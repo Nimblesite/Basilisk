@@ -15,7 +15,7 @@
 
 use basilisk_resolver::{NewTypeCallInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic, error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -26,21 +26,14 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
-            "`NewType` requires exactly two arguments: a string name and a concrete base class"
-                .to_owned(),
-        ),
-        note: Some(
-            "PEP 484: `NewType` accepts only proper concrete classes as the base type".to_owned(),
-        ),
-        provenance: None,
-    }
+        path,
+        Some("`NewType` requires exactly two arguments: a string name and a concrete base class"),
+        Some("PEP 484: `NewType` accepts only proper concrete classes as the base type"),
+    )
 }
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
@@ -239,12 +232,8 @@ impl Rule for InvalidNewType {
         let source = &module.source;
         let path = &module.path;
 
-        let typeddict_names: Vec<&str> = module
-            .classes
-            .iter()
-            .filter(|c| c.is_typed_dict)
-            .map(|c| c.name.as_str())
-            .collect();
+        let typeddict_names: Vec<&str> =
+            basilisk_resolver::collect_names_where(&module.classes, |c| c.is_typed_dict);
 
         for info in &module.newtype_calls {
             check_newtype_call(info, source, path, &typeddict_names, diagnostics);
@@ -468,23 +457,21 @@ fn check_newtype_call_arg_types(
             let Some(arg_text) = slice_span(source, *arg_span) else {
                 continue;
             };
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument to `{}` ({}) is not compatible with its base type `{base_type}`",
                     call.callee,
                     arg_text.trim()
                 ),
-                span: call.span,
-                path: path.to_owned(),
-                help: Some(format!(
+                call.span,
+                path,
+                Some(format!(
                     "Pass a value of type `{base_type}` to the `{}` constructor",
                     call.callee
                 )),
-                note: Some("NewType constructors accept only values of the base type".to_owned()),
-                provenance: None,
-            });
+                Some("NewType constructors accept only values of the base type".to_owned()),
+            ));
         }
     }
 }
@@ -537,22 +524,20 @@ fn check_newtype_var_literal_assignments(
         );
 
         if is_bare_literal {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Cannot assign a literal value directly to `{ann}`; \
                      use `{ann}(value)` to create a `{ann}` instance"
                 ),
-                span: var.name_span,
-                path: path.to_owned(),
-                help: Some(format!("Replace the literal with `{ann}(value)`")),
-                note: Some(
+                var.name_span,
+                path,
+                Some(format!("Replace the literal with `{ann}(value)`")),
+                Some(
                     "NewType creates a distinct type; only the constructor call is valid"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

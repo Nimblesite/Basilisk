@@ -26,7 +26,7 @@ use basilisk_resolver::scope::ProtocolRtcViolationKind;
 use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0114",
@@ -72,16 +72,14 @@ impl Rule for ProtocolRuntimeCheckableViolation {
                 ),
             };
 
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
                 message,
-                span: violation.span,
-                path: module.path.clone(),
+                violation.span,
+                &module.path,
                 help,
                 note,
-                provenance: None,
-            });
+            ));
         }
     }
 }

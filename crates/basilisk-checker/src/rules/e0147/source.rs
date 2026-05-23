@@ -2,7 +2,7 @@
 
 use basilisk_resolver::Span;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use crate::rules::shared::split_top_level_commas;
 
@@ -225,19 +225,15 @@ pub(super) fn make_diag(
     path: &str,
     code: &ErrorCode,
 ) -> Diagnostic {
-    Diagnostic {
-        code: code.clone(),
-        severity: Severity::Error,
-        message: format!("Tuple type compatibility violation: {message}"),
+    error_diagnostic_owned(
+        code.clone(),
+        format!("Tuple type compatibility violation: {message}"),
         span,
-        path: path.to_owned(),
-        help: Some(
-            "Ensure the assigned tuple matches the declared starred-unpack annotation".to_owned(),
-        ),
-        note: Some(
+        path,
+        Some("Ensure the assigned tuple matches the declared starred-unpack annotation".to_owned()),
+        Some(
             "See https://typing.readthedocs.io/en/latest/spec/tuples.html#type-compatibility-rules"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

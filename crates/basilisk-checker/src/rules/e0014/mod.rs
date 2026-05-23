@@ -22,7 +22,7 @@ use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_resolver::{ResolvedModule, Span, VariableInfo};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -274,23 +274,21 @@ fn make_diagnostic(
     declared: &InferredType,
     path: &str,
 ) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Type mismatch: `{}` is annotated `{annotation}` ({}) but assigned {}",
             var.name, declared, inferred
         ),
-        span: var.name_span,
-        path: path.to_owned(),
-        help: Some(format!(
+        var.name_span,
+        path,
+        Some(format!(
             "Either change the annotation to match the value, or change the value to `{annotation}`"
         )),
-        note: Some(
+        Some(
             "Basilisk requires the inferred type to be assignable to the declared type".to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 /// Extract the annotation text from the source line containing `name_span`.

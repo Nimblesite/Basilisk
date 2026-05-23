@@ -19,7 +19,7 @@
 
 use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule, Span, VariableInfo};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -349,14 +349,5 @@ fn make_diagnostic(
         ),
     };
 
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message,
-        span,
-        path: path.to_owned(),
-        help,
-        note,
-        provenance: None,
-    }
+    error_diagnostic_owned(CODE.clone(), message, span, path, help, note)
 }

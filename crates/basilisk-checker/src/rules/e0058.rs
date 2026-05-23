@@ -11,7 +11,7 @@
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -22,16 +22,14 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diag(span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: "`Annotated` requires at least two arguments: a type and metadata".to_owned(),
+    error_diagnostic_owned(
+        CODE.clone(),
+        "`Annotated` requires at least two arguments: a type and metadata".to_owned(),
         span,
-        path: path.to_owned(),
-        help: Some("Use `Annotated[Type, metadata]` with at least one metadata value".to_owned()),
-        note: Some("PEP 593: `Annotated[X]` with a single argument is invalid".to_owned()),
-        provenance: None,
-    }
+        path,
+        Some("Use `Annotated[Type, metadata]` with at least one metadata value".to_owned()),
+        Some("PEP 593: `Annotated[X]` with a single argument is invalid".to_owned()),
+    )
 }
 
 /// Returns `true` when `ann` is an `Annotated[...]` subscript with only one argument

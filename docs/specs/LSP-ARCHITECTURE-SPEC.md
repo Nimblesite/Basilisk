@@ -15,6 +15,67 @@ This is the **single source of truth** for all LSP features, DAP integration, cu
 
 ---
 
+## System Architecture
+
+Three editor frontends share one binary. The binary embeds the LSP server and the type-checking pipeline (parser → resolver → checker), and shells out to external tools (`ruff`, `debugpy`, `uv`) on demand.
+
+```mermaid
+flowchart TB
+    subgraph Editors["Editor Frontends"]
+        direction LR
+        VSC["VS Code"]
+        Zed["Zed"]
+        Nvim["Neovim"]
+    end
+
+    subgraph Binary["basilisk binary"]
+        direction TB
+        LSP["LSP server<br/>(JSON-RPC)"]
+        subgraph Pipeline["Type-checking pipeline"]
+            direction LR
+            Parser["Parser"]
+            Resolver["Resolver"]
+            Checker["Checker"]
+            Parser --> Resolver --> Checker
+        end
+        LSP --> Pipeline
+    end
+
+    subgraph Subprocs["External subprocesses"]
+        direction LR
+        Ruff["ruff"]
+        Debugpy["debugpy"]
+        UvBin["uv"]
+        Py["python3"]
+    end
+
+    Helper["basilisk-profiler-helper<br/>(separate binary)"]
+
+    VSC <-->|"stdio JSON-RPC"| LSP
+    Zed <-->|"stdio JSON-RPC"| LSP
+    Nvim <-->|"stdio JSON-RPC"| LSP
+
+    VSC <-->|"TCP DAP"| Debugpy
+    Zed <-->|"TCP DAP"| Debugpy
+    Nvim <-->|"TCP DAP"| Debugpy
+
+    LSP -.->|spawn| Ruff
+    LSP -.->|spawn| Debugpy
+    LSP -.->|spawn| UvBin
+    LSP -.->|spawn| Py
+
+    VSC -.->|bundles per-platform| Binary
+    VSC -.->|bundles per-platform| Helper
+```
+
+**Notes on this picture:**
+- Solid arrows are runtime data flow. Dotted arrows are process spawns or build-time bundling.
+- The VSIX ships the `basilisk` binary and `basilisk-profiler-helper` for 5 platforms (darwin x64/arm64, linux x64/arm64, win32 x64). Zed and Neovim users install `basilisk` themselves.
+- The DAP connection from each editor goes directly to `debugpy` over TCP — `basilisk` only spawns `debugpy` and tells the editor which port to dial.
+- See [Three-Phase Pipeline](#three-phase-pipeline) below for what happens inside the pipeline.
+
+---
+
 ## Binary Invocation
 
 ```bash
@@ -171,17 +232,14 @@ All editors MUST implement a TCP proxy between the DAP client and debugpy to fix
 
 ### Three-Phase Pipeline
 
-```
-Source Text
-    │
-    ▼
-basilisk-parser::parse_source() → ParsedModule (Ruff AST)
-    │
-    ▼
-basilisk-resolver::resolve() → ResolvedModule (symbol table)
-    │
-    ▼
-basilisk-checker::check() → Vec<Diagnostic>
+```mermaid
+flowchart TD
+    Src["Source Text"]
+    Parser["basilisk-parser::parse_source()<br/>→ ParsedModule (Ruff AST)"]
+    Resolver["basilisk-resolver::resolve()<br/>→ ResolvedModule (symbol table)"]
+    Checker["basilisk-checker::check()<br/>→ Vec&lt;Diagnostic&gt;"]
+
+    Src --> Parser --> Resolver --> Checker
 ```
 
 ### ResolvedModule — The Data That Powers Everything

@@ -20,7 +20,7 @@ use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged as _;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0097",
@@ -44,18 +44,14 @@ impl Rule for ProtocolNewSelfAttrViolation {
         }
 
         // Re-parse the source to walk the AST.
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 
         for cls_info in &protocol_classes {
             // Collect declared attribute names for this protocol.
-            let declared_attrs: HashSet<&str> = cls_info
-                .attributes
-                .iter()
-                .map(|a| a.name.as_str())
-                .collect();
+            let declared_attrs: HashSet<&str> =
+                basilisk_resolver::collect_name_set(&cls_info.attributes);
 
             // Also include method names as declared members.
             let declared_methods: HashSet<&str> =
@@ -241,24 +237,22 @@ fn check_self_attr_target(
     let attr_name = attr.attr.as_str();
     if !declared_attrs.contains(attr_name) && !declared_methods.contains(attr_name) {
         let range = attr.range();
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!("Protocol member `{attr_name}` is not declared in the Protocol body"),
-            span: Span {
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!("Protocol member `{attr_name}` is not declared in the Protocol body"),
+            Span {
                 start: range.start().to_u32(),
                 end: range.end().to_u32(),
             },
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Add `{attr_name}: <type>` as a class-level annotation in the Protocol"
             )),
-            note: Some(
+            Some(
                 "Protocol members must be explicitly declared; assigning to undeclared \
                  self-attributes in `__init__`/`__new__` is not allowed"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }

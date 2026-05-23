@@ -25,7 +25,7 @@
 
 use basilisk_resolver::{Pep695BoundViolationKind, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -73,16 +73,14 @@ impl Rule for Pep695InvalidBound {
                 ),
             };
 
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
                 message,
-                span: violation.span,
-                path: module.path.clone(),
-                help: None,
-                note: None,
-                provenance: None,
-            });
+                violation.span,
+                &module.path,
+                None,
+                None,
+            ));
         }
     }
 }

@@ -15,7 +15,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -26,18 +26,14 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: None,
-        note: Some(
-            "PEP 589: TypedDict subclassing has strict field-compatibility requirements".to_owned(),
-        ),
-        provenance: None,
-    }
+        path,
+        None,
+        Some("PEP 589: TypedDict subclassing has strict field-compatibility requirements"),
+    )
 }
 
 /// Returns `true` if this class is in a `TypedDict` hierarchy (directly or transitively).
@@ -195,11 +191,7 @@ pub(crate) struct InvalidTypedDictInheritance;
 
 impl Rule for InvalidTypedDictInheritance {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let class_map: HashMap<&str, &ClassInfo> = module
-            .classes
-            .iter()
-            .map(|cls| (cls.name.as_str(), cls))
-            .collect();
+        let class_map = super::shared::class_name_map(&module.classes);
 
         let attr_map: HashMap<(&str, &str), &AttributeInfo> = module
             .classes

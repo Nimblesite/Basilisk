@@ -7,7 +7,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {
@@ -210,24 +210,22 @@ impl Rule for TypeIsInconsistentNarrowing {
 
             // Check consistency.
             if !is_consistent(narrowed_type, param_type) {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "`TypeIs[{narrowed_type}]` narrows to a type inconsistent with parameter type `{param_type}`"
                     ),
-                    span: ann_span,
-                    path: module.path.clone(),
-                    help: Some(format!(
+                    ann_span,
+                    &module.path,
+                    Some(format!(
                         "The narrowed type `{narrowed_type}` must be consistent with the input type `{param_type}`"
                     )),
-                    note: Some(
+                    Some(
                         "Per the typing spec, TypeIs requires the narrowed type to be \
                          consistent with the input type"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }

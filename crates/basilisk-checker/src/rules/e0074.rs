@@ -29,7 +29,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 use crate::span_util::slice_span;
 
@@ -50,11 +50,8 @@ impl Rule for ConstructorCallNewMismatch {
         let path = &module.path;
 
         // Build class info maps.
-        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> = module
-            .classes
-            .iter()
-            .map(|c| (c.name.as_str(), c))
-            .collect();
+        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
+            basilisk_resolver::name_lookup(&module.classes);
 
         // Build method map: (class_name, method_name) -> Vec<&FunctionInfo>
         let mut method_map: HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>> =
@@ -73,122 +70,40 @@ impl Rule for ConstructorCallNewMismatch {
             return;
         };
 
-        for stmt in &parsed.ast.body {
-            check_stmt_for_specialized_constructor_calls(
-                stmt,
-                source,
-                path,
-                &class_map,
-                &method_map,
-                diagnostics,
-            );
-        }
+        let ctx = Ctx {
+            source,
+            path,
+            class_map: &class_map,
+            method_map: &method_map,
+        };
+        basilisk_resolver::visit_calls(&parsed.ast.body, &mut |call| {
+            check_specialized_constructor_call(call, &ctx, diagnostics);
+        });
     }
 }
 
-/// Walk a statement looking for call expressions on specialized generic classes.
-fn check_stmt_for_specialized_constructor_calls(
-    stmt: &ruff_python_ast::Stmt,
-    source: &str,
-    path: &str,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    use ruff_python_ast::Stmt;
-
-    match stmt {
-        Stmt::Expr(node) => {
-            check_expr_recursive(
-                &node.value,
-                source,
-                path,
-                class_map,
-                method_map,
-                diagnostics,
-            );
-        }
-        Stmt::Assign(node) => {
-            check_expr_recursive(
-                &node.value,
-                source,
-                path,
-                class_map,
-                method_map,
-                diagnostics,
-            );
-        }
-        Stmt::AnnAssign(node) => {
-            if let Some(val) = node.value.as_deref() {
-                check_expr_recursive(val, source, path, class_map, method_map, diagnostics);
-            }
-        }
-        Stmt::Try(try_stmt) => {
-            for body in [&try_stmt.body, &try_stmt.orelse, &try_stmt.finalbody] {
-                for s in body {
-                    check_stmt_for_specialized_constructor_calls(
-                        s,
-                        source,
-                        path,
-                        class_map,
-                        method_map,
-                        diagnostics,
-                    );
-                }
-            }
-            for handler in &try_stmt.handlers {
-                let ruff_python_ast::ExceptHandler::ExceptHandler(h) = handler;
-                for s in &h.body {
-                    check_stmt_for_specialized_constructor_calls(
-                        s,
-                        source,
-                        path,
-                        class_map,
-                        method_map,
-                        diagnostics,
-                    );
-                }
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Recursively check an expression and its sub-expressions for specialized
-/// constructor calls.
-fn check_expr_recursive(
-    expr: &ruff_python_ast::Expr,
-    source: &str,
-    path: &str,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    use ruff_python_ast::Expr;
-
-    // Check this expression if it is a call.
-    if let Expr::Call(call) = expr {
-        // Recurse into arguments first.
-        for arg in &call.arguments.args {
-            check_expr_recursive(arg, source, path, class_map, method_map, diagnostics);
-        }
-
-        // Now check whether this call is a specialized constructor call.
-        check_specialized_constructor_call(call, source, path, class_map, method_map, diagnostics);
-    }
+/// Shared context for E0074 statement/expression walkers.
+struct Ctx<'a> {
+    source: &'a str,
+    path: &'a str,
+    class_map: &'a HashMap<&'a str, &'a basilisk_resolver::ClassInfo>,
+    method_map: &'a HashMap<(&'a str, &'a str), Vec<&'a basilisk_resolver::FunctionInfo>>,
 }
 
 /// Check a single call expression to see if it is a specialized generic
 /// constructor call with mismatched arguments.
 fn check_specialized_constructor_call(
     call: &ruff_python_ast::ExprCall,
-    source: &str,
-    path: &str,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    ctx: &Ctx<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use ruff_python_ast::Expr;
+    let Ctx {
+        source,
+        path,
+        class_map,
+        method_map,
+    } = *ctx;
 
     // The callee must be a subscript expression: ClassName[TypeArgs]
     let Expr::Subscript(sub) = call.func.as_ref() else {
@@ -350,28 +265,26 @@ fn check_new_method_args(
                 start: range.start().to_u32(),
                 end: range.end().to_u32(),
             };
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument type `{arg_type}` is incompatible with parameter `{}` \
                      of type `{resolved_type}` in `{class_name}.__new__`",
                     param.name
                 ),
                 span,
-                path: path.to_owned(),
-                help: Some(format!(
+                path,
+                Some(format!(
                     "Pass a value of type `{resolved_type}` for parameter `{}`",
                     param.name
                 )),
-                note: Some(format!(
+                Some(format!(
                     "`{class_name}` is specialized with type arguments `[{}]`, \
                      binding `{}` to `{resolved_type}`",
                     type_args.join(", "),
                     ann_trimmed
                 )),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -425,11 +338,8 @@ fn check_cls_param_mismatch(
     let ann_type_args: Vec<&str> = ann_args_str.split(',').map(str::trim).collect();
 
     // Check if the annotation type args contain any type variables from the class.
-    let generic_param_names: Vec<&str> = class_info
-        .generic_params
-        .iter()
-        .map(|p| p.name.as_str())
-        .collect();
+    let generic_param_names: Vec<&str> =
+        basilisk_resolver::collect_names(&class_info.generic_params);
 
     let all_fixed = ann_type_args
         .iter()
@@ -459,26 +369,24 @@ fn check_cls_param_mismatch(
             start: range.start().to_u32(),
             end: range.end().to_u32(),
         };
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`{class_name}[{}]()` is incompatible: `__new__` expects \
                  `cls: {cls_annotation}` but received `type[{class_name}[{}]]`",
                 type_args.join(", "),
                 type_args.join(", ")
             ),
             span,
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Use `{class_name}[{}]()` to match the expected `cls` parameter type",
                 ann_type_args.join(", ")
             )),
-            note: Some(format!(
+            Some(format!(
                 "The `__new__` method constrains `cls` to `{cls_annotation}`"
             )),
-            provenance: None,
-        });
+        ));
     }
 }
 

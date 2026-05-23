@@ -26,7 +26,7 @@ use ruff_text_size::Ranged as _;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 
 use super::Rule;
 
@@ -40,17 +40,13 @@ pub(crate) struct TypeCallConstructorViolation;
 
 impl Rule for TypeCallConstructorViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 
         // Collect class info and method maps from resolved module.
-        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> = module
-            .classes
-            .iter()
-            .map(|c| (c.name.as_str(), c))
-            .collect();
+        let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
+            basilisk_resolver::name_lookup(&module.classes);
 
         let mut method_map: HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>> =
             HashMap::new();
@@ -64,11 +60,7 @@ impl Rule for TypeCallConstructorViolation {
         }
 
         // Collect TypeVar names (module-level).
-        let typevar_names: Vec<&str> = module
-            .typevar_calls
-            .iter()
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let typevar_names: Vec<&str> = basilisk_resolver::collect_names(&module.typevar_calls);
 
         // Build TypeVar bound map: typevar_name -> bound_class_name.
         let typevar_bounds = build_typevar_bound_map(&parsed.ast.body, &typevar_names);
@@ -118,19 +110,18 @@ fn check_function(
         return;
     }
 
+    let cctx = CheckCtx {
+        source,
+        path,
+        type_param_map: &type_param_map,
+        class_map,
+        method_map,
+        typevar_names,
+        typevar_bounds,
+    };
     // Walk function body.
     for stmt in &func.body {
-        check_stmt(
-            stmt,
-            source,
-            path,
-            &type_param_map,
-            class_map,
-            method_map,
-            typevar_names,
-            typevar_bounds,
-            diagnostics,
-        );
+        check_stmt_inner(stmt, &cctx, diagnostics);
     }
 }
 
@@ -194,33 +185,6 @@ struct CheckCtx<'a> {
     typevar_bounds: &'a HashMap<&'a str, &'a str>,
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "type checking requires full context"
-)]
-fn check_stmt(
-    stmt: &Stmt,
-    source: &str,
-    path: &str,
-    type_param_map: &HashMap<String, String>,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    typevar_names: &[&str],
-    typevar_bounds: &HashMap<&str, &str>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    let cctx = CheckCtx {
-        source,
-        path,
-        type_param_map,
-        class_map,
-        method_map,
-        typevar_names,
-        typevar_bounds,
-    };
-    check_stmt_inner(stmt, &cctx, diagnostics);
-}
-
 fn check_stmt_inner(stmt: &Stmt, cctx: &CheckCtx<'_>, diagnostics: &mut Vec<Diagnostic>) {
     match stmt {
         Stmt::Expr(e) => check_expr_inner(&e.value, cctx, diagnostics),
@@ -274,17 +238,7 @@ fn check_expr_inner(expr: &Expr, cctx: &CheckCtx<'_>, diagnostics: &mut Vec<Diag
         return;
     };
 
-    check_type_call(
-        call,
-        inner_type,
-        cctx.source,
-        cctx.path,
-        cctx.class_map,
-        cctx.method_map,
-        cctx.typevar_names,
-        cctx.typevar_bounds,
-        diagnostics,
-    );
+    check_type_call(call, inner_type, cctx, diagnostics);
 }
 
 // ---------------------------------------------------------------------------
@@ -292,47 +246,40 @@ fn check_expr_inner(expr: &Expr, cctx: &CheckCtx<'_>, diagnostics: &mut Vec<Diag
 // ---------------------------------------------------------------------------
 
 /// Validate a call `cls(...)` where `cls: type[inner_type]`.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "type checking requires full context"
-)]
 fn check_type_call(
     call: &ast::ExprCall,
     inner_type: &str,
-    source: &str,
-    path: &str,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    typevar_names: &[&str],
-    typevar_bounds: &HashMap<&str, &str>,
+    cctx: &CheckCtx<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let span = Span {
-        start: call.range().start().to_u32(),
-        end: call.range().end().to_u32(),
-    };
-
+    let span = Span::from(call.range());
     let total_args = call.arguments.args.len() + call.arguments.keywords.len();
 
     // Is inner_type an unbound TypeVar (no bound)?
-    if typevar_names.contains(&inner_type) && !typevar_bounds.contains_key(inner_type) {
-        check_unbound_typevar_call(inner_type, total_args, span, path, diagnostics);
+    if cctx.typevar_names.contains(&inner_type) && !cctx.typevar_bounds.contains_key(inner_type) {
+        check_unbound_typevar_call(inner_type, total_args, span, cctx.path, diagnostics);
         return;
     }
 
     // Resolve the effective class name (follow TypeVar bounds).
-    let class_name = typevar_bounds
+    let class_name = cctx
+        .typevar_bounds
         .get(inner_type)
         .copied()
         .unwrap_or(inner_type);
 
     // Look up the class.
-    let Some(class_info) = class_map.get(class_name) else {
+    let Some(class_info) = cctx.class_map.get(class_name) else {
         return;
     };
 
-    let constructor_sig =
-        resolve_constructor_sig(class_name, class_info, class_map, method_map, source);
+    let constructor_sig = resolve_constructor_sig(
+        class_name,
+        class_info,
+        cctx.class_map,
+        cctx.method_map,
+        cctx.source,
+    );
 
     check_constructor_call(
         call,
@@ -340,9 +287,9 @@ fn check_type_call(
         &constructor_sig,
         total_args,
         span,
-        source,
-        path,
-        method_map,
+        cctx.source,
+        cctx.path,
+        cctx.method_map,
         diagnostics,
     );
 }
@@ -356,21 +303,19 @@ fn check_unbound_typevar_call(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     if total_args > 0 {
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Cannot pass arguments to constructor of unbound type variable `{inner_type}`; \
                  its constructor signature is unknown"
             ),
             span,
-            path: path.to_owned(),
-            help: Some(format!(
+            path,
+            Some(format!(
                 "Add a `bound=` constraint to TypeVar `{inner_type}` if arguments are required"
             )),
-            note: None,
-            provenance: None,
-        });
+            None,
+        ));
     }
 }
 
@@ -393,19 +338,17 @@ fn check_constructor_call(
     match constructor_sig {
         ConstructorSig::NoArgs => {
             if total_args > 0 {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "`{class_name}` constructor takes no arguments \
                          but {total_args} argument(s) were provided via `type[{class_name}]`"
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!("Call `{class_name}()` with no arguments")),
-                    note: None,
-                    provenance: None,
-                });
+                    path,
+                    Some(format!("Call `{class_name}()` with no arguments")),
+                    None,
+                ));
             }
         }
         ConstructorSig::Required { min, max } => {
@@ -417,37 +360,33 @@ fn check_constructor_call(
                 .collect();
 
             if total_args < *min {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "`{class_name}` constructor requires at least {min} argument(s) \
                          but {total_args} were provided via `type[{class_name}]`"
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "Provide at least {min} argument(s) when calling `{class_name}` via a `type[{class_name}]` variable"
                     )),
-                    note: None,
-            provenance: None,
-                });
+                    None,
+                ));
             } else if total_args > *max {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "`{class_name}` constructor accepts at most {max} argument(s) \
                          but {total_args} were provided via `type[{class_name}]`"
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "Pass at most {max} argument(s) when calling `{class_name}` via a `type[{class_name}]` variable"
                     )),
-                    note: None,
-            provenance: None,
-                });
+                    None,
+                ));
             } else {
                 check_kwarg_types(
                     call,

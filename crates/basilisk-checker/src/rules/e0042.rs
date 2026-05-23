@@ -18,7 +18,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -29,24 +29,22 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diagnostic(message: String, span: basilisk_resolver::Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic_owned(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
+        path,
+        Some(
             "When using PEP 695 type parameter syntax, declare all type parameters \
              in the `[...]` list rather than using outer-scope TypeVar instances."
                 .to_owned(),
         ),
-        note: Some(
+        Some(
             "PEP 695: traditional TypeVars from outer scope are not allowed in \
              classes/functions that use the new type parameter syntax."
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 /// Returns `true` when `needle` appears as a whole identifier in `haystack`.
@@ -84,11 +82,8 @@ pub(crate) struct Pep695TraditionalTypeVarMix;
 impl Rule for Pep695TraditionalTypeVarMix {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Build a set of all module-level traditional TypeVar names.
-        let traditional_typevars: HashSet<&str> = module
-            .typevar_calls
-            .iter()
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let traditional_typevars: HashSet<&str> =
+            basilisk_resolver::collect_name_set(&module.typevar_calls);
 
         // Check classes: if a class uses PEP 695 syntax and references a traditional
         // TypeVar in its base expressions that is NOT one of its own PEP 695 params.

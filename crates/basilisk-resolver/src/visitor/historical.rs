@@ -1,6 +1,6 @@
 //! Historical visitor functions.
 
-use ruff_python_ast::{ExceptHandler, Expr, Stmt, StmtFunctionDef};
+use ruff_python_ast::{Expr, Stmt, StmtFunctionDef};
 use ruff_text_size::Ranged;
 
 use crate::scope::{HistoricalPositionalViolation, HistoricalPositionalViolationKind};
@@ -70,60 +70,22 @@ pub(super) fn collect_hist_violations_from_stmts(
     posonly_map: &std::collections::HashMap<String, std::collections::HashSet<String>>,
     out: &mut Vec<HistoricalPositionalViolation>,
 ) {
-    for stmt in stmts {
-        match stmt {
-            Stmt::FunctionDef(func) => {
-                check_func_for_hist_posonly_violation(func, out);
-                collect_hist_violations_from_stmts(&func.body, posonly_map, out);
+    crate::walk_all_stmts(stmts, &mut |stmt| match stmt {
+        Stmt::FunctionDef(func) => check_func_for_hist_posonly_violation(func, out),
+        Stmt::Expr(e) => collect_hist_violations_from_expr(&e.value, posonly_map, out),
+        Stmt::Assign(a) => collect_hist_violations_from_expr(&a.value, posonly_map, out),
+        Stmt::AnnAssign(a) => {
+            if let Some(val) = &a.value {
+                collect_hist_violations_from_expr(val, posonly_map, out);
             }
-            Stmt::ClassDef(cls) => {
-                collect_hist_violations_from_stmts(&cls.body, posonly_map, out);
-            }
-            Stmt::Expr(e) => {
-                collect_hist_violations_from_expr(&e.value, posonly_map, out);
-            }
-            Stmt::Assign(a) => {
-                collect_hist_violations_from_expr(&a.value, posonly_map, out);
-            }
-            Stmt::AnnAssign(a) => {
-                if let Some(val) = &a.value {
-                    collect_hist_violations_from_expr(val, posonly_map, out);
-                }
-            }
-            Stmt::Return(r) => {
-                if let Some(val) = &r.value {
-                    collect_hist_violations_from_expr(val, posonly_map, out);
-                }
-            }
-            Stmt::If(node) => {
-                collect_hist_violations_from_stmts(&node.body, posonly_map, out);
-                for clause in &node.elif_else_clauses {
-                    collect_hist_violations_from_stmts(&clause.body, posonly_map, out);
-                }
-            }
-            Stmt::For(node) => {
-                collect_hist_violations_from_stmts(&node.body, posonly_map, out);
-                collect_hist_violations_from_stmts(&node.orelse, posonly_map, out);
-            }
-            Stmt::While(node) => {
-                collect_hist_violations_from_stmts(&node.body, posonly_map, out);
-                collect_hist_violations_from_stmts(&node.orelse, posonly_map, out);
-            }
-            Stmt::With(node) => {
-                collect_hist_violations_from_stmts(&node.body, posonly_map, out);
-            }
-            Stmt::Try(node) => {
-                collect_hist_violations_from_stmts(&node.body, posonly_map, out);
-                for handler in &node.handlers {
-                    let ExceptHandler::ExceptHandler(eh) = handler;
-                    collect_hist_violations_from_stmts(&eh.body, posonly_map, out);
-                }
-                collect_hist_violations_from_stmts(&node.orelse, posonly_map, out);
-                collect_hist_violations_from_stmts(&node.finalbody, posonly_map, out);
-            }
-            _ => {}
         }
-    }
+        Stmt::Return(r) => {
+            if let Some(val) = &r.value {
+                collect_hist_violations_from_expr(val, posonly_map, out);
+            }
+        }
+        _ => {}
+    });
 }
 
 pub(super) fn check_func_for_hist_posonly_violation(

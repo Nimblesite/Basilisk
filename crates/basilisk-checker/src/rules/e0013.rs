@@ -9,7 +9,7 @@ use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_resolver::{FunctionInfo, ResolvedModule, ReturnStmtInfo};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -103,23 +103,21 @@ fn check_function(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec<Di
 }
 
 fn make_none_diagnostic(stmt: &ReturnStmtInfo, func_name: &str, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Function `{func_name}` is annotated `-> None` but has a `return` statement with a value"
         ),
-        span: stmt.span,
-        path: path.to_owned(),
-        help: Some(
+        stmt.span,
+        path,
+        Some(
             "Either remove the return value or change the return type annotation".to_owned(),
         ),
-        note: Some(
+        Some(
             "A function annotated `-> None` must only use bare `return` or fall off the end"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 fn make_diagnostic(
@@ -129,20 +127,18 @@ fn make_diagnostic(
     declared_type: &InferredType,
     path: &str,
 ) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Function `{func_name}` return type mismatch: {inferred_type} is not assignable to {declared_type}"
         ),
-        span: stmt.span,
-        path: path.to_owned(),
-        help: Some(
+        stmt.span,
+        path,
+        Some(
             "Either change the return value or update the return type annotation".to_owned(),
         ),
-        note: Some(
+        Some(
             "Basilisk requires the inferred return type to be assignable to the declared type".to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

@@ -36,7 +36,7 @@ use ruff_text_size::Ranged;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::{ann_str, expr_name};
 
 use super::Rule;
@@ -51,8 +51,7 @@ pub(crate) struct ProtocolClassObjectViolation;
 
 impl Rule for ProtocolClassObjectViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
         let ctx = ModuleCtx::from_ast(&parsed.ast.body);
@@ -286,10 +285,7 @@ fn check_stmts(stmts: &[Stmt], ctx: &ModuleCtx, path: &str, diag: &mut Vec<Diagn
     for stmt in stmts {
         match stmt {
             Stmt::AnnAssign(ann) => {
-                let span = Span {
-                    start: ann.range().start().to_u32(),
-                    end: ann.range().end().to_u32(),
-                };
+                let span = Span::from(ann.range());
 
                 // Track `var: type[Proto]` declarations.
                 if let Some(proto_name) = extract_type_proto_name(&ann.annotation) {
@@ -314,10 +310,7 @@ fn check_stmts(stmts: &[Stmt], ctx: &ModuleCtx, path: &str, diag: &mut Vec<Diagn
                             if let Some(value_name) = expr_name(&assign.value) {
                                 if value_name == proto_name.as_str() && ctx.is_protocol(proto_name)
                                 {
-                                    let span = Span {
-                                        start: assign.range().start().to_u32(),
-                                        end: assign.range().end().to_u32(),
-                                    };
+                                    let span = Span::from(assign.range());
                                     diag.push(make_type_proto_diag(proto_name, path, span));
                                 }
                             }
@@ -334,10 +327,7 @@ fn check_stmts_with_funcs(stmts: &[Stmt], ctx: &ModuleCtx, path: &str, diag: &mu
     for stmt in stmts {
         if let Stmt::Expr(expr_stmt) = stmt {
             if let Expr::Call(call) = &*expr_stmt.value {
-                let span = Span {
-                    start: expr_stmt.range().start().to_u32(),
-                    end: expr_stmt.range().end().to_u32(),
-                };
+                let span = Span::from(expr_stmt.range());
                 check_call_with_sigs(call, &ctx.func_sigs, ctx, path, diag, span);
             }
         }
@@ -373,27 +363,25 @@ fn check_ann_assign(
     if let Some(protocol) = ctx.find_protocol(&ann_name) {
         if let Some(concrete) = ctx.find_concrete(value_name) {
             if !class_satisfies_protocol_as_object(concrete, protocol) {
-                diag.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diag.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Class `{}` cannot be used as an instance of protocol `{}`: \
                          class-level access to protocol members is incompatible",
                         concrete.name, protocol.name
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "Pass an instance of a class implementing `{}` instead of the class itself",
                         protocol.name
                     )),
-                    note: Some(
+                    Some(
                         "A class object satisfies a protocol only if all protocol members \
                          are accessible on the class with compatible types"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }
@@ -490,23 +478,21 @@ fn extract_type_proto_from_str(s: &str) -> Option<&str> {
 }
 
 fn make_type_proto_diag(proto_name: &str, path: &str, span: Span) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Protocol class `{proto_name}` cannot be used where `type[{proto_name}]` is expected; \
              only concrete (non-protocol) subtypes are accepted"
         ),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Pass a concrete class that implements `{proto_name}` instead of the Protocol class itself"
         )),
-        note: Some(
+        Some(
             "Variables and parameters annotated with `type[Proto]` accept only \
              concrete (non-protocol) subtypes of Proto"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

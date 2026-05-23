@@ -33,64 +33,17 @@ pub(super) fn stmt_contains_yield(stmt: &Stmt) -> bool {
 /// Collect all yield/yield-from expressions from a function body (recursively).
 pub(super) fn collect_yield_exprs(stmts: &[Stmt]) -> Vec<crate::scope::YieldExprInfo> {
     let mut out = Vec::new();
-    for stmt in stmts {
-        collect_yield_exprs_from_stmt(stmt, &mut out);
-    }
-    out
-}
-
-/// Recursively collect yield expressions from a single statement.
-pub(super) fn collect_yield_exprs_from_stmt(
-    stmt: &Stmt,
-    out: &mut Vec<crate::scope::YieldExprInfo>,
-) {
-    match stmt {
-        Stmt::Expr(node) => collect_yield_from_expr(&node.value, out),
-        Stmt::Assign(node) => collect_yield_from_expr(&node.value, out),
+    super::walks::walk_function_stmts(stmts, &mut |stmt| match stmt {
+        Stmt::Expr(node) => collect_yield_from_expr(&node.value, &mut out),
+        Stmt::Assign(node) => collect_yield_from_expr(&node.value, &mut out),
         Stmt::AnnAssign(node) => {
             if let Some(value) = &node.value {
-                collect_yield_from_expr(value, out);
+                collect_yield_from_expr(value, &mut out);
             }
         }
-        Stmt::If(node) => {
-            for s in &node.body {
-                collect_yield_exprs_from_stmt(s, out);
-            }
-            for clause in &node.elif_else_clauses {
-                for s in &clause.body {
-                    collect_yield_exprs_from_stmt(s, out);
-                }
-            }
-        }
-        Stmt::While(node) => {
-            for s in &node.body {
-                collect_yield_exprs_from_stmt(s, out);
-            }
-        }
-        Stmt::For(node) => {
-            for s in &node.body {
-                collect_yield_exprs_from_stmt(s, out);
-            }
-        }
-        Stmt::With(node) => {
-            for s in &node.body {
-                collect_yield_exprs_from_stmt(s, out);
-            }
-        }
-        Stmt::Try(node) => {
-            for s in &node.body {
-                collect_yield_exprs_from_stmt(s, out);
-            }
-            for s in &node.finalbody {
-                collect_yield_exprs_from_stmt(s, out);
-            }
-            for s in &node.orelse {
-                collect_yield_exprs_from_stmt(s, out);
-            }
-        }
-        // Do NOT recurse into nested function defs
         _ => {}
-    }
+    });
+    out
 }
 
 /// Extract yield info from an expression node.

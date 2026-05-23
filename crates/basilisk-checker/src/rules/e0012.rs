@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, RhsKind, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -220,22 +220,20 @@ fn make_diagnostic(
     span: Span,
     path: &str,
 ) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Argument `{param_name}` of `{callee}` expects `{annotation}` but received \
              {rhs_description}"
         ),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Pass a value of type `{annotation}` for parameter `{param_name}`"
         )),
-        note: Some(
+        Some(
             "Basilisk checks that literal arguments are compatible with declared parameter types"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

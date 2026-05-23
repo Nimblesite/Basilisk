@@ -1,97 +1,99 @@
 ---
 name: code-dedup
-description: Searches for duplicate code, duplicate tests, and dead code, then safely merges or removes them. Use when the user says "deduplicate", "find duplicates", "remove dead code", "DRY up", or "code dedup". Requires test coverage — refuses to touch untested code.
+description: Uses deslop MCP to find the worst duplicate-code offenders in the repo and merge them. Loops until there are no major duplication issues left. Use when the user says "deduplicate", "find duplicates", "remove dead code", "DRY up", or "code dedup".
 ---
 <!-- agent-pmo:2efd847 -->
 
 # Code Dedup
 
-Carefully search for duplicate code, duplicate tests, and dead code across the repo. Merge duplicates and delete dead code — but only when test coverage proves the change is safe.
+Drive deduplication through the **deslop MCP**. Start with `top-offenders`, fix the worst cluster, then loop on `top-offenders` again. Keep going until there are no major duplication issues left.
 
-## Prerequisites — hard gate
+## Required tools
 
-Before touching ANY code, verify these conditions. If any fail, stop and report why.
+You MUST use these tools — do not substitute grep/find/manual searching:
 
-1. Run `make test` — all tests must pass (includes coverage thresholds). If tests fail, stop. Do not dedup a broken codebase.
-2. Rust and TypeScript are statically typed — proceed.
+- `mcp__deslop__top-offenders` — **start here every iteration.** The worst duplicate clusters in the repo.
+- `mcp__deslop__cluster-by-id` — full member list for a specific cluster
+- `mcp__deslop__find-similar` — confirm no near-duplicate was reintroduced after a merge
+- `mcp__deslop__report-for-file` / `mcp__deslop__report-for-range` — verify a touched file/range
+- `mcp__deslop__report-query` / `mcp__deslop__report-get` — drill into the current report
 
-## Steps
+If a tool's schema isn't loaded, call `ToolSearch` with `select:mcp__deslop__<name>` first.
 
-Copy this checklist and track progress:
+Do NOT call `mcp__deslop__rescan` at the start. Just call `top-offenders` directly.
+
+## The loop
 
 ```
-Dedup Progress:
-- [ ] Step 1: Prerequisites passed (tests green, coverage met, typed)
-- [ ] Step 2: Dead code scan complete
-- [ ] Step 3: Duplicate code scan complete
-- [ ] Step 4: Duplicate test scan complete
-- [ ] Step 5: Changes applied
-- [ ] Step 6: Verification passed (tests green, coverage stable)
+1. mcp__deslop__top-offenders          -> list of worst clusters
+2. If list is empty / only minor      -> EXIT loop, report done
+3. Pick the #1 cluster
+4. mcp__deslop__cluster-by-id          -> all members
+5. Merge the duplicates (extract shared code, update call sites, delete duplicates)
+6. mcp__deslop__find-similar on the new shared code
+   -> confirm it didn't re-introduce a near-duplicate elsewhere
+7. Go back to step 1
 ```
 
-### Step 1 — Inventory test coverage
+"No major duplication issues" means `top-offenders` returns nothing worth merging under the rules below. One pass is not enough — keep looping.
 
-1. Run `make test` to confirm green baseline (includes coverage thresholds)
-2. Note the current coverage percentage — this is the floor. It must not drop.
-3. Identify which files/modules have coverage and which do not. Only files WITH coverage are candidates for dedup.
+## Per-iteration detail
 
-### Step 2 — Scan for dead code
+### 1. Pull the worst offenders
 
-1. Look for unused exports, unused functions, unused classes, unused variables
-2. Use language-appropriate tools:
-   - Rust: the compiler already warns on dead code — check `make lint` output
-   - TypeScript: check for unexported functions with zero references
-   - Python: look for functions/classes with zero imports across the codebase
-3. For each candidate: **grep the entire codebase** for references (including tests, scripts, configs). Only mark as dead if truly zero references.
-4. List all dead code found with file paths and line numbers. Do NOT delete yet.
+Call `mcp__deslop__top-offenders` **first, every iteration**. Work the list top-down — biggest offender first.
 
-### Step 3 — Scan for duplicate code
+### 2. Inspect the cluster
 
-1. Look for functions/methods with identical or near-identical logic
-2. Look for copy-pasted blocks (same structure, maybe different variable names)
-3. Look for multiple implementations of the same algorithm or pattern
-4. Check across module boundaries — duplicates often hide in different crates
-5. For each duplicate pair: note both locations, what they do, and how they differ
-6. List all duplicates found. Do NOT merge yet.
+Call `mcp__deslop__cluster-by-id` for the top entry. Read every member. Confirm they are genuinely duplicated logic (not coincidental similarity).
 
-### Step 4 — Scan for duplicate tests
+### 3. Merge
 
-1. Look for test functions with identical assertions against the same code paths
-2. Look for test fixtures/helpers that are duplicated across test files
-3. List all duplicate tests found. Do NOT delete yet.
-
-### Step 5 — Apply changes (one at a time)
-
-For each change: **change -> test -> verify coverage -> continue or revert**.
-
-#### 5a. Remove dead code
-- Delete dead code identified in Step 2
-- After each deletion: run `make test`
-- If tests fail or coverage drops: **revert immediately**
-
-#### 5b. Merge duplicate code
-- Extract shared logic into a single function/module
+- Extract shared logic into a single function/module (prefer moving to a shared crate per CLAUDE.md)
 - Update all call sites
-- After each merge: run `make test`
-- If tests fail: **revert immediately**
+- Delete the now-unused duplicates
+- Preserve public API surface — do not change exported signatures
 
-#### 5c. Remove duplicate tests
-- Delete the redundant test (keep the more thorough one)
-- After each deletion: run `make test`
-- If coverage drops: **revert immediately**
+### 4. Verify with deslop
 
-### Step 6 — Final verification
+- `mcp__deslop__find-similar` against the new shared code — confirm no near-duplicate was reintroduced
+- `mcp__deslop__report-for-file` on the touched files — confirm the cluster is gone
 
-1. Run `make test` — all tests must still pass
-2. Run `make test` — coverage must be >= the baseline from Step 1
-3. Run `make lint` and `make fmt-check` — code must be clean
-4. Report: what was removed, what was merged, final coverage vs baseline
+### 5. Loop
+
+Go back to step 1. Keep going until `top-offenders` has no major entries left.
+
+## Filing deslop bugs / false positives
+
+If deslop reports something that is clearly wrong — a cluster of code that is not actually duplicated, members that don't belong together, a crash, malformed output, missing files, stale results — **you MUST file a detailed issue against the deslop repo via `gh`**. Do not silently work around it.
+
+Use:
+
+```
+gh issue create --repo <deslop-repo> --title "<concise summary>" --body "<details>"
+```
+
+The issue body MUST include:
+
+- The exact deslop tool called and its full arguments
+- The full response (or relevant excerpt) showing the false positive / bug
+- File paths and line ranges of the cluster members
+- Why this is a false positive (e.g. "members X and Y share only the function signature, bodies are unrelated") or a precise description of the bug
+- Repo commit SHA so the maintainer can reproduce
+- What you expected deslop to return instead
+
+If you don't know the deslop repo URL, ask the user once and then proceed.
+
+After filing, skip that cluster and continue the loop with the next offender.
 
 ## Rules
 
-- **No test coverage = do not touch.** If a file has no tests covering it, leave it alone entirely.
-- **Coverage must not drop.** The coverage floor from Step 1 is sacred.
-- **One change at a time.** Make one dedup change, run tests, verify coverage. Never batch.
-- **When in doubt, leave it.** If two code blocks look similar but you're not sure they're identical, leave both.
-- **Preserve public API surface.** Do not change function signatures or module exports.
-- **Three similar lines is fine.** Only dedup when shared logic is substantial (>10 lines) or 3+ copies.
+- **deslop drives the work.** No grep-based duplicate hunting. The MCP is the source of truth.
+- **Start with `top-offenders`.** Never start the loop with `rescan` or anything else.
+- **Loop until clean.** One pass is not enough. Stop only when `top-offenders` has no major entries left.
+- **File issues on false positives / bugs.** Every deslop mistake gets a detailed `gh issue create` against the deslop repo.
+- **When in doubt, leave it.** If a cluster's members look similar but aren't equivalent, file a false-positive issue and skip.
+- **Preserve public API surface.** Do not change exported function signatures or module exports.
+- **Three similar lines is fine.** Only merge when shared logic is substantial (>10 lines) or 3+ copies.
+- **Move, don't copy.** Per CLAUDE.md, copying files is illegal — move them.
+- **No `allow(clippy=...)`, no `unwrap`, no regex** — the merged code must meet the project's Rust quality bar.

@@ -22,7 +22,7 @@
 
 use basilisk_resolver::{EnumValueTypeViolationKind, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -62,20 +62,18 @@ impl Rule for EnumValueTypeMismatch {
                     ),
                 ),
             };
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
                 message,
-                span: violation.span,
-                path: module.path.clone(),
-                help: Some(help),
-                note: Some(
+                violation.span,
+                &module.path,
+                Some(help),
+                Some(
                     "PEP 435 / typing spec: When `_value_: T` is declared in an enum class, \
                      all member values must be compatible with `T`"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

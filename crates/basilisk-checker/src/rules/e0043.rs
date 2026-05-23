@@ -13,7 +13,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -23,20 +23,18 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diagnostic(message: String, span: basilisk_resolver::Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic_owned(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
+        path,
+        Some(
             "All arguments to `Generic[...]` must be TypeVar, TypeVarTuple, \
              or ParamSpec instances"
                 .to_owned(),
         ),
-        note: Some("PEP 484: `Generic[int]` is invalid; use a TypeVar instead".to_owned()),
-        provenance: None,
-    }
+        Some("PEP 484: `Generic[int]` is invalid; use a TypeVar instead".to_owned()),
+    )
 }
 
 /// Emits BSK-E0043 when a non-TypeVar appears in `Generic[...]` or `Protocol[...]`.
@@ -45,11 +43,8 @@ pub(crate) struct NonTypeVarInGeneric;
 impl Rule for NonTypeVarInGeneric {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Collect all module-level TypeVar names (traditional TypeVar calls).
-        let typevar_names: HashSet<&str> = module
-            .typevar_calls
-            .iter()
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let typevar_names: HashSet<&str> =
+            basilisk_resolver::collect_name_set(&module.typevar_calls);
 
         for class in &module.classes {
             // Flag non-simple-name args (subscripts etc.) in Generic/Protocol.
@@ -105,11 +100,8 @@ impl Rule for NonTypeVarInGeneric {
             // e.g. `class Bad(Iterable[T_co], Generic[S_co])` is invalid because
             // T_co is used in a base but not listed in Generic[S_co].
             if !class.generic_params.is_empty() {
-                let declared_in_generic: HashSet<&str> = class
-                    .generic_params
-                    .iter()
-                    .map(|p| p.name.as_str())
-                    .collect();
+                let declared_in_generic: HashSet<&str> =
+                    basilisk_resolver::collect_name_set(&class.generic_params);
 
                 // Collect TypeVar names used anywhere in base class expressions
                 // but not declared in Generic[...]/Protocol[...].

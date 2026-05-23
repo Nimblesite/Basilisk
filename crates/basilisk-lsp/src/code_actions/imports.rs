@@ -7,25 +7,28 @@ use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::atomic::Ordering;
 
-use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url, WorkspaceEdit,
-};
+use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit, Url};
 
 use super::TMP_COUNTER;
 
-// ── Organize imports via ruff ─────────────────────────────────────────────────
+// ── Internal helpers ──────────────────────────────────────────────────────────
 
-/// Run `ruff check --select I --fix` on the document source and return a
-/// full-file replacement [`CodeAction`], or `None` if ruff is not installed or
-/// the source is already sorted.
-pub(crate) fn organize_imports(uri: &Url, source: &str) -> Option<CodeAction> {
+/// Run `ruff check --select <code> --fix --quiet` on `source` via a temp file
+/// and return the rewritten source if ruff applied changes.
+///
+/// Returns `None` when:
+/// - ruff is not installed (exec fails)
+/// - ruff exits with code >= 2 (internal error)
+/// - the file is unchanged (no fixes apply)
+/// - tmp-file I/O fails
+fn run_ruff_fix(source: &str, select_code: &str, tmp_prefix: &str) -> Option<String> {
     let id = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let tmp_path = std::env::temp_dir().join(format!("basilisk_org_{id}.py"));
+    let tmp_path = std::env::temp_dir().join(format!("{tmp_prefix}_{id}.py"));
 
     std::fs::write(&tmp_path, source).ok()?;
 
     let status = std::process::Command::new("ruff")
-        .args(["check", "--select", "I", "--fix", "--quiet"])
+        .args(["check", "--select", select_code, "--fix", "--quiet"])
         .arg(&tmp_path)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -43,28 +46,47 @@ pub(crate) fn organize_imports(uri: &Url, source: &str) -> Option<CodeAction> {
     let _ = std::fs::remove_file(&tmp_path);
 
     if new_source == source {
-        return None; // Already sorted — don't offer a no-op action.
+        return None;
     }
 
+    Some(new_source)
+}
+
+/// Build a [`CodeAction`] that replaces the entire document with `new_text`.
+fn full_file_replacement_action(
+    uri: &Url,
+    source: &str,
+    new_text: String,
+    title: &str,
+    kind: CodeActionKind,
+    is_preferred: bool,
+) -> CodeAction {
     let mut changes = HashMap::new();
     let _ = changes.insert(
         uri.clone(),
         vec![TextEdit {
             range: full_document_range(source),
-            new_text: new_source,
+            new_text,
         }],
     );
-    Some(CodeAction {
-        title: "Organize imports (ruff)".to_owned(),
-        kind: Some(CodeActionKind::SOURCE_ORGANIZE_IMPORTS),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(true),
-        ..Default::default()
-    })
+    super::code_action_with_changes(title.to_owned(), kind, changes, is_preferred)
+}
+
+// ── Organize imports via ruff ─────────────────────────────────────────────────
+
+/// Run `ruff check --select I --fix` on the document source and return a
+/// full-file replacement [`CodeAction`], or `None` if ruff is not installed or
+/// the source is already sorted.
+pub(crate) fn organize_imports(uri: &Url, source: &str) -> Option<CodeAction> {
+    let new_source = run_ruff_fix(source, "I", "basilisk_org")?;
+    Some(full_file_replacement_action(
+        uri,
+        source,
+        new_source,
+        "Organize imports (ruff)",
+        CodeActionKind::SOURCE_ORGANIZE_IMPORTS,
+        true,
+    ))
 }
 
 // ── Expand wildcard imports via ruff ──────────────────────────────────────────
@@ -75,51 +97,15 @@ pub(crate) fn expand_wildcard_imports(uri: &Url, source: &str) -> Option<CodeAct
     if !source.contains("import *") {
         return None;
     }
-
-    let id = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let tmp_path = std::env::temp_dir().join(format!("basilisk_wild_{id}.py"));
-
-    std::fs::write(&tmp_path, source).ok()?;
-
-    let status = std::process::Command::new("ruff")
-        .args(["check", "--select", "F403", "--fix", "--quiet"])
-        .arg(&tmp_path)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .ok()?;
-
-    if !matches!(status.code(), Some(0 | 1)) {
-        let _ = std::fs::remove_file(&tmp_path);
-        return None;
-    }
-
-    let new_source = std::fs::read_to_string(&tmp_path).ok()?;
-    let _ = std::fs::remove_file(&tmp_path);
-
-    if new_source == source {
-        return None;
-    }
-
-    let mut changes = HashMap::new();
-    let _ = changes.insert(
-        uri.clone(),
-        vec![TextEdit {
-            range: full_document_range(source),
-            new_text: new_source,
-        }],
-    );
-    Some(CodeAction {
-        title: "Expand wildcard imports (ruff)".to_owned(),
-        kind: Some(CodeActionKind::QUICKFIX),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    })
+    let new_source = run_ruff_fix(source, "F403", "basilisk_wild")?;
+    Some(full_file_replacement_action(
+        uri,
+        source,
+        new_source,
+        "Expand wildcard imports (ruff)",
+        CodeActionKind::QUICKFIX,
+        false,
+    ))
 }
 
 // ── Convert import style via ruff ─────────────────────────────────────────────
@@ -131,52 +117,15 @@ pub(crate) fn convert_import_style(uri: &Url, source: &str) -> Option<CodeAction
     if !source.contains("import ") {
         return None;
     }
-
-    let id = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let tmp_path = std::env::temp_dir().join(format!("basilisk_conv_{id}.py"));
-
-    std::fs::write(&tmp_path, source).ok()?;
-
-    let status = std::process::Command::new("ruff")
-        .args(["check", "--select", "E401", "--fix", "--quiet"])
-        .arg(&tmp_path)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .ok()?;
-
-    if !matches!(status.code(), Some(0 | 1)) {
-        let _ = std::fs::remove_file(&tmp_path);
-        return None;
-    }
-
-    let new_source = std::fs::read_to_string(&tmp_path).ok()?;
-    let _ = std::fs::remove_file(&tmp_path);
-
-    if new_source == source {
-        return None;
-    }
-
-    let full_range = full_document_range(source);
-    let mut changes = HashMap::new();
-    let _ = changes.insert(
-        uri.clone(),
-        vec![TextEdit {
-            range: full_range,
-            new_text: new_source,
-        }],
-    );
-    Some(CodeAction {
-        title: "Fix multiple imports on one line (ruff E401)".to_owned(),
-        kind: Some(CodeActionKind::QUICKFIX),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    })
+    let new_source = run_ruff_fix(source, "E401", "basilisk_conv")?;
+    Some(full_file_replacement_action(
+        uri,
+        source,
+        new_source,
+        "Fix multiple imports on one line (ruff E401)",
+        CodeActionKind::QUICKFIX,
+        false,
+    ))
 }
 
 // ── Add __all__ declaration ───────────────────────────────────────────────────
@@ -217,17 +166,12 @@ pub(crate) fn add_dunder_all(uri: &Url, source: &str) -> Option<CodeAction> {
             new_text: all_text,
         }],
     );
-    Some(CodeAction {
-        title: "Add __all__ declaration (basilisk)".to_owned(),
-        kind: Some(CodeActionKind::SOURCE),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    })
+    Some(super::code_action_with_changes(
+        "Add __all__ declaration (basilisk)".to_owned(),
+        CodeActionKind::SOURCE,
+        changes,
+        false,
+    ))
 }
 
 /// Collect public (non-underscore-prefixed) top-level names from source text.

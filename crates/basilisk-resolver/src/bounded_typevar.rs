@@ -390,47 +390,21 @@ fn walk_stmts(
     typevar_bounds: &std::collections::HashMap<String, String>,
     out: &mut Vec<BoundedTypeVarAttrViolation>,
 ) {
-    for stmt in stmts {
-        match stmt {
-            Stmt::Expr(node) => {
-                walk_expr(&node.value, param_typevar, typevar_bounds, out);
+    crate::walk_function_stmts(stmts, &mut |stmt| match stmt {
+        Stmt::Expr(node) => walk_expr(&node.value, param_typevar, typevar_bounds, out),
+        Stmt::Return(node) => {
+            if let Some(val) = &node.value {
+                walk_expr(val, param_typevar, typevar_bounds, out);
             }
-            Stmt::Return(node) => {
-                if let Some(val) = &node.value {
-                    walk_expr(val, param_typevar, typevar_bounds, out);
-                }
-            }
-            Stmt::Assign(node) => {
-                walk_expr(&node.value, param_typevar, typevar_bounds, out);
-            }
-            Stmt::AnnAssign(node) => {
-                if let Some(val) = &node.value {
-                    walk_expr(val, param_typevar, typevar_bounds, out);
-                }
-            }
-            Stmt::If(node) => {
-                walk_stmts(&node.body, param_typevar, typevar_bounds, out);
-                for clause in &node.elif_else_clauses {
-                    walk_stmts(&clause.body, param_typevar, typevar_bounds, out);
-                }
-            }
-            Stmt::For(node) => {
-                walk_stmts(&node.body, param_typevar, typevar_bounds, out);
-            }
-            Stmt::While(node) => {
-                walk_stmts(&node.body, param_typevar, typevar_bounds, out);
-            }
-            Stmt::With(node) => {
-                walk_stmts(&node.body, param_typevar, typevar_bounds, out);
-            }
-            Stmt::Try(node) => {
-                walk_stmts(&node.body, param_typevar, typevar_bounds, out);
-                walk_stmts(&node.orelse, param_typevar, typevar_bounds, out);
-                walk_stmts(&node.finalbody, param_typevar, typevar_bounds, out);
-            }
-            _ => {}
         }
-    }
+        Stmt::Assign(node) => walk_expr(&node.value, param_typevar, typevar_bounds, out),
+        Stmt::AnnAssign(node) => {
+            if let Some(val) = &node.value {
+                walk_expr(val, param_typevar, typevar_bounds, out);
+            }
+        }
+        _ => {}
+    });
 }
 
 /// Check a single expression for attribute accesses on bounded typevar params.

@@ -14,7 +14,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 
@@ -190,28 +190,24 @@ fn check_subscript_on_line(
 
                 let max_pos = tuple_len_i64 - 1;
 
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
-                        "Tuple index {idx} is out of range for `tuple` of length {tuple_len}"
-                    ),
-                    span: basilisk_resolver::Span {
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!("Tuple index {idx} is out of range for `tuple` of length {tuple_len}"),
+                    basilisk_resolver::Span {
                         start: span_start,
                         end: span_end,
                     },
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "Valid indices for a {tuple_len}-element tuple are \
                          -{tuple_len}..{max_pos} (inclusive)"
                     )),
-                    note: Some(
+                    Some(
                         "PEP 484: indexing a fixed-length tuple with an out-of-range \
                          literal integer is a type error."
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
 

@@ -32,7 +32,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -165,48 +165,44 @@ fn emit_comparison_diagnostics(
             } else {
                 left_class
             };
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Cannot use ordering operator on `{no_order_class}`: \
                      comparison methods are not synthesized (order is not enabled)"
                 ),
-                span: cmp.span,
-                path: module.path.clone(),
-                help: Some(
+                cmp.span,
+                &module.path,
+                Some(
                     "Enable `order=True` on the dataclass to synthesize ordering methods"
                         .to_owned(),
                 ),
-                note: Some(
+                Some(
                     "Without `order=True`, `__lt__`, `__le__`, `__gt__`, `__ge__` \
                      are not generated"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         } else if left_class != right_class {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Cannot compare `{left_class}` and `{right_class}` with ordering operator: \
                      `@dataclass(order=True)` comparison methods only accept the same type"
                 ),
-                span: cmp.span,
-                path: module.path.clone(),
-                help: Some(
+                cmp.span,
+                &module.path,
+                Some(
                     "Ordering comparisons (`<`, `<=`, `>`, `>=`) between different dataclass \
                      types are not supported"
                         .to_owned(),
                 ),
-                note: Some(
+                Some(
                     "PEP 557: the synthesized `__lt__` etc. return `NotImplemented` for \
                      instances of a different type"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

@@ -15,7 +15,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::{guards::is_protocol_class, Rule};
 
@@ -31,11 +31,7 @@ pub(crate) struct MissingOverrideDecorator;
 impl Rule for MissingOverrideDecorator {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Build a raw class map first (name → ClassInfo).
-        let raw_map: HashMap<&str, &ClassInfo> = module
-            .classes
-            .iter()
-            .map(|cls| (cls.name.as_str(), cls))
-            .collect();
+        let raw_map = super::shared::class_name_map(&module.classes);
 
         // Determine which classes are Protocol (transitively) — e.g.
         // `class MyProto(SomeBase)` where `SomeBase(Protocol)` is also Protocol.
@@ -180,23 +176,21 @@ fn make_diagnostic(
     span: basilisk_resolver::Span,
     path: &str,
 ) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Method `{}` in class `{}` overrides a base-class method but is missing `@override`",
             method_name, class.name
         ),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Add `@override` above `def {method_name}(...)` to make the override explicit"
         )),
-        note: Some(
+        Some(
             "`@override` (PEP 698) makes overrides explicit and lets the type checker \
              catch typos in method names"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

@@ -10,7 +10,7 @@ use ruff_text_size::Ranged;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 
 use super::Rule;
@@ -25,8 +25,7 @@ pub(crate) struct CallableCallSiteViolation;
 
 impl Rule for CallableCallSiteViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
         for stmt in &parsed.ast.body {
@@ -83,11 +82,8 @@ fn parse_callable_annotation(param_name: &str, annotation: &Expr) -> Option<Call
     let Expr::Subscript(subscript) = annotation else {
         return None;
     };
-    let is_callable = match subscript.value.as_ref() {
-        Expr::Name(name) => name.id.as_str() == "Callable",
-        Expr::Attribute(attr) => attr.attr.as_str() == "Callable",
-        _ => false,
-    };
+    let is_callable =
+        basilisk_resolver::is_name_or_attr_named(subscript.value.as_ref(), "Callable");
     if !is_callable {
         return None;
     }
@@ -148,13 +144,7 @@ fn annotation_to_string(expr: &Expr) -> String {
 }
 
 fn check_body_calls(stmts: &[Stmt], cp: &[CallableParam], path: &str, diag: &mut Vec<Diagnostic>) {
-    for stmt in stmts {
-        check_stmt_calls(stmt, cp, path, diag);
-    }
-}
-
-fn check_stmt_calls(stmt: &Stmt, cp: &[CallableParam], path: &str, diag: &mut Vec<Diagnostic>) {
-    match stmt {
+    basilisk_resolver::walk_function_stmts(stmts, &mut |stmt| match stmt {
         Stmt::Expr(node) => check_expr_for_call(&node.value, cp, path, diag),
         Stmt::Assign(node) => check_expr_for_call(&node.value, cp, path, diag),
         Stmt::AnnAssign(node) => {
@@ -167,26 +157,8 @@ fn check_stmt_calls(stmt: &Stmt, cp: &[CallableParam], path: &str, diag: &mut Ve
                 check_expr_for_call(v, cp, path, diag);
             }
         }
-        Stmt::If(node) => {
-            check_body_calls(&node.body, cp, path, diag);
-            for clause in &node.elif_else_clauses {
-                check_body_calls(&clause.body, cp, path, diag);
-            }
-        }
-        Stmt::For(node) => check_body_calls(&node.body, cp, path, diag),
-        Stmt::While(node) => check_body_calls(&node.body, cp, path, diag),
-        Stmt::Try(node) => {
-            check_body_calls(&node.body, cp, path, diag);
-            for h in &node.handlers {
-                let ast::ExceptHandler::ExceptHandler(eh) = h;
-                check_body_calls(&eh.body, cp, path, diag);
-            }
-            check_body_calls(&node.orelse, cp, path, diag);
-            check_body_calls(&node.finalbody, cp, path, diag);
-        }
-        Stmt::With(node) => check_body_calls(&node.body, cp, path, diag),
-        _ => {} // Don't recurse into nested functions (FunctionDef, ClassDef, etc.)
-    }
+        _ => {}
+    });
 }
 
 fn check_expr_for_call(expr: &Expr, cp: &[CallableParam], path: &str, diag: &mut Vec<Diagnostic>) {
@@ -206,27 +178,22 @@ fn check_expr_for_call(expr: &Expr, cp: &[CallableParam], path: &str, diag: &mut
 }
 
 fn validate_call(call: &ast::ExprCall, cp: &CallableParam, path: &str, diag: &mut Vec<Diagnostic>) {
-    let span = Span {
-        start: call.range().start().to_u32(),
-        end: call.range().end().to_u32(),
-    };
+    let span = Span::from(call.range());
     let positional_count = call.arguments.args.len();
     let has_kwargs = !call.arguments.keywords.is_empty();
 
     if has_kwargs {
-        diag.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`Callable` parameter `{}` does not accept keyword arguments",
                 cp.name
             ),
             span,
-            path: path.to_owned(),
-            help: Some("Callable parameters are positional-only".to_owned()),
-            note: None,
-            provenance: None,
-        });
+            path,
+            Some("Callable parameters are positional-only".to_owned()),
+            None,
+        ));
         return;
     }
 
@@ -235,42 +202,38 @@ fn validate_call(call: &ast::ExprCall, cp: &CallableParam, path: &str, diag: &mu
     };
     match positional_count.cmp(&expected) {
         std::cmp::Ordering::Less => {
-            diag.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diag.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Too few arguments for `{}`: expected {} but got {}",
                     cp.name, expected, positional_count
                 ),
                 span,
-                path: path.to_owned(),
-                help: Some(format!(
+                path,
+                Some(format!(
                     "`{}` is typed as `Callable[[{}], ...]`",
                     cp.name,
                     cp.arg_types.join(", ")
                 )),
-                note: None,
-                provenance: None,
-            });
+                None,
+            ));
         }
         std::cmp::Ordering::Greater => {
-            diag.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diag.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Too many arguments for `{}`: expected {} but got {}",
                     cp.name, expected, positional_count
                 ),
                 span,
-                path: path.to_owned(),
-                help: Some(format!(
+                path,
+                Some(format!(
                     "`{}` is typed as `Callable[[{}], ...]`",
                     cp.name,
                     cp.arg_types.join(", ")
                 )),
-                note: None,
-                provenance: None,
-            });
+                None,
+            ));
         }
         std::cmp::Ordering::Equal => {
             check_arg_types(call, cp, path, diag);
@@ -293,14 +256,10 @@ fn check_arg_types(
     {
         if let Some(actual) = infer_expr_literal_type(arg_expr) {
             if !is_type_compatible(actual, expected_type) {
-                let span = Span {
-                    start: arg_expr.range().start().to_u32(),
-                    end: arg_expr.range().end().to_u32(),
-                };
-                diag.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                let span = Span::from(arg_expr.range());
+                diag.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Argument {} to `{}` has incompatible type `{}`; expected `{}`",
                         idx + 1,
                         cp.name,
@@ -308,11 +267,10 @@ fn check_arg_types(
                         expected_type
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: None,
-                    note: None,
-                    provenance: None,
-                });
+                    path,
+                    None,
+                    None,
+                ));
             }
         }
     }

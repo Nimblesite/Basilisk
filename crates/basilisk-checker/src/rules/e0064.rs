@@ -24,7 +24,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{NamedTupleDefInfo, ResolvedModule, RhsKind, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -34,16 +34,14 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: None,
-        note: Some("PEP 544/NamedTuple: keyword arguments must match declared fields".to_owned()),
-        provenance: None,
-    }
+        path,
+        None,
+        Some("PEP 544/NamedTuple: keyword arguments must match declared fields"),
+    )
 }
 
 /// Returns a human-readable literal-type name when `rhs` is incompatible

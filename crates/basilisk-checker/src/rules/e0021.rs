@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -125,20 +125,18 @@ fn has_overload_decorator(decorators: &[String]) -> bool {
 }
 
 fn make_diagnostic(func: &FunctionInfo, func_name: &str, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "`@overload` variant of `{func_name}` has the same parameter signature as a previous overload"
         ),
-        span: func.name_span,
-        path: path.to_owned(),
-        help: Some(
+        func.name_span,
+        path,
+        Some(
             "Each `@overload` variant must have a distinct parameter signature".to_owned(),
         ),
-        note: Some(
+        Some(
             "Overlapping overloads cannot be distinguished at call sites".to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

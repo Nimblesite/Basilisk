@@ -38,7 +38,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -64,21 +64,14 @@ fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
 }
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
-            "Type annotations must be valid type expressions (class names, subscripts, unions)"
-                .to_owned(),
-        ),
-        note: Some(
-            "PEP 484: annotations should be types, not arbitrary runtime expressions".to_owned(),
-        ),
-        provenance: None,
-    }
+        path,
+        Some("Type annotations must be valid type expressions (class names, subscripts, unions)"),
+        Some("PEP 484: annotations should be types, not arbitrary runtime expressions"),
+    )
 }
 
 /// Emits BSK-E0047 when an annotation contains an invalid type expression.
@@ -94,12 +87,8 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
     let non_type_names = collect_non_type_names(module);
     let module_scope_names = build_module_scope_names(module);
     let builtin_type_names: HashSet<&str> = PYTHON_BUILTIN_TYPE_NAMES.iter().copied().collect();
-    let paramspec_names: HashSet<&str> = module
-        .typevar_calls
-        .iter()
-        .filter(|tv| tv.is_paramspec)
-        .map(|tv| tv.name.as_str())
-        .collect();
+    let paramspec_names: HashSet<&str> =
+        basilisk_resolver::collect_name_set_where(&module.typevar_calls, |tv| tv.is_paramspec);
 
     check_function_param_annotations(module, &non_type_names, &paramspec_names, diagnostics);
     check_module_var_annotations(module, &non_type_names, &paramspec_names, diagnostics);

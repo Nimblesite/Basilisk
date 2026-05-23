@@ -9,7 +9,7 @@
 
 use basilisk_resolver::{ResolvedModule, RhsKind};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -39,40 +39,33 @@ impl Rule for InvalidCastCall {
                         | RhsKind::BytesLiteral
                         | RhsKind::NoneValue
                 ) {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: "First argument of `cast()` must be a type, not a value literal"
-                            .to_owned(),
-                        span: *first_span,
-                        path: module.path.clone(),
-                        help: Some(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        "First argument of `cast()` must be a type, not a value literal".to_owned(),
+                        *first_span,
+                        &module.path,
+                        Some(
                             "Replace the literal with a type expression, e.g. `cast(int, val)`"
                                 .to_owned(),
                         ),
-                        note: Some(
+                        Some(
                             "PEP 484: the first argument to `cast()` must be a type expression"
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 }
             } else {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
-                        "`cast()` requires exactly 2 arguments (type, value), got {arg_count}"
-                    ),
-                    span: call.span,
-                    path: module.path.clone(),
-                    help: Some("Usage: `cast(Type, expression)`".to_owned()),
-                    note: Some(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!("`cast()` requires exactly 2 arguments (type, value), got {arg_count}"),
+                    call.span,
+                    &module.path,
+                    Some("Usage: `cast(Type, expression)`".to_owned()),
+                    Some(
                         "PEP 484: `cast(typ, val)` takes exactly two positional arguments"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }

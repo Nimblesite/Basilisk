@@ -31,12 +31,7 @@ pub(super) fn collect_float_accesses_in_function(
     out: &mut Vec<FloatParamIntAttrAccess>,
 ) {
     // Collect names of parameters annotated exactly as `float`.
-    let float_params: Vec<&str> = func
-        .parameters
-        .posonlyargs
-        .iter()
-        .chain(func.parameters.args.iter())
-        .chain(func.parameters.kwonlyargs.iter())
+    let float_params: Vec<&str> = super::walks::iter_all_params(&func.parameters)
         .filter(|p| {
             p.parameter.annotation.as_deref().is_some_and(|ann| {
                 let range = ann.range();
@@ -91,33 +86,34 @@ pub(super) fn collect_module_attr_accesses(
     stmts: &[Stmt],
 ) -> Vec<crate::scope::ModuleAttrAccessInfo> {
     let mut out = Vec::new();
-    for stmt in stmts {
-        collect_attr_accesses_from_stmt(stmt, &mut out);
-    }
-    out
-}
-
-pub(super) fn collect_attr_accesses_from_stmt(
-    stmt: &Stmt,
-    out: &mut Vec<crate::scope::ModuleAttrAccessInfo>,
-) {
-    match stmt {
-        Stmt::Expr(node) => collect_attr_accesses_from_expr(&node.value, out),
+    walk_module_level_if(stmts, &mut |stmt| match stmt {
+        Stmt::Expr(node) => collect_attr_accesses_from_expr(&node.value, &mut out),
         Stmt::If(node) => {
-            collect_attr_accesses_from_expr(&node.test, out);
-            for s in &node.body {
-                collect_attr_accesses_from_stmt(s, out);
-            }
+            collect_attr_accesses_from_expr(&node.test, &mut out);
             for clause in &node.elif_else_clauses {
                 if let Some(test) = &clause.test {
-                    collect_attr_accesses_from_expr(test, out);
-                }
-                for s in &clause.body {
-                    collect_attr_accesses_from_stmt(s, out);
+                    collect_attr_accesses_from_expr(test, &mut out);
                 }
             }
         }
         _ => {}
+    });
+    out
+}
+
+/// Walk module-level statements, descending only into `if` (including elif/else)
+/// branches. `for`/`while`/`with`/`try`/function/class bodies are NOT recursed.
+/// Used by module-level analyses that conceptually live at the top of the file
+/// but want to look through `if TYPE_CHECKING:` style guards.
+fn walk_module_level_if(stmts: &[Stmt], visit: &mut impl FnMut(&Stmt)) {
+    for stmt in stmts {
+        visit(stmt);
+        if let Stmt::If(node) = stmt {
+            walk_module_level_if(&node.body, visit);
+            for clause in &node.elif_else_clauses {
+                walk_module_level_if(&clause.body, visit);
+            }
+        }
     }
 }
 
@@ -183,34 +179,19 @@ pub(super) fn collect_module_order_comparisons(
     stmts: &[Stmt],
 ) -> Vec<crate::scope::ModuleOrderComparisonInfo> {
     let mut out = Vec::new();
-    for stmt in stmts {
-        collect_order_comparisons_from_stmt(stmt, &mut out);
-    }
-    out
-}
-
-pub(super) fn collect_order_comparisons_from_stmt(
-    stmt: &Stmt,
-    out: &mut Vec<crate::scope::ModuleOrderComparisonInfo>,
-) {
-    match stmt {
-        Stmt::Expr(node) => collect_order_comparisons_from_expr(&node.value, out),
+    walk_module_level_if(stmts, &mut |stmt| match stmt {
+        Stmt::Expr(node) => collect_order_comparisons_from_expr(&node.value, &mut out),
         Stmt::If(node) => {
-            collect_order_comparisons_from_expr(&node.test, out);
-            for s in &node.body {
-                collect_order_comparisons_from_stmt(s, out);
-            }
+            collect_order_comparisons_from_expr(&node.test, &mut out);
             for clause in &node.elif_else_clauses {
                 if let Some(test) = &clause.test {
-                    collect_order_comparisons_from_expr(test, out);
-                }
-                for s in &clause.body {
-                    collect_order_comparisons_from_stmt(s, out);
+                    collect_order_comparisons_from_expr(test, &mut out);
                 }
             }
         }
         _ => {}
-    }
+    });
+    out
 }
 
 pub(super) fn collect_order_comparisons_from_expr(

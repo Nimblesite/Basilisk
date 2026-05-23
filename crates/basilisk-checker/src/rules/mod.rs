@@ -2,6 +2,10 @@
 //!
 //! Each rule is a zero-size struct implementing [`Rule`]. Rules are
 //! registered in [`run_all`] and executed in order against a resolved module.
+//!
+//! Module declarations are listed explicitly (not via a `rule_modules!` macro)
+//! so `cargo mutants` can discover them — it parses Rust with `syn` and does
+//! not expand macros, which means macro-declared modules are invisible to it.
 
 pub(crate) mod e0001;
 pub(crate) mod e0002;

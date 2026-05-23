@@ -562,6 +562,27 @@ mod tests {
         std::env::temp_dir().join(format!("{prefix}_{n}_{}", std::process::id()))
     }
 
+    /// Create a unique tmp dir named `<prefix>_<n>_<pid>` and return its path.
+    /// The dir is left in place; tests should clean up with `fs::remove_dir_all` at the end.
+    fn make_tmp_dir(prefix: &str) -> PathBuf {
+        let dir = unique_tmp(prefix);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Create `<parent>/<pkg_name>/` and populate it with empty files named in
+    /// `files`. Returns the package directory path. Collapses the
+    /// `create_dir_all` + `fs::write(empty)` boilerplate that every package
+    /// resolution test repeats.
+    fn make_pkg(parent: &Path, pkg_name: &str, files: &[&str]) -> PathBuf {
+        let pkg = parent.join(pkg_name);
+        fs::create_dir_all(&pkg).unwrap();
+        for f in files {
+            fs::write(pkg.join(f), "").unwrap();
+        }
+        pkg
+    }
+
     fn make_search_paths(roots: Vec<PathBuf>) -> ImportSearchPaths {
         ImportSearchPaths {
             roots,
@@ -575,8 +596,7 @@ mod tests {
 
     #[test]
     fn test_resolve_simple_module() {
-        let dir = unique_tmp("bsk_ir_simple");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = make_tmp_dir("bsk_ir_simple");
         fs::write(dir.join("foo.py"), "x = 1\n").unwrap();
 
         let paths = make_search_paths(vec![dir.clone()]);
@@ -591,8 +611,7 @@ mod tests {
 
     #[test]
     fn test_resolve_prefers_pyi() {
-        let dir = unique_tmp("bsk_ir_pyi");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = make_tmp_dir("bsk_ir_pyi");
         fs::write(dir.join("bar.py"), "x = 1\n").unwrap();
         fs::write(dir.join("bar.pyi"), "x: int\n").unwrap();
 
@@ -607,9 +626,7 @@ mod tests {
     #[test]
     fn test_resolve_package_init() {
         let dir = unique_tmp("bsk_ir_pkg");
-        let pkg = dir.join("mypkg");
-        fs::create_dir_all(&pkg).unwrap();
-        fs::write(pkg.join("__init__.py"), "").unwrap();
+        let _pkg = make_pkg(&dir, "mypkg", &["__init__.py"]);
 
         let paths = make_search_paths(vec![dir.clone()]);
         let result = resolve_module("mypkg", &paths).unwrap();
@@ -636,8 +653,7 @@ mod tests {
 
     #[test]
     fn test_resolve_unresolved() {
-        let dir = unique_tmp("bsk_ir_unresolved");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = make_tmp_dir("bsk_ir_unresolved");
 
         let paths = make_search_paths(vec![dir.clone()]);
         let result = resolve_module("nonexistent", &paths);
@@ -648,8 +664,7 @@ mod tests {
 
     #[test]
     fn test_resolve_relative_import_same_dir() {
-        let dir = unique_tmp("bsk_ir_rel");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = make_tmp_dir("bsk_ir_rel");
         fs::write(dir.join("sibling.py"), "x = 1\n").unwrap();
         let importing = dir.join("main.py");
 
@@ -679,8 +694,7 @@ mod tests {
 
     #[test]
     fn test_resolve_relative_import_bare_dot() {
-        let dir = unique_tmp("bsk_ir_rel_bare");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = make_tmp_dir("bsk_ir_rel_bare");
         fs::write(dir.join("__init__.py"), "").unwrap();
         let importing = dir.join("mod.py");
 
@@ -694,10 +708,8 @@ mod tests {
 
     #[test]
     fn test_extra_paths_searched() {
-        let root = unique_tmp("bsk_ir_extra_root");
-        let extra = unique_tmp("bsk_ir_extra_lib");
-        fs::create_dir_all(&root).unwrap();
-        fs::create_dir_all(&extra).unwrap();
+        let root = make_tmp_dir("bsk_ir_extra_root");
+        let extra = make_tmp_dir("bsk_ir_extra_lib");
         fs::write(extra.join("libmod.py"), "x = 1\n").unwrap();
 
         let paths = ImportSearchPaths {
@@ -717,10 +729,8 @@ mod tests {
 
     #[test]
     fn test_site_packages_searched() {
-        let root = unique_tmp("bsk_ir_sp_root");
-        let sp = unique_tmp("bsk_ir_sp_pkgs");
-        fs::create_dir_all(&root).unwrap();
-        fs::create_dir_all(&sp).unwrap();
+        let root = make_tmp_dir("bsk_ir_sp_root");
+        let sp = make_tmp_dir("bsk_ir_sp_pkgs");
         fs::write(sp.join("requests.py"), "").unwrap();
 
         let paths = ImportSearchPaths {
@@ -740,10 +750,8 @@ mod tests {
 
     #[test]
     fn test_workspace_root_takes_priority() {
-        let root = unique_tmp("bsk_ir_prio_root");
-        let extra = unique_tmp("bsk_ir_prio_extra");
-        fs::create_dir_all(&root).unwrap();
-        fs::create_dir_all(&extra).unwrap();
+        let root = make_tmp_dir("bsk_ir_prio_root");
+        let extra = make_tmp_dir("bsk_ir_prio_extra");
         fs::write(root.join("dup.py"), "root\n").unwrap();
         fs::write(extra.join("dup.py"), "extra\n").unwrap();
 
@@ -765,10 +773,7 @@ mod tests {
     #[test]
     fn test_package_init_pyi_preferred() {
         let dir = unique_tmp("bsk_ir_pkg_pyi");
-        let pkg = dir.join("mypkg");
-        fs::create_dir_all(&pkg).unwrap();
-        fs::write(pkg.join("__init__.py"), "").unwrap();
-        fs::write(pkg.join("__init__.pyi"), "").unwrap();
+        let _pkg = make_pkg(&dir, "mypkg", &["__init__.py", "__init__.pyi"]);
 
         let paths = make_search_paths(vec![dir.clone()]);
         let result = resolve_module("mypkg", &paths).unwrap();
@@ -779,8 +784,7 @@ mod tests {
 
     #[test]
     fn test_dotted_module_intermediate_missing() {
-        let dir = unique_tmp("bsk_ir_dotted_miss");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = make_tmp_dir("bsk_ir_dotted_miss");
         // No pkg/ directory exists.
 
         let paths = make_search_paths(vec![dir.clone()]);
@@ -796,10 +800,8 @@ mod tests {
     // scripts/ directory is not listed as a workspace root.
     #[test]
     fn test_sibling_module_resolved_when_importer_dir_not_in_roots() {
-        let scripts_dir = unique_tmp("bsk_ir_sibling");
-        let workspace_root = unique_tmp("bsk_ir_sibling_root");
-        fs::create_dir_all(&scripts_dir).unwrap();
-        fs::create_dir_all(&workspace_root).unwrap();
+        let scripts_dir = make_tmp_dir("bsk_ir_sibling");
+        let workspace_root = make_tmp_dir("bsk_ir_sibling_root");
         fs::write(scripts_dir.join("configure_agent_backend.py"), "x = 1\n").unwrap();
         let importing_file = scripts_dir.join("configure_agent_backend_test.py");
 
@@ -853,8 +855,7 @@ mod tests {
 
     #[test]
     fn test_resolve_relative_import_too_many_levels() {
-        let dir = unique_tmp("bsk_ir_rel_deep");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = make_tmp_dir("bsk_ir_rel_deep");
         let importing = dir.join("mod.py");
 
         let paths = make_search_paths(vec![dir.clone()]);
@@ -926,8 +927,7 @@ mod tests {
         fs::create_dir_all(&sp).unwrap();
 
         // Workspace root is intentionally empty (no .venv inside it).
-        let workspace = unique_tmp("bsk_ir_workspace_no_venv");
-        fs::create_dir_all(&workspace).unwrap();
+        let workspace = make_tmp_dir("bsk_ir_workspace_no_venv");
 
         let config = crate::config::WorkspaceConfig::default();
         let result =
@@ -985,10 +985,8 @@ mod tests {
 
     #[test]
     fn test_stub_paths_searched_before_roots() {
-        let root = unique_tmp("bsk_ir_stubpath_root");
-        let stubs = unique_tmp("bsk_ir_stubpath_stubs");
-        fs::create_dir_all(&root).unwrap();
-        fs::create_dir_all(&stubs).unwrap();
+        let root = make_tmp_dir("bsk_ir_stubpath_root");
+        let stubs = make_tmp_dir("bsk_ir_stubpath_stubs");
         fs::write(root.join("mymod.py"), "x = 1\n").unwrap();
         fs::write(stubs.join("mymod.pyi"), "x: int\n").unwrap();
 
@@ -1011,8 +1009,7 @@ mod tests {
 
     #[test]
     fn test_stub_paths_only_pyi() {
-        let stubs = unique_tmp("bsk_ir_stubpath_pyi_only");
-        fs::create_dir_all(&stubs).unwrap();
+        let stubs = make_tmp_dir("bsk_ir_stubpath_pyi_only");
         // Only .py in stub dir — should NOT be found (stubs are .pyi only)
         fs::write(stubs.join("mymod.py"), "x = 1\n").unwrap();
 
@@ -1037,12 +1034,9 @@ mod tests {
 
     #[test]
     fn test_stub_package_resolution() {
-        let root = unique_tmp("bsk_ir_pep561_root");
+        let root = make_tmp_dir("bsk_ir_pep561_root");
         let sp = unique_tmp("bsk_ir_pep561_sp");
-        fs::create_dir_all(&root).unwrap();
-        let stubs_dir = sp.join("requests-stubs");
-        fs::create_dir_all(&stubs_dir).unwrap();
-        fs::write(stubs_dir.join("__init__.pyi"), "").unwrap();
+        let _stubs_dir = make_pkg(&sp, "requests-stubs", &["__init__.pyi"]);
 
         let paths = ImportSearchPaths {
             roots: vec![root.clone()],
@@ -1063,9 +1057,7 @@ mod tests {
     #[test]
     fn test_stub_package_submodule() {
         let sp = unique_tmp("bsk_ir_pep561_sub");
-        let stubs_dir = sp.join("requests-stubs");
-        fs::create_dir_all(&stubs_dir).unwrap();
-        fs::write(stubs_dir.join("__init__.pyi"), "").unwrap();
+        let stubs_dir = make_pkg(&sp, "requests-stubs", &["__init__.pyi"]);
         fs::write(stubs_dir.join("api.pyi"), "def get() -> None: ...\n").unwrap();
 
         let paths = ImportSearchPaths {
@@ -1086,10 +1078,7 @@ mod tests {
     #[test]
     fn test_py_typed_detection() {
         let sp = unique_tmp("bsk_ir_pytyped");
-        let pkg = sp.join("rich");
-        fs::create_dir_all(&pkg).unwrap();
-        fs::write(pkg.join("py.typed"), "").unwrap();
-        fs::write(pkg.join("__init__.py"), "").unwrap();
+        let _pkg = make_pkg(&sp, "rich", &["py.typed", "__init__.py"]);
 
         assert!(is_inline_typed_package("rich", &sp));
         assert!(!is_inline_typed_package("flask", &sp));

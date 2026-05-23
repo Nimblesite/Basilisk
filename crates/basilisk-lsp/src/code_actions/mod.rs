@@ -1,10 +1,11 @@
 //! Code Actions handler: quick fixes for diagnostics.
 
+use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 
 use tower_lsp::lsp_types::{
     CodeAction, CodeActionKind, CodeActionOrCommand, Command, Diagnostic, NumberOrString, Range,
-    Url,
+    TextEdit, Url, WorkspaceEdit,
 };
 
 mod fixes;
@@ -15,6 +16,31 @@ mod suppress;
 
 /// Monotonic counter for unique temp-file names.
 pub(super) static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Construct a [`CodeAction`] whose edit is a precomputed `changes` map.
+///
+/// Many code-action builders construct a `HashMap<Url, Vec<TextEdit>>` and
+/// wrap it in `WorkspaceEdit { changes: Some(changes), ..Default::default() }`.
+/// This helper deduplicates that boilerplate for actions that carry no
+/// associated diagnostic (`diagnostics: None`).
+pub(super) fn code_action_with_changes(
+    title: String,
+    kind: CodeActionKind,
+    changes: HashMap<Url, Vec<TextEdit>>,
+    is_preferred: bool,
+) -> CodeAction {
+    CodeAction {
+        title,
+        kind: Some(kind),
+        diagnostics: None,
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }),
+        is_preferred: Some(is_preferred),
+        ..Default::default()
+    }
+}
 
 // Re-export pub(crate) items that the server module calls directly.
 pub(crate) use imports::organize_imports;
@@ -277,35 +303,64 @@ fn make_uv_add_stubs_action(diag: &Diagnostic, module: &str) -> CodeAction {
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::indexing_slicing,
-    reason = "test-only code: unwrap/expect/indexing acceptable in unit tests"
+    clippy::panic,
+    reason = "test-only code: unwrap/expect/indexing/panic acceptable in unit tests"
 )]
 mod tests {
     use super::*;
-    use tower_lsp::lsp_types::{Diagnostic, NumberOrString, Position, Range, Url};
+    use tower_lsp::lsp_types::{
+        Diagnostic, DiagnosticSeverity, NumberOrString, Position, Range, Url,
+    };
+
+    fn pos(line: u32, character: u32) -> Position {
+        Position { line, character }
+    }
+
+    fn range_at(start: (u32, u32), end: (u32, u32)) -> Range {
+        Range {
+            start: pos(start.0, start.1),
+            end: pos(end.0, end.1),
+        }
+    }
+
+    fn make_diagnostic(
+        severity: DiagnosticSeverity,
+        code: &str,
+        message: &str,
+        range: Range,
+    ) -> Diagnostic {
+        Diagnostic {
+            range,
+            severity: Some(severity),
+            code: Some(NumberOrString::String(code.to_owned())),
+            code_description: None,
+            source: Some("basilisk".to_owned()),
+            message: message.to_owned(),
+            tags: None,
+            related_information: None,
+            data: None,
+        }
+    }
+
+    fn find_action_with_title<'a>(
+        actions: &'a [CodeActionOrCommand],
+        substring: &str,
+    ) -> Option<&'a CodeActionOrCommand> {
+        actions.iter().find(|a| match a {
+            CodeActionOrCommand::CodeAction(ca) => ca.title.contains(substring),
+            CodeActionOrCommand::Command(_) => false,
+        })
+    }
 
     #[test]
     fn test_fix_remove_redundant_annotation() {
         let uri = Url::parse("file:///test.py").unwrap();
-        let diag = Diagnostic {
-            range: Range {
-                start: Position {
-                    line: 0,
-                    character: 0,
-                },
-                end: Position {
-                    line: 0,
-                    character: 1,
-                },
-            },
-            severity: Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-            code: Some(NumberOrString::String("BSK-W0050".to_owned())),
-            code_description: None,
-            source: Some("basilisk".to_owned()),
-            message: "Redundant type annotation".to_owned(),
-            tags: None,
-            related_information: None,
-            data: None,
-        };
+        let diag = make_diagnostic(
+            DiagnosticSeverity::WARNING,
+            "BSK-W0050",
+            "Redundant type annotation",
+            range_at((0, 0), (0, 1)),
+        );
         let source = "x: int = 42\n";
         let action = fixes::fix_remove_redundant_annotation(&uri, &diag, source);
         assert_eq!(action.title, "Remove redundant type annotation (basilisk)");
@@ -325,45 +380,18 @@ mod tests {
     #[test]
     fn test_code_actions_includes_w0050() {
         let uri = Url::parse("file:///test.py").unwrap();
-        let diag = Diagnostic {
-            range: Range {
-                start: Position {
-                    line: 0,
-                    character: 0,
-                },
-                end: Position {
-                    line: 0,
-                    character: 1,
-                },
-            },
-            severity: Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-            code: Some(NumberOrString::String("BSK-W0050".to_owned())),
-            code_description: None,
-            source: Some("basilisk".to_owned()),
-            message: "Redundant type annotation".to_owned(),
-            tags: None,
-            related_information: None,
-            data: None,
-        };
+        let diag = make_diagnostic(
+            DiagnosticSeverity::WARNING,
+            "BSK-W0050",
+            "Redundant type annotation",
+            range_at((0, 0), (0, 1)),
+        );
         let source = "x: int = 42\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 0,
-            },
-            end: Position {
-                line: 0,
-                character: 0,
-            },
-        };
+        let range = range_at((0, 0), (0, 0));
         let actions = super::code_actions(&uri, &[diag], source, &range, None);
         assert!(actions.len() >= 2);
-        let remove_action = actions.iter().find(|a| match a {
-            CodeActionOrCommand::CodeAction(ca) => ca.title.contains("Remove redundant"),
-            CodeActionOrCommand::Command(_) => false,
-        });
         assert!(
-            remove_action.is_some(),
+            find_action_with_title(&actions, "Remove redundant").is_some(),
             "Should have remove redundant action"
         );
     }
@@ -407,164 +435,85 @@ mod tests {
         assert_eq!(extract_module_from_diagnostic(msg), None);
     }
 
+    fn assert_uv_add_action(
+        actions: &[CodeActionOrCommand],
+        title_substring: &str,
+        expected_title: &str,
+        expected_command: &str,
+        expected_arg: &str,
+    ) {
+        let action = find_action_with_title(actions, title_substring)
+            .unwrap_or_else(|| panic!("Should have action matching {title_substring:?}"));
+        let CodeActionOrCommand::CodeAction(ca) = action else {
+            panic!("Expected a CodeAction, got a Command");
+        };
+        assert_eq!(ca.title, expected_title);
+        let cmd = ca.command.as_ref().expect("should have command");
+        assert_eq!(cmd.command, expected_command);
+        let args = cmd.arguments.as_ref().expect("should have arguments");
+        assert_eq!(args[0], serde_json::Value::String(expected_arg.to_owned()));
+    }
+
     #[test]
     fn test_bsk_e0010_code_action_includes_uv_add() {
-        let diag = Diagnostic {
-            range: Range {
-                start: Position {
-                    line: 0,
-                    character: 0,
-                },
-                end: Position {
-                    line: 0,
-                    character: 8,
-                },
-            },
-            severity: Some(tower_lsp::lsp_types::DiagnosticSeverity::ERROR),
-            code: Some(NumberOrString::String("BSK-E0010".to_owned())),
-            code_description: None,
-            source: Some("basilisk".to_owned()),
-            message: "Cannot resolve import 'requests'".to_owned(),
-            tags: None,
-            related_information: None,
-            data: None,
-        };
+        let diag = make_diagnostic(
+            DiagnosticSeverity::ERROR,
+            "BSK-E0010",
+            "Cannot resolve import 'requests'",
+            range_at((0, 0), (0, 8)),
+        );
         let uri = Url::parse("file:///test.py").unwrap();
         let source = "import requests\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 0,
-            },
-            end: Position {
-                line: 0,
-                character: 0,
-            },
-        };
+        let range = range_at((0, 0), (0, 0));
         let actions = super::code_actions(&uri, &[diag], source, &range, None);
-        let uv_action = actions.iter().find(|a| match a {
-            CodeActionOrCommand::CodeAction(ca) => ca.title.contains("uv add"),
-            CodeActionOrCommand::Command(_) => false,
-        });
-        assert!(
-            uv_action.is_some(),
-            "Should have uv add action for BSK-E0010"
+        assert_uv_add_action(
+            &actions,
+            "uv add",
+            "Add 'requests' dependency (uv add)",
+            basilisk_common::commands::UV_ADD,
+            "requests",
         );
-        if let Some(CodeActionOrCommand::CodeAction(ca)) = uv_action {
-            assert_eq!(ca.title, "Add 'requests' dependency (uv add)");
-            let cmd = ca.command.as_ref().expect("should have command");
-            assert_eq!(cmd.command, basilisk_common::commands::UV_ADD);
-            let args = cmd.arguments.as_ref().expect("should have arguments");
-            assert_eq!(args[0], serde_json::Value::String("requests".to_owned()));
-        }
     }
 
     #[test]
     fn test_bsk_w0010_code_action_includes_uv_add_dev() {
-        let diag = Diagnostic {
-            range: Range {
-                start: Position {
-                    line: 0,
-                    character: 0,
-                },
-                end: Position {
-                    line: 0,
-                    character: 8,
-                },
-            },
-            severity: Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-            code: Some(NumberOrString::String("BSK-W0010".to_owned())),
-            code_description: None,
-            source: Some("basilisk".to_owned()),
-            message: "Missing type stubs for 'requests'".to_owned(),
-            tags: None,
-            related_information: None,
-            data: None,
-        };
+        let diag = make_diagnostic(
+            DiagnosticSeverity::WARNING,
+            "BSK-W0010",
+            "Missing type stubs for 'requests'",
+            range_at((0, 0), (0, 8)),
+        );
         let uri = Url::parse("file:///test.py").unwrap();
         let source = "import requests\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 0,
-            },
-            end: Position {
-                line: 0,
-                character: 0,
-            },
-        };
+        let range = range_at((0, 0), (0, 0));
         let actions = super::code_actions(&uri, &[diag], source, &range, None);
-        let uv_action = actions.iter().find(|a| match a {
-            CodeActionOrCommand::CodeAction(ca) => ca.title.contains("uv add --dev"),
-            CodeActionOrCommand::Command(_) => false,
-        });
-        assert!(
-            uv_action.is_some(),
-            "Should have uv add --dev action for BSK-W0010"
+        assert_uv_add_action(
+            &actions,
+            "uv add --dev",
+            "Install type stubs for 'requests' (uv add --dev)",
+            basilisk_common::commands::UV_ADD_DEV,
+            "requests-stubs",
         );
-        if let Some(CodeActionOrCommand::CodeAction(ca)) = uv_action {
-            assert_eq!(ca.title, "Install type stubs for 'requests' (uv add --dev)");
-            let cmd = ca.command.as_ref().expect("should have command");
-            assert_eq!(cmd.command, basilisk_common::commands::UV_ADD_DEV);
-            let args = cmd.arguments.as_ref().expect("should have arguments");
-            assert_eq!(
-                args[0],
-                serde_json::Value::String("requests-stubs".to_owned())
-            );
-        }
     }
 
     #[test]
     fn test_bsk_w0014_code_action_includes_uv_add_dev_pytest() {
-        let diag = Diagnostic {
-            range: Range {
-                start: Position {
-                    line: 0,
-                    character: 0,
-                },
-                end: Position {
-                    line: 0,
-                    character: 0,
-                },
-            },
-            severity: Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-            code: Some(NumberOrString::String(
-                crate::server::test_handlers::PYTEST_NOT_FOUND_CODE.to_owned(),
-            )),
-            code_description: None,
-            source: Some("basilisk".to_owned()),
-            message: "pytest not found in uv.lock — use quick fix to install".to_owned(),
-            tags: None,
-            related_information: None,
-            data: None,
-        };
+        let diag = make_diagnostic(
+            DiagnosticSeverity::WARNING,
+            crate::server::test_handlers::PYTEST_NOT_FOUND_CODE,
+            "pytest not found in uv.lock — use quick fix to install",
+            range_at((0, 0), (0, 0)),
+        );
         let uri = Url::parse("file:///test_example.py").unwrap();
         let source = "def test_hello() -> None:\n    pass\n";
-        let range = Range {
-            start: Position {
-                line: 0,
-                character: 0,
-            },
-            end: Position {
-                line: 0,
-                character: 0,
-            },
-        };
+        let range = range_at((0, 0), (0, 0));
         let actions = super::code_actions(&uri, &[diag], source, &range, None);
-        let pytest_action = actions.iter().find(|a| match a {
-            CodeActionOrCommand::CodeAction(ca) => ca.title.contains("Install pytest"),
-            CodeActionOrCommand::Command(_) => false,
-        });
-        assert!(
-            pytest_action.is_some(),
-            "Should have install pytest action for BSK-W0014"
+        assert_uv_add_action(
+            &actions,
+            "Install pytest",
+            "Install pytest (uv add --dev pytest)",
+            basilisk_common::commands::UV_ADD_DEV,
+            "pytest",
         );
-        if let Some(CodeActionOrCommand::CodeAction(ca)) = pytest_action {
-            assert_eq!(ca.title, "Install pytest (uv add --dev pytest)");
-            let cmd = ca.command.as_ref().expect("should have command");
-            assert_eq!(cmd.command, basilisk_common::commands::UV_ADD_DEV);
-            let args = cmd.arguments.as_ref().expect("should have arguments");
-            assert_eq!(args[0], serde_json::Value::String("pytest".to_owned()));
-        }
     }
 }

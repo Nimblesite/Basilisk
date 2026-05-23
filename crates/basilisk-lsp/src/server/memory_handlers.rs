@@ -10,6 +10,18 @@ use tracing::info;
 
 use super::LspServer;
 
+/// Return the first command argument, or an empty JSON object if absent.
+///
+/// LSP `executeCommand` always delivers `args` as an array; for these handlers,
+/// callers can either omit it entirely or pass a single object. Treating "absent"
+/// as "empty object" lets the rest of the handler use the same `.get(...)` path
+/// for both cases.
+fn first_arg_or_empty(args: &[serde_json::Value]) -> serde_json::Value {
+    args.first()
+        .cloned()
+        .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()))
+}
+
 /// Handle `basilisk.memory.start` — begin memory tracking.
 ///
 /// Requires an active debug session. Injects `tracemalloc.start()` into the
@@ -20,10 +32,7 @@ pub(super) async fn execute_memory_start(
 ) -> LspResult<Option<serde_json::Value>> {
     info!("execute_memory_start called");
 
-    let arg = args
-        .first()
-        .cloned()
-        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+    let arg = first_arg_or_empty(args);
 
     let traceback_depth = arg
         .get("tracebackDepth")
@@ -60,10 +69,7 @@ pub(super) async fn execute_memory_snapshot(
 ) -> LspResult<Option<serde_json::Value>> {
     info!("execute_memory_snapshot called");
 
-    let arg = args
-        .first()
-        .cloned()
-        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+    let arg = first_arg_or_empty(args);
 
     let session_id = arg
         .get("memorySessionId")
@@ -93,10 +99,7 @@ pub(super) async fn execute_memory_diff(
 ) -> LspResult<Option<serde_json::Value>> {
     info!("execute_memory_diff called");
 
-    let arg = args
-        .first()
-        .cloned()
-        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+    let arg = first_arg_or_empty(args);
 
     let session_id = arg
         .get("memorySessionId")
@@ -126,10 +129,7 @@ pub(super) async fn execute_memory_references(
 ) -> LspResult<Option<serde_json::Value>> {
     info!("execute_memory_references called");
 
-    let arg = args
-        .first()
-        .cloned()
-        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+    let arg = first_arg_or_empty(args);
 
     let target_type = arg
         .get("targetType")
@@ -180,10 +180,7 @@ pub(super) async fn execute_memory_objects_by_type(
 ) -> LspResult<Option<serde_json::Value>> {
     info!("execute_memory_objects_by_type called");
 
-    let arg = args
-        .first()
-        .cloned()
-        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+    let arg = first_arg_or_empty(args);
 
     let type_name = arg
         .get("typeName")

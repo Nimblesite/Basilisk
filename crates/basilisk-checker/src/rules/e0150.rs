@@ -23,7 +23,7 @@ use basilisk_resolver::ResolvedModule;
 use ruff_python_ast::{CmpOp, Expr, Stmt};
 use ruff_text_size::Ranged;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -40,8 +40,7 @@ pub(crate) struct DeadBranchVariable;
 
 impl Rule for DeadBranchVariable {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 
@@ -329,29 +328,27 @@ fn check_expr_for_dead_var_usage(
             let var_name = name.id.as_str();
             if dead_vars.contains(var_name) && !live_vars.contains(var_name) {
                 let range = name.range();
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Variable `{var_name}` is only defined in a dead version/platform branch"
                     ),
-                    span: basilisk_resolver::Span {
+                    basilisk_resolver::Span {
                         start: range.start().to_u32(),
                         end: range.end().to_u32(),
                     },
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "`{var_name}` is assigned in a branch that is unreachable \
                          for the target Python version ({}.{})",
                         TARGET_VERSION.0, TARGET_VERSION.1
                     )),
-                    note: Some(
+                    Some(
                         "PEP 484: type checkers should evaluate version/platform guards \
                          and treat unreachable branches as dead code"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
         Expr::Call(call) => {

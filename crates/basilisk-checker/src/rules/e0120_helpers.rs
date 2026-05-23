@@ -6,7 +6,7 @@
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, RhsKind, YieldExprInfo};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::inference::infer_rhs;
 use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
@@ -124,24 +124,22 @@ fn check_yield_from_list(
             continue;
         }
         if !elem_type.is_assignable_to(declared_yield_type) {
-            out.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            out.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Incompatible `yield from` in `{}`: list element type `{elem_type}` \
                      is not assignable to yield type `{declared_yield_type}`",
                     func.name
                 ),
-                span: yield_expr.span,
-                path: module.path.clone(),
-                help: Some(
+                yield_expr.span,
+                &module.path,
+                Some(
                     "Ensure the sub-iterator yields values compatible with the outer \
                      generator's yield type"
                         .to_owned(),
                 ),
-                note: None,
-                provenance: None,
-            });
+                None,
+            ));
             return; // One diagnostic per yield-from is enough.
         }
     }
@@ -182,24 +180,22 @@ fn check_yield_from_call(
 
     // Check yield type compatibility.
     if !callee_yield_type.is_assignable_to(declared_yield_type) {
-        out.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        out.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Incompatible `yield from` in `{}`: sub-generator yields \
                  `{callee_yield_type}` but `{declared_yield_type}` is expected",
                 func.name
             ),
-            span: yield_expr.span,
-            path: module.path.clone(),
-            help: Some(
+            yield_expr.span,
+            &module.path,
+            Some(
                 "Ensure the sub-iterator yields values compatible with the outer \
                  generator's yield type"
                     .to_owned(),
             ),
-            note: None,
-            provenance: None,
-        });
+            None,
+        ));
     }
 
     // Check send type compatibility between Generator types.
@@ -265,23 +261,21 @@ pub(super) fn check_send_type_compat(
     }
 
     if !outer_send.is_assignable_to(&callee_send) {
-        out.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        out.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Incompatible `yield from` send type in `{}`: outer sends \
                  `{outer_send}` but sub-generator accepts `{callee_send}`",
                 func.name
             ),
-            span: yield_expr.span,
-            path: module.path.clone(),
-            help: Some(
+            yield_expr.span,
+            &module.path,
+            Some(
                 "Ensure the sub-generator's send type is compatible with the \
                  outer generator's send type"
                     .to_owned(),
             ),
-            note: None,
-            provenance: None,
-        });
+            None,
+        ));
     }
 }

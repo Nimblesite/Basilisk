@@ -3,9 +3,7 @@
 
 use std::collections::HashMap;
 
-use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Position, Range, TextEdit, Url, WorkspaceEdit,
-};
+use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit, Url};
 
 /// Offer to inline a function call when the called function is defined in the
 /// same file and has a single `return expr` body.
@@ -315,15 +313,10 @@ fn build_inline_action(uri: &Url, edit_range: Range, new_text: String) -> CodeAc
         }],
     );
 
-    CodeAction {
-        title: "Inline function (basilisk)".to_owned(),
-        kind: Some(CodeActionKind::new("refactor.inline.function")),
-        diagnostics: None,
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(false),
-        ..Default::default()
-    }
+    super::super::code_action_with_changes(
+        "Inline function (basilisk)".to_owned(),
+        CodeActionKind::new("refactor.inline.function"),
+        changes,
+        false,
+    )
 }

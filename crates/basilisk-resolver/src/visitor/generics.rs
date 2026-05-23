@@ -130,10 +130,7 @@ pub(super) fn collect_generic_subscript_sites(stmts: &[Stmt]) -> Vec<GenericSubs
                         out.push(GenericSubscriptSite {
                             base_name,
                             arg_count,
-                            span: Span {
-                                start: sub.range().start().to_u32(),
-                                end: sub.range().end().to_u32(),
-                            },
+                            span: Span::from(sub.range()),
                         });
                     }
                 }
@@ -149,23 +146,14 @@ pub(super) fn collect_generic_subscript_sites(stmts: &[Stmt]) -> Vec<GenericSubs
                         out.push(GenericSubscriptSite {
                             base_name,
                             arg_count,
-                            span: Span {
-                                start: sub.range().start().to_u32(),
-                                end: sub.range().end().to_u32(),
-                            },
+                            span: Span::from(sub.range()),
                         });
                     }
                 }
             }
             // Function definitions: check parameter annotations for subscripts
             Stmt::FunctionDef(func_def) => {
-                for param in func_def
-                    .parameters
-                    .args
-                    .iter()
-                    .chain(func_def.parameters.posonlyargs.iter())
-                    .chain(func_def.parameters.kwonlyargs.iter())
-                {
+                for param in super::walks::iter_all_params(&func_def.parameters) {
                     if let Some(ann) = &param.parameter.annotation {
                         if let Expr::Subscript(sub) = ann.as_ref() {
                             if let Some(base_name) = expr_simple_name(sub.value.as_ref()) {
@@ -176,10 +164,7 @@ pub(super) fn collect_generic_subscript_sites(stmts: &[Stmt]) -> Vec<GenericSubs
                                 out.push(GenericSubscriptSite {
                                     base_name,
                                     arg_count,
-                                    span: Span {
-                                        start: sub.range().start().to_u32(),
-                                        end: sub.range().end().to_u32(),
-                                    },
+                                    span: Span::from(sub.range()),
                                 });
                             }
                         }

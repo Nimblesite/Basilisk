@@ -9,7 +9,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 
 use super::helpers::{span_text, CODE};
 
@@ -63,7 +63,7 @@ pub(super) fn check_protocol_classvar_conformance(
         .iter()
         .filter(|cls| !cls.bases.iter().any(|b| b == "Protocol"))
         .map(|cls| {
-            let attr_names: Vec<&str> = cls.attributes.iter().map(|a| a.name.as_str()).collect();
+            let attr_names: Vec<&str> = basilisk_resolver::collect_names(&cls.attributes);
             (cls.name.as_str(), attr_names)
         })
         .collect();
@@ -141,28 +141,26 @@ fn emit_protocol_violations(
 ) {
     for cv_attr in required_cv_attrs {
         if !cls_attrs.contains(cv_attr) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Class `{impl_class_name}` is not compatible with protocol \
                      `{ann_trimmed}`: attribute `{cv_attr}` is required to be a \
                      class variable (`ClassVar`) but is not defined at class level",
                 ),
-                span: name_span,
-                path: path.to_owned(),
-                help: Some(format!(
+                name_span,
+                path,
+                Some(format!(
                     "Define `{cv_attr}` as a class-level attribute in \
                      `{impl_class_name}` instead of assigning via `self.{cv_attr}` \
                      in `__init__`",
                 )),
-                note: Some(
+                Some(
                     "Protocol `ClassVar` attributes must be class-level variables \
                      in the implementation, not instance variables"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

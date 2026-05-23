@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::Span;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use crate::rules::shared::infer_expr_literal_type;
 
@@ -192,35 +192,31 @@ fn check_attr_assignment(
     let attr_name = attr.attr.as_str();
     let span = mk_span(attr.range());
     let Some(proto_attr) = proto.attrs.iter().find(|a| a.name == attr_name) else {
-        diag.push(Diagnostic {
-            code: code.clone(),
-            severity: Severity::Error,
-            message: format!("Protocol `{proto_name}` has no attribute `{attr_name}`"),
+        diag.push(error_diagnostic_owned(
+            code.clone(),
+            format!("Protocol `{proto_name}` has no attribute `{attr_name}`"),
             span,
-            path: path.to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        });
+            path,
+            None,
+            None,
+        ));
         return;
     };
     // Check type compatibility of the assigned value
     let value_type = infer_expr_literal_type(value).map(str::to_owned);
     if let Some(vt) = value_type {
         if !types_compat(&proto_attr.ann, &vt) {
-            diag.push(Diagnostic {
-                code: code.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diag.push(error_diagnostic_owned(
+                code.clone(),
+                format!(
                     "Cannot assign `{vt}` to `{proto_name}.{attr_name}` of type `{}`",
                     proto_attr.ann
                 ),
                 span,
-                path: path.to_owned(),
-                help: None,
-                note: None,
-                provenance: None,
-            });
+                path,
+                None,
+                None,
+            ));
         }
     }
 }
@@ -274,18 +270,14 @@ fn check_attr_access_in_expr(
                     if let Some(proto) = ctx.find_protocol(proto_name) {
                         let attr_name = attr.attr.as_str();
                         if !proto.attrs.iter().any(|a| a.name == attr_name) {
-                            diag.push(Diagnostic {
-                                code: code.clone(),
-                                severity: Severity::Error,
-                                message: format!(
-                                    "Protocol `{proto_name}` has no attribute `{attr_name}`"
-                                ),
-                                span: mk_span(attr.range()),
-                                path: path.to_owned(),
-                                help: None,
-                                note: None,
-                                provenance: None,
-                            });
+                            diag.push(error_diagnostic_owned(
+                                code.clone(),
+                                format!("Protocol `{proto_name}` has no attribute `{attr_name}`"),
+                                mk_span(attr.range()),
+                                path,
+                                None,
+                                None,
+                            ));
                         }
                     }
                 }
@@ -334,18 +326,14 @@ fn check_assignment(
     if ctx.is_non_protocol_class(&base) {
         if let Some(fname) = value_name {
             if ctx.find_func(fname).is_some() {
-                diag.push(Diagnostic {
-                    code: code.clone(),
-                    severity: Severity::Error,
-                    message: format!(
-                        "Cannot assign function `{fname}` to non-protocol type `{base}`"
-                    ),
+                diag.push(error_diagnostic_owned(
+                    code.clone(),
+                    format!("Cannot assign function `{fname}` to non-protocol type `{base}`"),
                     span,
-                    path: path.to_owned(),
-                    help: None,
-                    note: None,
-                    provenance: None,
-                });
+                    path,
+                    None,
+                    None,
+                ));
             }
         }
         return;

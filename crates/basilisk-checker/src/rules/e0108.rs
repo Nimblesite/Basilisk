@@ -24,7 +24,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ClassInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -56,12 +56,8 @@ fn check_self_attr_assignments(module: &ResolvedModule, diagnostics: &mut Vec<Di
         .iter()
         .filter(|c| c.is_dataclass_slots || (c.is_dataclass && c.has_manual_slots))
         .map(|c| {
-            let fields: HashSet<&str> = c
-                .attributes
-                .iter()
-                .filter(|a| a.has_annotation)
-                .map(|a| a.name.as_str())
-                .collect();
+            let fields: HashSet<&str> =
+                basilisk_resolver::collect_name_set_where(&c.attributes, |a| a.has_annotation);
             (c.name.as_str(), fields)
         })
         .collect();
@@ -139,32 +135,30 @@ fn find_undeclared_self_assignments(
         if !fields.contains(attr_name) {
             let byte_offset = class_offset + line_offset + (line.len() - trimmed.len());
             let span_end = byte_offset + "self.".len() + attr_name.len();
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Cannot assign to attribute `{attr_name}` on `{}`: \
                      `{attr_name}` is not defined in `__slots__`",
                     cls.name
                 ),
-                span: Span {
+                Span {
                     start: u32::try_from(byte_offset).unwrap_or(0),
                     end: u32::try_from(span_end).unwrap_or(0),
                 },
-                path: path.to_owned(),
-                help: Some(format!(
+                path,
+                Some(format!(
                     "Only attributes declared in `__slots__` can be assigned; \
                      `{}` defines slots {fields_list}",
                     cls.name,
                     fields_list = format_fields(fields),
                 )),
-                note: Some(
+                Some(
                     "Slot-constrained classes (via `@dataclass(slots=True)` or manual \
                      `__slots__`) cannot have undeclared attributes"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -209,26 +203,24 @@ fn check_slots_access_on_non_slots_class(
             continue;
         }
         if non_slots_dataclasses.contains(access.object_name.as_str()) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Cannot access `__slots__` on `{}`: class does not define `__slots__`",
                     access.object_name
                 ),
-                span: access.span,
-                path: path.clone(),
-                help: Some(format!(
+                access.span,
+                path,
+                Some(format!(
                     "Use `@dataclass(slots=True)` or define `__slots__` manually in `{}`",
                     access.object_name
                 )),
-                note: Some(
+                Some(
                     "Only classes with `@dataclass(slots=True)` or a manual `__slots__` \
                      definition have a `__slots__` attribute"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 
@@ -294,29 +286,27 @@ fn check_instance_slots_access(
                     continue;
                 };
 
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Cannot access `__slots__` on `{class_name}` instance: \
                          class does not define `__slots__`"
                     ),
-                    span: Span {
+                    Span {
                         start: span_start,
                         end: span_end,
                     },
-                    path: path.clone(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "Use `@dataclass(slots=True)` or define `__slots__` manually in \
                          `{class_name}`"
                     )),
-                    note: Some(
+                    Some(
                         "Only classes with `@dataclass(slots=True)` or a manual `__slots__` \
                          definition have a `__slots__` attribute"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }

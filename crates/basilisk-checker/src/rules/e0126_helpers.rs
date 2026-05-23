@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 /// BSK-E0126 error code shared between this module and the rule.
@@ -342,27 +342,25 @@ pub(super) fn emit_literal_value_mismatch(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    diagnostics.push(Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Cannot assign `Literal[\"{source_value}\"]` to `Literal[\"{target_value}\"]` \
              — literal values are incompatible"
         ),
-        span: Span {
+        Span {
             start: u32::try_from(assign.name_offset).unwrap_or(u32::MAX),
             end: u32::try_from(assign.name_offset + assign.name_len).unwrap_or(u32::MAX),
         },
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "The variable expects exactly `Literal[\"{target_value}\"]`, \
              but the parameter has type `Literal[\"{source_value}\"]`"
         )),
-        note: Some(
+        Some(
             "PEP 586: Literal types are only compatible when their values match exactly".to_owned(),
         ),
-        provenance: None,
-    });
+    ));
 }
 
 /// Emit a BSK-E0126 diagnostic for an f-string `LiteralString` violation.
@@ -373,28 +371,26 @@ pub(super) fn emit_fstring_literal_string_error(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    diagnostics.push(Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Cannot assign f-string to `LiteralString` — interpolated variable \
              `{name}` has type `{param_ann}`, which is not `LiteralString`"
         ),
-        span: Span {
+        Span {
             start: u32::try_from(assign.name_offset).unwrap_or(u32::MAX),
             end: u32::try_from(assign.name_offset + assign.name_len).unwrap_or(u32::MAX),
         },
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Change `{name}` to `LiteralString` or use `str` as the target type"
         )),
-        note: Some(
+        Some(
             "PEP 675: an f-string is `LiteralString` only if all interpolated \
              expressions are compatible with `LiteralString`"
                 .to_owned(),
         ),
-        provenance: None,
-    });
+    ));
 }
 
 /// Emit a BSK-E0126 diagnostic for an invariant container generic mismatch.
@@ -406,29 +402,27 @@ pub(super) fn emit_invariant_container_mismatch(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    diagnostics.push(Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Cannot assign `{param_ann}` to `{ann}` — \
              `{ann_container}` is invariant in its type parameter"
         ),
-        span: Span {
+        Span {
             start: u32::try_from(assign.name_offset).unwrap_or(u32::MAX),
             end: u32::try_from(assign.name_offset + assign.name_len).unwrap_or(u32::MAX),
         },
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Use `Sequence[str]` (covariant) instead of `{ann}` if you \
              need to accept `{param_ann}`"
         )),
-        note: Some(
+        Some(
             "PEP 484: mutable generic containers like `list` are invariant — \
              `list[LiteralString]` is not a subtype of `list[str]`"
                 .to_owned(),
         ),
-        provenance: None,
-    });
+    ));
 }
 
 /// Emit a BSK-E0126 diagnostic for a container constructor call with str argument.
@@ -441,26 +435,24 @@ pub(super) fn emit_container_call_str_error(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    diagnostics.push(Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Cannot assign `{rhs}` to `{ann}` — argument `{arg}` \
              has type `{param_ann}`, not `LiteralString`"
         ),
-        span: Span {
+        Span {
             start: u32::try_from(assign.name_offset).unwrap_or(u32::MAX),
             end: u32::try_from(assign.name_offset + assign.name_len).unwrap_or(u32::MAX),
         },
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Change `{arg}` to `LiteralString` or relax the target annotation"
         )),
-        note: Some(
+        Some(
             "PEP 675: `str` is not assignable to `LiteralString` — \
              `LiteralString` is a strict subtype of `str`"
                 .to_owned(),
         ),
-        provenance: None,
-    });
+    ));
 }

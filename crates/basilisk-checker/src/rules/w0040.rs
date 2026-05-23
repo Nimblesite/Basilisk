@@ -14,7 +14,7 @@
 
 use basilisk_resolver::{ResolvedModule, RhsKind};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -31,19 +31,17 @@ impl Rule for LambdaMissingAnnotations {
         // Module-level: `f = lambda x: x + 1` without annotation
         for var in &module.module_vars {
             if var.rhs_kind == RhsKind::Lambda && !var.has_annotation {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Warning,
-                    message: format!("lambda assigned to unannotated variable '{}'", var.name),
-                    span: var.name_span,
-                    path: module.path.clone(),
-                    help: Some(
+                diagnostics.push(warning_diagnostic_owned(
+                    CODE.clone(),
+                    format!("lambda assigned to unannotated variable '{}'", var.name),
+                    var.name_span,
+                    &module.path,
+                    Some(
                         "Add a type annotation such as `Callable[[int], int]` to improve type safety"
                             .to_owned(),
                     ),
-                    note: None,
-            provenance: None,
-                });
+                    None,
+                ));
             }
         }
 
@@ -51,22 +49,20 @@ impl Rule for LambdaMissingAnnotations {
         for class in &module.classes {
             for attr in &class.attributes {
                 if attr.rhs_is_lambda && !attr.has_annotation {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Warning,
-                        message: format!(
+                    diagnostics.push(warning_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "lambda assigned to unannotated class attribute '{}'",
                             attr.name
                         ),
-                        span: attr.name_span,
-                        path: module.path.clone(),
-                        help: Some(
+                        attr.name_span,
+                        &module.path,
+                        Some(
                             "Add a type annotation such as `Callable[[int], int]` to improve type safety"
                                 .to_owned(),
                         ),
-                        note: None,
-            provenance: None,
-                    });
+                        None,
+                    ));
                 }
             }
         }

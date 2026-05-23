@@ -33,7 +33,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{FinalViolationKind, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -44,18 +44,14 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str, help: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic_owned(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(help.to_owned()),
-        note: Some(
-            "PEP 591: `Final` names may only be assigned once at declaration time".to_owned(),
-        ),
-        provenance: None,
-    }
+        path,
+        Some(help.to_owned()),
+        Some("PEP 591: `Final` names may only be assigned once at declaration time".to_owned()),
+    )
 }
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {

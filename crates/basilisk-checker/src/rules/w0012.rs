@@ -11,7 +11,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{info_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -46,20 +46,16 @@ impl UnusedDependency {
         path: &str,
         span: basilisk_resolver::Span,
     ) -> Diagnostic {
-        Diagnostic {
-            code: Self::CODE.clone(),
-            severity: Severity::Info,
-            message: format!(
+        info_diagnostic_owned(
+            Self::CODE.clone(),
+            format!(
                 "Package `{package_name}` is declared in [project.dependencies] but never imported"
             ),
             span,
-            path: path.to_owned(),
-            help: Some(format!("Remove it: `uv remove {package_name}`")),
-            note: Some(
-                "Unused dependencies increase install size and lock file complexity".to_owned(),
-            ),
-            provenance: None,
-        }
+            path,
+            Some(format!("Remove it: `uv remove {package_name}`")),
+            Some("Unused dependencies increase install size and lock file complexity".to_owned()),
+        )
     }
 }
 
@@ -79,6 +75,7 @@ impl Rule for UnusedDependency {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::diagnostic::Severity;
     use basilisk_resolver::Span;
 
     fn make_module() -> ResolvedModule {

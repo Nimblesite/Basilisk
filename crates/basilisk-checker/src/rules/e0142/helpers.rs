@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 pub(super) const CODE: ErrorCode = ErrorCode {
@@ -279,28 +279,26 @@ pub(super) fn check_frozen_inheritance(
                 continue;
             };
             if base_settings.frozen {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Non-frozen class `{}` cannot inherit from frozen \
                          dataclass-transform class `{}`",
                         cls.name, base
                     ),
-                    span: cls.name_span,
-                    path: path.to_owned(),
-                    help: Some(
+                    cls.name_span,
+                    path,
+                    Some(
                         "A non-frozen class cannot subclass a frozen \
                          dataclass-transform class"
                             .to_owned(),
                     ),
-                    note: Some(
+                    Some(
                         "dataclass_transform: frozen and non-frozen classes \
                          cannot be mixed in the same hierarchy"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }
@@ -320,28 +318,26 @@ pub(super) fn check_frozen_instance_assignment(
         if !settings.frozen {
             continue;
         }
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Cannot assign to attribute `{}` of frozen \
                  dataclass-transform class `{}` instance `{}`",
                 assign.attr_name, class_name, assign.object_name
             ),
-            span: assign.target_span,
-            path: path.to_owned(),
-            help: Some(
+            assign.target_span,
+            path,
+            Some(
                 "Instances of frozen dataclass-transform classes are immutable \
                  after construction"
                     .to_owned(),
             ),
-            note: Some(
+            Some(
                 "dataclass_transform(frozen=True) prohibits attribute assignment \
                  after construction"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }
 
@@ -397,19 +393,10 @@ fn split_first_top_level_arg(args: &str) -> &str {
 /// Returns `true` if the argument text looks like a keyword arg (`name=value`).
 fn is_keyword_arg(arg: &str) -> bool {
     let arg = arg.trim();
-    let eq_pos = arg.find('=');
-    let Some(eq_pos) = eq_pos else {
+    let Some(eq_pos) = arg.find('=') else {
         return false;
     };
-    let before = arg[..eq_pos].trim();
-    !before.is_empty()
-        && before
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_')
-        && before
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+    basilisk_resolver::is_simple_ascii_python_identifier(arg[..eq_pos].trim())
 }
 
 /// Check 3: Positional arguments to a `kw_only` transform-class constructor.
@@ -446,25 +433,23 @@ pub(super) fn check_kw_only_positional_args(
         }
 
         if parse_call_positional(source, rhs_text, rhs_span.start_usize()) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Constructor of `{callee}` only accepts keyword arguments \
                      (kw_only=True)"
                 ),
-                span: rhs_span,
-                path: path.to_owned(),
-                help: Some(format!(
+                rhs_span,
+                path,
+                Some(format!(
                     "Pass arguments as keyword arguments: `{callee}(field=value, ...)`"
                 )),
-                note: Some(
+                Some(
                     "dataclass_transform with kw_only_default=True makes all \
                      constructor parameters keyword-only"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -519,27 +504,25 @@ pub(super) fn check_no_order_comparison(
             continue;
         };
 
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Comparison operator not supported: \
                  `{class_name}` does not synthesise ordering methods \
                  (order=False by default)"
             ),
-            span: span_for_source_line(source, line_number),
-            path: path.to_owned(),
-            help: Some(format!(
+            span_for_source_line(source, line_number),
+            path,
+            Some(format!(
                 "Use `order=True` in `class {class_name}(...)` to enable ordering, \
                  or avoid `<`, `>`, `<=`, `>=` comparisons"
             )),
-            note: Some(
+            Some(
                 "dataclass_transform without order=True does not synthesise \
                  __lt__, __le__, __gt__, __ge__ methods"
                     .to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }
 

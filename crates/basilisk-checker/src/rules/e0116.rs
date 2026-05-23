@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -33,11 +33,7 @@ pub(crate) struct NamedTupleDefError;
 
 impl Rule for NamedTupleDefError {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let class_map: HashMap<&str, &ClassInfo> = module
-            .classes
-            .iter()
-            .map(|c| (c.name.as_str(), c))
-            .collect();
+        let class_map = super::shared::class_name_map(&module.classes);
 
         for class in &module.classes {
             let is_nt = is_namedtuple(class) || is_transitive_namedtuple(class, &class_map);
@@ -67,23 +63,21 @@ fn check_underscore_fields(class: &ClassInfo, path: &str, diagnostics: &mut Vec<
             continue;
         }
         if attr.name.starts_with('_') {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "`NamedTuple` field name `{}` must not start with an underscore",
                     attr.name
                 ),
-                span: attr.name_span,
-                path: path.to_owned(),
-                help: Some("Rename the field to remove the leading underscore".to_owned()),
-                note: Some(
+                attr.name_span,
+                path,
+                Some("Rename the field to remove the leading underscore".to_owned()),
+                Some(
                     "The `NamedTuple` runtime raises `ValueError` for field names \
                      starting with `_`"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -115,28 +109,26 @@ fn check_default_ordering(
         if attr.has_value {
             seen_default = true;
         } else if seen_default {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "`NamedTuple` field `{}` without a default value follows a field \
                      with a default value",
                     attr.name
                 ),
-                span: attr.name_span,
-                path: path.to_owned(),
-                help: Some(
+                attr.name_span,
+                path,
+                Some(
                     "Move fields without defaults before fields with defaults, \
                      or add a default value"
                         .to_owned(),
                 ),
-                note: Some(
+                Some(
                     "In `NamedTuple`, fields with defaults must come after all \
                      fields without defaults"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }
@@ -153,26 +145,24 @@ fn check_multiple_inheritance(class: &ClassInfo, path: &str, diagnostics: &mut V
         .collect();
 
     if !non_namedtuple_bases.is_empty() {
-        diagnostics.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "`NamedTuple` class `{}` cannot inherit from multiple bases: `{}`",
                 class.name,
                 non_namedtuple_bases.join("`, `")
             ),
-            span: class.name_span,
-            path: path.to_owned(),
-            help: Some(
+            class.name_span,
+            path,
+            Some(
                 "`NamedTuple` does not support multiple inheritance; \
                  remove the extra base classes"
                     .to_owned(),
             ),
-            note: Some(
+            Some(
                 "Only `Generic[...]` is allowed alongside `NamedTuple` as a base class".to_owned(),
             ),
-            provenance: None,
-        });
+        ));
     }
 }
 
@@ -201,26 +191,24 @@ fn check_subclass_field_conflict(
             continue;
         }
         if base_field_names.contains(&attr.name.as_str()) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "`NamedTuple` subclass `{}` redefines field `{}` from base class",
                     class.name, attr.name
                 ),
-                span: attr.name_span,
-                path: path.to_owned(),
-                help: Some(format!(
+                attr.name_span,
+                path,
+                Some(format!(
                     "Remove the redefinition of `{}` or use a different field name",
                     attr.name
                 )),
-                note: Some(
+                Some(
                     "Fields added in a `NamedTuple` subclass must not conflict with \
                      fields in the base class"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

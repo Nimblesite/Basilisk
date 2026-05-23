@@ -11,7 +11,7 @@
 
 use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -59,39 +59,35 @@ fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
 }
 
 fn make_param_diagnostic(param: &ParameterInfo, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Invalid type annotation on `{}` — numeric literals are not valid types",
             param.name
         ),
-        span: param.name_span,
-        path: path.to_owned(),
-        help: Some(HELP.to_owned()),
-        note: Some(
+        param.name_span,
+        path,
+        Some(HELP.to_owned()),
+        Some(
             "A literal value used as a type annotation has no meaning to the type checker"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }
 
 fn make_return_diagnostic(func: &FunctionInfo, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Invalid return type annotation on `{}` — numeric literals are not valid types",
             func.name
         ),
-        span: func.name_span,
-        path: path.to_owned(),
-        help: Some(HELP.to_owned()),
-        note: Some(
+        func.name_span,
+        path,
+        Some(HELP.to_owned()),
+        Some(
             "A literal value used as a type annotation has no meaning to the type checker"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

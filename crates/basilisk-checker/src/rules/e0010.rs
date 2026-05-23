@@ -114,10 +114,6 @@ fn format_reason(import: &ImportInfo, root_module: &str) -> (String, String) {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::indexing_slicing,
-    reason = "test-only code: indexing acceptable in unit tests"
-)]
 mod tests {
     use super::*;
     use basilisk_resolver::scope::ImportKind;
@@ -146,29 +142,34 @@ mod tests {
         }
     }
 
-    #[test]
-    fn generic_message_when_no_reason() {
-        let import = make_import("requests", None);
+    fn run_check(import: ImportInfo) -> Vec<crate::Diagnostic> {
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
         ImportFromUntypedModule.check(&module, &mut diagnostics);
+        diagnostics
+    }
+
+    /// Run the rule on a single import with `reason` and assert a single diagnostic was emitted.
+    /// Returns that diagnostic for further inspection.
+    fn check_single(name: &str, reason: Option<UnresolvedReason>) -> crate::Diagnostic {
+        let mut diagnostics = run_check(make_import(name, reason));
         assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0]
-            .message
-            .contains("no type information available"));
+        diagnostics.remove(0)
+    }
+
+    #[test]
+    fn generic_message_when_no_reason() {
+        let diag = check_single("requests", None);
+        assert!(diag.message.contains("no type information available"));
     }
 
     #[test]
     fn not_installed_message() {
-        let import = make_import("requests", Some(UnresolvedReason::NotInstalled));
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        ImportFromUntypedModule.check(&module, &mut diagnostics);
-        assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0]
+        let diag = check_single("requests", Some(UnresolvedReason::NotInstalled));
+        assert!(diag
             .message
             .contains("is not a dependency in pyproject.toml"));
-        assert!(diagnostics[0]
+        assert!(diag
             .help
             .as_ref()
             .is_some_and(|h| h.contains("not listed in project dependencies")));
@@ -176,24 +177,16 @@ mod tests {
 
     #[test]
     fn not_in_deps_message() {
-        let import = make_import("urllib3", Some(UnresolvedReason::NotInDeps));
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        ImportFromUntypedModule.check(&module, &mut diagnostics);
-        assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0].message.contains("transitive dependency"));
-        assert!(diagnostics[0].message.contains("[project.dependencies]"));
+        let diag = check_single("urllib3", Some(UnresolvedReason::NotInDeps));
+        assert!(diag.message.contains("transitive dependency"));
+        assert!(diag.message.contains("[project.dependencies]"));
     }
 
     #[test]
     fn needs_sync_message() {
-        let import = make_import("flask", Some(UnresolvedReason::NeedsSync));
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        ImportFromUntypedModule.check(&module, &mut diagnostics);
-        assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0].message.contains("not synced"));
-        assert!(diagnostics[0]
+        let diag = check_single("flask", Some(UnresolvedReason::NeedsSync));
+        assert!(diag.message.contains("not synced"));
+        assert!(diag
             .help
             .as_ref()
             .is_some_and(|h| h.contains("out of sync")));
@@ -201,89 +194,50 @@ mod tests {
 
     #[test]
     fn wrong_python_version_message() {
-        let import = make_import(
+        let diag = check_single(
             "some_versioned_pkg",
             Some(UnresolvedReason::WrongPythonVersion),
         );
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        ImportFromUntypedModule.check(&module, &mut diagnostics);
-        assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0]
+        assert!(diag
             .message
             .contains("not available in the target Python version"));
     }
 
     #[test]
     fn no_stubs_falls_back_to_generic() {
-        let import = make_import("requests", Some(UnresolvedReason::NoStubs));
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        ImportFromUntypedModule.check(&module, &mut diagnostics);
-        assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0]
-            .message
-            .contains("no type information available"));
+        let diag = check_single("requests", Some(UnresolvedReason::NoStubs));
+        assert!(diag.message.contains("no type information available"));
     }
 
     #[test]
     fn unknown_reason_falls_back_to_generic() {
-        let import = make_import("requests", Some(UnresolvedReason::Unknown));
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        ImportFromUntypedModule.check(&module, &mut diagnostics);
-        assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0]
-            .message
-            .contains("no type information available"));
+        let diag = check_single("requests", Some(UnresolvedReason::Unknown));
+        assert!(diag.message.contains("no type information available"));
     }
 
     #[test]
     fn skips_stdlib_imports() {
-        let import = make_import("os", None);
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        ImportFromUntypedModule.check(&module, &mut diagnostics);
-        assert!(diagnostics.is_empty());
+        assert!(run_check(make_import("os", None)).is_empty());
     }
 
     #[test]
     fn skips_resolved_imports() {
         let import = ImportInfo {
-            module: "requests".to_owned(),
-            names: vec![],
-            span: Span::new(0, 15),
-            kind: ImportKind::Plain,
             resolution: ImportResolution::SourcePy,
-            resolved_path: None,
-            package_dep_kind: None,
-            package_version: None,
-            package_name: None,
-            unresolved_reason: None,
+            ..make_import("requests", None)
         };
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        ImportFromUntypedModule.check(&module, &mut diagnostics);
-        assert!(diagnostics.is_empty());
+        assert!(run_check(import).is_empty());
     }
 
     #[test]
     fn diagnostic_has_correct_code() {
-        let import = make_import("numpy", None);
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        ImportFromUntypedModule.check(&module, &mut diagnostics);
-        assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].code.code, "BSK-E0010");
+        let diag = check_single("numpy", None);
+        assert_eq!(diag.code.code, "BSK-E0010");
     }
 
     #[test]
     fn diagnostic_has_help_text() {
-        let import = make_import("requests", None);
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        ImportFromUntypedModule.check(&module, &mut diagnostics);
-        assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0].help.is_some());
+        let diag = check_single("requests", None);
+        assert!(diag.help.is_some());
     }
 }

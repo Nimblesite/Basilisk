@@ -25,7 +25,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -53,22 +53,14 @@ fn annotation_text(source: &str, span: Option<Span>) -> Option<&str> {
 }
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: Some(
-            "`Required` and `NotRequired` may only be used in `TypedDict` field annotations"
-                .to_owned(),
-        ),
-        note: Some(
-            "PEP 655: `Required` and `NotRequired` are special forms for `TypedDict` keys only"
-                .to_owned(),
-        ),
-        provenance: None,
-    }
+        path,
+        Some("`Required` and `NotRequired` may only be used in `TypedDict` field annotations"),
+        Some("PEP 655: `Required` and `NotRequired` are special forms for `TypedDict` keys only"),
+    )
 }
 
 /// Returns `true` when this class or any same-module ancestor is a `TypedDict`.
@@ -95,11 +87,7 @@ impl Rule for RequiredNotRequiredContext {
         let path = &module.path;
 
         // Build class map for transitive TypedDict detection.
-        let class_map: HashMap<&str, &ClassInfo> = module
-            .classes
-            .iter()
-            .map(|cls| (cls.name.as_str(), cls))
-            .collect();
+        let class_map = super::shared::class_name_map(&module.classes);
 
         // Check class attributes.
         for cls in &module.classes {

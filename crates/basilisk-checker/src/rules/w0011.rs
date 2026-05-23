@@ -13,7 +13,7 @@
 
 use basilisk_resolver::{ImportResolution, PackageDepKind, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -36,22 +36,20 @@ impl Rule for UndeclaredDependencyImport {
             .filter(|import| import.package_dep_kind == Some(PackageDepKind::Transitive))
             .for_each(|import| {
                 let root_module = import.module.split('.').next().unwrap_or(&import.module);
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Warning,
-                    message: format!(
+                diagnostics.push(warning_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Import `{root_module}` is a transitive dependency, not declared in \
                          [project.dependencies]"
                     ),
-                    span: import.span,
-                    path: module.path.clone(),
-                    help: Some(format!("Add it explicitly: `uv add {root_module}`")),
-                    note: Some(
+                    import.span,
+                    &module.path,
+                    Some(format!("Add it explicitly: `uv add {root_module}`")),
+                    Some(
                         "Transitive dependencies can disappear when direct dependencies change"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             });
     }
 }
@@ -75,25 +73,45 @@ mod tests {
         }
     }
 
-    #[test]
-    fn fires_for_transitive_dependency() {
-        let import = ImportInfo {
-            module: "urllib3".to_owned(),
+    /// Build an `ImportInfo` for these tests, only varying the fields that affect the rule.
+    fn make_import(
+        module: &str,
+        span_end: u32,
+        resolution: ImportResolution,
+        resolved_path: Option<&str>,
+        dep_kind: Option<PackageDepKind>,
+    ) -> ImportInfo {
+        ImportInfo {
+            module: module.to_owned(),
             names: vec![],
-            span: Span::new(0, 14),
+            span: Span::new(0, span_end),
             kind: ImportKind::Plain,
-            resolution: ImportResolution::SourcePy,
-            resolved_path: Some(PathBuf::from(
-                "/venv/lib/python3.12/site-packages/urllib3/__init__.py",
-            )),
-            package_dep_kind: Some(PackageDepKind::Transitive),
+            resolution,
+            resolved_path: resolved_path.map(PathBuf::from),
+            package_dep_kind: dep_kind,
             package_version: None,
             package_name: None,
             unresolved_reason: None,
-        };
+        }
+    }
+
+    fn run_check(import: ImportInfo) -> Vec<crate::Diagnostic> {
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
         UndeclaredDependencyImport.check(&module, &mut diagnostics);
+        diagnostics
+    }
+
+    #[test]
+    fn fires_for_transitive_dependency() {
+        let import = make_import(
+            "urllib3",
+            14,
+            ImportResolution::SourcePy,
+            Some("/venv/lib/python3.12/site-packages/urllib3/__init__.py"),
+            Some(PackageDepKind::Transitive),
+        );
+        let diagnostics = run_check(import);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].code.code, "BSK-W0011");
         assert!(diagnostics[0].message.contains("transitive"));
@@ -101,105 +119,55 @@ mod tests {
 
     #[test]
     fn skips_direct_dependency() {
-        let import = ImportInfo {
-            module: "requests".to_owned(),
-            names: vec![],
-            span: Span::new(0, 15),
-            kind: ImportKind::Plain,
-            resolution: ImportResolution::SourcePy,
-            resolved_path: Some(PathBuf::from(
-                "/venv/lib/python3.12/site-packages/requests/__init__.py",
-            )),
-            package_dep_kind: Some(PackageDepKind::Direct),
-            package_version: None,
-            package_name: None,
-            unresolved_reason: None,
-        };
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        UndeclaredDependencyImport.check(&module, &mut diagnostics);
-        assert!(diagnostics.is_empty());
+        let import = make_import(
+            "requests",
+            15,
+            ImportResolution::SourcePy,
+            Some("/venv/lib/python3.12/site-packages/requests/__init__.py"),
+            Some(PackageDepKind::Direct),
+        );
+        assert!(run_check(import).is_empty());
     }
 
     #[test]
     fn skips_dev_dependency() {
-        let import = ImportInfo {
-            module: "pytest".to_owned(),
-            names: vec![],
-            span: Span::new(0, 13),
-            kind: ImportKind::Plain,
-            resolution: ImportResolution::SourcePy,
-            resolved_path: Some(PathBuf::from(
-                "/venv/lib/python3.12/site-packages/pytest/__init__.py",
-            )),
-            package_dep_kind: Some(PackageDepKind::Dev),
-            package_version: None,
-            package_name: None,
-            unresolved_reason: None,
-        };
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        UndeclaredDependencyImport.check(&module, &mut diagnostics);
-        assert!(diagnostics.is_empty());
+        let import = make_import(
+            "pytest",
+            13,
+            ImportResolution::SourcePy,
+            Some("/venv/lib/python3.12/site-packages/pytest/__init__.py"),
+            Some(PackageDepKind::Dev),
+        );
+        assert!(run_check(import).is_empty());
     }
 
     #[test]
     fn skips_stdlib_modules() {
-        let import = ImportInfo {
-            module: "os".to_owned(),
-            names: vec![],
-            span: Span::new(0, 9),
-            kind: ImportKind::Plain,
-            resolution: ImportResolution::SourcePy,
-            resolved_path: None,
-            package_dep_kind: None,
-            package_version: None,
-            package_name: None,
-            unresolved_reason: None,
-        };
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        UndeclaredDependencyImport.check(&module, &mut diagnostics);
-        assert!(diagnostics.is_empty());
+        let import = make_import("os", 9, ImportResolution::SourcePy, None, None);
+        assert!(run_check(import).is_empty());
     }
 
     #[test]
     fn skips_unresolved_imports() {
-        let import = ImportInfo {
-            module: "nonexistent".to_owned(),
-            names: vec![],
-            span: Span::new(0, 18),
-            kind: ImportKind::Plain,
-            resolution: ImportResolution::Unresolved,
-            resolved_path: None,
-            package_dep_kind: Some(PackageDepKind::Transitive),
-            package_version: None,
-            package_name: None,
-            unresolved_reason: None,
-        };
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        UndeclaredDependencyImport.check(&module, &mut diagnostics);
-        assert!(diagnostics.is_empty());
+        let import = make_import(
+            "nonexistent",
+            18,
+            ImportResolution::Unresolved,
+            None,
+            Some(PackageDepKind::Transitive),
+        );
+        assert!(run_check(import).is_empty());
     }
 
     #[test]
     fn skips_when_no_dep_kind() {
-        let import = ImportInfo {
-            module: "mylib".to_owned(),
-            names: vec![],
-            span: Span::new(0, 12),
-            kind: ImportKind::Plain,
-            resolution: ImportResolution::SourcePy,
-            resolved_path: Some(PathBuf::from("/workspace/mylib/__init__.py")),
-            package_dep_kind: None,
-            package_version: None,
-            package_name: None,
-            unresolved_reason: None,
-        };
-        let module = make_module(vec![import]);
-        let mut diagnostics = Vec::new();
-        UndeclaredDependencyImport.check(&module, &mut diagnostics);
-        assert!(diagnostics.is_empty());
+        let import = make_import(
+            "mylib",
+            12,
+            ImportResolution::SourcePy,
+            Some("/workspace/mylib/__init__.py"),
+            None,
+        );
+        assert!(run_check(import).is_empty());
     }
 }

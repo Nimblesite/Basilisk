@@ -8,7 +8,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -28,24 +28,22 @@ impl Rule for InvalidTypedDictBase {
         for class in module.classes.iter().filter(|c| c.is_typed_dict) {
             for kw in &class.class_keywords {
                 if !KNOWN_TYPED_DICT_KEYWORDS.contains(&kw.as_str()) {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "TypedDict class `{}` uses unrecognised keyword `{kw}`",
                             class.name
                         ),
-                        span: class.name_span,
-                        path: module.path.clone(),
-                        help: Some(format!(
+                        class.name_span,
+                        &module.path,
+                        Some(format!(
                             "Remove `{kw}=` — TypedDict only accepts `total`, `extra_items`, or `closed`"
                         )),
-                        note: Some(
+                        Some(
                             "PEP 589: unrecognised keyword arguments in TypedDict are invalid"
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 }
             }
         }

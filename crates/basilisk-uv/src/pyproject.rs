@@ -107,72 +107,71 @@ mod tests {
         tempfile::tempdir().unwrap()
     }
 
+    /// Write `content` as the workspace's `pyproject.toml` then return the deps it produces.
+    /// The `TempDir` is returned so the caller controls its lifetime (drop = cleanup).
+    fn deps_from_pyproject(content: &str) -> (tempfile::TempDir, Vec<String>) {
+        let dir = setup_dir();
+        std::fs::write(dir.path().join("pyproject.toml"), content).unwrap();
+        let deps = extract_pyproject_deps(dir.path());
+        (dir, deps)
+    }
+
     #[test]
     fn extracts_simple_deps() {
-        let dir = setup_dir();
-        let content = r#"
+        let (_dir, deps) = deps_from_pyproject(
+            r#"
 [project]
 name = "my-app"
 dependencies = ["requests", "flask", "click"]
-"#;
-        std::fs::write(dir.path().join("pyproject.toml"), content).unwrap();
-
-        let deps = extract_pyproject_deps(dir.path());
+"#,
+        );
         assert_eq!(deps, vec!["requests", "flask", "click"]);
     }
 
     #[test]
     fn normalises_names() {
-        let dir = setup_dir();
-        let content = r#"
+        let (_dir, deps) = deps_from_pyproject(
+            r#"
 [project]
 name = "my-app"
 dependencies = ["scikit-learn", "Python-dateutil"]
-"#;
-        std::fs::write(dir.path().join("pyproject.toml"), content).unwrap();
-
-        let deps = extract_pyproject_deps(dir.path());
+"#,
+        );
         assert_eq!(deps, vec!["scikit_learn", "python_dateutil"]);
     }
 
     #[test]
     fn strips_version_constraints() {
-        let dir = setup_dir();
-        let content = r#"
+        let (_dir, deps) = deps_from_pyproject(
+            r#"
 [project]
 name = "my-app"
 dependencies = ["requests>=2.28,<3.0", "flask~=2.0"]
-"#;
-        std::fs::write(dir.path().join("pyproject.toml"), content).unwrap();
-
-        let deps = extract_pyproject_deps(dir.path());
+"#,
+        );
         assert_eq!(deps, vec!["requests", "flask"]);
     }
 
     #[test]
     fn strips_extras() {
-        let dir = setup_dir();
-        let content = r#"
+        let (_dir, deps) = deps_from_pyproject(
+            r#"
 [project]
 name = "my-app"
 dependencies = ["flask[async]", "uvicorn[standard]>=0.20"]
-"#;
-        std::fs::write(dir.path().join("pyproject.toml"), content).unwrap();
-
-        let deps = extract_pyproject_deps(dir.path());
+"#,
+        );
         assert_eq!(deps, vec!["flask", "uvicorn"]);
     }
 
     #[test]
     fn returns_empty_for_no_deps_section() {
-        let dir = setup_dir();
-        let content = r#"
+        let (_dir, deps) = deps_from_pyproject(
+            r#"
 [project]
 name = "my-app"
-"#;
-        std::fs::write(dir.path().join("pyproject.toml"), content).unwrap();
-
-        let deps = extract_pyproject_deps(dir.path());
+"#,
+        );
         assert!(deps.is_empty());
     }
 
@@ -185,10 +184,7 @@ name = "my-app"
 
     #[test]
     fn returns_empty_for_malformed_toml() {
-        let dir = setup_dir();
-        std::fs::write(dir.path().join("pyproject.toml"), "not { valid toml").unwrap();
-
-        let deps = extract_pyproject_deps(dir.path());
+        let (_dir, deps) = deps_from_pyproject("not { valid toml");
         assert!(deps.is_empty());
     }
 
@@ -217,8 +213,8 @@ name = "my-app"
     /// `pytest`/`Pillow`/`GitPython` etc. wrongly trigger BSK-E0010.
     #[test]
     fn includes_pep621_optional_dependencies() {
-        let dir = setup_dir();
-        let content = r#"
+        let (_dir, deps) = deps_from_pyproject(
+            r#"
 [project]
 name = "my-app"
 dependencies = ["requests"]
@@ -226,34 +222,22 @@ dependencies = ["requests"]
 [project.optional-dependencies]
 dev = ["pytest>=8.3.0", "Pillow>=11.0.0", "GitPython>=3.1.44"]
 test = ["httpx>=0.28.0"]
-"#;
-        std::fs::write(dir.path().join("pyproject.toml"), content).unwrap();
-
-        let deps = extract_pyproject_deps(dir.path());
-        assert!(
-            deps.contains(&"pytest".to_owned()),
-            "issue #25: pytest from [project.optional-dependencies].dev must be included; got {deps:?}"
+"#,
         );
-        assert!(
-            deps.contains(&"pillow".to_owned()),
-            "issue #25: Pillow from optional-dependencies must be included; got {deps:?}"
-        );
-        assert!(
-            deps.contains(&"gitpython".to_owned()),
-            "issue #25: GitPython from optional-dependencies must be included; got {deps:?}"
-        );
-        assert!(
-            deps.contains(&"httpx".to_owned()),
-            "issue #25: deps from non-`dev` extras must also be included; got {deps:?}"
-        );
+        for name in ["pytest", "pillow", "gitpython", "httpx"] {
+            assert!(
+                deps.contains(&name.to_owned()),
+                "issue #25: {name} from optional-dependencies must be included; got {deps:?}"
+            );
+        }
     }
 
     /// Regression for issue #25: PEP 735 `[dependency-groups]` (uv-native) must
     /// be parsed too — `pytest`/`httpx` declared there are real direct deps.
     #[test]
     fn includes_pep735_dependency_groups() {
-        let dir = setup_dir();
-        let content = r#"
+        let (_dir, deps) = deps_from_pyproject(
+            r#"
 [project]
 name = "my-app"
 dependencies = ["requests"]
@@ -261,21 +245,13 @@ dependencies = ["requests"]
 [dependency-groups]
 dev = ["pytest>=8.3.0", "httpx>=0.28.0"]
 docs = ["sphinx>=7.0"]
-"#;
-        std::fs::write(dir.path().join("pyproject.toml"), content).unwrap();
-
-        let deps = extract_pyproject_deps(dir.path());
-        assert!(
-            deps.contains(&"pytest".to_owned()),
-            "issue #25: pytest from [dependency-groups].dev must be included; got {deps:?}"
+"#,
         );
-        assert!(
-            deps.contains(&"httpx".to_owned()),
-            "issue #25: httpx from [dependency-groups].dev must be included; got {deps:?}"
-        );
-        assert!(
-            deps.contains(&"sphinx".to_owned()),
-            "issue #25: deps from non-`dev` groups must also be included; got {deps:?}"
-        );
+        for name in ["pytest", "httpx", "sphinx"] {
+            assert!(
+                deps.contains(&name.to_owned()),
+                "issue #25: {name} from dependency-groups must be included; got {deps:?}"
+            );
+        }
     }
 }

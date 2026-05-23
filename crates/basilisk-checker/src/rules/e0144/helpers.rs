@@ -10,7 +10,7 @@ use ruff_text_size::Ranged as _;
 
 use basilisk_resolver::Span;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 use crate::span_util::slice_span;
 
@@ -217,21 +217,19 @@ pub(super) fn check_kwarg_types(
             continue;
         };
         if !is_type_compatible(arg_type, expected_type) {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Keyword argument `{kw_name}={arg_type}` is incompatible with \
                      parameter `{kw_name}: {expected_type}` of `{class_name}` constructor"
                 ),
                 span,
-                path: path.to_owned(),
-                help: Some(format!(
+                path,
+                Some(format!(
                     "Pass a `{expected_type}` value for keyword argument `{kw_name}`"
                 )),
-                note: None,
-                provenance: None,
-            });
+                None,
+            ));
         }
     }
     // Suppress unused warning.
@@ -267,28 +265,23 @@ pub(super) fn check_positional_arg_types(
             continue;
         };
         if !is_type_compatible(arg_type, expected_type) {
-            let arg_span = Span {
-                start: arg_expr.range().start().to_u32(),
-                end: arg_expr.range().end().to_u32(),
-            };
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            let arg_span = Span::from(arg_expr.range());
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Argument {n} has type `{arg_type}` but parameter `{pname}` of \
                      `{class_name}` constructor expects `{expected_type}`",
                     n = idx + 1,
                     pname = param.name,
                 ),
-                span: arg_span,
-                path: path.to_owned(),
-                help: Some(format!(
+                arg_span,
+                path,
+                Some(format!(
                     "Pass a `{expected_type}` value as argument {n}",
                     n = idx + 1
                 )),
-                note: None,
-                provenance: None,
-            });
+                None,
+            ));
             // Use outer span to silence unreachable — not actually needed but
             // keeps the variable used.
             let _ = span;

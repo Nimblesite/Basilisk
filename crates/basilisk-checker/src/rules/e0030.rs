@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -68,28 +68,26 @@ impl Rule for NonDefaultAfterDefault {
                 // Rule 2: TypeVar with default cannot follow a TypeVarTuple.
                 // ParamSpec with default after TypeVarTuple is explicitly allowed.
                 if seen_typevartuple && has_default && !is_paramspec {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "`TypeVar` `{}` with `default=` cannot follow a `TypeVarTuple` \
                              in `Generic[...]` for `{}`",
                             param.name, class.name
                         ),
-                        span: param.span,
-                        path: module.path.clone(),
-                        help: Some(
+                        param.span,
+                        &module.path,
+                        Some(
                             "A defaulted `TypeVar` after a `TypeVarTuple` is ambiguous; \
                              use a `ParamSpec` instead if a trailing defaulted parameter is needed"
                                 .to_owned(),
                         ),
-                        note: Some(
+                        Some(
                             "PEP 696: `TypeVar` with `default=` cannot immediately follow \
                              a `TypeVarTuple`"
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                     continue;
                 }
 
@@ -97,26 +95,24 @@ impl Rule for NonDefaultAfterDefault {
                 if has_default {
                     seen_default = true;
                 } else if seen_default {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!(
                             "Non-default `TypeVar` `{}` follows a default `TypeVar` in \
                              `Generic[...]` for `{}`",
                             param.name, class.name
                         ),
-                        span: param.span,
-                        path: module.path.clone(),
-                        help: Some(
+                        param.span,
+                        &module.path,
+                        Some(
                             "Move all non-default `TypeVar`s before any `TypeVar` with a `default=`"
                                 .to_owned(),
                         ),
-                        note: Some(
+                        Some(
                             "PEP 696: non-default TypeVars must not follow default TypeVars"
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 }
             }
         }

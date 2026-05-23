@@ -111,6 +111,13 @@ pub fn load_config(root: &Path) -> WorkspaceConfig {
     WorkspaceConfig::default()
 }
 
+/// Collect string entries of a JSON array as `PathBuf`s, dropping non-strings.
+fn json_path_list(arr: &[serde_json::Value]) -> Vec<PathBuf> {
+    arr.iter()
+        .filter_map(|v| v.as_str().map(PathBuf::from))
+        .collect()
+}
+
 /// Parse a JSON config file (basilisk.json or pyrightconfig.json).
 fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
     let content = std::fs::read_to_string(path).ok()?;
@@ -126,22 +133,13 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
         cfg.python_platform = Some(v.to_owned());
     }
     if let Some(arr) = obj.get("include").and_then(|v| v.as_array()) {
-        cfg.include = arr
-            .iter()
-            .filter_map(|v| v.as_str().map(PathBuf::from))
-            .collect();
+        cfg.include = json_path_list(arr);
     }
     if let Some(arr) = obj.get("exclude").and_then(|v| v.as_array()) {
-        cfg.exclude = arr
-            .iter()
-            .filter_map(|v| v.as_str().map(PathBuf::from))
-            .collect();
+        cfg.exclude = json_path_list(arr);
     }
     if let Some(arr) = obj.get("extraPaths").and_then(|v| v.as_array()) {
-        cfg.extra_paths = arr
-            .iter()
-            .filter_map(|v| v.as_str().map(PathBuf::from))
-            .collect();
+        cfg.extra_paths = json_path_list(arr);
     }
     if let Some(v) = obj.get("typeCheckingMode").and_then(|v| v.as_str()) {
         cfg.strict = v == "strict" || v == "all";
@@ -160,10 +158,7 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
         .or_else(|| obj.get("stub-paths"))
         .and_then(|v| v.as_array())
     {
-        cfg.stub_paths = arr
-            .iter()
-            .filter_map(|v| v.as_str().map(PathBuf::from))
-            .collect();
+        cfg.stub_paths = json_path_list(arr);
     }
 
     Some(cfg)

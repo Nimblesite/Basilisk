@@ -20,7 +20,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::{guards::is_enum_class, Rule};
 
@@ -45,27 +45,25 @@ impl Rule for EnumMemberAnnotated {
                 if attr.name.starts_with('_') && attr.name.ends_with('_') {
                     continue;
                 }
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Enum member `{}` in `{}` should not have an explicit type annotation",
                         attr.name, cls.name
                     ),
-                    span: attr.name_span,
-                    path: module.path.clone(),
-                    help: Some(format!(
+                    attr.name_span,
+                    &module.path,
+                    Some(format!(
                         "Remove the type annotation from `{}` — enum members have an inferred \
                          `Literal[{}.{}]` type",
                         attr.name, cls.name, attr.name
                     )),
-                    note: Some(
+                    Some(
                         "PEP 435: Enum members should not carry explicit type annotations; \
                          use an annotation-only field (no value) for non-member attributes"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
     }

@@ -27,7 +27,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use super::Rule;
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0106",
@@ -40,27 +40,25 @@ pub(crate) struct ProtocolClassObject;
 impl Rule for ProtocolClassObject {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         for violation in &module.protocol_class_object_violations {
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Protocol class `{}` cannot be used where `type[{}]` is expected; \
                      only concrete (non-protocol) subtypes are accepted",
                     violation.protocol_name, violation.protocol_name
                 ),
-                span: violation.span,
-                path: module.path.clone(),
-                help: Some(format!(
+                violation.span,
+                &module.path,
+                Some(format!(
                     "Pass a concrete class that implements `{}` instead",
                     violation.protocol_name
                 )),
-                note: Some(
+                Some(
                     "Variables and parameters annotated with `type[Proto]` accept only \
                      concrete (non-protocol) subtypes of Proto"
                         .to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

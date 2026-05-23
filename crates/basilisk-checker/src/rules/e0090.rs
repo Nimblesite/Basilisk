@@ -19,7 +19,7 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 
@@ -53,19 +53,17 @@ impl Rule for InvalidTupleTypeSyntax {
 
             let ann_trimmed = ann_text.trim();
             if let Some(error_msg) = check_tuple_syntax(ann_trimmed) {
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!("Invalid tuple type syntax: {error_msg}"),
-                    span: ann_span,
-                    path: module.path.clone(),
-                    help: Some("Use valid tuple type syntax according to PEP 646".to_owned()),
-                    note: Some(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!("Invalid tuple type syntax: {error_msg}"),
+                    ann_span,
+                    &module.path,
+                    Some("Use valid tuple type syntax according to PEP 646".to_owned()),
+                    Some(
                         "Tuple types must follow the pattern `tuple[T, ...]` with exactly one type before the ellipsis"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
 
@@ -78,19 +76,17 @@ impl Rule for InvalidTupleTypeSyntax {
 
                 let ret_trimmed = ret_text.trim();
                 if let Some(error_msg) = check_tuple_syntax(ret_trimmed) {
-                    diagnostics.push(Diagnostic {
-                        code: CODE.clone(),
-                        severity: Severity::Error,
-                        message: format!("Invalid tuple type syntax: {error_msg}"),
-                        span: ret_span,
-                        path: module.path.clone(),
-                        help: Some("Use valid tuple type syntax according to PEP 646".to_owned()),
-                        note: Some(
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!("Invalid tuple type syntax: {error_msg}"),
+                        ret_span,
+                        &module.path,
+                        Some("Use valid tuple type syntax according to PEP 646".to_owned()),
+                        Some(
                             "Tuple types must follow the pattern `tuple[T, ...]` with exactly one type before the ellipsis"
                                 .to_owned(),
                         ),
-                        provenance: None,
-                    });
+                    ));
                 }
             }
         }

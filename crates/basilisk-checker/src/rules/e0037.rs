@@ -11,7 +11,7 @@
 
 use basilisk_resolver::{ResolvedModule, Span, TypedDictSecondArgKind};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -21,19 +21,14 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
+    error_diagnostic(
+        CODE.clone(),
         message,
         span,
-        path: path.to_owned(),
-        help: None,
-        note: Some(
-            "PEP 589: TypedDict functional syntax has strict requirements on its arguments"
-                .to_owned(),
-        ),
-        provenance: None,
-    }
+        path,
+        None,
+        Some("PEP 589: TypedDict functional syntax has strict requirements on its arguments"),
+    )
 }
 
 /// Emits BSK-E0037 for invalid `TypedDict(...)` functional-syntax calls.

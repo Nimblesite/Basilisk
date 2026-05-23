@@ -415,7 +415,28 @@ fn collect_function_pcts(data: &ProfileData) -> HashMap<super::aggregator::Frame
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::profiler::aggregator::SpeedscopeFrame;
+    use crate::profiler::aggregator::{FunctionStats, SpeedscopeFrame};
+
+    /// Build a `FunctionStats` where `total_samples == self_samples`.
+    /// Every diff-builder test in this module uses this shape.
+    fn fn_stats(name: &str, file: &str, line: i32, samples: u64) -> FunctionStats {
+        FunctionStats {
+            name: name.to_owned(),
+            file: file.to_owned(),
+            line,
+            total_samples: samples,
+            self_samples: samples,
+        }
+    }
+
+    /// Insert one function under `file` in the given `ProfileData`.
+    fn insert_fn(data: &mut ProfileData, file: &str, name: &str, line: i32, samples: u64) {
+        let _ = data
+            .function_stats
+            .entry(file.to_owned())
+            .or_default()
+            .insert(name.to_owned(), fn_stats(name, file, line, samples));
+    }
 
     fn make_test_data() -> ProfileData {
         let mut data = ProfileData::default();
@@ -517,59 +538,19 @@ mod tests {
 
     #[test]
     fn profile_diff_classifies_functions() {
-        use crate::profiler::aggregator::FunctionStats;
-
         let mut data_a = ProfileData {
             total_samples: 100,
             ..ProfileData::default()
         };
-        let funcs_a = data_a.function_stats.entry("a.py".to_owned()).or_default();
-        let _ = funcs_a.insert(
-            "hot_fn".to_owned(),
-            FunctionStats {
-                name: "hot_fn".to_owned(),
-                file: "a.py".to_owned(),
-                line: 1,
-                total_samples: 50,
-                self_samples: 50,
-            },
-        );
-        let _ = funcs_a.insert(
-            "other_fn".to_owned(),
-            FunctionStats {
-                name: "other_fn".to_owned(),
-                file: "a.py".to_owned(),
-                line: 10,
-                total_samples: 50,
-                self_samples: 50,
-            },
-        );
+        insert_fn(&mut data_a, "a.py", "hot_fn", 1, 50);
+        insert_fn(&mut data_a, "a.py", "other_fn", 10, 50);
 
         let mut data_b = ProfileData {
             total_samples: 100,
             ..ProfileData::default()
         };
-        let funcs_b = data_b.function_stats.entry("a.py".to_owned()).or_default();
-        let _ = funcs_b.insert(
-            "hot_fn".to_owned(),
-            FunctionStats {
-                name: "hot_fn".to_owned(),
-                file: "a.py".to_owned(),
-                line: 1,
-                total_samples: 80,
-                self_samples: 80,
-            },
-        );
-        let _ = funcs_b.insert(
-            "other_fn".to_owned(),
-            FunctionStats {
-                name: "other_fn".to_owned(),
-                file: "a.py".to_owned(),
-                line: 10,
-                total_samples: 20,
-                self_samples: 20,
-            },
-        );
+        insert_fn(&mut data_b, "a.py", "hot_fn", 1, 80);
+        insert_fn(&mut data_b, "a.py", "other_fn", 10, 20);
 
         let diff = compute_profile_diff(&data_a, &data_b);
         assert!(
@@ -584,25 +565,11 @@ mod tests {
 
     #[test]
     fn profile_diff_unchanged_when_same_pct() {
-        use crate::profiler::aggregator::FunctionStats;
         let mut data = ProfileData {
             total_samples: 100,
             ..ProfileData::default()
         };
-        let _ = data
-            .function_stats
-            .entry("a.py".to_owned())
-            .or_default()
-            .insert(
-                "fn_a".to_owned(),
-                FunctionStats {
-                    name: "fn_a".to_owned(),
-                    file: "a.py".to_owned(),
-                    line: 10,
-                    total_samples: 100,
-                    self_samples: 100,
-                },
-            );
+        insert_fn(&mut data, "a.py", "fn_a", 10, 100);
         let diff = compute_profile_diff(&data, &data);
         assert!(diff.hotter.is_empty());
         assert!(diff.cooler.is_empty());
@@ -611,26 +578,12 @@ mod tests {
 
     #[test]
     fn profile_diff_new_function_classified_hotter() {
-        use crate::profiler::aggregator::FunctionStats;
         let data_a = ProfileData::default();
         let mut data_b = ProfileData {
             total_samples: 100,
             ..ProfileData::default()
         };
-        let _ = data_b
-            .function_stats
-            .entry("new.py".to_owned())
-            .or_default()
-            .insert(
-                "new_fn".to_owned(),
-                FunctionStats {
-                    name: "new_fn".to_owned(),
-                    file: "new.py".to_owned(),
-                    line: 1,
-                    total_samples: 100,
-                    self_samples: 100,
-                },
-            );
+        insert_fn(&mut data_b, "new.py", "new_fn", 1, 100);
         let diff = compute_profile_diff(&data_a, &data_b);
         assert_eq!(diff.hotter.len(), 1);
         if let Some(first_hotter) = diff.hotter.first() {
@@ -640,25 +593,11 @@ mod tests {
 
     #[test]
     fn export_profile_diff_writes_valid_json() -> Result<(), String> {
-        use crate::profiler::aggregator::FunctionStats;
         let mut data_a = ProfileData {
             total_samples: 100,
             ..ProfileData::default()
         };
-        let _ = data_a
-            .function_stats
-            .entry("a.py".to_owned())
-            .or_default()
-            .insert(
-                "fn_a".to_owned(),
-                FunctionStats {
-                    name: "fn_a".to_owned(),
-                    file: "a.py".to_owned(),
-                    line: 10,
-                    total_samples: 100,
-                    self_samples: 100,
-                },
-            );
+        insert_fn(&mut data_a, "a.py", "fn_a", 10, 100);
         let dir = std::env::temp_dir();
         let result = export_profile_diff(&data_a, &ProfileData::default(), &dir)?;
         assert!(result.path.exists());

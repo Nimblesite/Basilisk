@@ -30,7 +30,7 @@
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -144,25 +144,23 @@ fn check_return_stmt_for_concrete_class(
                     start: range.start().to_u32(),
                     end: range.end().to_u32(),
                 };
-                diagnostics.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Return type `Self` requires returning the current class instance, \
                          but `{class_name}()` is not `Self` — it would be wrong in a subclass"
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some(format!(
+                    path,
+                    Some(format!(
                         "Return `self` (or `cls()` in a classmethod) instead of \
                          `{class_name}()`"
                     )),
-                    note: Some(
+                    Some(
                         "`Self` resolves to the concrete subclass type, not the parent class"
                             .to_owned(),
                     ),
-                    provenance: None,
-                });
+                ));
             }
         }
         Stmt::If(if_stmt) => {
@@ -242,20 +240,18 @@ fn check_expr_for_self_subscript(
         start: range.start().to_u32(),
         end: range.end().to_u32(),
     };
-    diagnostics.push(Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: "`Self` is not subscriptable — it already captures the full type \
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        "`Self` is not subscriptable — it already captures the full type \
                   of the enclosing class"
             .to_owned(),
         span,
-        path: path.to_owned(),
-        help: Some("Use `Self` without type arguments".to_owned()),
-        note: Some(
+        path,
+        Some("Use `Self` without type arguments".to_owned()),
+        Some(
             "`Self` in a generic class automatically includes the class's type \
              parameters; subscripting it is invalid"
                 .to_owned(),
         ),
-        provenance: None,
-    });
+    ));
 }

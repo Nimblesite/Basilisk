@@ -11,7 +11,7 @@ use ruff_text_size::Ranged;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::{ann_str, expr_name};
 
 use super::Rule;
@@ -26,8 +26,7 @@ pub(crate) struct UnpackKwargsViolation;
 
 impl Rule for UnpackKwargsViolation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
         let ctx = KwargsContext::from_ast(&parsed.ast.body);
@@ -285,18 +284,16 @@ fn check_function_def(
     };
     let func_span = mk_span(func.range());
     if ctx.is_typevar(unpack_type) {
-        diag.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Invalid `**kwargs: Unpack[{unpack_type}]`: `{unpack_type}` is a TypeVar, not a TypedDict"
             ),
-            span: func_span,
-            path: path.to_owned(),
-            help: Some("Use a concrete TypedDict type with Unpack".to_owned()),
-            note: None,
-        provenance: None,
-        });
+            func_span,
+            path,
+            Some("Use a concrete TypedDict type with Unpack".to_owned()),
+            None,
+        ));
         return;
     }
     check_param_overlap(func, unpack_type, ctx, path, diag, func_span);
@@ -316,18 +313,16 @@ fn check_param_overlap(
     for param in &func.parameters.args {
         let pname = param.parameter.name.as_str();
         if td_keys.iter().any(|k| k == pname) {
-            diag.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diag.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Parameter `{pname}` overlaps with TypedDict `{unpack_type}` key `{pname}`"
                 ),
                 span,
-                path: path.to_owned(),
-                help: Some(format!("Make `{pname}` positional-only (add `/`)")),
-                note: None,
-                provenance: None,
-            });
+                path,
+                Some(format!("Make `{pname}` positional-only (add `/`)")),
+                None,
+            ));
         }
     }
 }
@@ -364,19 +359,17 @@ fn check_positional_args(
     span: Span,
 ) {
     if call.arguments.args.len() > info.positional_count {
-        diag.push(Diagnostic {
-            code: CODE.clone(),
-            severity: Severity::Error,
-            message: format!(
+        diag.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
                 "Cannot pass positional arguments to `{func_name}` for Unpack[{}] kwargs",
                 info.td_name
             ),
             span,
-            path: path.to_owned(),
-            help: Some("Pass keyword arguments instead".to_owned()),
-            note: None,
-            provenance: None,
-        });
+            path,
+            Some("Pass keyword arguments instead".to_owned()),
+            None,
+        ));
     }
 }
 
@@ -398,19 +391,17 @@ fn check_missing_required(
         // No kwargs at all — check if TD has required keys
         let td_has_required = has_required_td_keys(&info.td_name, ctx);
         if td_has_required {
-            diag.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
-                message: format!(
+            diag.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
                     "Call to `{func_name}` missing required keyword arguments from `{}`",
                     info.td_name
                 ),
                 span,
-                path: path.to_owned(),
-                help: None,
-                note: None,
-                provenance: None,
-            });
+                path,
+                None,
+                None,
+            ));
         }
     }
 }
@@ -427,19 +418,17 @@ fn check_extra_keywords(
     for kw in &call.arguments.keywords {
         if let Some(arg_name) = &kw.arg {
             if !info.td_keys.iter().any(|k| k == arg_name.as_str()) {
-                diag.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diag.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Keyword `{arg_name}` in call to `{func_name}` is not a key of TypedDict `{}`",
                         info.td_name
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: None,
-                    note: None,
-            provenance: None,
-                });
+                    path,
+                    None,
+                    None,
+                ));
                 return;
             }
         }
@@ -466,19 +455,17 @@ fn check_dict_spread(
         };
         if let Some(ann) = ctx.var_annotations.get(var_name) {
             if ann.starts_with("dict[") || ann == "dict" {
-                diag.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diag.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Cannot spread `{var_name}: {ann}` into `{func_name}` with Unpack[{}] kwargs",
                         info.td_name
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: Some("Use a TypedDict instead of a plain dict".to_owned()),
-                    note: None,
-            provenance: None,
-                });
+                    path,
+                    Some("Use a TypedDict instead of a plain dict".to_owned()),
+                    None,
+                ));
             }
         }
     }
@@ -512,18 +499,16 @@ fn check_duplicate_keywords(
         let spread_keys = resolve_spread_keys(var_name, ctx);
         for ek in &explicit_kw_names {
             if spread_keys.iter().any(|sk| sk == ek) {
-                diag.push(Diagnostic {
-                    code: CODE.clone(),
-                    severity: Severity::Error,
-                    message: format!(
+                diag.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
                         "Keyword `{ek}` in call to `{func_name}` conflicts with `**{var_name}`"
                     ),
                     span,
-                    path: path.to_owned(),
-                    help: None,
-                    note: None,
-                    provenance: None,
-                });
+                    path,
+                    None,
+                    None,
+                ));
                 return;
             }
         }

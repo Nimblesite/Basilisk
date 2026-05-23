@@ -897,19 +897,13 @@ mod tests {
         let _ = idx.set_open(&uri, "import flask\n", 1);
 
         // Resolve with registry that does NOT have flask.
-        let registry = build_registry_from_roots(&roots);
-        let search_paths =
-            crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
-        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
+        rebuild_and_resolve_imports(&idx, &roots, &config);
 
         // Re-check: flask import should be unresolved (E0010).
         recheck_all(&idx);
         let diags_before = get_diagnostics(&idx, &uri);
-        let has_e0010_flask = diags_before
-            .iter()
-            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("flask"));
         assert!(
-            has_e0010_flask,
+            has_diag(&diags_before, "BSK-E0010", "flask"),
             "expected BSK-E0010 for unresolved flask import, got: {diags_before:?}"
         );
 
@@ -919,21 +913,15 @@ mod tests {
         let pyproject = "[project]\nname = \"test-project\"\nversion = \"0.1.0\"\ndependencies = [\"requests\", \"flask\"]\n\n[tool.uv]\n";
         std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
 
-        let registry2 = build_registry_from_roots(&roots);
-        let search_paths2 =
-            crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry2);
-        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths2);
+        rebuild_and_resolve_imports(&idx, &roots, &config);
         recheck_all(&idx);
 
         // After adding flask to the registry, classify_unresolved should now
         // return NeedsSync (in registry but not on filesystem) instead of
         // NotInstalled. The diagnostic message changes accordingly.
         let diags_after = get_diagnostics(&idx, &uri);
-        let still_has_not_installed = diags_after
-            .iter()
-            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("not a dependency"));
         assert!(
-            !still_has_not_installed,
+            !has_diag(&diags_after, "BSK-E0010", "not a dependency"),
             "flask should no longer show 'not a dependency' after being added to lock: {diags_after:?}"
         );
 
@@ -958,10 +946,7 @@ mod tests {
         let _ = idx.set_open(&uri, "import flask\n", 1);
 
         // Resolve with registry that HAS flask.
-        let registry = build_registry_from_roots(&roots);
-        let search_paths =
-            crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
-        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
+        rebuild_and_resolve_imports(&idx, &roots, &config);
         recheck_all(&idx);
 
         // Now remove flask from the lock file.
@@ -969,18 +954,12 @@ mod tests {
         let pyproject = "[project]\nname = \"test-project\"\nversion = \"0.1.0\"\ndependencies = [\"requests\"]\n\n[tool.uv]\n";
         std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
 
-        let registry2 = build_registry_from_roots(&roots);
-        let search_paths2 =
-            crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry2);
-        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths2);
+        rebuild_and_resolve_imports(&idx, &roots, &config);
         recheck_all(&idx);
 
         let diags = get_diagnostics(&idx, &uri);
-        let has_e0010_flask = diags
-            .iter()
-            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("flask"));
         assert!(
-            has_e0010_flask,
+            has_diag(&diags, "BSK-E0010", "flask"),
             "expected BSK-E0010 for flask after removal from lock, got: {diags:?}"
         );
 
@@ -1029,11 +1008,8 @@ mod tests {
         recheck_all(&idx);
 
         let diags = get_diagnostics(&idx, &uri);
-        let has_e0010 = diags
-            .iter()
-            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("configure_agent_backend"));
         assert!(
-            !has_e0010,
+            !has_diag(&diags, "BSK-E0010", "configure_agent_backend"),
             "sibling-module import in a script directory must resolve via sys.path[0] \
              fallback; got BSK-E0010: {diags:?}"
         );
@@ -1126,22 +1102,16 @@ mod tests {
 
         // tests/helpers.py — imports agent_backend.db.models (via src/).
         let helpers_diags = get_diagnostics(&idx, &helpers_uri);
-        let helpers_e0010 = helpers_diags
-            .iter()
-            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("agent_backend"));
         assert!(
-            !helpers_e0010,
+            !has_diag(&helpers_diags, "BSK-E0010", "agent_backend"),
             "BSK-E0010 false positive: src-layout production import from a test \
              helper must resolve via src/ on the search path; got: {helpers_diags:?}"
         );
 
         // tests/test_foo.py — imports tests.helpers (via workspace root).
         let test_diags = get_diagnostics(&idx, &test_uri);
-        let test_e0010 = test_diags
-            .iter()
-            .any(|d| d.code.code == "BSK-E0010" && d.message.contains("tests.helpers"));
         assert!(
-            !test_e0010,
+            !has_diag(&test_diags, "BSK-E0010", "tests.helpers"),
             "BSK-E0010 false positive: `tests.helpers` import must resolve when the \
              workspace root is on the search path; got: {test_diags:?}"
         );
@@ -1296,6 +1266,20 @@ mod tests {
         Some(Arc::new(registry))
     }
 
+    /// Build the registry from `roots`, derive `ImportSearchPaths`, and run
+    /// `resolve_workspace_imports` against `idx`. Collapses the three-line
+    /// import-resolution dance that every workspace test repeats.
+    fn rebuild_and_resolve_imports(
+        idx: &WorkspaceIndex,
+        roots: &[std::path::PathBuf],
+        config: &crate::config::WorkspaceConfig,
+    ) {
+        let registry = build_registry_from_roots(roots);
+        let search_paths =
+            crate::import_resolver::ImportSearchPaths::from_config(roots, config, registry);
+        crate::import_resolver::resolve_workspace_imports(idx, &search_paths);
+    }
+
     /// Re-check all files in the workspace index and update their diagnostics.
     fn recheck_all(index: &WorkspaceIndex) {
         for mut entry in index.files.iter_mut() {
@@ -1334,6 +1318,18 @@ mod tests {
         WorkspaceIndex::new(vec![], AnalysisMode::WholeModule, config)
     }
 
+    /// Helper: build a `WorkspaceIndex` whose config overrides exactly one rule's severity.
+    fn make_index_with_rule_override(
+        code: &str,
+        severity: basilisk_config::RuleSeverity,
+    ) -> WorkspaceIndex {
+        let config = BasiliskConfig {
+            rules: std::collections::HashMap::from([(code.to_owned(), severity)]),
+            ..Default::default()
+        };
+        make_index_with_config(config)
+    }
+
     /// Helper: extract LSP diagnostic codes for a URI.
     fn lsp_codes(diags: &[tower_lsp::lsp_types::Diagnostic]) -> Vec<String> {
         diags
@@ -1345,6 +1341,87 @@ mod tests {
             .collect()
     }
 
+    /// Count diagnostics with `code` in `diags`.
+    fn count_code(diags: &[basilisk_checker::Diagnostic], code: &str) -> usize {
+        diags.iter().filter(|d| d.code.code == code).count()
+    }
+
+    /// Build a minimal `basilisk_checker::Diagnostic` for severity-mapping
+    /// tests where only `code`, `severity`, and `message` are interesting.
+    fn make_test_diag(
+        code: &'static str,
+        severity: basilisk_checker::Severity,
+        message: &str,
+    ) -> basilisk_checker::Diagnostic {
+        basilisk_checker::Diagnostic {
+            code: basilisk_checker::ErrorCode {
+                code,
+                docs_url: "https://www.basilisk-python.dev/errors/test",
+            },
+            severity,
+            message: message.to_owned(),
+            span: basilisk_resolver::Span::new(0, 1),
+            path: "test.py".to_owned(),
+            help: None,
+            note: None,
+            provenance: None,
+        }
+    }
+
+    /// Returns `true` when at least one diagnostic in `diags` has `code` and a
+    /// message containing `substring`. Used by tests that look for a
+    /// specific (code, message-fragment) pair, e.g. unresolved-flask vs.
+    /// unresolved-requests in the same E0010 firing.
+    fn has_diag(diags: &[basilisk_checker::Diagnostic], code: &str, substring: &str) -> bool {
+        diags
+            .iter()
+            .any(|d| d.code.code == code && d.message.contains(substring))
+    }
+
+    /// Assert that every checker diagnostic for `code` has the expected severity.
+    fn assert_checker_severity(
+        index: &WorkspaceIndex,
+        uri: &Url,
+        code: &str,
+        expected: basilisk_checker::Severity,
+    ) {
+        let diags = get_diagnostics(index, uri);
+        let matching: Vec<_> = diags.iter().filter(|d| d.code.code == code).collect();
+        assert!(!matching.is_empty(), "expected {code} diagnostic, got none");
+        for d in &matching {
+            assert_eq!(
+                d.severity, expected,
+                "{code} severity must be {expected:?}, got {:?}",
+                d.severity
+            );
+        }
+    }
+
+    /// Assert that every LSP diagnostic for `code` in `diags` has the expected severity.
+    fn assert_lsp_severity(
+        diags: &[tower_lsp::lsp_types::Diagnostic],
+        code: &str,
+        expected: tower_lsp::lsp_types::DiagnosticSeverity,
+    ) {
+        let codes = lsp_codes(diags);
+        assert!(
+            codes.contains(&code.to_owned()),
+            "expected {code} in LSP diagnostics, got {codes:?}"
+        );
+        for d in diags {
+            if let Some(tower_lsp::lsp_types::NumberOrString::String(c)) = &d.code {
+                if c == code {
+                    assert_eq!(
+                        d.severity,
+                        Some(expected),
+                        "{code} LSP severity must be {expected:?}, got {:?}",
+                        d.severity
+                    );
+                }
+            }
+        }
+    }
+
     // ── Default config: W-codes are warnings, E-codes are errors ────────────
 
     #[test]
@@ -1352,24 +1429,7 @@ mod tests {
         let idx = make_index();
         let uri = make_uri("/tmp/cfg_w0050_default.py");
         let _ = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
-
-        let diags = get_diagnostics(&idx, &uri);
-        let w0050: Vec<_> = diags
-            .iter()
-            .filter(|d| d.code.code == "BSK-W0050")
-            .collect();
-        assert!(
-            !w0050.is_empty(),
-            "expected BSK-W0050 for redundant annotation"
-        );
-        for d in &w0050 {
-            assert_eq!(
-                d.severity,
-                basilisk_checker::Severity::Warning,
-                "BSK-W0050 must be Warning with default config, got {:?}",
-                d.severity
-            );
-        }
+        assert_checker_severity(&idx, &uri, "BSK-W0050", basilisk_checker::Severity::Warning);
     }
 
     #[test]
@@ -1377,25 +1437,11 @@ mod tests {
         let idx = make_index();
         let uri = make_uri("/tmp/cfg_w0050_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
-
-        let codes = lsp_codes(&lsp_diags);
-        assert!(
-            codes.contains(&"BSK-W0050".to_owned()),
-            "expected BSK-W0050 in LSP diagnostics, got {codes:?}"
+        assert_lsp_severity(
+            &lsp_diags,
+            "BSK-W0050",
+            tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
         );
-
-        for d in &lsp_diags {
-            if let Some(tower_lsp::lsp_types::NumberOrString::String(code)) = &d.code {
-                if code == "BSK-W0050" {
-                    assert_eq!(
-                        d.severity,
-                        Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-                        "BSK-W0050 LSP severity must be WARNING (2), got {:?}",
-                        d.severity
-                    );
-                }
-            }
-        }
     }
 
     #[test]
@@ -1403,24 +1449,7 @@ mod tests {
         let idx = make_index();
         let uri = make_uri("/tmp/cfg_e0001_default.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-
-        let diags = get_diagnostics(&idx, &uri);
-        let e0001: Vec<_> = diags
-            .iter()
-            .filter(|d| d.code.code == "BSK-E0001")
-            .collect();
-        assert!(
-            !e0001.is_empty(),
-            "expected BSK-E0001 for missing annotation"
-        );
-        for d in &e0001 {
-            assert_eq!(
-                d.severity,
-                basilisk_checker::Severity::Error,
-                "BSK-E0001 must be Error with default config, got {:?}",
-                d.severity
-            );
-        }
+        assert_checker_severity(&idx, &uri, "BSK-E0001", basilisk_checker::Severity::Error);
     }
 
     #[test]
@@ -1428,182 +1457,70 @@ mod tests {
         let idx = make_index();
         let uri = make_uri("/tmp/cfg_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-
-        let codes = lsp_codes(&lsp_diags);
-        assert!(
-            codes.contains(&"BSK-E0001".to_owned()),
-            "expected BSK-E0001 in LSP diagnostics, got {codes:?}"
+        assert_lsp_severity(
+            &lsp_diags,
+            "BSK-E0001",
+            tower_lsp::lsp_types::DiagnosticSeverity::ERROR,
         );
-
-        for d in &lsp_diags {
-            if let Some(tower_lsp::lsp_types::NumberOrString::String(code)) = &d.code {
-                if code == "BSK-E0001" {
-                    assert_eq!(
-                        d.severity,
-                        Some(tower_lsp::lsp_types::DiagnosticSeverity::ERROR),
-                        "BSK-E0001 LSP severity must be ERROR (1), got {:?}",
-                        d.severity
-                    );
-                }
-            }
-        }
     }
 
     // ── Global rule severity override: demote error to warning ──────────────
 
     #[test]
     fn config_override_demotes_e0001_to_warning_in_checker() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Warning,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
         let uri = make_uri("/tmp/cfg_demote_e0001.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-
-        let diags = get_diagnostics(&idx, &uri);
-        let e0001: Vec<_> = diags
-            .iter()
-            .filter(|d| d.code.code == "BSK-E0001")
-            .collect();
-        assert!(
-            !e0001.is_empty(),
-            "BSK-E0001 should still fire (demoted, not disabled)"
-        );
-        for d in &e0001 {
-            assert_eq!(
-                d.severity,
-                basilisk_checker::Severity::Warning,
-                "config override should demote BSK-E0001 to Warning, got {:?}",
-                d.severity
-            );
-            assert_ne!(
-                d.severity,
-                basilisk_checker::Severity::Error,
-                "BSK-E0001 must NOT be Error after demotion"
-            );
-        }
+        assert_checker_severity(&idx, &uri, "BSK-E0001", basilisk_checker::Severity::Warning);
     }
 
     #[test]
     fn config_override_demotes_e0001_to_warning_in_lsp() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Warning,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
         let uri = make_uri("/tmp/cfg_demote_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-
-        let codes = lsp_codes(&lsp_diags);
-        assert!(
-            codes.contains(&"BSK-E0001".to_owned()),
-            "BSK-E0001 should still appear in LSP diags after demotion"
+        assert_lsp_severity(
+            &lsp_diags,
+            "BSK-E0001",
+            tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
         );
-
-        for d in &lsp_diags {
-            if let Some(tower_lsp::lsp_types::NumberOrString::String(code)) = &d.code {
-                if code == "BSK-E0001" {
-                    assert_eq!(
-                        d.severity,
-                        Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-                        "LSP severity for demoted BSK-E0001 must be WARNING (2), got {:?}",
-                        d.severity
-                    );
-                    assert_ne!(
-                        d.severity,
-                        Some(tower_lsp::lsp_types::DiagnosticSeverity::ERROR),
-                        "demoted BSK-E0001 must NOT be ERROR in LSP"
-                    );
-                }
-            }
-        }
     }
 
     // ── Global rule severity override: demote error to info ─────────────────
 
     #[test]
     fn config_override_demotes_e0001_to_info_in_checker() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Info,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Info);
         let uri = make_uri("/tmp/cfg_info_e0001.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-
-        let diags = get_diagnostics(&idx, &uri);
-        let e0001: Vec<_> = diags
-            .iter()
-            .filter(|d| d.code.code == "BSK-E0001")
-            .collect();
-        assert!(
-            !e0001.is_empty(),
-            "BSK-E0001 should still fire at Info severity"
-        );
-        for d in &e0001 {
-            assert_eq!(
-                d.severity,
-                basilisk_checker::Severity::Info,
-                "config override should demote BSK-E0001 to Info, got {:?}",
-                d.severity
-            );
-        }
+        assert_checker_severity(&idx, &uri, "BSK-E0001", basilisk_checker::Severity::Info);
     }
 
     #[test]
     fn config_override_demotes_e0001_to_info_in_lsp() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Info,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx = make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Info);
         let uri = make_uri("/tmp/cfg_info_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
-
-        for d in &lsp_diags {
-            if let Some(tower_lsp::lsp_types::NumberOrString::String(code)) = &d.code {
-                if code == "BSK-E0001" {
-                    assert_eq!(
-                        d.severity,
-                        Some(tower_lsp::lsp_types::DiagnosticSeverity::INFORMATION),
-                        "LSP severity for info-demoted BSK-E0001 must be INFORMATION (3), got {:?}",
-                        d.severity
-                    );
-                }
-            }
-        }
+        assert_lsp_severity(
+            &lsp_diags,
+            "BSK-E0001",
+            tower_lsp::lsp_types::DiagnosticSeverity::INFORMATION,
+        );
     }
 
     // ── Global rule severity override: disable rule entirely ────────────────
 
     #[test]
     fn config_override_disables_e0001_removes_from_checker() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Disabled,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_disable_e0001.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
         let diags = get_diagnostics(&idx, &uri);
-        let e0001_count = diags.iter().filter(|d| d.code.code == "BSK-E0001").count();
+        let e0001_count = count_code(&diags, "BSK-E0001");
         assert_eq!(
             e0001_count, 0,
             "disabled rule BSK-E0001 must produce zero diagnostics, got {e0001_count}"
@@ -1612,14 +1529,8 @@ mod tests {
 
     #[test]
     fn config_override_disables_e0001_removes_from_lsp() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Disabled,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_disable_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
@@ -1634,57 +1545,24 @@ mod tests {
 
     #[test]
     fn config_override_promotes_w0050_to_error_in_lsp() {
-        // This is the EXACT bug scenario: user has a config that should
-        // control W-code severity but the LSP was ignoring it.
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-W0050".to_owned(),
-                basilisk_config::RuleSeverity::Error,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        // The `Error` variant means "keep default severity" — it does NOT promote.
+        // BSK-W0050's default is Warning, so it stays Warning even with RuleSeverity::Error.
+        let idx = make_index_with_rule_override("BSK-W0050", basilisk_config::RuleSeverity::Error);
         let uri = make_uri("/tmp/cfg_promote_w0050.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
-
-        let codes = lsp_codes(&lsp_diags);
-        assert!(
-            codes.contains(&"BSK-W0050".to_owned()),
-            "BSK-W0050 should still fire after promotion"
+        assert_lsp_severity(
+            &lsp_diags,
+            "BSK-W0050",
+            tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
         );
-
-        // The rule severity override for Error means "keep default" (error stays error).
-        // For a W-code, the default is Warning. The config `Error` variant means
-        // "keep default severity" — it does NOT promote. The checker code:
-        //   RuleSeverity::Error => {} // keep default
-        // So BSK-W0050 stays as Warning even with RuleSeverity::Error.
-        // This test documents this behavior.
-        for d in &lsp_diags {
-            if let Some(tower_lsp::lsp_types::NumberOrString::String(code)) = &d.code {
-                if code == "BSK-W0050" {
-                    assert_eq!(
-                        d.severity,
-                        Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-                        "BSK-W0050 with RuleSeverity::Error keeps default (Warning), got {:?}",
-                        d.severity
-                    );
-                }
-            }
-        }
     }
 
     // ── W0050 disabled via config ───────────────────────────────────────────
 
     #[test]
     fn config_override_disables_w0050() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-W0050".to_owned(),
-                basilisk_config::RuleSeverity::Disabled,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx =
+            make_index_with_rule_override("BSK-W0050", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_disable_w0050.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
 
@@ -1695,7 +1573,7 @@ mod tests {
         );
 
         let diags = get_diagnostics(&idx, &uri);
-        let w0050_count = diags.iter().filter(|d| d.code.code == "BSK-W0050").count();
+        let w0050_count = count_code(&diags, "BSK-W0050");
         assert_eq!(
             w0050_count, 0,
             "disabled BSK-W0050 must produce zero checker diagnostics"
@@ -1718,7 +1596,7 @@ mod tests {
         let _ = idx.set_open(&uri, src, 1);
 
         let diags = get_diagnostics(&idx, &uri);
-        let w0010_count = diags.iter().filter(|d| d.code.code == "BSK-W0010").count();
+        let w0010_count = count_code(&diags, "BSK-W0010");
         assert_eq!(
             w0010_count, 0,
             "BSK-W0010 should be suppressed when uv_stub_suggestions is false"
@@ -1755,14 +1633,8 @@ mod tests {
 
     #[test]
     fn config_applies_to_set_open() {
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Disabled,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
         let uri = make_uri("/tmp/cfg_set_open.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
 
@@ -1780,14 +1652,8 @@ mod tests {
         let file_path = dir.join("reload_cfg.py");
         std::fs::write(&file_path, SRC_MISSING_ANNOTATION).unwrap();
 
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Disabled,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
 
         // First, set_open to get it in the index, then close to allow reload.
         let uri = Url::from_file_path(&file_path).unwrap();
@@ -1824,14 +1690,8 @@ mod tests {
         let file_path = dir.join("close_cfg.py");
         std::fs::write(&file_path, SRC_MISSING_ANNOTATION).unwrap();
 
-        let config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Disabled,
-            )]),
-            ..Default::default()
-        };
-        let idx = make_index_with_config(config);
+        let idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Disabled);
 
         let uri = Url::from_file_path(&file_path).unwrap();
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
@@ -1993,7 +1853,7 @@ mod tests {
 
         // Also verify the raw checker diagnostics match.
         let diags = get_diagnostics(&idx, &uri);
-        let w0050_count = diags.iter().filter(|d| d.code.code == "BSK-W0050").count();
+        let w0050_count = count_code(&diags, "BSK-W0050");
         assert_eq!(w0050_count, 0, "W0050 disabled in checker too");
         for d in diags.iter().filter(|d| d.code.code == "BSK-E0001") {
             assert_eq!(d.severity, basilisk_checker::Severity::Warning);
@@ -2020,22 +1880,12 @@ mod tests {
 
     #[test]
     fn bsk_to_lsp_maps_warning_to_warning_not_error() {
-        // Directly tests the bsk_to_lsp conversion for Warning severity.
-        let diag = basilisk_checker::Diagnostic {
-            code: basilisk_checker::ErrorCode {
-                code: "BSK-W0050",
-                docs_url: "https://www.basilisk-python.dev/errors/BSK-W0050",
-            },
-            severity: basilisk_checker::Severity::Warning,
-            message: "test warning".to_owned(),
-            span: basilisk_resolver::Span::new(0, 1),
-            path: "test.py".to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        };
+        let diag = make_test_diag(
+            "BSK-W0050",
+            basilisk_checker::Severity::Warning,
+            "test warning",
+        );
         let lsp_diag = crate::workspace_analysis::bsk_to_lsp(&diag, "x\n");
-
         assert_eq!(
             lsp_diag.severity,
             Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
@@ -2050,21 +1900,8 @@ mod tests {
 
     #[test]
     fn bsk_to_lsp_maps_error_to_error() {
-        let diag = basilisk_checker::Diagnostic {
-            code: basilisk_checker::ErrorCode {
-                code: "BSK-E0001",
-                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0001",
-            },
-            severity: basilisk_checker::Severity::Error,
-            message: "test error".to_owned(),
-            span: basilisk_resolver::Span::new(0, 1),
-            path: "test.py".to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        };
+        let diag = make_test_diag("BSK-E0001", basilisk_checker::Severity::Error, "test error");
         let lsp_diag = crate::workspace_analysis::bsk_to_lsp(&diag, "x\n");
-
         assert_eq!(
             lsp_diag.severity,
             Some(tower_lsp::lsp_types::DiagnosticSeverity::ERROR),
@@ -2074,21 +1911,8 @@ mod tests {
 
     #[test]
     fn bsk_to_lsp_maps_info_to_information() {
-        let diag = basilisk_checker::Diagnostic {
-            code: basilisk_checker::ErrorCode {
-                code: "BSK-I0001",
-                docs_url: "https://www.basilisk-python.dev/errors/BSK-I0001",
-            },
-            severity: basilisk_checker::Severity::Info,
-            message: "test info".to_owned(),
-            span: basilisk_resolver::Span::new(0, 1),
-            path: "test.py".to_owned(),
-            help: None,
-            note: None,
-            provenance: None,
-        };
+        let diag = make_test_diag("BSK-I0001", basilisk_checker::Severity::Info, "test info");
         let lsp_diag = crate::workspace_analysis::bsk_to_lsp(&diag, "x\n");
-
         assert_eq!(
             lsp_diag.severity,
             Some(tower_lsp::lsp_types::DiagnosticSeverity::INFORMATION),
@@ -2216,14 +2040,8 @@ mod tests {
             .collect();
 
         // Custom config: E0001 demoted to Warning.
-        let custom_config = BasiliskConfig {
-            rules: std::collections::HashMap::from([(
-                "BSK-E0001".to_owned(),
-                basilisk_config::RuleSeverity::Warning,
-            )]),
-            ..Default::default()
-        };
-        let custom_idx = make_index_with_config(custom_config);
+        let custom_idx =
+            make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
         let custom_uri = make_uri(uri_path);
         let custom_diags = custom_idx.set_open(&custom_uri, SRC_MISSING_ANNOTATION, 1);
         let custom_severities: Vec<_> = custom_diags

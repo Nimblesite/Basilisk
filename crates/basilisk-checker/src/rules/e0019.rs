@@ -14,7 +14,7 @@
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -35,7 +35,7 @@ impl Rule for UnboundVariable {
 }
 
 fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
-    let param_names: Vec<&str> = func.parameters.iter().map(|p| p.name.as_str()).collect();
+    let param_names: Vec<&str> = basilisk_resolver::collect_names(&func.parameters);
 
     // Use top_level_return_name_refs to avoid false positives where a `return name`
     // is inside the same conditional branch that assigned `name`.
@@ -56,23 +56,21 @@ fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
 }
 
 fn make_diagnostic(func: &FunctionInfo, name: &str, span: Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!(
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!(
             "Function `{}` returns `{name}` but `{name}` may be unbound on some paths",
             func.name
         ),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Assign `{name}` unconditionally before the `return`, or add a default value"
         )),
-        note: Some(
+        Some(
             "Basilisk detects variables that are assigned only inside conditional branches \
              (if/while/try) and may not be defined on every execution path"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

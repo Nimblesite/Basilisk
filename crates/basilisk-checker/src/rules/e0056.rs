@@ -19,7 +19,7 @@
 
 use basilisk_resolver::{ReadOnlyViolationKind, ResolvedModule};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -49,18 +49,16 @@ impl Rule for ReadOnlyTypedDictMutation {
                     )
                 }
             };
-            diagnostics.push(Diagnostic {
-                code: CODE.clone(),
-                severity: Severity::Error,
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
                 message,
-                span: v.span,
-                path: module.path.clone(),
-                help: Some("Remove the mutation or make the field writable".to_owned()),
-                note: Some(
+                v.span,
+                &module.path,
+                Some("Remove the mutation or make the field writable".to_owned()),
+                Some(
                     "PEP 705: `ReadOnly` fields in a `TypedDict` may not be assigned after construction".to_owned(),
                 ),
-                provenance: None,
-            });
+            ));
         }
     }
 }

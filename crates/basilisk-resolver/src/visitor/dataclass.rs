@@ -356,11 +356,7 @@ pub(super) fn dataclass_flag(class: &StmtClassDef, key: &str) -> bool {
         let Expr::Call(call) = &dec.expression else {
             continue;
         };
-        let is_dc = match call.func.as_ref() {
-            Expr::Name(n) => n.id.as_str() == "dataclass",
-            Expr::Attribute(a) => a.attr.as_str() == "dataclass",
-            _ => false,
-        };
+        let is_dc = super::walks::is_name_or_attr_named(call.func.as_ref(), "dataclass");
         if !is_dc {
             continue;
         }
@@ -377,11 +373,7 @@ pub(super) fn dataclass_flag(class: &StmtClassDef, key: &str) -> bool {
 /// (the sentinel that makes all following fields keyword-only).
 pub(super) fn field_kw_only_override(value: &Expr) -> Option<bool> {
     let Expr::Call(call) = value else { return None };
-    let is_field_call = match call.func.as_ref() {
-        Expr::Name(n) => n.id.as_str() == "field",
-        Expr::Attribute(a) => a.attr.as_str() == "field",
-        _ => false,
-    };
+    let is_field_call = super::walks::is_name_or_attr_named(call.func.as_ref(), "field");
     if !is_field_call {
         return None;
     }
@@ -401,11 +393,7 @@ pub(super) fn field_init_is_false(value: &Expr) -> bool {
     let Expr::Call(call) = value else {
         return false;
     };
-    let is_field_call = match call.func.as_ref() {
-        Expr::Name(n) => n.id.as_str() == "field",
-        Expr::Attribute(a) => a.attr.as_str() == "field",
-        _ => false,
-    };
+    let is_field_call = super::walks::is_name_or_attr_named(call.func.as_ref(), "field");
     if !is_field_call {
         return false;
     }
@@ -420,11 +408,7 @@ pub(super) fn dataclass_bool_flag_is_false(class: &StmtClassDef, key: &str) -> b
         let Expr::Call(call) = &dec.expression else {
             continue;
         };
-        let is_dc = match call.func.as_ref() {
-            Expr::Name(n) => n.id.as_str() == "dataclass",
-            Expr::Attribute(a) => a.attr.as_str() == "dataclass",
-            _ => false,
-        };
+        let is_dc = super::walks::is_name_or_attr_named(call.func.as_ref(), "dataclass");
         if !is_dc {
             continue;
         }

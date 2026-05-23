@@ -28,7 +28,7 @@ use std::collections::HashSet;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -39,20 +39,14 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 fn make_diag(msg: String, span: basilisk_resolver::Span, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: msg,
+    error_diagnostic_owned(
+        CODE.clone(),
+        msg,
         span,
-        path: path.to_owned(),
-        help: Some(
-            "Unpack the `TypeVarTuple` with `*`, e.g. `Generic[*Ts]` or `*args: *Ts`".to_owned(),
-        ),
-        note: Some(
-            "PEP 646: TypeVarTuple must always be used with the `*` unpack operator".to_owned(),
-        ),
-        provenance: None,
-    }
+        path,
+        Some("Unpack the `TypeVarTuple` with `*`, e.g. `Generic[*Ts]` or `*args: *Ts`".to_owned()),
+        Some("PEP 646: TypeVarTuple must always be used with the `*` unpack operator".to_owned()),
+    )
 }
 
 fn span_text(source: &str, span: Option<basilisk_resolver::Span>) -> Option<&str> {
@@ -118,12 +112,7 @@ pub(crate) struct TypeVarTupleUnpackRequired;
 impl Rule for TypeVarTupleUnpackRequired {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         // Collect all TypeVarTuple names defined in this module.
-        let tvt_names: HashSet<&str> = module
-            .typevar_calls
-            .iter()
-            .filter(|tv| tv.is_typevartuple)
-            .map(|tv| tv.name.as_str())
-            .collect();
+        let tvt_names = super::shared::typevar_tuple_names(&module.typevar_calls);
 
         if tvt_names.is_empty() {
             return;

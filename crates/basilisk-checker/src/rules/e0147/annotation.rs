@@ -384,11 +384,7 @@ pub(super) fn annotation_has_starred_unpack(annotation: &str) -> bool {
 
 /// Returns `true` when `s` is a simple Python identifier.
 pub(super) fn is_simple_name(s: &str) -> bool {
-    !s.is_empty()
-        && s.chars()
-            .next()
-            .is_some_and(|c| c.is_alphabetic() || c == '_')
-        && s.chars().all(|c| c.is_alphanumeric() || c == '_')
+    basilisk_resolver::is_simple_python_identifier(s)
 }
 
 // ---------------------------------------------------------------------------

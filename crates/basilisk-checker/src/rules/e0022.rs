@@ -10,7 +10,7 @@
 
 use basilisk_resolver::{ResolvedModule, Span};
 
-use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -35,19 +35,17 @@ impl Rule for UnhashableDictKey {
 }
 
 fn make_diagnostic(span: Span, key_type: &str, path: &str) -> Diagnostic {
-    Diagnostic {
-        code: CODE.clone(),
-        severity: Severity::Error,
-        message: format!("Unhashable type `{key_type}` used as a dictionary key"),
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!("Unhashable type `{key_type}` used as a dictionary key"),
         span,
-        path: path.to_owned(),
-        help: Some(format!(
+        path,
+        Some(format!(
             "Convert the `{key_type}` to a hashable type (e.g. `tuple`) before using it as a key"
         )),
-        note: Some(
+        Some(
             "Dictionary keys must be hashable; `list`, `set`, and `dict` are not hashable"
                 .to_owned(),
         ),
-        provenance: None,
-    }
+    )
 }

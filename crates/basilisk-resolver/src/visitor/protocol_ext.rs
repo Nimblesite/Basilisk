@@ -1,6 +1,6 @@
 //! Protocol Ext visitor functions.
 
-use ruff_python_ast::{ExceptHandler, Expr, Stmt};
+use ruff_python_ast::{Expr, Stmt};
 
 use crate::scope::{
     ClassInfo, ProtocolInstantiationViolation, ProtocolRtcViolation, ProtocolRtcViolationKind, Span,
@@ -150,52 +150,20 @@ pub(super) fn find_protocol_instantiations(
     abstract_names: &std::collections::HashSet<&str>,
     out: &mut Vec<ProtocolInstantiationViolation>,
 ) {
-    for stmt in stmts {
-        match stmt {
-            Stmt::Assign(node) => {
-                check_expr_for_protocol_call(&node.value, protocol_names, abstract_names, out);
-            }
-            Stmt::AnnAssign(node) => {
-                if let Some(value) = &node.value {
-                    check_expr_for_protocol_call(value, protocol_names, abstract_names, out);
-                }
-            }
-            Stmt::Expr(node) => {
-                check_expr_for_protocol_call(&node.value, protocol_names, abstract_names, out);
-            }
-            Stmt::FunctionDef(func) => {
-                find_protocol_instantiations(&func.body, protocol_names, abstract_names, out);
-            }
-            Stmt::ClassDef(cls) => {
-                find_protocol_instantiations(&cls.body, protocol_names, abstract_names, out);
-            }
-            Stmt::If(node) => {
-                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
-                for clause in &node.elif_else_clauses {
-                    find_protocol_instantiations(&clause.body, protocol_names, abstract_names, out);
-                }
-            }
-            Stmt::For(node) => {
-                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
-            }
-            Stmt::While(node) => {
-                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
-            }
-            Stmt::With(node) => {
-                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
-            }
-            Stmt::Try(node) => {
-                find_protocol_instantiations(&node.body, protocol_names, abstract_names, out);
-                for handler in &node.handlers {
-                    let ExceptHandler::ExceptHandler(except) = handler;
-                    find_protocol_instantiations(&except.body, protocol_names, abstract_names, out);
-                }
-                find_protocol_instantiations(&node.finalbody, protocol_names, abstract_names, out);
-                find_protocol_instantiations(&node.orelse, protocol_names, abstract_names, out);
-            }
-            _ => {}
+    crate::walk_all_stmts(stmts, &mut |stmt| match stmt {
+        Stmt::Assign(node) => {
+            check_expr_for_protocol_call(&node.value, protocol_names, abstract_names, out);
         }
-    }
+        Stmt::AnnAssign(node) => {
+            if let Some(value) = &node.value {
+                check_expr_for_protocol_call(value, protocol_names, abstract_names, out);
+            }
+        }
+        Stmt::Expr(node) => {
+            check_expr_for_protocol_call(&node.value, protocol_names, abstract_names, out);
+        }
+        _ => {}
+    });
 }
 
 /// Check if an expression is a call to a Protocol or abstract class,
@@ -323,45 +291,25 @@ pub(super) fn collect_protocol_rtc_in_stmts(
     protocol_map: &std::collections::HashMap<&str, ProtocolInfo<'_>>,
     out: &mut Vec<ProtocolRtcViolation>,
 ) {
-    for stmt in stmts {
-        match stmt {
-            Stmt::If(node) => {
-                collect_protocol_rtc_in_expr(&node.test, protocol_map, out);
-                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
-                for clause in &node.elif_else_clauses {
-                    if let Some(test) = &clause.test {
-                        collect_protocol_rtc_in_expr(test, protocol_map, out);
-                    }
-                    collect_protocol_rtc_in_stmts(&clause.body, protocol_map, out);
+    crate::walk_all_stmts(stmts, &mut |stmt| match stmt {
+        Stmt::If(node) => {
+            collect_protocol_rtc_in_expr(&node.test, protocol_map, out);
+            for clause in &node.elif_else_clauses {
+                if let Some(test) = &clause.test {
+                    collect_protocol_rtc_in_expr(test, protocol_map, out);
                 }
             }
-            Stmt::Expr(node) => {
-                collect_protocol_rtc_in_expr(&node.value, protocol_map, out);
-            }
-            Stmt::Assign(node) => {
-                collect_protocol_rtc_in_expr(&node.value, protocol_map, out);
-            }
-            Stmt::AnnAssign(node) => {
-                if let Some(val) = &node.value {
-                    collect_protocol_rtc_in_expr(val, protocol_map, out);
-                }
-            }
-            Stmt::While(node) => {
-                collect_protocol_rtc_in_expr(&node.test, protocol_map, out);
-                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
-            }
-            Stmt::For(node) => {
-                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
-            }
-            Stmt::FunctionDef(node) => {
-                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
-            }
-            Stmt::ClassDef(node) => {
-                collect_protocol_rtc_in_stmts(&node.body, protocol_map, out);
-            }
-            _ => {}
         }
-    }
+        Stmt::Expr(node) => collect_protocol_rtc_in_expr(&node.value, protocol_map, out),
+        Stmt::Assign(node) => collect_protocol_rtc_in_expr(&node.value, protocol_map, out),
+        Stmt::AnnAssign(node) => {
+            if let Some(val) = &node.value {
+                collect_protocol_rtc_in_expr(val, protocol_map, out);
+            }
+        }
+        Stmt::While(node) => collect_protocol_rtc_in_expr(&node.test, protocol_map, out),
+        _ => {}
+    });
 }
 
 /// Check a single `isinstance`/`issubclass` call for protocol violations.
