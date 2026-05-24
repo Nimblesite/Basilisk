@@ -186,7 +186,7 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
     vscode.commands.registerCommand("basilisk.openWalkthrough", () => {
       void vscode.commands.executeCommand(
         "workbench.action.openWalkthrough",
-        "basilisk-lang.basilisk#basilisk.gettingStarted",
+        "Nimblesite.basilisk#basilisk.gettingStarted",
       );
     }),
   );

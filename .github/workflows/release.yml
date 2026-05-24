@@ -275,6 +275,7 @@ jobs:
             cp "target/${{ matrix.rust_target }}/release/basilisk-profiler-helper" "vscode-extension/bin/${{ env.target }}/"
           fi
           cp shipwright.json vscode-extension/shipwright.json
+          cp NOTICES vscode-extension/NOTICES
 
       # Skip on cross-compiled targets: the runner's CPU arch can't execute
       # the produced binary (x64 host -> aarch64 target). The VSIX contents
@@ -337,8 +338,14 @@ jobs:
 
       - name: Publish to VS Code Marketplace
         shell: bash
+        env:
+          VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
         run: |
           set -euo pipefail
+          if [ -z "${VSCE_PAT:-}" ]; then
+            echo "::error::VSCODE_MARKETPLACE_PAT not accessible. If it exists at the Nimblesite org level, add Basilisk to its allowed repositories under Org Settings → Secrets and variables → Actions."
+            exit 1
+          fi
           # Tags like v0.1.0-alpha / v0.1.0-beta / v0.1.0-rc.1 are prerelease.
           # Plain vX.Y.Z is a stable release. Marketplace requires the
           # --pre-release flag for any SemVer prerelease suffix; without it,
@@ -350,9 +357,21 @@ jobs:
           else
             echo "Detected stable tag ${GITHUB_REF_NAME}; publishing to stable channel"
           fi
-          npx --yes @vscode/vsce publish $flag --packagePath $(find . -iname '*.vsix')
-        env:
-          VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
+          # One publish per platform-specific VSIX. vsce requires a separate
+          # publish call for each --target platform; globbing all into one
+          # publish silently uses only the first.
+          shopt -s globstar nullglob
+          published=0
+          for vsix in **/*.vsix; do
+            echo "Publishing $vsix"
+            npx --yes @vscode/vsce publish $flag --packagePath "$vsix"
+            published=$((published + 1))
+          done
+          if [ "$published" -eq 0 ]; then
+            echo "::error::No VSIX artifacts found to publish"
+            exit 1
+          fi
+          echo "Published $published VSIX(es) to the Marketplace"
 
   github-release:
     name: Create GitHub Release
