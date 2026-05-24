@@ -185,7 +185,7 @@ _clean_rust:
 
 _clean_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Cleaning VSIX artifacts\033[0m' && \
-	$(RM) $(_EXTENSION_DIR)/out $(_EXTENSION_DIR)/*.vsix && \
+	$(RM) $(_EXTENSION_DIR)/out $(_EXTENSION_DIR)/*.vsix ./*.vsix && \
 	echo -e '\033[0;32m✓ VSIX clean complete\033[0m'
 
 _uninstall_binaries:
@@ -258,7 +258,7 @@ _uninstall_vsix:
 
 _install_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Installing VSIX\033[0m' && \
-	code --install-extension $$(ls -t $(_EXTENSION_DIR)/*.vsix | head -1) && \
+	code --install-extension $$(ls -t ./*.vsix | head -1) && \
 	echo -e '\033[0;32m✓ VSIX installed\033[0m'
 
 _lint_rust:
