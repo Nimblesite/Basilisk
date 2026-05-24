@@ -17,7 +17,7 @@ jobs:
   # ── Lint (runs in parallel with all test jobs) ─────────────────────────────
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04-8-cores
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -50,7 +50,7 @@ jobs:
   # ── Zed Extension (runs in parallel) ───────────────────────────────────────
   zed:
     name: Zed Extension
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04-8-cores
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -75,7 +75,7 @@ jobs:
   # ── Rust coverage + thresholds (runs in parallel) ──────────────────────────
   test-rust:
     name: Rust Tests & Coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04-8-cores
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -123,7 +123,7 @@ jobs:
   # ── VS Code extension (runs in parallel) ───────────────────────────────────
   test-vscode:
     name: VS Code Extension
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04-8-cores
     # TIMEOUT EXCEPTION: VS Code extension e2e tests launch a full VS Code instance via xvfb, requiring ~25 min
     timeout-minutes: 35
     steps:
@@ -174,7 +174,7 @@ jobs:
 
   verify-binaries:
     name: Shipwright Binary Gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04-8-cores
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -212,7 +212,7 @@ jobs:
   # ── Neovim extension (runs in parallel) ────────────────────────────────────
   test-nvim:
     name: Neovim Extension
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04-8-cores
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -251,7 +251,7 @@ jobs:
   # ── Mutation testing (runs in parallel shards) ─────────────────────────────
   mutation-test-shard:
     name: Mutation Testing Shard ${{ matrix.label }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04-8-cores
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -303,7 +303,7 @@ jobs:
 
   mutation-test:
     name: Mutation Testing
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04-8-cores
     needs: mutation-test-shard
     timeout-minutes: 10
     steps:
@@ -344,7 +344,7 @@ jobs:
   build:
     name: Build
     needs: [test-rust, test-vscode, test-nvim, zed, mutation-test, verify-binaries]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04-8-cores
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
