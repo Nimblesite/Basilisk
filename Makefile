@@ -5,7 +5,7 @@
 # Exactly 7 standard targets: build, test, lint, fmt, clean, ci, setup
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup mutation-test reinstall-vsix
+.PHONY: build test lint fmt clean ci setup mutation-test reinstall-vsix reinstall-vsix-prerelease
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -161,9 +161,17 @@ mutation-test:
 		fi; \
 	'
 
-## reinstall-vsix: Full clean rebuild and reinstall of binaries + VSIX
-reinstall-vsix: _clean_rust _clean_vsix _uninstall_binaries _build_rust _install_binaries _package_vsix _uninstall_vsix _install_vsix
+## reinstall-vsix: Clean rebuild + reinstall a host-targeted VSIX.
+## Mirrors .github/workflows/release.yml `vsix` job for the host platform.
+reinstall-vsix: _clean_rust _clean_vsix _release_vsix _uninstall_vsix _install_vsix
 	@echo -e '\033[0;32m✓ reinstall-vsix complete\033[0m'
+
+## reinstall-vsix-prerelease: Same as reinstall-vsix but packages with
+## --pre-release so the VSIX matches what the release pipeline builds for
+## tags like v0.1.0-alpha. Use to dry-run a prerelease install locally.
+reinstall-vsix-prerelease: VSCE_PRERELEASE := 1
+reinstall-vsix-prerelease: _clean_rust _clean_vsix _release_vsix _uninstall_vsix _install_vsix
+	@echo -e '\033[0;32m✓ reinstall-vsix-prerelease complete\033[0m'
 
 # =============================================================================
 # Internal Recipes
@@ -177,7 +185,7 @@ _clean_rust:
 
 _clean_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Cleaning VSIX artifacts\033[0m' && \
-	$(RM) $(_EXTENSION_DIR)/out $(_EXTENSION_DIR)/*.vsix $(_EXTENSION_DIR)/bin && \
+	$(RM) $(_EXTENSION_DIR)/out $(_EXTENSION_DIR)/*.vsix ./*.vsix $(_EXTENSION_DIR)/NOTICES && \
 	echo -e '\033[0;32m✓ VSIX clean complete\033[0m'
 
 _uninstall_binaries:
@@ -202,35 +210,56 @@ _build_vsix:
 	cd $(_EXTENSION_DIR) && npm ci && npm run compile && \
 	echo -e '\033[0;32m✓ VS Code extension compiled\033[0m'
 
-_package_vsix:
+# _release_vsix: build a host-targeted VSIX. Mirrors the per-platform steps
+# of the `vsix` job in .github/workflows/release.yml. Single recipe so host
+# detection vars are consistent throughout.
+_release_vsix:
 	@set -e; \
-	REPO_ROOT="$$(pwd)"; \
-	BASILISK_BIN="$$REPO_ROOT/target/release/basilisk"; \
-	if [ ! -x "$$BASILISK_BIN" ]; then \
-	    echo -e '\033[1m\033[0;36m▶ Building basilisk binary (release)\033[0m'; \
-	    cargo build --release; \
+	case "$$(uname -s)" in \
+		Darwin) plat=darwin; exe="" ;; \
+		Linux)  plat=linux;  exe="" ;; \
+		MINGW*|MSYS*|CYGWIN*) plat=win32; exe=".exe" ;; \
+		*) echo "Unsupported OS: $$(uname -s)" >&2; exit 1 ;; \
+	esac; \
+	case "$$(uname -m)" in \
+		arm64|aarch64) arch=arm64; rust_arch=aarch64 ;; \
+		x86_64|amd64)  arch=x64;   rust_arch=x86_64 ;; \
+		*) echo "Unsupported arch: $$(uname -m)" >&2; exit 1 ;; \
+	esac; \
+	case "$$plat" in \
+		darwin) rust_target="$$rust_arch-apple-darwin" ;; \
+		linux)  rust_target="$$rust_arch-unknown-linux-gnu" ;; \
+		win32)  rust_target="$$rust_arch-pc-windows-msvc" ;; \
+	esac; \
+	target="$$plat-$$arch"; \
+	echo -e "\033[1m\033[0;36m▶ Building VSIX for $$target ($$rust_target)\033[0m"; \
+	cargo build --release --target "$$rust_target" --bin basilisk; \
+	if [ "$$plat" = "darwin" ]; then \
+		cargo build --release --target "$$rust_target" --bin basilisk-profiler-helper; \
 	fi; \
-	[ -x "$$BASILISK_BIN" ] || { echo -e '\033[0;31m✗ basilisk release binary not found\033[0m'; exit 1; }; \
-	echo -e '\033[1m\033[0;36m▶ Packaging VSIX\033[0m'; \
-	cd $(_EXTENSION_DIR) && npm ci && npm run compile; \
-	echo -e '\033[1m\033[0;36m▶ Staging bundled binary into VSIX (VSIX-SPEC § Binary Distribution)\033[0m'; \
-	node scripts/sync-shipwright-manifest.mjs; \
-	STAGED="$$(node scripts/stage-bundled-binary.mjs "$$BASILISK_BIN")"; \
-	PLATFORM="$$(basename "$$(dirname "$$STAGED")")"; \
-	npm run package; \
-	echo -e '\033[1m\033[0;36m▶ Verifying packaged VSIX contains bundled binary\033[0m'; \
-	VSIX="$$(ls -t *.vsix | head -1)"; \
-	node scripts/verify-shipwright.mjs vsix "$$VSIX" "$$PLATFORM"; \
-	echo -e '\033[0;32m✓ VSIX packaged\033[0m'
+	$(RM) "$(_EXTENSION_DIR)/bin"; \
+	mkdir -p "$(_EXTENSION_DIR)/bin/$$target"; \
+	cp "target/$$rust_target/release/basilisk$$exe" "$(_EXTENSION_DIR)/bin/$$target/"; \
+	if [ "$$plat" = "darwin" ]; then \
+		cp "target/$$rust_target/release/basilisk-profiler-helper" "$(_EXTENSION_DIR)/bin/$$target/"; \
+	fi; \
+	cp shipwright.json $(_EXTENSION_DIR)/shipwright.json; \
+	cp NOTICES $(_EXTENSION_DIR)/NOTICES; \
+	repo_root="$$(pwd)"; \
+	cd $(_EXTENSION_DIR) && npm ci && npm run compile && npm run sync:shipwright; \
+	prerelease_flag=""; \
+	if [ -n "$(VSCE_PRERELEASE)" ]; then prerelease_flag="--pre-release"; fi; \
+	npx vsce package $$prerelease_flag --target "$$target" --ignore-other-target-folders --out "$$repo_root/basilisk-$$target.vsix"; \
+	echo -e "\033[0;32m✓ VSIX built at basilisk-$$target.vsix$${prerelease_flag:+ (pre-release)}\033[0m"
 
 _uninstall_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Uninstalling VSIX\033[0m' && \
-	code --uninstall-extension basilisk-lang.basilisk 2>/dev/null || true && \
+	code --uninstall-extension nimblesite.basilisk 2>/dev/null || true && \
 	echo -e '\033[0;32m✓ VSIX uninstalled\033[0m'
 
 _install_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Installing VSIX\033[0m' && \
-	code --install-extension $$(ls -t $(_EXTENSION_DIR)/*.vsix | head -1) && \
+	code --install-extension $$(ls -t ./*.vsix | head -1) && \
 	echo -e '\033[0;32m✓ VSIX installed\033[0m'
 
 _lint_rust:

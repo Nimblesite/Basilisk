@@ -14,7 +14,7 @@ import { execFileSync } from 'child_process';
 
 export { POLL_INTERVAL_MS, WAIT_MS } from '../../timeouts';
 
-export const EXTENSION_ID = 'basilisk-lang.basilisk';
+export const EXTENSION_ID = 'Nimblesite.basilisk';
 
 /** Maximum time (ms) to wait for diagnostics from the LSP server. */
 export const DIAGNOSTIC_TIMEOUT_MS = 15_000;
