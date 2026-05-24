@@ -5,7 +5,7 @@
 # Exactly 7 standard targets: build, test, lint, fmt, clean, ci, setup
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup mutation-test reinstall-vsix
+.PHONY: build test lint fmt clean ci setup mutation-test reinstall-vsix reinstall-vsix-prerelease
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -166,6 +166,13 @@ mutation-test:
 reinstall-vsix: _clean_rust _clean_vsix _release_vsix _uninstall_vsix _install_vsix
 	@echo -e '\033[0;32m✓ reinstall-vsix complete\033[0m'
 
+## reinstall-vsix-prerelease: Same as reinstall-vsix but packages with
+## --pre-release so the VSIX matches what the release pipeline builds for
+## tags like v0.1.0-alpha. Use to dry-run a prerelease install locally.
+reinstall-vsix-prerelease: VSCE_PRERELEASE := 1
+reinstall-vsix-prerelease: _clean_rust _clean_vsix _release_vsix _uninstall_vsix _install_vsix
+	@echo -e '\033[0;32m✓ reinstall-vsix-prerelease complete\033[0m'
+
 # =============================================================================
 # Internal Recipes
 # =============================================================================
@@ -237,9 +244,12 @@ _release_vsix:
 		cp "target/$$rust_target/release/basilisk-profiler-helper" "$(_EXTENSION_DIR)/bin/$$target/"; \
 	fi; \
 	cp shipwright.json $(_EXTENSION_DIR)/shipwright.json; \
+	repo_root="$$(pwd)"; \
 	cd $(_EXTENSION_DIR) && npm ci && npm run compile && npm run sync:shipwright; \
-	npx vsce package --target "$$target" --ignore-other-target-folders --out "basilisk-$$target.vsix"; \
-	echo -e "\033[0;32m✓ VSIX built for $$target\033[0m"
+	prerelease_flag=""; \
+	if [ -n "$(VSCE_PRERELEASE)" ]; then prerelease_flag="--pre-release"; fi; \
+	npx vsce package $$prerelease_flag --target "$$target" --ignore-other-target-folders --out "$$repo_root/basilisk-$$target.vsix"; \
+	echo -e "\033[0;32m✓ VSIX built at basilisk-$$target.vsix$${prerelease_flag:+ (pre-release)}\033[0m"
 
 _uninstall_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Uninstalling VSIX\033[0m' && \
