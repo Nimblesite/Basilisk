@@ -71,7 +71,12 @@ fn walk_class(cls: &StmtClassDef, ctx: &Ctx<'_>, source: &str, out: &mut Pep695S
             enclosing_class_params: enclosing_params(ctx),
         });
     }
-    record_module_binding_offset(ctx, cls.name.as_str(), cls.name.range().start().to_u32(), out);
+    record_module_binding_offset(
+        ctx,
+        cls.name.as_str(),
+        cls.name.range().start().to_u32(),
+        out,
+    );
 
     let child = Ctx {
         scope: Scope::Class,
