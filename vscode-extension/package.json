@@ -50,7 +50,7 @@
         {
           "id": "basilisk-explorer",
           "title": "Basilisk",
-          "icon": "resources/basilisk-icon.svg"
+          "icon": "resources/activity-bar-icon.svg"
         }
       ]
     },
