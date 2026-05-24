@@ -275,6 +275,7 @@ jobs:
             cp "target/${{ matrix.rust_target }}/release/basilisk-profiler-helper" "vscode-extension/bin/${{ env.target }}/"
           fi
           cp shipwright.json vscode-extension/shipwright.json
+          cp NOTICES vscode-extension/NOTICES
 
       # Skip on cross-compiled targets: the runner's CPU arch can't execute
       # the produced binary (x64 host -> aarch64 target). The VSIX contents

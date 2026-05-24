@@ -67,3 +67,35 @@ See https://opensource.org/licenses/MIT and https://unlicense.org for the
 full license texts.
 
 -------------------------------------------------------------------------------
+
+inferno
+Source:        https://github.com/jonhoo/inferno (v0.12)
+License:       CDDL-1.0
+Modifications: NONE. Used unmodified as a Cargo dependency.
+
+This software contains the `inferno` crate, distributed under the Common
+Development and Distribution License, Version 1.0 (CDDL-1.0). The full
+text of the CDDL-1.0 is available at:
+https://opensource.org/licenses/CDDL-1.0
+
+Source code for `inferno` is available unmodified at the URL above. No
+modifications have been made by Basilisk; we link against the unmodified
+upstream crate as published on crates.io.
+
+-------------------------------------------------------------------------------
+
+colored
+Source:        https://github.com/colored-rs/colored (v3.x)
+License:       MPL-2.0
+Modifications: NONE. Used unmodified as a Cargo dependency.
+
+This software contains the `colored` crate, distributed under the Mozilla
+Public License, Version 2.0 (MPL-2.0). The full text of the MPL-2.0 is
+available at:
+https://www.mozilla.org/en-US/MPL/2.0/
+
+Source code for `colored` is available unmodified at the URL above. No
+modifications have been made by Basilisk; we link against the unmodified
+upstream crate as published on crates.io.
+
+-------------------------------------------------------------------------------

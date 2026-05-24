@@ -185,7 +185,7 @@ _clean_rust:
 
 _clean_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Cleaning VSIX artifacts\033[0m' && \
-	$(RM) $(_EXTENSION_DIR)/out $(_EXTENSION_DIR)/*.vsix ./*.vsix && \
+	$(RM) $(_EXTENSION_DIR)/out $(_EXTENSION_DIR)/*.vsix ./*.vsix $(_EXTENSION_DIR)/NOTICES && \
 	echo -e '\033[0;32m✓ VSIX clean complete\033[0m'
 
 _uninstall_binaries:
@@ -244,6 +244,7 @@ _release_vsix:
 		cp "target/$$rust_target/release/basilisk-profiler-helper" "$(_EXTENSION_DIR)/bin/$$target/"; \
 	fi; \
 	cp shipwright.json $(_EXTENSION_DIR)/shipwright.json; \
+	cp NOTICES $(_EXTENSION_DIR)/NOTICES; \
 	repo_root="$$(pwd)"; \
 	cd $(_EXTENSION_DIR) && npm ci && npm run compile && npm run sync:shipwright; \
 	prerelease_flag=""; \
