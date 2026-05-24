@@ -51,29 +51,33 @@ fn is_site_packages_import(import: &ImportInfo) -> bool {
 /// Check whether the resolved package has a `py.typed` marker (PEP 561).
 ///
 /// Per PEP 561 the marker is placed at the **top-level package** and applies
-/// to every submodule. For a `from sqlalchemy.orm import ...` import the
-/// resolved path is `.../sqlalchemy/orm/__init__.py`, but the marker lives
-/// at `.../sqlalchemy/py.typed`. We walk up `depth(module)` levels from the
-/// resolved file's parent to reach the top-level package directory.
+/// to every submodule. A submodule may resolve either to a flat-file module
+/// (`.../pydantic_ai/direct.py`) or to a nested subpackage
+/// (`.../sqlalchemy/orm/__init__.py`); in both cases the marker lives at the
+/// top-level package root (`.../pydantic_ai/py.typed`, `.../sqlalchemy/py.typed`).
+///
+/// We walk the filesystem upward from the resolved file toward the
+/// `site-packages` root, returning `true` at the first directory that contains
+/// a `py.typed` marker. Walking the directory tree (rather than counting dots
+/// in the dotted module name) honors flat-file and subpackage submodules
+/// uniformly and never over-climbs past the package into `site-packages`.
 fn has_py_typed_marker(import: &ImportInfo) -> bool {
     let Some(resolved) = import.resolved_path.as_ref() else {
         return false;
     };
-    let Some(mut pkg_dir) = resolved.parent() else {
-        return false;
-    };
-    // For nested imports like `sqlalchemy.orm.session` we need to climb up
-    // one directory per dot in the dotted module name to reach the top
-    // package directory. Single-file modules (`flask.py`) and top-level
-    // packages have zero dots and need no climbing.
-    let depth = import.module.matches('.').count();
-    for _ in 0..depth {
-        let Some(parent) = pkg_dir.parent() else {
+    let mut dir = resolved.parent();
+    while let Some(current) = dir {
+        // Stop at the `site-packages` boundary: installed packages are its
+        // direct children, so the marker never lives at or above this level.
+        if current.file_name() == Some(std::ffi::OsStr::new("site-packages")) {
             return false;
-        };
-        pkg_dir = parent;
+        }
+        if current.join("py.typed").is_file() {
+            return true;
+        }
+        dir = current.parent();
     }
-    pkg_dir.join("py.typed").is_file()
+    false
 }
 
 /// Build the diagnostic for a missing type stubs warning.
@@ -86,14 +90,29 @@ fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
         message: format!("Package `{root_module}` is installed but has no type stubs available"),
         span: import.span,
         path: path.to_owned(),
-        help: Some(format!(
-            "Type stubs available as `types-{root_module}` — use quick fix to install"
-        )),
+        help: Some(stub_help_text(root_module)),
         note: Some(
             "Packages without type stubs or a `py.typed` marker provide no type information"
                 .to_owned(),
         ),
         provenance: Some(TypeProvenance::Untyped),
+    }
+}
+
+/// Build the `help` line for a missing-stubs diagnostic.
+///
+/// When typeshed publishes a stub distribution for the package, point the user
+/// at the real distribution name (e.g. `yaml` → `types-PyYAML`) so the quick fix
+/// resolves. Otherwise say so plainly — there is no installable stub to suggest.
+fn stub_help_text(root_module: &str) -> String {
+    match basilisk_stubs::typeshed_stub_distribution(root_module) {
+        Some(distribution) => {
+            format!("Type stubs available as `{distribution}` — use quick fix to install")
+        }
+        None => format!(
+            "No published type stubs for `{root_module}` — add inline types (`py.typed`) upstream \
+             or provide a local stub"
+        ),
     }
 }
 
@@ -157,6 +176,44 @@ mod tests {
         let diagnostics = run_check(import);
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].code.code, "BSK-W0010");
+    }
+
+    /// Regression for issue #46: the help text must name the *real* typeshed
+    /// distribution (`yaml` → `types-PyYAML`), not a fabricated `types-yaml`.
+    #[test]
+    fn help_text_uses_real_typeshed_distribution_name() {
+        let import = make_import(
+            "yaml",
+            11,
+            ImportResolution::SourcePy,
+            Some("/venv/lib/python3.12/site-packages/yaml/__init__.py"),
+        );
+        let diagnostics = run_check(import);
+        assert_eq!(diagnostics.len(), 1);
+        let help = diagnostics[0].help.as_deref().unwrap_or_default();
+        assert!(
+            help.contains("types-PyYAML"),
+            "help must name the real typeshed distribution, got: {help}"
+        );
+    }
+
+    /// Regression for issue #46: when no stub distribution exists, the help must
+    /// say so plainly rather than inviting a quick fix that is never offered.
+    #[test]
+    fn help_text_states_no_stubs_for_unknown_package() {
+        let import = make_import(
+            "acme_private_pkg",
+            20,
+            ImportResolution::SourcePy,
+            Some("/venv/lib/python3.12/site-packages/acme_private_pkg/__init__.py"),
+        );
+        let diagnostics = run_check(import);
+        assert_eq!(diagnostics.len(), 1);
+        let help = diagnostics[0].help.as_deref().unwrap_or_default();
+        assert!(
+            help.contains("No published type stubs"),
+            "help must state that no stubs exist, got: {help}"
+        );
     }
 
     #[test]
@@ -281,6 +338,54 @@ mod tests {
             diagnostics.is_empty(),
             "PEP 561 py.typed at the top-level package must apply to all submodules; \
              got: {diagnostics:?}"
+        );
+        Ok(())
+    }
+
+    /// Regression for issue #46: `from pydantic_ai.direct import model_request`
+    /// resolves to a **flat-file** submodule `.../pydantic_ai/direct.py` (NOT a
+    /// subpackage `__init__.py`). The resolved file's parent is *already* the
+    /// top-level package directory, so climbing `depth` (one dot) levels
+    /// over-climbs into `site-packages` and misses the marker, producing a
+    /// false-positive W0010. The marker check must locate the top-level package
+    /// regardless of whether the submodule is a flat file or a subpackage.
+    #[test]
+    fn skips_flat_file_submodule_when_root_package_has_py_typed(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let root_pkg = dir
+            .path()
+            .join("lib")
+            .join("python3.12")
+            .join("site-packages")
+            .join("pydantic_ai_fake");
+        fs::create_dir_all(&root_pkg)?;
+        // py.typed lives at the top-level package; `direct` is a flat module.
+        fs::write(root_pkg.join("py.typed"), "")?;
+        fs::write(root_pkg.join("__init__.py"), "")?;
+        let flat_module = root_pkg.join("direct.py");
+        fs::write(&flat_module, "def model_request() -> None: ...\n")?;
+
+        let import = ImportInfo {
+            module: "pydantic_ai_fake.direct".to_owned(),
+            names: vec!["model_request".to_owned()],
+            span: Span::new(0, 40),
+            kind: ImportKind::From,
+            resolution: ImportResolution::SourcePy,
+            resolved_path: Some(flat_module),
+            package_dep_kind: None,
+            package_version: None,
+            package_name: None,
+            unresolved_reason: None,
+        };
+        let module = make_module(vec![import]);
+        let mut diagnostics = Vec::new();
+
+        MissingTypeStubs.check(&module, &mut diagnostics);
+
+        assert!(
+            diagnostics.is_empty(),
+            "PEP 561 py.typed must be honored for flat-file submodules; got: {diagnostics:?}"
         );
         Ok(())
     }

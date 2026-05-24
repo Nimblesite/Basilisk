@@ -86,10 +86,10 @@ pub fn code_actions(
             }
         }
         if code == "BSK-W0010" {
-            if let Some(module) = extract_module_from_diagnostic(&diag.message) {
-                actions.push(CodeActionOrCommand::CodeAction(make_uv_add_stubs_action(
-                    diag, &module,
-                )));
+            if let Some(action) = extract_module_from_diagnostic(&diag.message)
+                .and_then(|module| make_uv_add_stubs_action(diag, &module))
+            {
+                actions.push(CodeActionOrCommand::CodeAction(action));
             }
         }
         if code == "BSK-W0013" {
@@ -284,20 +284,25 @@ fn make_uv_add_dev_pytest_action(diag: &Diagnostic) -> CodeAction {
     }
 }
 
-/// Build a code action that runs `uv add --dev <package>-stubs` for missing type stubs.
-fn make_uv_add_stubs_action(diag: &Diagnostic, module: &str) -> CodeAction {
-    let stubs_package = format!("{module}-stubs");
-    CodeAction {
+/// Build a code action that runs `uv add --dev types-<dist>` for missing type
+/// stubs — but only when typeshed publishes a stub distribution for `module`.
+///
+/// Returns `None` when no stub distribution is known (the package ships inline
+/// `py.typed` types or no stubs exist), so we never offer a quick-fix that would
+/// fail to resolve on `PyPI` (e.g. the nonexistent `pydantic_ai-stubs`).
+fn make_uv_add_stubs_action(diag: &Diagnostic, module: &str) -> Option<CodeAction> {
+    let stubs_package = basilisk_stubs::typeshed_stub_distribution(module)?;
+    Some(CodeAction {
         title: format!("Install type stubs for '{module}' (uv add --dev)"),
         kind: Some(CodeActionKind::QUICKFIX),
         diagnostics: Some(vec![diag.clone()]),
         command: Some(Command {
             title: format!("uv add --dev {stubs_package}"),
             command: basilisk_common::commands::UV_ADD_DEV.to_owned(),
-            arguments: Some(vec![serde_json::Value::String(stubs_package)]),
+            arguments: Some(vec![serde_json::Value::String(stubs_package.to_owned())]),
         }),
         ..CodeAction::default()
-    }
+    })
 }
 
 #[cfg(test)]
@@ -477,12 +482,15 @@ mod tests {
         );
     }
 
+    /// Regression for issue #46: typeshed publishes stubs as `types-<dist>`,
+    /// not `<module>-stubs`. For `requests` the real package is
+    /// `types-requests`; offering `requests-stubs` fails to resolve on `PyPI`.
     #[test]
     fn test_bsk_w0010_code_action_includes_uv_add_dev() {
         let diag = make_diagnostic(
             DiagnosticSeverity::WARNING,
             "BSK-W0010",
-            "Missing type stubs for 'requests'",
+            "Package `requests` is installed but has no type stubs available",
             range_at((0, 0), (0, 8)),
         );
         let uri = Url::parse("file:///test.py").unwrap();
@@ -494,7 +502,29 @@ mod tests {
             "uv add --dev",
             "Install type stubs for 'requests' (uv add --dev)",
             basilisk_common::commands::UV_ADD_DEV,
-            "requests-stubs",
+            "types-requests",
+        );
+    }
+
+    /// Regression for issue #46: `make_uv_add_stubs_action` must NOT offer a
+    /// quick-fix when no stub package is known for the module. `pydantic_ai`
+    /// ships inline `py.typed` and has no typeshed stub — suggesting
+    /// `pydantic_ai-stubs` (or any name) leads to a broken `uv add` that 404s.
+    #[test]
+    fn test_bsk_w0010_action_suppressed_for_unknown_stub() {
+        let diag = make_diagnostic(
+            DiagnosticSeverity::WARNING,
+            "BSK-W0010",
+            "Package `pydantic_ai` is installed but has no type stubs available",
+            range_at((0, 0), (0, 12)),
+        );
+        let uri = Url::parse("file:///test.py").unwrap();
+        let source = "import pydantic_ai\n";
+        let range = range_at((0, 0), (0, 0));
+        let actions = super::code_actions(&uri, &[diag], source, &range, None);
+        assert!(
+            find_action_with_title(&actions, "Install type stubs").is_none(),
+            "must not offer a stub-install quick-fix for a package with no known stub package"
         );
     }
 
