@@ -56,7 +56,7 @@ BSK-E0014,directives_type_ignore.py,directives,PASS,0,0,1
 BSK-E0014,directives_type_ignore_file1.py,directives,PASS,0,0,1
 BSK-E0014,directives_type_ignore_file2.py,directives,PASS,1,0,0
 BSK-E0150,directives_version_platform.py,directives,PASS,3,0,0
-BSK-E0040|BSK-E0111,enums_behaviors.py,enums,PASS,1,0,0
+BSK-E0040,enums_behaviors.py,enums,PASS,1,0,0
 ,enums_definition.py,enums,PASS,0,0,0
 BSK-E0061,enums_expansion.py,enums,PASS,1,0,0
 ,enums_member_names.py,enums,PASS,0,0,0
