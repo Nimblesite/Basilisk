@@ -110,6 +110,26 @@ pub(super) fn has_custom_init_in_bases(
     false
 }
 
+/// Returns `true` if the class has a base the checker cannot resolve to a known
+/// definition — i.e. a base that is not `object`/`Generic`/`Protocol`, not a
+/// known builtin, and not a class defined in this module.
+///
+/// Such a base is an external import (e.g. pydantic `BaseModel`, attrs, msgspec)
+/// that may provide an argument-accepting constructor we cannot see. Callers
+/// must therefore not conclude the class "inherits only from `object`".
+pub(super) fn has_unresolved_base(
+    class_info: &ClassInfo,
+    class_map: &HashMap<&str, &ClassInfo>,
+) -> bool {
+    all_base_names(class_info).into_iter().any(|base_name| {
+        base_name != "object"
+            && base_name != "Generic"
+            && base_name != "Protocol"
+            && !BUILTINS_WITH_INIT.contains(&base_name)
+            && !class_map.contains_key(base_name)
+    })
+}
+
 /// Find `__init__` methods for a class, searching up the MRO.
 pub(super) fn find_init_in_hierarchy<'a>(
     class_name: &str,
