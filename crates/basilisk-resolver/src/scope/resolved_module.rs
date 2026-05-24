@@ -232,6 +232,12 @@ pub struct ResolvedModule {
     /// Populated by the workspace layer after import resolution, not during
     /// the initial `resolve()` pass. Maps import name → external symbol info.
     pub imported_symbols: std::collections::HashMap<String, ExternalSymbol>,
+    /// AST-derived PEP 695 scoping facts used by `BSK-E0149`.
+    ///
+    /// Populated from `ruff_python_ast` nodes (never from raw line scanning) so
+    /// that docstring/comment/string content is never mistaken for real
+    /// `class` / `def` / `type` declarations.
+    pub pep695_scoping: super::pep695_scoping::Pep695Scoping,
     /// The source file path.
     pub path: String,
     /// The original source text (forwarded from parser for span restoration).
