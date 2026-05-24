@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 // Deep coverage tests - exercises as many checker code paths as possible.
 // Focused on rules with < 30% line coverage that have significant implementation.
 

@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-TESTING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-TESTING
 // Integration tests for basilisk-lsp.
 
 #[test]

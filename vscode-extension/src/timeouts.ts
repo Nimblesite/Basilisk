@@ -1,3 +1,4 @@
+// Implements [VSIX-ARCHITECTURE]. See docs/specs/VSIX-SPEC.md#VSIX-ARCHITECTURE
 /**
  * Canonical timeout constants for the Basilisk VS Code extension.
  *

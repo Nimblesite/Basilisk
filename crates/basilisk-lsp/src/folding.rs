@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-FOLDING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-FOLDING
+//!
 //! Folding Ranges handler.
 //!
 //! Computes foldable regions for functions, classes, and import blocks.

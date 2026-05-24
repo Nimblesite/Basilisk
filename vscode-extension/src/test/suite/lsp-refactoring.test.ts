@@ -1,3 +1,4 @@
+// Implements [LSPARCH-FEATURES-RENAME]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-RENAME
 /**
  * LSP Refactoring Tests for the Basilisk VS Code Extension.
  *

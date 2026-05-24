@@ -1,3 +1,4 @@
+//! Tests for [BSK-W0040] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for BSK-W0040: Lambda missing type annotations.
 
 use super::common::*;

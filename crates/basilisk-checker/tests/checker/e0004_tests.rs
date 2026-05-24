@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0004] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
 // Integration tests for BSK-E0004: Missing *args/**kwargs type annotation.
 
 use super::common::*;

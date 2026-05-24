@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! Navigation-related LSP handlers: go-to-definition, declaration, type-definition,
 //! references, highlights, rename, symbols, call hierarchy, and type hierarchy.
 

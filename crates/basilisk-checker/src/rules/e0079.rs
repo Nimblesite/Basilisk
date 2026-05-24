@@ -1,3 +1,4 @@
+//! Implements [BSK-E0079] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
 //! BSK-E0079: Module assigned to incompatible protocol type.
 //!
 //! When a module object is assigned to a variable typed as a `Protocol`, the

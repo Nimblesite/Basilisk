@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0035] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 // Integration tests for BSK-E0035: Required/NotRequired in invalid context.
 
 use super::common::*;

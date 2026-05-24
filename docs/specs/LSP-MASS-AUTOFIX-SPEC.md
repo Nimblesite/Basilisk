@@ -1,4 +1,4 @@
-# Mass Autofix & Gradual Adoption — Specification
+# Mass Autofix & Gradual Adoption — Specification {#AUTOFIX}
 
 ## Problem {#AUTOFIX-PROBLEM}
 
@@ -153,7 +153,7 @@ AI Typing is an AI-assisted type inference feature that goes beyond what determi
 
 > For the full AI provider abstraction, request/response types, and implementation plan, see [LSP-AI-SPEC.md §LSPAI-FEATURE-MASSAUTOFIX](LSP-AI-SPEC.md#LSPAI-FEATURE-MASSAUTOFIX). This section documents only the integration point between Mass Autofix and the AI layer.
 
-### Scope
+### Scope {#AUTOFIX-AI-SCOPE}
 
 **AI Typing implementation is outside the scope of the Mass Autofix / Gradual Adoption work.** The current plan only requires:
 

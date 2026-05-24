@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0125] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0125: Instance attribute on class object.
 
 use super::common::*;

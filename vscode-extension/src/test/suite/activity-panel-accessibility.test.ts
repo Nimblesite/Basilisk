@@ -1,3 +1,4 @@
+// Tests for [EXTACT]. See docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT
 /**
  * Activity Panel Accessibility Audit Tests for the Basilisk VS Code Extension.
  *

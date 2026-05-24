@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-SEMTOKENS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-SEMTOKENS
+//!
 //! Semantic token computation for the Basilisk LSP server.
 //!
 //! Classifies symbol name spans from the resolved module into LSP semantic

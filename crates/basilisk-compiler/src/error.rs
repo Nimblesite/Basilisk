@@ -1,3 +1,4 @@
+//! Implements [COMPARCH]. See docs/specs/COMPILER-ARCHITECTURE-SPEC.md#COMPARCH
 //! Compiler error types.
 
 /// Errors that can occur during compilation.

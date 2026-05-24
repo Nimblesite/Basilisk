@@ -1,3 +1,4 @@
+//! Implements [BSK-E0141] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0141: Unpack[`TypedDict`] kwargs violations.
 //!
 //! Detects invalid uses of `**kwargs: Unpack[TypedDict]` in function signatures:

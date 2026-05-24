@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 // Integration tests to exercise many checker rules and improve coverage.
 // Tests a wide range of BSK-E0XXX rules through the full parse/resolve/check pipeline.
 

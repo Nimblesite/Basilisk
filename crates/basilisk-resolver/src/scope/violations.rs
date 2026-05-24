@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Violation types collected during resolution for use by checker rules.
 
 use super::span::Span;

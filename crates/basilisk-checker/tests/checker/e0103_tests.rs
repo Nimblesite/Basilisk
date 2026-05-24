@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0103] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0103: Tuple index out of bounds.
 
 use super::common::*;

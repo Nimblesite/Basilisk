@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0001]-[BSK-E0025] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0081] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0081: `TypeVarTuple` unpack minimum type argument violation.
 //!
 //! When a function parameter has a type annotation containing a `TypeVarTuple`

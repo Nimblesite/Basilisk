@@ -1,3 +1,4 @@
+//! Implements [BSK-E0150] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0150: Variable defined only in dead version/platform branch.
 //!
 //! When `sys.version_info`, `sys.platform`, or `os.name` is compared against

@@ -1,3 +1,4 @@
+// Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 /**
  * Profiler E2E Tests — Command Registration, Configuration, Status Bar, Keybindings.
  *

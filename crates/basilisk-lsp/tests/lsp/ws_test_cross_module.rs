@@ -1,3 +1,4 @@
+//! Tests for [ANALYSIS-CROSSLSP]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP
 // E2E tests for cross-module analysis.
 //
 // These tests exercise the full LSP pipeline: real `.py` files on disk,

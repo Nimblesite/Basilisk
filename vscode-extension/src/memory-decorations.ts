@@ -1,3 +1,4 @@
+// Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 /**
  * Inline memory allocation decorations for Basilisk memory profiling.
  *

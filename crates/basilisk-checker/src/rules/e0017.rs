@@ -1,3 +1,4 @@
+//! Implements [BSK-E0017] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0017: Incompatible class attribute override.
 //!
 //! When a child class declares an attribute that also exists in a same-module

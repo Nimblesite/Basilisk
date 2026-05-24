@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Protocol Ext visitor functions.
 
 use ruff_python_ast::{Expr, Stmt};

@@ -218,3 +218,40 @@ After each step:
 All remaining FPs are 1-2 per rule — no single rule dominates. See updated breakdown table above.
 
 **Notable**: E0094 (2), E0093 (2), E0140 (2), E0014 (2) are the only rules with >1 FP. All others have exactly 1.
+
+---
+
+## SHOWSTOPPER: BSK-E0149 treats docstring text as `class` / `def` definitions
+
+**Reported**: 2026-05-23 — found in the wild on `StoryTowns/scripts/provision_nimblesite_agent.py`.
+**Severity**: SHOWSTOPPER. Hard errors on perfectly valid Python text in module docstrings. Any docstring containing a bracketed token after a line that happens to begin with the word `class` (e.g. our own `[SPEC-ID]` cross-references — see CLAUDE.md "ALL CODE **MUST** REFER TO A SPEC-ID") will misfire.
+
+**Files**:
+- `crates/basilisk-checker/src/rules/e0149/violations.rs:19-38` (`collect_pep695_type_params`)
+- `crates/basilisk-checker/src/rules/e0149/mod.rs:78-117` (the line-iteration driver)
+
+**Root cause**: `collect_pep695_type_params` (and the rest of the rule) scans `source.lines()` and treats any line whose trimmed prefix is `class `, `def `, `async def `, or `type ` as a real definition. It has **no awareness of string/docstring/comment boundaries**. The driver loop in `mod.rs:78` shares the same blind spot.
+
+**Minimal repro**:
+```python
+"""Docstring.
+
+class as the public Supabase anon key — see [AI-API-AUTH] in
+foo bar [AI-API-AUTH].
+"""
+```
+The docstring line `class as the public ... [AI-API-AUTH] ...` is parsed as `class as[the public ... AI-API-AUTH ...]:` → `AI-API-AUTH` registered as a PEP 695 type param. Then `foo bar [AI-API-AUTH].` (still inside the docstring) is flagged as module-level use of an out-of-scope type param.
+
+**Why this is bad**:
+1. Direct violation of CLAUDE.md: "Regex = ⛔️ ILLEGAL. Use the proper parsing mechanism - usually ruff". This rule is doing line-prefix string matching, which is the moral equivalent.
+2. Hard errors on docstring prose erode the entire product's credibility — the user's exact reaction was "WTF is this? a bug?"
+3. Our own spec-ID convention (`[GROUP-TOPIC]` references in docstrings) is the most likely trigger.
+
+**Fix**:
+- Stop iterating raw source lines. Drive the rule off `ResolvedModule.classes` / `functions` / `type_statements` (already available — see `mod.rs:172-185` for the right pattern, used by `check_type_alias_misuse`).
+- For the module-level type-param-use check, walk AST statements, not text lines.
+- The line-based helpers (`collect_pep695_type_params`, `check_module_level_type_param_use`, `check_pep695_bound_cross_references`, etc.) should consume parsed nodes, not `&str` lines.
+
+**Related**: the older E0149 entry in the "Completed" list above fixed a *different* line-scanning bug (RHS subscripts of `type` statements). That fix did not address docstring/string-content misclassification. Both come from the same underlying anti-pattern — the whole rule needs to be re-grounded on the AST.
+
+**Verification**: add a conformance fixture with a module docstring containing `class ...` / `def ...` prefixes and `[Name]` bracketed tokens, and assert zero E0149 diagnostics. Also add a fixture with `[SPEC-ID]` cross-references (matching our own convention).

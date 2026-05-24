@@ -1,3 +1,4 @@
+//! Implements [BSK-E0138] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Helper types and AST collection functions for BSK-E0138.
 //!
 //! Contains data types describing `@dataclass_transform` metaclasses and

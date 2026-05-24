@@ -1,3 +1,4 @@
+//! Implements [BSK-E0033] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 //! BSK-E0033: Invalid `reveal_type()` call.
 //!
 //! `reveal_type(expr)` must be called with exactly one positional argument.

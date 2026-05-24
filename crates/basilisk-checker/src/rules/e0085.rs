@@ -1,3 +1,4 @@
+//! Implements [BSK-E0085] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0085: `TypeVarTuple` argument count mismatch.
 //!
 //! When a constructor with `TypeVarTuple` parameters is called, the number of

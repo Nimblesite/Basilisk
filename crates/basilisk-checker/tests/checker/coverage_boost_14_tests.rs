@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 use super::common::*;
 
 // Coverage boost tests batch 14: targeting PEP 695 syntax, deeper e0107/e0144/e0115 paths.

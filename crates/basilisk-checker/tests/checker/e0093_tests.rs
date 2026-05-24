@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0093] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
 // Tests for BSK-E0093: Invalid key or value type in `TypedDict` assignment.
 
 use super::common::*;

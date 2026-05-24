@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0116] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0116: `NamedTuple` class definition errors.
 
 use super::common::*;

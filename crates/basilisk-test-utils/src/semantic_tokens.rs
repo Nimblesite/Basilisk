@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 //! Semantic token parsing and assertion helpers.
 
 /// Parse semantic token data into Vec of (deltaLine, deltaStart, length, tokenType, modifiers).

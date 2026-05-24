@@ -1,3 +1,4 @@
+//! Implements [ANALYSIS-INDEX-STRUCT]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-INDEX-STRUCT
 //! File-system scanning utilities for the workspace index.
 //!
 //! Provides recursive Python file collection, exclusion filtering, stem

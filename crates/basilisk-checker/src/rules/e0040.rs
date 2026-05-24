@@ -1,3 +1,4 @@
+//! Implements [BSK-E0040] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
 //! BSK-E0040: Invalid Enum subclassing.
 //!
 //! An Enum class with one or more defined members is implicitly final and

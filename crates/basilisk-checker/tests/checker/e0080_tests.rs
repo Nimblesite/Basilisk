@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0080] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
 // Tests for BSK-E0080: `TypeVar` upper bound violation at call site.
 //
 // This rule detects when a call site passes a value whose type does not satisfy

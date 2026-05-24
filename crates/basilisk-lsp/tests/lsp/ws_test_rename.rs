@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-RENAME]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-RENAME
 // Tests for LSP: `ws_test_rename`.
 
 use super::ws_test_common::*;

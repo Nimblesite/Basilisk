@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Generate LSP diagnostics from profiling data.
 //!
 //! Converts hot lines and hot functions into `publishDiagnostics` entries

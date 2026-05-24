@@ -1,3 +1,4 @@
+//! Implements [BSK-E0089] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0089: Invalid PEP 695 type parameter bound or constraint.
 //!
 //! PEP 695 introduced a new syntax for declaring type parameters in class and

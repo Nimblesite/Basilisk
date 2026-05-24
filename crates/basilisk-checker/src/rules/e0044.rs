@@ -1,3 +1,4 @@
+//! Implements [BSK-E0044] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
 //! BSK-E0044: `Final` used in an invalid position.
 //!
 //! PEP 591 restricts `Final[T]` to:

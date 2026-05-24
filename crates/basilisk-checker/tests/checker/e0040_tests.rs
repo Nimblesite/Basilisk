@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0040] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for BSK-E0040: Invalid Enum subclassing.
 
 use super::common::*;

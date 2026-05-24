@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 //! Helpers that depend on `basilisk-parser` and `basilisk-resolver`.
 //! Gated behind the `resolver` feature.
 

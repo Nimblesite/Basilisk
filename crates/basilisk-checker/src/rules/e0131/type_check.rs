@@ -1,3 +1,4 @@
+//! Implements [BSK-E0131] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Type checking helpers for BSK-E0131.
 //!
 //! Contains compatibility checks for yield/send/return types and the

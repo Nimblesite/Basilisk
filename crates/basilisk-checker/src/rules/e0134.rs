@@ -1,3 +1,4 @@
+//! Implements [BSK-E0134] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0134: Invariant generic type mismatch at call site.
 //!
 //! When a function parameter expects a parameterised generic like

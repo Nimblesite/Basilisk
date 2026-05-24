@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-CALLHIER]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CALLHIER
+//!
 //! Call Hierarchy handlers (prepare, incoming, outgoing).
 //!
 //! Implements `textDocument/prepareCallHierarchy`, `callHierarchy/incomingCalls`,

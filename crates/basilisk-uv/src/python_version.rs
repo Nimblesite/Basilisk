@@ -1,3 +1,4 @@
+//! Implements [LSPUV]. See docs/specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV
 //! `.python-version` file parsing.
 //!
 //! uv projects typically contain a `.python-version` file at the workspace root

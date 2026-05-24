@@ -1,3 +1,4 @@
+//! Implements [BSK-E0048] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
 //! BSK-E0048: Invalid right-hand side for a `TypeAlias` annotation.
 //!
 //! PEP 613 requires that the RHS of an explicit `TypeAlias` annotation must be

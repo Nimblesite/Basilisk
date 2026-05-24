@@ -1,3 +1,4 @@
+//! Implements [BSK-E0130] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Collection helpers for BSK-E0130.
 
 use std::collections::HashMap;

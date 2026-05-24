@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! Language Server Protocol server implementation for Basilisk.
 //!
 //! Thin dispatcher that delegates to feature modules for each LSP request.

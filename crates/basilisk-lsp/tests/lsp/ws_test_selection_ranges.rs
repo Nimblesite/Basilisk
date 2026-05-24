@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-SELECTION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-SELECTION
 // Tests for LSP: `ws_test_selection_ranges`.
 
 use super::ws_test_common::*;

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0051] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
 //! BSK-E0051: Invalid `Literal` parameterization.
 //!
 //! PEP 586 restricts what values may appear inside `Literal[...]`.

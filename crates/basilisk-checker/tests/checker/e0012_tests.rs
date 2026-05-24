@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0012] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for BSK-E0012: Argument type mismatch at call site.
 
 use super::common::*;

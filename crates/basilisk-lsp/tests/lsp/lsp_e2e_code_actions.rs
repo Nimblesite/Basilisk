@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
 // Tests for LSP: `lsp_e2e_code_actions`.
 
 // LSP E2E tests — Signature Help, Find References, Rename, Inlay Hints,

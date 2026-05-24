@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0041] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for BSK-E0041: Too few arguments in a function call.
 
 use super::common::*;

@@ -1,3 +1,4 @@
+//! Implements [LSPUV]. See docs/specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV
 //! Package name to Python import name mapping.
 //!
 //! Many `PyPI` packages use different names for their importable module than the

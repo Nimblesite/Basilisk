@@ -1,3 +1,4 @@
+//! Implements [BSK-E0110] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0110: Protocol variance violation.
 //!
 //! Detects when a Protocol class declares `TypeVar`s with incorrect variance

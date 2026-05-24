@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-CODELENS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODELENS
 // Tests for LSP: `ws_test_code_lens`.
 
 use super::ws_test_common::*;

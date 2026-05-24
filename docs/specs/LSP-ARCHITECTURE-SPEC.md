@@ -1,4 +1,4 @@
-# Basilisk LSP — Feature Specification
+# Basilisk LSP — Feature Specification {#LSPARCH}
 
 > **Goal**: Compete with Pylance. Every feature that makes a Python IDE useful.
 
@@ -15,7 +15,7 @@ This is the **single source of truth** for all LSP features, DAP integration, cu
 
 ---
 
-## System Architecture
+## System Architecture {#LSPARCH-SYSTEM}
 
 Three editor frontends share one binary. The binary embeds the LSP server and the type-checking pipeline (parser → resolver → checker), and shells out to external tools (`ruff`, `debugpy`, `uv`) on demand.
 
@@ -76,7 +76,7 @@ flowchart TB
 
 ---
 
-## Binary Invocation
+## Binary Invocation {#LSPARCH-INVOKE}
 
 ```bash
 basilisk lsp [--transport stdio|ws] [--port 8765]
@@ -86,7 +86,7 @@ basilisk lsp [--transport stdio|ws] [--port 8765]
 - WebSocket transport: `--transport ws --port 8765`
 - Logging: `BASILISK_LOG=debug basilisk lsp` (default level: `warn`, written to stderr)
 
-## Binary Resolution Order (all editors)
+## Binary Resolution Order (all editors) {#LSPARCH-BINRES}
 
 Every editor extension MUST resolve the `basilisk` binary using this cascade:
 
@@ -97,7 +97,7 @@ Every editor extension MUST resolve the `basilisk` binary using this cascade:
 5. `/opt/homebrew/bin/basilisk`
 6. Fall back to OS PATH search
 
-## Shared Configuration Settings (all editors)
+## Shared Configuration Settings (all editors) {#LSPARCH-CONFIG}
 
 These settings are sent to the LSP server via `workspace/configuration` under the `basilisk` key. Every editor MUST support them:
 
@@ -121,7 +121,7 @@ These settings are sent to the LSP server via `workspace/configuration` under th
 | `basilisk.uv.stubSuggestions` | `boolean` | `true` | Suggest installing type stub packages |
 | `basilisk.uv.dependencyDiagnostics` | `boolean` | `false` | Enable BSK-W0011/W0012/W0013 dependency hygiene warnings |
 
-## Command Registration Rule
+## Command Registration Rule {#LSPARCH-CMDREG}
 
 ⚠️ FOLLOW THIS DOCUMENTATION TO THE LETTER
 https://code.visualstudio.com/api/references/vscode-api#commands
@@ -138,7 +138,7 @@ This rule applies equally to VS Code, Neovim, and Zed extensions.
 
 ---
 
-## Custom LSP Commands (`workspace/executeCommand`)
+## Custom LSP Commands (`workspace/executeCommand`) {#LSPARCH-CMDS}
 
 | Command | Arguments | Response | Description |
 |---------|-----------|----------|-------------|
@@ -160,13 +160,13 @@ This rule applies equally to VS Code, Neovim, and Zed extensions.
 | `basilisk/workspaceModules` | `{scope?: string}` | `WorkspaceModulesResponse` | Return the workspace module tree (optionally scoped to a package/subpackage) |
 | `basilisk/typeHealth` | `{module?: string}` | `TypeHealthResponse` | Return type health statistics for the workspace or a specific module |
 
-### Custom LSP Notifications
+### Custom LSP Notifications {#LSPARCH-NOTIFS}
 
 | Notification | Direction | Params | Description |
 |-------------|-----------|--------|-------------|
 | `basilisk/moduleChanged` | Server → Client | `{module: ModuleNode}` | Sent when a module's symbol table changes after re-analysis. Debounced at 300ms. |
 
-### Data Model Types
+### Data Model Types {#LSPARCH-DATAMODEL}
 
 ```typescript
 /** A node in the workspace module tree. */
@@ -214,7 +214,7 @@ interface TypeHealthResponse {
 }
 ```
 
-## DapTcpProxy (all editors)
+## DapTcpProxy (all editors) {#LSPARCH-DAPPROXY}
 
 All editors MUST implement a TCP proxy between the DAP client and debugpy to fix known stepping quirks:
 
@@ -228,9 +228,9 @@ All editors MUST implement a TCP proxy between the DAP client and debugpy to fix
 
 ---
 
-## Architecture
+## Architecture {#LSPARCH-ARCH}
 
-### Three-Phase Pipeline
+### Three-Phase Pipeline {#LSPARCH-ARCH-PIPELINE}
 
 ```mermaid
 flowchart TD
@@ -242,7 +242,7 @@ flowchart TD
     Src --> Parser --> Resolver --> Checker
 ```
 
-### ResolvedModule — The Data That Powers Everything
+### ResolvedModule — The Data That Powers Everything {#LSPARCH-ARCH-RESOLVED}
 
 `ResolvedModule` (defined in `crates/basilisk-resolver/src/scope.rs`) contains:
 
@@ -263,7 +263,7 @@ flowchart TD
 
 Every symbol has a `Span` (byte start/end) for precise positioning.
 
-### Server Module Structure
+### Server Module Structure {#LSPARCH-ARCH-MODSTRUCT}
 
 ```
 crates/basilisk-lsp/src/
@@ -290,7 +290,7 @@ crates/basilisk-lsp/src/
 
 Each module exports pure functions: `(resolved: &ResolvedModule, source: &str, ...) → LSP response type`.
 
-### Performance: Cache ResolvedModule
+### Performance: Cache ResolvedModule {#LSPARCH-ARCH-CACHE}
 
 ```rust
 struct DocumentState {
@@ -304,9 +304,9 @@ Update `resolved` on `did_change`/`did_open`. Reuse cached result for all featur
 
 ---
 
-## LSP Features
+## LSP Features {#LSPARCH-FEATURES}
 
-### Shared Infrastructure: `find_symbol_at_offset`
+### Shared Infrastructure: `find_symbol_at_offset` {#LSPARCH-FEATURES-FINDSYM}
 
 Central symbol lookup function reused by hover, go-to-def, references, rename:
 
@@ -328,7 +328,7 @@ pub fn find_symbol_at_offset(resolved: &ResolvedModule, offset: usize) -> Option
 
 Also: `pub fn format_type_signature(hit: &SymbolHit, source: &str) -> String` — builds hover markdown for any symbol kind.
 
-### Hover (`textDocument/hover`)
+### Hover (`textDocument/hover`) {#LSPARCH-FEATURES-HOVER}
 
 Show type signatures for any symbol, with diagnostics as secondary:
 
@@ -348,7 +348,7 @@ Show type signatures for any symbol, with diagnostics as secondary:
 | Parameter | `(parameter) name: Type` |
 | Attribute | `(property) ClassName.name: Type` |
 
-### Go to Definition (`textDocument/definition`)
+### Go to Definition (`textDocument/definition`) {#LSPARCH-FEATURES-DEFINITION}
 
 Ctrl+Click / F12 on a symbol jumps to its definition.
 
@@ -363,7 +363,7 @@ Ctrl+Click / F12 on a symbol jumps to its definition.
 
 Single-file scope. Cross-module requires workspace module resolver.
 
-### Document Symbols (`textDocument/documentSymbol`)
+### Document Symbols (`textDocument/documentSymbol`) {#LSPARCH-FEATURES-DOCSYM}
 
 Hierarchical outline tree:
 
@@ -377,19 +377,19 @@ Hierarchical outline tree:
   MAX_SIZE: int                    (variable)
 ```
 
-### Signature Help (`textDocument/signatureHelp`)
+### Signature Help (`textDocument/signatureHelp`) {#LSPARCH-FEATURES-SIGHELP}
 
 Trigger on `(` and `,`. Shows parameter hints with active parameter tracking. Skips `self`/`cls` for methods.
 
-### Find All References (`textDocument/references`)
+### Find All References (`textDocument/references`) {#LSPARCH-FEATURES-REFS}
 
 Whole-word text scan with word boundary checks, filtering strings/comments. Respects `include_declaration`.
 
-### Rename Symbol (`textDocument/prepareRename` + `textDocument/rename`)
+### Rename Symbol (`textDocument/prepareRename` + `textDocument/rename`) {#LSPARCH-FEATURES-RENAME}
 
 Validates symbol is renameable, returns `WorkspaceEdit` with `TextEdit` for each occurrence. Single-file scope.
 
-### Completion (`textDocument/completion`)
+### Completion (`textDocument/completion`) {#LSPARCH-FEATURES-COMPLETION}
 
 - **Symbol completions**: functions, classes, variables from resolved module
 - **Dot-access completions**: `self.attr`, `ClassName.attr` — class members
@@ -397,7 +397,7 @@ Validates symbol is renameable, returns `WorkspaceEdit` with `TextEdit` for each
 - **Builtin completions**: 78 Python builtins (functions, constants, exceptions)
 - **Keyword argument completions**: `param_name=` inside function calls
 
-### Code Actions (`textDocument/codeAction`)
+### Code Actions (`textDocument/codeAction`) {#LSPARCH-FEATURES-CODEACTIONS}
 
 | Diagnostic | Action | Transformation |
 |-----------|--------|----------------|
@@ -414,17 +414,17 @@ Validates symbol is renameable, returns `WorkspaceEdit` with `TextEdit` for each
 
 Register `codeActionKinds`: `[QUICKFIX, SOURCE_ORGANIZE_IMPORTS, REFACTOR]`
 
-### Execute Command (`workspace/executeCommand`)
+### Execute Command (`workspace/executeCommand`) {#LSPARCH-FEATURES-EXECCMD}
 
 - `basilisk.organizeImports` — run Ruff import organization on a document
 
-### Inlay Hints (`textDocument/inlayHint`)
+### Inlay Hints (`textDocument/inlayHint`) {#LSPARCH-FEATURES-INLAYHINTS}
 
 1. **Variable type hints** — unannotated variables, inferred type at `name_span.end`
 2. **Parameter name hints** — call sites, `"param_name="` at arg span start
 3. **Function return type hints** — inferred from `return_stmts[].rhs_kind`, positioned after closing `)`
 
-### Semantic Tokens (`textDocument/semanticTokens/full`)
+### Semantic Tokens (`textDocument/semanticTokens/full`) {#LSPARCH-FEATURES-SEMTOKENS}
 
 **Token type legend**:
 
@@ -442,49 +442,49 @@ Register `codeActionKinds`: `[QUICKFIX, SOURCE_ORGANIZE_IMPORTS, REFACTOR]`
 
 **Token modifier legend**: `declaration`, `definition`, `readonly`, `static`, `deprecated`
 
-### Document Highlight (`textDocument/documentHighlight`)
+### Document Highlight (`textDocument/documentHighlight`) {#LSPARCH-FEATURES-HIGHLIGHT}
 
 Highlight all occurrences of symbol under cursor. Definition = WRITE, usages = READ.
 
-### Workspace Symbols (`workspace/symbol`)
+### Workspace Symbols (`workspace/symbol`) {#LSPARCH-FEATURES-WSSYM}
 
 Ctrl+T symbol search across all open documents. Aggregates from DashMap, filters by query.
 
-### Format Document (`textDocument/formatting`)
+### Format Document (`textDocument/formatting`) {#LSPARCH-FEATURES-FORMAT}
 
 Spawn `ruff format --stdin-filename <path> -` with document text on stdin. Return single `TextEdit` replacing entire document.
 
-### Folding Ranges (`textDocument/foldingRange`)
+### Folding Ranges (`textDocument/foldingRange`) {#LSPARCH-FEATURES-FOLDING}
 
 Emit `FoldingRange` for: function `def_span`, class `def_span`, consecutive import blocks.
 
-### Selection Ranges (`textDocument/selectionRange`)
+### Selection Ranges (`textDocument/selectionRange`) {#LSPARCH-FEATURES-SELECTION}
 
 Smart Select: identifier → parameter → parameter list → function → class → module. Nested range tree from `ResolvedModule` spans.
 
-### Call Hierarchy (`textDocument/prepareCallHierarchy` + incoming/outgoing)
+### Call Hierarchy (`textDocument/prepareCallHierarchy` + incoming/outgoing) {#LSPARCH-FEATURES-CALLHIER}
 
 - **Prepare**: Find function/class at cursor, return `CallHierarchyItem`
 - **Incoming**: Find all `CallSite`s where `callee == name`, group by enclosing function
 - **Outgoing**: Find all `CallSite`s within function's `def_span`
 
-### Type Hierarchy (`textDocument/prepareTypeHierarchy` + supertypes/subtypes)
+### Type Hierarchy (`textDocument/prepareTypeHierarchy` + supertypes/subtypes) {#LSPARCH-FEATURES-TYPEHIER}
 
 - **Prepare**: Find `ClassInfo` at cursor
 - **Supertypes**: Use `ClassInfo.bases` to find parent classes
 - **Subtypes**: Find classes whose `bases` contains target class name
 
-### Code Lens (`textDocument/codeLens`)
+### Code Lens (`textDocument/codeLens`) {#LSPARCH-FEATURES-CODELENS}
 
 Show "N references" above each function and class definition.
 
 ---
 
-## uv Integration Architecture
+## uv Integration Architecture {#LSPARCH-UV}
 
 See [LSP-UV-INTEGRATION-SPEC.md](LSP-UV-INTEGRATION-SPEC.md) for the full specification. Key architectural details:
 
-### Detection & Registry
+### Detection & Registry {#LSPARCH-UV-DETECT}
 
 On startup, the LSP detects uv projects via filesystem signals (`uv.lock`, `[tool.uv]` in `pyproject.toml`, `.venv/pyvenv.cfg` with `uv = true`). If detected:
 
@@ -499,11 +499,11 @@ The registry feeds into:
 - **Hover**: shows dependency classification and workspace member status
 - **Code actions**: `uv add`, `uv add --dev`, `uv sync` quick fixes
 
-### Hot Reload
+### Hot Reload {#LSPARCH-UV-HOTRELOAD}
 
 All uv commands trigger `rebuild_registry_and_resolve()` on success — re-parses `uv.lock`, rebuilds the registry, re-resolves all imports, and republishes diagnostics for every indexed file. The same function fires when the file watcher detects `uv.lock` or `pyproject.toml` changes. No LSP restart needed.
 
-### uv Binary Resolution
+### uv Binary Resolution {#LSPARCH-UV-BINRES}
 
 | Priority | Source |
 |----------|--------|
@@ -515,7 +515,7 @@ All uv commands trigger `rebuild_registry_and_resolve()` on success — re-parse
 
 The uv binary is only needed for **commands** (sync, add, remove). Lock file parsing and environment detection are pure filesystem operations.
 
-### uv Diagnostic Codes
+### uv Diagnostic Codes {#LSPARCH-UV-DIAGCODES}
 
 | Code | Severity | Default | Gate | Description |
 |------|----------|---------|------|-------------|
@@ -526,19 +526,19 @@ The uv binary is only needed for **commands** (sync, add, remove). Lock file par
 
 ---
 
-## Stub Resolution & Type Provenance
+## Stub Resolution & Type Provenance {#LSPARCH-STUBS}
 
 See [CHECKER-STUB-RESOLUTION-SPEC.md](CHECKER-STUB-RESOLUTION-SPEC.md) for PEP 561 resolution order, typeshed bundling, type provenance tracking, suppression system, and auto-stub generation.
 
 ---
 
-## Analysis Modes
+## Analysis Modes {#LSPARCH-MODES}
 
 See [LSP-ANALYSIS-MODES-SPEC.md](LSP-ANALYSIS-MODES-SPEC.md) for `openFilesOnly` / `wholeModule` / `crossModule` modes, workspace index, import graph, and cross-file LSP features.
 
 ---
 
-## Editor-Specific Specs
+## Editor-Specific Specs {#LSPARCH-EDITORS}
 
 For editor-specific implementation details (commands, UI, configuration schema, DAP proxy implementation), see:
 
@@ -548,7 +548,7 @@ For editor-specific implementation details (commands, UI, configuration schema, 
 
 ---
 
-## Testing Strategy
+## Testing Strategy {#LSPARCH-TESTING}
 
 Every LSP feature gets E2E tests in `crates/basilisk-lsp/tests/lsp_e2e_tests.rs` and WS tests in `crates/basilisk-lsp/tests/lsp_ws_tests.rs`. No mocking — test the actual protocol.
 

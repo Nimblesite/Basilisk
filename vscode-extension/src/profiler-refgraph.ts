@@ -1,3 +1,4 @@
+// Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 /**
  * Reference graph webview: Canvas 2D force-directed graph for memory
  * retention chains. Node sizing by log(size), coloring by role, edge

@@ -1,3 +1,4 @@
+//! Tests for [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 //! E2E integration tests for the Basilisk profiler system.
 //!
 //! Tests the profiler core: session management, data aggregation, export

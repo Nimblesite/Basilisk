@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-CLI]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI
 //! Machine-readable JSON output for diagnostics.
 //!
 //! JSON output is a flat array consumed by the VS Code extension:

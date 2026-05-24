@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0031] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 // Integration tests for BSK-E0031: Invalid `cast()` call.
 
 use super::common::*;

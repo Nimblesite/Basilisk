@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0079] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 // Integration tests for BSK-E0079: Module-level protocol incompatibility.
 
 use super::common::*;

@@ -1,6 +1,6 @@
-# Basilisk Activity Panel
+# Basilisk Activity Panel {#EXTACT}
 
-## Goal
+## Goal {#EXTACT-GOAL}
 
 The Basilisk activity icon opens a sidebar that is **genuinely useful** — not a branding placeholder. It gives Python developers immediate, actionable insight into their codebase: module structure, type coverage, diagnostics, adoption progress, and what Basilisk actually does for them.
 
@@ -8,7 +8,7 @@ Every panel must pass the bar: **"Would I leave this open while coding?"** If no
 
 **Cross-editor spec.** The LSP commands and data model are shared. The rendering differs per editor. This spec defines the shared protocol first, then per-editor implementation notes. Only **differences** are documented per-editor — if it's the same, it's in the shared section.
 
-## Critical Docs
+## Critical Docs {#EXTACT-CRITICAL-DOCS}
 
 - [VS Code TreeView API](https://code.visualstudio.com/api/extension-guides/tree-view)
 - [VS Code Extension API — views](https://code.visualstudio.com/api/references/contribution-points#contributes.views)
@@ -19,7 +19,7 @@ Every panel must pass the bar: **"Would I leave this open while coding?"** If no
 
 ---
 
-## Architecture
+## Architecture {#EXTACT-ARCHITECTURE}
 
 ```mermaid
 flowchart TB
@@ -46,11 +46,11 @@ All data flows from the LSP server via custom commands. The editor extension is 
 
 ---
 
-## Custom LSP Commands (Shared)
+## Custom LSP Commands (Shared) {#EXTACT-LSP-COMMANDS}
 
 These commands are the shared backbone. Every editor uses the same request/response types.
 
-### `basilisk/workspaceModules`
+### `basilisk/workspaceModules` {#EXTACT-LSP-COMMANDS-WORKSPACE-MODULES}
 
 Returns the semantic module tree for the workspace.
 
@@ -59,7 +59,7 @@ Returns the semantic module tree for the workspace.
 - **Returns**: `WorkspaceModulesResponse`
 - **Trigger**: On panel open, refresh, or after `basilisk/moduleChanged` notification
 
-### `basilisk/moduleChanged`
+### `basilisk/moduleChanged` {#EXTACT-LSP-COMMANDS-MODULE-CHANGED}
 
 Server pushes updated module data after re-analysis.
 
@@ -67,7 +67,7 @@ Server pushes updated module data after re-analysis.
 - **Params**: `{ module: ModuleNode }` — the changed module's updated tree
 - **Trigger**: After file save triggers re-analysis
 
-### `basilisk/typeHealth`
+### `basilisk/typeHealth` {#EXTACT-LSP-COMMANDS-TYPE-HEALTH}
 
 Returns type coverage and diagnostic health for the workspace.
 
@@ -78,7 +78,7 @@ Returns type coverage and diagnostic health for the workspace.
 
 ---
 
-## Shared Data Model
+## Shared Data Model {#EXTACT-DATA-MODEL}
 
 ```typescript
 // --- Module Explorer ---
@@ -150,11 +150,11 @@ interface ModuleHealth {
 
 ---
 
-## Panel 1: Module Explorer
+## Panel 1: Module Explorer {#EXTACT-MODULES}
 
 The killer panel. Shows the **semantic** structure of the workspace — not a file tree, a *module* tree. Every Python developer needs to understand their module graph, and the built-in Explorer doesn't show it.
 
-### Tree Structure
+### Tree Structure {#EXTACT-MODULES-TREE-STRUCTURE}
 
 ```
 myapp/
@@ -184,7 +184,7 @@ myapp/
       +-- def now() -> datetime
 ```
 
-### Tree Item Properties
+### Tree Item Properties {#EXTACT-MODULES-ITEM-PROPERTIES}
 
 | Property | Value |
 |----------|-------|
@@ -194,14 +194,14 @@ myapp/
 | Tooltip | Full signature + docstring first line (if available) |
 | Click action | Open file at the symbol's line |
 
-### Decorations
+### Decorations {#EXTACT-MODULES-DECORATIONS}
 
 - **Unannotated symbols**: italic label, warning suffix — visual nudge to add types
 - **Private symbols** (`_prefixed`): dimmed
 - **`__all__` exported**: export icon overlay
 - **Classes with errors**: red dot decoration
 
-### Context Menu Actions
+### Context Menu Actions {#EXTACT-MODULES-CONTEXT-MENU}
 
 | Action | Scope |
 |--------|-------|
@@ -213,7 +213,7 @@ myapp/
 | Organize Imports | Module |
 | Fix All | Module |
 
-### Toolbar Actions
+### Toolbar Actions {#EXTACT-MODULES-TOOLBAR}
 
 | Action | Description |
 |--------|-------------|
@@ -222,7 +222,7 @@ myapp/
 | Filter | Toggle filter input to search modules/symbols by name |
 | Toggle View | Switch between tree (grouped by module) and flat (all symbols alphabetically) |
 
-### Refresh Strategy
+### Refresh Strategy {#EXTACT-MODULES-REFRESH}
 
 - **On workspace open**: full fetch
 - **On file save**: incremental update via `basilisk/moduleChanged` notification
@@ -231,11 +231,11 @@ myapp/
 
 ---
 
-## Panel 2: Type Health
+## Panel 2: Type Health {#EXTACT-HEALTH}
 
 At-a-glance view of how well-typed the codebase is. Answers: "How much of my code does Basilisk actually understand?"
 
-### Tree Structure
+### Tree Structure {#EXTACT-HEALTH-TREE-STRUCTURE}
 
 ```
 Workspace Health: 73% typed  [========---] 14E 23W
@@ -248,7 +248,7 @@ Workspace Health: 73% typed  [========---] 14E 23W
   [fail]  myapp/legacy/importer.py     12%   11E 19W    [adopted]
 ```
 
-### Tree Item Properties
+### Tree Item Properties {#EXTACT-HEALTH-ITEM-PROPERTIES}
 
 | Property | Value |
 |----------|-------|
@@ -259,7 +259,7 @@ Workspace Health: 73% typed  [========---] 14E 23W
 | Decoration | `[adopted]` badge if file is in adoption mode |
 | Sort | Worst-first by default (lowest coverage at top). Toggleable. |
 
-### Header Widget
+### Header Widget {#EXTACT-HEALTH-HEADER}
 
 The top-level item is a summary row showing workspace-wide stats:
 
@@ -267,7 +267,7 @@ The top-level item is a summary row showing workspace-wide stats:
 - **Totals**: errors, warnings, adopted file count
 - **Trend indicator** (future): up/down since last session
 
-### Toolbar Actions
+### Toolbar Actions {#EXTACT-HEALTH-TOOLBAR}
 
 | Action | Description |
 |--------|-------------|
@@ -275,7 +275,7 @@ The top-level item is a summary row showing workspace-wide stats:
 | Sort | Cycle: worst-first -> best-first -> alphabetical |
 | Filter | Show only: errors, warnings, unannotated, adopted |
 
-### Context Menu Actions
+### Context Menu Actions {#EXTACT-HEALTH-CONTEXT-MENU}
 
 | Action | Command |
 |--------|---------|
@@ -285,7 +285,7 @@ The top-level item is a summary row showing workspace-wide stats:
 | Fix All in File | Run autofix |
 | Add Missing Annotations | AI-powered (future) |
 
-### Refresh Strategy
+### Refresh Strategy {#EXTACT-HEALTH-REFRESH}
 
 - **On diagnostic change**: re-compute health stats client-side from diagnostic events + cached annotation data
 - **On adopt/unadopt**: immediate refresh
@@ -293,11 +293,11 @@ The top-level item is a summary row showing workspace-wide stats:
 
 ---
 
-## Panel 3: Basilisk
+## Panel 3: Basilisk {#EXTACT-INFO}
 
 Helps users understand what Basilisk **is** and what it **does**. Not a static about page — a living dashboard of feature status and quick actions.
 
-### Structure
+### Structure {#EXTACT-INFO-STRUCTURE}
 
 Tree with grouped sections (top-level nodes are section headers, children are items).
 
@@ -332,7 +332,7 @@ Server Info
   +-- Workspace: /home/user/myapp (142 files)
 ```
 
-### Getting Started Section
+### Getting Started Section {#EXTACT-INFO-GETTING-STARTED}
 
 **Walkthrough: "What is Basilisk?"**
 
@@ -351,7 +351,7 @@ Server Info
 4. **Try an Autofix** — Hover a diagnostic, click the lightbulb
 5. **Run a Test** — Open Test Explorer, click play
 
-### Feature Status Section
+### Feature Status Section {#EXTACT-INFO-FEATURE-STATUS}
 
 Each item reflects a real setting and shows whether the feature is active.
 
@@ -368,11 +368,11 @@ Each item reflects a real setting and shows whether the feature is active.
 
 **Click action**: toggles the setting. Disabled -> enabled, enabled -> disabled. Immediate effect.
 
-### Quick Actions Section
+### Quick Actions Section {#EXTACT-INFO-QUICK-ACTIONS}
 
 Each item triggers an existing command. Convenience surface — users don't have to remember command palette names.
 
-### Server Info Section
+### Server Info Section {#EXTACT-INFO-SERVER-INFO}
 
 Read-only information fetched from:
 - LSP `initialize` response (server version, capabilities)
@@ -381,9 +381,9 @@ Read-only information fetched from:
 
 ---
 
-## Editor-Specific Implementation
+## Editor-Specific Implementation {#EXTACT-EDITORS}
 
-### VS Code
+### VS Code {#EXTACT-EDITORS-VSCODE}
 
 Full native support via TreeView API. This is the reference implementation.
 
@@ -524,7 +524,7 @@ Full native support via TreeView API. This is the reference implementation.
 
 **Filter**: Built-in VS Code tree filter plus `basilisk.moduleExplorer.filter` command for glob-style module filtering. Filter state persists in `workspaceState`.
 
-### Zed
+### Zed {#EXTACT-EDITORS-ZED}
 
 Zed does **not** currently support custom sidebar panels (open issue #21208). Until it does, the same data is surfaced through available Zed mechanisms:
 
@@ -557,7 +557,7 @@ Calls `basilisk/typeHealth` and formats as markdown.
 
 **Activity bar icon**: Zed uses the extension icon from `extension.toml`. Same SVG, rendered per Zed's theme.
 
-### Neovim
+### Neovim {#EXTACT-EDITORS-NEOVIM}
 
 Neovim has no built-in sidebar framework, but the Lua ecosystem has mature tree plugins. `basilisk.nvim` implements the panels as Lua-rendered floating/split windows.
 
@@ -584,7 +584,7 @@ Opened via `:BasiliskHealth` command or keymap (default: `<leader>bh`).
 
 ---
 
-## Accessibility
+## Accessibility {#EXTACT-ACCESSIBILITY}
 
 - All tree items have descriptive accessibility labels
 - Icon + text for all status indicators (never color alone)
@@ -593,7 +593,7 @@ Opened via `:BasiliskHealth` command or keymap (default: `<leader>bh`).
 
 ---
 
-## Performance
+## Performance {#EXTACT-PERFORMANCE}
 
 - **Lazy loading**: Module Explorer fetches children on expand, not upfront. Top-level modules loaded first, symbols loaded when a module is expanded.
 - **Debounced updates**: `basilisk/moduleChanged` notifications are debounced (300ms) to avoid flicker during rapid saves.
@@ -603,6 +603,6 @@ Opened via `:BasiliskHealth` command or keymap (default: `<leader>bh`).
 
 ---
 
-## Implementation Plan
+## Implementation Plan {#EXTACT-IMPLEMENTATION-PLAN}
 
 See [EXTENSION-ACTIVITY-PANEL-PLAN.md](../plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) for the full phased implementation plan and TODO list.

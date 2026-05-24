@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0063] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 // Integration tests for BSK-E0063: Non-hashable dataclass.
 
 use super::common::*;

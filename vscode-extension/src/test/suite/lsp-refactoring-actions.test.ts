@@ -1,3 +1,4 @@
+// Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
 /**
  * LSP Refactoring Code Action Tests for the Basilisk VS Code Extension.
  *

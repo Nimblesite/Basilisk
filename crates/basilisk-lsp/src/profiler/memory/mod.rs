@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Memory profiling and leak detection for the Basilisk LSP.
 //!
 //! Uses `tracemalloc` (Python stdlib) for per-line allocation tracking and

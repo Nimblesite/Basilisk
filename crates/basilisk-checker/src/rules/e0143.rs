@@ -1,3 +1,4 @@
+//! Implements [BSK-E0143] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0143: `NamedTuple` usage violations.
 //!
 //! Detects invalid usage of `NamedTuple` instances:

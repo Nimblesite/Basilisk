@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-CLI]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

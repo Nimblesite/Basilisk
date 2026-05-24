@@ -1,3 +1,4 @@
+//! Implements [BSK-E0082] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0082: `TypeVarTuple` callable/tuple argument mismatch.
 //!
 //! When a constructor (or function) links two parameters via a `TypeVarTuple`

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0092] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0092: Wrong number of type arguments to a generic class or type alias.
 //!
 //! When a user-defined generic class has both required (non-default) and optional

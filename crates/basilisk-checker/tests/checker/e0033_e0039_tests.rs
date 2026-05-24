@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0033]-[BSK-E0039] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 // Integration tests for BSK-E0033 (invalid `reveal_type`) and BSK-E0039 (invalid `assert_type`).
 
 use super::common::*;

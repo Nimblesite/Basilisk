@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Narrowing guard types collected from function bodies.
 //!
 //! These represent control-flow-sensitive type narrowing facts extracted

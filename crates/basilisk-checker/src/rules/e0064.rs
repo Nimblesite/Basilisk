@@ -1,3 +1,4 @@
+//! Implements [BSK-E0064] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
 //! BSK-E0064: Invalid argument in a `NamedTuple` constructor call.
 //!
 //! When a `NamedTuple` is instantiated using keyword arguments, Basilisk

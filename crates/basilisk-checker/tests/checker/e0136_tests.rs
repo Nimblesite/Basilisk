@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0136] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0136: Callable subtyping violations.
 
 use super::common::*;

@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Memory snapshot diffing — compare two snapshots to detect growth and leaks.
 //!
 //! Parses the JSON output from the `diff_snapshot` injection script and

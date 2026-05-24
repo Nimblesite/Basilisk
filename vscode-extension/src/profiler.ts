@@ -1,3 +1,4 @@
+// Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 /**
  * Profiler UI module for the Basilisk VS Code extension.
  *

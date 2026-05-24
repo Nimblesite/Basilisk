@@ -1,3 +1,4 @@
+//! Implements [BSK-E0031] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 //! BSK-E0031: Invalid `cast()` call.
 //!
 //! `typing.cast(typ, val)` must be called with exactly two positional arguments,

@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0151] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 #![allow(
     clippy::expect_used,
     clippy::indexing_slicing,

@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-CODELENS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODELENS
+//!
 //! Code Lens handler: reference counts above functions and classes.
 
 use basilisk_resolver::ResolvedModule;

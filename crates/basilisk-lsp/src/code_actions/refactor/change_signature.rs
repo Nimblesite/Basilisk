@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
+//!
 //! Change function signature refactoring.
 //!
 //! Offers to add a parameter with a default value to a function, or to remove

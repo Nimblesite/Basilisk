@@ -1,3 +1,4 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 //! Basilisk profiler helper -- elevated binary for py-spy `vm_read` on macOS.
 //!
 //! On macOS, reading another process's memory requires elevated privileges
@@ -23,8 +24,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use basilisk_common::shipwright_version::{self, VersionOutput};
 use serde::{Deserialize, Serialize};
+use shipwright::{dispatch, BuildInfo, VersionSpec};
+use shipwright_manifest::{ExecutableKind, Language};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tracing::{error, info};
@@ -92,18 +94,42 @@ struct FrameData {
     line: i32,
 }
 
+/// Handle `--version` / `--version --json` via the Shipwright contract emitter.
+///
+/// Returns `true` when a version flag was handled and `main` should exit 0.
+/// Build-time metadata is supplied by `build.rs`.
+fn handle_version(args: &[String]) -> bool {
+    let spec = VersionSpec {
+        name: "basilisk-profiler-helper",
+        version: env!("CARGO_PKG_VERSION"),
+        kind: ExecutableKind::Tool,
+        language: Language::Rust,
+        product: Some("basilisk"),
+        capabilities: &["profiler-helper"],
+        build: BuildInfo {
+            git_sha: option_env!("SHIPWRIGHT_GIT_SHA"),
+            git_dirty: option_env!("SHIPWRIGHT_GIT_DIRTY").map(|s| s == "true"),
+            build_time: option_env!("SHIPWRIGHT_BUILD_TIME"),
+            target: option_env!("SHIPWRIGHT_TARGET"),
+            toolchain: option_env!("SHIPWRIGHT_TOOLCHAIN"),
+        },
+    };
+    match dispatch(args, &mut std::io::stdout(), &spec) {
+        Ok(handled) => handled,
+        Err(err) => {
+            let _ = std::io::Write::write_all(
+                &mut std::io::stderr(),
+                format!("basilisk-profiler-helper: --version emission failed: {err}\n").as_bytes(),
+            );
+            true
+        }
+    }
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
-    let args = std::env::args().skip(1).collect::<Vec<_>>();
-    if shipwright_version::print_if_requested(
-        &args,
-        VersionOutput {
-            name: "basilisk-profiler-helper",
-            kind: "tool",
-            product: "basilisk",
-            capabilities: &["profiler-helper"],
-        },
-    ) {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if handle_version(&args) {
         return ExitCode::SUCCESS;
     }
 

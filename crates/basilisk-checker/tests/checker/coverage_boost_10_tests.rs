@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 use super::common::*;
 
 // Coverage boost tests batch 10: targeting medium-coverage rules for maximum improvement.

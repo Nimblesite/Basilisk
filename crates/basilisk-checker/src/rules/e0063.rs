@@ -1,3 +1,4 @@
+//! Implements [BSK-E0063] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
 //! BSK-E0063: Non-hashable dataclass assigned to a `Hashable`-annotated variable.
 //!
 //! A `@dataclass` with `eq=True` (the default) sets `__hash__` to `None` unless

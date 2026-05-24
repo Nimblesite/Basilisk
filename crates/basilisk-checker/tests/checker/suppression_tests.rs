@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-STRICTNESS-SUPPRESSION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STRICTNESS-SUPPRESSION
 // Integration tests for the suppression system.
 
 use super::common::*;

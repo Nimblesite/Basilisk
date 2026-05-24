@@ -1,3 +1,4 @@
+//! Implements [BSK-E0042] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
 //! BSK-E0042: PEP 695 type parameter syntax mixed with traditional `TypeVars`.
 //!
 //! PEP 695 introduced a new syntax for declaring type parameters (`class Foo[T]`

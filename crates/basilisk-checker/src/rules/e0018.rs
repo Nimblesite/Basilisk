@@ -1,3 +1,4 @@
+//! Implements [BSK-E0018] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0018: Undefined variable used in a return statement.
 //!
 //! When a function contains a `return <name>` statement and the name is not

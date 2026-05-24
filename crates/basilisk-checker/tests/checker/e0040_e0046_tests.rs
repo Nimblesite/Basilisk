@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0040]-[BSK-E0046] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for BSK-E0040 (enum subclassing) and BSK-E0046 (enum member annotated).
 
 use super::common::*;

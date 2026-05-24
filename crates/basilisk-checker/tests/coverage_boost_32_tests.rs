@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 //! Coverage boost tests batch 32: targeting top uncovered rule files.
 //! Focus on e0115 deprecated usage, e0130 `TypeVar` scope, e0148 generic type args,
 //! and the long tail of near-complete rule files.

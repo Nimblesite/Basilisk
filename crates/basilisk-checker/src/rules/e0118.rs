@@ -1,3 +1,4 @@
+//! Implements [BSK-E0118] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0118: Calling `super().method()` on an abstract method with no default
 //! implementation.
 //!

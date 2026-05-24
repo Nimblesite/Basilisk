@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Integration tests for the profiler pipeline: ingestion -> export -> diagnostics.
 //!
 //! These tests construct `ProfileData` manually (no py-spy process needed)

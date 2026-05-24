@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0060] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 // Integration tests for BSK-E0060: dataclass ordering invalid.
 
 use super::common::*;

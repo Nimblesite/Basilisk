@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! AST visitor that collects function definitions and module-level information.
 
 const ENUM_BASES: &[&str] = &["Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"];
@@ -17,6 +18,7 @@ mod generics;
 mod historical;
 mod module_level;
 mod narrowing;
+mod pep695_scoping;
 mod protocol;
 mod protocol_ext;
 mod type_alias;
@@ -242,6 +244,7 @@ fn build_resolved_module(
         generator_violations: results.generator_issues,
         unbound_typevar_usages: Vec::new(),
         imported_symbols: std::collections::HashMap::new(),
+        pep695_scoping: pep695_scoping::collect_pep695_scoping(stmts, &module.source),
         path: module.path.clone(),
         source: module.source.clone(),
     }

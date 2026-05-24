@@ -1,3 +1,4 @@
+//! Implements [BSK-E0004] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
 //! BSK-E0004: Missing `*args` / `**kwargs` type annotation.
 //!
 //! Every variadic positional parameter (`*args`) and variadic keyword parameter

@@ -31,7 +31,8 @@ mod helpers;
 
 use helpers::{
     check_init_method_args, check_self_type_incompatibility, extract_type_args_text,
-    has_custom_init_in_bases, is_namedtuple_class, resolve_string_annotation, CODE,
+    has_custom_init_in_bases, has_unresolved_base, is_namedtuple_class, resolve_string_annotation,
+    CODE,
 };
 
 /// Emits BSK-E0111 for constructor call errors involving `__init__`.
@@ -401,6 +402,14 @@ fn check_no_init_with_args(
         if method_map.contains_key(&(base_name, "__init_subclass__")) {
             return;
         }
+    }
+
+    // If the class inherits from a base we cannot resolve (an external import
+    // such as pydantic `BaseModel`, attrs, or msgspec), we cannot prove it lacks
+    // an argument-accepting constructor — the "inherits only from `object`"
+    // premise is false. Stay conservative and do not flag. (Issue #44)
+    if has_unresolved_base(class_info, class_map) {
+        return;
     }
 
     let range = call.range();

@@ -1,3 +1,4 @@
+// Implements [EXTACT-MODULES]. See docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-MODULES
 /**
  * Module Explorer — TreeDataProvider for the Basilisk sidebar.
  *

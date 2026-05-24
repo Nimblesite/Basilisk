@@ -1,4 +1,4 @@
-# Basilisk Debug Integration via debugpy
+# Basilisk Debug Integration via debugpy {#LSPDEBUG}
 
 ## Goal {#LSPDEBUG-GOAL}
 

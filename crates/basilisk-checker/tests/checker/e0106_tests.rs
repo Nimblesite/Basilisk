@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0106] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0106: Protocol class used where type[Proto] expected.
 
 use super::common::*;

@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-CONFIG]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG
+//!
 //! Workspace configuration reader.
 //!
 //! Parses `pyrightconfig.json` and `pyproject.toml` `[tool.basilisk]` /

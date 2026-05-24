@@ -1,3 +1,4 @@
+//! Implements [BSK-E0129] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0129: Literal value assignment incompatibility.
 //!
 //! Detects two classes of Literal-related assignment errors inside function bodies:

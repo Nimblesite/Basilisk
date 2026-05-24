@@ -1,3 +1,4 @@
+//! Implements [BSK-E0124] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0124: Protocol attribute tuple element type mismatch.
 //!
 //! When a class explicitly implements a `Protocol` and assigns to a

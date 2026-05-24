@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 // Integration tests for the types module: `InferredType`, Display, `from_annotation`, `is_assignable_to`.
 
 // These tests exercise type inference paths through real Python code.

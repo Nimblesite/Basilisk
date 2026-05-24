@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-COMPLETION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-COMPLETION
+//!
 //! Dot-completion provider.
 //!
 //! Handles `expr.<cursor>` and `self.<cursor>` patterns by inspecting class

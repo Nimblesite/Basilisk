@@ -1,3 +1,4 @@
+// Implements [VSIX-TEST-EXPLORER-INTEGRATION]. See docs/specs/VSIX-SPEC.md#VSIX-TEST-EXPLORER-INTEGRATION
 /**
  * Test Explorer integration for Basilisk.
  *

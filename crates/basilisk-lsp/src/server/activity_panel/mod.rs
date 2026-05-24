@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! Activity panel command handlers for the Basilisk LSP server.
 //!
 //! Implements `basilisk.workspaceModules` and `basilisk.typeHealth` execute-command

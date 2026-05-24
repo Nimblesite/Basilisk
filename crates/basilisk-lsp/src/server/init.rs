@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! Initialization and configuration handlers for the Basilisk LSP server.
 //!
 //! Covers `initialize`, `initialized`, `shutdown`, and `did_change_configuration`.
@@ -483,7 +485,18 @@ fn scan_resolve_and_check_with_roots(
     let mut search_paths =
         crate::import_resolver::ImportSearchPaths::from_config(roots, &config, registry);
     search_paths.workspace_members = discover_workspace_members(roots);
+    info!(
+        site_packages = ?search_paths.site_packages,
+        workspace_members = search_paths.workspace_members.len(),
+        stub_paths = search_paths.stub_paths.len(),
+        has_registry = search_paths.registry.is_some(),
+        "built LSP import search paths"
+    );
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
+    // Cache the search paths so incremental single-file re-checks (didOpen /
+    // didChange) resolve third-party imports identically to this scan, instead
+    // of resurrecting false BSK-E0010. Implements [ANALYSIS-INCR-IMPORTS].
+    index.set_search_paths(search_paths);
 
     // Re-check all files now that imports are resolved. The initial scan()
     // generates diagnostics before workspace members are known, so BSK-E0010
@@ -722,6 +735,9 @@ pub(super) async fn rebuild_registry_and_resolve(server: &LspServer) {
         crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
     search_paths.workspace_members = discover_workspace_members(&roots);
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
+    // Refresh the cached search paths so subsequent incremental re-checks pick
+    // up the rebuilt registry / venv. Implements [ANALYSIS-INCR-IMPORTS].
+    index.set_search_paths(search_paths);
     drop(roots);
 
     // Re-check all files and publish updated diagnostics.

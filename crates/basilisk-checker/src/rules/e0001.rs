@@ -1,3 +1,4 @@
+//! Implements [BSK-E0001] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
 //! BSK-E0001: Missing parameter type annotation.
 
 use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule};

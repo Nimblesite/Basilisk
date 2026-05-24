@@ -1,3 +1,4 @@
+// Implements [LSPARCH-FEATURES-DEFINITION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-DEFINITION
 /**
  * LSP Navigation & Code Action Tests for the Basilisk VS Code Extension.
  *

@@ -1,3 +1,4 @@
+//! Implements [STUBRES-CONFIG]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CONFIG
 //! Gradual Adoption Store — manages per-file diagnostic severity overrides.
 //!
 //! When a user "adopts" a file, Basilisk runs autofix (safe) and then records

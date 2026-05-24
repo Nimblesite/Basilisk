@@ -1,3 +1,4 @@
+//! Implements [BSK-E0026] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0026: `TypeVar` declared with exactly one constraint.
 //!
 //! PEP 484 requires a `TypeVar` to have either zero constraints (unconstrained)

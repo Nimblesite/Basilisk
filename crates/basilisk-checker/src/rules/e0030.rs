@@ -1,3 +1,4 @@
+//! Implements [BSK-E0030] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 //! BSK-E0030: Non-default `TypeVar` follows a default `TypeVar` in `Generic[...]`.
 //!
 //! PEP 696 §Ordering defines two ordering rules for type parameters in `Generic[...]`:

@@ -1,3 +1,4 @@
+// Tests for [LSPDEBUG]. See docs/specs/LSP-DEBUG-INTEGRATION-SPEC.md#LSPDEBUG
 /* eslint-disable max-lines */
 /**
  * Debug Integration E2E Tests for the Basilisk VS Code Extension.
@@ -590,6 +591,29 @@ function clearAllBreakpoints(): void {
 }
 
 /**
+ * Stop the active debug session during cleanup, then let the runtime settle.
+ *
+ * VS Code rejects the terminate/disconnect request with "Canceled" when the
+ * session ends on its own before the request resolves — a benign shutdown race.
+ * Cleanup hooks must never fail the suite over that race, so it is swallowed;
+ * any other rejection is re-thrown. [LSPDEBUG]
+ */
+async function stopActiveDebugSession(): Promise<void> {
+    if (vscode.debug.activeDebugSession === undefined) {
+        return;
+    }
+    try {
+        await vscode.debug.stopDebugging();
+    } catch (error) {
+        const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+        if (!message.includes('cancel')) {
+            throw error;
+        }
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, SESSION_SETTLE_MS));
+}
+
+/**
  * Start a debug session on the stepping fixture, wait for it to stop, return session + threadId.
  */
 async function launchAndWaitForBreakpoint(
@@ -673,9 +697,7 @@ suite('Debug Integration E2E Tests', () => {
 
     suiteTeardown(async () => {
         clearAllBreakpoints();
-        if (vscode.debug.activeDebugSession) {
-            await vscode.debug.stopDebugging();
-        }
+        await stopActiveDebugSession();
         if (tmpDir !== undefined && tmpDir !== '' && fs.existsSync(tmpDir)) {
             fs.rmSync(tmpDir, { recursive: true, force: true });
         }
@@ -683,10 +705,7 @@ suite('Debug Integration E2E Tests', () => {
 
     teardown(async () => {
         clearAllBreakpoints();
-        if (vscode.debug.activeDebugSession) {
-            await vscode.debug.stopDebugging();
-            await new Promise<void>((resolve) => setTimeout(resolve, SESSION_SETTLE_MS));
-        }
+        await stopActiveDebugSession();
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -1630,10 +1649,7 @@ suite('Debug Integration E2E Tests', () => {
         assert.ok(attachSession !== undefined, 'Attach session should be created');
 
         // Clean up
-        if (vscode.debug.activeDebugSession) {
-            await vscode.debug.stopDebugging();
-            await new Promise<void>((resolve) => setTimeout(resolve, SESSION_SETTLE_MS));
-        }
+        await stopActiveDebugSession();
         await stopDebugSession(lspSession.sessionId);
     });
 

@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! Performance benchmarks for the activity panel LSP commands.
 //!
 //! Validates that key operations meet latency targets for 1000-file workspaces:

@@ -1,3 +1,4 @@
+//! Implements [LSPUV]. See docs/specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV
 //! uv workspace configuration parsing.
 //!
 //! Reads `[tool.uv.workspace]` from `pyproject.toml` and resolves glob

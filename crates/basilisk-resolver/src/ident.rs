@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Python-identifier predicate.
 //!
 //! Used by checker rules, the resolver, and helpers to decide whether a string

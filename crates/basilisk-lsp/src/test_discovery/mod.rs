@@ -1,3 +1,5 @@
+//! Implements [LSPTEST]. See docs/specs/LSP-TEST-INTEGRATION-SPEC.md#LSPTEST
+//!
 //! Test Explorer: discover pytest and unittest tests from Python source files.
 //!
 //! Scans workspace for `test_*.py` and `*_test.py` files, parses them with

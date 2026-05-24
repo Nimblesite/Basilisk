@@ -1,3 +1,4 @@
+//! Tests for [STUBRES-ENGINE]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,
@@ -121,5 +122,42 @@ fn lookup_builtin_memoryview_type() {
     assert_eq!(
         basilisk_stubs::lookup_builtin("memoryview"),
         Some("memoryview")
+    );
+}
+
+// Regression for issue #46: BSK-W0010's quick fix must offer the *real*
+// typeshed distribution name, and nothing when no stub distribution exists.
+
+#[test]
+fn stub_distribution_maps_requests_to_types_requests() {
+    assert_eq!(
+        basilisk_stubs::typeshed_stub_distribution("requests"),
+        Some("types-requests")
+    );
+}
+
+#[test]
+fn stub_distribution_maps_import_root_not_distribution_name() {
+    // The import root `yaml` is published as `types-PyYAML`, not `types-yaml`.
+    assert_eq!(
+        basilisk_stubs::typeshed_stub_distribution("yaml"),
+        Some("types-PyYAML")
+    );
+}
+
+#[test]
+fn stub_distribution_uses_top_level_import_root_for_dotted_modules() {
+    assert_eq!(
+        basilisk_stubs::typeshed_stub_distribution("requests.auth"),
+        Some("types-requests")
+    );
+}
+
+#[test]
+fn stub_distribution_is_none_for_inline_typed_package() {
+    // pydantic-ai ships inline `py.typed`; there is no `types-pydantic_ai`.
+    assert_eq!(
+        basilisk_stubs::typeshed_stub_distribution("pydantic_ai"),
+        None
     );
 }

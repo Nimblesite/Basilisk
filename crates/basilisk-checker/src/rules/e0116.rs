@@ -1,3 +1,4 @@
+//! Implements [BSK-E0116] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0116: `NamedTuple` class definition errors.
 //!
 //! Detects several categories of `NamedTuple` definition errors:

@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-TESTING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-TESTING
 // Tests for LSP: `ws_test_analysis_modes`.
 
 use super::ws_test_common::*;

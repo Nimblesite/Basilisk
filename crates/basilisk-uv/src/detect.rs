@@ -1,3 +1,4 @@
+//! Implements [LSPUV]. See docs/specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV
 //! uv project detection.
 //!
 //! Determines whether a workspace directory is a uv-managed Python project by

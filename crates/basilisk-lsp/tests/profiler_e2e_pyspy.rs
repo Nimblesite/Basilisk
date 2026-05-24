@@ -1,3 +1,4 @@
+//! Tests for [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 //! Real E2E tests that spawn Python processes and profile them with py-spy.
 //!
 //! These tests prove the ENTIRE profiler pipeline works end-to-end:

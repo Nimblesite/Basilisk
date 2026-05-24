@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-FORMAT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-FORMAT
+//!
 //! Document formatting handler via Ruff delegation.
 //!
 //! Delegates to `ruff format` for Python document formatting, returning

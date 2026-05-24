@@ -1,3 +1,4 @@
+//! Implements [BSK-E0016] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0016: Incompatible method override.
 //!
 //! When a class method marked with `@override` has a different parameter

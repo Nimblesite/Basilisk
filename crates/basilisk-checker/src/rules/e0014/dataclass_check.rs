@@ -1,3 +1,4 @@
+//! Implements [BSK-E0014] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! Dataclass attribute assignment checking for BSK-E0014.
 //!
 //! Validates module-level attribute assignments (`instance.field = value`)

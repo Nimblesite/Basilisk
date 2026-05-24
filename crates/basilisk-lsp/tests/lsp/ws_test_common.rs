@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-TESTING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-TESTING
 // Shared test infrastructure for WebSocket LSP E2E tests.
 //
 // Every WS test file imports this module via `mod ws_test_common;` to get

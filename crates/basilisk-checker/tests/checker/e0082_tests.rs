@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0082] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
 // Integration tests for BSK-E0082: `TypeVarTuple` callable/tuple mismatch.
 
 use super::common::*;

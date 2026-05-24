@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
+//!
 //! F-string conversion refactoring actions: f-string to `.format()` and vice versa.
 
 use std::collections::HashMap;

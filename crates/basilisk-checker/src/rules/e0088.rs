@@ -1,3 +1,4 @@
+//! Implements [BSK-E0088] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0088: `TypedDict` runtime violation.
 //!
 //! PEP 589 defines constraints on what you can do with `TypedDict` type objects at runtime:

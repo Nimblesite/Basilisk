@@ -1,3 +1,4 @@
+//! Implements [BSK-E0080] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0080: `TypeVar` upper bound violation at call site.
 //!
 //! When a function parameter is annotated with a `TypeVar` that has an upper

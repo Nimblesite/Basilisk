@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-PLUGINS]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-PLUGINS
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

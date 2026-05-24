@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0100] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0100: Literal augmented assignment.
 
 use super::common::*;

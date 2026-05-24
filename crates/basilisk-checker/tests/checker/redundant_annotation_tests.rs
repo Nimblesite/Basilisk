@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 // Comprehensive tests for redundant type annotations.
 //
 // Tests the interaction between E0005 (missing annotation) and W0050 (redundant

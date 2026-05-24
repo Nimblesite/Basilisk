@@ -1,3 +1,4 @@
+//! Implements [BSK-E0136] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0136: Callable subtyping violations (covariance / contravariance).
 //!
 //! Callable types are covariant with respect to return types and contravariant

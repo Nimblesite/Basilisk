@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! LSP command handlers for `basilisk.memory.*` memory profiling commands.
 //!
 //! Memory profiling requires an active debug session (debugpy). These handlers

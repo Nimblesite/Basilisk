@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
 // Tests for LSP: `ws_test_code_actions`.
 
 use super::ws_test_common::*;

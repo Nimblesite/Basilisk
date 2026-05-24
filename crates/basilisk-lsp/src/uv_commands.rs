@@ -1,3 +1,4 @@
+//! Implements [LSPARCH-UV]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-UV
 //! uv command execution — thin subprocess wrapper.
 //!
 //! Delegates all package management to the `uv` CLI. We don't reinvent

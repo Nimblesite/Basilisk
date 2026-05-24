@@ -1,3 +1,4 @@
+//! Implements [BSK-E0024] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0024: Invalid type form — numeric literal used as type annotation.
 //!
 //! Type annotations must be type expressions, not literal values.  Using a

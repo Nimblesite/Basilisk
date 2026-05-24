@@ -1,3 +1,4 @@
+// Implements [VSIX]. See docs/specs/VSIX-SPEC.md#VSIX
 /**
  * Basilisk VS Code Extension
  *

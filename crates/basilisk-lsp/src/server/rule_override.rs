@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! Utility for inserting rule overrides into `pyproject.toml`.
 
 /// Insert or update a rule override in `pyproject.toml` content.

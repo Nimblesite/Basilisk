@@ -1,3 +1,4 @@
+//! Implements [COMPARCH]. See docs/specs/COMPILER-ARCHITECTURE-SPEC.md#COMPARCH
 //! Basilisk compiler — compiles typed Python to native code.
 //!
 //! This crate takes Python source, runs it through the analyzer pipeline,
