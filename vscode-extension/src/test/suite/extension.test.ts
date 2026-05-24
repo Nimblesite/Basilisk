@@ -4,7 +4,7 @@ import * as path from 'path';
 import { getStore } from '../../extension';
 import { POLL_INTERVAL_MS, WAIT_MS } from "./test-helpers";
 
-const EXTENSION_ID = 'basilisk-lang.basilisk';
+const EXTENSION_ID = 'Nimblesite.basilisk';
 
 interface PackageJSON {
     displayName: string;
@@ -26,7 +26,7 @@ suite('Basilisk Extension E2E Tests', () => {
         await vscode.window.showTextDocument(doc);
 
         // Poll until the extension is active.
-        const ext = vscode.extensions.getExtension('basilisk-lang.basilisk');
+        const ext = vscode.extensions.getExtension('Nimblesite.basilisk');
         if (ext && !ext.isActive) {
             await ext.activate();
         }
