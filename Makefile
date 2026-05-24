@@ -161,8 +161,9 @@ mutation-test:
 		fi; \
 	'
 
-## reinstall-vsix: Full clean rebuild and reinstall of binaries + VSIX
-reinstall-vsix: _clean_rust _clean_vsix _uninstall_binaries _build_rust _install_binaries _package_vsix _uninstall_vsix _install_vsix
+## reinstall-vsix: Clean rebuild + reinstall a host-targeted VSIX.
+## Mirrors .github/workflows/release.yml `vsix` job for the host platform.
+reinstall-vsix: _clean_rust _clean_vsix _release_vsix _uninstall_vsix _install_vsix
 	@echo -e '\033[0;32m✓ reinstall-vsix complete\033[0m'
 
 # =============================================================================
@@ -202,10 +203,43 @@ _build_vsix:
 	cd $(_EXTENSION_DIR) && npm ci && npm run compile && \
 	echo -e '\033[0;32m✓ VS Code extension compiled\033[0m'
 
-_package_vsix:
-	@echo -e '\033[1m\033[0;36m▶ Packaging VSIX\033[0m' && \
-	cd $(_EXTENSION_DIR) && npm ci && npm run compile && npm run package && \
-	echo -e '\033[0;32m✓ VSIX packaged\033[0m'
+# _release_vsix: build a host-targeted VSIX. Mirrors the per-platform steps
+# of the `vsix` job in .github/workflows/release.yml. Single recipe so host
+# detection vars are consistent throughout.
+_release_vsix:
+	@set -e; \
+	case "$$(uname -s)" in \
+		Darwin) plat=darwin; exe="" ;; \
+		Linux)  plat=linux;  exe="" ;; \
+		MINGW*|MSYS*|CYGWIN*) plat=win32; exe=".exe" ;; \
+		*) echo "Unsupported OS: $$(uname -s)" >&2; exit 1 ;; \
+	esac; \
+	case "$$(uname -m)" in \
+		arm64|aarch64) arch=arm64; rust_arch=aarch64 ;; \
+		x86_64|amd64)  arch=x64;   rust_arch=x86_64 ;; \
+		*) echo "Unsupported arch: $$(uname -m)" >&2; exit 1 ;; \
+	esac; \
+	case "$$plat" in \
+		darwin) rust_target="$$rust_arch-apple-darwin" ;; \
+		linux)  rust_target="$$rust_arch-unknown-linux-gnu" ;; \
+		win32)  rust_target="$$rust_arch-pc-windows-msvc" ;; \
+	esac; \
+	target="$$plat-$$arch"; \
+	echo -e "\033[1m\033[0;36m▶ Building VSIX for $$target ($$rust_target)\033[0m"; \
+	cargo build --release --target "$$rust_target" --bin basilisk; \
+	if [ "$$plat" = "darwin" ]; then \
+		cargo build --release --target "$$rust_target" --bin basilisk-profiler-helper; \
+	fi; \
+	$(RM) "$(_EXTENSION_DIR)/bin"; \
+	mkdir -p "$(_EXTENSION_DIR)/bin/$$target"; \
+	cp "target/$$rust_target/release/basilisk$$exe" "$(_EXTENSION_DIR)/bin/$$target/"; \
+	if [ "$$plat" = "darwin" ]; then \
+		cp "target/$$rust_target/release/basilisk-profiler-helper" "$(_EXTENSION_DIR)/bin/$$target/"; \
+	fi; \
+	cp shipwright.json $(_EXTENSION_DIR)/shipwright.json; \
+	cd $(_EXTENSION_DIR) && npm ci && npm run compile && npm run sync:shipwright; \
+	npx vsce package --target "$$target" --ignore-other-target-folders --out "basilisk-$$target.vsix"; \
+	echo -e "\033[0;32m✓ VSIX built for $$target\033[0m"
 
 _uninstall_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Uninstalling VSIX\033[0m' && \
