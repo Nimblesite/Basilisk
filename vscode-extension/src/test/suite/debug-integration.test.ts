@@ -23,7 +23,7 @@ import * as os from 'os';
 import * as net from 'net';
 import { execFileSync } from 'child_process';
 
-const EXTENSION_ID = 'basilisk-lang.basilisk';
+const EXTENSION_ID = 'Nimblesite.basilisk';
 
 /** Maximum time (ms) to wait for the LSP server to fully start. */
 const SERVER_START_WAIT_MS = 10_000;
