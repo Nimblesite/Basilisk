@@ -1,3 +1,4 @@
+//! Implements [STUBRES-ENGINE]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
 //! AST-based stub generation.
 //!
 //! Parses `.py` source files with `ruff_python_parser` and extracts

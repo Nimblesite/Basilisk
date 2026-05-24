@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
+//!
 //! Inline variable refactoring action.
 
 use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, Url};

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0115] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Collection helpers for BSK-E0115.
 //!
 //! Functions that scan an AST or source text to build maps of deprecated

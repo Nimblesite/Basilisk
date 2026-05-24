@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-PLUGINS]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-PLUGINS
 //! WASM-based plugin host for Basilisk.
 //!
 //! Will house the sandboxed plugin runtime in Phase 5.

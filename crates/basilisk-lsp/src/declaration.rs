@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-DEFINITION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-DEFINITION
+//!
 //! Go to Declaration handler.
 //!
 //! For single-file analysis, declaration and definition are equivalent.

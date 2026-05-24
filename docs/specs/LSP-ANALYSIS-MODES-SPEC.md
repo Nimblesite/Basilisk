@@ -1,4 +1,4 @@
-# LSP Analysis Modes — Specification
+# LSP Analysis Modes — Specification {#LSPMODES}
 
 > **Scope**: How the LSP server decides which files to analyse and how symbol graphs are shared
 > **Related**: [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES) — LSP features and protocol
@@ -233,6 +233,12 @@ Same as `wholeModule`, with an additional pass: the import graph is built from `
 ### didChange {#ANALYSIS-INCR-CHANGE}
 
 Incremental text edits are applied to the in-memory buffer, then parse → resolve → check runs for the changed file. In `crossModule`, direct importers are queued for re-analysis if the exported symbol table changed.
+
+### Import resolution on incremental re-check {#ANALYSIS-INCR-IMPORTS}
+
+The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk reload, dependent invalidation) MUST resolve third-party and workspace imports against the **same** `ImportSearchPaths` (venv site-packages, workspace members, stub paths, uv registry) that the full workspace scan used. The full scan builds these once and caches them on the workspace index; incremental re-checks reuse the cached value rather than recomputing it (site-packages discovery may touch the filesystem or spawn a subprocess and MUST NOT run per keystroke).
+
+Without this, the syntactic resolver marks every import `Unresolved`, so opening or editing a file resurrects false `BSK-E0010` ("Cannot resolve import … no type information available") in the editor for packages that resolve cleanly on the CLI and during the startup scan. The diagnostics an incremental re-check **publishes** MUST already reflect import resolution — not just the cached symbol table used by navigation features.
 
 ### File-Watcher Event {#ANALYSIS-INCR-WATCH}
 

@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Lightweight `Named` trait + collection helpers.
 //!
 //! Many resolver types share a `pub name: String` field, and 20+ sites across

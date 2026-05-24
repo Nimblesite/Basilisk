@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-COMPLETION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-COMPLETION
+//!
 //! Symbol completion provider.
 //!
 //! Produces completion items for functions, classes, module-level variables,

@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
+//!
 //! Auto-import symbol index for workspace-wide import suggestions.
 //!
 //! Builds an index of all exported symbols from workspace files so the

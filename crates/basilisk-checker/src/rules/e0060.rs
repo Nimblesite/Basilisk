@@ -1,3 +1,4 @@
+//! Implements [BSK-E0060] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
 //! BSK-E0060: Invalid ordering comparison of dataclass instances.
 //!
 //! When `@dataclass(order=True)`, Python synthesizes `__lt__`, `__le__`, `__gt__`,

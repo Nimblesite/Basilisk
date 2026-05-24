@@ -1,3 +1,4 @@
+//! Implements [BSK-E0066] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
 //! BSK-E0066: Enum member value incompatible with `_value_` type annotation.
 //!
 //! When an enum class declares `_value_: T` (annotation-only, no value), all

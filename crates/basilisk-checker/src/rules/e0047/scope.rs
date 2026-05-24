@@ -1,3 +1,4 @@
+//! Implements [BSK-E0047] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
 //! Module scope and circular annotation helpers for BSK-E0047.
 //!
 //! Contains helpers for building module scope name sets, detecting circular

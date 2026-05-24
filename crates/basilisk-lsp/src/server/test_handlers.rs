@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! Test discovery and execution command handlers for the Basilisk LSP server.
 //!
 //! Covers `basilisk.discoverTests`, `basilisk.runTests`, `basilisk.runTestFile`,

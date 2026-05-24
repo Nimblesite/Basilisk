@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0037] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 // Integration tests for BSK-E0037: Invalid `TypedDict` functional-syntax call.
 
 use super::common::*;

@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! LSP request handlers — split into navigation and feature submodules.
 //!
 //! Navigation: go-to-definition, declaration, type-definition, references,

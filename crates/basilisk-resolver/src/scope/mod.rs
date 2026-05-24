@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Scope and function information types produced by the resolver.
 
 mod class_types;
@@ -7,6 +8,7 @@ mod import_types;
 mod module_types;
 mod named;
 pub(crate) mod narrowing_types;
+mod pep695_scoping;
 mod resolved_module;
 mod rhs;
 mod span;
@@ -35,6 +37,10 @@ pub use named::{
     Named,
 };
 pub use narrowing_types::{MatchCaseNarrowing, NarrowingGuard, NarrowingGuardKind};
+pub use pep695_scoping::{
+    AttrAccess, DecoratorRef, GenericDefKind, Pep695AliasDef, Pep695Def, Pep695Param,
+    Pep695ParamKind, Pep695Scoping,
+};
 pub use resolved_module::ResolvedModule;
 pub use rhs::RhsKind;
 pub use span::Span;

@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-MOJO-SAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-MOJO-SAFETY
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

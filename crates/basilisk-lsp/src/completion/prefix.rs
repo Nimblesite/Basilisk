@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-COMPLETION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-COMPLETION
+//!
 //! Cursor prefix and dot-detection helpers.
 
 /// Extract the identifier fragment immediately before `byte_offset`.

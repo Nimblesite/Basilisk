@@ -1,3 +1,4 @@
+//! Implements [STUBRES-ENGINE]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
 //! Auto-stub generation for untyped Python packages.
 //!
 //! Generates best-effort `.pyi` stub files from installed packages.

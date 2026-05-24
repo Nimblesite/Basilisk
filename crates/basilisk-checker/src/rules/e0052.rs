@@ -1,3 +1,4 @@
+//! Implements [BSK-E0052] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
 //! BSK-E0052: Assignment to attribute of a frozen dataclass instance, or invalid
 //! frozen/non-frozen dataclass inheritance.
 //!

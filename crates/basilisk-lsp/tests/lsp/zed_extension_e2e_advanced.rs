@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-TESTING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-TESTING
 // E2E tests simulating the Zed extension's interaction with the Basilisk LSP.
 //
 // Tests: document symbols, execute commands, inlay hints, semantic tokens,

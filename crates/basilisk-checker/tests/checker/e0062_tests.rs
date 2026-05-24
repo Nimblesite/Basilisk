@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0062] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 // Integration tests for BSK-E0062: NoReturn/Never function can fall through.
 
 use super::common::*;

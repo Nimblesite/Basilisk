@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! File operation handlers: `workspace/willRenameFiles`.
 //!
 //! When a Python file is renamed, rewrites all import statements in files

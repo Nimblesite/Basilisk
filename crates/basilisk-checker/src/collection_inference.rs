@@ -1,3 +1,4 @@
+//! Implements [TYPEINF-COLLECTIONS]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#typeinf-collections
 //! Collection type inference for lists, dicts, sets, and tuples.
 
 use crate::inference::infer_rhs;

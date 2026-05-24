@@ -1,3 +1,4 @@
+//! Implements [BSK-E0074] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
 //! BSK-E0074: Constructor call type mismatch with specialized generic class.
 //!
 //! When a generic class is called with explicit type arguments (e.g.

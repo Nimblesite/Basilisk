@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-COMPLETION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-COMPLETION
+//!
 //! Completion (`IntelliSense`) handler.
 //!
 //! Provides symbol completions, dot completions, import completions,

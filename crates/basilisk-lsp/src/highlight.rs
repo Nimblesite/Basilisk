@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-HIGHLIGHT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-HIGHLIGHT
+//!
 //! Document Highlight handler.
 
 use basilisk_resolver::ResolvedModule;

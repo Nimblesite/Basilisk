@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! py-spy sampling wrapper.
 //!
 //! Spawns a dedicated OS thread that calls `py_spy::PythonSpy::get_stack_traces()`

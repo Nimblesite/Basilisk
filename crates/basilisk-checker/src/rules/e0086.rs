@@ -1,3 +1,4 @@
+//! Implements [BSK-E0086] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0086: Multiple `TypeVarTuple` unpacks in generic or tuple type.
 //!
 //! Only a single `TypeVarTuple` unpack (`*Ts`) may appear in a type parameter

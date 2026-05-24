@@ -1,3 +1,4 @@
+//! Implements [BSK-E0103] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0103: Tuple index out of bounds.
 //!
 //! When a fixed-length `tuple[T1, T2, ...]` variable is indexed with a literal

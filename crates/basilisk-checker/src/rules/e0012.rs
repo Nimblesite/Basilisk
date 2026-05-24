@@ -1,3 +1,4 @@
+//! Implements [BSK-E0012] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0012: Argument type mismatch at a call site.
 //!
 //! When a function is called with a literal argument whose type is clearly

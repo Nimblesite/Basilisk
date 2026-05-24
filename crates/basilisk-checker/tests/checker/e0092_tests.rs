@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0092] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
 // Integration tests for BSK-E0092: Too few type arguments.
 
 use super::common::*;

@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0059] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // Integration tests for BSK-E0059: dataclass `match_args=False`.
 
 use super::common::*;

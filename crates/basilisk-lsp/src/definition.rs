@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-DEFINITION]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-DEFINITION
+//!
 //! Go to Definition handler.
 
 use basilisk_resolver::ResolvedModule;

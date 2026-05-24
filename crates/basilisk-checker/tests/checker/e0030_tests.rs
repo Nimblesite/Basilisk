@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0030] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 // Integration tests for BSK-E0030: Non-default after default `TypeVar`.
 
 use super::common::*;

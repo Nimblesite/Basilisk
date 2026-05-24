@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0147] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0147: Tuple starred-unpack compatibility.
 
 use super::common::*;

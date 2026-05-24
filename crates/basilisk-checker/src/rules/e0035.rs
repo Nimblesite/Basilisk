@@ -1,3 +1,4 @@
+//! Implements [BSK-E0035] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 //! BSK-E0035: `Required` / `NotRequired` used in an invalid context.
 //!
 //! PEP 655 and the typing spec restrict `Required[T]` and `NotRequired[T]` to:

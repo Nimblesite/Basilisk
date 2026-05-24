@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Performance benchmarks for the profiler pipeline.
 //!
 //! Validates that key operations meet latency targets for 60K-sample profiles:

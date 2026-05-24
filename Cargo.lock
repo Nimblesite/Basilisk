@@ -254,6 +254,8 @@ dependencies = [
  "colored",
  "serde",
  "serde_json",
+ "shipwright",
+ "shipwright-manifest",
  "tokio",
  "tower-lsp",
  "tracing",
@@ -340,6 +342,8 @@ dependencies = [
  "py-spy",
  "serde",
  "serde_json",
+ "shipwright",
+ "shipwright-manifest",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -2484,6 +2488,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "shipwright"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55d9c8e37e50fe32929d360cacd8dad21744b069d01ab6239f6497266c0c3cb6"
+dependencies = [
+ "serde_json",
+ "shipwright-manifest",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "shipwright-manifest"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6da47084e0d15717a38feb0beb071fd581a3805e23592748b9fdfab635d48707"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

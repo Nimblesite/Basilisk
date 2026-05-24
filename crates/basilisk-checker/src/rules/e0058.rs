@@ -1,3 +1,4 @@
+//! Implements [BSK-E0058] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
 //! BSK-E0058: `Annotated[...]` requires at least two arguments.
 //!
 //! PEP 593 requires `Annotated` to be subscripted with at least two arguments:

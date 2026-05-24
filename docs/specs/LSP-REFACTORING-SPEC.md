@@ -1,4 +1,4 @@
-# LSP Refactoring Spec
+# LSP Refactoring Spec {#REFACTOR}
 
 **Status**: Draft
 **Depends on**: [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES), [LSP-ANALYSIS-MODES-SPEC.md §ANALYSIS-CROSSLSP](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP)
@@ -118,7 +118,7 @@ When a user renames a `.py` file in their editor:
 
 **Trigger**: User selects an expression (not a statement).
 
-### Algorithm
+### Algorithm {#REFACTOR-EXTRACT-VAR-ALGO}
 
 1. **Validate selection** — must be a single, complete expression node in the AST.
 2. **Find all identical occurrences** in the enclosing scope (same AST structure, not string matching).
@@ -135,7 +135,7 @@ When a user renames a `.py` file in their editor:
 
 **Trigger**: Cursor on a variable assignment.
 
-### Algorithm
+### Algorithm {#REFACTOR-INLINE-VAR-ALGO}
 
 1. **Find the definition** — must be a simple `name = expr` assignment with exactly one definition point.
 2. **Find all references** in the enclosing scope.
@@ -156,7 +156,7 @@ When a user renames a `.py` file in their editor:
 
 **Trigger**: Cursor on a function call where the function is defined in the same workspace.
 
-### Algorithm
+### Algorithm {#REFACTOR-INLINE-FUNC-ALGO}
 
 1. **Resolve** the function definition.
 2. **Validate**: function body is a single `return` expression, or a short block that can be inlined.
@@ -174,7 +174,7 @@ This is a complex refactoring. Initial implementation should support only single
 
 **Trigger**: Cursor on a top-level function, class, or constant definition.
 
-### Algorithm
+### Algorithm {#REFACTOR-MOVE-ALGO}
 
 1. **Identify the symbol** and all its dependencies (imports it uses, other symbols it references).
 2. **User selects destination** module (via editor file picker or quick-pick).
@@ -197,7 +197,7 @@ Same as above, but the destination is a new file named after the symbol (e.g., `
 
 **Trigger**: Cursor on a function definition.
 
-### Operations
+### Operations {#REFACTOR-SIGNATURE-OPS}
 
 - **Add parameter**: insert a new parameter with a default value. All existing callers remain valid.
 - **Remove parameter**: remove a parameter. Update all callers to remove the corresponding argument (reject if any caller passes a value that differs from the default).
@@ -235,7 +235,7 @@ These are offered as code actions only when applicable and safe. Each conversion
 
 **Trigger**: Cursor on a class that inherits from an abstract base class with unimplemented abstract methods.
 
-### Algorithm
+### Algorithm {#REFACTOR-ABSTRACT-ALGO}
 
 1. **Resolve base classes** — find all `@abstractmethod` methods in the MRO.
 2. **Filter** — exclude methods already implemented in the class.

@@ -1,3 +1,4 @@
+// Tests for [LSPARCH-FEATURES]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES
 /**
  * LSP Feature Tests for the Basilisk VS Code Extension.
  *

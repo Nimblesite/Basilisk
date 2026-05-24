@@ -1,4 +1,4 @@
-# AI-Powered LSP Features — Specification
+# AI-Powered LSP Features — Specification {#LSPAI}
 
 > **Goal**: Model-agnostic AI integration in the Basilisk LSP. Any model, anywhere — local, cloud, GitHub Copilot, Claude, Ollama, whatever. The LSP doesn't care what's behind the provider. It sends structured context, gets structured responses back.
 

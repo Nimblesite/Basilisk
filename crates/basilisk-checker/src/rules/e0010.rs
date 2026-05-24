@@ -1,3 +1,4 @@
+//! Implements [BSK-E0010] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0010: Unresolved import.
 //!
 //! Fires when an import cannot be resolved and the module is not part of the

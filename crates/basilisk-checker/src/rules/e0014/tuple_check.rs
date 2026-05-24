@@ -1,3 +1,4 @@
+//! Implements [BSK-E0014] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! Tuple assignment checking for BSK-E0014.
 //!
 //! Validates that re-assignments to tuple-annotated module variables are

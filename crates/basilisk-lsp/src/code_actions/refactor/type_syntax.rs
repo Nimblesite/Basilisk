@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
+//!
 //! Type syntax conversion refactoring actions: Union/pipe and Optional/pipe-None.
 
 use std::collections::HashMap;

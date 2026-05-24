@@ -1,3 +1,4 @@
+//! Implements [BSK-E0145] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! AST utility helpers and predicate functions for BSK-E0145.
 
 use ruff_python_ast::Expr;

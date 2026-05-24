@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-TESTING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-TESTING
 // Tests for LSP: `ws_test_diagnostics_rules_advanced`.
 
 // WebSocket LSP E2E tests — Diagnostic rules E0026–E0054 and multi-rule pipeline.

@@ -1,4 +1,4 @@
-# Dev container matching CI (GitHub Actions ubuntu-latest + dtolnay/rust-toolchain@stable)
+# Dev container matching CI (GitHub Actions ubuntu-22.04-8-cores + dtolnay/rust-toolchain@stable)
 # Pin Rust to match CI's stable channel — this is the critical version.
 FROM rust:1.94.0-bookworm
 

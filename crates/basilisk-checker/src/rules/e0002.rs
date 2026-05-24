@@ -1,3 +1,4 @@
+//! Implements [BSK-E0002] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
 //! BSK-E0002: Missing return type annotation.
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};

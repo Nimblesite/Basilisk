@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 //! Coverage boost tests batch 33: disk-based integration tests for file-dependent rules
 //! and comprehensive assertion-heavy tests.
 

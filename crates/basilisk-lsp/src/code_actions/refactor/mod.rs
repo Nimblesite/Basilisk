@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
+//!
 //! Refactoring code actions: extract variable/constant/function, convert type
 //! syntax, implement abstract methods, inline variable/function, `NamedTuple`
 //! conversions, and construct conversions.

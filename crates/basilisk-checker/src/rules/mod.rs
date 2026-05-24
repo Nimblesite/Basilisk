@@ -1,3 +1,5 @@
+//! Implements [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//!
 //! Type checking rules.
 //!
 //! Each rule is a zero-size struct implementing [`Rule`]. Rules are

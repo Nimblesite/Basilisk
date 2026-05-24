@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0001] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
 // Integration tests for BSK-E0001: Missing parameter type annotation.
 
 use super::common::*;

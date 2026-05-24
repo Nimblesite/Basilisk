@@ -1,3 +1,4 @@
+// Implements [VSIX-PYTHON-DEBUGGER-DAP-PROXY]. See docs/specs/VSIX-SPEC.md#VSIX-PYTHON-DEBUGGER-DAP-PROXY
 /**
  * DAP proxy that sits between VS Code and debugpy.
  *

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0102] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0102: Invalid `TypeVar` default referencing another `TypeVar`.
 //!
 //! PEP 696 specifies constraints on `TypeVar` defaults that reference other `TypeVars`:

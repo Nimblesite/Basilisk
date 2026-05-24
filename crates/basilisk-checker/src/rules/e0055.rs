@@ -1,3 +1,4 @@
+//! Implements [BSK-E0055] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
 //! BSK-E0055: Invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword argument combination.
 //!
 //! PEP 484 / PEP 695 forbid certain combinations of keyword arguments in

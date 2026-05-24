@@ -1,3 +1,4 @@
+//! Implements [BSK-E0142] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Helper types and functions for BSK-E0142.
 //!
 //! Contains data types for transform-class settings, source text parsing

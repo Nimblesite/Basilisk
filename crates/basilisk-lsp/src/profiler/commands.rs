@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Profiler command constants and shared utilities.
 //!
 //! The actual LSP command handlers live in `server::profiler_handlers` following

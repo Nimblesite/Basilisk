@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0026] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for BSK-E0026: `TypeVar` with single constraint.
 
 use super::common::*;

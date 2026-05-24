@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0042] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for BSK-E0042: PEP 695 mixed with traditional `TypeVar`.
 
 use super::common::*;

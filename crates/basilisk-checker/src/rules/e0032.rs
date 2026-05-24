@@ -1,3 +1,4 @@
+//! Implements [BSK-E0032] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 //! BSK-E0032: Invalid keyword argument in `TypedDict` class definition.
 //!
 //! `TypedDict` class syntax only accepts `total=True/False` as a keyword argument.

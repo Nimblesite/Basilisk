@@ -1,3 +1,4 @@
+//! Implements [BSK-E0068] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
 //! BSK-E0068: `Literal["EnumClass.MEMBER"]` (string) used where
 //! `Literal[EnumClass.MEMBER]` (enum member reference) is required.
 //!

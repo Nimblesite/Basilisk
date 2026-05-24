@@ -1,3 +1,4 @@
+//! Implements [BSK-E0037] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 //! BSK-E0037: Invalid `TypedDict(...)` functional-syntax call.
 //!
 //! The `TypedDict(name, {...})` functional syntax has several constraints:

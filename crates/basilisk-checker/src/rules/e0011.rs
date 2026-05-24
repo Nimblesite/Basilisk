@@ -1,3 +1,4 @@
+//! Implements [BSK-E0011] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0011: Explicit `Any` annotation / return type mismatch.
 //!
 //! Two categories of diagnostic share this code:

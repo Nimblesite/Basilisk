@@ -1,3 +1,4 @@
+//! Implements [LSPUV]. See docs/specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV
 //! `uv.lock` file parser.
 //!
 //! The uv lock file is a TOML file that records the exact versions of all

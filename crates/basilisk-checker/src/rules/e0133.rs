@@ -1,3 +1,4 @@
+//! Implements [BSK-E0133] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0133: Protocol `TypeVar` variance mismatch.
 //!
 //! When a generic protocol class declares a `TypeVar` as invariant but the

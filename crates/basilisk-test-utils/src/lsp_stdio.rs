@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 //! Stdio-based LSP test fixture.
 //!
 //! Spawns a `basilisk lsp` child process and communicates via JSON-RPC

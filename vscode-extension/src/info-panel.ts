@@ -1,3 +1,4 @@
+// Implements [EXTACT-INFO]. See docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO
 /**
  * Basilisk Info Panel — TreeDataProvider for the Basilisk sidebar.
  *

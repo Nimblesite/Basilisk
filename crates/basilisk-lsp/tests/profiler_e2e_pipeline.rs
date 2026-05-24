@@ -1,3 +1,4 @@
+//! Tests for [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 //! Hardcore E2E pipeline tests that prove the profiler ACTUALLY WORKS.
 //!
 //! These tests construct real `py_spy::StackTrace` and `py_spy::Frame` objects

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0131] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Annotation parsing for BSK-E0131.
 //!
 //! Provides utilities for recognising and decomposing generator-like return

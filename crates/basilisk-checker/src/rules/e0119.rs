@@ -1,3 +1,4 @@
+//! Implements [BSK-E0119] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0119: Protocol `isinstance`/`issubclass` violations.
 //!
 //! Per PEP 544:

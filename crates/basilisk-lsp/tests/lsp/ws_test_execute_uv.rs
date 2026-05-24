@@ -1,3 +1,4 @@
+//! Tests for [LSPUV]. See docs/specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV
 // E2E tests for uv command execution via `workspace/executeCommand`.
 //
 // Tests the full pipeline:

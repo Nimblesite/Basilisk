@@ -1,3 +1,4 @@
+//! Implements [BSK-E0077] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
 //! BSK-E0077: Protocol `Self`-return conformance violation.
 //!
 //! When a `Protocol` declares a method returning `Self`, any class passed where

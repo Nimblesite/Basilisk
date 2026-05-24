@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-HOVER]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-HOVER
+//!
 //! Hover handler: type-aware hover with diagnostic and import info.
 //!
 //! Shows type signatures for symbols at definition sites, reference sites

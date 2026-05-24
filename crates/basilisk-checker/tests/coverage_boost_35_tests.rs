@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 //! Coverage boost tests batch 35: targeting the long tail of uncovered rules.
 
 use basilisk_checker::check;

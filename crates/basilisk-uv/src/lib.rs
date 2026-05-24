@@ -1,3 +1,4 @@
+//! Implements [LSPUV]. See docs/specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV
 //! uv package manager integration for Basilisk LSP.
 //!
 //! Provides detection, lock file parsing, package registry construction, and

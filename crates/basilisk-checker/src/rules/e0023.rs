@@ -1,3 +1,4 @@
+//! Implements [BSK-E0023] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0023: Non-exhaustive `match` statement.
 //!
 //! A `match` statement that has no wildcard `case _:` branch may fail to

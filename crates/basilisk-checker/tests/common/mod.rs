@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 pub use basilisk_checker::{check, Diagnostic};
 pub use basilisk_parser::parse_source;
 pub use basilisk_resolver::resolve;

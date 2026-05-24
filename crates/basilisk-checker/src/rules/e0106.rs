@@ -1,3 +1,4 @@
+//! Implements [BSK-E0106] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0106: Protocol class used where `type[Proto]` is expected.
 //!
 //! The typing spec states: "Variables and parameters annotated with

@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Platform-specific privilege detection and escalation for profiling.
 //!
 //! py-spy reads target process memory via OS-specific calls:

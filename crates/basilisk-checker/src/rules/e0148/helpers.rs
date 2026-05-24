@@ -1,3 +1,4 @@
+//! Implements [BSK-E0148] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! All internal types, parsing, and checking logic for BSK-E0148.
 
 use std::collections::HashMap;

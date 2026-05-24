@@ -1,3 +1,4 @@
+//! Implements [BSK-E0053] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
 //! BSK-E0053: `assert_type()` type mismatch.
 //!
 //! `assert_type(expr, Type)` is a static-analysis directive that verifies the

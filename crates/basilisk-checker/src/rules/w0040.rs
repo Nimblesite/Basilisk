@@ -1,3 +1,4 @@
+//! Implements [BSK-W0040] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
 //! BSK-W0040: Lambda function missing type annotations.
 //!
 //! Emitted when a lambda function is assigned to a variable without type annotations.

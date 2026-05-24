@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0002] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
 // Integration tests for BSK-E0002: Missing return type annotation.
 
 use super::common::*;

@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-SIGHELP]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-SIGHELP
+//!
 //! Signature Help handler: parameter hints on function calls.
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, ReturnAnnotationKind};

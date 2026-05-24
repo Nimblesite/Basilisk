@@ -1,3 +1,4 @@
+//! Implements [BSK-E0078] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
 //! BSK-E0078: `Self` type violations in generics.
 //!
 //! This rule detects two kinds of `Self` type violations:

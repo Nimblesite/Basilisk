@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! LSP command handlers for `basilisk.profiler.*` profiling commands.
 //!
 //! Each handler extracts arguments, delegates to [`ProfileSessionManager`],

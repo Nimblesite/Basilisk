@@ -1,3 +1,4 @@
+//! Implements [BSK-E0130] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Variance assignment checking for BSK-E0130.
 //!
 //! Checks module-level and function-body assignments for variance

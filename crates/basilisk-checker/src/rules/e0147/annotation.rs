@@ -1,3 +1,4 @@
+//! Implements [BSK-E0147] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Tuple annotation parsing and compatibility helpers for BSK-E0147.
 
 use crate::rules::shared::split_top_level_commas;

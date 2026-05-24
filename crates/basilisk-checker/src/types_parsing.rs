@@ -1,3 +1,4 @@
+//! Implements [TYPEINF-OVERVIEW]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#typeinf-overview
 //! Annotation parsing for [`InferredType`].
 //!
 //! Converts Python annotation text (e.g. `"list[int]"`, `"Callable[[str], bool]"`)

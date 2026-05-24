@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-DOCSYM]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-DOCSYM
 // Tests for LSP: `ws_test_document_symbols`.
 
 use super::ws_test_common::*;

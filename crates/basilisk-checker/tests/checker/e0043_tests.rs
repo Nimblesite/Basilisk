@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0043] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for BSK-E0043: Non-`TypeVar` in Generic[...].
 
 use super::common::*;

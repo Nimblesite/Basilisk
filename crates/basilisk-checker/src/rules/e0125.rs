@@ -1,3 +1,4 @@
+//! Implements [BSK-E0125] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0125: Access to instance attribute on a class object.
 //!
 //! Instance attributes (annotations without `ClassVar` in the class body that

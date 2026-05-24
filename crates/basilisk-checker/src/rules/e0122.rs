@@ -1,3 +1,4 @@
+//! Implements [BSK-E0122] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0122: Callable call-site arity and argument validation.
 //!
 //! When a parameter is annotated as `Callable[[int, str], T]`, calls to that

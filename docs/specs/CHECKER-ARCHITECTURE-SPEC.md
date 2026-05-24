@@ -1,4 +1,4 @@
-# Basilisk: Complete Type Safety for Python
+# Basilisk: Complete Type Safety for Python {#CHKARCH}
 
 **Version**: 0.1.0-draft
 **Status**: Specification Draft
@@ -295,7 +295,7 @@ The `# type:` prefix ensures compatibility with editors and tools that already r
 
 Basilisk targets **100% conformance** with the Python typing specification. We run the official conformance test suite (`python/typing` repository) in CI.
 
-#### Foundation PEPs
+#### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
 | PEP | Title | Status |
 |---|---|---|
@@ -305,7 +305,7 @@ Basilisk targets **100% conformance** with the Python typing specification. We r
 | 585 | Generics in Standard Collections | Required |
 | 604 | Union `X \| Y` Syntax | Required |
 
-#### Advanced PEPs
+#### Advanced PEPs {#CHKARCH-PEPS-ADVANCED}
 
 | PEP | Title | Status |
 |---|---|---|
@@ -504,7 +504,7 @@ The prefix determines the **default** severity. Every rule can be overridden to 
 
 ### Rule Categories {#CHKARCH-DIAG-CATEGORIES}
 
-#### Missing Annotations (BSK-E0001 -- BSK-E0009)
+#### Missing Annotations (BSK-E0001 -- BSK-E0009) {#CHKARCH-DIAG-MISSING}
 
 | Code | Description |
 |---|---|
@@ -514,7 +514,7 @@ The prefix determines the **default** severity. Every rule can be overridden to 
 | BSK-E0004 | Missing `*args` / `**kwargs` type annotation |
 | BSK-E0005 | Missing class attribute type annotation |
 
-#### Type Safety (BSK-E0010 -- BSK-E0029)
+#### Type Safety (BSK-E0010 -- BSK-E0029) {#CHKARCH-DIAG-TYPESAFETY}
 
 | Code | Description |
 |---|---|
@@ -535,7 +535,7 @@ The prefix determines the **default** severity. Every rule can be overridden to 
 | BSK-E0024 | Invalid type form in annotation |
 | BSK-E0025 | Missing `@override` decorator |
 
-#### Ownership Safety (BSK-E0030 -- BSK-E0039)
+#### Ownership Safety (BSK-E0030 -- BSK-E0039) {#CHKARCH-DIAG-OWNERSHIP}
 
 | Code | Description |
 |---|---|
@@ -546,7 +546,7 @@ The prefix determines the **default** severity. Every rule can be overridden to 
 | BSK-E0034 | Owned value not consumed or returned |
 | BSK-E0035 | Multiple mutable references to same value |
 
-#### Immutability (BSK-E0040 -- BSK-E0049)
+#### Immutability (BSK-E0040 -- BSK-E0049) {#CHKARCH-DIAG-IMMUTABILITY}
 
 | Code | Description |
 |---|---|
@@ -555,7 +555,7 @@ The prefix determines the **default** severity. Every rule can be overridden to 
 | BSK-W0042 | Mutable dataclass (prefer `frozen=True`) |
 | BSK-E0043 | Mutation of `Final` variable |
 
-#### Structural Discipline (BSK-E0050 -- BSK-E0059)
+#### Structural Discipline (BSK-E0050 -- BSK-E0059) {#CHKARCH-DIAG-STRUCTURAL}
 
 | Code | Description |
 |---|---|
@@ -565,7 +565,7 @@ The prefix determines the **default** severity. Every rule can be overridden to 
 | BSK-W0053 | Missing `__slots__` (performance suggestion) |
 | BSK-E0054 | Sealed class (`@final`) subclassed |
 
-#### Coercion Safety (BSK-E0060 -- BSK-E0069)
+#### Coercion Safety (BSK-E0060 -- BSK-E0069) {#CHKARCH-DIAG-COERCION}
 
 | Code | Description |
 |---|---|
@@ -574,7 +574,7 @@ The prefix determines the **default** severity. Every rule can be overridden to 
 | BSK-E0062 | Implicit `bytes`-to-`str` coercion |
 | BSK-E0063 | Implicit numeric widening |
 
-#### Optional Safety (BSK-E0070 -- BSK-E0079)
+#### Optional Safety (BSK-E0070 -- BSK-E0079) {#CHKARCH-DIAG-OPTIONAL}
 
 | Code | Description |
 |---|---|
@@ -583,7 +583,7 @@ The prefix determines the **default** severity. Every rule can be overridden to 
 | BSK-E0072 | Call on `Optional` type |
 | BSK-E0073 | Iteration over `Optional` type |
 
-#### Unused Code (BSK-W0080 -- BSK-W0089)
+#### Unused Code (BSK-W0080 -- BSK-W0089) {#CHKARCH-DIAG-UNUSED}
 
 | Code | Description |
 |---|---|
@@ -594,7 +594,7 @@ The prefix determines the **default** severity. Every rule can be overridden to 
 | BSK-W0084 | Unused call result (non-None return) |
 | BSK-W0085 | Unreachable code |
 
-#### Code Quality (BSK-W0090 -- BSK-W0099)
+#### Code Quality (BSK-W0090 -- BSK-W0099) {#CHKARCH-DIAG-QUALITY}
 
 | Code | Description |
 |---|---|
@@ -1041,44 +1041,44 @@ Basilisk follows the Python Typing Council's governance (PEP 729). We implement 
 
 ## Roadmap {#CHKARCH-ROADMAP}
 
-### Phase 1: Foundation
+### Phase 1: Foundation {#CHKARCH-ROADMAP-P1}
 - Parser (evaluate `ruff_python_parser` vs custom)
 - Name resolver
 - Basic type checker (50% PEP conformance)
 - CLI with human-readable output
 - CI pipeline
 
-### Phase 2: LSP and Editors
+### Phase 2: LSP and Editors {#CHKARCH-ROADMAP-P2}
 - Language server (diagnostics, hover, completions)
 - VS Code extension (VSIX)
 - Integrated Python debugging via DAP proxy over debugpy (§10.1.1)
 - Neovim / Helix configuration
 
-### Phase 3: Strict-by-Default
+### Phase 3: Strict-by-Default {#CHKARCH-ROADMAP-P3}
 - All BSK-E0001 through BSK-E0025 rules
 - Migration mode
 - `basilisk migrate` from mypy/Pyright
 - 80% PEP conformance
 
-### Phase 4: Mojo Safety
+### Phase 4: Mojo Safety {#CHKARCH-ROADMAP-P4}
 - Ownership tracking (BSK-E003x)
 - Immutability enforcement (BSK-E004x)
 - Structural discipline (BSK-E005x)
 - Coercion detection (BSK-E006x)
 
-### Phase 5: Plugin System and Stubs
+### Phase 5: Plugin System and Stubs {#CHKARCH-ROADMAP-P5}
 - WASM plugin host
 - Django, Pydantic, SQLAlchemy plugins
 - Auto-stub generation engine
 - Stub registry
 
-### Phase 6: Production Hardening
+### Phase 6: Production Hardening {#CHKARCH-ROADMAP-P6}
 - 95%+ PEP conformance
 - Performance optimization (meet all targets in Section 8.4)
 - SARIF/JUnit output
 - Enterprise migration playbook
 
-### Phase 7: Ecosystem Growth
+### Phase 7: Ecosystem Growth {#CHKARCH-ROADMAP-P7}
 - Plugin marketplace
 - Community stub registry
 - Conference talks, documentation, tutorials
@@ -1086,7 +1086,7 @@ Basilisk follows the Python Typing Council's governance (PEP 729). We implement 
 
 ---
 
-## Appendix A: Full PEP Coverage Matrix
+## Appendix A: Full PEP Coverage Matrix {#CHKARCH-APPENDIX-PEPS}
 
 | PEP | Title | Priority | Phase |
 |---|---|---|---|
@@ -1113,7 +1113,7 @@ Basilisk follows the Python Typing Council's governance (PEP 729). We implement 
 | 702 | Deprecated Decorator | P1 | 5 |
 | 742 | TypeIs | P0 | 3 |
 
-## Appendix B: Glossary
+## Appendix B: Glossary {#CHKARCH-APPENDIX-GLOSSARY}
 
 | Term | Definition |
 |---|---|

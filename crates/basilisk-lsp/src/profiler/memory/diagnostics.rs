@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Generate LSP diagnostics from memory profiling data.
 //!
 //! Converts allocation snapshots, snapshot diffs, and gc collection results

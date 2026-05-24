@@ -1,3 +1,4 @@
+//! Implements [BSK-E0094] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0094: `Self` type used in an invalid location.
 //!
 //! PEP 673 defines `Self` as a special type that refers to the current class.

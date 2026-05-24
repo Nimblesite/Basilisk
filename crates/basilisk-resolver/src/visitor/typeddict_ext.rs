@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Typeddict Ext visitor functions.
 
 use ruff_python_ast::{Expr, Stmt, StmtAnnAssign, StmtAssign};

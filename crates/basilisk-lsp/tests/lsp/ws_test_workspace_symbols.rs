@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-WSSYM]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-WSSYM
 // Tests for LSP: `ws_test_workspace_symbols`.
 
 use super::ws_test_common::*;

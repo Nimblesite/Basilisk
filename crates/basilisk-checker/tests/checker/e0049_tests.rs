@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0049] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for BSK-E0049: Multiple unbounded tuple components.
 
 use super::common::*;

@@ -1,3 +1,4 @@
+//! Implements [BSK-W0011] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-W0011: Undeclared dependency import.
 //!
 //! Fires when an import resolves to a package that is only a transitive

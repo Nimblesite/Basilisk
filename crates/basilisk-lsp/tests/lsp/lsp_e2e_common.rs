@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-TESTING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-TESTING
 // Shared test infrastructure for stdio-based LSP E2E tests.
 //
 // Each test file imports this module via `mod lsp_e2e_common;` to get

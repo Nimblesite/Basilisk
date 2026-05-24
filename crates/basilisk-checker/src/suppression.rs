@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-STRICTNESS-SUPPRESSION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-strictness-suppression
 //! Inline suppression and mode override parser.
 //!
 //! Parses `# type: ignore`, `# type: warning[CODE]`, `# type: disabled[CODE]`,

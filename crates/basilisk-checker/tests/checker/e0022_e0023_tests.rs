@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0022]-[BSK-E0023] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for BSK-E0022 (unhashable dict key) and BSK-E0023 (non-exhaustive match).
 
 use super::common::*;

@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 //! JSON-RPC diagnostic parsing and assertion helpers.
 //!
 //! These helpers work with raw `serde_json::Value` diagnostics

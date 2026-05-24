@@ -1,3 +1,4 @@
+//! Tests for [TYPEINF-ALGO]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ALGO
 // Tests targeting inference.rs (`FlowUnionTracker`, `check_annotated_variable`, `infer_flow_union_types`)
 // and guards.rs (`dataclass_transform`, `collect_transform_functions`, `collect_transform_classes`).
 

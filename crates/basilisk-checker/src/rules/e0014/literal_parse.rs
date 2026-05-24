@@ -1,3 +1,4 @@
+//! Implements [BSK-E0014] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! Literal value parsing for BSK-E0014.
 //!
 //! Provides functions that parse source-text representations of Python literals

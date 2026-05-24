@@ -1,4 +1,4 @@
-# Basilisk Type Inference Specification
+# Basilisk Type Inference Specification {#TYPEINF}
 
 Basilisk implements premium type inference that not only improves type safety - it enforces the removal of redundant type annotations. The aim is to achieve something in the ballpark of Hindley Milner style functionality where we do not specify types unless there is a special reason to. We want to avoid forcing Python developers to specify types unless it's absolutely necessary. This means that Python continues to be a less verbose language with full type safety.
 
@@ -1039,7 +1039,7 @@ All inference results are stored as Salsa query results, enabling **sub-10ms inc
 
 ---
 
-## References
+## References {#TYPEINF-REFS}
 
 1. [PEP 484 — Type Hints](https://peps.python.org/pep-0484/)
 2. [PEP 526 — Variable Annotations](https://peps.python.org/pep-0526/)

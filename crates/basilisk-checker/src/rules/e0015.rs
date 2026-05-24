@@ -1,3 +1,4 @@
+//! Implements [BSK-E0015] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0015: Invalid type argument count or form.
 //!
 //! Certain generic types accept a fixed number of type arguments.  This rule

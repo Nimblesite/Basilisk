@@ -1,3 +1,4 @@
+//! Implements [LSPUV]. See docs/specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV
 //! Error types for uv integration.
 
 /// Errors that can occur during uv project detection, parsing, or registry

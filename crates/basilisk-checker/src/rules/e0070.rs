@@ -1,3 +1,4 @@
+//! Implements [BSK-E0070] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
 //! BSK-E0070: `Never` type compatibility violations.
 //!
 //! Detects type compatibility errors involving the `Never` bottom type:

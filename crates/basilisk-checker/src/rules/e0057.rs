@@ -1,3 +1,4 @@
+//! Implements [BSK-E0057] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
 //! BSK-E0057: Invalid RHS in a PEP 695 `type X = rhs` statement.
 //!
 //! PEP 695 requires the RHS of a `type` statement to be a valid type expression.

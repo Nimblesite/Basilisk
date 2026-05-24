@@ -1,3 +1,4 @@
+//! Implements [LSPUV]. See docs/specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV
 //! Package registry built from a uv lock file.
 //!
 //! Provides fast lookup of Python packages by their import name, with

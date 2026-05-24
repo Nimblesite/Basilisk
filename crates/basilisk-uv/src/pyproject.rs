@@ -1,3 +1,4 @@
+//! Implements [LSPUV]. See docs/specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV
 //! `pyproject.toml` dependency extraction.
 //!
 //! Reads `[project].dependencies` from a `pyproject.toml` file to determine

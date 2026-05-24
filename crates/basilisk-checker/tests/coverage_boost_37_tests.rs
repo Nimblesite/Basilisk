@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 //! Coverage boost tests batch 37: targeting specific uncovered branches in near-complete files.
 
 use basilisk_checker::check;

@@ -1,3 +1,4 @@
+//! Implements [LSPARCH-FEATURES-FINDSYM]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-FINDSYM
 //! Shared utilities for LSP feature handlers.
 //!
 //! Position conversion, symbol lookup, and type signature formatting.

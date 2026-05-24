@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0027] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for BSK-E0027: Duplicate `TypeVar` in Generic[...].
 
 use super::common::*;

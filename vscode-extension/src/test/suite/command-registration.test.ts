@@ -1,3 +1,4 @@
+// Tests for [LSPARCH-CMDREG]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDREG
 /**
  * Command Registration Tests for the Basilisk VS Code Extension.
  *

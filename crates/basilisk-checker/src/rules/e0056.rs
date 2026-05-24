@@ -1,3 +1,4 @@
+//! Implements [BSK-E0056] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
 //! BSK-E0056: Mutation of `ReadOnly` `TypedDict` fields
 //!
 //! Fields marked as `ReadOnly` in `TypedDict`s cannot be mutated through:

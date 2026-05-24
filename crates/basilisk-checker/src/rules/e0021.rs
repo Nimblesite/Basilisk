@@ -1,3 +1,4 @@
+//! Implements [BSK-E0021] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0021: Overlapping `@overload` signatures.
 //!
 //! Within a group of `@overload` functions for the same name, every overload

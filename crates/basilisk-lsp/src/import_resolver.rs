@@ -1,3 +1,5 @@
+//! Implements [ANALYSIS-CROSSLSP-IMPORT]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP-IMPORT
+//!
 //! Import resolution engine — resolves `import X` to filesystem paths.
 //!
 //! Search order: workspace roots → extraPaths → venv site-packages.
@@ -478,32 +480,42 @@ pub fn resolve_workspace_imports(index: &WorkspaceIndex, search_paths: &ImportSe
             continue;
         };
         let mut resolved = Arc::try_unwrap(resolved_arc).unwrap_or_else(|arc| (*arc).clone());
-
-        // The file's own path, used to search its directory for sibling modules.
-        let importing_file = PathBuf::from(&resolved.path);
-
-        for import in &mut resolved.imports {
-            let result = match import.kind {
-                ImportKind::Plain | ImportKind::From | ImportKind::Star => {
-                    resolve_module_with_importer(
-                        &import.module,
-                        search_paths,
-                        Some(&importing_file),
-                    )
-                }
-            };
-            if let Some(r) = result {
-                import.resolution = r.resolution;
-                import.resolved_path = Some(r.path);
-            } else if !basilisk_stubs::is_stdlib_module(&import.module) {
-                // Classify why the import is unresolved for actionable diagnostics.
-                import.unresolved_reason = Some(classify_unresolved(&import.module, search_paths));
-            }
-
-            // Annotate with package metadata from the uv registry.
-            enrich_package_metadata(import, search_paths);
-        }
+        resolve_module_imports(&mut resolved, search_paths);
         entry.value_mut().resolved = Some(Arc::new(resolved));
+    }
+}
+
+/// Resolve every import in a single module against the search paths, in place.
+///
+/// Sets each `ImportInfo`'s `resolution`, `resolved_path`, `unresolved_reason`,
+/// and uv package metadata. Shared by the whole-workspace scan
+/// ([`resolve_workspace_imports`]) and the incremental single-file analysis
+/// path so both agree on what resolves — preventing false `BSK-E0010` in the
+/// editor for third-party imports that the CLI resolves.
+/// Implements [ANALYSIS-INCR-IMPORTS].
+pub fn resolve_module_imports(
+    resolved: &mut basilisk_resolver::ResolvedModule,
+    search_paths: &ImportSearchPaths,
+) {
+    // The file's own path, used to search its directory for sibling modules.
+    let importing_file = PathBuf::from(&resolved.path);
+
+    for import in &mut resolved.imports {
+        let result = match import.kind {
+            ImportKind::Plain | ImportKind::From | ImportKind::Star => {
+                resolve_module_with_importer(&import.module, search_paths, Some(&importing_file))
+            }
+        };
+        if let Some(r) = result {
+            import.resolution = r.resolution;
+            import.resolved_path = Some(r.path);
+        } else if !basilisk_stubs::is_stdlib_module(&import.module) {
+            // Classify why the import is unresolved for actionable diagnostics.
+            import.unresolved_reason = Some(classify_unresolved(&import.module, search_paths));
+        }
+
+        // Annotate with package metadata from the uv registry.
+        enrich_package_metadata(import, search_paths);
     }
 }
 

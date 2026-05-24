@@ -1,3 +1,4 @@
+//! Implements [STUBRES-CONFIG]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CONFIG
 //! Configuration file parsing — `pyproject.toml` and `basilisk.json`.
 
 use std::collections::HashMap;

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0121] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0121: Protocol conformance violation in annotated assignment.
 //!
 //! Detects two kinds of errors in annotated assignments at module level:

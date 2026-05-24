@@ -15,17 +15,15 @@ The project is a Python type checker and comprehensive LSP (test explorer, debug
 **Overall aim: FIX THE PYTHON DEVELOPER EXPERIENCE.**
 One IDE extension = COMPLETE PYTHON DEVELOPMENT EXPERIENCE. SEAMLESS, FAST, COMPLETE.
 
-# Too Many Cooks - MANDATORY
-
-⚠️ REGISTER IMMEDIATELY!!!
-
-COORDINATOR: dictate orders through plans and messages. DELEGATE!!!
-OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY!!!
-
-- Lock files before editing. Don't edit locked files.
-- Respond to messages quickly. Others are waiting.
-
 # Documentation Structure
+
+- ALL SPEC SECTIONS **MUST** HAVE UNIQUE, NON-NUMERIC, HIERARCHICALLY STRUCTURED SPEC IDS
+- ALL CODE **MUST** REFER TO A SPEC-ID
+- ALL TESTS MUST CROSS-REFERENCE THE SPEC-ID AND CODE
+- THIS IS NON-NEGOTIABLE. THIS IS THE FABRIC OF THE REPOSITORY AND HOW ALL INFORMATION
+  IS LINKED. 
+- IF YOU FIND CODE OR TESTS NOT LINKED TO A SPEC-ID, FIX IT IMMEDIATELY
+- IF YOU FIND SPEC SECTIONS WITH NO ID, ADD ONE IMMEDIATELY
 
 - `docs/INDEX.md` — Full index of all docs
 - `docs/specs/` — Specifications (naming: `[COMPONENT]-[FEATURE]-SPEC.md`)
@@ -142,6 +140,17 @@ Testing is absolutely critical. We aim for 100% test coverage and a high mutatio
 3. Repeat until it's failing for the right reason
 4. Fix the bug (do NOT change the test)
 5. Run the test — confirm it passes
+
+# Too Many Cooks - MANDATORY
+
+⚠️ REGISTER IMMEDIATELY!!!
+
+COORDINATOR: dictate orders through plans and messages. DELEGATE!!!
+OTHERS: do exactly as the coordinator says. CONSTANTLY CHECK MESSAGES AND COMPLY!!!
+
+- Lock files before editing. Don't edit locked files.
+- Respond to messages quickly. Others are waiting.
+
 
 ## Website and CSS
 

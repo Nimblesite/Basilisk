@@ -1,3 +1,4 @@
+//! Implements [BSK-E0067] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
 //! BSK-E0067: Non-member referenced in `Literal[EnumClass.X]` annotation.
 //!
 //! The `Literal[EnumClass.X]` type is only valid when `X` is an actual enum

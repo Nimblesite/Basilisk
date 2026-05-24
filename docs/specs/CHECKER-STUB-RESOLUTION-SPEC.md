@@ -1,4 +1,4 @@
-# Stub Resolution & Type Provenance — Specification
+# Stub Resolution & Type Provenance — Specification {#STUBRES}
 
 > **Crate**: `basilisk-stubs` (resolution, typeshed bundling), `basilisk-config` (overrides)
 > **Related**: [LSP-UV-INTEGRATION-SPEC.md §LSPUV-LOCK-REGISTRY](LSP-UV-INTEGRATION-SPEC.md#LSPUV-LOCK-REGISTRY) — `PackageRegistry` accelerates stub discovery

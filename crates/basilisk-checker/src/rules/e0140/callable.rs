@@ -1,3 +1,4 @@
+//! Implements [BSK-E0140] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Callable type parsing and compatibility checking for BSK-E0140.
 
 use basilisk_resolver::Span;

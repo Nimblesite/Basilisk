@@ -1,3 +1,4 @@
+// Implements [EXTACT-HEALTH]. See docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-HEALTH
 /**
  * Type Health — TreeDataProvider for the Basilisk sidebar.
  *

@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0050] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // E2E tests for BSK-E0050: Invalid `NewType(...)` call.
 
 use super::common::*;

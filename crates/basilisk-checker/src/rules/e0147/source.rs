@@ -1,3 +1,4 @@
+//! Implements [BSK-E0147] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Source text parsing helpers for BSK-E0147.
 
 use basilisk_resolver::Span;

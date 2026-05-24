@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0047] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for BSK-E0047: Invalid type expression.
 
 use super::common::*;

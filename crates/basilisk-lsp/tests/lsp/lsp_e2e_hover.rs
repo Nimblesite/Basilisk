@@ -1,3 +1,4 @@
+//! Tests for [LSPARCH-FEATURES-HOVER]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-HOVER
 // Tests for LSP: `lsp_e2e_hover`.
 
 // LSP E2E tests — Hover (type signatures, docstrings, enhanced hover).

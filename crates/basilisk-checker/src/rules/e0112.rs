@@ -1,3 +1,4 @@
+//! Implements [BSK-E0112] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0112: TypeGuard/TypeIs return type incompatibility in callable arguments.
 //!
 //! When a function returning `TypeGuard[X]` or `TypeIs[X]` is passed as an

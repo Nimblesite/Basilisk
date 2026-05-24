@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0066] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 // Integration tests for BSK-E0066: Enum value type mismatch.
 
 use super::common::*;

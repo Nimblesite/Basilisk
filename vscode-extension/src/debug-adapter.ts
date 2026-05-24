@@ -1,3 +1,4 @@
+// Implements [VSIX-PYTHON-DEBUGGER-DAP]. See docs/specs/VSIX-SPEC.md#VSIX-PYTHON-DEBUGGER-DAP
 /**
  * Debug adapter factory, DAP tracker, and logging utilities for Basilisk.
  */

@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0118] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for BSK-E0118: Super call on abstract method with no implementation.
 
 use super::common::*;

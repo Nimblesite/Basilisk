@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Module-level types: call sites, type definitions, comparisons, and misc info.
 
 use super::{rhs::RhsKind, span::Span};

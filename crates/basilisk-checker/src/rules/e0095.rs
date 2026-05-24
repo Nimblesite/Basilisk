@@ -1,3 +1,4 @@
+//! Implements [BSK-E0095] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0095: `InitVar` field validation in dataclasses.
 //!
 //! Detects two categories of `InitVar` violations:

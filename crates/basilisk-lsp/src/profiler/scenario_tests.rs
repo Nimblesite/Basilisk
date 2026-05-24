@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Realistic profiling scenario tests.
 //!
 //! These tests simulate REAL-WORLD profiling scenarios using py-spy's actual

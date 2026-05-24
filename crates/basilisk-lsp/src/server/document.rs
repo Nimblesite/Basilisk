@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! Text document lifecycle handlers for the Basilisk LSP server.
 //!
 //! Covers `did_open`, `did_change`, `did_save`, `did_close`, and

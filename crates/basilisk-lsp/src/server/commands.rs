@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! Execute-command handlers for the Basilisk LSP server.
 //!
 //! Covers `workspace/executeCommand` dispatch and the individual command

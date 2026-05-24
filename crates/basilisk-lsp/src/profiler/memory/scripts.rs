@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Python injection scripts for memory profiling via DAP evaluate.
 //!
 //! These scripts are injected into a running Python process through the

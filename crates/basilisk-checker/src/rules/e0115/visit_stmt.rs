@@ -1,3 +1,4 @@
+//! Implements [BSK-E0115] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Statement visitor for BSK-E0115.
 //!
 //! Contains `visit_stmt_for_usage` and helpers for assignment-related

@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Collect type narrowing guards from function bodies.
 //!
 //! Walks the AST of a function body and extracts narrowing facts for:

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0036] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 //! Argument validation helpers for BSK-E0036: `ClassVar` argument correctness
 //! checks and type-mismatch detection between the `ClassVar` inner type and the RHS.
 

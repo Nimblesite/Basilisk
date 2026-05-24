@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-ARCH-MODSTRUCT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-MODSTRUCT
+//!
 //! Adoption command handlers for gradual adoption mode.
 //!
 //! Implements `basilisk.adoptFile`, `basilisk.adoptWorkspace`, and

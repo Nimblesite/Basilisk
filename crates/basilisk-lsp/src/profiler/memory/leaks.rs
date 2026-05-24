@@ -1,3 +1,5 @@
+//! Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
+//!
 //! Memory leak confidence scoring.
 //!
 //! Analyzes patterns across multiple snapshot diffs to classify suspected

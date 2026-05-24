@@ -1,3 +1,4 @@
+// Implements [LSPTEST]. See docs/specs/LSP-TEST-INTEGRATION-SPEC.md#LSPTEST
 /**
  * Test Explorer E2E Tests for the Basilisk VS Code Extension.
  *

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0108] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0108: Dataclass slots violations.
 //!
 //! Reports errors when:

@@ -1,3 +1,4 @@
+//! Tests for [BSK-E0054] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // Integration tests for BSK-E0054: Final type qualifier violations.
 
 use super::common::*;

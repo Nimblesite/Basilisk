@@ -1,3 +1,4 @@
+// Implements [VSIX-ARCHITECTURE]. See docs/specs/VSIX-SPEC.md#VSIX-ARCHITECTURE
 /**
  * Centralized, immutable-by-default application state for the Basilisk
  * VS Code extension.

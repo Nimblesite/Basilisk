@@ -1,3 +1,4 @@
+//! Implements [BSK-E0099] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0099: Direct instantiation of a Protocol class.
 //!
 //! Protocol classes define structural interfaces and cannot be instantiated

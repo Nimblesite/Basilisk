@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-MOJO-SAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-MOJO-SAFETY
 //! Mojo-inspired ownership and immutability analysis for Basilisk.
 //!
 //! Houses ownership tracking, immutability enforcement, and coercion

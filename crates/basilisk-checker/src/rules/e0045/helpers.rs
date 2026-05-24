@@ -1,3 +1,4 @@
+//! Implements [BSK-E0045] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
 //! Helper functions for BSK-E0045: Invalid first argument to `Annotated[...]`.
 //!
 //! Contains annotation parsing utilities, type expression validity checks,

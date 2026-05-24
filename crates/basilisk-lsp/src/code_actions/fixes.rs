@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
+//!
 //! Per-diagnostic quick-fix code actions.
 //!
 //! Each function maps a specific Basilisk diagnostic code to a targeted text

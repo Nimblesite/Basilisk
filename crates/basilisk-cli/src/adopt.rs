@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-CLI]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI
 //! `basilisk adopt` and `basilisk unadopt` subcommands.
 //!
 //! `adopt`  — check files, record remaining error codes in the adoption store,

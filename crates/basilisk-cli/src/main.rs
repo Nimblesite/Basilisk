@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-CLI]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI
 //! Basilisk CLI entry point.
 //!
 //! Usage:
@@ -9,9 +10,10 @@
 use std::collections::HashSet;
 use std::process::ExitCode;
 
-use basilisk_common::shipwright_version::{self, VersionOutput};
 use clap::{Parser, Subcommand};
 use colored::Colorize as _;
+use shipwright::{dispatch, BuildInfo, VersionSpec};
+use shipwright_manifest::{ExecutableKind, Language};
 use tracing::{error, info, warn};
 
 use crate::output::{
@@ -129,17 +131,43 @@ enum StubGenModeArg {
     Hybrid,
 }
 
-fn main() -> ExitCode {
-    let args = std::env::args().skip(1).collect::<Vec<_>>();
-    if shipwright_version::print_if_requested(
-        &args,
-        VersionOutput {
-            name: "basilisk",
-            kind: "lsp",
-            product: "basilisk",
-            capabilities: &["cli", "lsp", "dap", "profiler", "test-explorer"],
+/// Handle `--version` / `--version --json` via the Shipwright contract emitter.
+///
+/// Returns `true` when a version flag was handled and `main` should exit 0.
+/// Build-time metadata is supplied by `build.rs`.
+fn handle_version(args: &[String]) -> bool {
+    let spec = VersionSpec {
+        name: "basilisk",
+        version: env!("CARGO_PKG_VERSION"),
+        kind: ExecutableKind::Lsp,
+        language: Language::Rust,
+        product: Some("basilisk"),
+        capabilities: &["cli", "lsp", "dap", "profiler", "test-explorer"],
+        build: BuildInfo {
+            git_sha: option_env!("SHIPWRIGHT_GIT_SHA"),
+            git_dirty: option_env!("SHIPWRIGHT_GIT_DIRTY").map(|s| s == "true"),
+            build_time: option_env!("SHIPWRIGHT_BUILD_TIME"),
+            target: option_env!("SHIPWRIGHT_TARGET"),
+            toolchain: option_env!("SHIPWRIGHT_TOOLCHAIN"),
         },
-    ) {
+    };
+    match dispatch(args, &mut std::io::stdout(), &spec) {
+        Ok(handled) => handled,
+        Err(err) => {
+            let _ = std::io::Write::write_all(
+                &mut std::io::stderr(),
+                format!("basilisk: --version emission failed: {err}\n").as_bytes(),
+            );
+            // Don't swallow the error silently; surface to the user but
+            // don't continue normal execution either.
+            true
+        }
+    }
+}
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if handle_version(&args) {
         return ExitCode::SUCCESS;
     }
 
@@ -541,35 +569,13 @@ fn process_file(
     let source = parsed.source.clone();
     let mut resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
 
-    // Resolve imports against venv/site-packages and uv registry.
-    resolve_file_imports(&mut resolved, search_paths);
+    // Resolve imports against venv/site-packages and uv registry using the same
+    // routine the LSP uses, so the CLI and editor agree on what resolves and on
+    // package-dependency metadata (W0011 transitive-import warnings, etc.).
+    basilisk_lsp::import_resolver::resolve_module_imports(&mut resolved, search_paths);
 
     let diags = basilisk_checker::check(&resolved);
     Ok((diags, source))
-}
-
-/// Resolve imports for a single file using the search paths.
-fn resolve_file_imports(
-    resolved: &mut basilisk_resolver::ResolvedModule,
-    search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
-) {
-    let importing_file = std::path::Path::new(&resolved.path);
-    for import in &mut resolved.imports {
-        let result = basilisk_lsp::import_resolver::resolve_module_with_importer(
-            &import.module,
-            search_paths,
-            Some(importing_file),
-        );
-        if let Some(r) = result {
-            import.resolution = r.resolution;
-            import.resolved_path = Some(r.path);
-        } else if !basilisk_stubs::is_stdlib_module(&import.module) {
-            import.unresolved_reason = Some(basilisk_lsp::import_resolver::classify_unresolved(
-                &import.module,
-                search_paths,
-            ));
-        }
-    }
 }
 
 /// Walk up from `start` to find the project root (directory containing

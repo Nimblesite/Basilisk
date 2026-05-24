@@ -1,3 +1,4 @@
+//! Tests for [BSK-W0050] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // E2E tests for BSK-W0050: Redundant annotation warning
 
 use super::common::*;

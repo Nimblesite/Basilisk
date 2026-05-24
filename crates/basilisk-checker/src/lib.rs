@@ -1,3 +1,4 @@
+//! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-arch-pipeline
 //! Type checker for Basilisk.
 //!
 //! The public API is [`check`] and [`check_with_config`], which take a

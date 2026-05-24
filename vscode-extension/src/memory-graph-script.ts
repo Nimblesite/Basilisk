@@ -1,3 +1,4 @@
+// Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 /**
  * Inline JavaScript for the reference graph webview Canvas 2D renderer.
  *

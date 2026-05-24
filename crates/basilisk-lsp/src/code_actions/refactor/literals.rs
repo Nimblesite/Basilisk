@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
+//!
 //! Literal conversion refactoring actions: `dict()` to `{}` and `list()` to `[]`.
 
 use std::collections::HashMap;

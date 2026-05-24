@@ -1,3 +1,4 @@
+//! Tests for [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 // Tests for resolver: `test_decorators`.
 
 use super::common::resolve_src;

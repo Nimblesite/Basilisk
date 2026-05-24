@@ -1,3 +1,4 @@
+//! Implements [BSK-E0027] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0027: Duplicate `TypeVar` in a `Generic[...]` base.
 //!
 //! Each type parameter in `Generic[T1, T2, ...]` must be unique.

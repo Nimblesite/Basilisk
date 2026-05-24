@@ -1,3 +1,5 @@
+//! Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
+//!
 //! Mass autofix engine — apply all fixable diagnostics in a single action.
 //!
 //! Collects per-diagnostic fixes, resolves overlapping edits (keeping the

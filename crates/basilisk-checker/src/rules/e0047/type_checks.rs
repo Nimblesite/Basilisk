@@ -1,3 +1,4 @@
+//! Implements [BSK-E0047] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
 //! Structural annotation validity checks for BSK-E0047.
 //!
 //! Contains pure functions for detecting structurally invalid type expressions

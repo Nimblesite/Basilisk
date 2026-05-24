@@ -1,3 +1,4 @@
+//! Implements [BSK-E0151] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0151: Invalid `TypeAliasType(...)` call.
 //!
 //! Detects violations in `TypeAliasType(...)` calls:

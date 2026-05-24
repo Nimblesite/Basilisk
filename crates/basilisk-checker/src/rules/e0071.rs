@@ -1,3 +1,4 @@
+//! Implements [BSK-E0071] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
 //! BSK-E0071: Historical positional-only parameter violations.
 //!
 //! Before PEP 570 (Python 3.8), the convention for marking parameters as

@@ -1,3 +1,4 @@
+//! Implements [BSK-E0003] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
 //! BSK-E0003: Missing variable type annotation.
 //!
 //! Fires when a module-level variable has no type annotation.  In strict mode
