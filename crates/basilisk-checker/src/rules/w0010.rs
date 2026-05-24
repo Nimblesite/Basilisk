@@ -389,4 +389,96 @@ mod tests {
         );
         Ok(())
     }
+
+    /// Regression for issue #46 (acceptance: the `<pkg>.<subpkg>.<deeper>` shape):
+    /// `from pkg.sub.deep import x` resolves to `.../pkg/sub/deep/__init__.py`,
+    /// three segments below the top-level package. The marker at the package
+    /// root must still be honored no matter how deep the submodule nests.
+    #[test]
+    fn skips_deeper_nested_submodule_when_root_package_has_py_typed(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let root_pkg = dir
+            .path()
+            .join("lib")
+            .join("python3.12")
+            .join("site-packages")
+            .join("deeppkg_fake");
+        let deep = root_pkg.join("sub").join("deep");
+        fs::create_dir_all(&deep)?;
+        fs::write(root_pkg.join("py.typed"), "")?;
+        fs::write(root_pkg.join("__init__.py"), "")?;
+        fs::write(root_pkg.join("sub").join("__init__.py"), "")?;
+        let deep_init = deep.join("__init__.py");
+        fs::write(&deep_init, "def helper() -> int: ...\n")?;
+
+        let import = ImportInfo {
+            module: "deeppkg_fake.sub.deep".to_owned(),
+            names: vec!["helper".to_owned()],
+            span: Span::new(0, 40),
+            kind: ImportKind::From,
+            resolution: ImportResolution::SourcePy,
+            resolved_path: Some(deep_init),
+            package_dep_kind: None,
+            package_version: None,
+            package_name: None,
+            unresolved_reason: None,
+        };
+        let module = make_module(vec![import]);
+        let mut diagnostics = Vec::new();
+
+        MissingTypeStubs.check(&module, &mut diagnostics);
+
+        assert!(
+            diagnostics.is_empty(),
+            "PEP 561 py.typed at the root must apply to deeply nested submodules; \
+             got: {diagnostics:?}"
+        );
+        Ok(())
+    }
+
+    /// Regression for issue #46 (acceptance: `from httpx._client import Client`):
+    /// the underscore-prefixed flat-file submodule pattern. `httpx/_client.py` is
+    /// a flat file whose parent is already the top-level package, so the marker
+    /// at `httpx/py.typed` must be found without over-climbing.
+    #[test]
+    fn skips_httpx_underscore_flat_submodule_when_root_has_py_typed(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let root_pkg = dir
+            .path()
+            .join("lib")
+            .join("python3.12")
+            .join("site-packages")
+            .join("httpx_fake");
+        fs::create_dir_all(&root_pkg)?;
+        fs::write(root_pkg.join("py.typed"), "")?;
+        fs::write(root_pkg.join("__init__.py"), "")?;
+        let client = root_pkg.join("_client.py");
+        fs::write(&client, "class Client: ...\n")?;
+
+        let import = ImportInfo {
+            module: "httpx_fake._client".to_owned(),
+            names: vec!["Client".to_owned()],
+            span: Span::new(0, 34),
+            kind: ImportKind::From,
+            resolution: ImportResolution::SourcePy,
+            resolved_path: Some(client),
+            package_dep_kind: None,
+            package_version: None,
+            package_name: None,
+            unresolved_reason: None,
+        };
+        let module = make_module(vec![import]);
+        let mut diagnostics = Vec::new();
+
+        MissingTypeStubs.check(&module, &mut diagnostics);
+
+        assert!(
+            diagnostics.is_empty(),
+            "PEP 561 py.typed must be honored for underscore flat-file submodules; \
+             got: {diagnostics:?}"
+        );
+        Ok(())
+    }
 }
