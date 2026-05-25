@@ -41,7 +41,7 @@
     }
   },
   "conformance": {
-    "_doc": "Minimum PEP conformance pass percentage (files passing / total files). Ratchet UP only. Current: 134/146 = 91.78% (pinned to python/typing@268d0c4e). Regression from 135/146: generics_defaults_specialization.py now fails (upstream added new assertions for type-alias default substitution); fixing BSK-E0092 is tracked separately.",
-    "threshold": 91
+    "_doc": "Minimum PEP conformance pass percentage (files passing / total files). Ratchet UP only. Current: 135/146 = 92.46% (pinned to python/typing@268d0c4e). 11 files still fail (missed required diagnostics): constructors_callable, dataclasses_transform_converter, generics_defaults_specialization, generics_paramspec_components, generics_paramspec_semantics, generics_paramspec_specialization, generics_typevartuple_args, generics_typevartuple_basic, protocols_definition, typeddicts_extra_items, typeddicts_readonly_inheritance.",
+    "threshold": 92
   }
 }
