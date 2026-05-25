@@ -165,8 +165,24 @@ basilisk stats src/
 
 Output includes: total functions, typed functions, type coverage percentage, files with no annotations.
 
+## Step 8 — Profile a running script
+
+Basilisk includes an integrated CPU and memory profiler. To try it in VS Code:
+
+1. Run any Python script (the process must be alive)
+2. Open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) — or use the shortcut `Cmd+Shift+P Cmd+Shift+S` / `Ctrl+Shift+P Ctrl+Shift+S`
+3. Run **Basilisk: Start Profiling** and pick the target process
+4. Watch inline CPU heat annotations appear on hot lines as samples accumulate
+5. Run **Basilisk: Stop Profiling** to open the flamegraph viewer
+
+For memory leak hunting, use **Basilisk: Start Memory Tracking**, take two snapshots with **Basilisk: Take Memory Snapshot**, then **Basilisk: Diff Memory Snapshots** to surface leaks as diagnostics in the Problems panel.
+
+See the [Profiler guide](/docs/profiler/) for the full workflow — flamegraphs, reference graphs, profile diffing, Zed and Neovim commands, and platform requirements.
+
 ## Next steps
 
 - [Configuration reference](/docs/configuration/) — full `pyproject.toml` schema
+- [Profiler](/docs/profiler/) — CPU heatmaps, flamegraphs, and memory leak detection
+- [Debugging](/docs/debugging/) — F5 to debug, breakpoints, stepping, watch expressions
 - [All rules](/docs/rules/) — every BSK-E and BSK-W code explained
 - [Migration guide](/docs/migration/) — migrating from Pyright or mypy

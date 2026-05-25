@@ -190,13 +190,27 @@ All rules are **on by default**. There is no way to relax them globally.
 
 ## Requirements
 
-Install the Basilisk binary:
+None — the Basilisk binary is bundled with this extension for macOS (Apple Silicon), Linux (x86_64 and aarch64), and Windows (x86_64 and aarch64). Install the extension and go.
 
-```sh
-cargo install basilisk
+### Installing the CLI separately
+
+If you also want the `basilisk` CLI on your PATH (for CI, scripting, or terminal use), install it with your platform's package manager:
+
+```bash
+# macOS, Linux
+brew tap Nimblesite/tap
+brew install basilisk
 ```
 
-Rust 1.87+ required for building from source.
+```powershell
+# Windows
+scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
+scoop install basilisk
+```
+
+Or download a pre-built binary from [GitHub Releases](https://github.com/Nimblesite/Basilisk/releases).
+
+To make this extension use a CLI you installed separately, set `basilisk.executablePath` or `basilisk.binaries.basilisk` to the absolute path of the binary. Building from source also works (`cargo build --release` from the repository — Rust 1.87+ required).
 
 ---
 

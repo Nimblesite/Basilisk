@@ -675,10 +675,10 @@
         "steps": [
           {
             "id": "basilisk.installBinary",
-            "title": "Install Basilisk Binary",
-            "description": "Install via cargo: `cargo install basilisk` or download from GitHub releases.\n[Open Terminal](command:workbench.action.terminal.new)",
+            "title": "Basilisk Binary",
+            "description": "The Basilisk binary is bundled with this extension — no separate install required. To override, set `basilisk.executablePath` or download from GitHub releases.\n[Open Releases](https://github.com/Nimblesite/Basilisk/releases)",
             "media": {
-              "markdown": "Install via `cargo install basilisk`."
+              "markdown": "The Basilisk binary ships with this extension. No `cargo install` needed."
             }
           },
           {

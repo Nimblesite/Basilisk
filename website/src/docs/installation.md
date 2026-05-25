@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
 title: "Install Basilisk — VS Code, Neovim, Zed, or CLI"
-description: "Install the Basilisk Python language server via VS Code Marketplace, pre-built binaries, cargo install, or build from source. Supports macOS, Linux, and Windows."
-keywords: basilisk, install, cargo, rust, python type checker, vs code, zed
+description: "Install the Basilisk Python language server via VS Code Marketplace, Homebrew, Scoop, pre-built binaries, or build from source. Supports macOS, Linux, and Windows."
+keywords: basilisk, install, homebrew, scoop, rust, python type checker, vs code, zed
 date: 2026-02-28
 dateModified: 2026-03-31
 author: The Basilisk Project
@@ -42,21 +42,39 @@ cargo build --release
 
 Use `basilisk.executablePath`, `basilisk.binaries.basilisk`, or `basilisk.binaries.path` only when you intentionally want to override the bundled VSIX binary.
 
+## Homebrew (macOS, Linux)
+
+```bash
+brew tap Nimblesite/tap
+brew install basilisk
+```
+
+This installs the latest released `basilisk` binary on macOS (Apple Silicon) and Linux (x86_64, aarch64). Upgrade with `brew upgrade basilisk`.
+
+## Scoop (Windows)
+
+```powershell
+scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
+scoop install basilisk
+```
+
+This installs the latest released `basilisk.exe` on Windows (x86_64 and arm64). Upgrade with `scoop update basilisk`.
+
 ## Pre-built binaries
 
 Download the latest release for your platform from [GitHub Releases](https://github.com/Nimblesite/Basilisk/releases):
 
 ```bash
 # macOS (Apple Silicon)
-curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-darwin-aarch64.tar.gz | tar xz
-sudo mv basilisk /usr/local/bin/
-
-# macOS (Intel)
-curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-darwin-x86_64.tar.gz | tar xz
-sudo mv basilisk /usr/local/bin/
+curl -sSfL -o basilisk.zip https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-aarch64-apple-darwin.zip
+unzip basilisk.zip && sudo mv basilisk /usr/local/bin/
 
 # Linux (x86_64)
-curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
+curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-x86_64-unknown-linux-gnu.tar.gz | tar xz
+sudo mv basilisk /usr/local/bin/
+
+# Linux (aarch64)
+curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-aarch64-unknown-linux-gnu.tar.gz | tar xz
 sudo mv basilisk /usr/local/bin/
 ```
 
@@ -65,16 +83,6 @@ Verify the installation:
 ```bash
 basilisk --version
 ```
-
-## Install via Cargo
-
-If you have Rust installed:
-
-```bash
-cargo install basilisk
-```
-
-This installs the binary to `~/.cargo/bin/`, which is typically already on your PATH if you installed Rust via rustup.
 
 ## Build from source
 
@@ -102,7 +110,7 @@ Basilisk integrates naturally into any CI pipeline. Download the binary in your 
 # GitHub Actions example
 - name: Install Basilisk
   run: |
-    curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
+    curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-x86_64-unknown-linux-gnu.tar.gz | tar xz
     sudo mv basilisk /usr/local/bin/
 
 - name: Type check

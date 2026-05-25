@@ -160,8 +160,24 @@ basilisk stats src/
 
 输出包括：总函数数、已类型化的函数数、类型覆盖率百分比、无注解的文件。
 
+## 第 8 步——分析运行中的脚本
+
+Basilisk 包含一个集成的 CPU 和内存性能分析器。要在 VS Code 中试用：
+
+1. 运行任何 Python 脚本（进程必须处于活动状态）
+2. 打开命令面板（`Cmd+Shift+P` / `Ctrl+Shift+P`）——或使用快捷键 `Cmd+Shift+P Cmd+Shift+S` / `Ctrl+Shift+P Ctrl+Shift+S`
+3. 运行 **Basilisk: Start Profiling** 并选择目标进程
+4. 随着采样的积累，观察内联 CPU 热注解出现在热行上
+5. 运行 **Basilisk: Stop Profiling** 以打开火焰图查看器
+
+对于内存泄漏检测，使用 **Basilisk: Start Memory Tracking**，通过 **Basilisk: Take Memory Snapshot** 拍摄两个快照，然后 **Basilisk: Diff Memory Snapshots** 在问题面板中将泄漏显示为诊断。
+
+请参阅[性能分析器指南](/zh/docs/profiler/)了解完整的工作流程——火焰图、引用图、配置文件差异、Zed 和 Neovim 命令以及平台要求。
+
 ## 下一步
 
 - [配置参考](/zh/docs/configuration/) — 完整的 `pyproject.toml` 模式
+- [性能分析器](/zh/docs/profiler/) — CPU 热图、火焰图和内存泄漏检测
+- [调试](/zh/docs/debugging/) — F5 调试，断点，单步执行，监视表达式
 - [所有规则](/zh/docs/rules/) — 每个 BSK-E 和 BSK-W 代码的解释
 - [迁移指南](/zh/docs/migration/) — 从 Pyright 或 mypy 迁移

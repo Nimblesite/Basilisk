@@ -1,0 +1,35 @@
+# typed: false
+# frozen_string_literal: true
+
+class Basilisk < Formula
+  desc "Strict-by-default Python type checker and LSP, built in Rust"
+  homepage "https://www.basilisk-python.dev"
+  version "${BASILISK_VERSION}"
+  license "MIT"
+
+  on_macos do
+    on_arm do
+      url "${BASILISK_BASE_URL}/basilisk-aarch64-apple-darwin.zip"
+      sha256 "${BASILISK_SHA_DARWIN_ARM64}"
+    end
+  end
+
+  on_linux do
+    on_intel do
+      url "${BASILISK_BASE_URL}/basilisk-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "${BASILISK_SHA_LINUX_X86_64}"
+    end
+    on_arm do
+      url "${BASILISK_BASE_URL}/basilisk-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "${BASILISK_SHA_LINUX_AARCH64}"
+    end
+  end
+
+  def install
+    bin.install "basilisk"
+  end
+
+  test do
+    assert_match "basilisk", shell_output("#{bin}/basilisk --version")
+  end
+end
