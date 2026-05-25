@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
 title: 安装
-description: 如何安装 Basilisk——预构建二进制文件、VS Code 扩展、Zed 扩展或从源代码构建。
-keywords: basilisk, 安装, cargo, rust, python类型检查器, vs code, zed
+description: 如何安装 Basilisk——通过 Homebrew、Scoop、预构建二进制文件、VS Code 扩展、Zed 扩展或从源代码构建。
+keywords: basilisk, 安装, homebrew, scoop, rust, python类型检查器, vs code, zed
 lang: zh
 ---
 
@@ -37,21 +37,39 @@ cargo build --release
 
 仅当您明确想覆盖 VSIX 中捆绑的二进制文件时，才需要设置 `basilisk.executablePath`、`basilisk.binaries.basilisk` 或 `basilisk.binaries.path`。
 
+## Homebrew (macOS、Linux)
+
+```bash
+brew tap Nimblesite/tap
+brew install basilisk
+```
+
+在 macOS (Apple Silicon) 和 Linux (x86_64、aarch64) 上安装最新发布的 `basilisk` 二进制文件。使用 `brew upgrade basilisk` 升级。
+
+## Scoop (Windows)
+
+```powershell
+scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
+scoop install basilisk
+```
+
+在 Windows (x86_64 和 arm64) 上安装最新发布的 `basilisk.exe`。使用 `scoop update basilisk` 升级。
+
 ## 预构建二进制文件
 
 从 [GitHub Releases](https://github.com/Nimblesite/Basilisk/releases) 下载适合您平台的最新版本：
 
 ```bash
 # macOS (Apple Silicon)
-curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-darwin-aarch64.tar.gz | tar xz
-sudo mv basilisk /usr/local/bin/
-
-# macOS (Intel)
-curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-darwin-x86_64.tar.gz | tar xz
-sudo mv basilisk /usr/local/bin/
+curl -sSfL -o basilisk.zip https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-aarch64-apple-darwin.zip
+unzip basilisk.zip && sudo mv basilisk /usr/local/bin/
 
 # Linux (x86_64)
-curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
+curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-x86_64-unknown-linux-gnu.tar.gz | tar xz
+sudo mv basilisk /usr/local/bin/
+
+# Linux (aarch64)
+curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-aarch64-unknown-linux-gnu.tar.gz | tar xz
 sudo mv basilisk /usr/local/bin/
 ```
 
@@ -60,16 +78,6 @@ sudo mv basilisk /usr/local/bin/
 ```bash
 basilisk --version
 ```
-
-## 通过 Cargo 安装
-
-如果您已安装 Rust：
-
-```bash
-cargo install basilisk
-```
-
-这会将二进制文件安装到 `~/.cargo/bin/`，如果您通过 rustup 安装了 Rust，它通常已经在您的 PATH 中。
 
 ## 从源代码构建
 
@@ -97,7 +105,7 @@ Basilisk 自然地集成到任何 CI 管道中。在您的工作流程中下载�
 # GitHub Actions 示例
 - name: 安装 Basilisk
   run: |
-    curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-linux-x86_64.tar.gz | tar xz
+    curl -sSfL https://github.com/Nimblesite/Basilisk/releases/latest/download/basilisk-x86_64-unknown-linux-gnu.tar.gz | tar xz
     sudo mv basilisk /usr/local/bin/
 
 - name: 类型检查
