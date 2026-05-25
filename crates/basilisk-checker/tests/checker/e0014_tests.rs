@@ -212,6 +212,25 @@ r1_2: RecursiveTypeAlias1[int] = [1, [1, 2, 3]]
 }
 
 #[test]
+fn e0014_no_false_positive_on_homogeneous_tuple_str_annotation(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Regression for issue #45: `tuple[str, ...]` is PEP 484's homogeneous
+    // variable-length tuple. A literal tuple of all-string elements widens to
+    // it and must NOT fire E0014.
+    let source = r#"
+_MODEL_SETTING_KEYS: tuple[str, ...] = ("max_tokens", "temperature", "top_p", "timeout", "seed")
+"#;
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "BSK-E0014");
+    assert!(
+        msgs.is_empty(),
+        "tuple[str, ...] = (..all strings..) should NOT fire E0014, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn e0014_tuple_reassignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: int = 1
