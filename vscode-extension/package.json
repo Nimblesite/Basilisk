@@ -2,7 +2,7 @@
   "name": "basilisk",
   "displayName": "Basilisk",
   "description": "Complete Python language server — the open-source replacement for Pylance. Type checking, completions, go-to-definition, and more. Built in Rust.",
-  "version": "0.1.0",
+  "version": "0.0.0-PLACEHOLDER",
   "publisher": "Nimblesite",
   "license": "MIT OR Apache-2.0",
   "icon": "images/basilisk-logo.png",
