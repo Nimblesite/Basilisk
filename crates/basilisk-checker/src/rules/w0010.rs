@@ -62,22 +62,10 @@ fn is_site_packages_import(import: &ImportInfo) -> bool {
 /// in the dotted module name) honors flat-file and subpackage submodules
 /// uniformly and never over-climbs past the package into `site-packages`.
 fn has_py_typed_marker(import: &ImportInfo) -> bool {
-    let Some(resolved) = import.resolved_path.as_ref() else {
-        return false;
-    };
-    let mut dir = resolved.parent();
-    while let Some(current) = dir {
-        // Stop at the `site-packages` boundary: installed packages are its
-        // direct children, so the marker never lives at or above this level.
-        if current.file_name() == Some(std::ffi::OsStr::new("site-packages")) {
-            return false;
-        }
-        if current.join("py.typed").is_file() {
-            return true;
-        }
-        dir = current.parent();
-    }
-    false
+    import
+        .resolved_path
+        .as_ref()
+        .is_some_and(|resolved| basilisk_stubs::has_py_typed_marker(resolved))
 }
 
 /// Build the diagnostic for a missing type stubs warning.
