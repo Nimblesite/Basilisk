@@ -292,7 +292,12 @@ async function executeCommandMiddleware(
   if (staticToast !== undefined) {
     vscode.window.showInformationMessage(staticToast);
   } else if (pkgCmd !== undefined && args.length > 0) {
-    const pkg = (args[0] as { package: string }).package;
+    // A code action passes the package as a bare string (e.g. ["types-six"]);
+    // the command-palette prompt path passes [{ package: "..." }]. Accept both.
+    const arg = args[0];
+    const pkg = typeof arg === "string"
+      ? arg
+      : (arg as { package?: string } | undefined)?.package;
     const verb = command === "basilisk.uv.remove" ? "Removed" :
       command === "basilisk.uv.addDev" ? "Added dev dependency" : "Added";
     vscode.window.showInformationMessage(`Basilisk: ${verb} ${pkg}.`);
