@@ -485,3 +485,33 @@ fn color_always_clean_file_emits_ansi() -> Result<(), Box<dyn std::error::Error>
     );
     Ok(())
 }
+
+// ── Tracing log ANSI (issue #23) ──────────────────────────────────────────────
+
+/// Regression for issue #23: when the `basilisk` binary runs as a subprocess
+/// (e.g. the LSP launched by the VS Code extension), its stderr is a pipe, not
+/// a terminal. The structured `tracing` logs written to stderr must NOT contain
+/// raw ANSI colour escape sequences in that case — otherwise the VS Code output
+/// channel renders them as garbage (as reported in the bug). `Command::output`
+/// captures stderr through a pipe, faithfully reproducing the non-terminal case.
+#[test]
+fn tracing_logs_emit_no_ansi_on_piped_stderr() -> Result<(), Box<dyn std::error::Error>> {
+    // BASILISK_LOG=info guarantees `run_check` emits at least its
+    // "loaded config" info line to stderr, so stderr is non-empty.
+    let out = binary()
+        .arg("check")
+        .arg(fixture("clean/fully_typed_module.py"))
+        .env("BASILISK_LOG", "info")
+        .output()?;
+
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        !stderr.is_empty(),
+        "BASILISK_LOG=info must produce tracing output on stderr so this test is meaningful"
+    );
+    assert!(
+        !stderr.contains('\u{1b}'),
+        "tracing logs on piped (non-terminal) stderr must contain no ANSI escapes, got:\n{stderr}"
+    );
+    Ok(())
+}
