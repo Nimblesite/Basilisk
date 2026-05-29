@@ -14,7 +14,7 @@ use tower_lsp::lsp_types::Url;
 
 use crate::config::AnalysisMode;
 use crate::import_graph::ImportGraph;
-use crate::workspace_analysis::{analyse_with_config, fnv1a};
+use crate::workspace_analysis::{analyse_with_config, bsk_to_lsp, fnv1a};
 use crate::workspace_scan::{collect_python_files, deduplicate_by_stem, path_to_uri};
 
 // ── FileEntry ────────────────────────────────────────────────────────────────
@@ -351,6 +351,58 @@ impl WorkspaceIndex {
         let (entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
         let _ = self.files.insert(path, entry);
         (uri.clone(), lsp_diags)
+    }
+
+    /// Drop a file from the index entirely.
+    ///
+    /// Used when a watched file is deleted on disk so that a subsequent
+    /// workspace re-resolution does not resurrect its diagnostics from a stale
+    /// entry. Implements [ANALYSIS-INCR-IMPORTS].
+    pub fn forget_file(&self, uri: &Url) {
+        if let Ok(path) = uri.to_file_path() {
+            let _ = self.files.remove(&path);
+        }
+    }
+
+    /// Re-check every indexed file with its current `ResolvedModule` and return
+    /// the freshly converted LSP diagnostics keyed by URI.
+    ///
+    /// Updates each entry's stored diagnostics in place. Shared by the
+    /// re-resolution path so a single recheck loop serves every caller.
+    #[must_use]
+    pub fn recheck_all_files(&self) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
+        self.files
+            .iter_mut()
+            .filter_map(|mut entry| {
+                let resolved = entry.resolved.clone()?;
+                let file_config = self.config_for_file(entry.key());
+                let checker_diags = basilisk_checker::check_with_config(&resolved, file_config);
+                let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
+                    .iter()
+                    .map(|d| bsk_to_lsp(d, &entry.text))
+                    .collect();
+                entry.diagnostics = checker_diags;
+                let uri = path_to_uri(entry.key())?;
+                Some((uri, lsp_diags))
+            })
+            .collect()
+    }
+
+    /// Re-resolve every indexed file's imports against the cached search paths,
+    /// then re-check all files.
+    ///
+    /// Called when the package layout changes (e.g. a new module is created) so
+    /// that files importing the new module stop reporting `BSK-E0010` without an
+    /// LSP reload. When no search paths are cached yet this degrades to a plain
+    /// recheck. Implements [ANALYSIS-INCR-IMPORTS].
+    #[must_use]
+    pub fn reresolve_imports_and_recheck(
+        &self,
+    ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
+        if let Some(search_paths) = self.search_paths_snapshot() {
+            crate::import_resolver::resolve_workspace_imports(self, &search_paths);
+        }
+        self.recheck_all_files()
     }
 
     /// Scan all workspace roots and populate the index.
@@ -1673,15 +1725,17 @@ mod tests {
 
     #[test]
     fn config_override_promotes_w0050_to_error_in_lsp() {
-        // The `Error` variant means "keep default severity" — it does NOT promote.
-        // BSK-W0050's default is Warning, so it stays Warning even with RuleSeverity::Error.
+        // `RuleSeverity::Error` promotes a warning-default rule UP to a hard
+        // error, so a project can dial strictness up (e.g. make "no type stubs"
+        // a red error) — not just down. BSK-W0050 defaults to Warning; with the
+        // override it must surface as ERROR through the LSP.
         let idx = make_index_with_rule_override("BSK-W0050", basilisk_config::RuleSeverity::Error);
         let uri = make_uri("/tmp/cfg_promote_w0050.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
         assert_lsp_severity(
             &lsp_diags,
             "BSK-W0050",
-            tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
+            tower_lsp::lsp_types::DiagnosticSeverity::ERROR,
         );
     }
 
@@ -1711,23 +1765,23 @@ mod tests {
     // ── uv_stub_suggestions config ──────────────────────────────────────────
 
     #[test]
-    fn config_uv_stub_suggestions_false_suppresses_w0010() {
-        // BSK-W0010 should be suppressed when uv_stub_suggestions is false.
+    fn config_uv_stub_suggestions_false_suppresses_e0152() {
+        // BSK-E0152 should be suppressed when uv_stub_suggestions is false.
         let config = BasiliskConfig {
             uv_stub_suggestions: false,
             ..Default::default()
         };
         let idx = make_index_with_config(config);
         let uri = make_uri("/tmp/cfg_no_stubs.py");
-        // Even with source that might trigger W0010, the config suppresses it.
+        // Even with source that might trigger E0152, the config suppresses it.
         let src = "import os\n";
         let _ = idx.set_open(&uri, src, 1);
 
         let diags = get_diagnostics(&idx, &uri);
-        let w0010_count = count_code(&diags, "BSK-W0010");
+        let e0152_count = count_code(&diags, "BSK-E0152");
         assert_eq!(
-            w0010_count, 0,
-            "BSK-W0010 should be suppressed when uv_stub_suggestions is false"
+            e0152_count, 0,
+            "BSK-E0152 should be suppressed when uv_stub_suggestions is false"
         );
     }
 

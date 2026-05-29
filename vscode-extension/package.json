@@ -2,7 +2,7 @@
   "name": "basilisk",
   "displayName": "Basilisk",
   "description": "Complete Python language server — the open-source replacement for Pylance. Type checking, completions, go-to-definition, and more. Built in Rust.",
-  "version": "0.1.0",
+  "version": "0.0.0-PLACEHOLDER",
   "publisher": "Nimblesite",
   "license": "MIT OR Apache-2.0",
   "icon": "images/basilisk-logo.png",
@@ -675,10 +675,10 @@
         "steps": [
           {
             "id": "basilisk.installBinary",
-            "title": "Install Basilisk Binary",
-            "description": "Install via cargo: `cargo install basilisk` or download from GitHub releases.\n[Open Terminal](command:workbench.action.terminal.new)",
+            "title": "Basilisk Binary",
+            "description": "The Basilisk binary is bundled with this extension — no separate install required. To override, set `basilisk.executablePath` or download from GitHub releases.\n[Open Releases](https://github.com/Nimblesite/Basilisk/releases)",
             "media": {
-              "markdown": "Install via `cargo install basilisk`."
+              "markdown": "The Basilisk binary ships with this extension. No `cargo install` needed."
             }
           },
           {
@@ -721,7 +721,7 @@
     "package": "npm run sync:shipwright && vsce package"
   },
   "dependencies": {
-    "@nimblesite/shipwright-vscode": "^0.2.0",
+    "@nimblesite/shipwright-vscode": "^0.5.3",
     "@preact/signals-core": "^1.14.0",
     "vscode-languageclient": "^9.0.1"
   },

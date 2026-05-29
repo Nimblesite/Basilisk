@@ -526,6 +526,156 @@ async fn cross_module_find_references() -> TestResult<()> {
 }
 
 // ---------------------------------------------------------------------------
+// Regression: BSK-E0014 false positive on first-party import in a NEWLY
+// CREATED file within a known package (GitHub #53).
+//
+// A pre-existing sibling (`dispatcher.py`) imports `from nap.agent_workspace.host
+// import Err` and resolves cleanly. A brand-new file (`log_persist.py`) created
+// in the same package with the SAME import must resolve identically — without a
+// server reload. Implements [ANALYSIS-INCR-IMPORTS].
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn new_file_resolves_first_party_sibling_import() -> TestResult<()> {
+    // `src/` layout so workspace-member discovery adds `src/` as a source root.
+    let (dir, root_uri) = setup_cross_module_workspace(&[
+        (
+            "pyproject.toml",
+            "[project]\nname = \"nap\"\nversion = \"0.0.0\"\n",
+        ),
+        ("src/nap/__init__.py", ""),
+        ("src/nap/agent_workspace/__init__.py", ""),
+        (
+            "src/nap/agent_workspace/host.py",
+            "class Err:\n    code: int\n",
+        ),
+        (
+            // Pre-existing sibling — present during the startup scan.
+            "src/nap/agent_workspace/dispatcher.py",
+            "from nap.agent_workspace.host import Err\n\ndef run() -> Err:\n    return Err()\n",
+        ),
+    ]);
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "wholeModule").await?;
+
+    // Drain the startup-scan diagnostics.
+    let _ = collect_all_diagnostics(&mut fixture).await;
+
+    // Create a NEW file in the SAME package AFTER the scan, then open it.
+    let new_rel = "src/nap/agent_workspace/log_persist.py";
+    let new_code =
+        "from nap.agent_workspace.host import Err\n\ndef persist() -> Err:\n    return Err()\n";
+    std::fs::write(dir.join(new_rel), new_code)?;
+    let new_uri = format!("{root_uri}/{new_rel}");
+    fixture.did_open(&new_uri, new_code).await?;
+
+    let diag_msg = fixture.wait_for_diagnostics().await?;
+    let json: serde_json::Value = serde_json::from_str(&diag_msg)?;
+    let empty = vec![];
+    let diagnostics = json["params"]["diagnostics"].as_array().unwrap_or(&empty);
+
+    let unresolved_import = diagnostics.iter().any(|d| {
+        let code = d["code"].as_str().unwrap_or("");
+        (code == "BSK-E0010" || code == "BSK-E0014")
+            && d["message"]
+                .as_str()
+                .unwrap_or("")
+                .contains("nap.agent_workspace.host")
+    });
+    assert!(
+        !unresolved_import,
+        "new file must resolve first-party sibling import like its pre-existing \
+         siblings — got unresolved-import diagnostic: {diagnostics:#?}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Regression: creating a NEW module must update the package index so that
+// pre-existing files importing it stop reporting BSK-E0010 — WITHOUT a server
+// reload (GitHub #53). The file-watcher CREATED event must re-resolve the
+// importers of the new module, not just the new module's own imports.
+// Implements [ANALYSIS-INCR-IMPORTS].
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn created_module_clears_unresolved_import_in_dependents() -> TestResult<()> {
+    // `src/` layout so workspace-member discovery adds `src/` as a source root.
+    let (dir, root_uri) = setup_cross_module_workspace(&[
+        ("pyproject.toml", "[project]\nname = \"nap\"\nversion = \"0.0.0\"\n"),
+        ("src/nap/__init__.py", ""),
+        ("src/nap/agent_workspace/__init__.py", ""),
+        (
+            // Consumer imports a module that does NOT exist yet at scan time.
+            "src/nap/agent_workspace/consumer.py",
+            "from nap.agent_workspace.log_persist import fetch_logs\n\ndef use() -> None:\n    fetch_logs()\n",
+        ),
+    ]);
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "wholeModule").await?;
+
+    // Startup scan: consumer.py SHOULD report BSK-E0010 — log_persist is absent.
+    let startup = collect_all_diagnostics(&mut fixture).await;
+    let consumer_uri = format!("{root_uri}/src/nap/agent_workspace/consumer.py");
+    let startup_has_e0010 = startup.get(&consumer_uri).is_some_and(|d| {
+        d["params"]["diagnostics"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().any(is_log_persist_unresolved))
+    });
+    assert!(
+        startup_has_e0010,
+        "precondition: consumer.py should report unresolved import before log_persist exists"
+    );
+
+    // Now CREATE the missing module on disk and notify via the file watcher,
+    // exactly as an editor does when a new file appears.
+    let new_rel = "src/nap/agent_workspace/log_persist.py";
+    std::fs::write(
+        dir.join(new_rel),
+        "def fetch_logs() -> None:\n    return None\n",
+    )?;
+    let new_uri = format!("{root_uri}/{new_rel}");
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "workspace/didChangeWatchedFiles",
+            "params": { "changes": [{ "uri": new_uri, "type": 1 }] }  // 1 = Created
+        }))
+        .await?;
+
+    // The dependent (consumer.py) must be re-resolved and re-published WITHOUT
+    // its unresolved-import diagnostic — no reload required.
+    let after = collect_all_diagnostics(&mut fixture).await;
+    let consumer_after = after
+        .get(&consumer_uri)
+        .ok_or("consumer.py diagnostics not re-published after the module was created")?;
+    let empty = vec![];
+    let diagnostics = consumer_after["params"]["diagnostics"]
+        .as_array()
+        .unwrap_or(&empty);
+    let still_unresolved = diagnostics.iter().any(is_log_persist_unresolved);
+    assert!(
+        !still_unresolved,
+        "creating log_persist.py must clear the unresolved-import diagnostic in consumer.py \
+         without a reload — got: {diagnostics:#?}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+/// True iff the diagnostic is an unresolved-import error for `log_persist`.
+fn is_log_persist_unresolved(d: &serde_json::Value) -> bool {
+    let code = d["code"].as_str().unwrap_or("");
+    (code == "BSK-E0010" || code == "BSK-E0014")
+        && d["message"].as_str().unwrap_or("").contains("log_persist")
+}
+
+// ---------------------------------------------------------------------------
 // Cross-module: wildcard import
 // ---------------------------------------------------------------------------
 

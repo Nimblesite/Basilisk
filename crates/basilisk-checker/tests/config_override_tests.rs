@@ -94,6 +94,47 @@ fn global_rule_severity_override_demotes_to_info() {
 }
 
 #[test]
+fn global_rule_severity_override_promotes_warning_to_error() {
+    // A warning-level rule (BSK-W0050 redundant annotation) must be promotable
+    // to a hard ERROR via `rules."BSK-W0050" = "error"`. This lets a project
+    // dial strictness UP — e.g. make "no type stubs" a red error — not just
+    // down. Today the `Error` override is a silent no-op, so this fails.
+    let source = "x: int = 42\n";
+    let default_diags = check_default(source, "test.py");
+    let w0050_default: Vec<_> = default_diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-W0050")
+        .collect();
+    assert!(!w0050_default.is_empty(), "W0050 should fire by default");
+    assert_eq!(
+        w0050_default[0].severity,
+        basilisk_checker::Severity::Warning,
+        "W0050 defaults to warning"
+    );
+
+    let config = BasiliskConfig {
+        rules: HashMap::from([("BSK-W0050".to_owned(), RuleSeverity::Error)]),
+        ..Default::default()
+    };
+    let diags = check_with(source, "test.py", &config);
+    let promoted: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.code == "BSK-W0050")
+        .collect();
+    assert!(
+        !promoted.is_empty(),
+        "W0050 should still fire when promoted to error"
+    );
+    for diag in &promoted {
+        assert_eq!(
+            diag.severity,
+            basilisk_checker::Severity::Error,
+            "W0050 should be promoted to a hard error via config"
+        );
+    }
+}
+
+#[test]
 fn per_path_override_disables_rule() {
     let source = "def foo(x):\n    return x\n";
 

@@ -85,7 +85,7 @@ pub fn code_actions(
                 )));
             }
         }
-        if code == "BSK-W0010" {
+        if code == "BSK-E0152" {
             if let Some(action) = extract_module_from_diagnostic(&diag.message)
                 .and_then(|module| make_uv_add_stubs_action(diag, &module))
             {
@@ -486,10 +486,10 @@ mod tests {
     /// not `<module>-stubs`. For `requests` the real package is
     /// `types-requests`; offering `requests-stubs` fails to resolve on `PyPI`.
     #[test]
-    fn test_bsk_w0010_code_action_includes_uv_add_dev() {
+    fn test_bsk_e0152_code_action_includes_uv_add_dev() {
         let diag = make_diagnostic(
-            DiagnosticSeverity::WARNING,
-            "BSK-W0010",
+            DiagnosticSeverity::ERROR,
+            "BSK-E0152",
             "Package `requests` is installed but has no type stubs available",
             range_at((0, 0), (0, 8)),
         );
@@ -511,10 +511,10 @@ mod tests {
     /// ships inline `py.typed` and has no typeshed stub — suggesting
     /// `pydantic_ai-stubs` (or any name) leads to a broken `uv add` that 404s.
     #[test]
-    fn test_bsk_w0010_action_suppressed_for_unknown_stub() {
+    fn test_bsk_e0152_action_suppressed_for_unknown_stub() {
         let diag = make_diagnostic(
-            DiagnosticSeverity::WARNING,
-            "BSK-W0010",
+            DiagnosticSeverity::ERROR,
+            "BSK-E0152",
             "Package `pydantic_ai` is installed but has no type stubs available",
             range_at((0, 0), (0, 12)),
         );

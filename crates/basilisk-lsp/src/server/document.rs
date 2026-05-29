@@ -205,6 +205,11 @@ pub(super) async fn did_change_watched_files(
     // Classify the incoming changes, filtering to Python files only.
     let mut reload_targets: Vec<Url> = Vec::new();
     let mut delete_targets: Vec<Url> = Vec::new();
+    // A newly-created module changes what dependents can resolve, so it requires
+    // re-resolving the whole workspace — not just reloading the new file. A pure
+    // content change (CHANGED) leaves the module path untouched, so the cheaper
+    // per-file reload suffices. Implements [ANALYSIS-INCR-IMPORTS] (GitHub #53).
+    let mut has_created_module = false;
 
     for change in &params.changes {
         let uri = &change.uri;
@@ -216,7 +221,11 @@ pub(super) async fn did_change_watched_files(
             continue;
         }
         match change.typ {
-            FileChangeType::CREATED | FileChangeType::CHANGED => {
+            FileChangeType::CREATED => {
+                has_created_module = true;
+                reload_targets.push(uri.clone());
+            }
+            FileChangeType::CHANGED => {
                 reload_targets.push(uri.clone());
             }
             FileChangeType::DELETED => {
@@ -246,9 +255,22 @@ pub(super) async fn did_change_watched_files(
             .filter_map(|uri| index.reload_from_disk(uri))
             .collect();
 
+        // When a new module appeared, its dependents may now resolve imports
+        // that were previously unresolved. Re-resolve the whole workspace so
+        // their stale BSK-E0010 clears without an LSP reload (GitHub #53).
+        let publish_set = if has_created_module {
+            // Drop deleted entries first so the recheck cannot resurrect them.
+            for uri in &delete_targets {
+                index.forget_file(uri);
+            }
+            index.reresolve_imports_and_recheck()
+        } else {
+            reload_results
+        };
+
         drop(guard);
 
-        for (uri, diags) in reload_results {
+        for (uri, diags) in publish_set {
             client.publish_diagnostics(uri, diags, None).await;
         }
         for uri in delete_targets {

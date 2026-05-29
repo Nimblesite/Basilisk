@@ -103,7 +103,7 @@ fn format_reason(import: &ImportInfo, root_module: &str) -> (String, String) {
             ),
             "Check the `requires-python` setting in pyproject.toml".to_owned(),
         ),
-        // NoStubs is handled by W0010 — fall through to generic message.
+        // NoStubs is handled by E0152 — fall through to generic message.
         Some(UnresolvedReason::NoStubs | UnresolvedReason::Unknown) | None => (
             format!(
                 "Cannot resolve import `{}` \u{2014} no type information available",
