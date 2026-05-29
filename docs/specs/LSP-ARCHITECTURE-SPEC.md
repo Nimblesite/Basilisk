@@ -408,7 +408,7 @@ Validates symbol is renameable, returns `WorkspaceEdit` with `TextEdit` for each
 | (source) | Organize imports | Delegate to `ruff check --select I --fix` |
 
 | BSK-E0010 (uv) | Add dependency | `uv add <package>` via `basilisk.uv.add` command |
-| BSK-W0010 (uv) | Install type stubs | `uv add --dev types-<package>` via `basilisk.uv.addDev` command |
+| BSK-E0152 (uv) | Install type stubs | `uv add --dev types-<package>` via `basilisk.uv.addDev` command |
 | BSK-W0011 (uv) | Add dependency | `uv add <package>` — transitive dep used directly |
 | BSK-W0013 (uv) | Sync environment | `uv sync` via `basilisk.uv.sync` command |
 
@@ -519,7 +519,7 @@ The uv binary is only needed for **commands** (sync, add, remove). Lock file par
 
 | Code | Severity | Default | Gate | Description |
 |------|----------|---------|------|-------------|
-| BSK-W0010 | Warning | Enabled | `uv.stubSuggestions` | Package installed but no type stubs |
+| BSK-E0152 | Error | Enabled | `uv.stubSuggestions` | Package installed but no type stubs (opt down to import untyped libs at your own risk) |
 | BSK-W0011 | Warning | Disabled | `uv.dependencyDiagnostics` | Import of transitive dependency not in `[project.dependencies]` |
 | BSK-W0012 | Info | Disabled | `uv.dependencyDiagnostics` | Declared dependency never imported (whole-module only, skeleton) |
 | BSK-W0013 | Warning | Disabled | `uv.dependencyDiagnostics` | `uv.lock` older than `pyproject.toml` (skeleton) |

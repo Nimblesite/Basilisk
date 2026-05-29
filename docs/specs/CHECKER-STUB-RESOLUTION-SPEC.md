@@ -104,14 +104,14 @@ One diagnostic at the import site is worth more than fifty cascading errors at u
 
 **Principle**: Diagnostics MUST NOT tell users to run CLI commands. The LSP provides one-click code actions that do the work. The user should never leave the editor to fix a missing import.
 
-Every BSK-E0010 and BSK-W0010 diagnostic MUST have an associated code action:
+Every BSK-E0010 and BSK-E0152 diagnostic MUST have an associated code action:
 
 | Diagnostic | Scenario | Code Action | LSP Command |
 |------------|----------|-------------|-------------|
 | BSK-E0010 | Package not installed | "Add dependency: `{pkg}`" | `basilisk.uv.add` |
 | BSK-E0010 | Package not in deps (transitive only) | "Add dependency: `{pkg}`" | `basilisk.uv.add` |
 | BSK-E0010 | Package declared but not synced | "Sync environment" | `basilisk.uv.sync` |
-| BSK-W0010 | Package installed but no type stubs | "Install type stubs: `types-{pkg}`" | `basilisk.uv.addDev` |
+| BSK-E0152 | Package installed but no type stubs | "Install type stubs: `types-{pkg}`" | `basilisk.uv.addDev` |
 
 The code action executes via `workspace/executeCommand`. The LSP spawns `uv` as a subprocess, reports progress via `window/logMessage`, and triggers a full re-resolve on completion — the diagnostic clears automatically.
 

@@ -1,12 +1,15 @@
-//! Implements [BSK-W0010] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-W0010: Missing type stubs for installed package.
+//! Implements [BSK-E0152] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! BSK-E0152: Missing type stubs for installed package.
 //!
 //! Fires when a package is imported and resolves to a `.py` source file (not
 //! `.pyi`) without a `py.typed` marker. This means the package is installed
-//! but lacks type information, reducing type safety.
+//! but lacks type information, reducing type safety. Strict-by-default: an
+//! untyped third-party import is a hard error. Projects can opt out per import
+//! (`# type: warning[BSK-E0152]`) or globally (`"BSK-E0152" = "warning"`) to
+//! import non-type-safe libraries at their own risk.
 //!
 //! ```python
-//! import flask  # W0010: Package 'flask' is installed but has no type stubs
+//! import flask  # E0152: Package 'flask' is installed but has no type stubs
 //! ```
 
 use basilisk_resolver::{ImportInfo, ImportResolution, ResolvedModule};
@@ -17,11 +20,11 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-W0010",
-    docs_url: "https://www.basilisk-python.dev/warnings/BSK-W0010",
+    code: "BSK-E0152",
+    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0152",
 };
 
-/// Emits BSK-W0010 when an imported package resolves to a `.py` source file
+/// Emits BSK-E0152 when an imported package resolves to a `.py` source file
 /// without a `py.typed` marker, indicating missing type stubs.
 pub(crate) struct MissingTypeStubs;
 
@@ -68,13 +71,13 @@ fn has_py_typed_marker(import: &ImportInfo) -> bool {
         .is_some_and(|resolved| basilisk_stubs::has_py_typed_marker(resolved))
 }
 
-/// Build the diagnostic for a missing type stubs warning.
+/// Build the diagnostic for a missing type stubs error.
 fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
     let root_module = import.module.split('.').next().unwrap_or(&import.module);
 
     Diagnostic {
         code: CODE.clone(),
-        severity: Severity::Warning,
+        severity: Severity::Error,
         message: format!("Package `{root_module}` is installed but has no type stubs available"),
         span: import.span,
         path: path.to_owned(),
@@ -163,7 +166,27 @@ mod tests {
         );
         let diagnostics = run_check(import);
         assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].code.code, "BSK-W0010");
+        assert_eq!(diagnostics[0].code.code, "BSK-E0152");
+    }
+
+    /// Strict-by-default: an untyped third-party import is a hard ERROR, not a
+    /// warning. Users opt down (`"BSK-E0152" = "warning"`) to import at their
+    /// own risk; this asserts the default severity stays an error.
+    #[test]
+    fn defaults_to_error_severity() {
+        let import = make_import(
+            "flask",
+            12,
+            ImportResolution::SourcePy,
+            Some("/venv/lib/python3.12/site-packages/flask/__init__.py"),
+        );
+        let diagnostics = run_check(import);
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(
+            diagnostics[0].severity,
+            Severity::Error,
+            "missing type stubs must default to a hard error"
+        );
     }
 
     /// Regression for issue #46: the help text must name the *real* typeshed
@@ -277,7 +300,7 @@ mod tests {
 
         assert!(
             diagnostics.is_empty(),
-            "PEP 561 inline-typed packages must not emit BSK-W0010"
+            "PEP 561 inline-typed packages must not emit BSK-E0152"
         );
         Ok(())
     }
@@ -335,7 +358,7 @@ mod tests {
     /// subpackage `__init__.py`). The resolved file's parent is *already* the
     /// top-level package directory, so climbing `depth` (one dot) levels
     /// over-climbs into `site-packages` and misses the marker, producing a
-    /// false-positive W0010. The marker check must locate the top-level package
+    /// false-positive E0152. The marker check must locate the top-level package
     /// regardless of whether the submodule is a flat file or a subpackage.
     #[test]
     fn skips_flat_file_submodule_when_root_package_has_py_typed(

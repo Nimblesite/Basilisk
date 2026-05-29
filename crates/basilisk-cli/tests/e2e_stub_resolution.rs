@@ -145,8 +145,8 @@ fn stub_package_resolved_before_inline_typed() {
 }
 
 /// Reproduces issue: "I can't get it to pick up stubs and the auto-fix doesn't
-/// fix anything." The BSK-W0010 quick-fix runs `uv add --dev types-<pkg>`, which
-/// drops a `<pkg>-stubs/` package into site-packages. W0010 fires only while the
+/// fix anything." The BSK-E0152 quick-fix runs `uv add --dev types-<pkg>`, which
+/// drops a `<pkg>-stubs/` package into site-packages. E0152 fires only while the
 /// import resolves to `SourcePy`; after the stub package is installed the import
 /// MUST resolve to `StubPyi` so the warning clears. This exercises that exact
 /// before/after transition deterministically (no network / no uv).
@@ -155,7 +155,7 @@ fn autofix_stub_install_flips_source_resolution_to_stub() {
     let sp = unique_tmp("e2e_stub_autofix_flip");
 
     // BEFORE the auto-fix: `requests` is installed without inline types and
-    // without a stub package → resolves to plain source (W0010 fires here).
+    // without a stub package → resolves to plain source (E0152 fires here).
     let pkg = sp.join("requests");
     fs::create_dir_all(&pkg).unwrap();
     fs::write(pkg.join("__init__.py"), "def get(url): pass\n").unwrap();
@@ -165,7 +165,7 @@ fn autofix_stub_install_flips_source_resolution_to_stub() {
     assert_eq!(
         before.resolution,
         ImportResolution::SourcePy,
-        "precondition: plain site-packages package resolves to SourcePy (W0010 fires)"
+        "precondition: plain site-packages package resolves to SourcePy (E0152 fires)"
     );
 
     // AFTER the auto-fix: `uv add --dev types-requests` installs `requests-stubs/`.
@@ -182,7 +182,7 @@ fn autofix_stub_install_flips_source_resolution_to_stub() {
         after.resolution,
         ImportResolution::StubPyi,
         "after `uv add --dev types-requests` the import must resolve to the stub \
-         package so BSK-W0010 clears, got: {:?} at {:?}",
+         package so BSK-E0152 clears, got: {:?} at {:?}",
         after.resolution,
         after.path
     );

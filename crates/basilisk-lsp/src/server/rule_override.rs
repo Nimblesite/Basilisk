@@ -89,8 +89,8 @@ mod tests {
     #[test]
     fn insert_when_content_has_no_trailing_newline() {
         let content = "[project]\nname = \"foo\"";
-        let result = insert_rule_override(content, "BSK-W0010", "error");
+        let result = insert_rule_override(content, "BSK-E0152", "warning");
         assert!(result.contains("\n\n[tool.basilisk.rules]\n"));
-        assert!(result.contains("BSK-W0010 = \"error\""));
+        assert!(result.contains("BSK-E0152 = \"warning\""));
     }
 }

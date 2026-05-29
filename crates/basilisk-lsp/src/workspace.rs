@@ -1673,15 +1673,17 @@ mod tests {
 
     #[test]
     fn config_override_promotes_w0050_to_error_in_lsp() {
-        // The `Error` variant means "keep default severity" — it does NOT promote.
-        // BSK-W0050's default is Warning, so it stays Warning even with RuleSeverity::Error.
+        // `RuleSeverity::Error` promotes a warning-default rule UP to a hard
+        // error, so a project can dial strictness up (e.g. make "no type stubs"
+        // a red error) — not just down. BSK-W0050 defaults to Warning; with the
+        // override it must surface as ERROR through the LSP.
         let idx = make_index_with_rule_override("BSK-W0050", basilisk_config::RuleSeverity::Error);
         let uri = make_uri("/tmp/cfg_promote_w0050.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
         assert_lsp_severity(
             &lsp_diags,
             "BSK-W0050",
-            tower_lsp::lsp_types::DiagnosticSeverity::WARNING,
+            tower_lsp::lsp_types::DiagnosticSeverity::ERROR,
         );
     }
 
@@ -1711,23 +1713,23 @@ mod tests {
     // ── uv_stub_suggestions config ──────────────────────────────────────────
 
     #[test]
-    fn config_uv_stub_suggestions_false_suppresses_w0010() {
-        // BSK-W0010 should be suppressed when uv_stub_suggestions is false.
+    fn config_uv_stub_suggestions_false_suppresses_e0152() {
+        // BSK-E0152 should be suppressed when uv_stub_suggestions is false.
         let config = BasiliskConfig {
             uv_stub_suggestions: false,
             ..Default::default()
         };
         let idx = make_index_with_config(config);
         let uri = make_uri("/tmp/cfg_no_stubs.py");
-        // Even with source that might trigger W0010, the config suppresses it.
+        // Even with source that might trigger E0152, the config suppresses it.
         let src = "import os\n";
         let _ = idx.set_open(&uri, src, 1);
 
         let diags = get_diagnostics(&idx, &uri);
-        let w0010_count = count_code(&diags, "BSK-W0010");
+        let e0152_count = count_code(&diags, "BSK-E0152");
         assert_eq!(
-            w0010_count, 0,
-            "BSK-W0010 should be suppressed when uv_stub_suggestions is false"
+            e0152_count, 0,
+            "BSK-E0152 should be suppressed when uv_stub_suggestions is false"
         );
     }
 

@@ -508,7 +508,7 @@ mod tests {
 
     /// A site-packages `.py` package WITHOUT a `py.typed` marker must NOT have its
     /// annotations consumed (PEP 561: inline types are opt-in). This keeps
-    /// untyped third-party packages untyped so BSK-W0010 still applies.
+    /// untyped third-party packages untyped so BSK-E0152 still applies.
     #[test]
     fn cross_module_skips_non_py_typed_package() {
         let sp = std::env::temp_dir().join(format!("bsk_xmod_untyped_{}", std::process::id()));

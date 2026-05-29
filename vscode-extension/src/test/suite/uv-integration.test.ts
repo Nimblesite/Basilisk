@@ -152,7 +152,7 @@ suite('Basilisk uv Integration Tests', () => {
     // Quick-fix success toast names the package (regression)
     // ----------------------------------------------------------------
 
-    // A code action (e.g. the BSK-W0010 "install stubs" fix) invokes
+    // A code action (e.g. the BSK-E0152 "install stubs" fix) invokes
     // basilisk.uv.addDev with a BARE STRING argument, not a `{ package }`
     // object. The success toast must read the package name from either shape;
     // previously it only handled the object form and showed "undefined".
