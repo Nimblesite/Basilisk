@@ -82,7 +82,7 @@ pub fn check_with_config(
             let code = diag.code.code;
 
             // 0. Config gating for uv diagnostics.
-            if code == "BSK-W0010" && !config.uv_stub_suggestions {
+            if code == "BSK-E0152" && !config.uv_stub_suggestions {
                 return None;
             }
             if matches!(code, "BSK-W0011" | "BSK-W0012" | "BSK-W0013")
@@ -124,7 +124,7 @@ pub fn check_with_config(
                     basilisk_config::RuleSeverity::Disabled => return None,
                     basilisk_config::RuleSeverity::Warning => diag.severity = Severity::Warning,
                     basilisk_config::RuleSeverity::Info => diag.severity = Severity::Info,
-                    basilisk_config::RuleSeverity::Error => {} // keep default
+                    basilisk_config::RuleSeverity::Error => diag.severity = Severity::Error,
                 }
             }
 
@@ -136,7 +136,7 @@ pub fn check_with_config(
                     basilisk_config::RuleSeverity::Disabled => return None,
                     basilisk_config::RuleSeverity::Warning => diag.severity = Severity::Warning,
                     basilisk_config::RuleSeverity::Info => diag.severity = Severity::Info,
-                    basilisk_config::RuleSeverity::Error => {}
+                    basilisk_config::RuleSeverity::Error => diag.severity = Severity::Error,
                 }
             }
 
@@ -321,7 +321,7 @@ mod tests {
         // Should NOT have any downstream errors referencing `get`.
         let downstream = diagnostics
             .iter()
-            .filter(|d| d.code.code != "BSK-E0010" && d.code.code != "BSK-W0010")
+            .filter(|d| d.code.code != "BSK-E0010" && d.code.code != "BSK-E0152")
             .filter(|d| d.message.contains("get"))
             .count();
         assert_eq!(

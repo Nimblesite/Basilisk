@@ -127,8 +127,8 @@ BSK-E0062|BSK-E0070,specialtypes_never.py,specialtypes,PASS,3,0,0
 BSK-E0012|BSK-E0014,specialtypes_none.py,specialtypes,PASS,3,0,1
 BSK-E0065,specialtypes_promotions.py,specialtypes,PASS,1,0,0
 BSK-E0014|BSK-E0015|BSK-E0092|BSK-E0145,specialtypes_type.py,specialtypes,PASS,9,0,2
-BSK-E0014|BSK-E0045|BSK-E0147,tuples_type_compat.py,tuples,PASS,16,0,16
-BSK-E0013|BSK-E0014|BSK-E0049|BSK-E0090,tuples_type_form.py,tuples,PASS,11,0,4
+BSK-E0014|BSK-E0045|BSK-E0147,tuples_type_compat.py,tuples,PASS,16,0,14
+BSK-E0013|BSK-E0014|BSK-E0049|BSK-E0090,tuples_type_form.py,tuples,PASS,11,0,3
 BSK-E0049|BSK-E0053,tuples_unpacked.py,tuples,PASS,4,0,3
 BSK-E0037,typeddicts_alt_syntax.py,typeddicts,PASS,4,0,0
 BSK-E0029|BSK-E0032,typeddicts_class_syntax.py,typeddicts,PASS,3,0,0

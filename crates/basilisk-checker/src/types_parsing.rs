@@ -75,7 +75,9 @@ fn parse_container_annotation(annotation: &str) -> InferredType {
     }
     if annotation.starts_with("dict[") && annotation.ends_with(']') {
         let inner = &annotation[5..annotation.len() - 1];
-        let parts: Vec<&str> = inner.split(',').collect();
+        // Bracket-aware split so a nested key type (e.g. `tuple[str, str]`) is
+        // not severed at its inner comma — same splitter `tuple[`/`union[` use.
+        let parts = split_type_params(inner);
         if parts.len() == 2 {
             let key_type = InferredType::from_annotation(parts.first().map_or("", |s| s.trim()));
             let value_type = InferredType::from_annotation(parts.get(1).map_or("", |s| s.trim()));

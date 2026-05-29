@@ -247,10 +247,23 @@ impl InferredType {
                 a_key.is_assignable_to(b_key) && a_val.is_assignable_to(b_val)
             }
             (InferredType::Tuple(a), InferredType::Tuple(b)) => {
-                a.len() == b.len()
-                    && a.iter()
-                        .zip(b.iter())
-                        .all(|(a_elem, b_elem)| a_elem.is_assignable_to(b_elem))
+                match (homogeneous_tuple_elem(a), homogeneous_tuple_elem(b)) {
+                    // Target `tuple[X, ...]` (PEP 484 homogeneous variable-length):
+                    // a source `tuple[Y, ...]` matches when `Y` is assignable to `X`.
+                    (Some(a_elem), Some(b_elem)) => a_elem.is_assignable_to(b_elem),
+                    // Target `tuple[X, ...]`: every element of a fixed-length source
+                    // tuple must be assignable to `X` (empty tuple is vacuously valid).
+                    (None, Some(b_elem)) => a.iter().all(|elem| elem.is_assignable_to(b_elem)),
+                    // Target is fixed-length: a variable-length source cannot satisfy it.
+                    (Some(_), None) => false,
+                    // Both fixed-length: require equal arity and positional assignability.
+                    (None, None) => {
+                        a.len() == b.len()
+                            && a.iter()
+                                .zip(b.iter())
+                                .all(|(a_elem, b_elem)| a_elem.is_assignable_to(b_elem))
+                    }
+                }
             }
             // Callable type assignability
             (InferredType::Callable(a), InferredType::Callable(b)) => {
@@ -317,5 +330,19 @@ impl InferredType {
             // structural checking, so we don't treat it as universally compatible.
             _ => false,
         }
+    }
+}
+
+/// Returns the element type `X` when `elems` is the homogeneous variable-length
+/// tuple form `tuple[X, ...]`.
+///
+/// Implements [TYPEINF-OVERVIEW]. The annotation parser ([`super::types_parsing`])
+/// represents the `...` terminator as `Named("...")`, so `tuple[str, ...]` becomes
+/// `Tuple([Str, Named("...")])`. Distinguishing this from a fixed-length tuple is
+/// what lets a literal `(a, b, c)` widen to `tuple[X, ...]` (PEP 484).
+fn homogeneous_tuple_elem(elems: &[InferredType]) -> Option<&InferredType> {
+    match elems {
+        [elem, InferredType::Named(terminator)] if terminator == "..." => Some(elem),
+        _ => None,
     }
 }

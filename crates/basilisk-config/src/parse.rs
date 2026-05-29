@@ -42,9 +42,9 @@ pub struct BasiliskConfig {
     /// (e.g. `"vendor/**"` matches `vendor/lib/foo.py`).
     pub per_path_overrides: HashMap<String, PathOverride>,
 
-    /// Whether to emit BSK-W0010 (missing type stubs) warnings.
+    /// Whether to emit BSK-E0152 (missing type stubs) diagnostics.
     ///
-    /// When `true` (default), warns about installed packages lacking type stubs.
+    /// When `true` (default), flags installed packages lacking type stubs.
     /// Maps to `basilisk.uv.stubSuggestions` in the LSP config.
     pub uv_stub_suggestions: bool,
 

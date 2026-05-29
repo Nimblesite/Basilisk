@@ -93,9 +93,9 @@ if !untyped_names.is_empty() && should_suppress_cascade(&diag, &untyped_names, s
 
 Add `pub provenance: Option<TypeProvenance>` field (defaults to `None`). Existing rule code unaffected.
 
-### 2.2 Tag BSK-E0010 and BSK-W0010 with provenance
+### 2.2 Tag BSK-E0010 and BSK-E0152 with provenance
 
-**Files**: `crates/basilisk-checker/src/rules/e0010.rs`, `w0010.rs`
+**Files**: `crates/basilisk-checker/src/rules/e0010.rs`, `e0152.rs`
 
 Set `provenance: Some(TypeProvenance::Untyped)` on emitted diagnostics.
 
@@ -260,7 +260,7 @@ All stub/provenance config via `[tool.basilisk]` — already partially implement
 | `crates/basilisk-checker/src/lib.rs` | Cascade suppression filter in `check_with_config()` |
 | `crates/basilisk-checker/src/diagnostic.rs` | Add `provenance` field to `Diagnostic` |
 | `crates/basilisk-checker/src/rules/e0010.rs` | Tag with provenance |
-| `crates/basilisk-checker/src/rules/w0010.rs` | Tag with provenance |
+| `crates/basilisk-checker/src/rules/e0152.rs` | Tag with provenance |
 | `crates/basilisk-lsp/src/cross_module.rs` | Populate provenance from import resolution |
 | `crates/basilisk-lsp/src/hover.rs` | Provenance + uv metadata in hover |
 | `crates/basilisk-lsp/src/import_resolver.rs` | Add `.basilisk/stubs/` search path |
@@ -274,10 +274,10 @@ All stub/provenance config via `[tool.basilisk]` — already partially implement
 
 1. **Cascade suppression**: Create a Python file that imports an untyped package and uses it extensively. Confirm BSK-E0010 fires once at import, zero downstream errors.
 2. **Provenance hover**: Hover over stdlib import -> "(typeshed)". Hover over untyped import -> "(no type stubs available)".
-3. **Auto-stub generation**: `basilisk stubs generate requests` produces valid `.pyi` in `.basilisk/stubs/`. Re-check shows BSK-E0010 cleared, BSK-W0010 shows "(best-effort stub)".
+3. **Auto-stub generation**: `basilisk stubs generate requests` produces valid `.pyi` in `.basilisk/stubs/`. Re-check shows BSK-E0010 cleared, BSK-E0152 shows "(best-effort stub)".
 4. **Config**: Set `rules."BSK-E0010" = "warning"` in `pyproject.toml`, confirm severity changes.
 5. **uv integration**: In a uv project, confirm hover shows package version and stub status.
-6. **One-click code actions**: BSK-E0010 and BSK-W0010 diagnostics show quick fix code actions. Clicking the quick fix installs the package/stubs automatically. No CLI commands in help text.
+6. **One-click code actions**: BSK-E0010 and BSK-E0152 diagnostics show quick fix code actions. Clicking the quick fix installs the package/stubs automatically. No CLI commands in help text.
 7. **Full CI**: `cargo clippy`, `cargo test`, `cargo fmt --check` all pass.
 
 ---
@@ -300,7 +300,7 @@ All stub/provenance config via `[tool.basilisk]` — already partially implement
 ### Phase 2: Provenance in Hover & Diagnostics ✅ DONE
 - [x] Add `provenance: Option<TypeProvenance>` to `Diagnostic` struct
 - [x] Tag BSK-E0010 diagnostics with `TypeProvenance::Untyped`
-- [x] Tag BSK-W0010 diagnostics with provenance
+- [x] Tag BSK-E0152 diagnostics with provenance
 - [x] Tier-based severity adjustment (Tier3 -> Info) in `check_with_config()`
 - [x] Provenance annotations in hover tooltips
 - [x] uv-enriched hover (package version, stub status) — already done, enhanced with provenance labels
@@ -333,11 +333,11 @@ All stub/provenance config via `[tool.basilisk]` — already partially implement
 ### Phase 4b: Diagnostic Help Text Cleanup ✅ DONE
 - [x] Remove "Run `uv add ...`" CLI instructions from BSK-E0010 help text (`e0010.rs`)
 - [x] Remove "Run `uv sync`" CLI instructions from BSK-E0010 help text
-- [x] Remove "`uv add --dev types-...`" CLI instructions from BSK-W0010 help text
+- [x] Remove "`uv add --dev types-...`" CLI instructions from BSK-E0152 help text
 - [x] Remove "Run `uv lock`" CLI instructions from BSK-W0013 help text
 - [x] Remove "run `uv add --dev pytest`" from pytest-not-found messages (init.rs, test_handlers.rs)
 - [x] Replace with problem descriptions — the code action is the fix, not a CLI command
-- [x] All BSK-E0010/W0010/W0013/W0014 scenarios have corresponding code actions in `code_actions/mod.rs`
+- [x] All BSK-E0010/E0152/W0013/W0014 scenarios have corresponding code actions in `code_actions/mod.rs`
 - [x] Update tests to match new help text
 - [x] All tests passing (18 checker, 57 code action)
 

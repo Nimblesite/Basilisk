@@ -3,11 +3,31 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { getStore } from '../../extension';
+import { createServerCommandHandler } from '../../lsp-client';
 import {
     SUITE_SETUP_TIMEOUT_MS,
     setupLspTestSuite,
     teardownLspTestSuite,
 } from './test-helpers';
+
+/** Run `body`, capturing any `showInformationMessage` toasts, then restore. */
+async function captureInfoToasts(body: () => Promise<unknown>): Promise<string[]> {
+    const messages: string[] = [];
+    const win = vscode.window as {
+        showInformationMessage: typeof vscode.window.showInformationMessage;
+    };
+    const original = win.showInformationMessage;
+    win.showInformationMessage = (async (msg: string) => {
+        messages.push(msg);
+        return undefined;
+    }) as typeof vscode.window.showInformationMessage;
+    try {
+        await body();
+    } finally {
+        win.showInformationMessage = original;
+    }
+    return messages;
+}
 
 suite('Basilisk uv Integration Tests', () => {
     let tmpDir: string;
@@ -125,6 +145,33 @@ suite('Basilisk uv Integration Tests', () => {
             inspected.defaultValue,
             true,
             'Default uv.dependencyDiagnostics should be true'
+        );
+    });
+
+    // ----------------------------------------------------------------
+    // Quick-fix success toast names the package (regression)
+    // ----------------------------------------------------------------
+
+    // A code action (e.g. the BSK-E0152 "install stubs" fix) invokes
+    // basilisk.uv.addDev with a BARE STRING argument, not a `{ package }`
+    // object. The success toast must read the package name from either shape;
+    // previously it only handled the object form and showed "undefined".
+    test('uv.addDev success toast names the package from a bare-string arg', async () => {
+        const fakeClient = {
+            sendRequest: async () => ({ success: true }),
+        } as unknown as Parameters<typeof createServerCommandHandler>[0];
+        const handler = createServerCommandHandler(fakeClient, 'basilisk.uv.addDev');
+
+        // A code action sends the package as a bare string, not { package }.
+        const messages = await captureInfoToasts(async () => handler('types-six'));
+
+        assert.ok(
+            messages.some((m) => m.includes('types-six')),
+            `toast should name the package; got: ${JSON.stringify(messages)}`
+        );
+        assert.ok(
+            !messages.some((m) => m.includes('undefined')),
+            `toast must not say "undefined"; got: ${JSON.stringify(messages)}`
         );
     });
 

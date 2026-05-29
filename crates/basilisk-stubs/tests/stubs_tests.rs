@@ -125,7 +125,7 @@ fn lookup_builtin_memoryview_type() {
     );
 }
 
-// Regression for issue #46: BSK-W0010's quick fix must offer the *real*
+// Regression for issue #46: BSK-E0152's quick fix must offer the *real*
 // typeshed distribution name, and nothing when no stub distribution exists.
 
 #[test]

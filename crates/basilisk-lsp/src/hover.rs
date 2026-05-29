@@ -73,6 +73,35 @@ pub fn hover_at(
         }
     }
 
+    // 2b. Imported symbol with no local definition (e.g. a function/class from a
+    // `.pyi` stub or a py.typed package): show its signature/type from
+    // cross-module resolution so stub types surface on hover.
+    if hit.is_none() {
+        if let Some(name) = identifier_at_offset(source, byte_offset) {
+            if let Some(ext_sym) = resolved.imported_symbols.get(&name) {
+                let mut md = if let Some(sig) = &ext_sym.signature {
+                    format!("```python\n{sig}\n```")
+                } else if let Some(ty) = &ext_sym.type_annotation {
+                    format!("```python\n{name}: {ty}\n```")
+                } else {
+                    String::new()
+                };
+                if let Some(label) = ext_sym
+                    .provenance
+                    .and_then(basilisk_stubs::TypeProvenance::hover_label)
+                {
+                    if !md.is_empty() {
+                        md.push_str("\n\n");
+                    }
+                    let _ = write!(md, "*{label}*");
+                }
+                if !md.is_empty() {
+                    sections.push(md);
+                }
+            }
+        }
+    }
+
     // 3. Import resolution details when the cursor is on an import statement.
     if let Some(import_info) = find_import_at_offset(resolved, byte_offset) {
         let import_md = format_import_hover(import_info);
@@ -214,6 +243,48 @@ mod tests {
         assert!(
             markup.value.contains("os.pyi"),
             "should show resolved path: {}",
+            markup.value
+        );
+    }
+
+    /// Stage 3 of stub type consumption: hovering a symbol imported from a stub
+    /// or py.typed package (one with no local definition) must show its
+    /// signature/type from `imported_symbols`. Before this, hover found no local
+    /// `hit` and rendered nothing for such symbols.
+    #[test]
+    fn test_hover_on_imported_stub_symbol_shows_signature() {
+        use basilisk_resolver::scope::{ExternalSymbol, ExternalSymbolKind};
+        use basilisk_resolver::Span;
+
+        let source = "from acme import fetch\n\nx = fetch('u')\n";
+        let parsed = basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned())
+            .expect("test source should parse");
+        let mut resolved = basilisk_resolver::resolve(&parsed).expect("resolution should not fail");
+
+        let _ = resolved.imported_symbols.insert(
+            "fetch".to_owned(),
+            ExternalSymbol {
+                name: "fetch".to_owned(),
+                kind: ExternalSymbolKind::Function,
+                type_annotation: Some("bytes".to_owned()),
+                source_path: std::path::PathBuf::from("/venv/.../acme-stubs/__init__.pyi"),
+                source_span: Span::new(0, 0),
+                signature: Some("def fetch(url: str) -> bytes".to_owned()),
+                provenance: Some(basilisk_stubs::TypeProvenance::StubTier1),
+            },
+        );
+
+        // Hover on the `fetch` usage in `x = fetch('u')` (not the import line).
+        let offset = source.rfind("fetch").expect("usage present") + 1;
+        let hover = hover_at(&resolved, source, offset, &[]);
+        let hover = hover.expect("hover should be Some for an imported stub symbol");
+        let HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected Markup hover contents");
+        };
+
+        assert!(
+            markup.value.contains("def fetch(url: str) -> bytes"),
+            "hover should show the stub signature: {}",
             markup.value
         );
     }

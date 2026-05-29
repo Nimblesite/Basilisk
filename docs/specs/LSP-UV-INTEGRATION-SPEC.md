@@ -179,12 +179,13 @@ With uv integration, BSK-E0010 becomes context-aware:
 | Stdlib module, wrong Python version | `Module "tomllib" requires Python >= 3.11 (project targets 3.10)` | — |
 | Workspace member, not in deps | `Import "my_lib" resolves as workspace member "packages/my_lib"` | — (info, not error) |
 
-### 5.2 Missing Stub Suggestions (BSK-W0010) {#LSPUV-DIAGNOSTICS-MISSING-STUBS}
+### 5.2 Missing Stub Suggestions (BSK-E0152) {#LSPUV-DIAGNOSTICS-MISSING-STUBS}
 
-New warning when a package is installed but has no type information:
+Strict-by-default error when a package is installed but has no type information
+(opt down with `"BSK-E0152" = "warning"` to import untyped libraries at your own risk):
 
 ```
-warning[BSK-W0010]: Package "requests" has no type information
+error[BSK-E0152]: Package "requests" has no type information
   --> src/app.py:3:1
    |
  3 | import requests
@@ -261,7 +262,7 @@ Each workspace member becomes an LSP workspace folder. The LSP server maintains 
 | Trigger | Code Action Title | Command |
 |---------|-------------------|---------|
 | BSK-E0010 (unresolved, package available) | "Add dependency: `requests`" | `basilisk.uv.add` |
-| BSK-W0010 (no stubs) | "Install type stubs: `types-requests`" | `basilisk.uv.addDev` |
+| BSK-E0152 (no stubs) | "Install type stubs: `types-requests`" | `basilisk.uv.addDev` |
 | BSK-W0013 (stale lock) | "Sync environment" | `basilisk.uv.sync` |
 
 ### 7.2 Execution {#LSPUV-ACTIONS-EXECUTION}

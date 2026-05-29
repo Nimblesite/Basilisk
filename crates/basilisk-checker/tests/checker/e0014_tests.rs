@@ -212,6 +212,47 @@ r1_2: RecursiveTypeAlias1[int] = [1, [1, 2, 3]]
 }
 
 #[test]
+fn e0014_no_false_positive_on_homogeneous_tuple_str_annotation(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Regression for issue #45: `tuple[str, ...]` is PEP 484's homogeneous
+    // variable-length tuple. A literal tuple of all-string elements widens to
+    // it and must NOT fire E0014.
+    let source = r#"
+_MODEL_SETTING_KEYS: tuple[str, ...] = ("max_tokens", "temperature", "top_p", "timeout", "seed")
+"#;
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "BSK-E0014");
+    assert!(
+        msgs.is_empty(),
+        "tuple[str, ...] = (..all strings..) should NOT fire E0014, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0014_no_false_positive_on_dict_with_tuple_key_annotation(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Regression for issue #51: `dict[tuple[str, str], str]` has a tuple KEY
+    // type whose inner comma must not be split by the dict arg parser. A dict
+    // literal matching the annotation exactly must NOT fire E0014.
+    let source = r#"
+_LLM_DISPLAY_NAMES: dict[tuple[str, str], str] = {
+    ("anthropic", "claude-opus-4-7"): "Claude Opus 4.7",
+    ("anthropic", "claude-sonnet-4-6"): "Claude Sonnet 4.6",
+}
+"#;
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "BSK-E0014");
+    assert!(
+        msgs.is_empty(),
+        "dict[tuple[str, str], str] = {{matching literal}} should NOT fire E0014, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn e0014_tuple_reassignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: int = 1

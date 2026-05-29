@@ -48,6 +48,27 @@ pub fn typeshed_stub_distribution(module_name: &str) -> Option<&'static str> {
     STUB_DISTRIBUTIONS.get(root).copied()
 }
 
+/// Whether the package containing `resolved_path` ships a PEP 561 `py.typed`
+/// marker (i.e. opts in to inline type distribution).
+///
+/// Walks up from the resolved file looking for a `py.typed` file, stopping at
+/// the `site-packages` boundary — installed packages are its direct children,
+/// so the marker never lives at or above that level. Implements [STUBRES-ENGINE].
+#[must_use]
+pub fn has_py_typed_marker(resolved_path: &std::path::Path) -> bool {
+    let mut dir = resolved_path.parent();
+    while let Some(current) = dir {
+        if current.file_name() == Some(std::ffi::OsStr::new("site-packages")) {
+            return false;
+        }
+        if current.join("py.typed").is_file() {
+            return true;
+        }
+        dir = current.parent();
+    }
+    false
+}
+
 /// Look up the type annotation string for a built-in symbol.
 ///
 /// Returns type information for Python built-in types.

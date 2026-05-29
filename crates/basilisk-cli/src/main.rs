@@ -506,7 +506,7 @@ fn collect_and_check(
     let mut sources = Vec::new();
 
     for path in python_files {
-        match process_file(&path, &search_paths) {
+        match process_file(&path, &search_paths, &config) {
             Ok((diags, source)) => {
                 all_diagnostics.extend(diags);
                 sources.push(FileSource { path, text: source });
@@ -564,6 +564,7 @@ fn build_uv_registry(
 fn process_file(
     path: &str,
     search_paths: &basilisk_lsp::import_resolver::ImportSearchPaths,
+    config: &basilisk_config::BasiliskConfig,
 ) -> Result<(Vec<basilisk_checker::Diagnostic>, String), String> {
     let parsed = basilisk_parser::parse_file(path).map_err(|e| e.to_string())?;
     let source = parsed.source.clone();
@@ -574,7 +575,10 @@ fn process_file(
     // package-dependency metadata (W0011 transitive-import warnings, etc.).
     basilisk_lsp::import_resolver::resolve_module_imports(&mut resolved, search_paths);
 
-    let diags = basilisk_checker::check(&resolved);
+    // Apply the project's `[tool.basilisk.rules]` / per-path overrides so the
+    // CLI and editor agree on severity (e.g. a project can promote "no type
+    // stubs" to a hard error). Using `check` here would silently drop config.
+    let diags = basilisk_checker::check_with_config(&resolved, config);
     Ok((diags, source))
 }
 
@@ -768,6 +772,55 @@ mod tests {
         assert!(
             !diags.is_empty(),
             "unannotated function must produce diagnostics"
+        );
+        Ok(())
+    }
+
+    // ── collect_and_check: project config severity overrides are applied ──────
+
+    /// Unique temp dir for tests that need an isolated project root.
+    fn unique_project_dir(prefix: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static CTR: AtomicU64 = AtomicU64::new(0);
+        let n = CTR.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("{prefix}_{}_{n}", std::process::id()))
+    }
+
+    /// Regression: the `basilisk check` CLI must honor `[tool.basilisk.rules]`
+    /// severity overrides from `pyproject.toml`. A project that escalates a
+    /// warning-default rule (BSK-W0050) to "error" must see it surface as a
+    /// hard error through the real CLI pipeline — otherwise strictness config
+    /// is silently ignored in CI. Previously `process_file` called
+    /// `basilisk_checker::check` (default config), dropping all overrides.
+    #[test]
+    fn collect_and_check_applies_project_rule_severity_override(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dir = unique_project_dir("basilisk_cli_cfg_promote");
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            b"[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n\
+              [tool.basilisk.rules]\n\"BSK-W0050\" = \"error\"\n",
+        )?;
+        let py = dir.join("m.py");
+        std::fs::write(&py, b"x: int = 42\n")?;
+
+        let path = py.to_string_lossy().into_owned();
+        let (diags, _) = collect_and_check(&[path])?;
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let w0050: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-W0050")
+            .collect();
+        assert!(!w0050.is_empty(), "BSK-W0050 must still fire");
+        assert!(
+            w0050
+                .iter()
+                .all(|d| d.severity == basilisk_checker::Severity::Error),
+            "project config `BSK-W0050 = \"error\"` must promote W0050 to error \
+             through the CLI; got {:?}",
+            w0050.iter().map(|d| d.severity).collect::<Vec<_>>()
         );
         Ok(())
     }

@@ -721,7 +721,7 @@
     "package": "npm run sync:shipwright && vsce package"
   },
   "dependencies": {
-    "@nimblesite/shipwright-vscode": "^0.2.0",
+    "@nimblesite/shipwright-vscode": "^0.5.3",
     "@preact/signals-core": "^1.14.0",
     "vscode-languageclient": "^9.0.1"
   },
