@@ -19,16 +19,8 @@
         "bundlePath": "bin/${platform}/${binaryName}${exe}",
         "perPlatformArtifact": true
       },
-      "sources": ["user-setting", "env", "bundled", "pkgmgr", "cargo-bin", "path", "lsp-initialize"],
+      "sources": ["user-setting", "bundled"],
       "userSetting": "basilisk.executablePath",
-      "env": {
-        "pathVar": "BASILISK_EXECUTABLE_PATH",
-        "dirVar": "BASILISK_BINARY_DIR"
-      },
-      "pkgmgr": {
-        "brew": "basilisk",
-        "scoop": "basilisk"
-      },
       "githubRelease": {
         "repo": "Nimblesite/Basilisk",
         "assetPattern": "basilisk-${version}-${platform}.tar.gz",
@@ -49,12 +41,8 @@
         "bundlePath": "bin/${platform}/${binaryName}${exe}",
         "perPlatformArtifact": true
       },
-      "sources": ["user-setting", "env", "bundled", "cargo-bin", "path"],
+      "sources": ["user-setting", "bundled"],
       "userSetting": "basilisk.binaries.basilisk-profiler-helper",
-      "env": {
-        "pathVar": "BASILISK_PROFILER_HELPER_PATH",
-        "dirVar": "BASILISK_BINARY_DIR"
-      },
       "verifyStartup": false,
       "versionCheckStrategy": "version-flag",
       "required": false

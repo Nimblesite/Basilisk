@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { execFileSync } from 'child_process';
+
 
 export { POLL_INTERVAL_MS, WAIT_MS } from '../../timeouts';
 
@@ -33,8 +33,6 @@ export const SUITE_SETUP_TIMEOUT_MS = 90_000;
 /** Maximum time (ms) to wait for a server-advertised command to appear. */
 export const COMMAND_WAIT_MS = 1_000;
 
-/** Timeout (ms) for basilisk binary version check via CLI. */
-const BINARY_VERSION_CHECK_TIMEOUT_MS = 5_000;
 
 /** Default interval (ms) for polling loops. */
 export const DEFAULT_POLL_INTERVAL_MS = 100;
@@ -52,7 +50,7 @@ function detectShipwrightPlatform(): string {
     return 'linux-x64';
 }
 
-/** Resolve the bundled VSIX binary staged by the test bootstrap. */
+/** Resolve the basilisk binary for tests: bundled VSIX binary first, then workspace build. */
 export function findBasiliskBinary(): string | undefined {
     const extensionRoot = path.resolve(__dirname, '../../..');
     const exe = process.platform === 'win32' ? '.exe' : '';
@@ -61,29 +59,18 @@ export function findBasiliskBinary(): string | undefined {
         return bundled;
     }
 
-    const envPath = process.env.BASILISK_EXECUTABLE_PATH;
-    if (envPath !== undefined && envPath !== '' && fs.existsSync(envPath)) {
-        return envPath;
-    }
-
-    // __dirname at runtime is vscode-extension/out/test/suite/ — 4 levels to repo root.
     const workspaceRoot = path.resolve(__dirname, '../../../..');
-    const releaseBinary = path.join(workspaceRoot, 'target', 'release', 'basilisk');
+    const releaseBinary = path.join(workspaceRoot, 'target', 'release', `basilisk${exe}`);
     if (fs.existsSync(releaseBinary)) {
         return releaseBinary;
     }
 
-    const debugBinary = path.join(workspaceRoot, 'target', 'debug', 'basilisk');
+    const debugBinary = path.join(workspaceRoot, 'target', 'debug', `basilisk${exe}`);
     if (fs.existsSync(debugBinary)) {
         return debugBinary;
     }
 
-    try {
-        execFileSync('basilisk', ['--version'], { timeout: BINARY_VERSION_CHECK_TIMEOUT_MS });
-        return 'basilisk';
-    } catch {
-        return undefined;
-    }
+    return undefined;
 }
 
 /**

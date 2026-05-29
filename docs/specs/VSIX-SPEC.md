@@ -314,15 +314,10 @@ VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSessi
 
 ---
 
-## Binary Resolution {#VSIX-BINARY-RESOLUTION}
+## Binary Resolution
 
-> See `LSP-ARCHITECTURE-SPEC.md` § Binary Resolution Order for the shared cascade.
-
-VS Code-specific resolution order:
-1. VS Code setting: `basilisk.executablePath`
-2. Environment variable: `BASILISK_EXECUTABLE_PATH`
-3. Well-known locations: `~/.cargo/bin/basilisk`, `/usr/local/bin/basilisk`, `/opt/homebrew/bin/basilisk`
-4. Fall back to bare `"basilisk"` on PATH
+See [`LSP-ARCHITECTURE-SPEC.md` § LSPARCH-BINRES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-BINRES)
+— single source of truth for all binary resolution.
 
 ---
 

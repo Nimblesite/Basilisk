@@ -86,16 +86,28 @@ basilisk lsp [--transport stdio|ws] [--port 8765]
 - WebSocket transport: `--transport ws --port 8765`
 - Logging: `BASILISK_LOG=debug basilisk lsp` (default level: `warn`, written to stderr)
 
-## Binary Resolution Order (all editors) {#LSPARCH-BINRES}
+## Binary Resolution (all editors) {#LSPARCH-BINRES}
 
-Every editor extension MUST resolve the `basilisk` binary using this cascade:
+Runtime binaries are declared in `shipwright.json` and resolved by the
+Shipwright framework. Each component's `sources` array controls the
+resolution cascade. The only permitted sources are:
 
-1. User-configured path (editor setting)
-2. `BASILISK_PATH` environment variable
-3. `~/.cargo/bin/basilisk`
-4. `/usr/local/bin/basilisk`
-5. `/opt/homebrew/bin/basilisk`
-6. Fall back to OS PATH search
+1. **`user-setting`** — explicit user override via the editor setting
+   (e.g. `basilisk.executablePath`). Allows advanced users to point at a
+   different build.
+2. **`bundled`** — the binary shipped inside the extension package at
+   `bin/${platform}/${binaryName}${exe}`.
+
+No other source is permitted. `cargo-bin`, `pkgmgr`, `path`, `env`, and
+`lsp-initialize` are **illegal** — the extension must never fall back to
+system-installed binaries.
+
+Current components (see `shipwright.json` for the full manifest):
+
+| Component | Required | Platforms |
+|-----------|----------|-----------|
+| `basilisk` (LSP server) | yes | all 5 |
+| `basilisk-profiler-helper` | no | darwin-arm64 |
 
 ## Shared Configuration Settings (all editors) {#LSPARCH-CONFIG}
 
