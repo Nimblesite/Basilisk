@@ -314,7 +314,7 @@ VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSessi
 
 ---
 
-## Binary Resolution
+## Binary Resolution {#VSIX-BINARY-RESOLUTION}
 
 See [`LSP-ARCHITECTURE-SPEC.md` § LSPARCH-BINRES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-BINRES)
 — single source of truth for all binary resolution.
