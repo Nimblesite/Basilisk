@@ -247,6 +247,7 @@ Rough plan (most of this is human-led — voice, accounts, timing, relationships
 - [ ] **`[AGENT]`** Finish Neovim binary auto-download from GitHub releases + outdated-binary version check (last `NEOVIM-PLAN.md` gaps).
 - [ ] **`[HUMAN]`** Create/confirm publisher accounts and store CI secrets: VS Code Marketplace (VSCE_PAT), Open VSX (OVSX_PAT), Zed registry, (optional) luarocks.
 - [ ] **`[HUMAN]`** Decide the versioning scheme (single repo-wide version vs. per-extension) and the release cadence.
+- [ ] **`[AGENT]`** Website: if a version is displayed anywhere, source it dynamically from the latest GitHub release — never hardcode it in copy (hardcoded `v0.1` strings were removed 2026-05-30; `site.json` still carries `0.0.0-PLACEHOLDER`).
 
 ## B. Editor publishing
 

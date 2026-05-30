@@ -62,7 +62,7 @@ This acknowledges that large codebases cannot be fully typed overnight, while en
 
 ## Project status
 
-Basilisk is currently in **v0.1 (alpha)** — the core checker, LSP server, and editor extensions are all working. Autocomplete, go-to-definition, hover, diagnostics, inlay hints, refactoring, debugging, and profiling are shipping today.
+Basilisk is currently in **alpha** — the core checker, LSP server, and editor extensions are all working. Autocomplete, go-to-definition, hover, diagnostics, inlay hints, refactoring, debugging, and profiling are shipping today.
 
 | Phase | Milestone | Status |
 |---|---|---|

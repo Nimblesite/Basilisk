@@ -64,7 +64,7 @@ The result: keystroke-responsive type checking that doesn't require a persistent
 
 ## What exists today
 
-Basilisk v0.1 (alpha) implements Phase 1 of a seven-phase roadmap.
+Basilisk (alpha) implements Phase 1 of a seven-phase roadmap.
 
 **Working today:**
 - Core parser, name resolver, and type checker
