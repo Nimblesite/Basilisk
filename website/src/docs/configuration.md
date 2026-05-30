@@ -34,11 +34,6 @@ stub-paths = ["stubs/"]
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
 
-[tool.basilisk.mojo-safety]
-ownership = true
-immutability = true
-no-implicit-coercion = true
-
 [tool.basilisk.migration]
 enabled = true
 started = "2025-06-01"
@@ -91,36 +86,6 @@ Directories or files to analyze. Accepts paths and glob patterns. Only `.py` fil
 **Example:** `["**/migrations/**", "**/generated/**"]`
 
 Glob patterns to exclude from analysis. Applied after `include`. Use `**` for recursive matching.
-
----
-
-## `[tool.basilisk.mojo-safety]`
-
-Controls Mojo-inspired safety analysis. See [Mojo-Style Safety](/docs/mojo-safety/) for full documentation.
-
-### `ownership`
-
-**Type:** `boolean`
-**Default:** `true`
-
-Enable ownership analysis: `Borrowed`, `InOut`, `Owned` annotation checking.
-Flags mutation of `Borrowed` parameters (BSK-E0030) and use-after-move (BSK-E0031).
-
-### `immutability`
-
-**Type:** `boolean`
-**Default:** `true`
-
-Enforce immutability of parameters not annotated with `InOut`.
-Flags mutation of unannotated parameters (BSK-E0040).
-
-### `no-implicit-coercion`
-
-**Type:** `boolean`
-**Default:** `true`
-
-Flag implicit type coercions: `int` → `float`, `bool` → `int`, `bytes` → `str`.
-Requires explicit conversion functions (BSK-E0060 through BSK-E0063).
 
 ---
 
@@ -181,7 +146,7 @@ A date after which `strict = false` is no longer honored and errors are enforced
 ### `rules.ignore`
 
 **Type:** `string[]`
-**Example:** `["BSK-E0011", "BSK-W0080"]`
+**Example:** `["BSK-E0011", "BSK-E0001"]`
 
 Specific rules to ignore in matching files. Prefer narrow ignores over `strict = false` when possible.
 
@@ -207,7 +172,7 @@ To suppress all diagnostics in a file, add at the top:
 # basilisk: relaxed
 ```
 
-> **Note:** Inline suppressions without a reason comment are themselves flagged as BSK-W0095. The reason is not checked for content — it just needs to be present.
+> **Note:** Inline suppressions without a reason comment are themselves flagged as a warning. The reason is not checked for content — it just needs to be present.
 
 ---
 

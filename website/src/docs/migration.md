@@ -68,8 +68,8 @@ If you were already using Pyright with `typeCheckingMode = "strict"`, you will s
 
 Basilisk adds errors that Pyright does not flag even in strict mode:
 - **BSK-E0011** — Implicit `Any` in parameter and return position
-- **BSK-E0040** — Mutation of unannotated parameters
-- **BSK-E0060–E0063** — Implicit type coercions
+- **BSK-E0023** — Non-exhaustive `match` statement (missing cases)
+- **BSK-E0025** — Missing `@override` decorator on overriding methods
 
 ### Step 3 — Handle `# type: ignore` comments
 
@@ -83,7 +83,7 @@ x = get_value()  # type: ignore[reportArgumentType]
 x = get_value()  # basilisk: ignore[BSK-E0012] -- third-party API mismatch, tracked in #456
 ```
 
-Basilisk will flag bare `# type: ignore` comments as BSK-W0090 (unused suppression) since it doesn't recognise them. The migration tool suggests the correct format.
+Basilisk will flag bare `# type: ignore` comments since it doesn't recognise them. The migration tool suggests the correct `# basilisk: ignore[CODE] -- reason` format.
 
 ### Step 4 — Gradual enforcement with migration mode
 
@@ -143,8 +143,8 @@ exclude = ["**/migrations/**"]
 mypy's `--strict` enables a specific set of flags. Basilisk enforces all of them and more. When migrating from `mypy --strict`, expect:
 
 - **More errors from BSK-E0011** — mypy permits `Any` in some positions that Basilisk does not
-- **More errors from BSK-E0040/E0041** — Basilisk's immutability rules have no mypy equivalent
-- **More errors from BSK-E0060–E0063** — mypy does not flag implicit numeric coercions
+- **More errors from BSK-E0023** — non-exhaustive `match` statements that mypy does not check
+- **More errors from BSK-E0025** — missing `@override` decorators that mypy does not require
 
 ### Step 3 — mypy plugins
 

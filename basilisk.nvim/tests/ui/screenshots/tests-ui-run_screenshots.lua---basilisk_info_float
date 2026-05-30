@@ -8,11 +8,11 @@
 07|│                                                                              │
 08|│  Status:     active                                                          │
 09|│  Client ID:  1                                                               │
-10|│  Root:       /private/var/folders/v3/49bmt6f55b1csb6snk8fr1mw0000gn/T/nvim.ch│
+10|│  Root:       /tmp/nvim-basilisk/session/0                                    │
 11|│ristianfindlay/f5dexg/0                                                       │
 12|│                                                                              │
-13|│  Binary:     /Users/christianfindlay/Documents/Code/Basilisk/target/release/b│
-14|│asilisk                                                                       │
+13|│  Binary:     /opt/basilisk/target/release/basilisk                           │
+14|│                                                                              │
 15|│  Version:    basilisk 0.1.0                                                  │
 16|│  Python:     auto-detect                                                     │
 17|│  Mode:       wholeModule                                                     │

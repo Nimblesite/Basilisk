@@ -19,7 +19,7 @@ export default function (eleventyConfig) {
       name: "Basilisk",
       url: "https://www.basilisk-python.dev",
       description:
-        "Strict-by-default Python type checker. Every parameter typed. Every return declared. No escape hatches. Built in Rust.",
+        "Open-source, strict-by-default Python language server built in Rust. Type checking, autocomplete, refactoring, debugging, and profiling — in VS Code, Cursor, Zed, and Neovim.",
       author: "The Basilisk Project",
       themeColor: "#e8500a",
       stylesheet: "/assets/css/styles.css",
@@ -38,6 +38,14 @@ export default function (eleventyConfig) {
       docs: true,
       darkMode: true,
       i18n: false,
+    },
+    // Register the languages the site actually ships so the base layout emits a
+    // complete hreflang cluster (en + zh + x-default) and og:locale:alternate.
+    // Without this, supportedLanguages defaults to ['en'] and the Chinese pages
+    // are never declared as alternates — Google can't connect /  ⇄  /zh/.
+    i18n: {
+      defaultLanguage: "en",
+      languages: ["en", "zh"],
     },
   });
 

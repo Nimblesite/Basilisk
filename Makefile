@@ -1,11 +1,11 @@
-# agent-pmo:2efd847
+# agent-pmo:74cf183
 # =============================================================================
 # Standard Makefile — Basilisk
 # Cross-platform: Linux, macOS, Windows (via GNU Make)
 # Exactly 7 standard targets: build, test, lint, fmt, clean, ci, setup
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup mutation-test reinstall-vsix reinstall-vsix-prerelease
+.PHONY: build test lint fmt clean ci setup mutation-test conformance bench reinstall-vsix reinstall-vsix-prerelease
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -160,6 +160,19 @@ mutation-test:
 			cat "$$missed_file"; \
 		fi; \
 	'
+
+## conformance: Run the PEP typing conformance suite and write
+## conformance/conformance_status.csv. Fetches the upstream suite if missing;
+## use FETCH=1 to force a re-download.
+conformance:
+	@bash scripts/conformance.sh $(if $(filter 1,$(FETCH)),--fetch,)
+
+## bench: Benchmark Basilisk vs pyright/mypy/ty/pyrefly on the fixture suite.
+## Requires hyperfine; competitor tools are skipped if not installed.
+## Writes per-fixture JSON + a summary to benchmarks/results/.
+bench:
+	@cargo build --release --bin basilisk
+	@bash benchmarks/run.sh
 
 ## reinstall-vsix: Clean rebuild + reinstall a host-targeted VSIX.
 ## Mirrors .github/workflows/release.yml `vsix` job for the host platform.

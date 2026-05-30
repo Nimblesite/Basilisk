@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/basilisk-logo.png" alt="Basilisk" width="140">
+  <img src="https://basilisk-python.dev/assets/images/favicon.png" alt="Basilisk" width="140">
 </p>
 
 <h1 align="center">Basilisk for VS Code</h1>

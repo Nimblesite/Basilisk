@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
-title: "Quick Start — Replace Pylance in 5 Minutes"
+title: "Quick Start — Type-Check Your First File in 5 Minutes"
 description: "Get started with Basilisk in 5 minutes. Install the VS Code extension, run your first type check, and see strict-by-default Python diagnostics in action."
-keywords: basilisk, quick start, pylance replacement, python language server, type checking, tutorial, vs code
+keywords: basilisk, quick start, python language server, type checking, tutorial, vs code
 date: 2026-02-28
 dateModified: 2026-03-31
 author: The Basilisk Project
@@ -177,7 +177,7 @@ Basilisk includes an integrated CPU and memory profiler. To try it in VS Code:
 
 For memory leak hunting, use **Basilisk: Start Memory Tracking**, take two snapshots with **Basilisk: Take Memory Snapshot**, then **Basilisk: Diff Memory Snapshots** to surface leaks as diagnostics in the Problems panel.
 
-See the [Profiler guide](/docs/profiler/) for the full workflow — flamegraphs, reference graphs, profile diffing, Zed and Neovim commands, and platform requirements.
+See the [Profiler guide](/docs/profiler/) for the full workflow — flamegraphs, reference graphs, profile diffing, VS Code commands, Zed slash commands, Neovim user commands, and platform requirements.
 
 ## Next steps
 
