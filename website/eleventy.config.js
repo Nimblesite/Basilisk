@@ -39,6 +39,14 @@ export default function (eleventyConfig) {
       darkMode: true,
       i18n: false,
     },
+    // Register the languages the site actually ships so the base layout emits a
+    // complete hreflang cluster (en + zh + x-default) and og:locale:alternate.
+    // Without this, supportedLanguages defaults to ['en'] and the Chinese pages
+    // are never declared as alternates — Google can't connect /  ⇄  /zh/.
+    i18n: {
+      defaultLanguage: "en",
+      languages: ["en", "zh"],
+    },
   });
 
   eleventyConfig.addPassthroughCopy("src/assets");
