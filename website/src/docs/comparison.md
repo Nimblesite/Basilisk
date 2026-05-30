@@ -43,7 +43,6 @@ Basilisk removes the choice. There is no permissive mode to fall back to.
 | PEP conformance¹ | 92.5% (→100% target) | ~99% | ~58% | early alpha | ~86% |
 | Implementation | Rust | TypeScript | Python/C | Rust | Rust |
 | Runtime required | None | Node.js | Python | None | None |
-| Incremental speed | <10ms | ~386ms² | slower | 4.7ms² | <10ms |
 | Full LSP (completions, hover, goto) | ✅ | Pylance only | ❌ | Basic | Basic |
 | Integrated debugger | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Integrated profiler | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -56,7 +55,6 @@ Basilisk removes the choice. There is no permissive mode to fall back to.
 **Sources:**
 
 ¹ Full-pass score from the [official python/typing conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) (pyright 1.1.408, mypy 1.19.1, pyrefly 0.54.0). mypy's partial+pass score is 96.4%. ty is not yet included in the official suite — alpha-stage figure from [sinon.github.io/future-python-type-checkers](https://sinon.github.io/future-python-type-checkers/) (August 2025, alpha build).
-² Incremental re-check time after editing a load-bearing file in PyTorch, per the [Astral ty launch post](https://astral.sh/blog/ty) (December 2025): ty 4.7ms, Pyright 386ms.
 
 ---
 
@@ -110,10 +108,10 @@ mypy defined what Python type checking looks like. Its `--strict` flag was the r
 
 **Built by the Ruff team. Rust + Salsa. Early alpha — not yet in the official conformance suite.**
 
-ty is the most interesting new entrant. It's built by the same team that created Ruff (now the de facto Python linter), uses the same Salsa-based incremental architecture as Basilisk, and has Astral's engineering velocity behind it.
+ty is the most interesting new entrant. It's built by the same team that created Ruff (now the de facto Python linter), uses a Salsa-based incremental architecture, is built in Rust like Basilisk, and has Astral's engineering velocity behind it.
 
 **What ty does well:**
-- Same architectural foundation as Basilisk (Salsa + Rust)
+- Rust-based incremental architecture (Salsa)
 - Built by a team with a track record of shipping
 - MIT licensed, fully open source
 - Sub-10ms incremental speed ([4.7ms on PyTorch](https://astral.sh/blog/ty), December 2025)
@@ -153,7 +151,7 @@ Pyrefly was built by Meta to handle their Python codebase — one of the largest
 Basilisk is not a faster version of an existing tool. It occupies a different position:
 
 **Unique to Basilisk:**
-1. Strict by default — the only tool where you cannot accidentally run in permissive mode, yet you can dial rules down per-file or per-path from the editor UI or config (with optional deadlines)
+1. Strict by default — the only tool where you cannot accidentally run in permissive mode, yet you can dial rules down per-file or per-path from the editor UI or config
 2. Enrichment fixes — one-click code actions that add the missing types *for* you, instead of just reporting that they're missing
 3. A complete, open-source LSP in every editor — completions, hover, go-to-definition, refactoring, debugging, and profiling, the same in VS Code, plus native Zed and Neovim extensions (Open VSX for Cursor, Windsurf, and others coming very soon; JetBrains planned) — not just inside one proprietary VS Code extension
 4. Integrated debugger and profiler brokered through the language server

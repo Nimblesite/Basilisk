@@ -17,7 +17,7 @@ jobs:
   # ── Lint (runs in parallel with all test jobs) ─────────────────────────────
   lint:
     name: Lint
-    runs-on: ubuntu-22.04-8-cores
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -50,7 +50,7 @@ jobs:
   # ── Zed Extension (runs in parallel) ───────────────────────────────────────
   zed:
     name: Zed Extension
-    runs-on: ubuntu-22.04-8-cores
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -62,6 +62,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          # Bust the cache: a prior run cached host build-script binaries
+          # (e.g. serde's build-script-build) linked against a glibc the
+          # standard runner does not provide, so they failed to execute on
+          # restore. A fresh prefix forces serde et al. to rebuild from
+          # source against the runner's own glibc.
+          prefix-key: v1-rust-glibc
 
       - name: Build Zed extension to WASM
         run: cargo build --release --target wasm32-wasip2 --manifest-path basilisk-zed/Cargo.toml
@@ -75,7 +81,7 @@ jobs:
   # ── Rust coverage + thresholds (runs in parallel) ──────────────────────────
   test-rust:
     name: Rust Tests & Coverage
-    runs-on: ubuntu-22.04-8-cores
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -123,7 +129,7 @@ jobs:
   # ── VS Code extension (runs in parallel) ───────────────────────────────────
   test-vscode:
     name: VS Code Extension
-    runs-on: ubuntu-22.04-8-cores
+    runs-on: ubuntu-24.04
     # TIMEOUT EXCEPTION: VS Code extension e2e tests launch a full VS Code instance via xvfb, requiring ~25 min
     timeout-minutes: 35
     steps:
@@ -174,7 +180,7 @@ jobs:
 
   verify-binaries:
     name: Shipwright Binary Gate
-    runs-on: ubuntu-22.04-8-cores
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -212,7 +218,7 @@ jobs:
   # ── Neovim extension (runs in parallel) ────────────────────────────────────
   test-nvim:
     name: Neovim Extension
-    runs-on: ubuntu-22.04-8-cores
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -251,8 +257,13 @@ jobs:
   # ── Mutation testing (runs in parallel shards) ─────────────────────────────
   mutation-test-shard:
     name: Mutation Testing Shard ${{ matrix.label }}
-    runs-on: ubuntu-22.04-8-cores
-    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    # cargo-mutants rebuilds + reruns the test suite once per mutant, so it is
+    # heavily CPU-bound. The 20-minute budget was calibrated for the retired
+    # 8-core larger runners; on the standard hosted runner the slower shards
+    # tip over the limit non-deterministically. 60 min gives ~3x headroom
+    # without weakening the mutation gate (the merge job still enforces score).
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -303,7 +314,7 @@ jobs:
 
   mutation-test:
     name: Mutation Testing
-    runs-on: ubuntu-22.04-8-cores
+    runs-on: ubuntu-24.04
     needs: mutation-test-shard
     timeout-minutes: 10
     steps:
@@ -344,7 +355,7 @@ jobs:
   build:
     name: Build
     needs: [test-rust, test-vscode, test-nvim, zed, mutation-test, verify-binaries]
-    runs-on: ubuntu-22.04-8-cores
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4

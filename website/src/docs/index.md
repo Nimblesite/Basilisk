@@ -50,15 +50,15 @@ Basilisk has a single operating mode. There is no `--basic`, `--standard`, or `-
 
 When strictness is opt-in, teams drift toward permissive defaults. Deadlines arrive. Technical debt accumulates. The `--strict` flag never gets added to the CI script. Basilisk removes that possibility entirely.
 
-Opting out is still possible — for legacy directories, with per-path configuration and an optional deadline after which the relaxation expires:
+Opting out is still possible — for legacy directories, you can disable or soften specific rules per path:
 
 ```toml
 [tool.basilisk.per-path-overrides."legacy/**"]
-strict = false
-deadline = "2026-12-31"
+disabled = ["BSK-E0011"]        # turn a rule off for legacy code
+rules."BSK-E0010" = "warning"   # or just soften its severity
 ```
 
-This acknowledges that large codebases cannot be fully typed overnight, while ensuring that the permissive period has an expiration date.
+This acknowledges that large codebases cannot be fully typed overnight, while keeping the relaxation explicit and scoped to the paths that need it.
 
 ## Project status
 
@@ -68,7 +68,7 @@ Basilisk is currently in **alpha** — the core checker, LSP server, and editor 
 |---|---|---|
 | 1 | Parser, resolver, type checker, CLI | Complete |
 | 2 | LSP server, editor extensions (VS Code, Cursor, Zed, Neovim) | Complete |
-| 3 | Expanded rule set, 92.5% PEP conformance, migration mode | In progress |
+| 3 | Expanded rule set, 92.5% PEP conformance, gradual adoption | In progress |
 | 4 | Ownership & immutability analysis (Mojo-inspired) | Planned |
 | 5 | WASM plugins, Django/Pydantic/SQLAlchemy | Planned |
 | 6 | 95%+ PEP, SARIF/JUnit, JetBrains extension | Planned |

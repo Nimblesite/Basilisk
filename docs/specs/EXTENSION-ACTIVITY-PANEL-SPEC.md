@@ -353,18 +353,35 @@ Server Info
 
 ### Feature Status Section {#EXTACT-INFO-FEATURE-STATUS}
 
-Each item reflects a real setting and shows whether the feature is active.
+**A toggle may appear here ONLY if flipping it has a real, observable effect that
+matches its label, proven by a VSIX test.** A toggle that writes a setting no
+code reads is a lie to the user and must not exist. (Audited 2026-05-30: most of
+the originally-specced toggles were no-ops because the LSP server's
+`did_change_configuration` only parses `analysisMode` and `testExplorer` — every
+other forwarded setting was silently dropped.)
 
-| Feature | Setting | Active Check |
-|---------|---------|--------------|
-| Type Checking | `basilisk.enabled` | boolean |
-| Inlay Hints | `basilisk.inlayHints.*` | any sub-setting true |
-| Autofix | always available | LSP running |
-| Debugger | `basilisk.debugger.enabled` | boolean |
-| Test Explorer | `basilisk.testExplorer.enabled` | boolean |
-| Ruff Integration | `basilisk.ruff.enabled` | boolean |
-| AI Suggestions | `basilisk.ai.enabled` | boolean (future) |
-| Profiler | `basilisk.profiler.enabled` | boolean (future) |
+**Shipped toggles** (each has a namesake effect):
+
+| Feature | Setting | Effect when off |
+|---------|---------|-----------------|
+| Type Checking | `basilisk.enabled` | Extension stops publishing diagnostics (`checkDocument` clears them) |
+| uv Integration | `basilisk.uv.enabled` | uv Quick Actions and uv Server Info rows are hidden from this panel |
+
+**Not yet implemented** — these were removed from the panel because the setting
+is currently ignored. They return only once the server honors the setting AND a
+VSIX test proves the effect. See
+[EXTENSION-ACTIVITY-PANEL-PLAN.md](../plans/EXTENSION-ACTIVITY-PANEL-PLAN.md#EXTACT-PLAN-FEATURE-TOGGLES)
+for the work required.
+
+| Feature | Setting | Why it's not shipped |
+|---------|---------|----------------------|
+| Inlay Hints (Params) | `basilisk.inlayHints.parameterNames` | Server emits hints unconditionally; setting dropped |
+| Inlay Hints (Types) | `basilisk.inlayHints.variableTypes` | Server emits hints unconditionally; setting dropped |
+| Ruff Integration | `basilisk.ruff.enabled` | Server runs ruff unconditionally; setting dropped |
+| Test Explorer | `basilisk.testExplorer.enabled` | Only gates auto-discovery-on-save; does not disable the explorer |
+| Debugger | `basilisk.debugger.enabled` | Setting was never even declared; debugging is always registered |
+| AI Suggestions | `basilisk.aiTyping.enabled` | No provider implemented; nothing reads the setting |
+| Profiler | `basilisk.profiler.enabled` | Setting does not exist; profiler is always available |
 
 **Click action**: toggles the setting. Disabled -> enabled, enabled -> disabled. Immediate effect.
 

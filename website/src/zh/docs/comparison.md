@@ -38,7 +38,6 @@ Basilisk 消除了这个选择。没有宽松模式可以回退。
 | PEP 符合性¹ | 92.5%（目标 →100%） | ~99% | ~58% | 早期 alpha | ~86% |
 | 实现语言 | Rust | TypeScript | Python/C | Rust | Rust |
 | 需要运行时 | 无 | Node.js | Python | 无 | 无 |
-| 增量速度 | <10ms | ~386ms² | 更慢 | 4.7ms² | <10ms |
 | 完整 LSP（补全、悬停、跳转） | ✅ | 仅 Pylance | ❌ | 基础 | 基础 |
 | 集成调试器 | ✅ | ❌ | ❌ | ❌ | ❌ |
 | 集成性能分析器 | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -51,7 +50,6 @@ Basilisk 消除了这个选择。没有宽松模式可以回退。
 **来源：**
 
 ¹ 完全通过得分来自[官方 python/typing 符合性套件](https://github.com/python/typing/blob/main/conformance/results/results.html)（pyright 1.1.408、mypy 1.19.1、pyrefly 0.54.0）。mypy 的部分+通过得分为 96.4%。ty 尚未包含在官方套件中——alpha 阶段的数据来自 [sinon.github.io/future-python-type-checkers](https://sinon.github.io/future-python-type-checkers/)（2025 年 8 月，alpha 版本）。
-² 在 PyTorch 中编辑核心文件后的增量重检时间，来自 [Astral ty 发布文章](https://astral.sh/blog/ty)（2025 年 12 月）：ty 4.7ms，Pyright 386ms。
 
 ---
 
@@ -105,10 +103,10 @@ mypy 定义了 Python 类型检查的样子。多年来，其 `--strict` 标志�
 
 **由 Ruff 团队构建。Rust + Salsa。早期 alpha——尚未在官方符合性套件中。**
 
-ty 是最有趣的新入场者。它由创建 Ruff 的同一团队构建（现在是事实上的 Python linter），使用与 Basilisk 相同的基于 Salsa 的增量架构，并拥有 Astral 的工程速度支持。
+ty 是最有趣的新入场者。它由创建 Ruff 的同一团队构建（现在是事实上的 Python linter），使用基于 Salsa 的增量架构，与 Basilisk 一样用 Rust 构建，并拥有 Astral 的工程速度支持。
 
 **ty 做得好的地方：**
-- 与 Basilisk 相同的架构基础（Salsa + Rust）
+- 基于 Rust 的增量架构（Salsa）
 - 由有交付记录的团队构建
 - MIT 许可，完全开源
 - 亚 10 毫秒的增量速度（[PyTorch 上 4.7ms](https://astral.sh/blog/ty)，2025 年 12 月）

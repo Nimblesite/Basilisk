@@ -69,15 +69,30 @@ jobs:
           key: release-${{ matrix.target }}
           cache-on-failure: true
 
-      - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }} --bin basilisk
+      - name: Build release binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --target ${{ matrix.target }} --bin basilisk
+          if [[ "${{ matrix.platform }}" == darwin-* ]]; then
+            cargo build --release --target ${{ matrix.target }} --bin basilisk-profiler-helper
+          fi
 
       - name: Package macOS archive
         if: startsWith(matrix.platform, 'darwin-')
         run: |
           set -euo pipefail
-          binary_path="target/${{ matrix.target }}/release/${{ matrix.binary }}"
-          ditto -c -k --keepParent "$binary_path" "${{ matrix.archive }}"
+          reldir="target/${{ matrix.target }}/release"
+          # The release archive is the single source of truth for the VSIX job,
+          # so the darwin archive must also carry the profiler helper that ships
+          # inside the macOS VSIX. ditto's zip preserves the Unix executable bit;
+          # Homebrew's `bin.install "basilisk"` ignores the extra helper.
+          staging="basilisk-darwin"
+          rm -rf "$staging"
+          mkdir -p "$staging"
+          cp "$reldir/${{ matrix.binary }}" "$staging/"
+          cp "$reldir/basilisk-profiler-helper" "$staging/"
+          ditto -c -k --keepParent "$staging" "${{ matrix.archive }}"
 
       - name: Package Linux archive
         if: startsWith(matrix.platform, 'linux-')
@@ -97,10 +112,40 @@ jobs:
           name: ${{ matrix.archive }}
           path: ${{ matrix.archive }}
 
+  release:
+    name: Publish binaries to release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download platform archives
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: basilisk-*
+          merge-multiple: true
+
+      # Create the release up front and attach the platform archives to it.
+      # Every downstream job (VSIX, Homebrew, Scoop) pulls its binaries from
+      # this release rather than from raw Actions artifacts, which drop the
+      # Unix executable bit. Archives (tar.gz / ditto zip) preserve it.
+      - name: Create release with platform binaries
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          # Any tag with a SemVer prerelease suffix (v0.1.0-alpha,
+          # v0.1.0-beta, v0.1.0-rc.1, …) marks the GitHub release as
+          # prerelease so it does not become the "Latest release".
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            artifacts/*.tar.gz
+            artifacts/*.zip
+
   vsix:
     name: VSIX - ${{ matrix.platform }}-${{ matrix.arch }}
+    needs: release
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -108,30 +153,30 @@ jobs:
           - os: macos-15
             platform: darwin
             arch: arm64
-            rust_target: aarch64-apple-darwin
             npm_config_arch: arm64
+            archive: basilisk-aarch64-apple-darwin.zip
           - os: ubuntu-latest
             platform: linux
             arch: x64
-            rust_target: x86_64-unknown-linux-gnu
             npm_config_arch: x64
+            archive: basilisk-x86_64-unknown-linux-gnu.tar.gz
           - os: ubuntu-latest
             platform: linux
             arch: arm64
-            rust_target: aarch64-unknown-linux-gnu
             npm_config_arch: arm64
             cross: true
+            archive: basilisk-aarch64-unknown-linux-gnu.tar.gz
           - os: windows-latest
             platform: win32
             arch: x64
-            rust_target: x86_64-pc-windows-msvc
             npm_config_arch: x64
+            archive: basilisk-x86_64-pc-windows-msvc.zip
           - os: windows-latest
             platform: win32
             arch: arm64
-            rust_target: aarch64-pc-windows-msvc
             npm_config_arch: arm64
             cross: true
+            archive: basilisk-aarch64-pc-windows-msvc.zip
 
     steps:
       - uses: actions/checkout@v4
@@ -139,22 +184,6 @@ jobs:
       - name: Stamp release version
         shell: bash
         run: scripts/stamp-version.sh
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_target }}
-
-      - name: Install cross-compilation tools
-        if: matrix.rust_target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: vsix-${{ matrix.rust_target }}
-          cache-on-failure: true
 
       - uses: actions/setup-node@v4
         with:
@@ -173,17 +202,42 @@ jobs:
         working-directory: vscode-extension
         run: npm run test:shipwright
 
-      - name: Build VSIX runtime binaries
-        shell: bash
-        run: |
-          cargo build --release --target ${{ matrix.rust_target }} --bin basilisk
-          if [ "${{ matrix.platform }}" = "darwin" ]; then
-            cargo build --release --target ${{ matrix.rust_target }} --bin basilisk-profiler-helper
-          fi
-
       - name: Set vsce target
         shell: pwsh
         run: echo "target=${{ matrix.platform }}-${{ matrix.arch }}" >> $env:GITHUB_ENV
+
+      # Pull the per-platform binary from the release published by the `release`
+      # job — the single source of truth — instead of recompiling here. The
+      # release archives preserve the Unix executable bit, so the staged binary
+      # is runnable (a raw Actions-artifact hand-off would strip it -> EACCES).
+      - name: Download release archive (POSIX)
+        if: matrix.platform != 'win32'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf runtime-bin
+          mkdir -p runtime-bin
+          gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
+            --pattern "${{ matrix.archive }}" --dir runtime-bin
+          case "${{ matrix.archive }}" in
+            *.tar.gz) tar -xzf "runtime-bin/${{ matrix.archive }}" -C runtime-bin ;;
+            # ditto zips nest under a top dir; -j flattens, -o preserves perms.
+            *.zip) unzip -j -o "runtime-bin/${{ matrix.archive }}" -d runtime-bin ;;
+          esac
+
+      - name: Download release archive (Windows)
+        if: matrix.platform == 'win32'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Remove-Item -Recurse -Force runtime-bin -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path runtime-bin | Out-Null
+          gh release download "$env:GITHUB_REF_NAME" --repo "$env:GITHUB_REPOSITORY" --pattern "${{ matrix.archive }}" --dir runtime-bin
+          Expand-Archive -Path "runtime-bin/${{ matrix.archive }}" -DestinationPath runtime-bin -Force
 
       - name: Stage Shipwright manifest and runtime binaries
         shell: bash
@@ -193,9 +247,18 @@ jobs:
           if [ "${{ matrix.platform }}" = "win32" ]; then exe=".exe"; fi
           rm -rf vscode-extension/bin
           mkdir -p "vscode-extension/bin/${{ env.target }}"
-          cp "target/${{ matrix.rust_target }}/release/basilisk${exe}" "vscode-extension/bin/${{ env.target }}/"
+          cp "runtime-bin/basilisk${exe}" "vscode-extension/bin/${{ env.target }}/"
           if [ "${{ matrix.platform }}" = "darwin" ]; then
-            cp "target/${{ matrix.rust_target }}/release/basilisk-profiler-helper" "vscode-extension/bin/${{ env.target }}/"
+            cp "runtime-bin/basilisk-profiler-helper" "vscode-extension/bin/${{ env.target }}/"
+          fi
+          # Belt-and-suspenders: the release archives already carry the exec bit,
+          # but re-assert it for POSIX targets so a staged binary is always
+          # runnable regardless of the extractor (Windows .exe needs no bit).
+          if [ "${{ matrix.platform }}" != "win32" ]; then
+            chmod +x "vscode-extension/bin/${{ env.target }}/basilisk"
+          fi
+          if [ "${{ matrix.platform }}" = "darwin" ]; then
+            chmod +x "vscode-extension/bin/${{ env.target }}/basilisk-profiler-helper"
           fi
           cp shipwright.json vscode-extension/shipwright.json
           cp NOTICES vscode-extension/NOTICES
@@ -250,6 +313,36 @@ jobs:
           name: ${{ env.target }}
           path: vscode-extension/*.vsix
 
+  release-assets:
+    name: Attach VSIX + checksums to release
+    needs: vsix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          # Flatten every upload (archives + per-platform VSIXes) into one dir.
+          # Each upload's `name:` is the file itself, so merge-multiple yields
+          # the bare files side by side for checksumming.
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: artifacts
+        run: sha256sum ./*.tar.gz ./*.zip ./*.vsix > checksums-sha256.txt
+
+      # Attach the VSIXes and the full checksum manifest to the release the
+      # `release` job already created with the platform archives.
+      - name: Upload VSIX and checksums to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --clobber \
+            artifacts/*.vsix artifacts/checksums-sha256.txt
+
   publish-vsix:
     name: Publish VSIX
     needs: vsix
@@ -296,44 +389,9 @@ jobs:
           fi
           echo "Published $published VSIX(es) to the Marketplace"
 
-  github-release:
-    name: Create GitHub Release
-    needs: [build, vsix]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          # Flatten: each upload's `name:` is the file itself, so without
-          # merging, download-artifact@v4 creates artifacts/<file>/<file>
-          # — `mv *.tar.gz artifacts/` then collides with the directory.
-          merge-multiple: true
-
-      - name: Generate checksums
-        working-directory: artifacts
-        run: sha256sum ./*.tar.gz ./*.zip ./*.vsix > checksums-sha256.txt
-
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          # Any tag with a SemVer prerelease suffix (v0.1.0-alpha,
-          # v0.1.0-beta, v0.1.0-rc.1, …) marks the GitHub release as
-          # prerelease so it does not become the "Latest release".
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          files: |
-            artifacts/*.tar.gz
-            artifacts/*.zip
-            artifacts/*.vsix
-            artifacts/checksums-sha256.txt
-
   deploy-pages:
     name: Deploy GitHub Pages
-    needs: github-release
+    needs: release-assets
     # Only stable releases update the live site. SemVer prerelease tags
     # (v0.1.0-alpha, v0.1.0-rc.1, …) contain a hyphen and are skipped.
     if: ${{ !contains(github.ref_name, '-') }}
@@ -345,29 +403,41 @@ jobs:
 
   publish-homebrew:
     name: Publish Homebrew formula
-    needs: github-release
+    needs: release
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download release archives
-        uses: actions/download-artifact@v4
+      # Auth for the tap push: actions/checkout configures the PAT as an HTTP
+      # extraheader, which GitHub accepts. A hand-rolled
+      # `git clone https://x-access-token:$PAT@github.com/...` is rejected
+      # ("Invalid username or token. Password authentication is not supported").
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
         with:
-          path: artifacts
-          merge-multiple: true
+          repository: Nimblesite/homebrew-tap
+          token: ${{ secrets.BREW_SCOOP_PAT }}
+          path: tap
 
-      - name: Render formula and push to tap
+      # Pull the macOS + Linux archives straight from the release so the
+      # checksums in the formula match exactly what users download.
+      - name: Download release archives
+        shell: bash
         env:
-          BREW_SCOOP_PAT: ${{ secrets.BREW_SCOOP_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${BREW_SCOOP_PAT:-}" ]; then
-            echo "::error::BREW_SCOOP_PAT not accessible. The Nimblesite org secret exists; ensure Basilisk is in its allowed repositories (Org Settings → Secrets and variables → Actions → BREW_SCOOP_PAT → Repository access)."
-            exit 1
-          fi
+          mkdir -p artifacts
+          gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --dir artifacts \
+            --pattern "basilisk-aarch64-apple-darwin.zip" \
+            --pattern "basilisk-x86_64-unknown-linux-gnu.tar.gz" \
+            --pattern "basilisk-aarch64-unknown-linux-gnu.tar.gz"
 
+      - name: Render formula and push to tap
+        run: |
+          set -euo pipefail
           export BASILISK_VERSION="${GITHUB_REF_NAME#v}"
           export BASILISK_BASE_URL="https://github.com/Nimblesite/Basilisk/releases/download/${GITHUB_REF_NAME}"
           BASILISK_SHA_DARWIN_ARM64="$(sha256sum artifacts/basilisk-aarch64-apple-darwin.zip | awk '{print $1}')"
@@ -375,7 +445,6 @@ jobs:
           BASILISK_SHA_LINUX_AARCH64="$(sha256sum artifacts/basilisk-aarch64-unknown-linux-gnu.tar.gz | awk '{print $1}')"
           export BASILISK_SHA_DARWIN_ARM64 BASILISK_SHA_LINUX_X86_64 BASILISK_SHA_LINUX_AARCH64
 
-          git clone "https://x-access-token:${BREW_SCOOP_PAT}@github.com/Nimblesite/homebrew-tap.git" tap
           mkdir -p tap/Formula
 
           # envsubst with an explicit variable list — leaves Ruby's #{...}
@@ -397,36 +466,44 @@ jobs:
 
   publish-scoop:
     name: Publish Scoop manifest
-    needs: github-release
+    needs: release
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download release archives
-        uses: actions/download-artifact@v4
+      # Auth for the bucket push: see note in publish-homebrew. Use
+      # actions/checkout's token handling, not a URL-embedded PAT.
+      - name: Checkout scoop-bucket
+        uses: actions/checkout@v4
         with:
-          path: artifacts
-          merge-multiple: true
+          repository: Nimblesite/scoop-bucket
+          token: ${{ secrets.BREW_SCOOP_PAT }}
+          path: bucket
 
-      - name: Render manifest and push to bucket
+      # Pull the Windows archives straight from the release so the checksums in
+      # the manifest match exactly what users download.
+      - name: Download release archives
+        shell: bash
         env:
-          BREW_SCOOP_PAT: ${{ secrets.BREW_SCOOP_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${BREW_SCOOP_PAT:-}" ]; then
-            echo "::error::BREW_SCOOP_PAT not accessible. The Nimblesite org secret exists; ensure Basilisk is in its allowed repositories (Org Settings → Secrets and variables → Actions → BREW_SCOOP_PAT → Repository access)."
-            exit 1
-          fi
+          mkdir -p artifacts
+          gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --dir artifacts \
+            --pattern "basilisk-x86_64-pc-windows-msvc.zip" \
+            --pattern "basilisk-aarch64-pc-windows-msvc.zip"
 
+      - name: Render manifest and push to bucket
+        run: |
+          set -euo pipefail
           export BASILISK_VERSION="${GITHUB_REF_NAME#v}"
           export BASILISK_BASE_URL="https://github.com/Nimblesite/Basilisk/releases/download/${GITHUB_REF_NAME}"
           BASILISK_SHA_WIN_X64="$(sha256sum artifacts/basilisk-x86_64-pc-windows-msvc.zip | awk '{print $1}')"
           BASILISK_SHA_WIN_ARM64="$(sha256sum artifacts/basilisk-aarch64-pc-windows-msvc.zip | awk '{print $1}')"
           export BASILISK_SHA_WIN_X64 BASILISK_SHA_WIN_ARM64
 
-          git clone "https://x-access-token:${BREW_SCOOP_PAT}@github.com/Nimblesite/scoop-bucket.git" bucket
           mkdir -p bucket/bucket
 
           # envsubst with an explicit variable list — leaves Scoop's $version

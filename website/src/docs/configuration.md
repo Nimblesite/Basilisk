@@ -34,14 +34,9 @@ stub-paths = ["stubs/"]
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
 
-[tool.basilisk.migration]
-enabled = true
-started = "2025-06-01"
-enforce_after = "2025-12-01"
-
 [tool.basilisk.per-path-overrides."legacy/**"]
-strict = false
-deadline = "2026-12-31"
+disabled = ["BSK-E0011"]
+rules."BSK-E0010" = "warning"
 ```
 
 ---
@@ -89,66 +84,34 @@ Glob patterns to exclude from analysis. Applied after `include`. Use `**` for re
 
 ---
 
-## `[tool.basilisk.migration]`
-
-Migration mode softens selected errors to warnings for a defined period, making it easier to adopt Basilisk in an existing codebase.
-
-### `enabled`
-
-**Type:** `boolean`
-**Default:** `false`
-
-Enable migration mode. When `true`, errors are reported as warnings until `enforce_after`.
-
-### `started`
-
-**Type:** `string` (ISO date)
-**Example:** `"2025-06-01"`
-
-Informational: when migration was started. Used in progress reports.
-
-### `enforce_after`
-
-**Type:** `string` (ISO date)
-**Example:** `"2025-12-01"`
-
-After this date, all warnings in migration mode become errors again. Basilisk will warn you as the deadline approaches.
-
----
-
 ## `[tool.basilisk.per-path-overrides."<glob>"]`
 
 Apply different settings to specific paths. The glob is matched against file paths relative to the project root.
 
 ```toml
 [tool.basilisk.per-path-overrides."legacy/**"]
-strict = false
-deadline = "2026-12-31"
+# Turn rules off entirely for matching files
+disabled = ["BSK-E0011"]
 
 [tool.basilisk.per-path-overrides."tests/**"]
-# Tests can use Any more freely
-rules.ignore = ["BSK-E0011"]
+# Or soften a rule's severity instead of disabling it
+rules."BSK-E0011" = "warning"
 ```
 
-### `strict`
-
-**Type:** `boolean`
-**Default:** `true`
-
-Set to `false` to disable strict mode for matching files. All errors become warnings.
-
-### `deadline`
-
-**Type:** `string` (ISO date)
-
-A date after which `strict = false` is no longer honored and errors are enforced. Basilisk prints a reminder as the deadline approaches.
-
-### `rules.ignore`
+### `disabled`
 
 **Type:** `string[]`
 **Example:** `["BSK-E0011", "BSK-E0001"]`
 
-Specific rules to ignore in matching files. Prefer narrow ignores over `strict = false` when possible.
+Rule codes to disable entirely for files matching this glob.
+
+### `rules`
+
+**Type:** table of rule code → severity
+**Severities:** `"error"`, `"warning"`, `"info"`, `"disabled"`
+**Example:** `rules."BSK-E0011" = "warning"`
+
+Override the severity of specific rules for matching files. Prefer softening or disabling individual rules over relaxing broad swaths of checking.
 
 ---
 
