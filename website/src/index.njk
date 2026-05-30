@@ -446,11 +446,13 @@ permalink: /
 <section class="benchmark-section">
   <div class="container">
     <p class="section-label">Performance benchmarks</p>
-    <h2 class="section-heading">Pyrefly-class speed.<br>Pyright and mypy left behind.</h2>
+    <h2 class="section-heading">Always faster than Pyright.<br>And we&rsquo;re just getting started.</h2>
     <p class="section-subhead">
-      Basilisk already trades blows with Pyrefly on per-rule benchmarks and
-      crushes Pyright and mypy. Salsa&rsquo;s incremental engine has headroom
-      we haven&rsquo;t tapped yet.
+      Cold, full-file CLI runs over large single-rule fixtures (measured with
+      <code>make bench</code>). Basilisk is consistently faster than Pyright and
+      roughly mypy-class. The Rust newcomers ty and Pyrefly lead on raw cold
+      throughput today &mdash; but Basilisk&rsquo;s real edge is the warm path:
+      sub-10ms incremental re-checks via Salsa, which these cold runs don&rsquo;t capture.
     </p>
 
     <div class="table-wrapper">
@@ -468,43 +470,43 @@ permalink: /
         <tbody>
           <tr>
             <td>E0002 Missing return</td>
-            <td class="col-basilisk">255 ms</td>
-            <td>779 ms</td>
-            <td>147 ms</td>
-            <td>113 ms</td>
-            <td>52 ms ✓</td>
+            <td class="col-basilisk">249 ms</td>
+            <td>542 ms</td>
+            <td>146 ms</td>
+            <td>104 ms</td>
+            <td>35 ms ✓</td>
           </tr>
           <tr>
             <td>E0016 Incompatible override</td>
-            <td class="col-basilisk">107 ms</td>
-            <td>824 ms</td>
-            <td>151 ms</td>
-            <td>119 ms</td>
-            <td>73 ms ✓</td>
+            <td class="col-basilisk">150 ms</td>
+            <td>632 ms</td>
+            <td>156 ms</td>
+            <td>109 ms</td>
+            <td>52 ms ✓</td>
           </tr>
           <tr>
             <td>E0022 Unhashable dict key</td>
-            <td class="col-basilisk">105 ms</td>
-            <td>681 ms</td>
-            <td>148 ms</td>
-            <td>104 ms</td>
-            <td>55 ms ✓</td>
+            <td class="col-basilisk">217 ms</td>
+            <td>521 ms</td>
+            <td>149 ms</td>
+            <td>96 ms</td>
+            <td>37 ms ✓</td>
           </tr>
           <tr>
             <td>E0023 Non-exhaustive match</td>
-            <td class="col-basilisk">81 ms</td>
-            <td>664 ms</td>
-            <td>151 ms</td>
-            <td>109 ms</td>
-            <td>39 ms ✓</td>
+            <td class="col-basilisk">114 ms</td>
+            <td>512 ms</td>
+            <td>150 ms</td>
+            <td>103 ms</td>
+            <td>24 ms ✓</td>
           </tr>
           <tr>
             <td>E0026 TypeVar constraint</td>
-            <td class="col-basilisk">73 ms</td>
-            <td>869 ms</td>
-            <td>151 ms</td>
-            <td>115 ms</td>
-            <td>60 ms ✓</td>
+            <td class="col-basilisk">125 ms</td>
+            <td>699 ms</td>
+            <td>152 ms</td>
+            <td>103 ms</td>
+            <td>38 ms ✓</td>
           </tr>
         </tbody>
       </table>
@@ -706,6 +708,7 @@ Install from <span class="tok-str">Extensions</span>
       <li>Full-pass conformance scores from the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">official python/typing conformance suite</a> (pyright 1.1.408, mypy 1.19.1, pyrefly 0.54.0). mypy&rsquo;s partial+pass score is 96.4%.</li>
       <li>Incremental re-check time after editing a load-bearing file in PyTorch, per the <a href="https://astral.sh/blog/ty" target="_blank" rel="noopener">Astral ty launch post</a> (December 2025): ty 4.7ms, Pyright 386ms.</li>
       <li>Pyrefly throughput (1.85M LOC/sec) from <a href="https://pyrefly.org/" target="_blank" rel="noopener">pyrefly.org</a> (measured on 166-core Meta infrastructure).</li>
+      <li>Performance-benchmark table: mean wall-clock over 10 hyperfine runs (2 warm-up) of each tool&rsquo;s CLI against large single-rule fixtures, on Apple Silicon (Darwin arm64). Tool versions: basilisk (this build), pyright 1.1.408, mypy 1.19.1, ty 0.0.19, pyrefly 0.54.0. Reproduce with <code>make bench</code>. These are cold full-file runs and do not reflect warm incremental (LSP) performance.</li>
     </ol>
   </div>
 </section>

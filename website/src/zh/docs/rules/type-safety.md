@@ -1,47 +1,49 @@
 ---
 layout: layouts/docs.njk
-title: 类型安全 — E0010–E0025
+title: 类型安全 — E0010–E0029
 description: 捕获类型不匹配、错误注解和不健全类型使用的规则。
 keywords: basilisk, 类型安全, 类型不匹配, BSK-E0012, BSK-E0013, BSK-E0016
 lang: zh
 ---
 
-# 类型安全 — E0010–E0025
+# 类型安全 — E0010–E0029
 
-捕获类型不匹配、错误注解和不健全类型使用的规则。
+捕获类型不匹配、错误注解和不健全类型使用的规则。完整代码列表请参见[规则总览](/zh/docs/rules/)。
 
-← [缺失注解](/zh/docs/rules/missing-annotations/) | [规则索引](/zh/docs/rules/) →
+← [缺失注解](/zh/docs/rules/missing-annotations/) | [所有规则](/zh/docs/rules/) →
 
 ---
 
-### BSK-E0010 — 从未类型化模块导入
+### BSK-E0010 — 无法解析的导入 (Unresolved import)
 
-从没有类型存根的模块导入会为所有导入的名称产生隐式 `Any`。
+`import` 语句引用了在已配置的搜索路径中无法找到的模块。
 
 ```python
-# 错误——legacy_module 没有存根
+# 错误——找不到该模块
 from legacy_module import process_data
 
-# 正确——提供或生成存根
-# basilisk stubs generate legacy_module
+# 修复——安装对应包或将其加入工作区，
+# 也可通过 stub-paths 指向对应的 .pyi 文件
 ```
 
 ---
 
-### BSK-E0011 — 隐式 `Any`
+### BSK-E0011 — 显式 `Any` 注解 / 返回类型不匹配 (Explicit `Any` / return type mismatch)
 
-`Any` 必须用抑制原因明确注解。不允许来自推断的隐式 `Any`。
+此代码覆盖两种检查：显式 `Any` 注解会屏蔽类型检查，必须附带理由；返回值与声明的返回类型明显不兼容也会触发此报告。
 
 ```python
-# 错误
-def handle(data: Any) -> bool:
-    ...
+from typing import Any
 
-# 正确（带理由）
+# 警告——显式 `Any` 必须注明原因
 def handle(
     data: Any,  # basilisk: ignore[BSK-E0011] -- awaiting stubs for third-party SDK
 ) -> bool:
     ...
+
+# 错误——int 字面量不能赋值给 `str`
+def name() -> str:
+    return 42
 ```
 
 ---
@@ -171,10 +173,11 @@ def classify(x: int | str) -> str:
 
 ### BSK-E0024 — 无效类型形式
 
-类型注解使用了无效的语法。
+在类型位置使用了非有效类型的值，例如将数字字面量用作注解。
 
 ```python
-x: int | = None  # 错误——格式错误的联合
+x: 42 = 0   # 错误——`42` 不是类型
+y: int = 0  # 正确
 ```
 
 ---
@@ -186,5 +189,47 @@ x: int | = None  # 错误——格式错误的联合
 ```python
 class Child(Base):
     def process(self) -> str:  # 错误——缺少 @override
+        ...
+```
+
+---
+
+### BSK-E0026 — `TypeVar` 只有一个约束
+
+声明仅有一个约束的 `TypeVar` 没有意义——约束需要两个或更多。
+
+```python
+from typing import TypeVar
+
+T = TypeVar("T", int)        # 错误——只有一个约束
+U = TypeVar("U", int, str)   # 正确——两个或更多
+```
+
+---
+
+### BSK-E0027 — `Generic[...]` 基类中重复的 `TypeVar`
+
+同一 `TypeVar` 在 `Generic[...]`（或 `Protocol[...]`）基类中出现了不止一次。
+
+```python
+from typing import Generic, TypeVar
+
+T = TypeVar("T")
+class Box(Generic[T, T]):  # 错误——`T` 出现两次
+    ...
+```
+
+---
+
+### BSK-E0029 — 在 `TypedDict` 类中定义方法
+
+`TypedDict` 类仅描述数据结构，不允许定义方法。
+
+```python
+from typing import TypedDict
+
+class Movie(TypedDict):
+    title: str
+    def play(self) -> None:  # 错误——TypedDict 中不允许定义方法
         ...
 ```
