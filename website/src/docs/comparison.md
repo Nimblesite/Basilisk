@@ -43,7 +43,6 @@ Basilisk removes the choice. There is no permissive mode to fall back to.
 | PEP conformance¹ | 92.5% (→100% target) | ~99% | ~58% | early alpha | ~86% |
 | Implementation | Rust | TypeScript | Python/C | Rust | Rust |
 | Runtime required | None | Node.js | Python | None | None |
-| Incremental speed | not yet measured | ~386ms² | slower | 4.7ms² | <10ms |
 | Full LSP (completions, hover, goto) | ✅ | Pylance only | ❌ | Basic | Basic |
 | Integrated debugger | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Integrated profiler | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -56,7 +55,6 @@ Basilisk removes the choice. There is no permissive mode to fall back to.
 **Sources:**
 
 ¹ Full-pass score from the [official python/typing conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) (pyright 1.1.408, mypy 1.19.1, pyrefly 0.54.0). mypy's partial+pass score is 96.4%. ty is not yet included in the official suite — alpha-stage figure from [sinon.github.io/future-python-type-checkers](https://sinon.github.io/future-python-type-checkers/) (August 2025, alpha build).
-² Incremental re-check time after editing a load-bearing file in PyTorch, per the [Astral ty launch post](https://astral.sh/blog/ty) (December 2025): ty 4.7ms, Pyright 386ms.
 
 ---
 

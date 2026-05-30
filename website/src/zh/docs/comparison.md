@@ -38,7 +38,6 @@ Basilisk 消除了这个选择。没有宽松模式可以回退。
 | PEP 符合性¹ | 92.5%（目标 →100%） | ~99% | ~58% | 早期 alpha | ~86% |
 | 实现语言 | Rust | TypeScript | Python/C | Rust | Rust |
 | 需要运行时 | 无 | Node.js | Python | 无 | 无 |
-| 增量速度 | 尚未测量 | ~386ms² | 更慢 | 4.7ms² | <10ms |
 | 完整 LSP（补全、悬停、跳转） | ✅ | 仅 Pylance | ❌ | 基础 | 基础 |
 | 集成调试器 | ✅ | ❌ | ❌ | ❌ | ❌ |
 | 集成性能分析器 | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -51,7 +50,6 @@ Basilisk 消除了这个选择。没有宽松模式可以回退。
 **来源：**
 
 ¹ 完全通过得分来自[官方 python/typing 符合性套件](https://github.com/python/typing/blob/main/conformance/results/results.html)（pyright 1.1.408、mypy 1.19.1、pyrefly 0.54.0）。mypy 的部分+通过得分为 96.4%。ty 尚未包含在官方套件中——alpha 阶段的数据来自 [sinon.github.io/future-python-type-checkers](https://sinon.github.io/future-python-type-checkers/)（2025 年 8 月，alpha 版本）。
-² 在 PyTorch 中编辑核心文件后的增量重检时间，来自 [Astral ty 发布文章](https://astral.sh/blog/ty)（2025 年 12 月）：ty 4.7ms，Pyright 386ms。
 
 ---
 
