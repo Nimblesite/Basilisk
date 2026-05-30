@@ -9,7 +9,7 @@ permalink: /zh/
 benchmarkStrings:
   label: "性能基准测试"
   heading: "这是起点。<br>我们正在逼近 Pyrefly。"
-  subhead: "这些是今天的数据——由 <code>make bench</code> 生成并提交到代码库，因此它们会随着我们的优化而变化。Basilisk 在每条规则上都已胜过 Pyright；我们的目标是达到 Pyrefly 级别的吞吐量。而且这些是<em>冷启动</em>的全文件运行——并未体现 Basilisk 真正的优势：通过 Salsa 实现的亚 10 毫秒热增量重检。"
+  subhead: "这些是今天的数据——由 <code>make bench</code> 生成并提交到代码库，因此它们会随着我们的优化而变化。Basilisk 在我们基准测试的每条规则上都已胜过 Pyright；我们的目标是达到 Pyrefly 级别的吞吐量。这些是端到端测量的<em>冷启动</em>全文件运行；热增量重检只重新分析你改动的文件及其导入方，因此做的工作更少。"
   ruleHeader: "规则"
   names:
     e0001_missing_param: "缺少参数类型"
@@ -74,7 +74,7 @@ benchmarkStrings:
         <div class="hero__meta">
           <span>完整 <strong>LSP</strong></span>
           <span>用 <strong>Rust</strong> 构建</span>
-          <span><strong>&lt;10ms</strong> 增量检查</span>
+          <span><strong>增量</strong>重检</span>
           <span>每款编辑器 &mdash; <strong>VS Code</strong>、<strong>Cursor</strong>、<strong>Windsurf</strong>、<strong>Zed</strong>、<strong>Neovim</strong></span>
           <span><strong>MIT</strong> 许可证</span>
         </div>
@@ -221,17 +221,18 @@ benchmarkStrings:
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number"><<span class="stat-block__unit">10</span></span>
-        <span class="stat-block__label">毫秒，增量检查</span>
+        <span class="stat-block__number">10<span class="stat-block__unit">/10</span></span>
+        <span class="stat-block__label">基准测试的规则胜过 Pyright</span>
       </div>
     </div>
     <div class="feature-row__text">
-      <p class="feature-row__num">02 &mdash; 亚 10 毫秒增量检查</p>
-      <h2 class="feature-row__title">响应每次击键。<br>每次编辑。</h2>
+      <p class="feature-row__num">02 &mdash; 实测，而非承诺</p>
+      <h2 class="feature-row__title">快过 Pyright。<br>我们基准测试的每条规则。</h2>
       <p class="feature-row__body">
-        由 Salsa 驱动——与 rust-analyzer 相同的增量计算框架。
-        Basilisk 只重新计算发生变化的部分。100K 行代码冷启动不到 5 秒。
-        之后每次编辑都响应击键。
+        每次发布都运行 <code>make bench</code>——用 hyperfine 在相同的固定用例上对 Pyright、
+        mypy、ty 和 Pyrefly 测量挂钟时间，数据提交到代码库。在我们基准测试的规则上，
+        Basilisk 的冷启动全文件检查全面胜过 Pyright。而且由于重检是增量的——只重新分析
+        被编辑的文件及其导入方——热编辑做的工作更少。
       </p>
     </div>
   </div>
@@ -412,7 +413,7 @@ benchmarkStrings:
           </tr>
           <tr>
             <td>增量速度 <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup2;</a></td>
-            <td class="col-basilisk">&lt;10ms</td>
+            <td class="col-basilisk">尚未测量</td>
             <td>~386ms</td>
             <td>更慢</td>
             <td>4.7ms</td>

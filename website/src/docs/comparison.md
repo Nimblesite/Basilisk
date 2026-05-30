@@ -43,7 +43,7 @@ Basilisk removes the choice. There is no permissive mode to fall back to.
 | PEP conformance¹ | 92.5% (→100% target) | ~99% | ~58% | early alpha | ~86% |
 | Implementation | Rust | TypeScript | Python/C | Rust | Rust |
 | Runtime required | None | Node.js | Python | None | None |
-| Incremental speed | <10ms | ~386ms² | slower | 4.7ms² | <10ms |
+| Incremental speed | not yet measured | ~386ms² | slower | 4.7ms² | <10ms |
 | Full LSP (completions, hover, goto) | ✅ | Pylance only | ❌ | Basic | Basic |
 | Integrated debugger | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Integrated profiler | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -110,10 +110,10 @@ mypy defined what Python type checking looks like. Its `--strict` flag was the r
 
 **Built by the Ruff team. Rust + Salsa. Early alpha — not yet in the official conformance suite.**
 
-ty is the most interesting new entrant. It's built by the same team that created Ruff (now the de facto Python linter), uses the same Salsa-based incremental architecture as Basilisk, and has Astral's engineering velocity behind it.
+ty is the most interesting new entrant. It's built by the same team that created Ruff (now the de facto Python linter), uses a Salsa-based incremental architecture, is built in Rust like Basilisk, and has Astral's engineering velocity behind it.
 
 **What ty does well:**
-- Same architectural foundation as Basilisk (Salsa + Rust)
+- Rust-based incremental architecture (Salsa)
 - Built by a team with a track record of shipping
 - MIT licensed, fully open source
 - Sub-10ms incremental speed ([4.7ms on PyTorch](https://astral.sh/blog/ty), December 2025)

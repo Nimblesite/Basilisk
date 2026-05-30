@@ -8,7 +8,7 @@ permalink: /
 benchmarkStrings:
   label: "Performance benchmarks"
   heading: "This is the starting line.<br>We&rsquo;re closing on Pyrefly."
-  subhead: "These are today&rsquo;s numbers &mdash; produced by <code>make bench</code> and committed to the repo, so they move as we optimize. Basilisk already beats Pyright on every rule; our target is Pyrefly-class throughput. And these are <em>cold</em> full-file runs &mdash; they don&rsquo;t capture Basilisk&rsquo;s real edge, the sub-10ms warm incremental re-checks via Salsa."
+  subhead: "These are today&rsquo;s numbers &mdash; produced by <code>make bench</code> and committed to the repo, so they move as we optimize. Basilisk already beats Pyright on every rule we benchmark; our target is Pyrefly-class throughput. These are <em>cold</em> full-file runs measured end-to-end; warm edits re-check only the file you touched and its importers, so they do strictly less work."
   ruleHeader: "Rule"
   metaPre: "Mean wall-clock over "
   metaMid: " hyperfine runs; lower is better, ✓ = fastest. Measured on "
@@ -62,7 +62,7 @@ benchmarkStrings:
         <div class="hero__meta">
           <span>Full <strong>LSP</strong></span>
           <span>Built in <strong>Rust</strong></span>
-          <span><strong><10ms</strong> incremental</span>
+          <span><strong>Incremental</strong> re-checks</span>
           <span>Every IDE &mdash; <strong>VS Code</strong>, <strong>Cursor</strong>, <strong>Windsurf</strong>, <strong>Zed</strong>, <strong>Neovim</strong></span>
           <span><strong>MIT</strong> License</span>
         </div>
@@ -210,17 +210,19 @@ benchmarkStrings:
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number"><<span class="stat-block__unit">10</span></span>
-        <span class="stat-block__label">milliseconds, incremental</span>
+        <span class="stat-block__number">10<span class="stat-block__unit">/10</span></span>
+        <span class="stat-block__label">benchmarked rules beat Pyright</span>
       </div>
     </div>
     <div class="feature-row__text">
-      <p class="feature-row__num">02 &mdash; Sub-10ms incremental checks</p>
-      <h2 class="feature-row__title">Keystroke-responsive.<br>Every edit.</h2>
+      <p class="feature-row__num">02 &mdash; Measured, not promised</p>
+      <h2 class="feature-row__title">Faster than Pyright.<br>Every rule we benchmark.</h2>
       <p class="feature-row__body">
-        Powered by Salsa &mdash; the same incremental computation framework behind rust-analyzer.
-        Basilisk only recomputes what changed. Cold start on 100K LOC in under 5 seconds.
-        Keystroke-responsive on every subsequent edit.
+        Every release runs <code>make bench</code> &mdash; hyperfine wall-clock against Pyright,
+        mypy, ty, and Pyrefly on identical fixtures, with the numbers committed to the repo. On
+        the rules we benchmark, Basilisk&rsquo;s cold full-file checks beat Pyright outright. And
+        because re-checks are incremental &mdash; only the edited file and its importers are
+        re-analyzed &mdash; warm edits do even less work.
       </p>
     </div>
   </div>
@@ -402,7 +404,7 @@ benchmarkStrings:
           </tr>
           <tr>
             <td>Incremental speed <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup2;</a></td>
-            <td class="col-basilisk"><10ms</td>
+            <td class="col-basilisk">not yet measured</td>
             <td>~386ms</td>
             <td>slower</td>
             <td>4.7ms</td>

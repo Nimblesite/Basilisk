@@ -58,9 +58,9 @@ Basilisk is implemented in Rust and ships as a single binary with no runtime dep
 
 The alternative — implementing a Python type checker in Python — has a fundamental problem: it requires a Python interpreter to run. In a CI environment that might be running Docker images, GitHub Actions runners, or edge build systems, adding a Python runtime dependency just to check Python types is unnecessary overhead.
 
-More importantly, Rust's ownership model and zero-cost abstractions make it possible to implement the incremental computation Basilisk needs. We use [Salsa](https://github.com/salsa-rs/salsa) — the same incremental computation framework that powers rust-analyzer — to achieve sub-10ms incremental type checks. When you edit a single file, Basilisk recomputes only the affected analysis results. The rest stays cached.
+More importantly, Rust's ownership model and zero-cost abstractions make it possible to implement the incremental computation Basilisk needs. When you edit a single file, Basilisk re-checks only that file and the modules that import it — the affected analysis results — and the rest stays cached. No persistent daemon, no whole-project re-analysis on every keystroke.
 
-The result: keystroke-responsive type checking that doesn't require a persistent daemon, doesn't consume gigabytes of memory on large codebases, and doesn't slow down as your codebase grows.
+The result: incremental type checking that doesn't require a persistent daemon and is designed to stay responsive as your codebase grows.
 
 ## What exists today
 
