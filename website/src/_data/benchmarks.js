@@ -38,6 +38,11 @@ function parseCsv(text) {
   }
   if (dataLines.length < 2) return null;
 
+  // Friendly run count: the `# runs:` header is "10 (hyperfine mean ...)" — the
+  // website only wants the leading number so the caption reads "10 runs".
+  const runsMatch = (meta.runs || "").match(/^\d+/);
+  meta.runsCount = runsMatch ? runsMatch[0] : null;
+
   const cols = dataLines[0].split(",");
   const tools = cols.slice(1).map((c) => c.replace(/_ms$/, ""));
   const rows = dataLines.slice(1).map((line) => {

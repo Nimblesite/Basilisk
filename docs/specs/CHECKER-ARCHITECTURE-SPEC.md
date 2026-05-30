@@ -1108,7 +1108,7 @@ Comparison baselines: Pyright, ty, Pyrefly, Zuban.
 | Golden file tests | Expected diagnostic output | Diagnostic regression |
 | Fuzzing | `cargo-fuzz` | Crash resistance, soundness |
 | Property tests | `proptest` crate | Type system invariants |
-| Benchmarks | Criterion + real codebases | Performance regression gates |
+| Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly | Performance tracking + regression gate (fails if basilisk regresses >25% vs the committed per-machine `benchmarks/status/<machine>.csv`) |
 
 ---
 
