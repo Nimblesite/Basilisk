@@ -655,7 +655,7 @@ Install from <span class="tok-str">Extensions</span>
       <li>Full-pass conformance scores from the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">official python/typing conformance suite</a> (pyright 1.1.408, mypy 1.19.1, pyrefly 0.54.0). mypy&rsquo;s partial+pass score is 96.4%.</li>
       <li>Incremental re-check time after editing a load-bearing file in PyTorch, per the <a href="https://astral.sh/blog/ty" target="_blank" rel="noopener">Astral ty launch post</a> (December 2025): ty 4.7ms, Pyright 386ms.</li>
       <li>Pyrefly throughput (1.85M LOC/sec) from <a href="https://pyrefly.org/" target="_blank" rel="noopener">pyrefly.org</a> (measured on 166-core Meta infrastructure).</li>
-      <li>Performance-benchmark table: mean wall-clock over 10 hyperfine runs (2 warm-up) of each tool&rsquo;s CLI against large single-rule fixtures, on Apple Silicon (Darwin arm64). Tool versions: basilisk (this build), pyright 1.1.408, mypy 1.19.1, ty 0.0.19, pyrefly 0.54.0. Reproduce with <code>make bench</code>. These are cold full-file runs and do not reflect warm incremental (LSP) performance.</li>
+      <li>Performance-benchmark table: mean wall-clock over {{ benchmarks.meta.runsCount }} hyperfine runs of each tool&rsquo;s CLI against large single-rule fixtures, measured on {{ benchmarks.meta.cpu }} ({{ benchmarks.meta.arch }}). Full conditions and tool versions are recorded in the CSV header at <code>benchmarks/status/{{ benchmarks.primary }}.csv</code>; reproduce with <code>make bench</code>. These are cold full-file runs and do not reflect warm incremental (LSP) performance.</li>
     </ol>
   </div>
 </section>

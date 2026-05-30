@@ -665,6 +665,7 @@ benchmarkStrings:
       <li>完全通过的符合性得分来自<a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">官方 python/typing 符合性套件</a>（pyright 1.1.408、mypy 1.19.1、pyrefly 0.54.0）。mypy 的部分+通过得分为 96.4%。</li>
       <li>在 PyTorch 中编辑核心文件后的增量重检时间，来自 <a href="https://astral.sh/blog/ty" target="_blank" rel="noopener">Astral ty 发布文章</a>（2025 年 12 月）：ty 4.7ms，Pyright 386ms。</li>
       <li>Pyrefly 吞吐量（1.85M LOC/秒）来自 <a href="https://pyrefly.org/" target="_blank" rel="noopener">pyrefly.org</a>（在 Meta 166 核基础设施上测量）。</li>
+      <li>性能基准测试表：每款工具 CLI 针对大型单规则测试文件的平均挂钟时间，基于 {{ benchmarks.meta.runsCount }} 次 hyperfine 运行，测量于 {{ benchmarks.meta.cpu }}（{{ benchmarks.meta.arch }}）。完整测试条件与工具版本记录在 CSV 头部 <code>benchmarks/status/{{ benchmarks.primary }}.csv</code> 中；可用 <code>make bench</code> 复现。这些是冷启动的全文件运行，并不反映热增量（LSP）性能。</li>
     </ol>
   </div>
 </section>
