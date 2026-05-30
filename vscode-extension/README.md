@@ -80,7 +80,7 @@ The Basilisk sidebar provides three panels accessible from the activity bar:
 
 **Type Health** — Workspace-wide type coverage dashboard. Shows annotated vs unannotated symbol counts, error/warning tallies, and per-module coverage percentages with color-coded progress bars. Sort by worst-first, best-first, or alphabetical.
 
-**Basilisk Info** — Feature status toggles (type checking, inlay hints, Ruff, debugger, test explorer, uv), quick actions (restart server, organize imports), and server info (version, binary path, analysis mode).
+**Basilisk Info** — Feature status toggles (type checking, uv integration), quick actions (restart server, show output, fix all in workspace, organize imports, and uv sync/add/lock/create-env), and server info (version, binary path, analysis mode, uv status).
 
 All panels update automatically when files change (debounced 300ms). The Module Explorer and Type Health panels appear when a workspace is open; the Info panel is always visible.
 
@@ -161,10 +161,10 @@ All rules are **on by default**. There is no way to relax them globally.
 | `basilisk.binaries.basilisk` | `""` | Explicit path to the Basilisk language server binary |
 | `basilisk.useLsp` | `true` | Use LSP server (disable for subprocess fallback) |
 | `basilisk.trace.server` | `"off"` | LSP trace level: `off`, `messages`, `verbose` |
-| `basilisk.inlayHints.parameterNames` | `true` | Show parameter name hints at call sites |
-| `basilisk.inlayHints.variableTypes` | `true` | Show inferred types for unannotated variables |
-| `basilisk.ruff.enabled` | `true` | Enable Ruff integration |
-| `basilisk.ruff.executablePath` | `"ruff"` | Path to the ruff binary |
+| `basilisk.inlayHints.parameterNames` | `true` | Reserved — hints are always shown; the server does not yet read this |
+| `basilisk.inlayHints.variableTypes` | `true` | Reserved — hints are always shown; the server does not yet read this |
+| `basilisk.ruff.enabled` | `true` | Reserved — Ruff is always on; the server does not yet read this |
+| `basilisk.ruff.executablePath` | `"ruff"` | Reserved — server resolves ruff from PATH; not yet read |
 
 ---
 

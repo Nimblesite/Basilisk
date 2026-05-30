@@ -82,15 +82,20 @@ interface FeatureDef {
   readonly settingKey: string;
 }
 
+// Only features whose toggle has a real, observable effect belong here.
+// A toggle that writes a setting the server (or extension) never reads is
+// a lie to the user and must not exist. Audited 2026-05-30:
+//   - Type Checking (basilisk.enabled): gates diagnostic publication in
+//     extension.ts `checkDocument` — disabling clears diagnostics.
+//   - uv Integration (basilisk.uv.enabled): gates the uv Quick Actions and
+//     uv Server Info rows below (buildQuickActionsSection / buildUvInfoItems).
+// Removed because the setting was silently dropped by the LSP server (it only
+// parses analysisMode + testExplorer in did_change_configuration) and nothing
+// else read it: Inlay Hints (Params/Types), Ruff Integration, Test Explorer,
+// Debugger (never even declared), AI Typing. See EXTACT-INFO-FEATURE-STATUS.
 const FEATURES: readonly FeatureDef[] = [
   { label: "Type Checking", settingKey: "basilisk.enabled" },
-  { label: "Inlay Hints (Params)", settingKey: "basilisk.inlayHints.parameterNames" },
-  { label: "Inlay Hints (Types)", settingKey: "basilisk.inlayHints.variableTypes" },
-  { label: "Ruff Integration", settingKey: "basilisk.ruff.enabled" },
-  { label: "Debugger", settingKey: "basilisk.debugger.enabled" },
-  { label: "Test Explorer", settingKey: "basilisk.testExplorer.enabled" },
   { label: "uv Integration", settingKey: "basilisk.uv.enabled" },
-  { label: "AI Typing", settingKey: "basilisk.aiTyping.enabled" },
 ];
 
 // ── Provider ─────────────────────────────────────────────────────────────

@@ -490,35 +490,22 @@
         "basilisk.inlayHints.parameterNames": {
           "type": "boolean",
           "default": true,
-          "description": "Show parameter name hints at call sites."
+          "description": "Reserved: parameter-name inlay hints are always shown. The language server does not yet read this setting (see EXTENSION-ACTIVITY-PANEL-PLAN.md)."
         },
         "basilisk.inlayHints.variableTypes": {
           "type": "boolean",
           "default": true,
-          "description": "Show inferred type hints for unannotated variables."
+          "description": "Reserved: variable-type inlay hints are always shown. The language server does not yet read this setting (see EXTENSION-ACTIVITY-PANEL-PLAN.md)."
         },
         "basilisk.ruff.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable Ruff integration for formatting and import organization."
+          "description": "Reserved: Ruff integration is always on. The language server does not yet read this setting (see EXTENSION-ACTIVITY-PANEL-PLAN.md)."
         },
         "basilisk.ruff.executablePath": {
           "type": "string",
           "default": "ruff",
-          "description": "Path to the ruff binary."
-        },
-        "basilisk.aiTyping.enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable AI-assisted type inference for diagnostics that cannot be resolved by deterministic analysis. Requires a configured AI provider."
-        },
-        "basilisk.aiTyping.provider": {
-          "type": "string",
-          "enum": [
-            "none"
-          ],
-          "default": "none",
-          "description": "AI typing provider. Currently no providers are implemented — this setting is reserved for future use."
+          "description": "Reserved: the language server resolves ruff from PATH and does not yet read this setting (see EXTENSION-ACTIVITY-PANEL-PLAN.md)."
         },
         "basilisk.uv.enabled": {
           "type": "boolean",

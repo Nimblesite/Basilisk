@@ -174,18 +174,16 @@ Zed **不**从 PATH 解析裸命令名。扩展始终返回二进制文件的绝
   "lsp": {
     "basilisk": {
       "settings": {
-        "inlayHints": {
-          "paramNames": true,
-          "varTypes": true
-        },
-        "ruff": {
-          "enabled": true
-        }
+        "analysisMode": "wholeModule"
       }
     }
   }
 }
 ```
+
+> 语言服务器目前仅识别 `analysisMode`（`wholeModule` 或 `openFilesOnly`）和
+> `testExplorer` 设置。其他设置尚未被服务器读取——请参阅
+> [配置参考](/zh/docs/configuration/)了解当前实际生效的设置。
 
 ### 更改后重新构建
 

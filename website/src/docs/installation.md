@@ -181,18 +181,17 @@ Add Basilisk-specific settings to your Zed `settings.json`:
   "lsp": {
     "basilisk": {
       "settings": {
-        "inlayHints": {
-          "paramNames": true,
-          "varTypes": true
-        },
-        "ruff": {
-          "enabled": true
-        }
+        "analysisMode": "wholeModule"
       }
     }
   }
 }
 ```
+
+> The language server currently honors `analysisMode` (`wholeModule` or
+> `openFilesOnly`) and the `testExplorer` settings. Other settings are not yet
+> read by the server — see the [configuration reference](/docs/configuration/)
+> for what is actually wired up today.
 
 ### Rebuilding after changes
 
