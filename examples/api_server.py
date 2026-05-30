@@ -11,17 +11,17 @@ from typing import Any, overload
 
 
 # ── BSK-E0003: can't infer type from empty dict literal ─────────────────────
-_route_table = {}  # BSK-E0003: empty dict, no annotation
-_middleware_stack = []  # BSK-E0003: empty list, no annotation
+_route_table: dict[str, Any] = {}  # BSK-E0003: empty dict, no annotation
+_middleware_stack: list[Any] = []  # BSK-E0003: empty list, no annotation
 
 
 # ── BSK-E0001/E0002: untyped handler signatures ──────────────────────────────
-def handle_get(request, context):  # BSK-E0001: request, context untyped
+def handle_get(request: Any, context: Any) -> None:  # BSK-E0001: request, context untyped
     user_id = request.get("user_id")
     return {"user": user_id}  # BSK-E0002: no return type
 
 
-def handle_post(request, body, auth):  # BSK-E0001: three untyped params
+def handle_post(request: Any, body: Any, auth: Any) -> None:  # BSK-E0001: three untyped params
     if not auth:
         return None
     return body  # BSK-E0002: no return type
@@ -45,16 +45,16 @@ class BaseRoute:
 
 
 class AdminRoute(BaseRoute):
-    priority: str = "high"  # BSK-E0017: str overrides int
+    priority = "high"  # BSK-E0017: str overrides int
 
 
 # ── BSK-E0021: overload signatures identical (both take no-annotation param) ──
 @overload
-def parse_id(raw) -> int: ...  # BSK-E0001: raw untyped
+def parse_id(raw: Any) -> int: ...  # BSK-E0001: raw untyped
 
 
 @overload
-def parse_id(raw) -> int: ...  # BSK-E0001 + BSK-E0021: duplicate overload
+def parse_id(raw: Any) -> int: ...  # BSK-E0001 + BSK-E0021: duplicate overload
 
 
 def parse_id(raw: str) -> int:
@@ -73,7 +73,7 @@ class Router:
 
 
 class PrefixRouter(Router):
-    prefix: str = "/api"
+    prefix = "/api"
 
     def resolve(self, path: str) -> str:  # BSK-E0025: missing @override
         return self.p + path

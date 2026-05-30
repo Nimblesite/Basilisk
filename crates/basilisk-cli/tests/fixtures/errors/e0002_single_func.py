@@ -1,2 +1,2 @@
-def fetch(url: str):
+def fetch(url: str) -> None:
     pass

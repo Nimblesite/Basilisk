@@ -79,7 +79,7 @@ class Router:
 
 
 class PrefixRouter(Router):
-    prefix: str = "/api"
+    prefix = "/api"
 
     @override
     def resolve(self, path: str) -> str:

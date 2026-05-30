@@ -1,4 +1,4 @@
 from enum import Enum
 
 class Pet(Enum):
-    DOG: int = 2
+    DOG = 2

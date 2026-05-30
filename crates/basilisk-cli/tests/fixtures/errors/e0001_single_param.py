@@ -1,2 +1,2 @@
-def process(data) -> None:
+def process(data: Any) -> None:
     pass

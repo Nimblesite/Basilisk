@@ -10,23 +10,23 @@ from typing import Any, overload
 
 
 # ── BSK-E0003: unannotated empty collections ─────────────────────────────────
-_metric_history = []  # BSK-E0003: empty list, type unknown
-_checkpoint_index = {}  # BSK-E0003: empty dict, type unknown
+_metric_history: list[Any] = []  # BSK-E0003: empty list, type unknown
+_checkpoint_index: dict[str, Any] = {}  # BSK-E0003: empty dict, type unknown
 
 
 # ── BSK-E0001/E0002: untyped training functions ──────────────────────────────
-def forward_pass(model, batch, device):  # BSK-E0001: three untyped params
+def forward_pass(model: Any, batch: Any, device: Any) -> None:  # BSK-E0001: three untyped params
     inputs, labels = batch
     logits = model(inputs.to(device))
     return logits  # BSK-E0002: no return type
 
 
-def compute_loss(logits, labels, weights):  # BSK-E0001: three untyped params
+def compute_loss(logits: Any, labels: Any, weights: Any) -> None:  # BSK-E0001: three untyped params
     loss = ((logits - labels) ** 2).mean()
     return loss  # BSK-E0002: no return type
 
 
-def backward_and_step(loss, optimizer):  # BSK-E0001: two untyped params
+def backward_and_step(loss: Any, optimizer: Any) -> None:  # BSK-E0001: two untyped params
     loss.backward()
     optimizer.step()
     optimizer.zero_grad()  # BSK-E0002: no return type
@@ -55,7 +55,7 @@ class Metric:
 
 
 class LossMetric(Metric):
-    higher_is_better: str = "no"  # BSK-E0017: str overrides bool
+    higher_is_better = "no"  # BSK-E0017: str overrides bool
 
 
 # ── BSK-E0018: reference to name not yet defined ─────────────────────────────
@@ -63,7 +63,7 @@ def get_default_optimizer() -> str:
     return DEFAULT_OPTIMIZER  # BSK-E0018: not yet assigned
 
 
-DEFAULT_OPTIMIZER: str = "adam"
+DEFAULT_OPTIMIZER = "adam"
 
 
 # ── BSK-E0019: epoch stats built conditionally, returned unconditionally ──────
@@ -75,11 +75,11 @@ def run_epoch(data: list[dict[str, float]], validate: bool) -> dict[str, float]:
 
 # ── BSK-E0021: unannotated params make overloads identical ───────────────────
 @overload
-def decode_predictions(raw) -> list[int]: ...  # BSK-E0001: raw untyped
+def decode_predictions(raw: Any) -> list[int]: ...  # BSK-E0001: raw untyped
 
 
 @overload
-def decode_predictions(raw) -> list[int]: ...  # BSK-E0001 + BSK-E0021: duplicate
+def decode_predictions(raw: Any) -> list[int]: ...  # BSK-E0001 + BSK-E0021: duplicate
 
 
 def decode_predictions(raw: list[float]) -> list[int]:
@@ -108,7 +108,7 @@ class BaseCallback:
 
 
 class EarlyStoppingCallback(BaseCallback):
-    patience: int = 5
+    patience = 5
 
     def on_epoch_end(  # BSK-E0025: missing @override
         self, epoch: int, metrics: dict[str, float]

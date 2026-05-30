@@ -1,2 +1,2 @@
-def transfer(source: str, destination, amount: float, currency) -> bool:
+def transfer(source: str, destination: Any, amount: float, currency: Any) -> bool:
     return True

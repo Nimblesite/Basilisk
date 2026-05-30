@@ -2,8 +2,8 @@ from __future__ import annotations
 
 
 class Base:
-    count: int = 0
+    count = 0
 
 
 class Child(Base):
-    count: str = "zero"
+    count = "zero"

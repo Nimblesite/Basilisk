@@ -4,8 +4,8 @@ class Base:
 
 
 class Child(Base):
-    def process(self, data):
+    def process(self, data: Any) -> None:
         return data.upper()
 
-    def extra(self, value):
+    def extra(self, value: Any) -> None:
         return value

@@ -10,18 +10,18 @@
 # Module-level: scalar literals are always inferrable
 # ---------------------------------------------------------------------------
 
-count: int = 42  # W0050 — obviously int
-name: str = "hello"  # W0050 — obviously str
-rate: float = 3.14  # W0050 — obviously float
-enabled: bool = True  # W0050 — obviously bool
-disabled: bool = False  # W0050 — obviously bool
-header: bytes = b"\x00\xff"  # W0050 — obviously bytes
-nothing: None = None  # W0050 — obviously None
+count = 42  # W0050 — obviously int
+name = "hello"  # W0050 — obviously str
+rate = 3.14  # W0050 — obviously float
+enabled = True  # W0050 — obviously bool
+disabled = False  # W0050 — obviously bool
+header = b"\x00\xff"  # W0050 — obviously bytes
+nothing = None  # W0050 — obviously None
 
 # Edge cases: zero/empty values
-zero: int = 0  # W0050 — still obviously int
-empty: str = ""  # W0050 — still obviously str
-zero_f: float = 0.0  # W0050 — still obviously float
+zero = 0  # W0050 — still obviously int
+empty = ""  # W0050 — still obviously str
+zero_f = 0.0  # W0050 — still obviously float
 
 # ---------------------------------------------------------------------------
 # Module-level: annotations that ADD information (no W0050)
@@ -40,12 +40,12 @@ coords: tuple[int, int] = (1, 2)  # NO warning — collection type is useful
 
 
 class Settings:
-    retries: int = 3  # W0050 — redundant
-    label: str = "default"  # W0050 — redundant
-    threshold: float = 0.5  # W0050 — redundant
-    verbose: bool = True  # W0050 — redundant
-    magic: bytes = b"\x00"  # W0050 — redundant
-    nothing: None = None  # W0050 — redundant
+    retries = 3  # W0050 — redundant
+    label = "default"  # W0050 — redundant
+    threshold = 0.5  # W0050 — redundant
+    verbose = True  # W0050 — redundant
+    magic = b"\x00"  # W0050 — redundant
+    nothing = None  # W0050 — redundant
 
 
 # ---------------------------------------------------------------------------
@@ -54,11 +54,11 @@ class Settings:
 
 
 class BaseRoute:
-    path: str = "/"
-    method: str = "GET"
-    auth_required: bool = False
-    priority: int = 0
-    timeout: float = 30.0
+    path = "/"
+    method = "GET"
+    auth_required = False
+    priority = 0
+    timeout = 30.0
 
 
 class AuthenticatedRoute(BaseRoute):
@@ -82,7 +82,7 @@ class ApiRoute(AuthenticatedRoute):
 
 
 class A:
-    tag: str = "a"
+    tag = "a"
 
 
 class B(A):
@@ -103,7 +103,7 @@ class D(C):
 
 
 class PriorityMixin:
-    priority: int = 0
+    priority = 0
 
 
 class Serializable:
@@ -115,7 +115,7 @@ class PrioritizedItem(PriorityMixin, Serializable):
 
 
 class WeightMixin:
-    weight: float = 1.0
+    weight = 1.0
 
 
 class WeightedItem(Serializable, WeightMixin):
@@ -128,7 +128,7 @@ class WeightedItem(Serializable, WeightMixin):
 
 
 class Root:
-    value: int = 0
+    value = 0
 
 
 class Left(Root):
@@ -469,7 +469,7 @@ def augmented_assign() -> None:
 # Global/nonlocal: annotation at module level, used in function
 # ---------------------------------------------------------------------------
 
-_counter: int = 0  # W0050 — obviously int
+_counter = 0  # W0050 — obviously int
 
 
 def increment() -> None:
@@ -494,7 +494,7 @@ class Point:
 class LabeledPoint:
     x: float  # NO W0050 — dataclass field, annotation required
     y: float  # NO W0050 — dataclass field, annotation required
-    label: str = "origin"  # NO W0050 — dataclass field, annotation required for default
+    label = "origin"  # NO W0050 — dataclass field, annotation required for default
 
 
 # ---------------------------------------------------------------------------
@@ -598,7 +598,7 @@ either: Union[int, str] = 42  # NO W0050 — Union adds info beyond int
 
 from typing import Final
 
-MAX_SIZE: Final[int] = 100  # W0050 — int is redundant (Final alone suffices)
+MAX_SIZE = 100  # W0050 — int is redundant (Final alone suffices)
 MAX_NAME: Final = "limit"  # NO W0050 — no redundant type, just Final
 
 

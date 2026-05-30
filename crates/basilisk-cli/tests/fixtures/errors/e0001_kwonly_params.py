@@ -1,2 +1,2 @@
-def render(*, width: int, height, background, scale: float) -> str:
+def render(*, width: int, height: Any, background: Any, scale: float) -> str:
     return ""

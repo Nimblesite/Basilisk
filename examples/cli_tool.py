@@ -14,13 +14,13 @@ from typing import Any, overload
 
 
 # ── BSK-E0003: unannotated state at module scope ─────────────────────────────
-_parsed_flags = {}  # BSK-E0003: empty dict
-_positional_args = []  # BSK-E0003: empty list
-_subcommand_map = {}  # BSK-E0003: empty dict
+_parsed_flags: dict[str, Any] = {}  # BSK-E0003: empty dict
+_positional_args: list[Any] = []  # BSK-E0003: empty list
+_subcommand_map: dict[str, Any] = {}  # BSK-E0003: empty dict
 
 
 # ── BSK-E0001/E0002: argument parsing functions without any types ─────────────
-def parse_flag(argv, name, default):  # BSK-E0001: three untyped params
+def parse_flag(argv: Any, name: Any, default: Any) -> None:  # BSK-E0001: three untyped params
     """Return the value of --name from argv, or default."""
     for i, arg in enumerate(argv):
         if arg == f"--{name}" and i + 1 < len(argv):
@@ -28,14 +28,14 @@ def parse_flag(argv, name, default):  # BSK-E0001: three untyped params
     return default  # BSK-E0002: no return type
 
 
-def run_subcommand(name, args, env):  # BSK-E0001: three untyped params
+def run_subcommand(name: Any, args: Any, env: Any) -> None:  # BSK-E0001: three untyped params
     handler = _subcommand_map.get(name)
     if handler:
         handler(args, env)
     # BSK-E0002: no return type
 
 
-def format_error(code, message, context):  # BSK-E0001: three untyped params
+def format_error(code: Any, message: Any, context: Any) -> None:  # BSK-E0001: three untyped params
     return f"[E{code}] {message} ({context})"  # BSK-E0002: no return type
 
 
@@ -62,8 +62,8 @@ class Command:
 
 
 class NetworkCommand(Command):
-    timeout: float = 30.0  # BSK-E0017: float overrides int
-    retryable: str = "yes"  # BSK-E0017: str overrides bool
+    timeout = 30.0  # BSK-E0017: float overrides int
+    retryable = "yes"  # BSK-E0017: str overrides bool
 
 
 # ── BSK-E0018: reference before module-level assignment ──────────────────────
@@ -71,7 +71,7 @@ def get_version_string() -> str:
     return f"v{VERSION}"  # BSK-E0018: VERSION not yet defined
 
 
-VERSION: str = "1.0.0"
+VERSION = "1.0.0"
 
 
 # ── BSK-E0019: output path only bound inside a branch ────────────────────────
@@ -86,11 +86,11 @@ def resolve_output(flags: dict[str, str], default: bool) -> str:
 
 # ── BSK-E0021: unannotated params make overloads identical ───────────────────
 @overload
-def coerce_value(raw, kind) -> int: ...  # BSK-E0001: raw, kind untyped
+def coerce_value(raw: Any, kind: Any) -> int: ...  # BSK-E0001: raw, kind untyped
 
 
 @overload
-def coerce_value(raw, kind) -> int: ...  # BSK-E0001 + BSK-E0021: duplicate
+def coerce_value(raw: Any, kind: Any) -> int: ...  # BSK-E0001 + BSK-E0021: duplicate
 
 
 def coerce_value(raw: str, kind: str) -> int:
@@ -121,7 +121,7 @@ class BaseFormatter:
 
 
 class JsonFormatter(BaseFormatter):
-    indent: int = 2
+    indent = 2
 
     def format(self, record: dict[str, str]) -> str:  # BSK-E0025: no @override
         import json

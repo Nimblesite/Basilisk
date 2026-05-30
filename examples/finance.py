@@ -13,12 +13,12 @@ from typing import Any, overload
 
 
 # ── BSK-E0003: empty portfolio and ledger ────────────────────────────────────
-_open_positions = {}  # BSK-E0003: empty dict, no annotation
-_trade_log = []  # BSK-E0003: empty list, no annotation
+_open_positions: dict[str, Any] = {}  # BSK-E0003: empty dict, no annotation
+_trade_log: list[Any] = []  # BSK-E0003: empty list, no annotation
 
 
 # ── BSK-E0001/E0002: core pricing functions missing all annotations ───────────
-def black_scholes(S, K, T, r, sigma):  # BSK-E0001: five untyped params
+def black_scholes(S: Any, K: Any, T: Any, r: Any, sigma: Any) -> None:  # BSK-E0001: five untyped params
     """Call option price — classic formula."""
     import math
 
@@ -28,14 +28,14 @@ def black_scholes(S, K, T, r, sigma):  # BSK-E0001: five untyped params
     return S - K * math.exp(-r * T)  # BSK-E0002: no return type
 
 
-def present_value(cash_flows, discount_rate):  # BSK-E0001: untyped params
+def present_value(cash_flows: Any, discount_rate: Any) -> None:  # BSK-E0001: untyped params
     total = 0.0
     for i, cf in enumerate(cash_flows):
         total += cf / (1 + discount_rate) ** i
     return total  # BSK-E0002: no return type
 
 
-def kelly_criterion(win_prob, win_amount, loss_amount):  # BSK-E0001
+def kelly_criterion(win_prob: Any, win_amount: Any, loss_amount: Any) -> None:  # BSK-E0001
     edge = win_prob * win_amount - (1 - win_prob) * loss_amount
     return edge / win_amount  # BSK-E0002: no return type
 
@@ -59,11 +59,11 @@ class Instrument:
 
 
 class Future(Instrument):
-    notional: int = 0  # BSK-E0017: int overrides float
+    notional = 0  # BSK-E0017: int overrides float
 
 
 class Option(Instrument):
-    is_derivative: str = "yes"  # BSK-E0017: str overrides bool
+    is_derivative = "yes"  # BSK-E0017: str overrides bool
 
 
 # ── BSK-E0018: forward reference to name assigned later ──────────────────────
@@ -71,7 +71,7 @@ def get_benchmark() -> str:
     return BENCHMARK_INDEX  # BSK-E0018: referenced before assignment
 
 
-BENCHMARK_INDEX: str = "SP500"
+BENCHMARK_INDEX = "SP500"
 
 
 # ── BSK-E0019: VaR only assigned inside the risk branch ──────────────────────
@@ -87,11 +87,11 @@ def compute_portfolio_risk(
 
 # ── BSK-E0021: unannotated params make overloads identical ───────────────────
 @overload
-def round_to_tick(price, tick) -> float: ...  # BSK-E0001: price, tick untyped
+def round_to_tick(price: Any, tick: Any) -> float: ...  # BSK-E0001: price, tick untyped
 
 
 @overload
-def round_to_tick(price, tick) -> float: ...  # BSK-E0001 + BSK-E0021: duplicate
+def round_to_tick(price: Any, tick: Any) -> float: ...  # BSK-E0001 + BSK-E0021: duplicate
 
 
 def round_to_tick(price: float, tick: int) -> float:

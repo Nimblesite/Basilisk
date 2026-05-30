@@ -10,24 +10,24 @@ from typing import Any, overload
 
 
 # ── BSK-E0003: unannotated empty collections at module scope ─────────────────
-_schema_cache = {}  # BSK-E0003: empty dict
-_transform_registry = []  # BSK-E0003: empty list
+_schema_cache: dict[str, Any] = {}  # BSK-E0003: empty dict
+_transform_registry: list[Any] = []  # BSK-E0003: empty list
 
 
 # ── BSK-E0001/E0002: untyped ETL stage functions ─────────────────────────────
-def extract(source, options):  # BSK-E0001: source, options untyped
+def extract(source: Any, options: Any) -> None:  # BSK-E0001: source, options untyped
     records = source.read_all()
     return records  # BSK-E0002: no return type
 
 
-def transform(records, schema, strict):  # BSK-E0001: three untyped params
+def transform(records: Any, schema: Any, strict: Any) -> None:  # BSK-E0001: three untyped params
     result = []
     for row in records:
         result.append(row)
     return result  # BSK-E0002: no return type
 
 
-def load(records, destination):  # BSK-E0001: records, destination untyped
+def load(records: Any, destination: Any) -> None:  # BSK-E0001: records, destination untyped
     destination.write(records)
     # implicit return None — no annotation # BSK-E0002: no return type
 
@@ -51,7 +51,7 @@ class Column:
 
 
 class PartitionKey(Column):
-    nullable: int = 0  # BSK-E0017: int overrides bool
+    nullable = 0  # BSK-E0017: int overrides bool
 
 
 # ── BSK-E0018: name used before any assignment in the module ─────────────────
@@ -74,11 +74,11 @@ def detect_encoding(raw_bytes: bytes) -> str:
 
 # ── BSK-E0021: unannotated overload params produce a duplicate ───────────────
 @overload
-def read_source(path) -> list[dict[str, str]]: ...  # BSK-E0001: path untyped
+def read_source(path: Any) -> list[dict[str, str]]: ...  # BSK-E0001: path untyped
 
 
 @overload
-def read_source(path) -> list[dict[str, str]]: ...  # BSK-E0001 + BSK-E0021: duplicate
+def read_source(path: Any) -> list[dict[str, str]]: ...  # BSK-E0001 + BSK-E0021: duplicate
 
 
 def read_source(path: str) -> list[dict[str, str]]:
