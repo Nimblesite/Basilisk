@@ -30,6 +30,7 @@ Implementation roadmaps tracking phasing, priorities, and progress.
 
 | File | Description |
 |---|---|
+| [ROADMAP-NEXT-STEPS-PLAN.md](plans/ROADMAP-NEXT-STEPS-PLAN.md) | Post-launch aggregation roadmap — editor releases, scale testing, i18n, MCP server, AI integration, marketing. Rough overview + agent/human-split TODO. |
 | [LSP-PLAN.md](plans/LSP-PLAN.md) | Overall LSP roadmap — seven phases from core features through cross-module analysis. |
 | [CHECKER-CROSS-MODULE-PLAN.md](plans/CHECKER-CROSS-MODULE-PLAN.md) | Cross-file LSP features, type provenance, Salsa integration, auto-stub generation. |
 | [CHECKER-PEP-CONFORMANCE-PLAN.md](plans/CHECKER-PEP-CONFORMANCE-PLAN.md) | PEP conformance push — target 85%, tiered task list by complexity and impact. |

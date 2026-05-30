@@ -16,9 +16,9 @@ permalink: /readme/
 <h1 align="center">Basilisk</h1>
 
 <p align="center">
-  <strong>The open-source Pylance replacement.</strong><br>
-  Complete Python language server, type checker, debugger, and profiler.<br>
-  VS Code &bull; Neovim &bull; Zed. Built in <strong>Rust</strong> — single binary, no runtime.
+  <strong>The open-source Python language server.</strong><br>
+  Complete language server, type checker, debugger, and profiler — strict by default.<br>
+  VS Code, Cursor &amp; Windsurf (Open VSX) &bull; Zed &bull; Neovim. Built in <strong>Rust</strong> — single binary, no runtime.
 </p>
 
 <p align="center">
@@ -107,12 +107,12 @@ All rules are on by default. There is no way to relax them globally.
 | `BSK-E0004` | `*args` or `**kwargs` has no type annotation |
 | `BSK-E0005` | Class attribute has no type annotation |
 
-### Type correctness (E0010-E0025)
+### Type correctness (E0010-E0029)
 
 | Code | Triggers when |
 |------|---------------|
-| `BSK-E0010` | Import from a module with no type stubs |
-| `BSK-E0011` | Implicit `Any` — type cannot be inferred |
+| `BSK-E0010` | Import cannot be resolved |
+| `BSK-E0011` | Explicit `Any` annotation, or a return type mismatch |
 | `BSK-E0012` | Argument type does not match parameter type |
 | `BSK-E0013` | Return type does not match declared return type |
 | `BSK-E0014` | Assignment type does not match declared variable type |
@@ -125,14 +125,19 @@ All rules are on by default. There is no way to relax them globally.
 | `BSK-E0021` | Two `@overload` signatures overlap |
 | `BSK-E0022` | Dict key type is not hashable |
 | `BSK-E0023` | `match` statement is not exhaustive |
-| `BSK-E0024` | Type expression is not valid (e.g. `int | 42`) |
+| `BSK-E0024` | Type expression is not valid (e.g. a numeric literal used as a type) |
 | `BSK-E0025` | Override method is missing the `@override` decorator |
+| `BSK-E0026` | `TypeVar` declared with a single constraint |
+| `BSK-E0027` | Duplicate `TypeVar` in a `Generic[...]` base |
+| `BSK-E0029` | Method defined inside a `TypedDict` class |
+
+These are the most common rules. Basilisk ships **151 diagnostic codes** in total (146 errors, 5 warnings) — see the [complete diagnostic reference](https://www.basilisk-python.dev/docs/rules/) (generated from the checker source by `scripts/gen_rules_reference.py`).
 
 ---
 
 ## Refactoring
 
-Basilisk ships 16 refactoring code actions — available via the lightbulb menu in VS Code, Zed, and Neovim. No extensions required.
+Basilisk ships a suite of refactoring code actions — available via the lightbulb (code actions) menu in VS Code, Cursor, and Windsurf (via Open VSX), plus Zed and Neovim. No extra extensions required.
 
 | Action | Kind | What it does |
 |--------|------|-------------|

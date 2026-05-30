@@ -2,7 +2,7 @@
 name: website-audit
 description: Audits a website for SEO, AI search performance, structured data, mobile usability, broken links, and social media cards. Fixes issues found. Use when the user mentions "audit website", "SEO", "fix search ranking", "AI search", "structured data", "social media cards", or "website performance".
 ---
-<!-- agent-pmo:2efd847 -->
+<!-- agent-pmo:74cf183 -->
 
 # Website Audit
 
@@ -40,8 +40,7 @@ Fetch and read each of these before auditing. These are the authoritative refere
 - [Top ways to ensure content performs well in Google's AI experiences](https://developers.google.com/search/blog/2025/05/succeeding-in-ai-search)
 - [SEO Starter Guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide)
 
-Take the business plan into account:
-[text](../../../business_plan/business_plan.md)
+If the repo has a business plan or product-strategy doc, take it into account.
 
 Identify the website source files in the repo. Determine the framework (static site generator, Next.js, Hugo, etc.) so you know where to find templates, metadata, and content.
 
@@ -146,7 +145,7 @@ Search for the authoritative URL and add a link to the URL. If it is not availab
 
 ## Step 11 — Audit Design Compliance
 
-Read the design system docs and view the design screens in the designsystem folder.
+If the repo has a design system (design tokens, component docs, or design screens), review it and check the site for compliance. Otherwise, audit the live site's visual consistency directly (spacing, type scale, color usage, component reuse).
 
 ## Step 12 — Test with Playwright
 

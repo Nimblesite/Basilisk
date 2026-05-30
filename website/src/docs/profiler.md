@@ -2,7 +2,7 @@
 layout: layouts/docs.njk
 title: "Python Profiler — CPU Heatmaps and Memory Leak Detection"
 description: Integrated Python profiling with Basilisk — CPU heatmaps, flamegraphs, memory leak detection, and reference graph visualization, all inside your editor.
-keywords: basilisk, profiling, python, py-spy, flamegraph, heatmap, memory leak, tracemalloc, cpu profiler, vs code, zed, neovim
+keywords: basilisk, profiling, python, py-spy, flamegraph, heatmap, memory leak, tracemalloc, cpu profiler, vs code, cursor, windsurf, open vsx, zed, neovim
 date: 2026-02-28
 dateModified: 2026-03-31
 author: The Basilisk Project

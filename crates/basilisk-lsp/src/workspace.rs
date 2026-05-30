@@ -14,7 +14,7 @@ use tower_lsp::lsp_types::Url;
 
 use crate::config::AnalysisMode;
 use crate::import_graph::ImportGraph;
-use crate::workspace_analysis::{analyse_with_config, fnv1a};
+use crate::workspace_analysis::{analyse_with_config, bsk_to_lsp, fnv1a};
 use crate::workspace_scan::{collect_python_files, deduplicate_by_stem, path_to_uri};
 
 // ── FileEntry ────────────────────────────────────────────────────────────────
@@ -351,6 +351,58 @@ impl WorkspaceIndex {
         let (entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
         let _ = self.files.insert(path, entry);
         (uri.clone(), lsp_diags)
+    }
+
+    /// Drop a file from the index entirely.
+    ///
+    /// Used when a watched file is deleted on disk so that a subsequent
+    /// workspace re-resolution does not resurrect its diagnostics from a stale
+    /// entry. Implements [ANALYSIS-INCR-IMPORTS].
+    pub fn forget_file(&self, uri: &Url) {
+        if let Ok(path) = uri.to_file_path() {
+            let _ = self.files.remove(&path);
+        }
+    }
+
+    /// Re-check every indexed file with its current `ResolvedModule` and return
+    /// the freshly converted LSP diagnostics keyed by URI.
+    ///
+    /// Updates each entry's stored diagnostics in place. Shared by the
+    /// re-resolution path so a single recheck loop serves every caller.
+    #[must_use]
+    pub fn recheck_all_files(&self) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
+        self.files
+            .iter_mut()
+            .filter_map(|mut entry| {
+                let resolved = entry.resolved.clone()?;
+                let file_config = self.config_for_file(entry.key());
+                let checker_diags = basilisk_checker::check_with_config(&resolved, file_config);
+                let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
+                    .iter()
+                    .map(|d| bsk_to_lsp(d, &entry.text))
+                    .collect();
+                entry.diagnostics = checker_diags;
+                let uri = path_to_uri(entry.key())?;
+                Some((uri, lsp_diags))
+            })
+            .collect()
+    }
+
+    /// Re-resolve every indexed file's imports against the cached search paths,
+    /// then re-check all files.
+    ///
+    /// Called when the package layout changes (e.g. a new module is created) so
+    /// that files importing the new module stop reporting `BSK-E0010` without an
+    /// LSP reload. When no search paths are cached yet this degrades to a plain
+    /// recheck. Implements [ANALYSIS-INCR-IMPORTS].
+    #[must_use]
+    pub fn reresolve_imports_and_recheck(
+        &self,
+    ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
+        if let Some(search_paths) = self.search_paths_snapshot() {
+            crate::import_resolver::resolve_workspace_imports(self, &search_paths);
+        }
+        self.recheck_all_files()
     }
 
     /// Scan all workspace roots and populate the index.

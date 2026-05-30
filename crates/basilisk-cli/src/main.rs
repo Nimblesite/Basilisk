@@ -173,11 +173,17 @@ fn main() -> ExitCode {
 
     // Initialize tracing. Controlled via BASILISK_LOG env var (defaults to info).
     // Examples: BASILISK_LOG=debug, BASILISK_LOG=basilisk_lsp::debug=trace
+    //
+    // Only colourise when stderr is an interactive terminal. When the binary
+    // runs as a subprocess (e.g. the LSP launched by the VS Code extension)
+    // stderr is a pipe, and raw ANSI escapes would otherwise render as garbage
+    // in the editor's output channel (issue #23).
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_env("BASILISK_LOG")
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
         )
+        .with_ansi(std::io::IsTerminal::is_terminal(&std::io::stderr()))
         .with_writer(std::io::stderr)
         .init();
 
