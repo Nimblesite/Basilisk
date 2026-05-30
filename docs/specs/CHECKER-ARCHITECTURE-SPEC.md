@@ -226,12 +226,12 @@ Block directives work with all modes: `# type: warning[CODE]` / `# type: end-war
 strict = true  # default, cannot be set to false globally
 
 [tool.basilisk.per-path-overrides."legacy/**"]
-strict = false  # gradual typing for legacy code
-deadline = "2025-12-31"  # enforcement deadline -- becomes strict after this date
+disabled = ["BSK-E0011"]              # disable rules entirely for legacy code
 
 [tool.basilisk.per-path-overrides."vendor/**"]
-rules.disabled = ["BSK-E0010"]
-rules.warning = ["BSK-E0001", "BSK-E0002"]
+disabled = ["BSK-E0010"]
+rules."BSK-E0001" = "warning"
+rules."BSK-E0002" = "warning"
 ```
 
 **Per-module override** (for third-party imports):
@@ -249,14 +249,6 @@ ignore-missing-stubs = true
 "BSK-E0010" = "warning"    # demote globally
 "BSK-W0050" = "error"      # promote globally
 "BSK-E0060" = "disabled"   # disable globally
-```
-
-**Migration mode** (project-wide, time-boxed):
-```toml
-[tool.basilisk.migration]
-enabled = true
-started = "2025-06-01"
-enforce_after = "2025-12-01"  # all errors become warnings until this date
 ```
 
 #### Suppression Precedence {#CHKARCH-STRICTNESS-PRECEDENCE}
@@ -1019,12 +1011,8 @@ immutability = true              # Parameters immutable by default (default: tru
 no-implicit-coercion = true      # Flag implicit type coercion (default: true)
 
 [tool.basilisk.per-path-overrides."legacy/**"]
-strict = false
-deadline = "2025-12-31"
-
-[tool.basilisk.migration]
-enabled = false
-enforce_after = "2026-01-01"
+disabled = ["BSK-E0011"]
+rules."BSK-E0010" = "warning"
 ```
 
 ### Migration from Existing Tools {#CHKARCH-CONFIG-MIGRATION}
@@ -1036,7 +1024,7 @@ basilisk migrate --from mypy      # Reads mypy.ini / setup.cfg -> pyproject.toml
 
 Semantic mapping:
 - Pyright `strict` mode -> Basilisk default (strict) with Mojo safety disabled
-- Pyright `standard` mode -> Basilisk `per-path-overrides` with `strict = false`
+- Pyright `standard` mode -> Basilisk `per-path-overrides` that disable or soften the stricter rules
 - mypy `--strict` -> Basilisk default with Mojo safety disabled
 
 ---
@@ -1128,11 +1116,10 @@ Comparison baselines: Pyright, ty, Pyrefly, Zuban.
 
 ### Gradual Adoption {#CHKARCH-MIGRATION-GRADUAL}
 
-1. **Start**: Enable Basilisk in migration mode (errors -> warnings)
-2. **Adopt per-directory**: Mark `src/` as strict, leave `legacy/` relaxed
+1. **Relax noisy rules per-directory**: soften or disable the highest-volume rules in `legacy/**` via per-path overrides, keep `src/**` strict
+2. **Relax per-file where needed**: drop `# basilisk: relaxed` at the top of a file to demote its errors to warnings while you work through it
 3. **Track progress**: `basilisk stats` shows type completeness percentage
-4. **Set deadline**: `deadline = "2025-12-31"` in per-path overrides
-5. **Enforce**: After deadline, relaxed paths become strict
+4. **Tighten over time**: remove the per-path overrides directory by directory as the code is typed
 
 ---
 
@@ -1171,7 +1158,7 @@ Basilisk follows the Python Typing Council's governance (PEP 729). We implement 
 
 ### Phase 3: Strict-by-Default {#CHKARCH-ROADMAP-P3}
 - All BSK-E0001 through BSK-E0025 rules
-- Migration mode
+- Gradual adoption (per-path / per-file relaxation)
 - `basilisk migrate` from mypy/Pyright
 - 80% PEP conformance
 
@@ -1237,6 +1224,5 @@ Basilisk follows the Python Typing Council's governance (PEP 729). We implement 
 | **Owned** | Parameter convention: function takes exclusive ownership; caller must not use value afterward |
 | **InOut** | Parameter convention: function may mutate the value in place |
 | **Strict mode** | Basilisk's only mode -- all types must be declared or inferable |
-| **Migration mode** | Temporary mode where errors become warnings until an enforcement deadline |
 | **Mojo safety** | The set of ownership, immutability, and coercion rules inspired by the Mojo language |
 | **Type completeness** | Percentage of symbols in a module/project with resolved (non-Any) types |

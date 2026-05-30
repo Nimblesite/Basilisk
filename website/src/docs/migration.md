@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "Migrate to Basilisk from Pyright or mypy"
-description: "Step-by-step migration guide from Pyright or mypy to Basilisk. Automatic config import, per-path overrides with deadlines, and incremental adoption strategy."
+description: "Step-by-step migration guide from Pyright or mypy to Basilisk. Automatic config import, per-path overrides, and incremental adoption strategy."
 keywords: migrate to basilisk, from pyright, from mypy, python type checker migration
 date: 2026-02-28
 dateModified: 2026-03-31
@@ -85,26 +85,24 @@ x = get_value()  # basilisk: ignore[BSK-E0012] -- third-party API mismatch, trac
 
 Basilisk will flag bare `# type: ignore` comments since it doesn't recognise them. The migration tool suggests the correct `# basilisk: ignore[CODE] -- reason` format.
 
-### Step 4 — Gradual enforcement with migration mode
+### Step 4 — Adopt gradually with per-path overrides
 
-For a large codebase, enable migration mode to phase errors in as warnings first:
+For a large codebase, soften or disable the noisiest rules in legacy directories and tighten them as you go:
 
 ```toml
 [tool.basilisk]
 python-version = "3.12"
 include = ["src/"]
 
-[tool.basilisk.migration]
-enabled = true
-started = "2025-06-01"
-enforce_after = "2025-12-01"
+[tool.basilisk.per-path-overrides."legacy/**"]
+rules."BSK-E0011" = "warning"   # demote the noisiest rule to a warning
 ```
 
-In migration mode, all type errors are reported as warnings. After `enforce_after`, they become errors again.
+You can also drop `# basilisk: relaxed` at the top of an individual file to turn all of its errors into warnings while you work through it.
 
 ### Strict mode differences
 
-If you used Pyright with `typeCheckingMode = "basic"` or `"standard"`, you will see significantly more errors with Basilisk — because those modes allow untyped code. This is expected and is the point. Use per-path overrides with deadlines to phase in enforcement on a directory-by-directory basis.
+If you used Pyright with `typeCheckingMode = "basic"` or `"standard"`, you will see significantly more errors with Basilisk — because those modes allow untyped code. This is expected and is the point. Use per-path overrides to phase in enforcement on a directory-by-directory basis.
 
 ---
 
@@ -154,7 +152,7 @@ Workaround while waiting for WASM plugins:
 
 ```toml
 [tool.basilisk.per-path-overrides."models/**"]
-rules.ignore = ["BSK-E0011"]  # Django model fields use Any extensively
+disabled = ["BSK-E0011"]  # Django model fields use Any extensively
 ```
 
 ### Step 4 — Update inline suppressions
@@ -191,12 +189,11 @@ basilisk check --only E0001,E0002 src/
 
 ### Use per-path overrides for legacy directories
 
-Don't try to type everything at once. Use per-path overrides with a deadline:
+Don't try to type everything at once. Soften the noisiest rules in legacy paths and keep new code strict:
 
 ```toml
 [tool.basilisk.per-path-overrides."legacy/**"]
-strict = false
-deadline = "2026-06-01"
+rules."BSK-E0011" = "warning"
 
 [tool.basilisk.per-path-overrides."new_modules/**"]
 # Full strictness immediately for new code

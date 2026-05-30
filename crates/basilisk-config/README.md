@@ -8,7 +8,7 @@ This crate handles all **configuration discovery and parsing**. It reads project
 
 ## Key concepts
 
-- **Per-path overrides** — allows relaxing strictness for legacy directories with optional deadlines.
+- **Per-path overrides** — disable specific rules or override their severity for matching path globs (e.g. legacy directories).
 - **Migration support** — reads existing `pyrightconfig.json` and `mypy.ini` to ease adoption.
 - **Analysis modes** — configures workspace-level analysis behavior (single-file, workspace, etc.).
 

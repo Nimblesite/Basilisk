@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 迁移指南
-description: 如何从 Pyright 或 mypy 逐步迁移到 Basilisk，包括配置导入、每路径覆盖和截止日期。
+description: 如何从 Pyright 或 mypy 逐步迁移到 Basilisk，包括配置导入、每路径覆盖和渐进式采用策略。
 keywords: 迁移到basilisk, 从pyright, 从mypy, python类型检查器迁移
 lang: zh
 ---
@@ -82,26 +82,24 @@ x = get_value()  # basilisk: ignore[BSK-E0012] -- third-party API mismatch, trac
 
 Basilisk 将标记裸 `# type: ignore` 注释，因为它不识别它们。迁移工具建议正确的 `# basilisk: ignore[CODE] -- reason` 格式。
 
-### 第 4 步——通过迁移模式逐步执行
+### 第 4 步——通过每路径覆盖渐进式采用
 
-对于大型代码库，启用迁移模式首先将错误分阶段作为警告：
+对于大型代码库，在遗留目录中降低或禁用最嘈杂的规则，并随着进展逐步收紧：
 
 ```toml
 [tool.basilisk]
 python-version = "3.12"
 include = ["src/"]
 
-[tool.basilisk.migration]
-enabled = true
-started = "2025-06-01"
-enforce_after = "2025-12-01"
+[tool.basilisk.per-path-overrides."legacy/**"]
+rules."BSK-E0011" = "warning"   # 将最嘈杂的规则降级为警告
 ```
 
-在迁移模式下，所有类型错误报告为警告。在 `enforce_after` 之后，它们再次变为错误。
+您也可以在单个文件顶部添加 `# basilisk: relaxed`，在处理该文件期间将其所有错误变为警告。
 
 ### 严格模式差异
 
-如果您将 Pyright 与 `typeCheckingMode = "basic"` 或 `"standard"` 一起使用，您会看到 Basilisk 报告的错误明显更多——因为这些模式允许未类型化的代码。这是预期的，也正是关键所在。使用带截止日期的每路径覆盖，逐目录地分阶段执行。
+如果您将 Pyright 与 `typeCheckingMode = "basic"` 或 `"standard"` 一起使用，您会看到 Basilisk 报告的错误明显更多——因为这些模式允许未类型化的代码。这是预期的，也正是关键所在。使用每路径覆盖，逐目录地分阶段执行。
 
 ---
 
@@ -151,7 +149,7 @@ mypy 插件（Django、SQLAlchemy、Pydantic）不能与 Basilisk 一起使用�
 
 ```toml
 [tool.basilisk.per-path-overrides."models/**"]
-rules.ignore = ["BSK-E0011"]  # Django 模型字段广泛使用 Any
+disabled = ["BSK-E0011"]  # Django 模型字段广泛使用 Any
 ```
 
 ### 第 4 步——更新内联抑制
@@ -188,12 +186,11 @@ basilisk check --only E0001,E0002 src/
 
 ### 对遗留目录使用每路径覆盖
 
-不要试图一次性类型化所有内容。使用带有截止日期的每路径覆盖：
+不要试图一次性类型化所有内容。在遗留路径中降低最嘈杂的规则，并保持新代码严格：
 
 ```toml
 [tool.basilisk.per-path-overrides."legacy/**"]
-strict = false
-deadline = "2026-06-01"
+rules."BSK-E0011" = "warning"
 
 [tool.basilisk.per-path-overrides."new_modules/**"]
 # 新代码立即完全严格

@@ -3,7 +3,9 @@
 
 This codebase is held to a high standard: code here should comfortably pass review at a top-tier engineering organization. Please keep quality high and address shortcomings as you find them, rather than leaving them for later.
 
-⚠️ USING GIT IS ⛔️ ILLEGAL - ESPECIALLY, DO NOT STAMP GIT COMMITS WITH YOUR SIGNATURE ⚠️
+⚠️ USING GIT IS ⛔️ ILLEGAL ⚠️
+
+⚠️ SIGNING A GIT COMMIT WITH CLAUDE CODE AS A COAUTHOR IS SUPER ⛔️ ILEGAL ⚠️
 
 ⚠️ AVOID DUPLICATION OF ALL KINDS AND PRACTICE TOKEN ECONOMICS ⚠️
 

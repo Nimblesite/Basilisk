@@ -29,14 +29,9 @@ stub-paths = ["stubs/"]
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
 
-[tool.basilisk.migration]
-enabled = true
-started = "2025-06-01"
-enforce_after = "2025-12-01"
-
 [tool.basilisk.per-path-overrides."legacy/**"]
-strict = false
-deadline = "2026-12-31"
+disabled = ["BSK-E0011"]
+rules."BSK-E0010" = "warning"
 ```
 
 ---
@@ -84,66 +79,34 @@ deadline = "2026-12-31"
 
 ---
 
-## `[tool.basilisk.migration]`
-
-迁移模式在定义的时间段内将选定的错误软化为警告，使现有代码库更容易采用 Basilisk。
-
-### `enabled`
-
-**类型：** `boolean`
-**默认值：** `false`
-
-启用迁移模式。当为 `true` 时，错误在 `enforce_after` 之前报告为警告。
-
-### `started`
-
-**类型：** `string`（ISO 日期）
-**示例：** `"2025-06-01"`
-
-信息性：迁移开始的时间。用于进度报告。
-
-### `enforce_after`
-
-**类型：** `string`（ISO 日期）
-**示例：** `"2025-12-01"`
-
-在此日期之后，迁移模式中的所有警告再次变为错误。随着截止日期临近，Basilisk 会警告您。
-
----
-
 ## `[tool.basilisk.per-path-overrides."<glob>"]`
 
 将不同的设置应用于特定路径。glob 与相对于项目根目录的文件路径匹配。
 
 ```toml
 [tool.basilisk.per-path-overrides."legacy/**"]
-strict = false
-deadline = "2026-12-31"
+# 为匹配的文件完全禁用规则
+disabled = ["BSK-E0011"]
 
 [tool.basilisk.per-path-overrides."tests/**"]
-# 测试可以更自由地使用 Any
-rules.ignore = ["BSK-E0011"]
+# 或降低规则的严重性而不是完全禁用
+rules."BSK-E0011" = "warning"
 ```
 
-### `strict`
-
-**类型：** `boolean`
-**默认值：** `true`
-
-设置为 `false` 以禁用匹配文件的严格模式。所有错误变为警告。
-
-### `deadline`
-
-**类型：** `string`（ISO 日期）
-
-`strict = false` 不再生效并强制执行错误的日期。随着截止日期临近，Basilisk 会打印提醒。
-
-### `rules.ignore`
+### `disabled`
 
 **类型：** `string[]`
 **示例：** `["BSK-E0011", "BSK-E0001"]`
 
-在匹配文件中忽略的特定规则。尽可能选择狭窄的忽略而不是 `strict = false`。
+为匹配此 glob 的文件完全禁用的规则代码。
+
+### `rules`
+
+**类型：** 规则代码 → 严重性的表
+**严重性：** `"error"`、`"warning"`、`"info"`、`"disabled"`
+**示例：** `rules."BSK-E0011" = "warning"`
+
+为匹配的文件覆盖特定规则的严重性。尽可能选择降低或禁用单个规则，而不是放宽大范围的检查。
 
 ---
 

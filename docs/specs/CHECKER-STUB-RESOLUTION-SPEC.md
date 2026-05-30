@@ -180,7 +180,7 @@ ignore-missing-stubs = true
 ignore-missing-stubs = true
 
 [tool.basilisk.per-path-overrides."vendor/**"]
-rules.disabled = ["BSK-E0010"]
+disabled = ["BSK-E0010"]
 ```
 
 ---

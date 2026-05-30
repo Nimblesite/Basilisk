@@ -151,7 +151,7 @@ Pyrefly was built by Meta to handle their Python codebase — one of the largest
 Basilisk is not a faster version of an existing tool. It occupies a different position:
 
 **Unique to Basilisk:**
-1. Strict by default — the only tool where you cannot accidentally run in permissive mode, yet you can dial rules down per-file or per-path from the editor UI or config (with optional deadlines)
+1. Strict by default — the only tool where you cannot accidentally run in permissive mode, yet you can dial rules down per-file or per-path from the editor UI or config
 2. Enrichment fixes — one-click code actions that add the missing types *for* you, instead of just reporting that they're missing
 3. A complete, open-source LSP in every editor — completions, hover, go-to-definition, refactoring, debugging, and profiling, the same in VS Code, plus native Zed and Neovim extensions (Open VSX for Cursor, Windsurf, and others coming very soon; JetBrains planned) — not just inside one proprietary VS Code extension
 4. Integrated debugger and profiler brokered through the language server

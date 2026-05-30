@@ -83,7 +83,7 @@ Basilisk (alpha) 实现了七阶段路线图的前两个阶段。
 - 集成性能分析器（py-spy，火焰图，内存泄漏检测）
 
 **路线图中：**
-- 第 3 阶段：80% PEP 覆盖率，`basilisk migrate`，迁移模式
+- 第 3 阶段：80% PEP 覆盖率，`basilisk migrate`，渐进式采用
 - 第 4 阶段：Mojo 安全注解（所有权、不可变性）
 - 第 5 阶段：WASM 插件系统，Django/Pydantic/SQLAlchemy 插件，自动存根生成
 - 第 6 阶段：95%+ PEP 覆盖率，SARIF/JUnit 输出，JetBrains 扩展

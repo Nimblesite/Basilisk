@@ -83,7 +83,7 @@ Basilisk (alpha) implements Phase 1 of a seven-phase roadmap.
 - Integrated profiler (py-spy, flamegraphs, memory leak detection)
 
 **On the roadmap:**
-- Phase 3: 80% PEP coverage, `basilisk migrate`, migration mode
+- Phase 3: 80% PEP coverage, `basilisk migrate`, gradual adoption
 - Phase 4: Mojo safety annotations (ownership, immutability, coercion)
 - Phase 5: WASM plugin system, Django/Pydantic/SQLAlchemy plugins, auto-stub generation
 - Phase 6: 95%+ PEP coverage, SARIF/JUnit output, enterprise hardening
