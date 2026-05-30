@@ -26,6 +26,32 @@ function codeAndName(stem) {
   return { code: code.toUpperCase(), name: name.trim() };
 }
 
+// Parse the CSV `# tools:` header into [{ tool, version }] for the methodology
+// footnote. The header looks like:
+//   "basilisk=basilisk 0.0.0, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ..."
+// i.e. comma-separated `name=<--version output>` entries. The version output
+// usually repeats the tool name and may carry a trailing parenthetical, both of
+// which we strip so the site shows a clean "pyright 1.1.408".
+function parseToolVersions(toolsStr) {
+  if (!toolsStr) return [];
+  return toolsStr
+    .split(/,\s+(?=[a-z0-9_]+=)/i)
+    .map((entry) => {
+      const eq = entry.indexOf("=");
+      const tool = (eq >= 0 ? entry.slice(0, eq) : entry).trim();
+      let version = (eq >= 0 ? entry.slice(eq + 1) : "").replace(/\s*\(.*\)\s*$/, "").trim();
+      const prefix = `${tool} `;
+      if (version.toLowerCase().startsWith(prefix.toLowerCase())) {
+        version = version.slice(prefix.length).trim();
+      }
+      // Dev builds carry the workspace's release-time version sentinel; show it
+      // as a build label rather than the raw placeholder string.
+      if (!version || /placeholder/i.test(version)) version = "dev build";
+      return { tool, version };
+    })
+    .filter((t) => t.tool);
+}
+
 function parseCsv(text) {
   const meta = {};
   const dataLines = [];
@@ -45,6 +71,7 @@ function parseCsv(text) {
   // website only wants the leading number so the caption reads "10 runs".
   const runsMatch = (meta.runs || "").match(/^\d+/);
   meta.runsCount = runsMatch ? runsMatch[0] : null;
+  meta.toolVersions = parseToolVersions(meta.tools);
 
   const cols = dataLines[0].split(",");
   const tools = cols.slice(1).map((c) => c.replace(/_ms$/, ""));
