@@ -1,12 +1,12 @@
 ---
 layout: layouts/docs.njk
-title: 类型检查器对比
-description: Basilisk 与 Pyright、mypy、ty 和 Pyrefly 在严格性、PEP 符合性、性能和功能方面的比较。
-keywords: basilisk vs pyright, python类型检查器比较, mypy vs basilisk, ty, pyrefly
+title: Python 类型检查工具对比
+description: "Basilisk 与 Pyright、mypy、ty、Pyrefly 等 Python 类型检查工具的对比：严格性、PEP 符合性、性能与功能。"
+keywords: basilisk vs pyright, python 类型检查工具对比, mypy vs basilisk, ty, pyrefly
 lang: zh
 ---
 
-# 类型检查器对比
+# Python 类型检查工具对比
 
 Python 类型检查器的格局已经发生了重大变化。2025 年推出了三个基于 Rust 的新工具。它们每一个都默认使用渐进类型。
 
