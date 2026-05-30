@@ -446,71 +446,41 @@ permalink: /
 <section class="benchmark-section">
   <div class="container">
     <p class="section-label">Performance benchmarks</p>
-    <h2 class="section-heading">Always faster than Pyright.<br>And we&rsquo;re just getting started.</h2>
+    <h2 class="section-heading">This is the starting line.<br>We&rsquo;re closing on Pyrefly.</h2>
     <p class="section-subhead">
-      Cold, full-file CLI runs over large single-rule fixtures (measured with
-      <code>make bench</code>). Basilisk is consistently faster than Pyright and
-      roughly mypy-class. The Rust newcomers ty and Pyrefly lead on raw cold
-      throughput today &mdash; but Basilisk&rsquo;s real edge is the warm path:
-      sub-10ms incremental re-checks via Salsa, which these cold runs don&rsquo;t capture.
+      These are today&rsquo;s numbers &mdash; produced by <code>make bench</code> and
+      committed to the repo, so they move as we optimize. Basilisk already beats
+      Pyright on every rule; our target is Pyrefly-class throughput. And these are
+      <em>cold</em> full-file runs &mdash; they don&rsquo;t capture Basilisk&rsquo;s real edge,
+      the sub-10ms warm incremental re-checks via Salsa.
     </p>
 
+    {% if benchmarks.hasData %}
     <div class="table-wrapper">
       <table class="benchmark-table">
         <thead>
           <tr>
             <th>Rule</th>
-            <th class="col-basilisk">basilisk</th>
-            <th>pyright</th>
-            <th>mypy</th>
-            <th>pyrefly</th>
-            <th>ty</th>
+            {% for tool in benchmarks.tools %}<th{% if tool == 'basilisk' %} class="col-basilisk"{% endif %}>{{ tool }}</th>{% endfor %}
           </tr>
         </thead>
         <tbody>
+          {% for row in benchmarks.rows %}
           <tr>
-            <td>E0002 Missing return</td>
-            <td class="col-basilisk">249 ms</td>
-            <td>542 ms</td>
-            <td>146 ms</td>
-            <td>104 ms</td>
-            <td>35 ms ✓</td>
+            <td>{{ row.label }}</td>
+            {% for cell in row.cells %}<td{% if cell.tool == 'basilisk' %} class="col-basilisk"{% endif %}>{{ cell.text }}{% if cell.fastest %} ✓{% endif %}</td>{% endfor %}
           </tr>
-          <tr>
-            <td>E0016 Incompatible override</td>
-            <td class="col-basilisk">150 ms</td>
-            <td>632 ms</td>
-            <td>156 ms</td>
-            <td>109 ms</td>
-            <td>52 ms ✓</td>
-          </tr>
-          <tr>
-            <td>E0022 Unhashable dict key</td>
-            <td class="col-basilisk">217 ms</td>
-            <td>521 ms</td>
-            <td>149 ms</td>
-            <td>96 ms</td>
-            <td>37 ms ✓</td>
-          </tr>
-          <tr>
-            <td>E0023 Non-exhaustive match</td>
-            <td class="col-basilisk">114 ms</td>
-            <td>512 ms</td>
-            <td>150 ms</td>
-            <td>103 ms</td>
-            <td>24 ms ✓</td>
-          </tr>
-          <tr>
-            <td>E0026 TypeVar constraint</td>
-            <td class="col-basilisk">125 ms</td>
-            <td>699 ms</td>
-            <td>152 ms</td>
-            <td>103 ms</td>
-            <td>38 ms ✓</td>
-          </tr>
+          {% endfor %}
         </tbody>
       </table>
     </div>
+    <p class="bench-meta">
+      Mean wall-clock, lower is better; ✓ = fastest. Measured on
+      <strong>{{ benchmarks.meta.cpu }}</strong> ({{ benchmarks.meta.os }}, {{ benchmarks.meta.cores }} cores),
+      {{ benchmarks.meta.runs }}. Generated {{ benchmarks.meta.generated }} from
+      <code>benchmarks/status/{{ benchmarks.primary }}.csv</code>.
+    </p>
+    {% endif %}
   </div>
 </section>
 

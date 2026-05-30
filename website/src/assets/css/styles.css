@@ -863,6 +863,8 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   border-bottom: 1px solid var(--color-border);
 }
 
+.bench-meta { margin-top: var(--space-4); font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.6; }
+.bench-meta code { font-family: var(--font-mono); font-size: 0.9em; color: var(--color-text-secondary); }
 .benchmark-table { width: 100%; min-width: 680px; border-collapse: separate; border-spacing: 0; font-size: 0.875rem; }
 .benchmark-table thead { background: var(--color-bg-tertiary); }
 .benchmark-table thead th { padding: var(--space-4) var(--space-5); text-align: center; font-weight: 600; color: var(--color-text-secondary); border-bottom: 1px solid var(--color-border-bright); white-space: nowrap; }

@@ -7,10 +7,17 @@
 #
 # Run from the repo root:  make bench   (or:  bash benchmarks/run.sh)
 #
-# Competitor tools are OPTIONAL — any that are not installed are skipped, and
-# the summary simply omits their column. Only `basilisk` and `hyperfine` are
-# required. Fixtures intentionally contain errors, so every command is run with
-# hyperfine --ignore-failure (a non-zero "errors found" exit is expected).
+# OUTPUT (auto-generated every run):
+#   benchmarks/status/<machine>.csv   — git-tracked per-machine results table,
+#                                        the same way conformance_status.csv is
+#                                        tracked. The website reads this file, so
+#                                        the published numbers are never hand-typed.
+#   benchmarks/results/*.json         — raw hyperfine output (gitignored)
+#   benchmarks/results/summary.md     — human-readable summary (gitignored)
+#
+# Competitor tools are OPTIONAL — any that are not installed are skipped (their
+# column is left blank). Only `basilisk` and `hyperfine` are required. Fixtures
+# intentionally contain errors, so every command runs with --ignore-failure.
 
 set -uo pipefail
 
@@ -18,9 +25,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BSK="$ROOT/target/release/basilisk"
 FX="$ROOT/benchmarks/fixtures"
 OUT="$ROOT/benchmarks/results"
+STATUS_DIR="$ROOT/benchmarks/status"
 RUNS="${RUNS:-10}"
 WARMUP="${WARMUP:-2}"
-mkdir -p "$OUT"
+mkdir -p "$OUT" "$STATUS_DIR"
+
+# Canonical tool column order for the status CSV / website (stable schema).
+ALL_TOOLS="basilisk pyright mypy ty pyrefly"
 
 # ─── Preconditions ────────────────────────────────────────────────────────────
 if ! command -v hyperfine >/dev/null 2>&1; then
@@ -53,10 +64,45 @@ version_of() {
   printf '%s' "${v:-n/a}"
 }
 
+# ─── Machine identity & conditions (no hostname — CPU/arch/OS only) ───────────
+slugify() { printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -cs 'a-z0-9' '-' | sed 's/^-*//; s/-*$//'; }
+detect_cpu() {
+  if sysctl -n machdep.cpu.brand_string >/dev/null 2>&1; then
+    sysctl -n machdep.cpu.brand_string
+  elif [[ -r /proc/cpuinfo ]]; then
+    grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//'
+  else
+    echo "unknown CPU"
+  fi
+}
+detect_cores() { sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo "?"; }
+
+BENCH_CPU="$(detect_cpu)"
+BENCH_ARCH="$(uname -m)"
+BENCH_OS="$(uname -s) $(uname -r)"
+BENCH_CORES="$(detect_cores)"
+BENCH_GENERATED="$(date '+%Y-%m-%dT%H:%M:%S%z')"
+if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  BENCH_MACHINE="GitHub Actions ${RUNNER_NAME:-runner} (${RUNNER_OS:-?}/${RUNNER_ARCH:-?})"
+  BENCH_SLUG="gha-$(slugify "${RUNNER_OS:-unknown}-${RUNNER_ARCH:-unknown}")"
+else
+  BENCH_MACHINE="$BENCH_CPU"
+  BENCH_SLUG="$(slugify "$(uname -s)-${BENCH_ARCH}-${BENCH_CPU}")"
+fi
+
+# Tool-version string for the CSV header.
+BENCH_TOOLS=""
+for name in "${TOOL_NAMES[@]}"; do
+  BENCH_TOOLS+="${BENCH_TOOLS:+, }${name}=$(version_of "$name")"
+done
+
 echo "======================================================="
-echo "  Basilisk Benchmark — $(date '+%Y-%m-%d %H:%M')"
+echo "  Basilisk Benchmark — ${BENCH_GENERATED}"
 echo "======================================================="
-echo "  host    : $(uname -sm)"
+echo "  machine : $BENCH_MACHINE"
+echo "  cpu     : $BENCH_CPU ($BENCH_CORES cores, $BENCH_ARCH)"
+echo "  os      : $BENCH_OS"
+echo "  slug    : $BENCH_SLUG  ->  benchmarks/status/${BENCH_SLUG}.csv"
 echo "  runs    : $RUNS (warmup $WARMUP)"
 echo "  tools   :"
 for name in "${TOOL_NAMES[@]}"; do
@@ -95,14 +141,19 @@ for FILE in "${FIXTURES[@]}"; do
   echo ""
 done
 
-# ─── Summary table (mean ms per tool, parsed from hyperfine JSON) ─────────────
+# ─── Write outputs: summary.md (ephemeral) + status CSV (git-tracked) ─────────
 echo "─── Summary: mean wall-clock per fixture (ms) ──────────────────────────"
 echo ""
+BENCH_SLUG="$BENCH_SLUG" BENCH_MACHINE="$BENCH_MACHINE" BENCH_CPU="$BENCH_CPU" \
+BENCH_ARCH="$BENCH_ARCH" BENCH_OS="$BENCH_OS" BENCH_CORES="$BENCH_CORES" \
+BENCH_GENERATED="$BENCH_GENERATED" BENCH_TOOLS="$BENCH_TOOLS" BENCH_RUNS="$RUNS" \
+BENCH_STATUS_DIR="$STATUS_DIR" BENCH_ALL_TOOLS="$ALL_TOOLS" \
 python3 - "$OUT" "${TOOL_NAMES[@]}" <<'PY'
 import json, os, sys, glob
 
 out_dir = sys.argv[1]
 tools = sys.argv[2:]
+all_tools = os.environ["BENCH_ALL_TOOLS"].split()
 
 rows = []
 for jf in sorted(glob.glob(os.path.join(out_dir, "*.json"))):
@@ -116,6 +167,7 @@ if not rows:
     print("  (no JSON results)")
     raise SystemExit
 
+# Console table -------------------------------------------------------------
 w = max(len(s) for s, _ in rows)
 header = f"  {'fixture':<{w}}  " + "  ".join(f"{t:>9}" for t in tools)
 print(header)
@@ -125,24 +177,45 @@ for stem, means in rows:
     fastest = min((means[t] for t in tools if t in means), default=None)
     for t in tools:
         if t in means:
-            v = means[t]
-            mark = " *" if fastest is not None and abs(v - fastest) < 1e-9 else "  "
-            cells.append(f"{v:7.1f}{mark}")
+            mark = " *" if fastest is not None and abs(means[t] - fastest) < 1e-9 else "  "
+            cells.append(f"{means[t]:7.1f}{mark}")
         else:
             cells.append(f"{'n/a':>9}")
     print(f"  {stem:<{w}}  " + "  ".join(cells))
 print("\n  (* = fastest for that fixture; lower is better)")
 
-# Machine-readable markdown summary for the website / docs.
-md = [f"# Benchmark summary\n", f"Host: `{os.uname().sysname} {os.uname().machine}`\n",
-      "", "| fixture | " + " | ".join(tools) + " |",
+# Human-readable summary.md (gitignored) ------------------------------------
+md = ["# Benchmark summary\n", f"Machine: `{os.environ['BENCH_MACHINE']}`\n", "",
+      "| fixture | " + " | ".join(tools) + " |",
       "|" + "---|" * (len(tools) + 1)]
 for stem, means in rows:
-    cells = [f"{means[t]:.1f} ms" if t in means else "n/a" for t in tools]
-    md.append(f"| {stem} | " + " | ".join(cells) + " |")
+    md.append(f"| {stem} | " + " | ".join(f"{means[t]:.1f} ms" if t in means else "n/a" for t in tools) + " |")
 with open(os.path.join(out_dir, "summary.md"), "w") as fh:
     fh.write("\n".join(md) + "\n")
-print(f"\n  Markdown summary: {os.path.join(out_dir, 'summary.md')}")
+
+# Git-tracked per-machine status CSV ----------------------------------------
+# Stable schema: a metadata header (# lines) the website parses for conditions,
+# then one row per fixture with a fixed `<tool>_ms` column for every tool.
+status_path = os.path.join(os.environ["BENCH_STATUS_DIR"], os.environ["BENCH_SLUG"] + ".csv")
+lines = [
+    f"# machine: {os.environ['BENCH_MACHINE']}",
+    f"# cpu: {os.environ['BENCH_CPU']}",
+    f"# arch: {os.environ['BENCH_ARCH']}",
+    f"# os: {os.environ['BENCH_OS']}",
+    f"# cores: {os.environ['BENCH_CORES']}",
+    f"# tools: {os.environ['BENCH_TOOLS']}",
+    f"# runs: {os.environ['BENCH_RUNS']} (hyperfine mean wall-clock, milliseconds)",
+    f"# generated: {os.environ['BENCH_GENERATED']}",
+    f"# note: cold full-file CLI runs; does not reflect warm incremental (LSP) speed.",
+    "fixture," + ",".join(f"{t}_ms" for t in all_tools),
+]
+for stem, means in rows:
+    cells = [stem] + [f"{means[t]:.1f}" if t in means else "" for t in all_tools]
+    lines.append(",".join(cells))
+with open(status_path, "w") as fh:
+    fh.write("\n".join(lines) + "\n")
+print(f"\n  Status CSV (git-tracked): {status_path}")
+print(f"  Summary:                  {os.path.join(out_dir, 'summary.md')}")
 PY
 
 # ─── Diagnostic coverage (best-effort error counts) ───────────────────────────
@@ -172,4 +245,4 @@ for FILE in "${FIXTURES[@]}"; do
 done
 
 echo ""
-echo "Done. Per-fixture JSON + summary.md saved to $OUT/"
+echo "Done. Re-run any time with 'make bench'; commit benchmarks/status/*.csv to track trends."
