@@ -14,7 +14,7 @@ eleventyNavigation:
 
 # Refactoring
 
-Basilisk provides **a full suite of refactoring code actions** via the LSP protocol. They appear in the lightbulb menu in VS Code (and Cursor/Windsurf via Open VSX), Zed, and Neovim automatically — no additional extensions or configuration required.
+Basilisk provides **a full suite of refactoring code actions** via the LSP protocol. They appear in the lightbulb menu in VS Code, Zed, and Neovim automatically (Cursor/Windsurf via Open VSX coming very soon) — no additional extensions or configuration required.
 
 Every refactoring produces a `WorkspaceEdit` that the editor applies atomically. Multi-file refactorings (move symbol, module rename) use `DocumentChanges` with `CreateFile` operations.
 

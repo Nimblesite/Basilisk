@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "Install Basilisk — VS Code, Cursor, Zed, Neovim, or CLI"
-description: "Install the Basilisk Python language server via the VS Code Marketplace, Open VSX (Cursor, Windsurf), Homebrew, Scoop, pre-built binaries, or build from source. Supports macOS, Linux, and Windows."
+description: "Install the Basilisk Python language server via the VS Code Marketplace, Homebrew, Scoop, pre-built binaries, or build from source. Supports macOS, Linux, and Windows."
 keywords: basilisk, install, open vsx, homebrew, scoop, rust, python language server, vs code, cursor, windsurf, zed, neovim
 date: 2026-02-28
 dateModified: 2026-03-31
@@ -15,7 +15,7 @@ eleventyNavigation:
 
 Basilisk is a single Rust binary with no runtime dependencies. No Node.js. No Python interpreter. No package manager required after installation.
 
-## VS Code, Cursor, Windsurf & other VS Code-compatible editors (recommended)
+## VS Code (recommended)
 
 The fastest way to get started. Install the **Basilisk** extension from your editor's marketplace:
 
@@ -24,7 +24,7 @@ The fastest way to get started. Install the **Basilisk** extension from your edi
 3. Search for **Basilisk**
 4. Click **Install**
 
-The same extension is published to both the **VS Code Marketplace** and **[Open VSX](https://open-vsx.org)**, so it installs the same way in VS Code, **Cursor**, **Windsurf**, and any other editor that pulls from an Open VSX-compatible marketplace — no separate plugin required.
+The extension is published to the **VS Code Marketplace** today. Publishing to **[Open VSX](https://open-vsx.org)** — which makes it installable in **Cursor**, **Windsurf**, and other VS Code-compatible editors — is **coming very soon**.
 
 **The extension bundles the matching Basilisk binary for your platform.** No manual setup is required for a default VSIX install.
 
@@ -208,7 +208,7 @@ Zed recompiles the WASM and reloads the extension automatically.
 Basilisk implements the Language Server Protocol. Any editor with LSP support can use it:
 
 - **VS Code** — via the official Basilisk extension (bundles the matching binary)
-- **Cursor, Windsurf & other VS Code forks** — install the same extension from [Open VSX](https://open-vsx.org)
+- **Cursor, Windsurf & other VS Code forks** — via [Open VSX](https://open-vsx.org) (coming very soon)
 - **Zed** — via the Basilisk Zed extension (see above)
 - **Neovim** — via nvim-lspconfig
 - **Helix** — native LSP support

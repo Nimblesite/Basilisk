@@ -15,7 +15,7 @@ eleventyNavigation:
 
 Basilisk is a **complete, open-source Python language server**. Everything you rely on a modern Python extension for — autocomplete, go-to-definition, hover information, refactoring, diagnostics, integrated debugging, profiling — Basilisk does too, fully open source and strict by default.
 
-It is not just a type checker. It is a feature-complete LSP with first-class extensions for **VS Code**, **Cursor**, **Windsurf**, **Zed**, and **Neovim** — plus any other editor that speaks the Language Server Protocol (JetBrains is on the way). No proprietary extension, no Node.js — a single Rust binary, the same experience in every editor.
+It is not just a type checker. It is a feature-complete LSP with first-class extensions for **VS Code**, **Zed**, and **Neovim** — plus any other editor that speaks the Language Server Protocol. **Cursor** and **Windsurf** (via Open VSX) are coming very soon, and JetBrains is on the way. No proprietary extension, no Node.js — a single Rust binary, the same experience in every editor.
 
 ## The problem Basilisk solves
 
@@ -28,7 +28,7 @@ Basilisk takes a different position. It brings the whole stack — type checking
 ## What Basilisk is
 
 - A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, a full [refactoring suite](/docs/refactoring/), code actions, inlay hints
-- **Editor extensions for every major IDE** — VS Code, Cursor, and Windsurf (via Open VSX), plus Neovim (0.10+) and Zed; JetBrains (IntelliJ / PyCharm) is on the way
+- **Editor extensions for every major IDE** — VS Code, Neovim (0.10+), and Zed today; Cursor and Windsurf (via Open VSX) coming very soon, and JetBrains (IntelliJ / PyCharm) on the way
 - **Enrichment fixes** — one-click code actions that add the missing type annotations *for* you
 - An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
 - An **integrated profiler** — CPU profiling via py-spy with inline heatmap annotations, flamegraphs, memory leak detection, and reference graph visualization, all inside your editor

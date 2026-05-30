@@ -10,7 +10,7 @@ lang: zh
 
 Basilisk 是一个**完整的开源 Python 语言服务器**。您依赖现代 Python 扩展提供的一切——自动补全、跳转到定义、悬停信息、重构、诊断、集成调试、性能分析——Basilisk 全部提供，完全开源，默认严格模式。
 
-它不仅仅是一个类型检查器。它是一个功能完整的 LSP，为 **VS Code**、**Cursor**、**Windsurf**、**Zed** 和 **Neovim** 提供一流扩展——以及任何支持语言服务器协议的其他编辑器（JetBrains 即将推出）。无专有扩展。无 Node.js。单个 Rust 二进制文件，在每款编辑器中提供相同的体验。
+它不仅仅是一个类型检查器。它是一个功能完整的 LSP，为 **VS Code**、**Zed** 和 **Neovim** 提供一流扩展——以及任何支持语言服务器协议的其他编辑器。**Cursor** 和 **Windsurf**（通过 Open VSX）即将推出，JetBrains（IntelliJ / PyCharm）也在路上。无专有扩展。无 Node.js。单个 Rust 二进制文件，在每款编辑器中提供相同的体验。
 
 ## Basilisk 解决的问题
 
@@ -23,7 +23,7 @@ Basilisk 采取不同的立场。它将整个工具栈——类型检查、语�
 ## Basilisk 是什么
 
 - **功能完整的语言服务器** (LSP)——自动补全、跳转到定义、悬停、查找引用、重命名、[完整的重构套件](/zh/docs/refactoring/)、代码操作、内联提示
-- **适配每款主流编辑器的扩展**——VS Code、Cursor 和 Windsurf（通过 Open VSX），加上 Neovim (0.10+) 和 Zed；JetBrains（IntelliJ / PyCharm）即将推出
+- **适配每款主流编辑器的扩展**——VS Code、Neovim (0.10+) 和 Zed 现已支持；Cursor 和 Windsurf（通过 Open VSX）即将推出，JetBrains（IntelliJ / PyCharm）也在路上
 - **补全修复**——一键代码操作，自动为您添加缺失的类型注解
 - **集成调试器**——按 F5 调试 Python，支持断点、单步执行、变量检查和监视表达式，全部通过 Basilisk LSP 代理
 - **集成性能分析器**——通过 py-spy 进行 CPU 分析，具有内联热图注解、火焰图、内存泄漏检测和引用图可视化，全部在您的编辑器内

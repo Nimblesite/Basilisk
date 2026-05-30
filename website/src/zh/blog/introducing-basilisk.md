@@ -76,7 +76,7 @@ Basilisk (alpha) 实现了七阶段路线图的前两个阶段。
 
 **同样今天可用：**
 - 语言服务器协议 (LSP) 服务器——自动补全、跳转到定义、悬停、诊断、内联提示、完整的重构操作套件
-- VS Code 扩展——每个平台捆绑正确的二进制文件；同时发布到 [Open VSX](https://open-vsx.org)，因此 Cursor、Windsurf 和其他兼容 VS Code 的编辑器也可使用
+- VS Code 扩展——每个平台捆绑正确的二进制文件；发布到 [Open VSX](https://open-vsx.org)（让 Cursor、Windsurf 和其他兼容 VS Code 的编辑器也可使用）即将推出
 - Neovim 插件 (0.10+)
 - Zed 扩展
 - 集成调试器（debugpy，按 F5）

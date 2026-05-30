@@ -18,6 +18,16 @@
 # Competitor tools are OPTIONAL — any that are not installed are skipped (their
 # column is left blank). Only `basilisk` and `hyperfine` are required. Fixtures
 # intentionally contain errors, so every command runs with --ignore-failure.
+#
+# REGRESSION GATE:
+#   `make bench` FAILS (non-zero exit) if basilisk got slower than the recorded
+#   baseline (the existing benchmarks/status/<machine>.csv) on any fixture by
+#   more than BENCH_REGRESS_PCT (default 25%). On a regression the baseline CSV
+#   is left UNCHANGED so the gate keeps comparing against known-good numbers.
+#   To accept new numbers / establish a fresh baseline (e.g. after changing the
+#   fixture set or intentionally trading speed for correctness):
+#       BENCH_NO_GATE=1 make bench
+#   Knobs:  BENCH_REGRESS_PCT=<pct>   BENCH_NO_GATE=1   RUNS=<n>   WARMUP=<n>
 
 set -uo pipefail
 
@@ -28,6 +38,9 @@ OUT="$ROOT/benchmarks/results"
 STATUS_DIR="$ROOT/benchmarks/status"
 RUNS="${RUNS:-10}"
 WARMUP="${WARMUP:-2}"
+# Regression gate: on by default; BENCH_NO_GATE=1 disables it and re-baselines.
+BENCH_GATE="1"; [[ -n "${BENCH_NO_GATE:-}" ]] && BENCH_GATE="0"
+BENCH_REGRESS_PCT="${BENCH_REGRESS_PCT:-25}"
 mkdir -p "$OUT" "$STATUS_DIR"
 
 # Canonical tool column order for the status CSV / website (stable schema).
@@ -148,6 +161,7 @@ BENCH_SLUG="$BENCH_SLUG" BENCH_MACHINE="$BENCH_MACHINE" BENCH_CPU="$BENCH_CPU" \
 BENCH_ARCH="$BENCH_ARCH" BENCH_OS="$BENCH_OS" BENCH_CORES="$BENCH_CORES" \
 BENCH_GENERATED="$BENCH_GENERATED" BENCH_TOOLS="$BENCH_TOOLS" BENCH_RUNS="$RUNS" \
 BENCH_STATUS_DIR="$STATUS_DIR" BENCH_ALL_TOOLS="$ALL_TOOLS" \
+BENCH_GATE="$BENCH_GATE" BENCH_REGRESS_PCT="$BENCH_REGRESS_PCT" \
 python3 - "$OUT" "${TOOL_NAMES[@]}" <<'PY'
 import json, os, sys, glob
 
@@ -193,11 +207,47 @@ for stem, means in rows:
 with open(os.path.join(out_dir, "summary.md"), "w") as fh:
     fh.write("\n".join(md) + "\n")
 
-# Git-tracked per-machine status CSV ----------------------------------------
+# Git-tracked per-machine status CSV + regression gate ----------------------
 # Stable schema: a metadata header (# lines) the website parses for conditions,
 # then one row per fixture with a fixed `<tool>_ms` column for every tool.
 status_path = os.path.join(os.environ["BENCH_STATUS_DIR"], os.environ["BENCH_SLUG"] + ".csv")
-lines = [
+gate_on = os.environ.get("BENCH_GATE", "1") == "1"
+pct = float(os.environ.get("BENCH_REGRESS_PCT", "25"))
+
+def read_baseline_basilisk(path):
+    """basilisk_ms per fixture from an existing status CSV (the last/committed run)."""
+    base, cols = {}, None
+    if not os.path.exists(path):
+        return base
+    with open(path) as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split(",")
+            if cols is None:
+                cols = parts
+                continue
+            if "basilisk_ms" not in cols:
+                break
+            idx = cols.index("basilisk_ms")
+            val = parts[idx] if idx < len(parts) else ""
+            if val:
+                base[parts[0]] = float(val)
+    return base
+
+baseline = read_baseline_basilisk(status_path)
+
+# Regression = basilisk slower than baseline by more than `pct`% on a fixture.
+regressions = []
+for stem, means in rows:
+    if "basilisk" not in means or stem not in baseline:
+        continue
+    old, new = baseline[stem], means["basilisk"]
+    if old > 0 and new > old * (1.0 + pct / 100.0):
+        regressions.append((stem, old, new, (new / old - 1.0) * 100.0))
+
+csv_lines = [
     f"# machine: {os.environ['BENCH_MACHINE']}",
     f"# cpu: {os.environ['BENCH_CPU']}",
     f"# arch: {os.environ['BENCH_ARCH']}",
@@ -211,12 +261,28 @@ lines = [
 ]
 for stem, means in rows:
     cells = [stem] + [f"{means[t]:.1f}" if t in means else "" for t in all_tools]
-    lines.append(",".join(cells))
-with open(status_path, "w") as fh:
-    fh.write("\n".join(lines) + "\n")
-print(f"\n  Status CSV (git-tracked): {status_path}")
+    csv_lines.append(",".join(cells))
+
+blocked = bool(regressions) and gate_on
+if blocked:
+    print(f"\n  REGRESSION GATE — basilisk slower than baseline by >{pct:.0f}%")
+    print(f"    baseline: {status_path}")
+    print(f"    {'fixture':<34} {'baseline':>11} {'now':>11} {'change':>9}")
+    for stem, old, new, delta in regressions:
+        print(f"    {stem:<34} {old:>8.1f} ms {new:>8.1f} ms {delta:>+7.1f}%")
+    print("    Baseline left UNCHANGED. Investigate, or re-baseline with:")
+    print("      BENCH_NO_GATE=1 make bench")
+else:
+    with open(status_path, "w") as fh:
+        fh.write("\n".join(csv_lines) + "\n")
+    suffix = "  (gate off; baseline re-set)" if (regressions and not gate_on) else ""
+    print(f"\n  Status CSV (git-tracked): {status_path}{suffix}")
 print(f"  Summary:                  {os.path.join(out_dir, 'summary.md')}")
+
+if blocked:
+    raise SystemExit(3)
 PY
+GATE_STATUS=$?
 
 # ─── Diagnostic coverage (best-effort error counts) ───────────────────────────
 echo ""
@@ -245,4 +311,11 @@ for FILE in "${FIXTURES[@]}"; do
 done
 
 echo ""
-echo "Done. Re-run any time with 'make bench'; commit benchmarks/status/*.csv to track trends."
+if [[ "${GATE_STATUS:-0}" -ne 0 ]]; then
+  echo "RESULT: FAIL — performance regression vs baseline (see gate report above)."
+  echo "        Fix the slowdown, or re-baseline with: BENCH_NO_GATE=1 make bench"
+else
+  echo "RESULT: PASS — no performance regression vs baseline."
+  echo "        Commit benchmarks/status/*.csv to track the trend."
+fi
+exit "${GATE_STATUS:-0}"

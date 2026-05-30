@@ -47,7 +47,7 @@ Basilisk removes the choice. There is no permissive mode to fall back to.
 | Full LSP (completions, hover, goto) | ✅ | Pylance only | ❌ | Basic | Basic |
 | Integrated debugger | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Integrated profiler | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Editor extensions | VS Code + Open VSX (Cursor, Windsurf…), Zed, Neovim | Proprietary (Pylance) | None | VS Code | VS Code |
+| Editor extensions | VS Code, Zed, Neovim (Open VSX for Cursor/Windsurf soon) | Proprietary (Pylance) | None | VS Code | VS Code |
 | Plugin system | WASM (planned) | None | Python hooks | Planned | None |
 | License | MIT | MIT | MIT | MIT | MIT |
 
@@ -155,7 +155,7 @@ Basilisk is not a faster version of an existing tool. It occupies a different po
 **Unique to Basilisk:**
 1. Strict by default — the only tool where you cannot accidentally run in permissive mode, yet you can dial rules down per-file or per-path from the editor UI or config (with optional deadlines)
 2. Enrichment fixes — one-click code actions that add the missing types *for* you, instead of just reporting that they're missing
-3. A complete, open-source LSP in every editor — completions, hover, go-to-definition, refactoring, debugging, and profiling, the same in VS Code and any Open VSX editor (Cursor, Windsurf, and others), plus native Zed and Neovim extensions (JetBrains planned) — not just inside one proprietary VS Code extension
+3. A complete, open-source LSP in every editor — completions, hover, go-to-definition, refactoring, debugging, and profiling, the same in VS Code, plus native Zed and Neovim extensions (Open VSX for Cursor, Windsurf, and others coming very soon; JetBrains planned) — not just inside one proprietary VS Code extension
 4. Integrated debugger and profiler brokered through the language server
 5. WASM plugin system (planned) — extensible without forking, secure by design
 

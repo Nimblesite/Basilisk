@@ -42,7 +42,7 @@ Basilisk 消除了这个选择。没有宽松模式可以回退。
 | 完整 LSP（补全、悬停、跳转） | ✅ | 仅 Pylance | ❌ | 基础 | 基础 |
 | 集成调试器 | ✅ | ❌ | ❌ | ❌ | ❌ |
 | 集成性能分析器 | ✅ | ❌ | ❌ | ❌ | ❌ |
-| 编辑器扩展 | VS Code + Open VSX（Cursor、Windsurf…）、Zed、Neovim | 专有（Pylance） | 无 | VS Code | VS Code |
+| 编辑器扩展 | VS Code、Zed、Neovim（Cursor/Windsurf 的 Open VSX 即将推出） | 专有（Pylance） | 无 | VS Code | VS Code |
 | 插件系统 | WASM（计划中） | 无 | Python 钩子 | 计划中 | 无 |
 | 许可证 | MIT | MIT | MIT | MIT | MIT |
 
@@ -150,7 +150,7 @@ Basilisk 不是现有工具的更快版本。它占据了不同的位置：
 **Basilisk 独有的：**
 1. 默认严格——唯一不能意外在宽松模式下运行的工具，同时可以通过编辑器 UI 或配置文件按文件或路径调整规则（设置可选截止日期）
 2. 补全修复——一键代码操作，自动添加缺失的类型，而不仅仅是报告缺少
-3. 在每款编辑器中完整的开源 LSP——补全、悬停、跳转到定义、重构、调试和性能分析，在 VS Code 和任何 Open VSX 编辑器（Cursor、Windsurf 等）以及原生 Zed 和 Neovim 扩展中相同（JetBrains 计划中）——不仅仅在一个专有的 VS Code 扩展内
+3. 在每款编辑器中完整的开源 LSP——补全、悬停、跳转到定义、重构、调试和性能分析，在 VS Code 以及原生 Zed 和 Neovim 扩展中相同（Cursor、Windsurf 等的 Open VSX 即将推出；JetBrains 计划中）——不仅仅在一个专有的 VS Code 扩展内
 4. 通过语言服务器代理的集成调试器和性能分析器
 5. WASM 插件系统（计划中）——无需分叉即可扩展，设计安全
 
