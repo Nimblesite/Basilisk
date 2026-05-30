@@ -4,6 +4,31 @@ title: "Basilisk — 开源 Python 语言服务器，默认严格模式"
 description: "用 Rust 构建的开源 Python 语言服务器。默认严格的类型检查、自动补全、重构、调试和性能分析——兼容 VS Code、Cursor、Windsurf、Zed 和 Neovim 的完全开源方案。"
 lang: zh
 permalink: /zh/
+# 共享基准测试宏（_includes/benchmark-section.njk）的可翻译文案。
+# 数字来自 _data/benchmarks.js（受 git 跟踪的 CSV）；此处仅放文案。
+benchmarkStrings:
+  label: "性能基准测试"
+  heading: "这是起点。<br>我们正在逼近 Pyrefly。"
+  subhead: "这些是今天的数据——由 <code>make bench</code> 生成并提交到代码库，因此它们会随着我们的优化而变化。Basilisk 在每条规则上都已胜过 Pyright；我们的目标是达到 Pyrefly 级别的吞吐量。而且这些是<em>冷启动</em>的全文件运行——并未体现 Basilisk 真正的优势：通过 Salsa 实现的亚 10 毫秒热增量重检。"
+  ruleHeader: "规则"
+  names:
+    e0001_missing_param: "缺少参数类型"
+    e0002_missing_return: "缺少返回类型"
+    e0010_unresolved_import: "无法解析的导入"
+    e0012_argument_type_mismatch: "参数类型不匹配"
+    e0014_assignment_incompatibility: "赋值类型不兼容"
+    e0016_incompatible_override: "不兼容的方法覆盖"
+    e0022_unhashable_dict_key: "不可哈希的字典键"
+    e0023_nonexhaustive_match: "非穷举的 match"
+    e0026_typevar_single_constraint: "TypeVar 单一约束"
+    e0054_final_reassignment: "Final 重新赋值"
+  metaPre: "平均挂钟时间，基于 "
+  metaMid: " 次 hyperfine 运行；越低越好，✓ = 最快。测量于 "
+  metaCpuOpen: "（"
+  metaOsSep: "，"
+  metaCoresClose: " 核心），生成于 "
+  metaDateClose: "。来源："
+  metaEnd: " —— 由 <code>make bench</code> 重新生成。"
 ---
 
 <script src="/assets/js/demo.js" defer></script>
@@ -442,73 +467,8 @@ permalink: /zh/
 <!-- ═══════════════════════════════════════════════
      BENCHMARKING TABLE
 ═══════════════════════════════════════════════ -->
-<section class="benchmark-section">
-  <div class="container">
-    <p class="section-label">性能基准测试</p>
-    <h2 class="section-heading">与 Pyrefly 同级的速度。<br>Pyright 和 mypy 远落其后。</h2>
-    <p class="section-subhead">
-      Basilisk 在单规则基准测试中已与 Pyrefly 不相上下，
-      远超 Pyright 和 mypy。Salsa 的增量引擎还有尚未开发的潜力。
-    </p>
-
-    <div class="table-wrapper">
-      <table class="benchmark-table">
-        <thead>
-          <tr>
-            <th>规则</th>
-            <th class="col-basilisk">basilisk</th>
-            <th>pyright</th>
-            <th>mypy</th>
-            <th>pyrefly</th>
-            <th>ty</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>E0002 缺少返回值</td>
-            <td class="col-basilisk">255 ms</td>
-            <td>779 ms</td>
-            <td>147 ms</td>
-            <td>113 ms</td>
-            <td>52 ms ✓</td>
-          </tr>
-          <tr>
-            <td>E0016 不兼容覆盖</td>
-            <td class="col-basilisk">107 ms</td>
-            <td>824 ms</td>
-            <td>151 ms</td>
-            <td>119 ms</td>
-            <td>73 ms ✓</td>
-          </tr>
-          <tr>
-            <td>E0022 不可哈希字典键</td>
-            <td class="col-basilisk">105 ms</td>
-            <td>681 ms</td>
-            <td>148 ms</td>
-            <td>104 ms</td>
-            <td>55 ms ✓</td>
-          </tr>
-          <tr>
-            <td>E0023 非穷举匹配</td>
-            <td class="col-basilisk">81 ms</td>
-            <td>664 ms</td>
-            <td>151 ms</td>
-            <td>109 ms</td>
-            <td>39 ms ✓</td>
-          </tr>
-          <tr>
-            <td>E0026 TypeVar 约束</td>
-            <td class="col-basilisk">73 ms</td>
-            <td>869 ms</td>
-            <td>151 ms</td>
-            <td>115 ms</td>
-            <td>60 ms ✓</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
+{% import "benchmark-section.njk" as benchmark %}
+{{ benchmark.section(benchmarks, benchmarkStrings) }}
 
 <!-- ═══════════════════════════════════════════════
      INTERACTIVE DEMO

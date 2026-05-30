@@ -13,6 +13,7 @@ Usage:
 Run this after adding or renaming a rule, and paste the table into
 website/src/docs/rules/index.md (between the REFERENCE markers).
 """
+
 from __future__ import annotations
 
 import json
@@ -71,10 +72,14 @@ def main() -> int:
         print(json.dumps(codes, indent=2, sort_keys=True))
         return 0
     if "--check" in sys.argv:
-        target = Path(sys.argv[sys.argv.index("--check") + 1]).read_text(encoding="utf-8")
+        target = Path(sys.argv[sys.argv.index("--check") + 1]).read_text(
+            encoding="utf-8"
+        )
         missing = [c for c in codes if c not in target]
         if missing:
-            print(f"MISSING {len(missing)} codes: {', '.join(sorted(missing, key=sort_key))}")
+            print(
+                f"MISSING {len(missing)} codes: {', '.join(sorted(missing, key=sort_key))}"
+            )
             return 1
         print(f"OK: all {len(codes)} codes present")
         return 0

@@ -16,11 +16,14 @@ const STATUS_DIR = join(__dirname, "../../../benchmarks/status");
 
 const titleCase = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-// "e0002_missing_return" -> "E0002 Missing return"
-function labelFor(stem) {
+// "e0002_missing_return" -> { code: "E0002", name: "Missing return" }
+// `code` is language-neutral; `name` is the English fallback. The benchmark
+// table macro is shared across locales — non-English pages pass a translated
+// name map keyed by `fixture`, falling back to this English `name`.
+function codeAndName(stem) {
   const [code, ...rest] = stem.split("_");
-  const human = rest.join(" ").replace(/\b\w/, (c) => c.toUpperCase());
-  return `${code.toUpperCase()} ${human}`.trim();
+  const name = rest.join(" ").replace(/\b\w/, (c) => c.toUpperCase());
+  return { code: code.toUpperCase(), name: name.trim() };
 }
 
 function parseCsv(text) {
@@ -58,9 +61,12 @@ function parseCsv(text) {
       (best, t) => (best == null || values[t] < values[best] ? t : best),
       null,
     );
+    const { code, name } = codeAndName(stem);
     return {
       fixture: stem,
-      label: labelFor(stem),
+      code,
+      name,
+      label: `${code} ${name}`.trim(),
       values,
       fastest,
       cells: tools.map((t) => ({
