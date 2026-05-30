@@ -1,9 +1,9 @@
 {
   "name": "Basilisk",
-  "title": "Basilisk — The Open-Source Pylance Replacement",
-  "description": "Open-source Python language server replacing Pylance and Pyright. Strict-by-default type checking, autocomplete, debugging, and profiling. Built in Rust.",
+  "title": "Basilisk — Open-Source Python Language Server, Strict by Default",
+  "description": "Open-source Python language server in Rust — strict-by-default checking, autocomplete, refactoring, debugging & profiling in VS Code, Cursor, Zed & Neovim.",
   "url": "https://www.basilisk-python.dev",
-  "keywords": "basilisk, python type checker, pylance replacement, pyright alternative, language server, lsp, strict typing, rust, vs code, open source",
+  "keywords": "basilisk, python type checker, python language server, lsp, strict typing, rust, vs code, cursor, zed, neovim, open source, autocomplete, refactoring",
   "themeColor": "#e8500a",
   "stylesheet": "/assets/css/styles.css",
   "github": "https://github.com/Nimblesite/Basilisk",

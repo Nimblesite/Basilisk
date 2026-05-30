@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
-title: Type Safety — E0010–E0025
-description: "Basilisk rules for type safety — argument mismatches, return type errors, incompatible overrides, unhashable dict keys, and non-exhaustive match statements. BSK-E0010 through E0025."
+title: Type Safety — E0010–E0029
+description: "Basilisk rules for type safety — argument mismatches, return type errors, incompatible overrides, unhashable dict keys, and non-exhaustive match statements. BSK-E0010 through E0029."
 keywords: basilisk, type safety, type mismatch, BSK-E0012, BSK-E0013, BSK-E0016
 date: 2026-02-28
 dateModified: 2026-03-31
@@ -12,42 +12,44 @@ eleventyNavigation:
   order: 2
 ---
 
-# Type Safety — E0010–E0025
+# Type Safety — E0010–E0029
 
-Rules that catch type mismatches, incorrect annotations, and unsound type usage.
+Rules that catch type mismatches, incorrect annotations, and unsound type usage. For the complete, generated list of every code, see the [rules overview](/docs/rules/).
 
-← [Missing Annotations](/docs/rules/missing-annotations/) | Next: [Ownership Safety](/docs/rules/ownership-safety/) →
+← [Missing Annotations](/docs/rules/missing-annotations/) | [All Rules](/docs/rules/) →
 
 ---
 
-### BSK-E0010 — Import from untyped module
+### BSK-E0010 — Unresolved import
 
-Importing from a module with no type stubs produces implicit `Any` for all imported names.
+An `import` refers to a module that cannot be resolved on the configured search paths.
 
 ```python
-# Error — legacy_module has no stubs
+# Error — module cannot be found
 from legacy_module import process_data
 
-# Correct — provide or generate stubs
-# basilisk stubs generate legacy_module
+# Fix — install the package / add it to the workspace, or point
+# stub-paths at a .pyi for it
 ```
 
 ---
 
-### BSK-E0011 — Implicit `Any`
+### BSK-E0011 — Explicit `Any` / return type mismatch
 
-`Any` must be explicitly annotated with a suppression reason. Implicit `Any` from inference is not permitted.
+Two checks share this code. An explicit `Any` annotation silences type checking and must be justified; and a returned value that is clearly incompatible with the declared return type is reported.
 
 ```python
-# Error
-def handle(data: Any) -> bool:
-    ...
+from typing import Any
 
-# Correct (with justification)
+# Warning — explicit `Any` must carry a reason
 def handle(
     data: Any,  # basilisk: ignore[BSK-E0011] -- awaiting stubs for third-party SDK
 ) -> bool:
     ...
+
+# Error — int literal is not assignable to `str`
+def name() -> str:
+    return 42
 ```
 
 ---
@@ -177,10 +179,11 @@ def classify(x: int | str) -> str:
 
 ### BSK-E0024 — Invalid type form
 
-A type annotation uses syntax that is not valid.
+A value that is not a valid type is used in a type position — for example a numeric literal as an annotation.
 
 ```python
-x: int | = None  # Error — malformed union
+x: 42 = 0   # Error — `42` is not a type
+y: int = 0  # Correct
 ```
 
 ---
@@ -192,5 +195,47 @@ A method that overrides a parent class method is missing the `@override` decorat
 ```python
 class Child(Base):
     def process(self) -> str:  # Error — missing @override
+        ...
+```
+
+---
+
+### BSK-E0026 — `TypeVar` with a single constraint
+
+A `TypeVar` declared with exactly one constraint is meaningless — constraints require two or more.
+
+```python
+from typing import TypeVar
+
+T = TypeVar("T", int)        # Error — a single constraint
+U = TypeVar("U", int, str)   # Correct — two or more
+```
+
+---
+
+### BSK-E0027 — Duplicate `TypeVar` in a `Generic[...]` base
+
+The same `TypeVar` appears more than once in a `Generic[...]` (or `Protocol[...]`) base.
+
+```python
+from typing import Generic, TypeVar
+
+T = TypeVar("T")
+class Box(Generic[T, T]):  # Error — `T` listed twice
+    ...
+```
+
+---
+
+### BSK-E0029 — Method defined inside a `TypedDict`
+
+`TypedDict` classes describe data shape only; they may not define methods.
+
+```python
+from typing import TypedDict
+
+class Movie(TypedDict):
+    title: str
+    def play(self) -> None:  # Error — methods aren't allowed in a TypedDict
         ...
 ```

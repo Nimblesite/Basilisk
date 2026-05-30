@@ -4,7 +4,7 @@ description: Prepare the Basilisk codebase for CI. Reads the CI workflow, builds
 argument-hint: "[optional focus area]"
 allowed-tools: Read, Grep, Glob, Edit, Write, Bash
 ---
-<!-- agent-pmo:2efd847 -->
+<!-- agent-pmo:74cf183 -->
 
 # CI Prep — Get Basilisk PR-Ready
 

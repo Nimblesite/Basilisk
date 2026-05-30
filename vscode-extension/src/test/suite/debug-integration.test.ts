@@ -24,6 +24,8 @@ import * as os from 'os';
 import * as net from 'net';
 import { execFileSync } from 'child_process';
 
+import { findBasiliskBinary } from './test-helpers';
+
 const EXTENSION_ID = 'Nimblesite.basilisk';
 
 /** Maximum time (ms) to wait for the LSP server to fully start. */
@@ -139,43 +141,6 @@ const TYPE_VARIETY_START_LINE = 98;
 const CLASS_INSTANCE_START_LINE = 119;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function detectShipwrightPlatform(): string {
-    if (process.platform === 'darwin' && process.arch === 'arm64') { return 'darwin-arm64'; }
-    if (process.platform === 'linux' && process.arch === 'arm64') { return 'linux-arm64'; }
-    if (process.platform === 'linux') { return 'linux-x64'; }
-    if (process.platform === 'win32' && process.arch === 'arm64') { return 'win32-arm64'; }
-    if (process.platform === 'win32') { return 'win32-x64'; }
-    return 'linux-x64';
-}
-
-/** Resolve the bundled VSIX binary staged by the test bootstrap. */
-function findBasiliskBinary(): string | undefined {
-    const extensionRoot = path.resolve(__dirname, '../../..');
-    const exe = process.platform === 'win32' ? '.exe' : '';
-    const bundled = path.join(extensionRoot, 'bin', detectShipwrightPlatform(), `basilisk${exe}`);
-    if (fs.existsSync(bundled)) {
-        return bundled;
-    }
-
-    const envPath = process.env.BASILISK_EXECUTABLE_PATH;
-    if (envPath !== undefined && envPath !== '' && fs.existsSync(envPath)) {
-        return envPath;
-    }
-
-    // __dirname at runtime is vscode-extension/out/test/suite/ — 4 levels to repo root.
-    const workspaceRoot = path.resolve(__dirname, '../../../..');
-    const debugBinary = path.join(workspaceRoot, 'target', 'debug', 'basilisk');
-    if (fs.existsSync(debugBinary)) {
-        return debugBinary;
-    }
-    try {
-        execFileSync('basilisk', ['--version'], { timeout: SUBPROCESS_TIMEOUT_MS });
-        return 'basilisk';
-    } catch {
-        return undefined;
-    }
-}
 
 /**
  * Check if debugpy is installed in the system Python.

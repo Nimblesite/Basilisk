@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 配置参考
-description: Basilisk pyproject.toml 配置选项的完整参考。
+description: Basilisk pyproject.toml 配置选项的完整参考。严重性覆盖、每路径规则、内联抑制和 Ruff 集成。
 keywords: basilisk, 配置, pyproject.toml, 设置
 lang: zh
 ---
@@ -28,11 +28,6 @@ python-platform = "All"
 stub-paths = ["stubs/"]
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
-
-[tool.basilisk.mojo-safety]
-ownership = true
-immutability = true
-no-implicit-coercion = true
 
 [tool.basilisk.migration]
 enabled = true
@@ -86,36 +81,6 @@ deadline = "2026-12-31"
 **示例：** `["**/migrations/**", "**/generated/**"]`
 
 要从分析中排除的 Glob 模式。在 `include` 之后应用。使用 `**` 进行递归匹配。
-
----
-
-## `[tool.basilisk.mojo-safety]`
-
-控制 Mojo 启发的安全分析。请参阅 [Mojo 风格安全](/zh/docs/mojo-safety/) 以获取完整文档。
-
-### `ownership`
-
-**类型：** `boolean`
-**默认值：** `true`
-
-启用所有权分析：`Borrowed`、`InOut`、`Owned` 注解检查。
-标记 `Borrowed` 参数的变异（BSK-E0030）和移动后使用（BSK-E0031）。
-
-### `immutability`
-
-**类型：** `boolean`
-**默认值：** `true`
-
-强制执行未标注 `InOut` 的参数的不可变性。
-标记未标注参数的变异（BSK-E0040）。
-
-### `no-implicit-coercion`
-
-**类型：** `boolean`
-**默认值：** `true`
-
-标记隐式类型强制转换：`int` → `float`、`bool` → `int`、`bytes` → `str`。
-需要显式转换函数（BSK-E0060 到 BSK-E0063）。
 
 ---
 
@@ -176,7 +141,7 @@ rules.ignore = ["BSK-E0011"]
 ### `rules.ignore`
 
 **类型：** `string[]`
-**示例：** `["BSK-E0011", "BSK-W0080"]`
+**示例：** `["BSK-E0011", "BSK-E0001"]`
 
 在匹配文件中忽略的特定规则。尽可能选择狭窄的忽略而不是 `strict = false`。
 
@@ -202,7 +167,7 @@ data = unsafe_cast(value)  # basilisk: ignore -- third-party code, cannot type
 # basilisk: relaxed
 ```
 
-> **注意：** 没有原因注释的内联抑制本身被标记为 BSK-W0095。原因不检查内容——它只需要存在。
+> **注意：** 没有原因注释的内联抑制本身会被标记为警告。原因不检查内容——它只需要存在。
 
 ---
 

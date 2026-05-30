@@ -1,0 +1,20 @@
+# machine: Apple M4 Max
+# cpu: Apple M4 Max
+# arch: arm64
+# os: Darwin 25.5.0
+# cores: 14
+# tools: basilisk=basilisk 0.0.0-PLACEHOLDER, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0
+# runs: 10 (hyperfine mean wall-clock, milliseconds)
+# generated: 2026-05-30T13:30:25+1000
+# note: cold full-file CLI runs; does not reflect warm incremental (LSP) speed.
+fixture,basilisk_ms,pyright_ms,mypy_ms,ty_ms,pyrefly_ms
+e0001_missing_param,362.2,510.3,150.7,29.4,121.7
+e0002_missing_return,259.9,548.4,162.2,37.7,110.7
+e0010_unresolved_import,124.1,459.8,158.5,370.4,785.4
+e0012_argument_type_mismatch,157.7,649.1,154.5,53.3,110.1
+e0014_assignment_incompatibility,97.7,588.0,157.6,50.4,109.0
+e0016_incompatible_override,153.2,638.6,159.9,53.5,117.4
+e0022_unhashable_dict_key,224.8,520.9,157.4,37.2,100.1
+e0023_nonexhaustive_match,118.6,519.6,159.1,23.5,107.5
+e0026_typevar_single_constraint,128.9,709.5,156.1,37.8,106.5
+e0054_final_reassignment,48.0,454.2,154.9,27.0,96.0

@@ -2,7 +2,7 @@
 name: code-dedup
 description: Uses deslop MCP to find the worst duplicate-code offenders in the repo and merge them. Loops until there are no major duplication issues left. Use when the user says "deduplicate", "find duplicates", "remove dead code", "DRY up", or "code dedup".
 ---
-<!-- agent-pmo:2efd847 -->
+<!-- agent-pmo:74cf183 -->
 
 # Code Dedup
 

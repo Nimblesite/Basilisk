@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 迁移指南
-description: 如何从 Pyright 或 mypy 迁移到 Basilisk，包括配置导入和每路径覆盖。
+description: 如何从 Pyright 或 mypy 逐步迁移到 Basilisk，包括配置导入、每路径覆盖和截止日期。
 keywords: 迁移到basilisk, 从pyright, 从mypy, python类型检查器迁移
 lang: zh
 ---
@@ -62,9 +62,11 @@ basilisk check src/
 | `reportOperatorIssue` | BSK-E0014 |
 
 Basilisk 添加了即使在严格模式下 Pyright 也不标记的错误：
-- **BSK-E0011** — 参数和返回位置中的隐式 `Any`
-- **BSK-E0040** — 未标注参数的变异
-- **BSK-E0060–E0063** — 隐式类型强制转换
+- **BSK-E0001** — 缺少参数类型注解（严格强制执行）
+- **BSK-E0002** — 缺少返回类型注解（严格强制执行）
+- **BSK-E0011** — 参数和返回位置中的显式 `Any`——需要说明理由
+- **BSK-E0023** — 非穷举 `match` 语句（缺少情况）
+- **BSK-E0025** — 覆盖方法缺少 `@override` 装饰器
 
 ### 第 3 步——处理 `# type: ignore` 注释
 
@@ -78,7 +80,7 @@ x = get_value()  # type: ignore[reportArgumentType]
 x = get_value()  # basilisk: ignore[BSK-E0012] -- third-party API mismatch, tracked in #456
 ```
 
-Basilisk 将标记裸 `# type: ignore` 注释为 BSK-W0090（未使用的抑制），因为它不识别它们。迁移工具建议正确的格式。
+Basilisk 将标记裸 `# type: ignore` 注释，因为它不识别它们。迁移工具建议正确的 `# basilisk: ignore[CODE] -- reason` 格式。
 
 ### 第 4 步——通过迁移模式逐步执行
 
@@ -96,6 +98,10 @@ enforce_after = "2025-12-01"
 ```
 
 在迁移模式下，所有类型错误报告为警告。在 `enforce_after` 之后，它们再次变为错误。
+
+### 严格模式差异
+
+如果您将 Pyright 与 `typeCheckingMode = "basic"` 或 `"standard"` 一起使用，您会看到 Basilisk 报告的错误明显更多——因为这些模式允许未类型化的代码。这是预期的，也正是关键所在。使用带截止日期的每路径覆盖，逐目录地分阶段执行。
 
 ---
 
@@ -134,8 +140,8 @@ exclude = ["**/migrations/**"]
 mypy 的 `--strict` 启用一组特定的标志。Basilisk 强制执行所有这些标志以及更多。从 `mypy --strict` 迁移时，预期：
 
 - **来自 BSK-E0011 的更多错误** — mypy 在某些 Basilisk 不允许的位置允许 `Any`
-- **来自 BSK-E0040/E0041 的更多错误** — Basilisk 的不可变性规则没有 mypy 等效
-- **来自 BSK-E0060–E0063 的更多错误** — mypy 不标记隐式数字强制转换
+- **来自 BSK-E0023 的更多错误** — mypy 不检查的非穷举 `match` 语句
+- **来自 BSK-E0025 的更多错误** — mypy 不要求的缺失 `@override` 装饰器
 
 ### 第 3 步——mypy 插件
 

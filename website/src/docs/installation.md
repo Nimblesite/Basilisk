@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
-title: "Install Basilisk — VS Code, Neovim, Zed, or CLI"
-description: "Install the Basilisk Python language server via VS Code Marketplace, Homebrew, Scoop, pre-built binaries, or build from source. Supports macOS, Linux, and Windows."
-keywords: basilisk, install, homebrew, scoop, rust, python type checker, vs code, zed
+title: "Install Basilisk — VS Code, Cursor, Zed, Neovim, or CLI"
+description: "Install the Basilisk Python language server via the VS Code Marketplace, Homebrew, Scoop, pre-built binaries, or build from source. Supports macOS, Linux, and Windows."
+keywords: basilisk, install, open vsx, homebrew, scoop, rust, python language server, vs code, cursor, windsurf, zed, neovim
 date: 2026-02-28
 dateModified: 2026-03-31
 author: The Basilisk Project
@@ -15,14 +15,16 @@ eleventyNavigation:
 
 Basilisk is a single Rust binary with no runtime dependencies. No Node.js. No Python interpreter. No package manager required after installation.
 
-## VS Code extension (recommended)
+## VS Code (recommended)
 
-The fastest way to get started. Install the **Basilisk** extension from the VS Code Marketplace:
+The fastest way to get started. Install the **Basilisk** extension from your editor's marketplace:
 
-1. Open VS Code
+1. Open your editor
 2. Go to Extensions (`Ctrl+Shift+X` / `Cmd+Shift+X`)
 3. Search for **Basilisk**
 4. Click **Install**
+
+The extension is published to the **VS Code Marketplace** today. Publishing to **[Open VSX](https://open-vsx.org)** — which makes it installable in **Cursor**, **Windsurf**, and other VS Code-compatible editors — is **coming very soon**.
 
 **The extension bundles the matching Basilisk binary for your platform.** No manual setup is required for a default VSIX install.
 
@@ -206,10 +208,12 @@ Zed recompiles the WASM and reloads the extension automatically.
 Basilisk implements the Language Server Protocol. Any editor with LSP support can use it:
 
 - **VS Code** — via the official Basilisk extension (bundles the matching binary)
+- **Cursor, Windsurf & other VS Code forks** — via [Open VSX](https://open-vsx.org) (coming very soon)
 - **Zed** — via the Basilisk Zed extension (see above)
 - **Neovim** — via nvim-lspconfig
 - **Helix** — native LSP support
 - **Emacs** — via eglot or lsp-mode
+- **JetBrains (IntelliJ / PyCharm)** — coming soon
 
 ## How the VS Code extension finds the binary
 
