@@ -10,7 +10,7 @@ lang: zh
 
 捕获类型不匹配、错误注解和不健全类型使用的规则。
 
-← [缺失注解](/zh/docs/rules/missing-annotations/) | 下一个：[所有权安全](/zh/docs/rules/ownership-safety/) →
+← [缺失注解](/zh/docs/rules/missing-annotations/) | [规则索引](/zh/docs/rules/) →
 
 ---
 

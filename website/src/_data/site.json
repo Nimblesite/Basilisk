@@ -1,7 +1,7 @@
 {
   "name": "Basilisk",
   "title": "Basilisk — Open-Source Python Language Server, Strict by Default",
-  "description": "An open-source Python language server built in Rust. Strict-by-default type checking, autocomplete, refactoring, debugging, and profiling — in VS Code, Cursor, Zed, and Neovim.",
+  "description": "Open-source Python language server in Rust — strict-by-default checking, autocomplete, refactoring, debugging & profiling in VS Code, Cursor, Zed & Neovim.",
   "url": "https://www.basilisk-python.dev",
   "keywords": "basilisk, python type checker, python language server, lsp, strict typing, rust, vs code, cursor, zed, neovim, open source, autocomplete, refactoring",
   "themeColor": "#e8500a",

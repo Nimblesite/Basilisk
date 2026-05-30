@@ -2,7 +2,7 @@
 layout: layouts/docs.njk
 title: "Python 性能分析器——CPU 热图与内存泄漏检测"
 description: Basilisk 集成的 Python 性能分析——CPU 热图、火焰图、内存泄漏检测和引用图可视化，全部在您的编辑器内。
-keywords: basilisk, 性能分析, python, py-spy, 火焰图, 热图, 内存泄漏, tracemalloc, cpu分析器, vs code, zed, neovim
+keywords: basilisk, 性能分析, python, py-spy, 火焰图, 热图, 内存泄漏, tracemalloc, cpu分析器, vs code, cursor, windsurf, open vsx, zed, neovim
 lang: zh
 ---
 

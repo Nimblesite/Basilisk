@@ -121,6 +121,11 @@ nohup.out
 *.key
 !*.pub.key
 
+# Per-developer Claude Code state (machine-local; never committed)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/*.local.json
+
 # =============================================================================
 # Temporary
 # =============================================================================

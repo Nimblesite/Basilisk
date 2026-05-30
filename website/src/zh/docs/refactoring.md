@@ -1,14 +1,14 @@
 ---
 layout: layouts/docs.njk
 title: 重构
-description: Basilisk 中所有 16 个重构代码操作——提取、内联、移动、重命名、转换和更改签名。
-keywords: basilisk, 重构, 提取变量, 提取函数, 内联, 移动符号, 重命名, 代码操作, pylance
+description: Basilisk 完整的重构代码操作套件——提取、内联、移动、重命名、转换和更改签名。
+keywords: basilisk, 重构, 提取变量, 提取函数, 内联, 移动符号, 重命名, 代码操作
 lang: zh
 ---
 
 # 重构
 
-Basilisk 通过 LSP 协议提供 **16 个重构代码操作**。它们自动出现在 VS Code、Zed 和 Neovim 的灯泡菜单中——无需额外的扩展或配置。
+Basilisk 通过 LSP 协议提供**完整的重构代码操作套件**。它们自动出现在 VS Code（以及通过 Open VSX 的 Cursor/Windsurf）、Zed 和 Neovim 的灯泡菜单中——无需额外的扩展或配置。
 
 每个重构都会产生一个编辑器原子性应用的 `WorkspaceEdit`。多文件重构（移动符号、模块重命名）使用带有 `CreateFile` 操作的 `DocumentChanges`。
 

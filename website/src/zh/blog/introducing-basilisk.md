@@ -48,33 +48,9 @@ Basilisk 默认是严格的。没有宽松模式。没有要忘记传递的 `--s
 
 这不是为了让 Python 开发人员的生活更艰难。这是为了让安全路径成为默认路径。当严格性是默认的，类型覆盖率会随着团队添加新代码而自然增加。没有什么需要记住打开的。
 
-在现有代码库上采用 Basilisk 确实需要工作——但这是暴露真实错误的工作。每个 BSK-E0001 都是一个从未定义类型契约的函数。每个 BSK-E0040 都是调用者从未同意的变异。Basilisk 报告的错误不是误报——它们是类型系统未被使用的地方。
+在现有代码库上采用 Basilisk 确实需要工作——但这是暴露真实错误的工作。每个 BSK-E0001 都是一个从未定义类型契约的函数。每个 BSK-E0023 都是一个被静默忽略未处理情况的 `match` 语句。Basilisk 报告的错误不是误报——它们是类型系统未被使用的地方。
 
-## Mojo 的洞察
-
-[Mojo](https://www.modular.com/mojo) 是 Python 的超集，添加了系统编程功能：所有权语义、默认不可变性、零隐式强制转换。其函数模型在语言层面区分了 `borrowed`、`inout` 和 `owned` 参数。
-
-Basilisk 借鉴（无双关意图）这些概念，并将其实现为对标准 Python 语法的静态分析。使用 `typing` 模块中的 `Annotated`：
-
-```python
-from typing import Annotated
-from basilisk import Borrowed, InOut, Owned
-
-def summarise(items: Annotated[list[int], Borrowed]) -> int:
-    return sum(items)  # 只读——OK
-
-def append_value(
-    items: Annotated[list[int], InOut],
-    value: int,
-) -> None:
-    items.append(value)  # 声明了变异——OK
-
-def consume_and_sort(items: Annotated[list[int], Owned]) -> list[int]:
-    items.sort()
-    return items  # 所有权已转移——调用者之后不能使用 items
-```
-
-这些注解不是运行时构造。它们由 Basilisk 进行静态验证。通过这些检查的代码在结构上与 Mojo 的类型期望兼容——您的 Python 代码库可以在不等待 Mojo 编译器的情况下变得 Mojo 就绪。
+展望未来，[Mojo](https://www.modular.com/mojo) 的所有权语义和不可变性模型是 Basilisk 计划未来方向的灵感来源——但这在路线图中，而不在当前版本中。
 
 ## 为什么选择 Rust
 
@@ -88,7 +64,7 @@ Basilisk 用 Rust 实现，作为单个二进制文件发布，没有运行时�
 
 ## 今天存在的内容
 
-Basilisk v0.1.0 实现了七阶段路线图的第 1 阶段。
+Basilisk v0.1 (alpha) 实现了七阶段路线图的前两个阶段。
 
 **今天可用：**
 - 核心解析器、名称解析器和类型检查器
@@ -98,16 +74,19 @@ Basilisk v0.1.0 实现了七阶段路线图的第 1 阶段。
 - 出错时退出代码为 1，用于 CI 集成
 - 递归目录检查
 
-**积极开发中：**
-- 语言服务器协议 (LSP) 服务器
-- VS Code 扩展
-- Neovim 配置
+**同样今天可用：**
+- 语言服务器协议 (LSP) 服务器——自动补全、跳转到定义、悬停、诊断、内联提示、完整的重构操作套件
+- VS Code 扩展——每个平台捆绑正确的二进制文件；同时发布到 [Open VSX](https://open-vsx.org)，因此 Cursor、Windsurf 和其他兼容 VS Code 的编辑器也可使用
+- Neovim 插件 (0.10+)
+- Zed 扩展
+- 集成调试器（debugpy，按 F5）
+- 集成性能分析器（py-spy，火焰图，内存泄漏检测）
 
 **路线图中：**
 - 第 3 阶段：80% PEP 覆盖率，`basilisk migrate`，迁移模式
-- 第 4 阶段：Mojo 安全注解（所有权、不可变性、强制转换）
+- 第 4 阶段：Mojo 安全注解（所有权、不可变性）
 - 第 5 阶段：WASM 插件系统，Django/Pydantic/SQLAlchemy 插件，自动存根生成
-- 第 6 阶段：95%+ PEP 覆盖率，SARIF/JUnit 输出，企业加固
+- 第 6 阶段：95%+ PEP 覆盖率，SARIF/JUnit 输出，JetBrains 扩展
 - 第 7 阶段：插件市场，社区存根，生态系统
 
 ## 试用

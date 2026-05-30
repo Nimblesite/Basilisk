@@ -15,14 +15,16 @@ eleventyNavigation:
 
 Basilisk is a single Rust binary with no runtime dependencies. No Node.js. No Python interpreter. No package manager required after installation.
 
-## VS Code extension (recommended)
+## VS Code, Cursor, Windsurf & other VS Code-compatible editors (recommended)
 
-The fastest way to get started. Install the **Basilisk** extension from the VS Code Marketplace:
+The fastest way to get started. Install the **Basilisk** extension from your editor's marketplace:
 
-1. Open VS Code
+1. Open your editor
 2. Go to Extensions (`Ctrl+Shift+X` / `Cmd+Shift+X`)
 3. Search for **Basilisk**
 4. Click **Install**
+
+The same extension is published to both the **VS Code Marketplace** and **[Open VSX](https://open-vsx.org)**, so it installs the same way in VS Code, **Cursor**, **Windsurf**, and any other editor that pulls from an Open VSX-compatible marketplace — no separate plugin required.
 
 **The extension bundles the matching Basilisk binary for your platform.** No manual setup is required for a default VSIX install.
 
@@ -206,10 +208,12 @@ Zed recompiles the WASM and reloads the extension automatically.
 Basilisk implements the Language Server Protocol. Any editor with LSP support can use it:
 
 - **VS Code** — via the official Basilisk extension (bundles the matching binary)
+- **Cursor, Windsurf & other VS Code forks** — install the same extension from [Open VSX](https://open-vsx.org)
 - **Zed** — via the Basilisk Zed extension (see above)
 - **Neovim** — via nvim-lspconfig
 - **Helix** — native LSP support
 - **Emacs** — via eglot or lsp-mode
+- **JetBrains (IntelliJ / PyCharm)** — coming soon
 
 ## How the VS Code extension finds the binary
 

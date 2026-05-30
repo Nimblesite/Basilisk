@@ -5,9 +5,9 @@
 <h1 align="center">Basilisk</h1>
 
 <p align="center">
-  <strong>The open-source Pylance replacement.</strong><br>
-  Complete Python language server, type checker, debugger, and profiler.<br>
-  VS Code &bull; Neovim &bull; Zed. Built in <strong>Rust</strong> — single binary, no runtime.
+  <strong>The open-source Python language server.</strong><br>
+  Complete language server, type checker, debugger, and profiler — strict by default.<br>
+  VS Code, Cursor &amp; Windsurf (Open VSX) &bull; Zed &bull; Neovim. Built in <strong>Rust</strong> — single binary, no runtime.
 </p>
 
 <p align="center">

@@ -83,7 +83,7 @@ x = get_value()  # type: ignore[reportArgumentType]
 x = get_value()  # basilisk: ignore[BSK-E0012] -- third-party API mismatch, tracked in #456
 ```
 
-Basilisk will flag bare `# type: ignore` comments as BSK-W0090 (unused suppression) since it doesn't recognise them. The migration tool suggests the correct format.
+Basilisk will flag bare `# type: ignore` comments since it doesn't recognise them. The migration tool suggests the correct `# basilisk: ignore[CODE] -- reason` format.
 
 ### Step 4 — Gradual enforcement with migration mode
 
