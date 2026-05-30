@@ -69,8 +69,14 @@ jobs:
           key: release-${{ matrix.target }}
           cache-on-failure: true
 
-      - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }} --bin basilisk
+      - name: Build release binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --target ${{ matrix.target }} --bin basilisk
+          if [[ "${{ matrix.platform }}" == darwin-* ]]; then
+            cargo build --release --target ${{ matrix.target }} --bin basilisk-profiler-helper
+          fi
 
       - name: Package macOS archive
         if: startsWith(matrix.platform, 'darwin-')
@@ -97,10 +103,31 @@ jobs:
           name: ${{ matrix.archive }}
           path: ${{ matrix.archive }}
 
+      # Raw, unarchived binaries for the vsix job to download instead of
+      # recompiling the same targets a second time. macOS additionally ships
+      # the profiler helper inside the VSIX.
+      - name: Stage runtime binaries for the VSIX job
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf runtime-bin
+          mkdir -p runtime-bin
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" runtime-bin/
+          if [[ "${{ matrix.platform }}" == darwin-* ]]; then
+            cp "target/${{ matrix.target }}/release/basilisk-profiler-helper" runtime-bin/
+          fi
+
+      - name: Upload runtime binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-${{ matrix.platform }}
+          path: runtime-bin/
+
   vsix:
     name: VSIX - ${{ matrix.platform }}-${{ matrix.arch }}
+    needs: build
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -108,28 +135,23 @@ jobs:
           - os: macos-15
             platform: darwin
             arch: arm64
-            rust_target: aarch64-apple-darwin
             npm_config_arch: arm64
           - os: ubuntu-latest
             platform: linux
             arch: x64
-            rust_target: x86_64-unknown-linux-gnu
             npm_config_arch: x64
           - os: ubuntu-latest
             platform: linux
             arch: arm64
-            rust_target: aarch64-unknown-linux-gnu
             npm_config_arch: arm64
             cross: true
           - os: windows-latest
             platform: win32
             arch: x64
-            rust_target: x86_64-pc-windows-msvc
             npm_config_arch: x64
           - os: windows-latest
             platform: win32
             arch: arm64
-            rust_target: aarch64-pc-windows-msvc
             npm_config_arch: arm64
             cross: true
 
@@ -139,22 +161,6 @@ jobs:
       - name: Stamp release version
         shell: bash
         run: scripts/stamp-version.sh
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_target }}
-
-      - name: Install cross-compilation tools
-        if: matrix.rust_target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: vsix-${{ matrix.rust_target }}
-          cache-on-failure: true
 
       - uses: actions/setup-node@v4
         with:
@@ -173,17 +179,17 @@ jobs:
         working-directory: vscode-extension
         run: npm run test:shipwright
 
-      - name: Build VSIX runtime binaries
-        shell: bash
-        run: |
-          cargo build --release --target ${{ matrix.rust_target }} --bin basilisk
-          if [ "${{ matrix.platform }}" = "darwin" ]; then
-            cargo build --release --target ${{ matrix.rust_target }} --bin basilisk-profiler-helper
-          fi
-
       - name: Set vsce target
         shell: pwsh
         run: echo "target=${{ matrix.platform }}-${{ matrix.arch }}" >> $env:GITHUB_ENV
+
+      # Reuse the binaries compiled once in the `build` job instead of
+      # recompiling the same Rust targets here.
+      - name: Download runtime binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: runtime-${{ matrix.platform }}-${{ matrix.arch }}
+          path: runtime-bin
 
       - name: Stage Shipwright manifest and runtime binaries
         shell: bash
@@ -193,9 +199,9 @@ jobs:
           if [ "${{ matrix.platform }}" = "win32" ]; then exe=".exe"; fi
           rm -rf vscode-extension/bin
           mkdir -p "vscode-extension/bin/${{ env.target }}"
-          cp "target/${{ matrix.rust_target }}/release/basilisk${exe}" "vscode-extension/bin/${{ env.target }}/"
+          cp "runtime-bin/basilisk${exe}" "vscode-extension/bin/${{ env.target }}/"
           if [ "${{ matrix.platform }}" = "darwin" ]; then
-            cp "target/${{ matrix.rust_target }}/release/basilisk-profiler-helper" "vscode-extension/bin/${{ env.target }}/"
+            cp "runtime-bin/basilisk-profiler-helper" "vscode-extension/bin/${{ env.target }}/"
           fi
           cp shipwright.json vscode-extension/shipwright.json
           cp NOTICES vscode-extension/NOTICES
@@ -308,6 +314,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          # Skip the raw runtime binaries (consumed only by the vsix job): they
+          # share the bare name `basilisk` and would collide under
+          # merge-multiple. Archives and VSIXes are still pulled and attached.
+          pattern: "!runtime-*"
           # Flatten: each upload's `name:` is the file itself, so without
           # merging, download-artifact@v4 creates artifacts/<file>/<file>
           # — `mv *.tar.gz artifacts/` then collides with the directory.
@@ -367,6 +377,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          # Only the platform archives are needed here; skip the VSIX and raw
+          # runtime-binary artifacts.
+          pattern: basilisk-*
           merge-multiple: true
 
       - name: Render formula and push to tap
@@ -420,6 +433,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          # Only the platform archives are needed here; skip the VSIX and raw
+          # runtime-binary artifacts.
+          pattern: basilisk-*
           merge-multiple: true
 
       - name: Render manifest and push to bucket
