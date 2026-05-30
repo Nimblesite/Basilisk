@@ -258,7 +258,12 @@ jobs:
   mutation-test-shard:
     name: Mutation Testing Shard ${{ matrix.label }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # cargo-mutants rebuilds + reruns the test suite once per mutant, so it is
+    # heavily CPU-bound. The 20-minute budget was calibrated for the retired
+    # 8-core larger runners; on the standard hosted runner the slower shards
+    # tip over the limit non-deterministically. 60 min gives ~3x headroom
+    # without weakening the mutation gate (the merge job still enforces score).
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
