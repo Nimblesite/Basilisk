@@ -104,9 +104,8 @@ authors = ["Basilisk Contributors"]
 description = "Strict-by-default Python type checker with debugging and profiling"
 repository = "https://github.com/basilisk-lang/basilisk"
 
-[grammars.python]
-repository = "https://github.com/tree-sitter/tree-sitter-python"
-rev = "latest-stable-sha"
+# No [grammars.python] block — see [ZED-GRAMMAR]. The language reuses Zed's
+# built-in tree-sitter-python grammar, so no grammar is compiled from source.
 
 [language_servers.basilisk]
 name = "Basilisk"
@@ -299,6 +298,12 @@ The extension ships tree-sitter-python queries for:
 
 Note: Zed already has built-in Python support via tree-sitter-python. The Basilisk extension can either augment the built-in queries or rely on them entirely, only providing the LSP and DAP integration.
 
+### Grammar Reuse {#ZED-GRAMMAR}
+
+`extension.toml` deliberately omits a `[grammars.python]` block. `languages/python/config.toml` declares `grammar = "python"`, which Zed resolves to its **built-in** tree-sitter-python grammar; the query files above (`highlights.scm`, `outline.scm`, `runnables.scm`, …) augment that built-in grammar.
+
+Bundling `[grammars.python]` would force Zed to compile the grammar from source on install, which requires downloading and extracting the ~400 MB `wasi-sdk` toolchain. On a constrained disk that extraction can fail mid-way (`No space left on device`), leaving a corrupt cache that then surfaces as the misleading `failed to compile grammar 'python'`. Reusing the built-in grammar removes the compile step entirely — installs are instant and need no toolchain. Implemented in `basilisk-zed/extension.toml` (absence of `[grammars.*]`).
+
 ## Binary Distribution {#ZED-DIST}
 
 The extension downloads the `basilisk` binary from GitHub Releases on first activation:
@@ -429,7 +434,7 @@ See [ZED-PLAN.md](../plans/ZED-PLAN.md) for the full implementation plan with ph
 - [x] Signature help
 
 ### Tree-sitter Queries {#ZED-STATUS-TREESITTER}
-- [x] Add `[grammars.python]` to `extension.toml`
+- [x] Reuse Zed's built-in tree-sitter-python grammar — no `[grammars.python]` block ([ZED-GRAMMAR])
 - [x] Create `languages/python/config.toml`
 - [x] Create `highlights.scm` — keywords, builtins, decorators, f-strings, type annotations
 - [x] Create `brackets.scm` — `()`, `[]`, `{}`

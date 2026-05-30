@@ -6,9 +6,11 @@ authors = ["Basilisk Contributors"]
 description = "Strict-by-default Python type checker with debugging and profiling"
 repository = "https://github.com/Nimblesite/Basilisk"
 
-[grammars.python]
-repository = "https://github.com/tree-sitter/tree-sitter-python"
-rev = "a61ed4fbad3ecc2e1e63e1b15a5404f12b3a797a"
+# No [grammars.python] block: the language below reuses Zed's built-in
+# tree-sitter-python grammar by name, so Zed never compiles a grammar from
+# source (which requires downloading the ~400 MB wasi-sdk toolchain). The
+# query files in languages/python/ augment the built-in grammar. See
+# docs/specs/ZED-SPEC.md [ZED-GRAMMAR].
 
 [language_servers.basilisk]
 name = "Basilisk"
@@ -17,68 +19,55 @@ languages = ["Python"]
 [language_servers.basilisk.language_ids]
 "Python" = "python"
 
-[[slash_commands]]
-name = "modules"
+[slash_commands.modules]
 description = "Show workspace module tree"
 requires_argument = false
 
-[[slash_commands]]
-name = "symbols"
+[slash_commands.symbols]
 description = "Show symbols in a module"
 requires_argument = true
 
-[[slash_commands]]
-name = "health"
+[slash_commands.health]
 description = "Type health statistics"
 requires_argument = false
 
-[[slash_commands]]
-name = "basilisk"
+[slash_commands.basilisk]
 description = "Basilisk server info and commands"
 requires_argument = false
 
-[[slash_commands]]
-name = "profile"
+[slash_commands.profile]
 description = "Start CPU profiling (optional: PID)"
 requires_argument = false
 
-[[slash_commands]]
-name = "profstop"
+[slash_commands.profstop]
 description = "Stop CPU profiling and export results"
 requires_argument = false
 
-[[slash_commands]]
-name = "profsnapshot"
+[slash_commands.profsnapshot]
 description = "Take a profiling snapshot without stopping"
 requires_argument = false
 
-[[slash_commands]]
-name = "memleak"
+[slash_commands.memleak]
 description = "Start memory leak tracking via tracemalloc"
 requires_argument = false
 
-[[slash_commands]]
-name = "memstop"
+[slash_commands.memstop]
 description = "Stop memory tracking and generate leak report"
 requires_argument = false
 
-[[slash_commands]]
-name = "memrefs"
+[slash_commands.memrefs]
 description = "Walk the reference graph for a Python type"
 requires_argument = false
 
-[[slash_commands]]
-name = "tests"
+[slash_commands.tests]
 description = "Discover pytest/unittest tests in workspace"
 requires_argument = false
 
-[[slash_commands]]
-name = "runtests"
+[slash_commands.runtests]
 description = "Run tests by node ID or file"
 requires_argument = false
 
-[[slash_commands]]
-name = "testfile"
+[slash_commands.testfile]
 description = "Run all tests in the current file"
 requires_argument = false
 
