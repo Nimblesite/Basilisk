@@ -15,16 +15,13 @@ eleventyNavigation:
 
 Every Basilisk diagnostic has a unique code in the format `BSK-EXXXX` (error) or `BSK-WXXXX` (warning).
 
-All rules are enabled by default. There is no opt-in.
+Rules are enabled by default. You can dial individual rules down per-file or per-path from your editor or `pyproject.toml` — strict is the default, not a cage.
+
+Basilisk implements 150+ diagnostic codes spanning the full Python typing surface (generics, protocols, dataclasses, TypedDicts, overloads, literals, and more), driven by the [official Python typing conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html). The two foundational groups are documented below; the complete set is enforced by the checker.
 
 | Group | Codes | Description |
 |---|---|---|
 | [Missing Annotations](/docs/rules/missing-annotations/) | E0001–E0009 | Unannotated parameters, return types, variables, and attributes |
-| [Type Safety](/docs/rules/type-safety/) | E0010–E0025 | Type mismatches, incorrect annotations, unsound type usage |
-| [Ownership Safety](/docs/rules/ownership-safety/) | E0030–E0035 | Mojo-inspired ownership violations |
-| [Immutability](/docs/rules/immutability/) | E0040–E0043 | Mutation of immutable parameters and `Final` variables |
-| [Structural Discipline](/docs/rules/structural-discipline/) | E0050–E0054 | Dynamic attributes, missing `__init__`, sealed class violations |
-| [Coercion Safety](/docs/rules/coercion-safety/) | E0060–E0063 | Implicit numeric and type coercions |
-| [Optional Safety](/docs/rules/optional-safety/) | E0070–E0073 | Unsafe access on `Optional` values |
-| [Unused Code](/docs/rules/unused-code/) | W0080–W0089 | Unused imports, variables, functions, and unreachable branches |
-| [Code Quality](/docs/rules/code-quality/) | W0090–W0099 | Suppression comments, deprecated APIs, mutable defaults |
+| [Type Safety](/docs/rules/type-safety/) | E0010–E0029 | Type mismatches, incorrect annotations, unsound type usage |
+
+> **Roadmap:** Mojo-inspired ownership and immutability analysis is planned for a future release. It is not yet part of the shipping rule set.

@@ -16,7 +16,7 @@ eleventyNavigation:
 
 Rules that catch type mismatches, incorrect annotations, and unsound type usage.
 
-← [Missing Annotations](/docs/rules/missing-annotations/) | Next: [Ownership Safety](/docs/rules/ownership-safety/) →
+← [Missing Annotations](/docs/rules/missing-annotations/) | [All Rules](/docs/rules/) →
 
 ---
 

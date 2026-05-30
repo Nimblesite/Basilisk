@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
-title: "Basilisk: Open-Source Pylance Replacement for Python"
-description: "Basilisk is a strict-by-default Python language server that replaces Pylance and Pyright. Autocomplete, go-to-definition, debugging, profiling — fully open source, built in Rust."
-keywords: basilisk, python, language server, pylance replacement, pyright, type checker, lsp, vs code, strict, rust
+title: "Basilisk: Open-Source Python Language Server"
+description: "Basilisk is a strict-by-default Python language server with autocomplete, go-to-definition, refactoring, debugging, and profiling — fully open source, built in Rust, in VS Code, Cursor, Zed, and Neovim."
+keywords: basilisk, python, language server, lsp, type checker, vs code, cursor, zed, neovim, strict, rust
 date: 2026-02-28
 dateModified: 2026-03-31
 author: The Basilisk Project
@@ -13,9 +13,9 @@ eleventyNavigation:
 
 # Introduction
 
-Basilisk is a **complete Python language server** that replaces Pylance and Pyright. Everything Pylance does — autocomplete, go-to-definition, hover information, refactoring, diagnostics, integrated debugging, profiling — Basilisk does too, fully open source and strict by default.
+Basilisk is a **complete, open-source Python language server**. Everything you rely on a modern Python extension for — autocomplete, go-to-definition, hover information, refactoring, diagnostics, integrated debugging, profiling — Basilisk does too, fully open source and strict by default.
 
-It is not just a type checker. It is a feature-complete LSP with first-class extensions for **VS Code**, **Neovim**, and **Zed** — plus any other editor that speaks the Language Server Protocol. No proprietary extensions. No Node.js. A single Rust binary.
+It is not just a type checker. It is a feature-complete LSP with first-class extensions for **VS Code**, **Cursor**, **Windsurf**, **Zed**, and **Neovim** — plus any other editor that speaks the Language Server Protocol (JetBrains is on the way). No proprietary extension, no Node.js — a single Rust binary, the same experience in every editor.
 
 ## The problem Basilisk solves
 
@@ -23,12 +23,13 @@ It is not just a type checker. It is a feature-complete LSP with first-class ext
 
 Every other Python type checker (mypy, ty, Pyrefly) defaults to *gradual typing*. Untyped code passes silently. `Any` spreads through type inference without warning. Strictness is something you must deliberately opt into, configure, remember to enforce in CI, and re-explain to every new team member.
 
-Basilisk takes a different position. **It replaces the entire Pylance stack** — type checking, language features, and VS Code integration — with an open-source alternative that is strict by default. Type annotations are contracts, not documentation.
+Basilisk takes a different position. It brings the whole stack — type checking, language features, debugging, and profiling — into a single open-source tool that is strict by default and runs the same in **every** editor, not just VS Code. Type annotations are contracts, not documentation.
 
 ## What Basilisk is
 
-- A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, [17 refactoring actions](/docs/refactoring/), code actions, inlay hints
-- **Editor extensions** for VS Code, Neovim (0.10+), and Zed — install it, disable Pylance, and everything works
+- A **full-featured language server** (LSP) — autocomplete, go-to-definition, hover, find references, rename, a full [refactoring suite](/docs/refactoring/), code actions, inlay hints
+- **Editor extensions for every major IDE** — VS Code, Cursor, and Windsurf (via Open VSX), plus Neovim (0.10+) and Zed; JetBrains (IntelliJ / PyCharm) is on the way
+- **Enrichment fixes** — one-click code actions that add the missing type annotations *for* you
 - An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
 - An **integrated profiler** — CPU profiling via py-spy with inline heatmap annotations, flamegraphs, memory leak detection, and reference graph visualization, all inside your editor
 - A **strict-by-default type checker** — no `--strict` flag, no gradual mode, no opt-in
@@ -41,7 +42,7 @@ Basilisk takes a different position. **It replaces the entire Pylance stack** �
 
 - Not a compiler — your Python code runs on CPython as normal
 - Not a runtime type checker — analysis happens statically at development time
-- Not a Mojo dependency — Basilisk's ownership annotations work with standard Python today
+- Not tied to one editor — the same server powers VS Code, Cursor, Windsurf, Zed, and Neovim
 
 ## One mode only
 
@@ -59,28 +60,18 @@ deadline = "2026-12-31"
 
 This acknowledges that large codebases cannot be fully typed overnight, while ensuring that the permissive period has an expiration date.
 
-## Mojo-inspired safety
-
-Basilisk adds [Mojo-inspired](https://docs.modular.com/mojo/manual/values/ownership/) ownership semantics as static analysis annotations over standard Python syntax. Using `Annotated` from the `typing` module, you can declare that a parameter is:
-
-- **`Borrowed`** — a read-only reference; mutation is a type error
-- **`InOut`** — a mutable reference; must be explicitly declared
-- **`Owned`** — ownership is transferred; use after transfer is a type error
-
-These are not runtime constructs. They are statically checked annotations. Code that passes Basilisk's ownership checks is structurally compatible with Mojo's type expectations.
-
 ## Project status
 
-Basilisk is currently at **v0.1.0** — the core checker, LSP server, and VS Code extension are all working. Autocomplete, go-to-definition, hover, diagnostics, and inlay hints are shipping today.
+Basilisk is currently in **v0.1 (alpha)** — the core checker, LSP server, and editor extensions are all working. Autocomplete, go-to-definition, hover, diagnostics, inlay hints, refactoring, debugging, and profiling are shipping today.
 
 | Phase | Milestone | Status |
 |---|---|---|
 | 1 | Parser, resolver, type checker, CLI | Complete |
-| 2 | LSP server, VS Code extension | Complete |
-| 3 | All E0001–E0025 rules, 80% PEP coverage, migration mode | In progress |
-| 4 | Mojo safety annotations (ownership, immutability, coercion) | Planned |
+| 2 | LSP server, editor extensions (VS Code, Cursor, Zed, Neovim) | Complete |
+| 3 | Expanded rule set, 92.5% PEP conformance, migration mode | In progress |
+| 4 | Ownership & immutability analysis (Mojo-inspired) | Planned |
 | 5 | WASM plugins, Django/Pydantic/SQLAlchemy | Planned |
-| 6 | 95%+ PEP, SARIF/JUnit, enterprise hardening | Planned |
+| 6 | 95%+ PEP, SARIF/JUnit, JetBrains extension | Planned |
 | 7 | Plugin marketplace, community stubs, ecosystem | Planned |
 
 ## Architecture
@@ -96,9 +87,9 @@ Basilisk is a Cargo workspace with 16 Rust crates, each owning one layer of the 
 
 ## Next steps
 
-- [Install Basilisk](/docs/installation/) — build from source or install via cargo
+- [Install Basilisk](/docs/installation/) — Homebrew, Scoop, your editor's marketplace, or build from source
 - [Quick Start](/docs/quick-start/) — your first type check in under 5 minutes
-- [Refactoring](/docs/refactoring/) — all 16 refactoring code actions (extract, inline, move, rename, convert)
+- [Refactoring](/docs/refactoring/) — the full refactoring suite (extract, inline, move, rename, convert)
 - [Debugging](/docs/debugging/) — set breakpoints, step through code, inspect variables
 - [Profiler](/docs/profiler/) — CPU heatmaps, flamegraphs, memory leak detection, and reference graphs
 - [All Rules](/docs/rules/) — browse every BSK-E and BSK-W diagnostic code

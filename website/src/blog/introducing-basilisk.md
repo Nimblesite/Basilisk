@@ -48,33 +48,9 @@ Basilisk is strict by default. There is no permissive mode. There is no `--stric
 
 This is not about making Python developers' lives harder. It's about making the safe path the default path. When strictness is the default, type coverage naturally increases as teams add new code. There's nothing to remember to turn on.
 
-Adopting Basilisk on an existing codebase does require work — but it's work that surfaces real bugs. Every BSK-E0001 is a function where the type contract was never defined. Every BSK-E0040 is a mutation that the caller never agreed to. The errors Basilisk reports are not false positives — they are places where the type system was not being used.
+Adopting Basilisk on an existing codebase does require work — but it's work that surfaces real bugs. Every BSK-E0001 is a function where the type contract was never defined. Every BSK-E0023 is a `match` statement where an unhandled case was silently ignored. The errors Basilisk reports are not false positives — they are places where the type system was not being used.
 
-## The Mojo insight
-
-[Mojo](https://www.modular.com/mojo) is a superset of Python that adds systems programming features: ownership semantics, immutability by default, zero implicit coercion. Its function model distinguishes between `borrowed`, `inout`, and `owned` parameters at the language level.
-
-Basilisk borrows (no pun intended) these concepts and implements them as static analysis over standard Python syntax. Using `Annotated` from the `typing` module:
-
-```python
-from typing import Annotated
-from basilisk import Borrowed, InOut, Owned
-
-def summarise(items: Annotated[list[int], Borrowed]) -> int:
-    return sum(items)  # read-only — OK
-
-def append_value(
-    items: Annotated[list[int], InOut],
-    value: int,
-) -> None:
-    items.append(value)  # mutation declared — OK
-
-def consume_and_sort(items: Annotated[list[int], Owned]) -> list[int]:
-    items.sort()
-    return items  # ownership transferred — caller cannot use items after this
-```
-
-These annotations are not runtime constructs. They are statically verified by Basilisk. Code that passes these checks is structurally compatible with Mojo's type expectations — your Python codebase can become Mojo-ready without waiting for a Mojo compiler.
+Looking further ahead, [Mojo](https://www.modular.com/mojo)'s ownership semantics and immutability model are an inspiration for a planned future direction in Basilisk — but that is on the roadmap, not in the current release.
 
 ## Why Rust
 
@@ -88,7 +64,7 @@ The result: keystroke-responsive type checking that doesn't require a persistent
 
 ## What exists today
 
-Basilisk v0.1.0 implements Phase 1 of a seven-phase roadmap.
+Basilisk v0.1 (alpha) implements Phase 1 of a seven-phase roadmap.
 
 **Working today:**
 - Core parser, name resolver, and type checker
@@ -99,9 +75,9 @@ Basilisk v0.1.0 implements Phase 1 of a seven-phase roadmap.
 - Recursive directory checking
 
 **Working today:**
-- Language Server Protocol (LSP) server — autocomplete, go-to-definition, hover, diagnostics, inlay hints, 17 refactoring actions
-- VS Code extension — bundles the correct binary per platform
-- Neovim extension (0.10+)
+- Language Server Protocol (LSP) server — autocomplete, go-to-definition, hover, diagnostics, inlay hints, a suite of refactoring actions
+- VS Code extension — bundles the correct binary per platform; also published to [Open VSX](https://open-vsx.org) so Cursor, Windsurf, and other VS Code-compatible editors work too
+- Neovim plugin (0.10+)
 - Zed extension
 - Integrated debugger (debugpy, press F5)
 - Integrated profiler (py-spy, flamegraphs, memory leak detection)

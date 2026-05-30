@@ -40,17 +40,15 @@ Basilisk removes the choice. There is no permissive mode to fall back to.
 | Feature | Basilisk | Pyright | mypy | ty | Pyrefly |
 |---|---|---|---|---|---|
 | Strict by default | ✅ | ❌ opt-in | ❌ opt-in | ❌ opt-in | ❌ opt-in |
-| PEP conformance | 100% target | ~99%¹ | ~58%¹ | early alpha² | ~86%¹ |
+| PEP conformance¹ | 92.5% (→100% target) | ~99% | ~58% | early alpha | ~86% |
 | Implementation | Rust | TypeScript | Python/C | Rust | Rust |
 | Runtime required | None | Node.js | Python | None | None |
 | Incremental speed | <10ms | ~386ms² | slower | 4.7ms² | <10ms |
-| Ownership analysis | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Immutability enforcement | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Coercion detection | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Full LSP (completions, hover, goto) | ✅ | Pylance only | ❌ | Basic | Basic |
+| Integrated debugger | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Integrated profiler | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Editor extensions | VS Code + Open VSX (Cursor, Windsurf…), Zed, Neovim | Proprietary (Pylance) | None | VS Code | VS Code |
 | Plugin system | WASM (planned) | None | Python hooks | Planned | None |
-| VS Code extension | Open source | Proprietary (Pylance) | None | Open source | Open source |
-| Mojo compatibility | ✅ | ❌ | ❌ | ❌ | ❌ |
-| SARIF output | ✅ (Phase 3) | ✅ | ❌ | ❌ | ✅ |
 | License | MIT | MIT | MIT | MIT | MIT |
 
 <a name="footnotes"></a>
@@ -78,10 +76,8 @@ Pyright is the most conformant Python type checker available today. It correctly
 **What Pyright doesn't do:**
 - Strict by default — four modes: `off`, `basic`, `standard`, `strict`
 - Requires Node.js to run — adds a dependency to Python-only CI environments
-- Pylance (the VS Code extension) is proprietary — not all features are available outside VS Code
-- No ownership or immutability analysis
+- Pylance (the VS Code extension) is proprietary — its richest features don't leave VS Code
 - No plugins — no way to add framework-specific type intelligence
-- No coercion detection
 
 **When Pyright makes sense:** If you're already invested in the Microsoft VS Code ecosystem and don't mind the Node.js dependency, Pyright's current PEP conformance makes it the strongest choice for pure type checking today. Basilisk targets exceeding its conformance in Phase 3.
 
@@ -104,7 +100,6 @@ mypy defined what Python type checking looks like. Its `--strict` flag was the r
 - Daemon mode (`dmypy`) is fragile under certain conditions
 - Not strict by default
 - Requires a Python runtime
-- No ownership analysis, no coercion detection
 - Plugin API is Python-only — no WASM portability
 
 **When mypy makes sense:** Existing codebases with heavy investment in mypy plugins (Django, SQLAlchemy) may find migration effort significant until Basilisk's WASM plugin ecosystem reaches parity.
@@ -126,7 +121,7 @@ ty is the most interesting new entrant. It's built by the same team that created
 **What ty doesn't do (yet):**
 - Not yet included in the [official python/typing conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) — still in early alpha
 - Gradual typing by default
-- No ownership analysis
+- No integrated debugger or profiler
 
 **When ty makes sense:** If you want to bet on Astral's velocity and can tolerate lower type coverage during the adoption period. ty may eventually become a major player; it's too early to depend on it for strict enforcement.
 
@@ -146,7 +141,6 @@ Pyrefly was built by Meta to handle their Python codebase — one of the largest
 
 **What Pyrefly doesn't do:**
 - Strict by default — not available
-- No ownership or immutability analysis
 - No plugin system
 - Meta-driven roadmap — external contributions have less influence
 
@@ -159,16 +153,15 @@ Pyrefly was built by Meta to handle their Python codebase — one of the largest
 Basilisk is not a faster version of an existing tool. It occupies a different position:
 
 **Unique to Basilisk:**
-1. Strict by default — the only tool where you cannot accidentally run in permissive mode
-2. Ownership analysis — `Borrowed`, `InOut`, `Owned` semantics, statically verified
-3. Immutability enforcement — parameters are read-only unless declared otherwise
-4. Coercion detection — implicit `int`→`float`, `bool`→`int`, `bytes`→`str` are type errors
+1. Strict by default — the only tool where you cannot accidentally run in permissive mode, yet you can dial rules down per-file or per-path from the editor UI or config (with optional deadlines)
+2. Enrichment fixes — one-click code actions that add the missing types *for* you, instead of just reporting that they're missing
+3. A complete, open-source LSP in every editor — completions, hover, go-to-definition, refactoring, debugging, and profiling, the same in VS Code and any Open VSX editor (Cursor, Windsurf, and others), plus native Zed and Neovim extensions (JetBrains planned) — not just inside one proprietary VS Code extension
+4. Integrated debugger and profiler brokered through the language server
 5. WASM plugin system (planned) — extensible without forking, secure by design
-6. Mojo compatibility — code passing Basilisk is structurally ready for Mojo
 
 **Where Basilisk is not yet the best choice:**
-- PEP conformance: Phase 1 implements E0001–E0025. Pyright covers more edge cases today. Basilisk's target is 100%; it's not there yet.
-- Plugin ecosystem: mypy's Django and SQLAlchemy plugins are mature. Basilisk's WASM plugins are Phase 5.
-- VS Code extension: The Basilisk extension is Phase 2. Pylance is feature-complete today (though proprietary).
+- PEP conformance: Basilisk passes 92.5% of the official conformance suite (135/146). Pyright still covers more edge cases today. Basilisk's target is 100%; it's not there yet.
+- Plugin ecosystem: mypy's Django and SQLAlchemy plugins are mature. Basilisk's WASM plugins are planned.
+- Maturity: Pylance is feature-complete today (though proprietary and VS Code only). Basilisk is in alpha.
 
-The honest recommendation: teams starting a new Python project should use Basilisk and benefit from strict enforcement from day one. Teams migrating from Pyright on an existing well-typed codebase should evaluate in Phase 3 when coverage reaches parity.
+The honest recommendation: teams starting a new Python project should use Basilisk and benefit from strict enforcement from day one — especially if they work across more than one editor. Teams migrating from Pyright on an existing well-typed codebase should evaluate as conformance approaches parity.

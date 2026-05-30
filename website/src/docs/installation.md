@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
-title: "Install Basilisk — VS Code, Neovim, Zed, or CLI"
-description: "Install the Basilisk Python language server via VS Code Marketplace, Homebrew, Scoop, pre-built binaries, or build from source. Supports macOS, Linux, and Windows."
-keywords: basilisk, install, homebrew, scoop, rust, python type checker, vs code, zed
+title: "Install Basilisk — VS Code, Cursor, Zed, Neovim, or CLI"
+description: "Install the Basilisk Python language server via the VS Code Marketplace, Open VSX (Cursor, Windsurf), Homebrew, Scoop, pre-built binaries, or build from source. Supports macOS, Linux, and Windows."
+keywords: basilisk, install, open vsx, homebrew, scoop, rust, python language server, vs code, cursor, windsurf, zed, neovim
 date: 2026-02-28
 dateModified: 2026-03-31
 author: The Basilisk Project
