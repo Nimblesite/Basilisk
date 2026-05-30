@@ -26,6 +26,37 @@ Every TODO item is tagged so we know who picks it up:
 
 ---
 
+## Top 5 bang-for-buck — start here
+
+> Ranked by reward ÷ effort, for the goal of broadening IDE coverage and getting discovered.
+> Sequence matters: **1 → 2** (publish everywhere *before* you announce).
+
+1. **Open VSX → Cursor & Windsurf** *(TODO B)* — **Effort: tiny. Reward: huge.** The VSIX is already
+   built; this is one `ovsx publish` CI step + an `OVSX_PAT`. Instantly puts Basilisk in the two
+   fastest-growing Python editors, and the site already promises them ("coming very soon"). Nothing
+   else has this ratio. **Do this first** so the launch can truthfully say "VS Code, Cursor, Windsurf."
+
+2. **Launch announcement blitz** *(TODO M)* — **Effort: low. Reward: highest for discovery.** ~14
+   installs = invisible. The product already ships on VS Code; the gap is distribution. One coordinated
+   push (Show HN + r/Python + r/rust + dev.to + X — "open-source Pylance replacement, strict-by-default,
+   in Rust") can drive thousands of installs + stars in 48h. Sequence right after #1 so arrivals can
+   install everywhere. The single biggest "people actually find out" lever.
+
+3. **Get listed on the official Python typing conformance results** *(TODO H + G)* — **Effort: medium.
+   Reward: very high.** We're at 92.5%; closing the 11 failing files earns a spot on the scoreboard the
+   whole target audience watches. Correctness + credibility + organic discovery in one (the
+   Zuban/David Halter precedent proves it draws eyes).
+
+4. **Ship Neovim + Zed for real** *(TODO A/B)* — **Effort: low-medium. Reward: high.** Both are ~95%
+   done. Neovim needs a tagged release + binary auto-download; Zed needs the registry-publish PR.
+   Cheaply covers two evangelist-heavy communities that amplify disproportionately.
+
+5. **Publishable benchmark vs Pyright on large real codebases** *(TODO E)* — **Effort: medium. Reward:
+   high.** Turns "fast" from a claim into headline numbers — ammunition for #2's posts, the website,
+   and #3's story. Content leverage that compounds.
+
+---
+
 ## 1. Editor releases (the critical path)
 
 This is the single highest-leverage block: the code is largely done, but **nothing actually ships
