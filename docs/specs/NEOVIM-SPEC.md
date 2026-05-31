@@ -141,7 +141,7 @@ All 21 core LSP features (defined in LSP-ARCHITECTURE-SPEC.md) are native in Neo
 | Semantic Tokens | Automatic via LSP client |
 | Code Actions | `vim.lsp.buf.code_action()` |
 | Formatting | `vim.lsp.buf.format()` |
-| Code Lens | `vim.lsp.codelens.refresh()` / `run()` |
+| Code Lens | `vim.lsp.codelens.enable()` (0.12+) / `refresh()` (0.10–0.11 fallback) / `run()` |
 | Call/Type Hierarchy | `vim.lsp.buf.incoming_calls()` / `outgoing_calls()` / `typehierarchy()` |
 | Document Highlight | `vim.lsp.buf.document_highlight()` |
 | Folding/Selection Ranges | Automatic via LSP client |

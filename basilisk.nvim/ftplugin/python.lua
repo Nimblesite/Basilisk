@@ -9,6 +9,15 @@ if not ok or not basilisk.config then
   return
 end
 
+-- Guard: source once per buffer. Neovim re-runs ftplugins on every FileType
+-- event and unlets the builtin `b:did_ftplugin` before ours runs (we are
+-- earlier on the runtimepath), so we keep our own buffer-local marker to avoid
+-- registering the LspAttach handler more than once.
+if vim.b.basilisk_did_ftplugin then
+  return
+end
+vim.b.basilisk_did_ftplugin = true
+
 local config = basilisk.config
 
 -- Set up keymaps on LspAttach for basilisk clients only.
@@ -25,15 +34,11 @@ vim.api.nvim_create_autocmd("LspAttach", {
       vim.lsp.inlay_hint.enable(true, { bufnr = args.buf })
     end
 
-    -- Enable code lens if supported.
+    -- Enable code lens if supported. Activation is version-compatible: see
+    -- basilisk.codelens (prefers vim.lsp.codelens.enable on Neovim 0.12+, which
+    -- replaced the deprecated/removed refresh()).
     if client:supports_method("textDocument/codeLens") then
-      vim.lsp.codelens.refresh({ bufnr = args.buf })
-      vim.api.nvim_create_autocmd({ "BufEnter", "InsertLeave" }, {
-        buffer = args.buf,
-        callback = function()
-          vim.lsp.codelens.refresh({ bufnr = args.buf })
-        end,
-      })
+      require("basilisk.codelens").activate(args.buf)
     end
 
     -- Skip keymaps if disabled.
