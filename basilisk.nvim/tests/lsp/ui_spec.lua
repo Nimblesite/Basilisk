@@ -95,8 +95,10 @@ describe("basilisk UI interactions with real LSP", function()
     helpers.wait_for_server_ready(buf)
 
     if client:supports_method("textDocument/codeLens") then
-      local ok = pcall(vim.lsp.codelens.refresh, { bufnr = buf })
-      assert.is_true(ok, "codelens refresh should not error")
+      -- Go through the plugin's version-compatible activation so this stays
+      -- green on Neovim 0.13, where vim.lsp.codelens.refresh is removed.
+      local ok = pcall(require("basilisk.codelens").activate, buf)
+      assert.is_true(ok, "code lens activation should not error")
     end
   end)
 

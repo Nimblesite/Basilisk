@@ -141,7 +141,7 @@ All 21 core LSP features (defined in LSP-ARCHITECTURE-SPEC.md) are native in Neo
 | Semantic Tokens | Automatic via LSP client |
 | Code Actions | `vim.lsp.buf.code_action()` |
 | Formatting | `vim.lsp.buf.format()` |
-| Code Lens | `vim.lsp.codelens.refresh()` / `run()` |
+| Code Lens | `vim.lsp.codelens.enable()` (0.12+) / `refresh()` (0.10–0.11 fallback) / `run()` |
 | Call/Type Hierarchy | `vim.lsp.buf.incoming_calls()` / `outgoing_calls()` / `typehierarchy()` |
 | Document Highlight | `vim.lsp.buf.document_highlight()` |
 | Folding/Selection Ranges | Automatic via LSP client |
@@ -358,8 +358,14 @@ All shared settings are defined in LSP-ARCHITECTURE-SPEC.md and passed through t
 
 ```lua
 -- lazy.nvim
-{ 'basilisk-lang/basilisk.nvim', ft = 'python',
+{ 'Nimblesite/basilisk.nvim', ft = 'python',
   dependencies = { 'mfussenegger/nvim-dap' } }  -- optional
+
+-- vim.pack (built-in, Neovim 0.12+) — no third-party plugin manager
+vim.pack.add({
+  { src = 'https://github.com/Nimblesite/basilisk.nvim',
+    version = vim.version.range('*') },  -- latest stable tag; or pin 'v0.5.0'
+})
 
 -- Usage
 require('basilisk').setup({})  -- zero-config, works out of the box
@@ -377,3 +383,24 @@ require('lspconfig').basilisk.setup({})
 ### CI {#NVIM-DISTRIBUTION-CI}
 
 GitHub Actions: run plenary.nvim tests on Neovim 0.10, 0.11, nightly.
+
+### Release & Versioning {#NVIM-DISTRIBUTION-RELEASE}
+
+`basilisk.nvim/` is canonical inside the `Nimblesite/Basilisk` monorepo, but Neovim plugin
+managers (and `vim.pack`) can only install a repo whose root *is* the plugin — none install from a
+subdirectory. On each `vX.Y.Z` tag, the `publish-nvim` job in `release.yml` publishes the
+`basilisk.nvim/` tree to the standalone mirror **`Nimblesite/basilisk.nvim`** (the repo users
+install), using the **same write convention as `publish-homebrew` / `publish-scoop`**: clone the
+sibling `Nimblesite/*` repo with the shared `BREW_SCOOP_PAT` via the `x-access-token` credential,
+replace its content with the plugin tree, commit as `github-actions[bot]` (`basilisk ${VERSION}`),
+and push.
+
+- The mirror is also tagged with the identical `vX.Y.Z`, so the plugin version always matches the
+  binary that `binary.lua` auto-downloads from `Nimblesite/Basilisk` releases, and version-pinned
+  installs (`vim.pack` / lazy.nvim) resolve. Tagging is nvim-specific — plugins are git-tag
+  versioned, unlike the Homebrew formula and Scoop manifest.
+
+Versioning is **tag-only** — the plugin carries no embedded version string; `:BasiliskInfo` and
+`:checkhealth basilisk` report the binary version, which equals the tag. See
+`docs/plans/NEOVIM-RELEASE-PLAN.md` for the full rollout, required secrets, and the
+LuaRocks / nvim-lspconfig secondary channels.

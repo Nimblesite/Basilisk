@@ -51,9 +51,19 @@ const SORT_CYCLE: readonly SortMode[] = ["worst", "best", "alpha"];
 
 type TreeItem = SummaryItem | ModuleHealthItem;
 
-class SummaryItem extends vscode.TreeItem {
+export class SummaryItem extends vscode.TreeItem {
   constructor(stats: HealthStats) {
     super("Workspace Coverage", vscode.TreeItemCollapsibleState.None);
+    if (stats.totalFiles === 0) {
+      // [EXTACT-HEALTH] Empty workspace (no Python files): render an explicit
+      // empty state instead of a misleading 100% coverage bar / green "pass"
+      // icon for 0/0 symbols (issue #57).
+      this.description = "No Python files found";
+      this.tooltip = "Basilisk found no Python files to measure in this workspace";
+      this.iconPath = new vscode.ThemeIcon("info");
+      this.contextValue = "summaryEmpty";
+      return;
+    }
     this.description = `${coverageBar(stats.coveragePercent)} ${stats.coveragePercent}% — ${stats.annotatedSymbols}/${stats.totalSymbols} symbols`;
     this.tooltip = [
       `Coverage: ${stats.coveragePercent}%`,

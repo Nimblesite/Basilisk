@@ -14,6 +14,7 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { getStore } from "../../extension";
+import { SummaryItem } from "../../type-health";
 import {
     EXTENSION_ID,
     WAIT_MS,
@@ -395,5 +396,72 @@ suite("Basilisk Activity Panel E2E Tests", function () {
       healthWelcome.contents.includes("Waiting for analysis"),
       "typeHealth welcome should mention waiting for analysis",
     );
+  });
+});
+
+// ── Type Health summary rendering [EXTACT-HEALTH] ───────────────────────────
+//
+// Regression tests for issue #57: an empty workspace (totalFiles === 0) must
+// render an explicit "no Python files" state, never a misleading 100% coverage
+// bar with a green "pass" icon.
+// Spec: docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-HEALTH
+suite("Type Health Summary Rendering [EXTACT-HEALTH]", function () {
+  const emptyStats = {
+    totalSymbols: 0,
+    annotatedSymbols: 0,
+    coveragePercent: 100,
+    errors: 0,
+    warnings: 0,
+    adoptedFiles: 0,
+    totalFiles: 0,
+  };
+
+  const measuredStats = {
+    totalSymbols: 20,
+    annotatedSymbols: 17,
+    coveragePercent: 85,
+    errors: 0,
+    warnings: 0,
+    adoptedFiles: 0,
+    totalFiles: 3,
+  };
+
+  test("empty workspace shows 'No Python files found', never a 100% bar", function () {
+    const item = new SummaryItem(emptyStats);
+    const description = String(item.description);
+
+    assert.strictEqual(
+      description,
+      "No Python files found",
+      "empty workspace must render an explicit 'no Python files' state",
+    );
+    assert.ok(
+      !description.includes("%"),
+      `empty workspace must not show a percentage, got: "${description}"`,
+    );
+    assert.ok(
+      !description.includes("█") && !description.includes("░"),
+      `empty workspace must not render a coverage bar, got: "${description}"`,
+    );
+  });
+
+  test("empty workspace uses a neutral info icon, not a green pass", function () {
+    const item = new SummaryItem(emptyStats);
+    const icon = item.iconPath;
+    assert.ok(icon instanceof vscode.ThemeIcon, "summary icon should be a ThemeIcon");
+    assert.strictEqual(
+      icon.id,
+      "info",
+      "empty workspace should use a neutral 'info' icon, not the green 'pass' icon",
+    );
+  });
+
+  test("measured workspace still renders the coverage bar and percentage", function () {
+    const item = new SummaryItem(measuredStats);
+    const description = String(item.description);
+
+    assert.ok(description.includes("85%"), `expected the coverage percentage, got: "${description}"`);
+    assert.ok(description.includes("17/20"), `expected the symbol counts, got: "${description}"`);
+    assert.ok(description.includes("█"), `expected a coverage bar, got: "${description}"`);
   });
 });
