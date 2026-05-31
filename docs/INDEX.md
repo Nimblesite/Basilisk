@@ -40,5 +40,6 @@ Implementation roadmaps tracking phasing, priorities, and progress.
 | [CHECK-ELIMINATE-FALSE-POSITIVES.md](plans/CHECK-ELIMINATE-FALSE-POSITIVES.md) | Eliminate conformance suite false positives — rule-specific fixes and engine work. |
 | [CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | Type narrowing and full inference engine — NarrowingEngine, expression inference, ConstraintSolver, class hierarchy subtyping. |
 | [ZED-PLAN.md](plans/ZED-PLAN.md) | Zed extension — LSP scaffolding, tree-sitter queries, DAP support. |
+| [NEOVIM-RELEASE-PLAN.md](plans/NEOVIM-RELEASE-PLAN.md) | Shipping `basilisk.nvim` — subtree-mirror to a standalone repo, tag-synced to monorepo releases; LuaRocks/lspconfig as optional secondary channels. |
 | [LSP-TEST-INTEGRATION-PLAN.md](plans/LSP-TEST-INTEGRATION-PLAN.md) | Test integration rollout — Rust library, LSP protocol, VS Code/Neovim/Zed integration, coverage. |
 | [EXTENSION-ACTIVITY-PANEL-PLAN.md](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Activity panel rollout — LSP backend, VS Code panels, Zed slash commands, Neovim buffers. |
