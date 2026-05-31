@@ -266,6 +266,7 @@ The top-level item is a summary row showing workspace-wide stats:
 - **Coverage bar**: progress bar rendered in description
 - **Totals**: errors, warnings, adopted file count
 - **Trend indicator** (future): up/down since last session
+- **Empty workspace**: when `totalFiles == 0` (no Python files found), the summary renders an explicit `No Python files found` state with a neutral info icon — never a `100%` coverage bar or a green "pass" icon, which would misleadingly read as "perfectly typed". (Editors **must** branch on `totalFiles == 0`; the `coveragePercent` value is vacuously 100 for an empty workspace and must not be displayed.)
 
 ### Toolbar Actions {#EXTACT-HEALTH-TOOLBAR}
 
