@@ -22,11 +22,27 @@ difference drives every decision below.
 | Install | `vsce publish` → marketplace | registry PR | **plugin manager clones a repo at a tag** |
 
 There is **no Neovim marketplace**. Users install with a plugin manager (lazy.nvim, packer,
-mini.deps, vim-plug, …) that does a `git clone` of a GitHub repo and checks out a branch or
-tag. "Releasing" a Neovim plugin therefore means:
+mini.deps, vim-plug, …) — or Neovim's own built-in `vim.pack` — that does a `git clone` of a
+GitHub repo and checks out a branch or tag. "Releasing" a Neovim plugin therefore means:
 
 1. The plugin source is the head of a **standalone, installable Git repo**, and
 2. **Git tags / a stable branch** mark which commits users should pin to.
+
+This is confirmed by the official Neovim docs (`runtime/doc/{repeat,usr_05,pack}.txt`):
+
+- **Packages load directories already on disk.** `'packpath'` + `pack/*/start` (auto-loaded) and
+  `pack/*/opt` (via `:packadd`); the package dir is added to `'runtimepath'`. Core Neovim does not
+  download plugins through this mechanism.
+- **The repo root must be the plugin root.** The documented layout is
+  `…/pack/<x>/start/<plugin>/plugin/…`, with the warning to "make sure that you end up with a path
+  like this" — `plugin/`, `lua/`, `doc/` must sit at the top of the installed directory. There is
+  **no install-from-subdirectory** facility — the constraint that forces the mirror in §3.
+- **`helptags` are generated at install time** (`:helptags` over `doc/`), so CI need not generate
+  them — only ship `doc/`.
+- **`vim.pack.add()`** (Neovim's first-party manager) reinforces all of the above: its `src` is a
+  Git URL ("Any format supported by `git clone`"), it clones the **whole repo** (no subdir), and
+  its `version` field selects a branch/tag/commit **or a `vim.version.range()` semver constraint** —
+  an extra argument for the tag-based versioning model (§5).
 
 Optional secondary channels: **LuaRocks** (for `rocks.nvim` / `luarocks` users) and a
 **nvim-lspconfig PR** (for users who want only the bare LSP, no plugin features).
@@ -90,9 +106,24 @@ Nimblesite/basilisk.nvim      (generated, read-only mirror — users install THI
   always the same number. A user on plugin `v0.5.0` gets binary `v0.5.0`.
 - Standard, well-trodden pattern (`git subtree split`, or `splitsh-lite` for speed).
 
-**Why not install-from-subdir**: lazy.nvim/packer/vim-plug do not support pinning to a
-subdirectory of a repo; the repo root must be the runtimepath entry. A mirror is the minimal,
+**Why not install-from-subdir**: lazy.nvim/packer/vim-plug (and `vim.pack`) do not support pinning
+to a subdirectory of a repo; the repo root must be the runtimepath entry. A mirror is the minimal,
 robust way to satisfy that without restructuring the monorepo.
+
+**Resulting install snippets** (publish once the mirror exists; keep all in sync with §7.1):
+
+```lua
+-- lazy.nvim
+{ 'Nimblesite/basilisk.nvim', ft = 'python',
+  dependencies = { 'mfussenegger/nvim-dap' } }  -- optional
+
+-- vim.pack (built-in, Neovim 0.12+) — config-free, no third-party manager
+vim.pack.add({
+  { src = 'https://github.com/Nimblesite/basilisk.nvim',
+    version = vim.version.range('*') },  -- latest stable tag; or pin 'v0.5.0'
+})
+require('basilisk').setup({})
+```
 
 ---
 
@@ -178,6 +209,9 @@ Two viable models — pick one in §7:
       it to the repo/org Actions secrets allow-list.
 - [ ] Fix the org-name inconsistency in `NEOVIM-SPEC.md`, `doc/basilisk.txt`, `NEOVIM-PLAN.md`
       (§7.1). Spec edit must keep the `[NVIM-DISTRIBUTION-*]` IDs.
+- [ ] Add a **`vim.pack.add()`** install snippet (§3) alongside the lazy.nvim/packer blocks in
+      `NEOVIM-SPEC.md [NVIM-DISTRIBUTION-PRIMARY-STANDALONE]` and `doc/basilisk.txt` — Neovim's
+      built-in, no-third-party-manager install path (0.12+).
 - [ ] Add a `[NVIM-DISTRIBUTION-RELEASE]` subsection to `NEOVIM-SPEC.md` describing the
       subtree-mirror mechanism, and cross-reference this plan (per CLAUDE.md: every spec section
       gets a non-numeric hierarchical ID; code/CI references it).
