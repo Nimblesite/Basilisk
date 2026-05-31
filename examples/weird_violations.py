@@ -14,7 +14,7 @@ from typing import Any, overload
 
 # ── E0003: empty dict hiding inside a function default ───────────────────────
 # (Basilisk checks module-level assignments)
-_cache: dict[str, Any] = {}  # BSK-E0003: type of values unknown
+_cache = {}  # BSK-E0003: type of values unknown
 
 
 # ── E0014: bool is a subtype of int in Python, but Basilisk still flags
@@ -34,7 +34,7 @@ class Config:
 
 class FrozenConfig(Config):
     values: tuple[str, ...] = ()  # BSK-E0017: tuple overrides list
-    max_size = "unlimited"  # BSK-E0017: str overrides int
+    max_size: str = "unlimited"  # BSK-E0017: str overrides int
 
 
 # ── E0018: name used before assignment even though it looks like a constant ───
@@ -42,8 +42,8 @@ def describe_algorithm() -> str:
     return f"Using {ALGO_NAME} with seed {ALGO_SEED}"  # BSK-E0018: ALGO_NAME not yet defined
 
 
-ALGO_NAME = "DBSCAN"
-ALGO_SEED = 42
+ALGO_NAME: str = "DBSCAN"
+ALGO_SEED: int = 42
 
 
 # ── E0019: exactly-one-path binding — the 'elif' still leaves a gap ──────────
@@ -68,11 +68,11 @@ def sum_with_retry(values: list[int], retries: int) -> int:
 # ── E0021: unannotated overload params look identical to the checker ─────────
 # (differs only in return type — unannotated param means both have same signature)
 @overload
-def load(path: Any) -> bytes: ...  # BSK-E0001: path untyped
+def load(path) -> bytes: ...  # BSK-E0001: path untyped
 
 
 @overload
-def load(path: Any) -> str: ...  # BSK-E0001 + BSK-E0021: duplicate
+def load(path) -> str: ...  # BSK-E0001 + BSK-E0021: duplicate
 
 
 def load(path: str) -> bytes | str:
@@ -82,11 +82,11 @@ def load(path: str) -> bytes | str:
 
 # ── E0021: unannotated + Any together — Any is explicit, param is bare ────────
 @overload
-def wrap(value: Any) -> list[Any]: ...  # BSK-E0001: value untyped
+def wrap(value) -> list[Any]: ...  # BSK-E0001: value untyped
 
 
 @overload
-def wrap(value: Any) -> list[Any]: ...  # BSK-E0001 + BSK-E0021: duplicate
+def wrap(value) -> list[Any]: ...  # BSK-E0001 + BSK-E0021: duplicate
 
 
 def wrap(value: Any) -> list[Any]:  # BSK-E0011: Any without justification
@@ -122,7 +122,7 @@ class Timestamped:
 
 
 # ── Combination: untyped + Any return + unhashable key ───────────────────────
-def batch_lookup(keys: Any, db: Any) -> None:  # BSK-E0001: keys, db untyped
+def batch_lookup(keys, db):  # BSK-E0001: keys, db untyped
     results = {}
     for key in keys:
         results[key] = db.get(key)
