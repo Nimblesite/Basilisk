@@ -403,47 +403,55 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
-        with:
-          # `git subtree split` replays the full history of basilisk.nvim/, so
-          # the shallow default checkout is not enough.
-          fetch-depth: 0
 
-      - name: Split basilisk.nvim/ into a standalone tree
-        id: split
-        run: |
-          set -euo pipefail
-          # Neovim plugin managers (and the built-in vim.pack) can only install
-          # a repo whose root *is* the plugin — none install from a repo
-          # subdirectory. `git subtree split` rewrites basilisk.nvim/ into a
-          # commit whose tree root is the plugin, which we publish to a mirror.
-          sha="$(git subtree split --prefix=basilisk.nvim)"
-          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
-
-      - name: Publish to the basilisk.nvim mirror
+      - name: Render plugin tree and push to the basilisk.nvim mirror
+        # Same write convention as publish-homebrew/publish-scoop: clone the
+        # sibling Nimblesite/* repo with the x-access-token credential, replace
+        # its content, then commit as github-actions[bot] and push. Neovim
+        # plugin managers (and vim.pack) can only install a repo whose root *is*
+        # the plugin, so the mirror's root is the basilisk.nvim/ tree. The PAT
+        # must be able to write to Nimblesite/basilisk.nvim (add it to the
+        # token's allowed repositories if it is fine-grained).
         env:
-          NVIM_MIRROR_PAT: ${{ secrets.NVIM_MIRROR_PAT }}
+          BREW_SCOOP_PAT: ${{ secrets.BREW_SCOOP_PAT }}
         run: |
           set -euo pipefail
-          if [ -z "${NVIM_MIRROR_PAT:-}" ]; then
-            echo "::error::NVIM_MIRROR_PAT not accessible. Create a fine-grained PAT with contents:write on Nimblesite/basilisk.nvim and add it under Org/Repo Settings → Secrets and variables → Actions → NVIM_MIRROR_PAT (and add Basilisk to its allowed repositories)."
+          if [ -z "${BREW_SCOOP_PAT:-}" ]; then
+            echo "::error::BREW_SCOOP_PAT not accessible. The Nimblesite org secret exists; ensure Basilisk is in its allowed repositories AND that the token can write to Nimblesite/basilisk.nvim (Org Settings → Secrets and variables → Actions → BREW_SCOOP_PAT → Repository access)."
             exit 1
           fi
-          sha="${{ steps.split.outputs.sha }}"
-          mirror="https://x-access-token:${NVIM_MIRROR_PAT}@github.com/Nimblesite/basilisk.nvim.git"
+
+          export BASILISK_VERSION="${GITHUB_REF_NAME#v}"
+
+          git clone "https://x-access-token:${BREW_SCOOP_PAT}@github.com/Nimblesite/basilisk.nvim.git" mirror
+
+          # Replace the mirror's tracked content with the current basilisk.nvim/
+          # tree, preserving the mirror's own .git directory.
+          find mirror -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -R basilisk.nvim/. mirror/
+
+          cd mirror
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "basilisk.nvim already up to date for ${BASILISK_VERSION}"
+          else
+            git commit -m "basilisk ${BASILISK_VERSION}"
+            git push
+          fi
 
           # Tag the mirror with the SAME tag as the monorepo so the plugin
           # version and the binary that binary.lua auto-downloads from
-          # Nimblesite/Basilisk releases are guaranteed identical.
-          git push "$mirror" "${sha}:refs/tags/${GITHUB_REF_NAME}"
-
-          # Only stable tags advance the mirror's default branch. SemVer
-          # prerelease tags (v0.1.0-alpha, -rc.1, …) contain a hyphen and ship
-          # as a tag only, so `main` keeps tracking the latest stable release.
-          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
-            echo "Prerelease ${GITHUB_REF_NAME}: tagged the mirror, leaving main unchanged"
+          # Nimblesite/Basilisk releases stay identical, and version-pinned
+          # installs (vim.pack / lazy.nvim) resolve. Unlike the Homebrew formula
+          # and Scoop manifest, plugins are versioned by git tag, so this step
+          # is nvim-specific. Idempotent: skip if the tag already exists.
+          if git ls-remote --exit-code --tags origin "refs/tags/${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "Tag ${GITHUB_REF_NAME} already present on the mirror"
           else
-            git push --force "$mirror" "${sha}:refs/heads/main"
-            echo "Stable ${GITHUB_REF_NAME}: tagged the mirror and advanced main"
+            git tag "${GITHUB_REF_NAME}"
+            git push origin "${GITHUB_REF_NAME}"
           fi
 
   publish-scoop:

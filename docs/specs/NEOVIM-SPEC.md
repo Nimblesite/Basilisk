@@ -388,14 +388,17 @@ GitHub Actions: run plenary.nvim tests on Neovim 0.10, 0.11, nightly.
 
 `basilisk.nvim/` is canonical inside the `Nimblesite/Basilisk` monorepo, but Neovim plugin
 managers (and `vim.pack`) can only install a repo whose root *is* the plugin — none install from a
-subdirectory. On each `vX.Y.Z` tag, the `publish-nvim` job in `release.yml` runs
-`git subtree split --prefix=basilisk.nvim` and publishes the result to the standalone mirror
-**`Nimblesite/basilisk.nvim`** (the repo users install):
+subdirectory. On each `vX.Y.Z` tag, the `publish-nvim` job in `release.yml` publishes the
+`basilisk.nvim/` tree to the standalone mirror **`Nimblesite/basilisk.nvim`** (the repo users
+install), using the **same write convention as `publish-homebrew` / `publish-scoop`**: clone the
+sibling `Nimblesite/*` repo with the shared `BREW_SCOOP_PAT` via the `x-access-token` credential,
+replace its content with the plugin tree, commit as `github-actions[bot]` (`basilisk ${VERSION}`),
+and push.
 
-- The mirror is tagged with the identical `vX.Y.Z`, so the plugin version always matches the
-  binary that `binary.lua` auto-downloads from `Nimblesite/Basilisk` releases.
-- The mirror's `main` tracks the latest **stable** tag only; SemVer prerelease tags
-  (`v0.1.0-alpha`, `-rc.1`, …) are published as a tag, not onto `main`.
+- The mirror is also tagged with the identical `vX.Y.Z`, so the plugin version always matches the
+  binary that `binary.lua` auto-downloads from `Nimblesite/Basilisk` releases, and version-pinned
+  installs (`vim.pack` / lazy.nvim) resolve. Tagging is nvim-specific — plugins are git-tag
+  versioned, unlike the Homebrew formula and Scoop manifest.
 
 Versioning is **tag-only** — the plugin carries no embedded version string; `:BasiliskInfo` and
 `:checkhealth basilisk` report the binary version, which equals the tag. See

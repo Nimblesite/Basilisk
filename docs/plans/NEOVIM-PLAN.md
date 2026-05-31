@@ -219,7 +219,8 @@ Phases 1–11 mostly COMPLETE. 189 tests (80 unit + 103 real LSP e2e + 6 screens
 - [x] lazy.nvim package spec (`{ 'Nimblesite/basilisk.nvim', ft = 'python' }`)
 - [x] Release/tagging mechanism — `publish-nvim` job in `release.yml` subtree-splits
       `basilisk.nvim/` to the `Nimblesite/basilisk.nvim` mirror, tag-synced to monorepo releases
-      (see `docs/plans/NEOVIM-RELEASE-PLAN.md`; `[HUMAN]` gaps: create mirror repo + `NVIM_MIRROR_PAT`)
+      (see `docs/plans/NEOVIM-RELEASE-PLAN.md`; `[HUMAN]` gap: grant the existing `BREW_SCOOP_PAT`
+      write access to the `Nimblesite/basilisk.nvim` mirror)
 - [ ] Submit `lsp/basilisk.lua` PR to nvim-lspconfig for basic LSP support
 - [ ] Version check — warn user if basilisk binary is outdated
 - [ ] Binary auto-download fallback (GitHub releases)

@@ -80,31 +80,47 @@ Optional secondary channels: **LuaRocks** (for `rocks.nvim` / `luarocks` users) 
 
 ---
 
-## 3. Recommended mechanism — subtree mirror, tag-synced to the monorepo
+## 3. Mechanism — generated mirror, written like the Homebrew/Scoop publishers
 
 Keep `basilisk.nvim/` canonical **inside the monorepo** (so it stays co-located with the LSP it
-drives, per CLAUDE.md: "the LSP drives the functionality"). On each release, **publish a
-read-only split** of that subdirectory to a dedicated standalone repo that users actually
-install from.
+drives, per CLAUDE.md: "the LSP drives the functionality"). On each release, **publish the plugin
+tree** to a dedicated standalone repo that users actually install from — using the **identical
+write convention** the existing `publish-homebrew` / `publish-scoop` jobs already use for their
+sibling repos.
 
 ```
-Nimblesite/Basilisk           (monorepo, canonical source)
+Nimblesite/Basilisk           (monorepo, canonical source — basilisk.nvim/)
         │  release.yml on tag vX.Y.Z
-        │  git subtree split --prefix=basilisk.nvim
+        │  clone mirror · replace content with basilisk.nvim/ · bot commit · push + tag
         ▼
-Nimblesite/basilisk.nvim      (generated, read-only mirror — users install THIS)
-        ├── pushed to `main` (rolling)        → users on HEAD get latest
-        └── tagged `vX.Y.Z` (matches monorepo) → users pinned to a release
+Nimblesite/basilisk.nvim      (generated mirror — users install THIS)
+        ├── main  (latest published tree, "basilisk X.Y.Z" bot commit)
+        └── vX.Y.Z tag (matches monorepo) → version-pinned installs
 ```
 
-**Why a mirror and not a separate hand-maintained repo**
+**Write convention (same as `publish-homebrew` / `publish-scoop`)** — `git clone` the sibling
+`Nimblesite/*` repo with `https://x-access-token:${BREW_SCOOP_PAT}@…`, write the content, then:
+
+```sh
+git config user.name  "github-actions[bot]"
+git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+git add -A
+git diff --cached --quiet || git commit -m "basilisk ${BASILISK_VERSION}"   # skip if unchanged
+git push
+```
+
+The only differences from the brew/scoop jobs: the *content* written is the whole `basilisk.nvim/`
+tree (not a single rendered formula/manifest), and the job **also pushes a `vX.Y.Z` tag** — plugins
+are git-tag versioned, so pinned installs (`vim.pack` / lazy.nvim) need it; a formula/manifest does
+not.
+
+**Why a generated mirror**
 
 - Single source of truth — no drift between monorepo and published plugin (CLAUDE.md: avoid
   duplication of all kinds).
 - The tag on the mirror **matches** the monorepo tag, so `binary.lua`'s auto-download (which
   resolves the *binary* from `Nimblesite/Basilisk` releases) and the *plugin* version are
   always the same number. A user on plugin `v0.5.0` gets binary `v0.5.0`.
-- Standard, well-trodden pattern (`git subtree split`, or `splitsh-lite` for speed).
 
 **Why not install-from-subdir**: lazy.nvim/packer/vim-plug (and `vim.pack`) do not support pinning
 to a subdirectory of a repo; the repo root must be the runtimepath entry. A mirror is the minimal,
@@ -133,29 +149,31 @@ Trigger: same `on: push: tags: ['v*']` as the rest of `release.yml`. Run **after
 `github-release` job (so the binaries the plugin downloads already exist for that tag), mirroring
 how `publish-homebrew`/`publish-scoop` declare `needs: github-release`.
 
-Steps:
+Steps (a plain `actions/checkout@v4` — no `fetch-depth: 0`, since we publish the *tree*, not
+rewritten history):
 
-1. `actions/checkout@v4` with **`fetch-depth: 0`** (subtree split needs full history).
-2. Produce the split commit of `basilisk.nvim/`:
-   - Simple: `git subtree split --prefix=basilisk.nvim -b nvim-release`.
-   - Faster on large histories: `splitsh-lite --prefix=basilisk.nvim`.
-3. (If §7 chooses to embed a version) run a small stamp step against the split — see §5.
-4. Push to the mirror and tag it, using a PAT with write access to the mirror repo:
-   - `git push --force <mirror> nvim-release:main`
-   - `git push <mirror> <split-sha>:refs/tags/${GITHUB_REF_NAME}`
-   - Mark prerelease tags (`*-alpha`, `-rc.N`) consistently with the rest of `release.yml`
-     (`contains(github.ref_name, '-')`); the mirror's `main` should track the latest **stable**
-     tag, not prereleases.
-5. Generate `helptags` is **not** needed in CI — plugin managers run `:helptags` on install. Do
-   verify `doc/basilisk.txt` and `doc/tags` ship in the split.
+1. Clone the mirror with the `x-access-token` credential, exactly as the brew/scoop jobs clone
+   their tap/bucket.
+2. Replace the mirror's tracked content with the current `basilisk.nvim/` tree (preserve `.git`):
+   `find mirror -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +` then `cp -R basilisk.nvim/. mirror/`.
+3. `git config` the `github-actions[bot]` identity, `git add -A`, skip-if-`git diff --cached
+   --quiet`, else `git commit -m "basilisk ${BASILISK_VERSION}"` and `git push` — byte-for-byte the
+   brew/scoop convention.
+4. Push the `vX.Y.Z` tag (idempotent — skip if it already exists on the mirror). This is the one
+   nvim-specific step; the formula/manifest publishers don't tag.
+5. `helptags` are **not** generated in CI — plugin managers run `:helptags` on install. Just ensure
+   `doc/basilisk.txt` ships in the tree (it does).
 
-**Secrets** (store as org/repo Actions secrets, matching the homebrew/scoop convention which use
-`BREW_SCOOP_PAT`): a `NVIM_MIRROR_PAT` (fine-grained PAT scoped to `Nimblesite/basilisk.nvim`,
-contents:write). Add the failure-with-actionable-message guard the other publish jobs use
-("secret not accessible → add repo to org allow-list").
+**Secrets**: **reuse the existing `BREW_SCOOP_PAT`** — `publish-homebrew` and `publish-scoop`
+already use it to push to sibling `Nimblesite/*` repos (`homebrew-tap`, `scoop-bucket`) via the
+`x-access-token` credential, which is the identical mechanism `publish-nvim` needs to push to
+`Nimblesite/basilisk.nvim`. The only requirement is that the token can **write to
+`Nimblesite/basilisk.nvim`**: a classic `repo`-scoped PAT covers it automatically; a fine-grained
+PAT must have `basilisk.nvim` added to its allowed repositories (Contents: read/write). The job
+carries the same failure-with-actionable-message guard as the other two.
 
-**Keep CI/Dockerfile in sync** (CLAUDE.md): if the job adds tooling (e.g. `splitsh-lite`), reflect
-it where dependencies are pinned.
+**No new tooling**: the job uses only `git`, `find`, and `cp` — already present on the runner and
+identical to the brew/scoop jobs — so no `ci.yml`/Dockerfile dependency changes are needed.
 
 ---
 
@@ -197,31 +215,36 @@ Two viable models — pick one in §7:
    `Nimblesite/Basilisk` is the *binary* source and stays as-is.)
 2. **Versioning model** — (A) tag-only vs (B) embedded version (§5). Recommended: **(A)** now,
    revisit at LuaRocks time.
-3. **Split tooling** — `git subtree split` (zero deps) vs `splitsh-lite` (faster, extra tool).
-   Recommended: start with `git subtree split`; switch only if CI time becomes a problem.
+3. **Write mechanism** — resolved: **match `publish-homebrew` / `publish-scoop`** (clone the
+   mirror, replace content, `github-actions[bot]` commit, push) rather than a `git subtree split`.
+   This reuses the established convention and `BREW_SCOOP_PAT`, needs no extra tooling, and the
+   generated mirror does not need rewritten per-commit history.
 
 ---
 
 ## 8. Task list
 
 > Decisions taken for this implementation: §7.1 → **`Nimblesite/basilisk.nvim`**,
-> §7.2 → **(A) tag-only**, §7.3 → **`git subtree split`**.
+> §7.2 → **(A) tag-only**, §7.3 → **match the brew/scoop write convention** (`BREW_SCOOP_PAT` +
+> `github-actions[bot]` commit + push, plus an nvim-only `vX.Y.Z` tag).
 
-- [ ] **`[HUMAN]`** Create the empty mirror repo `Nimblesite/basilisk.nvim`.
-- [ ] **`[HUMAN]`** Create `NVIM_MIRROR_PAT` (fine-grained, contents:write on the mirror) and add
-      it to the repo/org Actions secrets allow-list.
+- [x] **`[HUMAN]`** Create the mirror repo `Nimblesite/basilisk.nvim` (created; seeded once
+      manually from `main` to validate install).
+- [ ] **`[HUMAN]`** Ensure the existing `BREW_SCOOP_PAT` can write to `Nimblesite/basilisk.nvim`
+      (classic `repo` PAT: automatic; fine-grained: add `basilisk.nvim` to its allowed repos). No
+      new secret needed — reuses the homebrew/scoop token.
 - [x] Fix the org-name inconsistency in `NEOVIM-SPEC.md`, `doc/basilisk.txt`, `NEOVIM-PLAN.md`
       (§7.1). Spec edit keeps the `[NVIM-DISTRIBUTION-*]` IDs.
 - [x] Add a **`vim.pack.add()`** install snippet (§3) alongside the lazy.nvim/packer blocks in
       `NEOVIM-SPEC.md [NVIM-DISTRIBUTION-PRIMARY-STANDALONE]` and `doc/basilisk.txt` — Neovim's
       built-in, no-third-party-manager install path (0.12+).
 - [x] Add a `[NVIM-DISTRIBUTION-RELEASE]` subsection to `NEOVIM-SPEC.md` describing the
-      subtree-mirror mechanism, and cross-reference this plan.
-- [x] Add the `publish-nvim` job to `release.yml` (§4), `needs: github-release`, commented the
-      same way the homebrew/scoop jobs are.
+      mirror mechanism, and cross-reference this plan.
+- [x] Add the `publish-nvim` job to `release.yml` (§4), `needs: github-release`, written with the
+      same clone / `github-actions[bot]` commit / push convention as the homebrew/scoop jobs.
 - [x] Model **(A) tag-only** chosen (§5) — no `version.lua`, no `stamp-version.sh` change.
-- [ ] **`[HUMAN/CI]`** Dry-run on a prerelease tag (e.g. `vX.Y.Z-rc.1`): confirm the mirror gets
-      the tag but `main` does **not** advance to a prerelease. (Requires the mirror repo + PAT.)
+- [ ] **`[HUMAN/CI]`** Dry-run on the next tag: confirm the mirror gets the `basilisk ${VERSION}`
+      bot commit on `main` plus the matching `vX.Y.Z` tag. (Requires `BREW_SCOOP_PAT` write access.)
 - [ ] **`[HUMAN]`** Clean-machine smoke test (`ROADMAP-NEXT-STEPS-PLAN.md` §1 sign-off): on a
       fresh box, `lazy.nvim` install the *published mirror tag*, open a real Python project,
       confirm zero-config binary resolution/auto-download, diagnostics, hover, go-to-def, debug
@@ -234,10 +257,11 @@ Two viable models — pick one in §7:
 
 ## 9. Verification & rollback
 
-- **Verification**: the dry-run prerelease tag (§8) proves the pipeline end-to-end without
-  affecting stable users on the mirror's `main`. The clean-machine smoke test proves a real user
-  install works against the *published* artifact, not the dev tree.
-- **Rollback**: the mirror is generated and force-pushable; a bad release is corrected by tagging
-  a fixed `vX.Y.Z+1` from the monorepo and re-running `publish-nvim`. Because the plugin and
-  binary versions are tag-coupled (§3), there is no partial-release state where the plugin
-  expects a binary that does not exist.
+- **Verification**: the next tagged release exercises the pipeline end-to-end — confirm the mirror
+  receives the `basilisk ${VERSION}` bot commit and the matching `vX.Y.Z` tag. The clean-machine
+  smoke test proves a real user install works against the *published* artifact, not the dev tree.
+- **Rollback**: the mirror is generated, so a bad release is corrected by tagging a fixed
+  `vX.Y.Z+1` from the monorepo and re-running `publish-nvim` (the bot commit + new tag supersede
+  it; a bad tag can be deleted on the mirror). Because the plugin and binary versions are
+  tag-coupled (§3), there is no partial-release state where the plugin expects a binary that does
+  not exist.
