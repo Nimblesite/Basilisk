@@ -16,7 +16,7 @@ rate = 3.14  # W0050 — obviously float
 enabled = True  # W0050 — obviously bool
 disabled = False  # W0050 — obviously bool
 header = b"\x00\xff"  # W0050 — obviously bytes
-nothing = None  # W0050 — obviously None
+nothing: Any = None  # W0050 — obviously None
 
 # Edge cases: zero/empty values
 zero = 0  # W0050 — still obviously int
