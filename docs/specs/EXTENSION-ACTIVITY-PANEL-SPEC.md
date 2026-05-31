@@ -301,36 +301,71 @@ Helps users understand what Basilisk **is** and what it **does**. Not a static a
 
 Tree with grouped sections (top-level nodes are section headers, children are items).
 
+Every row falls into exactly one of two **interaction classes**, and the two classes
+**must be visually unmistakable** (see [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE)):
+`[A]` marks an **actionable** row (clicking does something), `·` marks a **read-only**
+display row (clicking does nothing). The markers below are notation for this spec, not
+literal glyphs — the editor renders the distinction with the affordances defined in
+[EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE).
+
 ```
 Getting Started
-  +-- What is Basilisk?                     -> opens walkthrough / help
-  +-- Quick Setup Guide                     -> opens walkthrough / help
-  +-- Keyboard Shortcuts                    -> opens keybinding reference
+  [A] What is Basilisk?                     -> opens walkthrough / help
+  [A] Quick Setup Guide                     -> opens walkthrough / help
+  [A] Keyboard Shortcuts                    -> opens keybinding reference
 
-Feature Status
-  +-- Type Checking                         enabled
-  +-- Inlay Hints                           enabled
-  +-- Autofix                               enabled
-  +-- Debugger                              disabled (click to enable)
-  +-- Test Explorer                         enabled
-  +-- Ruff Integration                      enabled
-  +-- AI Suggestions                        disabled
-  +-- Profiler                              not installed
+Feature Status                              (toggles — actionable)
+  [A] Type Checking                         enabled        (click to disable)
+  [A] Inlay Hints                           enabled        (click to disable)
+  [A] Autofix                               enabled        (click to disable)
+  [A] Debugger                              disabled       (click to enable)
+  [A] Test Explorer                         enabled        (click to disable)
+  [A] Ruff Integration                      enabled        (click to disable)
+  [A] AI Suggestions                        disabled       (click to enable)
+  [A] Profiler                              not installed
 
-Quick Actions
-  +-- Restart Language Server
-  +-- Organize Imports (Workspace)
-  +-- Fix All (Workspace)
-  +-- Show Output Log
-  +-- Run All Tests
+Quick Actions                              (commands — actionable)
+  [A] Restart Language Server
+  [A] Organize Imports (Workspace)
+  [A] Fix All (Workspace)
+  [A] Show Output Log
+  [A] Run All Tests
 
-Server Info
-  +-- Version: 0.4.2
-  +-- Binary: /usr/local/bin/basilisk
-  +-- Python: /usr/bin/python3.12
-  +-- Analysis Mode: wholeModule
-  +-- Workspace: /home/user/myapp (142 files)
+Server Info                                (read-only — display only)
+  ·   Version: 0.4.2
+  ·   Binary: /usr/local/bin/basilisk
+  ·   Python: /usr/bin/python3.12
+  ·   Analysis Mode: wholeModule
+  ·   Workspace: /home/user/myapp (142 files)
 ```
+
+### Interaction Affordance {#EXTACT-INFO-AFFORDANCE}
+
+The panel mixes actionable rows (feature toggles, quick actions, getting-started links)
+with read-only display rows (server info). Users **must** be able to tell, at a glance and
+without clicking, which rows do something and which are just information. This distinction
+is mandatory and is verified by tests.
+
+**Actionable rows** (`contextValue` of `feature`, `action`, or `gettingStarted`):
+
+- **Must** carry a `command` that runs on row click, and that command **must** be registered
+  by the extension — a row that looks clickable but invokes an unregistered/no-op command is
+  a defect (see [EXTACT-INFO-ACTION-WIRING](#EXTACT-INFO-ACTION-WIRING)).
+- **Must** surface their command as an **always-visible inline action button** (the `inline`
+  `view/item/context` menu group) so a literal button affordance is present, not only a
+  whole-row click target.
+- **Must** carry a tooltip phrased as an imperative describing the effect
+  (e.g. "Restart the language server", "Click to disable Type Checking").
+- Use an icon that connotes action (toggle state for features; a verb/tool icon for actions).
+
+**Read-only rows** (`contextValue` of `info`):
+
+- **Must not** carry a `command`, and **must not** contribute any inline action button.
+- **Must not** use an icon that reads as a button; the value is shown in the row `description`.
+- Tooltip, if present, states the fact — never an imperative.
+
+A single, centralized helper **must** own the construction of each interaction class so the
+affordance rules cannot drift per call site. No row may be both actionable and read-only.
 
 ### Getting Started Section {#EXTACT-INFO-GETTING-STARTED}
 
@@ -366,11 +401,21 @@ Each item reflects a real setting and shows whether the feature is active.
 | AI Suggestions | `basilisk.ai.enabled` | boolean (future) |
 | Profiler | `basilisk.profiler.enabled` | boolean (future) |
 
-**Click action**: toggles the setting. Disabled -> enabled, enabled -> disabled. Immediate effect.
+**Click action**: toggles the setting. Disabled -> enabled, enabled -> disabled. Immediate effect. Every row is an actionable row and carries the actionable affordance defined in [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE).
 
 ### Quick Actions Section {#EXTACT-INFO-QUICK-ACTIONS}
 
-Each item triggers an existing command. Convenience surface — users don't have to remember command palette names.
+Each item triggers an existing command. Convenience surface — users don't have to remember command palette names. Every row is an actionable row and carries the actionable affordance defined in [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE).
+
+#### Action Wiring {#EXTACT-INFO-ACTION-WIRING}
+
+A quick action that is contributed to the panel (or to `contributes.commands` in
+`package.json`) **must** have a live handler registered via `registerCommand`. Contributing a
+command without a handler — so the row renders but clicking it does nothing or raises
+"command not found" — is a defect. Every actionable row's command id **must** resolve to a
+registered handler, and this is asserted by an e2e test that drives the row, not by inspecting
+the command registry directly. When an action is genuinely unavailable in the current context
+(e.g. a uv action with uv disabled), the row **must** be hidden, not shown-but-dead.
 
 ### Server Info Section {#EXTACT-INFO-SERVER-INFO}
 
@@ -378,6 +423,8 @@ Read-only information fetched from:
 - LSP `initialize` response (server version, capabilities)
 - Extension settings (binary path, python path, analysis mode)
 - Workspace stats from `basilisk/typeHealth` (file count)
+
+Every row is a read-only display row and carries the read-only affordance defined in [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE): no command, no inline button, no button-like icon.
 
 ---
 
