@@ -204,27 +204,29 @@ Two viable models — pick one in §7:
 
 ## 8. Task list
 
-- [ ] **`[HUMAN]`** Resolve decision §7.1 (mirror org/name) and create the empty mirror repo.
+> Decisions taken for this implementation: §7.1 → **`Nimblesite/basilisk.nvim`**,
+> §7.2 → **(A) tag-only**, §7.3 → **`git subtree split`**.
+
+- [ ] **`[HUMAN]`** Create the empty mirror repo `Nimblesite/basilisk.nvim`.
 - [ ] **`[HUMAN]`** Create `NVIM_MIRROR_PAT` (fine-grained, contents:write on the mirror) and add
       it to the repo/org Actions secrets allow-list.
-- [ ] Fix the org-name inconsistency in `NEOVIM-SPEC.md`, `doc/basilisk.txt`, `NEOVIM-PLAN.md`
-      (§7.1). Spec edit must keep the `[NVIM-DISTRIBUTION-*]` IDs.
-- [ ] Add a **`vim.pack.add()`** install snippet (§3) alongside the lazy.nvim/packer blocks in
+- [x] Fix the org-name inconsistency in `NEOVIM-SPEC.md`, `doc/basilisk.txt`, `NEOVIM-PLAN.md`
+      (§7.1). Spec edit keeps the `[NVIM-DISTRIBUTION-*]` IDs.
+- [x] Add a **`vim.pack.add()`** install snippet (§3) alongside the lazy.nvim/packer blocks in
       `NEOVIM-SPEC.md [NVIM-DISTRIBUTION-PRIMARY-STANDALONE]` and `doc/basilisk.txt` — Neovim's
       built-in, no-third-party-manager install path (0.12+).
-- [ ] Add a `[NVIM-DISTRIBUTION-RELEASE]` subsection to `NEOVIM-SPEC.md` describing the
-      subtree-mirror mechanism, and cross-reference this plan (per CLAUDE.md: every spec section
-      gets a non-numeric hierarchical ID; code/CI references it).
-- [ ] Add the `publish-nvim` job to `release.yml` (§4), `needs: github-release`, comment it the
-      same way the homebrew/scoop jobs are commented.
-- [ ] (If model B) add `version.lua` + extend `scripts/stamp-version.sh` `FILES` (§5).
-- [ ] Dry-run on a prerelease tag (e.g. `vX.Y.Z-rc.1`): confirm the mirror gets the tag but
-      `main` does **not** advance to a prerelease.
+- [x] Add a `[NVIM-DISTRIBUTION-RELEASE]` subsection to `NEOVIM-SPEC.md` describing the
+      subtree-mirror mechanism, and cross-reference this plan.
+- [x] Add the `publish-nvim` job to `release.yml` (§4), `needs: github-release`, commented the
+      same way the homebrew/scoop jobs are.
+- [x] Model **(A) tag-only** chosen (§5) — no `version.lua`, no `stamp-version.sh` change.
+- [ ] **`[HUMAN/CI]`** Dry-run on a prerelease tag (e.g. `vX.Y.Z-rc.1`): confirm the mirror gets
+      the tag but `main` does **not** advance to a prerelease. (Requires the mirror repo + PAT.)
 - [ ] **`[HUMAN]`** Clean-machine smoke test (`ROADMAP-NEXT-STEPS-PLAN.md` §1 sign-off): on a
       fresh box, `lazy.nvim` install the *published mirror tag*, open a real Python project,
       confirm zero-config binary resolution/auto-download, diagnostics, hover, go-to-def, debug
       (nvim-dap), and profiling all light up. This is a release gate.
-- [ ] Mark `NEOVIM-PLAN.md` Phase 9 "tagging/release mechanism" item done; link this plan.
+- [x] Mark `NEOVIM-PLAN.md` Phase 9 release-mechanism item done; link this plan.
 - [ ] **`[LATER]`** LuaRocks rockspec + `publish-nvim-luarocks` step (§6) — optional.
 - [ ] **`[LATER]`** nvim-lspconfig PR (§6) — manual, one-time.
 

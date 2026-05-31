@@ -395,6 +395,57 @@ jobs:
           git commit -m "basilisk ${BASILISK_VERSION}"
           git push
 
+  publish-nvim:
+    name: Publish Neovim plugin
+    needs: github-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `git subtree split` replays the full history of basilisk.nvim/, so
+          # the shallow default checkout is not enough.
+          fetch-depth: 0
+
+      - name: Split basilisk.nvim/ into a standalone tree
+        id: split
+        run: |
+          set -euo pipefail
+          # Neovim plugin managers (and the built-in vim.pack) can only install
+          # a repo whose root *is* the plugin — none install from a repo
+          # subdirectory. `git subtree split` rewrites basilisk.nvim/ into a
+          # commit whose tree root is the plugin, which we publish to a mirror.
+          sha="$(git subtree split --prefix=basilisk.nvim)"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to the basilisk.nvim mirror
+        env:
+          NVIM_MIRROR_PAT: ${{ secrets.NVIM_MIRROR_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NVIM_MIRROR_PAT:-}" ]; then
+            echo "::error::NVIM_MIRROR_PAT not accessible. Create a fine-grained PAT with contents:write on Nimblesite/basilisk.nvim and add it under Org/Repo Settings → Secrets and variables → Actions → NVIM_MIRROR_PAT (and add Basilisk to its allowed repositories)."
+            exit 1
+          fi
+          sha="${{ steps.split.outputs.sha }}"
+          mirror="https://x-access-token:${NVIM_MIRROR_PAT}@github.com/Nimblesite/basilisk.nvim.git"
+
+          # Tag the mirror with the SAME tag as the monorepo so the plugin
+          # version and the binary that binary.lua auto-downloads from
+          # Nimblesite/Basilisk releases are guaranteed identical.
+          git push "$mirror" "${sha}:refs/tags/${GITHUB_REF_NAME}"
+
+          # Only stable tags advance the mirror's default branch. SemVer
+          # prerelease tags (v0.1.0-alpha, -rc.1, …) contain a hyphen and ship
+          # as a tag only, so `main` keeps tracking the latest stable release.
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            echo "Prerelease ${GITHUB_REF_NAME}: tagged the mirror, leaving main unchanged"
+          else
+            git push --force "$mirror" "${sha}:refs/heads/main"
+            echo "Stable ${GITHUB_REF_NAME}: tagged the mirror and advanced main"
+          fi
+
   publish-scoop:
     name: Publish Scoop manifest
     needs: github-release

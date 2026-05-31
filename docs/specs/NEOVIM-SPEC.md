@@ -358,8 +358,14 @@ All shared settings are defined in LSP-ARCHITECTURE-SPEC.md and passed through t
 
 ```lua
 -- lazy.nvim
-{ 'basilisk-lang/basilisk.nvim', ft = 'python',
+{ 'Nimblesite/basilisk.nvim', ft = 'python',
   dependencies = { 'mfussenegger/nvim-dap' } }  -- optional
+
+-- vim.pack (built-in, Neovim 0.12+) — no third-party plugin manager
+vim.pack.add({
+  { src = 'https://github.com/Nimblesite/basilisk.nvim',
+    version = vim.version.range('*') },  -- latest stable tag; or pin 'v0.5.0'
+})
 
 -- Usage
 require('basilisk').setup({})  -- zero-config, works out of the box
@@ -377,3 +383,21 @@ require('lspconfig').basilisk.setup({})
 ### CI {#NVIM-DISTRIBUTION-CI}
 
 GitHub Actions: run plenary.nvim tests on Neovim 0.10, 0.11, nightly.
+
+### Release & Versioning {#NVIM-DISTRIBUTION-RELEASE}
+
+`basilisk.nvim/` is canonical inside the `Nimblesite/Basilisk` monorepo, but Neovim plugin
+managers (and `vim.pack`) can only install a repo whose root *is* the plugin — none install from a
+subdirectory. On each `vX.Y.Z` tag, the `publish-nvim` job in `release.yml` runs
+`git subtree split --prefix=basilisk.nvim` and publishes the result to the standalone mirror
+**`Nimblesite/basilisk.nvim`** (the repo users install):
+
+- The mirror is tagged with the identical `vX.Y.Z`, so the plugin version always matches the
+  binary that `binary.lua` auto-downloads from `Nimblesite/Basilisk` releases.
+- The mirror's `main` tracks the latest **stable** tag only; SemVer prerelease tags
+  (`v0.1.0-alpha`, `-rc.1`, …) are published as a tag, not onto `main`.
+
+Versioning is **tag-only** — the plugin carries no embedded version string; `:BasiliskInfo` and
+`:checkhealth basilisk` report the binary version, which equals the tag. See
+`docs/plans/NEOVIM-RELEASE-PLAN.md` for the full rollout, required secrets, and the
+LuaRocks / nvim-lspconfig secondary channels.
