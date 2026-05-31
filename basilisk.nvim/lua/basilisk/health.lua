@@ -17,8 +17,12 @@ function M.check()
     vim.health.error("Neovim >= 0.10 required", { "Upgrade Neovim to 0.10 or later." })
   end
 
-  -- Basilisk binary.
-  local bin = binary.resolve()
+  -- Basilisk binary. Forward the configured binary_path so the cascade's
+  -- first step (setup({ binary_path = ... })) is honored — otherwise a binary
+  -- reachable only via config is falsely reported as not found (issue #67).
+  local cfg_ok, basilisk_cfg = pcall(require, "basilisk")
+  local configured_path = cfg_ok and basilisk_cfg.config and basilisk_cfg.config.binary_path or nil
+  local bin = binary.resolve(configured_path)
   if bin then
     local ver = binary.version(bin) or "unknown"
     vim.health.ok("basilisk binary found: " .. bin .. " (" .. ver .. ")")
