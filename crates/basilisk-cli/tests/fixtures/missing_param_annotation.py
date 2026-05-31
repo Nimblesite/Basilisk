@@ -1,6 +1,6 @@
-def process(data: Any) -> None:
+def process(data) -> None:
     pass
 
 
-def transform(value: Any, factor: float) -> float:
+def transform(value, factor: float) -> float:
     return value * factor

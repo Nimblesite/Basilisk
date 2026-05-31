@@ -1,11 +1,11 @@
-def risky(value: Any) -> None:
+def risky(value):
     try:
         return int(value)
     except ValueError:
         return 0
 
 
-def also_risky(a: Any, b: Any) -> None:
+def also_risky(a, b):
     try:
         return a / b
     except ZeroDivisionError:

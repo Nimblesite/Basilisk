@@ -1,2 +1,2 @@
-def greet(name: Any) -> None:
+def greet(name):
     return f"Hello, {name}!"

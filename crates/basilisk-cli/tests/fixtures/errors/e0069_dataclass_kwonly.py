@@ -4,7 +4,7 @@ from dataclasses import dataclass, KW_ONLY
 class Point:
     x: float
     _: KW_ONLY
-    y = 0.0
+    y: float = 0.0
 
 Point(1.0)       # OK — x positional, y uses default
 Point(1.0, 2.0)  # E0069 — y is keyword-only, cannot be passed positionally

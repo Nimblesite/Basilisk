@@ -1,10 +1,10 @@
-def fetch(url: str) -> None:
+def fetch(url: str):
     pass
 
 
-def compute(x: int, y: int) -> None:
+def compute(x: int, y: int):
     return x + y
 
 
-def noop() -> None:
+def noop():
     pass

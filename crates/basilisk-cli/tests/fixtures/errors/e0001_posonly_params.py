@@ -1,2 +1,2 @@
-def divide(numerator: Any, denominator: Any, /) -> float:
+def divide(numerator, denominator, /) -> float:
     return numerator / denominator

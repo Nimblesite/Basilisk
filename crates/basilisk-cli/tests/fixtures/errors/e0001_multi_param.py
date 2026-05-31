@@ -1,2 +1,2 @@
-def compute(x: Any, y: Any, z: Any) -> int:
+def compute(x, y, z) -> int:
     return 0

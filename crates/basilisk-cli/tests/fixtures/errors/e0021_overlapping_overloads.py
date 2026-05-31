@@ -2,11 +2,11 @@ from typing import overload
 
 
 @overload
-def process(x: Any) -> int: ...
+def process(x) -> int: ...
 
 
 @overload
-def process(x: Any) -> str: ...
+def process(x) -> str: ...
 
 
 def process(x: int) -> int:

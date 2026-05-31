@@ -1,2 +1,2 @@
-def everything(pos_only: Any, /, normal: Any, *args, kw_only: Any, **kwargs) -> None:
+def everything(pos_only, /, normal, *args, kw_only, **kwargs) -> None:
     pass

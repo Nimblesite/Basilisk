@@ -1,6 +1,6 @@
-def broken(x: Any, y: Any) -> None:
+def broken(x, y):
     return x + y
 
 
-def also_broken(name: Any) -> None:
+def also_broken(name):
     pass

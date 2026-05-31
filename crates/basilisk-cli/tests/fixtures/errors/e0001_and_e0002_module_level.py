@@ -1,14 +1,14 @@
-def parse(raw: Any) -> None:
+def parse(raw):
     return raw
 
 
-def validate(value: Any) -> None:
+def validate(value):
     return True
 
 
-def transform(data: Any) -> None:
+def transform(data):
     return data
 
 
-def serialize(obj: Any) -> None:
+def serialize(obj):
     return str(obj)
