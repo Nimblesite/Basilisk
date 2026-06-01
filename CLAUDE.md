@@ -9,6 +9,8 @@ This codebase is held to a high standard: code here should comfortably pass revi
 
 ⚠️ AVOID DUPLICATION OF ALL KINDS AND PRACTICE TOKEN ECONOMICS ⚠️
 
+⚠️ DO NOT STOP TO ASK QUESTIONS. USE YOUR JUDGMENT WITHOUT ASKING THE USER ⚠️
+
 ⚠️ QUALITY METRICS ONLY INCREASE PER PR. THEY NEVER DECREASE ⚠️
 
 Key design principles:
