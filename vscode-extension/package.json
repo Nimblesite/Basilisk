@@ -258,9 +258,21 @@
         "command": "basilisk.openWalkthrough",
         "title": "Basilisk: Getting Started",
         "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.info.runAction",
+        "title": "Run Action",
+        "category": "Basilisk",
+        "icon": "$(play)"
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "basilisk.info.runAction",
+          "when": "false"
+        }
+      ],
       "view/title": [
         {
           "command": "basilisk.refreshModuleExplorer",
@@ -303,6 +315,11 @@
           "command": "basilisk.copyQualifiedName",
           "when": "view == basilisk.moduleExplorer && viewItem =~ /^(module|symbol)/",
           "group": "6_copypath@2"
+        },
+        {
+          "command": "basilisk.info.runAction",
+          "when": "view == basilisk.info && viewItem =~ /^(action|feature)$/",
+          "group": "inline"
         }
       ]
     },

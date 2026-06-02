@@ -17,6 +17,7 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import { InfoPanelProvider } from "../../info-panel";
 import { createStore } from "../../store";
+import { EXTENSION_ID } from "./test-helpers";
 
 /** Toggles that ship — each has a namesake, observable effect. */
 const KEPT_FEATURE_LABELS = ["Type Checking", "uv Integration"] as const;
@@ -107,5 +108,140 @@ suite("Basilisk Info Panel Contents", () => {
     }
     // Non-uv actions remain regardless of the toggle.
     assert.ok(labels.includes("Restart Server"), "non-uv actions stay visible");
+  });
+});
+
+// ── Affordance partition [EXTACT-INFO-AFFORDANCE] ───────────────────────────
+//
+// Regression tests for issue #65: actionable rows (feature toggles, quick
+// actions) were visually indistinguishable from read-only Server Info rows —
+// no imperative tooltip, no inline button affordance — so users could not tell
+// what was a button and what was just information.
+//
+// Spec: docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-AFFORDANCE
+
+/** Section labels whose rows are actionable (carry a command). */
+const ACTIONABLE_SECTIONS = ["Feature Status", "Quick Actions"] as const;
+/** Section label whose rows are read-only display only. */
+const READONLY_SECTION = "Server Info";
+
+/** contextValues the spec assigns to actionable rows. */
+const ACTIONABLE_CONTEXT = new Set(["feature", "action"]);
+
+/** Extract a TreeItem's tooltip as a plain string (handles MarkdownString). */
+function tooltipOf(item: vscode.TreeItem): string {
+  const { tooltip } = item;
+  if (typeof tooltip === "string") { return tooltip; }
+  if (tooltip instanceof vscode.MarkdownString) { return tooltip.value; }
+  return "";
+}
+
+interface InlineMenuEntry {
+  readonly command: string;
+  readonly when: string;
+  readonly group?: string;
+}
+
+/** Load the extension's contributed view/item/context menu entries. */
+function loadItemContextMenus(): InlineMenuEntry[] {
+  const ext = vscode.extensions.getExtension(EXTENSION_ID);
+  assert.ok(ext, "Extension should be installed");
+  const pkg = ext.packageJSON as {
+    contributes?: { menus?: { "view/item/context"?: InlineMenuEntry[] } };
+  };
+  return pkg.contributes?.menus?.["view/item/context"] ?? [];
+}
+
+suite("Basilisk Info Panel Affordance [EXTACT-INFO-AFFORDANCE]", () => {
+  let provider: InfoPanelProvider;
+
+  setup(() => {
+    provider = new InfoPanelProvider(createStore());
+  });
+
+  teardown(() => {
+    provider.dispose();
+  });
+
+  /** Children of a named top-level section. */
+  function rowsIn(sectionLabel: string): vscode.TreeItem[] {
+    const section = provider.getChildren().find((entry) => labelOf(entry) === sectionLabel);
+    assert.ok(section, `"${sectionLabel}" section should exist`);
+    return provider.getChildren(section);
+  }
+
+  test("every actionable row carries a command and an imperative tooltip", () => {
+    for (const sectionLabel of ACTIONABLE_SECTIONS) {
+      const rows = rowsIn(sectionLabel);
+      assert.ok(rows.length > 0, `"${sectionLabel}" should have rows`);
+      for (const row of rows) {
+        const label = labelOf(row);
+        assert.ok(
+          row.command !== undefined && row.command.command !== "",
+          `"${label}" in ${sectionLabel} must carry a command (actionable rows are clickable)`,
+        );
+        assert.ok(
+          ACTIONABLE_CONTEXT.has(String(row.contextValue)),
+          `"${label}" must have an actionable contextValue, got "${String(row.contextValue)}"`,
+        );
+        const tip = tooltipOf(row).trim();
+        assert.ok(
+          tip.length > 0,
+          `"${label}" in ${sectionLabel} must carry an imperative tooltip describing its effect`,
+        );
+      }
+    }
+  });
+
+  test("every read-only Server Info row carries no command and contextValue 'info'", () => {
+    const rows = rowsIn(READONLY_SECTION);
+    assert.ok(rows.length > 0, "Server Info should have rows");
+    for (const row of rows) {
+      const label = labelOf(row);
+      assert.strictEqual(
+        row.command,
+        undefined,
+        `"${label}" is read-only and must not carry a command`,
+      );
+      assert.strictEqual(
+        row.contextValue,
+        "info",
+        `"${label}" must have contextValue "info" so it gets no inline button`,
+      );
+    }
+  });
+
+  test("no row is both actionable and read-only", () => {
+    const actionable = ACTIONABLE_SECTIONS.flatMap(rowsIn);
+    const readOnly = rowsIn(READONLY_SECTION);
+    for (const row of actionable) {
+      assert.notStrictEqual(row.contextValue, "info", `"${labelOf(row)}" must not be read-only`);
+    }
+    for (const row of readOnly) {
+      assert.ok(
+        !ACTIONABLE_CONTEXT.has(String(row.contextValue)),
+        `"${labelOf(row)}" must not be actionable`,
+      );
+    }
+  });
+
+  test("package.json contributes an inline action button for actionable info rows only", () => {
+    const inlineForInfo = loadItemContextMenus().filter(
+      (entry) => entry.group === "inline" && entry.when.includes("basilisk.info"),
+    );
+    assert.ok(
+      inlineForInfo.length > 0,
+      "info panel actionable rows must contribute an inline button (literal button affordance)",
+    );
+    for (const entry of inlineForInfo) {
+      assert.ok(
+        entry.when.includes("action") && entry.when.includes("feature"),
+        `inline button '${entry.command}' must target action/feature rows, got when: ${entry.when}`,
+      );
+      assert.ok(
+        !/viewItem\s*==\s*info/.test(entry.when),
+        `inline button '${entry.command}' must not target read-only info rows, got when: ${entry.when}`,
+      );
+    }
   });
 });

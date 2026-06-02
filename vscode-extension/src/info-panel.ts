@@ -25,7 +25,13 @@ class SectionItem extends vscode.TreeItem {
   }
 }
 
-/** Feature toggle — clicking toggles the corresponding setting. */
+/**
+ * Feature toggle — clicking toggles the corresponding setting.
+ *
+ * Actionable affordance per [EXTACT-INFO-AFFORDANCE]: carries a `command`, an
+ * imperative tooltip, and a toggle-state icon. Paired with the inline action
+ * button contributed for `viewItem == feature`.
+ */
 class FeatureItem extends vscode.TreeItem {
   constructor(
     label: string,
@@ -37,6 +43,7 @@ class FeatureItem extends vscode.TreeItem {
       ? new vscode.ThemeIcon("check", new vscode.ThemeColor("testing.iconPassed"))
       : new vscode.ThemeIcon("circle-slash", new vscode.ThemeColor("disabledForeground"));
     this.description = enabled ? "Enabled" : "Disabled";
+    this.tooltip = `Click to ${enabled ? "disable" : "enable"} ${label}`;
     this.contextValue = "feature";
     this.command = {
       command: "basilisk.toggleFeature",
@@ -46,19 +53,32 @@ class FeatureItem extends vscode.TreeItem {
   }
 }
 
-/** Quick action — clicking executes a command. */
+/** Definition of a quick action — the single source of truth for a row. */
+interface ActionDef {
+  readonly label: string;
+  readonly commandId: string;
+  /** Codicon id connoting the action (verb/tool). */
+  readonly icon: string;
+  /** Imperative tooltip describing the effect. */
+  readonly tooltip: string;
+}
+
+/**
+ * Quick action — clicking executes a command.
+ *
+ * Actionable affordance per [EXTACT-INFO-AFFORDANCE]: carries a `command`, an
+ * imperative tooltip describing the effect, and a verb/tool icon. Paired with
+ * the inline action button contributed for `viewItem == action`.
+ */
 class ActionItem extends vscode.TreeItem {
-  constructor(
-    label: string,
-    commandId: string,
-    icon: string,
-  ) {
-    super(label, vscode.TreeItemCollapsibleState.None);
-    this.iconPath = new vscode.ThemeIcon(icon);
+  constructor(def: ActionDef) {
+    super(def.label, vscode.TreeItemCollapsibleState.None);
+    this.iconPath = new vscode.ThemeIcon(def.icon);
+    this.tooltip = def.tooltip;
     this.contextValue = "action";
     this.command = {
-      command: commandId,
-      title: label,
+      command: def.commandId,
+      title: def.label,
     };
   }
 }
@@ -110,26 +130,31 @@ function buildFeatureStatusSection(): SectionItem {
   return new SectionItem("Feature Status", items);
 }
 
+// Quick Actions — single source of truth. Every command id here is either a
+// client command (registered in registerInfoPanel/store) or a server-advertised
+// command (registered by syncServerCommands); per [EXTACT-INFO-ACTION-WIRING] a
+// row may only appear if its command resolves to a live handler.
+const CORE_ACTIONS: readonly ActionDef[] = [
+  { label: "Restart Server", commandId: "basilisk.restartServer", icon: "debug-restart", tooltip: "Restart the Basilisk language server" },
+  { label: "Show Output", commandId: "basilisk.showOutput", icon: "output", tooltip: "Show the Basilisk output log" },
+  { label: "Fix All in Workspace", commandId: "basilisk.fixWorkspace", icon: "wand", tooltip: "Apply all safe autofixes across the workspace" },
+  { label: "Organize Imports (Workspace)", commandId: "basilisk.organizeImports", icon: "list-ordered", tooltip: "Organize imports across the workspace" },
+];
+
+// uv actions — shown only when uv Integration is enabled (otherwise hidden, not
+// shown-but-dead, per [EXTACT-INFO-ACTION-WIRING]).
+const UV_ACTIONS: readonly ActionDef[] = [
+  { label: "uv Sync", commandId: "basilisk.uv.sync", icon: "sync", tooltip: "Run uv sync to update the environment" },
+  { label: "uv Add Package", commandId: "basilisk.uv.add", icon: "add", tooltip: "Run uv add to add a dependency" },
+  { label: "uv Lock", commandId: "basilisk.uv.lock", icon: "lock", tooltip: "Run uv lock to update the lock file" },
+  { label: "uv Create Env", commandId: "basilisk.uv.createEnv", icon: "terminal", tooltip: "Run uv venv to create a virtual environment" },
+];
+
 /** Build the quick actions section with uv actions when enabled. */
 function buildQuickActionsSection(): SectionItem {
-  const items: ActionItem[] = [
-    new ActionItem("Restart Server", "basilisk.restartServer", "debug-restart"),
-    new ActionItem("Show Output", "basilisk.showOutput", "output"),
-    new ActionItem("Fix All in Workspace", "basilisk.fixWorkspace", "wand"),
-    new ActionItem("Organize Imports (Workspace)", "basilisk.organizeImports", "list-ordered"),
-  ];
-
   const uvEnabled = vscode.workspace.getConfiguration("basilisk").get<boolean>("uv.enabled") ?? true;
-  if (uvEnabled) {
-    items.push(
-      new ActionItem("uv Sync", "basilisk.uv.sync", "sync"),
-      new ActionItem("uv Add Package", "basilisk.uv.add", "add"),
-      new ActionItem("uv Lock", "basilisk.uv.lock", "lock"),
-      new ActionItem("uv Create Env", "basilisk.uv.createEnv", "terminal"),
-    );
-  }
-
-  return new SectionItem("Quick Actions", items);
+  const defs = uvEnabled ? [...CORE_ACTIONS, ...UV_ACTIONS] : CORE_ACTIONS;
+  return new SectionItem("Quick Actions", defs.map((def) => new ActionItem(def)));
 }
 
 /** Build uv-related info items from configuration. */
@@ -242,6 +267,19 @@ export function registerInfoPanel(
       async (settingKey: string, newValue: boolean) => {
         const cfg = vscode.workspace.getConfiguration();
         await cfg.update(settingKey, newValue, vscode.ConfigurationTarget.Workspace);
+      },
+    ),
+    // Inline action-button dispatcher [EXTACT-INFO-AFFORDANCE]. The literal
+    // button contributed for actionable rows (viewItem == action|feature)
+    // invokes this with the clicked row; it forwards to the row's own command
+    // so the button and the whole-row click share a single source of truth.
+    vscode.commands.registerCommand(
+      "basilisk.info.runAction",
+      async (item: vscode.TreeItem | undefined) => {
+        const command = item?.command;
+        if (command === undefined) { return; }
+        const commandArgs: unknown[] = command.arguments ?? [];
+        await vscode.commands.executeCommand(command.command, ...commandArgs);
       },
     ),
   ];
