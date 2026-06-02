@@ -260,9 +260,13 @@ _release_vsix:
 	cp NOTICES $(_EXTENSION_DIR)/NOTICES; \
 	repo_root="$$(pwd)"; \
 	cd $(_EXTENSION_DIR) && npm ci && npm run compile && npm run sync:shipwright; \
+	echo -e "\033[1m\033[0;36m▶ Vendoring debugpy into the VSIX bundle\033[0m"; \
+	node scripts/vendor-debugpy.mjs; \
 	prerelease_flag=""; \
 	if [ -n "$(VSCE_PRERELEASE)" ]; then prerelease_flag="--pre-release"; fi; \
 	npx vsce package $$prerelease_flag --target "$$target" --ignore-other-target-folders --out "$$repo_root/basilisk-$$target.vsix"; \
+	echo -e "\033[1m\033[0;36m▶ Verifying VSIX bundles every manifest component\033[0m"; \
+	node scripts/verify-shipwright.mjs vsix "$$repo_root/basilisk-$$target.vsix" "$$target"; \
 	echo -e "\033[0;32m✓ VSIX built at basilisk-$$target.vsix$${prerelease_flag:+ (pre-release)}\033[0m"
 
 _uninstall_vsix:

@@ -191,6 +191,11 @@ jobs:
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
 
+      # Needed to vendor debugpy (pip install --target) into the VSIX bundle.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install dependencies
         working-directory: vscode-extension
         run: npm ci
@@ -279,6 +284,11 @@ jobs:
             args+=("bin/${{ env.target }}/basilisk-profiler-helper")
           fi
           node scripts/verify-shipwright.mjs versions "${args[@]}"
+
+      - name: Vendor debugpy into the VSIX bundle
+        working-directory: vscode-extension
+        shell: bash
+        run: node scripts/vendor-debugpy.mjs
 
       - name: Package VSIX
         working-directory: vscode-extension

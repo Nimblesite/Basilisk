@@ -48,6 +48,24 @@
       "required": false
     },
     {
+      "id": "debugpy",
+      "kind": "asset",
+      "platforms": ["all"],
+      "bundled": {
+        "bundlePath": "bundled/debugpy",
+        "perPlatformArtifact": false
+      },
+      "asset": {
+        "source": "pip:debugpy==1.8.20",
+        "target": "bundled/debugpy",
+        "bundle": true,
+        "contentHash": false,
+        "downloadOnFirstUse": false
+      },
+      "verifyStartup": false,
+      "required": false
+    },
+    {
       "id": "basilisk-zed",
       "kind": "extension-zed",
       "language": "rust",

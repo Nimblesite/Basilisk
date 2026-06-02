@@ -217,18 +217,19 @@ pub(super) async fn execute_start_debug_session(
     args: &[serde_json::Value],
 ) -> LspResult<Option<serde_json::Value>> {
     info!("execute_start_debug_session called");
-    // Extract optional python interpreter override from args.
+    // Extract optional python interpreter override from args. A blank override
+    // (empty `basilisk.python.interpreterPath`) is treated as absent so we fall
+    // back to auto-detection instead of spawning `""` (os error 2).
     let python_override = args
         .first()
         .and_then(|v| v.get("python"))
-        .and_then(|v| v.as_str())
-        .map(String::from);
+        .and_then(|v| v.as_str());
 
     let workspace = server.workspace_roots.read().await;
     let root = workspace
         .first()
         .map_or_else(|| std::path::Path::new("."), std::path::PathBuf::as_path);
-    let python = python_override.unwrap_or_else(|| crate::debug::resolve_python(root));
+    let python = crate::debug::effective_python(python_override, root);
     drop(workspace);
 
     debug!(python = %python, "resolved python interpreter");
