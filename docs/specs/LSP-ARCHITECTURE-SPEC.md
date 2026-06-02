@@ -432,7 +432,7 @@ Register `codeActionKinds`: `[QUICKFIX, SOURCE_ORGANIZE_IMPORTS, REFACTOR]`
 
 ### Inlay Hints (`textDocument/inlayHint`) {#LSPARCH-FEATURES-INLAYHINTS}
 
-1. **Variable type hints** — unannotated variables, inferred type at `name_span.end`
+1. **Variable type hints** — unannotated variables (module-level and function-local), inferred type at `name_span.end`
 2. **Parameter name hints** — call sites, `"param_name="` at arg span start
 3. **Function return type hints** — inferred from `return_stmts[].rhs_kind`, positioned after closing `)`
 

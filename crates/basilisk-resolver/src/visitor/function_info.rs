@@ -9,7 +9,7 @@ use crate::scope::{
 };
 
 use super::annotations::{ann_assign_info_from, annotation_flags};
-use super::assigns::{collect_all_assigns, collect_unconditional_assigns};
+use super::assigns::{assign_infos_from, collect_all_assigns, collect_unconditional_assigns};
 use super::class_info_ext::{
     body_is_stub, decorator_name, decorator_name_and_span, extract_docstring,
 };
@@ -78,6 +78,7 @@ pub(super) fn function_info_from(
         .map(|tp| tp.type_params.iter().map(type_param_name).collect())
         .unwrap_or_default();
     let local_vars = collect_local_annotated_vars(&func.body);
+    let local_unannotated_vars = collect_local_unannotated_vars(&func.body);
     let yield_exprs = collect_yield_exprs(&func.body);
     let narrowing_guards = collect_narrowing_guards(&func.body);
 
@@ -113,6 +114,7 @@ pub(super) fn function_info_from(
         has_pep695_type_params,
         pep695_type_param_names,
         local_vars,
+        local_unannotated_vars,
         is_generator: func.body.iter().any(stmt_contains_yield),
         is_async: func.is_async,
         yield_exprs,
@@ -133,6 +135,21 @@ pub(super) fn collect_local_annotated_vars(stmts: &[Stmt]) -> Vec<VariableInfo> 
             if let Some(info) = ann_assign_info_from(node) {
                 out.push(info);
             }
+        }
+    });
+    out
+}
+
+/// Collect un-annotated local `x = <expr>` bindings declared anywhere in the
+/// function body (excluding nested function bodies).
+///
+/// The mirror of [`collect_local_annotated_vars`] for plain `Stmt::Assign`
+/// targets, which carry no annotation.  Powers the LSP inlay-hints pass.
+pub(super) fn collect_local_unannotated_vars(stmts: &[Stmt]) -> Vec<VariableInfo> {
+    let mut out = Vec::new();
+    walk_function_stmts(stmts, &mut |stmt| {
+        if let Stmt::Assign(node) = stmt {
+            out.extend(assign_infos_from(node));
         }
     });
     out

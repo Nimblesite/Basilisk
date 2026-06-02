@@ -159,6 +159,15 @@ pub struct FunctionInfo {
     /// with `has_annotation = true`.  Used by E0047 to check for invalid type
     /// annotations in local variable declarations.
     pub local_vars: Vec<VariableInfo>,
+    /// Un-annotated local `x = <expr>` bindings declared anywhere in the
+    /// function body (excluding nested function bodies).
+    ///
+    /// For `n = 0` inside the function, this contains a `VariableInfo` with
+    /// `has_annotation = false`.  Consumed by the LSP inlay-hints pass to render
+    /// inferred `: <type>` hints for local variables (see
+    /// `LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-INLAYHINTS`).  Kept separate
+    /// from `local_vars`, which is annotated-only for the checker rules.
+    pub local_unannotated_vars: Vec<VariableInfo>,
     /// `true` when the function body contains at least one `yield` or `yield from`.
     pub is_generator: bool,
     /// `true` when the function is declared with `async def`.
