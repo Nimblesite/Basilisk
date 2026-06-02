@@ -250,12 +250,7 @@ _release_vsix:
 	if [ "$$plat" = "darwin" ]; then \
 		cargo build --release --target "$$rust_target" --bin basilisk-profiler-helper; \
 	fi; \
-	$(RM) "$(_EXTENSION_DIR)/bin"; \
-	mkdir -p "$(_EXTENSION_DIR)/bin/$$target"; \
-	cp "target/$$rust_target/release/basilisk$$exe" "$(_EXTENSION_DIR)/bin/$$target/"; \
-	if [ "$$plat" = "darwin" ]; then \
-		cp "target/$$rust_target/release/basilisk-profiler-helper" "$(_EXTENSION_DIR)/bin/$$target/"; \
-	fi; \
+	node $(_EXTENSION_DIR)/scripts/stage-runtime.mjs "target/$$rust_target/release" "$$target"; \
 	cp shipwright.json $(_EXTENSION_DIR)/shipwright.json; \
 	cp NOTICES $(_EXTENSION_DIR)/NOTICES; \
 	repo_root="$$(pwd)"; \
@@ -332,9 +327,10 @@ _test_vsix:
 	echo -e "\033[0;32m✓ basilisk binary: $$BASILISK_BIN\033[0m"; \
 	echo -e '\033[1m\033[0;36m▶ VS Code extension — compile\033[0m'; \
 	cd $(_EXTENSION_DIR) && npm ci && npm run compile; \
-	echo -e '\033[1m\033[0;36m▶ VS Code extension — stage bundled binary\033[0m'; \
+	echo -e '\033[1m\033[0;36m▶ VS Code extension — stage the REAL release bundle\033[0m'; \
 	node scripts/sync-shipwright-manifest.mjs; \
-	node scripts/stage-bundled-binary.mjs "$$BASILISK_BIN"; \
+	node scripts/stage-runtime.mjs "$$(dirname "$$BASILISK_BIN")"; \
+	node scripts/vendor-debugpy.mjs; \
 	node scripts/verify-shipwright.mjs manifest; \
 	echo -e '\033[1m\033[0;36m▶ VS Code extension — ESLint\033[0m'; \
 	npm run lint; \
