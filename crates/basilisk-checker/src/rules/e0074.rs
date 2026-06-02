@@ -55,16 +55,7 @@ impl Rule for ConstructorCallNewMismatch {
             basilisk_resolver::name_lookup(&module.classes);
 
         // Build method map: (class_name, method_name) -> Vec<&FunctionInfo>
-        let mut method_map: HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>> =
-            HashMap::new();
-        for func in &module.functions {
-            if let Some(ref class_name) = func.class_name {
-                method_map
-                    .entry((class_name.as_str(), func.name.as_str()))
-                    .or_default()
-                    .push(func);
-            }
-        }
+        let method_map = super::shared::method_name_map(&module.functions);
 
         // Re-parse source to get AST for walking call expressions.
         let Ok(parsed) = basilisk_parser::parse_source(source.clone(), path.clone()) else {

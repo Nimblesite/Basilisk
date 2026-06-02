@@ -179,6 +179,7 @@ checker source (`scripts/gen_rules_reference.py`) — it is the authoritative li
 | `BSK-E0150` | Variable defined only in dead version/platform branch |
 | `BSK-E0151` | Invalid `TypeAliasType(...)` call |
 | `BSK-E0152` | Missing type stubs for installed package |
+| `BSK-E0153` | Invalid call to a constructor-derived callable |
 | `BSK-W0011` | Undeclared dependency import |
 | `BSK-W0012` | Unused dependency |
 | `BSK-W0013` | Stale uv lock file |

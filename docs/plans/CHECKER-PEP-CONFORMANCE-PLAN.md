@@ -1,6 +1,6 @@
 # PEP Conformance — Plan
 
-> **Score**: 124/146 (84.9%)
+> **Score**: 136/146 (93.15%)
 > **Tests**: `crates/basilisk-cli/tests/conformance/`
 > **Status CSV**: `conformance/conformance_status.csv`
 > **Run**: `make conformance` or `cargo test --test conformance_tests -- --nocapture`
@@ -21,6 +21,7 @@
 - [x] Generics category: 23/30 (76.7%)
 - [x] `protocols_generic.py` — generic protocol assignability — FLIPPED
 - [x] `typeddicts_type_consistency.py` — TypedDict type consistency — FLIPPED
+- [x] E0153: Constructor-to-callable conversion + call validation — FLIPPED `constructors_callable.py` ([CHKARCH-DIAG-CTOR-CALLABLE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CTOR-CALLABLE))
 
 ## TODO — 23 failing files remaining
 
@@ -52,9 +53,9 @@
 - [ ] `callables_annotation.py` (4 missed) — callable annotation edge cases
 - [ ] `callables_subtyping.py` (30 missed) — callable subtyping rules
 
-### Constructors (1 file)
+### Constructors
 
-- [ ] `constructors_callable.py` (12 missed) — callable as constructor
+- [x] `constructors_callable.py` — constructor-to-callable conversion (BSK-E0153) — DONE
 
 ### Dataclasses (1 file)
 

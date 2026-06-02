@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 
 use basilisk_parser::ParsedModule;
-use basilisk_resolver::{ClassInfo, ResolvedModule, Span, TypeVarCallInfo};
+use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule, Span, TypeVarCallInfo};
 use ruff_python_ast::{self as ast, Expr};
 
 // ---------------------------------------------------------------------------
@@ -109,6 +109,26 @@ pub(crate) fn parse_module(module: &ResolvedModule) -> Option<ParsedModule> {
 /// The returned map borrows from the slice; both must outlive the map.
 pub(crate) fn class_name_map(classes: &[ClassInfo]) -> HashMap<&str, &ClassInfo> {
     classes.iter().map(|c| (c.name.as_str(), c)).collect()
+}
+
+/// Build a `(class_name, method_name) -> Vec<&FunctionInfo>` lookup for every
+/// method in the module (functions carrying a `class_name`).
+///
+/// Multiple definitions sharing a key (e.g. `@overload` signatures plus the
+/// implementation) are preserved in declaration order. The returned map borrows
+/// from the slice; both must outlive the map.
+pub(crate) fn method_name_map(
+    functions: &[FunctionInfo],
+) -> HashMap<(&str, &str), Vec<&FunctionInfo>> {
+    let mut map: HashMap<(&str, &str), Vec<&FunctionInfo>> = HashMap::new();
+    for func in functions {
+        if let Some(ref class_name) = func.class_name {
+            map.entry((class_name.as_str(), func.name.as_str()))
+                .or_default()
+                .push(func);
+        }
+    }
+    map
 }
 
 // ---------------------------------------------------------------------------

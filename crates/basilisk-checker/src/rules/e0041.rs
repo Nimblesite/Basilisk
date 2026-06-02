@@ -313,15 +313,7 @@ fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
     let class_map = super::shared::class_name_map(&module.classes);
 
     // Build a map of (class_name, method_name) → FunctionInfo for methods.
-    let mut method_map: HashMap<(&str, &str), Vec<&FunctionInfo>> = HashMap::new();
-    for func in &module.functions {
-        if let Some(ref cls_name) = func.class_name {
-            method_map
-                .entry((cls_name.as_str(), func.name.as_str()))
-                .or_default()
-                .push(func);
-        }
-    }
+    let method_map = super::shared::method_name_map(&module.functions);
 
     for call in &module.calls {
         // Only process constructor calls (callee matches a class name)
