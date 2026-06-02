@@ -310,26 +310,16 @@ _test_rust:
 _test_vsix:
 	@set -e; \
 	REPO_ROOT="$$(pwd)"; \
-	BASILISK_BIN=""; \
-	for c in "$$REPO_ROOT/target/llvm-cov-target/ci/basilisk" \
-	         "$$REPO_ROOT/target/ci/basilisk" \
-	         "$$REPO_ROOT/target/llvm-cov-target/release/basilisk" \
-	         "$$REPO_ROOT/target/release/basilisk" \
-	         "$$REPO_ROOT/target/debug/basilisk"; do \
-	    if [ -x "$$c" ]; then BASILISK_BIN="$$c"; break; fi; \
-	done; \
-	if [ -z "$$BASILISK_BIN" ]; then \
-	    echo -e '\033[1m\033[0;36m▶ Building basilisk binary\033[0m'; \
-	    cargo build --profile ci; \
-	    BASILISK_BIN="$$REPO_ROOT/target/ci/basilisk"; \
-	fi; \
+	echo -e '\033[1m\033[0;36m▶ Building bundled runtime binaries (basilisk + profiler-helper)\033[0m'; \
+	cargo build --profile ci --bin basilisk --bin basilisk-profiler-helper; \
+	BASILISK_BIN="$$REPO_ROOT/target/ci/basilisk"; \
 	[ -x "$$BASILISK_BIN" ] || { echo -e '\033[0;31m✗ basilisk binary not found\033[0m'; exit 1; }; \
 	echo -e "\033[0;32m✓ basilisk binary: $$BASILISK_BIN\033[0m"; \
 	echo -e '\033[1m\033[0;36m▶ VS Code extension — compile\033[0m'; \
 	cd $(_EXTENSION_DIR) && npm ci && npm run compile; \
 	echo -e '\033[1m\033[0;36m▶ VS Code extension — stage the REAL release bundle\033[0m'; \
 	node scripts/sync-shipwright-manifest.mjs; \
-	node scripts/stage-runtime.mjs "$$(dirname "$$BASILISK_BIN")"; \
+	node scripts/stage-runtime.mjs "$$REPO_ROOT/target/ci"; \
 	node scripts/vendor-debugpy.mjs; \
 	node scripts/verify-shipwright.mjs manifest; \
 	echo -e '\033[1m\033[0;36m▶ VS Code extension — ESLint\033[0m'; \
