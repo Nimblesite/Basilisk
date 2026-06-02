@@ -275,6 +275,53 @@ async fn test_ws_inlay_hint_no_hints_for_annotated_vars() -> TestResult<()> {
 }
 
 #[tokio::test]
+async fn test_ws_inlay_hint_function_local_unannotated_vars() -> TestResult<()> {
+    // Regression for #68: un-annotated *function-local* variables must produce
+    // inferred `: <type>` hints, just like module-level ones do.  Previously the
+    // local-variable branch was dead code because `FunctionInfo::local_vars` only
+    // held annotated locals, so every entry was skipped.
+    let uri = "file:///inlay_local_vars.py";
+    let code = "def f():\n    n = 0\n    s = \"hi\"\n    return n\n";
+
+    let (_fixture, resp) = open_and_request(
+        uri,
+        code,
+        108,
+        "textDocument/inlayHint",
+        serde_json::json!({
+            "textDocument": { "uri": uri },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 4, "character": 0 }
+            }
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let hints = parsed["result"]
+        .as_array()
+        .ok_or("result should be an array")?;
+
+    let all_labels: String = hints
+        .iter()
+        .filter_map(|h| h["label"].as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    assert!(
+        all_labels.contains(": int"),
+        "local `n = 0` should produce a ': int' hint: {all_labels}"
+    );
+    assert!(
+        all_labels.contains(": str"),
+        "local `s = \"hi\"` should produce a ': str' hint: {all_labels}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_ws_inlay_hint_return_type_multiple_returns() -> TestResult<()> {
     let uri = "file:///inlay_multi_return.py";
     let code = "def choose(flag: bool):\n    if flag:\n        return 1\n    return 2\n";

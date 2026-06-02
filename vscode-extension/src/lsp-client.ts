@@ -97,6 +97,13 @@ export function startLspClient(
   const serverOptions: ServerOptions = {
     command: executablePath,
     args: ["lsp"],
+    options: {
+      // Point the server at the bundled debugpy so debugging works without the
+      // user installing debugpy into their interpreter. The server ignores this
+      // when the directory is absent (e.g. a dev build), falling back to the
+      // interpreter's own debugpy.
+      env: { ...process.env, BASILISK_DEBUGPY_PATH: context.asAbsolutePath("bundled/debugpy") },
+    },
   };
 
   const traceChannel = vscode.window.createOutputChannel("Basilisk LSP Trace");

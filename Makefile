@@ -250,19 +250,18 @@ _release_vsix:
 	if [ "$$plat" = "darwin" ]; then \
 		cargo build --release --target "$$rust_target" --bin basilisk-profiler-helper; \
 	fi; \
-	$(RM) "$(_EXTENSION_DIR)/bin"; \
-	mkdir -p "$(_EXTENSION_DIR)/bin/$$target"; \
-	cp "target/$$rust_target/release/basilisk$$exe" "$(_EXTENSION_DIR)/bin/$$target/"; \
-	if [ "$$plat" = "darwin" ]; then \
-		cp "target/$$rust_target/release/basilisk-profiler-helper" "$(_EXTENSION_DIR)/bin/$$target/"; \
-	fi; \
+	node $(_EXTENSION_DIR)/scripts/stage-runtime.mjs "target/$$rust_target/release" "$$target"; \
 	cp shipwright.json $(_EXTENSION_DIR)/shipwright.json; \
 	cp NOTICES $(_EXTENSION_DIR)/NOTICES; \
 	repo_root="$$(pwd)"; \
 	cd $(_EXTENSION_DIR) && npm ci && npm run compile && npm run sync:shipwright; \
+	echo -e "\033[1m\033[0;36m▶ Vendoring debugpy into the VSIX bundle\033[0m"; \
+	node scripts/vendor-debugpy.mjs; \
 	prerelease_flag=""; \
 	if [ -n "$(VSCE_PRERELEASE)" ]; then prerelease_flag="--pre-release"; fi; \
 	npx vsce package $$prerelease_flag --target "$$target" --ignore-other-target-folders --out "$$repo_root/basilisk-$$target.vsix"; \
+	echo -e "\033[1m\033[0;36m▶ Verifying VSIX bundles every manifest component\033[0m"; \
+	node scripts/verify-shipwright.mjs vsix "$$repo_root/basilisk-$$target.vsix" "$$target"; \
 	echo -e "\033[0;32m✓ VSIX built at basilisk-$$target.vsix$${prerelease_flag:+ (pre-release)}\033[0m"
 
 _uninstall_vsix:
@@ -311,26 +310,17 @@ _test_rust:
 _test_vsix:
 	@set -e; \
 	REPO_ROOT="$$(pwd)"; \
-	BASILISK_BIN=""; \
-	for c in "$$REPO_ROOT/target/llvm-cov-target/ci/basilisk" \
-	         "$$REPO_ROOT/target/ci/basilisk" \
-	         "$$REPO_ROOT/target/llvm-cov-target/release/basilisk" \
-	         "$$REPO_ROOT/target/release/basilisk" \
-	         "$$REPO_ROOT/target/debug/basilisk"; do \
-	    if [ -x "$$c" ]; then BASILISK_BIN="$$c"; break; fi; \
-	done; \
-	if [ -z "$$BASILISK_BIN" ]; then \
-	    echo -e '\033[1m\033[0;36m▶ Building basilisk binary\033[0m'; \
-	    cargo build --profile ci; \
-	    BASILISK_BIN="$$REPO_ROOT/target/ci/basilisk"; \
-	fi; \
+	echo -e '\033[1m\033[0;36m▶ Building bundled runtime binaries (basilisk + profiler-helper)\033[0m'; \
+	cargo build --profile ci --bin basilisk --bin basilisk-profiler-helper; \
+	BASILISK_BIN="$$REPO_ROOT/target/ci/basilisk"; \
 	[ -x "$$BASILISK_BIN" ] || { echo -e '\033[0;31m✗ basilisk binary not found\033[0m'; exit 1; }; \
 	echo -e "\033[0;32m✓ basilisk binary: $$BASILISK_BIN\033[0m"; \
 	echo -e '\033[1m\033[0;36m▶ VS Code extension — compile\033[0m'; \
 	cd $(_EXTENSION_DIR) && npm ci && npm run compile; \
-	echo -e '\033[1m\033[0;36m▶ VS Code extension — stage bundled binary\033[0m'; \
+	echo -e '\033[1m\033[0;36m▶ VS Code extension — stage the REAL release bundle\033[0m'; \
 	node scripts/sync-shipwright-manifest.mjs; \
-	node scripts/stage-bundled-binary.mjs "$$BASILISK_BIN"; \
+	node scripts/stage-runtime.mjs "$$REPO_ROOT/target/ci"; \
+	node scripts/vendor-debugpy.mjs; \
 	node scripts/verify-shipwright.mjs manifest; \
 	echo -e '\033[1m\033[0;36m▶ VS Code extension — ESLint\033[0m'; \
 	npm run lint; \

@@ -34,6 +34,7 @@ vscode-extension/out/
 vscode-extension/.vscode-test/
 vscode-extension/coverage/
 vscode-extension/bin/
+vscode-extension/bundled/
 vscode-extension/shipwright.json
 *.vsix
 *.tgz

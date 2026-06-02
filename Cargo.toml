@@ -17,6 +17,7 @@ members = [
     "crates/basilisk-test-utils",
     "crates/basilisk-uv",
     "crates/basilisk-profiler-helper",
+    "crates/basilisk-profiler-protocol",
     "basilisk-zed",
 ]
 exclude = []
@@ -62,6 +63,7 @@ basilisk-common     = { path = "crates/basilisk-common" }
 basilisk-test-macros = { path = "crates/basilisk-test-macros" }
 basilisk-uv         = { path = "crates/basilisk-uv" }
 basilisk-test-utils = { path = "crates/basilisk-test-utils" }
+basilisk-profiler-protocol = { path = "crates/basilisk-profiler-protocol" }
 
 [workspace.lints.rust]
 unsafe_code  = "deny"

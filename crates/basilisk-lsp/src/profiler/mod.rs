@@ -16,9 +16,13 @@ pub mod aggregator;
 pub mod commands;
 pub mod diagnostics;
 pub mod export;
+/// Elevated-helper-over-Unix-socket sampling path (Unix only). See [`helper_client`].
+#[cfg(unix)]
+pub mod helper_client;
 pub mod memory;
 pub mod presets;
 pub mod privilege;
+pub mod processes;
 pub mod sampler;
 
 #[cfg(test)]
@@ -220,9 +224,6 @@ impl ProfileSessionManager {
             }
         }
 
-        // Check privileges and elevate if needed before attaching the sampler.
-        privilege::elevate_if_needed(pid).await?;
-
         let rate = sample_rate.unwrap_or(100);
         let config = SamplerConfig {
             pid,
@@ -232,7 +233,9 @@ impl ProfileSessionManager {
             duration,
         };
 
-        let sampler = sampler::start_sampler(&config).map_err(ProfileError::Sampler)?;
+        // Pick the right sampler: in-process when we have access, or the
+        // elevated helper over a Unix socket when macOS requires `vm_read`.
+        let sampler = privilege::create_sampler(&config).await?;
         let python_version = sampler.python_version.clone();
         let session_id = generate_session_id();
         let started_at_iso = iso_now();

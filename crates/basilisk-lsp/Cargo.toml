@@ -13,6 +13,7 @@ basilisk-checker.workspace  = true
 basilisk-common.workspace   = true
 basilisk-uv.workspace       = true
 basilisk-stubs.workspace    = true
+basilisk-profiler-protocol.workspace = true
 
 tower-lsp         = "0.20"
 tokio             = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util", "net", "sync", "time", "process", "fs"] }
@@ -24,6 +25,7 @@ dashmap           = "6"
 tracing.workspace = true
 py-spy            = "0.4"
 inferno           = { version = "0.12", default-features = false }
+sysinfo           = { version = "0.39.3", default-features = false, features = ["system", "user"] }
 
 [dev-dependencies]
 tokio-tungstenite   = "0.24"

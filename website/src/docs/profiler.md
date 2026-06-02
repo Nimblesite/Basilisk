@@ -263,11 +263,12 @@ VS Code settings mirror these under `basilisk.profiler.*`:
 
 ### macOS
 
-py-spy requires the ability to read the memory of other processes. On macOS, this requires elevated privileges for processes you do not own.
+py-spy reads another process's memory via `task_for_pid`, which macOS restricts. What matters is **not** whether you own the process, but whether Basilisk launched it:
 
-Basilisk ships a privileged helper binary (`basilisk-profiler-helper`) that handles this transparently. The first time you profile a process, macOS will prompt for your administrator password via a standard system dialog. The helper is code-signed and runs only the specific operations needed.
+- **A process Basilisk launched** — for example a script started from a Basilisk debug session — is a child of the language server, so it can be profiled with **no elevation**.
+- **Any other process** — including one you started yourself in a separate terminal under the same user account — is not a child, so macOS still requires elevation. (Unlike Windows, macOS has no "same user, no elevation" path.)
 
-To profile your own process (e.g. a script you launched from Basilisk), no elevation is required.
+For that second case Basilisk ships a privileged helper binary (`basilisk-profiler-helper`). The first time you profile such a process, macOS prompts for your administrator password via a standard system dialog; the helper then runs as root, attaches to the target, and streams samples back to Basilisk over a local Unix socket. If you cancel the prompt, profiling stops with a clear error and no partial results.
 
 
 ### Linux

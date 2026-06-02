@@ -89,15 +89,38 @@ function verifyVsix(vsix, platform) {
   if (JSON.stringify(packagedManifest) !== JSON.stringify(manifest)) {
     throw new Error(`${vsix} contains a shipwright.json that differs from the repo manifest`);
   }
-  const required = bundledEntries(manifest, platform, true);
-  for (const entry of required) {
+  // Every component declared `bundled` for this platform MUST be present in the
+  // VSIX — including optional (`required: false`) ones such as the profiler
+  // helper. `required` governs runtime fallback, NOT whether we ship the
+  // artifact: a declared-but-missing binary used to pass verification, letting a
+  // broken bundle ship green.
+  const expected = bundledEntries(manifest, platform, false);
+  for (const entry of expected) {
     if (!entries.includes(entry)) {
-      throw new Error(`${vsix} is missing ${entry}`);
+      throw new Error(`${vsix} is missing bundled component: ${entry}`);
+    }
+  }
+  // Asset components (e.g. the bundled debugpy) ship a directory tree, not a
+  // single binary — assert at least one packaged file lives under each.
+  for (const prefix of bundledAssetPrefixes(manifest, platform)) {
+    if (!entries.some((entry) => entry.startsWith(prefix))) {
+      throw new Error(`${vsix} is missing bundled asset: ${prefix}`);
     }
   }
   rejectOtherPlatformBins(vsix, entries, platform);
   rejectUnmanifestedTargetBins(vsix, entries, manifest, platform);
   console.log(`${vsix}: package contents valid for ${platform}`);
+}
+
+/// Packaged-path prefixes for `asset` components bundled on this platform.
+function bundledAssetPrefixes(manifest, platform) {
+  return manifest.components
+    .filter((component) => component.kind === "asset" && component.bundled?.bundlePath)
+    .filter((component) => supportsPlatform(component, platform))
+    .map(
+      (component) =>
+        `extension/${component.bundled.bundlePath.replaceAll("${platform}", platform)}/`
+    );
 }
 
 function bundledEntries(manifest, platform, requiredOnly) {

@@ -13,6 +13,9 @@ export async function run(): Promise<void> {
         ui: 'tdd',
         color: true,
         timeout,
+        // Optional focus filter for invoking the runner directly to debug a
+        // single test/suite (see CLAUDE.md). Unset in CI, where the full suite runs.
+        ...(process.env.BSK_TEST_GREP !== undefined ? { grep: process.env.BSK_TEST_GREP } : {}),
         rootHooks: {
             beforeAll(this: Mocha.Context, done: Mocha.Done) {
                 this.timeout(SUITE_SETUP_TIMEOUT_MS);

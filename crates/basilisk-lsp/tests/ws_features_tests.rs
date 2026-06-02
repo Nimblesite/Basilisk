@@ -15,6 +15,9 @@
 #[path = "lsp/ws_test_common.rs"]
 mod ws_test_common;
 
+#[path = "common/mod.rs"]
+mod common;
+
 #[path = "lsp/ws_test_code_actions.rs"]
 mod ws_test_code_actions;
 #[path = "lsp/ws_test_code_lens.rs"]
@@ -31,6 +34,8 @@ mod ws_test_execute_uv;
 mod ws_test_hover;
 #[path = "lsp/ws_test_inlay_hints.rs"]
 mod ws_test_inlay_hints;
+#[path = "lsp/ws_test_processes.rs"]
+mod ws_test_processes;
 #[path = "lsp/ws_test_refactoring.rs"]
 mod ws_test_refactoring;
 #[path = "lsp/ws_test_semantic_tokens.rs"]

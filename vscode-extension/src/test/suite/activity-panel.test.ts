@@ -14,6 +14,7 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { getStore } from "../../extension";
+import { InfoPanelProvider } from "../../info-panel";
 import { SummaryItem } from "../../type-health";
 import {
     EXTENSION_ID,
@@ -138,6 +139,15 @@ function loadBasiliskViews(): ViewContribution[] {
   assert.ok(contributes?.views, "Extension should contribute views");
   return contributes.views["basilisk-explorer"] ?? [];
 }
+
+/** Extract a TreeItem's label as a plain string. */
+function rowLabel(item: vscode.TreeItem): string {
+  const { label } = item;
+  return typeof label === "string" ? label : label?.label ?? "";
+}
+
+/** Section labels whose info-panel rows are actionable (carry a command). */
+const ACTIONABLE_INFO_SECTIONS = ["Feature Status", "Quick Actions"];
 
 // ── Test Suite ────────────────────────────────────────────────────────────
 
@@ -273,6 +283,34 @@ suite("Basilisk Activity Panel E2E Tests", function () {
       undefined,
       vscode.ConfigurationTarget.Workspace,
     );
+  });
+
+  // Regression for issue #65 [EXTACT-INFO-ACTION-WIRING]: every actionable row
+  // the panel renders must resolve to a registered handler. Drives the LIVE
+  // panel tree (not the command registry directly) and checks each row's own
+  // command via the sanctioned "re-registering a live command throws" probe —
+  // a row that looked clickable but had no handler would fail here.
+  test("every actionable info panel row resolves to a registered command (no dead actions)", function () {
+    const store = getStore();
+    assert.ok(store, "Store should exist");
+
+    const provider = new InfoPanelProvider(store);
+    try {
+      const actionableRows = provider
+        .getChildren()
+        .filter((section) => ACTIONABLE_INFO_SECTIONS.includes(rowLabel(section)))
+        .flatMap((section) => provider.getChildren(section));
+
+      assert.ok(actionableRows.length > 0, "info panel should render actionable rows");
+
+      for (const row of actionableRows) {
+        const commandId = row.command?.command;
+        assert.ok(commandId, `"${rowLabel(row)}" must carry a command`);
+        assertCommandRegistered(commandId, `Info panel action "${rowLabel(row)}"`);
+      }
+    } finally {
+      provider.dispose();
+    }
   });
 
   // ── Server-Advertised Commands ────────────────────────────────────────

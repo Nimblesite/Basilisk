@@ -2,7 +2,7 @@
 //!
 //! Inlay Hints handler: inferred types and parameter names.
 
-use basilisk_resolver::{ResolvedModule, RhsKind};
+use basilisk_resolver::{ResolvedModule, RhsKind, VariableInfo};
 use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintLabel};
 
 use crate::util::byte_offset_to_position;
@@ -27,9 +27,20 @@ pub fn inlay_hints(resolved: &ResolvedModule, source: &str) -> Vec<InlayHint> {
     hints
 }
 
-/// Add type hints for unannotated module-level variables.
+/// Add type hints for unannotated variables — module-level and function-local.
 fn variable_type_hints(resolved: &ResolvedModule, source: &str, hints: &mut Vec<InlayHint>) {
-    for var in &resolved.module_vars {
+    push_variable_type_hints(&resolved.module_vars, source, hints);
+
+    // Local variables within functions (implements the [#68] fix: `local_vars`
+    // is annotated-only, so unannotated locals live in `local_unannotated_vars`).
+    for func in &resolved.functions {
+        push_variable_type_hints(&func.local_unannotated_vars, source, hints);
+    }
+}
+
+/// Push a `: <type>` hint for each unannotated variable with an inferable RHS type.
+fn push_variable_type_hints(vars: &[VariableInfo], source: &str, hints: &mut Vec<InlayHint>) {
+    for var in vars {
         if var.has_annotation {
             continue;
         }
@@ -47,29 +58,6 @@ fn variable_type_hints(resolved: &ResolvedModule, source: &str, hints: &mut Vec<
             padding_right: Some(true),
             data: None,
         });
-    }
-
-    // Local variables within functions.
-    for func in &resolved.functions {
-        for var in &func.local_vars {
-            if var.has_annotation {
-                continue;
-            }
-            let type_name = rhs_type_display(&var.rhs_kind);
-            if type_name.is_empty() {
-                continue;
-            }
-            hints.push(InlayHint {
-                position: byte_offset_to_position(source, var.name_span.end_usize()),
-                label: InlayHintLabel::String(format!(": {type_name}")),
-                kind: Some(InlayHintKind::TYPE),
-                text_edits: None,
-                tooltip: None,
-                padding_left: None,
-                padding_right: Some(true),
-                data: None,
-            });
-        }
     }
 }
 

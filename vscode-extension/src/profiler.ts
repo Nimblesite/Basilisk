@@ -39,37 +39,10 @@ const LSP_CMD = {
 /** LSP notification for profiling progress. */
 const PROFILER_PROGRESS_NOTIFICATION = "basilisk/profiler/progress";
 
-// ── Presets ───────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────
 
-interface PresetConfig {
-  sampleRate: number;
-  includeNative: boolean;
-}
-
-/** Lightweight preset sample rate (Hz). */
-const LIGHTWEIGHT_SAMPLE_RATE = 10;
-/** Detailed preset sample rate (Hz). */
-const DETAILED_SAMPLE_RATE = 100;
-/** Memory preset sample rate (Hz). */
-const MEMORY_SAMPLE_RATE = 50;
 /** Default sample rate fallback (Hz). */
 const DEFAULT_SAMPLE_RATE = 100;
-
-function resolvePreset(preset: string, cfg: vscode.WorkspaceConfiguration): PresetConfig {
-  switch (preset) {
-    case "lightweight":
-      return { sampleRate: LIGHTWEIGHT_SAMPLE_RATE, includeNative: false };
-    case "detailed":
-      return { sampleRate: DETAILED_SAMPLE_RATE, includeNative: true };
-    case "memory":
-      return { sampleRate: MEMORY_SAMPLE_RATE, includeNative: false };
-    default: // "default"
-      return {
-        sampleRate: cfg.get<number>("profiler.sampleRate", DEFAULT_SAMPLE_RATE),
-        includeNative: cfg.get<boolean>("profiler.includeNative", false),
-      };
-  }
-}
 
 // ── State ─────────────────────────────────────────────────────────────────
 
@@ -102,7 +75,7 @@ export function registerProfiler(
 
   // Client-side commands that proxy to LSP.
   disposables.push(
-    vscode.commands.registerCommand("basilisk.profileStart", async () => handleProfileStart(store)),
+    vscode.commands.registerCommand("basilisk.profileStart", async () => handleProfileStart()),
     vscode.commands.registerCommand("basilisk.profileStop", async () => handleProfileStop(store)),
     vscode.commands.registerCommand("basilisk.profileSnapshot", async () => handleProfileSnapshot(store)),
     vscode.commands.registerCommand("basilisk.profileAttachToDebug", async () => handleProfileAttachToDebug(store)),
@@ -148,49 +121,44 @@ export function registerProfiler(
 
 // ── Command handlers ──────────────────────────────────────────────────────
 
-async function handleProfileStart(store: Store): Promise<void> {
+async function handleProfileStart(): Promise<void> {
+  // [PROFILE-PROCESSES-LAUNCH] #62: the profiler no longer asks the user to
+  // hand-type a PID (and there was never a real "auto-detect"). Reveal the
+  // Python Processes panel so they can pick a process — or run & profile the
+  // current file — and start profiling with one click.
+  await vscode.commands.executeCommand("basilisk.pythonProcesses.focus");
+  vscode.window.showInformationMessage(
+    "Basilisk: Pick a Python process in the panel to profile, or run & profile the current file.",
+  );
+}
+
+/**
+ * Start profiling a specific PID — the panel's one-click path. Updates the
+ * shared session state (status bar, active session) so Stop, Snapshot, and
+ * live progress work exactly as they do for the debug-attach flow. The LSP
+ * resolves `preset` server-side; `sampleRate`/`includeNative` apply when the
+ * preset is `"default"`. Implements [PROFILE-PROCESSES-LAUNCH].
+ */
+export async function startProfilingForPid(store: Store, pid: number, preset: string): Promise<void> {
   const client = store.client.value;
   if (client?.isRunning() !== true) {
     vscode.window.showWarningMessage("Basilisk: Language server not running.");
     return;
   }
-
   if (activeSessionId !== undefined) {
     vscode.window.showWarningMessage(
-      `Basilisk: Already profiling PID ${activePid ?? "?"} (session ${activeSessionId}).`,
+      `Basilisk: Already profiling PID ${activePid ?? "?"} (session ${activeSessionId}). Stop it first.`,
     );
     return;
   }
 
-  // Prompt for PID or auto-detect.
-  const pidInput = await vscode.window.showInputBox({
-    prompt: "Python process PID (leave empty to auto-detect)",
-    placeHolder: "e.g. 12345",
-    validateInput: (value) => {
-      if (value === "") { return null; }
-      const num = Number(value);
-      if (!Number.isInteger(num) || num <= 0) {
-        return "Enter a valid positive integer PID";
-      }
-      return null;
-    },
-  });
-
-  if (pidInput === undefined) { return; } // Cancelled.
-
   const cfg = vscode.workspace.getConfiguration("basilisk");
-  const preset = cfg.get<string>("profiler.preset", "default");
-
-  // Apply preset overrides.
-  const presetConfig = resolvePreset(preset, cfg);
-
   const args: Record<string, unknown> = {
-    sampleRate: presetConfig.sampleRate,
-    includeNative: presetConfig.includeNative,
+    pid,
+    preset,
+    sampleRate: cfg.get<number>("profiler.sampleRate", DEFAULT_SAMPLE_RATE),
+    includeNative: cfg.get<boolean>("profiler.includeNative", false),
   };
-  if (pidInput !== "") {
-    args.pid = Number(pidInput);
-  }
 
   try {
     const result = await client.sendRequest<{ sessionId: string; pid: number; pythonVersion: string } | undefined>("workspace/executeCommand", {

@@ -67,6 +67,8 @@ pub mod commands {
     pub const PROFILER_SNAPSHOT: &str = "basilisk.profiler.snapshot";
     /// List active profiling sessions.
     pub const PROFILER_LIST: &str = "basilisk.profiler.list";
+    /// Enumerate attachable Python processes for the profiler picker (#62).
+    pub const PROFILER_PROCESSES: &str = "basilisk.profiler.processes";
 
     /// Start memory tracking in the active debug session.
     pub const MEMORY_START: &str = "basilisk.memory.start";
@@ -117,6 +119,7 @@ pub mod commands {
         PROFILER_STOP,
         PROFILER_SNAPSHOT,
         PROFILER_LIST,
+        PROFILER_PROCESSES,
         MEMORY_START,
         MEMORY_SNAPSHOT,
         MEMORY_DIFF,

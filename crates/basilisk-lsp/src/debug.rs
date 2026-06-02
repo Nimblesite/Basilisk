@@ -101,17 +101,20 @@ impl DebugSessionManager {
 
         info!(python = python_path, port, session_id = %session_id, "spawning debugpy adapter");
 
-        let child = tokio::process::Command::new(python_path)
+        let mut command = tokio::process::Command::new(python_path);
+        let _ = command
             .args(["-m", "debugpy.adapter", "--port", &port.to_string()])
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|err| {
-                error!(python = python_path, %err, "failed to spawn debugpy");
-                DebugError::SpawnFailed(err)
-            })?;
+            .kill_on_drop(true);
+        if let Some(pythonpath) = bundled_debugpy_pythonpath() {
+            let _ = command.env("PYTHONPATH", pythonpath);
+        }
+        let child = command.spawn().map_err(|err| {
+            error!(python = python_path, %err, "failed to spawn debugpy");
+            DebugError::SpawnFailed(err)
+        })?;
 
         let _ = self.sessions.lock().await.insert(session_id.clone(), child);
 
@@ -244,6 +247,43 @@ pub fn resolve_python(workspace_root: &Path) -> String {
     fallback.into()
 }
 
+/// Resolve the interpreter to launch: an explicit, non-blank override wins;
+/// otherwise auto-detect via [`resolve_python`].
+///
+/// A blank override (the editor sends an empty string when
+/// `basilisk.python.interpreterPath` is unset) must be treated as absent —
+/// otherwise the LSP spawns `Command::new("")` and fails with
+/// `No such file or directory (os error 2)` instead of falling back.
+#[must_use]
+pub fn effective_python(python_override: Option<&str>, workspace_root: &Path) -> String {
+    match python_override
+        .map(str::trim)
+        .filter(|candidate| !candidate.is_empty())
+    {
+        Some(candidate) => candidate.to_owned(),
+        None => resolve_python(workspace_root),
+    }
+}
+
+/// Build the `PYTHONPATH` that makes the **bundled** debugpy importable.
+///
+/// The editor sets `BASILISK_DEBUGPY_PATH` to the extension's vendored debugpy
+/// directory; we prepend it to any inherited `PYTHONPATH` so `import debugpy`
+/// resolves to the bundled copy even when the target interpreter lacks debugpy.
+/// Returns `None` when the variable is unset or points at a missing directory
+/// (e.g. a dev build), so callers fall back to the interpreter's own debugpy.
+fn bundled_debugpy_pythonpath() -> Option<std::ffi::OsString> {
+    let dir = std::env::var_os("BASILISK_DEBUGPY_PATH")?;
+    if dir.is_empty() || !Path::new(&dir).exists() {
+        return None;
+    }
+    let mut paths = vec![std::path::PathBuf::from(&dir)];
+    if let Some(existing) = std::env::var_os("PYTHONPATH") {
+        paths.extend(std::env::split_paths(&existing));
+    }
+    std::env::join_paths(paths).ok()
+}
+
 /// Check if debugpy is importable by the given Python interpreter.
 ///
 /// # Errors
@@ -252,13 +292,15 @@ pub fn resolve_python(workspace_root: &Path) -> String {
 /// or `DebugError::DebugpyNotFound` if the import fails.
 pub async fn check_debugpy(python: &str) -> Result<(), DebugError> {
     debug!(python, "checking if debugpy is installed");
-    let output = tokio::process::Command::new(python)
+    let mut command = tokio::process::Command::new(python);
+    let _ = command
         .args(["-c", "import debugpy; print(debugpy.__version__)"])
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .output()
-        .await
-        .map_err(DebugError::SpawnFailed)?;
+        .stderr(std::process::Stdio::null());
+    if let Some(pythonpath) = bundled_debugpy_pythonpath() {
+        let _ = command.env("PYTHONPATH", pythonpath);
+    }
+    let output = command.output().await.map_err(DebugError::SpawnFailed)?;
 
     if output.status.success() {
         info!(python, "debugpy is available");
@@ -310,6 +352,67 @@ mod tests {
         match prev {
             Some(val) => std::env::set_var(key, val),
             None => std::env::remove_var(key),
+        }
+    }
+
+    #[test]
+    fn bundled_debugpy_pythonpath_resolves_only_for_existing_dir() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        let prev_dir = std::env::var_os("BASILISK_DEBUGPY_PATH");
+        let prev_pp = std::env::var_os("PYTHONPATH");
+        std::env::remove_var("BASILISK_DEBUGPY_PATH");
+        std::env::remove_var("PYTHONPATH");
+
+        // Unset → no bundled debugpy.
+        assert!(bundled_debugpy_pythonpath().is_none());
+
+        // Set but missing → ignored (fall back to interpreter's debugpy).
+        std::env::set_var("BASILISK_DEBUGPY_PATH", "/nonexistent/debugpy-xyzzy");
+        assert!(bundled_debugpy_pythonpath().is_none());
+
+        // Existing dir → included in PYTHONPATH.
+        let dir = std::env::temp_dir();
+        std::env::set_var("BASILISK_DEBUGPY_PATH", &dir);
+        let value = bundled_debugpy_pythonpath().expect("resolves for an existing dir");
+        assert!(
+            value.to_string_lossy().contains(&*dir.to_string_lossy()),
+            "PYTHONPATH must include the bundled dir: {value:?}"
+        );
+
+        match prev_dir {
+            Some(val) => std::env::set_var("BASILISK_DEBUGPY_PATH", val),
+            None => std::env::remove_var("BASILISK_DEBUGPY_PATH"),
+        }
+        match prev_pp {
+            Some(val) => std::env::set_var("PYTHONPATH", val),
+            None => std::env::remove_var("PYTHONPATH"),
+        }
+    }
+
+    #[test]
+    fn effective_python_ignores_blank_override() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        let key = "BASILISK_PYTHON";
+        let prev = std::env::var(key).ok();
+        std::env::remove_var(key);
+
+        let root = Path::new("/nonexistent/workspace");
+        let fallback = resolve_python(root);
+
+        // Blank / whitespace overrides (empty interpreterPath from the editor)
+        // must NOT be used literally — that spawned "" -> os error 2.
+        assert_eq!(effective_python(Some(""), root), fallback);
+        assert_eq!(effective_python(Some("   "), root), fallback);
+        // Absent override also falls back.
+        assert_eq!(effective_python(None, root), fallback);
+        // A real override is honored.
+        assert_eq!(
+            effective_python(Some("/opt/py/python3"), root),
+            "/opt/py/python3"
+        );
+
+        if let Some(val) = prev {
+            std::env::set_var(key, val);
         }
     }
 
