@@ -249,6 +249,50 @@ async fn helper_listener_is_bound_before_helper_connects() {
 /// Linux-only: it needs a successful py-spy attach, which on macOS requires root
 /// even for a child (the very subject of #61 — see the elevated `osascript` path
 /// in `helper_client`). CI runs on Linux, where this exercises the real samples.
+/// Read `samples` batches until the deadline (or ~60), reporting how many
+/// arrived and whether `hot_function` appeared.
+#[cfg(target_os = "linux")]
+async fn collect_sample_batches(
+    reader: &mut BufReader<tokio::net::unix::OwnedReadHalf>,
+) -> (u64, bool) {
+    let mut batches = 0u64;
+    let mut saw_hot = false;
+    let deadline = Instant::now() + Duration::from_secs(8);
+    while Instant::now() < deadline && batches <= 60 {
+        match timeout(Duration::from_secs(5), read_message::<_, Message>(reader)).await {
+            Ok(Ok(Some(Message::Samples { traces }))) => {
+                batches += 1;
+                if traces
+                    .iter()
+                    .any(|t| t.frames.iter().any(|f| f.name == "hot_function"))
+                {
+                    saw_hot = true;
+                }
+            }
+            Ok(Ok(Some(Message::Attached { .. }))) => {}
+            Ok(Ok(Some(Message::Stopped) | None)) => break,
+            Ok(Err(err)) => panic!("sample read failed: {err}"),
+            Err(_elapsed) => break,
+        }
+    }
+    (batches, saw_hot)
+}
+
+/// Drain messages after sending `stop`, returning whether the helper confirmed
+/// `stopped` before closing.
+#[cfg(target_os = "linux")]
+async fn drain_until_stopped(reader: &mut BufReader<tokio::net::unix::OwnedReadHalf>) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        match timeout(Duration::from_secs(5), read_message::<_, Message>(reader)).await {
+            Ok(Ok(Some(Message::Stopped))) => return true,
+            Ok(Ok(Some(_))) => {}
+            Ok(Ok(None) | Err(_)) | Err(_) => break,
+        }
+    }
+    false
+}
+
 #[cfg(target_os = "linux")]
 #[tokio::test]
 async fn helper_socket_full_protocol_with_real_binary() {
@@ -322,31 +366,7 @@ async fn helper_socket_full_protocol_with_real_binary() {
     );
 
     // samples (repeating) — collect a healthy number with the hot frame present.
-    let mut batches = 0u64;
-    let mut saw_hot = false;
-    let deadline = Instant::now() + Duration::from_secs(8);
-    while Instant::now() < deadline && batches <= 60 {
-        match timeout(
-            Duration::from_secs(5),
-            read_message::<_, Message>(&mut reader),
-        )
-        .await
-        {
-            Ok(Ok(Some(Message::Samples { traces }))) => {
-                batches += 1;
-                if traces
-                    .iter()
-                    .any(|t| t.frames.iter().any(|f| f.name == "hot_function"))
-                {
-                    saw_hot = true;
-                }
-            }
-            Ok(Ok(Some(Message::Attached { .. }))) => {}
-            Ok(Ok(Some(Message::Stopped))) | Ok(Ok(None)) => break,
-            Ok(Err(err)) => panic!("sample read failed: {err}"),
-            Err(_elapsed) => break,
-        }
-    }
+    let (batches, saw_hot) = collect_sample_batches(&mut reader).await;
     assert!(batches > 50, "expected >50 sample batches, got {batches}");
     assert!(saw_hot, "hot_function must appear in the streamed samples");
 
@@ -354,24 +374,10 @@ async fn helper_socket_full_protocol_with_real_binary() {
     write_message(&mut write_half, &Cmd::Stop)
         .await
         .expect("send stop");
-    let mut got_stopped = false;
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while Instant::now() < deadline {
-        match timeout(
-            Duration::from_secs(5),
-            read_message::<_, Message>(&mut reader),
-        )
-        .await
-        {
-            Ok(Ok(Some(Message::Stopped))) => {
-                got_stopped = true;
-                break;
-            }
-            Ok(Ok(Some(_))) => {}
-            Ok(Ok(None)) | Ok(Err(_)) | Err(_) => break,
-        }
-    }
-    assert!(got_stopped, "helper must confirm 'stopped' before exiting");
+    assert!(
+        drain_until_stopped(&mut reader).await,
+        "helper must confirm 'stopped' before exiting"
+    );
 
     kill_pid(py_pid);
     wrapper.kill();
