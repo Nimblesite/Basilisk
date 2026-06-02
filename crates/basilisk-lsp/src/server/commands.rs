@@ -107,6 +107,7 @@ pub(super) async fn dispatch_execute_command(
         | basilisk_common::commands::PROFILER_STOP
         | basilisk_common::commands::PROFILER_SNAPSHOT
         | basilisk_common::commands::PROFILER_LIST
+        | basilisk_common::commands::PROFILER_PROCESSES
         | basilisk_common::commands::MEMORY_START
         | basilisk_common::commands::MEMORY_SNAPSHOT
         | basilisk_common::commands::MEMORY_DIFF
@@ -146,6 +147,9 @@ async fn dispatch_profiler_or_memory(
         }
         basilisk_common::commands::PROFILER_LIST => {
             super::profiler_handlers::execute_profiler_list(server, args).await
+        }
+        basilisk_common::commands::PROFILER_PROCESSES => {
+            super::profiler_handlers::execute_profiler_processes(server, args).await
         }
         basilisk_common::commands::MEMORY_START => {
             super::memory_handlers::execute_memory_start(server, args).await

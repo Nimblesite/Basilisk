@@ -19,6 +19,7 @@ pub mod export;
 pub mod memory;
 pub mod presets;
 pub mod privilege;
+pub mod processes;
 pub mod sampler;
 
 #[cfg(test)]

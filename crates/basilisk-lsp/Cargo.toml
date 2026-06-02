@@ -24,6 +24,7 @@ dashmap           = "6"
 tracing.workspace = true
 py-spy            = "0.4"
 inferno           = { version = "0.12", default-features = false }
+sysinfo           = { version = "0.39.3", default-features = false, features = ["system", "user"] }
 
 [dev-dependencies]
 tokio-tungstenite   = "0.24"

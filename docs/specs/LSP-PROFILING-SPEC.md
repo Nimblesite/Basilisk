@@ -78,7 +78,7 @@ The profiler uses `py-spy` (crate version 0.4) for stack sampling. See [py-spy d
 | Linux | Root, or `ptrace_scope=0`, or profiling own child | Works without root if `ptrace_scope` is relaxed |
 | Windows | No elevation for processes you own | Works out of the box |
 
-**macOS mitigation**: The LSP spawns a small helper binary (`basilisk-profiler-helper`) via `osascript` or `security authorizationdb` to get elevated privileges. It communicates with the LSP over a Unix socket. If the Python process was spawned by Basilisk's debug session manager, the LSP already has the child PID and can trace it directly (parent can trace child on macOS without root).
+**macOS mitigation**: For a process Basilisk launched (a child), the LSP already holds the child PID and traces it directly (parent traces child, no root). For any other process — *including a same-user process started in another terminal* — the LSP spawns a small helper binary (`basilisk-profiler-helper`) via `osascript` to get elevated privileges; the helper runs as root and streams samples back over a Unix socket. See [#PROFILE-PERMISSIONS-MACOS], [#PROFILE-HELPER-PROTOCOL], and [#PROFILE-HELPER-SOCKET].
 
 ## LSP Protocol {#PROFILE-PROTOCOL}
 
@@ -90,10 +90,15 @@ Start profiling a Python process.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `pid` | `number` | No | Target PID. If omitted, uses active debug session or auto-detects. |
+| `pid` | `number` | Yes¹ | Target PID. ¹Either `pid` or `debugSession` must be supplied; there is **no** silent auto-detect — the editor obtains a PID from [`basilisk.profiler.processes`](#PROFILE-PROCESSES-LSP) (the Python Processes panel) rather than prompting the user to type one. |
+| `debugSession` | `string` | Yes¹ | Attach to the debuggee of an active debug session instead of a raw PID. |
 | `sampleRate` | `number` | No | Samples per second (default: 100) |
 | `includeNative` | `boolean` | No | Include C extension frames (default: false) |
 | `duration` | `number` | No | Auto-stop after N seconds (default: null = manual stop) |
+
+A missing `pid` is rejected with `-32001` — earlier revisions of this spec
+claimed an "auto-detect when omitted", but none was ever implemented (#62). PID
+discovery is now an explicit, user-visible step via the process panel.
 
 **Response fields:** `sessionId`, `pid`, `pythonVersion`, `startedAt`.
 
@@ -127,6 +132,102 @@ After `stop` or `snapshot`, the LSP publishes profiling diagnostics for every fi
 #### basilisk/profiler/progress {#PROFILE-NOTIFICATIONS-PROGRESS}
 
 Periodic notification during active profiling with `sessionId`, `sampleCount`, `duration`, `topFunction`. Editors display this in a status indicator.
+
+## Process Enumeration & Selection {#PROFILE-PROCESSES}
+
+Starting a profile must never require the user to hand-type a PID (#62). The LSP
+owns process **discovery**; editors only render it. This section defines the
+enumeration command, its data model, and the panel/launch UX that replaces the
+old raw PID input box. Design + phased TODO: [LSP-PROFILER-PROCESS-PANEL-PLAN.md](../plans/LSP-PROFILER-PROCESS-PANEL-PLAN.md) `{#PROFPANEL-PLAN}`.
+
+### basilisk.profiler.processes {#PROFILE-PROCESSES-LSP}
+
+A `workspace/executeCommand` request that returns every attachable Python
+process. It takes no required arguments and responds with
+`{ "processes": ProcessInfo[] }`, sorted by CPU usage descending.
+
+Enumeration **only reads the OS process table** and therefore never requires
+elevation — discovery works without `sudo`, which is the whole point. It is
+implemented in [`processes.rs`](../../crates/basilisk-lsp/src/profiler/processes.rs)
+over the `sysinfo` crate and is advertised in `executeCommandProvider` like every
+other Basilisk command (editors must not pre-register it — see
+[LSP-ARCHITECTURE-SPEC.md] command registration rule).
+
+### ProcessInfo {#PROFILE-PROCESSES-MODEL}
+
+Each entry in the `processes[]` response:
+
+| Field (JSON) | Type | Notes |
+|---|---|---|
+| `pid` | number | Process id |
+| `ppid` | number | Parent pid (`0` if unknown) — enables "group by parent" |
+| `name` | string | Process name, e.g. `python3.12` |
+| `interpreterPath` | string \| null | Resolved interpreter executable path |
+| `script` | string \| null | Best-effort target script (first positional arg) |
+| `pythonVersion` | string \| null | e.g. `3.12.13`; `null` ⇒ render `—` |
+| `cpuPercent` | number | Instantaneous CPU% (may exceed 100 across cores) |
+| `memoryBytes` | number | Resident memory in bytes |
+| `runtimeSecs` | number | Seconds since process start |
+| `user` | string \| null | Owner login name |
+| `requiresElevation` | boolean | `true` if not owned by the current user |
+| `kind` | `"interpreter"` \| `"launcher"` | Bare interpreter vs. launcher |
+
+**Detection:** a process is "Python" when its name, interpreter exe basename, or
+`argv[0]` basename matches `python`, `python3`, `pythonX.Y`, or `pypy`. Known
+launchers (uvicorn, gunicorn, pytest, celery, flask, hypercorn, daphne, uwsgi,
+sanic) running on a Python interpreter are included and tagged `kind = "launcher"`
+so they are still offered for profiling rather than hidden.
+
+**Version resolution:** `pythonVersion` is resolved server-side — an exact
+version from `<exe> --version` (cached per interpreter, bounded per enumeration),
+falling back to the `pythonX.Y` path pattern, then `null`.
+
+**`requiresElevation`** is a *hint* for the panel's lock badge; the authoritative
+permission check still happens at attach time (see [#PROFILE-PERMISSIONS]).
+
+**Logging:** only the process *count* is logged. Command lines and user names may
+contain secrets/PII and are never logged (CLAUDE.md logging standards).
+
+### basilisk/profiler/processesChanged {#PROFILE-PROCESSES-NOTIFY}
+
+Reserved notification for pushing lazily-resolved interpreter versions to the
+editor after an enumeration returned them as `null`. v1 resolves versions inline
+within the request's resolution budget, so this notification is currently
+optional; editors treat its absence as "versions are already final".
+
+### Python Processes panel {#PROFILE-PROCESSES-PANEL}
+
+VS Code contributes a `basilisk.pythonProcesses` tree view in the
+`basilisk-explorer` activity-bar container, implemented in
+[`process-explorer.ts`](../../vscode-extension/src/process-explorer.ts). It calls
+`basilisk.profiler.processes` and renders one row per process:
+
+- **label** `python3.12 — app.py` · **description** `PID 82875 · 3.12.13 · 12.4% · 88 MB`
+- **tooltip** interpreter path, script, user, runtime, elevation note
+- **icon** a Python glyph, with a `$(lock)` badge when `requiresElevation`
+
+Auto-refresh is gated on view visibility (interval from
+`basilisk.profiler.processRefreshMs`, default 2000); a manual refresh button is
+always present. An empty state (`viewsWelcome`) offers **Run & Profile Current File**.
+
+#### Sort modes {#PROFILE-PROCESSES-PANEL-SORT}
+
+CPU% (default, descending), Memory, PID, Name, Runtime, Python version.
+
+#### Group modes {#PROFILE-PROCESSES-PANEL-GROUP}
+
+None (flat), Python version, Interpreter, User, Parent process. Groups render as
+collapsible parent nodes with a count badge.
+
+### Launch from the panel {#PROFILE-PROCESSES-LAUNCH}
+
+This is the headline fix for #62. Per-row inline buttons — **▶ Profile CPU**
+(`basilisk.profileProcess`) and **🧠 Track Memory** (`basilisk.memoryTrackProcess`)
+— start profiling with that row's `pid` in one click, **with no input box**. The
+row context menu adds Copy PID and Reveal Script. The old palette command
+`basilisk.profileStart` is **kept but rewritten**: instead of prompting for a PID
+it focuses this panel and shows a toast ("Pick a process below"). The lying
+"auto-detect" prompt is deleted.
 
 ## Sample Aggregation {#PROFILE-AGGREGATION}
 
@@ -288,6 +389,10 @@ Zed's limited extension API means profiling works through LSP diagnostics (hot l
 | Component | Code Location | Used By |
 |---|---|---|
 | py-spy sampling | `basilisk-lsp/src/profiler/sampler.rs` | Both |
+| Privilege check / sampler selection | `basilisk-lsp/src/profiler/privilege.rs` | Both |
+| Elevated helper socket client | `basilisk-lsp/src/profiler/helper_client.rs` | Both |
+| Elevated helper binary | `basilisk-profiler-helper/src/main.rs` | Both |
+| Helper wire protocol | `basilisk-profiler-protocol/src/lib.rs` | Both |
 | Sample aggregation | `basilisk-lsp/src/profiler/aggregator.rs` | Both |
 | Speedscope export | `basilisk-lsp/src/profiler/export.rs` | Both |
 | Flamegraph SVG | `basilisk-lsp/src/profiler/flamegraph.rs` | Both |
@@ -413,10 +518,35 @@ CPU and memory profiling can run simultaneously. Dashboard shows dual heat maps 
 
 ### macOS {#PROFILE-PERMISSIONS-MACOS}
 
-`vm_read` requires root, child-process relationship, `com.apple.security.get-task-allow` entitlement, or SIP disabled.
+`vm_read` (via `task_for_pid`) requires root, a child-process relationship with a non-hardened target, the `com.apple.security.get-task-allow` entitlement, or SIP disabled.
 
-1. **Debug session profiling (no elevation):** Parent can trace child on macOS. This is the primary UX.
-2. **External process profiling (elevation):** Spawn `basilisk-profiler-helper` via `osascript` with admin privileges. Helper runs as root, streams samples back over Unix domain socket.
+1. **Child-process profiling (no elevation):** A process Basilisk launched itself (e.g. a debug session) can be traced by its parent without elevation. This is the primary UX.
+2. **External-process profiling (elevation required):** Any process Basilisk did **not** launch — **including a same-user process started in another terminal** — is not a child, so macOS still requires elevation. There is no "same-user, no-elevation" shortcut on macOS the way there is on Windows; do not message users as if there were (issue #61, Defect 4). The LSP spawns `basilisk-profiler-helper` via `osascript` with administrator privileges; the helper runs as root and streams samples back over a Unix domain socket.
+
+The split is decided by `check_profiling_permissions` in `basilisk-lsp/src/profiler/privilege.rs`: a child PID yields `Allowed` (in-process py-spy), an external PID yields `ElevationRequired` (helper socket path), and a missing PID yields `Denied`.
+
+### Helper Socket Protocol {#PROFILE-HELPER-PROTOCOL}
+
+When elevation is required, the elevated helper and the LSP talk over a Unix domain socket using **newline-delimited JSON**. The message shapes and framing live in the shared `basilisk-profiler-protocol` crate so the two binaries can never drift; both `basilisk-lsp` and `basilisk-profiler-helper` depend on it.
+
+```text
+LSP    -> {"cmd":"attach","pid":12345,"rate":100,"native":false}
+helper -> {"type":"attached","pid":12345,"python":"3.12.0"}
+helper -> {"type":"samples","traces":[...]}        (repeating)
+LSP    -> {"cmd":"stop"}
+helper -> {"type":"stopped"}
+```
+
+`traces` carry the minimal per-thread / per-frame fields py-spy produces; the LSP converts them back into py-spy shapes and feeds the same aggregator the in-process sampler uses.
+
+### Helper Socket Sampling {#PROFILE-HELPER-SOCKET}
+
+The LSP side (`basilisk-lsp/src/profiler/helper_client.rs`) owns the socket lifecycle. The ordering is load-bearing — getting it wrong was the entirety of issue #61:
+
+1. **Bind the `UnixListener` first**, before spawning the helper. (The original bug: nothing ever bound the socket, so the helper's `connect()` always failed with `No such file or directory (os error 2)`.)
+2. **Spawn the helper detached** — `osascript`-elevated in production, or directly for tests — and never block on its exit (`.output().await` is wrong for a long-lived streamer).
+3. **Guard the elevated command's working directory** with `cd /` so `do shell script ... with administrator privileges` cannot fail with `getcwd: cannot access parent directories`.
+4. Accept the connection, drive `attach`/`samples`/`stop`, and forward batches into a `SamplerHandle` channel — identical to the in-process path from there on.
 
 ### Linux {#PROFILE-PERMISSIONS-LINUX}
 

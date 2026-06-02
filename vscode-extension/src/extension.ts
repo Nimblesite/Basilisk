@@ -18,6 +18,7 @@ import { registerTestExplorer } from "./test-explorer";
 import { registerModuleExplorer } from "./module-explorer";
 import { registerTypeHealth } from "./type-health";
 import { registerInfoPanel } from "./info-panel";
+import { registerPythonProcesses } from "./process-explorer";
 import { createStore, type Store } from "./store";
 import { registerProfiler, disposeProfiler } from "./profiler";
 import { registerMemoryProfiler, disposeMemoryProfiler } from "./memory-profiler";
@@ -173,6 +174,10 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
 
   const infoPanelResult = registerInfoPanel(context, s);
   singletonDisposables.push(...infoPanelResult.disposables);
+
+  // Python Processes panel — LSP-driven process picker for one-click profiling (#62).
+  const processesResult = registerPythonProcesses(context, s);
+  singletonDisposables.push(...processesResult.disposables);
 
   // Profiler UI — status bar, commands, decorations, flamegraph webview.
   const profilerDisposables = registerProfiler(context, s);

@@ -67,6 +67,11 @@
           "when": "basilisk.hasWorkspace"
         },
         {
+          "id": "basilisk.pythonProcesses",
+          "name": "Python Processes",
+          "when": "basilisk.hasWorkspace"
+        },
+        {
           "id": "basilisk.info",
           "name": "Basilisk",
           "visibility": "visible"
@@ -81,6 +86,10 @@
       {
         "view": "basilisk.typeHealth",
         "contents": "Waiting for analysis...\n[Restart Server](command:basilisk.restartServer)"
+      },
+      {
+        "view": "basilisk.pythonProcesses",
+        "contents": "No Python processes running.\n[Run & Profile Current File](command:basilisk.profileCurrentFile)\n[Refresh](command:basilisk.refreshProcesses)"
       }
     ],
     "commands": [
@@ -264,12 +273,80 @@
         "title": "Run Action",
         "category": "Basilisk",
         "icon": "$(play)"
+      },
+      {
+        "command": "basilisk.refreshProcesses",
+        "title": "Refresh Python Processes",
+        "category": "Basilisk",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "basilisk.sortProcesses",
+        "title": "Sort Python Processes",
+        "category": "Basilisk",
+        "icon": "$(sort-precedence)"
+      },
+      {
+        "command": "basilisk.groupProcesses",
+        "title": "Group Python Processes",
+        "category": "Basilisk",
+        "icon": "$(group-by-ref-type)"
+      },
+      {
+        "command": "basilisk.filterProcesses",
+        "title": "Filter Python Processes",
+        "category": "Basilisk",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "basilisk.profileCurrentFile",
+        "title": "Run & Profile Current File",
+        "category": "Basilisk",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "basilisk.profileProcess",
+        "title": "Profile CPU",
+        "category": "Basilisk",
+        "icon": "$(flame)"
+      },
+      {
+        "command": "basilisk.memoryTrackProcess",
+        "title": "Track Memory",
+        "category": "Basilisk",
+        "icon": "$(database)"
+      },
+      {
+        "command": "basilisk.copyProcessPid",
+        "title": "Copy PID",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.revealProcessScript",
+        "title": "Reveal Script in Editor",
+        "category": "Basilisk"
       }
     ],
     "menus": {
       "commandPalette": [
         {
           "command": "basilisk.info.runAction",
+          "when": "false"
+        },
+        {
+          "command": "basilisk.profileProcess",
+          "when": "false"
+        },
+        {
+          "command": "basilisk.memoryTrackProcess",
+          "when": "false"
+        },
+        {
+          "command": "basilisk.copyProcessPid",
+          "when": "false"
+        },
+        {
+          "command": "basilisk.revealProcessScript",
           "when": "false"
         }
       ],
@@ -303,6 +380,31 @@
           "command": "basilisk.sortTypeHealth",
           "when": "view == basilisk.typeHealth",
           "group": "navigation"
+        },
+        {
+          "command": "basilisk.profileCurrentFile",
+          "when": "view == basilisk.pythonProcesses",
+          "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.refreshProcesses",
+          "when": "view == basilisk.pythonProcesses",
+          "group": "navigation@2"
+        },
+        {
+          "command": "basilisk.sortProcesses",
+          "when": "view == basilisk.pythonProcesses",
+          "group": "navigation@3"
+        },
+        {
+          "command": "basilisk.groupProcesses",
+          "when": "view == basilisk.pythonProcesses",
+          "group": "navigation@4"
+        },
+        {
+          "command": "basilisk.filterProcesses",
+          "when": "view == basilisk.pythonProcesses",
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [
@@ -320,6 +422,36 @@
           "command": "basilisk.info.runAction",
           "when": "view == basilisk.info && viewItem =~ /^(action|feature)$/",
           "group": "inline"
+        },
+        {
+          "command": "basilisk.profileProcess",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "group": "inline@1"
+        },
+        {
+          "command": "basilisk.memoryTrackProcess",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "group": "inline@2"
+        },
+        {
+          "command": "basilisk.profileProcess",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "group": "1_profile@1"
+        },
+        {
+          "command": "basilisk.memoryTrackProcess",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "group": "1_profile@2"
+        },
+        {
+          "command": "basilisk.copyProcessPid",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "group": "9_copy@1"
+        },
+        {
+          "command": "basilisk.revealProcessScript",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "group": "9_copy@2"
         }
       ]
     },
@@ -626,6 +758,17 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically start CPU profiling when a debug session launches."
+        },
+        "basilisk.profiler.processRefreshMs": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 250,
+          "description": "Poll interval (ms) for refreshing the Python Processes panel while it is visible."
+        },
+        "basilisk.profiler.showLaunchers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Python launchers (uvicorn, gunicorn, pytest, …) in the Python Processes panel, not just bare interpreters."
         },
         "basilisk.profiler.preset": {
           "type": "string",
