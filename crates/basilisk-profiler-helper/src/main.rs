@@ -4,95 +4,29 @@
 //! On macOS, reading another process's memory requires elevated privileges
 //! (the `task_for_pid` mach call needs root or `SecTaskAccess`). This small
 //! binary is spawned by the LSP via `osascript` to get a one-time privilege
-//! elevation. It communicates with the LSP over a Unix domain socket,
-//! streaming stack trace samples back.
+//! elevation. It connects back to the LSP over a Unix domain socket and
+//! streams stack-trace samples.
 //!
 //! On Linux, this binary is not needed (`ptrace_scope=0` or same-user tracing).
 //! On Windows, `ReadProcessMemory` works without elevation for owned processes.
 //!
-//! # Protocol (over Unix socket, newline-delimited JSON)
-//!
-//! LSP sends: `{"cmd":"attach","pid":12345,"rate":100,"native":false}`
-//! Helper sends: `{"type":"attached","pid":12345,"python":"3.12.0"}`
-//! Helper sends: `{"type":"samples","traces":[...]}`  (repeating)
-//! LSP sends: `{"cmd":"stop"}`
-//! Helper sends: `{"type":"stopped"}`
-//! Helper exits.
+//! The wire protocol (message shapes + newline-JSON framing) lives in the
+//! shared [`basilisk_profiler_protocol`] crate so the LSP and helper never
+//! drift. See [PROFILE-HELPER-PROTOCOL].
 
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
+use basilisk_profiler_protocol::{
+    read_message, write_message, Command, FrameData, Message, TraceData,
+};
 use shipwright::{dispatch, BuildInfo, VersionSpec};
 use shipwright_manifest::{ExecutableKind, Language};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::BufReader;
 use tokio::net::UnixStream;
 use tracing::{error, info};
-
-/// Command from LSP to helper.
-#[derive(Debug, Deserialize)]
-#[serde(tag = "cmd", rename_all = "lowercase")]
-enum Command {
-    /// Attach to a Python process and begin sampling.
-    Attach {
-        /// Target process ID.
-        pid: u32,
-        /// Samples per second.
-        rate: Option<u64>,
-        /// Include native C frames.
-        native: Option<bool>,
-    },
-    /// Stop sampling and exit.
-    Stop,
-}
-
-/// Message from helper to LSP.
-#[derive(Debug, Serialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-enum Message {
-    /// Confirms successful attachment.
-    Attached {
-        /// Target PID.
-        pid: u32,
-        /// Detected Python version.
-        python: String,
-    },
-    /// A batch of stack trace samples.
-    Samples {
-        /// The sampled traces.
-        traces: Vec<TraceData>,
-    },
-    /// Sampling has stopped.
-    Stopped,
-}
-
-/// Simplified stack trace for serialization.
-#[derive(Debug, Serialize)]
-struct TraceData {
-    /// OS thread ID.
-    thread_id: u64,
-    /// Thread name if available.
-    thread_name: Option<String>,
-    /// Whether the thread is actively running.
-    active: bool,
-    /// Whether the thread holds the GIL.
-    owns_gil: bool,
-    /// Stack frames from innermost to outermost.
-    frames: Vec<FrameData>,
-}
-
-/// Single frame in a stack trace.
-#[derive(Debug, Serialize)]
-struct FrameData {
-    /// Function or method name.
-    name: String,
-    /// Source file path.
-    filename: String,
-    /// Line number in the source file.
-    line: i32,
-}
 
 /// Handle `--version` / `--version --json` via the Shipwright contract emitter.
 ///
@@ -174,24 +108,17 @@ async fn run_socket(socket_path: &str) -> Result<(), String> {
 async fn read_attach_command(
     reader: &mut BufReader<tokio::net::unix::OwnedReadHalf>,
 ) -> Result<(u32, u64, bool), String> {
-    let mut line = String::new();
-    let bytes_read = reader
-        .read_line(&mut line)
+    let cmd: Option<Command> = read_message(reader)
         .await
         .map_err(|err| format!("read failed: {err}"))?;
 
-    if bytes_read == 0 {
-        return Err("EOF before attach command".to_owned());
+    match cmd {
+        Some(Command::Attach { pid, rate, native }) => {
+            Ok((pid, rate.unwrap_or(100), native.unwrap_or(false)))
+        }
+        Some(Command::Stop) => Err("expected 'attach' command first".to_owned()),
+        None => Err("EOF before attach command".to_owned()),
     }
-
-    let cmd: Command =
-        serde_json::from_str(line.trim()).map_err(|err| format!("parse failed: {err}"))?;
-
-    let Command::Attach { pid, rate, native } = cmd else {
-        return Err("expected 'attach' command first".to_owned());
-    };
-
-    Ok((pid, rate.unwrap_or(100), native.unwrap_or(false)))
 }
 
 /// Attach py-spy to a Python process, returning the spy instance and version.
@@ -253,19 +180,14 @@ fn spawn_stop_listener(
     stop_flag: Arc<AtomicBool>,
 ) {
     let _listener = tokio::spawn(async move {
-        let mut buf = String::new();
         loop {
-            buf.clear();
-            match reader.read_line(&mut buf).await {
-                Ok(0) | Err(_) => {
+            match read_message::<_, Command>(&mut reader).await {
+                Ok(Some(Command::Stop) | None) | Err(_) => {
                     stop_flag.store(true, Ordering::SeqCst);
                     break;
                 }
-                Ok(_) => {
-                    if let Ok(Command::Stop) = serde_json::from_str(buf.trim()) {
-                        stop_flag.store(true, Ordering::SeqCst);
-                        break;
-                    }
+                Ok(Some(Command::Attach { .. })) => {
+                    // Ignore a duplicate attach; keep waiting for stop/EOF.
                 }
             }
         }
@@ -326,23 +248,12 @@ async fn run_sampling_loop(
     Ok(())
 }
 
-/// Send a JSON message followed by a newline over the async writer.
+/// Send a framed JSON message over the async writer.
 async fn send_message(
     writer: &mut tokio::net::unix::OwnedWriteHalf,
     msg: &Message,
 ) -> Result<(), String> {
-    let json = serde_json::to_string(msg).map_err(|err| format!("serialize failed: {err}"))?;
-    writer
-        .write_all(json.as_bytes())
+    write_message(writer, msg)
         .await
-        .map_err(|err| format!("write failed: {err}"))?;
-    writer
-        .write_all(b"\n")
-        .await
-        .map_err(|err| format!("write newline failed: {err}"))?;
-    writer
-        .flush()
-        .await
-        .map_err(|err| format!("flush failed: {err}"))?;
-    Ok(())
+        .map_err(|err| format!("write failed: {err}"))
 }

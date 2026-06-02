@@ -71,6 +71,27 @@ impl std::fmt::Debug for SamplerHandle {
 }
 
 impl SamplerHandle {
+    /// Construct a handle around an arbitrary sample-producing thread.
+    ///
+    /// Used by both the in-process py-spy sampler and the elevated helper-socket
+    /// sampler ([`super::helper_client`]) so the rest of the pipeline treats both
+    /// sources identically.
+    pub(crate) fn from_parts(
+        stop_flag: Arc<AtomicBool>,
+        join_handle: std::thread::JoinHandle<()>,
+        receiver: mpsc::Receiver<SampleBatch>,
+        python_version: String,
+        pid: u32,
+    ) -> Self {
+        Self {
+            stop_flag,
+            join_handle: Some(join_handle),
+            receiver,
+            python_version,
+            pid,
+        }
+    }
+
     /// Signal the sampler to stop.
     pub fn stop(&self) {
         self.stop_flag.store(true, Ordering::Relaxed);
@@ -196,13 +217,13 @@ pub fn start_sampler(config: &SamplerConfig) -> Result<SamplerHandle, SamplerErr
             SamplerError::AttachFailed(format!("Failed to spawn sampler thread: {err}"))
         })?;
 
-    Ok(SamplerHandle {
+    Ok(SamplerHandle::from_parts(
         stop_flag,
-        join_handle: Some(join_handle),
+        join_handle,
         receiver,
         python_version,
-        pid: config.pid,
-    })
+        config.pid,
+    ))
 }
 
 /// The main sampling loop, running on a dedicated OS thread.

@@ -11,13 +11,11 @@
 //! to profile a given PID, and on macOS spawns the elevated helper binary
 //! via `osascript` when needed.
 
-#[cfg(target_os = "macos")]
-use std::path::PathBuf;
-
 #[cfg(target_os = "linux")]
 use tracing::warn;
 use tracing::{debug, info};
 
+use super::sampler::{self, SamplerConfig, SamplerError, SamplerHandle};
 use super::ProfileError;
 
 /// Result of checking whether profiling privileges are sufficient.
@@ -44,29 +42,55 @@ pub fn check_profiling_permissions(pid: u32) -> Result<PermissionStatus, String>
     check_permissions_for_platform(pid)
 }
 
-/// Attempt to elevate privileges if needed for profiling the target PID.
+/// Create a sampler for the target PID, choosing the strategy by privilege.
 ///
-/// On macOS, this spawns the `basilisk-profiler-helper` binary via `osascript`
-/// with administrator privileges. On other platforms, it returns an error
-/// with instructions for the user.
+/// - [`PermissionStatus::Allowed`] → attach py-spy in-process.
+/// - [`PermissionStatus::ElevationRequired`] → spawn the elevated helper and
+///   stream samples over a Unix socket (macOS — see [`super::helper_client`]).
+/// - [`PermissionStatus::Denied`] → fail with a permission error.
+///
+/// This replaces the previously broken two-step "elevate, then also attach
+/// in-process" flow (issue #61): for an external macOS process the in-process
+/// attach could never succeed, so the elevated helper now *is* the sampler.
 ///
 /// # Errors
 ///
-/// Returns [`ProfileError::Sampler`] with a permission-denied error if
-/// elevation fails or is not possible.
-pub async fn elevate_if_needed(pid: u32) -> Result<(), ProfileError> {
-    let status = check_profiling_permissions(pid).map_err(ProfileError::ExportFailed)?;
+/// Returns [`ProfileError`] if permissions are insufficient or the chosen
+/// sampler cannot be started.
+pub(crate) async fn create_sampler(config: &SamplerConfig) -> Result<SamplerHandle, ProfileError> {
+    let status = check_profiling_permissions(config.pid).map_err(ProfileError::ExportFailed)?;
 
     match status {
-        PermissionStatus::Allowed => Ok(()),
+        PermissionStatus::Allowed => sampler::start_sampler(config).map_err(ProfileError::Sampler),
         PermissionStatus::ElevationRequired(reason) => {
-            info!(pid, %reason, "elevation required for profiling");
-            attempt_elevation(pid).await
+            info!(pid = config.pid, %reason, "elevation required; sampling via elevated helper");
+            start_elevated_sampler(config)
+                .await
+                .map_err(ProfileError::Sampler)
         }
         PermissionStatus::Denied(reason) => Err(ProfileError::Sampler(
-            super::sampler::SamplerError::PermissionDenied(reason),
+            SamplerError::PermissionDenied(reason),
         )),
     }
+}
+
+/// macOS: stream samples from the elevated helper over a Unix socket.
+#[cfg(target_os = "macos")]
+async fn start_elevated_sampler(config: &SamplerConfig) -> Result<SamplerHandle, SamplerError> {
+    super::helper_client::start_helper_sampler(config, super::helper_client::HelperSpawn::Elevated)
+        .await
+}
+
+/// Non-macOS: there is no supported privilege-elevation path for profiling.
+#[cfg(not(target_os = "macos"))]
+async fn start_elevated_sampler(_config: &SamplerConfig) -> Result<SamplerHandle, SamplerError> {
+    // Yield once to satisfy the `async` requirement (callers `.await` this).
+    tokio::task::yield_now().await;
+    Err(SamplerError::PermissionDenied(
+        "Privilege elevation is only supported on macOS. \
+         On Linux, adjust ptrace_scope or use setcap."
+            .to_owned(),
+    ))
 }
 
 /// Platform-specific permission check dispatch.
@@ -289,110 +313,9 @@ fn is_running_as_root() -> bool {
 }
 
 // ── Elevation ──────────────────────────────────────────────────────────────
-
-/// macOS elevation: spawn the helper via `osascript` with admin privileges.
-#[cfg(target_os = "macos")]
-async fn attempt_elevation(pid: u32) -> Result<(), ProfileError> {
-    let helper_path = find_helper_binary()?;
-    info!(
-        pid,
-        helper = %helper_path.display(),
-        "spawning elevated profiler helper via osascript"
-    );
-    spawn_elevated_helper(&helper_path, pid).await
-}
-
-/// Linux and Windows do not support elevation — returns an error immediately.
-#[cfg(not(target_os = "macos"))]
-async fn attempt_elevation(_pid: u32) -> Result<(), ProfileError> {
-    // Yield once to satisfy the `async` requirement (callers `.await` this).
-    tokio::task::yield_now().await;
-    Err(ProfileError::Sampler(
-        super::sampler::SamplerError::PermissionDenied(
-            "Privilege elevation is only supported on macOS. \
-             On Linux, adjust ptrace_scope or use setcap."
-                .to_owned(),
-        ),
-    ))
-}
-
-/// Locate the `basilisk-profiler-helper` binary.
-///
-/// Searches next to the current executable first, then falls back to PATH.
-#[cfg(target_os = "macos")]
-fn find_helper_binary() -> Result<PathBuf, ProfileError> {
-    let helper_name = "basilisk-profiler-helper";
-
-    // Check adjacent to the current executable.
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            let adjacent = exe_dir.join(helper_name);
-            if adjacent.exists() {
-                return Ok(adjacent);
-            }
-        }
-    }
-
-    // Fall back to PATH lookup via `which`.
-    let which_result = std::process::Command::new("which")
-        .arg(helper_name)
-        .output()
-        .map_err(|err| {
-            ProfileError::Sampler(super::sampler::SamplerError::PermissionDenied(format!(
-                "Failed to locate {helper_name}: {err}"
-            )))
-        })?;
-
-    if which_result.status.success() {
-        let path_str = String::from_utf8_lossy(&which_result.stdout);
-        return Ok(PathBuf::from(path_str.trim()));
-    }
-
-    Err(ProfileError::Sampler(
-        super::sampler::SamplerError::PermissionDenied(format!(
-            "Could not find {helper_name} binary. \
-             Ensure it is installed alongside the Basilisk LSP."
-        )),
-    ))
-}
-
-/// Spawn the helper binary with elevated privileges via `osascript`.
-///
-/// Uses the macOS `do shell script ... with administrator privileges`
-/// `AppleScript` command, which shows the system password prompt.
-#[cfg(target_os = "macos")]
-async fn spawn_elevated_helper(
-    helper_path: &std::path::Path,
-    pid: u32,
-) -> Result<(), ProfileError> {
-    let socket_path = create_socket_path(pid);
-    let helper_str = helper_path.display().to_string();
-
-    let script =
-        format!("do shell script \"{helper_str} {socket_path}\" with administrator privileges");
-
-    let result = tokio::process::Command::new("osascript")
-        .args(["-e", &script])
-        .output()
-        .await
-        .map_err(|err| {
-            ProfileError::Sampler(super::sampler::SamplerError::PermissionDenied(format!(
-                "Failed to spawn osascript for privilege elevation: {err}"
-            )))
-        })?;
-
-    if result.status.success() {
-        info!(pid, "elevated helper completed successfully");
-        Ok(())
-    } else {
-        let stderr = String::from_utf8_lossy(&result.stderr);
-        Err(ProfileError::Sampler(
-            super::sampler::SamplerError::PermissionDenied(format!(
-                "Privilege elevation failed (user may have cancelled): {stderr}"
-            )),
-        ))
-    }
-}
+//
+// The actual elevation + socket streaming lives in [`super::helper_client`].
+// `create_sampler` (above) routes [`PermissionStatus::ElevationRequired`] there.
 
 /// Return platform-specific help text for permission errors.
 ///
@@ -433,17 +356,6 @@ fn platform_permission_message_impl() -> &'static str {
 #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
 fn platform_permission_message_impl() -> &'static str {
     "Profiling is not supported on this platform."
-}
-
-/// Generate a unique Unix socket path for helper communication.
-#[cfg(target_os = "macos")]
-fn create_socket_path(pid: u32) -> String {
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
-
-    format!("/tmp/basilisk-profiler-{pid}-{timestamp}.sock")
 }
 
 #[cfg(test)]
@@ -521,14 +433,6 @@ mod tests {
         let _result = check_linux_permissions(1);
     }
 
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn socket_path_contains_pid() {
-        let path = create_socket_path(12345);
-        assert!(path.contains("12345"));
-        assert!(path.starts_with("/tmp/basilisk-profiler-"));
-    }
-
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     #[test]
     fn is_child_process_true_for_spawned_child() {
@@ -579,21 +483,44 @@ mod tests {
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     #[test]
-    fn elevate_if_needed_allowed_for_child() -> Result<(), String> {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|err| format!("failed to build tokio runtime: {err}"))?;
-
+    fn child_process_does_not_require_elevation() -> Result<(), String> {
         let child = std::process::Command::new("sleep").arg("10").spawn();
 
         if let Ok(mut child_proc) = child {
             let child_pid = child_proc.id();
-            let result = rt.block_on(elevate_if_needed(child_pid));
-            assert!(result.is_ok(), "child process should not need elevation");
+            let status = check_profiling_permissions(child_pid)
+                .map_err(|err| format!("check failed: {err}"))?;
+            assert_eq!(
+                status,
+                PermissionStatus::Allowed,
+                "a child process must be sampled in-process, with no elevation"
+            );
             let _ = child_proc.kill();
             let _ = child_proc.wait();
         }
+        Ok(())
+    }
+
+    /// Off macOS there is no elevation path; the helper-backed sampler must say so.
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn elevated_sampler_unsupported_off_macos() -> Result<(), String> {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|err| format!("build runtime: {err}"))?;
+        let config = SamplerConfig {
+            pid: std::process::id(),
+            sample_rate: 100,
+            include_native: false,
+            include_idle: false,
+            duration: None,
+        };
+        let result = runtime.block_on(start_elevated_sampler(&config));
+        assert!(
+            matches!(result, Err(SamplerError::PermissionDenied(ref msg)) if msg.contains("macOS")),
+            "off macOS elevation must be reported as unsupported, got: {result:?}"
+        );
         Ok(())
     }
 }
