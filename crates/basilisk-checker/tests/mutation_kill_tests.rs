@@ -502,7 +502,8 @@ c: int = "hello"
     let diagnostics = run(source)?;
     let e0014 = e0014_count(&diagnostics);
     assert_eq!(
-        e0014, 1,
+        e0014,
+        1,
         "only the unquoted `c: int = \"hello\"` mismatch fires; both quoted \
          annotations are skipped, got {e0014}: {:?}",
         diagnostics
@@ -539,7 +540,8 @@ bad: Json = {"a": 3j}
     let diagnostics = run(source)?;
     let e0014 = e0014_count(&diagnostics);
     assert_eq!(
-        e0014, 1,
+        e0014,
+        1,
         "the valid recursive-alias value is accepted; only the complex `3j` \
          value fires, got {e0014}: {:?}",
         diagnostics
