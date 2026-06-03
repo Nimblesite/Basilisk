@@ -41,7 +41,10 @@
     "lsp"
   ],
   "activationEvents": [
-    "onLanguage:python"
+    "onLanguage:python",
+    "onDebug",
+    "onDebugResolve:basilisk-debug",
+    "onDebugDynamicConfigurations:basilisk-debug"
   ],
   "main": "./out/extension.js",
   "contributes": {

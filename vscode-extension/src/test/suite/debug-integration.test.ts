@@ -27,6 +27,7 @@ import { execFileSync } from 'child_process';
 import { findBasiliskBinary } from './test-helpers';
 import { getStore } from '../../extension';
 import { currentStoppedFrameId, evaluateInDebugSession } from '../../dap-evaluate';
+import { applyDebugConfigDefaults } from '../../debug-adapter';
 
 const EXTENSION_ID = 'Nimblesite.basilisk';
 
@@ -1725,5 +1726,41 @@ suite('Debug Integration E2E Tests', () => {
         );
 
         await stopActiveDebugSession();
+    });
+});
+
+// ── Zero-config debug start [VSIX-PYTHON-DEBUGGER-DAP] ──────────────────────
+// Pure tests for the DebugConfigurationProvider's defaulting logic that lets
+// "Run and Debug" / F5 start without a launch.json.
+suite('Basilisk Debug Config Provider', () => {
+    test('empty config + Python file synthesizes a current-file launch', () => {
+        // VS Code passes a truly-empty {} when starting with no launch.json.
+        const resolved = applyDebugConfigDefaults({} as vscode.DebugConfiguration, 'python');
+        assert.strictEqual(resolved.type, 'basilisk-debug');
+        assert.strictEqual(resolved.request, 'launch');
+        assert.strictEqual(resolved.program, '${file}');
+    });
+
+    test('empty config + non-Python file is left untouched', () => {
+        const empty = {} as vscode.DebugConfiguration;
+        const resolved = applyDebugConfigDefaults(empty, 'rust');
+        assert.strictEqual(resolved.type, undefined);
+        assert.strictEqual(resolved.program, undefined);
+    });
+
+    test('launch config missing program defaults to the current file', () => {
+        const resolved = applyDebugConfigDefaults(
+            { name: 'x', type: 'basilisk-debug', request: 'launch' } as vscode.DebugConfiguration,
+            'python'
+        );
+        assert.strictEqual(resolved.program, '${file}');
+    });
+
+    test('a complete config passes through unchanged', () => {
+        const full = {
+            name: 'x', type: 'basilisk-debug', request: 'launch', program: '/tmp/a.py',
+        } as vscode.DebugConfiguration;
+        const resolved = applyDebugConfigDefaults(full, 'python');
+        assert.strictEqual(resolved.program, '/tmp/a.py');
     });
 });

@@ -348,3 +348,72 @@ export function createDebugAdapterFactory(
     },
   };
 }
+
+// ── Debug configuration provider ──────────────────────────────────────────
+
+/** A config field is "blank" when undefined (VS Code's empty `{}`) or empty. */
+function isBlank(value: string | undefined): boolean {
+  return value === undefined || value === "";
+}
+
+/** The default launch config for the current file. */
+function defaultLaunchConfig(): vscode.DebugConfiguration {
+  return {
+    name: "Python: Current File (Basilisk)",
+    type: "basilisk-debug",
+    request: "launch",
+    program: "${file}",
+    console: "internalConsole",
+    redirectOutput: true,
+    justMyCode: true,
+  };
+}
+
+/**
+ * Fill in a runnable `basilisk-debug` config from an empty or partial one.
+ *
+ * This is what makes "Run and Debug" / F5 work **without a launch.json**: VS
+ * Code calls the provider with an empty config (no type), and for a Python file
+ * we synthesize a launch of the current file. A partial config missing
+ * `program` defaults to `${file}`. Pure (no VS Code APIs) so it is unit-testable;
+ * the active language id is passed in.
+ */
+export function applyDebugConfigDefaults(
+  config: vscode.DebugConfiguration,
+  activeLanguageId: string | undefined,
+): vscode.DebugConfiguration {
+  // Empty config (F5 / "Run and Debug" with no launch.json — VS Code passes `{}`):
+  // only synthesize one for a Python file, else leave it for VS Code to report
+  // "open a file". Falsy check also tolerates blank fields from a stub config.
+  if (isBlank(config.type) && isBlank(config.request) && isBlank(config.name)) {
+    return activeLanguageId === "python" ? defaultLaunchConfig() : config;
+  }
+  // A launch config missing `program` targets the active file.
+  if (
+    config.type === "basilisk-debug" &&
+    config.request === "launch" &&
+    isBlank(config.program as string | undefined)
+  ) {
+    return { ...config, program: "${file}" };
+  }
+  return config;
+}
+
+/**
+ * Provider that lets `basilisk-debug` start with no `launch.json`: it offers a
+ * default configuration in the Run-and-Debug picker and resolves empty/partial
+ * configs to a launch of the current file.
+ */
+export function createBasiliskDebugConfigProvider(): vscode.DebugConfigurationProvider {
+  return {
+    provideDebugConfigurations(): vscode.DebugConfiguration[] {
+      return [defaultLaunchConfig()];
+    },
+    resolveDebugConfiguration(
+      _folder: vscode.WorkspaceFolder | undefined,
+      config: vscode.DebugConfiguration,
+    ): vscode.DebugConfiguration {
+      return applyDebugConfigDefaults(config, vscode.window.activeTextEditor?.document.languageId);
+    },
+  };
+}

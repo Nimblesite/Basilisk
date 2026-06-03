@@ -249,6 +249,31 @@ flowchart LR
 
 The LSP server spawns `debugpy.adapter --port <free-port>` via `basilisk/startDebugSession`. The proxy connects to that port and relays DAP messages bidirectionally, intercepting specific message patterns.
 
+### Starting a session (zero-config) {#VSIX-PYTHON-DEBUGGER-START}
+
+The `basilisk-debug` debugger is **factory-based** (no `program`/`runtime` in the
+manifest), so the extension must own both activation and config provisioning:
+
+- **Activation:** `activationEvents` includes `onDebug`,
+  `onDebugResolve:basilisk-debug`, and `onDebugDynamicConfigurations:basilisk-debug`
+  so the adapter/tracker register whenever debugging starts — not only after a
+  Python file is opened.
+- **Config provider:** `createBasiliskDebugConfigProvider` (`debug-adapter.ts`) is
+  registered for `basilisk-debug` (Dynamic + default). It makes **"Run and Debug"
+  / F5 work with no `launch.json`**: `provideDebugConfigurations` offers a
+  "Python: Current File (Basilisk)" entry, and `resolveDebugConfiguration` (pure
+  `applyDebugConfigDefaults`) fills an empty/partial config to launch the active
+  Python file (`program: ${file}`). Without this, an empty-state workspace shows
+  no Basilisk debug option.
+
+### Tracker capture {#VSIX-PYTHON-DEBUGGER-DAP-TRACKER}
+
+`BasiliskDebugAdapterTracker` is the single observability point for debugpy →
+VS Code traffic. It captures the debuggee's `process` event (`systemProcessId`,
+used by the CPU profiler — see [LSP-PROFILING-SPEC.md] `#PROFILE-SAME-PROCESS`)
+and `output` events (the `__BASILISK_MEM*__` payloads the memory round-trip
+recovers, since debugpy delivers `print()` output here, not in `evaluate`).
+
 ### Debug Adapter Proxy (VS Code Implementation) {#VSIX-PYTHON-DEBUGGER-DAP-PROXY}
 
 The proxy (`vscode-extension/src/dap-proxy.ts`) implements `vscode.DebugAdapter` via `DebugAdapterInlineImplementation`. It fixes four debugpy quirks:

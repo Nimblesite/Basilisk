@@ -12,7 +12,7 @@ import * as os from "os";
 import { Logger, bindLogger, CompositeSink, FileLogSink, nullSink } from "./logger";
 import type { LogSink } from "./logger";
 import { startLspClient } from "./lsp-client";
-import { createDebugAdapterFactory, BasiliskDebugAdapterTrackerFactory } from "./debug-adapter";
+import { createDebugAdapterFactory, BasiliskDebugAdapterTrackerFactory, createBasiliskDebugConfigProvider } from "./debug-adapter";
 import { startSubprocessMode } from "./subprocess-mode";
 import { registerTestExplorer } from "./test-explorer";
 import { registerModuleExplorer } from "./module-explorer";
@@ -256,6 +256,18 @@ function registerDebugSupport(context: vscode.ExtensionContext, s: Store): void 
       "basilisk-debug",
       createDebugAdapterFactory(() => s.client.value)
     )
+  );
+  // Let users start debugging with NO launch.json: the Dynamic provider lists a
+  // "Python (Basilisk)" config in the Run-and-Debug picker, and resolve fills in
+  // the current file for an empty/partial config (F5 / the big Run button).
+  const debugConfigProvider = createBasiliskDebugConfigProvider();
+  singletonDisposables.push(
+    vscode.debug.registerDebugConfigurationProvider(
+      "basilisk-debug",
+      debugConfigProvider,
+      vscode.DebugConfigurationProviderTriggerKind.Dynamic
+    ),
+    vscode.debug.registerDebugConfigurationProvider("basilisk-debug", debugConfigProvider)
   );
   singletonDisposables.push(
     vscode.debug.registerDebugAdapterTrackerFactory(
