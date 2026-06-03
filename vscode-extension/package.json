@@ -243,6 +243,12 @@
         "icon": "$(diff)"
       },
       {
+        "command": "basilisk.memoryMenu",
+        "title": "Basilisk: Memory…",
+        "category": "Basilisk",
+        "icon": "$(database)"
+      },
+      {
         "command": "basilisk.memoryStart",
         "title": "Basilisk: Start Memory Tracking",
         "category": "Basilisk",
@@ -363,6 +369,10 @@
         {
           "command": "basilisk.revealProcessScript",
           "when": "false"
+        },
+        {
+          "command": "basilisk.memoryMenu",
+          "when": "basilisk.debugging"
         },
         {
           "command": "basilisk.memoryStart",

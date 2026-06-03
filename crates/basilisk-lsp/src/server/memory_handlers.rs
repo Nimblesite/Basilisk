@@ -14,6 +14,11 @@ use super::LspServer;
 use crate::profiler::memory::diagnostics::DiagnosticsByUri;
 use crate::profiler::memory::session::IngestOutcome;
 
+/// Max allocation sites a snapshot/diff script emits. Kept modest so the printed
+/// `__BASILISK_MEM__` line (which surfaces in the Debug Console) stays readable —
+/// the dashboard only needs the top sites.
+const MAX_SNAPSHOT_STATS: usize = 100;
+
 /// Construct a memory-domain LSP error (`-32010`).
 fn memory_error(message: impl Into<String>) -> tower_lsp::jsonrpc::Error {
     tower_lsp::jsonrpc::Error {
@@ -91,7 +96,7 @@ pub(super) async fn execute_memory_snapshot(
         .and_then(serde_json::Value::as_str)
         .unwrap_or("unknown");
 
-    let script = crate::profiler::memory::scripts::take_snapshot(500);
+    let script = crate::profiler::memory::scripts::take_snapshot(MAX_SNAPSHOT_STATS);
 
     server
         .client
@@ -121,7 +126,7 @@ pub(super) async fn execute_memory_diff(
         .and_then(serde_json::Value::as_str)
         .unwrap_or("unknown");
 
-    let script = crate::profiler::memory::scripts::diff_snapshot(500);
+    let script = crate::profiler::memory::scripts::diff_snapshot(MAX_SNAPSHOT_STATS);
 
     server
         .client

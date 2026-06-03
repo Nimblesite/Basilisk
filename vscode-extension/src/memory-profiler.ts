@@ -17,6 +17,12 @@ import { Logger } from "./logger";
 import type { Store } from "./store";
 import { currentStoppedFrameId, evaluateInDebugSession } from "./dap-evaluate";
 import {
+  disposeMemoryDashboard,
+  openMemoryDashboard,
+  type MemoryDashboardSnapshot,
+  type MemoryDiffData,
+} from "./memory-dashboard";
+import {
   disposeRefGraph,
   openRefGraphWebview,
   type ReferenceGraphResult,
@@ -58,7 +64,8 @@ interface MemoryIngestResult {
 
 let memoryStatusBarItem: vscode.StatusBarItem | undefined;
 let activeMemorySessionId: string | undefined;
-let memDashboardPanel: vscode.WebviewPanel | undefined;
+/** Most recent snapshot, so a later "Compare" can show it alongside the diff. */
+let lastDashboardSnapshot: MemoryDashboardSnapshot | undefined;
 
 // ── Registration ──────────────────────────────────────────────────────────
 
@@ -74,10 +81,14 @@ export function registerMemoryProfiler(
     vscode.StatusBarAlignment.Left,
     MEMORY_STATUS_BAR_PRIORITY,
   );
-  memoryStatusBarItem.command = "basilisk.memoryStop";
+  // Click the status-bar item to open the memory action menu (no palette needed).
+  memoryStatusBarItem.command = "basilisk.memoryMenu";
 
   const disposables: vscode.Disposable[] = [
     memoryStatusBarItem,
+    vscode.commands.registerCommand("basilisk.memoryMenu", async () =>
+      handleMemoryMenu(),
+    ),
     vscode.commands.registerCommand("basilisk.memoryStart", async () =>
       handleMemoryStart(store),
     ),
@@ -96,9 +107,34 @@ export function registerMemoryProfiler(
     vscode.commands.registerCommand("basilisk.memoryReferences", async () =>
       handleMemoryReferences(store),
     ),
+    // Show/hide the memory status-bar entry as Basilisk debug sessions come and go.
+    vscode.debug.onDidChangeActiveDebugSession(() => { refreshMemoryStatusBar(); }),
+    vscode.debug.onDidStartDebugSession(() => { refreshMemoryStatusBar(); }),
+    vscode.debug.onDidTerminateDebugSession(() => { refreshMemoryStatusBar(); }),
   ];
 
+  refreshMemoryStatusBar();
   return disposables;
+}
+
+/** Quick-pick menu of memory actions — the clickable alternative to the palette. */
+async function handleMemoryMenu(): Promise<void> {
+  const tracking = activeMemorySessionId !== undefined;
+  const items: { label: string; command: string }[] = tracking
+    ? [
+        { label: "$(device-camera) Take Memory Snapshot", command: "basilisk.memorySnapshot" },
+        { label: "$(diff) Compare Memory Snapshots", command: "basilisk.memoryDiff" },
+        { label: "$(type-hierarchy) Show Reference Graph", command: "basilisk.memoryReferences" },
+        { label: "$(trash) Force Garbage Collection", command: "basilisk.memoryGcCollect" },
+        { label: "$(debug-stop) Stop Memory Tracking", command: "basilisk.memoryStop" },
+      ]
+    : [{ label: "$(database) Start Memory Tracking", command: "basilisk.memoryStart" }];
+  const pick = await vscode.window.showQuickPick(items, {
+    placeHolder: tracking ? "Basilisk memory profiling" : "Pause the debugger, then start memory tracking",
+  });
+  if (pick !== undefined) {
+    await vscode.commands.executeCommand(pick.command);
+  }
 }
 
 /** Clean up memory profiler resources. */
@@ -106,10 +142,8 @@ export function disposeMemoryProfiler(): void {
   clearMemoryDecorations();
   disposeMemoryDecorations();
   disposeRefGraph();
-  if (memDashboardPanel !== undefined) {
-    memDashboardPanel.dispose();
-    memDashboardPanel = undefined;
-  }
+  disposeMemoryDashboard();
+  lastDashboardSnapshot = undefined;
 }
 
 // ── Round-trip courier ──────────────────────────────────────────────────────
@@ -205,7 +239,7 @@ async function handleMemoryStart(store: Store): Promise<void> {
     }
 
     activeMemorySessionId = result.memorySessionId;
-    updateMemoryStatusBar("tracking");
+    refreshMemoryStatusBar();
     Logger.info(`Memory tracking started: session ${result.memorySessionId}`);
     void vscode.window.showInformationMessage("Basilisk: Memory tracking started. Take a snapshot to inspect allocations.");
   } catch (err) {
@@ -219,10 +253,12 @@ async function handleMemorySnapshot(store: Store): Promise<void> {
   const result = await runMemoryScript(store, LSP_MEM_CMD.snapshot);
   if (result?.kind === "snapshot") {
     applyMemoryDecorations(result as unknown as MemorySnapshotResult);
-    Logger.info(`Memory snapshot: ${String(result.currentMemory)} bytes current`);
-    void vscode.window.showInformationMessage(
-      `Basilisk: Snapshot — ${String(result.currentMemory)} bytes tracked`,
-    );
+    // Surface the snapshot in the dashboard webview (summary cards + the
+    // top-allocations table) so results are visible even when the hot lines are
+    // in libraries rather than the open file.
+    lastDashboardSnapshot = toDashboardSnapshot(result);
+    openMemoryDashboard(lastDashboardSnapshot);
+    Logger.info(`Memory snapshot: ${lastDashboardSnapshot.currentMemory} bytes current`);
   }
 }
 
@@ -232,10 +268,64 @@ async function handleMemoryDiff(store: Store): Promise<void> {
     applyLeakDecorations(result as unknown as MemoryDiffResult);
     const leaks = Array.isArray(result.suspectedLeaks) ? result.suspectedLeaks : [];
     Logger.info(`Memory diff: ${leaks.length} suspected leak(s)`);
+    // Refresh the dashboard with the leak analysis (needs a prior snapshot).
+    if (lastDashboardSnapshot !== undefined) {
+      openMemoryDashboard(lastDashboardSnapshot, toDashboardDiff(result));
+    }
     void vscode.window.showInformationMessage(
       `Basilisk: Compared snapshots — ${leaks.length} suspected leak(s)`,
     );
   }
+}
+
+/** Coerce an `unknown` JSON field to a string (never an object stringification). */
+function asString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+/** Coerce an `unknown` JSON field to a finite number. */
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+/** Map an ingest snapshot result to the dashboard's snapshot shape. */
+function toDashboardSnapshot(result: MemoryIngestResult): MemoryDashboardSnapshot {
+  return {
+    memorySessionId: asString(result.memorySessionId),
+    snapshotId: asString(result.snapshotId),
+    currentMemory: asNumber(result.currentMemory),
+    peakMemory: asNumber(result.peakMemory),
+    gcObjects: asNumber(result.gcObjects),
+    gcCounts: Array.isArray(result.gcCounts) ? (result.gcCounts as number[]) : [],
+    topAllocations: (Array.isArray(result.topAllocations)
+      ? result.topAllocations
+      : []) as MemoryDashboardSnapshot["topAllocations"],
+    timeline: [],
+  };
+}
+
+/** Map an ingest diff result to the dashboard's diff shape (lowercasing confidence). */
+function toDashboardDiff(result: MemoryIngestResult): MemoryDiffData {
+  const leaks = Array.isArray(result.suspectedLeaks) ? result.suspectedLeaks : [];
+  return {
+    totalGrowth: asNumber(result.totalGrowth),
+    totalFreed: asNumber(result.totalFreed),
+    netGrowth: asNumber(result.netGrowth),
+    grownAllocations: [],
+    suspectedLeaks: leaks.map((raw) => {
+      const leak = raw as Record<string, unknown>;
+      return {
+        file: asString(leak.file),
+        line: asNumber(leak.line),
+        sizeGrowth: asNumber(leak.sizeGrowth),
+        countGrowth: asNumber(leak.countGrowth),
+        currentSize: asNumber(leak.currentSize),
+        currentCount: asNumber(leak.currentCount),
+        confidence: asString(leak.confidence, "low").toLowerCase() as MemoryDiffData["suspectedLeaks"][number]["confidence"],
+        reason: asString(leak.reason),
+      };
+    }),
+  };
 }
 
 async function handleMemoryGcCollect(store: Store): Promise<void> {
@@ -252,7 +342,8 @@ async function handleMemoryGcCollect(store: Store): Promise<void> {
 
 function handleMemoryStop(_store: Store): void {
   activeMemorySessionId = undefined;
-  updateMemoryStatusBar("idle");
+  lastDashboardSnapshot = undefined;
+  refreshMemoryStatusBar();
   clearMemoryDecorations();
   Logger.info("Memory tracking stopped");
 }
@@ -289,18 +380,28 @@ async function handleMemoryReferences(store: Store): Promise<void> {
 
 // ── Status bar ────────────────────────────────────────────────────────────
 
-function updateMemoryStatusBar(state: "idle" | "tracking"): void {
+/**
+ * Show the memory status-bar entry whenever a Basilisk debug session is active
+ * (or tracking is on) and click it to open the action menu. Hidden otherwise.
+ */
+function refreshMemoryStatusBar(): void {
   if (memoryStatusBarItem === undefined) { return; }
 
-  if (state === "tracking") {
-    memoryStatusBarItem.text = "$(eye) Memory Tracking";
-    memoryStatusBarItem.tooltip =
-      "Basilisk: Memory tracking active (click to stop)";
-    memoryStatusBarItem.backgroundColor = new vscode.ThemeColor(
-      "statusBarItem.warningBackground",
-    );
-    memoryStatusBarItem.show();
-  } else {
+  const debugging = vscode.debug.activeDebugSession?.type === "basilisk-debug";
+  const tracking = activeMemorySessionId !== undefined;
+  if (!debugging && !tracking) {
     memoryStatusBarItem.hide();
+    return;
   }
+
+  if (tracking) {
+    memoryStatusBarItem.text = "$(eye) Memory: tracking";
+    memoryStatusBarItem.tooltip = "Basilisk: memory tracking active — click for snapshot/compare/stop";
+    memoryStatusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
+  } else {
+    memoryStatusBarItem.text = "$(database) Memory";
+    memoryStatusBarItem.tooltip = "Basilisk: click to start memory tracking (pause at a breakpoint first)";
+    memoryStatusBarItem.backgroundColor = undefined;
+  }
+  memoryStatusBarItem.show();
 }
