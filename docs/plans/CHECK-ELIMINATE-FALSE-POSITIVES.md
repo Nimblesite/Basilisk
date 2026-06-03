@@ -202,7 +202,48 @@ The remaining ~125 FPs cannot be fixed without fundamental engine work. The chec
 
 ## Execution log
 
-### 2026-06-03 — clean FP reduction: 170 → 161 (zero conformance regression)
+### 2026-06-03 (session 2) — FP reduction 161 → 136 and counting (zero conformance regression)
+
+Verification harness: [`scripts/fp_verify.sh`](../../scripts/fp_verify.sh) rebuilds, runs
+the conformance suite, and diffs `conformance_status.csv` against a saved baseline,
+flagging any PASS→FAIL flip, `caught` drop, or `missed` rise plus the per-file FP delta.
+Run after **every** change; revert anything that regresses. Baseline advances only to
+verified-better states.
+
+Throughout: **PASS=136, caught=858, missed=95 unchanged**; only `fp` moves (down).
+
+| # | Change | Files | FPs | Status |
+|---|--------|-------|-----|--------|
+| 1 | Bare `Callable` → `Callable[..., Any]`, bare `type` → `type[Any]` (≈Any); `tuple[()]` → empty tuple; `None` assignable to `Hashable`; skip whole-quoted annotations in E0014; E0099 skips type-utility (`assert_type`/`reveal_type`/`cast`) args | types_parsing.rs, types.rs, e0014/mod.rs, protocol_ext.rs | **−8** | DONE (161→153) |
+| 2 | `tuple[Any,...]` / `tuple[Unknown,...]` source assignable to fixed-length target (PEP 484 gradual) | types.rs | **−3** | DONE (153→150) |
+| 3 | Recursive **value-alias** matcher: resolve bare `Name = Union[...]` aliases (Json/RecursiveTuple/RecursiveMapping) and positively match the inferred literal against the expanded (recursive) definition. Positive-match semantics keep `Unknown` (e.g. `3j`) from matching, so the `# E` lines still fire | e0014/alias_match.rs (new), e0014/mod.rs | **−14** | DONE (150→136) |
+
+**Why the alias matcher is TP-safe:** it only *suppresses* when the value demonstrably
+matches the alias; `Unknown`/`Any` never positively match a concrete target, so the
+fixtures' incompatible assignments (`3j`, stray `list`s) keep firing. Restricted to
+`Union`-bodied aliases referenced by a bare name → excludes the 4 generic-alias FPs
+(`GenericTypeAlias1/2`, which need TypeVar substitution — see Deferred).
+
+**Deferred this session (need engine/resolver work, out of scope for a no-regression PR):**
+
+- **Callable/protocol structural subtyping** (callables_subtyping 24, callables_annotation 16,
+  protocols_subtyping 7, protocols_merging 2 ≈ **49 FPs**). These are *load-bearing*: E0014's
+  `Named`-base-mismatch catches both the OK and the `# E` lines (mirror-image assignments like
+  `f3: PosOnly2 = standard` OK vs `f1: Standard2 = pos_only` E). Eliminating the FPs requires
+  real PEP 484 callable subtyping with **parameter-kind awareness** (positional-only `/`,
+  keyword-only `*`, `*args`/`**kwargs` supertype rules, defaults, overloads, ParamSpec). Blocked
+  on a prerequisite: `ParameterInfo` does not capture parameter kind today — a resolver expansion
+  is needed first. Suppressing without it would drop ~40 TPs and slip conformance.
+- **Variadic-tuple star matching** (tuples_type_compat 11): PEP 646 `*tuple[...]` prefix/middle/suffix.
+- **Recursive generic aliases** (aliases_recursive 4): TypeVar substitution.
+- **TypedDict structural assignability** (E0014 readonly_*/inheritance 8, E0093 extra_items/ReadOnly 7).
+- **`assert_type` narrowing** (E0053 15): flow narrowing (isinstance/`is`/TypeGuard/TypeIs) + Union/tuple-unpack syntactic equivalence.
+- **Constructors** (E0111 9): dataclass_transform class/converter, NamedTuple subscript/inheritance, type-erasure.
+- **Scattered singles** (E0012/E0048/E0054/E0069/E0060/E0115/E0130/E0094/E0078/E0092/E0139/E0112/E0140/E0041/E0143).
+
+---
+
+### 2026-06-03 (session 1) — clean FP reduction: 170 → 161 (zero conformance regression)
 
 Measured against `main`. Every change verified empirically: re-ran the harness and
 diffed `conformance_status.csv` for PASS→FAIL flips AND `caught`/`missed` deltas.

@@ -250,6 +250,11 @@ impl InferredType {
                 a_key.is_assignable_to(b_key) && a_val.is_assignable_to(b_val)
             }
             (InferredType::Tuple(a), InferredType::Tuple(b)) => {
+                // A target with an unpacked `*tuple[...]` / `*Ts` segment (PEP 646)
+                // needs prefix/middle/suffix matching, not positional equality.
+                if b.iter().any(is_unpacked_tuple_elem) {
+                    return tuple_assignable_with_star(a, b);
+                }
                 match (homogeneous_tuple_elem(a), homogeneous_tuple_elem(b)) {
                     // Target `tuple[X, ...]` (PEP 484 homogeneous variable-length):
                     // a source `tuple[Y, ...]` matches when `Y` is assignable to `X`.
@@ -353,4 +358,113 @@ fn homogeneous_tuple_elem(elems: &[InferredType]) -> Option<&InferredType> {
         [elem, InferredType::Named(terminator)] if terminator == "..." => Some(elem),
         _ => None,
     }
+}
+
+/// Returns `true` when a tuple element is an unpacked variadic segment — either
+/// `*tuple[...]` or a `*Ts` TypeVarTuple. The annotation parser stores these as
+/// `Named` text beginning with `*`.
+fn is_unpacked_tuple_elem(elem: &InferredType) -> bool {
+    matches!(elem, InferredType::Named(name) if name.starts_with('*'))
+}
+
+/// What an unpacked `*tuple[...]` / `*Ts` segment consumes from a source tuple.
+enum StarSegment {
+    /// `*tuple[X, ...]` or `*Ts` — zero or more elements, each assignable to the
+    /// element type (`None` ⇒ any, for `*Ts` / `*tuple[Any, ...]`).
+    Variadic(Option<InferredType>),
+    /// `*tuple[X, Y]` — a fixed run of elements consumed positionally.
+    Fixed(Vec<InferredType>),
+}
+
+/// Parse an unpacked tuple element (`Named("*tuple[...]")` / `Named("*ts")`).
+fn parse_star_segment(name: &str) -> StarSegment {
+    let Some(inner) = name
+        .strip_prefix("*tuple[")
+        .and_then(|rest| rest.strip_suffix(']'))
+    else {
+        // `*Ts` (a TypeVarTuple) — any number of elements of any type.
+        return StarSegment::Variadic(None);
+    };
+    let parts = crate::types_parsing::split_type_params(inner);
+    if matches!(parts.last(), Some(last) if last.trim() == "...") {
+        // `*tuple[X, ...]` — homogeneous, zero or more of `X`.
+        let elem = parts
+            .first()
+            .map(|p| InferredType::from_annotation(p.trim()));
+        return StarSegment::Variadic(elem);
+    }
+    StarSegment::Fixed(
+        parts
+            .iter()
+            .map(|p| InferredType::from_annotation(p.trim()))
+            .collect(),
+    )
+}
+
+/// Match a fixed-length source tuple against a target tuple that contains a
+/// single unpacked `*tuple[...]` / `*Ts` segment (PEP 646), using
+/// prefix/middle/suffix decomposition.
+fn tuple_assignable_with_star(source: &[InferredType], target: &[InferredType]) -> bool {
+    // Only a fixed-length source is supported here; a variadic source against a
+    // variadic target needs full unification (handled elsewhere / conservatively).
+    if source.iter().any(is_unpacked_tuple_elem) {
+        return false;
+    }
+    let Some(star_idx) = target.iter().position(is_unpacked_tuple_elem) else {
+        return false;
+    };
+    let prefix = &target[..star_idx];
+    let suffix = &target[star_idx + 1..];
+    // Only one unpacked segment is supported.
+    if suffix.iter().any(is_unpacked_tuple_elem) {
+        return false;
+    }
+
+    match parse_star_segment(match &target[star_idx] {
+        InferredType::Named(name) => name,
+        _ => return false,
+    }) {
+        StarSegment::Variadic(elem) => {
+            if source.len() < prefix.len() + suffix.len() {
+                return false;
+            }
+            let middle_end = source.len() - suffix.len();
+            prefix_suffix_match(source, prefix, suffix)
+                && match elem {
+                    None => true,
+                    Some(elem_ty) => source[prefix.len()..middle_end]
+                        .iter()
+                        .all(|s| s.is_assignable_to(&elem_ty)),
+                }
+        }
+        StarSegment::Fixed(middle) => {
+            if source.len() != prefix.len() + middle.len() + suffix.len() {
+                return false;
+            }
+            let middle_end = prefix.len() + middle.len();
+            prefix_suffix_match(source, prefix, suffix)
+                && source[prefix.len()..middle_end]
+                    .iter()
+                    .zip(middle.iter())
+                    .all(|(s, m)| s.is_assignable_to(m))
+        }
+    }
+}
+
+/// Check that a source tuple's leading elements match `prefix` and trailing
+/// elements match `suffix` (both fixed, non-starred).
+fn prefix_suffix_match(
+    source: &[InferredType],
+    prefix: &[InferredType],
+    suffix: &[InferredType],
+) -> bool {
+    let suffix_start = source.len() - suffix.len();
+    source[..prefix.len()]
+        .iter()
+        .zip(prefix.iter())
+        .all(|(s, p)| s.is_assignable_to(p))
+        && source[suffix_start..]
+            .iter()
+            .zip(suffix.iter())
+            .all(|(s, q)| s.is_assignable_to(q))
 }

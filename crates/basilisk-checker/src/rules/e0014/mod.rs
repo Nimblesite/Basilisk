@@ -13,6 +13,7 @@
 //! The check is performed by extracting the annotation text from the source
 //! around the variable's name span and comparing it against the RHS kind.
 
+mod alias_match;
 mod dataclass_check;
 mod literal_parse;
 mod tuple_check;
@@ -45,6 +46,7 @@ impl Rule for AssignmentTypeMismatch {
         let skip = SkipNames {
             typeddict: collect_typeddict_names(module),
             type_alias: collect_type_alias_names(module),
+            value_aliases: alias_match::collect_union_aliases(module),
         };
         check_vars(
             &module.module_vars,
@@ -108,6 +110,9 @@ struct SkipNames {
     typeddict: std::collections::HashSet<String>,
     /// PEP 695 type alias names (lowercase).
     type_alias: std::collections::HashSet<String>,
+    /// Legacy `Name = Union[...]` value aliases (lowercase → definition), used
+    /// for recursive-alias value matching.
+    value_aliases: std::collections::HashMap<String, InferredType>,
 }
 
 /// Check a slice of annotated variables for type mismatches.
@@ -203,6 +208,26 @@ fn check_vars(
                         if let Some(param_type) = param_types.get(rhs_name) {
                             inferred_type = param_type.clone();
                         }
+                    }
+                }
+            }
+
+            // A bare reference to a legacy `Union` alias (e.g. a recursive
+            // `Json` alias) needs value-level matching against the expanded
+            // definition rather than the `Named`-vs-literal comparison below.
+            if let InferredType::Named(ref name) = declared_type {
+                if !name.contains('[') {
+                    if let Some(def) = skip.value_aliases.get(name.as_str()) {
+                        return if alias_match::alias_assignable(
+                            &inferred_type,
+                            def,
+                            &skip.value_aliases,
+                            0,
+                        ) {
+                            None
+                        } else {
+                            Some((var, annotation_text.to_owned(), inferred_type, declared_type))
+                        };
                     }
                 }
             }
