@@ -226,7 +226,12 @@ fn check_vars(
                         ) {
                             None
                         } else {
-                            Some((var, annotation_text.to_owned(), inferred_type, declared_type))
+                            Some((
+                                var,
+                                annotation_text.to_owned(),
+                                inferred_type,
+                                declared_type,
+                            ))
                         };
                     }
                 }

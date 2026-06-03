@@ -97,7 +97,7 @@ BSK-E0071,historical_positional.py,historical,PASS,4,0,0
 BSK-E0053|BSK-E0127,literals_interactions.py,literals,PASS,4,0,4
 BSK-E0014|BSK-E0051|BSK-E0109|BSK-E0126|BSK-E0129,literals_literalstring.py,literals,PASS,9,0,0
 BSK-E0014|BSK-E0051|BSK-E0068|BSK-E0117|BSK-E0129|BSK-E0130,literals_parameterizations.py,literals,PASS,17,0,0
-BSK-E0014|BSK-E0129,literals_semantics.py,literals,PASS,4,0,2
+BSK-E0014|BSK-E0129,literals_semantics.py,literals,PASS,4,0,1
 BSK-E0111|BSK-E0116|BSK-E0143,namedtuples_define_class.py,namedtuples,PASS,14,0,2
 BSK-E0041|BSK-E0064,namedtuples_define_functional.py,namedtuples,PASS,9,0,0
 BSK-E0073,namedtuples_type_compat.py,namedtuples,PASS,2,0,0
@@ -129,7 +129,7 @@ BSK-E0065,specialtypes_promotions.py,specialtypes,PASS,1,0,0
 BSK-E0015|BSK-E0092|BSK-E0145,specialtypes_type.py,specialtypes,PASS,9,0,0
 BSK-E0014|BSK-E0045|BSK-E0147,tuples_type_compat.py,tuples,PASS,16,0,2
 BSK-E0014|BSK-E0049|BSK-E0090,tuples_type_form.py,tuples,PASS,11,0,0
-BSK-E0014|BSK-E0049|BSK-E0053,tuples_unpacked.py,tuples,PASS,4,0,4
+BSK-E0049|BSK-E0053,tuples_unpacked.py,tuples,PASS,4,0,3
 BSK-E0037,typeddicts_alt_syntax.py,typeddicts,PASS,4,0,0
 BSK-E0029|BSK-E0032,typeddicts_class_syntax.py,typeddicts,PASS,3,0,0
 BSK-E0014|BSK-E0093|BSK-E0132|BSK-E0141,typeddicts_extra_items.py,typeddicts,FAIL,5,18,10

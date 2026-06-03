@@ -304,52 +304,37 @@ After each step:
 
 ---
 
-## TODO
+## TODO — live checklist (ratchets DOWN; tick as eliminated)
 
-> **Total: 18 FPs** (down from 251→177→57→18, as of 2026-03-21)
+> **Total: 126 FPs** (this session: 161 → 126, −35, ZERO conformance regression).
+> Gate: `coverage-thresholds.json` `max_false_positives = 126` (ratchet DOWN only).
+> Each item verified via [`scripts/fp_verify.sh`](../../scripts/fp_verify.sh): no PASS→FAIL,
+> `caught`≥858, `missed`≤95.
 
-### FP Breakdown by Rule (from conformance test verbose output)
+### Done this session (−35)
 
-| Rule | FPs | Files |
-|------|-----|-------|
-| BSK-E0094 | 2 | generics_self_usage (2) |
-| BSK-E0093 | 2 | typeddicts_final (1), typeddicts_readonly_update (1) |
-| BSK-E0140 | 2 | callables_kwargs (1), typeddicts_readonly_kwargs (1) |
-| BSK-E0014 | 2 | dataclasses_transform_converter (1), directives_type_checking (1) |
-| BSK-E0149 | 1 | generics_syntax_scoping (1, triple-reported) |
-| BSK-E0141 | 1 | typeddicts_extra_items (1) |
-| BSK-E0132 | 1 | typeddicts_extra_items (1) |
-| BSK-E0139 | 1 | generics_typevartuple_specialization (1) |
-| BSK-E0143 | 1 | namedtuples_usage (1) |
-| BSK-E0115 | 1 | directives_deprecated (1) |
-| BSK-E0112 | 1 | narrowing_typeguard (1) |
-| BSK-E0099 | 1 | generics_self_protocols (1) |
-| BSK-E0092 | 1 | generics_paramspec_specialization (1) |
-| BSK-E0078 | 1 | generics_self_usage (1) |
-| BSK-E0069 | 1 | dataclasses_transform_func (1) |
+- [x] Bare `Callable` → `Callable[..., Any]`, bare `type` → Any (`types_parsing.rs`)
+- [x] `tuple[()]` → empty tuple type (`types_parsing.rs`)
+- [x] `None` assignable to `Hashable` (`types.rs`)
+- [x] Skip whole-quoted forward-ref annotations in E0014 (`e0014/mod.rs`)
+- [x] E0099 skips `assert_type`/`reveal_type`/`cast` arguments (`protocol_ext.rs`)
+- [x] `tuple[Any,...]`/`tuple[Unknown,...]` source → fixed-length target (gradual) (`types.rs`)
+- [x] Recursive `Union` value-alias matcher (Json/RecursiveTuple/RecursiveMapping) (`e0014/alias_match.rs`)
+- [x] PEP 646 variadic-tuple `*tuple[...]` star matching (`types.rs`)
+- [x] Non-decimal `Literal` integer equivalence (`0x14`==`0o24`==`0b10100`) (`types_parsing.rs`)
+- [x] Shared `parse_key_value_args` helper (dedup `dict[]`/`Mapping[]` parsing)
+- [x] Mutation-hardening e2e tests (`tests/fp_elimination_tests.rs`) + FP-ceiling ratchet → 126
 
-### Completed (120+ FPs eliminated, 177 -> 57 as of 2026-03-21)
+### Remaining — deferred engine work (need narrowing / structural subtyping / resolver expansion)
 
-- [x] Step 0: Add FP verbose reporting to conformance harness — `diag_line_rules` HashMap in `conformance_tests.rs`
-- [x] BSK-E0014: bare generics (`list`, `dict`, `set`, `tuple`) + `complex` type recognition — 7 FPs fixed
-- [x] BSK-E0104: recursive alias cycle detection — allow container-wrapped recursion — 2 FPs fixed
-- [x] BSK-E0061: enum `assert_type` — only flag when first arg is enum-typed param — 8 FPs fixed
-- [x] BSK-E0111: constructor calls — add builtin base classes, dataclass inheritance, `__init_subclass__` — 9 FPs fixed
-- [x] BSK-E0149: PEP 695 type param extraction — fixed `extract_pep695_type_params` to check `=` for `type` statements, preventing RHS subscripts from being treated as type params — 18 FPs fixed
-- [x] BSK-E0093: TypedDict `Required`/`NotRequired`/`ReadOnly` — added `is_field_required()` helper and `strip_td_wrappers()` for value type comparison — 9 FPs fixed
-- [x] BSK-E0110: protocol variance — treat invariant containers as variance-neutral; add `tuple`/`Tuple` to covariant containers — 5 FPs fixed
-- [x] BSK-E0121: protocol conformance — check class attributes (not just methods) for protocol member satisfaction — 7 FPs fixed
-- [x] BSK-E0130: TypeVar scoping — skip docstrings, comments, and multi-line function signature continuations — 6 FPs fixed
-- [x] BSK-E0014: **massive FP elimination** — suppress when RHS is non-literal (variable/param/call) and involves Named/Callable/Tuple types; suppress when declared type is Named (unresolved alias); `contains_unresolvable` recursive check; `# type: ignore` line-level support — **101 FPs fixed**
-- [x] BSK-E0013: return type mismatch — `contains_named` recursive check for declared types with Named inside unions/tuples; `is_base_to_literal` for Bool→Literal[True/False] and Int→Literal[N] etc. — **7 FPs fixed**
-- [x] BSK-E0053: `assert_type` — variadic tuple equivalence in `types_match` — **4 FPs fixed**
-- [x] File-level `# type: ignore` support in `suppression.rs` — detect standalone `# type: ignore` before executable code and suppress all diagnostics — **1 FP fixed**
-
-### Remaining: 18 FPs across 15 files (scattered, low-count rules)
-
-All remaining FPs are 1-2 per rule — no single rule dominates. See updated breakdown table above.
-
-**Notable**: E0094 (2), E0093 (2), E0140 (2), E0014 (2) are the only rules with >1 FP. All others have exactly 1.
+- [ ] **Callable/protocol structural subtyping** (~49): callables_subtyping (24), callables_annotation (16), protocols_subtyping (7), protocols_merging (2). Blocked on resolver capturing parameter **kind** (positional-only `/`, keyword-only `*`) in `ParameterInfo`, then full PEP 484 callable subtyping. Load-bearing — suppression drops ~40 TPs.
+- [ ] **TypedDict structural assignability** (~17): E0014 readonly_consistency (5)/readonly_inheritance (2)/inheritance (1); E0093 extra_items/ReadOnly/final/update (7+); PEP 728/705.
+- [ ] **`assert_type` flow narrowing** (E0053 ~11): isinstance/`is`/TypeGuard/TypeIs (exceptions_context_managers 4, literals_interactions 4, narrowing_typeguard 2, narrowing_typeis 1) + Union/tuple-unpack syntactic equivalence (annotations_typeexpr 1, tuples_unpacked 3).
+- [ ] **Constructors** (E0111 9): dataclass_transform class/converter/meta, NamedTuple subscript/inheritance, type-erasure.
+- [ ] **Recursive generic aliases** (4): TypeVar substitution (GenericTypeAlias1/2 in aliases_recursive).
+- [ ] **E0012 TypeVarTuple arity** (4): needs argument-type resolution in E0012.
+- [ ] **E0130 TypeVar scoping** (3), **E0047 ParamSpec annotations** (≈4), and scattered singles (E0048/E0054/E0069/E0060/E0115/E0094/E0078/E0092/E0139/E0112/E0140/E0041/E0143).
+- [ ] **`if not TYPE_CHECKING:` block bodies** (E0014 directives_type_checking 1): resolver must mark statements unreachable to the checker.
 
 ---
 

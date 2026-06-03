@@ -34,7 +34,7 @@ const MAX_DEPTH: u32 = 24;
 ///
 /// These are legacy aliases written as `Name = Union[...]` or `Name = a | b | …`
 /// (no annotation). Restricting to `Union` definitions deliberately excludes
-/// generic (`list[...]`-bodied) aliases that would need TypeVar substitution.
+/// generic (`list[...]`-bodied) aliases that would need `TypeVar` substitution.
 pub(super) fn collect_union_aliases(module: &ResolvedModule) -> HashMap<String, InferredType> {
     let mut aliases = HashMap::new();
     for var in &module.module_vars {
@@ -100,13 +100,15 @@ pub(super) fn alias_assignable(
             _ => false,
         },
         InferredType::Dict(key, val) => match value {
-            InferredType::Dict(vkey, vval) => {
-                alias_assignable(vkey, key, aliases, depth + 1)
-                    && alias_assignable(vval, val, aliases, depth + 1)
+            InferredType::Dict(value_key, value_val) => {
+                alias_assignable(value_key, key, aliases, depth + 1)
+                    && alias_assignable(value_val, val, aliases, depth + 1)
             }
             _ => false,
         },
-        InferredType::Tuple(target_elems) => match_tuple_target(value, target_elems, aliases, depth),
+        InferredType::Tuple(target_elems) => {
+            match_tuple_target(value, target_elems, aliases, depth)
+        }
         InferredType::Any => true,
         _ => positive_base_match(value, target),
     }
@@ -166,10 +168,13 @@ fn match_tuple_target(
 /// Positive structural match for primitive base types. Notably `Unknown`/`Any`
 /// values do NOT match a concrete base type — the checker cannot prove it.
 fn positive_base_match(value: &InferredType, target: &InferredType) -> bool {
-    use InferredType::{Bool, Bytes, Float, Int, Literal, LiteralString, None_, Str};
     use crate::types::LiteralValue;
+    use InferredType::{Bool, Bytes, Float, Int, Literal, LiteralString, None_, Str};
     match target {
-        Int => matches!(value, Int | Bool | Literal(LiteralValue::Int(_) | LiteralValue::Bool(_))),
+        Int => matches!(
+            value,
+            Int | Bool | Literal(LiteralValue::Int(_) | LiteralValue::Bool(_))
+        ),
         Float => matches!(
             value,
             Float | Int | Bool | Literal(LiteralValue::Float(_) | LiteralValue::Int(_))
@@ -193,11 +198,6 @@ fn alias_base(name: &str) -> &str {
 /// structurally against a dict literal value.
 fn parse_mapping_named(name: &str) -> Option<InferredType> {
     let inner = name.strip_prefix("mapping[")?.strip_suffix(']')?;
-    let parts = crate::types_parsing::split_type_params(inner);
-    if parts.len() != 2 {
-        return None;
-    }
-    let key = InferredType::from_annotation(parts.first().map_or("", |s| s.trim()));
-    let val = InferredType::from_annotation(parts.get(1).map_or("", |s| s.trim()));
+    let (key, val) = crate::types_parsing::parse_key_value_args(inner)?;
     Some(InferredType::Dict(Box::new(key), Box::new(val)))
 }

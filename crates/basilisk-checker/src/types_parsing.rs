@@ -84,13 +84,12 @@ fn parse_container_annotation(annotation: &str) -> InferredType {
         let inner = &annotation[5..annotation.len() - 1];
         // Bracket-aware split so a nested key type (e.g. `tuple[str, str]`) is
         // not severed at its inner comma — same splitter `tuple[`/`union[` use.
-        let parts = split_type_params(inner);
-        if parts.len() == 2 {
-            let key_type = InferredType::from_annotation(parts.first().map_or("", |s| s.trim()));
-            let value_type = InferredType::from_annotation(parts.get(1).map_or("", |s| s.trim()));
-            return InferredType::Dict(Box::new(key_type), Box::new(value_type));
-        }
-        return InferredType::Named(annotation.to_owned());
+        return match parse_key_value_args(inner) {
+            Some((key_type, value_type)) => {
+                InferredType::Dict(Box::new(key_type), Box::new(value_type))
+            }
+            None => InferredType::Named(annotation.to_owned()),
+        };
     }
     if annotation.starts_with("set[") && annotation.ends_with(']') {
         let inner = &annotation[4..annotation.len() - 1];
@@ -166,9 +165,17 @@ fn parse_single_literal(val: &str) -> InferredType {
     if let Ok(num) = val.parse::<i64>() {
         return InferredType::Literal(LiteralValue::Int(num));
     }
-    if let Some(hex) = val.strip_prefix("0x").or_else(|| val.strip_prefix("0X")) {
-        if let Ok(num) = i64::from_str_radix(hex, 16) {
-            return InferredType::Literal(LiteralValue::Int(num));
+    // Non-decimal integer literals: `Literal[0x14]`, `Literal[0o24]`, `Literal[0b10100]`
+    // are all the value `20` and must compare equal across spellings.
+    for (prefix_lower, prefix_upper, radix) in [("0x", "0X", 16), ("0o", "0O", 8), ("0b", "0B", 2)]
+    {
+        if let Some(digits) = val
+            .strip_prefix(prefix_lower)
+            .or_else(|| val.strip_prefix(prefix_upper))
+        {
+            if let Ok(num) = i64::from_str_radix(&digits.replace('_', ""), radix) {
+                return InferredType::Literal(LiteralValue::Int(num));
+            }
         }
     }
 
@@ -187,6 +194,19 @@ fn parse_single_literal(val: &str) -> InferredType {
     }
 
     InferredType::Named(val.to_owned())
+}
+
+/// Parse the `K, V` inside a two-argument subscript (`dict[K, V]`,
+/// `Mapping[K, V]`) into key and value [`InferredType`]s. Returns `None` unless
+/// exactly two top-level, bracket-aware arguments are present.
+pub(super) fn parse_key_value_args(inner: &str) -> Option<(InferredType, InferredType)> {
+    let parts = split_type_params(inner);
+    if parts.len() != 2 {
+        return None;
+    }
+    let key = InferredType::from_annotation(parts.first().map_or("", |s| s.trim()));
+    let value = InferredType::from_annotation(parts.get(1).map_or("", |s| s.trim()));
+    Some((key, value))
 }
 
 /// Split type parameters by top-level commas, respecting bracket nesting.

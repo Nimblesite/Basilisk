@@ -361,7 +361,7 @@ fn homogeneous_tuple_elem(elems: &[InferredType]) -> Option<&InferredType> {
 }
 
 /// Returns `true` when a tuple element is an unpacked variadic segment — either
-/// `*tuple[...]` or a `*Ts` TypeVarTuple. The annotation parser stores these as
+/// `*tuple[...]` or a `*Ts` `TypeVarTuple`. The annotation parser stores these as
 /// `Named` text beginning with `*`.
 fn is_unpacked_tuple_elem(elem: &InferredType) -> bool {
     matches!(elem, InferredType::Named(name) if name.starts_with('*'))
@@ -405,35 +405,42 @@ fn parse_star_segment(name: &str) -> StarSegment {
 /// single unpacked `*tuple[...]` / `*Ts` segment (PEP 646), using
 /// prefix/middle/suffix decomposition.
 fn tuple_assignable_with_star(source: &[InferredType], target: &[InferredType]) -> bool {
-    // Only a fixed-length source is supported here; a variadic source against a
-    // variadic target needs full unification (handled elsewhere / conservatively).
+    // Unhandled shapes return `true` (assignable) rather than `false`: this is a
+    // best-effort matcher and must never manufacture a false positive. Only a
+    // pattern we actually decompose may return `false` (a real mismatch).
+    //
+    // A variadic source, multiple unpacked segments, or a `*Ts` we can't read
+    // all need full PEP 646 unification — be permissive.
     if source.iter().any(is_unpacked_tuple_elem) {
-        return false;
+        return true;
     }
     let Some(star_idx) = target.iter().position(is_unpacked_tuple_elem) else {
-        return false;
+        return true;
     };
-    let prefix = &target[..star_idx];
-    let suffix = &target[star_idx + 1..];
+    let (prefix, rest) = target.split_at(star_idx);
+    let Some((star_elem, suffix)) = rest.split_first() else {
+        return true;
+    };
     // Only one unpacked segment is supported.
     if suffix.iter().any(is_unpacked_tuple_elem) {
-        return false;
+        return true;
     }
+    let InferredType::Named(star_name) = star_elem else {
+        return true;
+    };
 
-    match parse_star_segment(match &target[star_idx] {
-        InferredType::Named(name) => name,
-        _ => return false,
-    }) {
+    match parse_star_segment(star_name) {
         StarSegment::Variadic(elem) => {
-            if source.len() < prefix.len() + suffix.len() {
+            let Some(middle_len) = source.len().checked_sub(prefix.len() + suffix.len()) else {
                 return false;
-            }
-            let middle_end = source.len() - suffix.len();
+            };
             prefix_suffix_match(source, prefix, suffix)
                 && match elem {
                     None => true,
-                    Some(elem_ty) => source[prefix.len()..middle_end]
+                    Some(elem_ty) => source
                         .iter()
+                        .skip(prefix.len())
+                        .take(middle_len)
                         .all(|s| s.is_assignable_to(&elem_ty)),
                 }
         }
@@ -441,10 +448,11 @@ fn tuple_assignable_with_star(source: &[InferredType], target: &[InferredType]) 
             if source.len() != prefix.len() + middle.len() + suffix.len() {
                 return false;
             }
-            let middle_end = prefix.len() + middle.len();
             prefix_suffix_match(source, prefix, suffix)
-                && source[prefix.len()..middle_end]
+                && source
                     .iter()
+                    .skip(prefix.len())
+                    .take(middle.len())
                     .zip(middle.iter())
                     .all(|(s, m)| s.is_assignable_to(m))
         }
@@ -452,19 +460,20 @@ fn tuple_assignable_with_star(source: &[InferredType], target: &[InferredType]) 
 }
 
 /// Check that a source tuple's leading elements match `prefix` and trailing
-/// elements match `suffix` (both fixed, non-starred).
+/// elements match `suffix` (both fixed, non-starred). Callers guarantee
+/// `source.len() >= prefix.len() + suffix.len()`.
 fn prefix_suffix_match(
     source: &[InferredType],
     prefix: &[InferredType],
     suffix: &[InferredType],
 ) -> bool {
-    let suffix_start = source.len() - suffix.len();
-    source[..prefix.len()]
+    source
         .iter()
         .zip(prefix.iter())
         .all(|(s, p)| s.is_assignable_to(p))
-        && source[suffix_start..]
+        && source
             .iter()
-            .zip(suffix.iter())
+            .rev()
+            .zip(suffix.iter().rev())
             .all(|(s, q)| s.is_assignable_to(q))
 }

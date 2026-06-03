@@ -43,7 +43,7 @@
   "conformance": {
     "_doc": "Minimum PEP conformance pass percentage (files passing / total files). Ratchet UP only. Current: 136/146 = 93.15% (pinned to python/typing@268d0c4e). 10 files still fail (missed required diagnostics): dataclasses_transform_converter, generics_defaults_specialization, generics_paramspec_components, generics_paramspec_semantics, generics_paramspec_specialization, generics_typevartuple_args, generics_typevartuple_basic, protocols_definition, typeddicts_extra_items, typeddicts_readonly_inheritance.",
     "threshold": 93,
-    "_fp_ceiling_doc": "Maximum total false positives across the suite (diagnostics on lines without a # E annotation). Ratchet DOWN only — the mirror of the pass-percentage gate. Enforced by conformance_tests.rs. Current measured: 161.",
-    "max_false_positives": 161
+    "_fp_ceiling_doc": "Maximum total false positives across the suite (diagnostics on lines without a # E annotation). Ratchet DOWN only — the mirror of the pass-percentage gate. Enforced by conformance_tests.rs. Any change that reintroduces even one FP pushes the total above this ceiling and fails CI. Current measured: 126.",
+    "max_false_positives": 126
   }
 }
