@@ -386,33 +386,41 @@ fn category(name: &str) -> &str {
 /// `coverage-thresholds.json`.  Falls back to 0 if the file is missing or
 /// malformed so the test still runs (the coverage script enforces separately).
 fn read_conformance_threshold() -> usize {
+    read_conformance_field("threshold").unwrap_or(0)
+}
+
+/// The maximum total false positives allowed across the suite, from
+/// `coverage-thresholds.json` → `conformance.max_false_positives`.
+///
+/// Ratchets DOWN only — like the pass-percentage gate but in the opposite
+/// direction. Returns `None` when the key is absent (gate disabled).
+fn read_conformance_fp_ceiling() -> Option<usize> {
+    read_conformance_field("max_false_positives")
+}
+
+/// Read a numeric field nested under the `"conformance"` object in
+/// `coverage-thresholds.json`.
+///
+/// Minimal JSON extraction — avoids adding a serde dependency to this test
+/// crate. Looks for `"conformance"` then the first occurrence of the requested
+/// key, then parses the following integer.
+fn read_conformance_field(key: &str) -> Option<usize> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let Some(repo_root) = manifest
+    let repo_root = manifest
         .ancestors()
-        .find(|p| p.join("Cargo.toml").exists() && p.join("crates").exists())
-    else {
-        return 0;
-    };
-    let path = repo_root.join("coverage-thresholds.json");
-    let Ok(content) = fs::read_to_string(&path) else {
-        return 0;
-    };
-    // Minimal JSON extraction — avoids adding a serde dependency to this test
-    // crate.  We look for `"conformance"` → `"threshold"` → number.
-    let Some(conformance_idx) = content.find("\"conformance\"") else {
-        return 0;
-    };
+        .find(|p| p.join("Cargo.toml").exists() && p.join("crates").exists())?;
+    let content = fs::read_to_string(repo_root.join("coverage-thresholds.json")).ok()?;
+    let conformance_idx = content.find("\"conformance\"")?;
     let rest = &content[conformance_idx..];
-    let Some(threshold_idx) = rest.find("\"threshold\"") else {
-        return 0;
-    };
-    let after = &rest[threshold_idx + "\"threshold\"".len()..];
+    let key_pat = format!("\"{key}\"");
+    let key_idx = rest.find(&key_pat)?;
+    let after = &rest[key_idx + key_pat.len()..];
     // Skip `:` and whitespace, then parse the number.
-    let num_start = after.find(|c: char| c.is_ascii_digit()).unwrap_or(0);
+    let num_start = after.find(|c: char| c.is_ascii_digit())?;
     let num_end = after[num_start..]
         .find(|c: char| !c.is_ascii_digit())
         .map_or(after.len(), |i| num_start + i);
-    after[num_start..num_end].parse().unwrap_or(0)
+    after[num_start..num_end].parse().ok()
 }
 
 // ---------------------------------------------------------------------------
@@ -472,6 +480,18 @@ fn conformance_score() {
         "  Conformance gate: {pct}% ({}/{}) >= {threshold}% threshold — PASS",
         totals.pass, totals.files
     );
+
+    // Enforce the false-positive ceiling from coverage-thresholds.json.
+    // False positives ratchet DOWN only: introducing new ones fails the gate.
+    if let Some(ceiling) = read_conformance_fp_ceiling() {
+        assert!(
+            totals.fp <= ceiling,
+            "PEP conformance false-positive regression: {} FPs > {ceiling} ceiling. \
+             False positives ratchet DOWN only — eliminate new ones before merging.",
+            totals.fp
+        );
+        println!("  FP gate: {} <= {ceiling} ceiling — PASS", totals.fp);
+    }
 }
 
 type CategoryMap = BTreeMap<String, (usize, usize)>;

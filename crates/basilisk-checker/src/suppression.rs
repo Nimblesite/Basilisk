@@ -47,9 +47,27 @@ pub fn parse_source_overrides(source: &str) -> SourceOverrides {
     let mut line_overrides = Vec::new();
     let mut block_starts: Vec<(usize, LineOverride)> = Vec::new();
     let mut block_overrides = Vec::new();
+    // Whether a docstring, import, or executable statement has been seen yet.
+    // A file-level `# type: ignore` is only valid before any such line.
+    let mut seen_substantial = false;
 
     for (line_idx, line) in source.lines().enumerate() {
         let trimmed = line.trim();
+
+        // File-level `# type: ignore` (PEP 484): a standalone `# type: ignore`
+        // on its own line, before any docstring/import/executable code, silences
+        // all errors in the file. Only blank lines and comments (shebang lines,
+        // coding cookies) may precede it.
+        if file_mode.is_none() && trimmed == "# type: ignore" && !seen_substantial {
+            file_mode = Some(FileOverride::Specific {
+                mode: RuleMode::Ignore,
+                codes: Vec::new(),
+            });
+            continue;
+        }
+        if !trimmed.is_empty() && !trimmed.starts_with('#') {
+            seen_substantial = true;
+        }
 
         // File-level directives (must be standalone comment lines).
         if trimmed == "# basilisk: relaxed" {
@@ -100,12 +118,11 @@ pub fn parse_source_overrides(source: &str) -> SourceOverrides {
         // Per-line directives: `# type: ignore`, `# type: warning[CODE]`, etc.
         // These appear at the end of a line with code.
         if let Some(rest) = find_comment_directive(line, "# type: ignore") {
-            let codes = parse_bracketed_codes(rest);
             line_overrides.push((
                 line_idx,
                 LineOverride {
                     mode: RuleMode::Ignore,
-                    codes,
+                    codes: parse_ignore_codes(rest),
                 },
             ));
         } else if let Some(rest) = find_comment_directive(line, "# type: disabled") {
@@ -228,6 +245,23 @@ fn find_comment_directive<'a>(line: &'a str, directive: &str) -> Option<&'a str>
         .map(|pos| &line[pos + directive.len()..])
 }
 
+/// Parse the code list for a `# type: ignore[...]` directive.
+///
+/// Per the typing spec, a `# type: ignore` comment silences *all* errors on the
+/// line; any bracketed content is type-checker-specific. Basilisk honours
+/// code-specific suppression only when every bracketed token is a Basilisk code
+/// (`BSK-…`). Any other content — mypy's `# type: ignore[assignment]`, an
+/// arbitrary tag, or no brackets at all — suppresses every error on the line, as
+/// the spec requires. (`Vec::new()` means "all rules" in `override_matches`.)
+fn parse_ignore_codes(rest: &str) -> Vec<String> {
+    let codes = parse_bracketed_codes(rest);
+    if codes.iter().all(|code| code.starts_with("BSK-")) {
+        codes
+    } else {
+        Vec::new()
+    }
+}
+
 /// Parse bracketed codes like `[BSK-E0010, BSK-E0011]` from the start of a string.
 fn parse_bracketed_codes(rest: &str) -> Vec<String> {
     let rest = rest.trim();
@@ -337,6 +371,64 @@ mod tests {
         assert_eq!(overrides.line_overrides.len(), 1);
         assert_eq!(overrides.line_overrides[0].1.mode, RuleMode::Info);
         assert!(overrides.line_overrides[0].1.codes.is_empty());
+    }
+
+    #[test]
+    fn test_type_ignore_non_basilisk_bracket_suppresses_all() {
+        // PEP 484: `# type: ignore[<anything>]` silences all errors on the line.
+        // A non-Basilisk tag must not be treated as a code-specific filter.
+        let source = "z: int = \"\"  # type: ignore[additional_stuff]\n";
+        let overrides = parse_source_overrides(source);
+        assert_eq!(overrides.line_overrides.len(), 1);
+        assert_eq!(overrides.line_overrides[0].1.mode, RuleMode::Ignore);
+        assert!(
+            overrides.line_overrides[0].1.codes.is_empty(),
+            "non-Basilisk bracket content must suppress all rules"
+        );
+        // And it actually suppresses an arbitrary diagnostic code.
+        assert!(override_matches(
+            "BSK-E0014",
+            &overrides.line_overrides[0].1.codes
+        ));
+    }
+
+    #[test]
+    fn test_type_ignore_basilisk_bracket_stays_code_specific() {
+        let source = "x = foo()  # type: ignore[BSK-E0010]\n";
+        let overrides = parse_source_overrides(source);
+        assert_eq!(overrides.line_overrides[0].1.codes, vec!["BSK-E0010"]);
+        assert!(!override_matches(
+            "BSK-E0014",
+            &overrides.line_overrides[0].1.codes
+        ));
+    }
+
+    #[test]
+    fn test_file_level_type_ignore_before_docstring() {
+        // A standalone `# type: ignore` after only a shebang and blank line, before
+        // the docstring, silences the whole file.
+        let source =
+            "#!/usr/bin/env python\n\n# type: ignore\n\n\"\"\"Doc.\"\"\"\n\nx: int = \"\"\n";
+        let overrides = parse_source_overrides(source);
+        match &overrides.file_mode {
+            Some(FileOverride::Specific { mode, codes }) => {
+                assert_eq!(*mode, RuleMode::Ignore);
+                assert!(codes.is_empty());
+            }
+            other => panic!("Expected file-level Ignore, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_type_ignore_after_code_is_not_file_level() {
+        // The same comment after a docstring/code is NOT file-level (it must still
+        // report errors elsewhere in the file).
+        let source = "\"\"\"Doc.\"\"\"\n\n# type: ignore\n\nx: int = \"\"\n";
+        let overrides = parse_source_overrides(source);
+        assert!(
+            overrides.file_mode.is_none(),
+            "comment after the docstring must not become a file-level directive"
+        );
     }
 
     #[test]

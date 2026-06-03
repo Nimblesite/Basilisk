@@ -2,9 +2,69 @@
 
 ## Context
 
-The conformance suite tracks ~230 false positives across 60+ files. False positives are diagnostics Basilisk reports on lines that have NO `# E` annotation — meaning the typing spec says these lines are **valid code** but Basilisk incorrectly flags them. This erodes user trust and blocks adoption.
+False positives are diagnostics Basilisk reports on lines that have NO `# E`
+annotation — the typing spec says the line is **valid code** but Basilisk flags
+it anyway. They erode user trust and block adoption.
 
-The conformance harness (`crates/basilisk-cli/tests/conformance_tests.rs:272-275`) counts FPs but only prints verbose output for **missed** errors, not for FPs. We need to fix the checker rules that over-report.
+The conformance harness (`crates/basilisk-cli/tests/conformance_tests.rs`) now
+prints per-FP verbose output (`FP <file>: count=N lines=[(line, rule)…]`, see
+`diag_line_rules`). Run `cargo test --test conformance_tests --release -- --nocapture`
+and `grep '  FP    '` to get the exact rule→line mapping.
+
+### CURRENT STATE (measured 2026-06-03, on `main` after PR #73)
+
+- **136/146 PASS (93.15%)**, threshold pinned at 93 in `coverage-thresholds.json`.
+- **170 false positives** across 50 files. (The earlier "18 FPs" claim in this
+  doc's history was a never-merged aspiration — the real number is 170.)
+
+> **HARD INVARIANT.** Conformance is monotonic: PASS count only goes UP, FP count
+> only goes DOWN. A file PASSES iff `missed == 0`. Flipping ONE file PASS→FAIL
+> drops us to 92.46% < 93 → CI fails. **Every FP fix must reduce FPs with ZERO
+> new missed diagnostics.** Verify empirically: after each change re-run the
+> harness and diff `conformance_status.csv` against baseline — no file may regress
+> PASS→FAIL and total `missed` must not increase.
+
+### FP distribution by rule (the real target list)
+
+| Rule | FPs | What it is | Dominant pattern |
+|------|-----|------------|------------------|
+| **E0014** | **~105** | assignment type mismatch | `local: NamedType = param` — param-type-map lookup yields a `Named`/`Callable` type that the `_ => false` catch-all in `is_assignable_to` rejects. E0014 is a *literal-mismatch* checker; protocol/callable/alias assignability belongs to E0136/E0121/E0099. |
+| E0053 | 15 | `assert_type` equivalence | text-based type equivalence misses spec-equal forms |
+| E0111 | 9 | constructor calls | over-strict arg checking on transformed/namedtuple/erased classes |
+| E0093 | 7 | TypedDict | `extra_items`/`ReadOnly`/`Final` field semantics |
+| E0013 | 7 | return type mismatch | base↔Literal and structural return widening |
+| E0012 | 4 | TypeVarTuple unpack | — |
+| E0130 / E0047 | 3 each | scoping / forward refs | — |
+| ~15 rules | 1–2 each | scattered | per-rule edge cases |
+
+---
+
+## Strategy (this PR)
+
+Fix the rules in descending FP order, **verifying empirically after each** against
+the saved baseline (`/tmp/conf_baseline.csv`). Group the E0014 mass into surgical,
+TP-safe guards rather than rewriting the (text-based) rule wholesale.
+
+- **FIX A — E0014 param-lookup conservatism** (`e0014/mod.rs` param branch). Only
+  adopt a parameter/variable's inferred type when *both* it and the declared type
+  are **value-adjudicable** (Int/Str/Float/Bool/Bytes/None/Literal/builtin
+  containers thereof) — never `Named`/`Callable`/`TypeForm`. Preserves the
+  `Literal[False] = a` (a: Literal[0]) TP while killing every `local: Named = param`
+  FP. Target ≈ 56 FPs (callables_annotation, callables_subtyping, protocols_*,
+  specialtypes_*, typeddicts_readonly_consistency).
+- **FIX B — E0014 TypedDict skip broadening**: when the declared type is a TypedDict,
+  skip for *all* RHS shapes (not just dict literals); E0093 owns TD field checking.
+- **FIX C — directives**: recognise `# type: ignore[code]` bracket form, file-level
+  `# type: ignore` before docstring, and suppress assignments under
+  `if not TYPE_CHECKING:` (3 FPs).
+- **FIX D — E0053** (15 FPs), **FIX E — E0013** (7 FPs), **FIX F — E0111** (9 FPs):
+  independent rules; root-cause + TP-safe patch per cluster.
+
+### Enforcement upgrade
+
+Add `conformance.max_false_positives` to `coverage-thresholds.json` and assert it
+in the harness (ratchet DOWN only), making FP a true quality gate alongside the
+PASS-percentage gate — "quality metrics only increase per PR".
 
 ---
 
@@ -140,25 +200,97 @@ The remaining ~125 FPs cannot be fixed without fundamental engine work. The chec
 
 ---
 
-## Execution Order
+## Execution log
 
-### Phase 1: Rule-Specific Fixes (Steps 0-6) — MOSTLY COMPLETE
+### 2026-06-03 (session 2) — FP reduction 161 → 136 and counting (zero conformance regression)
 
-| Step | Est. FPs Fixed | Effort | Risk | Status |
-|------|---------------|--------|------|--------|
-| 0. FP verbose reporting | 0 (tooling) | Low | None | DONE |
-| 1. E0104 recursive aliases | ~20 | Low | Low | DONE (2 FPs fixed) |
-| 2. E0136 callable subtyping | ~25 | Medium | Medium | Pending |
-| 3. E0014 assignment mismatch | ~110 | Medium | Medium | **DONE (108 FPs fixed)** |
-| 4. E0093 TypedDict | ~15 | Medium | Low | Partial (9 FPs fixed, 7 remain) |
-| 5. E0121/E0110/E0133 protocols | ~25 | High | Medium | Partial (12 FPs fixed) |
-| 6. E0013 return type mismatch | ~7 | Low | Low | **DONE (7 FPs fixed)** |
-| 7. File-level `# type: ignore` | ~1 | Low | None | **DONE** |
-| 8. Remaining scatter | ~20 | High | Low | In Progress |
+Verification harness: [`scripts/fp_verify.sh`](../../scripts/fp_verify.sh) rebuilds, runs
+the conformance suite, and diffs `conformance_status.csv` against a saved baseline,
+flagging any PASS→FAIL flip, `caught` drop, or `missed` rise plus the per-file FP delta.
+Run after **every** change; revert anything that regresses. Baseline advances only to
+verified-better states.
 
-### Phase 2: Type Narrowing and Full Inference — DONE
+Throughout: **PASS=136, caught=858, missed=95 unchanged**; only `fp` moves (down).
 
-Type narrowing engine, expression inference, constraint solver, and subtyping context all implemented. See [CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md). FPs reduced from 57 to 18.
+| # | Change | Files | FPs | Status |
+|---|--------|-------|-----|--------|
+| 1 | Bare `Callable` → `Callable[..., Any]`, bare `type` → `type[Any]` (≈Any); `tuple[()]` → empty tuple; `None` assignable to `Hashable`; skip whole-quoted annotations in E0014; E0099 skips type-utility (`assert_type`/`reveal_type`/`cast`) args | types_parsing.rs, types.rs, e0014/mod.rs, protocol_ext.rs | **−8** | DONE (161→153) |
+| 2 | `tuple[Any,...]` / `tuple[Unknown,...]` source assignable to fixed-length target (PEP 484 gradual) | types.rs | **−3** | DONE (153→150) |
+| 3 | Recursive **value-alias** matcher: resolve bare `Name = Union[...]` aliases (Json/RecursiveTuple/RecursiveMapping) and positively match the inferred literal against the expanded (recursive) definition. Positive-match semantics keep `Unknown` (e.g. `3j`) from matching, so the `# E` lines still fire | e0014/alias_match.rs (new), e0014/mod.rs | **−14** | DONE (150→136) |
+
+**Why the alias matcher is TP-safe:** it only *suppresses* when the value demonstrably
+matches the alias; `Unknown`/`Any` never positively match a concrete target, so the
+fixtures' incompatible assignments (`3j`, stray `list`s) keep firing. Restricted to
+`Union`-bodied aliases referenced by a bare name → excludes the 4 generic-alias FPs
+(`GenericTypeAlias1/2`, which need TypeVar substitution — see Deferred).
+
+**Deferred this session (need engine/resolver work, out of scope for a no-regression PR):**
+
+- **Callable/protocol structural subtyping** (callables_subtyping 24, callables_annotation 16,
+  protocols_subtyping 7, protocols_merging 2 ≈ **49 FPs**). These are *load-bearing*: E0014's
+  `Named`-base-mismatch catches both the OK and the `# E` lines (mirror-image assignments like
+  `f3: PosOnly2 = standard` OK vs `f1: Standard2 = pos_only` E). Eliminating the FPs requires
+  real PEP 484 callable subtyping with **parameter-kind awareness** (positional-only `/`,
+  keyword-only `*`, `*args`/`**kwargs` supertype rules, defaults, overloads, ParamSpec). Blocked
+  on a prerequisite: `ParameterInfo` does not capture parameter kind today — a resolver expansion
+  is needed first. Suppressing without it would drop ~40 TPs and slip conformance.
+- **Variadic-tuple star matching** (tuples_type_compat 11): PEP 646 `*tuple[...]` prefix/middle/suffix.
+- **Recursive generic aliases** (aliases_recursive 4): TypeVar substitution.
+- **TypedDict structural assignability** (E0014 readonly_*/inheritance 8, E0093 extra_items/ReadOnly 7).
+- **`assert_type` narrowing** (E0053 15): flow narrowing (isinstance/`is`/TypeGuard/TypeIs) + Union/tuple-unpack syntactic equivalence.
+- **Constructors** (E0111 9): dataclass_transform class/converter, NamedTuple subscript/inheritance, type-erasure.
+- **Scattered singles** (E0012/E0048/E0054/E0069/E0060/E0115/E0130/E0094/E0078/E0092/E0139/E0112/E0140/E0041/E0143).
+
+---
+
+### 2026-06-03 (session 1) — clean FP reduction: 170 → 161 (zero conformance regression)
+
+Measured against `main`. Every change verified empirically: re-ran the harness and
+diffed `conformance_status.csv` for PASS→FAIL flips AND `caught`/`missed` deltas.
+
+| Change | Rule | FPs removed | Result |
+|--------|------|-------------|--------|
+| `is_unverifiable_return_type` recursive skip (Named **and** Literal at any nesting) | E0013 | **7 (all of them)** | **DONE.** E0013 is now FP-free. Quoted forward-ref unions (`"int \| Meta2"`), `tuple[()]`, and `Literal[...]`/`Literal`-tuple returns are unverifiable by kind-only return inference; skipping them loses no TP (verified: the suite's only Literal-return sites are the OK cases fixed + `...`-body overload stubs + `LiteralString`). |
+| File-level `# type: ignore` + spec-compliant `# type: ignore[<non-BSK>]` | suppression (E0014 FPs) | **2** | **DONE.** Standalone top-of-file `# type: ignore` (only blank/comment lines before) silences the file; bracketed non-Basilisk tags suppress all per PEP 484, while `[BSK-…]` stays code-specific. TP at `directives_type_ignore_file2.py:14` preserved (comment after docstring). |
+| FP-ceiling gate | harness | 0 (enforcement) | **DONE.** `conformance.max_false_positives` in `coverage-thresholds.json`, asserted in `conformance_tests.rs`. Ratchets DOWN only — mirrors the pass-% gate. Set to **161**. |
+
+**Rejected (would reduce `caught` — violates the monotonic invariant):**
+
+- **E0014 param-lookup conservatism (FIX A)** — removed ~58 FPs but flipped 4 files
+  PASS→FAIL (callables_annotation/subtyping, protocols_subtyping,
+  typeddicts_readonly_consistency add +47 `missed`). In those files E0014 is the
+  *de-facto partial subtyping checker* (it catches the `# E` lines via Named/Callable
+  comparison while FP-ing on the OK ones). Reverted. This cluster needs **real
+  callable/protocol subtyping** (Steps 2/5), not suppression.
+- **E0014 transitive-TypedDict skip (FIX B)** — removed 5 FPs but dropped `caught`
+  858→856 (+2 `missed` on the already-FAIL `typeddicts_extra_items` /
+  `typeddicts_readonly_inheritance`): E0014's blanket dict→TD flag was *accidentally*
+  catching `# E` lines that E0093 misses. Reverted. Needs E0093 field-level work.
+
+**Deferred (needs engine work, out of scope for a no-regression PR):**
+
+- **E0053 (assert_type, 15 FPs)** — 11 are flow narrowing (`isinstance`/`TypeGuard`/
+  `is`-comparison); the rest are Union-syntax / unpacked-tuple equivalence in the
+  resolver's `types_match` (high blast radius, medium confidence). Needs the
+  narrowing engine + semantic type normalisation.
+- **E0111 (constructor calls, 9 FPs)** — multiple distinct causes (generic-NamedTuple
+  subscript, NamedTuple inheritance, `@dataclass_transform` frozen bases) across a
+  FAIL file. Each is its own investigation; high regression risk in one pass.
+- **E0014 mass (~96 remaining)** — callables/protocols/recursive-aliases/tuples all
+  require real subtyping or value-level recursive-alias checking.
+
+### Historical notes (pre-2026-06-03, partially superseded)
+
+The status table below predates the measured baseline above; several "DONE (N FPs)"
+claims describe branches that did not land on `main` (the real baseline was 170 FPs,
+not the 18 this doc once claimed). Kept for the root-cause analysis it contains.
+
+| Step | Rule | Notes |
+|------|------|-------|
+| 0 | FP verbose reporting | DONE (`diag_line_rules` in `conformance_tests.rs`) |
+| 1 | E0104 recursive aliases | container-wrapped recursion allowed |
+| 2 | E0136 callable subtyping | **still needed** (see Rejected/FIX A) |
+| 5 | E0121/E0110/E0133 protocols | **still needed** (see Rejected/FIX A) |
 
 ---
 
@@ -172,52 +304,37 @@ After each step:
 
 ---
 
-## TODO
+## TODO — live checklist (ratchets DOWN; tick as eliminated)
 
-> **Total: 18 FPs** (down from 251→177→57→18, as of 2026-03-21)
+> **Total: 126 FPs** (this session: 161 → 126, −35, ZERO conformance regression).
+> Gate: `coverage-thresholds.json` `max_false_positives = 126` (ratchet DOWN only).
+> Each item verified via [`scripts/fp_verify.sh`](../../scripts/fp_verify.sh): no PASS→FAIL,
+> `caught`≥858, `missed`≤95.
 
-### FP Breakdown by Rule (from conformance test verbose output)
+### Done this session (−35)
 
-| Rule | FPs | Files |
-|------|-----|-------|
-| BSK-E0094 | 2 | generics_self_usage (2) |
-| BSK-E0093 | 2 | typeddicts_final (1), typeddicts_readonly_update (1) |
-| BSK-E0140 | 2 | callables_kwargs (1), typeddicts_readonly_kwargs (1) |
-| BSK-E0014 | 2 | dataclasses_transform_converter (1), directives_type_checking (1) |
-| BSK-E0149 | 1 | generics_syntax_scoping (1, triple-reported) |
-| BSK-E0141 | 1 | typeddicts_extra_items (1) |
-| BSK-E0132 | 1 | typeddicts_extra_items (1) |
-| BSK-E0139 | 1 | generics_typevartuple_specialization (1) |
-| BSK-E0143 | 1 | namedtuples_usage (1) |
-| BSK-E0115 | 1 | directives_deprecated (1) |
-| BSK-E0112 | 1 | narrowing_typeguard (1) |
-| BSK-E0099 | 1 | generics_self_protocols (1) |
-| BSK-E0092 | 1 | generics_paramspec_specialization (1) |
-| BSK-E0078 | 1 | generics_self_usage (1) |
-| BSK-E0069 | 1 | dataclasses_transform_func (1) |
+- [x] Bare `Callable` → `Callable[..., Any]`, bare `type` → Any (`types_parsing.rs`)
+- [x] `tuple[()]` → empty tuple type (`types_parsing.rs`)
+- [x] `None` assignable to `Hashable` (`types.rs`)
+- [x] Skip whole-quoted forward-ref annotations in E0014 (`e0014/mod.rs`)
+- [x] E0099 skips `assert_type`/`reveal_type`/`cast` arguments (`protocol_ext.rs`)
+- [x] `tuple[Any,...]`/`tuple[Unknown,...]` source → fixed-length target (gradual) (`types.rs`)
+- [x] Recursive `Union` value-alias matcher (Json/RecursiveTuple/RecursiveMapping) (`e0014/alias_match.rs`)
+- [x] PEP 646 variadic-tuple `*tuple[...]` star matching (`types.rs`)
+- [x] Non-decimal `Literal` integer equivalence (`0x14`==`0o24`==`0b10100`) (`types_parsing.rs`)
+- [x] Shared `parse_key_value_args` helper (dedup `dict[]`/`Mapping[]` parsing)
+- [x] Mutation-hardening e2e tests (`tests/fp_elimination_tests.rs`) + FP-ceiling ratchet → 126
 
-### Completed (120+ FPs eliminated, 177 -> 57 as of 2026-03-21)
+### Remaining — deferred engine work (need narrowing / structural subtyping / resolver expansion)
 
-- [x] Step 0: Add FP verbose reporting to conformance harness — `diag_line_rules` HashMap in `conformance_tests.rs`
-- [x] BSK-E0014: bare generics (`list`, `dict`, `set`, `tuple`) + `complex` type recognition — 7 FPs fixed
-- [x] BSK-E0104: recursive alias cycle detection — allow container-wrapped recursion — 2 FPs fixed
-- [x] BSK-E0061: enum `assert_type` — only flag when first arg is enum-typed param — 8 FPs fixed
-- [x] BSK-E0111: constructor calls — add builtin base classes, dataclass inheritance, `__init_subclass__` — 9 FPs fixed
-- [x] BSK-E0149: PEP 695 type param extraction — fixed `extract_pep695_type_params` to check `=` for `type` statements, preventing RHS subscripts from being treated as type params — 18 FPs fixed
-- [x] BSK-E0093: TypedDict `Required`/`NotRequired`/`ReadOnly` — added `is_field_required()` helper and `strip_td_wrappers()` for value type comparison — 9 FPs fixed
-- [x] BSK-E0110: protocol variance — treat invariant containers as variance-neutral; add `tuple`/`Tuple` to covariant containers — 5 FPs fixed
-- [x] BSK-E0121: protocol conformance — check class attributes (not just methods) for protocol member satisfaction — 7 FPs fixed
-- [x] BSK-E0130: TypeVar scoping — skip docstrings, comments, and multi-line function signature continuations — 6 FPs fixed
-- [x] BSK-E0014: **massive FP elimination** — suppress when RHS is non-literal (variable/param/call) and involves Named/Callable/Tuple types; suppress when declared type is Named (unresolved alias); `contains_unresolvable` recursive check; `# type: ignore` line-level support — **101 FPs fixed**
-- [x] BSK-E0013: return type mismatch — `contains_named` recursive check for declared types with Named inside unions/tuples; `is_base_to_literal` for Bool→Literal[True/False] and Int→Literal[N] etc. — **7 FPs fixed**
-- [x] BSK-E0053: `assert_type` — variadic tuple equivalence in `types_match` — **4 FPs fixed**
-- [x] File-level `# type: ignore` support in `suppression.rs` — detect standalone `# type: ignore` before executable code and suppress all diagnostics — **1 FP fixed**
-
-### Remaining: 18 FPs across 15 files (scattered, low-count rules)
-
-All remaining FPs are 1-2 per rule — no single rule dominates. See updated breakdown table above.
-
-**Notable**: E0094 (2), E0093 (2), E0140 (2), E0014 (2) are the only rules with >1 FP. All others have exactly 1.
+- [ ] **Callable/protocol structural subtyping** (~49): callables_subtyping (24), callables_annotation (16), protocols_subtyping (7), protocols_merging (2). Blocked on resolver capturing parameter **kind** (positional-only `/`, keyword-only `*`) in `ParameterInfo`, then full PEP 484 callable subtyping. Load-bearing — suppression drops ~40 TPs.
+- [ ] **TypedDict structural assignability** (~17): E0014 readonly_consistency (5)/readonly_inheritance (2)/inheritance (1); E0093 extra_items/ReadOnly/final/update (7+); PEP 728/705.
+- [ ] **`assert_type` flow narrowing** (E0053 ~11): isinstance/`is`/TypeGuard/TypeIs (exceptions_context_managers 4, literals_interactions 4, narrowing_typeguard 2, narrowing_typeis 1) + Union/tuple-unpack syntactic equivalence (annotations_typeexpr 1, tuples_unpacked 3).
+- [ ] **Constructors** (E0111 9): dataclass_transform class/converter/meta, NamedTuple subscript/inheritance, type-erasure.
+- [ ] **Recursive generic aliases** (4): TypeVar substitution (GenericTypeAlias1/2 in aliases_recursive).
+- [ ] **E0012 TypeVarTuple arity** (4): needs argument-type resolution in E0012.
+- [ ] **E0130 TypeVar scoping** (3), **E0047 ParamSpec annotations** (≈4), and scattered singles (E0048/E0054/E0069/E0060/E0115/E0094/E0078/E0092/E0139/E0112/E0140/E0041/E0143).
+- [ ] **`if not TYPE_CHECKING:` block bodies** (E0014 directives_type_checking 1): resolver must mark statements unreachable to the checker.
 
 ---
 
