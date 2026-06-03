@@ -480,6 +480,77 @@ d: float = 3.14
     Ok(())
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// E0014 check_vars: quoted forward-reference annotation skip (line 140)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Kills mutant: e0014/mod.rs:140 `replace || with &&` in the whole-quoted
+/// annotation guard (`starts_with('"') || starts_with('\'')`). A quoted
+/// forward-reference annotation must NOT be evaluated as a value type (so it
+/// produces no E0014), while an unquoted, genuinely-mismatched annotation MUST
+/// still fire. Flipping `||`→`&&` (or dropping either `starts_with`) makes the
+/// guard never skip, so the quoted lines would be processed and fire E0014 —
+/// observably changing the count.
+#[mutation_safe(rule = "e0014", fns = "check_vars")]
+#[test]
+fn mutant_e0014_quoted_annotation_skip() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+a: "int" = "hello"
+b: 'int' = 'hello'
+c: int = "hello"
+"#;
+    let diagnostics = run(source)?;
+    let e0014 = e0014_count(&diagnostics);
+    assert_eq!(
+        e0014, 1,
+        "only the unquoted `c: int = \"hello\"` mismatch fires; both quoted \
+         annotations are skipped, got {e0014}: {:?}",
+        diagnostics
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0014")
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// E0014 check_vars: bare recursive-Union-alias interception (line 219)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Kills mutant: e0014/mod.rs:219 `delete !` in the bare-alias guard
+/// (`!name.contains('[')`). A bare reference to a legacy recursive `Union`
+/// alias must be matched value-by-value against its expanded definition: a
+/// valid `Json` value is accepted (no E0014) and only an invalid member
+/// (complex `3j`) fires. Deleting the `!` flips the guard so bare alias names
+/// are no longer intercepted, falling back to the `Named`-vs-literal compare,
+/// which rejects the valid value too — raising the E0014 count.
+#[mutation_safe(rule = "e0014", fns = "check_vars")]
+#[test]
+fn mutant_e0014_recursive_union_alias() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import Union
+
+Json = Union[None, int, str, float, list["Json"], dict[str, "Json"]]
+
+ok: Json = [1, {"a": 1}]
+bad: Json = {"a": 3j}
+"#;
+    let diagnostics = run(source)?;
+    let e0014 = e0014_count(&diagnostics);
+    assert_eq!(
+        e0014, 1,
+        "the valid recursive-alias value is accepted; only the complex `3j` \
+         value fires, got {e0014}: {:?}",
+        diagnostics
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0014")
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
 fn e0001_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
     diagnostics
         .iter()
