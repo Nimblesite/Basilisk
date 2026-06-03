@@ -25,8 +25,8 @@ BSK-E0014|BSK-E0047|BSK-E0136,callables_subtyping.py,callables,PASS,32,0,24
 BSK-E0014|BSK-E0036|BSK-E0044,classes_classvar.py,classes,PASS,17,0,0
 ,classes_override.py,classes,PASS,0,0,0
 BSK-E0111|BSK-E0128,constructors_call_init.py,constructors,PASS,5,0,0
-BSK-E0013|BSK-E0041,constructors_call_metaclass.py,constructors,PASS,2,0,1
-BSK-E0013|BSK-E0074,constructors_call_new.py,constructors,PASS,2,0,2
+BSK-E0041,constructors_call_metaclass.py,constructors,PASS,2,0,0
+BSK-E0074,constructors_call_new.py,constructors,PASS,2,0,0
 BSK-E0144,constructors_call_type.py,constructors,PASS,8,0,0
 BSK-E0153,constructors_callable.py,constructors,PASS,12,0,0
 ,constructors_consistency.py,constructors,PASS,0,0,0
@@ -52,8 +52,8 @@ BSK-E0115,directives_deprecated.py,directives,PASS,12,0,1
 BSK-E0012|BSK-E0013|BSK-E0041,directives_no_type_check.py,directives,PASS,1,0,0
 BSK-E0033,directives_reveal_type.py,directives,PASS,2,0,0
 BSK-E0014,directives_type_checking.py,directives,PASS,0,0,1
-BSK-E0014,directives_type_ignore.py,directives,PASS,0,0,1
-BSK-E0014,directives_type_ignore_file1.py,directives,PASS,0,0,1
+,directives_type_ignore.py,directives,PASS,0,0,0
+,directives_type_ignore_file1.py,directives,PASS,0,0,0
 BSK-E0014,directives_type_ignore_file2.py,directives,PASS,1,0,0
 BSK-E0150,directives_version_platform.py,directives,PASS,3,0,0
 BSK-E0040,enums_behaviors.py,enums,PASS,1,0,0
@@ -62,7 +62,7 @@ BSK-E0061,enums_expansion.py,enums,PASS,1,0,0
 ,enums_member_names.py,enums,PASS,0,0,0
 BSK-E0066,enums_member_values.py,enums,PASS,2,0,0
 BSK-E0046|BSK-E0067,enums_members.py,enums,PASS,7,0,0
-BSK-E0013|BSK-E0053,exceptions_context_managers.py,exceptions,PASS,0,0,6
+BSK-E0053,exceptions_context_managers.py,exceptions,PASS,0,0,4
 BSK-E0027|BSK-E0047|BSK-E0092|BSK-E0132|BSK-E0134,generics_base_class.py,generics,PASS,7,0,0
 BSK-E0026|BSK-E0027|BSK-E0043|BSK-E0148,generics_basic.py,generics,PASS,13,0,0
 BSK-E0030|BSK-E0091|BSK-E0092|BSK-E0130,generics_defaults.py,generics,PASS,5,0,2
@@ -128,7 +128,7 @@ BSK-E0012|BSK-E0014,specialtypes_none.py,specialtypes,PASS,3,0,1
 BSK-E0065,specialtypes_promotions.py,specialtypes,PASS,1,0,0
 BSK-E0014|BSK-E0015|BSK-E0092|BSK-E0145,specialtypes_type.py,specialtypes,PASS,9,0,2
 BSK-E0014|BSK-E0045|BSK-E0147,tuples_type_compat.py,tuples,PASS,16,0,14
-BSK-E0013|BSK-E0014|BSK-E0049|BSK-E0090,tuples_type_form.py,tuples,PASS,11,0,3
+BSK-E0014|BSK-E0049|BSK-E0090,tuples_type_form.py,tuples,PASS,11,0,1
 BSK-E0049|BSK-E0053,tuples_unpacked.py,tuples,PASS,4,0,3
 BSK-E0037,typeddicts_alt_syntax.py,typeddicts,PASS,4,0,0
 BSK-E0029|BSK-E0032,typeddicts_class_syntax.py,typeddicts,PASS,3,0,0
