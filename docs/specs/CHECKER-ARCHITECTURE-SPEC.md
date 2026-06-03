@@ -692,11 +692,38 @@ list — keep it in sync after adding or renaming a rule.
 | `BSK-E0150` | Variable defined only in dead version/platform branch |
 | `BSK-E0151` | Invalid `TypeAliasType(...)` call |
 | `BSK-E0152` | Missing type stubs for installed package |
+| `BSK-E0153` | Invalid call to a constructor-derived callable ([CHKARCH-DIAG-CTOR-CALLABLE](#CHKARCH-DIAG-CTOR-CALLABLE)) |
 | `BSK-W0011` | Undeclared dependency import |
 | `BSK-W0012` | Unused dependency |
 | `BSK-W0013` | Stale uv lock file |
 | `BSK-W0040` | Lambda function missing type annotations |
 | `BSK-W0050` | Redundant type annotation warning |
+
+#### Constructor-to-callable conversion {#CHKARCH-DIAG-CTOR-CALLABLE}
+
+`BSK-E0153` implements the typing-spec rule
+["Converting a constructor to callable"](https://typing.readthedocs.io/en/latest/spec/constructors.html#converting-a-constructor-to-callable).
+When a class object flows through an identity-over-callable function
+(`def f(cb: Callable[P, R]) -> Callable[P, R]`), the value it returns gains the
+class's *constructor-to-callable* signature. Calls to a variable bound that way
+are validated against the synthesized signature.
+
+The synthesized signature is derived in priority order:
+
+1. The metaclass `__call__` (when the class declares a metaclass that defines
+   `__call__`) — e.g. a `__call__` taking `*args, **kwargs` accepts any call.
+2. `__new__` when its return type is neither `Self` nor the class itself
+   (e.g. `-> int`, `-> Proxy`, `-> Any`); `__init__` is then ignored.
+3. Otherwise `__init__` (or `__new__` when no `__init__` exists); a class with
+   neither synthesizes a zero-argument callable returning the instance.
+
+`BSK-E0153` fires when a call to such a variable supplies too few or too many
+positional arguments, names a keyword that is not a parameter, or binds a
+function-scoped `TypeVar` inconsistently (e.g. `list[T]` filled by both
+`list[int]` and `list[str]`). The analysis is conservative: starred positional
+arguments and `**kwargs` unpacking suppress arity checks to avoid false
+positives. Implemented in `crates/basilisk-checker/src/rules/e0153.rs`; tests in
+`crates/basilisk-checker/tests/e0153_tests.rs`.
 
 #### Planned analyses {#CHKARCH-DIAG-PLANNED}
 

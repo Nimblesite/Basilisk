@@ -48,16 +48,7 @@ impl Rule for TypeCallConstructorViolation {
         let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
             basilisk_resolver::name_lookup(&module.classes);
 
-        let mut method_map: HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>> =
-            HashMap::new();
-        for func in &module.functions {
-            if let Some(ref class_name) = func.class_name {
-                method_map
-                    .entry((class_name.as_str(), func.name.as_str()))
-                    .or_default()
-                    .push(func);
-            }
-        }
+        let method_map = super::shared::method_name_map(&module.functions);
 
         // Collect TypeVar names (module-level).
         let typevar_names: Vec<&str> = basilisk_resolver::collect_names(&module.typevar_calls);

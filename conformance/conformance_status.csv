@@ -28,7 +28,7 @@ BSK-E0111|BSK-E0128,constructors_call_init.py,constructors,PASS,5,0,0
 BSK-E0013|BSK-E0041,constructors_call_metaclass.py,constructors,PASS,2,0,1
 BSK-E0013|BSK-E0074,constructors_call_new.py,constructors,PASS,2,0,2
 BSK-E0144,constructors_call_type.py,constructors,PASS,8,0,0
-,constructors_callable.py,constructors,FAIL,0,12,0
+BSK-E0153,constructors_callable.py,constructors,PASS,12,0,0
 ,constructors_consistency.py,constructors,PASS,0,0,0
 ,dataclasses_descriptors.py,dataclasses,PASS,0,0,0
 BSK-E0054,dataclasses_final.py,dataclasses,PASS,5,0,1
