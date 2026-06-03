@@ -101,7 +101,13 @@ export function registerProfiler(
         .get<boolean>("profiler.profileOnLaunch", false);
       if (profileOnLaunch && session.type === "basilisk-debug" && activeSessionId === undefined) {
         Logger.info(`Profile on Launch: auto-profiling debug session ${session.id}`);
-        void handleProfileAttachToDebug(store);
+        // The debuggee PID arrives asynchronously via the DAP `process` event,
+        // so wait for it before attaching (avoids a "not ready yet" race).
+        void waitForDebuggeePid(store, session.id).then((ready) => {
+          if (ready && activeSessionId === undefined) {
+            void handleProfileAttachToDebug(store);
+          }
+        });
       }
     }),
   );
@@ -117,6 +123,34 @@ export function registerProfiler(
   );
 
   return disposables;
+}
+
+// ── Debuggee PID readiness ─────────────────────────────────────────────────
+
+/**
+ * Resolve once the debuggee's PID for `sessionId` is known (captured from the
+ * DAP `process` event into the store), or after a bounded wait. Returns whether
+ * the PID became available. Used by the "Profile on Launch" auto-attach so it
+ * doesn't fire before debugpy reports the process.
+ */
+async function waitForDebuggeePid(store: Store, sessionId: string): Promise<boolean> {
+  if (store.getDebuggeeProcessId(sessionId) !== undefined) {
+    return true;
+  }
+  return new Promise((resolve) => {
+    const interval = setInterval(() => {
+      if (store.getDebuggeeProcessId(sessionId) !== undefined) {
+        clearInterval(interval);
+        clearTimeout(timeout);
+        resolve(true);
+      }
+    }, POLL_INTERVAL_MS);
+    // Clear BOTH timers on whichever path resolves first so neither dangles.
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+      resolve(store.getDebuggeeProcessId(sessionId) !== undefined);
+    }, STARTUP_TIMEOUT_MS);
+  });
 }
 
 // ── Command handlers ──────────────────────────────────────────────────────
@@ -266,6 +300,17 @@ async function handleProfileAttachToDebug(store: Store): Promise<void> {
     return;
   }
 
+  // Resolve the debuggee's PID captured from the DAP `process` event so we
+  // profile the SAME process the debugger is attached to. The LSP profiler is
+  // PID-based; the privilege layer handles elevation (macOS helper) transparently.
+  const pid = store.getDebuggeeProcessId(session.id);
+  if (pid === undefined) {
+    vscode.window.showWarningMessage(
+      "Basilisk: The debuggee process isn't ready yet — let it start running, then run “Profile Debug Session” again.",
+    );
+    return;
+  }
+
   const cfg = vscode.workspace.getConfiguration("basilisk");
   const sampleRate = cfg.get<number>("profiler.sampleRate", DEFAULT_SAMPLE_RATE);
   const includeNative = cfg.get<boolean>("profiler.includeNative", false);
@@ -273,7 +318,7 @@ async function handleProfileAttachToDebug(store: Store): Promise<void> {
   try {
     const result = await client.sendRequest<{ sessionId: string; pid: number; pythonVersion: string } | undefined>("workspace/executeCommand", {
       command: LSP_CMD.start,
-      arguments: [{ debugSession: session.id, sampleRate, includeNative }],
+      arguments: [{ pid, sampleRate, includeNative }],
     });
 
     if (result !== undefined && result !== null) {

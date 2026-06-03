@@ -1558,7 +1558,7 @@ fn verify_memory_diagnostics(snap3: &MemorySnapshot, growth: &[AllocationGrowth]
         freed_allocations: vec![],
     };
     let mut fresh_tracker = LeakTracker::new();
-    let leak_diags = mem_diag::generate_diff_diagnostics(&diff_data, &mut fresh_tracker);
+    let (_leaks, leak_diags) = mem_diag::generate_diff_diagnostics(&diff_data, &mut fresh_tracker);
     assert!(!leak_diags.is_empty(), "should generate leak diagnostics");
 
     let cache_leak_diag = leak_diags

@@ -82,6 +82,12 @@ pub mod commands {
     pub const MEMORY_OBJECTS_BY_TYPE: &str = "basilisk.memory.objectsByType";
     /// Force garbage collection and report what was collected.
     pub const MEMORY_GC_COLLECT: &str = "basilisk.memory.gcCollect";
+    /// Ingest the raw output of a memory injection script run by the editor in
+    /// the active debug session. The marker in the output (`__BASILISK_MEM__*`)
+    /// selects the parser; the LSP updates session state, publishes memory
+    /// diagnostics, and returns the structured result. This is the second leg
+    /// of the editor-as-courier round-trip (the LSP holds no DAP connection).
+    pub const MEMORY_INGEST: &str = "basilisk.memory.ingest";
 
     /// Command names advertised via `executeCommandProvider` capabilities.
     ///
@@ -126,6 +132,7 @@ pub mod commands {
         MEMORY_REFERENCES,
         MEMORY_OBJECTS_BY_TYPE,
         MEMORY_GC_COLLECT,
+        MEMORY_INGEST,
     ];
 }
 

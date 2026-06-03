@@ -90,15 +90,27 @@ Start profiling a Python process.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `pid` | `number` | Yes¹ | Target PID. ¹Either `pid` or `debugSession` must be supplied; there is **no** silent auto-detect — the editor obtains a PID from [`basilisk.profiler.processes`](#PROFILE-PROCESSES-LSP) (the Python Processes panel) rather than prompting the user to type one. |
-| `debugSession` | `string` | Yes¹ | Attach to the debuggee of an active debug session instead of a raw PID. |
+| `pid` | `number` | **Yes** | Target PID. The editor obtains it from [`basilisk.profiler.processes`](#PROFILE-PROCESSES-LSP) (the Python Processes panel) or, for the active debug session, from the captured debuggee PID (see [#PROFILE-SAME-PROCESS]). There is **no** silent auto-detect. |
 | `sampleRate` | `number` | No | Samples per second (default: 100) |
 | `includeNative` | `boolean` | No | Include C extension frames (default: false) |
 | `duration` | `number` | No | Auto-stop after N seconds (default: null = manual stop) |
 
 A missing `pid` is rejected with `-32001` — earlier revisions of this spec
 claimed an "auto-detect when omitted", but none was ever implemented (#62). PID
-discovery is now an explicit, user-visible step via the process panel.
+discovery is now an explicit, user-visible step.
+
+#### Profiling the debug session's process {#PROFILE-SAME-PROCESS}
+
+The profiler and debugger **use the same process**. Because the LSP holds no DAP
+connection, it never learns the debuggee's OS PID directly (it spawns
+`debugpy.adapter`; debugpy spawns the debuggee later). Instead the editor captures
+it: the DAP proxy (`vscode-extension/src/dap-proxy.ts`) intercepts debugpy's
+`process` event (`body.systemProcessId`) and stores `sessionId → pid` in the
+extension store; "Profile Debug Session" (`basilisk.profileAttachToDebug`) then
+calls `basilisk.profiler.start` with that concrete `pid`. The LSP profiler stays
+PID-based — **no server-side `debugSession`→PID resolution** — and the existing
+privilege layer ([#PROFILE-PERMISSIONS]) routes the attach: child/same-user →
+in-process py-spy (Linux/Windows), external/grandchild → elevated helper (macOS).
 
 **Response fields:** `sessionId`, `pid`, `pythonVersion`, `startedAt`.
 
@@ -448,25 +460,73 @@ graph TB
     MEM_DIAG -->|"publishDiagnostics"| MEM_INLINE
 ```
 
-### How It Works {#PROFILE-MEMORY-HOWTO}
+### How It Works — Editor-as-Courier Round-Trip {#PROFILE-MEMORY-HOWTO}
 
-Memory profiling requires an active **debug session** (debugpy). The LSP injects Python code into the running process via DAP `evaluate` requests.
+Memory profiling requires an active **debug session** (debugpy). Crucially, **the
+LSP holds no DAP connection — the editor does** (the editor connects directly to
+debugpy; see [LSP-DEBUG-INTEGRATION-SPEC]). So the LSP cannot inject Python
+itself. Instead, memory analysis is a **two-leg round-trip with the editor as
+courier**, and debugpy can only `evaluate` against a **stopped** frame, so the
+debuggee must be paused at a breakpoint:
 
-1. **Start tracking**: Inject `tracemalloc.start(25)` (25-frame deep tracebacks) and `gc.set_debug(gc.DEBUG_SAVEALL)`.
-2. **Take snapshots**: Inject code to call `tracemalloc.take_snapshot()` and serialize top allocations as JSON via a `__BASILISK_MEM__` marker.
-3. **Diff snapshots**: Compare two snapshots to find growing allocations (suspected leaks), new allocations, and freed allocations. Lines that consistently grow across multiple diffs are flagged as suspected leaks.
-4. **Walk reference graph**: Inject an introspection script that uses `gc.get_referrers()` to walk the reference graph for a target object type, building a node/edge graph with cycle detection. This answers "why won't this object die?"
+1. **Leg 1 — LSP → editor (get script):** A `basilisk.memory.*` command returns a
+   Python injection script (e.g. `tracemalloc.take_snapshot()` printing a
+   `__BASILISK_MEM__`-prefixed JSON payload). The LSP performs no DAP I/O.
+2. **Editor runs the script** in the paused debuggee via a DAP `evaluate` request
+   (`vscode-extension/src/dap-evaluate.ts`), capturing the printed marker output.
+3. **Leg 2 — editor → LSP (ingest):** The editor posts the raw output back via
+   [`basilisk.memory.ingest`](#PROFILE-MEMORY-INGEST). The LSP marker-dispatches it
+   to the matching parser, updates per-session state (the
+   [`MemorySessionManager`](../../crates/basilisk-lsp/src/profiler/memory/session.rs)
+   holds the cross-diff [`LeakTracker`] and timeline), **publishes memory
+   diagnostics** via `textDocument/publishDiagnostics`, and returns the structured,
+   `kind`-tagged result the editor renders (decorations, dashboard, reference graph).
+
+The operations: **start tracking** (`tracemalloc.start(25)` + `gc.set_debug`),
+**snapshots** (`__BASILISK_MEM__`), **diffs** (`__BASILISK_MEM_DIFF__`; lines that
+grow across ≥3 consecutive diffs escalate to High confidence), **gc collect**
+(`__BASILISK_MEM_GC__`), and **reference-graph walks** (`__BASILISK_MEM_REFS__`,
+via `gc.get_referrers()` with cycle detection). The diff script self-seeds its
+baseline (`tracemalloc._basilisk_prev_snapshot`) inside the debuggee, so
+cross-snapshot baseline state lives in Python; the LSP keeps only leak-confidence
+history and diagnostics.
+
+This is identical for both editors — 100% of the engine is shared. Zed reaches the
+same flow through `workspace/executeCommand`; only the script-running leg is
+editor-specific.
 
 ### LSP Commands {#PROFILE-MEMORY-COMMANDS}
 
-| Command | Request Fields | Response Summary |
+The `start`/`snapshot`/`diff`/`references`/`objectsByType`/`gcCollect` commands are
+**leg 1** — they return `{ memorySessionId?, script }`. The editor runs the script
+and posts the output to [`basilisk.memory.ingest`](#PROFILE-MEMORY-INGEST) (leg 2).
+
+| Command | Request Fields | Leg-1 Response |
 |---|---|---|
-| `basilisk/memory/start` | `sessionId`, `tracebackDepth` (default 25), `snapshotInterval` (optional auto-snapshot) | `memorySessionId`, `tracingStarted`, `currentMemory`, `peakMemory` |
-| `basilisk/memory/snapshot` | `memorySessionId` | `snapshotId`, `currentMemory`, `peakMemory`, `gcObjects`, `gcCounts`, `topAllocations[]` |
-| `basilisk/memory/diff` | `memorySessionId`, `snapshot1`, `snapshot2` | `totalGrowth`, `totalFreed`, `netGrowth`, `suspectedLeaks[]`, `grownAllocations[]`, `freedAllocations[]` |
-| `basilisk/memory/references` | `memorySessionId`, `targetType`, `targetReprContains`, `maxDepth`, `maxNodes`, `direction` (`referrers`/`referents`/`both`) | `graph` with `nodes[]`, `edges[]`, `cycles[]`, `retentionPath[]` |
-| `basilisk/memory/objectsByType` | `memorySessionId`, `typeName`, `sortBy`, `limit` | `objects[]` (id, type, size, refcount, repr, createdAt), `totalCount`, `totalSize`, `typeSummary` |
-| `basilisk/memory/gcCollect` | `memorySessionId` | `collected`, `uncollectable`, `memoryFreed`, `uncollectableObjects[]` |
+| `basilisk.memory.start` | `tracebackDepth` (default 25) | `memorySessionId`, `tracingStarted`, `script` |
+| `basilisk.memory.snapshot` | `memorySessionId` | `memorySessionId`, `script` |
+| `basilisk.memory.diff` | `memorySessionId` | `memorySessionId`, `script` |
+| `basilisk.memory.references` | `memorySessionId`, `targetType`, `targetReprContains`, `maxDepth`, `maxNodes` | `script` |
+| `basilisk.memory.objectsByType` | `memorySessionId`, `typeName`, `limit` | `script` |
+| `basilisk.memory.gcCollect` | `memorySessionId` | `script` |
+
+#### basilisk.memory.ingest {#PROFILE-MEMORY-INGEST}
+
+Leg 2 of the round-trip. Request: `{ memorySessionId, output }` where `output` is
+the raw stdout of a script run in the debuggee. The
+[`MemorySessionManager`](../../crates/basilisk-lsp/src/profiler/memory/session.rs)
+detects the `__BASILISK_MEM*__` marker, parses with the existing parsers, scores
+leaks via the per-session `LeakTracker`, publishes diagnostics, and returns a
+`kind`-tagged object:
+
+- `kind: "snapshot"` → `snapshotId`, `currentMemory`, `peakMemory`, `gcObjects`, `gcCounts`, `topAllocations[]`
+- `kind: "diff"` → `totalGrowth`, `totalFreed`, `netGrowth`, `suspectedLeaks[]` (with `confidence`)
+- `kind: "gc"` → `collected`, `uncollectable`, `memoryFreed`, `uncollectableObjects[]`
+- `kind: "refs"` → `graph` with `nodes[]`, `edges[]`, `cycles[]`
+- `kind: "objects"` → `objects` (`objects[]`, `totalCount`, `totalSize`, `typeSummary`)
+- `kind: "ack"` → bare acknowledgment (start/stop scripts)
+
+An unknown session or a marker-less payload is rejected with `-32010`.
 
 ### Reference Graph Visualization {#PROFILE-MEMORY-VIS-REFGRAPH}
 
@@ -506,13 +566,14 @@ CPU and memory profiling can run simultaneously. Dashboard shows dual heat maps 
 
 | Component | Code Location |
 |---|---|
-| tracemalloc injection scripts | `basilisk-lsp/src/profiler/memory/scripts.rs` |
-| Reference graph walker script | `basilisk-lsp/src/profiler/memory/refgraph.rs` |
-| Snapshot diffing | `basilisk-lsp/src/profiler/memory/diff.rs` |
+| tracemalloc / gc injection scripts (incl. reference-graph walker) | `basilisk-lsp/src/profiler/memory/scripts.rs` |
+| Snapshot/diff/refs/objects parsers | `basilisk-lsp/src/profiler/memory/{mod,diff}.rs` |
 | Leak confidence scoring | `basilisk-lsp/src/profiler/memory/leaks.rs` |
 | Memory diagnostics | `basilisk-lsp/src/profiler/memory/diagnostics.rs` |
-| LSP memory commands | `basilisk-lsp/src/profiler/memory/commands.rs` |
-| Reference graph webview | `vscode-extension/src/profiler/refgraph/` (VS Code only) |
+| Session state + marker-dispatched ingest | `basilisk-lsp/src/profiler/memory/session.rs` |
+| LSP memory command handlers (incl. `ingest`) | `basilisk-lsp/src/server/memory_handlers.rs` |
+| Editor DAP `evaluate` courier bridge | `vscode-extension/src/dap-evaluate.ts` (VS Code only) |
+| Memory UI (decorations, dashboard, reference graph webview) | `vscode-extension/src/memory-profiler.ts`, `memory-decorations.ts` (VS Code only) |
 
 ## Permissions Model {#PROFILE-PERMISSIONS}
 
@@ -616,7 +677,7 @@ Works without root if `ptrace_scope=0`. Options for restricted environments: `su
 ### Integration Tests {#PROFILE-TESTING-INTEGRATION}
 
 - Start a known Python script, attach profiler, verify hot function matches expected bottleneck
-- Profile a debug session, verify PID auto-detection
+- Profile a debug session, verifying the debuggee PID captured from the DAP `process` event ([#PROFILE-SAME-PROCESS])
 - Verify speedscope output opens correctly in speedscope.app
 - Verify diagnostics appear for hot lines and disappear after clearing
 

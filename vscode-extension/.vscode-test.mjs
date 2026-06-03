@@ -45,6 +45,7 @@ export default defineConfig({
             '**/out/info-panel.js',
             '**/out/memory-decorations.js',
             '**/out/memory-profiler.js',
+            '**/out/memory-ref-graph.js',
             '**/out/module-explorer.js',
             '**/out/profiler.js',
             '**/out/profiler-flamegraph-html.js',

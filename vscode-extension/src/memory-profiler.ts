@@ -15,9 +15,18 @@
 import * as vscode from "vscode";
 import { Logger } from "./logger";
 import type { Store } from "./store";
+import { currentStoppedFrameId, evaluateInDebugSession } from "./dap-evaluate";
 import {
+  disposeRefGraph,
+  openRefGraphWebview,
+  type ReferenceGraphResult,
+} from "./memory-ref-graph";
+import {
+  applyLeakDecorations,
+  applyMemoryDecorations,
   clearMemoryDecorations,
   disposeMemoryDecorations,
+  type MemoryDiffResult,
   type MemorySnapshotResult,
 } from "./memory-decorations";
 
@@ -30,13 +39,25 @@ const LSP_MEM_CMD = {
   references: "basilisk.memory.references",
   objectsByType: "basilisk.memory.objectsByType",
   gcCollect: "basilisk.memory.gcCollect",
+  ingest: "basilisk.memory.ingest",
 } as const;
+
+/** tracemalloc traceback depth injected at start. */
+const TRACEBACK_DEPTH = 25;
+/** Reference-graph traversal bounds. */
+const REF_GRAPH_MAX_DEPTH = 5;
+const REF_GRAPH_MAX_NODES = 200;
+
+/** A tagged ingest result returned by `basilisk.memory.ingest`. */
+interface MemoryIngestResult {
+  kind: "snapshot" | "diff" | "gc" | "refs" | "objects" | "ack";
+  [field: string]: unknown;
+}
 
 // ── State ─────────────────────────────────────────────────────────────────
 
 let memoryStatusBarItem: vscode.StatusBarItem | undefined;
 let activeMemorySessionId: string | undefined;
-let refGraphPanel: vscode.WebviewPanel | undefined;
 let memDashboardPanel: vscode.WebviewPanel | undefined;
 
 // ── Registration ──────────────────────────────────────────────────────────
@@ -63,6 +84,12 @@ export function registerMemoryProfiler(
     vscode.commands.registerCommand("basilisk.memorySnapshot", async () =>
       handleMemorySnapshot(store),
     ),
+    vscode.commands.registerCommand("basilisk.memoryDiff", async () =>
+      handleMemoryDiff(store),
+    ),
+    vscode.commands.registerCommand("basilisk.memoryGcCollect", async () =>
+      handleMemoryGcCollect(store),
+    ),
     vscode.commands.registerCommand("basilisk.memoryStop", () => {
       handleMemoryStop(store);
     }),
@@ -78,13 +105,71 @@ export function registerMemoryProfiler(
 export function disposeMemoryProfiler(): void {
   clearMemoryDecorations();
   disposeMemoryDecorations();
-  if (refGraphPanel !== undefined) {
-    refGraphPanel.dispose();
-    refGraphPanel = undefined;
-  }
+  disposeRefGraph();
   if (memDashboardPanel !== undefined) {
     memDashboardPanel.dispose();
     memDashboardPanel = undefined;
+  }
+}
+
+// ── Round-trip courier ──────────────────────────────────────────────────────
+
+/**
+ * Run one memory operation as the editor-as-courier round-trip:
+ *   1. ask the LSP for the injection script (`command` → `{ script }`),
+ *   2. run it in the paused debuggee via DAP `evaluate`,
+ *   3. post the raw output back to `basilisk.memory.ingest`,
+ *   4. return the LSP's structured, marker-dispatched result.
+ *
+ * Returns null (with an actionable message) when there is no session, nothing
+ * is paused, or evaluation fails — memory profiling requires the debuggee to be
+ * stopped at a breakpoint because debugpy cannot evaluate a running program.
+ */
+async function runMemoryScript(
+  store: Store,
+  command: string,
+  extraArgs: Record<string, unknown> = {},
+): Promise<MemoryIngestResult | null> {
+  const client = store.client.value;
+  if (client?.isRunning() !== true) {
+    void vscode.window.showErrorMessage("Basilisk LSP not connected");
+    return null;
+  }
+  if (activeMemorySessionId === undefined) {
+    void vscode.window.showWarningMessage("Basilisk: Start memory tracking first.");
+    return null;
+  }
+  const frameId = await currentStoppedFrameId();
+  if (frameId === null) {
+    void vscode.window.showWarningMessage(
+      "Basilisk: Pause the debugger at a breakpoint to inspect memory.",
+    );
+    return null;
+  }
+
+  try {
+    const phase1 = await client.sendRequest<{ script?: string } | null>("workspace/executeCommand", {
+      command,
+      arguments: [{ memorySessionId: activeMemorySessionId, ...extraArgs }],
+    });
+    const script = phase1?.script;
+    if (script === undefined || script === "") { return null; }
+
+    const output = await evaluateInDebugSession(script, frameId);
+    if (output === null) {
+      void vscode.window.showWarningMessage("Basilisk: Could not run the memory script in the debuggee.");
+      return null;
+    }
+
+    return await client.sendRequest<MemoryIngestResult | null>("workspace/executeCommand", {
+      command: LSP_MEM_CMD.ingest,
+      arguments: [{ memorySessionId: activeMemorySessionId, output }],
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    Logger.warn(`[Memory] ${command} round-trip failed: ${msg}`);
+    void vscode.window.showWarningMessage(`Basilisk: ${msg}`);
+    return null;
   }
 }
 
@@ -96,21 +181,33 @@ async function handleMemoryStart(store: Store): Promise<void> {
     void vscode.window.showErrorMessage("Basilisk LSP not connected");
     return;
   }
+  // tracemalloc must be injected into a paused debuggee, so require a stopped
+  // frame before we even mint a session.
+  const frameId = await currentStoppedFrameId();
+  if (frameId === null) {
+    void vscode.window.showWarningMessage(
+      "Basilisk: Pause the debugger at a breakpoint, then start memory tracking.",
+    );
+    return;
+  }
 
   try {
-    const TRACEBACK_DEPTH = 25;
-    const result = await client.sendRequest<{ memorySessionId: string } | null>("workspace/executeCommand", {
+    const result = await client.sendRequest<{ memorySessionId?: string; script?: string } | null>("workspace/executeCommand", {
       command: LSP_MEM_CMD.start,
       arguments: [{ tracebackDepth: TRACEBACK_DEPTH }],
     });
+    if (result?.memorySessionId === undefined || result.script === undefined) { return; }
 
-    if (result?.memorySessionId !== undefined && result.memorySessionId !== "") {
-      activeMemorySessionId = result.memorySessionId;
-      updateMemoryStatusBar("tracking");
-      Logger.info(
-        `Memory tracking started: session ${result.memorySessionId}`,
-      );
+    const ack = await evaluateInDebugSession(result.script, frameId);
+    if (ack === null) {
+      void vscode.window.showWarningMessage("Basilisk: Could not start tracemalloc in the debuggee.");
+      return;
     }
+
+    activeMemorySessionId = result.memorySessionId;
+    updateMemoryStatusBar("tracking");
+    Logger.info(`Memory tracking started: session ${result.memorySessionId}`);
+    void vscode.window.showInformationMessage("Basilisk: Memory tracking started. Take a snapshot to inspect allocations.");
   } catch (err) {
     void vscode.window.showErrorMessage(
       `Memory tracking failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -119,26 +216,36 @@ async function handleMemoryStart(store: Store): Promise<void> {
 }
 
 async function handleMemorySnapshot(store: Store): Promise<void> {
-  const client = store.client.value;
-  if (client?.isRunning() !== true || activeMemorySessionId === undefined) {
-    void vscode.window.showWarningMessage(
-      "No active memory tracking session",
+  const result = await runMemoryScript(store, LSP_MEM_CMD.snapshot);
+  if (result?.kind === "snapshot") {
+    applyMemoryDecorations(result as unknown as MemorySnapshotResult);
+    Logger.info(`Memory snapshot: ${String(result.currentMemory)} bytes current`);
+    void vscode.window.showInformationMessage(
+      `Basilisk: Snapshot — ${String(result.currentMemory)} bytes tracked`,
     );
-    return;
   }
+}
 
-  try {
-    const result = await client.sendRequest<MemorySnapshotResult | null>("workspace/executeCommand", {
-      command: LSP_MEM_CMD.snapshot,
-      arguments: [{ memorySessionId: activeMemorySessionId }],
-    });
+async function handleMemoryDiff(store: Store): Promise<void> {
+  const result = await runMemoryScript(store, LSP_MEM_CMD.diff);
+  if (result?.kind === "diff") {
+    applyLeakDecorations(result as unknown as MemoryDiffResult);
+    const leaks = Array.isArray(result.suspectedLeaks) ? result.suspectedLeaks : [];
+    Logger.info(`Memory diff: ${leaks.length} suspected leak(s)`);
+    void vscode.window.showInformationMessage(
+      `Basilisk: Compared snapshots — ${leaks.length} suspected leak(s)`,
+    );
+  }
+}
 
-    if (result !== null) {
-      Logger.info(`Memory snapshot taken: ${activeMemorySessionId}`);
-    }
-  } catch (err) {
-    void vscode.window.showErrorMessage(
-      `Memory snapshot failed: ${err instanceof Error ? err.message : String(err)}`,
+async function handleMemoryGcCollect(store: Store): Promise<void> {
+  const result = await runMemoryScript(store, LSP_MEM_CMD.gcCollect);
+  if (result?.kind === "gc") {
+    const collected = Number(result.collected ?? 0);
+    const uncollectable = Number(result.uncollectable ?? 0);
+    Logger.info(`gc.collect(): ${collected} collected, ${uncollectable} uncollectable`);
+    void vscode.window.showInformationMessage(
+      `Basilisk: gc.collect() freed ${collected} object(s); ${uncollectable} uncollectable`,
     );
   }
 }
@@ -151,9 +258,8 @@ function handleMemoryStop(_store: Store): void {
 }
 
 async function handleMemoryReferences(store: Store): Promise<void> {
-  const client = store.client.value;
-  if (client?.isRunning() !== true) {
-    void vscode.window.showErrorMessage("Basilisk LSP not connected");
+  if (activeMemorySessionId === undefined) {
+    void vscode.window.showWarningMessage("Basilisk: Start memory tracking first.");
     return;
   }
 
@@ -161,32 +267,23 @@ async function handleMemoryReferences(store: Store): Promise<void> {
     prompt: "Object type to inspect (e.g. DataFrame, dict, MyClass)",
     placeHolder: "DataFrame",
   });
-
   if (typeName === undefined || typeName.trim() === "") {
     return;
   }
 
-  try {
-    const REF_GRAPH_MAX_DEPTH = 5;
-    const REF_GRAPH_MAX_NODES = 200;
-    const result = await client.sendRequest<ReferenceGraphResult | null>("workspace/executeCommand", {
-      command: LSP_MEM_CMD.references,
-      arguments: [
-        {
-          targetType: typeName.trim(),
-          maxDepth: REF_GRAPH_MAX_DEPTH,
-          maxNodes: REF_GRAPH_MAX_NODES,
-        },
-      ],
+  const result = await runMemoryScript(store, LSP_MEM_CMD.references, {
+    targetType: typeName.trim(),
+    maxDepth: REF_GRAPH_MAX_DEPTH,
+    maxNodes: REF_GRAPH_MAX_NODES,
+  });
+  if (result?.kind === "refs") {
+    openRefGraphWebview({
+      targetType: typeName.trim(),
+      maxDepth: REF_GRAPH_MAX_DEPTH,
+      maxNodes: REF_GRAPH_MAX_NODES,
+      script: "",
+      graph: result.graph as ReferenceGraphResult["graph"],
     });
-
-    if (result !== null) {
-      openRefGraphWebview(result);
-    }
-  } catch (err) {
-    void vscode.window.showErrorMessage(
-      `Reference graph failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
   }
 }
 
@@ -206,281 +303,4 @@ function updateMemoryStatusBar(state: "idle" | "tracking"): void {
   } else {
     memoryStatusBarItem.hide();
   }
-}
-
-// ── Reference graph webview (Phase 5D) ────────────────────────────────────
-
-interface ReferenceGraphResult {
-  targetType: string;
-  maxDepth: number;
-  maxNodes: number;
-  script: string;
-  graph?: {
-    nodes: RefGraphNode[];
-    edges: RefGraphEdge[];
-    cycles: number[][];
-    retentionPath?: string[];
-  };
-}
-
-interface RefGraphNode {
-  id: number;
-  type: string;
-  size: number;
-  repr: string;
-  depth: number;
-  isTarget: boolean;
-}
-
-interface RefGraphEdge {
-  from: number;
-  to: number;
-  label: string;
-}
-
-function openRefGraphWebview(result: ReferenceGraphResult): void {
-  if (refGraphPanel !== undefined) {
-    refGraphPanel.reveal(vscode.ViewColumn.Beside);
-  } else {
-    refGraphPanel = vscode.window.createWebviewPanel(
-      "basilisk.refGraph",
-      `Retention Graph \u2014 ${result.targetType}`,
-      vscode.ViewColumn.Beside,
-      { enableScripts: true, retainContextWhenHidden: true },
-    );
-    refGraphPanel.onDidDispose(() => {
-      refGraphPanel = undefined;
-    });
-  }
-
-  refGraphPanel.webview.html = buildRefGraphHtml(result);
-
-  refGraphPanel.webview.onDidReceiveMessage(
-    (msg: { type: string; file?: string; line?: number }) => {
-      if (
-        msg.type === "navigateToSource" &&
-        msg.file !== undefined &&
-        msg.line !== undefined
-      ) {
-        const uri = vscode.Uri.file(msg.file);
-        const position = new vscode.Position(msg.line - 1, 0);
-        void vscode.window.showTextDocument(uri, {
-          selection: new vscode.Range(position, position),
-          viewColumn: vscode.ViewColumn.One,
-        });
-      }
-    },
-  );
-}
-
-function buildRefGraphCss(): string {
-  return `
-    :root {
-      --mem-critical: #c084fc;
-      --mem-hot: #a78bfa;
-      --mem-leak: #f87171;
-      --mem-freed: #34d399;
-      --mem-info: #60a5fa;
-      --bg: #0a0c12;
-      --surface: #141820;
-      --border: #1a1f2e;
-      --text: #f0f2f7;
-      --text-secondary: #8892a4;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: var(--bg); color: var(--text); font-family: 'Space Grotesk', sans-serif; padding: 16px; }
-    h1 { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
-    h1 .accent { color: var(--mem-critical); }
-    .retention-path {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px 16px;
-      margin-bottom: 16px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
-      line-height: 1.8;
-    }
-    .retention-path .label {
-      font-size: 11px;
-      color: var(--text-secondary);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 6px;
-    }
-    .retention-path .step { color: var(--mem-info); }
-    .retention-path .target { color: var(--mem-critical); font-weight: 600; }
-    canvas { display: block; border-radius: 8px; background: var(--surface); }
-    .legend {
-      display: flex; gap: 16px; margin-top: 12px; font-size: 11px;
-      color: var(--text-secondary);
-    }
-    .legend-item { display: flex; align-items: center; gap: 4px; }
-    .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
-    .no-data { text-align: center; padding: 60px; color: var(--text-secondary); }`;
-}
-
-function buildRetentionPathHtml(retentionPath: string[]): string {
-  if (retentionPath.length === 0) { return ""; }
-  const steps = retentionPath
-    .map((step, i) => `<div class="${i === retentionPath.length - 1 ? "target" : "step"}">${escapeHtml(step)}</div>`)
-    .join("\n    ");
-  return `<div class="retention-path">
-    <div class="label">Retention Path</div>
-    ${steps}
-  </div>`;
-}
-
-function buildRefGraphScriptInit(nodesJson: string, edgesJson: string, cyclesJson: string): string {
-  return `
-    const vscode = acquireVsCodeApi();
-    const nodes = ${nodesJson};
-    const edges = ${edgesJson};
-    const cycles = ${cyclesJson};
-
-    if (nodes.length === 0) {
-      document.getElementById('graph').style.display = 'none';
-      const noData = document.createElement('div');
-      noData.className = 'no-data';
-      noData.textContent = 'No reference graph data available. Run the memory references command with an active debug session.';
-      document.body.appendChild(noData);
-    } else {
-      const canvas = document.getElementById('graph');
-      const ctx = canvas.getContext('2d');
-      const W = canvas.width, H = canvas.height;
-      const cycleNodeIds = new Set(cycles.flat());
-      const nodeMap = new Map();
-      nodes.forEach((n, i) => {
-        nodeMap.set(n.id, {
-          ...n,
-          x: W / 2 + (Math.random() - 0.5) * W * 0.6,
-          y: H / 2 + (Math.random() - 0.5) * H * 0.6,
-          vx: 0, vy: 0,
-          radius: Math.max(8, Math.min(30, Math.log2(Math.max(n.size, 1)) * 2)),
-        });
-      });
-      for (let iter = 0; iter < 60; iter++) {
-        const alpha = 0.3 * (1 - iter / 60);
-        const nodeList = Array.from(nodeMap.values());
-        for (let i = 0; i < nodeList.length; i++) {
-          for (let j = i + 1; j < nodeList.length; j++) {
-            const a = nodeList[i], b = nodeList[j];
-            let dx = b.x - a.x, dy = b.y - a.y;
-            const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-            const force = 2000 / (dist * dist);
-            dx = (dx / dist) * force * alpha;
-            dy = (dy / dist) * force * alpha;
-            a.x -= dx; a.y -= dy;
-            b.x += dx; b.y += dy;
-          }
-        }
-        for (const edge of edges) {
-          const a = nodeMap.get(edge.from), b = nodeMap.get(edge.to);
-          if (!a || !b) continue;
-          let dx = b.x - a.x, dy = b.y - a.y;
-          const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-          const force = (dist - 80) * 0.01 * alpha;
-          dx = (dx / dist) * force;
-          dy = (dy / dist) * force;
-          a.x += dx; a.y += dy;
-          b.x -= dx; b.y -= dy;
-        }
-        for (const n of nodeList) {
-          n.x = Math.max(40, Math.min(W - 40, n.x));
-          n.y = Math.max(40, Math.min(H - 40, n.y));
-        }
-      }`;
-}
-
-function buildRefGraphScriptDraw(): string {
-  return `
-      ctx.strokeStyle = 'rgba(136, 146, 164, 0.3)';
-      ctx.lineWidth = 1;
-      for (const edge of edges) {
-        const a = nodeMap.get(edge.from), b = nodeMap.get(edge.to);
-        if (!a || !b) continue;
-        const isCycleEdge = cycleNodeIds.has(edge.from) && cycleNodeIds.has(edge.to);
-        ctx.strokeStyle = isCycleEdge ? '#f87171' : 'rgba(136, 146, 164, 0.3)';
-        ctx.lineWidth = isCycleEdge ? 2 : 1;
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-        if (edge.label) {
-          const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-          ctx.fillStyle = '#8892a4';
-          ctx.font = '9px monospace';
-          ctx.fillText(edge.label, mx + 4, my - 4);
-        }
-      }
-      for (const n of nodeMap.values()) {
-        const isCycle = cycleNodeIds.has(n.id);
-        const color = n.isTarget ? '#c084fc'
-          : isCycle ? '#f87171'
-          : n.depth <= 1 ? '#60a5fa'
-          : '#8892a4';
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
-        ctx.fillStyle = color + '33';
-        ctx.fill();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = n.isTarget ? 3 : 1.5;
-        ctx.stroke();
-        ctx.fillStyle = '#f0f2f7';
-        ctx.font = '10px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(n.type, n.x, n.y + n.radius + 14);
-        ctx.fillStyle = '#8892a4';
-        ctx.font = '9px monospace';
-        ctx.fillText(formatBytes(n.size), n.x, n.y + n.radius + 26);
-      }
-    }
-    function formatBytes(bytes) {
-      if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
-      if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
-      if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
-      return bytes + ' B';
-    }`;
-}
-
-function buildRefGraphScript(nodesJson: string, edgesJson: string, cyclesJson: string): string {
-  return buildRefGraphScriptInit(nodesJson, edgesJson, cyclesJson) +
-    buildRefGraphScriptDraw();
-}
-
-function buildRefGraphHtml(result: ReferenceGraphResult): string {
-  const nodesJson = JSON.stringify(result.graph?.nodes ?? []);
-  const edgesJson = JSON.stringify(result.graph?.edges ?? []);
-  const cyclesJson = JSON.stringify(result.graph?.cycles ?? []);
-  const retentionPath = result.graph?.retentionPath ?? [];
-  const escapedType = escapeHtml(result.targetType);
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Retention Graph \u2014 ${escapedType}</title>
-  <style>${buildRefGraphCss()}</style>
-</head>
-<body>
-  <h1><span class="accent">\u25C9</span> Retention Graph \u2014 <span class="accent">${escapedType}</span></h1>
-  ${buildRetentionPathHtml(retentionPath)}
-  <canvas id="graph" width="800" height="500"></canvas>
-  <div class="legend">
-    <div class="legend-item"><div class="legend-dot" style="background: var(--mem-critical)"></div> Target object</div>
-    <div class="legend-item"><div class="legend-dot" style="background: var(--mem-info)"></div> Root retainer</div>
-    <div class="legend-item"><div class="legend-dot" style="background: var(--text-secondary)"></div> Intermediate</div>
-    <div class="legend-item"><div class="legend-dot" style="background: var(--mem-leak)"></div> Cycle member</div>
-  </div>
-  <script>${buildRefGraphScript(nodesJson, edgesJson, cyclesJson)}</script>
-</body>
-</html>`;
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }

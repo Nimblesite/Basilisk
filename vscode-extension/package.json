@@ -258,6 +258,18 @@
         "icon": "$(debug-stop)"
       },
       {
+        "command": "basilisk.memoryDiff",
+        "title": "Basilisk: Compare Memory Snapshots",
+        "category": "Basilisk",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "basilisk.memoryGcCollect",
+        "title": "Basilisk: Force Garbage Collection",
+        "category": "Basilisk",
+        "icon": "$(trash)"
+      },
+      {
         "command": "basilisk.memoryReferences",
         "title": "Basilisk: Show Reference Graph",
         "category": "Basilisk",
@@ -348,6 +360,30 @@
         {
           "command": "basilisk.revealProcessScript",
           "when": "false"
+        },
+        {
+          "command": "basilisk.memoryStart",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memorySnapshot",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memoryDiff",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memoryGcCollect",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memoryReferences",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memoryStop",
+          "when": "basilisk.debugging"
         }
       ],
       "view/title": [

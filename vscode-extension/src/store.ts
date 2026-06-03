@@ -51,6 +51,8 @@ export interface Store {
   readonly lspState: ReadonlySignal<LspState>;
   readonly isServerReady: ReadonlySignal<boolean>;
   readonly runtimeResolution: ReadonlySignal<RuntimeResolution | undefined>;
+  /** Map of VS Code debug session id → debuggee OS process id (from the DAP `process` event). */
+  readonly sessionIdToPid: ReadonlySignal<ReadonlyMap<string, number>>;
 
   // Read-only access to the ready handle (for whenReady callers).
   readonly lspReadyPromise: ReadonlySignal<Promise<void> | undefined>;
@@ -61,6 +63,12 @@ export interface Store {
   setOutputChannel(ch: vscode.OutputChannel): void;
   setLogSink(sink: LogSink): void;
   setRuntimeResolution(resolution: RuntimeResolution): void;
+  /** Record the debuggee PID captured from a debug session's DAP `process` event. */
+  setDebuggeeProcessId(sessionId: string, pid: number): void;
+  /** Look up the debuggee PID for a debug session, or undefined if not yet known. */
+  getDebuggeeProcessId(sessionId: string): number | undefined;
+  /** Forget a debug session's PID mapping (called when the session terminates). */
+  clearDebuggeeProcessId(sessionId: string): void;
   isClientCommandRegistered(id: string): boolean;
   isServerCommandAdvertised(id: string): boolean;
   ensureLspReadyPromise(timeoutMs?: number): Promise<Result<LanguageClient>>;
@@ -77,6 +85,7 @@ interface StoreSignals {
   logSink: Signal<LogSink | undefined>;
   lspState: Signal<LspState>;
   runtimeResolution: Signal<RuntimeResolution | undefined>;
+  sessionIdToPid: Signal<Map<string, number>>;
   readyHandle: Signal<ReadyHandle | undefined>;
   /** Disposables for client-registered commands — disposed on LSP stop/restart. */
   commandDisposables: vscode.Disposable[];
@@ -299,13 +308,38 @@ function resetSignals(signals: StoreSignals): void {
   signals.logSink.value = undefined;
   signals.lspState.value = "idle";
   signals.runtimeResolution.value = undefined;
+  signals.sessionIdToPid.value = new Map();
   signals.readyHandle.value = undefined;
+}
+
+/** Debuggee PID actions (copy-on-write Map) — extracted to keep createStore small. */
+function debuggeePidActions(signals: StoreSignals): Pick<
+  Store,
+  "setDebuggeeProcessId" | "getDebuggeeProcessId" | "clearDebuggeeProcessId"
+> {
+  return {
+    setDebuggeeProcessId(sessionId: string, pid: number): void {
+      const next = new Map(signals.sessionIdToPid.value);
+      next.set(sessionId, pid);
+      signals.sessionIdToPid.value = next;
+    },
+    getDebuggeeProcessId(sessionId: string): number | undefined {
+      return signals.sessionIdToPid.value.get(sessionId);
+    },
+    clearDebuggeeProcessId(sessionId: string): void {
+      if (!signals.sessionIdToPid.value.has(sessionId)) { return; }
+      const next = new Map(signals.sessionIdToPid.value);
+      next.delete(sessionId);
+      signals.sessionIdToPid.value = next;
+    },
+  };
 }
 
 // ── Factory ───────────────────────────────────────────────────────────────
 
-export function createStore(onReset?: () => void): Store {
-  const signals: StoreSignals = {
+/** Build the fresh, mutable signal bag backing a store. */
+function createStoreSignals(): StoreSignals {
+  return {
     client: signal<LanguageClient | undefined>(undefined),
     serverCommands: signal<ReadonlySet<string>>(new Set()),
     clientCommands: signal<ReadonlySet<string>>(new Set()),
@@ -314,10 +348,15 @@ export function createStore(onReset?: () => void): Store {
     logSink: signal<LogSink | undefined>(undefined),
     lspState: signal<LspState>("idle"),
     runtimeResolution: signal<RuntimeResolution | undefined>(undefined),
+    sessionIdToPid: signal<Map<string, number>>(new Map()),
     readyHandle: signal<ReadyHandle | undefined>(undefined),
     commandDisposables: [],
     serverCommandDisposables: [],
   };
+}
+
+export function createStore(onReset?: () => void): Store {
+  const signals: StoreSignals = createStoreSignals();
 
   const isServerReady = computed(() => signals.client.value?.isRunning() === true);
   const lspReadyPromise = computed(async () => signals.readyHandle.value?.promise);
@@ -331,6 +370,7 @@ export function createStore(onReset?: () => void): Store {
     logSink: signals.logSink as ReadonlySignal<LogSink | undefined>,
     lspState: signals.lspState as ReadonlySignal<LspState>,
     runtimeResolution: signals.runtimeResolution as ReadonlySignal<RuntimeResolution | undefined>,
+    sessionIdToPid: signals.sessionIdToPid as ReadonlySignal<ReadonlyMap<string, number>>,
     lspReadyPromise,
     isServerReady,
 
@@ -350,6 +390,7 @@ export function createStore(onReset?: () => void): Store {
     setRuntimeResolution(resolution: RuntimeResolution): void {
       signals.runtimeResolution.value = resolution;
     },
+    ...debuggeePidActions(signals),
     isClientCommandRegistered(id: string): boolean {
       return signals.clientCommands.value.has(id);
     },

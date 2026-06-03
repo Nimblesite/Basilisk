@@ -81,13 +81,18 @@ pub fn generate_allocation_diagnostics(
 /// Feeds growths through the `LeakTracker` for confidence scoring:
 /// - `BSK-MEM-GROWTH` warnings for all growing allocations
 /// - `BSK-MEM-LEAK` for suspected leaks (Medium+ confidence)
+///
+/// Returns the scored leaks alongside the diagnostics so a caller can both
+/// surface the structured leaks (e.g. in a response) and publish the
+/// diagnostics from a SINGLE scoring pass — scoring twice would double-count
+/// consecutive growths and corrupt confidence.
 #[must_use]
 pub fn generate_diff_diagnostics(
     diff: &MemoryDiff,
     leak_tracker: &mut LeakTracker,
-) -> DiagnosticsByUri {
-    let mut result: DiagnosticsByUri = HashMap::new();
+) -> (Vec<SuspectedLeak>, DiagnosticsByUri) {
     let suspected = leak_tracker.process_growths(&diff.grown_allocations);
+    let mut result: DiagnosticsByUri = HashMap::new();
 
     for leak in &suspected {
         let Ok(uri) = Url::from_file_path(&leak.file) else {
@@ -108,7 +113,7 @@ pub fn generate_diff_diagnostics(
         "generated memory diff diagnostics"
     );
 
-    result
+    (suspected, result)
 }
 
 /// Parsed uncollectable object from gc collect output.
@@ -503,7 +508,7 @@ mod tests {
     fn diff_diagnostics_with_large_growth() -> Result<(), String> {
         let diff = make_diff();
         let mut tracker = LeakTracker::new();
-        let diags = generate_diff_diagnostics(&diff, &mut tracker);
+        let (_, diags) = generate_diff_diagnostics(&diff, &mut tracker);
 
         let uri = Url::from_file_path("/tmp/cache.py").map_err(|()| "bad URI")?;
         let file_diags = diags
@@ -541,7 +546,7 @@ mod tests {
 
         let _ = generate_diff_diagnostics(&diff, &mut tracker);
         let _ = generate_diff_diagnostics(&diff, &mut tracker);
-        let diags = generate_diff_diagnostics(&diff, &mut tracker);
+        let (_, diags) = generate_diff_diagnostics(&diff, &mut tracker);
 
         let uri = Url::from_file_path("/tmp/cache.py").map_err(|()| "bad URI")?;
         let file_diags = diags.get(&uri).ok_or("expected diagnostics")?;
@@ -579,7 +584,7 @@ mod tests {
         };
 
         let mut tracker = LeakTracker::new();
-        let diags = generate_diff_diagnostics(&diff, &mut tracker);
+        let (_, diags) = generate_diff_diagnostics(&diff, &mut tracker);
 
         let uri = Url::from_file_path("/tmp/small.py").map_err(|()| "bad URI")?;
         let file_diags = diags.get(&uri).ok_or("expected diagnostics")?;
@@ -738,7 +743,7 @@ mod tests {
             freed_allocations: vec![],
         };
         let mut tracker = LeakTracker::new();
-        let diags = generate_diff_diagnostics(&diff, &mut tracker);
+        let (_, diags) = generate_diff_diagnostics(&diff, &mut tracker);
         assert!(diags.is_empty());
     }
 }

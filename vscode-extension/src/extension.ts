@@ -7,13 +7,13 @@
  */
 
 import * as vscode from "vscode";
-import { execFile } from "child_process";
 import * as path from "path";
 import * as os from "os";
 import { Logger, bindLogger, CompositeSink, FileLogSink, nullSink } from "./logger";
 import type { LogSink } from "./logger";
 import { startLspClient } from "./lsp-client";
 import { createDebugAdapterFactory, BasiliskDebugAdapterTrackerFactory } from "./debug-adapter";
+import { startSubprocessMode } from "./subprocess-mode";
 import { registerTestExplorer } from "./test-explorer";
 import { registerModuleExplorer } from "./module-explorer";
 import { registerTypeHealth } from "./type-health";
@@ -29,9 +29,6 @@ const STATUS_BAR_PRIORITY = 100;
 
 /** Length of an abbreviated session ID prefix for logging. */
 const SESSION_ID_PREFIX_LEN = 8;
-
-/** Exit code returned by `basilisk check` on internal errors. */
-const BASILISK_INTERNAL_ERROR_EXIT_CODE = 3;
 
 let store: Store | undefined;
 
@@ -263,8 +260,19 @@ function registerDebugSupport(context: vscode.ExtensionContext, s: Store): void 
   singletonDisposables.push(
     vscode.debug.registerDebugAdapterTrackerFactory(
       "basilisk-debug",
-      new BasiliskDebugAdapterTrackerFactory()
+      // The tracker captures the debuggee's PID (from the DAP `process` event)
+      // so the CPU profiler can attach to the SAME process the debugger drives.
+      new BasiliskDebugAdapterTrackerFactory((sessionId, pid) => {
+        s.setDebuggeeProcessId(sessionId, pid);
+      })
     )
+  );
+  // Forget the debuggee PID when its session ends so stale mappings can't
+  // misdirect a later profile attach.
+  context.subscriptions.push(
+    vscode.debug.onDidTerminateDebugSession((session) => {
+      s.clearDebuggeeProcessId(session.id);
+    })
   );
   registerDebugLifecycleLogging(context);
 }
@@ -273,6 +281,10 @@ function registerDebugLifecycleLogging(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.debug.onDidStartDebugSession((session) => {
       Logger.info(`Debug session started: id=${session.id}, name=${session.name}, type=${session.type}`);
+      // Gate debug-only commands (memory profiling needs a paused debuggee).
+      if (session.type === "basilisk-debug") {
+        void vscode.commands.executeCommand("setContext", "basilisk.debugging", true);
+      }
     })
   );
   context.subscriptions.push(
@@ -282,6 +294,12 @@ function registerDebugLifecycleLogging(context: vscode.ExtensionContext): void {
         `[Lifecycle] onDidTerminateDebugSession: terminated=${session.id.slice(0, SESSION_ID_PREFIX_LEN)}, ` +
         `active=${activeId === "undefined" ? "correctly undefined" : `STILL SET (${activeId.slice(0, SESSION_ID_PREFIX_LEN)})`}`
       );
+      // Clear the debug context once no Basilisk debug session remains active.
+      // Symmetric with the type-gated set above: stays true only while a
+      // basilisk-debug session is active (ignores other debuggers' sessions).
+      if (vscode.debug.activeDebugSession?.type !== "basilisk-debug") {
+        void vscode.commands.executeCommand("setContext", "basilisk.debugging", false);
+      }
     })
   );
   context.subscriptions.push(
@@ -382,111 +400,3 @@ async function startRuntime(context: vscode.ExtensionContext, s: Store): Promise
   }
 }
 
-function workspaceRoot(): string | undefined {
-  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-}
-
-// ── Subprocess mode ───────────────────────────────────────────────────────
-
-/** Shape of a single diagnostic emitted by `basilisk check --output json`. */
-interface BasiliskDiagnostic {
-  code: string;
-  severity: "error" | "warning";
-  message: string;
-  path: string;
-  line: number;
-  col: number;
-  end_line: number;
-  end_col: number;
-}
-
-function startSubprocessMode(
-  context: vscode.ExtensionContext,
-  executablePath: string
-): void {
-  const collection = vscode.languages.createDiagnosticCollection("basilisk");
-  context.subscriptions.push(collection);
-
-  context.subscriptions.push(
-    vscode.workspace.onDidOpenTextDocument((doc) => {
-      if (doc.languageId === "python") {checkDocument(doc, collection, executablePath);}
-    })
-  );
-  context.subscriptions.push(
-    vscode.workspace.onDidSaveTextDocument((doc) => {
-      if (doc.languageId === "python") {checkDocument(doc, collection, executablePath);}
-    })
-  );
-  context.subscriptions.push(
-    vscode.workspace.onDidCloseTextDocument((doc) => { collection.delete(doc.uri); })
-  );
-
-  for (const doc of vscode.workspace.textDocuments) {
-    if (doc.languageId === "python") {checkDocument(doc, collection, executablePath);}
-  }
-}
-
-function checkDocument(
-  doc: vscode.TextDocument,
-  collection: vscode.DiagnosticCollection,
-  executablePath: string
-): void {
-  const enabled = vscode.workspace.getConfiguration("basilisk").get<boolean>("enabled") ?? true;
-  if (!enabled) {
-    collection.delete(doc.uri);
-    return;
-  }
-  if (doc.isUntitled || doc.uri.scheme !== "file") {return;}
-
-  const filePath = doc.uri.fsPath;
-  execFile(
-    executablePath,
-    ["check", "--output", "json", filePath],
-    { cwd: workspaceRoot() },
-    (error, stdout, stderr) => {
-      if (error?.code === BASILISK_INTERNAL_ERROR_EXIT_CODE) {
-        vscode.window.showWarningMessage(
-          `Basilisk: internal error checking ${path.basename(filePath)}: ${stderr}`
-        );
-        return;
-      }
-      if (error && typeof error.code === "number" && error.code !== 1) {
-        vscode.window.showWarningMessage(
-          `Basilisk: failed to run '${executablePath}'. Is it on PATH? (${error.message})`
-        );
-        collection.delete(doc.uri);
-        return;
-      }
-      collection.set(doc.uri, parseDiagnostics(stdout, doc));
-    }
-  );
-}
-
-function parseDiagnostics(json: string, doc: vscode.TextDocument): vscode.Diagnostic[] {
-  let items: BasiliskDiagnostic[];
-  try {
-    items = JSON.parse(json) as BasiliskDiagnostic[];
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(items)) {return [];}
-
-  return items
-    .filter((item) => item.path === doc.uri.fsPath)
-    .map((item) => {
-      const range = new vscode.Range(
-        new vscode.Position(item.line - 1, item.col - 1),
-        new vscode.Position(item.end_line - 1, item.end_col - 1)
-      );
-      const severity = item.severity === "error"
-        ? vscode.DiagnosticSeverity.Error
-        : vscode.DiagnosticSeverity.Warning;
-      const diag = new vscode.Diagnostic(range, `${item.message} [${item.code}]`, severity);
-      diag.source = "basilisk";
-      diag.code = {
-        value: item.code,
-        target: vscode.Uri.parse(`https://www.basilisk-python.dev/errors/${item.code}`),
-      };
-      return diag;
-    });
-}
