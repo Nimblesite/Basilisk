@@ -129,6 +129,13 @@ fn check_vars(
         .filter(|var| var.has_annotation && var.rhs_span.is_some())
         .filter_map(|var| {
             let annotation_text = extract_annotation(source, var.name_span)?;
+
+            // Quoted forward-reference annotations (e.g. `"Literal[Color.RED]"`)
+            // are not evaluated as value types here; skip to avoid false positives.
+            if annotation_text.starts_with('"') || annotation_text.starts_with('\'') {
+                return None;
+            }
+
             let declared_type = InferredType::from_annotation(annotation_text);
 
             // TypeForm assignments require type-expression validation, not

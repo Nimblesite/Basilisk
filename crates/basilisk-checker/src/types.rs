@@ -233,6 +233,9 @@ impl InferredType {
             )
             // None is always assignable to Optional[T]
             | (InferredType::None_, InferredType::Optional(_)) => true,
+            // `None` satisfies `Hashable` (it defines `__hash__`). The annotation
+            // parser lowercases names, so the ABC arrives as `Named("hashable")`.
+            (InferredType::None_, InferredType::Named(name)) if name == "hashable" => true,
             // Optional types are assignable to their non-optional counterparts
             (InferredType::Optional(inner), other) => inner.is_assignable_to(other),
             (inner, InferredType::Optional(other)) => inner.is_assignable_to(other),
@@ -254,8 +257,13 @@ impl InferredType {
                     // Target `tuple[X, ...]`: every element of a fixed-length source
                     // tuple must be assignable to `X` (empty tuple is vacuously valid).
                     (None, Some(b_elem)) => a.iter().all(|elem| elem.is_assignable_to(b_elem)),
-                    // Target is fixed-length: a variable-length source cannot satisfy it.
-                    (Some(_), None) => false,
+                    // Target is fixed-length: a variable-length source cannot
+                    // satisfy it — EXCEPT `tuple[Any, ...]` / `tuple[Unknown, ...]`,
+                    // which are bidirectionally compatible with any tuple (PEP 484
+                    // gradual typing).
+                    (Some(source_elem), None) => {
+                        matches!(source_elem, InferredType::Any | InferredType::Unknown)
+                    }
                     // Both fixed-length: require equal arity and positional assignability.
                     (None, None) => {
                         a.len() == b.len()

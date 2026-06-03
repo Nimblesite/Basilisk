@@ -211,25 +211,38 @@ pub(super) fn check_expr_for_protocol_call(
             }
         }
         // Check if a Protocol/abstract class is passed as an argument.
-        for arg in &call.arguments.args {
-            if let Some(arg_name) = expr_simple_name(arg) {
-                let arg_str = arg_name.as_str();
-                if protocol_names.contains(arg_str) {
-                    out.push(ProtocolInstantiationViolation {
-                        class_name: arg_name,
-                        span: text_range_to_span(call.range),
-                        is_abstract: false,
-                    });
-                } else if abstract_names.contains(arg_str) {
-                    out.push(ProtocolInstantiationViolation {
-                        class_name: arg_name,
-                        span: text_range_to_span(call.range),
-                        is_abstract: true,
-                    });
+        // Type-checking utilities (assert_type, reveal_type, cast, ...) reference
+        // their type arguments nominally and never instantiate them, so passing a
+        // Protocol/abstract class to them is valid — skip their argument lists.
+        let callee_is_type_utility = expr_simple_name(&call.func)
+            .is_some_and(|name| is_type_checking_utility(name.as_str()));
+        if !callee_is_type_utility {
+            for arg in &call.arguments.args {
+                if let Some(arg_name) = expr_simple_name(arg) {
+                    let arg_str = arg_name.as_str();
+                    if protocol_names.contains(arg_str) {
+                        out.push(ProtocolInstantiationViolation {
+                            class_name: arg_name,
+                            span: text_range_to_span(call.range),
+                            is_abstract: false,
+                        });
+                    } else if abstract_names.contains(arg_str) {
+                        out.push(ProtocolInstantiationViolation {
+                            class_name: arg_name,
+                            span: text_range_to_span(call.range),
+                            is_abstract: true,
+                        });
+                    }
                 }
             }
         }
     }
+}
+
+/// Returns `true` for type-checking utility functions whose arguments are type
+/// expressions referenced nominally, not values to be instantiated.
+fn is_type_checking_utility(name: &str) -> bool {
+    matches!(name, "assert_type" | "reveal_type" | "cast")
 }
 
 // ---------------------------------------------------------------------------

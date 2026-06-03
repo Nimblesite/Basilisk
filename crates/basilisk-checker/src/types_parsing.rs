@@ -23,9 +23,16 @@ impl InferredType {
             "bytes" => InferredType::Bytes,
             "none" => InferredType::None_,
             // Bare `tuple` is `tuple[Any, ...]` — equivalent to Any for assignment.
-            "any" | "object" | "final" | "tuple" => InferredType::Any,
+            // Bare `type` is `type[Any]` (any class object) — Any-like for assignment.
+            "any" | "object" | "final" | "tuple" | "type" => InferredType::Any,
             "never" => InferredType::Never,
             "literalstring" => InferredType::LiteralString,
+            // A bare `Callable` annotation is `Callable[..., Any]` (PEP 484):
+            // empty `param_types` represents the arbitrary-parameter form.
+            "callable" => InferredType::Callable(CallableInfo {
+                param_types: Vec::new(),
+                return_type: Box::new(InferredType::Any),
+            }),
             // Bare generics without `[...]` are implicitly parameterised with Any.
             "list" => InferredType::List(Box::new(InferredType::Any)),
             "dict" => InferredType::Dict(Box::new(InferredType::Any), Box::new(InferredType::Any)),
@@ -91,6 +98,10 @@ fn parse_container_annotation(annotation: &str) -> InferredType {
     }
     if annotation.starts_with("tuple[") && annotation.ends_with(']') {
         let inner = &annotation[6..annotation.len() - 1];
+        // `tuple[()]` is the PEP 484 spelling of the empty-tuple type.
+        if inner.trim() == "()" {
+            return InferredType::Tuple(Vec::new());
+        }
         let parts = split_type_params(inner);
         let elem_types: Vec<InferredType> = parts
             .iter()
