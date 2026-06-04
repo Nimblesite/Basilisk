@@ -9,7 +9,9 @@ use basilisk_stubs::TypeProvenance;
 /// Every rule has a default severity determined by its code prefix (`E` = Error,
 /// `W` = Warning). All rules can be overridden to any severity at the line,
 /// block, file, path, or project level.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub enum Severity {
     /// Informational hint — does not block CI, shown as blue in LSP.
     Info,

@@ -21,6 +21,7 @@ use crate::output::{
 };
 
 mod adopt;
+mod cache_check;
 mod fix;
 mod output;
 
@@ -56,6 +57,17 @@ enum Command {
         /// When to use terminal colours: auto (default), always, or never.
         #[arg(long, default_value = "auto")]
         color: ColorMode,
+        /// Enable the opt-in result cache: unchanged files are served from a
+        /// persistent cache. A hit is returned only when the file, every file
+        /// it reads, the config, and the checker version are unchanged.
+        #[arg(long)]
+        cache: bool,
+        /// Override the cache directory (default: `<project>/.basilisk/cache/check`).
+        #[arg(long, value_name = "DIR")]
+        cache_dir: Option<std::path::PathBuf>,
+        /// Print cache hit/miss counts to stderr after checking.
+        #[arg(long)]
+        cache_stats: bool,
     },
     /// Apply autofixes to one or more files or directories.
     Fix {
@@ -194,9 +206,17 @@ fn main() -> ExitCode {
             paths,
             output,
             color,
+            cache,
+            cache_dir,
+            cache_stats,
         } => {
             color.apply();
-            run_check(&paths, output)
+            let cache_options = cache_check::CacheOptions {
+                enabled: cache,
+                dir: cache_dir,
+                stats: cache_stats,
+            };
+            run_check(&paths, output, &cache_options)
         }
         Command::Fix {
             paths,
@@ -403,8 +423,13 @@ fn run_stubs_status() -> u8 {
 /// - `0` — clean, no errors
 /// - `1` — type errors found
 /// - `3` — internal error
-fn run_check(paths: &[String], format: OutputFormat) -> u8 {
-    match collect_and_check(paths) {
+fn run_check(paths: &[String], format: OutputFormat, cache: &cache_check::CacheOptions) -> u8 {
+    let mut stats = cache_check::CacheStats::default();
+    let result = collect_and_check(paths, cache, &mut stats);
+    if cache.stats {
+        stats.report();
+    }
+    match result {
         Ok((diagnostics, sources)) => match format {
             OutputFormat::Json => {
                 render_diagnostics_json(&diagnostics, &sources);
@@ -446,6 +471,8 @@ fn run_check(paths: &[String], format: OutputFormat) -> u8 {
 
 fn collect_and_check(
     paths: &[String],
+    cache: &cache_check::CacheOptions,
+    stats: &mut cache_check::CacheStats,
 ) -> Result<(Vec<basilisk_checker::Diagnostic>, Vec<FileSource>), String> {
     // Load config from the first path's directory (or cwd).
     let config_root = paths
@@ -508,11 +535,16 @@ fn collect_and_check(
         "built import search paths"
     );
 
+    let cache_context = cache_check::build_context(cache, &config, &search_paths, &project_root);
+
     let mut all_diagnostics = Vec::new();
     let mut sources = Vec::new();
 
     for path in python_files {
-        match process_file(&path, &search_paths, &config) {
+        let outcome = cache_check::check_file(cache_context.as_ref(), stats, &path, || {
+            process_file(&path, &search_paths, &config)
+        });
+        match outcome {
             Ok((diags, source)) => {
                 all_diagnostics.extend(diags);
                 sources.push(FileSource { path, text: source });
@@ -685,6 +717,22 @@ mod tests {
         basilisk_config::DEFAULT_EXCLUDES.iter().copied().collect()
     }
 
+    /// Disabled cache options for tests that exercise the plain check pipeline.
+    fn no_cache() -> cache_check::CacheOptions {
+        cache_check::CacheOptions {
+            enabled: false,
+            dir: None,
+            stats: false,
+        }
+    }
+
+    /// Run `collect_and_check` with the cache disabled and a throwaway tally.
+    fn collect_and_check_uncached(
+        paths: &[String],
+    ) -> Result<(Vec<basilisk_checker::Diagnostic>, Vec<FileSource>), String> {
+        collect_and_check(paths, &no_cache(), &mut cache_check::CacheStats::default())
+    }
+
     // ── collect_python_files ──────────────────────────────────────────────────
 
     #[test]
@@ -718,7 +766,7 @@ mod tests {
         std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o000))?;
 
         let path = py.to_string_lossy().into_owned();
-        let result = collect_and_check(&[path]);
+        let result = collect_and_check_uncached(&[path]);
         std::fs::set_permissions(&py, std::fs::Permissions::from_mode(0o644))?;
         let _ = std::fs::remove_file(&py);
 
@@ -773,7 +821,7 @@ mod tests {
         let py = dir.join("basilisk_test_bad_code.py");
         std::fs::write(&py, b"def foo(x):\n    pass\n")?;
         let path = py.to_string_lossy().into_owned();
-        let (diags, _) = collect_and_check(&[path])?;
+        let (diags, _) = collect_and_check_uncached(&[path])?;
         let _ = std::fs::remove_file(&py);
         assert!(
             !diags.is_empty(),
@@ -812,7 +860,7 @@ mod tests {
         std::fs::write(&py, b"x: int = 42\n")?;
 
         let path = py.to_string_lossy().into_owned();
-        let (diags, _) = collect_and_check(&[path])?;
+        let (diags, _) = collect_and_check_uncached(&[path])?;
         let _ = std::fs::remove_dir_all(&dir);
 
         let w0050: Vec<_> = diags
@@ -840,7 +888,7 @@ mod tests {
         let py = dir.join("basilisk_test_clean_code.py");
         std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
         let path = py.to_string_lossy().into_owned();
-        let (diags, _) = collect_and_check(&[path])?;
+        let (diags, _) = collect_and_check_uncached(&[path])?;
         let _ = std::fs::remove_file(&py);
         assert!(
             diags.is_empty(),
@@ -870,7 +918,7 @@ mod tests {
         let py = dir.join("basilisk_test_rc_json_bad.py");
         std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
         let path = py.to_string_lossy().into_owned();
-        let code = run_check(&[path], OutputFormat::Json);
+        let code = run_check(&[path], OutputFormat::Json, &no_cache());
         let _ = std::fs::remove_file(&py);
         assert_eq!(code, 1, "bad code must make run_check return 1 (Json)");
         Ok(())
@@ -884,7 +932,7 @@ mod tests {
         let py = dir.join("basilisk_test_rc_json_clean.py");
         std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
         let path = py.to_string_lossy().into_owned();
-        let code = run_check(&[path], OutputFormat::Json);
+        let code = run_check(&[path], OutputFormat::Json, &no_cache());
         let _ = std::fs::remove_file(&py);
         assert_eq!(code, 0, "clean code must make run_check return 0 (Json)");
         Ok(())
@@ -898,7 +946,7 @@ mod tests {
         let py = dir.join("basilisk_test_rc_text_bad.py");
         std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
         let path = py.to_string_lossy().into_owned();
-        let code = run_check(&[path], OutputFormat::Text);
+        let code = run_check(&[path], OutputFormat::Text, &no_cache());
         let _ = std::fs::remove_file(&py);
         assert_eq!(code, 1, "bad code must make run_check return 1 (Text)");
         Ok(())
@@ -912,7 +960,7 @@ mod tests {
         let py = dir.join("basilisk_test_rc_text_clean.py");
         std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
         let path = py.to_string_lossy().into_owned();
-        let code = run_check(&[path], OutputFormat::Text);
+        let code = run_check(&[path], OutputFormat::Text, &no_cache());
         let _ = std::fs::remove_file(&py);
         assert_eq!(code, 0, "clean code must make run_check return 0 (Text)");
         Ok(())
@@ -921,7 +969,11 @@ mod tests {
     /// `run_check` internal error path: nonexistent path must return 3.
     #[test]
     fn run_check_nonexistent_path_returns_three() {
-        let code = run_check(&["/no/such/path.py".to_owned()], OutputFormat::Text);
+        let code = run_check(
+            &["/no/such/path.py".to_owned()],
+            OutputFormat::Text,
+            &no_cache(),
+        );
         assert_eq!(code, 3, "nonexistent path must make run_check return 3");
     }
 
@@ -952,7 +1004,7 @@ mod tests {
             b"def foo(x) -> None:  # type: warning[BSK-E0001]\n    pass\n",
         )?;
         let path = py.to_string_lossy().into_owned();
-        let code = run_check(&[path], OutputFormat::Text);
+        let code = run_check(&[path], OutputFormat::Text, &no_cache());
         let _ = std::fs::remove_file(&py);
         assert_eq!(
             code, 0,
@@ -971,7 +1023,7 @@ mod tests {
             b"def foo(x) -> None:  # type: warning[BSK-E0001]\n    pass\n",
         )?;
         let path = py.to_string_lossy().into_owned();
-        let code = run_check(&[path], OutputFormat::Json);
+        let code = run_check(&[path], OutputFormat::Json, &no_cache());
         let _ = std::fs::remove_file(&py);
         assert_eq!(
             code, 0,

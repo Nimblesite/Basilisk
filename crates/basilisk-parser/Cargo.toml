@@ -6,6 +6,7 @@ edition.workspace    = true
 license.workspace    = true
 
 [dependencies]
+basilisk-common              = { path = "../basilisk-common" }
 ruff_python_parser.workspace = true
 ruff_python_ast.workspace    = true
 thiserror                    = "2.0"

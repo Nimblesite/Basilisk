@@ -13,9 +13,11 @@ basilisk-stubs.workspace    = true
 ruff_python_ast.workspace   = true
 ruff_text_size.workspace    = true
 basilisk-uv.workspace       = true
+serde.workspace             = true
 
 [dev-dependencies]
 basilisk-test-macros.workspace = true
+serde_json.workspace = true
 tempfile = "3"
 
 [lints]

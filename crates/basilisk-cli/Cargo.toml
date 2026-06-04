@@ -16,6 +16,7 @@ basilisk-resolver.workspace = true
 basilisk-checker.workspace  = true
 basilisk-lsp.workspace      = true
 basilisk-common.workspace   = true
+basilisk-db.workspace       = true
 basilisk-uv.workspace       = true
 basilisk-stubs.workspace    = true
 clap.workspace              = true

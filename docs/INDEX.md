@@ -9,6 +9,7 @@ Specifications define the target behavior and architecture. They are the source 
 | [CHECKER-ARCHITECTURE-SPEC.md](specs/CHECKER-ARCHITECTURE-SPEC.md) | Core type checker architecture — type system, diagnostic codes, error ranges, and design philosophy. |
 | [CHECKER-TYPE-INFERENCE-SPEC.md](specs/CHECKER-TYPE-INFERENCE-SPEC.md) | Bidirectional type inference — variable/collection/generic inference, type narrowing, redundant annotation principle (W0050). |
 | [CHECKER-STUB-RESOLUTION-SPEC.md](specs/CHECKER-STUB-RESOLUTION-SPEC.md) | PEP 561 stub resolution, typeshed bundling, type provenance tracking, suppression system, auto-stub generation. |
+| [CHECKER-CACHE-SPEC.md](specs/CHECKER-CACHE-SPEC.md) | Opt-in, content-addressed CLI result cache — correctness contract (never miss an error), read-set fingerprinting, warm/cold detection. |
 | [COMPILER-ARCHITECTURE-SPEC.md](specs/COMPILER-ARCHITECTURE-SPEC.md) | Python-to-native compiler via LLVM — ownership model, memory backends, GPU support. |
 | [LSP-ARCHITECTURE-SPEC.md](specs/LSP-ARCHITECTURE-SPEC.md) | Single source of truth for LSP features, DAP integration, custom commands, configuration, and binary resolution. |
 | [LSP-ANALYSIS-MODES-SPEC.md](specs/LSP-ANALYSIS-MODES-SPEC.md) | Analysis modes (openFilesOnly, wholeModule, crossModule), workspace index, import graph, cross-file LSP features. |
@@ -34,6 +35,7 @@ Implementation roadmaps tracking phasing, priorities, and progress.
 | [LSP-PLAN.md](plans/LSP-PLAN.md) | Overall LSP roadmap — seven phases from core features through cross-module analysis. |
 | [CHECKER-CROSS-MODULE-PLAN.md](plans/CHECKER-CROSS-MODULE-PLAN.md) | Cross-file LSP features, type provenance, Salsa integration, auto-stub generation. |
 | [CHECKER-PEP-CONFORMANCE-PLAN.md](plans/CHECKER-PEP-CONFORMANCE-PLAN.md) | PEP conformance push — target 85%, tiered task list by complexity and impact. |
+| [CHECKER-CACHE-PLAN.md](plans/CHECKER-CACHE-PLAN.md) | Build order for the opt-in CLI result cache + warm/cold benchmark wiring. |
 | [LSP-AI-PLAN.md](plans/LSP-AI-PLAN.md) | AI provider abstraction — model-agnostic hooks for fixes, completions, refactoring. |
 | [LSP-PROFILING-PLAN.md](plans/LSP-PROFILING-PLAN.md) | Embed py-spy profiler into LSP for CPU profiling and hotspot visualization. |
 | [LSP-PROFILER-PROCESS-PANEL-PLAN.md](plans/LSP-PROFILER-PROCESS-PANEL-PLAN.md) | Python Processes activity-bar panel — LSP-driven process enumeration (sysinfo), sort/group, one-click CPU/memory profiling without the Command Palette. |

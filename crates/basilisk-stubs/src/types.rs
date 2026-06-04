@@ -54,7 +54,7 @@ pub enum StubTier {
 /// Where a type's information originated, from the perspective of the type
 /// checker.  Used for cascade suppression (suppress downstream errors from
 /// untyped imports) and hover annotations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum TypeProvenance {
     /// From source code annotations or inference.
     Source,

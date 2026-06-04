@@ -5,6 +5,8 @@
 //! and `wasm32-wasip1` (required by the Zed extension). Any constant or type
 //! that appears in more than one crate or editor extension belongs here.
 
+pub mod fs;
+
 /// Custom LSP method names used by Basilisk.
 ///
 /// These are the method strings registered as execute-command capabilities

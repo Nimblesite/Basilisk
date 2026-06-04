@@ -1,21 +1,19 @@
 //! Implements [CHKARCH-INCREMENTAL-SALSA]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA
 //! Incremental computation database for Basilisk.
 //!
-//! This crate will house the Salsa-based incremental database in Phase 2.
-//! Currently a placeholder for workspace coherence.
+//! This crate houses the opt-in CLI result cache ([`cache`], see
+//! [CHKCACHE](../../../docs/specs/CHECKER-CACHE-SPEC.md)) and will grow into the
+//! Salsa-based incremental database in Phase 2.
 
-/// Compute a cache key for a source string.
+pub mod cache;
+
+/// Compute a content-based cache key for a source string.
 ///
-/// Returns a content-based hash suitable for detecting changes.
-/// Phase 2: uses the standard library's `DefaultHasher`.  The real
-/// implementation will use a collision-resistant hash (e.g. xxHash).
+/// Delegates to the shared [`basilisk_common::fs::content_hash`] so every layer
+/// (stub cache, result cache, read-recorder) computes identical hashes.
 #[must_use]
 pub fn hash_source(source: &str) -> u64 {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    let mut hasher = DefaultHasher::new();
-    source.hash(&mut hasher);
-    hasher.finish()
+    basilisk_common::fs::content_hash(source)
 }
 
 /// Check whether a source file with the given hash needs to be rechecked.
