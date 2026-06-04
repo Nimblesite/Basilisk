@@ -253,12 +253,18 @@ async function handleMemorySnapshot(store: Store): Promise<void> {
   const result = await runMemoryScript(store, LSP_MEM_CMD.snapshot);
   if (result?.kind === "snapshot") {
     applyMemoryDecorations(result as unknown as MemorySnapshotResult);
-    // Surface the snapshot in the dashboard webview (summary cards + the
-    // top-allocations table) so results are visible even when the hot lines are
-    // in libraries rather than the open file.
+    // Retain for a later "Compare" (the Basilisk leak-analysis dashboard).
     lastDashboardSnapshot = toDashboardSnapshot(result);
-    openMemoryDashboard(lastDashboardSnapshot);
     Logger.info(`Memory snapshot: ${lastDashboardSnapshot.currentMemory} bytes current`);
+    // Open the V8 .heapprofile in VS Code's built-in profile viewer (flame chart
+    // + table, Self/Total size) — the same UI as Node.js heap profiles.
+    const heapProfilePath = asString(result.heapProfilePath);
+    if (heapProfilePath !== "") {
+      await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(heapProfilePath));
+    } else {
+      // Fall back to the Basilisk dashboard if the file wasn't produced.
+      openMemoryDashboard(lastDashboardSnapshot);
+    }
   }
 }
 

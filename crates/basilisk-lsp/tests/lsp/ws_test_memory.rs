@@ -117,6 +117,30 @@ async fn test_ws_memory_start_then_snapshot() -> TestResult<()> {
         .and_then(serde_json::Value::as_array)
         .ok_or("snapshot should carry topAllocations")?;
     assert_eq!(allocs.len(), 1, "one allocation site expected");
+
+    // The snapshot is also exported as a V8 `.heapprofile` the editor opens in
+    // VS Code's native profile viewer — verify the file exists and is valid.
+    let heap_path =
+        str_field(&snap, "heapProfilePath").ok_or("snapshot should return heapProfilePath")?;
+    assert!(
+        heap_path.ends_with(".heapprofile"),
+        "heapProfilePath: {heap_path}"
+    );
+    let contents =
+        std::fs::read_to_string(heap_path).map_err(|err| format!("read heapprofile: {err}"))?;
+    let profile: serde_json::Value = serde_json::from_str(&contents)?;
+    let self_size = profile
+        .get("head")
+        .and_then(|head| head.get("children"))
+        .and_then(serde_json::Value::as_array)
+        .and_then(|children| children.first())
+        .and_then(|node| node.get("selfSize"))
+        .and_then(serde_json::Value::as_u64);
+    assert_eq!(
+        self_size,
+        Some(24_567_890),
+        "heapprofile self size matches the allocation"
+    );
     Ok(())
 }
 

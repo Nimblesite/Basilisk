@@ -15,6 +15,7 @@
 
 pub mod diagnostics;
 pub mod diff;
+pub mod heapprofile;
 pub mod leaks;
 pub mod scripts;
 pub mod session;

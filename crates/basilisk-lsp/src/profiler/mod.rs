@@ -14,6 +14,7 @@
 
 pub mod aggregator;
 pub mod commands;
+pub mod cpuprofile;
 pub mod diagnostics;
 pub mod export;
 /// Elevated-helper-over-Unix-socket sampling path (Unix only). See [`helper_client`].
@@ -110,6 +111,8 @@ struct ProfileSession {
     hotspot_config: HotspotConfig,
     /// Seconds per sample (1.0 / `sample_rate`).
     sample_weight: f64,
+    /// Samples per second (used to emit integer microsecond timeDeltas).
+    sample_rate: u64,
     /// Whether idle threads are included.
     include_idle: bool,
 }
@@ -163,6 +166,8 @@ pub struct StopResult {
     pub hotspot_config: HotspotConfig,
     /// Seconds per sample.
     pub sample_weight: f64,
+    /// Samples per second.
+    pub sample_rate: u64,
 }
 
 /// Manages active profiling sessions for the LSP.
@@ -269,6 +274,7 @@ impl ProfileSessionManager {
                 sampler,
                 hotspot_config: HotspotConfig::default(),
                 sample_weight,
+                sample_rate: rate,
                 include_idle: false,
             },
         );
@@ -313,6 +319,7 @@ impl ProfileSessionManager {
             hot_lines,
             hotspot_config: session.hotspot_config,
             sample_weight: session.sample_weight,
+            sample_rate: session.sample_rate,
         })
     }
 
@@ -348,6 +355,7 @@ impl ProfileSessionManager {
             hot_lines,
             hotspot_config: session.hotspot_config.clone(),
             sample_weight: session.sample_weight,
+            sample_rate: session.sample_rate,
         })
     }
 

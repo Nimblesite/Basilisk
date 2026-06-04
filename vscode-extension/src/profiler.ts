@@ -235,7 +235,14 @@ async function handleProfileStop(store: Store): Promise<void> {
     if (result !== undefined && result !== null) {
       lastResult = result;
       applyProfileDecorations(result);
-      openFlamegraphWebview(result);
+      // Open the V8 .cpuprofile in VS Code's built-in profile viewer (flame
+      // chart + bottom-up/left-heavy tables); fall back to the speedscope-style
+      // webview only if the file wasn't produced.
+      if (result.cpuProfilePath !== undefined && result.cpuProfilePath !== "") {
+        await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(result.cpuProfilePath));
+      } else {
+        openFlamegraphWebview(result);
+      }
       Logger.info(
         `Profiling stopped: ${result.totalSamples} samples, ${result.duration.toFixed(1)}s, ` +
         `output: ${result.outputFile}`,

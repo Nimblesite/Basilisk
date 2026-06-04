@@ -41,6 +41,8 @@ export interface ProfileResult {
   duration: number;
   totalSamples: number;
   outputFile: string;
+  /** Path to the V8 `.cpuprofile` for VS Code's built-in profile viewer. */
+  cpuProfilePath?: string;
   hotFunctions: ProfileHotFunction[];
   hotLines: ProfileHotLine[];
 }

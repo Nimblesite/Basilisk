@@ -280,7 +280,20 @@ pub(super) async fn execute_memory_ingest(
     match server.memory_manager.ingest(session_id, output).await {
         Ok(result) => {
             publish_memory_diagnostics(server, &result.diagnostics).await;
-            Ok(Some(ingest_outcome_to_json(session_id, &result.outcome)))
+            let mut json = ingest_outcome_to_json(session_id, &result.outcome);
+            // A snapshot is also exported as a V8 `.heapprofile` so the editor can
+            // open it in VS Code's built-in profile viewer (flame chart + table).
+            if let IngestOutcome::Snapshot(snapshot) = &result.outcome {
+                if let Some(path) = write_heapprofile(snapshot) {
+                    if let Some(obj) = json.as_object_mut() {
+                        let _ = obj.insert(
+                            "heapProfilePath".to_owned(),
+                            serde_json::Value::String(path),
+                        );
+                    }
+                }
+            }
+            Ok(Some(json))
         }
         Err(err) => {
             error!(%err, "memory ingest failed");
@@ -294,6 +307,23 @@ pub(super) async fn execute_memory_ingest(
             Err(memory_error(err))
         }
     }
+}
+
+/// Write a snapshot as a V8 `.heapprofile` to the temp dir and return its path.
+///
+/// Returns `None` (logging the cause) if serialization or the write fails — the
+/// snapshot result is still returned to the editor, just without a file to open.
+fn write_heapprofile(snapshot: &crate::profiler::memory::MemorySnapshot) -> Option<String> {
+    let profile = crate::profiler::memory::heapprofile::snapshot_to_heapprofile(snapshot);
+    let json = serde_json::to_string(&profile)
+        .map_err(|err| error!(%err, "failed to serialize heapprofile"))
+        .ok()?;
+    let path = std::env::temp_dir().join(format!("basilisk-{}.heapprofile", snapshot.snapshot_id));
+    std::fs::write(&path, json)
+        .map_err(|err| error!(%err, "failed to write heapprofile"))
+        .ok()?;
+    info!(path = %path.display(), "wrote heapprofile");
+    Some(path.display().to_string())
 }
 
 /// Publish memory diagnostics for every affected URI.

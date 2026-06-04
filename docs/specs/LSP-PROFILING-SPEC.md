@@ -312,6 +312,28 @@ Stacks in speedscope are root-first (callers before callees). py-spy returns lea
 
 For direct SVG flamegraph output, use the `inferno` crate (Rust port of Brendan Gregg's FlameGraph). Convert aggregated stacks to collapsed format and pipe through `inferno::flamegraph::from_lines()`.
 
+## Native VS Code profile files {#PROFILE-NATIVE}
+
+Both profilers also emit **V8 profile files** that VS Code's built-in profile
+viewer opens natively (flame chart + bottom-up/left-heavy tables) — the same UI
+as Node.js profiling (see <https://code.visualstudio.com/docs/nodejs/profiling>).
+The editor opens them with `vscode.open`; the custom flamegraph/dashboard
+webviews remain as fallbacks.
+
+- **CPU → `.cpuprofile`** (`Profiler.Profile` schema):
+  [`cpuprofile.rs`](../../crates/basilisk-lsp/src/profiler/cpuprofile.rs) merges the
+  per-thread py-spy stacks into one call tree (`nodes` + `samples` + integer-µs
+  `timeDeltas`, derived from the sample rate). Written on `profiler.stop`;
+  the path is returned as `cpuProfilePath`.
+- **Memory → `.heapprofile`** (`HeapProfiler.SamplingHeapProfile` schema):
+  [`heapprofile.rs`](../../crates/basilisk-lsp/src/profiler/memory/heapprofile.rs)
+  maps each `tracemalloc` site to a `head`-tree node with `selfSize`. Written on
+  a snapshot ingest; the path is returned as `heapProfilePath`.
+
+Line numbers are 0-based in V8; `url` is the source file path so the viewer can
+navigate. `.heapsnapshot` is intentionally not produced (the built-in editor
+doesn't render it).
+
 ## Visualization {#PROFILE-VIS}
 
 ### Brand Palette for Profiling {#PROFILE-VIS-PALETTE}
