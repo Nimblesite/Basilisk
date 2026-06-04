@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 /// Severity level for a diagnostic rule override.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 pub enum RuleSeverity {
     /// Full error (default for most rules).
     Error,
@@ -34,7 +34,7 @@ impl RuleSeverity {
 ///
 /// Applied when the imported module name matches the override key.
 /// Keys support wildcard patterns (e.g. `django.*` matches `django.db.models`).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ModuleOverride {
     /// When `true`, BSK-E0010 is suppressed for this module.
     pub ignore_missing_stubs: bool,
@@ -44,7 +44,7 @@ pub struct ModuleOverride {
 ///
 /// Applied when the file path matches the override key pattern.
 /// Keys use glob patterns (e.g. `vendor/**` matches `vendor/lib/foo.py`).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct PathOverride {
     /// Rules to completely disable for files matching this path pattern.
     pub disabled_rules: Vec<String>,

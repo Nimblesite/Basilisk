@@ -46,7 +46,10 @@ pub fn parse_source(source: String, path: String) -> Result<ParsedModule, ParseE
 /// Returns [`ParseError::Io`] on read failure or [`ParseError::Syntax`] on
 /// parse failure.
 pub fn parse_file(path: &str) -> Result<ParsedModule, ParseError> {
-    std::fs::read_to_string(path)
+    // Routed through `read_tracked` so the result cache can record exactly which
+    // files a check read. Inert (identical to `fs::read_to_string`) when no
+    // recorder is active. See [CHKCACHE-READSET-FS].
+    basilisk_common::fs::read_tracked(std::path::Path::new(path))
         .map_err(|source| ParseError::Io {
             path: path.to_owned(),
             source,

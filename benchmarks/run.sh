@@ -38,13 +38,27 @@ OUT="$ROOT/benchmarks/results"
 STATUS_DIR="$ROOT/benchmarks/status"
 RUNS="${RUNS:-10}"
 WARMUP="${WARMUP:-2}"
+# Persistent cache dirs for the warm columns of the tools that HAVE a result
+# cache (basilisk's --cache, mypy's incremental). Entries are keyed by the
+# target path, so one dir across fixtures never collides; the hyperfine warmup
+# runs populate them so the measured runs are cache hits.
+WARMCACHE="$OUT/.warmcache"
+MYPYCACHE="$OUT/.mypycache"
 # Regression gate: on by default; BENCH_NO_GATE=1 disables it and re-baselines.
 BENCH_GATE="1"; [[ -n "${BENCH_NO_GATE:-}" ]] && BENCH_GATE="0"
 BENCH_REGRESS_PCT="${BENCH_REGRESS_PCT:-25}"
 mkdir -p "$OUT" "$STATUS_DIR"
 
 # Canonical tool column order for the status CSV / website (stable schema).
-ALL_TOOLS="basilisk pyright mypy ty pyrefly"
+# Every tool gets a COLD column (full check from scratch) and a -warm column
+# (a repeat run using whatever that tool caches):
+#   * basilisk-warm  — opt-in result-cache hit (basilisk check --cache)
+#   * mypy-warm      — incremental .mypy_cache hit; cold mypy is --no-incremental
+#   * pyright/ty/pyrefly-warm — these keep NO cross-run result cache (verified:
+#     they write zero cache artifacts), so their warm is a genuine repeat run
+#     that lands ~= cold. The (near-)equality is the honest result: they do a
+#     full check every invocation.
+ALL_TOOLS="basilisk basilisk-warm pyright pyright-warm mypy mypy-warm ty ty-warm pyrefly pyrefly-warm"
 
 # ─── Preconditions ────────────────────────────────────────────────────────────
 if ! command -v hyperfine >/dev/null 2>&1; then
@@ -62,17 +76,37 @@ fi
 declare -a TOOL_NAMES=() TOOL_CMDS=()
 add_tool() { TOOL_NAMES+=("$1"); TOOL_CMDS+=("$2"); }
 
-add_tool "basilisk" "$BSK check {}"
-command -v pyright  >/dev/null 2>&1 && add_tool "pyright"  "pyright {}"
-command -v mypy     >/dev/null 2>&1 && add_tool "mypy"     "mypy --ignore-missing-imports --no-error-summary {}"
-command -v ty       >/dev/null 2>&1 && add_tool "ty"       "ty check {}"
-command -v pyrefly  >/dev/null 2>&1 && add_tool "pyrefly"  "pyrefly check {}"
+# Warm caches start empty; the hyperfine warmup populates them so the measured
+# warm runs are hits.
+rm -rf "$WARMCACHE" "$MYPYCACHE"; mkdir -p "$WARMCACHE" "$MYPYCACHE"
+add_tool "basilisk"      "$BSK check {}"
+add_tool "basilisk-warm" "$BSK check {} --cache --cache-dir $WARMCACHE"
+if command -v pyright >/dev/null 2>&1; then
+  # No result cache; warm is a genuine repeat run (~= cold).
+  add_tool "pyright"      "pyright {}"
+  add_tool "pyright-warm" "pyright {}"
+fi
+if command -v mypy >/dev/null 2>&1; then
+  # cold = --no-incremental (full check); warm = incremental .mypy_cache hit.
+  # Without --no-incremental the hyperfine warmup turned every cold measurement
+  # into a do-nothing cache hit, which is why mypy used to look flat/fast.
+  add_tool "mypy"      "mypy --no-incremental --ignore-missing-imports --no-error-summary {}"
+  add_tool "mypy-warm" "mypy --cache-dir $MYPYCACHE --ignore-missing-imports --no-error-summary {}"
+fi
+if command -v ty >/dev/null 2>&1; then
+  add_tool "ty"      "ty check {}"
+  add_tool "ty-warm" "ty check {}"
+fi
+if command -v pyrefly >/dev/null 2>&1; then
+  add_tool "pyrefly"      "pyrefly check {}"
+  add_tool "pyrefly-warm" "pyrefly check {}"
+fi
 
 version_of() {
-  local v=""
-  case "$1" in
+  local base="${1%-warm}" v=""
+  case "$base" in
     basilisk) v="$("$BSK" --version 2>&1 | head -1)" ;;
-    *)        v="$("$1" --version 2>&1 | head -1)" ;;
+    *)        v="$("$base" --version 2>&1 | head -1)" ;;
   esac
   printf '%s' "${v:-n/a}"
 }
@@ -103,9 +137,11 @@ else
   BENCH_SLUG="$(slugify "$(uname -s)-${BENCH_ARCH}-${BENCH_CPU}")"
 fi
 
-# Tool-version string for the CSV header.
+# Tool-version string for the CSV header (one entry per base tool; the `-warm`
+# variants share the same binary/version, so they are omitted to avoid clutter).
 BENCH_TOOLS=""
 for name in "${TOOL_NAMES[@]}"; do
+  case "$name" in *-warm) continue ;; esac
   BENCH_TOOLS+="${BENCH_TOOLS:+, }${name}=$(version_of "$name")"
 done
 
@@ -256,7 +292,7 @@ csv_lines = [
     f"# tools: {os.environ['BENCH_TOOLS']}",
     f"# runs: {os.environ['BENCH_RUNS']} (hyperfine mean wall-clock, milliseconds)",
     f"# generated: {os.environ['BENCH_GENERATED']}",
-    f"# note: cold full-file CLI runs; does not reflect warm incremental (LSP) speed.",
+    f"# note: <tool>_ms = COLD full-file CLI check from scratch. <tool>-warm_ms = a repeat run using that tool's own cache. basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache, so their warm ~= cold (every run is a full check).",
     "fixture," + ",".join(f"{t}_ms" for t in all_tools),
 ]
 for stem, means in rows:
@@ -297,7 +333,7 @@ for FILE in "${FIXTURES[@]}"; do
   for i in "${!TOOL_NAMES[@]}"; do
     name="${TOOL_NAMES[$i]}"
     CMD="${TOOL_CMDS[$i]//\{\}/$FPATH}"
-    case "$name" in
+    case "${name%-warm}" in
       basilisk) n=$($CMD 2>/dev/null | grep -cE "error\[BSK" || true) ;;
       pyright)  n=$($CMD 2>/dev/null | grep -cE " - error:" || true) ;;
       mypy)     n=$($CMD 2>/dev/null | grep -cE ": error:" || true) ;;

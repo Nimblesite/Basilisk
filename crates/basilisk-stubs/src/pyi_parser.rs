@@ -52,7 +52,9 @@ pub fn parse_pyi_file(
     source: StubSource,
     tier: StubTier,
 ) -> Result<StubModule, StubParseError> {
-    let content = std::fs::read_to_string(path).map_err(|err| StubParseError::Io {
+    // Routed through `read_tracked` so the result cache records stub reads too.
+    // See [CHKCACHE-READSET-FS].
+    let content = basilisk_common::fs::read_tracked(path).map_err(|err| StubParseError::Io {
         path: path.to_path_buf(),
         source: err,
     })?;

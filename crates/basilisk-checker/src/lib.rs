@@ -26,6 +26,7 @@
 //! - Per-module overrides (`per-module-overrides."fastmcp".ignore-missing-stubs`)
 //! - Per-path overrides (`per-path-overrides."vendor/**".rules.disabled`)
 
+pub mod cached;
 pub mod collection_inference;
 pub mod diagnostic;
 pub mod inference;
@@ -35,6 +36,7 @@ pub mod suppression;
 pub mod types;
 pub mod types_parsing;
 
+pub use cached::CachedDiagnostic;
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};
 
 /// Run all rules and apply inline suppression / mode overrides.
