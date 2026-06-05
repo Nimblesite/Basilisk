@@ -224,6 +224,27 @@ Each editor implements test integration using its native test UI. Behavioral det
 - **Inline failures**: `vim.diagnostic.set()` in `basilisk-test` namespace
 - **Coverage**: Parse `coverage.xml`, display as extmark gutter highlights
 
+#### e2e harness result gate {#LSPTEST-EDITOR-SPECIFIC-INTEGRATION-NEOVIM-E2E-GATE}
+
+The Neovim e2e suite runs via `PlenaryBustedDirectory tests/lsp` (one child nvim
+per `*_spec.lua`, `sequential = true` so luacov stats merge without racing). The
+suite's pass/fail verdict is determined by **parsing the run output**, not by the
+nvim process exit code:
+
+- The PlenaryBustedDirectory parent nvim can exit non-zero on teardown — a
+  lingering LSP child process or async handle reaped late under `make ci`'s
+  parallel `-j3` load — even when every test passed. Gating on the exit code
+  alone is therefore flaky.
+- The exit code is also too weak in the other direction: a run that silently
+  executed no tests still exits zero.
+
+`assert_plenary_pass` (`scripts/common.sh`, used by `scripts/test-nvim.sh`)
+passes the run **iff** all four hold: every spec file started (one `Testing:`
+line each), every spec file emitted a final `Success:` summary, zero tests
+failed, zero tests errored, and no Lua traceback / nvim runtime error appeared.
+The nvim exit code is logged for diagnostics but is not authoritative. This is
+strictly stronger than the previous exit-code gate.
+
 ### Zed {#LSPTEST-EDITOR-SPECIFIC-INTEGRATION-ZED}
 
 - TBD — Zed lacks a native test explorer panel API. Will evaluate when available.
