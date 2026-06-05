@@ -34,7 +34,7 @@
       "threshold": 96
     },
     "vsix": {
-      "threshold": 84
+      "threshold": 86
     },
     "nvim": {
       "threshold": 39

@@ -15,8 +15,10 @@
 
 pub mod diagnostics;
 pub mod diff;
+pub mod heapprofile;
 pub mod leaks;
 pub mod scripts;
+pub mod session;
 pub mod timeline;
 
 use serde::{Deserialize, Serialize};
@@ -161,10 +163,37 @@ fn parse_allocation_site(value: &serde_json::Value) -> AllocationSite {
     }
 }
 
+/// Parse the `__BASILISK_MEM_REFS__` reference-graph payload.
+///
+/// The reference-graph script's JSON (`{ nodes, edges, cycles }`) is passed
+/// straight through to the editor's webview, so this validates the marker and
+/// JSON shape and returns the parsed object verbatim rather than re-modelling
+/// it in Rust (it has no server-side diagnostics).
+///
+/// # Errors
+///
+/// Returns an error if the marker is absent or the JSON is invalid.
+pub fn parse_refs_output(output: &str) -> Result<serde_json::Value, String> {
+    let json_str = extract_marker_json(output, REFS_MARKER)?;
+    serde_json::from_str(json_str).map_err(|err| format!("invalid reference-graph JSON: {err}"))
+}
+
+/// Parse the `__BASILISK_MEM_OBJECTS__` objects-by-type payload.
+///
+/// Like [`parse_refs_output`], this is a validated pass-through to the editor.
+///
+/// # Errors
+///
+/// Returns an error if the marker is absent or the JSON is invalid.
+pub fn parse_objects_output(output: &str) -> Result<serde_json::Value, String> {
+    let json_str = extract_marker_json(output, OBJECTS_MARKER)?;
+    serde_json::from_str(json_str).map_err(|err| format!("invalid objects-by-type JSON: {err}"))
+}
+
 /// Extract the JSON payload after a marker prefix from script output.
 ///
 /// Scans each line for the marker and returns the JSON string after it.
-fn extract_marker_json<'a>(output: &'a str, marker: &str) -> Result<&'a str, String> {
+pub(crate) fn extract_marker_json<'a>(output: &'a str, marker: &str) -> Result<&'a str, String> {
     for line in output.lines() {
         if let Some(json_start) = line.find(marker) {
             return Ok(&line[json_start + marker.len()..]);

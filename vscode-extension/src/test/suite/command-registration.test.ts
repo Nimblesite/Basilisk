@@ -121,6 +121,7 @@ const SERVER_COMMANDS = [
     'basilisk.memory.references',
     'basilisk.memory.objectsByType',
     'basilisk.memory.gcCollect',
+    'basilisk.memory.ingest',
 ] as const;
 
 /** Assert that registering a command succeeds (it was NOT already registered). */

@@ -8,6 +8,7 @@ import * as net from "net";
 import { type LanguageClient } from "vscode-languageclient/node";
 import { Logger } from "./logger";
 import { DapTcpProxy } from "./dap-proxy";
+import { appendDebugOutput, clearDebugOutput } from "./dap-output";
 
 /** Max number of variables to log inline before switching to a count summary. */
 const MAX_INLINE_VARS = 10;
@@ -91,23 +92,36 @@ function summarizeCollectionFields(obj: Record<string, unknown>, parts: string[]
 
 /**
  * Factory that creates per-session DAP message trackers.
+ *
+ * The tracker is the single observability point for debugpy → VS Code traffic,
+ * so it captures both the debuggee `process` event (the PID the CPU profiler
+ * targets — "same process") and `output` events (the marker payloads the
+ * memory round-trip recovers). `onDebuggeeProcessId`, when supplied, receives
+ * `(sessionId, pid)` once the `process` event arrives.
  */
 export class BasiliskDebugAdapterTrackerFactory
   implements vscode.DebugAdapterTrackerFactory
 {
+  constructor(private readonly onDebuggeeProcessId?: DebuggeeProcessIdCallback) {}
+
   public createDebugAdapterTracker(
     session: vscode.DebugSession
   ): vscode.ProviderResult<vscode.DebugAdapterTracker> {
-    return new BasiliskDebugAdapterTracker(session);
+    return new BasiliskDebugAdapterTracker(session, this.onDebuggeeProcessId);
   }
 }
 
 class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
   private readonly sessionId: string;
+  private readonly fullSessionId: string;
   private readonly sessionName: string;
 
-  constructor(session: vscode.DebugSession) {
+  constructor(
+    session: vscode.DebugSession,
+    private readonly onDebuggeeProcessId?: DebuggeeProcessIdCallback
+  ) {
     this.sessionId = session.id.slice(0, SESSION_ID_PREFIX_LEN);
+    this.fullSessionId = session.id;
     this.sessionName = session.name;
   }
 
@@ -117,6 +131,7 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
 
   public onWillStopSession(): void {
     Logger.info(`[DAP ${this.sessionId}] session "${this.sessionName}" stopping`);
+    clearDebugOutput(this.fullSessionId);
   }
 
   public onWillReceiveMessage(message: unknown): void {
@@ -139,10 +154,35 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
         Logger.warn(text);
       }
     } else if (msg.type === "event") {
-      Logger.debug(`[DAP ${this.sessionId}] <-- event:${msg.event} ${summarizeBody(msg.body)}`);
-      if (msg.event === "terminated") {
-        Logger.info(`[DAP ${this.sessionId}] program terminated`);
+      this.handleEvent(msg.event, msg.body);
+    }
+  }
+
+  /** Capture profiler-relevant events; log the rest. */
+  private handleEvent(event: string | undefined, body: unknown): void {
+    if (event === "output") {
+      // Capture debuggee stdout/stderr so the memory round-trip can recover
+      // the `__BASILISK_MEM*__` marker its injection scripts print (debugpy
+      // delivers print() output here, not in the evaluate result).
+      const text = (body as { output?: string } | undefined)?.output;
+      if (typeof text === "string") {
+        appendDebugOutput(this.fullSessionId, text);
       }
+      return;
+    }
+    if (event === "process") {
+      // The debuggee's OS PID — captured so the CPU profiler can attach to the
+      // SAME process the debugger drives (DAP: body.systemProcessId).
+      const pid = (body as { systemProcessId?: number } | undefined)?.systemProcessId;
+      if (typeof pid === "number" && this.onDebuggeeProcessId !== undefined) {
+        Logger.info(`[DAP ${this.sessionId}] debuggee systemProcessId=${pid}`);
+        this.onDebuggeeProcessId(this.fullSessionId, pid);
+      }
+      return;
+    }
+    Logger.debug(`[DAP ${this.sessionId}] <-- event:${event} ${summarizeBody(body)}`);
+    if (event === "terminated") {
+      Logger.info(`[DAP ${this.sessionId}] program terminated`);
     }
   }
 
@@ -172,6 +212,9 @@ async function isPortAlive(_host: string, port: number): Promise<boolean> {
     });
   });
 }
+
+/** Callback that receives the debuggee OS PID once debugpy emits its `process` event. */
+export type DebuggeeProcessIdCallback = (sessionId: string, pid: number) => void;
 
 /** Handle attach mode: connect to user-specified host:port, respawning if needed. */
 async function handleAttachMode(
@@ -302,6 +345,75 @@ export function createDebugAdapterFactory(
         throw new Error("Basilisk: LSP client is not running. Cannot start debug session.");
       }
       return handleLaunchMode(config, lspClient);
+    },
+  };
+}
+
+// ── Debug configuration provider ──────────────────────────────────────────
+
+/** A config field is "blank" when undefined (VS Code's empty `{}`) or empty. */
+function isBlank(value: string | undefined): boolean {
+  return value === undefined || value === "";
+}
+
+/** The default launch config for the current file. */
+function defaultLaunchConfig(): vscode.DebugConfiguration {
+  return {
+    name: "Python: Current File (Basilisk)",
+    type: "basilisk-debug",
+    request: "launch",
+    program: "${file}",
+    console: "internalConsole",
+    redirectOutput: true,
+    justMyCode: true,
+  };
+}
+
+/**
+ * Fill in a runnable `basilisk-debug` config from an empty or partial one.
+ *
+ * This is what makes "Run and Debug" / F5 work **without a launch.json**: VS
+ * Code calls the provider with an empty config (no type), and for a Python file
+ * we synthesize a launch of the current file. A partial config missing
+ * `program` defaults to `${file}`. Pure (no VS Code APIs) so it is unit-testable;
+ * the active language id is passed in.
+ */
+export function applyDebugConfigDefaults(
+  config: vscode.DebugConfiguration,
+  activeLanguageId: string | undefined,
+): vscode.DebugConfiguration {
+  // Empty config (F5 / "Run and Debug" with no launch.json — VS Code passes `{}`):
+  // only synthesize one for a Python file, else leave it for VS Code to report
+  // "open a file". Falsy check also tolerates blank fields from a stub config.
+  if (isBlank(config.type) && isBlank(config.request) && isBlank(config.name)) {
+    return activeLanguageId === "python" ? defaultLaunchConfig() : config;
+  }
+  // A launch config missing `program` targets the active file.
+  if (
+    config.type === "basilisk-debug" &&
+    config.request === "launch" &&
+    isBlank(config.program as string | undefined)
+  ) {
+    return { ...config, program: "${file}" };
+  }
+  return config;
+}
+
+/**
+ * Provider that lets `basilisk-debug` start with no `launch.json`: it offers a
+ * default configuration in the Run-and-Debug picker and resolves empty/partial
+ * configs to a launch of the current file.
+ */
+export function createBasiliskDebugConfigProvider(): vscode.DebugConfigurationProvider {
+  return {
+    provideDebugConfigurations(): vscode.DebugConfiguration[] {
+      return [defaultLaunchConfig()];
+    },
+    resolveDebugConfiguration(
+      _folder: vscode.WorkspaceFolder | undefined,
+      config: vscode.DebugConfiguration,
+    ): vscode.DebugConfiguration {
+      return applyDebugConfigDefaults(config, vscode.window.activeTextEditor?.document.languageId);
     },
   };
 }

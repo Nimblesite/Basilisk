@@ -25,6 +25,9 @@ import * as net from 'net';
 import { execFileSync } from 'child_process';
 
 import { findBasiliskBinary } from './test-helpers';
+import { getStore } from '../../extension';
+import { currentStoppedFrameId, evaluateInDebugSession } from '../../dap-evaluate';
+import { applyDebugConfigDefaults } from '../../debug-adapter';
 
 const EXTENSION_ID = 'Nimblesite.basilisk';
 
@@ -1635,5 +1638,129 @@ suite('Debug Integration E2E Tests', () => {
                 'Error should have a message explaining what went wrong'
             );
         }
+    });
+
+    // ────────────────────────────────────────────────────────────────────────
+    // 23. Profiler "same process": the debuggee PID is captured from the DAP
+    //     `process` event so CPU profiling can target the same process. [LSPPROF]
+    // ────────────────────────────────────────────────────────────────────────
+
+    test('captures debuggee PID from the debug session for same-process profiling', async function () {
+        this.timeout(DEBUG_SESSION_TIMEOUT_MS + STOPPED_EVENT_TIMEOUT_MS);
+
+        const { session } = await launchAndWaitForBreakpoint([34], pythonPath);
+
+        // The DAP `process` event carries systemProcessId; the proxy captures it
+        // into the store keyed by VS Code session id. Poll briefly because the
+        // event can arrive shortly after the first stop.
+        let pid: number | undefined;
+        for (let i = 0; i < 40 && pid === undefined; i++) {
+            pid = getStore()?.getDebuggeeProcessId(session.id);
+            if (pid === undefined) {
+                await new Promise<void>((resolve) => setTimeout(resolve, 50));
+            }
+        }
+
+        assert.ok(
+            pid !== undefined && pid > 0,
+            `debuggee PID should be captured for session ${session.id}, got ${String(pid)}`
+        );
+
+        await stopActiveDebugSession();
+    });
+
+    // ────────────────────────────────────────────────────────────────────────
+    // 24. Memory profiling round-trip against REAL debugpy: the editor couriers
+    //     the LSP's injection scripts via DAP `evaluate` and posts the output
+    //     back to `basilisk.memory.ingest`, which parses a real tracemalloc
+    //     snapshot. [LSPPROF] PROFILE-MEMORY
+    // ────────────────────────────────────────────────────────────────────────
+
+    test('memory round-trip: tracemalloc start + snapshot via DAP evaluate', async function () {
+        this.timeout(DEBUG_SESSION_TIMEOUT_MS + STOPPED_EVENT_TIMEOUT_MS);
+
+        await launchAndWaitForBreakpoint([34], pythonPath);
+
+        // Exercise the real bridge (dap-evaluate.ts): resolve the stopped frame
+        // the same way the memory commands do.
+        const frameId = await currentStoppedFrameId();
+        if (frameId === null) {
+            assert.fail('currentStoppedFrameId should resolve a frame while paused');
+        }
+
+        // 1. Mint a memory session + fetch the start script from the LSP.
+        const start = await vscode.commands.executeCommand<{ memorySessionId?: string; script?: string }>(
+            'basilisk.memory.start',
+            { tracebackDepth: 25 }
+        );
+        assert.ok(start.memorySessionId !== undefined, 'start should return a memorySessionId');
+        assert.ok(start.script?.includes('tracemalloc.start'), 'start script should start tracemalloc');
+
+        // 2. Inject tracemalloc into the live debuggee, then allocate ~2 MB so the
+        //    snapshot has something concrete to report.
+        await evaluateInDebugSession(start.script ?? '', frameId);
+        await evaluateInDebugSession(
+            'global _bsk_leak\n_bsk_leak = [bytearray(1024) for _ in range(2000)]',
+            frameId
+        );
+
+        // 3. Fetch the snapshot script, run it in the debuggee, courier output back.
+        const snapCmd = await vscode.commands.executeCommand<{ script?: string }>(
+            'basilisk.memory.snapshot',
+            { memorySessionId: start.memorySessionId }
+        );
+        assert.ok(snapCmd.script?.includes('__BASILISK_MEM__'), 'snapshot script should print the marker');
+
+        const output = await evaluateInDebugSession(snapCmd.script ?? '', frameId);
+        assert.ok(output !== null, 'evaluate should return the snapshot output');
+        const result = await vscode.commands.executeCommand<{ kind?: string; currentMemory?: number; snapshotId?: string }>(
+            'basilisk.memory.ingest',
+            { memorySessionId: start.memorySessionId, output }
+        );
+
+        assert.strictEqual(result.kind, 'snapshot', 'ingest should yield a snapshot');
+        assert.ok(typeof result.snapshotId === 'string', 'snapshot should have an id');
+        assert.ok(
+            typeof result.currentMemory === 'number' && result.currentMemory > 0,
+            `tracemalloc should report tracked memory, got ${String(result.currentMemory)}`
+        );
+
+        await stopActiveDebugSession();
+    });
+});
+
+// ── Zero-config debug start [VSIX-PYTHON-DEBUGGER-DAP] ──────────────────────
+// Pure tests for the DebugConfigurationProvider's defaulting logic that lets
+// "Run and Debug" / F5 start without a launch.json.
+suite('Basilisk Debug Config Provider', () => {
+    test('empty config + Python file synthesizes a current-file launch', () => {
+        // VS Code passes a truly-empty {} when starting with no launch.json.
+        const resolved = applyDebugConfigDefaults({} as vscode.DebugConfiguration, 'python');
+        assert.strictEqual(resolved.type, 'basilisk-debug');
+        assert.strictEqual(resolved.request, 'launch');
+        assert.strictEqual(resolved.program, '${file}');
+    });
+
+    test('empty config + non-Python file is left untouched', () => {
+        const empty = {} as vscode.DebugConfiguration;
+        const resolved = applyDebugConfigDefaults(empty, 'rust');
+        assert.strictEqual(resolved.type, undefined);
+        assert.strictEqual(resolved.program, undefined);
+    });
+
+    test('launch config missing program defaults to the current file', () => {
+        const resolved = applyDebugConfigDefaults(
+            { name: 'x', type: 'basilisk-debug', request: 'launch' } as vscode.DebugConfiguration,
+            'python'
+        );
+        assert.strictEqual(resolved.program, '${file}');
+    });
+
+    test('a complete config passes through unchanged', () => {
+        const full = {
+            name: 'x', type: 'basilisk-debug', request: 'launch', program: '/tmp/a.py',
+        } as vscode.DebugConfiguration;
+        const resolved = applyDebugConfigDefaults(full, 'python');
+        assert.strictEqual(resolved.program, '/tmp/a.py');
     });
 });

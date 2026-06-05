@@ -164,6 +164,18 @@ pub(super) async fn execute_profiler_stop(
                 }
             };
 
+            // Always export a V8 `.cpuprofile` too, so the editor can open it in
+            // VS Code's built-in profile viewer (flame chart + tables).
+            let cpu_profile_path = crate::profiler::cpuprofile::export_cpuprofile(
+                &result.data,
+                &result.session_id,
+                result.sample_rate,
+                &output_dir,
+            )
+            .map_err(|err| error!(%err, "failed to export cpuprofile"))
+            .ok()
+            .map(|path| path.display().to_string());
+
             publish_profiler_diagnostics(server, &result.data, &result.hotspot_config).await;
 
             server
@@ -185,6 +197,7 @@ pub(super) async fn execute_profiler_stop(
                 "duration": result.duration,
                 "totalSamples": result.total_samples,
                 "outputFile": output_file,
+                "cpuProfilePath": cpu_profile_path,
                 "hotFunctions": hot_funcs_json,
                 "hotLines": hot_lines_json,
             })))

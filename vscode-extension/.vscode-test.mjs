@@ -43,8 +43,10 @@ export default defineConfig({
             // coverage signal under the VS Code extension host.
             '**/out/coverage-decorations.js',
             '**/out/info-panel.js',
+            '**/out/memory-dashboard.js',
             '**/out/memory-decorations.js',
             '**/out/memory-profiler.js',
+            '**/out/memory-ref-graph.js',
             '**/out/module-explorer.js',
             '**/out/profiler.js',
             '**/out/profiler-flamegraph-html.js',

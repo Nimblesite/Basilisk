@@ -107,6 +107,9 @@ pub struct LspServer {
     pub(super) debug_manager: crate::debug::DebugSessionManager,
     /// Profiler session manager — py-spy sampling, aggregation, export.
     pub(super) profiler_manager: crate::profiler::ProfileSessionManager,
+    /// Memory session manager — drives the editor-couriered ingest round-trip
+    /// (snapshot/diff/leak state) since the LSP holds no DAP connection.
+    pub(super) memory_manager: crate::profiler::memory::session::MemorySessionManager,
     /// Debounced file-watcher task.
     pub(super) watcher_debounce: Mutex<Option<AbortHandle>>,
     /// Debounced module-changed notification task.
@@ -131,6 +134,7 @@ impl LspServer {
             workspace_roots: RwLock::new(Vec::new()),
             debug_manager: crate::debug::DebugSessionManager::new(),
             profiler_manager: crate::profiler::ProfileSessionManager::new(),
+            memory_manager: crate::profiler::memory::session::MemorySessionManager::new(),
             watcher_debounce: Mutex::new(None),
             module_changed_debounce: Mutex::new(None),
             test_config: RwLock::new(TestExplorerConfig::default()),

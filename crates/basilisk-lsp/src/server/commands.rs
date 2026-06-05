@@ -113,7 +113,8 @@ pub(super) async fn dispatch_execute_command(
         | basilisk_common::commands::MEMORY_DIFF
         | basilisk_common::commands::MEMORY_REFERENCES
         | basilisk_common::commands::MEMORY_OBJECTS_BY_TYPE
-        | basilisk_common::commands::MEMORY_GC_COLLECT => {
+        | basilisk_common::commands::MEMORY_GC_COLLECT
+        | basilisk_common::commands::MEMORY_INGEST => {
             dispatch_profiler_or_memory(server, &params.command, &params.arguments).await
         }
         unknown => {
@@ -168,6 +169,9 @@ async fn dispatch_profiler_or_memory(
         }
         basilisk_common::commands::MEMORY_GC_COLLECT => {
             super::memory_handlers::execute_memory_gc_collect(server, args).await
+        }
+        basilisk_common::commands::MEMORY_INGEST => {
+            super::memory_handlers::execute_memory_ingest(server, args).await
         }
         _ => Ok(None),
     }

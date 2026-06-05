@@ -41,7 +41,10 @@
     "lsp"
   ],
   "activationEvents": [
-    "onLanguage:python"
+    "onLanguage:python",
+    "onDebug",
+    "onDebugResolve:basilisk-debug",
+    "onDebugDynamicConfigurations:basilisk-debug"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -240,6 +243,12 @@
         "icon": "$(diff)"
       },
       {
+        "command": "basilisk.memoryMenu",
+        "title": "Basilisk: Memory…",
+        "category": "Basilisk",
+        "icon": "$(database)"
+      },
+      {
         "command": "basilisk.memoryStart",
         "title": "Basilisk: Start Memory Tracking",
         "category": "Basilisk",
@@ -256,6 +265,18 @@
         "title": "Basilisk: Stop Memory Tracking",
         "category": "Basilisk",
         "icon": "$(debug-stop)"
+      },
+      {
+        "command": "basilisk.memoryDiff",
+        "title": "Basilisk: Compare Memory Snapshots",
+        "category": "Basilisk",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "basilisk.memoryGcCollect",
+        "title": "Basilisk: Force Garbage Collection",
+        "category": "Basilisk",
+        "icon": "$(trash)"
       },
       {
         "command": "basilisk.memoryReferences",
@@ -348,6 +369,34 @@
         {
           "command": "basilisk.revealProcessScript",
           "when": "false"
+        },
+        {
+          "command": "basilisk.memoryMenu",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memoryStart",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memorySnapshot",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memoryDiff",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memoryGcCollect",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memoryReferences",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memoryStop",
+          "when": "basilisk.debugging"
         }
       ],
       "view/title": [
