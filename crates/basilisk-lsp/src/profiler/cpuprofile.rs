@@ -205,4 +205,28 @@ mod tests {
         assert_eq!(profile.get("endTime").and_then(Value::as_i64), Some(20_000));
         Ok(())
     }
+
+    #[test]
+    fn export_writes_a_valid_cpuprofile_file() -> Result<(), String> {
+        let data = ProfileData {
+            frames: vec![frame("f", "/tmp/a.py", 1)],
+            thread_stacks: HashMap::from([(1_u64, vec![vec![0]])]),
+            thread_weights: HashMap::from([(1_u64, vec![0.01])]),
+            ..ProfileData::default()
+        };
+        let path = export_cpuprofile(&data, "basilisk-unit-test", 100, &std::env::temp_dir())?;
+        assert!(
+            path.extension().is_some_and(|ext| ext == "cpuprofile"),
+            "path: {}",
+            path.display()
+        );
+        let contents = std::fs::read_to_string(&path).map_err(|err| err.to_string())?;
+        let parsed: Value = serde_json::from_str(&contents).map_err(|err| err.to_string())?;
+        assert!(parsed
+            .get("nodes")
+            .and_then(Value::as_array)
+            .is_some_and(|nodes| nodes.len() == 2));
+        let _ = std::fs::remove_file(&path);
+        Ok(())
+    }
 }
