@@ -400,11 +400,16 @@ pub(super) fn check_td_stmts(
                     if let Expr::Attribute(attr) = call.func.as_ref() {
                         if let Some(var_name) = expr_simple_name(&attr.value) {
                             if let Some(class_name) = var_type.get(&var_name) {
-                                if fields.contains_key(class_name.as_str()) {
+                                // A TypedDict with `extra_items` (PEP 728) behaves
+                                // like `dict[str, VT]`, so the mutating dict methods
+                                // become available and must not be flagged.
+                                if let Some((_, _, _, has_extra_items)) =
+                                    fields.get(class_name.as_str())
+                                {
                                     const DISALLOWED: &[&str] =
                                         &["clear", "pop", "popitem", "setdefault", "update"];
                                     let method = attr.attr.as_str();
-                                    if DISALLOWED.contains(&method) {
+                                    if !has_extra_items && DISALLOWED.contains(&method) {
                                         out.push(TypedDictKeyViolation {
                                             span: text_range_to_span(expr_stmt.value.range()),
                                             class_name: class_name.clone(),
@@ -421,7 +426,10 @@ pub(super) fn check_td_stmts(
                 td_check_expr_reads(&expr_stmt.value, var_type, fields, out);
             }
             Stmt::Delete(del) => {
-                // Detect del movie["key"] — only an error for total=True TypedDicts
+                // `del td[k]` is only an error when `k` is a literal naming a
+                // declared *required* field. Deleting a NotRequired field or an
+                // `extra_items` key (PEP 728) is allowed, and a non-literal key
+                // cannot be resolved to a field so is left alone.
                 for target in &del.targets {
                     let Expr::Subscript(sub) = target else {
                         continue;
@@ -432,10 +440,18 @@ pub(super) fn check_td_stmts(
                     let Some(class_name) = var_type.get(&var_name) else {
                         continue;
                     };
-                    let Some((_, _, is_total, _)) = fields.get(class_name.as_str()) else {
+                    let Some((all_fields, field_types, is_total, _)) =
+                        fields.get(class_name.as_str())
+                    else {
                         continue;
                     };
-                    if *is_total {
+                    let Expr::StringLiteral(key_str) = sub.slice.as_ref() else {
+                        continue;
+                    };
+                    let key = key_str.value.to_str();
+                    if all_fields.contains(&key)
+                        && super::typeddict_ext::is_field_required(key, field_types, *is_total)
+                    {
                         out.push(TypedDictKeyViolation {
                             span: text_range_to_span(del.range()),
                             class_name: class_name.clone(),

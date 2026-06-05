@@ -17,9 +17,10 @@ pub use visitor::walks::{
 };
 
 pub use scope::{
-    collect_name_set, collect_name_set_where, collect_names, collect_names_where, name_lookup,
-    AnnotatedTooFewArgs, AssertTypeCallInfo, AttrAccess, AttributeInfo, BaseSubscriptEntry,
-    BoundedTypeVarAttrViolation, CallSite, ClassInfo, CompareOp, DecoratorRef,
+    class_by_name, collect_name_set, collect_name_set_where, collect_names, collect_names_where,
+    has_extra_items_transitive, is_transitive_typeddict, name_lookup, strip_typeddict_qualifiers,
+    transitive_typeddict_names, AnnotatedTooFewArgs, AssertTypeCallInfo, AttrAccess, AttributeInfo,
+    BaseSubscriptEntry, BoundedTypeVarAttrViolation, CallSite, ClassInfo, CompareOp, DecoratorRef,
     EnumValueTypeViolationInfo, EnumValueTypeViolationKind, FinalViolationInfo, FinalViolationKind,
     FloatParamIntAttrAccess, FunctionInfo, GenericDefKind, GenericParamInfo,
     HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo, ImportKind,

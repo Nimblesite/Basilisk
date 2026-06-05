@@ -725,6 +725,47 @@ arguments and `**kwargs` unpacking suppress arity checks to avoid false
 positives. Implemented in `crates/basilisk-checker/src/rules/e0153.rs`; tests in
 `crates/basilisk-checker/tests/e0153_tests.rs`.
 
+#### `ReadOnly` `TypedDict` inheritance {#CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE}
+
+Implements the typing-spec
+[read-only `TypedDict` items](https://typing.readthedocs.io/en/latest/spec/typeddict.html#read-only-items)
+rules (PEP 705). The foundation is **transitive `TypedDict` recognition**:
+`ClassInfo::is_typed_dict` is only `true` for classes that name `TypedDict`
+*directly*, so a subclass (`class Album(NamedDict): ...`) was invisible to every
+`TypedDict` rule. The shared helpers in
+`crates/basilisk-resolver/src/scope/typeddict_meta.rs`
+(`is_transitive_typeddict`, `has_extra_items_transitive`,
+`transitive_typeddict_names`, `strip_typeddict_qualifiers`) and the effective
+field-merge in `crates/basilisk-resolver/src/visitor/typeddict_schema.rs`
+(`effective_fields`) compute each `TypedDict`'s full schema (own + inherited
+fields, most-derived declaration winning, carrying the field's `ReadOnly`
+qualifier and required-ness). Recognising transitive subclasses also cleared the
+E0014 dict-literal false positives across the read-only suite.
+
+The qualifier rules are enforced across four codes:
+
+- **`BSK-E0038`** (`crates/basilisk-checker/src/rules/e0038.rs`) — redeclaration
+  legality. A writable item may not be redeclared `ReadOnly`; a required item
+  may not be redeclared not-required; a writable item's value type is invariant
+  while a `ReadOnly` item's may be narrowed to a subtype (a different container
+  head is a legal narrowing, the same *invariant* container — `list`/`dict`/`set`
+  — with different arguments is not). Multiple inheritance with two bases
+  declaring a field with conflicting core type, required-ness, or read-only-ness
+  is rejected. The decision functions (`parse_field_qualifiers`,
+  `redeclaration_violation`, `value_type_incompatible`, `type_head`,
+  `is_invariant_container`, `bases_conflict`) are pure and mutation-tested
+  (`crates/basilisk-checker/tests/mutation_kill_tests.rs`, every viable mutant
+  killed).
+- **`BSK-E0056`** — writes to an *inherited* `ReadOnly` field that the subclass
+  did not redeclare as writable.
+- **`BSK-E0093`** — wrong value type / missing required key against the merged
+  schema, including plain reassignment of an already-typed variable.
+- **`BSK-E0014`** — skips dict-literal assignments to transitive `TypedDict`
+  subclasses (field-level checking belongs to E0093).
+
+Conformance: flips `typeddicts_readonly_inheritance.py`. Benchmark fixture:
+`benchmarks/fixtures/e0038_typeddict_readonly_inheritance.py`.
+
 #### Planned analyses {#CHKARCH-DIAG-PLANNED}
 
 The following anchors are retained for historical/spec-ID continuity. The

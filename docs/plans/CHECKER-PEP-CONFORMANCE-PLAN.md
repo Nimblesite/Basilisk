@@ -1,6 +1,6 @@
 # PEP Conformance — Plan
 
-> **Score**: 136/146 (93.15%)
+> **Score**: 137/146 (93.84%)
 > **Tests**: `crates/basilisk-cli/tests/conformance/`
 > **Status CSV**: `conformance/conformance_status.csv`
 > **Run**: `make conformance` or `cargo test --test conformance_tests -- --nocapture`
@@ -22,6 +22,7 @@
 - [x] `protocols_generic.py` — generic protocol assignability — FLIPPED
 - [x] `typeddicts_type_consistency.py` — TypedDict type consistency — FLIPPED
 - [x] E0153: Constructor-to-callable conversion + call validation — FLIPPED `constructors_callable.py` ([CHKARCH-DIAG-CTOR-CALLABLE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CTOR-CALLABLE))
+- [x] E0038/E0056/E0093/E0014: PEP 705 `ReadOnly` `TypedDict` inheritance — FLIPPED `typeddicts_readonly_inheritance.py` ([CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE)). Transitive `TypedDict` recognition + effective merged schema cleared the E0014 dict-literal false positives across the readonly suite (126 → 120 total FPs).
 
 ## TODO — 23 failing files remaining
 
@@ -80,6 +81,5 @@
 
 ### TypedDict (3 files)
 
-- [ ] `typeddicts_extra_items.py` (21 missed, 2 FP) — `extra_items` kwarg
-- [ ] `typeddicts_readonly_consistency.py` (7 missed) — readonly consistency
-- [ ] `typeddicts_readonly_inheritance.py` (10 missed) — readonly + inheritance
+- [ ] `typeddicts_extra_items.py` (18 missed, 7 FP) — `extra_items` kwarg (PEP 728)
+- [x] `typeddicts_readonly_inheritance.py` — PEP 705 `ReadOnly`/`Required`/`NotRequired` redeclaration legality + transitive inheritance — DONE ([CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE))
