@@ -297,9 +297,22 @@ Each workspace member becomes an LSP workspace folder. The LSP server maintains 
 The `basilisk.stubs.createLocal` action writes a permissive `.pyi` skeleton (no
 `uv` subprocess) — see [STUBRES-CREATE-LOCAL](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CREATE-LOCAL).
 
+The BSK-E0010 `basilisk.uv.add` quick fix is offered **only** when the unresolved
+import's top-level name is a valid `PyPI` distribution name — PEP 508/503: ASCII
+alphanumerics plus `.`, `-`, `_`, starting and ending with an alphanumeric.
+Internal or vendored modules such as `_pydevd_bundle` (leading `_`) are not
+installable; `uv` rejects them outright, so offering a fix that can only fail is
+suppressed (issue #84).
+
 ### 7.2 Execution {#LSPUV-ACTIONS-EXECUTION}
 
 Code actions that invoke uv run as **LSP commands** via `workspace/executeCommand`. The LSP spawns `uv` as a subprocess, streams output to the client via `window/logMessage`, and triggers a lock file re-parse on completion.
+
+Each command returns `{success, stdout, stderr}`. The client shows an optimistic
+success toast (e.g. "Added `requests`.") **only** when `success` is `true`. On
+failure the server already surfaces an error toast, so the client shows nothing —
+it must never display a success toast alongside the server's error toast for the
+same operation (issue #84).
 
 ```rust
 // Subprocess execution — NOT inline. Runs uv in project root.

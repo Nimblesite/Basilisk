@@ -81,9 +81,15 @@ pub fn code_actions(
         // uv-based quick fixes for unresolved imports and missing stubs.
         if code == "BSK-E0010" {
             if let Some(module) = extract_module_from_diagnostic(&diag.message) {
-                actions.push(CodeActionOrCommand::CodeAction(make_uv_add_action(
-                    diag, &module,
-                )));
+                // Only offer `uv add` when the name is a plausible PyPI
+                // distribution. Internal/vendored modules like `_pydevd_bundle`
+                // are not installable and uv rejects them outright, so the fix
+                // could only ever fail. [LSPUV-ACTIONS-QUICK-FIXES], issue #84.
+                if is_valid_pypi_distribution(&module) {
+                    actions.push(CodeActionOrCommand::CodeAction(make_uv_add_action(
+                        diag, &module,
+                    )));
+                }
             }
         }
         if code == "BSK-E0152" {
@@ -252,6 +258,25 @@ fn extract_module_from_diagnostic(message: &str) -> Option<String> {
         return None;
     }
     Some(top_level.to_owned())
+}
+
+/// Return `true` when `name` is a plausible `PyPI` distribution name.
+///
+/// Per PEP 508/503 a distribution name consists of ASCII letters, digits, `.`,
+/// `-`, or `_`, and must start and end with an alphanumeric character. `uv`
+/// enforces the leading-alphanumeric rule and rejects names such as
+/// `_pydevd_bundle` (a debugpy-internal submodule), so we must not offer a
+/// `uv add` quick-fix that can only fail (issue #84).
+fn is_valid_pypi_distribution(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    let (Some(first), Some(last)) = (bytes.first(), bytes.last()) else {
+        return false;
+    };
+    first.is_ascii_alphanumeric()
+        && last.is_ascii_alphanumeric()
+        && bytes
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
 }
 
 /// Build a code action that runs `uv add <package>` for an unresolved import.
@@ -515,6 +540,30 @@ mod tests {
             "Add 'requests' dependency (uv add)",
             basilisk_common::commands::UV_ADD,
             "requests",
+        );
+    }
+
+    /// Regression for issue #84: the BSK-E0010 "add dependency" quick-fix must
+    /// NOT offer `uv add` for a module name that is not a valid `PyPI`
+    /// distribution. `_pydevd_bundle` is a debugpy-internal submodule whose
+    /// name starts with `_`; `uv` rejects it ("Expected package name starting
+    /// with an alphanumeric character"), so offering the fix proposes an action
+    /// that can only fail.
+    #[test]
+    fn test_bsk_e0010_no_uv_add_for_non_pypi_module() {
+        let diag = make_diagnostic(
+            DiagnosticSeverity::ERROR,
+            "BSK-E0010",
+            "Cannot resolve import `_pydevd_bundle`",
+            range_at((0, 0), (0, 20)),
+        );
+        let uri = Url::parse("file:///test.py").unwrap();
+        let source = "import _pydevd_bundle\n";
+        let range = range_at((0, 0), (0, 0));
+        let actions = super::code_actions(&uri, &[diag], source, &range, None);
+        assert!(
+            find_action_with_title(&actions, "dependency (uv add)").is_none(),
+            "must not offer `uv add` for a name that is not a valid PyPI distribution"
         );
     }
 
