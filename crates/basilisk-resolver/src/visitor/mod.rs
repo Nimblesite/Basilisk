@@ -24,6 +24,7 @@ mod protocol_ext;
 mod type_alias;
 mod typeddict;
 mod typeddict_ext;
+mod typeddict_schema;
 mod typevar;
 mod unhashable;
 pub(crate) mod walks;
@@ -153,7 +154,7 @@ fn collect_analysis_results(
         literal_string_enum_mismatches: enum_checks::collect_literal_string_enum_mismatches(
             stmts, source,
         ),
-        readonly_issues: final_readonly::collect_readonly_violations(stmts, classes),
+        readonly_issues: final_readonly::collect_readonly_violations(stmts, classes, source),
         protocol_self_issues: protocol::collect_protocol_self_violations(
             stmts, classes, functions, source,
         ),

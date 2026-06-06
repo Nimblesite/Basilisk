@@ -70,19 +70,15 @@ impl Rule for AssignmentTypeMismatch {
 /// subclasses, so dict literal assignments to `TypedDict` annotations are
 /// skipped to avoid false positives.
 fn collect_typeddict_names(module: &ResolvedModule) -> std::collections::HashSet<String> {
-    let mut names: std::collections::HashSet<String> = module
-        .classes
-        .iter()
-        .filter(|c| {
-            c.bases.iter().any(|b| {
-                matches!(
-                    b.as_str(),
-                    "TypedDict" | "typing.TypedDict" | "typing_extensions.TypedDict"
-                )
-            })
-        })
-        .map(|c| c.name.to_ascii_lowercase())
-        .collect();
+    // Recognise transitive TypedDict subclasses (`class Album(NamedDict): ...`),
+    // not just classes that name `TypedDict` directly. Otherwise E0014 stops
+    // skipping their dict-literal assignments and false-positives on every valid
+    // `album: Album = {...}` whose base — not the leaf — is the TypedDict.
+    let mut names: std::collections::HashSet<String> =
+        basilisk_resolver::transitive_typeddict_names(&module.classes)
+            .into_iter()
+            .map(str::to_ascii_lowercase)
+            .collect();
 
     // Include functional-form TypedDicts: `Name = TypedDict("Name", {...})`.
     for td_call in &module.typeddict_calls {

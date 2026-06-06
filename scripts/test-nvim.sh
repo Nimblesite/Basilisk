@@ -61,8 +61,29 @@ if command -v nvim &>/dev/null; then
     # Plenary spawns a child nvim per test file. With coverage enabled,
     # children must run sequentially so luacov stats files merge correctly
     # instead of racing on concurrent writes.
+    #
+    # Gate on PARSED results, not the nvim exit code: under `make ci`'s parallel
+    # `-j3` load the PlenaryBustedDirectory parent can exit non-zero on teardown
+    # even when every test passed. assert_plenary_pass requires that every spec
+    # file ran AND summarised with zero failures/errors/tracebacks — strictly
+    # stronger than trusting the process exit. See common.sh
+    # [LSPTEST-EDITOR-SPECIFIC-INTEGRATION-NEOVIM-E2E-GATE].
+    expected_specs="$(find tests/lsp -name '*_spec.lua' | wc -l | tr -d ' ')"
+    lsp_out="$(mktemp)"
+    set +e
     LUACOV=1 nvim --headless -u tests/minimal_init.lua \
-        -c "PlenaryBustedDirectory tests/lsp {minimal_init = 'tests/minimal_init.lua', sequential = true}" 2>&1
+        -c "PlenaryBustedDirectory tests/lsp {minimal_init = 'tests/minimal_init.lua', sequential = true}" 2>&1 \
+        | tee "$lsp_out"
+    nvim_rc=${PIPESTATUS[0]}
+    set -e
+    if [[ "$nvim_rc" -ne 0 ]]; then
+        warn "nvim exited ${nvim_rc} after the LSP suite — validating against parsed results (teardown exit is not authoritative)"
+    fi
+    if ! assert_plenary_pass "$lsp_out" "$expected_specs" "Neovim LSP e2e tests"; then
+        rm -f "$lsp_out"
+        exit 1
+    fi
+    rm -f "$lsp_out"
     ok "Neovim LSP e2e tests passed"
 
     # Screenshot tests are visual regressions, not coverage inputs. Running

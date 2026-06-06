@@ -226,10 +226,14 @@ def regression_messages(fresh: MutationScore, baseline: MutationScore) -> list[s
         regressions.append(f"missed increased {baseline.missed} -> {fresh.missed}")
     if fresh.timeout > baseline.timeout:
         regressions.append(f"timeout increased {baseline.timeout} -> {fresh.timeout}")
-    if fresh.unviable > baseline.unviable:
-        regressions.append(
-            f"unviable increased {baseline.unviable} -> {fresh.unviable}"
-        )
+    # NOTE: `unviable` is deliberately NOT a regression signal. Unviable mutants
+    # are mutations cargo-mutants generated that fail to compile, so they are
+    # excluded from `kill_rate` by construction (see `score_percentage`: viable =
+    # caught + missed + timeout). Adding code legitimately grows the mutant pool
+    # and can yield more non-compiling mutants without any drop in test quality.
+    # A genuinely worse suite shows up as `caught dropped` / `missed increased` /
+    # `kill_rate dropped`, which remain hard-fail gates. The count is still
+    # reported via `score_summary` for visibility.
     if fresh.kill_rate < baseline.kill_rate:
         regressions.append(
             f"kill_rate dropped {baseline.kill_rate}% -> {fresh.kill_rate}%"

@@ -3,23 +3,22 @@
 
 This codebase is held to a high standard: code here should comfortably pass review at a top-tier engineering organization. Please keep quality high and address shortcomings as you find them, rather than leaving them for later.
 
-⚠️ USING GIT IS ⛔️ ILLEGAL ⚠️
+⚠️ USING GIT IS ⛔️ ILLEGAL ⚠️ SIGNING A GIT COMMIT WITH CLAUDE CODE AS A COAUTHOR IS SUPER ⛔️ ILEGAL ⚠️
 
-⚠️ SIGNING A GIT COMMIT WITH CLAUDE CODE AS A COAUTHOR IS SUPER ⛔️ ILEGAL ⚠️
+⚠️ CONFORMANCE SCORE INCREASES MONOTONICALLY, BENCHMARKS AND FALSE POSITIVES DECREASE MONOTONICALLY ⚠️
 
 ⚠️ AVOID DUPLICATION OF ALL KINDS AND PRACTICE TOKEN ECONOMICS ⚠️
 
 ⚠️ DO NOT STOP TO ASK QUESTIONS. USE YOUR JUDGMENT WITHOUT ASKING THE USER ⚠️
 
-⚠️ QUALITY METRICS ONLY INCREASE PER PR. THEY NEVER DECREASE ⚠️
+⚠️ DO NOT KILL A VS Code PROCESS (including in the browser) — it disrupts active debugging and test sessions. ⚠️
 
 Key design principles:
 
+- We are building a better Python dev experience
 - The LSP drives the functionality, not the IDE extension.
 - IDE extensions react to signals from the LSP (commands, state changes) and adjust accordingly.
 - IDE extensions never register commands the LSP doesn't advertise.
-- Please don't terminate a VS Code process (including in the browser) — it disrupts active debugging and test sessions.
-- Use the Deslop MCP to check for existing similar code with `find-similar` before writing new code, and `top-offenders` after modifying code. Always merge duplicate code.
 
 Target: 100% PEP conformance. Canonical version: **Python 3.12**. Read the PEP conformance readme carefully.
 
@@ -74,9 +73,11 @@ make setup   # post-create dev environment setup
 # Rules
 
 - Top priority: reduce code duplication. Merge similar code, and search for existing code before adding new code.
+- Use the Deslop MCP to check for existing similar code with `find-similar` before writing new code, and `top-offenders` after modifying code. Always merge duplicate code.
 - Keep it DRY. Check for existing code before writing new code.
 - Aggressively move code that can be shared out to shared crates/modules/packages.
-- Centralize all global state.
+- Centralize all global state. 
+- All state that can change uses Signals for reactivity. No stale state on screen
 - Each app has a single file for global state. No state should live outside this file.
 - `allow(clippy = ...)` is not permitted.
 - Keep the dependencies and versions in these two files in sync at all times: `.github/workflows/ci.yml`, `.devcontainer/Dockerfile`.

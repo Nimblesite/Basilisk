@@ -1,0 +1,2003 @@
+from typing import TypedDict, Required, NotRequired
+from typing_extensions import ReadOnly
+
+class B0(TypedDict):
+    a: Required[int]
+class C0(B0):
+    a: ReadOnly[int]
+class B1(TypedDict):
+    a: int
+class C1(B1):
+    a: str
+class B2(TypedDict):
+    a: ReadOnly[Required[int]]
+class C2(B2):
+    a: ReadOnly[NotRequired[int]]
+class B3(TypedDict):
+    a: Required[int]
+class C3(B3):
+    a: ReadOnly[int]
+class B4(TypedDict):
+    a: int
+class C4(B4):
+    a: str
+class B5(TypedDict):
+    a: ReadOnly[Required[int]]
+class C5(B5):
+    a: ReadOnly[NotRequired[int]]
+class B6(TypedDict):
+    a: Required[int]
+class C6(B6):
+    a: ReadOnly[int]
+class B7(TypedDict):
+    a: int
+class C7(B7):
+    a: str
+class B8(TypedDict):
+    a: ReadOnly[Required[int]]
+class C8(B8):
+    a: ReadOnly[NotRequired[int]]
+class B9(TypedDict):
+    a: Required[int]
+class C9(B9):
+    a: ReadOnly[int]
+class B10(TypedDict):
+    a: int
+class C10(B10):
+    a: str
+class B11(TypedDict):
+    a: ReadOnly[Required[int]]
+class C11(B11):
+    a: ReadOnly[NotRequired[int]]
+class B12(TypedDict):
+    a: Required[int]
+class C12(B12):
+    a: ReadOnly[int]
+class B13(TypedDict):
+    a: int
+class C13(B13):
+    a: str
+class B14(TypedDict):
+    a: ReadOnly[Required[int]]
+class C14(B14):
+    a: ReadOnly[NotRequired[int]]
+class B15(TypedDict):
+    a: Required[int]
+class C15(B15):
+    a: ReadOnly[int]
+class B16(TypedDict):
+    a: int
+class C16(B16):
+    a: str
+class B17(TypedDict):
+    a: ReadOnly[Required[int]]
+class C17(B17):
+    a: ReadOnly[NotRequired[int]]
+class B18(TypedDict):
+    a: Required[int]
+class C18(B18):
+    a: ReadOnly[int]
+class B19(TypedDict):
+    a: int
+class C19(B19):
+    a: str
+class B20(TypedDict):
+    a: ReadOnly[Required[int]]
+class C20(B20):
+    a: ReadOnly[NotRequired[int]]
+class B21(TypedDict):
+    a: Required[int]
+class C21(B21):
+    a: ReadOnly[int]
+class B22(TypedDict):
+    a: int
+class C22(B22):
+    a: str
+class B23(TypedDict):
+    a: ReadOnly[Required[int]]
+class C23(B23):
+    a: ReadOnly[NotRequired[int]]
+class B24(TypedDict):
+    a: Required[int]
+class C24(B24):
+    a: ReadOnly[int]
+class B25(TypedDict):
+    a: int
+class C25(B25):
+    a: str
+class B26(TypedDict):
+    a: ReadOnly[Required[int]]
+class C26(B26):
+    a: ReadOnly[NotRequired[int]]
+class B27(TypedDict):
+    a: Required[int]
+class C27(B27):
+    a: ReadOnly[int]
+class B28(TypedDict):
+    a: int
+class C28(B28):
+    a: str
+class B29(TypedDict):
+    a: ReadOnly[Required[int]]
+class C29(B29):
+    a: ReadOnly[NotRequired[int]]
+class B30(TypedDict):
+    a: Required[int]
+class C30(B30):
+    a: ReadOnly[int]
+class B31(TypedDict):
+    a: int
+class C31(B31):
+    a: str
+class B32(TypedDict):
+    a: ReadOnly[Required[int]]
+class C32(B32):
+    a: ReadOnly[NotRequired[int]]
+class B33(TypedDict):
+    a: Required[int]
+class C33(B33):
+    a: ReadOnly[int]
+class B34(TypedDict):
+    a: int
+class C34(B34):
+    a: str
+class B35(TypedDict):
+    a: ReadOnly[Required[int]]
+class C35(B35):
+    a: ReadOnly[NotRequired[int]]
+class B36(TypedDict):
+    a: Required[int]
+class C36(B36):
+    a: ReadOnly[int]
+class B37(TypedDict):
+    a: int
+class C37(B37):
+    a: str
+class B38(TypedDict):
+    a: ReadOnly[Required[int]]
+class C38(B38):
+    a: ReadOnly[NotRequired[int]]
+class B39(TypedDict):
+    a: Required[int]
+class C39(B39):
+    a: ReadOnly[int]
+class B40(TypedDict):
+    a: int
+class C40(B40):
+    a: str
+class B41(TypedDict):
+    a: ReadOnly[Required[int]]
+class C41(B41):
+    a: ReadOnly[NotRequired[int]]
+class B42(TypedDict):
+    a: Required[int]
+class C42(B42):
+    a: ReadOnly[int]
+class B43(TypedDict):
+    a: int
+class C43(B43):
+    a: str
+class B44(TypedDict):
+    a: ReadOnly[Required[int]]
+class C44(B44):
+    a: ReadOnly[NotRequired[int]]
+class B45(TypedDict):
+    a: Required[int]
+class C45(B45):
+    a: ReadOnly[int]
+class B46(TypedDict):
+    a: int
+class C46(B46):
+    a: str
+class B47(TypedDict):
+    a: ReadOnly[Required[int]]
+class C47(B47):
+    a: ReadOnly[NotRequired[int]]
+class B48(TypedDict):
+    a: Required[int]
+class C48(B48):
+    a: ReadOnly[int]
+class B49(TypedDict):
+    a: int
+class C49(B49):
+    a: str
+class B50(TypedDict):
+    a: ReadOnly[Required[int]]
+class C50(B50):
+    a: ReadOnly[NotRequired[int]]
+class B51(TypedDict):
+    a: Required[int]
+class C51(B51):
+    a: ReadOnly[int]
+class B52(TypedDict):
+    a: int
+class C52(B52):
+    a: str
+class B53(TypedDict):
+    a: ReadOnly[Required[int]]
+class C53(B53):
+    a: ReadOnly[NotRequired[int]]
+class B54(TypedDict):
+    a: Required[int]
+class C54(B54):
+    a: ReadOnly[int]
+class B55(TypedDict):
+    a: int
+class C55(B55):
+    a: str
+class B56(TypedDict):
+    a: ReadOnly[Required[int]]
+class C56(B56):
+    a: ReadOnly[NotRequired[int]]
+class B57(TypedDict):
+    a: Required[int]
+class C57(B57):
+    a: ReadOnly[int]
+class B58(TypedDict):
+    a: int
+class C58(B58):
+    a: str
+class B59(TypedDict):
+    a: ReadOnly[Required[int]]
+class C59(B59):
+    a: ReadOnly[NotRequired[int]]
+class B60(TypedDict):
+    a: Required[int]
+class C60(B60):
+    a: ReadOnly[int]
+class B61(TypedDict):
+    a: int
+class C61(B61):
+    a: str
+class B62(TypedDict):
+    a: ReadOnly[Required[int]]
+class C62(B62):
+    a: ReadOnly[NotRequired[int]]
+class B63(TypedDict):
+    a: Required[int]
+class C63(B63):
+    a: ReadOnly[int]
+class B64(TypedDict):
+    a: int
+class C64(B64):
+    a: str
+class B65(TypedDict):
+    a: ReadOnly[Required[int]]
+class C65(B65):
+    a: ReadOnly[NotRequired[int]]
+class B66(TypedDict):
+    a: Required[int]
+class C66(B66):
+    a: ReadOnly[int]
+class B67(TypedDict):
+    a: int
+class C67(B67):
+    a: str
+class B68(TypedDict):
+    a: ReadOnly[Required[int]]
+class C68(B68):
+    a: ReadOnly[NotRequired[int]]
+class B69(TypedDict):
+    a: Required[int]
+class C69(B69):
+    a: ReadOnly[int]
+class B70(TypedDict):
+    a: int
+class C70(B70):
+    a: str
+class B71(TypedDict):
+    a: ReadOnly[Required[int]]
+class C71(B71):
+    a: ReadOnly[NotRequired[int]]
+class B72(TypedDict):
+    a: Required[int]
+class C72(B72):
+    a: ReadOnly[int]
+class B73(TypedDict):
+    a: int
+class C73(B73):
+    a: str
+class B74(TypedDict):
+    a: ReadOnly[Required[int]]
+class C74(B74):
+    a: ReadOnly[NotRequired[int]]
+class B75(TypedDict):
+    a: Required[int]
+class C75(B75):
+    a: ReadOnly[int]
+class B76(TypedDict):
+    a: int
+class C76(B76):
+    a: str
+class B77(TypedDict):
+    a: ReadOnly[Required[int]]
+class C77(B77):
+    a: ReadOnly[NotRequired[int]]
+class B78(TypedDict):
+    a: Required[int]
+class C78(B78):
+    a: ReadOnly[int]
+class B79(TypedDict):
+    a: int
+class C79(B79):
+    a: str
+class B80(TypedDict):
+    a: ReadOnly[Required[int]]
+class C80(B80):
+    a: ReadOnly[NotRequired[int]]
+class B81(TypedDict):
+    a: Required[int]
+class C81(B81):
+    a: ReadOnly[int]
+class B82(TypedDict):
+    a: int
+class C82(B82):
+    a: str
+class B83(TypedDict):
+    a: ReadOnly[Required[int]]
+class C83(B83):
+    a: ReadOnly[NotRequired[int]]
+class B84(TypedDict):
+    a: Required[int]
+class C84(B84):
+    a: ReadOnly[int]
+class B85(TypedDict):
+    a: int
+class C85(B85):
+    a: str
+class B86(TypedDict):
+    a: ReadOnly[Required[int]]
+class C86(B86):
+    a: ReadOnly[NotRequired[int]]
+class B87(TypedDict):
+    a: Required[int]
+class C87(B87):
+    a: ReadOnly[int]
+class B88(TypedDict):
+    a: int
+class C88(B88):
+    a: str
+class B89(TypedDict):
+    a: ReadOnly[Required[int]]
+class C89(B89):
+    a: ReadOnly[NotRequired[int]]
+class B90(TypedDict):
+    a: Required[int]
+class C90(B90):
+    a: ReadOnly[int]
+class B91(TypedDict):
+    a: int
+class C91(B91):
+    a: str
+class B92(TypedDict):
+    a: ReadOnly[Required[int]]
+class C92(B92):
+    a: ReadOnly[NotRequired[int]]
+class B93(TypedDict):
+    a: Required[int]
+class C93(B93):
+    a: ReadOnly[int]
+class B94(TypedDict):
+    a: int
+class C94(B94):
+    a: str
+class B95(TypedDict):
+    a: ReadOnly[Required[int]]
+class C95(B95):
+    a: ReadOnly[NotRequired[int]]
+class B96(TypedDict):
+    a: Required[int]
+class C96(B96):
+    a: ReadOnly[int]
+class B97(TypedDict):
+    a: int
+class C97(B97):
+    a: str
+class B98(TypedDict):
+    a: ReadOnly[Required[int]]
+class C98(B98):
+    a: ReadOnly[NotRequired[int]]
+class B99(TypedDict):
+    a: Required[int]
+class C99(B99):
+    a: ReadOnly[int]
+class B100(TypedDict):
+    a: int
+class C100(B100):
+    a: str
+class B101(TypedDict):
+    a: ReadOnly[Required[int]]
+class C101(B101):
+    a: ReadOnly[NotRequired[int]]
+class B102(TypedDict):
+    a: Required[int]
+class C102(B102):
+    a: ReadOnly[int]
+class B103(TypedDict):
+    a: int
+class C103(B103):
+    a: str
+class B104(TypedDict):
+    a: ReadOnly[Required[int]]
+class C104(B104):
+    a: ReadOnly[NotRequired[int]]
+class B105(TypedDict):
+    a: Required[int]
+class C105(B105):
+    a: ReadOnly[int]
+class B106(TypedDict):
+    a: int
+class C106(B106):
+    a: str
+class B107(TypedDict):
+    a: ReadOnly[Required[int]]
+class C107(B107):
+    a: ReadOnly[NotRequired[int]]
+class B108(TypedDict):
+    a: Required[int]
+class C108(B108):
+    a: ReadOnly[int]
+class B109(TypedDict):
+    a: int
+class C109(B109):
+    a: str
+class B110(TypedDict):
+    a: ReadOnly[Required[int]]
+class C110(B110):
+    a: ReadOnly[NotRequired[int]]
+class B111(TypedDict):
+    a: Required[int]
+class C111(B111):
+    a: ReadOnly[int]
+class B112(TypedDict):
+    a: int
+class C112(B112):
+    a: str
+class B113(TypedDict):
+    a: ReadOnly[Required[int]]
+class C113(B113):
+    a: ReadOnly[NotRequired[int]]
+class B114(TypedDict):
+    a: Required[int]
+class C114(B114):
+    a: ReadOnly[int]
+class B115(TypedDict):
+    a: int
+class C115(B115):
+    a: str
+class B116(TypedDict):
+    a: ReadOnly[Required[int]]
+class C116(B116):
+    a: ReadOnly[NotRequired[int]]
+class B117(TypedDict):
+    a: Required[int]
+class C117(B117):
+    a: ReadOnly[int]
+class B118(TypedDict):
+    a: int
+class C118(B118):
+    a: str
+class B119(TypedDict):
+    a: ReadOnly[Required[int]]
+class C119(B119):
+    a: ReadOnly[NotRequired[int]]
+class B120(TypedDict):
+    a: Required[int]
+class C120(B120):
+    a: ReadOnly[int]
+class B121(TypedDict):
+    a: int
+class C121(B121):
+    a: str
+class B122(TypedDict):
+    a: ReadOnly[Required[int]]
+class C122(B122):
+    a: ReadOnly[NotRequired[int]]
+class B123(TypedDict):
+    a: Required[int]
+class C123(B123):
+    a: ReadOnly[int]
+class B124(TypedDict):
+    a: int
+class C124(B124):
+    a: str
+class B125(TypedDict):
+    a: ReadOnly[Required[int]]
+class C125(B125):
+    a: ReadOnly[NotRequired[int]]
+class B126(TypedDict):
+    a: Required[int]
+class C126(B126):
+    a: ReadOnly[int]
+class B127(TypedDict):
+    a: int
+class C127(B127):
+    a: str
+class B128(TypedDict):
+    a: ReadOnly[Required[int]]
+class C128(B128):
+    a: ReadOnly[NotRequired[int]]
+class B129(TypedDict):
+    a: Required[int]
+class C129(B129):
+    a: ReadOnly[int]
+class B130(TypedDict):
+    a: int
+class C130(B130):
+    a: str
+class B131(TypedDict):
+    a: ReadOnly[Required[int]]
+class C131(B131):
+    a: ReadOnly[NotRequired[int]]
+class B132(TypedDict):
+    a: Required[int]
+class C132(B132):
+    a: ReadOnly[int]
+class B133(TypedDict):
+    a: int
+class C133(B133):
+    a: str
+class B134(TypedDict):
+    a: ReadOnly[Required[int]]
+class C134(B134):
+    a: ReadOnly[NotRequired[int]]
+class B135(TypedDict):
+    a: Required[int]
+class C135(B135):
+    a: ReadOnly[int]
+class B136(TypedDict):
+    a: int
+class C136(B136):
+    a: str
+class B137(TypedDict):
+    a: ReadOnly[Required[int]]
+class C137(B137):
+    a: ReadOnly[NotRequired[int]]
+class B138(TypedDict):
+    a: Required[int]
+class C138(B138):
+    a: ReadOnly[int]
+class B139(TypedDict):
+    a: int
+class C139(B139):
+    a: str
+class B140(TypedDict):
+    a: ReadOnly[Required[int]]
+class C140(B140):
+    a: ReadOnly[NotRequired[int]]
+class B141(TypedDict):
+    a: Required[int]
+class C141(B141):
+    a: ReadOnly[int]
+class B142(TypedDict):
+    a: int
+class C142(B142):
+    a: str
+class B143(TypedDict):
+    a: ReadOnly[Required[int]]
+class C143(B143):
+    a: ReadOnly[NotRequired[int]]
+class B144(TypedDict):
+    a: Required[int]
+class C144(B144):
+    a: ReadOnly[int]
+class B145(TypedDict):
+    a: int
+class C145(B145):
+    a: str
+class B146(TypedDict):
+    a: ReadOnly[Required[int]]
+class C146(B146):
+    a: ReadOnly[NotRequired[int]]
+class B147(TypedDict):
+    a: Required[int]
+class C147(B147):
+    a: ReadOnly[int]
+class B148(TypedDict):
+    a: int
+class C148(B148):
+    a: str
+class B149(TypedDict):
+    a: ReadOnly[Required[int]]
+class C149(B149):
+    a: ReadOnly[NotRequired[int]]
+class B150(TypedDict):
+    a: Required[int]
+class C150(B150):
+    a: ReadOnly[int]
+class B151(TypedDict):
+    a: int
+class C151(B151):
+    a: str
+class B152(TypedDict):
+    a: ReadOnly[Required[int]]
+class C152(B152):
+    a: ReadOnly[NotRequired[int]]
+class B153(TypedDict):
+    a: Required[int]
+class C153(B153):
+    a: ReadOnly[int]
+class B154(TypedDict):
+    a: int
+class C154(B154):
+    a: str
+class B155(TypedDict):
+    a: ReadOnly[Required[int]]
+class C155(B155):
+    a: ReadOnly[NotRequired[int]]
+class B156(TypedDict):
+    a: Required[int]
+class C156(B156):
+    a: ReadOnly[int]
+class B157(TypedDict):
+    a: int
+class C157(B157):
+    a: str
+class B158(TypedDict):
+    a: ReadOnly[Required[int]]
+class C158(B158):
+    a: ReadOnly[NotRequired[int]]
+class B159(TypedDict):
+    a: Required[int]
+class C159(B159):
+    a: ReadOnly[int]
+class B160(TypedDict):
+    a: int
+class C160(B160):
+    a: str
+class B161(TypedDict):
+    a: ReadOnly[Required[int]]
+class C161(B161):
+    a: ReadOnly[NotRequired[int]]
+class B162(TypedDict):
+    a: Required[int]
+class C162(B162):
+    a: ReadOnly[int]
+class B163(TypedDict):
+    a: int
+class C163(B163):
+    a: str
+class B164(TypedDict):
+    a: ReadOnly[Required[int]]
+class C164(B164):
+    a: ReadOnly[NotRequired[int]]
+class B165(TypedDict):
+    a: Required[int]
+class C165(B165):
+    a: ReadOnly[int]
+class B166(TypedDict):
+    a: int
+class C166(B166):
+    a: str
+class B167(TypedDict):
+    a: ReadOnly[Required[int]]
+class C167(B167):
+    a: ReadOnly[NotRequired[int]]
+class B168(TypedDict):
+    a: Required[int]
+class C168(B168):
+    a: ReadOnly[int]
+class B169(TypedDict):
+    a: int
+class C169(B169):
+    a: str
+class B170(TypedDict):
+    a: ReadOnly[Required[int]]
+class C170(B170):
+    a: ReadOnly[NotRequired[int]]
+class B171(TypedDict):
+    a: Required[int]
+class C171(B171):
+    a: ReadOnly[int]
+class B172(TypedDict):
+    a: int
+class C172(B172):
+    a: str
+class B173(TypedDict):
+    a: ReadOnly[Required[int]]
+class C173(B173):
+    a: ReadOnly[NotRequired[int]]
+class B174(TypedDict):
+    a: Required[int]
+class C174(B174):
+    a: ReadOnly[int]
+class B175(TypedDict):
+    a: int
+class C175(B175):
+    a: str
+class B176(TypedDict):
+    a: ReadOnly[Required[int]]
+class C176(B176):
+    a: ReadOnly[NotRequired[int]]
+class B177(TypedDict):
+    a: Required[int]
+class C177(B177):
+    a: ReadOnly[int]
+class B178(TypedDict):
+    a: int
+class C178(B178):
+    a: str
+class B179(TypedDict):
+    a: ReadOnly[Required[int]]
+class C179(B179):
+    a: ReadOnly[NotRequired[int]]
+class B180(TypedDict):
+    a: Required[int]
+class C180(B180):
+    a: ReadOnly[int]
+class B181(TypedDict):
+    a: int
+class C181(B181):
+    a: str
+class B182(TypedDict):
+    a: ReadOnly[Required[int]]
+class C182(B182):
+    a: ReadOnly[NotRequired[int]]
+class B183(TypedDict):
+    a: Required[int]
+class C183(B183):
+    a: ReadOnly[int]
+class B184(TypedDict):
+    a: int
+class C184(B184):
+    a: str
+class B185(TypedDict):
+    a: ReadOnly[Required[int]]
+class C185(B185):
+    a: ReadOnly[NotRequired[int]]
+class B186(TypedDict):
+    a: Required[int]
+class C186(B186):
+    a: ReadOnly[int]
+class B187(TypedDict):
+    a: int
+class C187(B187):
+    a: str
+class B188(TypedDict):
+    a: ReadOnly[Required[int]]
+class C188(B188):
+    a: ReadOnly[NotRequired[int]]
+class B189(TypedDict):
+    a: Required[int]
+class C189(B189):
+    a: ReadOnly[int]
+class B190(TypedDict):
+    a: int
+class C190(B190):
+    a: str
+class B191(TypedDict):
+    a: ReadOnly[Required[int]]
+class C191(B191):
+    a: ReadOnly[NotRequired[int]]
+class B192(TypedDict):
+    a: Required[int]
+class C192(B192):
+    a: ReadOnly[int]
+class B193(TypedDict):
+    a: int
+class C193(B193):
+    a: str
+class B194(TypedDict):
+    a: ReadOnly[Required[int]]
+class C194(B194):
+    a: ReadOnly[NotRequired[int]]
+class B195(TypedDict):
+    a: Required[int]
+class C195(B195):
+    a: ReadOnly[int]
+class B196(TypedDict):
+    a: int
+class C196(B196):
+    a: str
+class B197(TypedDict):
+    a: ReadOnly[Required[int]]
+class C197(B197):
+    a: ReadOnly[NotRequired[int]]
+class B198(TypedDict):
+    a: Required[int]
+class C198(B198):
+    a: ReadOnly[int]
+class B199(TypedDict):
+    a: int
+class C199(B199):
+    a: str
+class B200(TypedDict):
+    a: ReadOnly[Required[int]]
+class C200(B200):
+    a: ReadOnly[NotRequired[int]]
+class B201(TypedDict):
+    a: Required[int]
+class C201(B201):
+    a: ReadOnly[int]
+class B202(TypedDict):
+    a: int
+class C202(B202):
+    a: str
+class B203(TypedDict):
+    a: ReadOnly[Required[int]]
+class C203(B203):
+    a: ReadOnly[NotRequired[int]]
+class B204(TypedDict):
+    a: Required[int]
+class C204(B204):
+    a: ReadOnly[int]
+class B205(TypedDict):
+    a: int
+class C205(B205):
+    a: str
+class B206(TypedDict):
+    a: ReadOnly[Required[int]]
+class C206(B206):
+    a: ReadOnly[NotRequired[int]]
+class B207(TypedDict):
+    a: Required[int]
+class C207(B207):
+    a: ReadOnly[int]
+class B208(TypedDict):
+    a: int
+class C208(B208):
+    a: str
+class B209(TypedDict):
+    a: ReadOnly[Required[int]]
+class C209(B209):
+    a: ReadOnly[NotRequired[int]]
+class B210(TypedDict):
+    a: Required[int]
+class C210(B210):
+    a: ReadOnly[int]
+class B211(TypedDict):
+    a: int
+class C211(B211):
+    a: str
+class B212(TypedDict):
+    a: ReadOnly[Required[int]]
+class C212(B212):
+    a: ReadOnly[NotRequired[int]]
+class B213(TypedDict):
+    a: Required[int]
+class C213(B213):
+    a: ReadOnly[int]
+class B214(TypedDict):
+    a: int
+class C214(B214):
+    a: str
+class B215(TypedDict):
+    a: ReadOnly[Required[int]]
+class C215(B215):
+    a: ReadOnly[NotRequired[int]]
+class B216(TypedDict):
+    a: Required[int]
+class C216(B216):
+    a: ReadOnly[int]
+class B217(TypedDict):
+    a: int
+class C217(B217):
+    a: str
+class B218(TypedDict):
+    a: ReadOnly[Required[int]]
+class C218(B218):
+    a: ReadOnly[NotRequired[int]]
+class B219(TypedDict):
+    a: Required[int]
+class C219(B219):
+    a: ReadOnly[int]
+class B220(TypedDict):
+    a: int
+class C220(B220):
+    a: str
+class B221(TypedDict):
+    a: ReadOnly[Required[int]]
+class C221(B221):
+    a: ReadOnly[NotRequired[int]]
+class B222(TypedDict):
+    a: Required[int]
+class C222(B222):
+    a: ReadOnly[int]
+class B223(TypedDict):
+    a: int
+class C223(B223):
+    a: str
+class B224(TypedDict):
+    a: ReadOnly[Required[int]]
+class C224(B224):
+    a: ReadOnly[NotRequired[int]]
+class B225(TypedDict):
+    a: Required[int]
+class C225(B225):
+    a: ReadOnly[int]
+class B226(TypedDict):
+    a: int
+class C226(B226):
+    a: str
+class B227(TypedDict):
+    a: ReadOnly[Required[int]]
+class C227(B227):
+    a: ReadOnly[NotRequired[int]]
+class B228(TypedDict):
+    a: Required[int]
+class C228(B228):
+    a: ReadOnly[int]
+class B229(TypedDict):
+    a: int
+class C229(B229):
+    a: str
+class B230(TypedDict):
+    a: ReadOnly[Required[int]]
+class C230(B230):
+    a: ReadOnly[NotRequired[int]]
+class B231(TypedDict):
+    a: Required[int]
+class C231(B231):
+    a: ReadOnly[int]
+class B232(TypedDict):
+    a: int
+class C232(B232):
+    a: str
+class B233(TypedDict):
+    a: ReadOnly[Required[int]]
+class C233(B233):
+    a: ReadOnly[NotRequired[int]]
+class B234(TypedDict):
+    a: Required[int]
+class C234(B234):
+    a: ReadOnly[int]
+class B235(TypedDict):
+    a: int
+class C235(B235):
+    a: str
+class B236(TypedDict):
+    a: ReadOnly[Required[int]]
+class C236(B236):
+    a: ReadOnly[NotRequired[int]]
+class B237(TypedDict):
+    a: Required[int]
+class C237(B237):
+    a: ReadOnly[int]
+class B238(TypedDict):
+    a: int
+class C238(B238):
+    a: str
+class B239(TypedDict):
+    a: ReadOnly[Required[int]]
+class C239(B239):
+    a: ReadOnly[NotRequired[int]]
+class B240(TypedDict):
+    a: Required[int]
+class C240(B240):
+    a: ReadOnly[int]
+class B241(TypedDict):
+    a: int
+class C241(B241):
+    a: str
+class B242(TypedDict):
+    a: ReadOnly[Required[int]]
+class C242(B242):
+    a: ReadOnly[NotRequired[int]]
+class B243(TypedDict):
+    a: Required[int]
+class C243(B243):
+    a: ReadOnly[int]
+class B244(TypedDict):
+    a: int
+class C244(B244):
+    a: str
+class B245(TypedDict):
+    a: ReadOnly[Required[int]]
+class C245(B245):
+    a: ReadOnly[NotRequired[int]]
+class B246(TypedDict):
+    a: Required[int]
+class C246(B246):
+    a: ReadOnly[int]
+class B247(TypedDict):
+    a: int
+class C247(B247):
+    a: str
+class B248(TypedDict):
+    a: ReadOnly[Required[int]]
+class C248(B248):
+    a: ReadOnly[NotRequired[int]]
+class B249(TypedDict):
+    a: Required[int]
+class C249(B249):
+    a: ReadOnly[int]
+class B250(TypedDict):
+    a: int
+class C250(B250):
+    a: str
+class B251(TypedDict):
+    a: ReadOnly[Required[int]]
+class C251(B251):
+    a: ReadOnly[NotRequired[int]]
+class B252(TypedDict):
+    a: Required[int]
+class C252(B252):
+    a: ReadOnly[int]
+class B253(TypedDict):
+    a: int
+class C253(B253):
+    a: str
+class B254(TypedDict):
+    a: ReadOnly[Required[int]]
+class C254(B254):
+    a: ReadOnly[NotRequired[int]]
+class B255(TypedDict):
+    a: Required[int]
+class C255(B255):
+    a: ReadOnly[int]
+class B256(TypedDict):
+    a: int
+class C256(B256):
+    a: str
+class B257(TypedDict):
+    a: ReadOnly[Required[int]]
+class C257(B257):
+    a: ReadOnly[NotRequired[int]]
+class B258(TypedDict):
+    a: Required[int]
+class C258(B258):
+    a: ReadOnly[int]
+class B259(TypedDict):
+    a: int
+class C259(B259):
+    a: str
+class B260(TypedDict):
+    a: ReadOnly[Required[int]]
+class C260(B260):
+    a: ReadOnly[NotRequired[int]]
+class B261(TypedDict):
+    a: Required[int]
+class C261(B261):
+    a: ReadOnly[int]
+class B262(TypedDict):
+    a: int
+class C262(B262):
+    a: str
+class B263(TypedDict):
+    a: ReadOnly[Required[int]]
+class C263(B263):
+    a: ReadOnly[NotRequired[int]]
+class B264(TypedDict):
+    a: Required[int]
+class C264(B264):
+    a: ReadOnly[int]
+class B265(TypedDict):
+    a: int
+class C265(B265):
+    a: str
+class B266(TypedDict):
+    a: ReadOnly[Required[int]]
+class C266(B266):
+    a: ReadOnly[NotRequired[int]]
+class B267(TypedDict):
+    a: Required[int]
+class C267(B267):
+    a: ReadOnly[int]
+class B268(TypedDict):
+    a: int
+class C268(B268):
+    a: str
+class B269(TypedDict):
+    a: ReadOnly[Required[int]]
+class C269(B269):
+    a: ReadOnly[NotRequired[int]]
+class B270(TypedDict):
+    a: Required[int]
+class C270(B270):
+    a: ReadOnly[int]
+class B271(TypedDict):
+    a: int
+class C271(B271):
+    a: str
+class B272(TypedDict):
+    a: ReadOnly[Required[int]]
+class C272(B272):
+    a: ReadOnly[NotRequired[int]]
+class B273(TypedDict):
+    a: Required[int]
+class C273(B273):
+    a: ReadOnly[int]
+class B274(TypedDict):
+    a: int
+class C274(B274):
+    a: str
+class B275(TypedDict):
+    a: ReadOnly[Required[int]]
+class C275(B275):
+    a: ReadOnly[NotRequired[int]]
+class B276(TypedDict):
+    a: Required[int]
+class C276(B276):
+    a: ReadOnly[int]
+class B277(TypedDict):
+    a: int
+class C277(B277):
+    a: str
+class B278(TypedDict):
+    a: ReadOnly[Required[int]]
+class C278(B278):
+    a: ReadOnly[NotRequired[int]]
+class B279(TypedDict):
+    a: Required[int]
+class C279(B279):
+    a: ReadOnly[int]
+class B280(TypedDict):
+    a: int
+class C280(B280):
+    a: str
+class B281(TypedDict):
+    a: ReadOnly[Required[int]]
+class C281(B281):
+    a: ReadOnly[NotRequired[int]]
+class B282(TypedDict):
+    a: Required[int]
+class C282(B282):
+    a: ReadOnly[int]
+class B283(TypedDict):
+    a: int
+class C283(B283):
+    a: str
+class B284(TypedDict):
+    a: ReadOnly[Required[int]]
+class C284(B284):
+    a: ReadOnly[NotRequired[int]]
+class B285(TypedDict):
+    a: Required[int]
+class C285(B285):
+    a: ReadOnly[int]
+class B286(TypedDict):
+    a: int
+class C286(B286):
+    a: str
+class B287(TypedDict):
+    a: ReadOnly[Required[int]]
+class C287(B287):
+    a: ReadOnly[NotRequired[int]]
+class B288(TypedDict):
+    a: Required[int]
+class C288(B288):
+    a: ReadOnly[int]
+class B289(TypedDict):
+    a: int
+class C289(B289):
+    a: str
+class B290(TypedDict):
+    a: ReadOnly[Required[int]]
+class C290(B290):
+    a: ReadOnly[NotRequired[int]]
+class B291(TypedDict):
+    a: Required[int]
+class C291(B291):
+    a: ReadOnly[int]
+class B292(TypedDict):
+    a: int
+class C292(B292):
+    a: str
+class B293(TypedDict):
+    a: ReadOnly[Required[int]]
+class C293(B293):
+    a: ReadOnly[NotRequired[int]]
+class B294(TypedDict):
+    a: Required[int]
+class C294(B294):
+    a: ReadOnly[int]
+class B295(TypedDict):
+    a: int
+class C295(B295):
+    a: str
+class B296(TypedDict):
+    a: ReadOnly[Required[int]]
+class C296(B296):
+    a: ReadOnly[NotRequired[int]]
+class B297(TypedDict):
+    a: Required[int]
+class C297(B297):
+    a: ReadOnly[int]
+class B298(TypedDict):
+    a: int
+class C298(B298):
+    a: str
+class B299(TypedDict):
+    a: ReadOnly[Required[int]]
+class C299(B299):
+    a: ReadOnly[NotRequired[int]]
+class B300(TypedDict):
+    a: Required[int]
+class C300(B300):
+    a: ReadOnly[int]
+class B301(TypedDict):
+    a: int
+class C301(B301):
+    a: str
+class B302(TypedDict):
+    a: ReadOnly[Required[int]]
+class C302(B302):
+    a: ReadOnly[NotRequired[int]]
+class B303(TypedDict):
+    a: Required[int]
+class C303(B303):
+    a: ReadOnly[int]
+class B304(TypedDict):
+    a: int
+class C304(B304):
+    a: str
+class B305(TypedDict):
+    a: ReadOnly[Required[int]]
+class C305(B305):
+    a: ReadOnly[NotRequired[int]]
+class B306(TypedDict):
+    a: Required[int]
+class C306(B306):
+    a: ReadOnly[int]
+class B307(TypedDict):
+    a: int
+class C307(B307):
+    a: str
+class B308(TypedDict):
+    a: ReadOnly[Required[int]]
+class C308(B308):
+    a: ReadOnly[NotRequired[int]]
+class B309(TypedDict):
+    a: Required[int]
+class C309(B309):
+    a: ReadOnly[int]
+class B310(TypedDict):
+    a: int
+class C310(B310):
+    a: str
+class B311(TypedDict):
+    a: ReadOnly[Required[int]]
+class C311(B311):
+    a: ReadOnly[NotRequired[int]]
+class B312(TypedDict):
+    a: Required[int]
+class C312(B312):
+    a: ReadOnly[int]
+class B313(TypedDict):
+    a: int
+class C313(B313):
+    a: str
+class B314(TypedDict):
+    a: ReadOnly[Required[int]]
+class C314(B314):
+    a: ReadOnly[NotRequired[int]]
+class B315(TypedDict):
+    a: Required[int]
+class C315(B315):
+    a: ReadOnly[int]
+class B316(TypedDict):
+    a: int
+class C316(B316):
+    a: str
+class B317(TypedDict):
+    a: ReadOnly[Required[int]]
+class C317(B317):
+    a: ReadOnly[NotRequired[int]]
+class B318(TypedDict):
+    a: Required[int]
+class C318(B318):
+    a: ReadOnly[int]
+class B319(TypedDict):
+    a: int
+class C319(B319):
+    a: str
+class B320(TypedDict):
+    a: ReadOnly[Required[int]]
+class C320(B320):
+    a: ReadOnly[NotRequired[int]]
+class B321(TypedDict):
+    a: Required[int]
+class C321(B321):
+    a: ReadOnly[int]
+class B322(TypedDict):
+    a: int
+class C322(B322):
+    a: str
+class B323(TypedDict):
+    a: ReadOnly[Required[int]]
+class C323(B323):
+    a: ReadOnly[NotRequired[int]]
+class B324(TypedDict):
+    a: Required[int]
+class C324(B324):
+    a: ReadOnly[int]
+class B325(TypedDict):
+    a: int
+class C325(B325):
+    a: str
+class B326(TypedDict):
+    a: ReadOnly[Required[int]]
+class C326(B326):
+    a: ReadOnly[NotRequired[int]]
+class B327(TypedDict):
+    a: Required[int]
+class C327(B327):
+    a: ReadOnly[int]
+class B328(TypedDict):
+    a: int
+class C328(B328):
+    a: str
+class B329(TypedDict):
+    a: ReadOnly[Required[int]]
+class C329(B329):
+    a: ReadOnly[NotRequired[int]]
+class B330(TypedDict):
+    a: Required[int]
+class C330(B330):
+    a: ReadOnly[int]
+class B331(TypedDict):
+    a: int
+class C331(B331):
+    a: str
+class B332(TypedDict):
+    a: ReadOnly[Required[int]]
+class C332(B332):
+    a: ReadOnly[NotRequired[int]]
+class B333(TypedDict):
+    a: Required[int]
+class C333(B333):
+    a: ReadOnly[int]
+class B334(TypedDict):
+    a: int
+class C334(B334):
+    a: str
+class B335(TypedDict):
+    a: ReadOnly[Required[int]]
+class C335(B335):
+    a: ReadOnly[NotRequired[int]]
+class B336(TypedDict):
+    a: Required[int]
+class C336(B336):
+    a: ReadOnly[int]
+class B337(TypedDict):
+    a: int
+class C337(B337):
+    a: str
+class B338(TypedDict):
+    a: ReadOnly[Required[int]]
+class C338(B338):
+    a: ReadOnly[NotRequired[int]]
+class B339(TypedDict):
+    a: Required[int]
+class C339(B339):
+    a: ReadOnly[int]
+class B340(TypedDict):
+    a: int
+class C340(B340):
+    a: str
+class B341(TypedDict):
+    a: ReadOnly[Required[int]]
+class C341(B341):
+    a: ReadOnly[NotRequired[int]]
+class B342(TypedDict):
+    a: Required[int]
+class C342(B342):
+    a: ReadOnly[int]
+class B343(TypedDict):
+    a: int
+class C343(B343):
+    a: str
+class B344(TypedDict):
+    a: ReadOnly[Required[int]]
+class C344(B344):
+    a: ReadOnly[NotRequired[int]]
+class B345(TypedDict):
+    a: Required[int]
+class C345(B345):
+    a: ReadOnly[int]
+class B346(TypedDict):
+    a: int
+class C346(B346):
+    a: str
+class B347(TypedDict):
+    a: ReadOnly[Required[int]]
+class C347(B347):
+    a: ReadOnly[NotRequired[int]]
+class B348(TypedDict):
+    a: Required[int]
+class C348(B348):
+    a: ReadOnly[int]
+class B349(TypedDict):
+    a: int
+class C349(B349):
+    a: str
+class B350(TypedDict):
+    a: ReadOnly[Required[int]]
+class C350(B350):
+    a: ReadOnly[NotRequired[int]]
+class B351(TypedDict):
+    a: Required[int]
+class C351(B351):
+    a: ReadOnly[int]
+class B352(TypedDict):
+    a: int
+class C352(B352):
+    a: str
+class B353(TypedDict):
+    a: ReadOnly[Required[int]]
+class C353(B353):
+    a: ReadOnly[NotRequired[int]]
+class B354(TypedDict):
+    a: Required[int]
+class C354(B354):
+    a: ReadOnly[int]
+class B355(TypedDict):
+    a: int
+class C355(B355):
+    a: str
+class B356(TypedDict):
+    a: ReadOnly[Required[int]]
+class C356(B356):
+    a: ReadOnly[NotRequired[int]]
+class B357(TypedDict):
+    a: Required[int]
+class C357(B357):
+    a: ReadOnly[int]
+class B358(TypedDict):
+    a: int
+class C358(B358):
+    a: str
+class B359(TypedDict):
+    a: ReadOnly[Required[int]]
+class C359(B359):
+    a: ReadOnly[NotRequired[int]]
+class B360(TypedDict):
+    a: Required[int]
+class C360(B360):
+    a: ReadOnly[int]
+class B361(TypedDict):
+    a: int
+class C361(B361):
+    a: str
+class B362(TypedDict):
+    a: ReadOnly[Required[int]]
+class C362(B362):
+    a: ReadOnly[NotRequired[int]]
+class B363(TypedDict):
+    a: Required[int]
+class C363(B363):
+    a: ReadOnly[int]
+class B364(TypedDict):
+    a: int
+class C364(B364):
+    a: str
+class B365(TypedDict):
+    a: ReadOnly[Required[int]]
+class C365(B365):
+    a: ReadOnly[NotRequired[int]]
+class B366(TypedDict):
+    a: Required[int]
+class C366(B366):
+    a: ReadOnly[int]
+class B367(TypedDict):
+    a: int
+class C367(B367):
+    a: str
+class B368(TypedDict):
+    a: ReadOnly[Required[int]]
+class C368(B368):
+    a: ReadOnly[NotRequired[int]]
+class B369(TypedDict):
+    a: Required[int]
+class C369(B369):
+    a: ReadOnly[int]
+class B370(TypedDict):
+    a: int
+class C370(B370):
+    a: str
+class B371(TypedDict):
+    a: ReadOnly[Required[int]]
+class C371(B371):
+    a: ReadOnly[NotRequired[int]]
+class B372(TypedDict):
+    a: Required[int]
+class C372(B372):
+    a: ReadOnly[int]
+class B373(TypedDict):
+    a: int
+class C373(B373):
+    a: str
+class B374(TypedDict):
+    a: ReadOnly[Required[int]]
+class C374(B374):
+    a: ReadOnly[NotRequired[int]]
+class B375(TypedDict):
+    a: Required[int]
+class C375(B375):
+    a: ReadOnly[int]
+class B376(TypedDict):
+    a: int
+class C376(B376):
+    a: str
+class B377(TypedDict):
+    a: ReadOnly[Required[int]]
+class C377(B377):
+    a: ReadOnly[NotRequired[int]]
+class B378(TypedDict):
+    a: Required[int]
+class C378(B378):
+    a: ReadOnly[int]
+class B379(TypedDict):
+    a: int
+class C379(B379):
+    a: str
+class B380(TypedDict):
+    a: ReadOnly[Required[int]]
+class C380(B380):
+    a: ReadOnly[NotRequired[int]]
+class B381(TypedDict):
+    a: Required[int]
+class C381(B381):
+    a: ReadOnly[int]
+class B382(TypedDict):
+    a: int
+class C382(B382):
+    a: str
+class B383(TypedDict):
+    a: ReadOnly[Required[int]]
+class C383(B383):
+    a: ReadOnly[NotRequired[int]]
+class B384(TypedDict):
+    a: Required[int]
+class C384(B384):
+    a: ReadOnly[int]
+class B385(TypedDict):
+    a: int
+class C385(B385):
+    a: str
+class B386(TypedDict):
+    a: ReadOnly[Required[int]]
+class C386(B386):
+    a: ReadOnly[NotRequired[int]]
+class B387(TypedDict):
+    a: Required[int]
+class C387(B387):
+    a: ReadOnly[int]
+class B388(TypedDict):
+    a: int
+class C388(B388):
+    a: str
+class B389(TypedDict):
+    a: ReadOnly[Required[int]]
+class C389(B389):
+    a: ReadOnly[NotRequired[int]]
+class B390(TypedDict):
+    a: Required[int]
+class C390(B390):
+    a: ReadOnly[int]
+class B391(TypedDict):
+    a: int
+class C391(B391):
+    a: str
+class B392(TypedDict):
+    a: ReadOnly[Required[int]]
+class C392(B392):
+    a: ReadOnly[NotRequired[int]]
+class B393(TypedDict):
+    a: Required[int]
+class C393(B393):
+    a: ReadOnly[int]
+class B394(TypedDict):
+    a: int
+class C394(B394):
+    a: str
+class B395(TypedDict):
+    a: ReadOnly[Required[int]]
+class C395(B395):
+    a: ReadOnly[NotRequired[int]]
+class B396(TypedDict):
+    a: Required[int]
+class C396(B396):
+    a: ReadOnly[int]
+class B397(TypedDict):
+    a: int
+class C397(B397):
+    a: str
+class B398(TypedDict):
+    a: ReadOnly[Required[int]]
+class C398(B398):
+    a: ReadOnly[NotRequired[int]]
+class B399(TypedDict):
+    a: Required[int]
+class C399(B399):
+    a: ReadOnly[int]
+class B400(TypedDict):
+    a: int
+class C400(B400):
+    a: str
+class B401(TypedDict):
+    a: ReadOnly[Required[int]]
+class C401(B401):
+    a: ReadOnly[NotRequired[int]]
+class B402(TypedDict):
+    a: Required[int]
+class C402(B402):
+    a: ReadOnly[int]
+class B403(TypedDict):
+    a: int
+class C403(B403):
+    a: str
+class B404(TypedDict):
+    a: ReadOnly[Required[int]]
+class C404(B404):
+    a: ReadOnly[NotRequired[int]]
+class B405(TypedDict):
+    a: Required[int]
+class C405(B405):
+    a: ReadOnly[int]
+class B406(TypedDict):
+    a: int
+class C406(B406):
+    a: str
+class B407(TypedDict):
+    a: ReadOnly[Required[int]]
+class C407(B407):
+    a: ReadOnly[NotRequired[int]]
+class B408(TypedDict):
+    a: Required[int]
+class C408(B408):
+    a: ReadOnly[int]
+class B409(TypedDict):
+    a: int
+class C409(B409):
+    a: str
+class B410(TypedDict):
+    a: ReadOnly[Required[int]]
+class C410(B410):
+    a: ReadOnly[NotRequired[int]]
+class B411(TypedDict):
+    a: Required[int]
+class C411(B411):
+    a: ReadOnly[int]
+class B412(TypedDict):
+    a: int
+class C412(B412):
+    a: str
+class B413(TypedDict):
+    a: ReadOnly[Required[int]]
+class C413(B413):
+    a: ReadOnly[NotRequired[int]]
+class B414(TypedDict):
+    a: Required[int]
+class C414(B414):
+    a: ReadOnly[int]
+class B415(TypedDict):
+    a: int
+class C415(B415):
+    a: str
+class B416(TypedDict):
+    a: ReadOnly[Required[int]]
+class C416(B416):
+    a: ReadOnly[NotRequired[int]]
+class B417(TypedDict):
+    a: Required[int]
+class C417(B417):
+    a: ReadOnly[int]
+class B418(TypedDict):
+    a: int
+class C418(B418):
+    a: str
+class B419(TypedDict):
+    a: ReadOnly[Required[int]]
+class C419(B419):
+    a: ReadOnly[NotRequired[int]]
+class B420(TypedDict):
+    a: Required[int]
+class C420(B420):
+    a: ReadOnly[int]
+class B421(TypedDict):
+    a: int
+class C421(B421):
+    a: str
+class B422(TypedDict):
+    a: ReadOnly[Required[int]]
+class C422(B422):
+    a: ReadOnly[NotRequired[int]]
+class B423(TypedDict):
+    a: Required[int]
+class C423(B423):
+    a: ReadOnly[int]
+class B424(TypedDict):
+    a: int
+class C424(B424):
+    a: str
+class B425(TypedDict):
+    a: ReadOnly[Required[int]]
+class C425(B425):
+    a: ReadOnly[NotRequired[int]]
+class B426(TypedDict):
+    a: Required[int]
+class C426(B426):
+    a: ReadOnly[int]
+class B427(TypedDict):
+    a: int
+class C427(B427):
+    a: str
+class B428(TypedDict):
+    a: ReadOnly[Required[int]]
+class C428(B428):
+    a: ReadOnly[NotRequired[int]]
+class B429(TypedDict):
+    a: Required[int]
+class C429(B429):
+    a: ReadOnly[int]
+class B430(TypedDict):
+    a: int
+class C430(B430):
+    a: str
+class B431(TypedDict):
+    a: ReadOnly[Required[int]]
+class C431(B431):
+    a: ReadOnly[NotRequired[int]]
+class B432(TypedDict):
+    a: Required[int]
+class C432(B432):
+    a: ReadOnly[int]
+class B433(TypedDict):
+    a: int
+class C433(B433):
+    a: str
+class B434(TypedDict):
+    a: ReadOnly[Required[int]]
+class C434(B434):
+    a: ReadOnly[NotRequired[int]]
+class B435(TypedDict):
+    a: Required[int]
+class C435(B435):
+    a: ReadOnly[int]
+class B436(TypedDict):
+    a: int
+class C436(B436):
+    a: str
+class B437(TypedDict):
+    a: ReadOnly[Required[int]]
+class C437(B437):
+    a: ReadOnly[NotRequired[int]]
+class B438(TypedDict):
+    a: Required[int]
+class C438(B438):
+    a: ReadOnly[int]
+class B439(TypedDict):
+    a: int
+class C439(B439):
+    a: str
+class B440(TypedDict):
+    a: ReadOnly[Required[int]]
+class C440(B440):
+    a: ReadOnly[NotRequired[int]]
+class B441(TypedDict):
+    a: Required[int]
+class C441(B441):
+    a: ReadOnly[int]
+class B442(TypedDict):
+    a: int
+class C442(B442):
+    a: str
+class B443(TypedDict):
+    a: ReadOnly[Required[int]]
+class C443(B443):
+    a: ReadOnly[NotRequired[int]]
+class B444(TypedDict):
+    a: Required[int]
+class C444(B444):
+    a: ReadOnly[int]
+class B445(TypedDict):
+    a: int
+class C445(B445):
+    a: str
+class B446(TypedDict):
+    a: ReadOnly[Required[int]]
+class C446(B446):
+    a: ReadOnly[NotRequired[int]]
+class B447(TypedDict):
+    a: Required[int]
+class C447(B447):
+    a: ReadOnly[int]
+class B448(TypedDict):
+    a: int
+class C448(B448):
+    a: str
+class B449(TypedDict):
+    a: ReadOnly[Required[int]]
+class C449(B449):
+    a: ReadOnly[NotRequired[int]]
+class B450(TypedDict):
+    a: Required[int]
+class C450(B450):
+    a: ReadOnly[int]
+class B451(TypedDict):
+    a: int
+class C451(B451):
+    a: str
+class B452(TypedDict):
+    a: ReadOnly[Required[int]]
+class C452(B452):
+    a: ReadOnly[NotRequired[int]]
+class B453(TypedDict):
+    a: Required[int]
+class C453(B453):
+    a: ReadOnly[int]
+class B454(TypedDict):
+    a: int
+class C454(B454):
+    a: str
+class B455(TypedDict):
+    a: ReadOnly[Required[int]]
+class C455(B455):
+    a: ReadOnly[NotRequired[int]]
+class B456(TypedDict):
+    a: Required[int]
+class C456(B456):
+    a: ReadOnly[int]
+class B457(TypedDict):
+    a: int
+class C457(B457):
+    a: str
+class B458(TypedDict):
+    a: ReadOnly[Required[int]]
+class C458(B458):
+    a: ReadOnly[NotRequired[int]]
+class B459(TypedDict):
+    a: Required[int]
+class C459(B459):
+    a: ReadOnly[int]
+class B460(TypedDict):
+    a: int
+class C460(B460):
+    a: str
+class B461(TypedDict):
+    a: ReadOnly[Required[int]]
+class C461(B461):
+    a: ReadOnly[NotRequired[int]]
+class B462(TypedDict):
+    a: Required[int]
+class C462(B462):
+    a: ReadOnly[int]
+class B463(TypedDict):
+    a: int
+class C463(B463):
+    a: str
+class B464(TypedDict):
+    a: ReadOnly[Required[int]]
+class C464(B464):
+    a: ReadOnly[NotRequired[int]]
+class B465(TypedDict):
+    a: Required[int]
+class C465(B465):
+    a: ReadOnly[int]
+class B466(TypedDict):
+    a: int
+class C466(B466):
+    a: str
+class B467(TypedDict):
+    a: ReadOnly[Required[int]]
+class C467(B467):
+    a: ReadOnly[NotRequired[int]]
+class B468(TypedDict):
+    a: Required[int]
+class C468(B468):
+    a: ReadOnly[int]
+class B469(TypedDict):
+    a: int
+class C469(B469):
+    a: str
+class B470(TypedDict):
+    a: ReadOnly[Required[int]]
+class C470(B470):
+    a: ReadOnly[NotRequired[int]]
+class B471(TypedDict):
+    a: Required[int]
+class C471(B471):
+    a: ReadOnly[int]
+class B472(TypedDict):
+    a: int
+class C472(B472):
+    a: str
+class B473(TypedDict):
+    a: ReadOnly[Required[int]]
+class C473(B473):
+    a: ReadOnly[NotRequired[int]]
+class B474(TypedDict):
+    a: Required[int]
+class C474(B474):
+    a: ReadOnly[int]
+class B475(TypedDict):
+    a: int
+class C475(B475):
+    a: str
+class B476(TypedDict):
+    a: ReadOnly[Required[int]]
+class C476(B476):
+    a: ReadOnly[NotRequired[int]]
+class B477(TypedDict):
+    a: Required[int]
+class C477(B477):
+    a: ReadOnly[int]
+class B478(TypedDict):
+    a: int
+class C478(B478):
+    a: str
+class B479(TypedDict):
+    a: ReadOnly[Required[int]]
+class C479(B479):
+    a: ReadOnly[NotRequired[int]]
+class B480(TypedDict):
+    a: Required[int]
+class C480(B480):
+    a: ReadOnly[int]
+class B481(TypedDict):
+    a: int
+class C481(B481):
+    a: str
+class B482(TypedDict):
+    a: ReadOnly[Required[int]]
+class C482(B482):
+    a: ReadOnly[NotRequired[int]]
+class B483(TypedDict):
+    a: Required[int]
+class C483(B483):
+    a: ReadOnly[int]
+class B484(TypedDict):
+    a: int
+class C484(B484):
+    a: str
+class B485(TypedDict):
+    a: ReadOnly[Required[int]]
+class C485(B485):
+    a: ReadOnly[NotRequired[int]]
+class B486(TypedDict):
+    a: Required[int]
+class C486(B486):
+    a: ReadOnly[int]
+class B487(TypedDict):
+    a: int
+class C487(B487):
+    a: str
+class B488(TypedDict):
+    a: ReadOnly[Required[int]]
+class C488(B488):
+    a: ReadOnly[NotRequired[int]]
+class B489(TypedDict):
+    a: Required[int]
+class C489(B489):
+    a: ReadOnly[int]
+class B490(TypedDict):
+    a: int
+class C490(B490):
+    a: str
+class B491(TypedDict):
+    a: ReadOnly[Required[int]]
+class C491(B491):
+    a: ReadOnly[NotRequired[int]]
+class B492(TypedDict):
+    a: Required[int]
+class C492(B492):
+    a: ReadOnly[int]
+class B493(TypedDict):
+    a: int
+class C493(B493):
+    a: str
+class B494(TypedDict):
+    a: ReadOnly[Required[int]]
+class C494(B494):
+    a: ReadOnly[NotRequired[int]]
+class B495(TypedDict):
+    a: Required[int]
+class C495(B495):
+    a: ReadOnly[int]
+class B496(TypedDict):
+    a: int
+class C496(B496):
+    a: str
+class B497(TypedDict):
+    a: ReadOnly[Required[int]]
+class C497(B497):
+    a: ReadOnly[NotRequired[int]]
+class B498(TypedDict):
+    a: Required[int]
+class C498(B498):
+    a: ReadOnly[int]
+class B499(TypedDict):
+    a: int
+class C499(B499):
+    a: str

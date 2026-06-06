@@ -147,18 +147,25 @@ pub(super) fn check_kwargs_readonly_violations(
 pub(super) fn build_typeddict_readonly_map(
     stmts: &[Stmt],
     classes: &[ClassInfo],
+    source: &str,
 ) -> std::collections::HashMap<String, std::collections::HashSet<String>> {
     use std::collections::{HashMap, HashSet};
+    let class_map = crate::scope::class_by_name(classes);
+    // Use the effective (post-inheritance) field set so a subclass that does NOT
+    // redeclare an inherited `ReadOnly` field still treats it as read-only
+    // (`class Album2(NamedDict): year: int` keeps `name: ReadOnly[str]`), while a
+    // subclass that redeclares it as mutable drops the read-only status (the
+    // most-derived declaration wins).
     let mut map: HashMap<String, HashSet<String>> = classes
         .iter()
-        .filter(|cls| cls.is_typed_dict)
+        .filter(|cls| crate::scope::is_transitive_typeddict(cls.name.as_str(), &class_map))
         .filter_map(|cls| {
-            let fields: HashSet<String> = cls
-                .attributes
-                .iter()
-                .filter(|a| a.is_readonly)
-                .map(|a| a.name.clone())
-                .collect();
+            let fields: HashSet<String> =
+                super::typeddict_schema::effective_fields(cls, &class_map, source)
+                    .into_iter()
+                    .filter(|f| f.readonly)
+                    .map(|f| f.name.to_owned())
+                    .collect();
             if fields.is_empty() {
                 None
             } else {
@@ -192,8 +199,9 @@ pub(super) fn build_typeddict_readonly_map(
 pub(super) fn collect_readonly_violations(
     stmts: &[Stmt],
     classes: &[ClassInfo],
+    source: &str,
 ) -> Vec<ReadOnlyViolationInfo> {
-    let td_readonly_fields = build_typeddict_readonly_map(stmts, classes);
+    let td_readonly_fields = build_typeddict_readonly_map(stmts, classes, source);
     if td_readonly_fields.is_empty() {
         return Vec::new();
     }

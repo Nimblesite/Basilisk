@@ -921,3 +921,287 @@ class C[T: str]:
     );
     Ok(())
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// E0038: TypedDict ReadOnly/Required redeclaration legality (PEP 705).
+// Implements [CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE]. See
+// docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE
+//
+// Each test below pins one decision function of the redeclaration matrix so
+// cargo-mutants generates mutants for it; every test asserts BOTH a violating
+// redeclaration that MUST fire and a legal one that MUST NOT, so flipping any
+// boolean, comparison, or match arm in those functions is observable.
+// ═══════════════════════════════════════════════════════════════════════
+
+fn e0038_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
+    count_code(diagnostics, "BSK-E0038")
+}
+
+/// Common prelude importing every `TypedDict` qualifier the tests use.
+const TD_PRELUDE: &str = "from typing import TypedDict, Required, NotRequired\n\
+                          from typing_extensions import ReadOnly\n";
+
+/// `parse_field_qualifiers`: a writable item redeclared `ReadOnly` is illegal,
+/// but a `ReadOnly` item redeclared writable is allowed. Also pins that the
+/// `ReadOnly[...]` detection actually reads the wrapper.
+#[mutation_safe(rule = "e0038", fns = "parse_field_qualifiers")]
+#[test]
+fn mutant_e0038_parse_readonly() -> Result<(), Box<dyn std::error::Error>> {
+    let illegal = format!(
+        "{TD_PRELUDE}\nclass Base(TypedDict):\n    a: Required[int]\n\
+         class Child(Base):\n    a: ReadOnly[int]\n"
+    );
+    assert!(
+        e0038_count(&run(&illegal)?) >= 1,
+        "writable item redeclared ReadOnly must fire E0038"
+    );
+
+    let legal = format!(
+        "{TD_PRELUDE}\nclass Base(TypedDict):\n    name: ReadOnly[str]\n\
+         class Child(Base):\n    name: str\n"
+    );
+    assert_eq!(
+        e0038_count(&run(&legal)?),
+        0,
+        "ReadOnly item redeclared writable is allowed — no E0038"
+    );
+    Ok(())
+}
+
+/// `parse_field_qualifiers` required-ness: `NotRequired` must be recognised
+/// ahead of `Required` (its text contains `required[`), and the implicit
+/// required-ness falls back to the class `total=` setting.
+#[mutation_safe(rule = "e0038", fns = "redeclaration_violation")]
+#[test]
+fn mutant_e0038_required_relaxing() -> Result<(), Box<dyn std::error::Error>> {
+    // Explicit Required -> NotRequired is illegal.
+    let illegal = format!(
+        "{TD_PRELUDE}\nclass Base(TypedDict):\n    a: Required[int]\n\
+         class Child(Base):\n    a: NotRequired[int]\n"
+    );
+    assert!(
+        e0038_count(&run(&illegal)?) >= 1,
+        "required item redeclared not-required must fire E0038"
+    );
+
+    // Implicit-required (via total) -> NotRequired is also illegal: pins the
+    // `class_total` fallback branch of parse_field_qualifiers.
+    let illegal_total = format!(
+        "{TD_PRELUDE}\nclass Base(TypedDict):\n    a: int\n\
+         class Child(Base):\n    a: NotRequired[int]\n"
+    );
+    assert!(
+        e0038_count(&run(&illegal_total)?) >= 1,
+        "total-required item redeclared not-required must fire E0038"
+    );
+
+    // NotRequired -> Required is allowed (making an optional item required).
+    let legal = format!(
+        "{TD_PRELUDE}\nclass Base(TypedDict):\n    a: NotRequired[int]\n\
+         class Child(Base):\n    a: Required[int]\n"
+    );
+    assert_eq!(
+        e0038_count(&run(&legal)?),
+        0,
+        "not-required item redeclared required is allowed — no E0038"
+    );
+    Ok(())
+}
+
+/// `value_type_incompatible`: writable items are invariant (any type change is
+/// illegal); a same-typed redeclaration is fine.
+#[mutation_safe(rule = "e0038", fns = "value_type_incompatible")]
+#[test]
+fn mutant_e0038_writable_invariant() -> Result<(), Box<dyn std::error::Error>> {
+    let illegal = format!(
+        "{TD_PRELUDE}\nclass Base(TypedDict):\n    a: int\n\
+         class Child(Base):\n    a: str\n"
+    );
+    assert!(
+        e0038_count(&run(&illegal)?) >= 1,
+        "writable item with changed value type must fire E0038"
+    );
+
+    let legal = format!(
+        "{TD_PRELUDE}\nclass Base(TypedDict):\n    a: int\n\
+         class Child(Base):\n    a: int\n"
+    );
+    assert_eq!(
+        e0038_count(&run(&legal)?),
+        0,
+        "identical redeclaration is allowed — no E0038"
+    );
+    Ok(())
+}
+
+/// `is_invariant_container`: narrowing the type argument of an invariant
+/// container (`list`/`dict`/`set`) under `ReadOnly` is illegal, but narrowing a
+/// covariant container (`Sequence`) is allowed.
+#[mutation_safe(rule = "e0038", fns = "is_invariant_container")]
+#[test]
+fn mutant_e0038_invariant_container() -> Result<(), Box<dyn std::error::Error>> {
+    for container in ["list", "set"] {
+        let illegal = format!(
+            "{TD_PRELUDE}\nclass Base(TypedDict):\n    a: ReadOnly[{container}[int | str]]\n\
+             class Child(Base):\n    a: ReadOnly[{container}[int]]\n"
+        );
+        assert!(
+            e0038_count(&run(&illegal)?) >= 1,
+            "narrowing ReadOnly[{container}[...]] arg must fire E0038"
+        );
+    }
+    let illegal_dict = format!(
+        "{TD_PRELUDE}\nclass Base(TypedDict):\n    a: ReadOnly[dict[str, int | str]]\n\
+         class Child(Base):\n    a: ReadOnly[dict[str, int]]\n"
+    );
+    assert!(
+        e0038_count(&run(&illegal_dict)?) >= 1,
+        "narrowing ReadOnly[dict[...]] arg must fire E0038"
+    );
+
+    // Sequence is covariant — narrowing its argument under ReadOnly is allowed.
+    let legal = format!(
+        "{TD_PRELUDE}\nfrom typing import Sequence\nclass Base(TypedDict):\n    \
+         a: ReadOnly[Sequence[int | str]]\n\
+         class Child(Base):\n    a: ReadOnly[Sequence[int]]\n"
+    );
+    assert_eq!(
+        e0038_count(&run(&legal)?),
+        0,
+        "narrowing a covariant ReadOnly[Sequence[...]] is allowed — no E0038"
+    );
+    Ok(())
+}
+
+/// `type_head`: a `ReadOnly` redeclaration to a *different* container (a
+/// covariant subtype, e.g. `Collection[T]` -> `list[T]`) is allowed, while the
+/// *same* invariant container with different args is not. Distinguishes
+/// head-comparison from full-string comparison.
+#[mutation_safe(rule = "e0038", fns = "type_head")]
+#[test]
+fn mutant_e0038_type_head() -> Result<(), Box<dyn std::error::Error>> {
+    let legal = format!(
+        "{TD_PRELUDE}\nfrom typing import Collection\nclass Base(TypedDict):\n    \
+         a: ReadOnly[Collection[int]]\n\
+         class Child(Base):\n    a: ReadOnly[list[int]]\n"
+    );
+    assert_eq!(
+        e0038_count(&run(&legal)?),
+        0,
+        "narrowing ReadOnly[Collection[int]] to ReadOnly[list[int]] is allowed"
+    );
+
+    let illegal = format!(
+        "{TD_PRELUDE}\nclass Base(TypedDict):\n    a: ReadOnly[list[int]]\n\
+         class Child(Base):\n    a: ReadOnly[list[bool]]\n"
+    );
+    assert!(
+        e0038_count(&run(&illegal)?) >= 1,
+        "same invariant container with different args must fire E0038"
+    );
+    Ok(())
+}
+
+/// `check_field_override`: end-to-end single-inheritance redeclaration drives
+/// the rule, and an unrelated new field added by the subclass is never flagged.
+#[mutation_safe(rule = "e0038", fns = "check_field_override")]
+#[test]
+fn mutant_e0038_field_override() -> Result<(), Box<dyn std::error::Error>> {
+    let illegal = format!(
+        "{TD_PRELUDE}\nclass Base(TypedDict):\n    a: ReadOnly[Required[int]]\n\
+         class Child(Base):\n    a: ReadOnly[NotRequired[int]]\n"
+    );
+    assert!(
+        e0038_count(&run(&illegal)?) >= 1,
+        "ReadOnly required -> ReadOnly not-required must fire E0038"
+    );
+
+    let legal = format!(
+        "{TD_PRELUDE}\nclass Base(TypedDict):\n    a: ReadOnly[NotRequired[int]]\n\
+         class Child(Base):\n    a: ReadOnly[Required[int]]\n    b: int\n"
+    );
+    assert_eq!(
+        e0038_count(&run(&legal)?),
+        0,
+        "ReadOnly not-required -> ReadOnly required (plus a new field) is allowed"
+    );
+    Ok(())
+}
+
+/// `bases_conflict` / `check_conflicting_bases`: multiple inheritance with two
+/// bases declaring the same field incompatibly (by core type, required-ness, or
+/// read-only-ness) is illegal; identical declarations merge cleanly.
+#[mutation_safe(rule = "e0038", fns = "bases_conflict")]
+#[test]
+fn mutant_e0038_bases_conflict() -> Result<(), Box<dyn std::error::Error>> {
+    // Core-type conflict.
+    let core = format!(
+        "{TD_PRELUDE}\nclass A(TypedDict):\n    x: int\nclass B(TypedDict):\n    x: float\n\
+         class C(A, B):\n    pass\n"
+    );
+    assert!(
+        e0038_count(&run(&core)?) >= 1,
+        "conflicting core types across bases must fire E0038"
+    );
+
+    // Required-ness conflict (same core, same readonly).
+    let req = format!(
+        "{TD_PRELUDE}\nclass A(TypedDict):\n    x: ReadOnly[NotRequired[int]]\n\
+         class B(TypedDict):\n    x: ReadOnly[Required[int]]\n\
+         class C(A, B):\n    pass\n"
+    );
+    assert!(
+        e0038_count(&run(&req)?) >= 1,
+        "conflicting required-ness across bases must fire E0038"
+    );
+
+    // Read-only-ness conflict (same core, same required-ness).
+    let ro = format!(
+        "{TD_PRELUDE}\nclass A(TypedDict):\n    x: ReadOnly[int]\nclass B(TypedDict):\n    x: int\n\
+         class C(A, B):\n    pass\n"
+    );
+    assert!(
+        e0038_count(&run(&ro)?) >= 1,
+        "conflicting read-only-ness across bases must fire E0038"
+    );
+
+    // Identical declarations across bases are compatible.
+    let legal = format!(
+        "{TD_PRELUDE}\nclass A(TypedDict):\n    x: int\nclass B(TypedDict):\n    x: int\n\
+         class C(A, B):\n    pass\n"
+    );
+    assert_eq!(
+        e0038_count(&run(&legal)?),
+        0,
+        "identical field declarations across bases must not conflict"
+    );
+
+    // Three bases, two of which conflict on `x`: pins the `len() < 2` early-out
+    // threshold — a wrong comparison would skip checking 3+ base classes.
+    let three = format!(
+        "{TD_PRELUDE}\nclass A(TypedDict):\n    x: int\nclass B(TypedDict):\n    x: float\n\
+         class D(TypedDict):\n    z: int\nclass C(A, B, D):\n    pass\n"
+    );
+    assert!(
+        e0038_count(&run(&three)?) >= 1,
+        "a conflict among three bases must still fire E0038"
+    );
+    Ok(())
+}
+
+/// `check_conflicting_bases` guard: a single `TypedDict` base (no multiple
+/// inheritance) never triggers the conflict path, even with qualifiers.
+#[mutation_safe(rule = "e0038", fns = "check_conflicting_bases")]
+#[test]
+fn mutant_e0038_single_base_no_conflict() -> Result<(), Box<dyn std::error::Error>> {
+    let single = format!(
+        "{TD_PRELUDE}\nclass A(TypedDict):\n    x: ReadOnly[int]\n\
+         class C(A):\n    y: int\n"
+    );
+    assert_eq!(
+        e0038_count(&run(&single)?),
+        0,
+        "a single base with a new field must not raise a conflict"
+    );
+    Ok(())
+}

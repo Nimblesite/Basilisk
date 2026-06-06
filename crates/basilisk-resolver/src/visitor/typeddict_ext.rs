@@ -14,7 +14,7 @@ use super::typeddict::TdFieldMap;
 ///
 /// - `is_total=true` (default):  all fields are required unless wrapped in `NotRequired`.
 /// - `is_total=false`:  all fields are not-required unless wrapped in `Required`.
-fn is_field_required(
+pub(super) fn is_field_required(
     field_name: &str,
     field_types: &std::collections::HashMap<&str, String>,
     is_total: bool,
@@ -324,46 +324,10 @@ pub(super) fn expr_literal_type_name(expr: &Expr) -> Option<&'static str> {
 
 /// Return `true` if an actual literal type is compatible with an expected `TypedDict` field type.
 pub(super) fn typeddict_field_type_compatible(actual: &str, expected: &str) -> bool {
-    let stripped = strip_td_wrappers(expected);
+    let stripped = crate::scope::strip_typeddict_qualifiers(expected);
     actual == stripped
         || (actual == "bool" && stripped == "int")
         || (actual == "int" && stripped == "float")
-}
-
-/// Strip `Required[...]`, `NotRequired[...]`, `ReadOnly[...]`, and
-/// `Annotated[..., meta]` wrappers from a `TypedDict` field annotation to
-/// extract the underlying type.
-fn strip_td_wrappers(annotation: &str) -> &str {
-    let mut result = annotation.trim();
-    loop {
-        let lower = result.to_ascii_lowercase();
-        if let Some(inner) = try_strip_wrapper(&lower, result, "required[")
-            .or_else(|| try_strip_wrapper(&lower, result, "notrequired["))
-            .or_else(|| try_strip_wrapper(&lower, result, "readonly["))
-        {
-            result = inner.trim();
-            continue;
-        }
-        // Annotated[T, ...] — keep only the first type arg.
-        if let Some(inner) = try_strip_wrapper(&lower, result, "annotated[") {
-            if let Some(comma) = inner.find(',') {
-                result = inner[..comma].trim();
-                continue;
-            }
-            result = inner.trim();
-            continue;
-        }
-        break;
-    }
-    result
-}
-
-/// Try to strip a wrapper prefix (case-insensitive) and its matching `]`.
-fn try_strip_wrapper<'a>(lower: &str, original: &'a str, prefix: &str) -> Option<&'a str> {
-    if !lower.starts_with(prefix) || !original.ends_with(']') {
-        return None;
-    }
-    Some(&original[prefix.len()..original.len() - 1])
 }
 
 /// Collect `ReadOnly` violations from module-level statements and function bodies.

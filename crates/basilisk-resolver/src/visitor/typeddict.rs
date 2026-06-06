@@ -11,7 +11,7 @@ use crate::scope::{
 
 use super::annotations::strip_annotated_wrapper;
 use super::class_info_ext::expr_simple_name;
-use super::core::{check_td_stmts, source_slice_span, text_range_to_span};
+use super::core::{check_td_stmts, text_range_to_span};
 use super::final_readonly::TYPING_FORMS;
 use super::typeddict_ext::{expr_literal_type_name, typeddict_field_type_compatible};
 
@@ -207,21 +207,23 @@ pub(super) fn collect_typeddict_key_violations<'a>(
     // (all_fields, field_types, is_total, has_extra_items)
     type FieldMap<'x> = HashMap<&'x str, (Vec<&'x str>, HashMap<&'x str, String>, bool, bool)>;
 
+    let class_map = crate::scope::class_by_name(classes);
+
     let typeddict_fields: FieldMap<'a> = classes
         .iter()
-        .filter(|c| c.is_typed_dict)
+        .filter(|c| crate::scope::is_transitive_typeddict(c.name.as_str(), &class_map))
         .map(|c| {
-            let all_fields: Vec<&str> = crate::collect_names(&c.attributes);
-            let field_types: HashMap<&str, String> = c
-                .attributes
+            // Merge own + inherited fields so transitive subclasses
+            // (`class Album(NamedDict): ...`) carry the full schema and the
+            // most-derived declaration of each redeclared field.
+            let effective = super::typeddict_schema::effective_fields(c, &class_map, source);
+            let all_fields: Vec<&str> = effective.iter().map(|f| f.name).collect();
+            let field_types: HashMap<&str, String> = effective
                 .iter()
-                .filter_map(|a| {
-                    let span = a.annotation_span?;
-                    let type_text = source_slice_span(source, span)?.trim().to_owned();
-                    Some((a.name.as_str(), type_text))
-                })
+                .filter_map(|f| f.annotation.map(|ann| (f.name, ann.to_owned())))
                 .collect();
-            let has_extra_items = c.class_keywords.iter().any(|kw| kw == "extra_items");
+            let has_extra_items =
+                crate::scope::has_extra_items_transitive(c.name.as_str(), &class_map);
             (
                 c.name.as_str(),
                 (
