@@ -116,42 +116,13 @@ pub fn parse_source_overrides(source: &str) -> SourceOverrides {
         }
 
         // Per-line directives: `# type: ignore`, `# type: warning[CODE]`, etc.
-        // These appear at the end of a line with code.
-        if let Some(rest) = find_comment_directive(line, "# type: ignore") {
-            line_overrides.push((
-                line_idx,
-                LineOverride {
-                    mode: RuleMode::Ignore,
-                    codes: parse_ignore_codes(rest),
-                },
-            ));
-        } else if let Some(rest) = find_comment_directive(line, "# type: disabled") {
-            let codes = parse_bracketed_codes(rest);
-            line_overrides.push((
-                line_idx,
-                LineOverride {
-                    mode: RuleMode::Disabled,
-                    codes,
-                },
-            ));
-        } else if let Some(rest) = find_comment_directive(line, "# type: warning") {
-            let codes = parse_bracketed_codes(rest);
-            line_overrides.push((
-                line_idx,
-                LineOverride {
-                    mode: RuleMode::Warning,
-                    codes,
-                },
-            ));
-        } else if let Some(rest) = find_comment_directive(line, "# type: info") {
-            let codes = parse_bracketed_codes(rest);
-            line_overrides.push((
-                line_idx,
-                LineOverride {
-                    mode: RuleMode::Info,
-                    codes,
-                },
-            ));
+        // A single line may carry several directives (e.g. `ignore` one code
+        // while `warning`-demoting another), so scan for EVERY `# type:` on the
+        // line and apply each independently (issue #78).
+        for directive in find_all_type_directives(line) {
+            if let Some(line_override) = parse_line_directive(directive) {
+                line_overrides.push((line_idx, line_override));
+            }
         }
     }
 
@@ -243,6 +214,54 @@ fn override_matches(diag_code: &str, codes: &[String]) -> bool {
 fn find_comment_directive<'a>(line: &'a str, directive: &str) -> Option<&'a str> {
     line.find(directive)
         .map(|pos| &line[pos + directive.len()..])
+}
+
+/// Return each `# type:` directive segment on a line — the text after each
+/// `# type: ` marker up to the next marker (or the end of the line).
+///
+/// Scanning for *every* marker (rather than stopping at the first) is what lets
+/// one physical line apply different verbs to different codes (issue #78).
+fn find_all_type_directives(line: &str) -> Vec<&str> {
+    const MARKER: &str = "# type: ";
+    let starts: Vec<usize> = line.match_indices(MARKER).map(|(pos, _)| pos).collect();
+    starts
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, &pos)| {
+            let seg_start = pos + MARKER.len();
+            let seg_end = starts.get(idx + 1).copied().unwrap_or(line.len());
+            line.get(seg_start..seg_end)
+        })
+        .collect()
+}
+
+/// Parse a single per-line directive segment (the verb and optional `[codes]`
+/// following a `# type: ` marker) into a [`LineOverride`]. Returns `None` when
+/// the verb is unrecognised. `ignore` keeps its PEP 484 semantics (a non-`BSK-`
+/// bracket suppresses every code on the line).
+fn parse_line_directive(directive: &str) -> Option<LineOverride> {
+    let directive = directive.trim_start();
+    if let Some(rest) = directive.strip_prefix("ignore") {
+        Some(LineOverride {
+            mode: RuleMode::Ignore,
+            codes: parse_ignore_codes(rest),
+        })
+    } else if let Some(rest) = directive.strip_prefix("disabled") {
+        Some(LineOverride {
+            mode: RuleMode::Disabled,
+            codes: parse_bracketed_codes(rest),
+        })
+    } else if let Some(rest) = directive.strip_prefix("warning") {
+        Some(LineOverride {
+            mode: RuleMode::Warning,
+            codes: parse_bracketed_codes(rest),
+        })
+    } else {
+        directive.strip_prefix("info").map(|rest| LineOverride {
+            mode: RuleMode::Info,
+            codes: parse_bracketed_codes(rest),
+        })
+    }
 }
 
 /// Parse the code list for a `# type: ignore[...]` directive.
@@ -371,6 +390,40 @@ mod tests {
         assert_eq!(overrides.line_overrides.len(), 1);
         assert_eq!(overrides.line_overrides[0].1.mode, RuleMode::Info);
         assert!(overrides.line_overrides[0].1.codes.is_empty());
+    }
+
+    /// Regression for issue #78: a line carrying TWO `# type:` directives must
+    /// have BOTH parsed (e.g. `ignore` one code while `warning`-demoting
+    /// another). Today only the first is honoured and the second is silently
+    /// dropped. The bug is order-independent, so this asserts the directive set
+    /// rather than positions.
+    #[test]
+    fn test_two_type_directives_on_one_line_both_parsed() {
+        let source = "x: int = \"hi\"  # type: ignore[BSK-E9999]  # type: warning[BSK-E0014]\n";
+        let overrides = parse_source_overrides(source);
+        let line0: Vec<&LineOverride> = overrides
+            .line_overrides
+            .iter()
+            .filter(|(idx, _)| *idx == 0)
+            .map(|(_, ov)| ov)
+            .collect();
+        assert_eq!(
+            line0.len(),
+            2,
+            "both directives on the line must be parsed, got: {line0:?}"
+        );
+        assert!(
+            line0
+                .iter()
+                .any(|ov| ov.mode == RuleMode::Ignore && ov.codes == ["BSK-E9999"]),
+            "missing the `ignore[BSK-E9999]` directive: {line0:?}"
+        );
+        assert!(
+            line0
+                .iter()
+                .any(|ov| ov.mode == RuleMode::Warning && ov.codes == ["BSK-E0014"]),
+            "missing the `warning[BSK-E0014]` directive (silently dropped): {line0:?}"
+        );
     }
 
     #[test]
