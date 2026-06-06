@@ -232,6 +232,13 @@ pub struct ResolvedModule {
     /// Populated by the workspace layer after import resolution, not during
     /// the initial `resolve()` pass. Maps import name → external symbol info.
     pub imported_symbols: std::collections::HashMap<String, ExternalSymbol>,
+    /// Public member API of plain-imported modules backed by a user/local stub,
+    /// keyed by local binding name (`X` for `import X`).
+    ///
+    /// Populated by the workspace import-resolution layer (Phase 1: user stubs
+    /// only). Consumed by `BSK-E0154` to flag access to attributes a stub does
+    /// not declare. Empty unless populated.
+    pub imported_modules: std::collections::HashMap<String, super::ImportedModuleApi>,
     /// AST-derived PEP 695 scoping facts used by `BSK-E0149`.
     ///
     /// Populated from `ruff_python_ast` nodes (never from raw line scanning) so

@@ -14,6 +14,7 @@ mod fixes;
 mod imports;
 pub mod mass_fix;
 pub(crate) mod refactor;
+mod stubs;
 mod suppress;
 
 /// Monotonic counter for unique temp-file names.
@@ -86,9 +87,24 @@ pub fn code_actions(
             }
         }
         if code == "BSK-E0152" {
-            if let Some(action) = extract_module_from_diagnostic(&diag.message)
-                .and_then(|module| make_uv_add_stubs_action(diag, &module))
-            {
+            if let Some(module) = extract_module_from_diagnostic(&diag.message) {
+                // Install a published typeshed stub when one exists...
+                let install = make_uv_add_stubs_action(diag, &module);
+                // ...and always offer a local stub: the only fix when typeshed
+                // has nothing, a valid fallback when it does. [STUBRES-CREATE-LOCAL]
+                let local_preferred = install.is_none();
+                if let Some(action) = install {
+                    actions.push(CodeActionOrCommand::CodeAction(action));
+                }
+                actions.push(CodeActionOrCommand::CodeAction(
+                    stubs::make_create_local_stub_action(diag, &module, local_preferred),
+                ));
+            }
+        }
+        if code == "BSK-E0154" {
+            // "Create method/attribute" quick fix — add the undeclared member
+            // to the local stub. [STUBRES-ADD-MEMBER]
+            if let Some(action) = stubs::make_add_member_action(diag, source) {
                 actions.push(CodeActionOrCommand::CodeAction(action));
             }
         }
@@ -461,6 +477,26 @@ mod tests {
         assert_eq!(args[0], serde_json::Value::String(expected_arg.to_owned()));
     }
 
+    /// Assert a create-local-stub action is present for `module`, dispatches the
+    /// `STUBS_CREATE_LOCAL` command with the module arg, and has the expected
+    /// `is_preferred` flag.
+    fn assert_create_local_stub_action(
+        actions: &[CodeActionOrCommand],
+        module: &str,
+        expected_preferred: bool,
+    ) {
+        let action = find_action_with_title(actions, "Create local type stub")
+            .expect("should offer a create-local-stub action");
+        let CodeActionOrCommand::CodeAction(ca) = action else {
+            panic!("Expected a CodeAction, got a Command");
+        };
+        let cmd = ca.command.as_ref().expect("should have command");
+        assert_eq!(cmd.command, basilisk_common::commands::STUBS_CREATE_LOCAL);
+        let args = cmd.arguments.as_ref().expect("should have arguments");
+        assert_eq!(args[0], serde_json::Value::String(module.to_owned()));
+        assert_eq!(ca.is_preferred, Some(expected_preferred));
+    }
+
     #[test]
     fn test_bsk_e0010_code_action_includes_uv_add() {
         let diag = make_diagnostic(
@@ -510,6 +546,9 @@ mod tests {
     /// quick-fix when no stub package is known for the module. `pydantic_ai`
     /// ships inline `py.typed` and has no typeshed stub — suggesting
     /// `pydantic_ai-stubs` (or any name) leads to a broken `uv add` that 404s.
+    ///
+    /// But the user must never be left with *no* fix ([STUBRES-CODEACTIONS]):
+    /// the create-local-stub action takes over as the preferred quick fix.
     #[test]
     fn test_bsk_e0152_action_suppressed_for_unknown_stub() {
         let diag = make_diagnostic(
@@ -525,6 +564,59 @@ mod tests {
         assert!(
             find_action_with_title(&actions, "Install type stubs").is_none(),
             "must not offer a stub-install quick-fix for a package with no known stub package"
+        );
+        assert_create_local_stub_action(&actions, "pydantic_ai", true);
+    }
+
+    /// Even when typeshed publishes stubs, the create-local action is offered as
+    /// a fallback alongside the install fix — so both paths are one click away.
+    #[test]
+    fn test_bsk_e0152_offers_local_stub_alongside_install_for_typeshed() {
+        let diag = make_diagnostic(
+            DiagnosticSeverity::ERROR,
+            "BSK-E0152",
+            "Package `requests` is installed but has no type stubs available",
+            range_at((0, 0), (0, 8)),
+        );
+        let uri = Url::parse("file:///test.py").unwrap();
+        let source = "import requests\n";
+        let range = range_at((0, 0), (0, 0));
+        let actions = super::code_actions(&uri, &[diag], source, &range, None);
+        assert!(
+            find_action_with_title(&actions, "Install type stubs").is_some(),
+            "typeshed-backed package must still offer the install quick-fix"
+        );
+        // Not preferred here — install is the highlighted default.
+        assert_create_local_stub_action(&actions, "requests", false);
+    }
+
+    /// BSK-E0154 offers a one-click "add member to stub" fix that dispatches the
+    /// `STUBS_ADD_MEMBER` command with the stub path and the inferred snippet.
+    #[test]
+    fn test_bsk_e0154_offers_add_member_action() {
+        let diag = make_diagnostic(
+            DiagnosticSeverity::ERROR,
+            "BSK-E0154",
+            "Module `cowsay` has no attribute `get_output_string`\n\nhelp: declare \
+             `get_output_string` in the local stub `/w/.basilisk/stubs/cowsay.pyi`, or fix the typo.",
+            range_at((1, 4), (1, 28)),
+        );
+        let uri = Url::parse("file:///test.py").unwrap();
+        let source = "import cowsay\nx = cowsay.get_output_string(\"c\", m)\n";
+        let range = range_at((0, 0), (0, 0));
+        let actions = super::code_actions(&uri, &[diag], source, &range, None);
+        let action = find_action_with_title(&actions, "Add method")
+            .expect("E0154 must offer an add-member action");
+        let CodeActionOrCommand::CodeAction(ca) = action else {
+            panic!("expected a CodeAction");
+        };
+        let cmd = ca.command.as_ref().expect("should have a command");
+        assert_eq!(cmd.command, basilisk_common::commands::STUBS_ADD_MEMBER);
+        let args = cmd.arguments.as_ref().unwrap();
+        assert_eq!(args[0].as_str().unwrap(), "/w/.basilisk/stubs/cowsay.pyi");
+        assert_eq!(
+            args[1].as_str().unwrap(),
+            "def get_output_string(arg0: Any, arg1: Any) -> Any: ..."
         );
     }
 

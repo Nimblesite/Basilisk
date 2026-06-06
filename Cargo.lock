@@ -322,6 +322,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sysinfo",
+ "tempfile",
  "tokio",
  "tokio-tungstenite",
  "tower-lsp",

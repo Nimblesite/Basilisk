@@ -22,7 +22,7 @@ pub use function_types::{
     FunctionInfo, ParameterInfo, ReturnAnnotationKind, ReturnStmtInfo, YieldExprInfo,
 };
 pub use import_types::{
-    ImportInfo, ImportKind, ImportResolution, PackageDepKind, UnresolvedReason,
+    ImportInfo, ImportKind, ImportResolution, ImportedModuleApi, PackageDepKind, UnresolvedReason,
 };
 pub use module_types::{
     AnnotatedTooFewArgs, AssertTypeCallInfo, CallSite, CompareOp, FloatParamIntAttrAccess,

@@ -182,22 +182,50 @@ With uv integration, BSK-E0010 becomes context-aware:
 ### 5.2 Missing Stub Suggestions (BSK-E0152) {#LSPUV-DIAGNOSTICS-MISSING-STUBS}
 
 Strict-by-default error when a package is installed but has no type information
-(opt down with `"BSK-E0152" = "warning"` to import untyped libraries at your own risk):
+(opt down with `"BSK-E0152" = "warning"` to import untyped libraries at your own risk).
+
+**When typeshed publishes a stub** (`requests` → `types-requests`):
 
 ```
-error[BSK-E0152]: Package "requests" has no type information
+error[BSK-E0152]: Package `requests` is installed but has no type stubs available
   --> src/app.py:3:1
    |
  3 | import requests
    | ^^^^^^^^^^^^^^^^ types will be inferred as Unknown
    |
-   = help: install type stubs: `uv add --dev types-requests`
+   = help: Type stubs available as `types-requests` — use quick fix to install
+   = note: Packages without type stubs or a PEP 561 `py.typed` marker provide no type information — https://peps.python.org/pep-0561/
 ```
 
-The stub suggestion is only emitted when:
+**When no published stub exists** (private/first-party package) — the help points
+at the local-stub route and links the official guide instead of a dead end:
+
+```
+error[BSK-E0152]: Package `acme_internal` is installed but has no type stubs available
+  --> src/app.py:3:1
+   |
+ 3 | import acme_internal
+   | ^^^^^^^^^^^^^^^^^^^^^ types will be inferred as Unknown
+   |
+   = help: No published type stubs for `acme_internal` — create a local stub (`acme_internal.pyi` in a `stub-paths` directory) or upstream a PEP 561 `py.typed` marker. Guide: https://typing.python.org/en/latest/guides/writing_stubs.html
+   = note: Packages without type stubs or a PEP 561 `py.typed` marker provide no type information — https://peps.python.org/pep-0561/
+```
+
+Per [STUBRES-CODEACTIONS](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CODEACTIONS) the
+help describes the fix; it never embeds a shell command — the code action does
+the work. The `help`/`note` lines are folded onto the LSP diagnostic message so
+editors (which have no `help`/`note` fields) still surface the guidance.
+
+The typeshed stub suggestion (and its `basilisk.uv.addDev` quick fix) is only
+emitted when:
 - The package IS in `uv.lock` (confirmed installed)
 - A matching stub package exists (`types-{name}` or `{name}-stubs`)
 - The stub package is NOT already in `uv.lock`
+
+The **create-local-stub** quick fix (`basilisk.stubs.createLocal`, see
+[STUBRES-CREATE-LOCAL](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CREATE-LOCAL)) is
+offered for **every** BSK-E0152 — it is the only fix when no typeshed stub
+exists, and a fallback when one does.
 
 ### 5.3 Dependency Hygiene Diagnostics {#LSPUV-DIAGNOSTICS-DEP-HYGIENE}
 
@@ -262,8 +290,12 @@ Each workspace member becomes an LSP workspace folder. The LSP server maintains 
 | Trigger | Code Action Title | Command |
 |---------|-------------------|---------|
 | BSK-E0010 (unresolved, package available) | "Add dependency: `requests`" | `basilisk.uv.add` |
-| BSK-E0152 (no stubs) | "Install type stubs: `types-requests`" | `basilisk.uv.addDev` |
+| BSK-E0152 (typeshed stub exists) | "Install type stubs for `requests` (uv add --dev)" | `basilisk.uv.addDev` |
+| BSK-E0152 (any — esp. no typeshed stub) | "Create local type stub for `acme_internal`" | `basilisk.stubs.createLocal` |
 | BSK-W0013 (stale lock) | "Sync environment" | `basilisk.uv.sync` |
+
+The `basilisk.stubs.createLocal` action writes a permissive `.pyi` skeleton (no
+`uv` subprocess) — see [STUBRES-CREATE-LOCAL](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CREATE-LOCAL).
 
 ### 7.2 Execution {#LSPUV-ACTIONS-EXECUTION}
 

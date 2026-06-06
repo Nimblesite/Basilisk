@@ -18,6 +18,7 @@ pub(super) mod memory_handlers;
 pub(super) mod profiler_handlers;
 pub(super) mod refactor_commands;
 pub(super) mod rule_override;
+pub(super) mod stub_handlers;
 pub(super) mod test_handlers;
 pub(super) mod uv_handlers;
 
