@@ -22,6 +22,7 @@ import { registerPythonProcesses } from "./process-explorer";
 import { createStore, type Store } from "./store";
 import { registerProfiler, disposeProfiler } from "./profiler";
 import { registerMemoryProfiler, disposeMemoryProfiler } from "./memory-profiler";
+import { isProfilingUiEnabled } from "./profiling-ui";
 import { reportRuntimeFailure, resolveBasiliskRuntime } from "./shipwright-runtime";
 
 /** Priority for the Basilisk status bar item (higher = further left). */
@@ -161,6 +162,14 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
   // Set context key so panel visibility conditions work.
   const hasWorkspace = (vscode.workspace.workspaceFolders?.length ?? 0) > 0;
   void vscode.commands.executeCommand("setContext", "basilisk.hasWorkspace", hasWorkspace);
+
+  // [PROFILE-UI-GATE] Single switch for every profiling `when` clause: on under
+  // test, hidden for shipped users until the profiler experience is reliable.
+  void vscode.commands.executeCommand(
+    "setContext",
+    "basilisk.profilingEnabled",
+    isProfilingUiEnabled(context),
+  );
 
   // Activity bar panels — register once (tree view IDs must be unique).
   const moduleResult = registerModuleExplorer(context, s);
