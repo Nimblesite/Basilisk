@@ -885,6 +885,102 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    // ── Issue #80: vendored / bundled third-party code must not be scanned ───
+    //
+    // The extension vendors third-party Python under `vscode-extension/bundled/`
+    // (debugpy and its nested `_vendored/` tree). Without a default exclude for
+    // `bundled`/`_vendored`, the workspace scan type-checks code we ship verbatim
+    // and never edit, flooding ~34k irrelevant diagnostics and burying the user's
+    // real errors. The scan must skip these directories by default.
+    #[test]
+    fn test_scan_excludes_bundled_and_vendored_dirs() {
+        let dir = unique_tmp("bsk_scan_bundled");
+        let bundled = dir.join("vscode-extension").join("bundled").join("debugpy");
+        let vendored = dir.join("pkg").join("_vendored").join("pydevd");
+        std::fs::create_dir_all(&bundled).unwrap();
+        std::fs::create_dir_all(&vendored).unwrap();
+
+        // A real source file that SHOULD be scanned.
+        std::fs::write(dir.join("main.py"), "x: int = 1\n").unwrap();
+        // Vendored files that SHOULD be skipped.
+        std::fs::write(bundled.join("peb_teb.py"), "def f(x):\n    return x\n").unwrap();
+        std::fs::write(vendored.join("pydevd.py"), "def g(y):\n    return y\n").unwrap();
+
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        let (results, file_count, _) = idx.scan();
+
+        assert_eq!(
+            file_count, 1,
+            "only main.py should be scanned; bundled/_vendored must be excluded"
+        );
+        let scanned: Vec<String> = results.iter().map(|(uri, _)| uri.to_string()).collect();
+        assert!(
+            !scanned.iter().any(|u| u.contains("/bundled/")),
+            "bundled debugpy code must not be scanned: {scanned:?}"
+        );
+        assert!(
+            !scanned.iter().any(|u| u.contains("/_vendored/")),
+            "_vendored code must not be scanned: {scanned:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Issue #80: user-facing `exclude` must accept glob patterns ───────────
+    //
+    // The workspace `exclude` config is the user's knob for extending the
+    // default ignore set. It must support gitignore-style globs applied to both
+    // nested directories (`**/generated/**`) and individual files (`*.pb.py`),
+    // not just literal path prefixes.
+    #[test]
+    fn test_scan_user_exclude_supports_glob_patterns() {
+        let dir = unique_tmp("bsk_scan_glob_exclude");
+        let gen = dir.join("src").join("generated");
+        std::fs::create_dir_all(&gen).unwrap();
+        std::fs::write(dir.join("app.py"), "x: int = 1\n").unwrap();
+        // Excluded by `**/generated/**` (nested directory, any depth).
+        std::fs::write(gen.join("models.py"), "y: int = 2\n").unwrap();
+        // Excluded by `*.pb.py` (file glob, any depth).
+        std::fs::write(dir.join("schema.pb.py"), "z: int = 3\n").unwrap();
+        // The user-facing exclude knob, read by the scan via load_config.
+        std::fs::write(
+            dir.join("basilisk.json"),
+            r#"{"exclude": ["**/generated/**", "*.pb.py"]}"#,
+        )
+        .unwrap();
+
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        let (results, file_count, _) = idx.scan();
+        let scanned: Vec<String> = results.iter().map(|(uri, _)| uri.to_string()).collect();
+
+        assert_eq!(
+            file_count, 1,
+            "only app.py should survive the glob excludes: {scanned:?}"
+        );
+        assert!(
+            scanned.iter().any(|u| u.ends_with("/app.py")),
+            "app.py must still be scanned: {scanned:?}"
+        );
+        assert!(
+            !scanned.iter().any(|u| u.contains("generated")),
+            "**/generated/** must exclude the nested directory: {scanned:?}"
+        );
+        assert!(
+            !scanned.iter().any(|u| u.contains("schema.pb.py")),
+            "*.pb.py glob must exclude the file: {scanned:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn test_scan_skips_open_files() {
         let dir = unique_tmp("bsk_scan_skip_open");

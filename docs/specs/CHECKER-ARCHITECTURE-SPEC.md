@@ -1111,6 +1111,25 @@ disabled = ["BSK-E0011"]
 rules."BSK-E0010" = "warning"
 ```
 
+### Exclude Semantics {#CHKARCH-CONFIG-EXCLUDE}
+
+`exclude` (and the `per-path-overrides` keys) use **gitignore-style globs**,
+matched against the path relative to the workspace root:
+
+- a bare name with no `/` matches that segment at **any** depth — `build`
+  excludes every `build` directory in the tree, `*.pb.py` every generated file;
+- `**` matches zero or more directory segments, so `**/bundled/**` matches a
+  `bundled` directory anywhere; `*` / `?` match within a single segment only;
+- an anchored pattern (one containing `/`) matches the full path or any of its
+  ancestor directories, so a directory pattern (`vendor/**`, `src/generated`)
+  also excludes everything beneath it.
+
+A baseline set of vendored / cache directories is **always** excluded (e.g.
+`node_modules`, `site-packages`, `.venv`, `__pycache__`, `build`, `dist`, and
+the extension's vendored `bundled` / `_vendored` trees); user `exclude` entries
+extend this set. Hidden directories (names starting with `.`) are always
+skipped. The single canonical matcher is `basilisk_config::path_matches_pattern`.
+
 ### Migration from Existing Tools {#CHKARCH-CONFIG-MIGRATION}
 
 ```bash
