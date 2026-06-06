@@ -399,6 +399,69 @@ jobs:
           fi
           echo "Published $published VSIX(es) to the Marketplace"
 
+  publish-vsix-ovsx:
+    name: Publish VSIX (Open VSX)
+    needs: vsix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Independent of publish-vsix: the Open VSX push (which serves the VS Code
+    # forks — Cursor, Windsurf, Antigravity) must not be gated on the MS
+    # Marketplace publish, and vice versa.
+    if: success() && startsWith(github.ref, 'refs/tags/')
+    # Least privilege: this job only downloads same-run artifacts and pushes to
+    # an external registry. Drop the inherited `contents: write` to read-only;
+    # `actions: read` is all download-artifact@v4 needs for same-run artifacts.
+    # Open VSX has no OIDC/trusted-publishing path, so no `id-token` is granted.
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: Publish to Open VSX Registry
+        shell: bash
+        # The token is exposed only as an env var, never on the command line:
+        # ovsx reads OVSX_PAT automatically when -p is omitted, keeping the
+        # secret out of the process argv (where `ps` or a leaked dump could
+        # read it). GitHub masks it in logs; this closes the argv vector too.
+        env:
+          OVSX_PAT: ${{ secrets.OPEN_VSX_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OVSX_PAT:-}" ]; then
+            echo "::error::OPEN_VSX_PAT not accessible. The Nimblesite org secret exists; add Basilisk to its allowed repositories under Org Settings → Secrets and variables → Actions → OPEN_VSX_PAT → Repository access."
+            exit 1
+          fi
+          # Mirrors the Marketplace prerelease rule: a hyphenated SemVer tag
+          # (v0.1.0-alpha, v0.1.0-rc.1, …) is a prerelease. ovsx, like vsce,
+          # only accepts --pre-release on a VSIX that was packaged as such —
+          # the `vsix` job already bakes that in, so the flags stay aligned.
+          flag=""
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            flag="--pre-release"
+            echo "Detected prerelease tag ${GITHUB_REF_NAME}; publishing with --pre-release"
+          else
+            echo "Detected stable tag ${GITHUB_REF_NAME}; publishing to stable channel"
+          fi
+          # One publish per platform-specific VSIX. The target is baked into
+          # each VSIX, so no --target flag is needed, but each must be pushed
+          # separately — a single glob would publish only the first.
+          # ovsx is version-pinned: a floating `npx ovsx` would fetch and run
+          # the latest release at publish time, inside the job that holds the
+          # token — a supply-chain risk. Bump deliberately.
+          shopt -s globstar nullglob
+          published=0
+          for vsix in **/*.vsix; do
+            echo "Publishing $vsix"
+            npx --yes ovsx@1.0.0 publish $flag --packagePath "$vsix"
+            published=$((published + 1))
+          done
+          if [ "$published" -eq 0 ]; then
+            echo "::error::No VSIX artifacts found to publish"
+            exit 1
+          fi
+          echo "Published $published VSIX(es) to Open VSX"
+
   deploy-pages:
     name: Deploy GitHub Pages
     needs: release-assets
