@@ -15,6 +15,7 @@
 import * as vscode from "vscode";
 import { Logger } from "./logger";
 import type { Store } from "./store";
+import { isProfilingUiEnabled } from "./profiling-ui";
 import { currentStoppedFrameId, evaluateInDebugSession } from "./dap-evaluate";
 import {
   disposeMemoryDashboard,
@@ -66,6 +67,8 @@ let memoryStatusBarItem: vscode.StatusBarItem | undefined;
 let activeMemorySessionId: string | undefined;
 /** Most recent snapshot, so a later "Compare" can show it alongside the diff. */
 let lastDashboardSnapshot: MemoryDashboardSnapshot | undefined;
+/** [PROFILE-UI-GATE] Whether the (imperative) memory indicator may be shown. */
+let memoryUiEnabled = false;
 
 // ── Registration ──────────────────────────────────────────────────────────
 
@@ -113,6 +116,10 @@ export function registerMemoryProfiler(
     vscode.debug.onDidTerminateDebugSession(() => { refreshMemoryStatusBar(); }),
   ];
 
+  // [PROFILE-UI-GATE] The memory indicator is the one profiling surface no `when`
+  // clause can reach, so it shares the single switch in code: shown under test,
+  // hidden for shipped users (see refreshMemoryStatusBar).
+  memoryUiEnabled = isProfilingUiEnabled(context);
   refreshMemoryStatusBar();
   return disposables;
 }
@@ -392,6 +399,8 @@ async function handleMemoryReferences(store: Store): Promise<void> {
  */
 function refreshMemoryStatusBar(): void {
   if (memoryStatusBarItem === undefined) { return; }
+  // [PROFILE-UI-GATE] Same switch as the declarative surfaces, applied in code.
+  if (!memoryUiEnabled) { memoryStatusBarItem.hide(); return; }
 
   const debugging = vscode.debug.activeDebugSession?.type === "basilisk-debug";
   const tracking = activeMemorySessionId !== undefined;
