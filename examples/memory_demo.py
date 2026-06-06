@@ -65,8 +65,7 @@ def main() -> None:
         spike = transient_spike()
         make_cycle(f"round{round_number}")
         print(
-            f"round {round_number}: "
-            f"{retained} leaked chunks, {spike} transient bytes"
+            f"round {round_number}: {retained} leaked chunks, {spike} transient bytes"
         )
 
     # Force a collection so the cycle's __del__ output appears at the end.
