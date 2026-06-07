@@ -48,7 +48,7 @@ test: _audit
 	echo -e '\n\033[0;32m✓ All tests passed.\033[0m'
 
 ## lint: Run all linters/analyzers (read-only). Does NOT format.
-lint: _lint_rust _lint_vsix
+lint: _lint_rust _lint_vsix _lint_deslop
 
 ## fmt: Format all code in-place
 fmt: _fmt_rust _fmt_python _fmt_vsix
@@ -284,6 +284,14 @@ _lint_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Linting VS Code extension\033[0m' && \
 	cd $(_EXTENSION_DIR) && npm ci --silent && npm run lint && \
 	echo -e '\033[0;32m✓ VS Code lint passed\033[0m'
+
+# Deslop duplication gate ([CI-DESLOP]). Reads the committed .deslop.toml budget
+# and exits non-zero when repo-wide duplication exceeds the ceiling. Requires the
+# `deslop` CLI on PATH (scripts/install-deslop.sh; checked by scripts/audit.sh).
+_lint_deslop:
+	@echo -e '\033[1m\033[0;36m▶ Deslop duplication gate\033[0m' && \
+	deslop . && \
+	echo -e '\033[0;32m✓ Deslop duplication gate passed\033[0m'
 
 _fmt_rust:
 	@echo -e '\033[1m\033[0;36m▶ Formatting Rust\033[0m' && \

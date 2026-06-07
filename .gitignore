@@ -92,6 +92,14 @@ mutants.out.old/
 mutants.out.backup-*/
 
 # =============================================================================
+# Deslop duplication gate (report + log artifacts written into the repo root)
+# =============================================================================
+deslop-report.json
+deslop-report.txt
+deslop-report.html
+deslop-*.log
+
+# =============================================================================
 # Benchmarks
 # =============================================================================
 benchmarks/results/

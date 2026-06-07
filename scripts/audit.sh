@@ -30,6 +30,7 @@ require_cmd npm            "Bundled with Node.js"
 require_cmd python3        "Install Python 3.12: https://python.org"
 require_cmd ruff           "Install: pip install ruff"
 require_cmd nvim           "Install Neovim 0.10+: https://neovim.io"
+require_cmd deslop         "Install: scripts/install-deslop.sh"
 require_py  debugpy        "Install: pip install debugpy"
 
 if [[ "$MISSING" -ne 0 ]]; then

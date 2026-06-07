@@ -49,19 +49,19 @@ jobs:
           cargo fmt --all -- --check
           ruff format --check --exclude '*/fixtures/*' .
 
-      - name: Lint (clippy + eslint)
-        run: make lint
+      # Install the deslop duplication-gate CLI BEFORE `make lint` runs it
+      # ([CI-DESLOP]). The pinned version + platform asset mapping live in
+      # scripts/install-deslop.sh (single source of truth, shared with
+      # scripts/setup.sh); it verifies the SHA-256 and appends the install dir
+      # to $GITHUB_PATH so the next step sees the binary.
+      - name: Install deslop
+        run: scripts/install-deslop.sh "$HOME/.local/bin"
 
-      # Deslop duplication gate ([CI-DESLOP]). The threshold lives in committed
-      # .deslop.toml — ratcheted DOWN only, never up. `deslop .` reads it and
-      # exits 3 (tanks the build) when repo-wide duplication exceeds it.
-      - name: Deslop duplication gate
-        env:
-          DESLOP_VERSION: "0.5.1" # pin — see https://github.com/Nimblesite/Deslop/releases
-        run: |
-          curl -sSfL "https://github.com/Nimblesite/Deslop/releases/download/v${DESLOP_VERSION}/deslop-${DESLOP_VERSION}-linux-x64.tar.gz" | tar -xz
-          echo "$PWD/deslop-${DESLOP_VERSION}-linux-x64" >> "$GITHUB_PATH"
-          deslop .
+      # `make lint` runs clippy, eslint, AND the deslop duplication gate. The
+      # threshold lives in committed .deslop.toml — ratcheted DOWN only, never
+      # up — and deslop exits non-zero when repo-wide duplication exceeds it.
+      - name: Lint (clippy + eslint + deslop)
+        run: make lint
 
   # ── Zed Extension (runs in parallel) ───────────────────────────────────────
   zed:

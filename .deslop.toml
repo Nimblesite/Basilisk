@@ -2,8 +2,9 @@
 # Deslop duplication gate — REPO-STANDARDS-SPEC [CI-DESLOP]
 # Single source of truth for this repo's duplication budget. Committed, PR-reviewed,
 # ratcheted DOWN only (never up without written justification).
-# CI runs `deslop .`, which reads this file and exits 3 (tanking the build) when
-# measured repo-wide duplication exceeds the value below.
+# `make lint` (and therefore `make ci` and CI) runs `deslop .`, which reads this
+# file and exits non-zero (tanking the build) when measured repo-wide duplication
+# exceeds the value below.
 # Docs: https://deslop.live/docs/for-ai/
 [threshold]
 # Measured repo-wide duplication at stamp time: 22.71%. Ceiling set just above to
