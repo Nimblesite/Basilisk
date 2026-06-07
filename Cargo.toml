@@ -41,13 +41,13 @@ tracing            = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # CLI and utilities
-clap      = { version = "4.5", features = ["derive"] }
+clap      = { version = "4.6", features = ["derive"] }
 thiserror = "2.0"
 walkdir   = "2.5"
 serde     = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml      = "0.8"
-phf       = "0.11"
+toml      = "1.1"
+phf       = "0.13"
 colored   = "3.0"
 
 # Workspace crates
