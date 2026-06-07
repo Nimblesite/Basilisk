@@ -1128,7 +1128,10 @@ A baseline set of vendored / cache directories is **always** excluded (e.g.
 `node_modules`, `site-packages`, `.venv`, `__pycache__`, `build`, `dist`, and
 the extension's vendored `bundled` / `_vendored` trees); user `exclude` entries
 extend this set. Hidden directories (names starting with `.`) are always
-skipped. The single canonical matcher is `basilisk_config::path_matches_pattern`.
+skipped. The single canonical matcher is `basilisk_config::path_matches_pattern`,
+shared by both file-collection entry points — the LSP workspace scan
+(`workspace_scan::is_excluded`) and the `basilisk check`/`fix`/`adopt` CLI walk
+(`is_excluded_path`) — so the editor and CLI exclude exactly the same files.
 
 ### Migration from Existing Tools {#CHKARCH-CONFIG-MIGRATION}
 

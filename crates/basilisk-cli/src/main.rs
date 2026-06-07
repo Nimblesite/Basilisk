@@ -647,6 +647,23 @@ pub(crate) fn pluralise(count: usize) -> &'static str {
     }
 }
 
+/// Whether `path` is excluded by any configured pattern, matched
+/// gitignore-style against the path relative to the walk `root`.
+///
+/// Implements [CHKARCH-CONFIG-EXCLUDE]. See
+/// docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-EXCLUDE
+///
+/// Uses the same [`basilisk_config::path_matches_pattern`] matcher as the LSP
+/// workspace scan, so `basilisk check` and the editor agree on what is skipped:
+/// bare names (`build`) at any depth, directory globs (`**/generated/**`),
+/// and file globs (`*.pb.py`) all work — not just literal directory names.
+fn is_excluded_path(path: &std::path::Path, root: &std::path::Path, excluded: &HashSet<&str>) -> bool {
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    excluded
+        .iter()
+        .any(|pattern| basilisk_config::path_matches_pattern(relative, pattern))
+}
+
 pub(crate) fn collect_python_files(
     paths: &[String],
     excluded: &HashSet<&str>,
@@ -673,6 +690,7 @@ pub(crate) fn collect_python_files(
                 files.push(root.clone());
             }
         } else {
+            let root_path = std::path::Path::new(root);
             for entry in walkdir::WalkDir::new(root)
                 .follow_links(false)
                 .into_iter()
@@ -690,7 +708,7 @@ pub(crate) fn collect_python_files(
                     if name.starts_with('.') {
                         return false;
                     }
-                    !excluded.contains(name.as_ref())
+                    !is_excluded_path(e.path(), root_path, excluded)
                 })
                 .filter_map(Result::ok)
                 .filter(|e| e.file_type().is_file())
@@ -699,6 +717,9 @@ pub(crate) fn collect_python_files(
                         .extension()
                         .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
                 })
+                // File-level globs (e.g. `*.pb.py`, `**/conftest.py`) are honoured
+                // here; directory globs are already pruned above before recursing.
+                .filter(|e| !is_excluded_path(e.path(), root_path, excluded))
             {
                 files.push(entry.path().to_string_lossy().into_owned());
             }
@@ -1104,6 +1125,53 @@ mod tests {
             files.len(),
             1,
             "vendor should be excluded, only app.py found"
+        );
+        Ok(())
+    }
+
+    /// Regression: the `basilisk check` CLI ignored user **glob** excludes.
+    /// `collect_python_files` matched only bare directory names against the
+    /// exclude set (and never applied any exclude to individual files), so a
+    /// project configuring `exclude = ["**/generated/**", "*.pb.py"]` still had
+    /// its generated tree and `*.pb.py` files type-checked — diverging from the
+    /// LSP workspace scan, which honours the same gitignore-style globs via
+    /// `basilisk_config::path_matches_pattern`. The CLI must agree with the LSP.
+    #[test]
+    fn collect_python_files_honors_user_glob_excludes(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let base = std::env::temp_dir().join(format!(
+            "basilisk_test_cli_glob_exclude_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        let gen = base.join("src").join("generated");
+        std::fs::create_dir_all(&gen)?;
+        std::fs::write(base.join("app.py"), b"x = 1")?; // real code — must survive
+        std::fs::write(gen.join("models.py"), b"y = 2")?; // excluded by **/generated/**
+        std::fs::write(base.join("schema.pb.py"), b"z = 3")?; // excluded by *.pb.py
+
+        let excludes: HashSet<&str> = ["**/generated/**", "*.pb.py"].into_iter().collect();
+        let path = base.to_string_lossy().into_owned();
+        let files = collect_python_files(&[path], &excludes)?;
+        let _ = std::fs::remove_dir_all(&base);
+
+        let names: Vec<String> = files.iter().map(|f| f.replace('\\', "/")).collect();
+        assert_eq!(
+            files.len(),
+            1,
+            "only app.py should survive the glob excludes, got: {names:?}"
+        );
+        assert!(
+            names.iter().any(|f| f.ends_with("/app.py")),
+            "app.py must still be collected: {names:?}"
+        );
+        assert!(
+            !names.iter().any(|f| f.contains("generated")),
+            "**/generated/** must exclude the nested directory: {names:?}"
+        );
+        assert!(
+            !names.iter().any(|f| f.contains("schema.pb.py")),
+            "*.pb.py glob must exclude the file: {names:?}"
         );
         Ok(())
     }
