@@ -295,10 +295,42 @@ async function executeCommandMiddleware(
 
   const result: unknown = await next(command, args);
 
+  // Only show an optimistic success toast when the LSP reports the command
+  // actually succeeded. A failed uv command (e.g. `uv add _pydevd_bundle`)
+  // already surfaces its own error toast from the server; showing "Added X"
+  // as well would contradict it and lie about the outcome.
+  // Implements [LSPUV-ACTIONS-EXECUTION]. See issue #84.
+  if (uvCommandSucceeded(result)) {
+    showUvSuccessToast(command, args, pkgCmd !== undefined);
+  }
+
+  return result;
+}
+
+/**
+ * True when an LSP `basilisk.uv.*` result reports success.
+ *
+ * Every uv command handler returns `{ success, stdout, stderr }`; failures and
+ * "no pyproject.toml" no-ops set `success: false`. Treat anything that isn't an
+ * explicit `success: true` as a non-success so we never show a misleading
+ * success toast over the server's error toast (issue #84).
+ */
+function uvCommandSucceeded(result: unknown): boolean {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as { success?: unknown }).success === true
+  );
+}
+
+/** Show the post-execution success toast for a uv command, if it warrants one. */
+function showUvSuccessToast(command: string, args: unknown[], isPackageCmd: boolean): void {
   const staticToast = TOAST_MESSAGES[command];
   if (staticToast !== undefined) {
     vscode.window.showInformationMessage(staticToast);
-  } else if (pkgCmd !== undefined && args.length > 0) {
+    return;
+  }
+  if (isPackageCmd && args.length > 0) {
     // A code action passes the package as a bare string (e.g. ["types-six"]);
     // the command-palette prompt path passes [{ package: "..." }]. Accept both.
     const arg = args[0];
@@ -309,8 +341,6 @@ async function executeCommandMiddleware(
       command === "basilisk.uv.addDev" ? "Added dev dependency" : "Added";
     vscode.window.showInformationMessage(`Basilisk: ${verb} ${pkg}.`);
   }
-
-  return result;
 }
 
 /**

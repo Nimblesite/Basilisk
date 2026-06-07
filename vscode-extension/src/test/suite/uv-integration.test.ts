@@ -29,6 +29,24 @@ async function captureInfoToasts(body: () => Promise<unknown>): Promise<string[]
     return messages;
 }
 
+/**
+ * Drive a server command through `createServerCommandHandler` with a fake LSP
+ * client that returns `result`, capturing the info toasts it produces. Lets a
+ * test assert on the toast behaviour for a given LSP outcome without a live
+ * server.
+ */
+async function uvToastsForResult(
+    result: unknown,
+    command: string,
+    arg: unknown
+): Promise<string[]> {
+    const fakeClient = {
+        sendRequest: async () => result,
+    } as unknown as Parameters<typeof createServerCommandHandler>[0];
+    const handler = createServerCommandHandler(fakeClient, command);
+    return captureInfoToasts(async () => handler(arg));
+}
+
 suite('Basilisk uv Integration Tests', () => {
     let tmpDir: string;
 
@@ -157,13 +175,8 @@ suite('Basilisk uv Integration Tests', () => {
     // object. The success toast must read the package name from either shape;
     // previously it only handled the object form and showed "undefined".
     test('uv.addDev success toast names the package from a bare-string arg', async () => {
-        const fakeClient = {
-            sendRequest: async () => ({ success: true }),
-        } as unknown as Parameters<typeof createServerCommandHandler>[0];
-        const handler = createServerCommandHandler(fakeClient, 'basilisk.uv.addDev');
-
         // A code action sends the package as a bare string, not { package }.
-        const messages = await captureInfoToasts(async () => handler('types-six'));
+        const messages = await uvToastsForResult({ success: true }, 'basilisk.uv.addDev', 'types-six');
 
         assert.ok(
             messages.some((m) => m.includes('types-six')),
@@ -172,6 +185,25 @@ suite('Basilisk uv Integration Tests', () => {
         assert.ok(
             !messages.some((m) => m.includes('undefined')),
             `toast must not say "undefined"; got: ${JSON.stringify(messages)}`
+        );
+    });
+
+    // Regression for issue #84: the optimistic "Added X" success toast fired
+    // unconditionally, never inspecting the LSP result. When `uv add` failed
+    // (e.g. on a non-package internal module like `_pydevd_bundle`), the UI
+    // showed BOTH the green "Added X" toast and the LSP's own error toast for
+    // the same operation. The success toast must be gated on result.success.
+    test('uv.add success toast is suppressed when the command fails', async () => {
+        const failure = {
+            success: false,
+            stdout: '',
+            stderr: 'error: Failed to parse: `_pydevd_bundle`',
+        };
+        const messages = await uvToastsForResult(failure, 'basilisk.uv.add', '_pydevd_bundle');
+
+        assert.ok(
+            !messages.some((m) => m.includes('Added')),
+            `must not show a success toast when uv add failed; got: ${JSON.stringify(messages)}`
         );
     });
 

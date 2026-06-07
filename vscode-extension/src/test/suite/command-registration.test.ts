@@ -103,6 +103,8 @@ const SERVER_COMMANDS = [
     'basilisk.uv.lock',
     'basilisk.uv.createEnv',
     'basilisk.moveSymbol',
+    'basilisk.stubs.createLocal',
+    'basilisk.stubs.addMember',
     'basilisk.discoverTests',
     'basilisk.runTests',
     'basilisk.runTestFile',

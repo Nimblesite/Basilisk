@@ -72,15 +72,39 @@ Additional directories to search for `.pyi` stub files. Searched in order before
 **Default:** `["."]` (current directory)
 **Example:** `["src/", "tests/"]`
 
-Directories or files to analyze. Accepts paths and glob patterns. Only `.py` files are processed.
+Directories or files to analyze. Plain paths relative to the project root — unlike `exclude`, `include` does **not** accept glob patterns. Only `.py` files are processed.
 
 ### `exclude`
 
 **Type:** `string[]`
-**Default:** `["**/node_modules/**", "**/__pycache__/**"]`
-**Example:** `["**/migrations/**", "**/generated/**"]`
+**Default:**
 
-Glob patterns to exclude from analysis. Applied after `include`. Use `**` for recursive matching.
+```toml
+exclude = [
+    "__pycache__", "node_modules", "venv", ".venv", "env", ".env",
+    ".tox", ".mypy_cache", ".ruff_cache", ".pytest_cache",
+    "site-packages", "__pypackages__", "build", "dist", ".eggs",
+    "bundled", "_vendored",
+]
+```
+
+**Example:** `["py-gen", "**/generated/**", "*.pb.py"]`
+
+Gitignore-style glob patterns for paths to skip. Hidden directories (names starting with `.`) are always skipped regardless of this setting.
+
+> **`exclude` _replaces_ the defaults — it does not extend them.** As soon as you set `exclude`, the built-in list above no longer applies. Re-list any defaults you still want alongside your own patterns, or they'll be analyzed again.
+
+Pattern syntax, matched against each path relative to the project root:
+
+| Pattern | Matches |
+| --- | --- |
+| `build` | a **bare name** — that directory or file segment at **any** depth |
+| `**/generated/**` | `**` — zero or more directory segments (a `generated` dir anywhere) |
+| `*.pb.py` | `*` — any run of characters within a single segment (a file glob) |
+| `gen?.py` | `?` — exactly one character within a segment |
+| `src/generated` | an **anchored** pattern (contains `/`) — the path or any ancestor dir, plus its subtree |
+
+The same patterns are honoured everywhere Basilisk discovers files: the LSP workspace scan, the `basilisk check` / `fix` / `adopt` CLI, and the editor's per-file checks when you open or edit a file — so a file excluded on the CLI is also silent in the editor. See `CHKARCH-CONFIG-EXCLUDE` in the architecture spec for the canonical semantics.
 
 ---
 

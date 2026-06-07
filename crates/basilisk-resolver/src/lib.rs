@@ -24,7 +24,7 @@ pub use scope::{
     EnumValueTypeViolationInfo, EnumValueTypeViolationKind, FinalViolationInfo, FinalViolationKind,
     FloatParamIntAttrAccess, FunctionInfo, GenericDefKind, GenericParamInfo,
     HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo, ImportKind,
-    ImportResolution, InvalidStringAnnotation, InvalidStringAnnotationKind,
+    ImportResolution, ImportedModuleApi, InvalidStringAnnotation, InvalidStringAnnotationKind,
     LiteralAugmentedAssignViolation, LiteralStringEnumMismatch, LocalClassVarViolation,
     MatchCaseNarrowing, MatchStmtInfo, ModuleAttrAccessInfo, ModuleAttrAssignment,
     ModuleBareAssignment, ModuleOrderComparisonInfo, Named, NamedTupleDefInfo, NarrowingGuard,

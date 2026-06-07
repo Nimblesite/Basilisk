@@ -39,17 +39,26 @@ pub fn collect_python_files(
         } else if path
             .extension()
             .is_some_and(|ext| ext == "py" || ext == "pyi")
+            && !is_excluded(&path, exclude, workspace_root)
         {
+            // File-level globs (e.g. `*.pb.py`, `**/conftest.py`) are honoured
+            // here; directory globs are already pruned above before recursing.
             out.push(path);
         }
     }
 }
 
-/// Check if a path matches any configured exclude patterns.
+/// Check if a path matches any configured exclude pattern.
+///
+/// Patterns are matched against the path relative to the workspace root using
+/// gitignore-style globs (see [`basilisk_config::path_matches_pattern`]), so
+/// `**/bundled/**`, `vendor/**`, `build`, and `*.pb.py` all work as expected.
 #[must_use]
 pub fn is_excluded(path: &Path, exclude: &[PathBuf], workspace_root: &Path) -> bool {
     let relative = path.strip_prefix(workspace_root).unwrap_or(path);
-    exclude.iter().any(|exc| relative.starts_with(exc))
+    exclude
+        .iter()
+        .any(|pattern| basilisk_config::path_matches_pattern(relative, &pattern.to_string_lossy()))
 }
 
 /// Deduplicate a list of Python files by stem, preferring `.pyi` over `.py`.

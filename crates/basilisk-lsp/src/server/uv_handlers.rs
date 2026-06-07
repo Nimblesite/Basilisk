@@ -118,10 +118,12 @@ fn uv_result_to_json(result: &crate::uv_commands::UvCommandResult) -> serde_json
     })
 }
 
-/// Extract a package name string from the first command argument.
+/// Extract a package/module name string from the first command argument.
 ///
 /// Accepts either a bare string `"requests"` or an object `{"package": "requests"}`.
-fn extract_package_arg(args: &[serde_json::Value]) -> Option<String> {
+/// Shared with [`super::stub_handlers`] so both `uv.*` and `stubs.*` commands
+/// parse their single string argument identically.
+pub(super) fn extract_package_arg(args: &[serde_json::Value]) -> Option<String> {
     args.first().and_then(|v| {
         v.as_str()
             .map(String::from)
