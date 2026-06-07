@@ -190,3 +190,77 @@ pub struct Diagnostic {
     /// diagnostics are downgraded to Info) and hover annotations.
     pub provenance: Option<TypeProvenance>,
 }
+
+impl Diagnostic {
+    /// Render the `help`/`note` lines as a plain-text suffix to append to a
+    /// primary message.
+    ///
+    /// The terminal renderer prints `help`/`note` as their own coloured lines,
+    /// but the LSP `Diagnostic` has no equivalent fields — so editors would
+    /// otherwise drop this guidance entirely. Folding it onto the message keeps
+    /// the explanation (and any documentation links it carries) visible in the
+    /// hover and Problems panel. Returns an empty string when neither is present
+    /// so callers that concatenate leave a help/note-free message untouched.
+    #[must_use]
+    pub fn help_note_suffix(&self) -> String {
+        let mut suffix = String::new();
+        if let Some(help) = &self.help {
+            suffix.push_str("\n\nhelp: ");
+            suffix.push_str(help);
+        }
+        if let Some(note) = &self.note {
+            suffix.push_str(if suffix.is_empty() {
+                "\n\nnote: "
+            } else {
+                "\nnote: "
+            });
+            suffix.push_str(note);
+        }
+        suffix
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Diagnostic, ErrorCode, Severity};
+    use basilisk_resolver::Span;
+
+    fn diag(help: Option<&str>, note: Option<&str>) -> Diagnostic {
+        Diagnostic {
+            code: ErrorCode {
+                code: "BSK-E0000",
+                docs_url: "https://www.basilisk-python.dev",
+            },
+            severity: Severity::Error,
+            message: "msg".to_owned(),
+            span: Span::new(0, 1),
+            path: "t.py".to_owned(),
+            help: help.map(str::to_owned),
+            note: note.map(str::to_owned),
+            provenance: None,
+        }
+    }
+
+    #[test]
+    fn suffix_empty_when_neither_present() {
+        assert_eq!(diag(None, None).help_note_suffix(), "");
+    }
+
+    #[test]
+    fn suffix_help_only() {
+        assert_eq!(diag(Some("H"), None).help_note_suffix(), "\n\nhelp: H");
+    }
+
+    #[test]
+    fn suffix_note_only_starts_with_blank_line() {
+        assert_eq!(diag(None, Some("N")).help_note_suffix(), "\n\nnote: N");
+    }
+
+    #[test]
+    fn suffix_help_and_note_share_one_blank_line() {
+        assert_eq!(
+            diag(Some("H"), Some("N")).help_note_suffix(),
+            "\n\nhelp: H\nnote: N"
+        );
+    }
+}

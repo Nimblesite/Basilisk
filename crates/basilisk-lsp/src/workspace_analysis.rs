@@ -86,13 +86,16 @@ pub fn bsk_to_lsp(
         basilisk_checker::Severity::Warning => DiagnosticSeverity::WARNING,
         basilisk_checker::Severity::Info => DiagnosticSeverity::INFORMATION,
     };
+    // The LSP `Diagnostic` has no `help`/`note` fields, so fold them onto the
+    // message — otherwise the editor drops the guidance (and its doc links).
+    let message = format!("{}{}", d.message, d.help_note_suffix());
     let Ok(fallback) = Url::parse(FALLBACK_DOCS_URL) else {
         return Diagnostic {
             range: Range { start, end },
             severity: Some(severity),
             code: Some(NumberOrString::String(d.code.code.to_owned())),
             source: Some("basilisk".to_owned()),
-            message: d.message.clone(),
+            message,
             ..Default::default()
         };
     };
@@ -104,7 +107,7 @@ pub fn bsk_to_lsp(
             href: Url::parse(d.code.docs_url).unwrap_or(fallback),
         }),
         source: Some("basilisk".to_owned()),
-        message: d.message.clone(),
+        message,
         ..Default::default()
     }
 }
@@ -178,5 +181,70 @@ pub(crate) fn apply_adoptions(
         {
             diag.severity = basilisk_checker::Severity::Warning;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bsk_to_lsp;
+
+    /// Build a checker diagnostic with the given optional help/note.
+    fn diag(help: Option<&str>, note: Option<&str>) -> basilisk_checker::Diagnostic {
+        basilisk_checker::Diagnostic {
+            code: basilisk_checker::ErrorCode {
+                code: "BSK-E0152",
+                docs_url: "https://www.basilisk-python.dev/errors/BSK-E0152",
+            },
+            severity: basilisk_checker::Severity::Error,
+            message: "Package `acme` is installed but has no type stubs available".to_owned(),
+            span: basilisk_resolver::Span::new(0, 5),
+            path: "test.py".to_owned(),
+            help: help.map(str::to_owned),
+            note: note.map(str::to_owned),
+            provenance: None,
+        }
+    }
+
+    /// The LSP diagnostic has no help/note fields; both must be folded onto the
+    /// message so the editor keeps the guidance (and its doc links) visible.
+    #[test]
+    fn folds_help_and_note_into_message() {
+        let lsp = bsk_to_lsp(
+            &diag(Some("do the thing"), Some("see the spec")),
+            "hello world",
+        );
+        assert!(
+            lsp.message.contains("no type stubs available"),
+            "primary message must be preserved: {}",
+            lsp.message
+        );
+        assert!(
+            lsp.message.contains("help: do the thing"),
+            "help must be folded into the message: {}",
+            lsp.message
+        );
+        assert!(
+            lsp.message.contains("note: see the spec"),
+            "note must be folded into the message: {}",
+            lsp.message
+        );
+    }
+
+    /// When neither help nor note is present the message is left byte-for-byte
+    /// identical — guards every existing substring assertion on diagnostics.
+    #[test]
+    fn leaves_message_unchanged_without_help_or_note() {
+        let input = diag(None, None);
+        let expected = input.message.clone();
+        let lsp = bsk_to_lsp(&input, "hello world");
+        assert_eq!(lsp.message, expected);
+    }
+
+    /// A note-only diagnostic must still get its note, with no stray `help:`.
+    #[test]
+    fn folds_note_only() {
+        let lsp = bsk_to_lsp(&diag(None, Some("note text")), "hello world");
+        assert!(lsp.message.contains("note: note text"), "{}", lsp.message);
+        assert!(!lsp.message.contains("help:"), "{}", lsp.message);
     }
 }

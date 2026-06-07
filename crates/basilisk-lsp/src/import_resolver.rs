@@ -8,7 +8,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use basilisk_resolver::scope::{ImportKind, ImportResolution, PackageDepKind, UnresolvedReason};
+use basilisk_resolver::scope::{
+    ImportKind, ImportResolution, ImportedModuleApi, PackageDepKind, UnresolvedReason,
+};
 use basilisk_uv::PackageRegistry;
 
 use crate::workspace::WorkspaceIndex;
@@ -500,6 +502,10 @@ pub fn resolve_module_imports(
     // The file's own path, used to search its directory for sibling modules.
     let importing_file = PathBuf::from(&resolved.path);
 
+    // Member APIs captured during the loop, inserted after it ends — we cannot
+    // borrow `resolved.imported_modules` while iterating `resolved.imports`.
+    let mut captured: Vec<(String, ImportedModuleApi)> = Vec::new();
+
     for import in &mut resolved.imports {
         let result = match import.kind {
             ImportKind::Plain | ImportKind::From | ImportKind::Star => {
@@ -514,9 +520,72 @@ pub fn resolve_module_imports(
             import.unresolved_reason = Some(classify_unresolved(&import.module, search_paths));
         }
 
+        // Capture the member API of plain `import X` statements backed by a
+        // user/local stub, so `BSK-E0154` can flag `X.undeclared_attr`. Only
+        // single-segment plain imports resolved to a `.pyi` under a configured
+        // `stub-paths` dir (Phase 1: the stubs the developer owns).
+        if let Some((binding, api)) = capture_user_stub_api(import, search_paths) {
+            captured.push((binding, api));
+        }
+
         // Annotate with package metadata from the uv registry.
         enrich_package_metadata(import, search_paths);
     }
+
+    for (binding, api) in captured {
+        let _ = resolved.imported_modules.insert(binding, api);
+    }
+}
+
+/// Build the [`ImportedModuleApi`] for a plain `import X` backed by a user stub,
+/// or `None` if this import is out of scope (aliased/dotted/from-import, not a
+/// user stub, or the stub fails to parse).
+fn capture_user_stub_api(
+    import: &basilisk_resolver::ImportInfo,
+    search_paths: &ImportSearchPaths,
+) -> Option<(String, ImportedModuleApi)> {
+    if import.kind != ImportKind::Plain || import.module.contains('.') {
+        return None;
+    }
+    let stub_path = import.resolved_path.as_ref()?;
+    if stub_path.extension().is_none_or(|ext| ext != "pyi") {
+        return None;
+    }
+    // A user stub is a `.pyi` under one of the configured stub-paths (which
+    // includes the auto-added `.basilisk/stubs`). Other `.pyi` (typeshed,
+    // `*-stubs`, py.typed packages) are deferred to Phase 2.
+    if !search_paths
+        .stub_paths
+        .iter()
+        .any(|dir| stub_path.starts_with(dir))
+    {
+        return None;
+    }
+
+    let stub = basilisk_stubs::parse_pyi_file(
+        stub_path,
+        &import.module,
+        basilisk_stubs::StubSource::UserStub,
+        basilisk_stubs::StubTier::Tier1,
+    )
+    .ok()?;
+
+    let mut member_names = std::collections::HashSet::new();
+    member_names.extend(stub.functions.keys().cloned());
+    member_names.extend(stub.classes.keys().cloned());
+    member_names.extend(stub.variables.keys().cloned());
+    member_names.extend(stub.overloads.keys().cloned());
+
+    let has_getattr = stub.functions.contains_key("__getattr__");
+
+    Some((
+        import.module.clone(),
+        ImportedModuleApi {
+            member_names,
+            has_getattr,
+            stub_path: stub_path.clone(),
+        },
+    ))
 }
 
 /// Enrich an import with package metadata from the uv registry.
@@ -604,6 +673,85 @@ mod tests {
             site_packages: None,
             registry: None,
         }
+    }
+
+    /// Build a `ResolvedModule` with a single plain `import <module>` statement.
+    fn module_with_plain_import(module: &str) -> basilisk_resolver::ResolvedModule {
+        basilisk_resolver::ResolvedModule {
+            path: "test.py".to_owned(),
+            imports: vec![basilisk_resolver::ImportInfo {
+                module: module.to_owned(),
+                names: vec![],
+                span: basilisk_resolver::Span::new(0, 0),
+                kind: ImportKind::Plain,
+                resolution: ImportResolution::Unresolved,
+                resolved_path: None,
+                package_dep_kind: None,
+                package_version: None,
+                package_name: None,
+                unresolved_reason: None,
+            }],
+            ..basilisk_resolver::ResolvedModule::default()
+        }
+    }
+
+    #[test]
+    fn captures_user_stub_member_api() {
+        let stub_dir = make_tmp_dir("bsk_ir_userstub");
+        fs::write(
+            stub_dir.join("cowsay.pyi"),
+            "from typing import Any\ndef tux(text: str) -> None: ...\ndef __getattr__(name: str) -> Any: ...\n",
+        )
+        .unwrap();
+
+        let mut paths = make_search_paths(vec![]);
+        paths.stub_paths = vec![stub_dir.clone()];
+
+        let mut resolved = module_with_plain_import("cowsay");
+        resolve_module_imports(&mut resolved, &paths);
+
+        let api = resolved.imported_modules.get("cowsay").unwrap();
+        assert!(api.member_names.contains("tux"));
+        assert!(api.has_getattr, "module-level __getattr__ must be detected");
+        assert!(api.stub_path.ends_with("cowsay.pyi"));
+
+        let _ = fs::remove_dir_all(&stub_dir);
+    }
+
+    #[test]
+    fn user_stub_without_getattr_is_strict() {
+        let stub_dir = make_tmp_dir("bsk_ir_userstub_strict");
+        fs::write(stub_dir.join("widget.pyi"), "def render() -> None: ...\n").unwrap();
+
+        let mut paths = make_search_paths(vec![]);
+        paths.stub_paths = vec![stub_dir.clone()];
+
+        let mut resolved = module_with_plain_import("widget");
+        resolve_module_imports(&mut resolved, &paths);
+
+        let api = resolved.imported_modules.get("widget").unwrap();
+        assert!(api.member_names.contains("render"));
+        assert!(!api.has_getattr);
+
+        let _ = fs::remove_dir_all(&stub_dir);
+    }
+
+    #[test]
+    fn does_not_capture_non_stub_import() {
+        // A plain `.py` source resolution (not a user stub) is not captured.
+        let dir = make_tmp_dir("bsk_ir_nonstub");
+        fs::write(dir.join("plainmod.py"), "x = 1\n").unwrap();
+
+        let paths = make_search_paths(vec![dir.clone()]);
+        let mut resolved = module_with_plain_import("plainmod");
+        resolve_module_imports(&mut resolved, &paths);
+
+        assert!(
+            resolved.imported_modules.is_empty(),
+            "non-user-stub imports must not populate imported_modules"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -32,6 +32,7 @@ tokio-tungstenite   = "0.24"
 futures-util        = "0.3"
 tokio               = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "net", "time"] }
 serde_json          = "1"
+tempfile            = "3"
 basilisk-test-utils = { workspace = true }
 
 [lints]

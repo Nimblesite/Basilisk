@@ -98,3 +98,25 @@ pub struct ImportInfo {
     /// available or the import resolved successfully.
     pub unresolved_reason: Option<UnresolvedReason>,
 }
+
+/// The public member API of a module imported via a plain `import X`, captured
+/// from its type stub so the checker can flag access to undeclared attributes.
+///
+/// Populated during workspace import resolution. Phase 1 only captures **user /
+/// local stubs** (`stub-paths` / `.basilisk/stubs`), which the developer
+/// controls and wants to be authoritative — so mere presence in
+/// [`super::ResolvedModule::imported_modules`] is the gate, and third-party
+/// typeshed / `py.typed` packages are deliberately not captured here yet.
+/// Consumed by `BSK-E0154`.
+#[derive(Debug, Clone)]
+pub struct ImportedModuleApi {
+    /// Top-level names the stub declares (functions, classes, variables).
+    pub member_names: std::collections::HashSet<String>,
+    /// Whether the stub defines a module-level `__getattr__` (PEP 562). When
+    /// true, any attribute access is permitted — the explicit opt-out that the
+    /// create-local-stub skeleton ships by default.
+    pub has_getattr: bool,
+    /// Path to the `.pyi` stub, so the diagnostic can point the developer at the
+    /// exact file to edit.
+    pub stub_path: std::path::PathBuf,
+}

@@ -43,7 +43,9 @@ pub struct WorkspaceConfig {
     pub python_platform: Option<String>,
     /// Paths to include in analysis (relative to workspace root).
     pub include: Vec<PathBuf>,
-    /// Paths to exclude from analysis (relative to workspace root).
+    /// Gitignore-style glob patterns to exclude from analysis, matched relative
+    /// to the workspace root (e.g. `**/bundled/**`, `vendor/**`, `*.pb.py`).
+    /// Implements [CHKARCH-CONFIG-EXCLUDE].
     pub exclude: Vec<PathBuf>,
     /// Extra paths for module resolution (e.g. `src/`).
     pub extra_paths: Vec<PathBuf>,

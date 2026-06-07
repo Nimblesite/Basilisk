@@ -28,6 +28,31 @@ async fn log_command(server: &LspServer, params: &ExecuteCommandParams) {
         .await;
 }
 
+/// Whether `cmd` is one of the `basilisk.stubs.*` commands.
+fn is_stub_command(cmd: &str) -> bool {
+    matches!(
+        cmd,
+        basilisk_common::commands::STUBS_CREATE_LOCAL | basilisk_common::commands::STUBS_ADD_MEMBER
+    )
+}
+
+/// Dispatch the `basilisk.stubs.*` family (create local stub, add member).
+async fn dispatch_stub_command(
+    server: &LspServer,
+    cmd: &str,
+    args: &[serde_json::Value],
+) -> LspResult<Option<serde_json::Value>> {
+    match cmd {
+        basilisk_common::commands::STUBS_CREATE_LOCAL => {
+            super::stub_handlers::execute_create_local_stub(server, args).await
+        }
+        basilisk_common::commands::STUBS_ADD_MEMBER => {
+            super::stub_handlers::execute_add_stub_member(server, args).await
+        }
+        _ => Ok(None),
+    }
+}
+
 /// Dispatch `workspace/executeCommand` to the appropriate handler.
 pub(super) async fn dispatch_execute_command(
     server: &LspServer,
@@ -82,6 +107,7 @@ pub(super) async fn dispatch_execute_command(
         basilisk_common::commands::MOVE_SYMBOL => {
             super::refactor_commands::execute_move_symbol(server, &params.arguments).await
         }
+        cmd if is_stub_command(cmd) => dispatch_stub_command(server, cmd, &params.arguments).await,
         basilisk_common::commands::DISCOVER_TESTS => {
             super::test_handlers::execute_discover_tests(server, &params.arguments).await
         }

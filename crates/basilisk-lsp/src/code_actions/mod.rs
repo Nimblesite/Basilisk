@@ -14,6 +14,7 @@ mod fixes;
 mod imports;
 pub mod mass_fix;
 pub(crate) mod refactor;
+mod stubs;
 mod suppress;
 
 /// Monotonic counter for unique temp-file names.
@@ -80,15 +81,36 @@ pub fn code_actions(
         // uv-based quick fixes for unresolved imports and missing stubs.
         if code == "BSK-E0010" {
             if let Some(module) = extract_module_from_diagnostic(&diag.message) {
-                actions.push(CodeActionOrCommand::CodeAction(make_uv_add_action(
-                    diag, &module,
-                )));
+                // Only offer `uv add` when the name is a plausible PyPI
+                // distribution. Internal/vendored modules like `_pydevd_bundle`
+                // are not installable and uv rejects them outright, so the fix
+                // could only ever fail. [LSPUV-ACTIONS-QUICK-FIXES], issue #84.
+                if is_valid_pypi_distribution(&module) {
+                    actions.push(CodeActionOrCommand::CodeAction(make_uv_add_action(
+                        diag, &module,
+                    )));
+                }
             }
         }
         if code == "BSK-E0152" {
-            if let Some(action) = extract_module_from_diagnostic(&diag.message)
-                .and_then(|module| make_uv_add_stubs_action(diag, &module))
-            {
+            if let Some(module) = extract_module_from_diagnostic(&diag.message) {
+                // Install a published typeshed stub when one exists...
+                let install = make_uv_add_stubs_action(diag, &module);
+                // ...and always offer a local stub: the only fix when typeshed
+                // has nothing, a valid fallback when it does. [STUBRES-CREATE-LOCAL]
+                let local_preferred = install.is_none();
+                if let Some(action) = install {
+                    actions.push(CodeActionOrCommand::CodeAction(action));
+                }
+                actions.push(CodeActionOrCommand::CodeAction(
+                    stubs::make_create_local_stub_action(diag, &module, local_preferred),
+                ));
+            }
+        }
+        if code == "BSK-E0154" {
+            // "Create method/attribute" quick fix — add the undeclared member
+            // to the local stub. [STUBRES-ADD-MEMBER]
+            if let Some(action) = stubs::make_add_member_action(diag, source) {
                 actions.push(CodeActionOrCommand::CodeAction(action));
             }
         }
@@ -236,6 +258,25 @@ fn extract_module_from_diagnostic(message: &str) -> Option<String> {
         return None;
     }
     Some(top_level.to_owned())
+}
+
+/// Return `true` when `name` is a plausible `PyPI` distribution name.
+///
+/// Per PEP 508/503 a distribution name consists of ASCII letters, digits, `.`,
+/// `-`, or `_`, and must start and end with an alphanumeric character. `uv`
+/// enforces the leading-alphanumeric rule and rejects names such as
+/// `_pydevd_bundle` (a debugpy-internal submodule), so we must not offer a
+/// `uv add` quick-fix that can only fail (issue #84).
+fn is_valid_pypi_distribution(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    let (Some(first), Some(last)) = (bytes.first(), bytes.last()) else {
+        return false;
+    };
+    first.is_ascii_alphanumeric()
+        && last.is_ascii_alphanumeric()
+        && bytes
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
 }
 
 /// Build a code action that runs `uv add <package>` for an unresolved import.
@@ -461,6 +502,26 @@ mod tests {
         assert_eq!(args[0], serde_json::Value::String(expected_arg.to_owned()));
     }
 
+    /// Assert a create-local-stub action is present for `module`, dispatches the
+    /// `STUBS_CREATE_LOCAL` command with the module arg, and has the expected
+    /// `is_preferred` flag.
+    fn assert_create_local_stub_action(
+        actions: &[CodeActionOrCommand],
+        module: &str,
+        expected_preferred: bool,
+    ) {
+        let action = find_action_with_title(actions, "Create local type stub")
+            .expect("should offer a create-local-stub action");
+        let CodeActionOrCommand::CodeAction(ca) = action else {
+            panic!("Expected a CodeAction, got a Command");
+        };
+        let cmd = ca.command.as_ref().expect("should have command");
+        assert_eq!(cmd.command, basilisk_common::commands::STUBS_CREATE_LOCAL);
+        let args = cmd.arguments.as_ref().expect("should have arguments");
+        assert_eq!(args[0], serde_json::Value::String(module.to_owned()));
+        assert_eq!(ca.is_preferred, Some(expected_preferred));
+    }
+
     #[test]
     fn test_bsk_e0010_code_action_includes_uv_add() {
         let diag = make_diagnostic(
@@ -479,6 +540,30 @@ mod tests {
             "Add 'requests' dependency (uv add)",
             basilisk_common::commands::UV_ADD,
             "requests",
+        );
+    }
+
+    /// Regression for issue #84: the BSK-E0010 "add dependency" quick-fix must
+    /// NOT offer `uv add` for a module name that is not a valid `PyPI`
+    /// distribution. `_pydevd_bundle` is a debugpy-internal submodule whose
+    /// name starts with `_`; `uv` rejects it ("Expected package name starting
+    /// with an alphanumeric character"), so offering the fix proposes an action
+    /// that can only fail.
+    #[test]
+    fn test_bsk_e0010_no_uv_add_for_non_pypi_module() {
+        let diag = make_diagnostic(
+            DiagnosticSeverity::ERROR,
+            "BSK-E0010",
+            "Cannot resolve import `_pydevd_bundle`",
+            range_at((0, 0), (0, 20)),
+        );
+        let uri = Url::parse("file:///test.py").unwrap();
+        let source = "import _pydevd_bundle\n";
+        let range = range_at((0, 0), (0, 0));
+        let actions = super::code_actions(&uri, &[diag], source, &range, None);
+        assert!(
+            find_action_with_title(&actions, "dependency (uv add)").is_none(),
+            "must not offer `uv add` for a name that is not a valid PyPI distribution"
         );
     }
 
@@ -510,6 +595,9 @@ mod tests {
     /// quick-fix when no stub package is known for the module. `pydantic_ai`
     /// ships inline `py.typed` and has no typeshed stub — suggesting
     /// `pydantic_ai-stubs` (or any name) leads to a broken `uv add` that 404s.
+    ///
+    /// But the user must never be left with *no* fix ([STUBRES-CODEACTIONS]):
+    /// the create-local-stub action takes over as the preferred quick fix.
     #[test]
     fn test_bsk_e0152_action_suppressed_for_unknown_stub() {
         let diag = make_diagnostic(
@@ -525,6 +613,59 @@ mod tests {
         assert!(
             find_action_with_title(&actions, "Install type stubs").is_none(),
             "must not offer a stub-install quick-fix for a package with no known stub package"
+        );
+        assert_create_local_stub_action(&actions, "pydantic_ai", true);
+    }
+
+    /// Even when typeshed publishes stubs, the create-local action is offered as
+    /// a fallback alongside the install fix — so both paths are one click away.
+    #[test]
+    fn test_bsk_e0152_offers_local_stub_alongside_install_for_typeshed() {
+        let diag = make_diagnostic(
+            DiagnosticSeverity::ERROR,
+            "BSK-E0152",
+            "Package `requests` is installed but has no type stubs available",
+            range_at((0, 0), (0, 8)),
+        );
+        let uri = Url::parse("file:///test.py").unwrap();
+        let source = "import requests\n";
+        let range = range_at((0, 0), (0, 0));
+        let actions = super::code_actions(&uri, &[diag], source, &range, None);
+        assert!(
+            find_action_with_title(&actions, "Install type stubs").is_some(),
+            "typeshed-backed package must still offer the install quick-fix"
+        );
+        // Not preferred here — install is the highlighted default.
+        assert_create_local_stub_action(&actions, "requests", false);
+    }
+
+    /// BSK-E0154 offers a one-click "add member to stub" fix that dispatches the
+    /// `STUBS_ADD_MEMBER` command with the stub path and the inferred snippet.
+    #[test]
+    fn test_bsk_e0154_offers_add_member_action() {
+        let diag = make_diagnostic(
+            DiagnosticSeverity::ERROR,
+            "BSK-E0154",
+            "Module `cowsay` has no attribute `get_output_string`\n\nhelp: declare \
+             `get_output_string` in the local stub `/w/.basilisk/stubs/cowsay.pyi`, or fix the typo.",
+            range_at((1, 4), (1, 28)),
+        );
+        let uri = Url::parse("file:///test.py").unwrap();
+        let source = "import cowsay\nx = cowsay.get_output_string(\"c\", m)\n";
+        let range = range_at((0, 0), (0, 0));
+        let actions = super::code_actions(&uri, &[diag], source, &range, None);
+        let action = find_action_with_title(&actions, "Add method")
+            .expect("E0154 must offer an add-member action");
+        let CodeActionOrCommand::CodeAction(ca) = action else {
+            panic!("expected a CodeAction");
+        };
+        let cmd = ca.command.as_ref().expect("should have a command");
+        assert_eq!(cmd.command, basilisk_common::commands::STUBS_ADD_MEMBER);
+        let args = cmd.arguments.as_ref().unwrap();
+        assert_eq!(args[0].as_str().unwrap(), "/w/.basilisk/stubs/cowsay.pyi");
+        assert_eq!(
+            args[1].as_str().unwrap(),
+            "def get_output_string(arg0: Any, arg1: Any) -> Any: ..."
         );
     }
 
