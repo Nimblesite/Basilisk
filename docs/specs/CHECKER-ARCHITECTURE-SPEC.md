@@ -1129,9 +1129,14 @@ A baseline set of vendored / cache directories is **always** excluded (e.g.
 the extension's vendored `bundled` / `_vendored` trees); user `exclude` entries
 extend this set. Hidden directories (names starting with `.`) are always
 skipped. The single canonical matcher is `basilisk_config::path_matches_pattern`,
-shared by both file-collection entry points — the LSP workspace scan
-(`workspace_scan::is_excluded`) and the `basilisk check`/`fix`/`adopt` CLI walk
-(`is_excluded_path`) — so the editor and CLI exclude exactly the same files.
+shared by every entry point so they all exclude exactly the same files:
+
+- the LSP **workspace scan** (`workspace_scan::is_excluded`),
+- the `basilisk check`/`fix`/`adopt` **CLI walk** (`is_excluded_path`), and
+- the LSP **incremental per-file path** (`WorkspaceIndex::is_path_excluded`,
+  applied in `analyse_and_resolve`) — so a vendored file that is *opened* or
+  *edited* in the editor is parsed for navigation but publishes **no**
+  diagnostics, matching the bulk scan rather than squiggling every line.
 
 ### Migration from Existing Tools {#CHKARCH-CONFIG-MIGRATION}
 

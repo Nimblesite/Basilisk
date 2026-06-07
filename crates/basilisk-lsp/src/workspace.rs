@@ -164,6 +164,16 @@ impl WorkspaceIndex {
         let config = self.config_for_file(path);
         let (mut entry, lsp_diags) = analyse_with_config(text, path, config);
 
+        // Excluded files (vendored/bundled) are parsed so navigation still
+        // works, but never contribute diagnostics — the editor's per-file path
+        // must match the bulk workspace scan and `basilisk check`, which skip
+        // them. Without this, opening a `bundled/` file squiggles every line.
+        // Implements [CHKARCH-CONFIG-EXCLUDE].
+        if self.is_path_excluded(path) {
+            entry.diagnostics.clear();
+            return (entry, Vec::new());
+        }
+
         let Some(search_paths) = self.search_paths_snapshot() else {
             return (entry, lsp_diags);
         };
@@ -196,6 +206,30 @@ impl WorkspaceIndex {
             .max_by_key(|root| root.components().count())
             .and_then(|root| self.root_configs.get(root))
             .unwrap_or(&self.checker_config)
+    }
+
+    /// Whether `file_path` matches the owning root's `exclude` patterns.
+    ///
+    /// Uses the same gitignore-style matcher as the workspace scan
+    /// (`basilisk_config::path_matches_pattern`, relative to the owning root),
+    /// so the incremental per-file path agrees with the bulk scan on which
+    /// vendored/bundled files are skipped. Implements [CHKARCH-CONFIG-EXCLUDE].
+    #[must_use]
+    fn is_path_excluded(&self, file_path: &std::path::Path) -> bool {
+        let Some(root) = self
+            .roots
+            .iter()
+            .filter(|root| file_path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+        else {
+            return false;
+        };
+        let config = self.root_configs.get(root).unwrap_or(&self.checker_config);
+        let relative = file_path.strip_prefix(root).unwrap_or(file_path);
+        config
+            .exclude
+            .iter()
+            .any(|pattern| basilisk_config::path_matches_pattern(relative, pattern))
     }
 
     /// Return the `FileEntry` for a URI, if present.
@@ -743,6 +777,49 @@ mod tests {
         assert!(
             !diags.is_empty(),
             "expected diagnostics for missing return annotation"
+        );
+    }
+
+    // ── Issue #80 (editor): opening a vendored/excluded file must NOT publish
+    //    diagnostics. Fix #80 excluded `bundled`/`_vendored` from the workspace
+    //    *scan*, but the per-file path (didOpen/didChange -> set_open ->
+    //    analyse_and_resolve) ignored `exclude` and squiggled any opened file.
+    //    The editor must match the scan and `basilisk check`.
+    #[test]
+    fn test_set_open_excluded_file_publishes_no_diagnostics() {
+        let root = unique_tmp("bsk_excluded_open");
+        // Default config => DEFAULT_EXCLUDES (includes `bundled` / `_vendored`).
+        let idx = WorkspaceIndex::new(
+            vec![root.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        // A vendored file with blatant type errors that WOULD normally fire.
+        let vendored = root.join("bundled").join("debugpy").join("vendored.py");
+        let uri = Url::from_file_path(&vendored).unwrap();
+        let diags = idx.set_open(&uri, "def f(x):\n    return x\n", 1);
+        assert!(
+            diags.is_empty(),
+            "opening an excluded (bundled/) file must publish no diagnostics, got: {diags:?}"
+        );
+    }
+
+    // Complement: a non-excluded file under the same root must STILL be checked,
+    // so the exclusion is specific rather than disabling diagnostics wholesale.
+    #[test]
+    fn test_set_open_non_excluded_file_under_root_still_publishes() {
+        let root = unique_tmp("bsk_included_open");
+        let idx = WorkspaceIndex::new(
+            vec![root.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        let src_file = root.join("src").join("app.py");
+        let uri = Url::from_file_path(&src_file).unwrap();
+        let diags = idx.set_open(&uri, "def f(x):\n    return x\n", 1);
+        assert!(
+            !diags.is_empty(),
+            "a non-excluded file under the root must still be checked, got none"
         );
     }
 
