@@ -23,6 +23,9 @@ layout: layouts/docs.njk
 title: README
 description: Crate architecture, diagnostic rules, and development guide for Basilisk.
 keywords: basilisk, readme, crate architecture, rust, python type checker
+# English-only crate README — no Chinese twin exists, so opt it out of the
+# language cluster (no /zh/readme/ hreflang or switcher link, which would 404).
+noTranslation: true
 eleventyNavigation:
   key: README
   order: 99
@@ -31,7 +34,13 @@ permalink: /readme/
 
 `;
 
-const readme = readFileSync(readmePath, "utf8");
+// The root README uses a repo-relative logo path (`images/basilisk-logo.png`)
+// that resolves on GitHub but 404s on the site at /readme/. Rewrite it to the
+// site's absolute logo asset so the page renders without a broken image.
+const readme = readFileSync(readmePath, "utf8").replace(
+  /images\/basilisk-logo\.png/g,
+  "/assets/images/logo.svg",
+);
 
 mkdirSync(dirname(outPath), { recursive: true });
 writeFileSync(outPath, frontmatter + readme, "utf8");

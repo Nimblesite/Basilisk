@@ -1,4 +1,4 @@
-<!-- agent-pmo:74cf183 -->
+<!-- agent-pmo:f87d349 -->
 # CLAUDE.md
 
 This codebase is held to a high standard: code here should comfortably pass review at a top-tier engineering organization. Please keep quality high and address shortcomings as you find them, rather than leaving them for later.
@@ -87,6 +87,19 @@ make setup   # post-create dev environment setup
 - Avoid regex. Use the proper parsing mechanism — usually ruff.
 - Keep files under 500 LOC. Break up larger files.
 - Move files rather than copying them.
+
+## Git & Branch Discipline
+
+Git is off-limits unless you are explicitly asked. When git IS used:
+
+- **Never push to `main` directly.** Every change ships via PR → CI green → merge. No exceptions.
+- **Never list the agent as a commit co-author.** No `Co-Authored-By` trailer, no agent attribution.
+- **Work on exactly ONE branch at a time.** Reuse the existing feature branch; never open a second.
+- **Never start a new branch when a feature branch already exists.** Check first.
+- **If multiple feature branches exist, merge them into one immediately**, before any other work.
+- **Worktrees are forbidden.** Never run `git worktree`.
+
+Auto-memory is OFF (`.claude/settings.json` → `"autoMemoryEnabled": false`). Every durable rule goes through a reviewed PR to this file — never auto-captured memory.
 
 ## Testing
 

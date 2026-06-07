@@ -1,5 +1,12 @@
 <!DOCTYPE html>
-<html lang="{{ lang | default('en') }}">
+{#- Locale-safe i18n: derive the effective language and a locale-stripped base
+    path straight from the URL, so language alternates never double-prefix
+    (/zh/zh/...) even when an auto-generated page reports the wrong `lang`.
+    Set `noTranslation: true` in a page's front matter to opt it out of the
+    language cluster entirely (e.g. the English-only README). -#}
+{%- set effLang = 'zh' if (page.url == '/zh/' or page.url.startsWith('/zh/')) else (lang | default('en')) -%}
+{%- set basePath = (page.url | replace('/zh/', '/')) if effLang == 'zh' else page.url -%}
+<html lang="{{ effLang }}">
 <head>
   <script>
     (function() {
@@ -31,11 +38,16 @@
   <!-- RSS Feed -->
   <link rel="alternate" type="application/atom+xml" title="{{ site.title }} Feed" href="{{ site.url }}/feed.xml">
 
-  <!-- Hreflang for language alternates -->
+  <!-- Hreflang for language alternates (locale-safe; see derivation at top of file) -->
+  {%- if noTranslation %}
+  <link rel="alternate" hreflang="{{ effLang }}" href="{{ site.url }}{{ page.url }}">
+  <link rel="alternate" hreflang="x-default" href="{{ site.url }}{{ page.url }}">
+  {%- else %}
   {% for langCode in supportedLanguages %}
-  <link rel="alternate" hreflang="{{ langCode }}" href="{{ site.url }}{{ page.url | altLangUrl(lang | default('en'), langCode) }}">
+  <link rel="alternate" hreflang="{{ langCode }}" href="{{ site.url }}{% if langCode == defaultLanguage %}{{ basePath }}{% else %}/{{ langCode }}{{ basePath }}{% endif %}">
   {% endfor %}
-  <link rel="alternate" hreflang="x-default" href="{{ site.url }}{{ page.url | altLangUrl(lang | default('en'), defaultLanguage) }}">
+  <link rel="alternate" hreflang="x-default" href="{{ site.url }}{{ basePath }}">
+  {%- endif %}
 
   <!-- Open Graph -->
   <meta property="og:type" content="{% if page.url.startsWith('/blog/') and page.url != '/blog/' %}article{% else %}website{% endif %}">
@@ -43,10 +55,12 @@
   <meta property="og:title" content="{{ title | default(site.title) }}">
   <meta property="og:description" content="{{ description | default(site.description) }}">
   <meta property="og:site_name" content="{{ site.title }}">
-  <meta property="og:locale" content="{{ (lang | default('en')) | toOgLocale }}">
-  {% for langCode in supportedLanguages %}{% if langCode != (lang | default('en')) %}
+  <meta property="og:locale" content="{{ effLang | toOgLocale }}">
+  {%- if not noTranslation %}
+  {% for langCode in supportedLanguages %}{% if langCode != effLang %}
   <meta property="og:locale:alternate" content="{{ langCode | toOgLocale }}">
   {% endif %}{% endfor %}
+  {%- endif %}
   {% if site.ogImage %}
   <meta property="og:image" content="{{ site.url }}{{ site.ogImage }}">
   <meta property="og:image:width" content="{{ site.ogImageWidth | default('1200') }}">
@@ -165,11 +179,13 @@
 
       <div class="nav-actions">
         <div class="language-switcher">
-          {% if lang == 'zh' %}
-          <a href="{{ page.url | replace('/zh/', '/') }}" lang="en" class="lang-link" aria-label="Switch to English">English</a>
+          {%- if not noTranslation %}
+          {% if effLang == 'zh' %}
+          <a href="{{ basePath }}" lang="en" class="lang-link" aria-label="Switch to English">English</a>
           {% else %}
-          <a href="/zh{{ page.url }}" lang="zh" class="lang-link" aria-label="切换到中文">中文</a>
+          <a href="/zh{{ basePath }}" lang="zh" class="lang-link" aria-label="切换到中文">中文</a>
           {% endif %}
+          {%- endif %}
         </div>
 
         {% if techdocOptions.features.darkMode %}

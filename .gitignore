@@ -13,7 +13,8 @@ Desktop.ini
 # =============================================================================
 # IDE / Editor
 # =============================================================================
-.idea/
+# NOTE: .idea/ (JetBrains shared run configs + code style) and .vscode/ are
+# intentionally committed, not ignored — shared dev tooling ([GITIGNORE-RULES]).
 *.swp
 *.swo
 *~
