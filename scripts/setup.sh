@@ -45,6 +45,10 @@ header "Installing Python packages"
 python3 -c 'import debugpy' &>/dev/null || python3 -m pip install --quiet --break-system-packages debugpy
 ok "debugpy"
 
+header "Installing deslop (duplication gate)"
+
+bash "$REPO_ROOT/scripts/install-deslop.sh"
+
 header "Installing Node dependencies"
 
 if command -v node &>/dev/null && command -v npm &>/dev/null; then

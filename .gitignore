@@ -13,7 +13,8 @@ Desktop.ini
 # =============================================================================
 # IDE / Editor
 # =============================================================================
-.idea/
+# NOTE: .idea/ (JetBrains shared run configs + code style) and .vscode/ are
+# intentionally committed, not ignored — shared dev tooling ([GITIGNORE-RULES]).
 *.swp
 *.swo
 *~
@@ -89,6 +90,14 @@ TestResults/
 mutants.out/
 mutants.out.old/
 mutants.out.backup-*/
+
+# =============================================================================
+# Deslop duplication gate (report + log artifacts written into the repo root)
+# =============================================================================
+deslop-report.json
+deslop-report.txt
+deslop-report.html
+deslop-*.log
 
 # =============================================================================
 # Benchmarks

@@ -1,0 +1,36 @@
+# agent-pmo:f87d349
+# Keeps SHA-pinned GitHub Actions and language dependencies fresh ([SWR-SEC-ACTION-PINNING]).
+# Each ecosystem is grouped into a single combined PR per run to reduce churn.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      cargo:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: "/vscode-extension"
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: "/website"
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ["*"]

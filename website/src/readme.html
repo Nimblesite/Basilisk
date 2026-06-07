@@ -3,6 +3,9 @@ layout: layouts/docs.njk
 title: README
 description: Crate architecture, diagnostic rules, and development guide for Basilisk.
 keywords: basilisk, readme, crate architecture, rust, python type checker
+# English-only crate README — no Chinese twin exists, so opt it out of the
+# language cluster (no /zh/readme/ hreflang or switcher link, which would 404).
+noTranslation: true
 eleventyNavigation:
   key: README
   order: 99
@@ -10,7 +13,7 @@ permalink: /readme/
 ---
 
 <p align="center">
-  <img src="images/basilisk-logo.png" alt="Basilisk" width="160">
+  <img src="/assets/images/logo.svg" alt="Basilisk" width="160">
 </p>
 
 <h1 align="center">Basilisk</h1>
