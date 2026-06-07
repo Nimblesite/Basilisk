@@ -657,7 +657,11 @@ pub(crate) fn pluralise(count: usize) -> &'static str {
 /// workspace scan, so `basilisk check` and the editor agree on what is skipped:
 /// bare names (`build`) at any depth, directory globs (`**/generated/**`),
 /// and file globs (`*.pb.py`) all work — not just literal directory names.
-fn is_excluded_path(path: &std::path::Path, root: &std::path::Path, excluded: &HashSet<&str>) -> bool {
+fn is_excluded_path(
+    path: &std::path::Path,
+    root: &std::path::Path,
+    excluded: &HashSet<&str>,
+) -> bool {
     let relative = path.strip_prefix(root).unwrap_or(path);
     excluded
         .iter()
@@ -1137,8 +1141,7 @@ mod tests {
     /// LSP workspace scan, which honours the same gitignore-style globs via
     /// `basilisk_config::path_matches_pattern`. The CLI must agree with the LSP.
     #[test]
-    fn collect_python_files_honors_user_glob_excludes(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn collect_python_files_honors_user_glob_excludes() -> Result<(), Box<dyn std::error::Error>> {
         let base = std::env::temp_dir().join(format!(
             "basilisk_test_cli_glob_exclude_{}",
             std::process::id()
