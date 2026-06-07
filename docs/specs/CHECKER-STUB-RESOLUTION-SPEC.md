@@ -91,7 +91,7 @@ pub struct TrackedType {
 | StubTier1 | not fired | normal errors | shows stub type | — |
 | StubTier2 | not fired | normal errors | shows type + "(auto-generated stub)" | — |
 | StubTier3 | downgraded to info | warnings only | shows type + "(best-effort, may be inaccurate)" | — |
-| Untyped | error (default) | **suppressed** | shows "Unknown (no stubs)" | one-click install via LSP |
+| Untyped | error (default) | **suppressed** | shows "Unknown (no stubs)" | one-click install (typeshed) or create-local stub via LSP |
 
 One diagnostic at the import site is worth more than fifty cascading errors at use sites. When provenance is `Untyped`:
 
@@ -111,11 +111,64 @@ Every BSK-E0010 and BSK-E0152 diagnostic MUST have an associated code action:
 | BSK-E0010 | Package not installed | "Add dependency: `{pkg}`" | `basilisk.uv.add` |
 | BSK-E0010 | Package not in deps (transitive only) | "Add dependency: `{pkg}`" | `basilisk.uv.add` |
 | BSK-E0010 | Package declared but not synced | "Sync environment" | `basilisk.uv.sync` |
-| BSK-E0152 | Package installed but no type stubs | "Install type stubs: `types-{pkg}`" | `basilisk.uv.addDev` |
+| BSK-E0152 | Package installed, typeshed stub exists | "Install type stubs: `types-{pkg}`" | `basilisk.uv.addDev` |
+| BSK-E0152 | Package installed, **no** typeshed stub | "Create local type stub for `{pkg}`" | `basilisk.stubs.createLocal` |
 
-The code action executes via `workspace/executeCommand`. The LSP spawns `uv` as a subprocess, reports progress via `window/logMessage`, and triggers a full re-resolve on completion — the diagnostic clears automatically.
+The `uv`-backed code actions execute via `workspace/executeCommand`. The LSP spawns `uv` as a subprocess, reports progress via `window/logMessage`, and triggers a full re-resolve on completion — the diagnostic clears automatically.
+
+The create-local action is offered for **every** BSK-E0152 (it is the *only* fix when typeshed publishes nothing, and a fallback when it does), so the "every diagnostic has a code action" guarantee above holds even for packages with no published stubs — the case that previously had no fix at all.
 
 Diagnostic help text should describe **what's wrong**, not what CLI command to run. The code action is the fix. See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-ACTIONS](LSP-UV-INTEGRATION-SPEC.md#LSPUV-ACTIONS) for the full code action specification.
+
+#### Create Local Stub {#STUBRES-CREATE-LOCAL}
+
+`basilisk.stubs.createLocal` (arg: module name) scaffolds a **strict** local
+stub for an untyped package so the developer — or an AI assisting in the
+editor — has a concrete, authoritative starting point instead of a dead-end error.
+
+- **Target**: `<workspace-root>/.basilisk/stubs/{module}.pyi`, the same Tier-3
+  stub cache the resolver auto-includes on its search path (see
+  [§STUBRES-AUTOGEN](#STUBRES-AUTOGEN) and `ImportSearchPaths::from_config`).
+  Writing there means the import re-resolves with **no config edit**.
+- **Skeleton (strict by default)**: header comments only — it declares *nothing*.
+  Creating it clears `BSK-E0152` (a stub now exists), and because the stub is
+  authoritative ([§STUBRES-MEMBER via E0154](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STUB-MEMBER)),
+  the developer is then prompted by `BSK-E0154` to declare each name they use.
+  The comment documents the opt-out — adding a module-level
+  `def __getattr__(name: str) -> Any: ...` makes every attribute `Any` and turns
+  strictness off — but the skeleton deliberately does **not** emit it, so the
+  stub is strict out of the box.
+- **Idempotent**: an existing stub is never clobbered (the handler returns
+  `created: false` and preserves the developer's work).
+- After writing, the handler calls `rebuild_registry_and_resolve` so BSK-E0152
+  clears automatically — matching the `uv` quick-fix behaviour above.
+
+The BSK-E0152 `help`/`note` text names this `stub-paths`/`.pyi` route and links
+[PEP 561](https://peps.python.org/pep-0561/) and the
+[stub-writing guide](https://typing.python.org/en/latest/guides/writing_stubs.html);
+those lines are folded onto the LSP diagnostic message so the editor surfaces
+them (the LSP `Diagnostic` has no `help`/`note` fields). No shell command
+appears in the help — the code action does the work.
+
+#### Add Member {#STUBRES-ADD-MEMBER}
+
+`basilisk.stubs.addMember` (args: stub path, snippet line) is the quick fix for
+`BSK-E0154` ([§CHKARCH-DIAG-STUB-MEMBER](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STUB-MEMBER)):
+"add the undeclared member to the local stub", closing the loop opened by the
+strict create-local skeleton.
+
+- **Code action** (`code_actions/stubs.rs`): parses the module/attribute and stub
+  path out of the (folded) diagnostic message, then inspects the source at the
+  access site. A call `module.attr(a, kw=b)` → a method whose parameters are
+  inferred from the call arguments (positional → `argN: Any`, keyword → `kw: Any`,
+  a `*`/`**` splat → `*args: Any, **kwargs: Any`); a plain `module.attr` → an
+  attribute `attr: Any`.
+- **Handler** (`server/stub_handlers.rs::execute_add_stub_member`): appends the
+  snippet to the existing `.pyi`, inserting `from typing import Any` once when the
+  snippet needs it, then re-resolves so `BSK-E0154` clears. Safety: only an
+  existing `.pyi` inside a workspace root is ever written.
+- The developer then tightens the `Any` placeholders into real signatures — the
+  stub grows precise one member at a time.
 
 ### Provenance in Hover {#STUBRES-PROVENANCE-HOVER}
 

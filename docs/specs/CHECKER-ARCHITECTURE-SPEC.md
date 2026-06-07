@@ -693,6 +693,7 @@ list — keep it in sync after adding or renaming a rule.
 | `BSK-E0151` | Invalid `TypeAliasType(...)` call |
 | `BSK-E0152` | Missing type stubs for installed package |
 | `BSK-E0153` | Invalid call to a constructor-derived callable ([CHKARCH-DIAG-CTOR-CALLABLE](#CHKARCH-DIAG-CTOR-CALLABLE)) |
+| `BSK-E0154` | Access to a module attribute a local stub does not declare ([CHKARCH-DIAG-STUB-MEMBER](#CHKARCH-DIAG-STUB-MEMBER)) |
 | `BSK-W0011` | Undeclared dependency import |
 | `BSK-W0012` | Unused dependency |
 | `BSK-W0013` | Stale uv lock file |
@@ -724,6 +725,33 @@ function-scoped `TypeVar` inconsistently (e.g. `list[T]` filled by both
 arguments and `**kwargs` unpacking suppress arity checks to avoid false
 positives. Implemented in `crates/basilisk-checker/src/rules/e0153.rs`; tests in
 `crates/basilisk-checker/tests/e0153_tests.rs`.
+
+#### Strict local-stub member access {#CHKARCH-DIAG-STUB-MEMBER}
+
+`BSK-E0154` makes a **user/local stub authoritative**: when `import X` resolves
+to a `.pyi` under a configured `stub-paths` directory (including the
+auto-discovered `.basilisk/stubs/` that the "Create local type stub" quick fix
+writes — see [STUBRES-CREATE-LOCAL](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CREATE-LOCAL)),
+accessing `X.attr` where the stub declares neither `attr` nor a module-level
+`def __getattr__` is a hard error. This is the strict-by-default counterpart
+that makes a hand-written or generated stub *mean something* — declare what you
+use, or it is flagged.
+
+The `def __getattr__(name: str) -> Any: ...` that the create-local skeleton ships
+by default is the **explicit opt-out**: keep it and every attribute is permitted
+(the module stays `Any`); remove it and declare specific symbols to opt into
+strictness.
+
+Scope (Phase 1): only plain, single-segment `import X` backed by a user stub.
+The member API is captured during import resolution
+(`crates/basilisk-lsp/src/import_resolver.rs`, on both the CLI and LSP paths) and
+carried on `ResolvedModule.imported_modules`. Because that map is populated *only*
+for user stubs, the rule is a complete no-op for code without local stubs (the
+conformance suite, first-party code) — the false-positive surface is zero by
+construction. Third-party typeshed / `py.typed` packages, instance/class
+attribute access, and dotted/aliased imports are deferred follow-ups. Implemented
+in `crates/basilisk-checker/src/rules/e0154/`; tests in
+`crates/basilisk-checker/src/rules/e0154/tests.rs`.
 
 #### `ReadOnly` `TypedDict` inheritance {#CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE}
 
@@ -1082,6 +1110,33 @@ no-implicit-coercion = true      # Flag implicit type coercion (default: true)
 disabled = ["BSK-E0011"]
 rules."BSK-E0010" = "warning"
 ```
+
+### Exclude Semantics {#CHKARCH-CONFIG-EXCLUDE}
+
+`exclude` (and the `per-path-overrides` keys) use **gitignore-style globs**,
+matched against the path relative to the workspace root:
+
+- a bare name with no `/` matches that segment at **any** depth — `build`
+  excludes every `build` directory in the tree, `*.pb.py` every generated file;
+- `**` matches zero or more directory segments, so `**/bundled/**` matches a
+  `bundled` directory anywhere; `*` / `?` match within a single segment only;
+- an anchored pattern (one containing `/`) matches the full path or any of its
+  ancestor directories, so a directory pattern (`vendor/**`, `src/generated`)
+  also excludes everything beneath it.
+
+A baseline set of vendored / cache directories is **always** excluded (e.g.
+`node_modules`, `site-packages`, `.venv`, `__pycache__`, `build`, `dist`, and
+the extension's vendored `bundled` / `_vendored` trees); user `exclude` entries
+extend this set. Hidden directories (names starting with `.`) are always
+skipped. The single canonical matcher is `basilisk_config::path_matches_pattern`,
+shared by every entry point so they all exclude exactly the same files:
+
+- the LSP **workspace scan** (`workspace_scan::is_excluded`),
+- the `basilisk check`/`fix`/`adopt` **CLI walk** (`is_excluded_path`), and
+- the LSP **incremental per-file path** (`WorkspaceIndex::is_path_excluded`,
+  applied in `analyse_and_resolve`) — so a vendored file that is *opened* or
+  *edited* in the editor is parsed for navigation but publishes **no**
+  diagnostics, matching the bulk scan rather than squiggling every line.
 
 ### Migration from Existing Tools {#CHKARCH-CONFIG-MIGRATION}
 

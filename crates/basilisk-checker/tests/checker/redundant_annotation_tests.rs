@@ -706,6 +706,45 @@ class ApiRoute(AuthenticatedRoute):
 }
 
 // ============================================================================
+// [BSK-E0005] vs [BSK-W0050] catch-22 — issue #83
+//
+// An annotated class attribute whose initializer is a NAME REFERENCE (not an
+// inline literal) carries `RhsKind::Other`; Basilisk cannot infer its type from
+// the RHS, so the annotation is informative — NOT redundant. W0050 must not
+// fire. Because E0005 (correctly) requires an annotation on a non-inferrable
+// RHS, ANNOTATING is the single valid resolution. Before the fix the annotated
+// form fired W0050 ("remove it") while the unannotated form fired E0005 ("add
+// it") — an unsatisfiable contradiction.
+// ============================================================================
+
+#[test]
+fn name_reference_class_attr_annotation_is_not_redundant() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Mirrors the issue repro: `tool_bind_host: str = _DEFAULT_TOOL_BIND_HOST`,
+    // where the RHS is a module-level constant referenced by name (not a literal).
+    let source = "\
+class DockerAgentWorkspaceHostConfig:
+    tool_bind_host: str = _DEFAULT_TOOL_BIND_HOST
+";
+    let diags = run(source)?;
+    // The annotation supplies a type Basilisk cannot infer from the name
+    // reference, so it is NOT redundant — W0050 must stay silent.
+    assert!(
+        !has_code(&diags, "BSK-W0050"),
+        "annotation on a non-inferrable name-reference RHS must not fire W0050 (issue #83), got: {:?}",
+        messages_for(&diags, "BSK-W0050")
+    );
+    // And since the attribute IS annotated, E0005 must not fire — proving the
+    // annotated form is a valid, contradiction-free resolution to the catch-22.
+    assert!(
+        !has_code(&diags, "BSK-E0005"),
+        "annotated attr must not fire E0005, got: {:?}",
+        e0005_messages(&diags)
+    );
+    Ok(())
+}
+
+// ============================================================================
 // Dataclass-style pattern (plain classes with defaults)
 // ============================================================================
 

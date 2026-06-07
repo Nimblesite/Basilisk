@@ -260,7 +260,7 @@ All stub/provenance config via `[tool.basilisk]` — already partially implement
 | `crates/basilisk-checker/src/lib.rs` | Cascade suppression filter in `check_with_config()` |
 | `crates/basilisk-checker/src/diagnostic.rs` | Add `provenance` field to `Diagnostic` |
 | `crates/basilisk-checker/src/rules/e0010.rs` | Tag with provenance |
-| `crates/basilisk-checker/src/rules/e0152.rs` | Tag with provenance |
+| `crates/basilisk-checker/src/rules/e0152/mod.rs` | Tag with provenance |
 | `crates/basilisk-lsp/src/cross_module.rs` | Populate provenance from import resolution |
 | `crates/basilisk-lsp/src/hover.rs` | Provenance + uv metadata in hover |
 | `crates/basilisk-lsp/src/import_resolver.rs` | Add `.basilisk/stubs/` search path |

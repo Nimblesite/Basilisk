@@ -87,11 +87,7 @@ impl Rule for RedundantAnnotationWarning {
                 // For class attributes with literal values, we can infer the type from the source
                 let inferred_type = if matches!(inferred_type, InferredType::Unknown) {
                     // Try to infer from the source text
-                    infer_type_from_source(
-                        &module.source,
-                        attr.name_span,
-                        &InferredType::from_annotation(annotation_text),
-                    )
+                    infer_type_from_source(&module.source, attr.name_span)
                 } else {
                     inferred_type
                 };
@@ -182,12 +178,16 @@ fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bo
     }
 }
 
-/// Infer type from source text when resolver inference fails
-fn infer_type_from_source(
-    source: &str,
-    name_span: basilisk_resolver::Span,
-    declared_type: &InferredType,
-) -> InferredType {
+/// Infer a type from the assignment's source text when resolver inference fails.
+///
+/// Annotated class attributes carry `RhsKind::Other` (the resolver does not
+/// classify the RHS of an `AnnAssign`), so W0050 recovers the literal type from
+/// the source line.  When the RHS is *not* a recognisable literal — a name
+/// reference, call, or arbitrary expression — Basilisk genuinely cannot infer
+/// its type, so we return `Unknown`.  Claiming the annotation is redundant in
+/// that case would be a false positive (issue #83): the annotation supplies a
+/// type the inference engine does not have.
+fn infer_type_from_source(source: &str, name_span: basilisk_resolver::Span) -> InferredType {
     // Extract the line containing the assignment
     let start = name_span.start_usize();
     let line_start = source[..start].rfind('\n').map_or(0, |pos| pos + 1);
@@ -222,8 +222,10 @@ fn infer_type_from_source(
     } else if value_text.starts_with("b\"") && value_text.ends_with('"') {
         InferredType::Bytes
     } else {
-        // Fall back to the declared type if we can't infer from the literal
-        declared_type.clone()
+        // RHS is not a recognisable literal (name reference, call, expression):
+        // Basilisk cannot infer its type, so the annotation is informative — not
+        // redundant.  Returning Unknown suppresses a false-positive W0050 (#83).
+        InferredType::Unknown
     }
 }
 

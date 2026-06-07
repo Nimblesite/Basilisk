@@ -28,6 +28,8 @@ mod ws_test_completion;
 mod ws_test_completion_advanced;
 #[path = "lsp/ws_test_execute_command.rs"]
 mod ws_test_execute_command;
+#[path = "lsp/ws_test_execute_stubs.rs"]
+mod ws_test_execute_stubs;
 #[path = "lsp/ws_test_execute_uv.rs"]
 mod ws_test_execute_uv;
 #[path = "lsp/ws_test_hover.rs"]

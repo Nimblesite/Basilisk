@@ -12,7 +12,7 @@ pub mod overrides;
 mod parse;
 
 pub use adoption::AdoptionStore;
-pub use overrides::{ModuleOverride, PathOverride, RuleSeverity};
+pub use overrides::{path_matches_pattern, ModuleOverride, PathOverride, RuleSeverity};
 pub use parse::BasiliskConfig;
 
 use std::path::Path;
@@ -38,6 +38,11 @@ pub const DEFAULT_EXCLUDES: &[&str] = &[
     "build",
     "dist",
     ".eggs",
+    // Vendored / bundled third-party code shipped verbatim (e.g. the extension's
+    // `bundled/debugpy` tree and its nested `_vendored/`). Never our code to
+    // type-check; scanning it floods thousands of irrelevant diagnostics (#80).
+    "bundled",
+    "_vendored",
 ];
 
 /// Load a `BasiliskConfig` from the first config file found in `root`.

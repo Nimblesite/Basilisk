@@ -46,6 +46,14 @@ pub mod commands {
     /// Move a symbol to an existing file (args: source URI, dest URI, symbol
     /// name, start line, end line).
     pub const MOVE_SYMBOL: &str = "basilisk.moveSymbol";
+    /// Scaffold a local `.pyi` stub for an untyped package under
+    /// `.basilisk/stubs/` (arg: module name). Quick fix for BSK-E0152 when no
+    /// published typeshed stub exists. Implements [STUBRES-CREATE-LOCAL].
+    pub const STUBS_CREATE_LOCAL: &str = "basilisk.stubs.createLocal";
+    /// Append a missing member (method or attribute) to a local stub
+    /// (args: stub path, snippet line). Quick fix for BSK-E0154. Implements
+    /// [STUBRES-ADD-MEMBER].
+    pub const STUBS_ADD_MEMBER: &str = "basilisk.stubs.addMember";
     /// Discover tests in the workspace or a specific file.
     pub const DISCOVER_TESTS: &str = "basilisk.discoverTests";
     /// Run one or more tests by node ID.
@@ -116,6 +124,8 @@ pub mod commands {
         UV_LOCK,
         UV_CREATE_ENV,
         MOVE_SYMBOL,
+        STUBS_CREATE_LOCAL,
+        STUBS_ADD_MEMBER,
         DISCOVER_TESTS,
         RUN_TESTS,
         RUN_TEST_FILE,
