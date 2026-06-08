@@ -52,8 +52,19 @@ jobs:
           website=false
           while IFS= read -r f; do
             [ -z "$f" ] && continue
+            # `website` gates the site build: only files the published site is
+            # actually built from (templates/assets + the benchmark CSVs it reads).
             case "$f" in
-              website/*|benchmarks/*) website=true ;;
+              website/*|benchmarks/status/*) website=true ;;
+            esac
+            # `code` gates the heavy Rust/extension/mutation matrix. Everything
+            # that never reaches the Rust toolchain is excluded: the whole site,
+            # ALL benchmark tooling (run.sh, fixtures, CSVs), docs/markdown, and
+            # CI/workflow YAML itself (changing orchestration doesn't change Rust
+            # — the edited workflow already runs on this very PR). Touch anything
+            # else (crates, Cargo.*, scripts, extensions) and the matrix runs.
+            case "$f" in
+              website/*|benchmarks/*|docs/*|.github/*|*.md) ;;
               *) code=true ;;
             esac
           done <<< "$changed"
@@ -357,7 +368,15 @@ jobs:
   mutation-test-shard:
     name: Mutation Testing Shard ${{ matrix.label }}
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # NOTE: no job-level `if`. Each of the four shards is a REQUIRED status check
+    # by its expanded name ("Mutation Testing Shard 1-of-4" …). A job-level skip
+    # collapses the matrix to the literal, unexpanded "… ${{ matrix.label }}", so
+    # the four required contexts never report and branch protection blocks the PR
+    # forever. Instead the matrix always expands and every step is gated on
+    # `code`: when a PR is site/docs/config-only the steps no-op and each shard
+    # reports success in seconds, satisfying the required checks at ~zero cost.
+    env:
+      RUN: ${{ needs.changes.outputs.code }}
     runs-on: ubuntu-24.04
     # cargo-mutants rebuilds + reruns the test suite once per mutant, so it is
     # heavily CPU-bound. The 20-minute budget was calibrated for the retired
@@ -382,31 +401,38 @@ jobs:
             label: 4-of-4
             output: 3-of-4
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: env.RUN == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - if: env.RUN == 'true'
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - if: env.RUN == 'true'
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-on-failure: true
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - if: env.RUN == 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.12"
 
       - name: Install lld
+        if: env.RUN == 'true'
         run: sudo apt-get update && sudo apt-get install -y lld
 
       - name: Install cargo-mutants
+        if: env.RUN == 'true'
         uses: taiki-e/install-action@59012be0884e296ca2da49b530610e72c49039ad # v2
         with:
           tool: cargo-mutants
 
       - name: Run mutation test shard
+        if: env.RUN == 'true'
         run: make mutation-test SHARD="${{ matrix.shard }}" MUTATION_CHECK=0
 
       - name: Upload mutation shard output
-        if: always()
+        if: always() && env.RUN == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mutation-output-${{ matrix.label }}
