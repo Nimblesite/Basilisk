@@ -7,6 +7,17 @@ on:
   # event that can start another workflow, so the release pipeline invokes this
   # one directly instead of relying on that event.
   workflow_call:
+  # Website + benchmark content is pure static-site data — it never touches the
+  # Rust toolchain or the published binaries. Deploy it straight from `main` on
+  # merge so a docs/benchmark refresh goes live WITHOUT cutting a binary release
+  # (release.yml builds 5 platforms + VSIX + marketplace publishes — all wasted
+  # work for a site change). A real release still redeploys via workflow_call.
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "benchmarks/status/**"
+      - ".github/workflows/deploy-pages.yml"
 
 permissions:
   contents: read
