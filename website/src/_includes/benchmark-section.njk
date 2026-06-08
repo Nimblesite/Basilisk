@@ -40,6 +40,12 @@
         </tbody>
       </table>
     </div>
+    {% if b.meta.toolVersions.length %}
+    <dl class="bench-versions" aria-label="{{ t.versionsLabel }}">
+      <dt>{{ t.versionsLabel }}</dt>
+      {% for v in b.meta.toolVersions %}<dd><code{% if v.tool == 'basilisk' %} class="col-basilisk"{% endif %}>{{ v.tool }} {{ v.version }}</code></dd>{% endfor %}
+    </dl>
+    {% endif %}
     <p class="bench-meta">{{ t.metaPre | safe }}{{ b.meta.runsCount }}{{ t.metaMid | safe }}<strong>{{ b.meta.cpu }}</strong>{{ t.metaCpuOpen | safe }}{{ b.meta.os }}{{ t.metaOsSep | safe }}{{ b.meta.cores }}{{ t.metaCoresClose | safe }}{{ b.meta.generated }}{{ t.metaDateClose | safe }}<code>benchmarks/status/{{ b.primary }}.csv</code>{{ t.metaEnd | safe }}</p>
     {% endif %}
   </div>

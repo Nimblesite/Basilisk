@@ -3,7 +3,7 @@
 # arch: arm64
 # os: Darwin 25.5.0
 # cores: 14
-# tools: basilisk=basilisk 0.0.0-PLACEHOLDER, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0
+# tools: basilisk=basilisk 0.0.0-dev+g2409664, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0
 # runs: 10 (hyperfine mean wall-clock, milliseconds)
 # generated: 2026-06-08T12:52:42+1000
 # note: <tool>_ms = COLD full-file CLI check from scratch. <tool>-warm_ms = a repeat run using that tool's own cache. basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache, so their warm ~= cold (every run is a full check).

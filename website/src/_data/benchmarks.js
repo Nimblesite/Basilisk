@@ -44,9 +44,13 @@ function parseToolVersions(toolsStr) {
       if (version.toLowerCase().startsWith(prefix.toLowerCase())) {
         version = version.slice(prefix.length).trim();
       }
-      // Dev builds carry the workspace's release-time version sentinel; show it
-      // as a build label rather than the raw placeholder string.
-      if (!version || /placeholder/i.test(version)) version = "dev build";
+      // Dev builds don't have a released version number. `make bench` pins them
+      // to the source commit (0.0.0-dev+g<sha>); render that as "dev (<sha>)" so
+      // the site still says exactly which build was measured. A bare placeholder
+      // (no commit pin) degrades to a plain "dev build" label.
+      const devPin = version.match(/dev\+g([0-9a-f]+(?:-dirty)?)/i);
+      if (devPin) version = `dev (${devPin[1]})`;
+      else if (!version || /placeholder/i.test(version)) version = "dev build";
       return { tool, version };
     })
     .filter((t) => t.tool);

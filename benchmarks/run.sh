@@ -105,8 +105,20 @@ fi
 version_of() {
   local base="${1%-warm}" v=""
   case "$base" in
-    basilisk) v="$("$BSK" --version 2>&1 | head -1)" ;;
-    *)        v="$("$base" --version 2>&1 | head -1)" ;;
+    basilisk)
+      v="$("$BSK" --version 2>&1 | head -1)"
+      # Dev builds carry the release-time version sentinel (0.0.0-PLACEHOLDER),
+      # which says nothing about WHICH basilisk was measured. Pin those to the
+      # source commit so the published benchmark records the exact build — a
+      # plain placeholder is useless next to competitors' real version numbers.
+      if printf '%s' "$v" | grep -qi placeholder; then
+        local sha dirty=""
+        sha="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
+        git -C "$ROOT" diff --quiet HEAD 2>/dev/null || dirty="-dirty"
+        v="basilisk 0.0.0-dev+g${sha}${dirty}"
+      fi
+      ;;
+    *) v="$("$base" --version 2>&1 | head -1)" ;;
   esac
   printf '%s' "${v:-n/a}"
 }
