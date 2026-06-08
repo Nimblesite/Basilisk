@@ -1750,7 +1750,7 @@ suite('Basilisk Debug Config Provider', () => {
 
     test('launch config missing program defaults to the current file', () => {
         const resolved = applyDebugConfigDefaults(
-            { name: 'x', type: 'basilisk-debug', request: 'launch' } as vscode.DebugConfiguration,
+            { name: 'x', type: 'basilisk-debug', request: 'launch' },
             'python'
         );
         assert.strictEqual(resolved.program, '${file}');

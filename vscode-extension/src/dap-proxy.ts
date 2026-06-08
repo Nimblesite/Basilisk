@@ -31,6 +31,16 @@ import * as fs from "fs";
 import { Logger } from "./logger";
 import { WAIT_MS } from "./timeouts";
 
+/**
+ * Coerce a socket `data` chunk to a `Buffer`. @types/node 25 types the `data`
+ * event payload as `string | Buffer`; these sockets are binary (no encoding is
+ * ever set) so the string branch never runs at runtime, but it keeps the types
+ * honest without a cast.
+ */
+function asBuffer(chunk: string | Buffer): Buffer {
+  return typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+}
+
 /** Minimal shape of a DAP message for type narrowing. */
 interface DapMessage {
   type: string;
@@ -126,7 +136,7 @@ export class DapTcpProxy {
         Logger.info(`[DAP Proxy] connected to debugpy at ${this.debugpyHost}:${this.debugpyPort}`);
         resolve();
       });
-      this.debugpySocket.on("data", (chunk) => { this.onDebugpyData(chunk); });
+      this.debugpySocket.on("data", (chunk) => { this.onDebugpyData(asBuffer(chunk)); });
       this.debugpySocket.on("error", (err) => {
         Logger.error(`[DAP Proxy] debugpy socket error: ${err.message}`);
         reject(err);
@@ -143,7 +153,7 @@ export class DapTcpProxy {
       this.server = net.createServer((socket) => {
         Logger.info("[DAP Proxy] VS Code connected to proxy");
         this.clientSocket = socket;
-        socket.on("data", (chunk) => { this.onClientData(chunk); });
+        socket.on("data", (chunk) => { this.onClientData(asBuffer(chunk)); });
         socket.on("error", (err) => {
           Logger.error(`[DAP Proxy] client socket error: ${err.message}`);
         });

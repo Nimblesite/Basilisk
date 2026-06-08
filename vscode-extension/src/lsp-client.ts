@@ -85,7 +85,7 @@ export type StatusBarUpdater = (state: "starting" | "ready" | "error" | "stopped
 interface LspClientOptions {
   context: vscode.ExtensionContext;
   executablePath: string;
-  outputChannel: vscode.OutputChannel | undefined;
+  outputChannel: vscode.LogOutputChannel | undefined;
 }
 
 export function startLspClient(
@@ -106,7 +106,11 @@ export function startLspClient(
     },
   };
 
-  const traceChannel = vscode.window.createOutputChannel("Basilisk LSP Trace");
+  // vscode-languageclient 10 requires `traceOutputChannel` to be a
+  // `LogOutputChannel` (created with `{ log: true }`).
+  const traceChannel = vscode.window.createOutputChannel("Basilisk LSP Trace", {
+    log: true,
+  });
   context.subscriptions.push(traceChannel);
 
   const clientOptions = buildClientOptions(outputChannel, traceChannel, updateStatusBar);
@@ -176,8 +180,8 @@ function bindLspStateEffects(store: Store, updateStatusBar: StatusBarUpdater): v
 }
 
 function buildClientOptions(
-  outputCh: vscode.OutputChannel | undefined,
-  traceCh: vscode.OutputChannel,
+  outputCh: vscode.LogOutputChannel | undefined,
+  traceCh: vscode.LogOutputChannel,
   updateStatusBar: StatusBarUpdater
 ): LanguageClientOptions {
   return {
@@ -210,7 +214,7 @@ function buildClientOptions(
         configuration: async (params, token, next) => {
           const results = await next(params, token);
           if (!Array.isArray(results)) {
-            return results as unknown as Record<string, unknown>[];
+            return results;
           }
           return (results as unknown[]).map((item: unknown, idx: number) => {
             const section = params.items[idx]?.section;
@@ -218,7 +222,7 @@ function buildClientOptions(
               return {
                 ...(typeof item === "object" && item !== null ? item as Record<string, unknown> : {}),
                 ...readBasiliskSettings(),
-              } as Record<string, unknown>;
+              };
             }
             return item as Record<string, unknown>;
           });

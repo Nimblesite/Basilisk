@@ -337,15 +337,21 @@ fn generate_stub_map(out_dir: &str) {
     .expect("write failed");
 
     let mut builder = phf_codegen::Map::new();
-    for line in data.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let (import_root, distribution) = line
-            .split_once('\t')
-            .expect("stub distribution data line must be <import_root>\\t<distribution>");
-        let _ = builder.entry(import_root, &format!("{distribution:?}"));
+    // phf_codegen 0.13's `entry` borrows the value string for the builder's
+    // lifetime, so the formatted distribution literals must outlive `build()`.
+    let entries: Vec<(&str, String)> = data
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(|line| {
+            let (import_root, distribution) = line
+                .split_once('\t')
+                .expect("stub distribution data line must be <import_root>\\t<distribution>");
+            (import_root, format!("{distribution:?}"))
+        })
+        .collect();
+    for (import_root, distribution) in &entries {
+        let _ = builder.entry(*import_root, distribution);
     }
     let built = builder.build();
     write!(writer, "{built}").expect("write failed");

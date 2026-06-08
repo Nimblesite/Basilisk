@@ -7,7 +7,11 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "sourceMap": true
+    "sourceMap": true,
+    // TS 6.0 skips auto-including @types/node 25 (its typesVersions has no key
+    // >= TS6), so node/mocha ambient globals are listed explicitly here;
+    // @types/vscode still loads via `import 'vscode'`.
+    "types": ["node", "mocha"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "out"]

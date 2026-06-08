@@ -46,7 +46,7 @@ export interface Store {
   readonly serverCommands: ReadonlySignal<ReadonlySet<string>>;
   readonly clientCommands: ReadonlySignal<ReadonlySet<string>>;
   readonly statusBarItem: ReadonlySignal<vscode.StatusBarItem | undefined>;
-  readonly outputChannel: ReadonlySignal<vscode.OutputChannel | undefined>;
+  readonly outputChannel: ReadonlySignal<vscode.LogOutputChannel | undefined>;
   readonly logSink: ReadonlySignal<LogSink | undefined>;
   readonly lspState: ReadonlySignal<LspState>;
   readonly isServerReady: ReadonlySignal<boolean>;
@@ -60,7 +60,7 @@ export interface Store {
   // Write actions — the only way to mutate state.
   setClient(context: vscode.ExtensionContext, c: LanguageClient): void;
   setStatusBarItem(item: vscode.StatusBarItem): void;
-  setOutputChannel(ch: vscode.OutputChannel): void;
+  setOutputChannel(ch: vscode.LogOutputChannel): void;
   setLogSink(sink: LogSink): void;
   setRuntimeResolution(resolution: RuntimeResolution): void;
   /** Record the debuggee PID captured from a debug session's DAP `process` event. */
@@ -81,7 +81,7 @@ interface StoreSignals {
   serverCommands: Signal<ReadonlySet<string>>;
   clientCommands: Signal<ReadonlySet<string>>;
   statusBarItem: Signal<vscode.StatusBarItem | undefined>;
-  outputChannel: Signal<vscode.OutputChannel | undefined>;
+  outputChannel: Signal<vscode.LogOutputChannel | undefined>;
   logSink: Signal<LogSink | undefined>;
   lspState: Signal<LspState>;
   runtimeResolution: Signal<RuntimeResolution | undefined>;
@@ -300,16 +300,25 @@ async function awaitLspReady(signals: StoreSignals, timeoutMs: number): Promise<
 
 /** Reset all signals to their initial values. */
 function resetSignals(signals: StoreSignals): void {
+  // Per-session client state — cleared on every reset.
   signals.client.value = undefined;
   signals.serverCommands.value = new Set();
   signals.clientCommands.value = new Set();
   signals.statusBarItem.value = undefined;
-  signals.outputChannel.value = undefined;
-  signals.logSink.value = undefined;
   signals.lspState.value = "idle";
   signals.runtimeResolution.value = undefined;
   signals.sessionIdToPid.value = new Map();
   signals.readyHandle.value = undefined;
+  // outputChannel and logSink are stable logging infrastructure created once by
+  // initLogging (and owned by context.subscriptions) — they are deliberately
+  // NOT cleared here. The onReset → startRuntime restart path reuses the store
+  // without re-running initLogging, so a restarted LanguageClient must still
+  // receive the existing channel. Clearing it would hand the client
+  // `outputChannel: undefined`, making vscode-languageclient 10 create and OWN
+  // an internal LogOutputChannel and dispose it on the next stop() — after
+  // which the server's stderr readline (which the client never tears down)
+  // drains a final line into the disposed channel and throws
+  // "Channel has been closed".
 }
 
 /** Debuggee PID actions (copy-on-write Map) — extracted to keep createStore small. */
@@ -344,7 +353,7 @@ function createStoreSignals(): StoreSignals {
     serverCommands: signal<ReadonlySet<string>>(new Set()),
     clientCommands: signal<ReadonlySet<string>>(new Set()),
     statusBarItem: signal<vscode.StatusBarItem | undefined>(undefined),
-    outputChannel: signal<vscode.OutputChannel | undefined>(undefined),
+    outputChannel: signal<vscode.LogOutputChannel | undefined>(undefined),
     logSink: signal<LogSink | undefined>(undefined),
     lspState: signal<LspState>("idle"),
     runtimeResolution: signal<RuntimeResolution | undefined>(undefined),
@@ -362,15 +371,15 @@ export function createStore(onReset?: () => void): Store {
   const lspReadyPromise = computed(async () => signals.readyHandle.value?.promise);
 
   return {
-    client: signals.client as ReadonlySignal<LanguageClient | undefined>,
-    serverCommands: signals.serverCommands as ReadonlySignal<ReadonlySet<string>>,
-    clientCommands: signals.clientCommands as ReadonlySignal<ReadonlySet<string>>,
-    statusBarItem: signals.statusBarItem as ReadonlySignal<vscode.StatusBarItem | undefined>,
-    outputChannel: signals.outputChannel as ReadonlySignal<vscode.OutputChannel | undefined>,
-    logSink: signals.logSink as ReadonlySignal<LogSink | undefined>,
-    lspState: signals.lspState as ReadonlySignal<LspState>,
-    runtimeResolution: signals.runtimeResolution as ReadonlySignal<RuntimeResolution | undefined>,
-    sessionIdToPid: signals.sessionIdToPid as ReadonlySignal<ReadonlyMap<string, number>>,
+    client: signals.client,
+    serverCommands: signals.serverCommands,
+    clientCommands: signals.clientCommands,
+    statusBarItem: signals.statusBarItem,
+    outputChannel: signals.outputChannel,
+    logSink: signals.logSink,
+    lspState: signals.lspState,
+    runtimeResolution: signals.runtimeResolution,
+    sessionIdToPid: signals.sessionIdToPid,
     lspReadyPromise,
     isServerReady,
 
@@ -381,7 +390,7 @@ export function createStore(onReset?: () => void): Store {
     setStatusBarItem(item: vscode.StatusBarItem): void {
       signals.statusBarItem.value = item;
     },
-    setOutputChannel(ch: vscode.OutputChannel): void {
+    setOutputChannel(ch: vscode.LogOutputChannel): void {
       signals.outputChannel.value = ch;
     },
     setLogSink(sink: LogSink): void {
