@@ -20,7 +20,7 @@ async function captureInfoToasts(body: () => Promise<unknown>): Promise<string[]
     win.showInformationMessage = (async (msg: string) => {
         messages.push(msg);
         return undefined;
-    }) as typeof vscode.window.showInformationMessage;
+    });
     try {
         await body();
     } finally {

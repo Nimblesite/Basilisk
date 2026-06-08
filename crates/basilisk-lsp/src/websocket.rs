@@ -153,7 +153,7 @@ async fn lsp_to_ws(
     while let Some(text) = merged.next().await {
         let patched = inject_missing_capabilities(&text);
         ws_write
-            .send(Message::Text(patched))
+            .send(Message::Text(patched.into()))
             .await
             .map_err(|err| ws_err(format!("ws write: {err}")))?;
     }

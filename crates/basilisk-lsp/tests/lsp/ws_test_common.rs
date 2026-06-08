@@ -76,14 +76,14 @@ impl WsTestFixture {
     /// Returns an error if the WebSocket send fails.
     pub async fn send_json(&mut self, value: &serde_json::Value) -> TestResult<()> {
         let text = value.to_string();
-        self.ws_write.send(Message::Text(text)).await?;
+        self.ws_write.send(Message::Text(text.into())).await?;
         Ok(())
     }
 
     /// Receive the next text message with a timeout.
     pub async fn recv(&mut self) -> Option<String> {
         match timeout(RECV_TIMEOUT, self.ws_read.next()).await {
-            Ok(Some(Ok(Message::Text(text)))) => Some(text.clone()),
+            Ok(Some(Ok(Message::Text(text)))) => Some(text.to_string()),
             _ => None,
         }
     }

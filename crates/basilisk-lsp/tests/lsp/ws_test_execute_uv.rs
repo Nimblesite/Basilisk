@@ -58,7 +58,7 @@ async fn drain_messages(fixture: &mut WsTestFixture, duration: Duration) -> Vec<
         let msg = tokio::time::timeout(duration, fixture.ws_read.next()).await;
         match msg {
             Ok(Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text)))) => {
-                messages.push(text.clone());
+                messages.push(text.to_string());
             }
             _ => break,
         }
