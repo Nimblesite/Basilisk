@@ -863,6 +863,12 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   border-bottom: 1px solid var(--color-border);
 }
 
+.bench-versions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-5) 0 0; padding: 0; }
+.bench-versions dt { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-muted); margin-right: var(--space-1); }
+.bench-versions dd { margin: 0; }
+.bench-versions code { display: inline-block; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--color-text-secondary); background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: 4px; padding: 2px var(--space-2); }
+.bench-versions code.col-basilisk { color: var(--color-primary); border-color: rgba(232,80,10,0.4); background: rgba(232,80,10,0.06); font-weight: 600; }
+
 .bench-meta { margin-top: var(--space-4); font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.6; }
 .bench-meta code { font-family: var(--font-mono); font-size: 0.9em; color: var(--color-text-secondary); }
 .benchmark-table { width: 100%; min-width: 680px; border-collapse: separate; border-spacing: 0; font-size: 0.875rem; }

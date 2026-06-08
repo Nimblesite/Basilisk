@@ -3,20 +3,25 @@
 # arch: arm64
 # os: Darwin 25.5.0
 # cores: 14
-# tools: basilisk=basilisk 0.0.0-PLACEHOLDER, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0
+# tools: basilisk=basilisk 0.0.0-dev+g2409664, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0
 # runs: 10 (hyperfine mean wall-clock, milliseconds)
-# generated: 2026-06-04T21:24:14+1000
+# generated: 2026-06-08T12:52:42+1000
 # note: <tool>_ms = COLD full-file CLI check from scratch. <tool>-warm_ms = a repeat run using that tool's own cache. basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache, so their warm ~= cold (every run is a full check).
 fixture,basilisk_ms,basilisk-warm_ms,pyright_ms,pyright-warm_ms,mypy_ms,mypy-warm_ms,ty_ms,ty-warm_ms,pyrefly_ms,pyrefly-warm_ms
-e0001_missing_param,348.7,234.6,506.0,515.2,611.4,156.7,29.9,30.5,106.5,104.9
-e0002_missing_return,245.8,101.5,562.8,561.8,630.5,155.7,36.3,37.1,112.0,109.5
-e0010_unresolved_import,125.4,72.2,459.6,466.2,644.5,166.3,370.3,377.8,794.5,784.3
-e0011_explicit_any,370.8,123.0,525.8,518.0,615.2,159.0,32.4,30.5,106.5,106.2
-e0012_argument_type_mismatch,148.7,56.0,655.0,650.7,618.4,162.7,59.3,54.9,115.2,112.7
-e0014_assignment_incompatibility,99.2,62.3,605.8,598.0,581.4,164.8,50.0,52.0,114.1,111.1
-e0016_incompatible_override,153.9,37.6,648.7,642.1,619.0,168.3,55.6,54.7,111.6,110.2
-e0018_undefined_name,261.4,143.9,502.1,487.4,613.9,158.0,50.3,49.6,535.8,533.9
-e0022_unhashable_dict_key,209.2,111.2,517.9,517.5,601.3,155.8,37.3,37.6,101.0,98.0
-e0023_nonexhaustive_match,118.3,39.1,528.4,523.3,592.9,156.6,25.1,24.5,107.7,104.6
-e0026_typevar_single_constraint,129.5,79.7,722.3,715.7,584.6,164.1,38.7,38.3,105.4,107.8
-e0054_final_reassignment,49.6,26.5,456.6,466.0,562.9,159.2,26.9,27.8,97.0,94.9
+e0001_missing_param,385.3,259.9,547.7,538.2,656.3,173.2,32.4,32.7,116.8,114.1
+e0002_missing_return,261.0,110.2,607.5,599.1,693.3,177.5,39.3,40.2,119.5,126.5
+e0010_unresolved_import,146.7,94.7,514.4,485.7,737.2,174.8,520.6,502.6,1032.7,1013.3
+e0011_explicit_any,395.6,132.4,553.0,543.3,669.0,177.3,35.3,34.3,116.1,122.6
+e0012_argument_type_mismatch,158.2,61.8,724.1,683.3,673.1,175.3,56.9,57.5,121.7,122.0
+e0014_assignment_incompatibility,106.5,68.4,620.8,626.1,634.9,182.4,52.7,52.2,120.3,122.0
+e0016_incompatible_override,164.1,42.6,707.9,669.9,659.8,176.0,62.1,57.2,122.7,121.9
+e0018_undefined_name,273.9,154.4,518.0,511.4,675.3,172.4,52.1,51.8,561.9,559.3
+e0022_unhashable_dict_key,220.1,117.3,544.9,538.7,651.8,170.0,39.0,39.2,107.0,106.9
+e0023_nonexhaustive_match,127.0,44.7,545.0,542.4,646.3,171.7,26.7,26.6,116.7,115.5
+e0026_typevar_single_constraint,137.5,86.4,761.6,752.5,620.6,177.7,41.6,41.3,114.4,116.0
+e0036_classvar_misuse,266.7,112.1,636.4,630.7,644.8,173.6,60.0,60.0,137.6,138.2
+e0038_typeddict_readonly_inheritance,139.3,34.8,681.4,680.0,615.2,174.7,40.2,40.6,121.5,152.5
+e0050_newtype_name_mismatch,141.2,94.4,743.0,740.9,664.5,175.1,45.9,45.8,123.0,123.5
+e0054_final_reassignment,54.1,32.0,474.0,467.7,594.5,173.6,29.0,29.1,105.9,104.5
+e0056_readonly_typeddict_mutation,87.7,35.0,638.1,636.1,607.7,177.5,45.7,46.1,114.2,115.8
+e0093_typeddict_invalid_key,83.9,32.9,640.7,632.8,613.6,173.3,39.2,39.2,113.3,112.7
