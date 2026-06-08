@@ -52,8 +52,19 @@ jobs:
           website=false
           while IFS= read -r f; do
             [ -z "$f" ] && continue
+            # `website` gates the site build: only files the published site is
+            # actually built from (templates/assets + the benchmark CSVs it reads).
             case "$f" in
-              website/*|benchmarks/*) website=true ;;
+              website/*|benchmarks/status/*) website=true ;;
+            esac
+            # `code` gates the heavy Rust/extension/mutation matrix. Everything
+            # that never reaches the Rust toolchain is excluded: the whole site,
+            # ALL benchmark tooling (run.sh, fixtures, CSVs), docs/markdown, and
+            # CI/workflow YAML itself (changing orchestration doesn't change Rust
+            # — the edited workflow already runs on this very PR). Touch anything
+            # else (crates, Cargo.*, scripts, extensions) and the matrix runs.
+            case "$f" in
+              website/*|benchmarks/*|docs/*|.github/*|*.md) ;;
               *) code=true ;;
             esac
           done <<< "$changed"
