@@ -34,14 +34,23 @@ pub(super) async fn execute_workspace_modules(
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    let modules: Option<Vec<serde_json::Value>> = server
-        .with_index(|idx| Some(build_module_tree(idx, scope)))
+    let roots = server.workspace_roots.read().await;
+    let project_root = roots.first().cloned();
+    drop(roots);
+
+    let tree = server
+        .with_index(|idx| Some(build_module_tree(idx, scope, project_root.as_deref())))
         .await;
 
-    let modules = modules.unwrap_or_default();
-    info!(module_count = modules.len(), scope, "workspaceModules");
+    let response = match tree {
+        Some(tree) => {
+            info!(module_count = tree.modules.len(), scope, "workspaceModules");
+            serde_json::json!({ "modules": tree.modules, "workspace": tree.workspace })
+        }
+        None => serde_json::json!({ "modules": [], "workspace": empty_health_stats() }),
+    };
 
-    Ok(Some(serde_json::json!({ "modules": modules })))
+    Ok(Some(response))
 }
 
 /// Handle `basilisk.typeHealth`.

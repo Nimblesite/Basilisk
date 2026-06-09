@@ -82,31 +82,46 @@ mod tests {
 
     #[test]
     fn bench_workspace_modules_under_100ms_for_1000_files() {
-        let (idx, _root) = build_large_workspace(1000);
+        let (idx, root) = build_large_workspace(1000);
 
         let start = Instant::now();
-        let tree = build_module_tree(&idx, "");
+        let result = build_module_tree(&idx, "", Some(&root));
         let elapsed = start.elapsed();
 
         let target_ms = 100 * TIMING_MULTIPLIER;
         assert!(
             elapsed.as_millis() < target_ms,
-            "workspaceModules took {elapsed:?} for 1000 files, target <{target_ms}ms"
+            "workspaceModules took {elapsed:?} for 1000 files (incl. folded health), target <{target_ms}ms"
         );
         assert!(
-            tree.len() >= 1000,
+            result.modules.len() >= 1000,
             "expected at least 1000 modules in tree, got {}",
-            tree.len()
+            result.modules.len()
         );
 
-        // Verify structure: each module should have symbols.
-        for module in tree.iter().take(5) {
+        // Verify structure: each module should have symbols and a folded health rollup.
+        for module in result.modules.iter().take(5) {
             let symbols = module.get("symbols").and_then(serde_json::Value::as_array);
             assert!(
                 symbols.is_some_and(|s| !s.is_empty()),
                 "each module should have symbols"
             );
+            assert!(
+                module
+                    .get("coveragePercent")
+                    .and_then(serde_json::Value::as_u64)
+                    .is_some(),
+                "each module should carry a folded coveragePercent"
+            );
         }
+
+        // The workspace rollup is accumulated in the same single pass.
+        let coverage = result
+            .workspace
+            .get("coveragePercent")
+            .and_then(serde_json::Value::as_u64)
+            .expect("workspace rollup coveragePercent missing");
+        assert!(coverage <= 100, "coverage should be <= 100");
     }
 
     #[test]

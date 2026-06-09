@@ -28,17 +28,36 @@ interface ModuleNode {
   readonly path: string;
   readonly kind: "package" | "module";
   readonly symbols: readonly SymbolNode[];
+  // Health rollup folded into each module by basilisk.workspaceModules
+  // [EXTACT-MODULES] — coverage %, diagnostic counts, and adoption state, so the
+  // merged panel needs no separate basilisk.typeHealth round-trip.
+  readonly coveragePercent: number;
+  readonly errors: number;
+  readonly warnings: number;
+  readonly adopted: boolean;
+}
+
+/** Workspace-wide health rollup carried alongside the module list. */
+interface HealthStats {
+  readonly totalSymbols: number;
+  readonly annotatedSymbols: number;
+  readonly coveragePercent: number;
+  readonly errors: number;
+  readonly warnings: number;
+  readonly adoptedFiles: number;
+  readonly totalFiles: number;
 }
 
 interface WorkspaceModulesResponse {
   readonly modules: readonly ModuleNode[];
+  readonly workspace: HealthStats;
 }
 
 // ── Tree items ───────────────────────────────────────────────────────────
 
 type TreeItem = ModuleTreeItem | SymbolTreeItem;
 
-class ModuleTreeItem extends vscode.TreeItem {
+export class ModuleTreeItem extends vscode.TreeItem {
   constructor(
     public readonly module: ModuleNode,
   ) {
@@ -48,12 +67,14 @@ class ModuleTreeItem extends vscode.TreeItem {
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None,
     );
-    this.iconPath = module.kind === "package"
-      ? new vscode.ThemeIcon("symbol-namespace")
-      : new vscode.ThemeIcon("symbol-file");
+    // Tint the namespace/file icon by coverage so a module's type health is
+    // visible at a glance [EXTACT-MODULES]; the per-symbol "untyped" decoration
+    // is the drill-down.
+    const codicon = module.kind === "package" ? "symbol-namespace" : "symbol-file";
+    this.iconPath = new vscode.ThemeIcon(codicon, coverageColor(module.coveragePercent));
     this.contextValue = "module";
-    this.description = module.kind;
-    this.tooltip = module.path;
+    this.description = moduleDescription(module);
+    this.tooltip = moduleTooltip(module);
     this.resourceUri = vscode.Uri.file(module.path);
     this.command = {
       command: "vscode.open",
@@ -112,24 +133,117 @@ function symbolIcon(symbol: SymbolNode): vscode.ThemeIcon {
   }
 }
 
+// ── Coverage rendering [EXTACT-MODULES] ──────────────────────────────────
+
+/** Width of the Unicode coverage bar in characters. */
+const COVERAGE_BAR_WIDTH = 10;
+/** Coverage threshold for "good" (green). */
+const COVERAGE_GOOD_THRESHOLD = 90;
+/** Coverage threshold for "warning" (yellow); below it is red. */
+const COVERAGE_WARN_THRESHOLD = 50;
+
+/** Render a coverage progress bar using Unicode block characters. */
+function coverageBar(percent: number): string {
+  const filled = Math.round(percent / COVERAGE_BAR_WIDTH);
+  return "█".repeat(filled) + "░".repeat(COVERAGE_BAR_WIDTH - filled);
+}
+
+/** Theme color for a coverage percentage: green >=90%, yellow >=50%, else red. */
+function coverageColor(percent: number): vscode.ThemeColor {
+  if (percent >= COVERAGE_GOOD_THRESHOLD) { return new vscode.ThemeColor("testing.iconPassed"); }
+  if (percent >= COVERAGE_WARN_THRESHOLD) { return new vscode.ThemeColor("list.warningForeground"); }
+  return new vscode.ThemeColor("list.errorForeground");
+}
+
+/** Module row description: coverage bar + % + error/warning counts + adopted badge. */
+function moduleDescription(module: ModuleNode): string {
+  const issues: string[] = [];
+  if (module.errors > 0) { issues.push(`${module.errors}E`); }
+  if (module.warnings > 0) { issues.push(`${module.warnings}W`); }
+  const issueStr = issues.length > 0 ? ` — ${issues.join(" ")}` : "";
+  const badge = module.adopted ? " [adopted]" : "";
+  return `${coverageBar(module.coveragePercent)} ${module.coveragePercent}%${issueStr}${badge}`;
+}
+
+/** Module row tooltip: name + path + coverage + diagnostics + adoption. */
+function moduleTooltip(module: ModuleNode): string {
+  return [
+    module.name,
+    module.path,
+    `Coverage: ${module.coveragePercent}%`,
+    `Errors: ${module.errors}`,
+    `Warnings: ${module.warnings}`,
+    module.adopted ? "Status: Adopted (errors demoted to warnings)" : "",
+  ].filter(Boolean).join("\n");
+}
+
+// ── Workspace health chrome [EXTACT-MODULES-HEADER] ──────────────────────
+
+/**
+ * Workspace summary rendered into the tree view's native `message` chrome.
+ *
+ * [EXTACT-HEALTH] An empty workspace (no Python files) renders an explicit
+ * "No Python files found" — never a misleading 100% for 0/0 symbols (#57).
+ */
+export function workspaceHealthMessage(stats: HealthStats | undefined): string {
+  if (stats === undefined) { return ""; }
+  if (stats.totalFiles === 0) { return "No Python files found"; }
+  const issues: string[] = [];
+  if (stats.errors > 0) { issues.push(`${stats.errors}E`); }
+  if (stats.warnings > 0) { issues.push(`${stats.warnings}W`); }
+  const issueStr = issues.length > 0 ? ` · ${issues.join(" ")}` : "";
+  return `${stats.coveragePercent}% typed${issueStr}`;
+}
+
+/** Numeric view badge: outstanding diagnostics (errors + warnings), or none. */
+export function workspaceHealthBadge(stats: HealthStats | undefined): vscode.ViewBadge | undefined {
+  if (stats === undefined || stats.totalFiles === 0) { return undefined; }
+  const count = stats.errors + stats.warnings;
+  if (count === 0) { return undefined; }
+  const errs = `${stats.errors} error${stats.errors === 1 ? "" : "s"}`;
+  const warns = `${stats.warnings} warning${stats.warnings === 1 ? "" : "s"}`;
+  return { value: count, tooltip: `${errs}, ${warns}` };
+}
+
 // ── Provider ─────────────────────────────────────────────────────────────
 
 /** View mode for module explorer: tree (hierarchical) or flat (all symbols). */
 type ViewMode = "tree" | "flat";
+
+/** Sort mode applied in flat view (tree view stays structural). */
+type SortMode = "worst" | "best" | "alpha";
+
+const SORT_CYCLE: readonly SortMode[] = ["worst", "best", "alpha"];
 
 export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>, vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<TreeItem | undefined>();
   public readonly onDidChangeTreeData = this.emitter.event;
 
   private modules: readonly ModuleNode[] = [];
+  private workspace: HealthStats | undefined;
   public readonly disposables: vscode.Disposable[] = [];
   private viewMode: ViewMode = "tree";
+  private sortMode: SortMode = "worst";
   private filterPattern = "";
+  private treeView: vscode.TreeView<TreeItem> | undefined;
 
   constructor(private readonly store: Store) {}
 
+  /** Bind the tree view so the provider can drive its native message + badge chrome. */
+  public setTreeView(treeView: vscode.TreeView<TreeItem>): void {
+    this.treeView = treeView;
+  }
+
   public refresh(): void {
     this.modules = [];
+    this.workspace = undefined;
+    this.emitter.fire(undefined);
+  }
+
+  /** Cycle the flat-view sort: worst-first -> best-first -> alphabetical. */
+  public cycleSortMode(): void {
+    const idx = SORT_CYCLE.indexOf(this.sortMode);
+    this.sortMode = SORT_CYCLE[(idx + 1) % SORT_CYCLE.length];
     this.emitter.fire(undefined);
   }
 
@@ -179,13 +293,31 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     if (this.modules.length === 0) {
       await this.fetchModules();
     }
+    this.updateViewChrome();
 
     const filtered = this.applyFilter(this.modules);
 
     if (this.viewMode === "flat") {
-      return ModuleExplorerProvider.flattenModules(filtered);
+      // Flat view honours the sort toggle; tree view stays structural.
+      return ModuleExplorerProvider.flattenModules(this.sortModules([...filtered]));
     }
     return filtered.map((mod) => new ModuleTreeItem(mod));
+  }
+
+  /** Order modules for flat view per the current sort toggle. */
+  private sortModules(modules: ModuleNode[]): ModuleNode[] {
+    switch (this.sortMode) {
+      case "worst": return modules.sort((a, b) => a.coveragePercent - b.coveragePercent);
+      case "best": return modules.sort((a, b) => b.coveragePercent - a.coveragePercent);
+      case "alpha": return modules.sort((a, b) => a.name.localeCompare(b.name));
+    }
+  }
+
+  /** Push the workspace rollup into the tree view's native message + badge chrome. */
+  private updateViewChrome(): void {
+    if (this.treeView === undefined) { return; }
+    this.treeView.message = workspaceHealthMessage(this.workspace);
+    this.treeView.badge = workspaceHealthBadge(this.workspace);
   }
 
   /** Apply glob-style filter to module list. */
@@ -226,6 +358,7 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
         { command: "basilisk.workspaceModules", arguments: [{}] },
       );
       this.modules = result?.modules ?? [];
+      this.workspace = result?.workspace;
     } catch (err: unknown) {
       Logger.error(`Module Explorer fetch failed: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -258,6 +391,9 @@ function registerExplorerCommands(
     }),
     vscode.commands.registerCommand("basilisk.toggleModuleExplorerView", () => {
       provider.toggleViewMode(context);
+    }),
+    vscode.commands.registerCommand("basilisk.sortModuleExplorer", () => {
+      provider.cycleSortMode();
     }),
     vscode.commands.registerCommand("basilisk.filterModuleExplorer", async () => {
       const input = await vscode.window.showInputBox({
@@ -309,6 +445,7 @@ export function registerModuleExplorer(
     treeDataProvider: provider,
     showCollapseAll: true,
   });
+  provider.setTreeView(treeView);
 
   context.subscriptions.push(treeView, provider);
 

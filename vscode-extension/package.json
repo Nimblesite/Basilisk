@@ -61,12 +61,7 @@
       "basilisk-explorer": [
         {
           "id": "basilisk.moduleExplorer",
-          "name": "Module Explorer",
-          "when": "basilisk.hasWorkspace"
-        },
-        {
-          "id": "basilisk.typeHealth",
-          "name": "Type Health",
+          "name": "Modules",
           "when": "basilisk.hasWorkspace"
         },
         {
@@ -85,10 +80,6 @@
       {
         "view": "basilisk.moduleExplorer",
         "contents": "No modules found.\n[Restart Server](command:basilisk.restartServer)"
-      },
-      {
-        "view": "basilisk.typeHealth",
-        "contents": "Waiting for analysis...\n[Restart Server](command:basilisk.restartServer)"
       },
       {
         "view": "basilisk.pythonProcesses",
@@ -179,13 +170,7 @@
         "icon": "$(collapse-all)"
       },
       {
-        "command": "basilisk.refreshTypeHealth",
-        "title": "Refresh Type Health",
-        "category": "Basilisk",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "basilisk.sortTypeHealth",
+        "command": "basilisk.sortModuleExplorer",
         "title": "Toggle Sort Order",
         "category": "Basilisk",
         "icon": "$(sort-precedence)"
@@ -461,13 +446,8 @@
           "group": "navigation"
         },
         {
-          "command": "basilisk.refreshTypeHealth",
-          "when": "view == basilisk.typeHealth",
-          "group": "navigation"
-        },
-        {
-          "command": "basilisk.sortTypeHealth",
-          "when": "view == basilisk.typeHealth",
+          "command": "basilisk.sortModuleExplorer",
+          "when": "view == basilisk.moduleExplorer",
           "group": "navigation"
         },
         {
@@ -928,17 +908,9 @@
           {
             "id": "basilisk.exploreModules",
             "title": "Explore Modules",
-            "description": "Click the Basilisk icon in the activity bar to see your modules and type health.\n[Open Module Explorer](command:basilisk.moduleExplorer.focus)",
+            "description": "Click the Basilisk icon in the activity bar to see your modules with per-module type coverage, errors, and warnings.\n[Open Modules](command:basilisk.moduleExplorer.focus)",
             "media": {
-              "markdown": "The Module Explorer shows your workspace's Python modules."
-            }
-          },
-          {
-            "id": "basilisk.checkTypeHealth",
-            "title": "Check Type Health",
-            "description": "The Type Health panel shows coverage statistics per module.\n[Open Type Health](command:basilisk.typeHealth.focus)",
-            "media": {
-              "markdown": "See which modules need more type annotations."
+              "markdown": "The Modules panel shows your workspace's Python modules with a coverage bar on each, so you can see which need more type annotations at a glance."
             }
           }
         ]

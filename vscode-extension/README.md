@@ -74,15 +74,13 @@ Profile Python code with py-spy directly from the editor. View heatmaps and iden
 
 ### Activity panel
 
-The Basilisk sidebar provides three panels accessible from the activity bar:
+The Basilisk sidebar provides two panels accessible from the activity bar:
 
-**Module Explorer** — Browse your workspace's Python module tree. Each module shows its top-level symbols (functions, classes, variables) with type annotation status. Right-click to copy import paths. Toggle between tree and flat views. Filtered by glob patterns.
-
-**Type Health** — Workspace-wide type coverage dashboard. Shows annotated vs unannotated symbol counts, error/warning tallies, and per-module coverage percentages with color-coded progress bars. Sort by worst-first, best-first, or alphabetical.
+**Modules** — Browse your workspace's Python module tree with type health folded in. Each module shows a coverage bar, coverage percentage, error/warning tallies, and an `[adopted]` badge, with its icon tinted green/yellow/red by coverage; expand a module to see its top-level symbols (functions, classes, variables) with annotation status. The workspace-wide coverage summary appears in the panel's title (message + numeric badge). Right-click to copy import paths. Toggle between tree and flat views; in flat view, sort by worst-first, best-first, or alphabetical. Filter by glob patterns.
 
 **Basilisk Info** — Feature status toggles (type checking, uv integration), quick actions (restart server, show output, fix all in workspace, organize imports, and uv sync/add/lock/create-env), and server info (version, binary path, analysis mode, uv status).
 
-All panels update automatically when files change (debounced 300ms). The Module Explorer and Type Health panels appear when a workspace is open; the Info panel is always visible.
+Both panels update automatically when files change (debounced 300ms). The Modules panel appears when a workspace is open; the Info panel is always visible.
 
 ### Inlay hints
 
@@ -181,9 +179,8 @@ All rules are **on by default**. There is no way to relax them globally.
 | `Basilisk: uv add` | Add a package via uv |
 | `Basilisk: Refresh Module Explorer` | Refresh the module tree |
 | `Basilisk: Toggle Module Explorer View` | Switch between tree and flat view |
+| `Basilisk: Toggle Sort Order` | Cycle flat-view sort (worst/best/alpha) |
 | `Basilisk: Copy Import Path` | Copy `from x import y` for the selected symbol |
-| `Basilisk: Refresh Type Health` | Refresh type coverage stats |
-| `Basilisk: Sort Type Health` | Cycle sort order (worst/best/alpha) |
 | `Basilisk: Open Walkthrough` | Open the Basilisk getting started walkthrough |
 
 ---

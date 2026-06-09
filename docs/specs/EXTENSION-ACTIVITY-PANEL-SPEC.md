@@ -27,15 +27,14 @@ flowchart TB
         direction TB
         subgraph Sidebar["Activity Sidebar"]
             direction TB
-            ME["Module Explorer<br/>Semantic tree of workspace Python modules<br/>with classes, functions, variables, types"]
-            TH["Type Health<br/>Coverage %, adoption status, diagnostics<br/>per-file and per-module rollup"]
+            ME["Modules<br/>Semantic tree of workspace Python modules with folded<br/>type health: coverage %, diagnostics, adoption per module.<br/>Workspace summary in the view message + numeric badge."]
             BK["Basilisk<br/>What is this? Feature status. Quick actions.<br/>Getting started. Toggle features."]
         end
         subgraph LSP["basilisk lsp (Rust)"]
             direction TB
-            C1["basilisk/workspaceModules"]
+            C1["basilisk/workspaceModules<br/>(modules + folded health rollup)"]
             C2["basilisk/moduleChanged"]
-            C3["basilisk/typeHealth"]
+            C3["basilisk/typeHealth<br/>(shared rollup; Zed /health, Neovim :BasiliskHealth)"]
         end
     end
 
@@ -52,7 +51,11 @@ These commands are the shared backbone. Every editor uses the same request/respo
 
 ### `basilisk/workspaceModules` {#EXTACT-LSP-COMMANDS-WORKSPACE-MODULES}
 
-Returns the semantic module tree for the workspace.
+Returns the semantic module tree for the workspace **with the type-health rollup
+folded in** — each `ModuleNode` carries its coverage %, error/warning counts, and
+adoption state, and the response carries a workspace-wide `HealthStats` summary.
+This single response powers the merged Modules panel, so it needs no separate
+`basilisk/typeHealth` round-trip or client-side join.
 
 - **Direction**: Client -> Server (request)
 - **Params**: `{ scope?: string }` — optional module name prefix filter (e.g. `"myapp.api"`)
@@ -69,7 +72,12 @@ Server pushes updated module data after re-analysis.
 
 ### `basilisk/typeHealth` {#EXTACT-LSP-COMMANDS-TYPE-HEALTH}
 
-Returns type coverage and diagnostic health for the workspace.
+Returns type coverage and diagnostic health for the workspace. The per-file
+computation is shared with (and identical to) the rollup folded into
+`basilisk/workspaceModules`. Editors with a unified panel (VS Code's merged
+Modules panel) read the folded rollup and do **not** call this command; it
+remains the standalone workspace-health command for editors without a unified
+panel — Zed's `/health` slash command and Neovim's `:BasiliskHealth`.
 
 - **Direction**: Client -> Server (request)
 - **Params**: `{}` (whole workspace) or `{ module?: string }` (specific module)
@@ -85,6 +93,8 @@ Returns type coverage and diagnostic health for the workspace.
 
 interface WorkspaceModulesResponse {
     modules: ModuleNode[];
+    /** Workspace-wide health rollup — rendered in the view's native message + badge. */
+    workspace: HealthStats;
 }
 
 interface ModuleNode {
@@ -98,6 +108,13 @@ interface ModuleNode {
     children: ModuleNode[];
     /** Top-level symbols exported by this module */
     symbols: SymbolNode[];
+    // --- Folded type-health rollup (single source of truth; see Type Health) ---
+    /** annotatedSymbols / totalSymbols * 100 over this module's symbols */
+    coveragePercent: number;
+    errors: number;
+    warnings: number;
+    /** true if the file is in adopted (errors-as-warnings) mode */
+    adopted: boolean;
 }
 
 interface SymbolNode {
@@ -150,9 +167,31 @@ interface ModuleHealth {
 
 ---
 
-## Panel 1: Module Explorer {#EXTACT-MODULES}
+## Panel 1: Modules {#EXTACT-MODULES}
 
 The killer panel. Shows the **semantic** structure of the workspace — not a file tree, a *module* tree. Every Python developer needs to understand their module graph, and the built-in Explorer doesn't show it.
+
+This panel also **subsumes Type Health** (issue #103): the per-module health rollup is folded into `basilisk/workspaceModules`, so each module row shows its coverage and diagnostics inline, and the workspace summary lives in native view chrome ([EXTACT-MODULES-HEADER](#EXTACT-MODULES-HEADER)). There is no separate Type Health panel in editors with a unified sidebar.
+
+### Module Row Rendering {#EXTACT-MODULES-MODULE-ROW}
+
+Each top-level module row renders its folded health:
+
+| Property | Value |
+|----------|-------|
+| Label | Module name (`myapp.api.auth`) |
+| Description | Coverage bar + `%`, then `nE nW` error/warning tallies, then `[adopted]` badge — e.g. `████████░░ 80% — 2E 3W [adopted]` |
+| Icon | `symbol-namespace` (package) / `symbol-file` (module), **tinted** green (>=90%) / yellow (50–89%) / red (<50%) by coverage |
+| Tooltip | Name, path, coverage %, error/warning counts, adoption status |
+| Drill-down | Expand to the module's symbols; the per-symbol "untyped" decoration is the type-health drill-down |
+
+### Workspace Health Header {#EXTACT-MODULES-HEADER}
+
+The workspace-wide summary renders in the tree view's **native chrome**, not a synthetic summary row:
+
+- **`treeView.message`**: `"73% typed · 14E 23W"` (coverage + error/warning tallies).
+- **`treeView.badge`**: numeric — the count of outstanding diagnostics (errors + warnings); hidden when zero.
+- **Empty workspace** (`totalFiles == 0`): the message reads `"No Python files found"` — never a misleading `100%` for 0/0 symbols, and no badge (preserves the issue #57 guarantee in the merged panel).
 
 ### Tree Structure {#EXTACT-MODULES-TREE-STRUCTURE}
 
@@ -220,7 +259,8 @@ myapp/
 | Refresh | Re-fetch module tree from LSP |
 | Collapse All | Standard collapse |
 | Filter | Toggle filter input to search modules/symbols by name |
-| Toggle View | Switch between tree (grouped by module) and flat (all symbols alphabetically) |
+| Toggle View | Switch between tree (grouped by module) and flat (all symbols) |
+| Sort | Cycle worst-first -> best-first -> alphabetical. Applied only in flat view; tree view stays structural. Carried over from the merged Type Health panel. |
 
 ### Refresh Strategy {#EXTACT-MODULES-REFRESH}
 
@@ -231,9 +271,22 @@ myapp/
 
 ---
 
-## Panel 2: Type Health {#EXTACT-HEALTH}
+## Type Health {#EXTACT-HEALTH}
 
 At-a-glance view of how well-typed the codebase is. Answers: "How much of my code does Basilisk actually understand?"
+
+> **Merged into the Modules panel (issue #103).** Type Health and the Module
+> Explorer rendered the same per-module list twice — coverage is a rollup of data
+> the module tree already carries. In editors with a unified sidebar (VS Code),
+> Type Health is **not a separate panel**: the per-module rollup is folded onto
+> each module row ([EXTACT-MODULES-MODULE-ROW](#EXTACT-MODULES-MODULE-ROW)) and the
+> workspace summary lives in the view's message + badge
+> ([EXTACT-MODULES-HEADER](#EXTACT-MODULES-HEADER)). The `basilisk/typeHealth`
+> command, `TypeHealthResponse`, and the tree structure below remain the **shared
+> health surface** for editors without a unified panel (Zed `/health`, Neovim
+> `:BasiliskHealth`), computed from the same per-file figures as the folded rollup.
+> The icon thresholds, coverage bar, `[adopted]` badge, and worst-first sort
+> described here all carry over to the merged panel.
 
 ### Tree Structure {#EXTACT-HEALTH-TREE-STRUCTURE}
 
@@ -440,7 +493,7 @@ the command registry directly. When an action is genuinely unavailable in the cu
 Read-only information fetched from:
 - LSP `initialize` response (server version, capabilities)
 - Extension settings (binary path, python path, analysis mode)
-- Workspace stats from `basilisk/typeHealth` (file count)
+- Workspace stats from `basilisk/workspaceModules` (folded health rollup: file count, coverage)
 
 Every row is a read-only display row and carries the read-only affordance defined in [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE): no command, no inline button, no button-like icon.
 
@@ -471,16 +524,9 @@ Full native support via TreeView API. This is the reference implementation.
         "basilisk": [
             {
                 "id": "basilisk.moduleExplorer",
-                "name": "Module Explorer",
+                "name": "Modules",
                 "icon": "$(symbol-namespace)",
-                "contextualTitle": "Basilisk Module Explorer"
-            },
-            {
-                "id": "basilisk.typeHealth",
-                "name": "Type Health",
-                "icon": "$(pulse)",
-                "contextualTitle": "Basilisk Type Health",
-                "visibility": "visible"
+                "contextualTitle": "Basilisk Modules"
             },
             {
                 "id": "basilisk.info",
@@ -521,13 +567,13 @@ Full native support via TreeView API. This is the reference implementation.
                 "group": "navigation"
             },
             {
-                "command": "basilisk.refreshTypeHealth",
-                "when": "view == basilisk.typeHealth",
+                "command": "basilisk.filterModuleExplorer",
+                "when": "view == basilisk.moduleExplorer",
                 "group": "navigation"
             },
             {
-                "command": "basilisk.sortTypeHealth",
-                "when": "view == basilisk.typeHealth",
+                "command": "basilisk.sortModuleExplorer",
+                "when": "view == basilisk.moduleExplorer",
                 "group": "navigation"
             }
         ],
@@ -567,12 +613,12 @@ Full native support via TreeView API. This is the reference implementation.
 | Command | Title |
 |---------|-------|
 | `basilisk.refreshModuleExplorer` | Basilisk: Refresh Module Explorer |
-| `basilisk.toggleModuleExplorerView` | Basilisk: Toggle Module View |
-| `basilisk.collapseModuleExplorer` | Basilisk: Collapse Module Explorer |
+| `basilisk.toggleModuleExplorerView` | Basilisk: Toggle Tree/Flat View |
+| `basilisk.collapseModuleExplorer` | Basilisk: Collapse All |
+| `basilisk.filterModuleExplorer` | Basilisk: Filter Modules |
+| `basilisk.sortModuleExplorer` | Basilisk: Toggle Sort Order (folded Type Health) |
 | `basilisk.copyImportPath` | Basilisk: Copy Import Path |
 | `basilisk.copyQualifiedName` | Basilisk: Copy Qualified Name |
-| `basilisk.refreshTypeHealth` | Basilisk: Refresh Type Health |
-| `basilisk.sortTypeHealth` | Basilisk: Sort Type Health |
 | `basilisk.openWalkthrough` | Basilisk: Getting Started |
 
 **When clauses / context keys**:

@@ -170,7 +170,7 @@ This rule applies equally to VS Code, Neovim, and Zed extensions.
 | `basilisk.uv.lock` | `{}` | `{}` | Run `uv lock` (resolve without installing) |
 | `basilisk.uv.createEnv` | `{pythonVersion?}` | `{}` | Run `uv venv` (optionally `--python X.Y`) |
 | `basilisk/workspaceModules` | `{scope?: string}` | `WorkspaceModulesResponse` | Return the workspace module tree (optionally scoped to a package/subpackage) |
-| `basilisk/typeHealth` | `{module?: string}` | `TypeHealthResponse` | Return type health statistics for the workspace or a specific module |
+| `basilisk/typeHealth` | `{module?: string}` | `TypeHealthResponse` | Return type health statistics for the workspace or a specific module. The same per-file rollup is folded into `basilisk/workspaceModules`; unified-panel editors read the folded data and this command serves editors without one (Zed `/health`, Neovim `:BasiliskHealth`). |
 
 ### Custom LSP Notifications {#LSPARCH-NOTIFS}
 
@@ -199,9 +199,15 @@ interface SymbolNode {
     children: SymbolNode[];    // Nested symbols (e.g. methods inside a class)
 }
 
-/** Response from `basilisk/workspaceModules`. */
+/**
+ * Response from `basilisk/workspaceModules`. Each ModuleNode carries its folded
+ * type-health rollup (coveragePercent, errors, warnings, adopted) and the
+ * response carries a workspace-wide summary, so a merged Modules panel needs no
+ * separate `basilisk/typeHealth` round-trip (issue #103).
+ */
 interface WorkspaceModulesResponse {
     modules: ModuleNode[];
+    workspace: HealthStats;
 }
 
 /** Aggregate health statistics for a scope (workspace or single module). */

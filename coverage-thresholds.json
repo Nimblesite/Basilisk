@@ -13,7 +13,7 @@
       "threshold": 100
     },
     "basilisk-lsp": {
-      "threshold": 77
+      "threshold": 78
     },
     "basilisk-mojo": {
       "threshold": 90
@@ -34,7 +34,7 @@
       "threshold": 96
     },
     "vsix": {
-      "threshold": 86
+      "threshold": 87
     },
     "nvim": {
       "threshold": 39
