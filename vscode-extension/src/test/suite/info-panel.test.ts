@@ -89,13 +89,13 @@ suite("Basilisk Info Panel Contents", () => {
     }
   });
 
-  test("uv Integration shows uv Quick Actions when enabled", async () => {
-    await setUvEnabled(true);
-    const labels = sectionItems("Quick Actions").map(labelOf);
-    for (const action of UV_ACTIONS) {
-      assert.ok(labels.includes(action), `"${action}" should appear when uv is enabled`);
-    }
-  });
+  // The positive "uv actions appear when uv is enabled" case lives in
+  // activity-panel.test.ts, not here: per issue #103 defect 1, a uv Quick Action
+  // may only render when the server advertises its handler, which requires a
+  // running LSP. This suite's provider is built on a fresh, server-down store,
+  // so the uv rows are correctly hidden regardless of the uv.enabled toggle —
+  // see "Quick Actions hides server-advertised rows when the server is not
+  // running" below for the server-down half of the contract.
 
   test("uv Integration hides uv Quick Actions when disabled", async () => {
     await setUvEnabled(false);
@@ -108,6 +108,38 @@ suite("Basilisk Info Panel Contents", () => {
     }
     // Non-uv actions remain regardless of the toggle.
     assert.ok(labels.includes("Restart Server"), "non-uv actions stay visible");
+  });
+
+  // Regression for issue #103 defect 1 [EXTACT-INFO-ACTION-WIRING]: the
+  // server-advertised quick actions (Fix All, Organize Imports, uv.*) were
+  // rendered unconditionally. Their handlers are only registered once the LSP
+  // reaches Running (store.syncServerCommands), so with the server stopped or
+  // mid-startup clicking a row raised "command not found". A row may only
+  // appear if its command resolves to a live handler — so when the server is
+  // not running these rows MUST be hidden, not shown-but-dead.
+  const SERVER_DEPENDENT_ACTIONS = [
+    "Fix All in Workspace",
+    "Organize Imports (Workspace)",
+    ...UV_ACTIONS,
+  ] as const;
+
+  test("Quick Actions hides server-advertised rows when the server is not running", () => {
+    // The suite-level provider is built on a fresh createStore(): lspState is
+    // "idle" and serverCommands is empty — i.e. the server is stopped. None of
+    // the server-advertised actions resolve to a live handler in this state.
+    const labels = sectionItems("Quick Actions").map(labelOf);
+    for (const dead of SERVER_DEPENDENT_ACTIONS) {
+      assert.ok(
+        !labels.includes(dead),
+        `"${dead}" is a server-advertised command; with the server stopped its ` +
+        `handler is not registered, so the row would raise "command not found" ` +
+        `when clicked and must be hidden`,
+      );
+    }
+    // The client-core actions stay available regardless of server state — you
+    // must be able to restart a stopped server and open its log.
+    assert.ok(labels.includes("Restart Server"), "client-core actions stay visible");
+    assert.ok(labels.includes("Show Output"), "client-core actions stay visible");
   });
 });
 

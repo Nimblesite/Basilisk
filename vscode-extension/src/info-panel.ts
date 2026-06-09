@@ -130,19 +130,29 @@ function buildFeatureStatusSection(): SectionItem {
   return new SectionItem("Feature Status", items);
 }
 
-// Quick Actions — single source of truth. Every command id here is either a
-// client command (registered in registerInfoPanel/store) or a server-advertised
-// command (registered by syncServerCommands); per [EXTACT-INFO-ACTION-WIRING] a
-// row may only appear if its command resolves to a live handler.
-const CORE_ACTIONS: readonly ActionDef[] = [
+// Quick Actions — single source of truth, partitioned by how each handler is
+// wired so a row can be gated on liveness per [EXTACT-INFO-ACTION-WIRING] (a row
+// may only appear if its command resolves to a live handler).
+
+// Client-core actions — registered client-side and always offered so the user
+// can recover a stopped server (restart) and read its log.
+const CLIENT_ACTIONS: readonly ActionDef[] = [
   { label: "Restart Server", commandId: "basilisk.restartServer", icon: "debug-restart", tooltip: "Restart the Basilisk language server" },
   { label: "Show Output", commandId: "basilisk.showOutput", icon: "output", tooltip: "Show the Basilisk output log" },
+];
+
+// Server-advertised actions — their handlers exist only while the LSP is Running
+// (store.syncServerCommands). Shown only when the server actually advertises
+// them; otherwise hidden (not shown-but-dead) so clicking can never raise
+// "command not found", per [EXTACT-INFO-ACTION-WIRING].
+const SERVER_ACTIONS: readonly ActionDef[] = [
   { label: "Fix All in Workspace", commandId: "basilisk.fixWorkspace", icon: "wand", tooltip: "Apply all safe autofixes across the workspace" },
   { label: "Organize Imports (Workspace)", commandId: "basilisk.organizeImports", icon: "list-ordered", tooltip: "Organize imports across the workspace" },
 ];
 
-// uv actions — shown only when uv Integration is enabled (otherwise hidden, not
-// shown-but-dead, per [EXTACT-INFO-ACTION-WIRING]).
+// uv actions — server-advertised AND additionally gated on uv Integration being
+// enabled. Hidden when uv is off or the server is down, per
+// [EXTACT-INFO-ACTION-WIRING].
 const UV_ACTIONS: readonly ActionDef[] = [
   { label: "uv Sync", commandId: "basilisk.uv.sync", icon: "sync", tooltip: "Run uv sync to update the environment" },
   { label: "uv Add Package", commandId: "basilisk.uv.add", icon: "add", tooltip: "Run uv add to add a dependency" },
@@ -150,10 +160,15 @@ const UV_ACTIONS: readonly ActionDef[] = [
   { label: "uv Create Env", commandId: "basilisk.uv.createEnv", icon: "terminal", tooltip: "Run uv venv to create a virtual environment" },
 ];
 
-/** Build the quick actions section with uv actions when enabled. */
-function buildQuickActionsSection(): SectionItem {
+/** Build the quick actions section, hiding any action whose handler is not live. */
+function buildQuickActionsSection(store: Store): SectionItem {
   const uvEnabled = vscode.workspace.getConfiguration("basilisk").get<boolean>("uv.enabled") ?? true;
-  const defs = uvEnabled ? [...CORE_ACTIONS, ...UV_ACTIONS] : CORE_ACTIONS;
+  function advertised(def: ActionDef): boolean {
+    return store.isServerCommandAdvertised(def.commandId);
+  }
+  const serverActions = SERVER_ACTIONS.filter(advertised);
+  const uvActions = uvEnabled ? UV_ACTIONS.filter(advertised) : [];
+  const defs = [...CLIENT_ACTIONS, ...serverActions, ...uvActions];
   return new SectionItem("Quick Actions", defs.map((def) => new ActionItem(def)));
 }
 
@@ -208,7 +223,7 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
 
     return [
       buildFeatureStatusSection(),
-      buildQuickActionsSection(),
+      buildQuickActionsSection(this.store),
       this.buildServerInfoSection(),
     ];
   }
