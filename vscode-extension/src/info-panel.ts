@@ -2,17 +2,24 @@
 /**
  * Basilisk Info Panel — TreeDataProvider for the Basilisk sidebar.
  *
- * Shows feature status (toggleable), quick actions, and server information
- * including uv environment status. This panel is always visible regardless
- * of workspace state.
+ * Slimmed per issue #103: feature toggles at the top level (two toggles do
+ * not justify a section header) plus a compact read-only Server Info section.
+ * Quick actions live elsewhere — Fix All / Organize Imports / Restart are
+ * toolbar buttons on the Modules panel (when-gated on the server running),
+ * Show Output is the status-bar click action, and everything remains in the
+ * command palette. The live server state row was dropped: the status bar
+ * already shows it.
+ *
+ * This panel is always visible regardless of workspace state.
  */
 
 import * as vscode from "vscode";
+import { effect } from "@preact/signals-core";
 import { type Store } from "./store";
 
 // ── Tree node types ──────────────────────────────────────────────────────
 
-type InfoItem = SectionItem | FeatureItem | ActionItem | InfoTextItem;
+type InfoItem = SectionItem | FeatureItem | InfoTextItem;
 
 /** Section header — collapsible container for related items. */
 class SectionItem extends vscode.TreeItem {
@@ -49,36 +56,6 @@ class FeatureItem extends vscode.TreeItem {
       command: "basilisk.toggleFeature",
       title: "Toggle Feature",
       arguments: [settingKey, !enabled],
-    };
-  }
-}
-
-/** Definition of a quick action — the single source of truth for a row. */
-interface ActionDef {
-  readonly label: string;
-  readonly commandId: string;
-  /** Codicon id connoting the action (verb/tool). */
-  readonly icon: string;
-  /** Imperative tooltip describing the effect. */
-  readonly tooltip: string;
-}
-
-/**
- * Quick action — clicking executes a command.
- *
- * Actionable affordance per [EXTACT-INFO-AFFORDANCE]: carries a `command`, an
- * imperative tooltip describing the effect, and a verb/tool icon. Paired with
- * the inline action button contributed for `viewItem == action`.
- */
-class ActionItem extends vscode.TreeItem {
-  constructor(def: ActionDef) {
-    super(def.label, vscode.TreeItemCollapsibleState.None);
-    this.iconPath = new vscode.ThemeIcon(def.icon);
-    this.tooltip = def.tooltip;
-    this.contextValue = "action";
-    this.command = {
-      command: def.commandId,
-      title: def.label,
     };
   }
 }
@@ -120,70 +97,40 @@ const FEATURES: readonly FeatureDef[] = [
 
 // ── Provider ─────────────────────────────────────────────────────────────
 
-/** Build the feature status section from current configuration. */
-function buildFeatureStatusSection(): SectionItem {
+/**
+ * Build the top-level feature toggles. Rendered directly at the root — two
+ * toggles do not justify a "Feature Status" section header (issue #103).
+ */
+function buildFeatureToggles(): FeatureItem[] {
   const cfg = vscode.workspace.getConfiguration();
-  const items: FeatureItem[] = FEATURES.map((f) => {
+  return FEATURES.map((f) => {
     const enabled = cfg.get<boolean>(f.settingKey) ?? true;
     return new FeatureItem(f.label, f.settingKey, enabled);
   });
-  return new SectionItem("Feature Status", items);
 }
 
-// Quick Actions — single source of truth, partitioned by how each handler is
-// wired so a row can be gated on liveness per [EXTACT-INFO-ACTION-WIRING] (a row
-// may only appear if its command resolves to a live handler).
-
-// Client-core actions — registered client-side and always offered so the user
-// can recover a stopped server (restart) and read its log.
-const CLIENT_ACTIONS: readonly ActionDef[] = [
-  { label: "Restart Server", commandId: "basilisk.restartServer", icon: "debug-restart", tooltip: "Restart the Basilisk language server" },
-  { label: "Show Output", commandId: "basilisk.showOutput", icon: "output", tooltip: "Show the Basilisk output log" },
-];
-
-// Server-advertised actions — their handlers exist only while the LSP is Running
-// (store.syncServerCommands). Shown only when the server actually advertises
-// them; otherwise hidden (not shown-but-dead) so clicking can never raise
-// "command not found", per [EXTACT-INFO-ACTION-WIRING].
-const SERVER_ACTIONS: readonly ActionDef[] = [
-  { label: "Fix All in Workspace", commandId: "basilisk.fixWorkspace", icon: "wand", tooltip: "Apply all safe autofixes across the workspace" },
-  { label: "Organize Imports (Workspace)", commandId: "basilisk.organizeImports", icon: "list-ordered", tooltip: "Organize imports across the workspace" },
-];
-
-// uv actions — server-advertised AND additionally gated on uv Integration being
-// enabled. Hidden when uv is off or the server is down, per
-// [EXTACT-INFO-ACTION-WIRING].
-const UV_ACTIONS: readonly ActionDef[] = [
-  { label: "uv Sync", commandId: "basilisk.uv.sync", icon: "sync", tooltip: "Run uv sync to update the environment" },
-  { label: "uv Add Package", commandId: "basilisk.uv.add", icon: "add", tooltip: "Run uv add to add a dependency" },
-  { label: "uv Lock", commandId: "basilisk.uv.lock", icon: "lock", tooltip: "Run uv lock to update the lock file" },
-  { label: "uv Create Env", commandId: "basilisk.uv.createEnv", icon: "terminal", tooltip: "Run uv venv to create a virtual environment" },
-];
-
-/** Build the quick actions section, hiding any action whose handler is not live. */
-function buildQuickActionsSection(store: Store): SectionItem {
-  const uvEnabled = vscode.workspace.getConfiguration("basilisk").get<boolean>("uv.enabled") ?? true;
-  function advertised(def: ActionDef): boolean {
-    return store.isServerCommandAdvertised(def.commandId);
-  }
-  const serverActions = SERVER_ACTIONS.filter(advertised);
-  const uvActions = uvEnabled ? UV_ACTIONS.filter(advertised) : [];
-  const defs = [...CLIENT_ACTIONS, ...serverActions, ...uvActions];
-  return new SectionItem("Quick Actions", defs.map((def) => new ActionItem(def)));
-}
-
-/** Build uv-related info items from configuration. */
-function buildUvInfoItems(cfg: vscode.WorkspaceConfiguration): InfoTextItem[] {
+/**
+ * Build the single compact uv info row. The verbose sub-settings (auto-sync,
+ * stub suggestions) live in the tooltip, not as their own rows (issue #103).
+ */
+function buildUvInfoItem(cfg: vscode.WorkspaceConfiguration): InfoTextItem {
   const uvEnabled = cfg.get<boolean>("uv.enabled") ?? true;
   const uvPath = cfg.get<string>("uv.executablePath") ?? "";
   const uvAutoSync = cfg.get<boolean>("uv.autoSync") ?? false;
   const uvStubs = cfg.get<boolean>("uv.stubSuggestions") ?? true;
 
-  return [
-    new InfoTextItem("uv", uvEnabled ? (uvPath === "" ? "auto-detect" : uvPath) : "disabled", "package"),
-    new InfoTextItem("uv Auto-Sync", uvAutoSync ? "on" : "off", "sync"),
-    new InfoTextItem("Stub Suggestions", uvStubs ? "on" : "off", "library"),
-  ];
+  const item = new InfoTextItem(
+    "uv",
+    uvEnabled ? (uvPath === "" ? "auto-detect" : uvPath) : "disabled",
+    "package",
+  );
+  item.tooltip = [
+    `uv Integration: ${uvEnabled ? "enabled" : "disabled"}`,
+    `Executable: ${uvPath === "" ? "auto-detect" : uvPath}`,
+    `Auto-Sync: ${uvAutoSync ? "on" : "off"}`,
+    `Stub Suggestions: ${uvStubs ? "on" : "off"}`,
+  ].join("\n");
+  return item;
 }
 
 export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vscode.Disposable {
@@ -200,6 +147,18 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
         }
       }),
     );
+    // Defect 3 (issue #103): Server Info must not go stale. Re-render whenever
+    // the LSP lifecycle signals change (e.g. the Version row appears once the
+    // client's initializeResult arrives) — same signals pattern as
+    // bindLspStateEffects in lsp-client.ts.
+    const disposeEffect = effect(() => {
+      // Subscribe to both signals; the values themselves are read in
+      // buildServerInfoSection on the re-render this triggers.
+      void this.store.lspState.value;
+      void this.store.client.value;
+      this.emitter.fire(undefined);
+    });
+    this.disposables.push({ dispose: disposeEffect });
   }
 
   public refresh(): void {
@@ -221,17 +180,19 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
     }
     if (element !== undefined) { return []; }
 
+    // Slimmed layout (issue #103): toggles at the root, then compact Server
+    // Info. No Quick Actions section — those are Modules-toolbar buttons,
+    // the status bar, and the command palette.
     return [
-      buildFeatureStatusSection(),
-      buildQuickActionsSection(this.store),
+      ...buildFeatureToggles(),
       this.buildServerInfoSection(),
     ];
   }
 
   private buildServerInfoSection(): SectionItem {
-    const lspState = this.store.lspState.value;
-    const stateIcon = lspState === "running" ? "circle-filled" : "circle-slash";
-
+    // No live "Server" state row: the status bar already shows it (issue
+    // #103). The lspState/client effect in the constructor still re-renders
+    // this section so the Version row appears as soon as the server is up.
     const client = this.store.client.value;
     const serverInfo = client?.initializeResult?.serverInfo;
     const cfg = vscode.workspace.getConfiguration("basilisk");
@@ -241,11 +202,10 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
     const execPath = cfg.get<string>("executablePath") ?? "basilisk";
 
     const items: InfoTextItem[] = [
-      new InfoTextItem("Server", lspState, stateIcon),
       ...(serverInfo !== undefined ? [new InfoTextItem("Version", serverInfo.version ?? "unknown", "versions")] : []),
       new InfoTextItem("Analysis Mode", mode, "symbol-keyword"),
       new InfoTextItem("Python", pythonPath === "" ? "auto-detect" : pythonPath, "symbol-namespace"),
-      ...buildUvInfoItems(cfg),
+      buildUvInfoItem(cfg),
       new InfoTextItem("Binary", execPath, "file-binary"),
     ];
 
@@ -281,11 +241,12 @@ export function registerInfoPanel(
       "basilisk.toggleFeature",
       async (settingKey: string, newValue: boolean) => {
         const cfg = vscode.workspace.getConfiguration();
-        await cfg.update(settingKey, newValue, vscode.ConfigurationTarget.Workspace);
+        const target = featureToggleTarget(vscode.workspace.workspaceFolders?.length ?? 0);
+        await cfg.update(settingKey, newValue, target);
       },
     ),
     // Inline action-button dispatcher [EXTACT-INFO-AFFORDANCE]. The literal
-    // button contributed for actionable rows (viewItem == action|feature)
+    // button contributed for feature-toggle rows (viewItem == feature)
     // invokes this with the clicked row; it forwards to the row's own command
     // so the button and the whole-row click share a single source of truth.
     vscode.commands.registerCommand(
@@ -300,4 +261,20 @@ export function registerInfoPanel(
   ];
 
   return { provider, disposables };
+}
+
+/**
+ * Configuration target for feature toggles — defect 2 of issue #103.
+ *
+ * The info panel is always visible (`visibility: "visible"`, no `when`), so
+ * toggles can be clicked with no folder open. Writing to
+ * `ConfigurationTarget.Workspace` is invalid without a workspace folder and
+ * rejects the update, so fall back to `Global` in that case. Pure in the
+ * folder count so both branches are testable in the e2e host (which always
+ * launches with a folder).
+ */
+export function featureToggleTarget(workspaceFolderCount: number): vscode.ConfigurationTarget {
+  return workspaceFolderCount > 0
+    ? vscode.ConfigurationTarget.Workspace
+    : vscode.ConfigurationTarget.Global;
 }

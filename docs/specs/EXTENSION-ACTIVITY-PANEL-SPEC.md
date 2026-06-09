@@ -261,6 +261,9 @@ myapp/
 | Filter | Toggle filter input to search modules/symbols by name |
 | Toggle View | Switch between tree (grouped by module) and flat (all symbols) |
 | Sort | Cycle worst-first -> best-first -> alphabetical. Applied only in flat view; tree view stays structural. Carried over from the merged Type Health panel. |
+| Fix All | Run `basilisk.fixWorkspace`. Promoted from the info panel (issue #103); `when`-gated on `basilisk.serverState == 'running'`. |
+| Organize Imports | Run `basilisk.organizeImports`. Same promotion + gating. |
+| Restart Server | Run `basilisk.restartServer`. Same promotion + gating. |
 
 ### Refresh Strategy {#EXTACT-MODULES-REFRESH}
 
@@ -353,45 +356,48 @@ Helps users understand what Basilisk **is** and what it **does**. Not a static a
 
 ### Structure {#EXTACT-INFO-STRUCTURE}
 
-Tree with grouped sections (top-level nodes are section headers, children are items).
+Slimmed per issue #103: the feature toggles render **at the root** (two real
+toggles do not justify a "Feature Status" section header) followed by one
+compact read-only **Server Info** section. There is **no Quick Actions
+section** — see [EXTACT-INFO-QUICK-ACTIONS](#EXTACT-INFO-QUICK-ACTIONS) for
+where each action lives now.
 
 Every row falls into exactly one of two **interaction classes**, and the two classes
 **must be visually unmistakable** (see [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE)):
 `[A]` marks an **actionable** row (clicking does something), `·` marks a **read-only**
 display row (clicking does nothing). The markers below are notation for this spec, not
-literal glyphs — the editor renders the distinction with the affordances defined in
-[EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE).
+literal glyphs.
 
 ```
-Getting Started
-  [A] What is Basilisk?                     -> opens walkthrough / help
-  [A] Quick Setup Guide                     -> opens walkthrough / help
-  [A] Keyboard Shortcuts                    -> opens keybinding reference
+[A] Type Checking                         Enabled        (click to disable)
+[A] uv Integration                        Enabled        (click to disable)
 
-Feature Status                              (toggles — actionable)
-  [A] Type Checking                         enabled        (click to disable)
-  [A] Inlay Hints                           enabled        (click to disable)
-  [A] Autofix                               enabled        (click to disable)
-  [A] Debugger                              disabled       (click to enable)
-  [A] Test Explorer                         enabled        (click to disable)
-  [A] Ruff Integration                      enabled        (click to disable)
-  [A] AI Suggestions                        disabled       (click to enable)
-  [A] Profiler                              not installed
-
-Quick Actions                              (commands — actionable)
-  [A] Restart Language Server
-  [A] Organize Imports (Workspace)
-  [A] Fix All (Workspace)
-  [A] Show Output Log
-  [A] Run All Tests
-
-Server Info                                (read-only — display only)
-  ·   Version: 0.4.2
-  ·   Binary: /usr/local/bin/basilisk
-  ·   Python: /usr/bin/python3.12
+Server Info                               (read-only — display only)
+  ·   Version: 0.4.2                      (present once the server is up)
   ·   Analysis Mode: wholeModule
-  ·   Workspace: /home/user/myapp (142 files)
+  ·   Python: auto-detect
+  ·   uv: auto-detect                     (tooltip: enabled, executable, auto-sync, stub suggestions)
+  ·   Binary: basilisk
 ```
+
+Notably absent, by design (issue #103):
+
+- **No live "Server: running/stopped" row** — the status bar already shows the
+  server state; duplicating it here invited staleness.
+- **No Quick Actions rows** — promoted to the Modules toolbar / status bar /
+  command palette, where they can be `when`-gated properly.
+- **No separate uv Auto-Sync / Stub Suggestions rows** — folded into the uv
+  row's tooltip.
+
+**Freshness:** the provider re-renders on `basilisk.*` configuration changes
+AND on `lspState`/`client` signal changes (a signals `effect()`, the same
+pattern as the status bar) so the Version row appears as soon as the server
+initializes — Server Info must never go stale (issue #103 defect 3).
+
+**Toggle write target:** the panel is always visible, so toggles are clickable
+with no folder open. `basilisk.toggleFeature` writes to
+`ConfigurationTarget.Workspace` when a workspace folder exists and falls back
+to `ConfigurationTarget.Global` otherwise (issue #103 defect 2).
 
 ### Interaction Affordance {#EXTACT-INFO-AFFORDANCE}
 
@@ -400,7 +406,9 @@ with read-only display rows (server info). Users **must** be able to tell, at a 
 without clicking, which rows do something and which are just information. This distinction
 is mandatory and is verified by tests.
 
-**Actionable rows** (`contextValue` of `feature`, `action`, or `gettingStarted`):
+**Actionable rows** (`contextValue` of `feature` — the slimmed panel's only
+actionable class; the former `action` and `gettingStarted` rows were removed
+in issue #103):
 
 - **Must** carry a `command` that runs on row click, and that command **must** be registered
   by the extension — a row that looks clickable but invokes an unregistered/no-op command is
@@ -474,26 +482,53 @@ for the work required.
 
 **Click action**: toggles the setting. Disabled -> enabled, enabled -> disabled. Immediate effect. Every row is an actionable row and carries the actionable affordance defined in [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE).
 
-### Quick Actions Section {#EXTACT-INFO-QUICK-ACTIONS}
+**Layout**: the toggles render at the panel root with **no "Feature Status"
+section header** — with only two shipped toggles a header is noise (issue
+#103). If the shipped set ever grows past ~4, reintroduce the header.
 
-Each item triggers an existing command. Convenience surface — users don't have to remember command palette names. Every row is an actionable row and carries the actionable affordance defined in [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE).
+**Write target**: `basilisk.toggleFeature` picks its `ConfigurationTarget`
+from the live workspace-folder count — `Workspace` when a folder is open,
+`Global` otherwise. The panel has no `when` clause, so the no-folder state is
+reachable and writing `Workspace` there is invalid (issue #103 defect 2).
+
+### Quick Actions {#EXTACT-INFO-QUICK-ACTIONS}
+
+There is **no Quick Actions section in this panel** (issue #103). A list of
+pseudo-buttons in an always-visible panel kept surfacing rows whose handlers
+were not alive. Each action now lives on a surface that can gate it properly:
+
+| Action | Where it lives now | Gating |
+|--------|--------------------|--------|
+| Fix All in Workspace (`basilisk.fixWorkspace`) | Modules panel toolbar button | `view == basilisk.moduleExplorer && basilisk.serverState == 'running'` |
+| Organize Imports (`basilisk.organizeImports`) | Modules panel toolbar button | same |
+| Restart Server (`basilisk.restartServer`) | Modules panel toolbar button | same |
+| Show Output (`basilisk.showOutput`) | Status bar item click action | always (client-registered) |
+| uv actions (`basilisk.uv.*`) | Command palette (+ code actions) | server-advertised handlers |
+
+The `basilisk.serverState` context key is set from the `lspState` signal
+effect in `lsp-client.ts` (values: `idle | starting | running | stopped`).
 
 #### Action Wiring {#EXTACT-INFO-ACTION-WIRING}
 
-A quick action that is contributed to the panel (or to `contributes.commands` in
-`package.json`) **must** have a live handler registered via `registerCommand`. Contributing a
-command without a handler — so the row renders but clicking it does nothing or raises
-"command not found" — is a defect. Every actionable row's command id **must** resolve to a
-registered handler, and this is asserted by an e2e test that drives the row, not by inspecting
-the command registry directly. When an action is genuinely unavailable in the current context
-(e.g. a uv action with uv disabled), the row **must** be hidden, not shown-but-dead.
+A quick action that is contributed to any surface (toolbar button, panel row,
+or `contributes.commands` in `package.json`) **must** have a live handler
+registered via `registerCommand` whenever it is visible/invocable. Contributing
+a command without a handler — so the button renders but clicking it raises
+"command not found" — is a defect. Server-dependent actions **must** be
+`when`-gated on `basilisk.serverState == 'running'` (toolbar) or hidden
+(rows); never shown-but-dead. This is asserted by e2e tests that drive the
+real contribution, not by inspecting the command registry directly.
 
 ### Server Info Section {#EXTACT-INFO-SERVER-INFO}
 
-Read-only information fetched from:
-- LSP `initialize` response (server version, capabilities)
-- Extension settings (binary path, python path, analysis mode)
-- Workspace stats from `basilisk/workspaceModules` (folded health rollup: file count, coverage)
+Compact read-only information fetched from:
+- LSP `initialize` response (server version — row appears once the server is up)
+- Extension settings (binary path, python path, analysis mode, uv)
+
+Rules (issue #103):
+- **No live server-state row** — the status bar is the single home for "running/stopped"; this section never duplicates it.
+- **One uv row** — the verbose sub-settings (executable path, auto-sync, stub suggestions) live in that row's tooltip, not as separate rows.
+- **Never stale** — the provider re-renders on `lspState`/`client` signal changes (defect 3), so the Version row tracks the actual server lifecycle.
 
 Every row is a read-only display row and carries the read-only affordance defined in [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE): no command, no inline button, no button-like icon.
 
@@ -574,6 +609,21 @@ Full native support via TreeView API. This is the reference implementation.
             {
                 "command": "basilisk.sortModuleExplorer",
                 "when": "view == basilisk.moduleExplorer",
+                "group": "navigation"
+            },
+            {
+                "command": "basilisk.fixWorkspace",
+                "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running'",
+                "group": "navigation"
+            },
+            {
+                "command": "basilisk.organizeImports",
+                "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running'",
+                "group": "navigation"
+            },
+            {
+                "command": "basilisk.restartServer",
+                "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running'",
                 "group": "navigation"
             }
         ],

@@ -1,23 +1,32 @@
-// Tests for [EXTACT-INFO]. See docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-FEATURE-STATUS
+// Tests for [EXTACT-INFO]. See docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO
 /**
- * Info Panel contents E2E tests.
+ * Info Panel contents E2E tests — the slimmed panel of issue #103.
  *
- * The Feature Status section is only allowed to list toggles whose setting has
- * a real, observable effect (a toggle that writes a setting nothing reads is a
- * lie to the user). These tests pin the shipped set and prove the one toggle
- * with a panel-visible effect — uv Integration — actually changes the panel.
+ * The panel is exactly: the feature toggles at the root (no "Feature Status"
+ * section header — two toggles don't justify one) plus a compact read-only
+ * Server Info section. There is NO Quick Actions section: the high-value
+ * actions are Modules-toolbar buttons gated on the server running (see
+ * activity-panel.test.ts), Show Output is the status-bar click action, and
+ * everything stays in the command palette.
  *
- * If someone re-adds a no-op toggle (e.g. "Ruff Integration", whose setting the
- * LSP server silently drops), the first test fails. See
- * EXTENSION-ACTIVITY-PANEL-PLAN.md#EXTACT-PLAN-FEATURE-TOGGLES for the work
- * required before a removed toggle may return.
+ * This structure is itself the regression guard for issue #103 defect 1
+ * ("command not found" quick actions): with no action rows in the panel at
+ * all, a dead shown-but-unregistered action row is structurally impossible —
+ * the only commands any row carries are the always-registered
+ * basilisk.toggleFeature toggles.
+ *
+ * Feature toggles: only toggles whose setting has a real, observable effect
+ * may appear (a toggle that writes a setting nothing reads is a lie to the
+ * user). If someone re-adds a no-op toggle (e.g. "Ruff Integration", whose
+ * setting the LSP server silently drops), the toggle-set test fails. See
+ * EXTENSION-ACTIVITY-PANEL-PLAN.md#EXTACT-PLAN-FEATURE-TOGGLES.
  */
 
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { InfoPanelProvider } from "../../info-panel";
+import { InfoPanelProvider, featureToggleTarget } from "../../info-panel";
 import { createStore } from "../../store";
-import { EXTENSION_ID } from "./test-helpers";
+import { EXTENSION_ID, SUITE_SETUP_TIMEOUT_MS, waitForLspReady } from "./test-helpers";
 
 /** Toggles that ship — each has a namesake, observable effect. */
 const KEPT_FEATURE_LABELS = ["Type Checking", "uv Integration"] as const;
@@ -32,133 +41,12 @@ const REMOVED_FEATURE_LABELS = [
   "AI Typing",
 ] as const;
 
-/** uv Quick Actions that must vanish when uv Integration is toggled off. */
-const UV_ACTIONS = ["uv Sync", "uv Add Package", "uv Lock", "uv Create Env"] as const;
-
 /** Extract a TreeItem's label as a plain string. */
 function labelOf(item: vscode.TreeItem): string {
   const { label } = item;
   if (typeof label === "string") { return label; }
   return label?.label ?? "";
 }
-
-async function setUvEnabled(value: boolean | undefined): Promise<void> {
-  await vscode.workspace.getConfiguration().update(
-    "basilisk.uv.enabled",
-    value,
-    vscode.ConfigurationTarget.Workspace,
-  );
-}
-
-suite("Basilisk Info Panel Contents", () => {
-  let provider: InfoPanelProvider;
-
-  setup(() => {
-    provider = new InfoPanelProvider(createStore());
-  });
-
-  teardown(async () => {
-    provider.dispose();
-    await setUvEnabled(undefined);
-  });
-
-  /** Children of a named top-level section in the info tree. */
-  function sectionItems(sectionLabel: string): vscode.TreeItem[] {
-    const sections = provider.getChildren();
-    const section = sections.find((entry) => labelOf(entry) === sectionLabel);
-    assert.ok(section, `"${sectionLabel}" section should exist`);
-    return provider.getChildren(section);
-  }
-
-  test("Feature Status lists exactly the toggles with a real effect", () => {
-    const labels = sectionItems("Feature Status").map(labelOf);
-    assert.deepStrictEqual(
-      labels,
-      [...KEPT_FEATURE_LABELS],
-      `Feature Status must list exactly: ${KEPT_FEATURE_LABELS.join(", ")}`,
-    );
-  });
-
-  test("Feature Status hides every no-op toggle", () => {
-    const labels = sectionItems("Feature Status").map(labelOf);
-    for (const removed of REMOVED_FEATURE_LABELS) {
-      assert.ok(
-        !labels.includes(removed),
-        `"${removed}" must not appear — its setting is ignored, so the toggle does nothing`,
-      );
-    }
-  });
-
-  // The positive "uv actions appear when uv is enabled" case lives in
-  // activity-panel.test.ts, not here: per issue #103 defect 1, a uv Quick Action
-  // may only render when the server advertises its handler, which requires a
-  // running LSP. This suite's provider is built on a fresh, server-down store,
-  // so the uv rows are correctly hidden regardless of the uv.enabled toggle —
-  // see "Quick Actions hides server-advertised rows when the server is not
-  // running" below for the server-down half of the contract.
-
-  test("uv Integration hides uv Quick Actions when disabled", async () => {
-    await setUvEnabled(false);
-    const labels = sectionItems("Quick Actions").map(labelOf);
-    for (const action of UV_ACTIONS) {
-      assert.ok(
-        !labels.includes(action),
-        `"${action}" must be hidden when uv Integration is off`,
-      );
-    }
-    // Non-uv actions remain regardless of the toggle.
-    assert.ok(labels.includes("Restart Server"), "non-uv actions stay visible");
-  });
-
-  // Regression for issue #103 defect 1 [EXTACT-INFO-ACTION-WIRING]: the
-  // server-advertised quick actions (Fix All, Organize Imports, uv.*) were
-  // rendered unconditionally. Their handlers are only registered once the LSP
-  // reaches Running (store.syncServerCommands), so with the server stopped or
-  // mid-startup clicking a row raised "command not found". A row may only
-  // appear if its command resolves to a live handler — so when the server is
-  // not running these rows MUST be hidden, not shown-but-dead.
-  const SERVER_DEPENDENT_ACTIONS = [
-    "Fix All in Workspace",
-    "Organize Imports (Workspace)",
-    ...UV_ACTIONS,
-  ] as const;
-
-  test("Quick Actions hides server-advertised rows when the server is not running", () => {
-    // The suite-level provider is built on a fresh createStore(): lspState is
-    // "idle" and serverCommands is empty — i.e. the server is stopped. None of
-    // the server-advertised actions resolve to a live handler in this state.
-    const labels = sectionItems("Quick Actions").map(labelOf);
-    for (const dead of SERVER_DEPENDENT_ACTIONS) {
-      assert.ok(
-        !labels.includes(dead),
-        `"${dead}" is a server-advertised command; with the server stopped its ` +
-        `handler is not registered, so the row would raise "command not found" ` +
-        `when clicked and must be hidden`,
-      );
-    }
-    // The client-core actions stay available regardless of server state — you
-    // must be able to restart a stopped server and open its log.
-    assert.ok(labels.includes("Restart Server"), "client-core actions stay visible");
-    assert.ok(labels.includes("Show Output"), "client-core actions stay visible");
-  });
-});
-
-// ── Affordance partition [EXTACT-INFO-AFFORDANCE] ───────────────────────────
-//
-// Regression tests for issue #65: actionable rows (feature toggles, quick
-// actions) were visually indistinguishable from read-only Server Info rows —
-// no imperative tooltip, no inline button affordance — so users could not tell
-// what was a button and what was just information.
-//
-// Spec: docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-AFFORDANCE
-
-/** Section labels whose rows are actionable (carry a command). */
-const ACTIONABLE_SECTIONS = ["Feature Status", "Quick Actions"] as const;
-/** Section label whose rows are read-only display only. */
-const READONLY_SECTION = "Server Info";
-
-/** contextValues the spec assigns to actionable rows. */
-const ACTIONABLE_CONTEXT = new Set(["feature", "action"]);
 
 /** Extract a TreeItem's tooltip as a plain string (handles MarkdownString). */
 function tooltipOf(item: vscode.TreeItem): string {
@@ -167,6 +55,139 @@ function tooltipOf(item: vscode.TreeItem): string {
   if (tooltip instanceof vscode.MarkdownString) { return tooltip.value; }
   return "";
 }
+
+suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
+  let provider: InfoPanelProvider;
+
+  // The write-through test drives the real basilisk.toggleFeature command,
+  // which exists once the extension has initialized — await that here so this
+  // file also passes standalone (single-file debugging), not only when an
+  // earlier suite already initialized the extension.
+  suiteSetup(async function () {
+    this.timeout(SUITE_SETUP_TIMEOUT_MS);
+    await waitForLspReady();
+  });
+
+  setup(() => {
+    provider = new InfoPanelProvider(createStore());
+  });
+
+  teardown(() => {
+    provider.dispose();
+  });
+
+  /** Children of the Server Info section. */
+  function serverInfoRows(): vscode.TreeItem[] {
+    const section = provider.getChildren().find((row) => labelOf(row) === "Server Info");
+    assert.ok(section, "Server Info section should exist");
+    return provider.getChildren(section);
+  }
+
+  test("root is exactly the feature toggles followed by Server Info — no section headers, no Quick Actions", () => {
+    const labels = provider.getChildren().map(labelOf);
+    assert.deepStrictEqual(
+      labels,
+      [...KEPT_FEATURE_LABELS, "Server Info"],
+      "slimmed panel root must be the two toggles + Server Info, in order",
+    );
+    assert.ok(!labels.includes("Feature Status"), "the Feature Status header was removed (two toggles don't justify it)");
+    assert.ok(!labels.includes("Quick Actions"), "the Quick Actions section was removed (actions live on the Modules toolbar / status bar / palette)");
+  });
+
+  test("no row in the entire panel carries a command other than the registered toggle", () => {
+    // Regression for issue #103 defect 1: a row that looks clickable but has
+    // no live handler raises "command not found". The slimmed panel makes
+    // that impossible — the ONLY command any row may carry is
+    // basilisk.toggleFeature, which registerInfoPanel itself registers.
+    const allRows = provider
+      .getChildren()
+      .flatMap((row) => [row, ...provider.getChildren(row)]);
+    assert.ok(allRows.length > 0, "panel should render rows");
+    for (const row of allRows) {
+      const commandId = row.command?.command;
+      if (commandId !== undefined) {
+        assert.strictEqual(
+          commandId,
+          "basilisk.toggleFeature",
+          `"${labelOf(row)}" carries "${commandId}" — only the always-registered toggle command is allowed in this panel`,
+        );
+      }
+    }
+  });
+
+  test("every no-op toggle stays hidden", () => {
+    const labels = provider.getChildren().map(labelOf);
+    for (const removed of REMOVED_FEATURE_LABELS) {
+      assert.ok(
+        !labels.includes(removed),
+        `"${removed}" must not appear — its setting is ignored, so the toggle does nothing`,
+      );
+    }
+  });
+
+  test("Server Info has no live Server state row (status bar owns it)", () => {
+    const labels = serverInfoRows().map(labelOf);
+    assert.ok(
+      !labels.includes("Server"),
+      "the Server state row duplicates the status bar and was dropped (issue #103)",
+    );
+  });
+
+  test("uv sub-settings are folded into the uv row tooltip, not separate rows", () => {
+    const rows = serverInfoRows();
+    const labels = rows.map(labelOf);
+    assert.ok(!labels.includes("uv Auto-Sync"), "uv Auto-Sync must not be its own row");
+    assert.ok(!labels.includes("Stub Suggestions"), "Stub Suggestions must not be its own row");
+
+    const uvRow = rows.find((row) => labelOf(row) === "uv");
+    assert.ok(uvRow, "the compact uv row should exist");
+    const tip = tooltipOf(uvRow);
+    assert.ok(tip.includes("Auto-Sync"), `uv tooltip must carry Auto-Sync, got: "${tip}"`);
+    assert.ok(tip.includes("Stub Suggestions"), `uv tooltip must carry Stub Suggestions, got: "${tip}"`);
+  });
+
+  // Defect 2 of issue #103: basilisk.toggleFeature wrote to
+  // ConfigurationTarget.Workspace unconditionally, which is invalid (and
+  // rejects) when no workspace folder is open — and the info panel is always
+  // visible, so that state is reachable. The target now derives from the live
+  // folder count; the helper is pure in the count because the e2e host always
+  // launches with a folder, making the no-folder branch unreachable end-to-end.
+  test("featureToggleTarget picks Workspace with a folder and Global without (defect 2)", () => {
+    assert.strictEqual(
+      featureToggleTarget(1),
+      vscode.ConfigurationTarget.Workspace,
+      "with a workspace folder, toggles write workspace settings",
+    );
+    assert.strictEqual(
+      featureToggleTarget(0),
+      vscode.ConfigurationTarget.Global,
+      "with no folder open, ConfigurationTarget.Workspace is invalid — must fall back to Global",
+    );
+  });
+
+  test("toggleFeature writes through and the panel reflects it", async () => {
+    // End-to-end: flip uv Integration off via the real command (this host has
+    // a folder, so it writes the Workspace target) and assert the toggle row
+    // re-renders as Disabled.
+    const cfg = vscode.workspace.getConfiguration();
+    try {
+      await vscode.commands.executeCommand("basilisk.toggleFeature", "basilisk.uv.enabled", false);
+      const uvToggle = provider.getChildren().find((row) => labelOf(row) === "uv Integration");
+      assert.ok(uvToggle, "uv Integration toggle should exist");
+      assert.strictEqual(uvToggle.description, "Disabled", "toggle row must reflect the written setting");
+    } finally {
+      await cfg.update("basilisk.uv.enabled", undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  });
+});
+
+// ── Affordance partition [EXTACT-INFO-AFFORDANCE] ───────────────────────────
+//
+// Regression tests for issue #65: actionable rows must be visually
+// unmistakable from read-only rows. In the slimmed panel the actionable class
+// is exactly the feature toggles; everything under Server Info is read-only.
+//
+// Spec: docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-AFFORDANCE
 
 interface InlineMenuEntry {
   readonly command: string;
@@ -195,38 +216,37 @@ suite("Basilisk Info Panel Affordance [EXTACT-INFO-AFFORDANCE]", () => {
     provider.dispose();
   });
 
-  /** Children of a named top-level section. */
-  function rowsIn(sectionLabel: string): vscode.TreeItem[] {
-    const section = provider.getChildren().find((entry) => labelOf(entry) === sectionLabel);
-    assert.ok(section, `"${sectionLabel}" section should exist`);
+  /** Top-level feature toggle rows. */
+  function toggleRows(): vscode.TreeItem[] {
+    return provider.getChildren().filter((row) => row.contextValue === "feature");
+  }
+
+  /** Read-only rows under Server Info. */
+  function readOnlyRows(): vscode.TreeItem[] {
+    const section = provider.getChildren().find((row) => labelOf(row) === "Server Info");
+    assert.ok(section, "Server Info section should exist");
     return provider.getChildren(section);
   }
 
-  test("every actionable row carries a command and an imperative tooltip", () => {
-    for (const sectionLabel of ACTIONABLE_SECTIONS) {
-      const rows = rowsIn(sectionLabel);
-      assert.ok(rows.length > 0, `"${sectionLabel}" should have rows`);
-      for (const row of rows) {
-        const label = labelOf(row);
-        assert.ok(
-          row.command !== undefined && row.command.command !== "",
-          `"${label}" in ${sectionLabel} must carry a command (actionable rows are clickable)`,
-        );
-        assert.ok(
-          ACTIONABLE_CONTEXT.has(String(row.contextValue)),
-          `"${label}" must have an actionable contextValue, got "${String(row.contextValue)}"`,
-        );
-        const tip = tooltipOf(row).trim();
-        assert.ok(
-          tip.length > 0,
-          `"${label}" in ${sectionLabel} must carry an imperative tooltip describing its effect`,
-        );
-      }
+  test("every feature toggle carries a command and an imperative tooltip", () => {
+    const rows = toggleRows();
+    assert.ok(rows.length > 0, "panel should render feature toggles");
+    for (const row of rows) {
+      const label = labelOf(row);
+      assert.ok(
+        row.command !== undefined && row.command.command !== "",
+        `"${label}" must carry a command (actionable rows are clickable)`,
+      );
+      const tip = tooltipOf(row).trim();
+      assert.ok(
+        tip.length > 0,
+        `"${label}" must carry an imperative tooltip describing its effect`,
+      );
     }
   });
 
   test("every read-only Server Info row carries no command and contextValue 'info'", () => {
-    const rows = rowsIn(READONLY_SECTION);
+    const rows = readOnlyRows();
     assert.ok(rows.length > 0, "Server Info should have rows");
     for (const row of rows) {
       const label = labelOf(row);
@@ -244,31 +264,30 @@ suite("Basilisk Info Panel Affordance [EXTACT-INFO-AFFORDANCE]", () => {
   });
 
   test("no row is both actionable and read-only", () => {
-    const actionable = ACTIONABLE_SECTIONS.flatMap(rowsIn);
-    const readOnly = rowsIn(READONLY_SECTION);
-    for (const row of actionable) {
+    for (const row of toggleRows()) {
       assert.notStrictEqual(row.contextValue, "info", `"${labelOf(row)}" must not be read-only`);
     }
-    for (const row of readOnly) {
-      assert.ok(
-        !ACTIONABLE_CONTEXT.has(String(row.contextValue)),
-        `"${labelOf(row)}" must not be actionable`,
-      );
+    for (const row of readOnlyRows()) {
+      assert.notStrictEqual(row.contextValue, "feature", `"${labelOf(row)}" must not be actionable`);
     }
   });
 
-  test("package.json contributes an inline action button for actionable info rows only", () => {
+  test("package.json contributes an inline action button for feature rows only", () => {
     const inlineForInfo = loadItemContextMenus().filter(
       (entry) => entry.group === "inline" && entry.when.includes("basilisk.info"),
     );
     assert.ok(
       inlineForInfo.length > 0,
-      "info panel actionable rows must contribute an inline button (literal button affordance)",
+      "feature toggle rows must contribute an inline button (literal button affordance)",
     );
     for (const entry of inlineForInfo) {
       assert.ok(
-        entry.when.includes("action") && entry.when.includes("feature"),
-        `inline button '${entry.command}' must target action/feature rows, got when: ${entry.when}`,
+        entry.when.includes("feature"),
+        `inline button '${entry.command}' must target feature rows, got when: ${entry.when}`,
+      );
+      assert.ok(
+        !/viewItem\s*=~?=?\s*.*action/.test(entry.when),
+        `inline button '${entry.command}' must not target the removed action rows, got when: ${entry.when}`,
       );
       assert.ok(
         !/viewItem\s*==\s*info/.test(entry.when),

@@ -23,6 +23,7 @@ import {
 import {
     EXTENSION_ID,
     WAIT_MS,
+    pollUntilResult,
     setupLspTestSuite,
     teardownLspTestSuite,
     closeAllEditors,
@@ -145,11 +146,16 @@ function rowLabel(item: vscode.TreeItem): string {
   return typeof label === "string" ? label : label?.label ?? "";
 }
 
-/** Section labels whose info-panel rows are actionable (carry a command). */
-const ACTIONABLE_INFO_SECTIONS = ["Feature Status", "Quick Actions"];
-
-/** uv Quick Actions the info panel renders when uv is enabled and the server is up. */
-const UV_QUICK_ACTIONS = ["uv Sync", "uv Add Package", "uv Lock", "uv Create Env"] as const;
+/**
+ * Quick actions promoted from the info panel to the Modules toolbar (issue
+ * #103), when-gated on the server running so a button can never invoke an
+ * unregistered handler [EXTACT-INFO-ACTION-WIRING].
+ */
+const PROMOTED_TOOLBAR_COMMANDS = [
+  "basilisk.fixWorkspace",
+  "basilisk.organizeImports",
+  "basilisk.restartServer",
+] as const;
 
 // ── Test Suite ────────────────────────────────────────────────────────────
 
@@ -264,10 +270,10 @@ suite("Basilisk Activity Panel E2E Tests", function () {
   });
 
   // Regression for issue #65 [EXTACT-INFO-ACTION-WIRING]: every actionable row
-  // the panel renders must resolve to a registered handler. Drives the LIVE
-  // panel tree (not the command registry directly) and checks each row's own
-  // command via the sanctioned "re-registering a live command throws" probe —
-  // a row that looked clickable but had no handler would fail here.
+  // the panel renders must resolve to a registered handler. In the slimmed
+  // panel (issue #103) the actionable rows are the top-level feature toggles.
+  // Drives the LIVE panel tree and checks each row's own command via the
+  // sanctioned "re-registering a live command throws" probe.
   test("every actionable info panel row resolves to a registered command (no dead actions)", function () {
     const store = getStore();
     assert.ok(store, "Store should exist");
@@ -276,49 +282,81 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     try {
       const actionableRows = provider
         .getChildren()
-        .filter((section) => ACTIONABLE_INFO_SECTIONS.includes(rowLabel(section)))
-        .flatMap((section) => provider.getChildren(section));
+        .filter((row) => row.contextValue === "feature");
 
-      assert.ok(actionableRows.length > 0, "info panel should render actionable rows");
+      assert.ok(actionableRows.length > 0, "info panel should render feature toggles");
 
       for (const row of actionableRows) {
         const commandId = row.command?.command;
         assert.ok(commandId, `"${rowLabel(row)}" must carry a command`);
-        assertCommandRegistered(commandId, `Info panel action "${rowLabel(row)}"`);
+        assertCommandRegistered(commandId, `Info panel toggle "${rowLabel(row)}"`);
       }
     } finally {
       provider.dispose();
     }
   });
 
-  // Regression for issue #103 defect 1 [EXTACT-INFO-ACTION-WIRING]: the positive
-  // half of the uv Quick Actions contract. With the server running its
-  // basilisk.uv.* handlers are advertised, so with uv Integration enabled the uv
-  // rows appear. The server-down half (these rows hidden, no "command not found")
-  // is pinned in info-panel.test.ts.
-  test("uv Quick Actions appear when uv is enabled and the server is running", async function () {
+  // Issue #103: the high-value quick actions were promoted from the info panel
+  // to Modules-toolbar buttons, when-gated on basilisk.serverState == 'running'
+  // so they can never render without a live handler [EXTACT-INFO-ACTION-WIRING].
+  test("Fix All / Organize Imports / Restart are Modules toolbar buttons gated on the server running", function () {
+    const contributes = loadContributes();
+    const titleMenus = contributes?.menus?.["view/title"] ?? [];
+    const moduleMenus = titleMenus.filter(
+      (entry) => entry.when.includes("view == basilisk.moduleExplorer"),
+    );
+
+    for (const cmd of PROMOTED_TOOLBAR_COMMANDS) {
+      const entry = moduleMenus.find((menu) => menu.command === cmd);
+      assert.ok(entry, `"${cmd}" must be contributed to the Modules view/title toolbar`);
+      assert.ok(
+        entry.when.includes("basilisk.serverState == 'running'"),
+        `"${cmd}" toolbar button must be when-gated on the server running, got: ${entry.when}`,
+      );
+    }
+  });
+
+  test("promoted toolbar commands are registered and executable while the server runs", async function () {
+    for (const cmd of PROMOTED_TOOLBAR_COMMANDS) {
+      assertCommandRegistered(cmd, "Promoted toolbar action");
+    }
+  });
+
+  // Defect 3 of issue #103: Server Info went stale — the provider only
+  // re-rendered on configuration changes, so "Server: stopped" / a missing
+  // Version row persisted after the server came up. The provider now holds a
+  // signals effect on store.lspState/store.client; restarting the real server
+  // must therefore fire the tree's change event without any config change.
+  test("info panel re-renders on LSP state changes (no stale Server Info)", async function () {
+    this.timeout(60_000);
     const store = getStore();
     assert.ok(store, "Store should exist");
-    const cfg = vscode.workspace.getConfiguration();
-    await cfg.update("basilisk.uv.enabled", true, vscode.ConfigurationTarget.Workspace);
 
     const provider = new InfoPanelProvider(store);
     try {
-      const labels = provider
-        .getChildren()
-        .filter((section) => rowLabel(section) === "Quick Actions")
-        .flatMap((section) => provider.getChildren(section))
-        .map(rowLabel);
+      const fired = new Promise<void>((resolve) => {
+        const sub = provider.onDidChangeTreeData(() => {
+          sub.dispose();
+          resolve();
+        });
+      });
 
-      for (const action of UV_QUICK_ACTIONS) {
-        assert.ok(
-          labels.includes(action),
-          `"${action}" should appear when uv is enabled and the server is running`,
-        );
-      }
+      await vscode.commands.executeCommand("basilisk.restartServer");
+      await fired;
+
+      // Restore a fully-running server for the tests that follow. isRunning()
+      // can flip true a beat before the store's state listener re-registers
+      // the server commands, so also wait for the commands to be re-advertised
+      // — the very next tests assert on them.
+      const ready = await store.ensureLspReadyPromise(WAIT_MS);
+      assert.ok(ready.ok, "LSP should be running again after restart");
+      await pollUntilResult({
+        fn: async () => store.serverCommands.value.size,
+        predicate: (size) => size > 0,
+        timeoutMs: WAIT_MS,
+      });
     } finally {
       provider.dispose();
-      await cfg.update("basilisk.uv.enabled", undefined, vscode.ConfigurationTarget.Workspace);
     }
   });
 

@@ -76,9 +76,9 @@ Profile Python code with py-spy directly from the editor. View heatmaps and iden
 
 The Basilisk sidebar provides two panels accessible from the activity bar:
 
-**Modules** — Browse your workspace's Python module tree with type health folded in. Each module shows a coverage bar, coverage percentage, error/warning tallies, and an `[adopted]` badge, with its icon tinted green/yellow/red by coverage; expand a module to see its top-level symbols (functions, classes, variables) with annotation status. The workspace-wide coverage summary appears in the panel's title (message + numeric badge). Right-click to copy import paths. Toggle between tree and flat views; in flat view, sort by worst-first, best-first, or alphabetical. Filter by glob patterns.
+**Modules** — Browse your workspace's Python module tree with type health folded in. Each module shows a coverage bar, coverage percentage, error/warning tallies, and an `[adopted]` badge, with its icon tinted green/yellow/red by coverage; expand a module to see its top-level symbols (functions, classes, variables) with annotation status. The workspace-wide coverage summary appears in the panel's title (message + numeric badge). Right-click to copy import paths. Toggle between tree and flat views; in flat view, sort by worst-first, best-first, or alphabetical. Filter by glob patterns. While the server is running, the toolbar also offers **Fix All**, **Organize Imports**, and **Restart Server**.
 
-**Basilisk Info** — Feature status toggles (type checking, uv integration), quick actions (restart server, show output, fix all in workspace, organize imports, and uv sync/add/lock/create-env), and server info (version, binary path, analysis mode, uv status).
+**Basilisk Info** — Feature toggles (type checking, uv integration) plus compact read-only server info (version, analysis mode, Python, uv — with auto-sync and stub-suggestion details in the tooltip — and binary path). The live server state lives in the status bar, whose click opens the Basilisk output log; uv actions (sync/add/lock/create-env) are in the command palette.
 
 Both panels update automatically when files change (debounced 300ms). The Modules panel appears when a workspace is open; the Info panel is always visible.
 

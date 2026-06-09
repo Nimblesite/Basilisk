@@ -90,7 +90,8 @@
       {
         "command": "basilisk.restartServer",
         "title": "Basilisk: Restart Language Server",
-        "category": "Basilisk"
+        "category": "Basilisk",
+        "icon": "$(debug-restart)"
       },
       {
         "command": "basilisk.showOutput",
@@ -100,7 +101,8 @@
       {
         "command": "basilisk.organizeImports",
         "title": "Basilisk: Organize Imports",
-        "category": "Basilisk"
+        "category": "Basilisk",
+        "icon": "$(list-ordered)"
       },
       {
         "command": "basilisk.fixFile",
@@ -110,7 +112,8 @@
       {
         "command": "basilisk.fixWorkspace",
         "title": "Basilisk: Fix All in Workspace",
-        "category": "Basilisk"
+        "category": "Basilisk",
+        "icon": "$(wand)"
       },
       {
         "command": "basilisk.adoptFile",
@@ -451,6 +454,21 @@
           "group": "navigation"
         },
         {
+          "command": "basilisk.fixWorkspace",
+          "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running'",
+          "group": "navigation"
+        },
+        {
+          "command": "basilisk.organizeImports",
+          "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running'",
+          "group": "navigation"
+        },
+        {
+          "command": "basilisk.restartServer",
+          "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running'",
+          "group": "navigation"
+        },
+        {
           "command": "basilisk.profileCurrentFile",
           "when": "view == basilisk.pythonProcesses",
           "group": "navigation@1"
@@ -489,7 +507,7 @@
         },
         {
           "command": "basilisk.info.runAction",
-          "when": "view == basilisk.info && viewItem =~ /^(action|feature)$/",
+          "when": "view == basilisk.info && viewItem == feature",
           "group": "inline"
         },
         {
