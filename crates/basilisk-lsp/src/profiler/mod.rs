@@ -34,6 +34,7 @@ mod pipeline_tests;
 mod scenario_tests;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 
 use tokio::sync::Mutex;
@@ -134,6 +135,19 @@ pub struct SessionInfo {
     pub duration: f64,
 }
 
+/// A live progress sample for [PROFILE-NOTIFICATIONS-PROGRESS].
+#[derive(Debug, Clone)]
+pub struct ProgressInfo {
+    /// Session being reported.
+    pub session_id: String,
+    /// Samples collected so far.
+    pub sample_count: u64,
+    /// Seconds since the session started.
+    pub duration: f64,
+    /// Hottest function seen so far (empty until data crosses thresholds).
+    pub top_function: String,
+}
+
 /// Result of starting a profiling session.
 #[derive(Debug, Clone)]
 pub struct StartResult {
@@ -173,9 +187,12 @@ pub struct StopResult {
 /// Manages active profiling sessions for the LSP.
 ///
 /// One session per PID. Lives on `LspServer` alongside `DebugSessionManager`.
+/// Cloning shares the session table, so a clone can drive the progress
+/// notifier task ([PROFILE-NOTIFICATIONS-PROGRESS]).
+#[derive(Clone)]
 pub struct ProfileSessionManager {
-    /// Active sessions keyed by session ID.
-    sessions: Mutex<HashMap<String, ProfileSession>>,
+    /// Active sessions keyed by session ID (shared across clones).
+    sessions: Arc<Mutex<HashMap<String, ProfileSession>>>,
 }
 
 impl std::fmt::Debug for ProfileSessionManager {
@@ -196,7 +213,7 @@ impl ProfileSessionManager {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            sessions: Mutex::new(HashMap::new()),
+            sessions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -356,6 +373,27 @@ impl ProfileSessionManager {
             hotspot_config: session.hotspot_config.clone(),
             sample_weight: session.sample_weight,
             sample_rate: session.sample_rate,
+        })
+    }
+
+    /// Drain pending samples and report live progress for one session, or
+    /// `None` once the session has ended (which stops the notifier task).
+    /// Implements [PROFILE-NOTIFICATIONS-PROGRESS].
+    pub async fn progress(&self, session_id: &str) -> Option<ProgressInfo> {
+        let mut sessions = self.sessions.lock().await;
+        let session = sessions.get_mut(session_id)?;
+        drain_samples(session);
+        let top_function = session
+            .data
+            .hot_functions(&session.hotspot_config)
+            .first()
+            .map(|hot| hot.name.clone())
+            .unwrap_or_default();
+        Some(ProgressInfo {
+            session_id: session.session_id.clone(),
+            sample_count: session.data.total_samples,
+            duration: session.started_at.elapsed().as_secs_f64(),
+            top_function,
         })
     }
 

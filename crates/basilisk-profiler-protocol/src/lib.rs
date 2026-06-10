@@ -102,17 +102,22 @@ pub enum AttachErrorKind {
 /// Classify a py-spy attach error message into an [`AttachErrorKind`].
 ///
 /// Shared by the in-process sampler and the elevated helper so both attach
-/// paths report identical, distinct failure modes (issue #81).
+/// paths report identical, distinct failure modes (issue #81). Matching is
+/// lowercase substring because py-spy's wording varies across platforms
+/// (macOS: "Failed to open process - check if it is running.", Linux:
+/// "Failed to get process executable name. Check that the process is
+/// running.").
 #[must_use]
 pub fn classify_attach_error(message: &str) -> AttachErrorKind {
-    // Case-tolerant substrings: py-spy's wording varies across platforms.
-    if message.contains("ermission") || message.contains("Operation not permitted") {
+    let lowered = message.to_lowercase();
+    if lowered.contains("permission") || lowered.contains("operation not permitted") {
         AttachErrorKind::PermissionDenied
-    } else if message.contains("ot a python") || message.contains("ot Python") {
+    } else if lowered.contains("not a python") {
         AttachErrorKind::NotPython
-    } else if message.contains("No such process")
-        || message.contains("not found")
-        || message.contains("check if it is running")
+    } else if lowered.contains("no such process")
+        || lowered.contains("not found")
+        || lowered.contains("check if it is running")
+        || lowered.contains("check that the process is running")
     {
         AttachErrorKind::ProcessNotFound
     } else {
@@ -271,6 +276,17 @@ mod tests {
         assert_eq!(
             classify_attach_error("Failed to open process - check if it is running."),
             AttachErrorKind::ProcessNotFound
+        );
+        // py-spy's Linux wording for a dead PID.
+        assert_eq!(
+            classify_attach_error(
+                "Failed to get process executable name. Check that the process is running."
+            ),
+            AttachErrorKind::ProcessNotFound
+        );
+        assert_eq!(
+            classify_attach_error("PID 9 is Not a Python process"),
+            AttachErrorKind::NotPython
         );
         assert_eq!(
             classify_attach_error("something exotic exploded"),

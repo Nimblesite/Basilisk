@@ -5,11 +5,52 @@
 //! Each handler extracts arguments, delegates to [`ProfileSessionManager`],
 //! and returns structured JSON responses matching the profiling protocol spec.
 
+use std::time::Duration;
+
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::MessageType;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use super::LspServer;
+
+/// How often live progress is pushed to the editor while profiling.
+const PROGRESS_NOTIFY_INTERVAL: Duration = Duration::from_secs(1);
+
+/// Custom notification carrying live profiling progress.
+struct ProfilerProgressNotification;
+
+impl tower_lsp::lsp_types::notification::Notification for ProfilerProgressNotification {
+    type Params = serde_json::Value;
+    const METHOD: &'static str = basilisk_common::notifications::PROFILER_PROGRESS;
+}
+
+/// Implements [PROFILE-NOTIFICATIONS-PROGRESS]: push periodic progress
+/// (sample count, duration, top function) until the session ends, so editors
+/// can show a live status indicator while profiling.
+fn spawn_progress_notifier(server: &LspServer, session_id: String) {
+    let manager = server.profiler_manager.clone();
+    let client = server.client.clone();
+    let _notifier = tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(PROGRESS_NOTIFY_INTERVAL);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            let _tick = ticker.tick().await;
+            let Some(progress) = manager.progress(&session_id).await else {
+                debug!(%session_id, "profiling session ended; stopping progress notifier");
+                break;
+            };
+            let params = serde_json::json!({
+                "sessionId": progress.session_id,
+                "sampleCount": progress.sample_count,
+                "duration": progress.duration,
+                "topFunction": progress.top_function,
+            });
+            client
+                .send_notification::<ProfilerProgressNotification>(params)
+                .await;
+        }
+    });
+}
 
 /// Construct a profiler-domain LSP error.
 fn profiler_error(code: i64, message: impl Into<String>) -> tower_lsp::jsonrpc::Error {
@@ -88,6 +129,8 @@ pub(super) async fn execute_profiler_start(
                     ),
                 )
                 .await;
+
+            spawn_progress_notifier(server, result.session_id.clone());
 
             Ok(Some(serde_json::json!({
                 "sessionId": result.session_id,
