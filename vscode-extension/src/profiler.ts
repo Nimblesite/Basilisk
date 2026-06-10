@@ -251,9 +251,16 @@ async function handleProfileStop(store: Store): Promise<void> {
       applyProfileDecorations(result);
       // Open the V8 .cpuprofile in VS Code's built-in profile viewer (flame
       // chart + bottom-up/left-heavy tables); fall back to the speedscope-style
-      // webview only if the file wasn't produced.
+      // webview only if the file wasn't produced. Open BESIDE the source so
+      // the profiled file (and its inline heat map) stays visible — opening
+      // in the active group hides the file and the visible-editors re-apply
+      // would clear its decorations.
       if (result.cpuProfilePath !== undefined && result.cpuProfilePath !== "") {
-        await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(result.cpuProfilePath));
+        await vscode.commands.executeCommand(
+          "vscode.open",
+          vscode.Uri.file(result.cpuProfilePath),
+          vscode.ViewColumn.Beside,
+        );
       } else {
         openFlamegraphWebview(result);
       }

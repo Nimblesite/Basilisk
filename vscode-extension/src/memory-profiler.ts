@@ -316,10 +316,15 @@ async function handleMemorySnapshot(store: Store): Promise<void> {
     lastDashboardSnapshot = toDashboardSnapshot(result);
     Logger.info(`Memory snapshot: ${lastDashboardSnapshot.currentMemory} bytes current`);
     // Open the V8 .heapprofile in VS Code's built-in profile viewer (flame chart
-    // + table, Self/Total size) — the same UI as Node.js heap profiles.
+    // + table, Self/Total size) — the same UI as Node.js heap profiles. Beside
+    // the source, so the snapshotted file keeps its allocation decorations.
     const heapProfilePath = asString(result.heapProfilePath);
     if (heapProfilePath !== "") {
-      await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(heapProfilePath));
+      await vscode.commands.executeCommand(
+        "vscode.open",
+        vscode.Uri.file(heapProfilePath),
+        vscode.ViewColumn.Beside,
+      );
     } else {
       // Fall back to the Basilisk dashboard if the file wasn't produced.
       openMemoryDashboard(lastDashboardSnapshot);
