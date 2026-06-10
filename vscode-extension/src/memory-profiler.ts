@@ -132,6 +132,15 @@ export function registerMemoryProfiler(
   return disposables;
 }
 
+/**
+ * The active memory-tracking session id, or undefined when not tracking.
+ * E2e seam for [PROFILE-MEMORY-HOWTO]/[PROFILE-PROCESSES-LAUNCH-FILE]: lets
+ * tests observe that tracking really started (e.g. the track-on-launch flow).
+ */
+export function activeMemorySession(): string | undefined {
+  return activeMemorySessionId;
+}
+
 /** Quick-pick menu of memory actions — the clickable alternative to the palette. */
 async function handleMemoryMenu(): Promise<void> {
   const tracking = activeMemorySessionId !== undefined;

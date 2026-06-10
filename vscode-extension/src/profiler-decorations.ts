@@ -83,6 +83,47 @@ function heatLevelFor(pct: number): HeatLevel | undefined {
   return HEAT_LEVELS.find((h) => pct >= h.minPct);
 }
 
+// ── Applied-decoration ledger ─────────────────────────────────────────────
+// Implements [PROFILE-VIS-HEATMAP] observability: `setDecorations` is
+// write-only in the VS Code API, so the heat map records what it applied and
+// exposes it for e2e assertions (per the VSIX internal-state testing rule).
+
+/** One heat decoration as applied to an open editor. */
+export interface AppliedDecoration {
+  readonly file: string;
+  /** 1-based line the decoration landed on. */
+  readonly line: number;
+  /** Palette color used (e.g. `#e8500a` for critical). */
+  readonly color: string;
+  /** The after-line text shown to the user (bar + % + samples). */
+  readonly contentText: string;
+}
+
+let appliedDecorations: AppliedDecoration[] = [];
+
+/** The heat-map decorations currently applied across visible editors. */
+export function appliedProfileDecorations(): readonly AppliedDecoration[] {
+  return appliedDecorations;
+}
+
+/** Record everything painted for one file, for the applied ledger. */
+export function recordApplied(
+  ledger: AppliedDecoration[],
+  file: string,
+  paintedByColor: ReadonlyMap<string, readonly vscode.DecorationOptions[]>,
+): void {
+  for (const [color, options] of paintedByColor) {
+    for (const option of options) {
+      ledger.push({
+        file,
+        line: option.range.start.line + 1,
+        color,
+        contentText: option.renderOptions?.after?.contentText ?? "",
+      });
+    }
+  }
+}
+
 // ── Decoration types (created lazily, one per heat level) ─────────────────
 
 const decorationTypes = new Map<string, vscode.TextEditorDecorationType>();
@@ -228,6 +269,7 @@ export function applyProfileDecorations(result: ProfileResult): void {
     for (const [color, options] of optionsByColor) {
       editor.setDecorations(getDecorationTypeForColor(color), options);
     }
+    recordApplied(appliedDecorations, filePath, optionsByColor);
   }
 
   const totalLines = result.hotLines.length;
@@ -242,6 +284,7 @@ export function clearProfileDecorations(): void {
       editor.setDecorations(decorationType, []);
     }
   }
+  appliedDecorations = [];
 }
 
 /** Dispose all decoration types (call on extension deactivate). */
@@ -250,4 +293,5 @@ export function disposeProfileDecorations(): void {
     decorationType.dispose();
   }
   decorationTypes.clear();
+  appliedDecorations = [];
 }

@@ -361,6 +361,16 @@ async function handleProfileAttachToDebug(store: Store): Promise<void> {
 
 // ── Status bar ────────────────────────────────────────────────────────────
 
+/**
+ * The profiler status-bar text, or undefined when idle/hidden. E2e seam for
+ * [PROFILE-NOTIFICATIONS-PROGRESS]: the live progress (samples/duration)
+ * lands here and StatusBarItem state is not readable via the public API.
+ */
+export function profilerStatusText(): string | undefined {
+  if (activeSessionId === undefined) { return undefined; }
+  return profilerStatusBarItem?.text;
+}
+
 function updateProfilerStatusBar(state: "idle" | "profiling"): void {
   if (profilerStatusBarItem === undefined) { return; }
 

@@ -685,7 +685,16 @@ The LSP side (`basilisk-lsp/src/profiler/helper_client.rs`) owns the socket life
 
 ### Linux {#PROFILE-PERMISSIONS-LINUX}
 
-Works without root if `ptrace_scope=0`. Options for restricted environments: `sudo`, `setcap cap_sys_ptrace+ep`, or profile child processes only.
+Works without root if `ptrace_scope=0`. Under the default `ptrace_scope=1`
+(restricted) the precheck **attempts the attach instead of denying upfront**:
+Yama still grants *ancestors* (a debug session's debuggee is the LSP's
+grandchild via `debugpy.adapter`) and targets that opted in via
+`PR_SET_PTRACER`, neither of which the precheck can observe. A real `EPERM`
+from py-spy is surfaced as a classified permission error
+([#PROFILE-HELPER-PROTOCOL-ERRORS]) with the remedies appended:
+`sudo sysctl kernel.yama.ptrace_scope=0`, `setcap cap_sys_ptrace+ep`, or
+profiling via a debug session. Scopes `2`/`3` are kernel-enforced regardless
+of process relationships and stay denied upfront with the matching remedy.
 
 ### Windows {#PROFILE-PERMISSIONS-WINDOWS}
 
