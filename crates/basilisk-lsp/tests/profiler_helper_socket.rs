@@ -272,6 +272,9 @@ async fn collect_sample_batches(
                 }
             }
             Ok(Ok(Some(Message::Attached { .. }))) => {}
+            Ok(Ok(Some(Message::Error { kind, message }))) => {
+                panic!("helper reported an error mid-sampling: {kind:?}: {message}")
+            }
             Ok(Ok(Some(Message::Stopped) | None)) => break,
             Ok(Err(err)) => panic!("sample read failed: {err}"),
             Err(_elapsed) => break,
