@@ -226,7 +226,10 @@ VS Code contributes a `basilisk.pythonProcesses` tree view in the
 
 Auto-refresh is gated on view visibility (interval from
 `basilisk.profiler.processRefreshMs`, default 2000); a manual refresh button is
-always present. An empty state (`viewsWelcome`) offers **Run & Profile Current File**.
+always present. Process rows carry a stable `TreeItem.id` (`pythonProcess:<pid>`)
+so VS Code can map inline-button clicks back to elements across refreshes
+(issue #79). An empty state (`viewsWelcome`) offers the two metric-explicit
+launches described in [#PROFILE-PROCESSES-LAUNCH-FILE].
 
 #### Sort modes {#PROFILE-PROCESSES-PANEL-SORT}
 
@@ -246,6 +249,31 @@ row context menu adds Copy PID and Reveal Script. The old palette command
 `basilisk.profileStart` is **kept but rewritten**: instead of prompting for a PID
 it focuses this panel and shows a toast ("Pick a process below"). The lying
 "auto-detect" prompt is deleted.
+
+VS Code can invoke an inline tree command with **no argument** (issue #79 —
+e.g. a click racing the panel's auto-refresh), so the handlers resolve their
+target as: explicit item → the panel's current selection → only then a warning
+(`createProcessRowActions` in `process-launch.ts`). Both row commands share
+this resolution.
+
+#### Run & profile the current file {#PROFILE-PROCESSES-LAUNCH-FILE}
+
+The view-title entry point must state **what it tracks** (issue #82 — the old
+single "Run & Profile Current File" `$(run-all)` button named no metric). Two
+metric-explicit buttons mirror the per-row actions, same labels and icons:
+
+- **🔥 Run & Profile CPU (Current File)** (`basilisk.profileCurrentFileCpu`) —
+  launches the active `.py` under `basilisk-debug` with `profileOnLaunch: true`;
+  profiler.ts honours that launch-config flag (or the global
+  `basilisk.profiler.profileOnLaunch` setting) and attaches the CPU profiler to
+  the captured debuggee PID ([#PROFILE-SAME-PROCESS]).
+- **🗄️ Run & Track Memory (Current File)** (`basilisk.trackMemoryCurrentFile`) —
+  launches with `stopOnEntry: true` + `memoryTrackOnLaunch: true`; tracemalloc
+  needs a paused debuggee ([#PROFILE-MEMORY-HOWTO]), so memory-profiler.ts
+  starts tracking at the entry pause and then resumes the program.
+
+Both appear in the title bar, the panel's empty state, and (gated on
+[#PROFILE-UI-GATE]) the command palette.
 
 ## Sample Aggregation {#PROFILE-AGGREGATION}
 
@@ -627,6 +655,24 @@ helper -> {"type":"stopped"}
 ```
 
 `traces` carry the minimal per-thread / per-frame fields py-spy produces; the LSP converts them back into py-spy shapes and feeds the same aggregator the in-process sampler uses.
+
+#### Attach-failure reporting {#PROFILE-HELPER-PROTOCOL-ERRORS}
+
+A failed attach must never surface as a bare EOF (issue #81). Two layers guarantee a diagnosable cause:
+
+1. **Structured error frame.** When py-spy attach fails, the helper sends
+   `{"type":"error","kind":"<kind>","message":"<py-spy cause>"}` before exiting.
+   `kind` is one of `process-not-found`, `not-python`, `permission-denied`,
+   `attach-failed` (`AttachErrorKind` in `basilisk-profiler-protocol`), shared
+   with the in-process sampler via `classify_attach_error` so both attach paths
+   report identical failure modes. The helper refines py-spy's ambiguous
+   "cannot open process" with a liveness probe: target alive ⇒
+   `permission-denied`, target gone ⇒ `process-not-found`.
+2. **Exit diagnosis fallback.** If the socket still EOFs (or the handshake/accept
+   times out) before `attached`, the LSP reaps the helper (its stderr is piped at
+   spawn) and appends its exit status plus trailing stderr to the error — this
+   also surfaces `osascript` elevation failures such as the user cancelling the
+   privilege prompt.
 
 ### Helper Socket Sampling {#PROFILE-HELPER-SOCKET}
 

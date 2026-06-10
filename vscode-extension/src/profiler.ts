@@ -96,10 +96,7 @@ export function registerProfiler(
   // "Profile on Launch" — automatically start profiling when a debug session starts.
   disposables.push(
     vscode.debug.onDidStartDebugSession((session) => {
-      const profileOnLaunch = vscode.workspace
-        .getConfiguration("basilisk")
-        .get<boolean>("profiler.profileOnLaunch", false);
-      if (profileOnLaunch && session.type === "basilisk-debug" && activeSessionId === undefined) {
+      if (shouldProfileOnLaunch(session) && activeSessionId === undefined) {
         Logger.info(`Profile on Launch: auto-profiling debug session ${session.id}`);
         // The debuggee PID arrives asynchronously via the DAP `process` event,
         // so wait for it before attaching (avoids a "not ready yet" race).
@@ -123,6 +120,23 @@ export function registerProfiler(
   );
 
   return disposables;
+}
+
+/**
+ * Whether a freshly started debug session should be auto-profiled: either its
+ * launch configuration asked for it (`profileOnLaunch: true`, set by the
+ * metric-explicit "Run & Profile CPU (Current File)" entry point — #82) or the
+ * user enabled the global `basilisk.profiler.profileOnLaunch` setting.
+ * Implements [PROFILE-PROCESSES-LAUNCH-FILE]. Exported for tests.
+ */
+export function shouldProfileOnLaunch(
+  session: Pick<vscode.DebugSession, "type" | "configuration">,
+): boolean {
+  if (session.type !== "basilisk-debug") { return false; }
+  if (session.configuration.profileOnLaunch === true) { return true; }
+  return vscode.workspace
+    .getConfiguration("basilisk")
+    .get<boolean>("profiler.profileOnLaunch", false);
 }
 
 // ── Debuggee PID readiness ─────────────────────────────────────────────────

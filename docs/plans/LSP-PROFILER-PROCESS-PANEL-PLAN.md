@@ -134,10 +134,12 @@ This is the headline fix — spec `{#PROFILE-PROCESSES-LAUNCH}`:
   calls the existing `basilisk.profiler.start` / memory-start with that row's `pid`. **No input box.**
 - **Row context menu:** Profile CPU · Track Memory · Copy PID · Reveal Script in Editor.
 - **Panel toolbar:** **Refresh** · **Sort…** · **Group…** · **Filter** ·
-  **▶ Run & Profile Current File** (`basilisk.profileCurrentFile`) — launches the active `.py` under a
-  child interpreter Basilisk owns (no elevation) and auto-attaches the profiler. The true one-click path.
+  **🔥 Run & Profile CPU (Current File)** (`basilisk.profileCurrentFileCpu`) ·
+  **🗄️ Run & Track Memory (Current File)** (`basilisk.trackMemoryCurrentFile`) — metric-explicit
+  launches of the active `.py` under a child interpreter Basilisk owns (no elevation), auto-attaching
+  the matching tracker (#82 retired the single ambiguous `basilisk.profileCurrentFile` button).
 - **Welcome view** (`viewsWelcome`) when no Python processes are running:
-  *"No Python processes running. [Run & Profile Current File]"*.
+  *"No Python processes running. [Run & Profile CPU (Current File)] [Run & Track Memory (Current File)]"*.
 
 `basilisk.profileStart` (the old palette command) is **kept** but rewritten: instead of an input box it
 **focuses this panel** and shows a toast "Pick a process below, or Run & Profile Current File". The
@@ -148,7 +150,8 @@ lying "auto-detect" prompt is deleted.
 - `views.basilisk-explorer[]` += `{ id: "basilisk.pythonProcesses", name: "Python Processes", when: "basilisk.hasWorkspace" }`.
 - New commands: `basilisk.refreshProcesses`, `basilisk.sortProcesses`, `basilisk.groupProcesses`,
   `basilisk.filterProcesses`, `basilisk.profileProcess`, `basilisk.memoryTrackProcess`,
-  `basilisk.profileCurrentFile`, `basilisk.copyProcessPid`, `basilisk.revealProcessScript`.
+  `basilisk.profileCurrentFileCpu`, `basilisk.trackMemoryCurrentFile`, `basilisk.copyProcessPid`,
+  `basilisk.revealProcessScript`.
 - `menus.view/title` (toolbar) + `menus.view/item/context` (inline + context) wired with
   `when: view == basilisk.pythonProcesses`.
 - `viewsWelcome` entry for the empty state.
@@ -234,8 +237,9 @@ Add to [LSP-PROFILING-SPEC.md](../specs/LSP-PROFILING-SPEC.md), all under a new
       menus, `view/item/context` inline + context menus, `viewsWelcome` empty state, new settings.
 - [ ] `basilisk.profileProcess` / `basilisk.memoryTrackProcess`: start CPU/memory profiling with the
       row's `pid` — **no input box**.
-- [ ] `basilisk.profileCurrentFile`: launch active `.py` under a Basilisk-owned child interpreter and
-      auto-attach (no elevation) — the one-click path; reuse the debug-launch plumbing where possible.
+- [ ] `basilisk.profileCurrentFileCpu` / `basilisk.trackMemoryCurrentFile`: launch active `.py` under a
+      Basilisk-owned child interpreter and auto-attach the named metric (no elevation) — the one-click
+      path; reuse the debug-launch plumbing where possible.
 - [ ] `basilisk.copyProcessPid`, `basilisk.revealProcessScript`.
 
 ### Phase 5 — Tests, polish, ratchet

@@ -17,6 +17,7 @@ import { Logger } from "./logger";
 import type { Store } from "./store";
 import { isProfilingUiEnabled } from "./profiling-ui";
 import { currentStoppedFrameId, evaluateInDebugSession } from "./dap-evaluate";
+import { POLL_INTERVAL_MS, STARTUP_TIMEOUT_MS } from "./timeouts";
 import {
   disposeMemoryDashboard,
   openMemoryDashboard,
@@ -112,7 +113,14 @@ export function registerMemoryProfiler(
     ),
     // Show/hide the memory status-bar entry as Basilisk debug sessions come and go.
     vscode.debug.onDidChangeActiveDebugSession(() => { refreshMemoryStatusBar(); }),
-    vscode.debug.onDidStartDebugSession(() => { refreshMemoryStatusBar(); }),
+    vscode.debug.onDidStartDebugSession((session) => {
+      refreshMemoryStatusBar();
+      // "Run & Track Memory (Current File)" (#82): the launch stopped on
+      // entry; inject tracemalloc there, then resume the program.
+      if (session.type === "basilisk-debug" && session.configuration.memoryTrackOnLaunch === true) {
+        void startMemoryTrackingOnLaunch(store);
+      }
+    }),
     vscode.debug.onDidTerminateDebugSession(() => { refreshMemoryStatusBar(); }),
   ];
 
@@ -212,6 +220,41 @@ async function runMemoryScript(
     void vscode.window.showWarningMessage(`Basilisk: ${msg}`);
     return null;
   }
+}
+
+// ── Track-memory-on-launch ────────────────────────────────────────────────
+
+/**
+ * Auto-start flow for the "Run & Track Memory (Current File)" entry point
+ * (#82). Memory tracking needs a paused debuggee ([PROFILE-MEMORY-HOWTO]), so
+ * the launch config sets `stopOnEntry`; tracemalloc is injected at the entry
+ * pause and the debuggee is resumed so the program runs with tracking on.
+ * Implements [PROFILE-PROCESSES-LAUNCH-FILE] (memory leg).
+ */
+async function startMemoryTrackingOnLaunch(store: Store): Promise<void> {
+  const frameId = await waitForStoppedFrame();
+  if (frameId === null) {
+    void vscode.window.showWarningMessage(
+      "Basilisk: The debuggee did not pause at entry — pause at a breakpoint, then start memory tracking.",
+    );
+    return;
+  }
+  await handleMemoryStart(store);
+  if (activeMemorySessionId !== undefined) {
+    Logger.info("Memory tracking started on launch — resuming the debuggee");
+    await vscode.commands.executeCommand("workbench.action.debug.continue");
+  }
+}
+
+/** Poll for a stopped frame until the startup budget runs out. */
+async function waitForStoppedFrame(): Promise<number | null> {
+  const deadline = Date.now() + STARTUP_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const frameId = await currentStoppedFrameId();
+    if (frameId !== null) { return frameId; }
+    await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  }
+  return null;
 }
 
 // ── Command handlers ──────────────────────────────────────────────────────

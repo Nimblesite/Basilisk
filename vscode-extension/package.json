@@ -83,7 +83,7 @@
       },
       {
         "view": "basilisk.pythonProcesses",
-        "contents": "No Python processes running.\n[Run & Profile Current File](command:basilisk.profileCurrentFile)\n[Refresh](command:basilisk.refreshProcesses)"
+        "contents": "No Python processes running.\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)\n[Refresh](command:basilisk.refreshProcesses)"
       }
     ],
     "commands": [
@@ -308,10 +308,16 @@
         "icon": "$(filter)"
       },
       {
-        "command": "basilisk.profileCurrentFile",
-        "title": "Run & Profile Current File",
+        "command": "basilisk.profileCurrentFileCpu",
+        "title": "Run & Profile CPU (Current File)",
         "category": "Basilisk",
-        "icon": "$(run-all)"
+        "icon": "$(flame)"
+      },
+      {
+        "command": "basilisk.trackMemoryCurrentFile",
+        "title": "Run & Track Memory (Current File)",
+        "category": "Basilisk",
+        "icon": "$(database)"
       },
       {
         "command": "basilisk.profileProcess",
@@ -363,7 +369,11 @@
           "when": "basilisk.profilingEnabled"
         },
         {
-          "command": "basilisk.profileCurrentFile",
+          "command": "basilisk.profileCurrentFileCpu",
+          "when": "basilisk.profilingEnabled"
+        },
+        {
+          "command": "basilisk.trackMemoryCurrentFile",
           "when": "basilisk.profilingEnabled"
         },
         {
@@ -469,29 +479,34 @@
           "group": "navigation"
         },
         {
-          "command": "basilisk.profileCurrentFile",
+          "command": "basilisk.profileCurrentFileCpu",
           "when": "view == basilisk.pythonProcesses",
           "group": "navigation@1"
         },
         {
-          "command": "basilisk.refreshProcesses",
+          "command": "basilisk.trackMemoryCurrentFile",
           "when": "view == basilisk.pythonProcesses",
           "group": "navigation@2"
         },
         {
-          "command": "basilisk.sortProcesses",
+          "command": "basilisk.refreshProcesses",
           "when": "view == basilisk.pythonProcesses",
           "group": "navigation@3"
         },
         {
-          "command": "basilisk.groupProcesses",
+          "command": "basilisk.sortProcesses",
           "when": "view == basilisk.pythonProcesses",
           "group": "navigation@4"
         },
         {
-          "command": "basilisk.filterProcesses",
+          "command": "basilisk.groupProcesses",
           "when": "view == basilisk.pythonProcesses",
           "group": "navigation@5"
+        },
+        {
+          "command": "basilisk.filterProcesses",
+          "when": "view == basilisk.pythonProcesses",
+          "group": "navigation@6"
         }
       ],
       "view/item/context": [

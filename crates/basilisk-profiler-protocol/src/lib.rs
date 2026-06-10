@@ -22,6 +22,13 @@
 //! LSP    -> {"cmd":"stop"}
 //! helper -> {"type":"stopped"}
 //! ```
+//!
+//! On failure the helper reports a structured error instead of silently
+//! closing the socket (issue #81 — a bare EOF is undiagnosable):
+//!
+//! ```text
+//! helper -> {"type":"error","kind":"process-not-found","message":"..."}
+//! ```
 
 use std::io::{Error, ErrorKind, Result};
 
@@ -64,6 +71,53 @@ pub enum Message {
     },
     /// Sampling has stopped; the helper is about to exit.
     Stopped,
+    /// The helper failed (issue #81). Sent before exiting so the LSP can
+    /// surface the real cause instead of an undiagnosable EOF.
+    Error {
+        /// Coarse failure classification for editor-side error mapping.
+        kind: AttachErrorKind,
+        /// Human-readable cause (e.g. the underlying py-spy error).
+        message: String,
+    },
+}
+
+/// Why an attach failed, classified so each mode gets a distinct, actionable
+/// message ([PROFILE-ERRORS] maps these to LSP error codes).
+///
+/// Implements [PROFILE-HELPER-PROTOCOL-ERRORS]. See
+/// docs/specs/LSP-PROFILING-SPEC.md#PROFILE-HELPER-PROTOCOL-ERRORS
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum AttachErrorKind {
+    /// The target PID does not exist (or exited before attach).
+    ProcessNotFound,
+    /// The target exists but is not a Python process.
+    NotPython,
+    /// Attaching requires privileges the helper does not have.
+    PermissionDenied,
+    /// Any other attach failure.
+    AttachFailed,
+}
+
+/// Classify a py-spy attach error message into an [`AttachErrorKind`].
+///
+/// Shared by the in-process sampler and the elevated helper so both attach
+/// paths report identical, distinct failure modes (issue #81).
+#[must_use]
+pub fn classify_attach_error(message: &str) -> AttachErrorKind {
+    // Case-tolerant substrings: py-spy's wording varies across platforms.
+    if message.contains("ermission") || message.contains("Operation not permitted") {
+        AttachErrorKind::PermissionDenied
+    } else if message.contains("ot a python") || message.contains("ot Python") {
+        AttachErrorKind::NotPython
+    } else if message.contains("No such process")
+        || message.contains("not found")
+        || message.contains("check if it is running")
+    {
+        AttachErrorKind::ProcessNotFound
+    } else {
+        AttachErrorKind::AttachFailed
+    }
 }
 
 /// A single thread's stack trace, in wire form.
@@ -175,6 +229,53 @@ mod tests {
         let decoded: Option<Message> = read_message(&mut reader).await?;
         assert_eq!(decoded, Some(msg));
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn round_trips_error_message_with_kebab_case_kind() -> Result<()> {
+        let msg = Message::Error {
+            kind: AttachErrorKind::PermissionDenied,
+            message: "py-spy attach failed: Operation not permitted".to_owned(),
+        };
+        let mut buf: Vec<u8> = Vec::new();
+        write_message(&mut buf, &msg).await?;
+        let wire = String::from_utf8_lossy(&buf);
+        assert!(
+            wire.contains(r#""type":"error""#) && wire.contains(r#""kind":"permission-denied""#),
+            "error frames must be tagged and kebab-cased: {wire}"
+        );
+        let mut reader = BufReader::new(buf.as_slice());
+        let decoded: Option<Message> = read_message(&mut reader).await?;
+        assert_eq!(decoded, Some(msg));
+        Ok(())
+    }
+
+    #[test]
+    fn classifies_attach_errors_into_distinct_kinds() {
+        assert_eq!(
+            classify_attach_error("Operation not permitted (os error 1)"),
+            AttachErrorKind::PermissionDenied
+        );
+        assert_eq!(
+            classify_attach_error("Permission denied attaching to PID"),
+            AttachErrorKind::PermissionDenied
+        );
+        assert_eq!(
+            classify_attach_error("PID 7 is not a python process"),
+            AttachErrorKind::NotPython
+        );
+        assert_eq!(
+            classify_attach_error("No such process (os error 3)"),
+            AttachErrorKind::ProcessNotFound
+        );
+        assert_eq!(
+            classify_attach_error("Failed to open process - check if it is running."),
+            AttachErrorKind::ProcessNotFound
+        );
+        assert_eq!(
+            classify_attach_error("something exotic exploded"),
+            AttachErrorKind::AttachFailed
+        );
     }
 
     #[tokio::test]

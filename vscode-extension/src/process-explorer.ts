@@ -13,7 +13,7 @@
 import * as vscode from "vscode";
 import { type Store } from "./store";
 import { Logger } from "./logger";
-import { startProfilingForPid } from "./profiler";
+import { registerLaunchCommands } from "./process-launch";
 
 // ── LSP response types ───────────────────────────────────────────────────
 
@@ -117,6 +117,8 @@ class ProcessGroupItem extends vscode.TreeItem {
     public readonly members: readonly ProcessInfo[],
   ) {
     super(label, vscode.TreeItemCollapsibleState.Expanded);
+    // Stable identity so VS Code preserves expansion state across refreshes.
+    this.id = `processGroup:${label}`;
     this.description = `${members.length}`;
     this.contextValue = "processGroup";
     this.iconPath = new vscode.ThemeIcon("folder");
@@ -131,6 +133,11 @@ class ProcessTreeItem extends vscode.TreeItem {
       scriptName !== undefined ? `${process.name} — ${scriptName}` : process.name,
       vscode.TreeItemCollapsibleState.None,
     );
+
+    // Stable identity across the panel's 2s auto-refresh: without it VS Code
+    // can fail to map an inline-button click back to a (recreated) element and
+    // invokes the command with no argument (#79).
+    this.id = `pythonProcess:${process.pid}`;
 
     const version = process.pythonVersion ?? "—";
     this.description =
@@ -310,51 +317,6 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
   }
 }
 
-// ── Launch actions ───────────────────────────────────────────────────────
-
-/** Guard: narrow to a real selection, warning when an action has no row. */
-function ensureSelection(item: ProcessTreeItem | undefined): item is ProcessTreeItem {
-  if (item === undefined) {
-    vscode.window.showWarningMessage("Basilisk: Select a Python process to profile.");
-    return false;
-  }
-  return true;
-}
-
-/** Start CPU profiling the given process row — no input box (the #62 fix). */
-async function profileProcess(store: Store, item: ProcessTreeItem | undefined): Promise<void> {
-  if (!ensureSelection(item)) { return; }
-  const preset = vscode.workspace.getConfiguration("basilisk").get<string>("profiler.preset", "default");
-  await startProfilingForPid(store, item.process.pid, preset);
-}
-
-/** Start memory-oriented profiling for the given process row. */
-async function memoryTrackProcess(store: Store, item: ProcessTreeItem | undefined): Promise<void> {
-  if (!ensureSelection(item)) { return; }
-  await startProfilingForPid(store, item.process.pid, "memory");
-}
-
-/** Run the active `.py` file under a debug session with profiling on launch. */
-async function profileCurrentFile(): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
-  if (editor?.document.languageId !== "python") {
-    vscode.window.showWarningMessage("Basilisk: Open a Python file to run and profile.");
-    return;
-  }
-  const file = editor.document.uri;
-  const folder = vscode.workspace.getWorkspaceFolder(file);
-  const started = await vscode.debug.startDebugging(folder, {
-    type: "basilisk-debug",
-    request: "launch",
-    name: "Run & Profile Current File",
-    program: file.fsPath,
-    profileOnLaunch: true,
-  });
-  if (!started) {
-    vscode.window.showErrorMessage("Basilisk: Could not launch the current file for profiling.");
-  }
-}
-
 // ── Registration ─────────────────────────────────────────────────────────
 
 /** Default poll interval (ms) when the setting is absent. */
@@ -378,6 +340,7 @@ export function registerPythonProcesses(
   wireVisibilityRefresh(treeView, provider);
 
   const disposables = [
+    ...registerLaunchCommands(store, treeView),
     vscode.commands.registerCommand("basilisk.refreshProcesses", () => { provider.refresh(); }),
     vscode.commands.registerCommand("basilisk.sortProcesses", () => { provider.cycleSortMode(); }),
     vscode.commands.registerCommand("basilisk.groupProcesses", () => { provider.cycleGroupMode(); }),
@@ -388,13 +351,6 @@ export function registerPythonProcesses(
       });
       provider.setFilter(input ?? "");
     }),
-    vscode.commands.registerCommand("basilisk.profileProcess", async (item?: ProcessTreeItem) =>
-      profileProcess(store, item),
-    ),
-    vscode.commands.registerCommand("basilisk.memoryTrackProcess", async (item?: ProcessTreeItem) =>
-      memoryTrackProcess(store, item),
-    ),
-    vscode.commands.registerCommand("basilisk.profileCurrentFile", async () => profileCurrentFile()),
     vscode.commands.registerCommand("basilisk.copyProcessPid", (item?: ProcessTreeItem) => {
       if (item !== undefined) {
         void vscode.env.clipboard.writeText(String(item.process.pid));

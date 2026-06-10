@@ -229,9 +229,11 @@ async fn helper_listener_is_bound_before_helper_connects() {
 
     let err = result.expect_err("attaching to a non-Python process must fail");
     let msg = err.to_string();
+    // The helper must CONNECT (listener bound) and then fail the ATTACH —
+    // since #81 it reports the structured py-spy cause over the socket.
     assert!(
-        msg.contains("closed the connection before confirming attach"),
-        "the helper must CONNECT (listener bound) then fail to attach; got: {msg}"
+        msg.contains("py-spy attach failed"),
+        "the helper must connect (listener bound) then report its attach failure; got: {msg}"
     );
     assert!(
         !msg.contains("timed out waiting for the profiler helper to connect"),
@@ -514,6 +516,160 @@ async fn elevated_spawn_is_macos_only() {
     assert!(
         err.to_string().contains("only supported on macOS"),
         "expected a macOS-only error, got: {err}"
+    );
+}
+
+// ── Issue #81: attach failures must be diagnosable ───────────────────────────
+//
+// Tests for [PROFILE-HELPER-PROTOCOL-ERRORS]. The bug: when py-spy
+// attach fails inside the helper, the helper exits without reporting anything
+// over the socket, the LSP reads a clean EOF, and the user sees the bare
+// "helper closed the connection before confirming attach" with no exit code,
+// no stderr, and no underlying cause.
+
+/// The bare, non-actionable EOF message from issue #81. No surfaced error may
+/// consist of only this text.
+const BARE_EOF_MSG: &str = "helper closed the connection before confirming attach";
+
+/// Issue #81 (cause surfacing): attaching the REAL helper to a live non-Python
+/// process must surface the underlying py-spy failure to the caller — not a
+/// bare "helper closed the connection" EOF.
+#[tokio::test]
+async fn attach_failure_to_non_python_target_surfaces_pyspy_cause() {
+    use basilisk_lsp::profiler::helper_client::{start_helper_sampler, HelperSpawn};
+    use basilisk_lsp::profiler::sampler::SamplerConfig;
+
+    let helper = helper_binary_path();
+    let mut sleeper = ProcessGuard::new(
+        Command::new("sleep")
+            .arg("30")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn sleep"),
+    );
+    let config = SamplerConfig {
+        pid: sleeper.id(),
+        sample_rate: 100,
+        include_native: false,
+        include_idle: false,
+        duration: None,
+    };
+
+    let result = timeout(
+        Duration::from_secs(30),
+        start_helper_sampler(&config, HelperSpawn::Direct(helper)),
+    )
+    .await
+    .expect("start_helper_sampler must not hang");
+    sleeper.kill();
+
+    let err = result.expect_err("attaching to a non-Python process must fail");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("py-spy attach failed"),
+        "the helper's real attach error must reach the caller (#81), got: {msg}"
+    );
+}
+
+/// Issue #81 (distinct failure modes): a target PID that no longer exists must
+/// be reported as a distinct, actionable cause — not a bare EOF.
+#[tokio::test]
+async fn attach_to_exited_target_reports_distinct_cause() {
+    use basilisk_lsp::profiler::helper_client::{start_helper_sampler, HelperSpawn};
+    use basilisk_lsp::profiler::sampler::{SamplerConfig, SamplerError};
+
+    let helper = helper_binary_path();
+
+    // A PID that is guaranteed dead: spawn a no-op and reap it.
+    let mut done = Command::new("true").spawn().expect("spawn true");
+    let dead_pid = done.id();
+    let _ = done.wait();
+
+    let config = SamplerConfig {
+        pid: dead_pid,
+        sample_rate: 100,
+        include_native: false,
+        include_idle: false,
+        duration: None,
+    };
+    let err = timeout(
+        Duration::from_secs(30),
+        start_helper_sampler(&config, HelperSpawn::Direct(helper)),
+    )
+    .await
+    .expect("must not hang")
+    .expect_err("attaching to an exited process must fail");
+
+    let msg = err.to_string();
+    let is_distinct = matches!(err, SamplerError::ProcessNotFound(_))
+        || msg.contains("No such process")
+        || msg.to_lowercase().contains("not found");
+    assert!(
+        is_distinct,
+        "an exited target must be reported as process-not-found, not a bare EOF (#81): {msg}"
+    );
+    assert!(
+        !msg.trim_end().ends_with(BARE_EOF_MSG),
+        "error must not be the bare EOF message (#81): {msg}"
+    );
+}
+
+/// Write an executable fake helper that connects, reads the attach command,
+/// writes a recognizable failure to stderr, and exits with a nonzero status —
+/// the silent-death shape that issue #81 says must be diagnosable.
+fn write_silent_death_fake_helper() -> PathBuf {
+    let dir = std::env::temp_dir().join("basilisk_helper_socket_e2e");
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    let path = dir.join(format!("fake-helper-{}.py", unique_suffix()));
+    let script = format!(
+        "#!/usr/bin/env {python}\nimport socket, sys\ns = socket.socket(socket.AF_UNIX)\ns.connect(sys.argv[1])\ns.recv(4096)\nsys.stderr.write(\"task_for_pid mismatch: helper lacks entitlement\\n\")\nsys.stderr.flush()\nsys.exit(7)\n",
+        python = python_path()
+    );
+    std::fs::write(&path, script).expect("write fake helper");
+    let mut perms = std::fs::metadata(&path)
+        .expect("stat fake helper")
+        .permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
+    std::fs::set_permissions(&path, perms).expect("chmod fake helper");
+    path
+}
+
+/// Issue #81 (exit code + stderr surfacing): when the helper dies before
+/// confirming attach WITHOUT reporting a structured error, the LSP must capture
+/// and surface the helper's exit status and stderr so the failure is
+/// diagnosable.
+#[tokio::test]
+async fn helper_dying_before_attach_surfaces_exit_status_and_stderr() {
+    use basilisk_lsp::profiler::helper_client::{start_helper_sampler, HelperSpawn};
+    use basilisk_lsp::profiler::sampler::SamplerConfig;
+
+    let fake_helper = write_silent_death_fake_helper();
+    let config = SamplerConfig {
+        pid: std::process::id(),
+        sample_rate: 100,
+        include_native: false,
+        include_idle: false,
+        duration: None,
+    };
+
+    let err = timeout(
+        Duration::from_secs(30),
+        start_helper_sampler(&config, HelperSpawn::Direct(fake_helper.clone())),
+    )
+    .await
+    .expect("must not hang")
+    .expect_err("a helper that dies before confirming attach must fail");
+    let _ = std::fs::remove_file(&fake_helper);
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("task_for_pid mismatch"),
+        "the helper's stderr must be surfaced so the user sees WHY (#81): {msg}"
+    );
+    assert!(
+        msg.contains('7'),
+        "the helper's exit status (7) must be surfaced (#81): {msg}"
     );
 }
 

@@ -20,7 +20,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use basilisk_profiler_protocol::{
-    read_message, write_message, Command, FrameData, Message, TraceData,
+    classify_attach_error, read_message, write_message, AttachErrorKind, Command, FrameData,
+    Message, TraceData,
 };
 use shipwright::{dispatch, BuildInfo, VersionSpec};
 use shipwright_manifest::{ExecutableKind, Language};
@@ -146,7 +147,36 @@ fn attach_pyspy(
     Ok((spy, version))
 }
 
+/// Whether the target PID is alive (signal-0 probe via `kill`).
+///
+/// Implements [PROFILE-HELPER-PROTOCOL-ERRORS].
+/// Refines attach-failure classification (issue #81): py-spy reports the same
+/// "Failed to open process" for a dead target and for a live one the helper
+/// lacks privileges to read — the user needs to know which.
+fn target_alive(pid: u32) -> bool {
+    std::process::Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .map(|status| status.success())
+        .is_ok_and(|alive| alive)
+}
+
+/// Classify an attach failure, refining ambiguous "cannot open" errors with a
+/// liveness probe so target-gone and permission-denied are reported distinctly.
+fn classify_helper_attach_error(pid: u32, message: &str) -> AttachErrorKind {
+    match classify_attach_error(message) {
+        AttachErrorKind::ProcessNotFound | AttachErrorKind::AttachFailed if target_alive(pid) => {
+            AttachErrorKind::PermissionDenied
+        }
+        kind => kind,
+    }
+}
+
 /// Main protocol loop: read attach, sample, respond.
+///
+/// Attach failures are reported back over the socket as a structured
+/// [`Message::Error`] before the helper exits, so the LSP never sees an
+/// undiagnosable bare EOF (issue #81).
 async fn run_protocol(
     mut reader: BufReader<tokio::net::unix::OwnedReadHalf>,
     mut writer: tokio::net::unix::OwnedWriteHalf,
@@ -154,7 +184,21 @@ async fn run_protocol(
     let (pid, sample_rate, include_native) = read_attach_command(&mut reader).await?;
     info!(pid, sample_rate, include_native, "attaching to process");
 
-    let (spy, python_version) = attach_pyspy(pid, sample_rate, include_native)?;
+    let (spy, python_version) = match attach_pyspy(pid, sample_rate, include_native) {
+        Ok(attached) => attached,
+        Err(message) => {
+            let kind = classify_helper_attach_error(pid, &message);
+            let _ = send_message(
+                &mut writer,
+                &Message::Error {
+                    kind,
+                    message: message.clone(),
+                },
+            )
+            .await;
+            return Err(message);
+        }
+    };
 
     send_message(
         &mut writer,
