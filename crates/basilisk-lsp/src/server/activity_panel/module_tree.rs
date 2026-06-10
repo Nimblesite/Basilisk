@@ -2,16 +2,40 @@
 //!
 //! Module tree construction for the workspace modules panel.
 
+use std::path::Path;
+
 use crate::workspace::WorkspaceIndex;
 
-use super::helpers::{byte_offset_to_line, module_name_from_path};
+use super::helpers::{byte_offset_to_line, coverage_percent, module_name_from_path};
+use super::type_health::compute_file_health;
+
+/// Result of building the workspace module tree: the per-module nodes (each with
+/// its folded health rollup) plus the workspace-wide health summary.
+pub(crate) struct WorkspaceModulesResult {
+    pub modules: Vec<serde_json::Value>,
+    pub workspace: serde_json::Value,
+}
 
 /// Build the module tree from the workspace index.
 ///
-/// Each file becomes a module node containing its top-level symbols.
-/// Packages are inferred from directory structure.
-pub(crate) fn build_module_tree(idx: &WorkspaceIndex, scope: &str) -> Vec<serde_json::Value> {
+/// Each file becomes a module node containing its top-level symbols and a folded
+/// health rollup (coverage %, error/warning counts, adoption state). The
+/// workspace-wide rollup is accumulated in the same single pass, so the merged
+/// Modules panel needs no separate `basilisk.typeHealth` round-trip.
+pub(crate) fn build_module_tree(
+    idx: &WorkspaceIndex,
+    scope: &str,
+    project_root: Option<&Path>,
+) -> WorkspaceModulesResult {
+    let adoption_store =
+        project_root.and_then(|root| basilisk_config::AdoptionStore::load(root).ok());
+
     let mut modules = Vec::new();
+    let mut total_symbols: usize = 0;
+    let mut total_annotated: usize = 0;
+    let mut total_errors: usize = 0;
+    let mut total_warnings: usize = 0;
+    let mut total_adopted: usize = 0;
 
     for entry in &idx.files {
         let path = entry.key();
@@ -33,6 +57,21 @@ pub(crate) fn build_module_tree(idx: &WorkspaceIndex, scope: &str) -> Vec<serde_
         };
 
         let symbols = build_symbol_list(resolved, &file_entry.text);
+        let health = compute_file_health(
+            resolved,
+            &file_entry.diagnostics,
+            path,
+            project_root,
+            adoption_store.as_ref(),
+        );
+
+        total_symbols += health.total_symbols;
+        total_annotated += health.annotated_symbols;
+        total_errors += health.errors;
+        total_warnings += health.warnings;
+        if health.adopted {
+            total_adopted += 1;
+        }
 
         let kind = if path
             .file_name()
@@ -48,6 +87,10 @@ pub(crate) fn build_module_tree(idx: &WorkspaceIndex, scope: &str) -> Vec<serde_
             "path": path.display().to_string(),
             "kind": kind,
             "symbols": symbols,
+            "coveragePercent": health.coverage_percent,
+            "errors": health.errors,
+            "warnings": health.warnings,
+            "adopted": health.adopted,
         }));
     }
 
@@ -57,7 +100,17 @@ pub(crate) fn build_module_tree(idx: &WorkspaceIndex, scope: &str) -> Vec<serde_
         a_name.cmp(b_name)
     });
 
-    modules
+    let workspace = serde_json::json!({
+        "totalSymbols": total_symbols,
+        "annotatedSymbols": total_annotated,
+        "coveragePercent": coverage_percent(total_annotated, total_symbols),
+        "errors": total_errors,
+        "warnings": total_warnings,
+        "adoptedFiles": total_adopted,
+        "totalFiles": idx.files.len(),
+    });
+
+    WorkspaceModulesResult { modules, workspace }
 }
 
 /// Build the list of top-level symbols from a resolved module.
@@ -208,16 +261,17 @@ mod tests {
     #[test]
     fn test_build_module_tree_two_files() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root]);
+        let idx = make_index_with_roots(vec![root.clone()]);
         let uri_a = make_uri("/workspace/alpha.py");
         let uri_b = make_uri("/workspace/beta.py");
         let _ = idx.set_open(&uri_a, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_b, "y: str = 'hi'\n", 1);
 
-        let tree = build_module_tree(&idx, "");
-        assert_eq!(tree.len(), 2, "expected 2 modules in the tree");
+        let tree = build_module_tree(&idx, "", Some(&root));
+        assert_eq!(tree.modules.len(), 2, "expected 2 modules in the tree");
 
         let names: Vec<&str> = tree
+            .modules
             .iter()
             .filter_map(|m| m.get("name").and_then(|v| v.as_str()))
             .collect();
@@ -225,7 +279,7 @@ mod tests {
         assert!(names.contains(&"beta"), "expected beta module");
 
         // Each module should have at least one symbol.
-        for module in &tree {
+        for module in &tree.modules {
             let symbols = module.get("symbols").and_then(|v| v.as_array()).unwrap();
             assert!(
                 !symbols.is_empty(),
@@ -237,41 +291,91 @@ mod tests {
     #[test]
     fn test_build_module_tree_kind_for_init_py() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root]);
+        let idx = make_index_with_roots(vec![root.clone()]);
         let uri = make_uri("/workspace/pkg/__init__.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "");
-        assert_eq!(tree.len(), 1);
-        let kind = tree[0].get("kind").and_then(|v| v.as_str()).unwrap();
+        let tree = build_module_tree(&idx, "", Some(&root));
+        assert_eq!(tree.modules.len(), 1);
+        let kind = tree.modules[0]
+            .get("kind")
+            .and_then(|v| v.as_str())
+            .unwrap();
         assert_eq!(kind, "package");
     }
 
     #[test]
     fn test_build_module_tree_kind_for_regular_module() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root]);
+        let idx = make_index_with_roots(vec![root.clone()]);
         let uri = make_uri("/workspace/mod.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "");
-        assert_eq!(tree.len(), 1);
-        let kind = tree[0].get("kind").and_then(|v| v.as_str()).unwrap();
+        let tree = build_module_tree(&idx, "", Some(&root));
+        assert_eq!(tree.modules.len(), 1);
+        let kind = tree.modules[0]
+            .get("kind")
+            .and_then(|v| v.as_str())
+            .unwrap();
         assert_eq!(kind, "module");
     }
 
     #[test]
     fn test_build_module_tree_scope_filter() {
         let root = PathBuf::from("/workspace");
-        let idx = make_index_with_roots(vec![root]);
+        let idx = make_index_with_roots(vec![root.clone()]);
         let uri_a = make_uri("/workspace/pkg/a.py");
         let uri_b = make_uri("/workspace/other/b.py");
         let _ = idx.set_open(&uri_a, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_b, "y: int = 2\n", 1);
 
-        let tree = build_module_tree(&idx, "pkg");
-        assert_eq!(tree.len(), 1, "scope filter should keep only pkg.a");
-        let name = tree[0].get("name").and_then(|v| v.as_str()).unwrap();
+        let tree = build_module_tree(&idx, "pkg", Some(&root));
+        assert_eq!(tree.modules.len(), 1, "scope filter should keep only pkg.a");
+        let name = tree.modules[0]
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap();
         assert_eq!(name, "pkg.a");
+    }
+
+    #[test]
+    fn test_build_module_tree_folds_health_rollup() {
+        let root = PathBuf::from("/workspace");
+        let idx = make_index_with_roots(vec![root.clone()]);
+        // Fully annotated file (100%) and a half-annotated file.
+        let uri_full = make_uri("/workspace/full.py");
+        let uri_partial = make_uri("/workspace/partial.py");
+        let _ = idx.set_open(&uri_full, "x: int = 1\n", 1);
+        let _ = idx.set_open(&uri_partial, "a: int = 1\nb = 2\n", 1);
+
+        let tree = build_module_tree(&idx, "", Some(&root));
+
+        // Every module node carries its folded health fields.
+        for module in &tree.modules {
+            for field in ["coveragePercent", "errors", "warnings", "adopted"] {
+                assert!(
+                    module.get(field).is_some(),
+                    "module node missing folded health field '{field}'"
+                );
+            }
+            let coverage = module
+                .get("coveragePercent")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap();
+            assert!(coverage <= 100, "coverage should be <= 100");
+        }
+
+        // The workspace rollup is present and consistent.
+        let ws = &tree.workspace;
+        assert_eq!(
+            ws.get("totalFiles").and_then(serde_json::Value::as_u64),
+            Some(2),
+            "workspace rollup should count both files"
+        );
+        let ws_coverage = ws
+            .get("coveragePercent")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap();
+        assert!(ws_coverage <= 100, "workspace coverage should be <= 100");
     }
 }

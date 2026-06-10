@@ -176,6 +176,10 @@ function bindLspStateEffects(store: Store, updateStatusBar: StatusBarUpdater): v
     if (statusBarState !== undefined) {
       updateStatusBar(statusBarState);
     }
+    // [EXTACT-EDITORS-VSCODE] basilisk.serverState context key — gates the
+    // server-dependent Modules-toolbar buttons (Fix All / Organize Imports /
+    // Restart) so they only render with a live handler behind them (#103).
+    void vscode.commands.executeCommand("setContext", "basilisk.serverState", state);
   });
 }
 

@@ -91,12 +91,10 @@ function assertCommandsHaveDescriptiveTitles(): void {
   const panelCommands = commands.filter(
     (cmd) =>
       cmd.command.includes("ModuleExplorer") ||
-      cmd.command.includes("TypeHealth") ||
       cmd.command.includes("toggleFeature") ||
       cmd.command.includes("openWalkthrough") ||
       cmd.command.includes("copyImportPath") ||
       cmd.command.includes("copyQualifiedName") ||
-      cmd.command.includes("sortTypeHealth") ||
       cmd.command.includes("filterModuleExplorer"),
   );
 
@@ -135,7 +133,6 @@ function assertCommandsHaveCategory(): void {
   const panelCommands = commands.filter(
     (cmd) =>
       cmd.command.includes("ModuleExplorer") ||
-      cmd.command.includes("TypeHealth") ||
       cmd.command.includes("toggleFeature") ||
       cmd.command.includes("openWalkthrough"),
   );
@@ -155,7 +152,6 @@ function assertToolbarMenusHaveWhenClauses(): void {
   const panelMenus = titleMenus.filter(
     (entry) =>
       entry.when.includes("basilisk.moduleExplorer") ||
-      entry.when.includes("basilisk.typeHealth") ||
       entry.when.includes("basilisk.info"),
   );
 
@@ -186,14 +182,12 @@ function assertWelcomeViewsHaveMeaningfulContent(): void {
   const welcomeViews = pkg.contributes?.viewsWelcome ?? [];
 
   const panelWelcome = welcomeViews.filter(
-    (entry) =>
-      entry.view === "basilisk.moduleExplorer" ||
-      entry.view === "basilisk.typeHealth",
+    (entry) => entry.view === "basilisk.moduleExplorer",
   );
 
   assert.ok(
-    panelWelcome.length >= 2,
-    "Both moduleExplorer and typeHealth should have welcome content",
+    panelWelcome.length >= 1,
+    "The merged Modules panel should have welcome content",
   );
 
   for (const welcome of panelWelcome) {
@@ -230,7 +224,7 @@ function assertDataPanelsRequireWorkspace(): void {
   const views = pkg.contributes?.views?.["basilisk-explorer"] ?? [];
 
   const dataViews = views.filter(
-    (v) => v.id === "basilisk.moduleExplorer" || v.id === "basilisk.typeHealth",
+    (v) => v.id === "basilisk.moduleExplorer",
   );
 
   for (const view of dataViews) {
@@ -275,12 +269,6 @@ suite("Basilisk Activity Panel Accessibility Audit", function () {
 
   test("module explorer commands follow naming pattern", function () {
     assertCommandsFollowNamingPattern((cmd) => cmd.command.includes("ModuleExplorer"));
-  });
-
-  test("type health commands follow naming pattern", function () {
-    assertCommandsFollowNamingPattern(
-      (cmd) => cmd.command.includes("TypeHealth") || cmd.command.includes("sortTypeHealth"),
-    );
   });
 
   test("info panel is always visible for discoverability", assertInfoPanelVisible);

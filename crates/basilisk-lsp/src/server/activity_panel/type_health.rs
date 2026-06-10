@@ -36,43 +36,30 @@ pub(crate) fn build_type_health(
             continue;
         };
 
-        let (symbols, annotated, unannotated_names) = count_annotations(resolved);
-        let errors = file_entry
-            .diagnostics
-            .iter()
-            .filter(|d| d.severity == basilisk_checker::Severity::Error)
-            .count();
-        let warnings = file_entry
-            .diagnostics
-            .iter()
-            .filter(|d| d.severity == basilisk_checker::Severity::Warning)
-            .count();
+        let health = compute_file_health(
+            resolved,
+            &file_entry.diagnostics,
+            path,
+            project_root,
+            adoption_store.as_ref(),
+        );
 
-        let adopted = adoption_store.as_ref().is_some_and(|store| {
-            let relative = path
-                .strip_prefix(project_root.unwrap_or(Path::new("")))
-                .unwrap_or(path);
-            store.demoted_count(relative) > 0
-        });
-
-        let coverage = coverage_percent(annotated, symbols);
-
-        total_symbols += symbols;
-        total_annotated += annotated;
-        total_errors += errors;
-        total_warnings += warnings;
-        if adopted {
+        total_symbols += health.total_symbols;
+        total_annotated += health.annotated_symbols;
+        total_errors += health.errors;
+        total_warnings += health.warnings;
+        if health.adopted {
             total_adopted += 1;
         }
 
         module_health.push(serde_json::json!({
             "name": module_name,
             "path": path.display().to_string(),
-            "coveragePercent": coverage,
-            "errors": errors,
-            "warnings": warnings,
-            "adopted": adopted,
-            "unannotated": unannotated_names,
+            "coveragePercent": health.coverage_percent,
+            "errors": health.errors,
+            "warnings": health.warnings,
+            "adopted": health.adopted,
+            "unannotated": health.unannotated,
         }));
     }
 
@@ -102,6 +89,58 @@ pub(crate) fn build_type_health(
         },
         "modules": module_health,
     })
+}
+
+/// Per-file type-health figures.
+///
+/// Single source of truth shared by the `basilisk.typeHealth` command and the
+/// health rollup folded into each `basilisk.workspaceModules` node — so the
+/// coverage/diagnostic/adoption numbers are computed in exactly one place.
+pub(crate) struct FileHealth {
+    pub total_symbols: usize,
+    pub annotated_symbols: usize,
+    pub coverage_percent: u64,
+    pub errors: usize,
+    pub warnings: usize,
+    pub adopted: bool,
+    pub unannotated: Vec<String>,
+}
+
+/// Compute the type-health figures for a single resolved file.
+pub(crate) fn compute_file_health(
+    resolved: &basilisk_resolver::ResolvedModule,
+    diagnostics: &[basilisk_checker::Diagnostic],
+    path: &Path,
+    project_root: Option<&Path>,
+    adoption_store: Option<&basilisk_config::AdoptionStore>,
+) -> FileHealth {
+    let (total_symbols, annotated_symbols, unannotated) = count_annotations(resolved);
+
+    let errors = diagnostics
+        .iter()
+        .filter(|d| d.severity == basilisk_checker::Severity::Error)
+        .count();
+    let warnings = diagnostics
+        .iter()
+        .filter(|d| d.severity == basilisk_checker::Severity::Warning)
+        .count();
+
+    let adopted = adoption_store.is_some_and(|store| {
+        let relative = path
+            .strip_prefix(project_root.unwrap_or(Path::new("")))
+            .unwrap_or(path);
+        store.demoted_count(relative) > 0
+    });
+
+    FileHealth {
+        total_symbols,
+        annotated_symbols,
+        coverage_percent: coverage_percent(annotated_symbols, total_symbols),
+        errors,
+        warnings,
+        adopted,
+        unannotated,
+    }
 }
 
 /// Count annotated vs unannotated symbols in a resolved module.

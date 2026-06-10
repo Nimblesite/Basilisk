@@ -16,7 +16,6 @@ import { createDebugAdapterFactory, BasiliskDebugAdapterTrackerFactory, createBa
 import { startSubprocessMode } from "./subprocess-mode";
 import { registerTestExplorer } from "./test-explorer";
 import { registerModuleExplorer } from "./module-explorer";
-import { registerTypeHealth } from "./type-health";
 import { registerInfoPanel } from "./info-panel";
 import { registerPythonProcesses } from "./process-explorer";
 import { createStore, type Store } from "./store";
@@ -172,11 +171,10 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
   );
 
   // Activity bar panels — register once (tree view IDs must be unique).
+  // The Modules panel (module-explorer) now carries the folded type-health
+  // rollup, so there is no separate Type Health panel [EXTACT-MODULES].
   const moduleResult = registerModuleExplorer(context, s);
   singletonDisposables.push(...moduleResult.disposables);
-
-  const typeHealthResult = registerTypeHealth(context, s);
-  singletonDisposables.push(...typeHealthResult.disposables);
 
   const infoPanelResult = registerInfoPanel(context, s);
   singletonDisposables.push(...infoPanelResult.disposables);

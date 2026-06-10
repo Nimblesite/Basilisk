@@ -15,10 +15,15 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import { getStore } from "../../extension";
 import { InfoPanelProvider } from "../../info-panel";
-import { SummaryItem } from "../../type-health";
+import {
+    ModuleTreeItem,
+    workspaceHealthBadge,
+    workspaceHealthMessage,
+} from "../../module-explorer";
 import {
     EXTENSION_ID,
     WAIT_MS,
+    pollUntilResult,
     setupLspTestSuite,
     teardownLspTestSuite,
     closeAllEditors,
@@ -65,18 +70,10 @@ const MODULE_EXPLORER_COMMANDS = [
   "basilisk.refreshModuleExplorer",
   "basilisk.collapseModuleExplorer",
   "basilisk.toggleModuleExplorerView",
+  "basilisk.sortModuleExplorer",
   "basilisk.filterModuleExplorer",
   "basilisk.copyImportPath",
   "basilisk.copyQualifiedName",
-] as const;
-
-/**
- * Commands registered client-side for the type health panel.
- * These are registered via context.subscriptions in registerTypeHealth().
- */
-const TYPE_HEALTH_COMMANDS = [
-  "basilisk.refreshTypeHealth",
-  "basilisk.sortTypeHealth",
 ] as const;
 
 /**
@@ -93,14 +90,17 @@ const WALKTHROUGH_COMMAND = "basilisk.openWalkthrough";
 /** View IDs contributed in package.json under basilisk-explorer. */
 const ACTIVITY_VIEW_IDS = [
   "basilisk.moduleExplorer",
-  "basilisk.typeHealth",
   "basilisk.info",
 ] as const;
 
-/** Server-advertised commands that back the activity panel data. */
+/**
+ * Server-advertised command that backs the merged Modules panel. Type Health is
+ * folded into this one response (issue #103), so the panel makes a single
+ * round-trip; basilisk.typeHealth remains advertised for Zed/Neovim and is
+ * covered by command-registration.test.ts.
+ */
 const PANEL_SERVER_COMMANDS = [
   "basilisk.workspaceModules",
-  "basilisk.typeHealth",
 ] as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -146,8 +146,16 @@ function rowLabel(item: vscode.TreeItem): string {
   return typeof label === "string" ? label : label?.label ?? "";
 }
 
-/** Section labels whose info-panel rows are actionable (carry a command). */
-const ACTIONABLE_INFO_SECTIONS = ["Feature Status", "Quick Actions"];
+/**
+ * Quick actions promoted from the info panel to the Modules toolbar (issue
+ * #103), when-gated on the server running so a button can never invoke an
+ * unregistered handler [EXTACT-INFO-ACTION-WIRING].
+ */
+const PROMOTED_TOOLBAR_COMMANDS = [
+  "basilisk.fixWorkspace",
+  "basilisk.organizeImports",
+  "basilisk.restartServer",
+] as const;
 
 // ── Test Suite ────────────────────────────────────────────────────────────
 
@@ -199,18 +207,6 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     );
   });
 
-  test("typeHealth view has correct 'when' condition", function () {
-    const views = loadBasiliskViews();
-    const healthView = views.find((view) => view.id === "basilisk.typeHealth");
-
-    assert.ok(healthView, "typeHealth view should exist");
-    assert.strictEqual(
-      healthView.when,
-      "basilisk.hasWorkspace",
-      "typeHealth should have 'basilisk.hasWorkspace' when clause",
-    );
-  });
-
   test("info view is always visible (no 'when' condition)", function () {
     const views = loadBasiliskViews();
     const infoView = views.find((view) => view.id === "basilisk.info");
@@ -240,20 +236,8 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     await vscode.commands.executeCommand("basilisk.toggleModuleExplorerView");
   });
 
-  // ── Type Health Commands ──────────────────────────────────────────────
-
-  test("type health commands are registered", function () {
-    for (const cmd of TYPE_HEALTH_COMMANDS) {
-      assertCommandRegistered(cmd, "Type Health");
-    }
-  });
-
-  test("refreshTypeHealth command is executable", async function () {
-    await vscode.commands.executeCommand("basilisk.refreshTypeHealth");
-  });
-
-  test("sortTypeHealth command is executable", async function () {
-    await vscode.commands.executeCommand("basilisk.sortTypeHealth");
+  test("sortModuleExplorer command is executable", async function () {
+    await vscode.commands.executeCommand("basilisk.sortModuleExplorer");
   });
 
   // ── Info Panel Commands ───────────────────────────────────────────────
@@ -286,10 +270,10 @@ suite("Basilisk Activity Panel E2E Tests", function () {
   });
 
   // Regression for issue #65 [EXTACT-INFO-ACTION-WIRING]: every actionable row
-  // the panel renders must resolve to a registered handler. Drives the LIVE
-  // panel tree (not the command registry directly) and checks each row's own
-  // command via the sanctioned "re-registering a live command throws" probe —
-  // a row that looked clickable but had no handler would fail here.
+  // the panel renders must resolve to a registered handler. In the slimmed
+  // panel (issue #103) the actionable rows are the top-level feature toggles.
+  // Drives the LIVE panel tree and checks each row's own command via the
+  // sanctioned "re-registering a live command throws" probe.
   test("every actionable info panel row resolves to a registered command (no dead actions)", function () {
     const store = getStore();
     assert.ok(store, "Store should exist");
@@ -298,16 +282,79 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     try {
       const actionableRows = provider
         .getChildren()
-        .filter((section) => ACTIONABLE_INFO_SECTIONS.includes(rowLabel(section)))
-        .flatMap((section) => provider.getChildren(section));
+        .filter((row) => row.contextValue === "feature");
 
-      assert.ok(actionableRows.length > 0, "info panel should render actionable rows");
+      assert.ok(actionableRows.length > 0, "info panel should render feature toggles");
 
       for (const row of actionableRows) {
         const commandId = row.command?.command;
         assert.ok(commandId, `"${rowLabel(row)}" must carry a command`);
-        assertCommandRegistered(commandId, `Info panel action "${rowLabel(row)}"`);
+        assertCommandRegistered(commandId, `Info panel toggle "${rowLabel(row)}"`);
       }
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  // Issue #103: the high-value quick actions were promoted from the info panel
+  // to Modules-toolbar buttons, when-gated on basilisk.serverState == 'running'
+  // so they can never render without a live handler [EXTACT-INFO-ACTION-WIRING].
+  test("Fix All / Organize Imports / Restart are Modules toolbar buttons gated on the server running", function () {
+    const contributes = loadContributes();
+    const titleMenus = contributes?.menus?.["view/title"] ?? [];
+    const moduleMenus = titleMenus.filter(
+      (entry) => entry.when.includes("view == basilisk.moduleExplorer"),
+    );
+
+    for (const cmd of PROMOTED_TOOLBAR_COMMANDS) {
+      const entry = moduleMenus.find((menu) => menu.command === cmd);
+      assert.ok(entry, `"${cmd}" must be contributed to the Modules view/title toolbar`);
+      assert.ok(
+        entry.when.includes("basilisk.serverState == 'running'"),
+        `"${cmd}" toolbar button must be when-gated on the server running, got: ${entry.when}`,
+      );
+    }
+  });
+
+  test("promoted toolbar commands are registered and executable while the server runs", async function () {
+    for (const cmd of PROMOTED_TOOLBAR_COMMANDS) {
+      assertCommandRegistered(cmd, "Promoted toolbar action");
+    }
+  });
+
+  // Defect 3 of issue #103: Server Info went stale — the provider only
+  // re-rendered on configuration changes, so "Server: stopped" / a missing
+  // Version row persisted after the server came up. The provider now holds a
+  // signals effect on store.lspState/store.client; restarting the real server
+  // must therefore fire the tree's change event without any config change.
+  test("info panel re-renders on LSP state changes (no stale Server Info)", async function () {
+    this.timeout(60_000);
+    const store = getStore();
+    assert.ok(store, "Store should exist");
+
+    const provider = new InfoPanelProvider(store);
+    try {
+      const fired = new Promise<void>((resolve) => {
+        const sub = provider.onDidChangeTreeData(() => {
+          sub.dispose();
+          resolve();
+        });
+      });
+
+      await vscode.commands.executeCommand("basilisk.restartServer");
+      await fired;
+
+      // Restore a fully-running server for the tests that follow. isRunning()
+      // can flip true a beat before the store's state listener re-registers
+      // the server commands, so also wait for the commands to be re-advertised
+      // — the very next tests assert on them.
+      const ready = await store.ensureLspReadyPromise(WAIT_MS);
+      assert.ok(ready.ok, "LSP should be running again after restart");
+      await pollUntilResult({
+        fn: async () => store.serverCommands.value.size,
+        predicate: (size) => size > 0,
+        timeoutMs: WAIT_MS,
+      });
     } finally {
       provider.dispose();
     }
@@ -324,12 +371,16 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     );
   });
 
-  test("LSP server advertises basilisk.typeHealth command", function () {
+  // The merged Modules panel no longer calls basilisk.typeHealth (its rollup is
+  // folded into workspaceModules, issue #103), but the command remains the
+  // shared workspace-health rollup for editors without a unified panel
+  // (Zed /health, Neovim :BasiliskHealth). Guard that it stays advertised.
+  test("LSP server still advertises basilisk.typeHealth for other editors", function () {
     const store = getStore();
     assert.ok(store, "Store should exist");
     assert.ok(
       store.isServerCommandAdvertised("basilisk.typeHealth"),
-      "Server should advertise basilisk.typeHealth",
+      "Server should still advertise basilisk.typeHealth (Zed/Neovim health command)",
     );
   });
 
@@ -382,19 +433,7 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     assert.ok(menuCommands.includes("basilisk.collapseModuleExplorer"), "Should include collapse");
     assert.ok(menuCommands.includes("basilisk.toggleModuleExplorerView"), "Should include view toggle");
     assert.ok(menuCommands.includes("basilisk.filterModuleExplorer"), "Should include filter");
-  });
-
-  test("type health has toolbar actions in package.json", function () {
-    const contributes = loadContributes();
-    const titleMenus = contributes?.menus?.["view/title"] ?? [];
-
-    const healthMenus = titleMenus.filter(
-      (entry) => entry.when === "view == basilisk.typeHealth",
-    );
-    const menuCommands = healthMenus.map((entry) => entry.command);
-
-    assert.ok(menuCommands.includes("basilisk.refreshTypeHealth"), "Should include refresh");
-    assert.ok(menuCommands.includes("basilisk.sortTypeHealth"), "Should include sort");
+    assert.ok(menuCommands.includes("basilisk.sortModuleExplorer"), "Should include sort (folded Type Health)");
   });
 
   test("module explorer has context menu for copy actions", function () {
@@ -423,27 +462,18 @@ suite("Basilisk Activity Panel E2E Tests", function () {
       "moduleExplorer welcome should mention no modules found",
     );
   });
-
-  test("type health has welcome content in package.json", function () {
-    const contributes = loadContributes();
-    const welcomeViews = contributes?.viewsWelcome ?? [];
-
-    const healthWelcome = welcomeViews.find((entry) => entry.view === "basilisk.typeHealth");
-    assert.ok(healthWelcome, "typeHealth should have welcome content");
-    assert.ok(
-      healthWelcome.contents.includes("Waiting for analysis"),
-      "typeHealth welcome should mention waiting for analysis",
-    );
-  });
 });
 
-// ── Type Health summary rendering [EXTACT-HEALTH] ───────────────────────────
+// ── Merged Modules panel: health chrome + per-module coverage [EXTACT-MODULES] ─
 //
-// Regression tests for issue #57: an empty workspace (totalFiles === 0) must
-// render an explicit "no Python files" state, never a misleading 100% coverage
-// bar with a green "pass" icon.
-// Spec: docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-HEALTH
-suite("Type Health Summary Rendering [EXTACT-HEALTH]", function () {
+// The Type Health panel was merged into the Modules panel (issue #103): the
+// workspace summary now renders in the tree view's native message + numeric
+// badge chrome, and each module carries a coverage bar on its description.
+//
+// Regression for issue #57: an empty workspace (totalFiles === 0) must render an
+// explicit "no Python files" state, never a misleading 100% coverage bar.
+// Spec: docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-MODULES-HEADER
+suite("Modules panel health chrome [EXTACT-MODULES-HEADER]", function () {
   const emptyStats = {
     totalSymbols: 0,
     annotatedSymbols: 0,
@@ -458,48 +488,89 @@ suite("Type Health Summary Rendering [EXTACT-HEALTH]", function () {
     totalSymbols: 20,
     annotatedSymbols: 17,
     coveragePercent: 85,
-    errors: 0,
-    warnings: 0,
+    errors: 2,
+    warnings: 3,
     adoptedFiles: 0,
     totalFiles: 3,
   };
 
-  test("empty workspace shows 'No Python files found', never a 100% bar", function () {
-    const item = new SummaryItem(emptyStats);
-    const description = String(item.description);
+  test("empty workspace message is 'No Python files found', never a 100% bar", function () {
+    const message = workspaceHealthMessage(emptyStats);
 
     assert.strictEqual(
-      description,
+      message,
       "No Python files found",
       "empty workspace must render an explicit 'no Python files' state",
     );
     assert.ok(
-      !description.includes("%"),
-      `empty workspace must not show a percentage, got: "${description}"`,
+      !message.includes("%"),
+      `empty workspace must not show a percentage, got: "${message}"`,
     );
     assert.ok(
-      !description.includes("█") && !description.includes("░"),
-      `empty workspace must not render a coverage bar, got: "${description}"`,
+      !message.includes("█") && !message.includes("░"),
+      `empty workspace must not render a coverage bar, got: "${message}"`,
     );
   });
 
-  test("empty workspace uses a neutral info icon, not a green pass", function () {
-    const item = new SummaryItem(emptyStats);
-    const icon = item.iconPath;
-    assert.ok(icon instanceof vscode.ThemeIcon, "summary icon should be a ThemeIcon");
+  test("empty workspace shows no badge (nothing to flag)", function () {
     assert.strictEqual(
-      icon.id,
-      "info",
-      "empty workspace should use a neutral 'info' icon, not the green 'pass' icon",
+      workspaceHealthBadge(emptyStats),
+      undefined,
+      "empty workspace must not show a numeric badge",
     );
   });
 
-  test("measured workspace still renders the coverage bar and percentage", function () {
-    const item = new SummaryItem(measuredStats);
+  test("measured workspace message shows coverage percent and diagnostics", function () {
+    const message = workspaceHealthMessage(measuredStats);
+    assert.ok(message.includes("85%"), `expected the coverage percentage, got: "${message}"`);
+    assert.ok(
+      message.includes("2E") && message.includes("3W"),
+      `expected error/warning tallies, got: "${message}"`,
+    );
+  });
+
+  test("measured workspace badge counts outstanding diagnostics", function () {
+    const badge = workspaceHealthBadge(measuredStats);
+    assert.ok(badge, "measured workspace with diagnostics should have a badge");
+    assert.strictEqual(badge.value, 5, "badge should count errors + warnings (2 + 3)");
+  });
+
+  test("each module row renders a coverage bar, percentage, and tallies", function () {
+    const item = new ModuleTreeItem({
+      name: "myapp.api",
+      path: "/ws/myapp/api.py",
+      kind: "module",
+      symbols: [],
+      coveragePercent: 85,
+      errors: 2,
+      warnings: 3,
+      adopted: false,
+    });
     const description = String(item.description);
 
     assert.ok(description.includes("85%"), `expected the coverage percentage, got: "${description}"`);
-    assert.ok(description.includes("17/20"), `expected the symbol counts, got: "${description}"`);
     assert.ok(description.includes("█"), `expected a coverage bar, got: "${description}"`);
+    assert.ok(
+      description.includes("2E") && description.includes("3W"),
+      `expected error/warning tallies, got: "${description}"`,
+    );
+  });
+
+  test("adopted module row shows the [adopted] badge", function () {
+    const item = new ModuleTreeItem({
+      name: "legacy",
+      path: "/ws/legacy.py",
+      kind: "module",
+      symbols: [],
+      coveragePercent: 12,
+      errors: 11,
+      warnings: 19,
+      adopted: true,
+    });
+
+    assert.ok(
+      String(item.description).includes("[adopted]"),
+      "adopted module must show the [adopted] badge",
+    );
   });
 });
