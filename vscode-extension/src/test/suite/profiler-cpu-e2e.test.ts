@@ -172,10 +172,28 @@ function assertHottestLineTier(result: ProfileResult, burnerPath: string): void 
   );
 }
 
+/** Assert [PROFILE-NOTIFICATIONS-DIAG]: Hint diagnostics from basilisk-profiler. */
+async function assertProfilerDiagnosticsPublished(uri: vscode.Uri): Promise<void> {
+  const diagnostics = await pollUntilResult({
+    fn: async () => vscode.languages.getDiagnostics(uri),
+    predicate: (diags) => diags.some((diag) => diag.source === "basilisk-profiler"),
+    timeoutMs: DIAGNOSTICS_WAIT_MS,
+  });
+  const profDiag = diagnostics.find((diag) => diag.source === "basilisk-profiler");
+  assert.ok(profDiag, "profiler diagnostics must be published for the hot file");
+  assert.strictEqual(profDiag.severity, vscode.DiagnosticSeverity.Hint, "profiler diagnostics are Hints");
+}
+
 /** Assert the heat map painted on the burner with palette colors and % text. */
 function assertHeatMapPainted(burnerPath: string): void {
   const applied = appliedProfileDecorations().filter((entry) => entry.file === burnerPath);
-  assert.ok(applied.length > 0, "stopping must paint heat decorations on the open hot file");
+  const visible = vscode.window.visibleTextEditors.map((e) => e.document.uri.fsPath).join(", ");
+  assert.ok(
+    applied.length > 0,
+    `stopping must paint heat decorations on the open hot file ${burnerPath}; ` +
+      `ledger: ${JSON.stringify(appliedProfileDecorations())}; visible editors: [${visible}]; ` +
+      `status: ${String(profilerStatusText())}`,
+  );
   for (const decoration of applied) {
     assert.ok(
       HEAT_PALETTE.includes(decoration.color),
@@ -218,42 +236,9 @@ suite("CPU profiling — real end-to-end", () => {
     teardownLspTestSuite(tmpDir);
   });
 
-  test("panel one-click flow: attach → live progress in status bar → stop paints the heat map", async function () {
-    if (process.platform !== "linux") { this.skip(); }
-    this.timeout(40_000);
-    const store = getStore();
-    assert.ok(store, "store must be initialized");
-    const pid = burner?.pid;
-    assert.ok(pid !== undefined && pid > 0, "burner must be running");
-
-    await startProfilingForPid(store, pid, "default");
-    assert.ok(profilerStatusText() !== undefined, "status bar must show a profiling state after start");
-
-    // [PROFILE-NOTIFICATIONS-PROGRESS]: live sample counts reach the status bar.
-    await pollUntilResult({
-      fn: async () => profilerStatusText() ?? "",
-      predicate: (text) => text.includes("samples"),
-      timeoutMs: PROGRESS_WAIT_MS,
-    });
-
-    await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
-    await vscode.commands.executeCommand("basilisk.profileStop");
-
-    assertHeatMapPainted(burnerPath);
-
-    // [PROFILE-NOTIFICATIONS-DIAG]: hint diagnostics from source basilisk-profiler.
-    const uri = burnerUri;
-    assert.ok(uri, "burner uri must exist");
-    const diagnostics = await pollUntilResult({
-      fn: async () => vscode.languages.getDiagnostics(uri),
-      predicate: (diags) => diags.some((diag) => diag.source === "basilisk-profiler"),
-      timeoutMs: DIAGNOSTICS_WAIT_MS,
-    });
-    const profDiag = diagnostics.find((diag) => diag.source === "basilisk-profiler");
-    assert.ok(profDiag, "profiler diagnostics must be published for the hot file");
-    assert.strictEqual(profDiag.severity, vscode.DiagnosticSeverity.Hint, "profiler diagnostics are Hints");
-  });
-
+  // Runs FIRST (the suite is fail-fast): it asserts the raw data, so a
+  // sampling failure surfaces with the profile contents instead of a bare
+  // "no decorations" from the UI-flow test below.
   test("raw pipeline: hot function attributed, speedscope + .cpuprofile artifacts written and parseable", async function () {
     if (process.platform !== "linux") { this.skip(); }
     this.timeout(40_000);
@@ -277,13 +262,50 @@ suite("CPU profiling — real end-to-end", () => {
     assert.ok(result.totalSamples > 0, "real sampling must collect samples");
     assert.ok(
       result.hotFunctions.some((fn) => fn.name === "hot_function"),
-      `hot_function must be attributed, got: ${result.hotFunctions.map((fn) => fn.name).join(", ")}`,
+      `hot_function must be attributed, got: ${JSON.stringify(result.hotFunctions)}`,
     );
-    assert.ok(result.hotLines.length > 0, "hot lines must be detected");
+    assert.ok(
+      result.hotLines.length > 0,
+      `hot lines must be detected; result: ${JSON.stringify(result)}`,
+    );
+    assert.ok(
+      result.hotLines.some((line) => line.file === burnerPath),
+      `hot lines must carry the editor's exact path ${burnerPath}, got: ${ 
+        JSON.stringify(result.hotLines.map((line) => line.file))}`,
+    );
 
     assertSpeedscopeArtifact(result.outputFile);
     assertCpuProfileArtifact(result.cpuProfilePath);
     assertHottestLineTier(result, burnerPath);
+  });
+
+  test("panel one-click flow: attach → live progress in status bar → stop paints the heat map", async function () {
+    if (process.platform !== "linux") { this.skip(); }
+    this.timeout(40_000);
+    const store = getStore();
+    assert.ok(store, "store must be initialized");
+    const pid = burner?.pid;
+    assert.ok(pid !== undefined && pid > 0, "burner must be running");
+
+    await startProfilingForPid(store, pid, "default");
+    assert.ok(profilerStatusText() !== undefined, "status bar must show a profiling state after start");
+
+    // [PROFILE-NOTIFICATIONS-PROGRESS]: a NON-ZERO live sample count reaches
+    // the status bar — "0 samples" would mean sampling is silently broken.
+    await pollUntilResult({
+      fn: async () => profilerStatusText() ?? "",
+      predicate: (text) => /[1-9][\d.]* ?K? samples/.test(text),
+      timeoutMs: PROGRESS_WAIT_MS,
+    });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
+    await vscode.commands.executeCommand("basilisk.profileStop");
+
+    assertHeatMapPainted(burnerPath);
+
+    const uri = burnerUri;
+    assert.ok(uri, "burner uri must exist");
+    await assertProfilerDiagnosticsPublished(uri);
   });
 
   test("attaching to an exited process fails with a distinct, classified cause (#81)", async function () {
