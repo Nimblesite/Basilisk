@@ -1248,15 +1248,16 @@ def func(int_cb: IntCb, str_cb: StrCb) -> None:
          flag both, over-suppression flags neither: {:?}",
         e0014.iter().map(|d| &d.message).collect::<Vec<_>>()
     );
+    let only = e0014.first().ok_or("expected one E0014 diagnostic")?;
     assert!(
-        e0014[0].message.contains("bad"),
+        only.message.contains("bad"),
         "the diagnostic must be on `bad`, got: {}",
-        e0014[0].message
+        only.message
     );
     Ok(())
 }
 
-/// `specialize_sig`'s `Proto[...]` arm turns a ParamSpec `__call__` into a
+/// `specialize_sig`'s `Proto[...]` arm turns a `ParamSpec` `__call__` into a
 /// gradual signature that still checks the `Concatenate`-style prefix.
 /// Deleting the arm collapses to "Unknown" and silently suppresses the
 /// invalid assignment below.
@@ -1292,10 +1293,11 @@ def func(int_first: IntFirst, str_first: StrFirst) -> None:
         "only the str-first assignment violates the int prefix: {:?}",
         e0014.iter().map(|d| &d.message).collect::<Vec<_>>()
     );
+    let only = e0014.first().ok_or("expected one E0014 diagnostic")?;
     assert!(
-        e0014[0].message.contains("bad"),
+        only.message.contains("bad"),
         "the diagnostic must be on `bad`, got: {}",
-        e0014[0].message
+        only.message
     );
     Ok(())
 }
