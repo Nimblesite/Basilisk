@@ -131,7 +131,14 @@ Stop profiling and return results.
 | `sessionId` | `string` | Yes | Session to stop |
 | `format` | `string` | No | `"speedscope"` (default), `"flamegraph"` (SVG), `"summary"` (text) |
 
-**Response fields:** `sessionId`, `duration`, `totalSamples`, `outputFile`, `hotFunctions[]` (name, file, line, samples, percentage, selfPercentage), `hotLines[]` (file, line, samples, percentage).
+**Response fields:** `sessionId`, `duration`, `totalSamples`, `outputFile`, `flamegraphPath`, `cpuProfilePath`, `exportError`, `hotFunctions[]` (name, file, line, samples, percentage, selfPercentage), `hotLines[]` (file, line, samples, percentage).
+
+- `flamegraphPath` — the local self-contained flamegraph SVG, always attempted
+  regardless of `format` so every editor has a viewer that needs no network
+  access ([PROFILE-FLAMEGRAPH]).
+- `exportError` — set when any export was refused or failed
+  ([PROFILE-SPEEDSCOPE-VALIDATE]); a failed export is never silent. Editors
+  must surface it to the user.
 
 #### basilisk/profiler/snapshot {#PROFILE-REQUESTS-SNAPSHOT}
 
@@ -313,6 +320,35 @@ Output conforms to the [speedscope file format schema](https://www.speedscope.ap
 | Frames deduplicated by `(name, filename, line)` | Index into `shared.frames` |
 
 Stacks in speedscope are root-first (callers before callees). py-spy returns leaf-first. Reverse the frame order when building `samples` entries.
+
+### Export Validation {#PROFILE-SPEEDSCOPE-VALIDATE}
+
+speedscope.app's importer indexes `shared.frames` by every sample entry, walks
+parallel `samples`/`weights` arrays, and reads `profiles[activeProfileIndex]`.
+A file violating any of those invariants loads as "Something went wrong" in
+the browser. The exporter therefore **refuses to write** (returns an error
+instead) when:
+
+- the session captured **zero samples** (`profiles: []` with
+  `activeProfileIndex: 0` is unloadable);
+- any weight is **non-finite or negative** (serde serializes NaN/∞ as `null`,
+  which the importer rejects);
+- any sample's **frame index is out of bounds** for `shared.frames`;
+- a thread's `samples` and `weights` **lengths differ**.
+
+The same validation guards the flamegraph SVG export. Tests assert the full
+invariant set on every exported file, not just key presence
+(`profiler_tests.rs::assert_speedscope_loadable`).
+
+### Viewer Delivery {#PROFILE-VIEWER-DELIVERY}
+
+`https://www.speedscope.app/#profileURL=<url>` only works for http(s) URLs the
+browser may fetch from that origin. An https page can **never** read
+`file://` URLs, so editors must never construct a speedscope.app link to a
+local file — it always fails with "Something went wrong". Until profiles are
+served over localhost HTTP with CORS, editors open the local flamegraph SVG
+(`flamegraphPath`) directly and tell the user where the speedscope JSON lives
+for manual import (drag-and-drop at speedscope.app).
 
 ## Flamegraph SVG Export {#PROFILE-FLAMEGRAPH}
 

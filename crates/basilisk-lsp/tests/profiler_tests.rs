@@ -511,6 +511,10 @@ fn speedscope_export_produces_valid_json() {
     let weights = profile.get("weights").unwrap().as_array().unwrap();
     assert_eq!(weights.len(), 2, "should have 2 weights");
 
+    // The file must satisfy every speedscope importer invariant, not just
+    // have the right key names.
+    assert_speedscope_loadable(&json);
+
     // Clean up.
     let _ = std::fs::remove_file(&export_result.path);
 }
@@ -530,7 +534,16 @@ fn flamegraph_export_produces_svg() {
     let contents = std::fs::read_to_string(&export_result.path).unwrap();
     assert!(contents.contains("<svg"), "output should be SVG");
     assert!(contents.contains("</svg>"), "SVG should be complete");
-    assert!(contents.len() > 100, "SVG should have substantial content");
+    // A real flamegraph names the profiled functions — a structurally valid
+    // but empty SVG must not pass.
+    assert!(
+        contents.contains("process"),
+        "SVG should contain the 'process' frame"
+    );
+    assert!(
+        contents.contains("parse"),
+        "SVG should contain the 'parse' frame"
+    );
 
     // Clean up.
     let _ = std::fs::remove_file(&export_result.path);
@@ -574,31 +587,314 @@ fn export_dispatches_to_correct_format() {
     let _ = std::fs::remove_file(&fr.path);
 }
 
+// ── Speedscope loadability validation [PROFILE-SPEEDSCOPE-VALIDATE] ──────
+//
+// speedscope.app does not merely parse the JSON — its importer indexes
+// `shared.frames` by every sample entry, reads `profiles[activeProfileIndex]`,
+// and walks parallel `samples`/`weights` arrays. A file that violates any of
+// those invariants loads as "Something went wrong" in the browser. These
+// checks assert what the importer actually requires, not just key presence.
+
+/// Speedscope's allowed `unit` strings (file-format-schema.json).
+const SPEEDSCOPE_UNITS: [&str; 6] = [
+    "bytes",
+    "microseconds",
+    "milliseconds",
+    "nanoseconds",
+    "none",
+    "seconds",
+];
+
+/// Assert one exported speedscope JSON document satisfies every invariant
+/// the speedscope.app importer enforces.
+fn assert_speedscope_loadable(json: &serde_json::Value) {
+    let frames = json["shared"]["frames"]
+        .as_array()
+        .expect("shared.frames must be an array");
+    for (idx, frame) in frames.iter().enumerate() {
+        assert!(
+            frame["name"].as_str().is_some_and(|n| !n.is_empty()),
+            "frame {idx} must have a non-empty name"
+        );
+    }
+
+    let profiles = json["profiles"]
+        .as_array()
+        .expect("profiles must be an array");
+    assert!(
+        !profiles.is_empty(),
+        "profiles must be non-empty — speedscope cannot open a file with no profiles"
+    );
+
+    let active = usize::try_from(
+        json["activeProfileIndex"]
+            .as_u64()
+            .expect("activeProfileIndex must be a number"),
+    )
+    .expect("activeProfileIndex must fit in usize");
+    assert!(
+        active < profiles.len(),
+        "activeProfileIndex {active} out of bounds for {} profiles",
+        profiles.len()
+    );
+
+    for (idx, profile) in profiles.iter().enumerate() {
+        assert_profile_loadable(idx, profile, frames.len());
+    }
+}
+
+/// Assert a single speedscope profile entry is importable.
+fn assert_profile_loadable(idx: usize, profile: &serde_json::Value, frame_count: usize) {
+    assert_eq!(
+        profile["type"].as_str(),
+        Some("sampled"),
+        "profile {idx}: type must be 'sampled'"
+    );
+    let unit = profile["unit"].as_str().unwrap_or_default();
+    assert!(
+        SPEEDSCOPE_UNITS.contains(&unit),
+        "profile {idx}: unit '{unit}' is not a speedscope unit"
+    );
+
+    // serde_json serializes NaN/Infinity as null — as_f64() returning None
+    // catches both missing and non-finite values.
+    let start = profile["startValue"]
+        .as_f64()
+        .expect("startValue must be a finite number");
+    let end = profile["endValue"]
+        .as_f64()
+        .expect("endValue must be a finite number");
+    assert!(
+        start <= end,
+        "profile {idx}: startValue {start} must be <= endValue {end}"
+    );
+
+    let samples = profile["samples"]
+        .as_array()
+        .expect("samples must be an array");
+    let weights = profile["weights"]
+        .as_array()
+        .expect("weights must be an array");
+    assert_eq!(
+        samples.len(),
+        weights.len(),
+        "profile {idx}: samples/weights length mismatch"
+    );
+
+    let mut weight_sum = 0.0_f64;
+    for weight in weights {
+        let w = weight.as_f64().expect("every weight must be finite");
+        assert!(w >= 0.0, "profile {idx}: negative weight {w}");
+        weight_sum += w;
+    }
+    assert!(
+        (weight_sum - (end - start)).abs() <= 1e-9 + weight_sum * 1e-9,
+        "profile {idx}: endValue-startValue {} must equal the weight sum {weight_sum}",
+        end - start
+    );
+
+    for stack in samples {
+        for entry in stack.as_array().expect("each sample must be a stack array") {
+            let frame_idx =
+                usize::try_from(entry.as_u64().expect("frame index must be an integer"))
+                    .expect("frame index must fit in usize");
+            assert!(
+                frame_idx < frame_count,
+                "profile {idx}: frame index {frame_idx} out of bounds ({frame_count} frames)"
+            );
+        }
+    }
+}
+
 #[test]
-fn speedscope_export_with_empty_data() {
-    let data = ProfileData::default();
+fn exported_speedscope_passes_loadability_validation() {
+    let data = make_test_profile_data();
     let dir = std::env::temp_dir();
 
-    let result = export::export_speedscope(&data, "empty-001", 0, 0.0, &dir);
-    assert!(result.is_ok(), "empty data export should succeed");
-
-    let export_result = result.unwrap();
+    let export_result = export::export_speedscope(&data, "loadable-001", 12345, 5.2, &dir)
+        .expect("export should succeed for populated data");
     let contents = std::fs::read_to_string(&export_result.path).unwrap();
     let json: serde_json::Value = serde_json::from_str(&contents).unwrap();
 
-    // Empty data should still produce valid structure.
-    assert!(json.get("$schema").is_some());
-    assert!(json.get("shared").is_some());
-    let frames = json
-        .get("shared")
-        .unwrap()
-        .get("frames")
-        .unwrap()
-        .as_array()
-        .unwrap();
-    assert_eq!(frames.len(), 0, "empty data should have 0 frames");
+    assert_speedscope_loadable(&json);
 
     let _ = std::fs::remove_file(&export_result.path);
+}
+
+#[test]
+fn speedscope_export_with_empty_data() {
+    // A session that captured zero samples must NOT produce a file:
+    // `profiles: []` with `activeProfileIndex: 0` crashes speedscope.app's
+    // importer. The exporter must refuse with an actionable error instead.
+    let data = ProfileData::default();
+    let dir = std::env::temp_dir();
+    let _ = std::fs::remove_file(dir.join("basilisk-empty-001.speedscope.json"));
+
+    let result = export::export_speedscope(&data, "empty-001", 0, 0.0, &dir);
+    let err = result.expect_err("empty-session export must be rejected");
+    assert!(
+        err.contains("no samples"),
+        "error should say no samples were collected, got: {err}"
+    );
+    assert!(
+        !dir.join("basilisk-empty-001.speedscope.json").exists(),
+        "no file may be written for an empty session"
+    );
+}
+
+#[test]
+fn speedscope_export_rejects_non_finite_weights() {
+    // serde_json writes f64::INFINITY/NAN as null, which speedscope cannot
+    // import. The exporter must reject the data instead of writing the file.
+    let mut data = make_test_profile_data();
+    let _ = data.thread_weights.insert(1, vec![0.01, f64::INFINITY]);
+    let dir = std::env::temp_dir();
+
+    let result = export::export_speedscope(&data, "nonfinite-001", 1, 1.0, &dir);
+    let err = result.expect_err("non-finite weights must be rejected");
+    assert!(
+        err.contains("finite"),
+        "error should mention non-finite weights, got: {err}"
+    );
+}
+
+#[test]
+fn speedscope_export_rejects_out_of_bounds_frame_indices() {
+    // Sample stacks index into shared.frames; an out-of-bounds index makes
+    // speedscope's importer throw. The exporter must reject such data.
+    let mut data = make_test_profile_data();
+    let _ = data.thread_stacks.insert(1, vec![vec![0, 1], vec![0, 7]]);
+    let dir = std::env::temp_dir();
+
+    let result = export::export_speedscope(&data, "oob-001", 1, 1.0, &dir);
+    let err = result.expect_err("out-of-bounds frame indices must be rejected");
+    assert!(
+        err.contains("frame index"),
+        "error should mention the bad frame index, got: {err}"
+    );
+}
+
+#[test]
+fn speedscope_export_rejects_sample_weight_length_mismatch() {
+    let mut data = make_test_profile_data();
+    let _ = data.thread_weights.insert(1, vec![0.01]);
+    let dir = std::env::temp_dir();
+
+    let result = export::export_speedscope(&data, "mismatch-001", 1, 1.0, &dir);
+    let err = result.expect_err("samples/weights length mismatch must be rejected");
+    assert!(
+        err.contains("weights"),
+        "error should mention the weights mismatch, got: {err}"
+    );
+}
+
+#[test]
+fn stop_artifacts_surface_export_errors_for_empty_session() {
+    // A stop on a session with zero samples must not silently return null
+    // paths — the editor needs the reason ([PROFILE-REQUESTS-STOP]).
+    let data = ProfileData::default();
+    let dir = std::env::temp_dir();
+
+    let artifacts =
+        export::export_stop_artifacts(&data, "stop-empty-001", 0.0, 100, "speedscope", &dir);
+
+    assert!(
+        artifacts.output_file.is_none(),
+        "no speedscope file for empty session"
+    );
+    assert!(
+        artifacts.flamegraph_path.is_none(),
+        "no flamegraph for empty session"
+    );
+    let err = artifacts
+        .export_error
+        .expect("export failure must be surfaced");
+    assert!(
+        err.contains("no samples"),
+        "exportError should explain that no samples were collected, got: {err}"
+    );
+}
+
+#[test]
+fn stop_artifacts_export_all_formats_for_populated_session() {
+    let data = make_test_profile_data();
+    let dir = std::env::temp_dir();
+
+    let artifacts =
+        export::export_stop_artifacts(&data, "stop-full-001", 5.0, 100, "speedscope", &dir);
+
+    assert!(
+        artifacts.export_error.is_none(),
+        "no errors expected: {:?}",
+        artifacts.export_error
+    );
+
+    let speedscope_path = artifacts
+        .output_file
+        .expect("speedscope file must be written");
+    let json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&speedscope_path).unwrap()).unwrap();
+    assert_speedscope_loadable(&json);
+
+    let flamegraph_path = artifacts
+        .flamegraph_path
+        .expect("flamegraph must always be written");
+    let svg = std::fs::read_to_string(&flamegraph_path).unwrap();
+    assert!(
+        svg.contains("<svg") && svg.contains("process"),
+        "flamegraph must render frames"
+    );
+
+    let cpu_path = artifacts
+        .cpu_profile_path
+        .expect("cpuprofile must be written");
+    assert!(
+        std::path::Path::new(&cpu_path).exists(),
+        "cpuprofile file must exist"
+    );
+
+    for path in [speedscope_path, flamegraph_path, cpu_path] {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+#[test]
+fn stop_artifacts_flamegraph_format_reuses_single_export() {
+    let data = make_test_profile_data();
+    let dir = std::env::temp_dir();
+
+    let artifacts =
+        export::export_stop_artifacts(&data, "stop-fg-001", 5.0, 100, "flamegraph", &dir);
+
+    let output = artifacts
+        .output_file
+        .expect("flamegraph format writes outputFile");
+    let flamegraph = artifacts
+        .flamegraph_path
+        .expect("flamegraphPath must be set");
+    assert_eq!(
+        output, flamegraph,
+        "flamegraph format must not export the SVG twice"
+    );
+
+    let _ = std::fs::remove_file(output);
+    if let Some(cpu) = artifacts.cpu_profile_path {
+        let _ = std::fs::remove_file(cpu);
+    }
+}
+
+#[test]
+fn flamegraph_export_with_empty_data_is_rejected() {
+    // An empty flamegraph SVG renders as a blank page — refuse instead.
+    let data = ProfileData::default();
+    let dir = std::env::temp_dir();
+
+    let result = export::export_flamegraph(&data, "empty-fg-001", &dir);
+    let err = result.expect_err("empty-session flamegraph must be rejected");
+    assert!(
+        err.contains("no samples"),
+        "error should say no samples were collected, got: {err}"
+    );
 }
 
 // ── Memory snapshot parsing tests ────────────────────────────────────────
@@ -1206,6 +1502,8 @@ fn verify_exports(data: &ProfileData, output_dir: &std::path::Path) {
         &std::fs::read_to_string(&speedscope_export.path).expect("read speedscope"),
     )
     .expect("parse speedscope JSON");
+
+    assert_speedscope_loadable(&speedscope_json);
 
     assert!(
         speedscope_json.get("$schema").is_some(),
