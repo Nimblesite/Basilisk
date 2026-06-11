@@ -132,7 +132,7 @@ BSK-E0014|BSK-E0049|BSK-E0090,tuples_type_form.py,tuples,PASS,11,0,0
 BSK-E0049|BSK-E0053,tuples_unpacked.py,tuples,PASS,4,0,3
 BSK-E0037,typeddicts_alt_syntax.py,typeddicts,PASS,4,0,0
 BSK-E0029|BSK-E0032,typeddicts_class_syntax.py,typeddicts,PASS,3,0,0
-BSK-E0014|BSK-E0093|BSK-E0132|BSK-E0141,typeddicts_extra_items.py,typeddicts,FAIL,5,18,7
+BSK-E0014|BSK-E0093|BSK-E0141,typeddicts_extra_items.py,typeddicts,FAIL,5,18,0
 BSK-E0093,typeddicts_final.py,typeddicts,PASS,0,0,1
 BSK-E0038,typeddicts_inheritance.py,typeddicts,PASS,2,0,0
 BSK-E0093,typeddicts_operations.py,typeddicts,PASS,11,0,0

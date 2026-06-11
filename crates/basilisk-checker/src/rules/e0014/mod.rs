@@ -50,6 +50,7 @@ impl Rule for AssignmentTypeMismatch {
         let empty_params = ParamMaps::default();
         let skip = SkipNames {
             typeddict: collect_typeddict_names(module),
+            typeddict_extra_items: collect_extra_items_typeddict_names(module),
             type_alias: collect_type_alias_names(module),
             value_aliases: alias_match::collect_union_aliases(module),
         };
@@ -154,11 +155,29 @@ fn collect_type_alias_names(module: &ResolvedModule) -> std::collections::HashSe
 struct SkipNames {
     /// `TypedDict` class names (lowercase).
     typeddict: std::collections::HashSet<String>,
+    /// `TypedDict` classes declaring `extra_items=` (PEP 728, lowercase).
+    typeddict_extra_items: std::collections::HashSet<String>,
     /// PEP 695 type alias names (lowercase).
     type_alias: std::collections::HashSet<String>,
     /// Legacy `Name = Union[...]` value aliases (lowercase → definition), used
     /// for recursive-alias value matching.
     value_aliases: std::collections::HashMap<String, InferredType>,
+}
+
+/// Names of `TypedDict` classes declaring `extra_items=` (lowercase).
+///
+/// Such `TypedDict`s may be assignable to `dict[str, VT]` (PEP 728), which
+/// E0014's name-level comparison cannot evaluate — those assignments are
+/// skipped rather than flagged.
+fn collect_extra_items_typeddict_names(
+    module: &ResolvedModule,
+) -> std::collections::HashSet<String> {
+    module
+        .classes
+        .iter()
+        .filter(|cls| cls.class_keywords.iter().any(|kw| kw == "extra_items"))
+        .map(|cls| cls.name.to_ascii_lowercase())
+        .collect()
 }
 
 /// Declared parameter annotations for the enclosing function: parsed types
@@ -243,16 +262,8 @@ fn check_vars(
             // Skip dict literal assignments to TypedDict annotations. E0014 compares
             // the top-level type (e.g. `dict[str, str|int]` vs `Movie`) which always
             // mismatches. Field-level checking is done by E0093 instead.
-            if let InferredType::Named(ref name) = declared_type {
-                if skip.typeddict.contains(name.as_str()) {
-                    let rhs_is_dict_literal = var
-                        .rhs_span
-                        .and_then(|sp| slice_span(source, sp))
-                        .is_some_and(|rhs| rhs.trim_start().starts_with('{'));
-                    if rhs_is_dict_literal {
-                        return None;
-                    }
-                }
+            if typeddict_literal_skipped(var, source, &declared_type, skip) {
+                return None;
             }
 
             // When the declared type is a Literal, try to infer the RHS as a
@@ -270,6 +281,13 @@ fn check_vars(
                         }
                     }
                 }
+            }
+
+            // PEP 728: a TypedDict declaring `extra_items=` may be assignable
+            // to `dict[str, VT]`; the name-level comparison below cannot
+            // evaluate that, so such assignments are skipped.
+            if extra_items_dict_skipped(&declared_type, &inferred_type, skip) {
+                return None;
             }
 
             // A bare reference to a legacy `Union` alias (e.g. a recursive
@@ -390,6 +408,42 @@ fn build_param_maps(params: &[basilisk_resolver::ParameterInfo], source: &str) -
             .insert(param.name.clone(), ann_text.trim().to_owned());
     }
     maps
+}
+
+/// `true` when a dict-literal assignment to a `TypedDict` annotation should
+/// be skipped (field-level checking is E0093's job).
+fn typeddict_literal_skipped(
+    var: &VariableInfo,
+    source: &str,
+    declared_type: &InferredType,
+    skip: &SkipNames,
+) -> bool {
+    let InferredType::Named(name) = declared_type else {
+        return false;
+    };
+    skip.typeddict.contains(name.as_str())
+        && var
+            .rhs_span
+            .and_then(|sp| slice_span(source, sp))
+            .is_some_and(|rhs| rhs.trim_start().starts_with('{'))
+}
+
+/// `true` when an `extra_items=` `TypedDict` is assigned to a `dict[...]`
+/// annotation — assignability depends on PEP 728 value types, which the
+/// name-level comparison cannot evaluate.
+fn extra_items_dict_skipped(
+    declared_type: &InferredType,
+    inferred_type: &InferredType,
+    skip: &SkipNames,
+) -> bool {
+    if !matches!(declared_type, InferredType::Dict(..)) {
+        return false;
+    }
+    let InferredType::Named(name) = inferred_type else {
+        return false;
+    };
+    let base = name.split('[').next().unwrap_or(name);
+    skip.typeddict_extra_items.contains(base)
 }
 
 /// Create diagnostic for inference-based type mismatch.
