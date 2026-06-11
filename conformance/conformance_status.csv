@@ -84,7 +84,7 @@ BSK-E0055|BSK-E0130,generics_syntax_infer_variance.py,generics,PASS,18,0,0
 BSK-E0149,generics_syntax_scoping.py,generics,PASS,7,0,0
 BSK-E0111|BSK-E0125,generics_type_erasure.py,generics,PASS,7,0,2
 ,generics_typevartuple_args.py,generics,FAIL,0,7,0
-BSK-E0055|BSK-E0083|BSK-E0084|BSK-E0086,generics_typevartuple_basic.py,generics,FAIL,8,5,0
+BSK-E0055|BSK-E0083|BSK-E0084|BSK-E0085|BSK-E0086,generics_typevartuple_basic.py,generics,PASS,13,0,0
 BSK-E0082,generics_typevartuple_callable.py,generics,PASS,1,0,0
 ,generics_typevartuple_concat.py,generics,PASS,0,0,0
 ,generics_typevartuple_overloads.py,generics,PASS,0,0,0

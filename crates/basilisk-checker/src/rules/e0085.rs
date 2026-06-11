@@ -95,6 +95,289 @@ impl Rule for TypeVarTupleArgCountMismatch {
             &module.path,
             diagnostics,
         );
+        check_bare_constructor_shapes(
+            &parsed.ast.body,
+            &tvt_classes,
+            &tvt_init_info,
+            &module.path,
+            diagnostics,
+        );
+        check_shared_tvt_call_consistency(module, &parsed.ast.body, &tvt_names, diagnostics);
+    }
+}
+
+/// `var: C[A1, ..., An] = C(shape)` — when `C` is generic over a `TypeVarTuple`
+/// and its `__init__` takes a `tuple[*Ts]`-typed argument, the constructor
+/// argument must be a tuple expression of arity `n`.
+fn check_bare_constructor_shapes(
+    stmts: &[Stmt],
+    tvt_classes: &HashMap<&str, &basilisk_resolver::ClassInfo>,
+    tvt_init_info: &HashMap<&str, bool>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    basilisk_resolver::walk_function_stmts(stmts, &mut |stmt| {
+        let Stmt::AnnAssign(ann) = stmt else { return };
+        let Some(value) = ann.value.as_deref() else {
+            return;
+        };
+        let Expr::Subscript(ann_sub) = ann.annotation.as_ref() else {
+            return;
+        };
+        let Some(class_name) = expr_simple_name(ann_sub.value.as_ref()) else {
+            return;
+        };
+        if !tvt_classes.contains_key(class_name)
+            || !tvt_init_info.get(class_name).copied().unwrap_or(false)
+        {
+            return;
+        }
+        let Expr::Call(call) = value else { return };
+        if expr_simple_name(call.func.as_ref()) != Some(class_name) {
+            return;
+        }
+        let [single_arg] = call.arguments.args.as_ref() else {
+            return;
+        };
+        let type_arg_count = match ann_sub.slice.as_ref() {
+            Expr::Tuple(t) => t.elts.len(),
+            _ => 1,
+        };
+        let supplied = match single_arg {
+            Expr::Tuple(t) => Some(t.elts.len()),
+            // A call result (e.g. `Height(1)`) is not a tuple expression.
+            Expr::Call(_) => None,
+            // Anything else (a variable, unpacking, ...) is not provably wrong.
+            _ => return,
+        };
+        if supplied == Some(type_arg_count) {
+            return;
+        }
+        let range = call.range();
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
+                "TypeVarTuple shape mismatch: `{class_name}` is declared with \
+                 {type_arg_count} type argument{}, but the constructor argument {}",
+                if type_arg_count == 1 { "" } else { "s" },
+                supplied.map_or_else(
+                    || "is not a tuple expression".to_owned(),
+                    |n| format!("is a tuple of length {n}")
+                ),
+            ),
+            Span {
+                start: range.start().to_u32(),
+                end: range.end().to_u32(),
+            },
+            path,
+            Some(format!(
+                "Pass a tuple of {type_arg_count} element{} matching the declared \
+                 specialization",
+                if type_arg_count == 1 { "" } else { "s" }
+            )),
+            None,
+        ));
+    });
+}
+
+/// When a function binds the same `TypeVarTuple` in several parameters
+/// (`def f(a: tuple[*Ts], b: tuple[*Ts])`), every call must bind it
+/// identically: tuple-literal arguments must have equal lengths, and
+/// parameter-reference arguments must carry identical annotations.
+fn check_shared_tvt_call_consistency(
+    module: &ResolvedModule,
+    stmts: &[Stmt],
+    tvt_names: &std::collections::HashSet<&str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    // Functions with two or more identically-annotated `*Ts` parameters:
+    // name → positions of those parameters.
+    let mut shared: HashMap<&str, Vec<usize>> = HashMap::new();
+    for func in &module.functions {
+        if func.class_name.is_some() {
+            continue;
+        }
+        let mut by_annotation: HashMap<&str, Vec<usize>> = HashMap::new();
+        for (idx, param) in func.parameters.iter().enumerate() {
+            let Some(ann) = param.annotation_text.as_deref() else {
+                continue;
+            };
+            let binds_tvt = tvt_names.iter().any(|tvt| ann.contains(&format!("*{tvt}")));
+            if binds_tvt {
+                by_annotation.entry(ann).or_default().push(idx);
+            }
+        }
+        if let Some(positions) = by_annotation.into_values().find(|p| p.len() >= 2) {
+            let _ = shared.insert(func.name.as_str(), positions);
+        }
+    }
+    if shared.is_empty() {
+        return;
+    }
+
+    let scope = HashMap::new();
+    walk_calls_with_scope(stmts, &scope, &shared, &module.path, diagnostics);
+}
+
+/// Parameter-name → annotation-text scope for one function.
+type ParamScope = HashMap<String, String>;
+
+/// Walk statements tracking the enclosing function's parameter annotations,
+/// checking shared-`TypeVarTuple` calls in expression positions.
+fn walk_calls_with_scope(
+    stmts: &[Stmt],
+    scope: &ParamScope,
+    shared: &HashMap<&str, Vec<usize>>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::FunctionDef(func) => {
+                let inner: ParamScope = func
+                    .parameters
+                    .posonlyargs
+                    .iter()
+                    .chain(func.parameters.args.iter())
+                    .chain(func.parameters.kwonlyargs.iter())
+                    .filter_map(|p| {
+                        p.parameter.annotation.as_deref().map(|ann| {
+                            (
+                                p.parameter.name.to_string(),
+                                crate::rules::shared::ann_str(ann),
+                            )
+                        })
+                    })
+                    .collect();
+                walk_calls_with_scope(&func.body, &inner, shared, path, diagnostics);
+            }
+            Stmt::ClassDef(cls) => {
+                walk_calls_with_scope(&cls.body, scope, shared, path, diagnostics);
+            }
+            Stmt::If(if_stmt) => {
+                walk_calls_with_scope(&if_stmt.body, scope, shared, path, diagnostics);
+                for clause in &if_stmt.elif_else_clauses {
+                    walk_calls_with_scope(&clause.body, scope, shared, path, diagnostics);
+                }
+            }
+            Stmt::For(for_stmt) => {
+                walk_calls_with_scope(&for_stmt.body, scope, shared, path, diagnostics);
+            }
+            Stmt::While(while_stmt) => {
+                walk_calls_with_scope(&while_stmt.body, scope, shared, path, diagnostics);
+            }
+            Stmt::Expr(node) => scan_expr_calls(&node.value, scope, shared, path, diagnostics),
+            Stmt::Assign(node) => scan_expr_calls(&node.value, scope, shared, path, diagnostics),
+            Stmt::AnnAssign(node) => {
+                if let Some(value) = node.value.as_deref() {
+                    scan_expr_calls(value, scope, shared, path, diagnostics);
+                }
+            }
+            Stmt::Return(node) => {
+                if let Some(value) = node.value.as_deref() {
+                    scan_expr_calls(value, scope, shared, path, diagnostics);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Recursively check call expressions (including nested call arguments).
+fn scan_expr_calls(
+    expr: &Expr,
+    scope: &ParamScope,
+    shared: &HashMap<&str, Vec<usize>>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let Expr::Call(call) = expr else { return };
+    if let Some(callee) = expr_simple_name(call.func.as_ref()) {
+        if let Some(positions) = shared.get(callee) {
+            check_call_binding_consistency(call, positions, scope, callee, path, diagnostics);
+        }
+    }
+    for arg in &call.arguments.args {
+        scan_expr_calls(arg, scope, shared, path, diagnostics);
+    }
+}
+
+/// Validate one call against the shared-`TypeVarTuple` parameter positions.
+fn check_call_binding_consistency(
+    call: &ruff_python_ast::ExprCall,
+    positions: &[usize],
+    scope: &ParamScope,
+    callee: &str,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let bindings: Vec<Binding> = positions
+        .iter()
+        .filter_map(|&pos| call.arguments.args.get(pos).map(arg_binding))
+        .collect();
+    if bindings.len() < 2 {
+        return;
+    }
+    let consistent = bindings.windows(2).all(|pair| match pair {
+        [first, second] => binding_matches(first, second, scope),
+        _ => true,
+    });
+    if consistent {
+        return;
+    }
+    let range = call.range();
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
+            "TypeVarTuple binding mismatch: arguments to `{callee}` must bind the \
+             shared TypeVarTuple to the same types"
+        ),
+        Span {
+            start: range.start().to_u32(),
+            end: range.end().to_u32(),
+        },
+        path,
+        Some(
+            "When the same TypeVarTuple appears in multiple parameters, the type \
+             parameters must be identical across arguments"
+                .to_owned(),
+        ),
+        None,
+    ));
+}
+
+/// How a call argument binds a `TypeVarTuple`.
+enum Binding {
+    /// A tuple literal of the given length.
+    TupleLen(usize),
+    /// A name reference (resolved via the enclosing function's parameters).
+    Name(String),
+    /// Not analyzable.
+    Opaque,
+}
+
+fn arg_binding(arg: &Expr) -> Binding {
+    match arg {
+        Expr::Tuple(t) => Binding::TupleLen(t.elts.len()),
+        Expr::Name(n) => Binding::Name(n.id.to_string()),
+        _ => Binding::Opaque,
+    }
+}
+
+/// `true` when two bindings are provably consistent (or not provably wrong).
+fn binding_matches(a: &Binding, b: &Binding, scope: &ParamScope) -> bool {
+    match (a, b) {
+        (Binding::TupleLen(la), Binding::TupleLen(lb)) => la == lb,
+        (Binding::Name(na), Binding::Name(nb)) => {
+            if na == nb {
+                return true;
+            }
+            match (scope.get(na), scope.get(nb)) {
+                (Some(ann_a), Some(ann_b)) => ann_a == ann_b,
+                _ => true,
+            }
+        }
+        _ => true,
     }
 }
 
