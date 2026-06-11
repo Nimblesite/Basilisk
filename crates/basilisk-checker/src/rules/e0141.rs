@@ -48,10 +48,12 @@ struct UnpackFuncInfo {
     td_keys: Vec<String>,
     /// Number of explicit positional parameters.
     positional_count: usize,
+    /// `true` when the `TypedDict` declares `extra_items=` (PEP 728).
+    td_extra_items: bool,
 }
 
 struct KwargsContext {
-    typeddict_keys: Vec<(String, Vec<String>)>,
+    typeddict_keys: Vec<(String, Vec<String>, bool)>,
     typevar_names: Vec<String>,
     /// Functions with Unpack kwargs: name → info.
     unpack_funcs: HashMap<String, UnpackFuncInfo>,
@@ -61,7 +63,7 @@ struct KwargsContext {
 
 impl KwargsContext {
     fn from_ast(stmts: &[Stmt]) -> Self {
-        let mut typeddict_keys: Vec<(String, Vec<String>)> = Vec::new();
+        let mut typeddict_keys: Vec<(String, Vec<String>, bool)> = Vec::new();
         let mut typevar_names = Vec::new();
         let mut unpack_funcs = HashMap::new();
         let mut var_annotations = HashMap::new();
@@ -113,8 +115,8 @@ impl KwargsContext {
     fn get_td_keys(&self, name: &str) -> Option<&[String]> {
         self.typeddict_keys
             .iter()
-            .find(|(n, _)| n == name)
-            .map(|(_, k)| k.as_slice())
+            .find(|(n, _, _)| n == name)
+            .map(|(_, k, _)| k.as_slice())
     }
 
     fn is_typevar(&self, name: &str) -> bool {
@@ -126,7 +128,10 @@ impl KwargsContext {
 // Context collection helpers
 // ---------------------------------------------------------------------------
 
-fn collect_typeddict(cls: &ast::StmtClassDef, typeddict_keys: &mut Vec<(String, Vec<String>)>) {
+fn collect_typeddict(
+    cls: &ast::StmtClassDef,
+    typeddict_keys: &mut Vec<(String, Vec<String>, bool)>,
+) {
     if !is_typeddict(cls, typeddict_keys) {
         return;
     }
@@ -143,18 +148,20 @@ fn collect_typeddict(cls: &ast::StmtClassDef, typeddict_keys: &mut Vec<(String, 
         .collect();
     let mut all_keys = collect_base_td_keys(cls, typeddict_keys);
     all_keys.extend(keys);
-    typeddict_keys.push((cls.name.to_string(), all_keys));
+    let has_extra_items = typeddict_has_extra_items(cls, typeddict_keys);
+    typeddict_keys.push((cls.name.to_string(), all_keys, has_extra_items));
 }
 
 fn collect_base_td_keys(
     cls: &ast::StmtClassDef,
-    typeddict_keys: &[(String, Vec<String>)],
+    typeddict_keys: &[(String, Vec<String>, bool)],
 ) -> Vec<String> {
     let mut result = Vec::new();
     if let Some(args) = &cls.arguments {
         for base in &args.args {
             if let Expr::Name(n) = base {
-                if let Some((_, bkeys)) = typeddict_keys.iter().find(|(n2, _)| n2 == n.id.as_str())
+                if let Some((_, bkeys, _)) =
+                    typeddict_keys.iter().find(|(n2, _, _)| n2 == n.id.as_str())
                 {
                     result.extend(bkeys.iter().cloned());
                 }
@@ -177,7 +184,7 @@ fn collect_typevar(assign: &ast::StmtAssign, typevar_names: &mut Vec<String>) {
 
 fn collect_unpack_func(
     func: &ast::StmtFunctionDef,
-    typeddict_keys: &[(String, Vec<String>)],
+    typeddict_keys: &[(String, Vec<String>, bool)],
     unpack_funcs: &mut HashMap<String, UnpackFuncInfo>,
 ) {
     let Some(kwarg) = &func.parameters.kwarg else {
@@ -189,7 +196,9 @@ fn collect_unpack_func(
     let Some(unpack_type) = extract_unpack_arg(annotation) else {
         return;
     };
-    if let Some((_, keys)) = typeddict_keys.iter().find(|(n, _)| n == unpack_type) {
+    if let Some((_, keys, has_extra_items)) =
+        typeddict_keys.iter().find(|(n, _, _)| n == unpack_type)
+    {
         let positional_count = func.parameters.posonlyargs.len() + func.parameters.args.len();
         let _ = unpack_funcs.insert(
             func.name.to_string(),
@@ -197,6 +206,7 @@ fn collect_unpack_func(
                 td_name: unpack_type.to_owned(),
                 td_keys: keys.clone(),
                 positional_count,
+                td_extra_items: *has_extra_items,
             },
         );
     }
@@ -255,7 +265,7 @@ fn collect_local_var_type(assign: &ast::StmtAssign, ctx: &mut KwargsContext) {
     // If RHS is a call to a known TypedDict constructor, track the variable type
     if let Expr::Call(call) = assign.value.as_ref() {
         if let Some(callee) = expr_name(&call.func) {
-            if ctx.typeddict_keys.iter().any(|(n, _)| n == callee) {
+            if ctx.typeddict_keys.iter().any(|(n, _, _)| n == callee) {
                 let _ = ctx
                     .var_annotations
                     .insert(var_name.to_owned(), callee.to_owned());
@@ -416,6 +426,10 @@ fn check_extra_keywords(
     diag: &mut Vec<Diagnostic>,
     span: Span,
 ) {
+    // PEP 728: `extra_items=` TypedDicts accept keys beyond their schema.
+    if info.td_extra_items {
+        return;
+    }
     for kw in &call.arguments.keywords {
         if let Some(arg_name) = &kw.arg {
             if !info.td_keys.iter().any(|k| k == arg_name.as_str()) {
@@ -543,12 +557,12 @@ fn has_required_td_keys(td_name: &str, ctx: &KwargsContext) -> bool {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn is_typeddict(cls: &ast::StmtClassDef, known_tds: &[(String, Vec<String>)]) -> bool {
+fn is_typeddict(cls: &ast::StmtClassDef, known_tds: &[(String, Vec<String>, bool)]) -> bool {
     cls.arguments.as_ref().is_some_and(|args| {
         args.args.iter().any(|a| {
             if let Expr::Name(n) = a {
                 let name = n.id.as_str();
-                name == "TypedDict" || known_tds.iter().any(|(td, _)| td == name)
+                name == "TypedDict" || known_tds.iter().any(|(td, _, _)| td == name)
             } else {
                 false
             }
@@ -574,4 +588,28 @@ fn mk_span(range: ruff_text_size::TextRange) -> Span {
         start: range.start().to_u32(),
         end: range.end().to_u32(),
     }
+}
+
+/// `true` when a `TypedDict` class declares `extra_items=` directly or
+/// inherits it from a base `TypedDict` (PEP 728).
+fn typeddict_has_extra_items(
+    cls: &ast::StmtClassDef,
+    typeddict_keys: &[(String, Vec<String>, bool)],
+) -> bool {
+    let Some(args) = &cls.arguments else {
+        return false;
+    };
+    let direct = args
+        .keywords
+        .iter()
+        .any(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "extra_items"));
+    direct
+        || args.args.iter().any(|base| {
+            matches!(
+                base,
+                Expr::Name(n) if typeddict_keys
+                    .iter()
+                    .any(|(name, _, has)| name == n.id.as_str() && *has)
+            )
+        })
 }

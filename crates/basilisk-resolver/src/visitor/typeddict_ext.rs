@@ -325,6 +325,12 @@ pub(super) fn expr_literal_type_name(expr: &Expr) -> Option<&'static str> {
 /// Return `true` if an actual literal type is compatible with an expected `TypedDict` field type.
 pub(super) fn typeddict_field_type_compatible(actual: &str, expected: &str) -> bool {
     let stripped = crate::scope::strip_typeddict_qualifiers(expected);
+    // A union field accepts a value matching any member (`year: int | None`).
+    if stripped.contains('|') {
+        return stripped
+            .split('|')
+            .any(|member| typeddict_field_type_compatible(actual, member.trim()));
+    }
     actual == stripped
         || (actual == "bool" && stripped == "int")
         || (actual == "int" && stripped == "float")

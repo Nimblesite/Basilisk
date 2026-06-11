@@ -1221,6 +1221,41 @@ Comparison baselines: Pyright, ty, Pyrefly, Zuban.
 | Property tests | `proptest` crate | Type system invariants |
 | Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly | Performance tracking + regression gate (fails if basilisk regresses >25% vs the committed per-machine `benchmarks/status/<machine>.csv`) |
 
+### Mutation Testing Ratchet {#CHKARCH-TESTING-MUTATION-RATCHET}
+
+Mutation testing is the proof that the test suite actually asserts behaviour —
+it is how conformance, false-positive, and rule semantics are kept from
+silently degrading over time. The scope only ever **grows** toward all Rust
+code:
+
+- **Scope is test-driven.** `#[mutation_safe(rule = "eNNNN", fns = "fn_a|fn_b")]`
+  attributes on e2e tests drive the `cargo mutants` examine regex
+  (`scripts/mutation_examine_re.py`). Adding such tests is the one and only way
+  to widen scope — every new checker rule or extracted helper ships with them.
+- **Baseline is ratcheted.** `mutation_testing/mutation_scores.json` is the
+  committed baseline; `mutation_testing/mutants_report.py` fails the build when
+  the **viable mutant pool shrinks**, `caught` drops, `missed` or `timeout`
+  increases, or `kill_rate` drops. (`unviable` mutants do not compile and are
+  deliberately excluded from the pool.) Both `make mutation-test` locally and
+  the CI shard merge enforce the same function.
+- **Direction.** The end state is the full workspace under mutation
+  (`make mutation-test ALL=1`). Until then, each PR that touches checker logic
+  is expected to leave the viable pool the same size or larger.
+
+### Benchmark Non-Regression {#CHKARCH-TESTING-BENCH-RATCHET}
+
+Performance and conformance ratchet **together** — neither may be traded for
+the other:
+
+- `make bench` (`benchmarks/run.sh`) fails when basilisk regresses more than
+  `BENCH_REGRESS_PCT` (default 25%) on any fixture vs the committed
+  per-machine baseline `benchmarks/status/<machine>.csv`.
+- Run `make bench` whenever checker hot paths change — resolver visitors, rule
+  `check` loops, conformance-driven rule additions. New conformance logic that
+  slows checking past the gate is not done: optimise it or restructure it.
+- `BENCH_NO_GATE=1` (baseline reset) is reserved for fixture-set changes and
+  must be justified in the PR description.
+
 ---
 
 ## Migration and Adoption {#CHKARCH-MIGRATION}

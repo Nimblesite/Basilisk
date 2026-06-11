@@ -41,7 +41,29 @@ impl Rule for TypedDictKeyValidation {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
         type_consistency::check_typeddict_assignability(module, diagnostics);
 
+        // TypedDicts declared with `extra_items=` accept keys beyond their
+        // schema (PEP 728) — unknown-key violations do not apply to them.
+        let extra_items_classes: std::collections::HashSet<&str> = module
+            .classes
+            .iter()
+            .filter(|cls| cls.class_keywords.iter().any(|kw| kw == "extra_items"))
+            .map(|cls| cls.name.as_str())
+            .collect();
+
         for violation in &module.typeddict_key_violations {
+            if extra_items_classes.contains(violation.class_name.as_str()) {
+                let unknown_key_only = match &violation.kind {
+                    TypedDictKeyViolationKind::InvalidSubscriptKey { .. }
+                    | TypedDictKeyViolationKind::SubscriptReadInvalidKey { .. } => true,
+                    TypedDictKeyViolationKind::InvalidDictLiteral { missing_keys, .. } => {
+                        missing_keys.is_empty()
+                    }
+                    _ => false,
+                };
+                if unknown_key_only {
+                    continue;
+                }
+            }
             let message = match &violation.kind {
                 TypedDictKeyViolationKind::InvalidSubscriptKey { key } => format!(
                     "`{}` is not a valid key for `TypedDict` `{}`",

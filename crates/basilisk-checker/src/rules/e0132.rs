@@ -137,6 +137,11 @@ fn check_class(
     let mut ancestor_args: HashMap<String, Vec<(Vec<String>, usize)>> = HashMap::new();
 
     for (idx, base) in base_subscripts.iter().enumerate() {
+        // Class keyword arguments (`extra_items=ReadOnly[int]`, `total=False`)
+        // are not base classes — skip anything carrying `=`.
+        if base.name.contains('=') {
+            continue;
+        }
         // The direct base itself is an "ancestor".
         if !base.type_args.is_empty() {
             ancestor_args

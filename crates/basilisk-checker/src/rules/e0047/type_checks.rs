@@ -281,7 +281,11 @@ pub(super) fn collect_non_type_names(module: &ResolvedModule) -> HashSet<String>
 /// - `Concatenate[...]` used outside of `Callable`
 /// - `P` inside a non-Callable subscript: `list[P]`, `dict[str, P]`
 /// - `P` as the return type of `Callable`: `Callable[[int, str], P]`
-pub(super) fn is_paramspec_invalid_annotation(ann: &str, paramspec_names: &HashSet<&str>) -> bool {
+pub(super) fn is_paramspec_invalid_annotation(
+    ann: &str,
+    paramspec_names: &HashSet<&str>,
+    paramspec_generic_bases: &HashSet<&str>,
+) -> bool {
     let ann = ann.trim();
     if ann.is_empty() || paramspec_names.is_empty() {
         return false;
@@ -297,6 +301,14 @@ pub(super) fn is_paramspec_invalid_annotation(ann: &str, paramspec_names: &HashS
 
     if !ann.contains('[') {
         return false;
+    }
+
+    // `Base[P]` is a valid PEP 612 specialization when `Base` is a class or
+    // alias that is itself generic over a `ParamSpec`.
+    if let Some(base) = ann.split('[').next() {
+        if paramspec_generic_bases.contains(base.trim()) {
+            return false;
+        }
     }
 
     if !ann.starts_with("Callable[") {

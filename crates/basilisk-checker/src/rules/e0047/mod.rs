@@ -89,8 +89,15 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
     let builtin_type_names: HashSet<&str> = PYTHON_BUILTIN_TYPE_NAMES.iter().copied().collect();
     let paramspec_names: HashSet<&str> =
         basilisk_resolver::collect_name_set_where(&module.typevar_calls, |tv| tv.is_paramspec);
+    let paramspec_generic_bases = collect_paramspec_generic_bases(module, &paramspec_names);
 
-    check_function_param_annotations(module, &non_type_names, &paramspec_names, diagnostics);
+    check_function_param_annotations(
+        module,
+        &non_type_names,
+        &paramspec_names,
+        &paramspec_generic_bases,
+        diagnostics,
+    );
     check_module_var_annotations(module, &non_type_names, &paramspec_names, diagnostics);
     check_local_var_annotations(module, &non_type_names, diagnostics);
     check_class_attr_annotations(
@@ -102,10 +109,37 @@ fn check_invalid_type_annotations(module: &ResolvedModule, diagnostics: &mut Vec
     );
 }
 
+/// Names of classes and aliases that are generic over a `ParamSpec` — these
+/// may validly be subscripted with a bare `ParamSpec` (PEP 612).
+fn collect_paramspec_generic_bases<'a>(
+    module: &'a ResolvedModule,
+    paramspec_names: &HashSet<&str>,
+) -> HashSet<&'a str> {
+    let class_bases = module.classes.iter().filter_map(|cls| {
+        let is_paramspec_generic = cls.base_subscripts.iter().any(|base| {
+            matches!(base.base_name.as_str(), "Protocol" | "Generic")
+                && base
+                    .type_arg_names
+                    .iter()
+                    .any(|arg| paramspec_names.contains(arg.as_str()))
+        });
+        is_paramspec_generic.then_some(cls.name.as_str())
+    });
+    let alias_bases = module.type_alias_defs.iter().filter_map(|alias| {
+        alias
+            .rhs_names
+            .iter()
+            .any(|name| paramspec_names.contains(name.as_str()))
+            .then_some(alias.name.as_str())
+    });
+    class_bases.chain(alias_bases).collect()
+}
+
 fn check_function_param_annotations(
     module: &ResolvedModule,
     non_type_names: &HashSet<String>,
     paramspec_names: &HashSet<&str>,
+    paramspec_generic_bases: &HashSet<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let source = &module.source;
@@ -126,7 +160,11 @@ fn check_function_param_annotations(
             let ann_trimmed = ann.trim();
             if is_invalid_type_annotation(ann_trimmed)
                 || is_non_type_name(ann_trimmed, non_type_names)
-                || is_paramspec_invalid_annotation(ann_trimmed, paramspec_names)
+                || is_paramspec_invalid_annotation(
+                    ann_trimmed,
+                    paramspec_names,
+                    paramspec_generic_bases,
+                )
             {
                 diagnostics.push(make_diagnostic(
                     format!(

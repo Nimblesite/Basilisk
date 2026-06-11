@@ -1205,3 +1205,99 @@ fn mutant_e0038_single_base_no_conflict() -> Result<(), Box<dyn std::error::Erro
     );
     Ok(())
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// E0014: Generic callback-protocol substitution (specialize_sig)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// `specialize_sig` must substitute parameter types when a generic callback
+/// protocol is specialized: `GenericCb[int] = int_cb` is valid only because
+/// `T := int` is applied to the `__call__` parameter. A mutant that keeps the
+/// unsubstituted `T` makes the valid assignment flag (extra E0014), and a
+/// mutant that over-suppresses misses the invalid one.
+#[mutation_safe(rule = "e0014", fns = "specialize_sig")]
+#[test]
+fn mutant_e0014_generic_callback_substitution() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import Generic, Protocol, TypeVar
+
+T = TypeVar("T")
+
+class GenericCb(Protocol[T]):
+    def __call__(self, a: T) -> None: ...
+
+class IntCb(Protocol):
+    def __call__(self, a: int) -> None: ...
+
+class StrCb(Protocol):
+    def __call__(self, a: str) -> None: ...
+
+def func(int_cb: IntCb, str_cb: StrCb) -> None:
+    ok: GenericCb[int] = int_cb
+    bad: GenericCb[int] = str_cb
+"#;
+    let diagnostics = run(source)?;
+    let e0014: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0014")
+        .collect();
+    assert_eq!(
+        e0014.len(),
+        1,
+        "exactly the str-callback assignment must flag; substitution failures \
+         flag both, over-suppression flags neither: {:?}",
+        e0014.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    let only = e0014.first().ok_or("expected one E0014 diagnostic")?;
+    assert!(
+        only.message.contains("bad"),
+        "the diagnostic must be on `bad`, got: {}",
+        only.message
+    );
+    Ok(())
+}
+
+/// `specialize_sig`'s `Proto[...]` arm turns a `ParamSpec` `__call__` into a
+/// gradual signature that still checks the `Concatenate`-style prefix.
+/// Deleting the arm collapses to "Unknown" and silently suppresses the
+/// invalid assignment below.
+#[mutation_safe(rule = "e0014", fns = "specialize_sig")]
+#[test]
+fn mutant_e0014_paramspec_ellipsis_prefix() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import Protocol, ParamSpec
+
+P = ParamSpec("P")
+
+class WithPrefix(Protocol[P]):
+    def __call__(self, a: int, *args: P.args, **kwargs: P.kwargs) -> None: ...
+
+class IntFirst(Protocol):
+    def __call__(self, a: int) -> None: ...
+
+class StrFirst(Protocol):
+    def __call__(self, a: str) -> None: ...
+
+def func(int_first: IntFirst, str_first: StrFirst) -> None:
+    ok: WithPrefix[...] = int_first
+    bad: WithPrefix[...] = str_first
+"#;
+    let diagnostics = run(source)?;
+    let e0014: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0014")
+        .collect();
+    assert_eq!(
+        e0014.len(),
+        1,
+        "only the str-first assignment violates the int prefix: {:?}",
+        e0014.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    let only = e0014.first().ok_or("expected one E0014 diagnostic")?;
+    assert!(
+        only.message.contains("bad"),
+        "the diagnostic must be on `bad`, got: {}",
+        only.message
+    );
+    Ok(())
+}

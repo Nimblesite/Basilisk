@@ -403,6 +403,12 @@ fn check_no_init_with_args(
         return;
     }
 
+    // Class-applied or metaclass-applied `@dataclass_transform` bases synthesize
+    // an `__init__` from the subclass's annotated fields (PEP 681).
+    if crate::rules::guards::inherits_dataclass_transform(class_info, class_map) {
+        return;
+    }
+
     let range = call.range();
     let span = Span {
         start: range.start().to_u32(),

@@ -52,6 +52,11 @@ class MutationScore:
     def to_json(self) -> dict[str, int | float | str]:
         return asdict(self)
 
+    @property
+    def viable(self) -> int:
+        """Compilable mutants — the pool kill_rate is computed over."""
+        return self.caught + self.missed + self.timeout
+
 
 class MutationScoreRegression(Exception):
     def __init__(self, regressions: list[str]) -> None:
@@ -220,6 +225,15 @@ def baseline_for_scope(score_book: dict[str, Any], scope: str) -> MutationScore 
 
 def regression_messages(fresh: MutationScore, baseline: MutationScore) -> list[str]:
     regressions: list[str] = []
+    # The mutation scope only ever GROWS ([CHKARCH-TESTING-MUTATION-RATCHET]):
+    # widening coverage means adding #[mutation_safe] tests over more rules and
+    # functions, which enlarges the viable mutant pool. A shrinking pool means
+    # scope was removed — that is a regression even if kill_rate held.
+    if fresh.viable < baseline.viable:
+        regressions.append(
+            f"viable mutant pool shrank {baseline.viable} -> {fresh.viable} "
+            "(mutation scope must only grow)"
+        )
     if fresh.caught < baseline.caught:
         regressions.append(f"caught dropped {baseline.caught} -> {fresh.caught}")
     if fresh.missed > baseline.missed:

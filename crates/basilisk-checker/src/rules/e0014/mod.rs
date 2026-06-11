@@ -14,8 +14,13 @@
 //! around the variable's name span and comparing it against the RHS kind.
 
 mod alias_match;
+mod callable_check;
 mod dataclass_check;
+mod default_spec;
 mod literal_parse;
+mod protocol_members;
+mod sig_model;
+mod sig_subtype;
 mod tuple_check;
 mod typeform_check;
 
@@ -42,12 +47,14 @@ pub(crate) struct AssignmentTypeMismatch;
 
 impl Rule for AssignmentTypeMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let empty_params = std::collections::HashMap::new();
+        let empty_params = ParamMaps::default();
         let skip = SkipNames {
             typeddict: collect_typeddict_names(module),
+            typeddict_extra_items: collect_extra_items_typeddict_names(module),
             type_alias: collect_type_alias_names(module),
             value_aliases: alias_match::collect_union_aliases(module),
         };
+        let call_index = callable_check::build_index(module);
         check_vars(
             &module.module_vars,
             &module.source,
@@ -56,12 +63,56 @@ impl Rule for AssignmentTypeMismatch {
             &empty_params,
             &skip,
             &module.functions,
+            &call_index,
         );
-        check_local_vars(module, diagnostics, &skip);
+        check_local_vars(module, diagnostics, &skip, &call_index);
         check_tuple_reassignments(module, diagnostics);
         check_dataclass_attr_assignments(module, diagnostics);
         typeform_check::check_typeform_calls(module, diagnostics);
+        default_spec::check_default_specializations(module, diagnostics);
+        drop_unchecked_block_diagnostics(module, diagnostics);
     }
+}
+
+/// Remove E0014 diagnostics inside `if not TYPE_CHECKING:` blocks — that code
+/// is explicitly excluded from type checking (PEP 484).
+fn drop_unchecked_block_diagnostics(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    use ruff_text_size::Ranged as _;
+
+    let Some(parsed) = crate::rules::shared::parse_module(module) else {
+        return;
+    };
+    let blocks: Vec<(u32, u32)> = parsed
+        .ast
+        .body
+        .iter()
+        .filter_map(|stmt| {
+            let ruff_python_ast::Stmt::If(if_stmt) = stmt else {
+                return None;
+            };
+            let ruff_python_ast::Expr::UnaryOp(unary) = if_stmt.test.as_ref() else {
+                return None;
+            };
+            let is_not_type_checking = unary.op == ruff_python_ast::UnaryOp::Not
+                && matches!(
+                    unary.operand.as_ref(),
+                    ruff_python_ast::Expr::Name(n) if n.id.as_str() == "TYPE_CHECKING"
+                );
+            is_not_type_checking.then(|| {
+                let range = if_stmt.range();
+                (range.start().to_u32(), range.end().to_u32())
+            })
+        })
+        .collect();
+    if blocks.is_empty() {
+        return;
+    }
+    diagnostics.retain(|diag| {
+        diag.code.code != CODE.code
+            || !blocks
+                .iter()
+                .any(|&(start, end)| diag.span.start >= start && diag.span.end <= end)
+    });
 }
 
 /// Collect names of `TypedDict` classes defined in this module.
@@ -104,6 +155,8 @@ fn collect_type_alias_names(module: &ResolvedModule) -> std::collections::HashSe
 struct SkipNames {
     /// `TypedDict` class names (lowercase).
     typeddict: std::collections::HashSet<String>,
+    /// `TypedDict` classes declaring `extra_items=` (PEP 728, lowercase).
+    typeddict_extra_items: std::collections::HashSet<String>,
     /// PEP 695 type alias names (lowercase).
     type_alias: std::collections::HashSet<String>,
     /// Legacy `Name = Union[...]` value aliases (lowercase → definition), used
@@ -111,20 +164,50 @@ struct SkipNames {
     value_aliases: std::collections::HashMap<String, InferredType>,
 }
 
+/// Names of `TypedDict` classes declaring `extra_items=` (lowercase).
+///
+/// Such `TypedDict`s may be assignable to `dict[str, VT]` (PEP 728), which
+/// E0014's name-level comparison cannot evaluate — those assignments are
+/// skipped rather than flagged.
+fn collect_extra_items_typeddict_names(
+    module: &ResolvedModule,
+) -> std::collections::HashSet<String> {
+    module
+        .classes
+        .iter()
+        .filter(|cls| cls.class_keywords.iter().any(|kw| kw == "extra_items"))
+        .map(|cls| cls.name.to_ascii_lowercase())
+        .collect()
+}
+
+/// Declared parameter annotations for the enclosing function: parsed types
+/// for assignability checks, and raw annotation texts for structural
+/// callable-subtyping checks.
+#[derive(Default)]
+struct ParamMaps {
+    types: std::collections::HashMap<String, InferredType>,
+    texts: std::collections::HashMap<String, String>,
+}
+
 /// Check a slice of annotated variables for type mismatches.
 ///
-/// `param_types` maps parameter names to their declared annotation types.
+/// `params` maps parameter names to their declared annotation types.
 /// When the RHS of an annotated local variable is a simple name reference
 /// that matches a parameter, the parameter's type is used for assignability
 /// checking instead of the generic `Unknown` fallback.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "assignment checking threads full module context"
+)]
 fn check_vars(
     vars: &[VariableInfo],
     source: &str,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
-    param_types: &std::collections::HashMap<String, InferredType>,
+    params: &ParamMaps,
     skip: &SkipNames,
     functions: &[basilisk_resolver::FunctionInfo],
+    call_index: &callable_check::CallIndex,
 ) {
     vars.iter()
         .filter(|var| var.has_annotation && var.rhs_span.is_some())
@@ -179,16 +262,8 @@ fn check_vars(
             // Skip dict literal assignments to TypedDict annotations. E0014 compares
             // the top-level type (e.g. `dict[str, str|int]` vs `Movie`) which always
             // mismatches. Field-level checking is done by E0093 instead.
-            if let InferredType::Named(ref name) = declared_type {
-                if skip.typeddict.contains(name.as_str()) {
-                    let rhs_is_dict_literal = var
-                        .rhs_span
-                        .and_then(|sp| slice_span(source, sp))
-                        .is_some_and(|rhs| rhs.trim_start().starts_with('{'));
-                    if rhs_is_dict_literal {
-                        return None;
-                    }
-                }
+            if typeddict_literal_skipped(var, source, &declared_type, skip) {
+                return None;
             }
 
             // When the declared type is a Literal, try to infer the RHS as a
@@ -201,11 +276,18 @@ fn check_vars(
                 if let Some(rhs_span) = var.rhs_span {
                     if let Some(rhs_text) = slice_span(source, rhs_span) {
                         let rhs_name = rhs_text.trim();
-                        if let Some(param_type) = param_types.get(rhs_name) {
+                        if let Some(param_type) = params.types.get(rhs_name) {
                             inferred_type = param_type.clone();
                         }
                     }
                 }
+            }
+
+            // PEP 728: a TypedDict declaring `extra_items=` may be assignable
+            // to `dict[str, VT]`; the name-level comparison below cannot
+            // evaluate that, so such assignments are skipped.
+            if extra_items_dict_skipped(&declared_type, &inferred_type, skip) {
+                return None;
             }
 
             // A bare reference to a legacy `Union` alias (e.g. a recursive
@@ -235,6 +317,10 @@ fn check_vars(
 
             if inferred_type.is_assignable_to(&declared_type) {
                 None
+            } else if callable_rescue(var, source, annotation_text, params, call_index) {
+                // Structurally valid callable subtyping (callback protocols,
+                // `Callable[...]` forms, `TypeAlias` callables) — not a mismatch.
+                None
             } else {
                 Some((
                     var,
@@ -255,34 +341,56 @@ fn check_vars(
         });
 }
 
+/// Attempt to validate a flagged assignment as structurally compatible
+/// callable subtyping: the RHS must be a parameter whose raw annotation text,
+/// compared against the declared annotation, passes the callable subtype check.
+fn callable_rescue(
+    var: &VariableInfo,
+    source: &str,
+    annotation_text: &str,
+    params: &ParamMaps,
+    call_index: &callable_check::CallIndex,
+) -> bool {
+    let Some(rhs_text) = var.rhs_span.and_then(|span| slice_span(source, span)) else {
+        return false;
+    };
+    let Some(rhs_annotation) = params.texts.get(rhs_text.trim()) else {
+        return false;
+    };
+    callable_check::assignment_compatible(annotation_text, rhs_annotation, call_index)
+}
+
 /// Check local variables in function bodies for type mismatches.
 ///
 /// Builds a map of parameter name to declared type for each function so that
 /// assignments like `x: Literal[False] = a` (where `a: Literal[0]`) can be
 /// checked for Literal-level incompatibility.
-fn check_local_vars(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>, skip: &SkipNames) {
+fn check_local_vars(
+    module: &ResolvedModule,
+    diagnostics: &mut Vec<Diagnostic>,
+    skip: &SkipNames,
+    call_index: &callable_check::CallIndex,
+) {
     let source = &module.source;
     for func in &module.functions {
-        let param_types = build_param_type_map(&func.parameters, source);
+        let params = build_param_maps(&func.parameters, source);
         check_vars(
             &func.local_vars,
             source,
             &module.path,
             diagnostics,
-            &param_types,
+            &params,
             skip,
             &module.functions,
+            call_index,
         );
     }
 }
 
-/// Build a map from parameter name to its declared `InferredType` by reading
-/// the annotation text from source spans.
-fn build_param_type_map(
-    params: &[basilisk_resolver::ParameterInfo],
-    source: &str,
-) -> std::collections::HashMap<String, InferredType> {
-    let mut map = std::collections::HashMap::new();
+/// Build maps from parameter name to its declared `InferredType` and raw
+/// annotation text by reading the annotation from source spans.
+fn build_param_maps(params: &[basilisk_resolver::ParameterInfo], source: &str) -> ParamMaps {
+    let mut maps = ParamMaps::default();
     for param in params {
         if !param.has_annotation {
             continue;
@@ -294,9 +402,48 @@ fn build_param_type_map(
             continue;
         };
         let inferred = InferredType::from_annotation(ann_text.trim());
-        let _ = map.insert(param.name.clone(), inferred);
+        let _ = maps.types.insert(param.name.clone(), inferred);
+        let _ = maps
+            .texts
+            .insert(param.name.clone(), ann_text.trim().to_owned());
     }
-    map
+    maps
+}
+
+/// `true` when a dict-literal assignment to a `TypedDict` annotation should
+/// be skipped (field-level checking is E0093's job).
+fn typeddict_literal_skipped(
+    var: &VariableInfo,
+    source: &str,
+    declared_type: &InferredType,
+    skip: &SkipNames,
+) -> bool {
+    let InferredType::Named(name) = declared_type else {
+        return false;
+    };
+    skip.typeddict.contains(name.as_str())
+        && var
+            .rhs_span
+            .and_then(|sp| slice_span(source, sp))
+            .is_some_and(|rhs| rhs.trim_start().starts_with('{'))
+}
+
+/// `true` when an `extra_items=` `TypedDict` is assigned to a `dict[...]`
+/// annotation — assignability depends on PEP 728 value types, which the
+/// name-level comparison cannot evaluate.
+fn extra_items_dict_skipped(
+    declared_type: &InferredType,
+    inferred_type: &InferredType,
+    skip: &SkipNames,
+) -> bool {
+    if !matches!(declared_type, InferredType::Dict(..)) {
+        return false;
+    }
+    let InferredType::Named(name) = inferred_type else {
+        return false;
+    };
+    let base = name.split('[').next().unwrap_or(name);
+    skip.typeddict_extra_items.contains(base)
 }
 
 /// Create diagnostic for inference-based type mismatch.
@@ -329,7 +476,7 @@ fn make_diagnostic(
 /// Looks for `: <annotation>` on the same source line as the variable name,
 /// stopping at the `=` sign that introduces the RHS.  Returns `None` if no
 /// such pattern is found.
-fn extract_annotation(source: &str, name_span: Span) -> Option<&str> {
+pub(super) fn extract_annotation(source: &str, name_span: Span) -> Option<&str> {
     // Find the byte offset of the start of the line containing the name.
     let start = usize::try_from(name_span.start).ok()?;
     let line_start = source.get(..start)?.rfind('\n').map_or(0, |pos| pos + 1);
