@@ -24,6 +24,8 @@ use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
+mod star_args;
+
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0085",
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0085",
@@ -34,12 +36,22 @@ pub(crate) struct TypeVarTupleArgCountMismatch;
 
 impl Rule for TypeVarTupleArgCountMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+        let Some(parsed) = super::shared::parse_module(module) else {
+            return;
+        };
+
+        // Unpacked-tuple `*args` validation applies with or without any
+        // `TypeVarTuple` declarations in the module.
+        star_args::check_star_args_calls(&parsed.ast.body, &module.path, diagnostics);
+
         // Collect TypeVarTuple names.
         let tvt_names = super::shared::typevar_tuple_names(&module.typevar_calls);
 
         if tvt_names.is_empty() {
             return;
         }
+
+        check_shared_tvt_call_consistency(module, &parsed.ast.body, &tvt_names, diagnostics);
 
         // Find classes that use TypeVarTuple in their generic params.
         let tvt_classes: HashMap<&str, &basilisk_resolver::ClassInfo> = module
@@ -83,11 +95,6 @@ impl Rule for TypeVarTupleArgCountMismatch {
             }
         }
 
-        // Re-parse to walk the AST for call expressions.
-        let Some(parsed) = super::shared::parse_module(module) else {
-            return;
-        };
-
         walk_stmts_for_tvt_calls(
             &parsed.ast.body,
             &tvt_classes,
@@ -102,7 +109,6 @@ impl Rule for TypeVarTupleArgCountMismatch {
             &module.path,
             diagnostics,
         );
-        check_shared_tvt_call_consistency(module, &parsed.ast.body, &tvt_names, diagnostics);
     }
 }
 
