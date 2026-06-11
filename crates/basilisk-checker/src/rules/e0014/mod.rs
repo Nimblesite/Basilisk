@@ -18,6 +18,9 @@ mod callable_check;
 mod dataclass_check;
 mod default_spec;
 mod literal_parse;
+mod protocol_members;
+mod sig_model;
+mod sig_subtype;
 mod tuple_check;
 mod typeform_check;
 
@@ -66,7 +69,49 @@ impl Rule for AssignmentTypeMismatch {
         check_dataclass_attr_assignments(module, diagnostics);
         typeform_check::check_typeform_calls(module, diagnostics);
         default_spec::check_default_specializations(module, diagnostics);
+        drop_unchecked_block_diagnostics(module, diagnostics);
     }
+}
+
+/// Remove E0014 diagnostics inside `if not TYPE_CHECKING:` blocks — that code
+/// is explicitly excluded from type checking (PEP 484).
+fn drop_unchecked_block_diagnostics(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    use ruff_text_size::Ranged as _;
+
+    let Some(parsed) = crate::rules::shared::parse_module(module) else {
+        return;
+    };
+    let blocks: Vec<(u32, u32)> = parsed
+        .ast
+        .body
+        .iter()
+        .filter_map(|stmt| {
+            let ruff_python_ast::Stmt::If(if_stmt) = stmt else {
+                return None;
+            };
+            let ruff_python_ast::Expr::UnaryOp(unary) = if_stmt.test.as_ref() else {
+                return None;
+            };
+            let is_not_type_checking = unary.op == ruff_python_ast::UnaryOp::Not
+                && matches!(
+                    unary.operand.as_ref(),
+                    ruff_python_ast::Expr::Name(n) if n.id.as_str() == "TYPE_CHECKING"
+                );
+            is_not_type_checking.then(|| {
+                let range = if_stmt.range();
+                (range.start().to_u32(), range.end().to_u32())
+            })
+        })
+        .collect();
+    if blocks.is_empty() {
+        return;
+    }
+    diagnostics.retain(|diag| {
+        diag.code.code != CODE.code
+            || !blocks
+                .iter()
+                .any(|&(start, end)| diag.span.start >= start && diag.span.end <= end)
+    });
 }
 
 /// Collect names of `TypedDict` classes defined in this module.

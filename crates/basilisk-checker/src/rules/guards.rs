@@ -106,7 +106,9 @@ pub(crate) fn inherits_dataclass_transform(
     class.bases.iter().any(|base| {
         class_map
             .get(base.split('[').next().unwrap_or(base))
-            .is_some_and(|b| is_transform_decorated(b, class_map) || inherits_dataclass_transform(b, class_map))
+            .is_some_and(|b| {
+                is_transform_decorated(b, class_map) || inherits_dataclass_transform(b, class_map)
+            })
     })
 }
 

@@ -177,8 +177,6 @@ fn free_type_params(
 /// `true` when `text` is a plain Python identifier (no subscripts, dots, etc.).
 fn is_identifier(text: &str) -> bool {
     !text.is_empty()
-        && text
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
         && !text.starts_with(|c: char| c.is_ascii_digit())
 }

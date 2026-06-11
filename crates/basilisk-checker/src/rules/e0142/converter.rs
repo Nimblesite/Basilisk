@@ -97,7 +97,11 @@ fn collect_field_specifier_names(stmts: &[Stmt]) -> Vec<String> {
                 continue;
             }
             for kw in &call.arguments.keywords {
-                if kw.arg.as_ref().is_none_or(|a| a.as_str() != "field_specifiers") {
+                if kw
+                    .arg
+                    .as_ref()
+                    .is_none_or(|a| a.as_str() != "field_specifiers")
+                {
                     continue;
                 }
                 if let Expr::Tuple(tuple) = &kw.value {
@@ -166,11 +170,11 @@ fn check_specifier_call(
     module_stmts: &[Stmt],
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<String> {
-    let converter_kw = call.arguments.keywords.iter().find(|kw| {
-        kw.arg
-            .as_ref()
-            .is_some_and(|a| a.as_str() == "converter")
-    })?;
+    let converter_kw = call
+        .arguments
+        .keywords
+        .iter()
+        .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "converter"))?;
     let Expr::Name(converter_name) = &converter_kw.value else {
         return None;
     };
@@ -193,9 +197,9 @@ fn check_specifier_call(
                 ),
                 Some("See the typing spec: dataclasses.html#converters".to_owned()),
             ));
-            return None;
+            None
         }
-        ConverterInput::Unknown => return None,
+        ConverterInput::Unknown => None,
         ConverterInput::Type(input_type) => {
             check_default_kwargs(call, input_type, ctx, module_stmts, diagnostics);
             Some(input_type.clone())
@@ -350,13 +354,15 @@ fn first_positional_type(params: &ruff_python_ast::Parameters, skip_self: bool) 
         .posonlyargs
         .iter()
         .chain(params.args.iter())
-        .skip(usize::from(skip_self))
-        .next();
+        .nth(usize::from(skip_self));
     if let Some(param) = positional {
-        return param.parameter.annotation.as_deref().map_or(
-            FirstParam::Unannotated,
-            |ann| FirstParam::Type(ann_str(ann)),
-        );
+        return param
+            .parameter
+            .annotation
+            .as_deref()
+            .map_or(FirstParam::Unannotated, |ann| {
+                FirstParam::Type(ann_str(ann))
+            });
     }
     if let Some(vararg) = &params.vararg {
         return vararg

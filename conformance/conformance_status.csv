@@ -21,7 +21,7 @@ BSK-E0024|BSK-E0047|BSK-E0048|BSK-E0053,annotations_typeexpr.py,annotations,PASS
 BSK-E0014|BSK-E0015|BSK-E0122|BSK-E0140,callables_annotation.py,callables,PASS,16,0,0
 BSK-E0012|BSK-E0041|BSK-E0140|BSK-E0141,callables_kwargs.py,callables,PASS,13,0,2
 BSK-E0140,callables_protocol.py,callables,PASS,17,0,0
-BSK-E0014|BSK-E0047|BSK-E0136,callables_subtyping.py,callables,PASS,32,0,2
+BSK-E0014|BSK-E0136,callables_subtyping.py,callables,PASS,32,0,0
 BSK-E0014|BSK-E0036|BSK-E0044,classes_classvar.py,classes,PASS,17,0,0
 ,classes_override.py,classes,PASS,0,0,0
 BSK-E0111|BSK-E0128,constructors_call_init.py,constructors,PASS,5,0,0
@@ -51,7 +51,7 @@ BSK-E0031,directives_cast.py,directives,PASS,3,0,0
 BSK-E0115,directives_deprecated.py,directives,PASS,12,0,1
 BSK-E0012|BSK-E0013|BSK-E0041,directives_no_type_check.py,directives,PASS,1,0,0
 BSK-E0033,directives_reveal_type.py,directives,PASS,2,0,0
-BSK-E0014,directives_type_checking.py,directives,PASS,0,0,1
+,directives_type_checking.py,directives,PASS,0,0,0
 ,directives_type_ignore.py,directives,PASS,0,0,0
 ,directives_type_ignore_file1.py,directives,PASS,0,0,0
 BSK-E0014,directives_type_ignore_file2.py,directives,PASS,1,0,0
@@ -71,7 +71,7 @@ BSK-E0014|BSK-E0092,generics_defaults_specialization.py,generics,PASS,3,0,0
 BSK-E0026|BSK-E0047,generics_paramspec_basic.py,generics,PASS,7,0,0
 ,generics_paramspec_components.py,generics,FAIL,0,16,0
 ,generics_paramspec_semantics.py,generics,FAIL,0,9,0
-BSK-E0047|BSK-E0092,generics_paramspec_specialization.py,generics,FAIL,0,5,3
+BSK-E0092,generics_paramspec_specialization.py,generics,FAIL,0,5,1
 BSK-E0117|BSK-E0130,generics_scoping.py,generics,PASS,10,0,0
 ,generics_self_advanced.py,generics,PASS,0,0,0
 BSK-E0075,generics_self_attributes.py,generics,PASS,2,0,0
@@ -112,12 +112,12 @@ BSK-E0099|BSK-E0146,protocols_class_objects.py,protocols,PASS,8,0,0
 BSK-E0036|BSK-E0121,protocols_definition.py,protocols,FAIL,2,19,0
 BSK-E0099|BSK-E0118|BSK-E0123|BSK-E0124,protocols_explicit.py,protocols,PASS,6,0,0
 BSK-E0130|BSK-E0137,protocols_generic.py,protocols,PASS,9,0,0
-BSK-E0014|BSK-E0098|BSK-E0099|BSK-E0121,protocols_merging.py,protocols,PASS,6,0,2
+BSK-E0098|BSK-E0099|BSK-E0121,protocols_merging.py,protocols,PASS,6,0,0
 BSK-E0079,protocols_modules.py,protocols,PASS,3,0,0
 ,protocols_recursive.py,protocols,PASS,0,0,0
 BSK-E0114|BSK-E0119,protocols_runtime_checkable.py,protocols,PASS,6,0,0
 ,protocols_self.py,protocols,PASS,0,0,0
-BSK-E0014|BSK-E0099,protocols_subtyping.py,protocols,PASS,7,0,7
+BSK-E0014|BSK-E0099,protocols_subtyping.py,protocols,PASS,7,0,0
 BSK-E0110|BSK-E0133,protocols_variance.py,protocols,PASS,5,0,0
 BSK-E0045|BSK-E0058,qualifiers_annotated.py,qualifiers,PASS,20,0,0
 BSK-E0014|BSK-E0041|BSK-E0044|BSK-E0054|BSK-E0064,qualifiers_final_annotation.py,qualifiers,PASS,26,0,0
@@ -127,7 +127,7 @@ BSK-E0062|BSK-E0070,specialtypes_never.py,specialtypes,PASS,3,0,0
 BSK-E0012|BSK-E0014,specialtypes_none.py,specialtypes,PASS,3,0,0
 BSK-E0065,specialtypes_promotions.py,specialtypes,PASS,1,0,0
 BSK-E0015|BSK-E0092|BSK-E0145,specialtypes_type.py,specialtypes,PASS,9,0,0
-BSK-E0014|BSK-E0045|BSK-E0147,tuples_type_compat.py,tuples,PASS,16,0,2
+BSK-E0014|BSK-E0045|BSK-E0147,tuples_type_compat.py,tuples,PASS,16,0,0
 BSK-E0014|BSK-E0049|BSK-E0090,tuples_type_form.py,tuples,PASS,11,0,0
 BSK-E0049|BSK-E0053,tuples_unpacked.py,tuples,PASS,4,0,3
 BSK-E0037,typeddicts_alt_syntax.py,typeddicts,PASS,4,0,0
