@@ -377,3 +377,34 @@ pub(crate) fn contains_typevar_reference(text: &str, name: &str) -> bool {
     }
     false
 }
+
+/// Generic parameter names of a class definition: PEP 695 type parameters
+/// plus `Protocol[...]` / `Generic[...]` base subscript arguments.
+pub(crate) fn class_generic_param_names(cls: &ruff_python_ast::StmtClassDef) -> Vec<String> {
+    let mut names: Vec<String> = cls
+        .type_params
+        .as_ref()
+        .map(|tp| {
+            tp.type_params
+                .iter()
+                .map(|p| p.name().to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+    for base in cls.bases() {
+        let Expr::Subscript(sub) = base else { continue };
+        let base_name = ann_str(&sub.value);
+        if base_name != "Protocol" && base_name != "Generic" {
+            continue;
+        }
+        let args: Vec<&Expr> = match sub.slice.as_ref() {
+            Expr::Tuple(t) => t.elts.iter().collect(),
+            other => vec![other],
+        };
+        names.extend(args.iter().filter_map(|a| match a {
+            Expr::Name(n) => Some(n.id.to_string()),
+            _ => None,
+        }));
+    }
+    names
+}

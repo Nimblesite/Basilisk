@@ -140,7 +140,7 @@ pub(super) fn class_entry(cls: &ruff_python_ast::StmtClassDef) -> ClassEntry {
         attrs,
         bases,
         is_protocol,
-        generic_params: generic_param_names(cls),
+        generic_params: crate::rules::shared::class_generic_param_names(cls),
     }
 }
 
@@ -156,37 +156,6 @@ fn overload_sigs(defs: &[&ruff_python_ast::StmtFunctionDef]) -> Vec<Sig> {
         .filter(|f| !has_overloads || is_overload(f))
         .map(|f| sig_from_function(f))
         .collect()
-}
-
-/// Generic parameter names of a class: PEP 695 params plus `Protocol[...]` /
-/// `Generic[...]` subscript arguments.
-fn generic_param_names(cls: &ruff_python_ast::StmtClassDef) -> Vec<String> {
-    let mut names: Vec<String> = cls
-        .type_params
-        .as_ref()
-        .map(|tp| {
-            tp.type_params
-                .iter()
-                .map(|p| p.name().to_string())
-                .collect()
-        })
-        .unwrap_or_default();
-    for base in cls.bases() {
-        let Expr::Subscript(sub) = base else { continue };
-        let base_name = ann_str(&sub.value);
-        if base_name != "Protocol" && base_name != "Generic" {
-            continue;
-        }
-        let args: Vec<&Expr> = match sub.slice.as_ref() {
-            Expr::Tuple(t) => t.elts.iter().collect(),
-            other => vec![other],
-        };
-        names.extend(args.iter().filter_map(|a| match a {
-            Expr::Name(n) => Some(n.id.to_string()),
-            _ => None,
-        }));
-    }
-    names
 }
 
 /// Build a [`Sig`] from a method definition (drops `self`).
