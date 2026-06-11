@@ -151,6 +151,34 @@ After `stop` or `snapshot`, the LSP publishes profiling diagnostics for every fi
 
 Periodic notification during active profiling with `sessionId`, `sampleCount`, `duration`, `topFunction`. Editors display this in a status indicator.
 
+### Editor loading & progress states {#PROFILE-UX-PROGRESS}
+
+No profiling action may be silent while it works. Every multi-second flow
+shows a progress surface from click to outcome:
+
+- **One notification per user action**, with live stage messages
+  ("Waiting for the program to pause…", "Injecting the in-process sampler…",
+  "Attaching…", "Collecting results…"). Covered flows: one-click CPU launch
+  (both the cooperative and py-spy legs), per-row py-spy attach, profiler
+  stop, and every memory operation (start, snapshot, compare, GC,
+  reference graph). All progress goes through a single shared wrapper
+  (`progress-ops.ts` in the VS Code extension) so styling, structured logs,
+  and the e2e seam stay uniform — VS Code's progress UI is not readable via
+  the public API, so the wrapper records a begin/step/end **operation log**
+  that tests assert against.
+- **Status bar "starting" state**: between the click and the first sample
+  batch the profiler item shows `$(loading~spin)` with an explanatory
+  tooltip, then flips to the live flame counter
+  ([#PROFILE-NOTIFICATIONS-PROGRESS]). It never sits hidden while a start is
+  in flight.
+- **Panel loading states** ([#PROFILE-PROCESSES-PANEL]): manual Refresh runs
+  under the view's progress bar; the auto-refresh poll stays silent. The
+  empty state is gated on the `basilisk.serverState` context key: while the
+  language server is starting it reads "Connecting to the Basilisk language
+  server…" — the "No Python processes running" message (with its launch
+  buttons) is only shown when the server is actually running and the list is
+  truly empty.
+
 ## Process Enumeration & Selection {#PROFILE-PROCESSES}
 
 Starting a profile must never require the user to hand-type a PID (#62). The LSP
@@ -195,6 +223,17 @@ Each entry in the `processes[]` response:
 launchers (uvicorn, gunicorn, pytest, celery, flask, hypercorn, daphne, uwsgi,
 sanic) running on a Python interpreter are included and tagged `kind = "launcher"`
 so they are still offered for profiling rather than hidden.
+
+**Exclusions:** debugger machinery is never offered as a target —
+`python -m debugpy.adapter`/`pydevd` and scripts inside `debugpy`/`pydevd`
+package directories are filtered out. Profiling the adapter instead of the
+debuggee is always a mistake, and adapters orphaned by a hard-killed editor
+would otherwise linger in the panel as phantom rows.
+
+**macOS argv:** sysinfo cannot read other processes' argv on macOS, so the
+enumerator takes one batched `ps -axo pid=,args=` snapshot per enumeration as
+a best-effort fallback — this is what powers script labels, launcher
+detection, and the exclusions there.
 
 **Version resolution:** `pythonVersion` is resolved server-side — an exact
 version from `<exe> --version` (cached per interpreter, bounded per enumeration),
@@ -242,10 +281,21 @@ collapsible parent nodes with a count badge.
 
 ### Launch from the panel {#PROFILE-PROCESSES-LAUNCH}
 
-This is the headline fix for #62. Per-row inline buttons — **▶ Profile CPU**
-(`basilisk.profileProcess`) and **🧠 Track Memory** (`basilisk.memoryTrackProcess`)
-— start profiling with that row's `pid` in one click, **with no input box**. The
-row context menu adds Copy PID and Reveal Script. The old palette command
+This is the headline fix for #62. Per-row inline buttons act on that row's
+`pid` in one click, **with no input box**:
+
+- **▶ Profile CPU** (`basilisk.profileProcess`) starts a CPU sampling session
+  for the row's PID.
+- **🧠 Track Memory** (`basilisk.memoryTrackProcess`) routes honestly: memory
+  tracking rides the DAP-`evaluate` courier ([#PROFILE-MEMORY-HOWTO]), so it
+  can only target the **live Basilisk debuggee**. When the row's PID is the
+  active `basilisk-debug` debuggee it runs `basilisk.memoryStart`; for any
+  other process it must **never** fall back to a CPU session — it explains
+  the constraint and offers the "Run & Track Memory (Current File)" launch
+  ([#PROFILE-PROCESSES-LAUNCH-FILE]). The routing decision is
+  `memoryTrackRoute` in `process-launch.ts`.
+
+The row context menu adds Copy PID and Reveal Script. The old palette command
 `basilisk.profileStart` is **kept but rewritten**: instead of prompting for a PID
 it focuses this panel and shows a toast ("Pick a process below"). The lying
 "auto-detect" prompt is deleted.
@@ -274,6 +324,45 @@ metric-explicit buttons mirror the per-row actions, same labels and icons:
 
 Both appear in the title bar, the panel's empty state, and (gated on
 [#PROFILE-UI-GATE]) the command palette.
+
+## Cooperative In-Process Sampling {#PROFILE-COOPERATIVE}
+
+The out-of-the-box CPU path for **debug-launched** sessions. Modern macOS
+gates task ports behind signed, debugger-entitled callers — even root +
+py-spy gets `EPERM` — so for sessions the editor launches under debugpy,
+Basilisk samples **from inside the debuggee** instead of reading foreign
+memory:
+
+1. The launch config sets `stopOnEntry` (macOS only; see
+   [#PROFILE-PROCESSES-LAUNCH-FILE]).
+2. `basilisk.profiler.cooperativeScript` (leg 1) mints a sample-file path and
+   returns a Python script; the editor evaluates it at the entry pause via
+   the same courier as memory profiling ([#PROFILE-MEMORY-HOWTO]), then
+   resumes the program. The script starts a **daemon thread** that walks
+   `sys._current_frames()` at the configured rate and appends one JSONL tick
+   record per sample to the file (header first:
+   `{"header":{"python":…,"pid":…}}`, then
+   `{"ticks":[[threadId,active,frames…]]}` with leaf-first frames, matching
+   py-spy). Leading debugpy/pydevd frames (the `sys.settrace` callbacks that
+   sit on top of the traced user frame) are stripped so tracer overhead is
+   attributed to the user line being traced; threads whose remaining leaf
+   sits in stdlib wait modules are marked idle.
+3. `basilisk.profiler.cooperativeAttach` (leg 2) tails the file as a standard
+   `SamplerHandle` (`cooperative.rs`) — handshaking on the header exactly like
+   the elevated helper does on `attached` — and registers a normal session,
+   so aggregation, hotspots, exports, diagnostics, and live progress
+   ([#PROFILE-NOTIFICATIONS-PROGRESS]) are reused unchanged. The response
+   matches `profiler.start`.
+4. Stop writes a `<file>.stop` sentinel; the injected thread exits, the
+   tailer drains what was flushed (0.5 s flush cadence) and removes both
+   files.
+
+Platform routing: macOS launch flow → cooperative; Linux/Windows launch flow
+→ py-spy attach to the captured debuggee PID ([#PROFILE-SAME-PROCESS]);
+external-process attach on macOS still requires the elevated helper
+([#PROFILE-PERMISSIONS-MACOS]). Trade-off: no native (C-extension) frames
+and GIL ownership is not observed — acceptable for the launch flow, where
+zero-setup beats fidelity.
 
 ## Sample Aggregation {#PROFILE-AGGREGATION}
 
@@ -522,14 +611,26 @@ Memory profiling requires an active **debug session** (debugpy). Crucially, **th
 LSP holds no DAP connection — the editor does** (the editor connects directly to
 debugpy; see [LSP-DEBUG-INTEGRATION-SPEC]). So the LSP cannot inject Python
 itself. Instead, memory analysis is a **two-leg round-trip with the editor as
-courier**, and debugpy can only `evaluate` against a **stopped** frame, so the
-debuggee must be paused at a breakpoint:
+courier**, and debugpy can only `evaluate` against a **stopped** frame. The
+editor satisfies that invariant itself: when the program is running, memory
+operations **transparently pause → evaluate → resume**
+(`acquireStoppedFrame` in `dap-evaluate.ts`) — IDE-grade snapshots never
+demand a manual breakpoint. A pause the *user* created (a real breakpoint
+stop) is left untouched after the evaluation.
 
 1. **Leg 1 — LSP → editor (get script):** A `basilisk.memory.*` command returns a
    Python injection script (e.g. `tracemalloc.take_snapshot()` printing a
    `__BASILISK_MEM__`-prefixed JSON payload). The LSP performs no DAP I/O.
 2. **Editor runs the script** in the paused debuggee via a DAP `evaluate` request
    (`vscode-extension/src/dap-evaluate.ts`), capturing the printed marker output.
+   **Pause detection must be event-tracked, never probed:** debugpy answers
+   `stackTrace` for a *running* thread with a sampled frame whose id is not
+   evaluable (`evaluate` then fails with "Unable to find thread for
+   evaluation"), so `currentStoppedFrameId` only mints a frame id for threads
+   the DAP tracker has seen `stopped` (and not since `continued`) — exactly how
+   VS Code's own debug UI tracks pause state (`dap-output.ts`). Anything else
+   returns null and surfaces the honest "Pause the debugger at a breakpoint"
+   guidance.
 3. **Leg 2 — editor → LSP (ingest):** The editor posts the raw output back via
    [`basilisk.memory.ingest`](#PROFILE-MEMORY-INGEST). The LSP marker-dispatches it
    to the matching parser, updates per-session state (the

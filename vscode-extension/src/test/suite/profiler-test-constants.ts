@@ -32,6 +32,8 @@ export const PROFILER_SERVER_COMMANDS = [
     'basilisk.profiler.stop',
     'basilisk.profiler.snapshot',
     'basilisk.profiler.list',
+    'basilisk.profiler.cooperativeScript',
+    'basilisk.profiler.cooperativeAttach',
 ] as const;
 
 /** Profiler configuration keys. */
@@ -69,6 +71,7 @@ export interface PackageJsonMenuEntry {
 export interface PackageJsonViewsWelcomeEntry {
     view: string;
     contents: string;
+    when?: string;
 }
 
 /** Shape of a keybinding entry in package.json contributes.keybindings. */

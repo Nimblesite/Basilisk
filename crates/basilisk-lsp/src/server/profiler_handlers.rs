@@ -151,6 +151,81 @@ pub(super) async fn execute_profiler_start(
     }
 }
 
+/// Handle `basilisk.profiler.cooperativeScript` — mint the in-process
+/// sampling script for the active debug session (leg 1 of the courier
+/// round-trip). Implements [PROFILE-COOPERATIVE].
+///
+/// Accepts `sampleRate` (u64, optional, default 100). Returns
+/// `{ script, sampleFile, sampleRate }`; the editor evaluates `script` in the
+/// paused debuggee, resumes it, then calls `cooperativeAttach`.
+pub(super) fn execute_profiler_cooperative_script(
+    args: &[serde_json::Value],
+) -> LspResult<Option<serde_json::Value>> {
+    let arg = args.first().cloned().unwrap_or_default();
+    let sample_rate = arg
+        .get("sampleRate")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(100);
+
+    let sample_file = crate::profiler::cooperative::mint_sample_file();
+    let script = crate::profiler::cooperative::sampling_script(&sample_file, sample_rate)
+        .map_err(|err| profiler_error(-32000, err.to_string()))?;
+
+    info!(sample_rate, file = %sample_file.display(), "cooperative sampling script minted");
+    Ok(Some(serde_json::json!({
+        "script": script,
+        "sampleFile": sample_file.display().to_string(),
+        "sampleRate": sample_rate,
+    })))
+}
+
+/// Handle `basilisk.profiler.cooperativeAttach` — adopt the cooperative
+/// sample stream after the editor injected the script (leg 2). Implements
+/// [PROFILE-COOPERATIVE]; returns the same shape as `profiler.start`.
+pub(super) async fn execute_profiler_cooperative_attach(
+    server: &LspServer,
+    args: &[serde_json::Value],
+) -> LspResult<Option<serde_json::Value>> {
+    let arg = args.first().cloned().unwrap_or_default();
+    let Some(sample_file) = arg.get("sampleFile").and_then(serde_json::Value::as_str) else {
+        return Err(profiler_error(
+            -32602,
+            "Missing required parameter: sampleFile",
+        ));
+    };
+    if !std::path::Path::new(sample_file)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with("basilisk-cpu-"))
+    {
+        return Err(profiler_error(
+            -32602,
+            "sampleFile must be a basilisk-cpu sample path minted by cooperativeScript",
+        ));
+    }
+    let sample_rate = arg.get("sampleRate").and_then(serde_json::Value::as_u64);
+
+    match server
+        .profiler_manager
+        .start_cooperative(std::path::PathBuf::from(sample_file), sample_rate)
+        .await
+    {
+        Ok(result) => {
+            spawn_progress_notifier(server, result.session_id.clone());
+            Ok(Some(serde_json::json!({
+                "sessionId": result.session_id,
+                "pid": result.pid,
+                "pythonVersion": result.python_version,
+                "startedAt": result.started_at,
+            })))
+        }
+        Err(err) => {
+            error!(%err, "cooperative attach failed");
+            Err(profiler_error(err.error_code(), err.to_string()))
+        }
+    }
+}
+
 /// Handle `basilisk.profiler.stop` — stop profiling and return results.
 ///
 /// Accepts a JSON object with:

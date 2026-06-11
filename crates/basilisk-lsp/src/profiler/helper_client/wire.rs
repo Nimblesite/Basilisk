@@ -21,7 +21,8 @@ pub fn build_elevation_script(helper: &str, socket: &str) -> String {
 }
 
 /// Convert wire-format traces back into the `py_spy` shapes the aggregator eats.
-pub(super) fn to_pyspy_traces(pid: u32, traces: Vec<TraceData>) -> Vec<py_spy::StackTrace> {
+/// Shared with the cooperative sampler, which produces the same wire shape.
+pub(crate) fn to_pyspy_traces(pid: u32, traces: Vec<TraceData>) -> Vec<py_spy::StackTrace> {
     let spy_pid = i32::try_from(pid).unwrap_or_default();
     traces
         .into_iter()

@@ -954,17 +954,14 @@ fn profstop_output_uses_canonical_format_names() {
 #[test]
 fn profile_output_documents_presets() {
     let text = slash_text("profile", &[]);
+    // Every preset the server parses must be documented — and only those
+    // (a documented-but-ignored preset was the old "memory" defect).
+    for preset in basilisk_common::profiler_presets::ALL {
+        assert!(text.contains(preset), "must document the {preset} preset");
+    }
     assert!(
-        text.contains(basilisk_common::profiler_presets::LIGHTWEIGHT),
-        "must document lightweight preset"
-    );
-    assert!(
-        text.contains(basilisk_common::profiler_presets::DETAILED),
-        "must document detailed preset"
-    );
-    assert!(
-        text.contains(basilisk_common::profiler_presets::MEMORY),
-        "must document memory preset"
+        !text.contains("lightweight") && !text.contains("`memory`"),
+        "must not document presets the server does not parse"
     );
 }
 

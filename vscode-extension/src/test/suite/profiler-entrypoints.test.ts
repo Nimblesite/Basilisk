@@ -79,10 +79,14 @@ suite("Python Processes — title-bar entry points state their metric (#82)", ()
   });
 
   test("the empty-state welcome offers both metric-explicit launches", () => {
+    // [PROFILE-UX-PROGRESS] split the welcome into connecting/stopped/running
+    // states; the launch buttons live on the server-running empty state.
     const welcome = getPackageJsonViewsWelcome().find(
-      (entry) => entry.view === "basilisk.pythonProcesses",
+      (entry) =>
+        entry.view === "basilisk.pythonProcesses" &&
+        entry.when === "basilisk.serverState == running",
     );
-    assert.ok(welcome, "the Python Processes panel must declare an empty state");
+    assert.ok(welcome, "the Python Processes panel must declare a server-running empty state");
     assert.ok(
       welcome.contents.includes(`command:${CPU_LAUNCH_COMMAND}`),
       `the welcome view must link the CPU launch (#82); got: ${welcome.contents}`,

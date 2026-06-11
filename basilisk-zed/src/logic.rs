@@ -47,9 +47,9 @@ fn slash_profile(args: &[String]) -> (String, String) {
     let line_code = profiler_diagnostics::LINE;
     let func_code = profiler_diagnostics::FUNC;
     let progress = notifications::PROFILER_PROGRESS;
-    let lightweight = profiler_presets::LIGHTWEIGHT;
+    let quick = profiler_presets::QUICK;
     let detailed = profiler_presets::DETAILED;
-    let memory_preset = profiler_presets::MEMORY;
+    let long_running = profiler_presets::LONG_RUNNING;
     let text = format!(
         "## CPU Profiling\n\n\
          **Target:** {target}\n\n\
@@ -63,11 +63,11 @@ fn slash_profile(args: &[String]) -> (String, String) {
          ```\n\
          If a debug session is active, the PID is auto-detected — omit the `pid` field.\n\n\
          ### Presets\n\
-         | Preset | Sample Rate | Native Frames | Best for |\n\
-         |--------|-------------|---------------|----------|\n\
-         | `{lightweight}` | 10 Hz | No | Long-running processes, minimal overhead |\n\
-         | `{detailed}` | 200 Hz | Yes | Short tasks, deep native call stacks |\n\
-         | `{memory_preset}` | 50 Hz | Yes | Memory-intensive workloads |\n\n\
+         | Preset | Sample Rate | Duration | Best for |\n\
+         |--------|-------------|----------|----------|\n\
+         | `{quick}` | 100 Hz | 10 s | Quick hotspot checks |\n\
+         | `{detailed}` | 200 Hz | 60 s | Thorough, higher-fidelity analysis |\n\
+         | `{long_running}` | 50 Hz | Unlimited | Servers and batch jobs, minimal overhead |\n\n\
          ### Results\n\
          - **Inline diagnostics** — `{line_code}` / `{func_code}` hints on hot lines (≥1% / ≥2% threshold)\n\
          - **Speedscope JSON** — written to `/tmp/`, open at speedscope.app for interactive flamegraph\n\

@@ -14,6 +14,7 @@ import * as vscode from "vscode";
 import { type Store } from "./store";
 import { Logger } from "./logger";
 import { registerLaunchCommands } from "./process-launch";
+import { withViewProgress } from "./progress-ops";
 
 // ── LSP response types ───────────────────────────────────────────────────
 
@@ -198,6 +199,17 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
     this.emitter.fire(undefined);
   }
 
+  /**
+   * Fetch fresh process data, then repaint — awaitable, so the manual Refresh
+   * command can run it under the view's progress bar ([PROFILE-UX-PROGRESS]).
+   * The silent timer-driven [`refresh`] stays untouched: a progress bar
+   * flashing every poll tick would be noise, not feedback.
+   */
+  public async refreshNow(): Promise<void> {
+    await this.fetchProcesses();
+    this.emitter.fire(undefined);
+  }
+
   public cycleSortMode(): void {
     const idx = SORT_CYCLE.indexOf(this.sortMode);
     this.sortMode = SORT_CYCLE[(idx + 1) % SORT_CYCLE.length];
@@ -341,7 +353,13 @@ export function registerPythonProcesses(
 
   const disposables = [
     ...registerLaunchCommands(store, treeView),
-    vscode.commands.registerCommand("basilisk.refreshProcesses", () => { provider.refresh(); }),
+    // Manual refresh runs under the view's progress bar so the click visibly
+    // does something; returns the promise so callers/tests can await it.
+    vscode.commands.registerCommand("basilisk.refreshProcesses", async () =>
+      withViewProgress("basilisk.pythonProcesses", "Refresh Python processes", async () =>
+        provider.refreshNow(),
+      ),
+    ),
     vscode.commands.registerCommand("basilisk.sortProcesses", () => { provider.cycleSortMode(); }),
     vscode.commands.registerCommand("basilisk.groupProcesses", () => { provider.cycleGroupMode(); }),
     vscode.commands.registerCommand("basilisk.filterProcesses", async () => {

@@ -14,6 +14,7 @@
 
 pub mod aggregator;
 pub mod commands;
+pub mod cooperative;
 pub mod cpuprofile;
 pub mod diagnostics;
 pub mod export;
@@ -258,45 +259,38 @@ impl ProfileSessionManager {
         // Pick the right sampler: in-process when we have access, or the
         // elevated helper over a Unix socket when macOS requires `vm_read`.
         let sampler = privilege::create_sampler(&config).await?;
-        let python_version = sampler.python_version.clone();
-        let session_id = generate_session_id();
-        let started_at_iso = iso_now();
+        Ok(insert_session(&mut sessions, sampler, rate))
+    }
 
-        info!(
-            session_id = %session_id,
-            pid,
-            python_version = %python_version,
-            sample_rate = rate,
-            "profiling session started"
-        );
+    /// Start a cooperative (in-process, editor-injected) profiling session by
+    /// tailing the sample file the injected thread streams to. Implements
+    /// [PROFILE-COOPERATIVE] — the out-of-the-box path for debug-launched
+    /// sessions on macOS, where task ports are unavailable to us.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ProfileError` if the injected sampler never reports its
+    /// header, or its PID is already being profiled.
+    pub async fn start_cooperative(
+        &self,
+        sample_file: std::path::PathBuf,
+        sample_rate: Option<u64>,
+    ) -> Result<StartResult, ProfileError> {
+        let rate = sample_rate.unwrap_or(100);
+        let sampler = cooperative::start_cooperative_sampler(sample_file)
+            .await
+            .map_err(ProfileError::Sampler)?;
 
-        let result = StartResult {
-            session_id: session_id.clone(),
-            pid,
-            python_version: python_version.clone(),
-            started_at: started_at_iso.clone(),
-        };
-
-        let sample_weight = 1.0 / f64::from(u32::try_from(rate).unwrap_or(100));
-
-        let _ = sessions.insert(
-            session_id.clone(),
-            ProfileSession {
-                session_id,
-                pid,
-                python_version,
-                started_at: Instant::now(),
-                started_at_iso,
-                data: ProfileData::default(),
-                sampler,
-                hotspot_config: HotspotConfig::default(),
-                sample_weight,
-                sample_rate: rate,
-                include_idle: false,
-            },
-        );
-
-        Ok(result)
+        let mut sessions = self.sessions.lock().await;
+        for session in sessions.values() {
+            if session.pid == sampler.pid {
+                return Err(ProfileError::AlreadyProfiling {
+                    pid: sampler.pid,
+                    session_id: session.session_id.clone(),
+                });
+            }
+        }
+        Ok(insert_session(&mut sessions, sampler, rate))
     }
 
     /// Stop a profiling session and return the results.
@@ -428,6 +422,55 @@ impl ProfileSessionManager {
             session.sampler.stop();
         }
     }
+}
+
+/// Register a freshly attached sampler as a session, whatever its backend
+/// (in-process py-spy, elevated helper, or cooperative tail).
+fn insert_session(
+    sessions: &mut HashMap<String, ProfileSession>,
+    sampler: SamplerHandle,
+    rate: u64,
+) -> StartResult {
+    let pid = sampler.pid;
+    let python_version = sampler.python_version.clone();
+    let session_id = generate_session_id();
+    let started_at_iso = iso_now();
+
+    info!(
+        session_id = %session_id,
+        pid,
+        python_version = %python_version,
+        sample_rate = rate,
+        "profiling session started"
+    );
+
+    let result = StartResult {
+        session_id: session_id.clone(),
+        pid,
+        python_version: python_version.clone(),
+        started_at: started_at_iso.clone(),
+    };
+
+    let sample_weight = 1.0 / f64::from(u32::try_from(rate).unwrap_or(100));
+
+    let _ = sessions.insert(
+        session_id.clone(),
+        ProfileSession {
+            session_id,
+            pid,
+            python_version,
+            started_at: Instant::now(),
+            started_at_iso,
+            data: ProfileData::default(),
+            sampler,
+            hotspot_config: HotspotConfig::default(),
+            sample_weight,
+            sample_rate: rate,
+            include_idle: false,
+        },
+    );
+
+    result
 }
 
 /// Drain all pending sample batches from the mpsc channel into `ProfileData`.

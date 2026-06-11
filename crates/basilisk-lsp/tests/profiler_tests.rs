@@ -2520,3 +2520,53 @@ while time.time() - start < 10:
     assert!(h >= l, "heavy ({h}) should have >= light ({l})");
     println!("  DISTRIBUTION TEST COMPLETE");
 }
+
+// ── Process enumeration must hide debugger infrastructure ───────────────────
+// Tests for [PROFILE-PROCESSES-MODEL]. A debugpy adapter is machinery, not a
+// profiling target: offering it in the panel invites profiling the debugger
+// itself, and adapters orphaned by a hard-killed editor linger as phantom
+// rows (the "process shown without running anything" defect).
+
+/// Spawn a real `python -m debugpy.adapter`, a plain Python sleeper, and
+/// assert enumeration lists the sleeper but never the adapter.
+#[tokio::test]
+async fn enumeration_hides_debugpy_adapter_but_lists_real_targets() {
+    use std::process::{Command, Stdio};
+
+    let python = std::env::var("PYTHON").unwrap_or_else(|_| "python3".to_owned());
+
+    let mut sleeper = common::ProcessGuard::new(
+        Command::new(&python)
+            .args(["-c", "import time; time.sleep(30)"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn python sleeper"),
+    );
+    let mut adapter = common::ProcessGuard::new(
+        Command::new(&python)
+            .args(["-m", "debugpy.adapter", "--port", "0"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn debugpy.adapter"),
+    );
+
+    // Let both settle so the process table sees them.
+    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+
+    let processes = basilisk_lsp::profiler::processes::enumerate_python_processes();
+    let sleeper_pid = sleeper.id();
+    let adapter_pid = adapter.id();
+    sleeper.kill();
+    adapter.kill();
+
+    assert!(
+        processes.iter().any(|p| p.pid == sleeper_pid),
+        "a plain python process must be offered for profiling"
+    );
+    assert!(
+        !processes.iter().any(|p| p.pid == adapter_pid),
+        "debugger infrastructure (debugpy.adapter) must NEVER be listed as a target"
+    );
+}

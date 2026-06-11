@@ -107,6 +107,7 @@ pub fn enumerate_python_processes() -> Vec<ProcessInfo> {
         .and_then(|pid| system.process(pid))
         .and_then(Process::user_id);
 
+    let argv_fallback = argv_by_pid();
     let mut cache: HashMap<String, Option<String>> = HashMap::new();
     let mut budget: u32 = VERSION_RESOLVE_BUDGET;
 
@@ -114,7 +115,12 @@ pub fn enumerate_python_processes() -> Vec<ProcessInfo> {
         .processes()
         .iter()
         .filter_map(|(pid, process)| {
-            build_process_info(*pid, process, &users, current_uid, &mut cache, &mut budget)
+            let context = EnumerationContext {
+                users: &users,
+                current_uid,
+                argv_fallback: &argv_fallback,
+            };
+            build_process_info(*pid, process, &context, &mut cache, &mut budget)
         })
         .collect();
 
@@ -123,20 +129,39 @@ pub fn enumerate_python_processes() -> Vec<ProcessInfo> {
     processes
 }
 
+/// Shared, read-only inputs for building one [`ProcessInfo`].
+struct EnumerationContext<'ctx> {
+    users: &'ctx Users,
+    current_uid: Option<&'ctx Uid>,
+    /// macOS argv fallback (sysinfo cannot read other processes' argv there).
+    argv_fallback: &'ctx HashMap<u32, Vec<OsString>>,
+}
+
 /// Build a [`ProcessInfo`] for `process`, or `None` if it is not Python.
 fn build_process_info(
     pid: Pid,
     process: &Process,
-    users: &Users,
-    current_uid: Option<&Uid>,
+    context: &EnumerationContext<'_>,
     cache: &mut HashMap<String, Option<String>>,
     budget: &mut u32,
 ) -> Option<ProcessInfo> {
+    let users = context.users;
+    let current_uid = context.current_uid;
     let name = process.name().to_string_lossy().into_owned();
     let exe = process
         .exe()
         .map(|path| path.to_string_lossy().into_owned());
-    let cmd = process.cmd();
+    // sysinfo returns an empty argv for other processes on macOS; fall back
+    // to the batched `ps` snapshot so script labels, launcher detection, and
+    // the infrastructure filter work there too.
+    let cmd: &[OsString] = if process.cmd().is_empty() {
+        context
+            .argv_fallback
+            .get(&pid.as_u32())
+            .map_or(&[], Vec::as_slice)
+    } else {
+        process.cmd()
+    };
     let cmd0 = cmd.first().map(|arg| arg.to_string_lossy().into_owned());
 
     let is_python = is_python_interpreter(file_basename(&name))
@@ -154,6 +179,12 @@ fn build_process_info(
 
     let interpreter_path = exe.or(cmd0);
     let script = extract_script(cmd);
+    // Debugger machinery is never a profiling target: offering the adapter
+    // invites profiling the debugger instead of the debuggee, and adapters
+    // orphaned by a hard-killed editor would linger as phantom rows.
+    if is_debugger_infrastructure(cmd) {
+        return None;
+    }
     let kind = classify_kind(cmd, script.as_deref());
     let python_version = interpreter_path
         .as_deref()
@@ -244,6 +275,61 @@ fn classify_kind(cmd: &[OsString], script: Option<&str>) -> ProcessKind {
         }
     }
     ProcessKind::Interpreter
+}
+
+/// One batched argv snapshot for the whole process table (macOS only).
+///
+/// sysinfo cannot read other processes' argv on macOS (`KERN_PROCARGS2` is
+/// not exposed through it), so `cmd()` comes back empty and script labels,
+/// launcher detection, and the infrastructure filter would all be blind. A
+/// single `ps` call per enumeration recovers best-effort argv strings —
+/// whitespace-split, so paths containing spaces degrade gracefully to
+/// classification-only use.
+#[cfg(target_os = "macos")]
+fn argv_by_pid() -> HashMap<u32, Vec<OsString>> {
+    let Ok(output) = std::process::Command::new("ps")
+        .args(["-axo", "pid=,args="])
+        .output()
+    else {
+        return HashMap::new();
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let mut tokens = line.split_whitespace();
+            let pid = tokens.next()?.parse::<u32>().ok()?;
+            let argv: Vec<OsString> = tokens.map(OsString::from).collect();
+            (!argv.is_empty()).then_some((pid, argv))
+        })
+        .collect()
+}
+
+/// Non-macOS: sysinfo reads argv directly; no fallback needed.
+#[cfg(not(target_os = "macos"))]
+fn argv_by_pid() -> HashMap<u32, Vec<OsString>> {
+    HashMap::new()
+}
+
+/// Debugger machinery module prefixes that must never be offered as targets.
+const INFRASTRUCTURE_MODULES: &[&str] = &["debugpy", "pydevd"];
+
+/// Whether this Python process is debugger infrastructure rather than a
+/// profilable target: `python -m debugpy.adapter`, `-m pydevd`, or a script
+/// living inside a `debugpy`/`pydevd` package directory (the launcher).
+/// Implements [PROFILE-PROCESSES-MODEL] (exclusions).
+fn is_debugger_infrastructure(cmd: &[OsString]) -> bool {
+    if let Some(module) = module_arg(cmd) {
+        let first_segment = module.split('.').next().unwrap_or(&module);
+        if INFRASTRUCTURE_MODULES.contains(&first_segment) {
+            return true;
+        }
+    }
+    cmd.iter().skip(1).any(|arg| {
+        let token = arg.to_string_lossy();
+        INFRASTRUCTURE_MODULES
+            .iter()
+            .any(|module| token.contains(&format!("/{module}/")) || token.contains(&format!("\\{module}\\")))
+    })
 }
 
 /// Extract the module name from a `python -m <module>` invocation, if present.

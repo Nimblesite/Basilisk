@@ -15,7 +15,10 @@ import * as fs from "fs";
 import * as path from "path";
 import { execFileSync, spawn, type ChildProcess } from "child_process";
 import { getStore } from "../../extension";
+import { evaluateInDebugSession, waitForStoppedFrame } from "../../dap-evaluate";
+import { buildProfileLaunchConfig } from "../../process-launch";
 import { profilerStatusText, startProfilingForPid } from "../../profiler";
+import { recordedOperations } from "../../progress-ops";
 import {
   applyProfileDecorations,
   clearProfileDecorations,
@@ -155,12 +158,17 @@ function assertCpuProfileArtifact(cpuProfilePath: string | undefined): void {
   );
 }
 
-/** Assert the hottest line wears the correctly-tiered palette color. */
+/** Assert the burner's hottest line wears the correctly-tiered palette color. */
 function assertHottestLineTier(result: ProfileResult, burnerPath: string): void {
   applyProfileDecorations(result);
   const applied = appliedProfileDecorations().filter((entry) => entry.file === burnerPath);
   assert.ok(applied.length > 0, "real profile data must paint the open hot file");
-  const topLine = [...result.hotLines].sort((a, b) => b.percentage - a.percentage)[0];
+  // Tier-check the hottest line OF THE BURNER — under debugpy, tracer
+  // machinery can own the globally hottest line in a file that isn't open.
+  const topLine = [...result.hotLines]
+    .filter((line) => line.file === burnerPath)
+    .sort((a, b) => b.percentage - a.percentage)[0];
+  assert.ok(topLine !== undefined, `the burner must have hot lines, got: ${JSON.stringify(result.hotLines)}`);
   const expectedColor =
     topLine.percentage >= 20 ? "#e8500a"
     : topLine.percentage >= 10 ? "#f97316"
@@ -170,6 +178,16 @@ function assertHottestLineTier(result: ProfileResult, burnerPath: string): void 
     applied.some((entry) => entry.line === topLine.line && entry.color === expectedColor),
     `hottest line ${topLine.line} (${topLine.percentage.toFixed(1)}%) must wear ${expectedColor}`,
   );
+}
+
+/** Wait for the active debug session to terminate. */
+async function waitForDebugSessionEnd(): Promise<void> {
+  await pollUntilResult({
+    fn: async () => vscode.debug.activeDebugSession,
+    predicate: (session) => session === undefined,
+    timeoutMs: 20_000,
+    intervalMs: 100,
+  });
 }
 
 /** Assert [PROFILE-NOTIFICATIONS-DIAG]: Hint diagnostics from basilisk-profiler. */
@@ -210,7 +228,7 @@ function assertHeatMapPainted(burnerPath: string): void {
   );
 }
 
- 
+// eslint-disable-next-line max-lines-per-function -- e2e suite: six sequential journeys over one shared burner
 suite("CPU profiling — real end-to-end", () => {
   let tmpDir = "";
   let burner: ChildProcess | undefined;
@@ -287,8 +305,17 @@ suite("CPU profiling — real end-to-end", () => {
     const pid = burner?.pid;
     assert.ok(pid !== undefined && pid > 0, "burner must be running");
 
+    const opsBefore = recordedOperations().length;
     await startProfilingForPid(store, pid, "default");
     assert.ok(profilerStatusText() !== undefined, "status bar must show a profiling state after start");
+
+    // [PROFILE-UX-PROGRESS] The attach must run under a progress notification.
+    const startOps = recordedOperations().slice(opsBefore);
+    assert.ok(
+      startOps.includes("begin:Basilisk: Starting CPU profiler") &&
+        startOps.includes("end:Basilisk: Starting CPU profiler"),
+      `panel attach must show progress, ops: ${startOps.join(" | ")}`,
+    );
 
     // [PROFILE-NOTIFICATIONS-PROGRESS]: a NON-ZERO live sample count reaches
     // the status bar — "0 samples" would mean sampling is silently broken.
@@ -306,6 +333,113 @@ suite("CPU profiling — real end-to-end", () => {
     const uri = burnerUri;
     assert.ok(uri, "burner uri must exist");
     await assertProfilerDiagnosticsPublished(uri);
+  });
+
+  // Runs on EVERY platform — the cooperative sampler needs no task ports, so
+  // this is the real CPU e2e that macOS can execute too ([PROFILE-COOPERATIVE]).
+  test("cooperative sampler: OOTB CPU profile of a debug-launched session", async function () {
+    this.timeout(60_000);
+    try {
+      const started = await vscode.debug.startDebugging(undefined, {
+        name: "Cooperative CPU E2E",
+        type: "basilisk-debug",
+        request: "launch",
+        program: burnerPath,
+        stopOnEntry: true,
+        justMyCode: true,
+        console: "internalConsole",
+      });
+      assert.ok(started, "the debug session must launch");
+
+      const frameId = await waitForStoppedFrame();
+      assert.ok(frameId !== null, "the debuggee must pause at entry for injection");
+
+      const leg1 = await vscode.commands.executeCommand<{ script: string; sampleFile: string }>(
+        "basilisk.profiler.cooperativeScript",
+        { sampleRate: 100 },
+      );
+      assert.ok(leg1.script.includes("sys._current_frames"), "the script must be the in-process sampler");
+
+      const ack = await evaluateInDebugSession(leg1.script, frameId);
+      await vscode.commands.executeCommand("workbench.action.debug.continue");
+      assert.ok(ack?.includes("__BASILISK_CPU_ACK__") === true, `injection must ack, got: ${String(ack)}`);
+
+      const session = await vscode.commands.executeCommand<StartResult>(
+        "basilisk.profiler.cooperativeAttach",
+        { sampleFile: leg1.sampleFile, sampleRate: 100 },
+      );
+      assert.ok(session.sessionId.length > 0, "cooperative attach must mint a session");
+      assert.ok(session.pythonVersion.startsWith("3."), `expected Python 3.x, got ${session.pythonVersion}`);
+
+      await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
+
+      const result = await vscode.commands.executeCommand<ProfileResult>("basilisk.profiler.stop", {
+        sessionId: session.sessionId,
+        format: "speedscope",
+      });
+      assert.ok(result.totalSamples > 0, "the in-process sampler must collect real ticks");
+      assert.ok(
+        result.hotFunctions.some((fn) => fn.name === "hot_function"),
+        `hot_function must be attributed, got: ${result.hotFunctions.map((fn) => fn.name).join(", ")}`,
+      );
+      assertCpuProfileArtifact(result.cpuProfilePath);
+      assertHottestLineTier(result, burnerPath);
+    } finally {
+      await vscode.debug.stopDebugging();
+      await waitForDebugSessionEnd();
+    }
+  });
+
+  test("one-click 'Run & Profile CPU' is OOTB on macOS via the cooperative sampler (#82)", async function () {
+    if (process.platform !== "darwin") { this.skip(); }
+    this.timeout(60_000);
+    const opsBefore = recordedOperations().length;
+    try {
+      const started = await vscode.debug.startDebugging(
+        undefined,
+        buildProfileLaunchConfig("cpu", burnerPath),
+      );
+      assert.ok(started, "the metric-explicit CPU launch must start");
+
+      // [PROFILE-UX-PROGRESS] No silence between the click and live data: the
+      // status bar must show SOMETHING (starting spinner or sample counter)
+      // almost immediately after the launch.
+      await pollUntilResult({
+        fn: async () => profilerStatusText(),
+        predicate: (text) => text !== undefined,
+        timeoutMs: 10_000,
+      });
+
+      // The cooperative flow injects at entry, resumes, and adopts the
+      // session — live NON-ZERO sample counts must reach the status bar
+      // without any elevation prompt.
+      await pollUntilResult({
+        fn: async () => profilerStatusText() ?? "",
+        predicate: (text) => /[1-9][\d.]* ?K? samples/.test(text),
+        timeoutMs: 20_000,
+      });
+
+      await vscode.commands.executeCommand("basilisk.profileStop");
+      assertHeatMapPainted(burnerPath);
+
+      // [PROFILE-UX-PROGRESS] Both the start and the stop must have run under
+      // progress notifications that opened and closed.
+      const ops = recordedOperations().slice(opsBefore);
+      for (const title of ["Basilisk: Starting CPU profiler", "Basilisk: Stopping profiler"]) {
+        const begin = ops.indexOf(`begin:${title}`);
+        const end = ops.indexOf(`end:${title}`);
+        assert.ok(begin !== -1, `"${title}" must show progress, ops: ${ops.join(" | ")}`);
+        assert.ok(end > begin, `"${title}" progress must close on completion`);
+      }
+      assert.strictEqual(
+        profilerStatusText(),
+        undefined,
+        "the status bar must clear after stop — no zombie spinner",
+      );
+    } finally {
+      await vscode.debug.stopDebugging();
+      await waitForDebugSessionEnd();
+    }
   });
 
   test("attaching to an exited process fails with a distinct, classified cause (#81)", async function () {

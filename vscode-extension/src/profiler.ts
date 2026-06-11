@@ -15,18 +15,27 @@
 import * as vscode from "vscode";
 import { Logger } from "./logger";
 import type { Store } from "./store";
+import { evaluateInDebugSession, waitForStoppedFrame } from "./dap-evaluate";
+import { withUserProgress } from "./progress-ops";
 import { POLL_INTERVAL_MS, STARTUP_TIMEOUT_MS } from "./timeouts";
 import {
   applyProfileDecorations,
   disposeProfileDecorations,
   type ProfileResult,
 } from "./profiler-decorations";
-import { buildFlamegraphHtml } from "./profiler-flamegraph-html";
+import { disposeFlamegraphPanel, openFlamegraphWebview } from "./profiler-flamegraph-html";
+import { shouldProfileOnLaunch, waitForDebuggeePid } from "./profiler-launch";
+import {
+  createProfilerStatusBar,
+  setProfilerStatus,
+  updateProfilerProgress,
+} from "./profiler-status";
+
+// Re-exported so tests keep one import site for the profiler's public seams.
+export { profilerStatusText } from "./profiler-status";
+export { shouldProfileOnLaunch } from "./profiler-launch";
 
 // ── Constants ─────────────────────────────────────────────────────────────
-
-/** Status bar priority — slightly lower than main Basilisk item. */
-const PROFILER_STATUS_BAR_PRIORITY = 99;
 
 /** LSP command names (must match basilisk-common constants). */
 const LSP_CMD = {
@@ -34,7 +43,12 @@ const LSP_CMD = {
   stop: "basilisk.profiler.stop",
   snapshot: "basilisk.profiler.snapshot",
   list: "basilisk.profiler.list",
+  cooperativeScript: "basilisk.profiler.cooperativeScript",
+  cooperativeAttach: "basilisk.profiler.cooperativeAttach",
 } as const;
+
+/** Ack printed by the injected cooperative sampler ([PROFILE-COOPERATIVE]). */
+const COOPERATIVE_ACK = "__BASILISK_CPU_ACK__";
 
 /** LSP notification for profiling progress. */
 const PROFILER_PROGRESS_NOTIFICATION = "basilisk/profiler/progress";
@@ -46,11 +60,9 @@ const DEFAULT_SAMPLE_RATE = 100;
 
 // ── State ─────────────────────────────────────────────────────────────────
 
-let profilerStatusBarItem: vscode.StatusBarItem | undefined;
 let activeSessionId: string | undefined;
 let activePid: number | undefined;
 let lastResult: ProfileResult | undefined;
-let flamegraphPanel: vscode.WebviewPanel | undefined;
 
 // ── Registration ──────────────────────────────────────────────────────────
 
@@ -64,14 +76,8 @@ export function registerProfiler(
 ): vscode.Disposable[] {
   const disposables: vscode.Disposable[] = [];
 
-  // Status bar item.
-  profilerStatusBarItem = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Left,
-    PROFILER_STATUS_BAR_PRIORITY,
-  );
-  profilerStatusBarItem.command = "basilisk.profileStop";
-  updateProfilerStatusBar("idle");
-  disposables.push(profilerStatusBarItem);
+  // Status bar item ([PROFILE-UX-PROGRESS] lifecycle lives in profiler-status.ts).
+  disposables.push(createProfilerStatusBar());
 
   // Client-side commands that proxy to LSP.
   disposables.push(
@@ -98,13 +104,7 @@ export function registerProfiler(
     vscode.debug.onDidStartDebugSession((session) => {
       if (shouldProfileOnLaunch(session) && activeSessionId === undefined) {
         Logger.info(`Profile on Launch: auto-profiling debug session ${session.id}`);
-        // The debuggee PID arrives asynchronously via the DAP `process` event,
-        // so wait for it before attaching (avoids a "not ready yet" race).
-        void waitForDebuggeePid(store, session.id).then((ready) => {
-          if (ready && activeSessionId === undefined) {
-            void handleProfileAttachToDebug(store);
-          }
-        });
+        void startProfilerOnLaunch(store, session.id);
       }
     }),
   );
@@ -122,49 +122,124 @@ export function registerProfiler(
   return disposables;
 }
 
-/**
- * Whether a freshly started debug session should be auto-profiled: either its
- * launch configuration asked for it (`profileOnLaunch: true`, set by the
- * metric-explicit "Run & Profile CPU (Current File)" entry point — #82) or the
- * user enabled the global `basilisk.profiler.profileOnLaunch` setting.
- * Implements [PROFILE-PROCESSES-LAUNCH-FILE]. Exported for tests.
- */
-export function shouldProfileOnLaunch(
-  session: Pick<vscode.DebugSession, "type" | "configuration">,
-): boolean {
-  if (session.type !== "basilisk-debug") { return false; }
-  if (session.configuration.profileOnLaunch === true) { return true; }
-  return vscode.workspace
-    .getConfiguration("basilisk")
-    .get<boolean>("profiler.profileOnLaunch", false);
+// ── Session adoption ──────────────────────────────────────────────────────
+
+/** The shape every profiling start command resolves to. */
+interface StartedSession {
+  sessionId: string;
+  pid: number;
+  pythonVersion: string;
 }
 
-// ── Debuggee PID readiness ─────────────────────────────────────────────────
+/**
+ * Adopt a freshly started session into the shared UI state (status bar,
+ * stop/snapshot routing, live progress) and announce it.
+ */
+function adoptSession(result: StartedSession, announcement: string): void {
+  activeSessionId = result.sessionId;
+  activePid = result.pid;
+  void vscode.commands.executeCommand("setContext", "basilisk.profiling", true);
+  setProfilerStatus("profiling", result.pid);
+  Logger.info(
+    `Profiling started: PID ${result.pid}, Python ${result.pythonVersion}, session ${result.sessionId}`,
+  );
+  vscode.window.showInformationMessage(announcement);
+}
+
+// ── Launch flows ([PROFILE-COOPERATIVE], [PROFILE-UX-PROGRESS]) ───────────
+
+/** The single progress title every CPU-start flow shares. */
+const CPU_START_TITLE = "Basilisk: Starting CPU profiler";
 
 /**
- * Resolve once the debuggee's PID for `sessionId` is known (captured from the
- * DAP `process` event into the store), or after a bounded wait. Returns whether
- * the PID became available. Used by the "Profile on Launch" auto-attach so it
- * doesn't fire before debugpy reports the process.
+ * Auto-start dispatcher for a freshly launched debug session: cooperative
+ * sampler on macOS, py-spy attach elsewhere. The whole start runs under one
+ * progress notification with stage messages, and the status bar shows a
+ * spinner until the live sample counter takes over — a click is never
+ * followed by silence ([PROFILE-UX-PROGRESS]).
  */
-async function waitForDebuggeePid(store: Store, sessionId: string): Promise<boolean> {
-  if (store.getDebuggeeProcessId(sessionId) !== undefined) {
-    return true;
-  }
-  return new Promise((resolve) => {
-    const interval = setInterval(() => {
-      if (store.getDebuggeeProcessId(sessionId) !== undefined) {
-        clearInterval(interval);
-        clearTimeout(timeout);
-        resolve(true);
+async function startProfilerOnLaunch(store: Store, debugSessionId: string): Promise<void> {
+  setProfilerStatus("starting");
+  try {
+    await withUserProgress(CPU_START_TITLE, async (report) => {
+      if (process.platform === "darwin") {
+        // macOS gates task ports behind entitled debuggers — even root
+        // py-spy gets EPERM — so use the cooperative in-process sampler
+        // injected at the entry pause ([PROFILE-COOPERATIVE], OOTB).
+        await startCooperativeProfileOnLaunch(store, report);
+        return;
       }
-    }, POLL_INTERVAL_MS);
-    // Clear BOTH timers on whichever path resolves first so neither dangles.
-    const timeout = setTimeout(() => {
-      clearInterval(interval);
-      resolve(store.getDebuggeeProcessId(sessionId) !== undefined);
-    }, STARTUP_TIMEOUT_MS);
-  });
+      // The debuggee PID arrives asynchronously via the DAP `process` event,
+      // so wait for it before attaching (avoids a "not ready yet" race).
+      report("Waiting for the program to start…");
+      const ready = await waitForDebuggeePid(store, debugSessionId);
+      if (ready && activeSessionId === undefined) {
+        report("Attaching the sampler…");
+        await handleProfileAttachToDebug(store);
+      }
+    });
+  } finally {
+    // Any failure path above leaves no session — never strand the spinner.
+    if (activeSessionId === undefined) { setProfilerStatus("idle"); }
+  }
+}
+
+/**
+ * OOTB CPU profiling for a debug-launched session: inject the in-process
+ * sampler at the `stopOnEntry` pause via the courier, resume the program,
+ * then adopt the streamed session. No task ports, no elevation prompt.
+ */
+async function startCooperativeProfileOnLaunch(
+  store: Store,
+  report: (message: string) => void,
+): Promise<void> {
+  const client = store.client.value;
+  if (client?.isRunning() !== true) { return; }
+
+  report("Waiting for the program to pause at entry…");
+  const frameId = await waitForStoppedFrame();
+  if (frameId === null) {
+    vscode.window.showWarningMessage(
+      "Basilisk: The debuggee did not pause at entry, so the profiler could not be injected.",
+    );
+    return;
+  }
+
+  const sampleRate = vscode.workspace
+    .getConfiguration("basilisk")
+    .get<number>("profiler.sampleRate", DEFAULT_SAMPLE_RATE);
+
+  try {
+    const leg1 = await client.sendRequest<{ script: string; sampleFile: string } | undefined>(
+      "workspace/executeCommand",
+      { command: LSP_CMD.cooperativeScript, arguments: [{ sampleRate }] },
+    );
+    if (leg1?.script === undefined) { return; }
+
+    report("Injecting the in-process sampler…");
+    const ack = await evaluateInDebugSession(leg1.script, frameId);
+    await vscode.commands.executeCommand("workbench.action.debug.continue");
+    if (!ack?.includes(COOPERATIVE_ACK)) {
+      vscode.window.showWarningMessage("Basilisk: Could not inject the in-process CPU sampler.");
+      return;
+    }
+
+    report("Starting the sample stream…");
+    const result = await client.sendRequest<StartedSession | undefined>(
+      "workspace/executeCommand",
+      {
+        command: LSP_CMD.cooperativeAttach,
+        arguments: [{ sampleFile: leg1.sampleFile, sampleRate }],
+      },
+    );
+    if (result !== undefined && result !== null && activeSessionId === undefined) {
+      adoptSession(result, `Basilisk: Profiling current file (PID ${result.pid}, in-process sampler)`);
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    Logger.error(`Cooperative profile start failed: ${msg}`);
+    vscode.window.showErrorMessage(`Basilisk: ${msg}`);
+  }
 }
 
 // ── Command handlers ──────────────────────────────────────────────────────
@@ -208,26 +283,27 @@ export async function startProfilingForPid(store: Store, pid: number, preset: st
     includeNative: cfg.get<boolean>("profiler.includeNative", false),
   };
 
+  setProfilerStatus("starting");
   try {
-    const result = await client.sendRequest<{ sessionId: string; pid: number; pythonVersion: string } | undefined>("workspace/executeCommand", {
-      command: LSP_CMD.start,
-      arguments: [args],
-    });
+    await withUserProgress(CPU_START_TITLE, async (report) => {
+      report(`Attaching to PID ${pid}…`);
+      const result = await client.sendRequest<
+        { sessionId: string; pid: number; pythonVersion: string } | undefined
+      >("workspace/executeCommand", {
+        command: LSP_CMD.start,
+        arguments: [args],
+      });
 
-    if (result !== undefined && result !== null) {
-      activeSessionId = result.sessionId;
-      activePid = result.pid;
-      void vscode.commands.executeCommand("setContext", "basilisk.profiling", true);
-      updateProfilerStatusBar("profiling");
-      Logger.info(`Profiling started: PID ${result.pid}, Python ${result.pythonVersion}, session ${result.sessionId}`);
-      vscode.window.showInformationMessage(
-        `Basilisk: Profiling PID ${result.pid} (Python ${result.pythonVersion})`,
-      );
-    }
+      if (result !== undefined && result !== null) {
+        adoptSession(result, `Basilisk: Profiling PID ${result.pid} (Python ${result.pythonVersion})`);
+      }
+    });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     Logger.error(`Profile start failed: ${msg}`);
     vscode.window.showErrorMessage(`Basilisk: ${msg}`);
+  } finally {
+    if (activeSessionId === undefined) { setProfilerStatus("idle"); }
   }
 }
 
@@ -239,10 +315,18 @@ async function handleProfileStop(store: Store): Promise<void> {
   }
 
   try {
-    const result = await client.sendRequest<ProfileResult | undefined>("workspace/executeCommand", {
-      command: LSP_CMD.stop,
-      arguments: [{ sessionId: activeSessionId, format: "speedscope" }],
-    });
+    // Collecting samples + writing artifacts takes a beat — show it
+    // ([PROFILE-UX-PROGRESS]).
+    const result = await withUserProgress(
+      "Basilisk: Stopping profiler",
+      async (report) => {
+        report("Collecting results…");
+        return client.sendRequest<ProfileResult | undefined>("workspace/executeCommand", {
+          command: LSP_CMD.stop,
+          arguments: [{ sessionId: activeSessionId, format: "speedscope" }],
+        });
+      },
+    );
 
     cleanupSession();
 
@@ -350,67 +434,13 @@ async function handleProfileAttachToDebug(store: Store): Promise<void> {
     });
 
     if (result !== undefined && result !== null) {
-      activeSessionId = result.sessionId;
-      activePid = result.pid;
-      void vscode.commands.executeCommand("setContext", "basilisk.profiling", true);
-      updateProfilerStatusBar("profiling");
-      Logger.info(`Profiling debug session: PID ${result.pid}, session ${result.sessionId}`);
-      vscode.window.showInformationMessage(
-        `Basilisk: Profiling debug session (PID ${result.pid})`,
-      );
+      adoptSession(result, `Basilisk: Profiling debug session (PID ${result.pid})`);
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     Logger.error(`Profile attach-to-debug failed: ${msg}`);
     vscode.window.showErrorMessage(`Basilisk: ${msg}`);
   }
-}
-
-// ── Status bar ────────────────────────────────────────────────────────────
-
-/**
- * The profiler status-bar text, or undefined when idle/hidden. E2e seam for
- * [PROFILE-NOTIFICATIONS-PROGRESS]: the live progress (samples/duration)
- * lands here and StatusBarItem state is not readable via the public API.
- */
-export function profilerStatusText(): string | undefined {
-  if (activeSessionId === undefined) { return undefined; }
-  return profilerStatusBarItem?.text;
-}
-
-function updateProfilerStatusBar(state: "idle" | "profiling"): void {
-  if (profilerStatusBarItem === undefined) { return; }
-
-  if (state === "idle") {
-    profilerStatusBarItem.hide();
-    return;
-  }
-
-  profilerStatusBarItem.text = "$(flame) Profiling...";
-  profilerStatusBarItem.tooltip = `Profiling PID ${activePid ?? "?"} \u2014 click to stop`;
-  profilerStatusBarItem.backgroundColor = new vscode.ThemeColor(
-    "statusBarItem.warningBackground",
-  );
-  profilerStatusBarItem.show();
-}
-
-/** Seconds per minute — threshold for switching from "Ns" to "N.Mm" display. */
-const SECONDS_PER_MINUTE = 60;
-/** Threshold for switching from raw count to "N.NK" display. */
-const KILO_THRESHOLD = 1000;
-
-function updateProfilerProgress(sampleCount: number, duration: number, topFunction: string): void {
-  if (profilerStatusBarItem === undefined) { return; }
-  const durationStr = duration < SECONDS_PER_MINUTE
-    ? `${duration.toFixed(0)}s`
-    : `${(duration / SECONDS_PER_MINUTE).toFixed(1)}m`;
-  const samplesStr = sampleCount >= KILO_THRESHOLD
-    ? `${(sampleCount / KILO_THRESHOLD).toFixed(1)}K`
-    : String(sampleCount);
-  profilerStatusBarItem.text = `$(flame) ${samplesStr} samples (${durationStr})`;
-  profilerStatusBarItem.tooltip =
-    `PID ${activePid ?? "?"} \u2014 ${samplesStr} samples, ${durationStr}\n` +
-    `Top: ${topFunction}\nClick to stop`;
 }
 
 // ── Progress listener ─────────────────────────────────────────────────────
@@ -444,53 +474,13 @@ function cleanupSession(): void {
   activeSessionId = undefined;
   activePid = undefined;
   void vscode.commands.executeCommand("setContext", "basilisk.profiling", false);
-  updateProfilerStatusBar("idle");
+  setProfilerStatus("idle");
 }
-
-// ── Flamegraph webview ────────────────────────────────────────────────────
-
-function openFlamegraphWebview(result: ProfileResult): void {
-  if (flamegraphPanel !== undefined) {
-    flamegraphPanel.reveal(vscode.ViewColumn.Beside);
-  } else {
-    flamegraphPanel = vscode.window.createWebviewPanel(
-      "basilisk.flamegraph",
-      "Basilisk Profiler",
-      vscode.ViewColumn.Beside,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: [],
-      },
-    );
-    flamegraphPanel.onDidDispose(() => {
-      flamegraphPanel = undefined;
-    });
-  }
-
-  flamegraphPanel.webview.html = buildFlamegraphHtml(result);
-
-  // Handle messages from the webview.
-  flamegraphPanel.webview.onDidReceiveMessage((msg: { type: string; file?: string; line?: number }) => {
-    if (msg.type === "navigateToSource" && msg.file !== undefined && msg.line !== undefined) {
-      const uri = vscode.Uri.file(msg.file);
-      const position = new vscode.Position(msg.line - 1, 0);
-      void vscode.window.showTextDocument(uri, {
-        selection: new vscode.Range(position, position),
-        viewColumn: vscode.ViewColumn.One,
-      });
-    }
-  });
-}
-
 
 /** Dispose all profiler resources. */
 export function disposeProfiler(): void {
   cleanupSession();
   disposeProfileDecorations();
-  if (flamegraphPanel !== undefined) {
-    flamegraphPanel.dispose();
-    flamegraphPanel = undefined;
-  }
+  disposeFlamegraphPanel();
   lastResult = undefined;
 }

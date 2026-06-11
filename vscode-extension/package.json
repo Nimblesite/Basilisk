@@ -83,7 +83,18 @@
       },
       {
         "view": "basilisk.pythonProcesses",
-        "contents": "No Python processes running.\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)\n[Refresh](command:basilisk.refreshProcesses)"
+        "contents": "Connecting to the Basilisk language server…",
+        "when": "basilisk.serverState != running && basilisk.serverState != stopped"
+      },
+      {
+        "view": "basilisk.pythonProcesses",
+        "contents": "The Basilisk language server is not running.\n[Restart Server](command:basilisk.restartServer)",
+        "when": "basilisk.serverState == stopped"
+      },
+      {
+        "view": "basilisk.pythonProcesses",
+        "contents": "No Python processes running. The list refreshes automatically.\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)\n[Refresh](command:basilisk.refreshProcesses)",
+        "when": "basilisk.serverState == running"
       }
     ],
     "commands": [
@@ -876,18 +887,18 @@
           "type": "string",
           "enum": [
             "default",
-            "lightweight",
+            "quick",
             "detailed",
-            "memory"
+            "longRunning"
           ],
           "enumDescriptions": [
-            "100 Hz sampling, no native frames (default)",
-            "10 Hz sampling for low overhead",
-            "100 Hz with native C frames included",
-            "CPU + memory tracking combined"
+            "Use the basilisk.profiler.sampleRate / includeNative settings",
+            "Short burst: 10 seconds at 100 Hz, for quick hotspot checks",
+            "Thorough: 60 seconds at 200 Hz, higher-fidelity data",
+            "No time limit at 50 Hz, for long-running servers and batch jobs"
           ],
           "default": "default",
-          "description": "Profiling preset that configures sample rate and options."
+          "description": "Profiling preset that configures sample rate and duration."
         },
         "basilisk.profiler.autoSnapshot": {
           "type": "boolean",

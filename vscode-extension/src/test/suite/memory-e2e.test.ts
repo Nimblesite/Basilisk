@@ -15,6 +15,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { currentStoppedFrameId, evaluateInDebugSession } from "../../dap-evaluate";
 import { activeMemorySession } from "../../memory-profiler";
+import { recordedOperations } from "../../progress-ops";
 import { buildProfileLaunchConfig } from "../../process-launch";
 import {
   applyLeakDecorations,
@@ -160,6 +161,118 @@ function assertSnapshotSurface(snapshot: MemorySnapshotResult & IngestResult): v
   );
 }
 
+/**
+ * Launch the run-forever fixture (no breakpoints) and probe
+ * `currentStoppedFrameId` `probes` times while it runs: every probe must
+ * decline, with the session still alive to prove the timing.
+ */
+async function probeRunningDebuggeeForFrames(probes: number): Promise<void> {
+  vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+  const runningFixture = path.resolve(__dirname, "../../src/test/fixtures/busy_wait.py");
+  const started = await vscode.debug.startDebugging(undefined, {
+    name: "Memory E2E running probe",
+    type: "basilisk-debug",
+    request: "launch",
+    program: runningFixture,
+    stopOnEntry: false,
+    justMyCode: true,
+    console: "internalConsole",
+  });
+  assert.ok(started, "the debug session must launch");
+  await pollUntilResult({
+    fn: async () => vscode.debug.activeDebugSession,
+    predicate: (session) => session !== undefined,
+    timeoutMs: SESSION_WAIT_MS,
+    intervalMs: POLL_MS,
+  });
+
+  for (let probe = 0; probe < probes; probe += 1) {
+    const frameId = await currentStoppedFrameId();
+    assert.ok(
+      vscode.debug.activeDebugSession !== undefined,
+      "the program must still be running while probing",
+    );
+    assert.strictEqual(
+      frameId,
+      null,
+      "a running debuggee must never yield a frame id (debugpy samples stackTrace for running threads)",
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+  }
+
+  await vscode.debug.stopDebugging();
+  await waitForSessionEnd();
+}
+
+/**
+ * Launch the run-forever allocator WITHOUT breakpoints, start tracking and
+ * snapshot via the real command handlers while it runs, and assert the
+ * auto-pause/auto-resume surface: a session is minted, the live allocation
+ * line is attributed, and the program is still running afterwards.
+ */
+async function trackAndSnapshotRunningProgram(): Promise<void> {
+  vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+  const busyFixture = path.resolve(__dirname, "../../src/test/fixtures/memory_busy.py");
+  const busyAllocLine = 12; // CACHE.append("x" * 5000)
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(busyFixture));
+  await vscode.window.showTextDocument(doc, { preview: false });
+
+  const started = await vscode.debug.startDebugging(undefined, {
+    name: "Memory E2E auto-pause",
+    type: "basilisk-debug",
+    request: "launch",
+    program: busyFixture,
+    stopOnEntry: false,
+    justMyCode: true,
+    console: "internalConsole",
+  });
+  assert.ok(started, "the debug session must launch");
+  await pollUntilResult({
+    fn: async () => vscode.debug.activeDebugSession,
+    predicate: (session) => session !== undefined,
+    timeoutMs: SESSION_WAIT_MS,
+    intervalMs: POLL_MS,
+  });
+
+  // Start tracking while RUNNING — must auto-pause, inject, auto-resume.
+  await vscode.commands.executeCommand("basilisk.memoryStart");
+  assert.ok(
+    activeMemorySession() !== undefined,
+    "Start Memory Tracking on a running program must mint a session (auto-pause)",
+  );
+
+  // Let the program allocate under tracemalloc, then snapshot while RUNNING.
+  await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+  clearMemoryDecorations();
+  const opsBefore = recordedOperations().length;
+  await vscode.commands.executeCommand("basilisk.memorySnapshot");
+  const applied = appliedMemoryDecorations().filter((entry) => entry.file === busyFixture);
+  assert.ok(
+    applied.some((entry) => entry.line === busyAllocLine),
+    `the snapshot must attribute the live allocation line ${busyAllocLine}, got: ${JSON.stringify(applied)}`,
+  );
+
+  // [PROFILE-UX-PROGRESS] The snapshot must run under a progress notification
+  // that narrates its stages and closes on completion — never a silent wait.
+  const snapshotOps = recordedOperations().slice(opsBefore);
+  const beginIdx = snapshotOps.indexOf("begin:Basilisk: Taking memory snapshot");
+  const endIdx = snapshotOps.indexOf("end:Basilisk: Taking memory snapshot");
+  assert.ok(beginIdx !== -1, `snapshot must show progress, ops: ${snapshotOps.join(" | ")}`);
+  assert.ok(endIdx > beginIdx, "the progress notification must close when the snapshot completes");
+  assert.ok(
+    snapshotOps.includes("step:Basilisk: Taking memory snapshot:Pausing the program…"),
+    `stage messages must narrate the auto-pause, ops: ${snapshotOps.join(" | ")}`,
+  );
+
+  // The program must have been resumed — still alive after the snapshot.
+  assert.ok(
+    vscode.debug.activeDebugSession !== undefined,
+    "the program must keep running after an auto-paused snapshot",
+  );
+  await vscode.debug.stopDebugging();
+  await waitForSessionEnd();
+}
+
 /** Assert the diff's user-facing surface: leak suspicion + leak decorations. */
 function assertLeakSurface(diff: MemoryDiffResult & IngestResult): void {
   assert.ok(diff.totalGrowth > 0, "allocating a chunk between pauses must register growth");
@@ -260,6 +373,25 @@ suite("Memory profiling — real end-to-end", () => {
 
     await resume();
     await waitForSessionEnd();
+  });
+
+  test("a running (not paused) debuggee yields no evaluable frame — snapshots route to 'pause first'", async function () {
+    this.timeout(60_000);
+    // debugpy answers `stackTrace` for a RUNNING thread with a sampled frame
+    // whose id is NOT evaluable — `evaluate` then fails with "Unable to find
+    // thread for evaluation" and the user sees a misleading generic error.
+    // currentStoppedFrameId must therefore refuse to mint a frame id unless a
+    // `stopped` event marked the thread paused; callers that can pause use
+    // acquireStoppedFrame's transparent pause/resume instead.
+    await probeRunningDebuggeeForFrames(5);
+  });
+
+  test("memory ops on a RUNNING program: auto-pause, snapshot real allocations, auto-resume", async function () {
+    this.timeout(60_000);
+    // IDE-grade behavior: clicking Start/Snapshot while the program runs must
+    // transparently pause → evaluate → resume, never demand a manual
+    // breakpoint. This drives the REAL command handlers, not the raw courier.
+    await trackAndSnapshotRunningProgram();
   });
 
   test("Run & Track Memory (Current File): stop-on-entry inject, auto-resume, program completes (#82)", async function () {

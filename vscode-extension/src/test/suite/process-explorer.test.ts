@@ -10,7 +10,7 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import { type LanguageClient } from "vscode-languageclient/node";
 import { PythonProcessesProvider, type ProcessInfo } from "../../process-explorer";
-import { createProcessRowActions } from "../../process-launch";
+import { createProcessRowActions, memoryTrackRoute } from "../../process-launch";
 import { createStore, type Store } from "../../store";
 
 const MB = 1024 * 1024;
@@ -214,22 +214,6 @@ suite("Python Processes Panel — inline launch actions (#79)", () => {
     assert.strictEqual(startPid(starts[0]), 200, "profiling must target the selected row's PID");
   });
 
-  test("inline Track Memory invoked without an argument targets the selected row", async () => {
-    const requests: RecordedRequest[] = [];
-    const store = storeWith(STUB_PROCESSES, requests);
-    provider = new PythonProcessesProvider(store);
-    const rows = await provider.getChildren();
-    const selectedRow = rows.find((row) => pidOf(row) === 100);
-    assert.ok(selectedRow !== undefined, "PID 100 row must exist");
-
-    const actions = createProcessRowActions(store, { selection: [selectedRow] });
-    await actions.memoryTrackProcess(undefined);
-
-    const starts = profilerStarts(requests);
-    assert.strictEqual(starts.length, 1, "Track Memory must start for the selected row (#79)");
-    assert.strictEqual(startPid(starts[0]), 100, "memory tracking must target the selected row's PID");
-  });
-
   test("an explicitly passed row wins over a different selection", async () => {
     const requests: RecordedRequest[] = [];
     const store = storeWith(STUB_PROCESSES, requests);
@@ -260,6 +244,77 @@ suite("Python Processes Panel — inline launch actions (#79)", () => {
       profilerStarts(requests).length,
       0,
       "without any resolvable target the action must not fire a profiler.start",
+    );
+  });
+});
+
+suite("Python Processes Panel — Track Memory routing", () => {
+  // Tests for the memory leg of [PROFILE-PROCESSES-LAUNCH]: tracemalloc rides
+  // the DAP courier, so the row action may only ever target the live debuggee.
+
+  /** Drive the row's Track Memory action against PID 100 with the given session. */
+  async function trackMemoryOnPid100(
+    session: { id: string; type: string } | undefined,
+    arrange: (store: Store) => void = () => undefined,
+  ): Promise<{ requests: RecordedRequest[]; executed: string[] }> {
+    const requests: RecordedRequest[] = [];
+    const executed: string[] = [];
+    const store = storeWith(STUB_PROCESSES, requests);
+    arrange(store);
+    const rows = await new PythonProcessesProvider(store).getChildren();
+    const selectedRow = rows.find((row) => pidOf(row) === 100);
+    assert.ok(selectedRow !== undefined, "PID 100 row must exist");
+
+    const actions = createProcessRowActions(store, { selection: [selectedRow] }, {
+      runCommand: async (command) => { executed.push(command); },
+      activeSession: () => session,
+    });
+    await actions.memoryTrackProcess(undefined);
+    return { requests, executed };
+  }
+
+  test("on the live debuggee it routes to real memory tracking — never a CPU start", async () => {
+    const { requests, executed } = await trackMemoryOnPid100(
+      { id: "session-1", type: "basilisk-debug" },
+      (store) => { store.setDebuggeeProcessId("session-1", 100); },
+    );
+
+    assert.deepStrictEqual(
+      executed,
+      ["basilisk.memoryStart"],
+      "Track Memory on the debuggee row must start tracemalloc tracking",
+    );
+    assert.strictEqual(
+      profilerStarts(requests).length,
+      0,
+      "Track Memory must NEVER start a CPU profiling session (the preset:'memory' defect)",
+    );
+  });
+
+  test("on an external process it starts nothing and offers the launch flow", async () => {
+    // No debug session at all — PID 100 is a foreign process.
+    const { requests, executed } = await trackMemoryOnPid100(undefined);
+
+    assert.deepStrictEqual(executed, [], "no memory command can run against a foreign PID");
+    assert.strictEqual(
+      profilerStarts(requests).length,
+      0,
+      "an external row must not silently fall back to CPU profiling",
+    );
+  });
+
+  test("memoryTrackRoute targets the debuggee only when session and PID both match", () => {
+    const store = storeWith(STUB_PROCESSES);
+    store.setDebuggeeProcessId("session-1", 100);
+    const basilisk = { id: "session-1", type: "basilisk-debug" };
+
+    assert.strictEqual(memoryTrackRoute(store, 100, basilisk), "start-tracking");
+    assert.strictEqual(memoryTrackRoute(store, 200, basilisk), "offer-launch", "PID mismatch");
+    assert.strictEqual(memoryTrackRoute(store, 100, undefined), "offer-launch", "no session");
+    assert.strictEqual(
+      memoryTrackRoute(store, 100, { id: "session-1", type: "python" }),
+      "offer-launch",
+      "foreign debug adapter",
     );
   });
 });

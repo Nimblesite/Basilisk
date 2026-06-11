@@ -61,10 +61,61 @@ async function profileProcess(store: Store, item: ProcessRowItem | undefined): P
   await startProfilingForPid(store, item.process.pid, preset);
 }
 
-/** Start memory-oriented profiling for the given process row. */
-async function memoryTrackProcess(store: Store, item: ProcessRowItem | undefined): Promise<void> {
+/** Where a row's Track Memory action routes. */
+export type MemoryTrackRoute = "start-tracking" | "offer-launch";
+
+/** The slice of a debug session the memory route needs (test seam). */
+type SessionRef = Pick<vscode.DebugSession, "id" | "type">;
+
+/** Injectable environment for the row actions (test seam, like ProcessRowSource). */
+export interface ProcessRowDeps {
+  readonly runCommand: (command: string) => Thenable<unknown>;
+  readonly activeSession: () => SessionRef | undefined;
+}
+
+const DEFAULT_ROW_DEPS: ProcessRowDeps = {
+  runCommand: async (command) => vscode.commands.executeCommand(command),
+  activeSession: () => vscode.debug.activeDebugSession,
+};
+
+/**
+ * Memory tracking rides the DAP-`evaluate` courier ([PROFILE-MEMORY-HOWTO]),
+ * so it can only ever target the live Basilisk debuggee — tracemalloc cannot
+ * be injected into an arbitrary external PID. Anything else routes to the
+ * "launch it under the debugger" offer instead of silently starting the wrong
+ * (CPU) profiler.
+ */
+export function memoryTrackRoute(
+  store: Store,
+  pid: number,
+  session: SessionRef | undefined,
+): MemoryTrackRoute {
+  const debuggeePid =
+    session?.type === "basilisk-debug" ? store.getDebuggeeProcessId(session.id) : undefined;
+  return debuggeePid === pid ? "start-tracking" : "offer-launch";
+}
+
+/** Track memory for the given row: real tracking for the debuggee, an honest offer otherwise. */
+async function memoryTrackProcess(
+  store: Store,
+  item: ProcessRowItem | undefined,
+  deps: ProcessRowDeps,
+): Promise<void> {
   if (!ensureSelection(item)) { return; }
-  await startProfilingForPid(store, item.process.pid, "memory");
+  const pid = item.process.pid;
+  if (memoryTrackRoute(store, pid, deps.activeSession()) === "start-tracking") {
+    await deps.runCommand("basilisk.memoryStart");
+    return;
+  }
+  const launch = "Run & Track Memory (Current File)";
+  void vscode.window
+    .showWarningMessage(
+      `Basilisk: Memory tracking needs the target running under the Basilisk debugger — PID ${pid} is not the active debuggee. Launch the current file with memory tracking instead?`,
+      launch,
+    )
+    .then((choice) => {
+      if (choice === launch) { void deps.runCommand("basilisk.trackMemoryCurrentFile"); }
+    });
 }
 
 /**
@@ -75,13 +126,15 @@ async function memoryTrackProcess(store: Store, item: ProcessRowItem | undefined
 export function createProcessRowActions(
   store: Store,
   view: ProcessRowSource,
+  deps: ProcessRowDeps = DEFAULT_ROW_DEPS,
 ): {
   readonly profileProcess: (item?: vscode.TreeItem) => Promise<void>;
   readonly memoryTrackProcess: (item?: vscode.TreeItem) => Promise<void>;
 } {
   return {
     profileProcess: async (item) => profileProcess(store, resolveProcessRow(item, view)),
-    memoryTrackProcess: async (item) => memoryTrackProcess(store, resolveProcessRow(item, view)),
+    memoryTrackProcess: async (item) =>
+      memoryTrackProcess(store, resolveProcessRow(item, view), deps),
   };
 }
 
@@ -112,6 +165,10 @@ export function buildProfileLaunchConfig(
       name: "Run & Profile CPU (Current File)",
       program,
       profileOnLaunch: true,
+      // macOS uses the cooperative in-process sampler, which is injected at
+      // the entry pause ([PROFILE-COOPERATIVE]); other platforms attach
+      // py-spy to the running debuggee and need no pause.
+      ...(process.platform === "darwin" ? { stopOnEntry: true } : {}),
     };
   }
   return {
