@@ -177,25 +177,31 @@ function M.apply_heat_map(hot_functions)
   end
 end
 
---- Export results to speedscope JSON and open in browser.
----@param result? table Profiling results from the LSP server.
+--- Open the flamegraph SVG exported by the LSP server in the browser.
+--- Implements [PROFILE-VIEWER-DELIVERY]: speedscope.app can NEVER fetch a
+--- `file://` profileURL (an https page may not read local files), so we open
+--- the local self-contained SVG instead and log the speedscope JSON path for
+--- manual import at https://www.speedscope.app.
+---@param result? table Profiling results from the LSP `profiler.stop` response.
 function M.export_flamegraph(result)
-  if not result or not result.speedscopeJson then
-    log.warn("no speedscope data available")
+  if not result or not result.flamegraphPath then
+    local reason = result and result.exportError or "no flamegraph available"
+    log.warn("flamegraph export unavailable: %s", reason)
+    return
+  end
+  if vim.fn.filereadable(result.flamegraphPath) == 0 then
+    log.error("flamegraph file missing: %s", result.flamegraphPath)
     return
   end
 
-  local tmpfile = vim.fn.tempname() .. ".speedscope.json"
-  local fh = io.open(tmpfile, "w")
-  if not fh then
-    log.error("failed to create temp file: %s", tmpfile)
-    return
+  vim.ui.open("file://" .. result.flamegraphPath)
+  log.info("flamegraph opened: %s", result.flamegraphPath)
+  if result.outputFile then
+    log.info(
+      "speedscope JSON: %s (import manually at https://www.speedscope.app)",
+      result.outputFile
+    )
   end
-  fh:write(result.speedscopeJson)
-  fh:close()
-
-  vim.ui.open("https://www.speedscope.app/#profileURL=file://" .. tmpfile)
-  log.info("flamegraph exported: %s", tmpfile)
 end
 
 return M
