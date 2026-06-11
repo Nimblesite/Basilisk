@@ -14,7 +14,9 @@
 //! around the variable's name span and comparing it against the RHS kind.
 
 mod alias_match;
+mod callable_check;
 mod dataclass_check;
+mod default_spec;
 mod literal_parse;
 mod tuple_check;
 mod typeform_check;
@@ -42,12 +44,13 @@ pub(crate) struct AssignmentTypeMismatch;
 
 impl Rule for AssignmentTypeMismatch {
     fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-        let empty_params = std::collections::HashMap::new();
+        let empty_params = ParamMaps::default();
         let skip = SkipNames {
             typeddict: collect_typeddict_names(module),
             type_alias: collect_type_alias_names(module),
             value_aliases: alias_match::collect_union_aliases(module),
         };
+        let call_index = callable_check::build_index(module);
         check_vars(
             &module.module_vars,
             &module.source,
@@ -56,11 +59,13 @@ impl Rule for AssignmentTypeMismatch {
             &empty_params,
             &skip,
             &module.functions,
+            &call_index,
         );
-        check_local_vars(module, diagnostics, &skip);
+        check_local_vars(module, diagnostics, &skip, &call_index);
         check_tuple_reassignments(module, diagnostics);
         check_dataclass_attr_assignments(module, diagnostics);
         typeform_check::check_typeform_calls(module, diagnostics);
+        default_spec::check_default_specializations(module, diagnostics);
     }
 }
 
@@ -111,20 +116,34 @@ struct SkipNames {
     value_aliases: std::collections::HashMap<String, InferredType>,
 }
 
+/// Declared parameter annotations for the enclosing function: parsed types
+/// for assignability checks, and raw annotation texts for structural
+/// callable-subtyping checks.
+#[derive(Default)]
+struct ParamMaps {
+    types: std::collections::HashMap<String, InferredType>,
+    texts: std::collections::HashMap<String, String>,
+}
+
 /// Check a slice of annotated variables for type mismatches.
 ///
-/// `param_types` maps parameter names to their declared annotation types.
+/// `params` maps parameter names to their declared annotation types.
 /// When the RHS of an annotated local variable is a simple name reference
 /// that matches a parameter, the parameter's type is used for assignability
 /// checking instead of the generic `Unknown` fallback.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "assignment checking threads full module context"
+)]
 fn check_vars(
     vars: &[VariableInfo],
     source: &str,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
-    param_types: &std::collections::HashMap<String, InferredType>,
+    params: &ParamMaps,
     skip: &SkipNames,
     functions: &[basilisk_resolver::FunctionInfo],
+    call_index: &callable_check::CallIndex,
 ) {
     vars.iter()
         .filter(|var| var.has_annotation && var.rhs_span.is_some())
@@ -201,7 +220,7 @@ fn check_vars(
                 if let Some(rhs_span) = var.rhs_span {
                     if let Some(rhs_text) = slice_span(source, rhs_span) {
                         let rhs_name = rhs_text.trim();
-                        if let Some(param_type) = param_types.get(rhs_name) {
+                        if let Some(param_type) = params.types.get(rhs_name) {
                             inferred_type = param_type.clone();
                         }
                     }
@@ -235,6 +254,10 @@ fn check_vars(
 
             if inferred_type.is_assignable_to(&declared_type) {
                 None
+            } else if callable_rescue(var, source, annotation_text, params, call_index) {
+                // Structurally valid callable subtyping (callback protocols,
+                // `Callable[...]` forms, `TypeAlias` callables) — not a mismatch.
+                None
             } else {
                 Some((
                     var,
@@ -255,34 +278,56 @@ fn check_vars(
         });
 }
 
+/// Attempt to validate a flagged assignment as structurally compatible
+/// callable subtyping: the RHS must be a parameter whose raw annotation text,
+/// compared against the declared annotation, passes the callable subtype check.
+fn callable_rescue(
+    var: &VariableInfo,
+    source: &str,
+    annotation_text: &str,
+    params: &ParamMaps,
+    call_index: &callable_check::CallIndex,
+) -> bool {
+    let Some(rhs_text) = var.rhs_span.and_then(|span| slice_span(source, span)) else {
+        return false;
+    };
+    let Some(rhs_annotation) = params.texts.get(rhs_text.trim()) else {
+        return false;
+    };
+    callable_check::assignment_compatible(annotation_text, rhs_annotation, call_index)
+}
+
 /// Check local variables in function bodies for type mismatches.
 ///
 /// Builds a map of parameter name to declared type for each function so that
 /// assignments like `x: Literal[False] = a` (where `a: Literal[0]`) can be
 /// checked for Literal-level incompatibility.
-fn check_local_vars(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>, skip: &SkipNames) {
+fn check_local_vars(
+    module: &ResolvedModule,
+    diagnostics: &mut Vec<Diagnostic>,
+    skip: &SkipNames,
+    call_index: &callable_check::CallIndex,
+) {
     let source = &module.source;
     for func in &module.functions {
-        let param_types = build_param_type_map(&func.parameters, source);
+        let params = build_param_maps(&func.parameters, source);
         check_vars(
             &func.local_vars,
             source,
             &module.path,
             diagnostics,
-            &param_types,
+            &params,
             skip,
             &module.functions,
+            call_index,
         );
     }
 }
 
-/// Build a map from parameter name to its declared `InferredType` by reading
-/// the annotation text from source spans.
-fn build_param_type_map(
-    params: &[basilisk_resolver::ParameterInfo],
-    source: &str,
-) -> std::collections::HashMap<String, InferredType> {
-    let mut map = std::collections::HashMap::new();
+/// Build maps from parameter name to its declared `InferredType` and raw
+/// annotation text by reading the annotation from source spans.
+fn build_param_maps(params: &[basilisk_resolver::ParameterInfo], source: &str) -> ParamMaps {
+    let mut maps = ParamMaps::default();
     for param in params {
         if !param.has_annotation {
             continue;
@@ -294,9 +339,12 @@ fn build_param_type_map(
             continue;
         };
         let inferred = InferredType::from_annotation(ann_text.trim());
-        let _ = map.insert(param.name.clone(), inferred);
+        let _ = maps.types.insert(param.name.clone(), inferred);
+        let _ = maps
+            .texts
+            .insert(param.name.clone(), ann_text.trim().to_owned());
     }
-    map
+    maps
 }
 
 /// Create diagnostic for inference-based type mismatch.
@@ -329,7 +377,7 @@ fn make_diagnostic(
 /// Looks for `: <annotation>` on the same source line as the variable name,
 /// stopping at the `=` sign that introduces the RHS.  Returns `None` if no
 /// such pattern is found.
-fn extract_annotation(source: &str, name_span: Span) -> Option<&str> {
+pub(super) fn extract_annotation(source: &str, name_span: Span) -> Option<&str> {
     // Find the byte offset of the start of the line containing the name.
     let start = usize::try_from(name_span.start).ok()?;
     let line_start = source.get(..start)?.rfind('\n').map_or(0, |pos| pos + 1);

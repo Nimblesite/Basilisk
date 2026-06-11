@@ -71,6 +71,45 @@ pub(crate) fn is_namedtuple_class(class: &ClassInfo) -> bool {
     class.bases.iter().any(|b| b == "NamedTuple")
 }
 
+/// Returns `true` when a class gets a synthesized `__init__` from a
+/// class-applied or metaclass-applied `@dataclass_transform`.
+///
+/// Covers both PEP 681 application forms that don't go through a decorator
+/// function: a transitive base class decorated with `@dataclass_transform`,
+/// or a transitive base whose metaclass (or one of its bases) carries the
+/// decorator.
+pub(crate) fn inherits_dataclass_transform(
+    class: &ClassInfo,
+    class_map: &HashMap<&str, &ClassInfo>,
+) -> bool {
+    fn is_transform_decorated(class: &ClassInfo, class_map: &HashMap<&str, &ClassInfo>) -> bool {
+        class
+            .decorator_spans
+            .iter()
+            .any(|(name, _)| name == "dataclass_transform")
+            || class.bases.iter().any(|base| {
+                class_map
+                    .get(base.split('[').next().unwrap_or(base))
+                    .is_some_and(|b| is_transform_decorated(b, class_map))
+            })
+    }
+
+    let metaclass_is_transform = class.metaclass_name.as_deref().is_some_and(|meta| {
+        class_map
+            .get(meta)
+            .is_some_and(|m| is_transform_decorated(m, class_map))
+    });
+    if metaclass_is_transform {
+        return true;
+    }
+
+    class.bases.iter().any(|base| {
+        class_map
+            .get(base.split('[').next().unwrap_or(base))
+            .is_some_and(|b| is_transform_decorated(b, class_map) || inherits_dataclass_transform(b, class_map))
+    })
+}
+
 // ---------------------------------------------------------------------------
 // dataclass_transform detection
 // ---------------------------------------------------------------------------

@@ -23,6 +23,7 @@
 //! c.id = 4                  # E — frozen instance is immutable
 //! ```
 
+mod converter;
 mod helpers;
 
 use std::collections::HashMap;
@@ -90,5 +91,9 @@ impl Rule for DataclassTransformClassViolation {
 
         // --- Check 4: Comparison operator on instance without order=True ---
         check_no_order_comparison(module, &instance_map, source, path, diagnostics);
+
+        // --- Check 5: Field-specifier `converter=` validation (PEP 681) ---
+        let subclass_names: Vec<&str> = direct_settings.keys().copied().collect();
+        converter::check_converters(module, &subclass_names, diagnostics);
     }
 }
