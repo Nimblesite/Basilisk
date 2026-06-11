@@ -18,36 +18,7 @@ pub(super) struct Param {
     pub(super) is_standard: bool,
 }
 
-/// A `*args` or `**kwargs` parameter slot.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(super) enum StarParam {
-    /// The signature has no such parameter.
-    #[default]
-    Absent,
-    /// Present without an annotation (implicitly `Any`).
-    Untyped,
-    /// Present with an annotation.
-    Typed(String),
-}
-
-impl StarParam {
-    /// `true` when the parameter exists in the signature.
-    pub(super) fn is_present(&self) -> bool {
-        !matches!(self, StarParam::Absent)
-    }
-
-    /// The annotation text; `None` for absent or untyped (gradual `Any`).
-    pub(super) fn ty(&self) -> Option<&str> {
-        match self {
-            StarParam::Typed(ty) => Some(ty),
-            StarParam::Absent | StarParam::Untyped => None,
-        }
-    }
-
-    fn from_annotation(annotation: Option<String>) -> StarParam {
-        annotation.map_or(StarParam::Untyped, StarParam::Typed)
-    }
-}
+pub(super) use crate::rules::shared::StarParam;
 
 /// A parsed callable signature.
 #[derive(Debug, Clone, Default)]

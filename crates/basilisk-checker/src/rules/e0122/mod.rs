@@ -21,6 +21,8 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0122",
 };
 
+mod hof_paramspec;
+
 /// Emits BSK-E0122 for invalid call-site usage of `Callable`-typed parameters.
 pub(crate) struct CallableCallSiteViolation;
 
@@ -33,6 +35,7 @@ impl Rule for CallableCallSiteViolation {
         for stmt in &parsed.ast.body {
             walk_stmt_for_functions(stmt, &attr_callables, &module.path, diagnostics);
         }
+        hof_paramspec::check_hof_paramspec_args(module, &parsed.ast.body, diagnostics);
     }
 }
 

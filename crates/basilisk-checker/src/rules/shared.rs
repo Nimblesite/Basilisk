@@ -408,3 +408,35 @@ pub(crate) fn class_generic_param_names(cls: &ruff_python_ast::StmtClassDef) -> 
     }
     names
 }
+
+/// A `*args` or `**kwargs` parameter slot in a parsed signature.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) enum StarParam {
+    /// The signature has no such parameter.
+    #[default]
+    Absent,
+    /// Present without an annotation (implicitly `Any`).
+    Untyped,
+    /// Present with an annotation.
+    Typed(String),
+}
+
+impl StarParam {
+    /// `true` when the parameter exists in the signature.
+    pub(crate) fn is_present(&self) -> bool {
+        !matches!(self, StarParam::Absent)
+    }
+
+    /// The annotation text; `None` for absent or untyped (gradual `Any`).
+    pub(crate) fn ty(&self) -> Option<&str> {
+        match self {
+            StarParam::Typed(ty) => Some(ty),
+            StarParam::Absent | StarParam::Untyped => None,
+        }
+    }
+
+    /// Build from an optional annotation of a present parameter.
+    pub(crate) fn from_annotation(annotation: Option<String>) -> StarParam {
+        annotation.map_or(StarParam::Untyped, StarParam::Typed)
+    }
+}
