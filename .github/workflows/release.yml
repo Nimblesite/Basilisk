@@ -133,6 +133,13 @@ jobs:
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           generate_release_notes: true
+          # Publish immediately — never leave the release as a draft. The action
+          # defaults to draft=false, but it only WRITES the fields you give it:
+          # on a re-run over a tag whose release already exists as a draft (a
+          # hand-created draft, or one left by an earlier interrupted run), an
+          # omitted `draft` preserves the existing draft flag and the release
+          # stays hidden. Setting it explicitly forces every run to publish.
+          draft: false
           # Any tag with a SemVer prerelease suffix (v0.1.0-alpha,
           # v0.1.0-beta, v0.1.0-rc.1, …) marks the GitHub release as
           # prerelease so it does not become the "Latest release".
@@ -140,6 +147,23 @@ jobs:
           files: |
             artifacts/*.tar.gz
             artifacts/*.zip
+
+      # Defence in depth: assert the release is actually published. If anything
+      # ever leaves it as a draft again, fail the run loudly here rather than
+      # shipping a tag whose binaries are invisible to users and to the
+      # downstream VSIX / Homebrew / Scoop jobs that download from this release.
+      - name: Verify release is published (not a draft)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          is_draft="$(gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --json isDraft --jq '.isDraft')"
+          if [ "${is_draft}" != "false" ]; then
+            echo "::error::Release ${GITHUB_REF_NAME} is a draft (isDraft=${is_draft}) — it must be published. Aborting."
+            exit 1
+          fi
+          echo "Release ${GITHUB_REF_NAME} is published (isDraft=false)."
 
   vsix:
     name: VSIX - ${{ matrix.platform }}-${{ matrix.arch }}
