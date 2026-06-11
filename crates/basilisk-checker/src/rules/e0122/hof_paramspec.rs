@@ -164,7 +164,7 @@ fn collect_pbind_params(
 }
 
 /// Parse `Callable[P, R]` or `Callable[Concatenate[T.., P], R]`.
-fn parse_callable_pbind(
+pub(super) fn parse_callable_pbind(
     ann: &Expr,
     paramspec_names: &HashSet<&str>,
 ) -> Option<(Vec<String>, String)> {

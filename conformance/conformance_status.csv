@@ -69,7 +69,7 @@ BSK-E0030|BSK-E0091|BSK-E0092|BSK-E0130,generics_defaults.py,generics,PASS,5,0,2
 BSK-E0102|BSK-E0128|BSK-E0130,generics_defaults_referential.py,generics,PASS,7,0,0
 BSK-E0014|BSK-E0092,generics_defaults_specialization.py,generics,PASS,3,0,0
 BSK-E0026|BSK-E0047,generics_paramspec_basic.py,generics,PASS,7,0,0
-,generics_paramspec_components.py,generics,FAIL,0,16,0
+BSK-E0122,generics_paramspec_components.py,generics,PASS,16,0,0
 BSK-E0122,generics_paramspec_semantics.py,generics,PASS,9,0,0
 BSK-E0092|BSK-E0122,generics_paramspec_specialization.py,generics,PASS,5,0,0
 BSK-E0117|BSK-E0130,generics_scoping.py,generics,PASS,10,0,0

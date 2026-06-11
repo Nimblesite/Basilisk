@@ -22,6 +22,7 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 mod hof_paramspec;
+mod paramspec_components;
 
 /// Emits BSK-E0122 for invalid call-site usage of `Callable`-typed parameters.
 pub(crate) struct CallableCallSiteViolation;
@@ -36,6 +37,7 @@ impl Rule for CallableCallSiteViolation {
             walk_stmt_for_functions(stmt, &attr_callables, &module.path, diagnostics);
         }
         hof_paramspec::check_hof_paramspec_args(module, &parsed.ast.body, diagnostics);
+        paramspec_components::check_paramspec_components(module, &parsed.ast.body, diagnostics);
     }
 }
 
