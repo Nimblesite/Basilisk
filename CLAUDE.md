@@ -106,12 +106,21 @@ Auto-memory is OFF (`.claude/settings.json` → `"autoMemoryEnabled": false`). E
 Testing is critical. We aim for 100% test coverage and a high mutation score at all times. Focus on assertions, not just coverage.
 
 - Never delete failing tests.
+- Mutation score monotonically increases. Include more Rust code in the mutation testing suite over time: widen scope by adding `#[mutation_safe]` tests over more rules/functions. The gate ([CHKARCH-TESTING-MUTATION-RATCHET], baseline `mutation_testing/mutation_scores.json`) fails CI if the viable mutant pool shrinks, caught drops, missed/timeout rise, or kill rate drops.
 - Never remove assertions that cause test failures.
 - Add more failing tests for broken or missing functionality — never remove them.
 - Don't reduce test assertiveness.
 - Don't ignore tests.
 - `make test` is FAIL-FAST — it stops at the first failure. Never use `--no-fail-fast`; it saves CI minutes.
 - `make test` always computes coverage and enforces it. The threshold lives in `coverage-thresholds.json` at the repo root — not env vars, not GH repo variables, not CI YAML. Below threshold fails the pipeline. Ratchet only.
+
+## Benchmarks
+
+Pay attention to benchmarks — performance is a feature and conformance must never be traded for it, nor it for conformance. Both ratchets hold simultaneously ([CHKARCH-TESTING-BENCH-RATCHET]).
+
+- Run `make bench` whenever you touch checker hot paths (resolver visitors, rule `check` loops, new conformance logic). It fails if basilisk gets >25% slower on any fixture vs the committed baseline `benchmarks/status/<machine>.csv`.
+- A conformance fix that blows the benchmark gate is not done — optimise or restructure it.
+- `BENCH_NO_GATE=1` baseline resets are for fixture-set changes only and must be justified in the PR description.
 
 ## IDE Extension Testing
 

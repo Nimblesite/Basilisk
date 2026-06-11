@@ -79,16 +79,6 @@ echo -e "then ${CYAN}Coverage Gutters: Watch${RESET} via Ctrl+Shift+P to see gut
 # ── Per-project coverage thresholds ──────────────────────────────────────────
 
 header "Enforcing per-project coverage thresholds"
-TEST_COVERAGE_BASILISK_CHECKER="${TEST_COVERAGE_BASILISK_CHECKER:-93}"
-TEST_COVERAGE_BASILISK_CLI="${TEST_COVERAGE_BASILISK_CLI:-88}"
-TEST_COVERAGE_BASILISK_DB="${TEST_COVERAGE_BASILISK_DB:-100}"
-TEST_COVERAGE_BASILISK_LSP="${TEST_COVERAGE_BASILISK_LSP:-77}"
-TEST_COVERAGE_BASILISK_MOJO="${TEST_COVERAGE_BASILISK_MOJO:-90}"
-TEST_COVERAGE_BASILISK_PARSER="${TEST_COVERAGE_BASILISK_PARSER:-100}"
-TEST_COVERAGE_BASILISK_PLUGIN="${TEST_COVERAGE_BASILISK_PLUGIN:-100}"
-TEST_COVERAGE_BASILISK_RESOLVER="${TEST_COVERAGE_BASILISK_RESOLVER:-94}"
-TEST_COVERAGE_BASILISK_STUBS="${TEST_COVERAGE_BASILISK_STUBS:-85}"
-TEST_COVERAGE_BASILISK_CONFIG="${TEST_COVERAGE_BASILISK_CONFIG:-96}"
 COV_FAILED=0
 HTML_ROWS=""
 check_crate() {
@@ -113,16 +103,13 @@ check_crate() {
         HTML_ROWS+="<tr class='pass'><td>${crate}</td><td>${pct}% (${covered}/${total_lines})</td><td>${threshold}%</td><td>PASS</td></tr>"
     fi
 }
-check_crate basilisk-checker  "$TEST_COVERAGE_BASILISK_CHECKER"
-check_crate basilisk-cli      "$TEST_COVERAGE_BASILISK_CLI"
-check_crate basilisk-db       "$TEST_COVERAGE_BASILISK_DB"
-check_crate basilisk-lsp      "$TEST_COVERAGE_BASILISK_LSP"
-check_crate basilisk-mojo     "$TEST_COVERAGE_BASILISK_MOJO"
-check_crate basilisk-parser   "$TEST_COVERAGE_BASILISK_PARSER"
-check_crate basilisk-plugin   "$TEST_COVERAGE_BASILISK_PLUGIN"
-check_crate basilisk-resolver "$TEST_COVERAGE_BASILISK_RESOLVER"
-check_crate basilisk-stubs    "$TEST_COVERAGE_BASILISK_STUBS"
-check_crate basilisk-config   "$TEST_COVERAGE_BASILISK_CONFIG"
+RUST_CRATES=(
+    basilisk-checker basilisk-cli basilisk-db basilisk-lsp basilisk-mojo
+    basilisk-parser basilisk-plugin basilisk-resolver basilisk-stubs basilisk-config
+)
+for crate in "${RUST_CRATES[@]}"; do
+    check_crate "$crate" "$(coverage_threshold_for "$crate")"
+done
 
 CRATES_HTML="$HTML_DIR/html/crates.html"
 cat > "$CRATES_HTML" <<HTML
