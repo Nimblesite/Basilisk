@@ -1301,3 +1301,128 @@ def func(int_first: IntFirst, str_first: StrFirst) -> None:
     );
     Ok(())
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// e0002/e0003/e0029 — negative-direction and message-arm mutants
+// (`&&`→`||` in check filters, `is_unresolvable`→true, deleted match arms,
+//  wrong-function `find` in E0029). Smoke tests only assert the positive
+//  direction, so these mutants survived them.
+// ═══════════════════════════════════════════════════════════════════════
+
+#[mutation_safe(rule = "e0002")]
+#[test]
+fn mutant_e0002_annotated_function_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def fully_annotated(x: int) -> int:
+    return x
+
+def returns_nothing() -> None:
+    pass
+";
+    let diagnostics = run(source)?;
+    assert_eq!(
+        count_code(&diagnostics, "BSK-E0002"),
+        0,
+        "annotated functions must not be flagged: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0003")]
+#[test]
+fn mutant_e0003_resolvable_or_annotated_vars_not_flagged() -> Result<(), Box<dyn std::error::Error>>
+{
+    let source = r"
+annotated_empty: list[int] = []
+annotated_none: int | None = None
+resolvable_int = 5
+resolvable_str = 'text'
+";
+    let diagnostics = run(source)?;
+    assert_eq!(
+        count_code(&diagnostics, "BSK-E0003"),
+        0,
+        "annotated or inferable variables must not be flagged: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0003")]
+#[test]
+fn mutant_e0003_messages_name_the_rhs_kind() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+empty_list = []
+empty_dict = {}
+nothing = None
+";
+    let diagnostics = run(source)?;
+    let messages: Vec<&str> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0003")
+        .map(|d| d.message.as_str())
+        .collect();
+    assert_eq!(
+        messages.len(),
+        3,
+        "all three vars must be flagged: {messages:?}"
+    );
+    assert!(
+        messages.iter().any(|m| m.contains("empty list `[]`")),
+        "empty-list diagnostic must explain the empty list: {messages:?}"
+    );
+    assert!(
+        messages.iter().any(|m| m.contains("empty dict `{}`")),
+        "empty-dict diagnostic must explain the empty dict: {messages:?}"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|m| m.contains("infer type from `None`")),
+        "None diagnostic must explain the None value: {messages:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "e0029")]
+#[test]
+fn mutant_e0029_diagnostic_targets_the_typeddict_method() -> Result<(), Box<dyn std::error::Error>>
+{
+    // `Plain.title` comes first so a loosened function lookup (`&&`→`||`)
+    // resolves the wrong function and points the span at the wrong class.
+    let source = r"
+from typing import TypedDict
+
+class Plain:
+    def title(self) -> str:
+        return 'plain'
+
+class Movie(TypedDict):
+    name: str
+
+    def title(self) -> str:
+        return self['name']
+";
+    let diagnostics = run(source)?;
+    let e0029: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.code == "BSK-E0029")
+        .collect();
+    assert_eq!(
+        e0029.len(),
+        1,
+        "exactly the TypedDict method is flagged: {e0029:?}"
+    );
+    let only = e0029.first().ok_or("expected one E0029 diagnostic")?;
+    let movie_class_offset = u32::try_from(
+        source
+            .find("class Movie")
+            .ok_or("fixture must contain Movie")?,
+    )?;
+    assert!(
+        only.span.start > movie_class_offset,
+        "diagnostic must point inside `Movie`, not `Plain` (span {} <= class offset {})",
+        only.span.start,
+        movie_class_offset
+    );
+    Ok(())
+}
