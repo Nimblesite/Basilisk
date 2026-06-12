@@ -41,7 +41,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct UnboundTypeVarScope;
 
 impl Rule for UnboundTypeVarScope {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Collect all known TypeVar names from module-level TypeVar() calls.
         let typevar_names: HashSet<&str> =
             basilisk_resolver::collect_name_set(&module.typevar_calls);

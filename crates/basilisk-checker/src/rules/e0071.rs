@@ -39,7 +39,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct HistoricalPositionalViolation;
 
 impl Rule for HistoricalPositionalViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let path = &module.path;
         for violation in &module.historical_positional_violations {
             let diagnostic = match violation.kind {

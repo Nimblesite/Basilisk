@@ -50,6 +50,14 @@ export interface Store {
   readonly logSink: ReadonlySignal<LogSink | undefined>;
   readonly lspState: ReadonlySignal<LspState>;
   readonly isServerReady: ReadonlySignal<boolean>;
+  /**
+   * Monotonic counter that bumps whenever fresh analysis may be available:
+   * the server reaches Running, `basilisk/moduleChanged` fires, or
+   * diagnostics change (debounced). Panels subscribe via a signals `effect`
+   * so they refresh automatically — never via per-panel polling
+   * ([EXTACT-REACTIVE-STATE], issue #58).
+   */
+  readonly analysisRevision: ReadonlySignal<number>;
   readonly runtimeResolution: ReadonlySignal<RuntimeResolution | undefined>;
   /** Map of VS Code debug session id → debuggee OS process id (from the DAP `process` event). */
   readonly sessionIdToPid: ReadonlySignal<ReadonlyMap<string, number>>;
@@ -69,6 +77,8 @@ export interface Store {
   getDebuggeeProcessId(sessionId: string): number | undefined;
   /** Forget a debug session's PID mapping (called when the session terminates). */
   clearDebuggeeProcessId(sessionId: string): void;
+  /** Signal that fresh analysis may be available ([EXTACT-REACTIVE-STATE]). */
+  bumpAnalysisRevision(): void;
   isClientCommandRegistered(id: string): boolean;
   isServerCommandAdvertised(id: string): boolean;
   ensureLspReadyPromise(timeoutMs?: number): Promise<Result<LanguageClient>>;
@@ -87,6 +97,11 @@ interface StoreSignals {
   runtimeResolution: Signal<RuntimeResolution | undefined>;
   sessionIdToPid: Signal<Map<string, number>>;
   readyHandle: Signal<ReadyHandle | undefined>;
+  analysisRevision: Signal<number>;
+  /** Trailing-debounce timer for diagnostics-driven analysisRevision bumps. */
+  diagnosticsDebounce: ReturnType<typeof setTimeout> | undefined;
+  /** Whether the global diagnostics listener has been registered. */
+  diagnosticsListenerBound: boolean;
   /** Disposables for client-registered commands — disposed on LSP stop/restart. */
   commandDisposables: vscode.Disposable[];
   /** Disposables for server-advertised command registrations — disposed on LSP stop/restart. */
@@ -217,6 +232,35 @@ function registerClientCommands(signals: StoreSignals, context: vscode.Extension
   });
 }
 
+/** Bump the analysis revision ([EXTACT-REACTIVE-STATE], issue #58). */
+function bumpAnalysisRevision(signals: StoreSignals): void {
+  signals.analysisRevision.value += 1;
+}
+
+/** Debounce window for diagnostics-driven refreshes (diagnostics fire per file). */
+const DIAGNOSTICS_BUMP_DEBOUNCE_MS = 300;
+
+/**
+ * Register the global diagnostics listener exactly once per store: any
+ * diagnostics change bumps the analysis revision (debounced) so panels that
+ * render health rollups stay live ([EXTACT-HEALTH-REFRESH]).
+ */
+function bindDiagnosticsListener(signals: StoreSignals, context: vscode.ExtensionContext): void {
+  if (signals.diagnosticsListenerBound) { return; }
+  signals.diagnosticsListenerBound = true;
+  context.subscriptions.push(
+    vscode.languages.onDidChangeDiagnostics(() => {
+      if (signals.diagnosticsDebounce !== undefined) {
+        clearTimeout(signals.diagnosticsDebounce);
+      }
+      signals.diagnosticsDebounce = setTimeout(() => {
+        signals.diagnosticsDebounce = undefined;
+        bumpAnalysisRevision(signals);
+      }, DIAGNOSTICS_BUMP_DEBOUNCE_MS);
+    }),
+  );
+}
+
 /**
  * Wire up the onDidChangeState listener on the given client.
  * This is the ONLY place commands get registered or populated.
@@ -234,7 +278,16 @@ function bindClientStateListener(
       disposeAllCommands(signals);
       syncServerCommands(signals);
       registerClientCommands(signals, context);
+      // Re-analysis completion: registered after disposeAllCommands each
+      // Running cycle so restarts re-bind it ([EXTACT-REACTIVE-STATE]).
+      signals.commandDisposables.push(
+        lspClient.onNotification("basilisk/moduleChanged", () => {
+          bumpAnalysisRevision(signals);
+        }),
+      );
       resolveLspReady(signals);
+      // Initial analysis becomes available once the server runs.
+      bumpAnalysisRevision(signals);
       return;
     }
 
@@ -359,6 +412,9 @@ function createStoreSignals(): StoreSignals {
     runtimeResolution: signal<RuntimeResolution | undefined>(undefined),
     sessionIdToPid: signal<Map<string, number>>(new Map()),
     readyHandle: signal<ReadyHandle | undefined>(undefined),
+    analysisRevision: signal<number>(0),
+    diagnosticsDebounce: undefined,
+    diagnosticsListenerBound: false,
     commandDisposables: [],
     serverCommandDisposables: [],
   };
@@ -382,10 +438,15 @@ export function createStore(onReset?: () => void): Store {
     sessionIdToPid: signals.sessionIdToPid,
     lspReadyPromise,
     isServerReady,
+    analysisRevision: signals.analysisRevision,
 
     setClient(context: vscode.ExtensionContext, c: LanguageClient): void {
       signals.client.value = c;
       bindClientStateListener(signals, context, c);
+      bindDiagnosticsListener(signals, context);
+    },
+    bumpAnalysisRevision(): void {
+      bumpAnalysisRevision(signals);
     },
     setStatusBarItem(item: vscode.StatusBarItem): void {
       signals.statusBarItem.value = item;

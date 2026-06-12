@@ -78,7 +78,12 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
 pub(crate) struct InvalidTypeAnnotation;
 
 impl Rule for InvalidTypeAnnotation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         check_invalid_type_annotations(module, diagnostics);
     }
 }

@@ -47,7 +47,12 @@ type MethodMap<'a> = HashMap<(&'a str, &'a str), Vec<&'a FunctionInfo>>;
 pub(crate) struct ConstructorCallableMisuse;
 
 impl Rule for ConstructorCallableMisuse {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
         let Ok(parsed) = basilisk_parser::parse_source(source.clone(), module.path.clone()) else {
             return;

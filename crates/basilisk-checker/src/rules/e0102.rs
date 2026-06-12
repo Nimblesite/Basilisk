@@ -272,7 +272,12 @@ fn check_default_constraints_vs_bound(
 }
 
 impl Rule for TypeVarDefaultReferential {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let typevar_by_name: HashMap<&str, &basilisk_resolver::TypeVarCallInfo> = module
             .typevar_calls
             .iter()

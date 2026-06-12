@@ -38,7 +38,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct TooFewArguments;
 
 impl Rule for TooFewArguments {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         check_plain_function_calls(module, diagnostics);
         check_constructor_calls(module, diagnostics);
         check_namedtuple_calls(module, diagnostics);

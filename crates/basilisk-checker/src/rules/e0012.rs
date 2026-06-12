@@ -32,7 +32,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct ArgumentTypeMismatch;
 
 impl Rule for ArgumentTypeMismatch {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Group module-level functions by name → list of overloads/implementations.
         let mut func_groups: HashMap<&str, Vec<&FunctionInfo>> = HashMap::new();
         for func in &module.functions {

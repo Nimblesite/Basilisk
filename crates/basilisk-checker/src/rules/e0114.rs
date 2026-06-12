@@ -39,7 +39,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct ProtocolRuntimeCheckableViolation;
 
 impl Rule for ProtocolRuntimeCheckableViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for violation in &module.protocol_runtime_checkable_violations {
             let (message, help, note) = match &violation.kind {
                 ProtocolRtcViolationKind::NotRuntimeCheckable {

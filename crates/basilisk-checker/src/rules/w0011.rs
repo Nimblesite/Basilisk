@@ -28,7 +28,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct UndeclaredDependencyImport;
 
 impl Rule for UndeclaredDependencyImport {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         module
             .imports
             .iter()
@@ -99,7 +104,11 @@ mod tests {
     fn run_check(import: ImportInfo) -> Vec<crate::Diagnostic> {
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
-        UndeclaredDependencyImport.check(&module, &mut diagnostics);
+        UndeclaredDependencyImport.check(
+            &module,
+            &crate::context::CheckContext::default(),
+            &mut diagnostics,
+        );
         diagnostics
     }
 

@@ -35,7 +35,11 @@ fn run(source: &str, imported_modules: HashMap<String, ImportedModuleApi>) -> Ve
         ..ResolvedModule::default()
     };
     let mut diagnostics = Vec::new();
-    ModuleAttributeUndefined.check(&module, &mut diagnostics);
+    ModuleAttributeUndefined.check(
+        &module,
+        &crate::context::CheckContext::default(),
+        &mut diagnostics,
+    );
     diagnostics
 }
 

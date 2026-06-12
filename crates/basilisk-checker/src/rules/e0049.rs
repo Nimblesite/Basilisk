@@ -31,7 +31,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct MultipleUnboundedTupleTypes;
 
 impl Rule for MultipleUnboundedTupleTypes {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for &span in &module.multiple_unbounded_tuple_spans {
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),

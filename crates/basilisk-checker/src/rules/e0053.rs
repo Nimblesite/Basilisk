@@ -30,7 +30,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct AssertTypeMismatch;
 
 impl Rule for AssertTypeMismatch {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for call in module
             .assert_type_calls
             .iter()

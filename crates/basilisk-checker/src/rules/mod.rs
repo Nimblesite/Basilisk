@@ -160,6 +160,7 @@ pub(crate) mod e0151;
 pub(crate) mod e0152;
 pub(crate) mod e0153;
 pub(crate) mod e0154;
+pub(crate) mod e0155;
 pub(crate) mod guards;
 pub(crate) mod shared;
 pub(crate) mod w0011;
@@ -172,10 +173,15 @@ use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::Diagnostic;
 
+pub use crate::context::CheckContext;
+
 /// A single type checking rule.
 pub(crate) trait Rule {
     /// Run the rule against a resolved module and push any diagnostics.
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>);
+    ///
+    /// `ctx` carries the configured target version/platform
+    /// ([CHKARCH-VERSION-TARGET]) so rules never hardcode a Python version.
+    fn check(&self, module: &ResolvedModule, ctx: &CheckContext, diagnostics: &mut Vec<Diagnostic>);
 }
 
 /// All registered Phase 1 rules.
@@ -332,6 +338,7 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &e0152::MissingTypeStubs,
         &e0153::ConstructorCallableMisuse,
         &e0154::ModuleAttributeUndefined,
+        &e0155::Pep695BelowTargetViolation,
         &w0011::UndeclaredDependencyImport,
         &w0012::UnusedDependency,
         &w0013::StaleLockFile,
@@ -342,9 +349,9 @@ fn all_rules() -> &'static [&'static dyn Rule] {
 
 /// Run all registered Phase 1 rules against a resolved module.
 #[must_use]
-pub fn run_all(module: &ResolvedModule) -> Vec<Diagnostic> {
+pub fn run_all(module: &ResolvedModule, ctx: &CheckContext) -> Vec<Diagnostic> {
     all_rules().iter().fold(Vec::new(), |mut acc, rule| {
-        rule.check(module, &mut acc);
+        rule.check(module, ctx, &mut acc);
         acc
     })
 }

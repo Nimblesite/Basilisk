@@ -39,7 +39,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct DataclassSlotsViolation;
 
 impl Rule for DataclassSlotsViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         check_self_attr_assignments(module, diagnostics);
         check_slots_access_on_non_slots_class(module, diagnostics);
     }

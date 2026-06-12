@@ -25,7 +25,12 @@ pub(crate) struct InvalidTypedDictBase;
 const KNOWN_TYPED_DICT_KEYWORDS: &[&str] = &["total", "extra_items", "closed"];
 
 impl Rule for InvalidTypedDictBase {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for class in module.classes.iter().filter(|c| c.is_typed_dict) {
             for kw in &class.class_keywords {
                 if !KNOWN_TYPED_DICT_KEYWORDS.contains(&kw.as_str()) {

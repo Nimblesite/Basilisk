@@ -48,7 +48,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct NoReturnFallThrough;
 
 impl Rule for NoReturnFallThrough {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         module.functions.iter().for_each(|func| {
             check_function(func, &module.source, &module.path, diagnostics);
         });

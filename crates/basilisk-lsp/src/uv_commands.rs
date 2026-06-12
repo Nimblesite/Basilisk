@@ -20,6 +20,9 @@ pub struct UvCommandResult {
     pub stdout: String,
     /// Combined stderr output.
     pub stderr: String,
+    /// Process exit code, if the process exited normally.
+    /// Logged as a structured field on failure ([LSPUV-COMMAND-FAILURE-UX]).
+    pub exit_code: Option<i32>,
 }
 
 /// Check if `uv` is available on `PATH`.
@@ -146,6 +149,7 @@ async fn run_uv(project_root: &Path, args: &[&str]) -> Result<UvCommandResult, s
         success,
         stdout,
         stderr,
+        exit_code: output.status.code(),
     })
 }
 
@@ -165,6 +169,7 @@ mod tests {
             success: true,
             stdout: "ok".to_owned(),
             stderr: String::new(),
+            exit_code: Some(0),
         };
         let debug_output = format!("{result:?}");
         assert!(debug_output.contains("success: true"));

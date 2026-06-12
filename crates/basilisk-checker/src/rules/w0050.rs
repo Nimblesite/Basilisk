@@ -28,7 +28,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct RedundantAnnotationWarning;
 
 impl Rule for RedundantAnnotationWarning {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Check module-level variables
         module
             .module_vars
@@ -74,7 +79,8 @@ impl Rule for RedundantAnnotationWarning {
                     base.contains("TypedDict")
                         || base.contains("Protocol")
                         || base.contains("NamedTuple")
-                }) && !is_namedtuple_subclass(class, &module.classes)
+                }) && !transitively_inherits(class, &module.classes, &is_namedtuple_base)
+                    && !annotation_defines_field(class, &module.classes)
             })
             .flat_map(|class| &class.attributes)
             .filter(|attr| attr.has_annotation && attr.has_value)
@@ -250,24 +256,62 @@ fn make_diagnostic_for_var(
     )
 }
 
-/// Check if a class transitively inherits from a `NamedTuple` class.
+/// Whether annotated assignments in this class declare *fields* rather than
+/// plain attributes (issue #110).
 ///
-/// This catches subclasses like `class PointWithName(Point)` where `Point` itself
-/// inherits from `NamedTuple`.
-fn is_namedtuple_subclass(
+/// For `pydantic.BaseModel` subclasses, `@dataclass` classes (including
+/// `dataclass_transform` factories), and attrs-style classes, the annotation is
+/// what makes the assignment a field — removing it silently deletes the field
+/// from validation/serialization or the generated `__init__`. W0050 must never
+/// call such an annotation redundant.
+fn annotation_defines_field(
     class: &basilisk_resolver::ClassInfo,
     all_classes: &[basilisk_resolver::ClassInfo],
 ) -> bool {
+    class.is_dataclass
+        || has_attrs_class_decorator(class)
+        || transitively_inherits(class, all_classes, &is_pydantic_model_base)
+}
+
+/// attrs-style class decorators (`@define`, `@frozen`, `@mutable`, `@attr.s`,
+/// `@attr.attrs`, …). The resolver records only the final name segment, so
+/// `@attr.s` arrives as `"s"` and `@attrs.define` as `"define"`. A stray match
+/// merely suppresses a warning — safe — whereas a miss corrupts a model.
+fn has_attrs_class_decorator(class: &basilisk_resolver::ClassInfo) -> bool {
+    class.decorator_spans.iter().any(|(name, _)| {
+        matches!(
+            name.as_str(),
+            "define" | "frozen" | "mutable" | "attrs" | "s"
+        )
+    })
+}
+
+fn is_namedtuple_base(base: &str) -> bool {
+    base == "NamedTuple"
+}
+
+fn is_pydantic_model_base(base: &str) -> bool {
+    base == "BaseModel" || base.ends_with(".BaseModel")
+}
+
+/// Check if a class transitively inherits from a base matching `is_marker_base`,
+/// directly or via locally-defined intermediate classes.
+///
+/// This catches subclasses like `class PointWithName(Point)` where `Point` itself
+/// inherits from the marker base.
+fn transitively_inherits(
+    class: &basilisk_resolver::ClassInfo,
+    all_classes: &[basilisk_resolver::ClassInfo],
+    is_marker_base: &dyn Fn(&str) -> bool,
+) -> bool {
     for base in &class.bases {
         let stripped = base.split('[').next().unwrap_or(base.as_str());
+        if is_marker_base(stripped) {
+            return true;
+        }
         for other in all_classes {
-            if other.name == stripped {
-                if other.bases.iter().any(|b| b == "NamedTuple") {
-                    return true;
-                }
-                if is_namedtuple_subclass(other, all_classes) {
-                    return true;
-                }
+            if other.name == stripped && transitively_inherits(other, all_classes, is_marker_base) {
+                return true;
             }
         }
     }

@@ -21,7 +21,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct NonExhaustiveMatch;
 
 impl Rule for NonExhaustiveMatch {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         module
             .match_stmts
             .iter()

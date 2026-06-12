@@ -486,7 +486,13 @@ fn collect_and_check(
             }
         })
         .unwrap_or_else(|| std::path::PathBuf::from("."));
-    let config = basilisk_config::load_basilisk_config(&config_root);
+    let mut config = basilisk_config::load_basilisk_config(&config_root);
+    // [CHKARCH-VERSION-TARGET] Detect the target version from project files
+    // when the config does not pin one, matching the LSP (issue #93).
+    if config.python_version.is_none() {
+        config.python_version =
+            basilisk_uv::python_version::resolve_target_python_version(&config_root);
+    }
 
     let excluded: HashSet<&str> = config.exclude.iter().map(String::as_str).collect();
     info!(

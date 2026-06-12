@@ -34,7 +34,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct LiteralStringEnumMismatch;
 
 impl Rule for LiteralStringEnumMismatch {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for mismatch in &module.literal_string_enum_mismatches {
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),

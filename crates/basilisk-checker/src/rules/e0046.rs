@@ -34,7 +34,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct EnumMemberAnnotated;
 
 impl Rule for EnumMemberAnnotated {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for cls in module.classes.iter().filter(|c| is_enum_class(c)) {
             for attr in cls
                 .attributes

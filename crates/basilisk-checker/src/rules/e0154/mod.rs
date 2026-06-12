@@ -65,7 +65,12 @@ const MODULE_DUNDERS: &[&str] = &[
 pub(crate) struct ModuleAttributeUndefined;
 
 impl Rule for ModuleAttributeUndefined {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Only projects with user/local stubs populate `imported_modules`, so
         // this short-circuits (and parses nothing) everywhere else.
         if module.imported_modules.is_empty() {

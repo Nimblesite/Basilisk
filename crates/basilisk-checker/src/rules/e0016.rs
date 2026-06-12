@@ -36,7 +36,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct IncompatibleOverride;
 
 impl Rule for IncompatibleOverride {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Build map: class_name → method_name → &FunctionInfo
         let method_map: HashMap<(&str, &str), &FunctionInfo> = module
             .functions

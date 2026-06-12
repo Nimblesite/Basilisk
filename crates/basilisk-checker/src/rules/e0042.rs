@@ -81,7 +81,12 @@ fn is_word_boundary_match(haystack: &str, needle: &str) -> bool {
 pub(crate) struct Pep695TraditionalTypeVarMix;
 
 impl Rule for Pep695TraditionalTypeVarMix {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Build a set of all module-level traditional TypeVar names.
         let traditional_typevars: HashSet<&str> =
             basilisk_resolver::collect_name_set(&module.typevar_calls);

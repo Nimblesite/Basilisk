@@ -36,7 +36,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct DataclassKwOnlyViolation;
 
 impl Rule for DataclassKwOnlyViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let positional_counts = build_positional_counts(&module.classes);
         let init_false_fields = build_init_false_fields(&module.classes);
 

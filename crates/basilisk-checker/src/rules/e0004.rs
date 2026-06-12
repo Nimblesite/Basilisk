@@ -21,7 +21,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct MissingVarArgAnnotation;
 
 impl Rule for MissingVarArgAnnotation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         module
             .functions
             .iter()

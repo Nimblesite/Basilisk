@@ -76,7 +76,9 @@ if [[ -f "$REF_STAMP_FILE" ]]; then
     CURRENT_REF=$(cat "$REF_STAMP_FILE")
 fi
 
-if [[ "${1:-}" == "--fetch" ]] || [[ "${1:-}" == "--fetch-only" ]] || \
+# --fetch forces a re-download; --fetch-only only ensures the pinned ref is
+# present (fetch if missing/stale, then exit) so `make test` works offline.
+if [[ "${1:-}" == "--fetch" ]] || \
    [[ ! -d "$CONFORMANCE_DIR" ]] || \
    [[ -z "$(ls -A "$CONFORMANCE_DIR" 2>/dev/null)" ]] || \
    [[ "$CURRENT_REF" != "$TYPING_REF" ]]; then

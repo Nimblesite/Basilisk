@@ -9,7 +9,12 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { type LanguageClient } from "vscode-languageclient/node";
-import { PythonProcessesProvider, type ProcessInfo } from "../../process-explorer";
+import {
+  PythonProcessesProvider,
+  memoryTrackProcess,
+  profileProcess,
+  type ProcessInfo,
+} from "../../process-explorer";
 import { createStore, type Store } from "../../store";
 
 const MB = 1024 * 1024;
@@ -160,5 +165,118 @@ suite("Python Processes Panel — launcher visibility", () => {
     const pids = rows.map(pidOf);
     assert.ok(!pids.includes(300), "the uvicorn launcher must be hidden");
     assert.ok(pids.includes(100) && pids.includes(200), "bare interpreters remain visible");
+  });
+});
+
+// ── Inline action target resolution (issue #79) [PROFILE-PROCESSES-PANEL] ──
+//
+// Clicking the inline flame / database icon on a process row must profile
+// THAT row. At runtime VS Code has been observed to invoke the command with
+// `item === undefined`; the handler must fall back to the tree view's current
+// selection before warning "Select a Python process to profile."
+
+suite("Python Processes Panel — inline action target (issue #79)", () => {
+  /** Capture LSP executeCommand calls made through the store's client. */
+  function storeCapturing(
+    processes: readonly ProcessInfo[],
+    calls: { command: string; pid: number | undefined }[],
+  ): Store {
+    const store = createStore();
+    const client = {
+      isRunning: (): boolean => true,
+      onDidChangeState: (): vscode.Disposable => ({ dispose: (): undefined => undefined }),
+      sendRequest: async (
+        _method: string,
+        params: { command?: string; arguments?: { pid?: number }[] },
+      ): Promise<unknown> => {
+        // The panel's own row fetch is also an executeCommand — serve it.
+        if (params?.command?.endsWith(".processes") === true) {
+          return { processes };
+        }
+        if (params?.command !== undefined) {
+          calls.push({ command: params.command, pid: params.arguments?.[0]?.pid });
+        }
+        return undefined;
+      },
+    } as unknown as LanguageClient;
+    store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, client);
+    return store;
+  }
+
+  /** Run fn with showWarningMessage stubbed, returning captured warnings. */
+  async function captureWarnings(fn: () => Promise<void>): Promise<string[]> {
+    const warnings: string[] = [];
+    const original = vscode.window.showWarningMessage;
+    (vscode.window as { showWarningMessage: unknown }).showWarningMessage = async (
+      message: string,
+    ): Promise<undefined> => {
+      warnings.push(message);
+      return Promise.resolve(undefined);
+    };
+    try {
+      await fn();
+    } finally {
+      (vscode.window as { showWarningMessage: unknown }).showWarningMessage = original;
+    }
+    return warnings;
+  }
+
+  test("undefined item falls back to the tree selection and profiles that PID", async () => {
+    const calls: { command: string; pid: number | undefined }[] = [];
+    const store = storeCapturing(STUB_PROCESSES, calls);
+    const provider = new PythonProcessesProvider(store);
+    try {
+      const rows = await provider.getChildren();
+      const selected = rows.find((row) => pidOf(row) === 100);
+      assert.ok(selected, "expected the PID 100 row");
+
+      const fakeView = { selection: [selected] } as unknown as vscode.TreeView<vscode.TreeItem>;
+      const warnings = await captureWarnings(async () => {
+        await profileProcess(store, undefined, fakeView);
+      });
+
+      assert.deepStrictEqual(warnings, [], "must not warn when a row is selected");
+      const start = calls.find((c) => c.command.includes("profiler"));
+      assert.ok(start, `profiler start must be requested, got: ${JSON.stringify(calls)}`);
+      assert.strictEqual(start.pid, 100, "must profile the selected row's PID");
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  test("memory tracking falls back to the tree selection the same way", async () => {
+    const calls: { command: string; pid: number | undefined }[] = [];
+    const store = storeCapturing(STUB_PROCESSES, calls);
+    const provider = new PythonProcessesProvider(store);
+    try {
+      const rows = await provider.getChildren();
+      const selected = rows.find((row) => pidOf(row) === 200);
+      assert.ok(selected, "expected the PID 200 row");
+
+      const fakeView = { selection: [selected] } as unknown as vscode.TreeView<vscode.TreeItem>;
+      const warnings = await captureWarnings(async () => {
+        await memoryTrackProcess(store, undefined, fakeView);
+      });
+
+      assert.deepStrictEqual(warnings, [], "must not warn when a row is selected");
+      const start = calls.find((c) => c.command.includes("profiler"));
+      assert.ok(start, `profiler start must be requested, got: ${JSON.stringify(calls)}`);
+      assert.strictEqual(start.pid, 200, "must memory-track the selected row's PID");
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  test("warns only when there is neither an item nor a selection", async () => {
+    const calls: { command: string; pid: number | undefined }[] = [];
+    const store = storeCapturing(STUB_PROCESSES, calls);
+
+    const fakeView = { selection: [] } as unknown as vscode.TreeView<vscode.TreeItem>;
+    const warnings = await captureWarnings(async () => {
+      await profileProcess(store, undefined, fakeView);
+    });
+
+    assert.strictEqual(warnings.length, 1, "must warn exactly once");
+    assert.deepStrictEqual(calls, [], "must not start profiling without a target");
   });
 });

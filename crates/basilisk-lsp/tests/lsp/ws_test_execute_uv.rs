@@ -648,3 +648,162 @@ async fn test_e0010_code_action_to_execute_command_full_flow() -> TestResult<()>
     let _ = std::fs::remove_dir_all(&dir);
     Ok(())
 }
+
+// ── uv failure classification [LSPUV-COMMAND-FAILURE-UX] (issue #94) ─────
+
+/// Send a request and collect EVERY message (response + notifications) until
+/// the response id arrives, plus a short post-response drain. The standard
+/// `fixture.request()` helper discards interleaved notifications, which is
+/// exactly where the failure toast lives.
+async fn request_collecting_all(
+    fixture: &mut WsTestFixture,
+    id: u64,
+    method: &str,
+    params: serde_json::Value,
+) -> TestResult<(Option<String>, Vec<String>)> {
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": method,
+            "params": params
+        }))
+        .await?;
+
+    let id_str = format!("\"id\":{id}");
+    let mut messages = Vec::new();
+    let mut response = None;
+    for _ in 0..40 {
+        let Some(msg) = fixture.recv().await else {
+            break;
+        };
+        let is_response = msg.contains(&id_str);
+        messages.push(msg.clone());
+        if is_response {
+            response = Some(msg);
+            break;
+        }
+    }
+    messages.extend(drain_messages(fixture, Duration::from_millis(800)).await);
+    Ok((response, messages))
+}
+
+/// Find the first `window/showMessage` error toast among drained messages.
+fn find_error_toast(messages: &[String]) -> Option<serde_json::Value> {
+    messages
+        .iter()
+        .filter_map(|m| serde_json::from_str::<serde_json::Value>(m).ok())
+        .find(|v| {
+            v["method"].as_str() == Some("window/showMessage")
+                && v["params"]["type"].as_u64() == Some(1)
+        })
+}
+
+#[tokio::test]
+async fn test_uv_add_nonexistent_package_toast_is_actionable_not_resolver_dump() -> TestResult<()> {
+    if !uv_available() {
+        return Ok(());
+    }
+
+    let dir = create_uv_project("bsk_uv_add_notfound");
+    let root_uri = format!("file://{}", dir.display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "wholeModule").await?;
+    let _ = drain_messages(&mut fixture, Duration::from_millis(500)).await;
+
+    // A package that does not exist on PyPI — uv's resolver fails.
+    let package = "bsk-no-such-package-issue94";
+    let (resp, messages) = request_collecting_all(
+        &mut fixture,
+        700,
+        "workspace/executeCommand",
+        serde_json::json!({
+            "command": "basilisk.uv.add",
+            "arguments": [package]
+        }),
+    )
+    .await?;
+    let resp = resp.ok_or("no response to workspace/executeCommand")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert_eq!(
+        parsed["result"]["success"], false,
+        "adding a nonexistent package must fail: {resp}"
+    );
+
+    let toast = find_error_toast(&messages)
+        .ok_or("expected a window/showMessage error toast for the failed uv add")?;
+    let text = toast["params"]["message"].as_str().unwrap_or_default();
+
+    // Plain-language headline: names the package and says it can't be found.
+    assert!(
+        text.contains(package),
+        "toast must name the failing package: {text}"
+    );
+    assert!(
+        text.to_lowercase().contains("found"),
+        "toast must say the package couldn't be found: {text}"
+    );
+    assert!(
+        text.to_lowercase().contains("check"),
+        "toast must tell the user what to do next (check the name): {text}"
+    );
+
+    // The raw resolver tree must NOT be the toast.
+    assert!(
+        !text.contains("No solution found")
+            && !text.contains("we can conclude")
+            && !text.contains("requirements are unsatisfiable"),
+        "toast must not dump uv's raw resolver output: {text}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_uv_generic_failure_toast_points_to_output_channel() -> TestResult<()> {
+    if !uv_available() {
+        return Ok(());
+    }
+
+    let dir = create_uv_project("bsk_uv_add_generic");
+    let root_uri = format!("file://{}", dir.display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "wholeModule").await?;
+    let _ = drain_messages(&mut fixture, Duration::from_millis(500)).await;
+
+    // An invalid requirement string — uv fails before resolution, which must
+    // classify as a generic failure with an Output-channel pointer.
+    let (resp, messages) = request_collecting_all(
+        &mut fixture,
+        701,
+        "workspace/executeCommand",
+        serde_json::json!({
+            "command": "basilisk.uv.add",
+            "arguments": ["not a valid requirement!!"]
+        }),
+    )
+    .await?;
+    let resp = resp.ok_or("no response to workspace/executeCommand")?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert_eq!(
+        parsed["result"]["success"], false,
+        "adding an invalid requirement must fail: {resp}"
+    );
+
+    let toast = find_error_toast(&messages)
+        .ok_or("expected a window/showMessage error toast for the failed uv add")?;
+    let text = toast["params"]["message"].as_str().unwrap_or_default();
+
+    assert!(
+        text.contains("Output"),
+        "generic failure toast must point at the Basilisk Output channel: {text}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}

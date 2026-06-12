@@ -36,7 +36,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct ProtocolSelfViolation;
 
 impl Rule for ProtocolSelfViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for violation in &module.protocol_self_violations {
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),

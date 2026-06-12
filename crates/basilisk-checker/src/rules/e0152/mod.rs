@@ -36,7 +36,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct MissingTypeStubs;
 
 impl Rule for MissingTypeStubs {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         module
             .imports
             .iter()

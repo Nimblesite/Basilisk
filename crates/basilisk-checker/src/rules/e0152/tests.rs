@@ -37,7 +37,11 @@ fn make_import(
 fn run_check(import: ImportInfo) -> Vec<crate::Diagnostic> {
     let module = make_module(vec![import]);
     let mut diagnostics = Vec::new();
-    MissingTypeStubs.check(&module, &mut diagnostics);
+    MissingTypeStubs.check(
+        &module,
+        &crate::context::CheckContext::default(),
+        &mut diagnostics,
+    );
     diagnostics
 }
 
@@ -219,7 +223,11 @@ fn skips_site_packages_package_with_py_typed_marker() -> Result<(), Box<dyn std:
     let module = make_module(vec![import]);
     let mut diagnostics = Vec::new();
 
-    MissingTypeStubs.check(&module, &mut diagnostics);
+    MissingTypeStubs.check(
+        &module,
+        &crate::context::CheckContext::default(),
+        &mut diagnostics,
+    );
 
     assert!(
         diagnostics.is_empty(),
@@ -266,7 +274,11 @@ fn skips_nested_submodule_when_root_package_has_py_typed() -> Result<(), Box<dyn
     let module = make_module(vec![import]);
     let mut diagnostics = Vec::new();
 
-    MissingTypeStubs.check(&module, &mut diagnostics);
+    MissingTypeStubs.check(
+        &module,
+        &crate::context::CheckContext::default(),
+        &mut diagnostics,
+    );
 
     assert!(
         diagnostics.is_empty(),
@@ -315,7 +327,11 @@ fn skips_flat_file_submodule_when_root_package_has_py_typed(
     let module = make_module(vec![import]);
     let mut diagnostics = Vec::new();
 
-    MissingTypeStubs.check(&module, &mut diagnostics);
+    MissingTypeStubs.check(
+        &module,
+        &crate::context::CheckContext::default(),
+        &mut diagnostics,
+    );
 
     assert!(
         diagnostics.is_empty(),
@@ -361,7 +377,11 @@ fn skips_deeper_nested_submodule_when_root_package_has_py_typed(
     let module = make_module(vec![import]);
     let mut diagnostics = Vec::new();
 
-    MissingTypeStubs.check(&module, &mut diagnostics);
+    MissingTypeStubs.check(
+        &module,
+        &crate::context::CheckContext::default(),
+        &mut diagnostics,
+    );
 
     assert!(
         diagnostics.is_empty(),
@@ -406,7 +426,11 @@ fn skips_httpx_underscore_flat_submodule_when_root_has_py_typed(
     let module = make_module(vec![import]);
     let mut diagnostics = Vec::new();
 
-    MissingTypeStubs.check(&module, &mut diagnostics);
+    MissingTypeStubs.check(
+        &module,
+        &crate::context::CheckContext::default(),
+        &mut diagnostics,
+    );
 
     assert!(
         diagnostics.is_empty(),

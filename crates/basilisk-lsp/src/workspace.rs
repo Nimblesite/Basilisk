@@ -105,11 +105,19 @@ impl WorkspaceIndex {
             .map(|root| {
                 let has_config =
                     root.join("pyproject.toml").is_file() || root.join("basilisk.json").is_file();
-                let cfg = if has_config {
+                let mut cfg = if has_config {
                     basilisk_config::load_basilisk_config(root)
                 } else {
                     checker_config.clone()
                 };
+                // [CHKARCH-VERSION-TARGET] An explicit `python-version` in the
+                // checker config wins; otherwise detect the project's target
+                // from `.python-version` / `requires-python` / `uv.lock` so
+                // version-aware rules follow the real target (issue #93).
+                if cfg.python_version.is_none() {
+                    cfg.python_version =
+                        basilisk_uv::python_version::resolve_target_python_version(root);
+                }
                 (root.clone(), cfg)
             })
             .collect();

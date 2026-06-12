@@ -19,7 +19,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct DuplicateTypeVarInGeneric;
 
 impl Rule for DuplicateTypeVarInGeneric {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for class in &module.classes {
             let params = &class.generic_params;
             let mut seen: Vec<&str> = Vec::new();

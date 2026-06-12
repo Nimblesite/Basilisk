@@ -61,7 +61,12 @@ impl Rule for TypeVarInvalidKwargs {
         clippy::too_many_lines,
         reason = "TypeVar/TypeVarTuple/ParamSpec keyword validation requires extensive branching"
     )]
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let path = &module.path;
         for tv in &module.typevar_calls {
             // TypeVarTuple and ParamSpec do not support variance flags, bound, or constraints.

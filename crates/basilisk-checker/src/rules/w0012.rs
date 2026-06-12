@@ -61,7 +61,12 @@ impl UnusedDependency {
 }
 
 impl Rule for UnusedDependency {
-    fn check(&self, _module: &ResolvedModule, _diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        _module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        _diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Skeleton: this rule requires workspace-level data to determine which
         // declared dependencies are never imported across all files. It will be
         // activated when the workspace layer provides aggregate import sets.
@@ -90,7 +95,11 @@ mod tests {
     fn does_not_fire_without_workspace_data() {
         let module = make_module();
         let mut diagnostics = Vec::new();
-        UnusedDependency.check(&module, &mut diagnostics);
+        UnusedDependency.check(
+            &module,
+            &crate::context::CheckContext::default(),
+            &mut diagnostics,
+        );
         assert!(diagnostics.is_empty());
     }
 

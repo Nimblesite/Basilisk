@@ -35,7 +35,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct InvalidTupleTypeSyntax;
 
 impl Rule for InvalidTupleTypeSyntax {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
 
         // Check all variable annotations for tuple type syntax violations

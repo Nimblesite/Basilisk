@@ -18,7 +18,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct MissingReturnAnnotation;
 
 impl Rule for MissingReturnAnnotation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         module
             .functions
             .iter()

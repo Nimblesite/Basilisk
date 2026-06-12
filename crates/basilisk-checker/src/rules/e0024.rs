@@ -28,7 +28,12 @@ const HELP: &str = "Use a type name like `int`, `str`, `float` instead of a lite
 pub(crate) struct InvalidTypeForm;
 
 impl Rule for InvalidTypeForm {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         module
             .functions
             .iter()

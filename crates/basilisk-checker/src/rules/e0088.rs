@@ -33,7 +33,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct TypedDictRuntimeViolation;
 
 impl Rule for TypedDictRuntimeViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for span in &module.isinstance_typeddict_violations {
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),

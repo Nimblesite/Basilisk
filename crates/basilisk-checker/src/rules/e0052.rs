@@ -39,7 +39,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct FrozenDataclassAssignment;
 
 impl Rule for FrozenDataclassAssignment {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let transform_classes = super::guards::collect_transform_classes(module);
 
         let class_frozen: HashMap<&str, (bool, bool)> = module

@@ -73,7 +73,12 @@ fn extract_initvar_inner(ann: &str) -> Option<&str> {
 pub(crate) struct InitVarViolation;
 
 impl Rule for InitVarViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         check_post_init_signatures(module, diagnostics);
         check_initvar_attribute_access(module, diagnostics);
     }

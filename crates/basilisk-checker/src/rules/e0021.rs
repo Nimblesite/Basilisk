@@ -27,7 +27,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct OverlappingOverloads;
 
 impl Rule for OverlappingOverloads {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Group overloaded functions by (class_name, function_name) so overloads
         // in different classes with the same method name don't cross-contaminate.
         let mut groups: HashMap<(Option<&str>, &str), Vec<&FunctionInfo>> = HashMap::new();

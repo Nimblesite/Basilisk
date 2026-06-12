@@ -111,7 +111,12 @@ fn find_matching_bracket(content: &str) -> Option<usize> {
 pub(crate) struct TypeVarTupleUnpackRequired;
 
 impl Rule for TypeVarTupleUnpackRequired {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Collect all TypeVarTuple names defined in this module.
         let tvt_names = super::shared::typevar_tuple_names(&module.typevar_calls);
 

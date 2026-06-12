@@ -41,7 +41,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct NamedTupleTupleCompat;
 
 impl Rule for NamedTupleTupleCompat {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
         let path = &module.path;
 

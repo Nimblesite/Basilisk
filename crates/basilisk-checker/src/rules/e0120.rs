@@ -40,7 +40,12 @@ use crate::types::InferredType;
 pub(crate) struct GeneratorReturnTypeViolation;
 
 impl Rule for GeneratorReturnTypeViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Emit violations collected by the resolver (invalid return types).
         for violation in &module.generator_violations {
             let (message, help, note) = match &violation.kind {

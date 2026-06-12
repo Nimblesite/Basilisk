@@ -29,7 +29,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct TypeVarTupleInvalidParams;
 
 impl Rule for TypeVarTupleInvalidParams {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for call in &module.calls {
             if call.callee != "TypeVarTuple" {
                 continue;

@@ -54,7 +54,12 @@ impl Rule for TypeVarScopeViolation {
         clippy::cognitive_complexity,
         reason = "TypeVar scoping requires many interleaved checks"
     )]
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let all_typevars: HashSet<String> = module
             .typevar_calls
             .iter()
