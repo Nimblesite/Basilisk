@@ -277,6 +277,9 @@ async fn collect_sample_batches(
                 }
             }
             Ok(Ok(Some(Message::Attached { .. }))) => {}
+            Ok(Ok(Some(Message::AttachFailed { reason, .. }))) => {
+                panic!("helper reported attach failure mid-stream: {reason}")
+            }
             Ok(Ok(Some(Message::Stopped) | None)) => break,
             Ok(Err(err)) => panic!("sample read failed: {err}"),
             Err(_elapsed) => break,
