@@ -28,7 +28,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct MissingOverloadImpl;
 
 impl Rule for MissingOverloadImpl {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Build a set of Protocol/ABC class names so we can exempt their methods.
         let exempt_classes: std::collections::HashSet<&str> = module
             .classes

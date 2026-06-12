@@ -29,7 +29,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct ImportFromUntypedModule;
 
 impl Rule for ImportFromUntypedModule {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         module
             .imports
             .iter()
@@ -146,7 +151,11 @@ mod tests {
     fn run_check(import: ImportInfo) -> Vec<crate::Diagnostic> {
         let module = make_module(vec![import]);
         let mut diagnostics = Vec::new();
-        ImportFromUntypedModule.check(&module, &mut diagnostics);
+        ImportFromUntypedModule.check(
+            &module,
+            &crate::context::CheckContext::default(),
+            &mut diagnostics,
+        );
         diagnostics
     }
 

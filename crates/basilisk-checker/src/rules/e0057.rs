@@ -148,7 +148,12 @@ fn is_non_type_name(rhs: &str, non_type_names: &HashSet<String>) -> bool {
 pub(crate) struct TypeStatementInvalidRhs;
 
 impl Rule for TypeStatementInvalidRhs {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
         let path = &module.path;
         let non_type_names = collect_non_type_names(module);

@@ -452,42 +452,42 @@
         {
           "command": "basilisk.refreshModuleExplorer",
           "when": "view == basilisk.moduleExplorer",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "basilisk.collapseModuleExplorer",
           "when": "view == basilisk.moduleExplorer",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "basilisk.toggleModuleExplorerView",
           "when": "view == basilisk.moduleExplorer",
-          "group": "navigation"
+          "group": "navigation@3"
         },
         {
           "command": "basilisk.filterModuleExplorer",
           "when": "view == basilisk.moduleExplorer",
-          "group": "navigation"
+          "group": "navigation@4"
         },
         {
           "command": "basilisk.sortModuleExplorer",
           "when": "view == basilisk.moduleExplorer",
-          "group": "navigation"
-        },
-        {
-          "command": "basilisk.fixWorkspace",
-          "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running'",
-          "group": "navigation"
+          "group": "navigation@5"
         },
         {
           "command": "basilisk.organizeImports",
           "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running'",
-          "group": "navigation"
+          "group": "1_modify@1"
+        },
+        {
+          "command": "basilisk.fixWorkspace",
+          "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running' && config.basilisk.experimental.fixAll",
+          "group": "1_modify@2"
         },
         {
           "command": "basilisk.restartServer",
           "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running'",
-          "group": "navigation"
+          "group": "9_server@1"
         },
         {
           "command": "basilisk.profileCurrentFileCpu",
@@ -924,6 +924,11 @@
           ],
           "default": "wholeModule",
           "description": "Controls which files Basilisk analyses. 'wholeModule' (default) analyses all workspace files; 'openFilesOnly' analyses only open editors; 'crossModule' is reserved for future cross-file import graph analysis."
+        },
+        "basilisk.experimental.fixAll": {
+          "type": "boolean",
+          "default": false,
+          "description": "Experimental: show the 'Fix All in Workspace' action in the Modules toolbar. Off by default until the mass-autofix flow is hardened."
         }
       }
     },

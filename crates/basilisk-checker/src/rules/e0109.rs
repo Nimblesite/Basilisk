@@ -42,7 +42,12 @@ fn bound_incompatible(bound: &str, arg_type: &str) -> bool {
 }
 
 impl Rule for TypeVarBoundCallViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
 
         // Build map: TypeVar name → bound type name

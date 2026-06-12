@@ -56,7 +56,12 @@ impl StaleLockFile {
 }
 
 impl Rule for StaleLockFile {
-    fn check(&self, _module: &ResolvedModule, _diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        _module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        _diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Skeleton: once the workspace layer provides lock-file staleness
         // information (e.g. via a field on ResolvedModule or a shared context),
         // this rule will compare mtimes and emit a diagnostic when uv.lock is
@@ -81,7 +86,11 @@ mod tests {
     fn does_not_fire_without_staleness_data() {
         let module = make_module();
         let mut diagnostics = Vec::new();
-        StaleLockFile.check(&module, &mut diagnostics);
+        StaleLockFile.check(
+            &module,
+            &crate::context::CheckContext::default(),
+            &mut diagnostics,
+        );
         assert!(diagnostics.is_empty());
     }
 

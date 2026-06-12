@@ -42,7 +42,12 @@ fn make_diagnostic(message: String, span: basilisk_resolver::Span, path: &str) -
 pub(crate) struct NonTypeVarInGeneric;
 
 impl Rule for NonTypeVarInGeneric {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Collect all module-level TypeVar names (traditional TypeVar calls).
         let typevar_names: HashSet<&str> =
             basilisk_resolver::collect_name_set(&module.typevar_calls);

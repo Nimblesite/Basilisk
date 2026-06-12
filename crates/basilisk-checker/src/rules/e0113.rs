@@ -166,7 +166,12 @@ fn split_generic(type_text: &str) -> Option<(&str, &str)> {
 }
 
 impl Rule for TypeIsInconsistentNarrowing {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
 
         for func in &module.functions {

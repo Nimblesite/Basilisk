@@ -355,6 +355,39 @@ Full support for:
 - `assert_never()` for exhaustiveness checking
 - Platform-aware reachability (default: assume code may run on any platform)
 
+### Target Version and Platform {#CHKARCH-VERSION-TARGET}
+
+Every rule runs against the **configured** target Python version — never a
+hardcoded constant (issue #93).
+
+- `BasiliskConfig.python_version` / `python_platform` (from `basilisk.json`
+  `pythonVersion`/`pythonPlatform` or `pyproject.toml` `[tool.basilisk]`
+  `python-version`/`python-platform`) parse into a typed
+  `CheckContext { target_version: (major, minor), target_platform }`
+  (`crates/basilisk-checker/src/context.rs`).
+- The centralized default is `DEFAULT_TARGET_VERSION = (3, 12)` — the **only**
+  place the default version constant lives. A malformed version string falls
+  back to the default rather than panicking or disabling gating.
+- When the checker config does not pin a version, the CLI and LSP detect it
+  from project files per
+  [`[LSPUV-PYTHON-VERSION-RESOLUTION-ORDER]`](LSP-UV-INTEGRATION-SPEC.md):
+  `.python-version` → `[project].requires-python` lower bound → `uv.lock`
+  `requires-python` lower bound (`basilisk_uv::python_version::resolve_target_python_version`).
+- `rules::run_all(module, ctx)` threads the context into every
+  `Rule::check(module, ctx, diagnostics)` — no rule may reference a literal
+  target version.
+
+#### Version/Platform Narrowing {#CHKARCH-VERSION-NARROWING}
+
+- `BSK-E0150` evaluates `sys.version_info` / `sys.platform` guards against
+  `ctx.target_version`, so dead-branch analysis follows the project's real
+  target.
+- `BSK-E0155` rejects PEP 695 syntax (`type X = …`, `class C[T]`, `def f[T]`)
+  when `ctx.target_version < (3, 12)` — the target interpreter cannot even
+  parse it.
+
+Tests: `crates/basilisk-checker/tests/checker/version_target_tests.rs`.
+
 ---
 
 ## Mojo-Inspired Safety Analysis {#CHKARCH-MOJO-SAFETY}
@@ -694,6 +727,7 @@ list — keep it in sync after adding or renaming a rule.
 | `BSK-E0152` | Missing type stubs for installed package |
 | `BSK-E0153` | Invalid call to a constructor-derived callable ([CHKARCH-DIAG-CTOR-CALLABLE](#CHKARCH-DIAG-CTOR-CALLABLE)) |
 | `BSK-E0154` | Access to a module attribute a local stub does not declare ([CHKARCH-DIAG-STUB-MEMBER](#CHKARCH-DIAG-STUB-MEMBER)) |
+| `BSK-E0155` | PEP 695 syntax used below the configured target version ([CHKARCH-VERSION-TARGET](#CHKARCH-VERSION-TARGET)) |
 | `BSK-W0011` | Undeclared dependency import |
 | `BSK-W0012` | Unused dependency |
 | `BSK-W0013` | Stale uv lock file |

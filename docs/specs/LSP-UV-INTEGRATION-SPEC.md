@@ -154,11 +154,22 @@ Extended version of current Python version detection:
 
 ### 4.2 Impact on Type Checking {#LSPUV-PYTHON-VERSION-IMPACT}
 
-The detected Python version controls:
+The detected version flows into the checker as
+`CheckContext.target_version` — see
+[`[CHKARCH-VERSION-TARGET]`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET)
+for the typed context, the centralized 3.12 default, and the wiring
+(`basilisk_uv::python_version::resolve_target_python_version` →
+`WorkspaceIndex::new` / CLI `main.rs`).
+
+Implemented impact today:
+
+- `sys.version_info` branch narrowing (`BSK-E0150` dead-branch analysis)
+- PEP 695 syntax gating below 3.12 (`BSK-E0155`)
+
+Planned (not yet version-gated):
 
 - stdlib module availability (e.g., `tomllib` only in 3.11+)
-- Syntax feature support (e.g., `match` in 3.10+, `type` statement in 3.12+)
-- `sys.version_info` branch narrowing
+- further syntax feature support (e.g., `match` in 3.10+)
 - `typing_extensions` vs `typing` import suggestions
 
 ---
@@ -368,7 +379,32 @@ All commands:
 - Execute in the workspace root directory
 - Stream stdout/stderr to the client via `window/logMessage`
 - Trigger `uv.lock` re-parse on successful completion
-- Report failure via `window/showMessage` (error level)
+- Report failure via `window/showMessage` (error level), classified per
+  [9.1](#LSPUV-COMMAND-FAILURE-UX)
+
+### 9.1 Failure Classification & User-Facing Messaging {#LSPUV-COMMAND-FAILURE-UX}
+
+A failed uv command MUST NOT surface raw resolver stderr as the toast (issue
+#94). `crates/basilisk-lsp/src/uv_failure.rs` classifies the (ANSI-stripped,
+whitespace-normalized) stderr and the toast carries a **plain-language headline
+plus a remediation hint**:
+
+| Category | Detected from | Toast headline + action |
+|---|---|---|
+| `package_not_found` | `No solution found` + `was not found in the package registry` / `there are no versions of` | "Package `<pkg>` couldn't be found or has no compatible version. Check the package name for a typo, or confirm it exists on the configured index." |
+| `resolution_conflict` | `No solution found` (without not-found markers) | "`<pkg>` conflicts with your existing dependencies. Relax a version pin, or retry with `--frozen` to skip locking." |
+| `network_error` | connection refused / DNS / request-send errors | "Couldn't reach the package index. Check your network or index URL, then retry." |
+| `uv_not_found` | spawn `ErrorKind::NotFound` | "`uv` isn't installed or isn't on PATH." + install link |
+| `generic` | anything else | "`<label>` failed. See the Basilisk Output channel for the full uv output." |
+
+Requirements:
+- The **full** uv stderr always remains in the Output channel via
+  `window/logMessage` — only the toast is classified.
+- Structured logging on failure includes `command`, `package`, `exit_code`,
+  `failure_category`, and `duration_ms`. Never log index credentials.
+- Covered by the e2e tests in
+  `crates/basilisk-lsp/tests/lsp/ws_test_execute_uv.rs` (package-not-found and
+  generic cases).
 
 ---
 

@@ -61,7 +61,12 @@ impl Rule for ClassVarInvalidContext {
         clippy::too_many_lines,
         reason = "ClassVar validation covers many distinct contexts"
     )]
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
         let path = &module.path;
 

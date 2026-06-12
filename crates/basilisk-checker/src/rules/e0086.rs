@@ -95,7 +95,12 @@ fn find_matching_bracket(content: &str) -> Option<usize> {
 pub(crate) struct MultipleTypeVarTuplesInGeneric;
 
 impl Rule for MultipleTypeVarTuplesInGeneric {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // 1. Check class generic parameters.
         for cls in &module.classes {
             let tvt_count = cls

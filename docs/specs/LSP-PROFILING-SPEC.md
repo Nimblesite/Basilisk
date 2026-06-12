@@ -791,6 +791,14 @@ LSP    -> {"cmd":"stop"}
 helper -> {"type":"stopped"}
 ```
 
+On an attach failure the helper MUST report the cause over the socket before exiting (issue #81 — exiting silently leaves the LSP with an undiagnosable EOF):
+
+```text
+helper -> {"type":"attachfailed","pid":12345,"reason":"py-spy attach failed: ..."}
+```
+
+The LSP classifies the reason into an actionable error — target process exited, permission denied (elevation required), or the verbatim py-spy error — and, when an old helper still EOFs without reporting, harvests the helper's exit status into the error message (`helper_client::describe_helper_eof`).
+
 `traces` carry the minimal per-thread / per-frame fields py-spy produces; the LSP converts them back into py-spy shapes and feeds the same aggregator the in-process sampler uses.
 
 #### Attach-failure reporting {#PROFILE-HELPER-PROTOCOL-ERRORS}

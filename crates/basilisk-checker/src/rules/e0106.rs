@@ -39,7 +39,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct ProtocolClassObject;
 
 impl Rule for ProtocolClassObject {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for violation in &module.protocol_class_object_violations {
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),

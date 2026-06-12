@@ -340,3 +340,94 @@ suite("Python Processes Panel — launcher visibility", () => {
     assert.ok(pids.includes(100) && pids.includes(200), "bare interpreters remain visible");
   });
 });
+
+// ── Inline action target resolution (issue #79) [PROFILE-PROCESSES-PANEL] ──
+//
+// Clicking the inline flame / database icon on a process row must act on
+// THAT row. At runtime VS Code has been observed to invoke the command with
+// `item === undefined`; the handler must fall back to the tree view's current
+// selection — and only warn when there is truly no target.
+
+suite("Python Processes Panel — inline action target (issue #79)", () => {
+  /** Run fn with showWarningMessage stubbed, returning captured warnings. */
+  async function captureWarnings(fn: () => Promise<void>): Promise<string[]> {
+    const warnings: string[] = [];
+    const original = vscode.window.showWarningMessage;
+    (vscode.window as { showWarningMessage: unknown }).showWarningMessage = async (
+      message: string,
+    ): Promise<undefined> => {
+      warnings.push(message);
+      return Promise.resolve(undefined);
+    };
+    try {
+      await fn();
+    } finally {
+      (vscode.window as { showWarningMessage: unknown }).showWarningMessage = original;
+    }
+    return warnings;
+  }
+
+  test("undefined item falls back to the tree selection and profiles that PID — without warning", async () => {
+    const requests: RecordedRequest[] = [];
+    const store = storeWith(STUB_PROCESSES, requests);
+    const provider = new PythonProcessesProvider(store);
+    try {
+      const rows = await provider.getChildren();
+      const selected = rows.find((row) => pidOf(row) === 100);
+      assert.ok(selected, "expected the PID 100 row");
+
+      const actions = createProcessRowActions(store, { selection: [selected] });
+      const warnings = await captureWarnings(async () => actions.profileProcess(undefined));
+
+      assert.deepStrictEqual(warnings, [], "must not warn when a row is selected");
+      const starts = profilerStarts(requests);
+      assert.strictEqual(starts.length, 1, "profiler start must be requested");
+      assert.strictEqual(startPid(starts[0]), 100, "must profile the selected row's PID");
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  test("memory tracking falls back to the tree selection the same way — without warning", async () => {
+    const requests: RecordedRequest[] = [];
+    const executed: string[] = [];
+    const store = storeWith(STUB_PROCESSES, requests);
+    store.setDebuggeeProcessId("session-1", 200);
+    const provider = new PythonProcessesProvider(store);
+    try {
+      const rows = await provider.getChildren();
+      const selected = rows.find((row) => pidOf(row) === 200);
+      assert.ok(selected, "expected the PID 200 row");
+
+      const actions = createProcessRowActions(store, { selection: [selected] }, {
+        runCommand: async (command) => { executed.push(command); },
+        activeSession: () => ({ id: "session-1", type: "basilisk-debug" }),
+      });
+      const warnings = await captureWarnings(async () => actions.memoryTrackProcess(undefined));
+
+      assert.deepStrictEqual(warnings, [], "must not warn when a row is selected");
+      assert.deepStrictEqual(
+        executed,
+        ["basilisk.memoryStart"],
+        "the selection fallback must reach the real memory-tracking flow",
+      );
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  test("warns exactly once when there is neither an item nor a selection", async () => {
+    const requests: RecordedRequest[] = [];
+    const store = storeWith(STUB_PROCESSES, requests);
+
+    const actions = createProcessRowActions(store, { selection: [] });
+    const warnings = await captureWarnings(async () => actions.profileProcess(undefined));
+
+    assert.strictEqual(warnings.length, 1, "must warn exactly once");
+    assert.strictEqual(
+      profilerStarts(requests).length,
+      0,
+      "must not start profiling without a target",
+    );
+  });
+});

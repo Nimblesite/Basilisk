@@ -49,7 +49,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct NonHashableDataclassAssignment;
 
 impl Rule for NonHashableDataclassAssignment {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Build a set of class names that are non-hashable dataclasses.
         // A dataclass is non-hashable when:
         //   - it is a dataclass (`is_dataclass`)

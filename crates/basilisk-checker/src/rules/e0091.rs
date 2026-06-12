@@ -37,7 +37,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct TypeVarDefaultIncompatible;
 
 impl Rule for TypeVarDefaultIncompatible {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Build a set of TypeVar names in scope — when the default is another TypeVar,
         // the check is referential and requires comparing bounds, which is out of scope
         // for this simple check. Skip those to avoid false positives.

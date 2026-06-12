@@ -47,7 +47,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct Pep695TypeParamScopingViolation;
 
 impl Rule for Pep695TypeParamScopingViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let scoping = &module.pep695_scoping;
         let path = &module.path;
 

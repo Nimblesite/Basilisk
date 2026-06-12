@@ -239,6 +239,10 @@ async fn helper_listener_is_bound_before_helper_connects() {
         !msg.contains("timed out waiting for the profiler helper to connect"),
         "a connection timeout means no listener was bound — the #61 bug: {msg}"
     );
+    assert!(
+        !msg.contains("closed the connection before confirming attach"),
+        "a bare EOF is the undiagnosable #81 failure mode: {msg}"
+    );
 }
 
 /// THE failing-without-fix test: drive the real helper binary over a real socket
@@ -695,5 +699,50 @@ fn elevation_command_guards_against_inaccessible_cwd() {
     assert!(
         cd < helper,
         "cd / must precede the helper invocation: {script}"
+    );
+}
+
+/// Issue #81: when the helper cannot attach (here: the target PID is already
+/// dead), the LSP must surface the helper's REAL cause — not the undiagnosable
+/// "helper closed the connection before confirming attach" bare-EOF message.
+#[tokio::test]
+async fn attach_to_exited_pid_reports_real_cause_not_bare_eof() {
+    use basilisk_lsp::profiler::helper_client::{start_helper_sampler, HelperSpawn};
+    use basilisk_lsp::profiler::sampler::SamplerConfig;
+
+    let helper = helper_binary_path();
+
+    // Spawn a process that exits immediately, and reap it so the PID is dead
+    // by the time the helper tries to attach.
+    let mut child = Command::new("true").spawn().expect("spawn `true`");
+    let pid = child.id();
+    let _ = child.wait();
+
+    let config = SamplerConfig {
+        pid,
+        sample_rate: 100,
+        include_native: false,
+        include_idle: false,
+        duration: None,
+    };
+    let err = timeout(
+        Duration::from_secs(30),
+        start_helper_sampler(&config, HelperSpawn::Direct(helper)),
+    )
+    .await
+    .expect("must not hang")
+    .expect_err("attaching to a dead PID must fail");
+
+    let msg = err.to_string();
+    assert!(
+        !msg.contains("closed the connection before confirming attach"),
+        "a bare EOF is not a diagnosis — the helper's failure cause must be surfaced: {msg}"
+    );
+    // The py-spy attach error (process gone / not a Python process) must reach
+    // the caller so the failure is actionable.
+    let lowered = msg.to_lowercase();
+    assert!(
+        lowered.contains("py-spy") || lowered.contains("process"),
+        "expected the helper's real attach-failure cause in the error, got: {msg}"
     );
 }

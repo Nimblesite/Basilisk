@@ -25,7 +25,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct TupleIndexOutOfBounds;
 
 impl Rule for TupleIndexOutOfBounds {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for violation in &module.tuple_index_violations {
             let len = i64::try_from(violation.tuple_length).unwrap_or(i64::MAX);
             let detail = if violation.index_value >= 0 {

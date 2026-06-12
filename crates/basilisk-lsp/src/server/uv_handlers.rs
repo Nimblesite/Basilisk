@@ -144,56 +144,87 @@ fn spawn_error(label: &str, err: &std::io::Error) -> tower_lsp::jsonrpc::Error {
 ///
 /// After any successful uv command, the lock file may have changed,
 /// so we rebuild the package registry and re-resolve all imports.
+///
+/// Failures are classified per [LSPUV-COMMAND-FAILURE-UX] (issue #94): the
+/// toast carries a plain-language headline + remediation, while the full uv
+/// stderr stays in the Output channel via `log_message`.
 async fn run_uv_and_refresh<F, Fut>(
     server: &LspServer,
     label: &str,
+    package: Option<&str>,
     command: F,
 ) -> LspResult<Option<serde_json::Value>>
 where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = std::io::Result<crate::uv_commands::UvCommandResult>>,
 {
+    let started = std::time::Instant::now();
     match command().await {
         Ok(result) => {
-            let msg = if result.success {
-                format!("{label} completed successfully")
-            } else {
-                // Strip ANSI escapes — uv emits coloured errors and the
-                // VS Code output channel renders the raw codes (issue #23).
-                let stderr_clean = strip_ansi(result.stderr.trim());
-                if stderr_clean.is_empty() {
-                    format!("{label} failed")
-                } else {
-                    format!("{label} failed: {stderr_clean}")
-                }
-            };
-            let msg_type = if result.success {
-                MessageType::INFO
-            } else {
-                MessageType::ERROR
-            };
-            server
-                .client
-                .log_message(msg_type, format!("Basilisk: {msg}"))
-                .await;
-
-            // Show error to user in the UI (not just the output panel).
-            if !result.success {
+            let duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+            if result.success {
+                info!(
+                    command = label,
+                    package = package.unwrap_or(""),
+                    duration_ms,
+                    "uv command succeeded"
+                );
                 server
                     .client
-                    .show_message(MessageType::ERROR, format!("Basilisk: {msg}"))
+                    .log_message(
+                        MessageType::INFO,
+                        format!("Basilisk: {label} completed successfully"),
+                    )
                     .await;
+                // Rebuild registry and re-resolve imports on success.
+                super::init::rebuild_registry_and_resolve(server).await;
+                return Ok(Some(uv_result_to_json(&result)));
             }
 
-            // Rebuild registry and re-resolve imports on success.
-            if result.success {
-                super::init::rebuild_registry_and_resolve(server).await;
-            }
+            // Strip ANSI escapes — uv emits coloured errors and the
+            // VS Code output channel renders the raw codes (issue #23).
+            let stderr_clean = strip_ansi(result.stderr.trim());
+            let failure = crate::uv_failure::classify_uv_failure(label, package, &stderr_clean);
+            warn!(
+                command = label,
+                package = package.unwrap_or(""),
+                exit_code = result.exit_code.unwrap_or(-1),
+                failure_category = failure.category.as_str(),
+                duration_ms,
+                "uv command failed"
+            );
+
+            // Output channel keeps the FULL uv stderr — power users lose nothing.
+            server
+                .client
+                .log_message(
+                    MessageType::ERROR,
+                    format!("Basilisk: {label} failed:\n{stderr_clean}"),
+                )
+                .await;
+
+            // The toast is the classified headline + remediation, never the
+            // raw resolver dump.
+            server
+                .client
+                .show_message(MessageType::ERROR, format!("Basilisk: {}", failure.message))
+                .await;
 
             Ok(Some(uv_result_to_json(&result)))
         }
         Err(err) => {
-            error!(%err, "{label} failed to spawn");
+            let failure = crate::uv_failure::classify_uv_spawn_failure(&err);
+            error!(
+                command = label,
+                package = package.unwrap_or(""),
+                failure_category = failure.category.as_str(),
+                %err,
+                "uv command failed to spawn"
+            );
+            server
+                .client
+                .show_message(MessageType::ERROR, format!("Basilisk: {}", failure.message))
+                .await;
             Err(spawn_error(label, &err))
         }
     }
@@ -231,7 +262,10 @@ pub(super) async fn execute_uv_sync(
         return no_uv_project_response(server, "uv sync").await;
     };
     info!("uv sync requested");
-    run_uv_and_refresh(server, "uv sync", || crate::uv_commands::uv_sync(&root)).await
+    run_uv_and_refresh(server, "uv sync", None, || {
+        crate::uv_commands::uv_sync(&root)
+    })
+    .await
 }
 
 /// Handle `basilisk.uv.add`.
@@ -247,7 +281,7 @@ pub(super) async fn execute_uv_add(
         return Ok(None);
     };
     info!(package = %package, "uv add requested");
-    run_uv_and_refresh(server, &format!("uv add {package}"), || {
+    run_uv_and_refresh(server, &format!("uv add {package}"), Some(&package), || {
         crate::uv_commands::uv_add(&root, &package)
     })
     .await
@@ -266,9 +300,12 @@ pub(super) async fn execute_uv_add_dev(
         return Ok(None);
     };
     info!(package = %package, "uv add --dev requested");
-    run_uv_and_refresh(server, &format!("uv add --dev {package}"), || {
-        crate::uv_commands::uv_add_dev(&root, &package)
-    })
+    run_uv_and_refresh(
+        server,
+        &format!("uv add --dev {package}"),
+        Some(&package),
+        || crate::uv_commands::uv_add_dev(&root, &package),
+    )
     .await
 }
 
@@ -285,9 +322,12 @@ pub(super) async fn execute_uv_remove(
         return Ok(None);
     };
     info!(package = %package, "uv remove requested");
-    run_uv_and_refresh(server, &format!("uv remove {package}"), || {
-        crate::uv_commands::uv_remove(&root, &package)
-    })
+    run_uv_and_refresh(
+        server,
+        &format!("uv remove {package}"),
+        Some(&package),
+        || crate::uv_commands::uv_remove(&root, &package),
+    )
     .await
 }
 
@@ -300,7 +340,10 @@ pub(super) async fn execute_uv_lock(
         return no_uv_project_response(server, "uv lock").await;
     };
     info!("uv lock requested");
-    run_uv_and_refresh(server, "uv lock", || crate::uv_commands::uv_lock(&root)).await
+    run_uv_and_refresh(server, "uv lock", None, || {
+        crate::uv_commands::uv_lock(&root)
+    })
+    .await
 }
 
 /// Handle `basilisk.uv.createEnv`.
@@ -330,7 +373,7 @@ pub(super) async fn execute_uv_create_env(
     });
     let pv = python_version.map(String::from);
     info!(python_version = ?pv, "uv venv requested");
-    run_uv_and_refresh(server, "uv venv", || {
+    run_uv_and_refresh(server, "uv venv", None, || {
         crate::uv_commands::uv_create_env(&root, pv.as_deref())
     })
     .await
@@ -374,6 +417,7 @@ mod tests {
             success: true,
             stdout: "ok".to_owned(),
             stderr: String::new(),
+            exit_code: Some(0),
         };
         let json = uv_result_to_json(&result);
         assert_eq!(json["success"], true);

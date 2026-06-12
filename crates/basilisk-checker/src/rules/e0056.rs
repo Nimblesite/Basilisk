@@ -33,7 +33,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct ReadOnlyTypedDictMutation;
 
 impl Rule for ReadOnlyTypedDictMutation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for v in &module.readonly_violations {
             let message = match v.kind {
                 ReadOnlyViolationKind::SubscriptAssign => {

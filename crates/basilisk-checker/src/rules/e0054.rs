@@ -107,7 +107,12 @@ fn collect_class_final_attr_map(module: &ResolvedModule) -> HashMap<String, Hash
 pub(crate) struct FinalAnnotationViolation;
 
 impl Rule for FinalAnnotationViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let path = &module.path;
         let module_final_names = collect_module_final_names(module);
         let class_final_map = collect_class_final_attr_map(module);

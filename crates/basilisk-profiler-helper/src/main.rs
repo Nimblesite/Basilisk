@@ -187,6 +187,7 @@ async fn run_protocol(
     let (spy, python_version) = match attach_pyspy(pid, sample_rate, include_native) {
         Ok(attached) => attached,
         Err(message) => {
+            error!(pid, %message, "attach failed");
             let kind = classify_helper_attach_error(pid, &message);
             let _ = send_message(
                 &mut writer,

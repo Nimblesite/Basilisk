@@ -33,7 +33,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct AssertTypeEnumLiteralMismatch;
 
 impl Rule for AssertTypeEnumLiteralMismatch {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let path = &module.path;
 
         // Build a map of enum class names → ClassInfo for lookup

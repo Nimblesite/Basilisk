@@ -21,7 +21,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct InvalidRevealTypeCall;
 
 impl Rule for InvalidRevealTypeCall {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for call in module.reveal_type_calls.iter().filter(|c| c.arg_count != 1) {
             let arg_count = call.arg_count;
             diagnostics.push(error_diagnostic_owned(

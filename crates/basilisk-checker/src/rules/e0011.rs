@@ -47,7 +47,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct ReturnTypeMismatch;
 
 impl Rule for ReturnTypeMismatch {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for func in &module.functions {
             check_explicit_any(func, &module.path, diagnostics);
 

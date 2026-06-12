@@ -119,7 +119,12 @@ fn has_final_multiple_type_args(ann: &str) -> bool {
 pub(crate) struct FinalInvalidPosition;
 
 impl Rule for FinalInvalidPosition {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
         let path = &module.path;
 

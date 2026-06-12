@@ -30,7 +30,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct MissingOverrideDecorator;
 
 impl Rule for MissingOverrideDecorator {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Build a raw class map first (name → ClassInfo).
         let raw_map = super::shared::class_name_map(&module.classes);
 

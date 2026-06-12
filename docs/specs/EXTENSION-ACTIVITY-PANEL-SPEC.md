@@ -272,6 +272,24 @@ myapp/
 - **On file create/delete/rename**: full re-fetch
 - **Manual**: refresh button
 
+All automatic refreshes flow through the centralized `analysisRevision`
+signal — see [#EXTACT-REACTIVE-STATE].
+
+### Centralized Reactive State (MANDATORY) {#EXTACT-REACTIVE-STATE}
+
+All panel state is centralized in the store (`vscode-extension/src/store.ts`)
+and reactive via Preact signals (issue #58). Panels MUST NOT hand-roll
+`setInterval` polls or register their own LSP notification listeners.
+
+- The store owns a monotonic **`analysisRevision`** signal that bumps when:
+  1. the server reaches `Running` (initial analysis),
+  2. `basilisk/moduleChanged` fires (re-analysis complete),
+  3. diagnostics change (debounced 300 ms).
+- Panels subscribe with a signals `effect(...)` (see
+  `module-explorer.ts::wireReactiveRefresh`) so a state change fires a refresh
+  automatically — the user never has to click Refresh to see the first result.
+- Tests: `vscode-extension/src/test/suite/store-reactivity.test.ts`.
+
 ---
 
 ## Type Health {#EXTACT-HEALTH}

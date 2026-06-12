@@ -136,7 +136,12 @@ enum InferredVariance {
 pub(crate) struct ProtocolVarianceMismatch;
 
 impl Rule for ProtocolVarianceMismatch {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Build a map of TypeVar name -> (is_covariant, is_contravariant).
         // Skip ParamSpec and TypeVarTuple — they don't have traditional variance.
         let typevar_variance: HashMap<&str, (bool, bool)> = module

@@ -42,7 +42,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct TypeAliasTypeViolation;
 
 impl Rule for TypeAliasTypeViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for violation in &module.type_alias_type_violations {
             let (message, help) = match &violation.kind {
                 TypeAliasTypeViolationKind::InvalidTypeExpression => (

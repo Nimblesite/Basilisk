@@ -27,7 +27,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct MissingAttributeAnnotation;
 
 impl Rule for MissingAttributeAnnotation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Collect all TypeVar names (module-level and class-body) so we can
         // exempt unannotated TypeVar assignments like `T = TypeVar("T")` from E0005.
         let typevar_names: std::collections::HashSet<&str> = module

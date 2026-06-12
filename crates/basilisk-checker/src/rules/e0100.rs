@@ -29,7 +29,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct LiteralAugmentedAssign;
 
 impl Rule for LiteralAugmentedAssign {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // First, emit any violations collected by the resolver.
         for violation in &module.literal_augmented_assign_violations {
             diagnostics.push(make_diagnostic(

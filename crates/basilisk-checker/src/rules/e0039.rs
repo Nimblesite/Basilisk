@@ -22,7 +22,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct InvalidAssertTypeCall;
 
 impl Rule for InvalidAssertTypeCall {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for call in module.assert_type_calls.iter().filter(|c| c.arg_count != 2) {
             let arg_count = call.arg_count;
             diagnostics.push(error_diagnostic_owned(

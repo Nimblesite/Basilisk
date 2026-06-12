@@ -20,7 +20,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct MissingVariableType;
 
 impl Rule for MissingVariableType {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         module
             .module_vars
             .iter()

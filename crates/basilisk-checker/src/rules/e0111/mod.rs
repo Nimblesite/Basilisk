@@ -39,7 +39,12 @@ use helpers::{
 pub(crate) struct ConstructorCallError;
 
 impl Rule for ConstructorCallError {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
         let path = &module.path;
 

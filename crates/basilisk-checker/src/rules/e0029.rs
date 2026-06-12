@@ -19,7 +19,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct TypedDictMethodNotAllowed;
 
 impl Rule for TypedDictMethodNotAllowed {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for class in module.classes.iter().filter(|c| c.is_typed_dict) {
             for method_name in &class.method_names {
                 // __init_subclass__ and __class_getitem__ are synthesised; skip them.

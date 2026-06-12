@@ -28,6 +28,7 @@
 
 pub mod cached;
 pub mod collection_inference;
+pub mod context;
 pub mod diagnostic;
 pub mod inference;
 pub mod rules;
@@ -64,7 +65,9 @@ pub fn check_with_config(
     let inline_overrides = suppression::parse_source_overrides(&module.source);
     let source = &module.source;
     let file_path = std::path::Path::new(&module.path);
-    let raw = rules::run_all(module);
+    // [CHKARCH-VERSION-TARGET] every rule sees the configured target.
+    let ctx = context::CheckContext::from_config(config);
+    let raw = rules::run_all(module, &ctx);
 
     // Build the set of symbol names imported from unresolved modules.
     // Used for cascade suppression: downstream errors referencing these names

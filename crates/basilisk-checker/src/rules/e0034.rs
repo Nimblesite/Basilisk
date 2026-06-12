@@ -34,7 +34,12 @@ fn is_final_decorator(d: &str) -> bool {
 pub(crate) struct FinalViolation;
 
 impl Rule for FinalViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Build a map of class name → ClassInfo for fast lookup.
         let class_map = super::shared::class_name_map(&module.classes);
 
