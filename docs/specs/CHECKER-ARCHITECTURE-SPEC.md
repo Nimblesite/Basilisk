@@ -1145,6 +1145,15 @@ disabled = ["BSK-E0011"]
 rules."BSK-E0010" = "warning"
 ```
 
+### Include Semantics {#CHKARCH-CONFIG-INCLUDE}
+
+`include` lists the roots scanned when no paths are given on the CLI
+(`basilisk check` with no arguments). Explicit CLI paths always override it;
+`exclude` applies within the include roots. When `include` is absent or empty,
+the current directory is scanned. Entries are resolved relative to the
+directory of the configuration file. This keeps vendored or generated trees
+the user excluded by omission out of the walk entirely (issue #37).
+
 ### Exclude Semantics {#CHKARCH-CONFIG-EXCLUDE}
 
 `exclude` (and the `per-path-overrides` keys) use **gitignore-style globs**,

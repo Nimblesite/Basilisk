@@ -397,8 +397,13 @@ pub(super) fn import_from_infos_from(node: &StmtImportFrom) -> Vec<ImportInfo> {
     }]
 }
 
+/// The locally bound name of an import alias: `asname` when present
+/// (`from X import Y as Z` binds `Z`), otherwise the imported name.
 pub(super) fn alias_name(alias: &Alias) -> String {
-    alias.name.to_string()
+    alias
+        .asname
+        .as_ref()
+        .map_or_else(|| alias.name.to_string(), ToString::to_string)
 }
 
 // ---------------------------------------------------------------------------

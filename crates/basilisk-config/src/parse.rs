@@ -22,6 +22,12 @@ pub struct BasiliskConfig {
     /// regardless of this list.
     pub exclude: Vec<String>,
 
+    /// Roots scanned when no paths are given on the CLI ([CHKARCH-CONFIG-INCLUDE]).
+    ///
+    /// Empty means "check the current directory". Explicit CLI paths always
+    /// override this list; `exclude` applies within the include roots.
+    pub include: Vec<String>,
+
     /// Additional directories to search for `.pyi` stubs.
     pub stub_paths: Vec<PathBuf>,
 
@@ -88,6 +94,7 @@ impl Default for BasiliskConfig {
                 .iter()
                 .map(|s| (*s).to_owned())
                 .collect(),
+            include: Vec::new(),
             stub_paths: Vec::new(),
             rules: HashMap::new(),
             per_module_overrides: HashMap::new(),
@@ -123,6 +130,29 @@ impl BasiliskConfig {
     }
 }
 
+/// Collect the string elements of a JSON array field, if present.
+fn json_string_array(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+) -> Option<Vec<String>> {
+    let arr = obj.get(key)?.as_array()?;
+    Some(
+        arr.iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect(),
+    )
+}
+
+/// Collect the string elements of a TOML array field, if present.
+fn toml_string_array(table: &toml::Table, key: &str) -> Option<Vec<String>> {
+    let arr = table.get(key)?.as_array()?;
+    Some(
+        arr.iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect(),
+    )
+}
+
 /// Load configuration from `basilisk.json`.
 pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
     let content = std::fs::read_to_string(path).ok()?;
@@ -131,12 +161,12 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
 
     let mut cfg = BasiliskConfig::default();
 
-    // exclude
-    if let Some(arr) = obj.get("exclude").and_then(|v| v.as_array()) {
-        cfg.exclude = arr
-            .iter()
-            .filter_map(|v| v.as_str().map(String::from))
-            .collect();
+    if let Some(exclude) = json_string_array(obj, "exclude") {
+        cfg.exclude = exclude;
+    }
+    // [CHKARCH-CONFIG-INCLUDE]
+    if let Some(include) = json_string_array(obj, "include") {
+        cfg.include = include;
     }
 
     // stub-paths / stubPaths
@@ -252,12 +282,12 @@ pub fn load_from_pyproject(path: &Path) -> Option<BasiliskConfig> {
 
     let mut cfg = BasiliskConfig::default();
 
-    // exclude
-    if let Some(arr) = basilisk.get("exclude").and_then(|v| v.as_array()) {
-        cfg.exclude = arr
-            .iter()
-            .filter_map(|v| v.as_str().map(String::from))
-            .collect();
+    if let Some(exclude) = toml_string_array(basilisk, "exclude") {
+        cfg.exclude = exclude;
+    }
+    // [CHKARCH-CONFIG-INCLUDE]
+    if let Some(include) = toml_string_array(basilisk, "include") {
+        cfg.include = include;
     }
 
     // stub-paths

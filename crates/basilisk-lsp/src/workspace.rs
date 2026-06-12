@@ -444,7 +444,26 @@ impl WorkspaceIndex {
         if let Some(search_paths) = self.search_paths_snapshot() {
             crate::import_resolver::resolve_workspace_imports(self, &search_paths);
         }
+        // Implements [ANALYSIS-SYMBOLS-INVAL] (GitHub #56): refresh dependents'
+        // imported symbols so symbol-level diagnostics don't go stale.
+        if matches!(self.mode, AnalysisMode::CrossModule) {
+            crate::cross_module::populate_cross_module_symbols(self);
+            self.build_import_graph();
+        }
         self.recheck_all_files()
+    }
+
+    /// Reload one file from disk, reporting whether its exported top-level
+    /// symbol set changed. Implements [ANALYSIS-SYMBOLS-INVAL] (GitHub #56).
+    pub fn reload_and_diff_exports(
+        &self,
+        uri: &Url,
+    ) -> Option<((Url, Vec<tower_lsp::lsp_types::Diagnostic>), bool)> {
+        let path = uri.to_file_path().ok()?;
+        let before = self.exported_symbol_names(&path);
+        let result = self.reload_from_disk(uri)?;
+        let changed = self.exported_symbol_names(&path) != before;
+        Some((result, changed))
     }
 
     /// Scan all workspace roots and populate the index.
@@ -1389,14 +1408,11 @@ mod tests {
         let test_uri = Url::from_file_path(&test_path).unwrap();
         let _ = idx.set_open(&test_uri, "from tests.helpers import AgentConfig\n", 1);
 
-        // Mirror the LSP init flow: workspace_members get added (src/ for
-        // src-layout projects), then imports are resolved.
-        let mut search_paths = crate::import_resolver::ImportSearchPaths::from_config(
+        // Mirror the LSP init flow: from_config discovers workspace_members
+        // (src/ for src-layout projects), then imports are resolved.
+        let search_paths = crate::import_resolver::ImportSearchPaths::from_config(
             &roots, &config, /*registry=*/ None,
         );
-        // Use the real init.rs discovery helper so this test exercises the
-        // production path, not a hand-built workspace_members list.
-        search_paths.workspace_members = crate::server::init::discover_workspace_members(&roots);
         crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
         recheck_all(&idx);
 

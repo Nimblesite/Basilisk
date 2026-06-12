@@ -250,15 +250,25 @@ pub(super) async fn did_change_watched_files(
         let guard = index_lock.read().await;
         let Some(index) = guard.as_ref() else { return };
 
+        // Reload changed files while diffing their exported symbol sets: in
+        // cross-module mode an export change must refresh dependents' stale
+        // symbol diagnostics. Implements [ANALYSIS-SYMBOLS-INVAL] (GitHub #56).
+        let mut exports_changed = false;
+        let cross_module = matches!(index.mode, crate::config::AnalysisMode::CrossModule);
         let reload_results: Vec<_> = reload_targets
             .iter()
-            .filter_map(|uri| index.reload_from_disk(uri))
+            .filter_map(|uri| {
+                let (result, changed) = index.reload_and_diff_exports(uri)?;
+                exports_changed |= changed && cross_module;
+                Some(result)
+            })
             .collect();
 
         // When a new module appeared, its dependents may now resolve imports
         // that were previously unresolved. Re-resolve the whole workspace so
         // their stale BSK-E0010 clears without an LSP reload (GitHub #53).
-        let publish_set = if has_created_module {
+        // Likewise when an edited module's exports changed (GitHub #56).
+        let publish_set = if has_created_module || exports_changed {
             // Drop deleted entries first so the recheck cannot resurrect them.
             for uri in &delete_targets {
                 index.forget_file(uri);

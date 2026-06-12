@@ -68,3 +68,27 @@ fn e0018_diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
     assert!(diag.help.is_some(), "E0018 should have help text");
     Ok(())
 }
+
+#[test]
+fn e0018_aliased_module_import_in_return_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    // Issues #107/#64: `from <pkg> import <mod> as <alias>` binds `<alias>` at
+    // module scope; using it in a nested function's return expression is valid.
+    let source = r#"
+from unittest.mock import patch
+from nap.api import auth as auth_mod
+
+def _patch_jwt(claims: dict[str, object]) -> object:
+    return patch.object(auth_mod, "_decode_supabase_jwt", return_value=claims)
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0018"),
+        "aliased module import used in a return expression must not fire E0018, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0018")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
