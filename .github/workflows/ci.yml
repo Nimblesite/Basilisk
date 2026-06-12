@@ -185,7 +185,10 @@ jobs:
     name: Rust Tests & Coverage
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
+    # llvm-cov instruments and compiles the whole workspace before running every
+    # target — CPU-bound, so it rides BIG_RUNNER too (see the mutation job for
+    # the opt-in contract). Falls back to the standard runner when unset.
+    runs-on: ${{ vars.BIG_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -377,12 +380,25 @@ jobs:
     # reports success in seconds, satisfying the required checks at ~zero cost.
     env:
       RUN: ${{ needs.changes.outputs.code }}
-    runs-on: ubuntu-24.04
+    # Big-runner opt-in via a single org/repo Actions variable. Set BIG_RUNNER to
+    # the label of the Nimblesite GitHub-hosted larger runner to route the real,
+    # CPU-bound mutation work onto it; leave it unset and the job falls back to
+    # the standard hosted runner so CI never breaks on a missing label. The
+    # variable is the single source of truth — change the machine in one place.
+    #
+    # The `code` guard keeps the larger runner off no-op shards: this job has no
+    # job-level `if` (the four shards must always report as required checks), so
+    # on a docs/config-only PR every shard still starts but every step no-ops.
+    # Only bill BIG_RUNNER when there is actually Rust to mutate; otherwise these
+    # seconds-long no-ops run on the standard runner.
+    runs-on: ${{ (needs.changes.outputs.code == 'true' && vars.BIG_RUNNER) || 'ubuntu-24.04' }}
     # cargo-mutants rebuilds + reruns the test suite once per mutant, so it is
-    # heavily CPU-bound. The 20-minute budget was calibrated for the retired
-    # 8-core larger runners; on the standard hosted runner the slower shards
-    # tip over the limit non-deterministically. 60 min gives ~3x headroom
-    # without weakening the mutation gate (the merge job still enforces score).
+    # heavily CPU-bound — the primary reason BIG_RUNNER exists. The 20-minute
+    # budget was calibrated for an 8-core larger runner; the standard hosted
+    # runner's slower shards tip over it non-deterministically, so 60 min gives
+    # ~3x headroom on the fallback path without weakening the mutation gate (the
+    # merge job still enforces score). On BIG_RUNNER the shards finish well
+    # under it; the ceiling is harmless.
     timeout-minutes: 60
     strategy:
       fail-fast: false
