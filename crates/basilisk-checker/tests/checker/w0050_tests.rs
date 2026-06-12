@@ -109,3 +109,94 @@ fn test_w0050_tuple_literal_no_warning() {
     // Collection types rarely match exactly due to inference differences
     assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
 }
+
+// Issue #110: the annotation on a Pydantic/dataclass/attrs field is load-bearing —
+// removing it deletes the field. W0050 must never fire there.
+
+#[test]
+fn test_w0050_pydantic_basemodel_field_not_flagged() {
+    let diags = run(concat!(
+        "from pydantic import BaseModel\n",
+        "class ToolResultIn(BaseModel):\n",
+        "    ok: bool = True\n",
+    ))
+    .unwrap();
+    assert!(
+        !diags.iter().any(|d| d.code.code == "BSK-W0050"),
+        "W0050 on a BaseModel field deletes the field when autofixed"
+    );
+}
+
+#[test]
+fn test_w0050_pydantic_basemodel_transitive_subclass_field_not_flagged() {
+    let diags = run(concat!(
+        "from pydantic import BaseModel\n",
+        "class Base(BaseModel):\n",
+        "    name: str = \"x\"\n",
+        "class Child(Base):\n",
+        "    count: int = 0\n",
+    ))
+    .unwrap();
+    assert!(
+        !diags.iter().any(|d| d.code.code == "BSK-W0050"),
+        "W0050 on a transitive BaseModel subclass field deletes the field when autofixed"
+    );
+}
+
+#[test]
+fn test_w0050_dataclass_field_not_flagged() {
+    let diags = run(concat!(
+        "from dataclasses import dataclass\n",
+        "@dataclass(frozen=True, kw_only=True)\n",
+        "class GitOutcome:\n",
+        "    committed: bool = False\n",
+    ))
+    .unwrap();
+    assert!(
+        !diags.iter().any(|d| d.code.code == "BSK-W0050"),
+        "W0050 on a dataclass field turns an init param into an inert class attribute"
+    );
+}
+
+#[test]
+fn test_w0050_dataclasses_dotted_decorator_field_not_flagged() {
+    let diags = run(concat!(
+        "import dataclasses\n",
+        "@dataclasses.dataclass\n",
+        "class Manifest:\n",
+        "    method: str = \"POST\"\n",
+    ))
+    .unwrap();
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+}
+
+#[test]
+fn test_w0050_attrs_define_field_not_flagged() {
+    let diags = run(concat!(
+        "from attrs import define\n",
+        "@define\n",
+        "class AuthContext:\n",
+        "    is_platform_admin: bool = False\n",
+    ))
+    .unwrap();
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+}
+
+#[test]
+fn test_w0050_attr_s_decorator_field_not_flagged() {
+    let diags = run(concat!(
+        "import attr\n",
+        "@attr.s(auto_attribs=True)\n",
+        "class AgentConfig:\n",
+        "    retries: int = 3\n",
+    ))
+    .unwrap();
+    assert!(!diags.iter().any(|d| d.code.code == "BSK-W0050"));
+}
+
+#[test]
+fn test_w0050_plain_class_attribute_still_flagged() {
+    // Regression guard: the exemption must not swallow plain classes.
+    let diags = run("class Plain:\n    x: int = 42\n").unwrap();
+    assert!(diags.iter().any(|d| d.code.code == "BSK-W0050"));
+}

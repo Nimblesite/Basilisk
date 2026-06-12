@@ -32,7 +32,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct InconsistentTypeVarOrder;
 
 impl Rule for InconsistentTypeVarOrder {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Build a map of class_name -> ClassInfo for classes in this module.
         let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
             basilisk_resolver::name_lookup(&module.classes);

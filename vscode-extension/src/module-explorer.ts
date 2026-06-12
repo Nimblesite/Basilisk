@@ -8,6 +8,7 @@
  * notifications.
  */
 
+import { effect } from "@preact/signals-core";
 import * as vscode from "vscode";
 import { type Store } from "./store";
 import { Logger } from "./logger";
@@ -367,9 +368,6 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
 
 // ── Registration ─────────────────────────────────────────────────────────
 
-/** Interval (ms) for polling client readiness to wire notification listeners. */
-const CLIENT_POLL_INTERVAL_MS = 1000;
-
 /**
  * Register clipboard and action commands for the module explorer.
  *
@@ -451,30 +449,27 @@ export function registerModuleExplorer(
 
   provider.restoreViewMode(context);
   const commandDisposables = registerExplorerCommands(context, provider);
-  wireModuleChangedListener(store, provider);
+  wireReactiveRefresh(store, provider);
 
   return { provider, disposables: commandDisposables };
 }
 
 /**
- * Watch the store's client signal and register a notification listener for
- * `basilisk/moduleChanged` whenever a new client connects.
+ * Subscribe the panel to the store's centralized `analysisRevision` signal
+ * ([EXTACT-REACTIVE-STATE], issue #58): server-Running, re-analysis
+ * completion, and diagnostics changes all bump the revision in the store, so
+ * the panel refreshes automatically — no per-panel polling or notification
+ * plumbing.
  */
-function wireModuleChangedListener(store: Store, provider: ModuleExplorerProvider): void {
-  let registered = false;
-
-  // Poll for client availability (same pattern as test-explorer).
-  const interval = setInterval(() => {
-    const client = store.client.value;
-    if (!client?.isRunning() || registered) {
-      if (client === undefined) { registered = false; }
-      return;
-    }
-    registered = true;
-    client.onNotification("basilisk/moduleChanged", () => {
+export function wireReactiveRefresh(store: Store, provider: ModuleExplorerProvider): void {
+  let lastRevision = store.analysisRevision.value;
+  const dispose = effect(() => {
+    const revision = store.analysisRevision.value;
+    // The effect runs once on subscription — only refresh on real bumps.
+    if (revision !== lastRevision) {
+      lastRevision = revision;
       provider.refresh();
-    });
-  }, CLIENT_POLL_INTERVAL_MS);
-
-  provider.disposables.push({ dispose: () => { clearInterval(interval); } });
+    }
+  });
+  provider.disposables.push({ dispose });
 }

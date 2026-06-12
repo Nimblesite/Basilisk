@@ -49,6 +49,16 @@ interface WelcomeContribution {
   readonly contents: string;
 }
 
+interface CommandContribution {
+  readonly command: string;
+  readonly title: string;
+  readonly icon?: string;
+}
+
+interface ConfigurationContribution {
+  readonly properties?: Record<string, { type?: string; default?: unknown }>;
+}
+
 interface PackageJSON {
   contributes?: {
     views?: Record<string, ViewContribution[]>;
@@ -57,6 +67,8 @@ interface PackageJSON {
       "view/item/context"?: MenuContribution[];
     };
     viewsWelcome?: WelcomeContribution[];
+    commands?: CommandContribution[];
+    configuration?: ConfigurationContribution | ConfigurationContribution[];
   };
 }
 
@@ -320,6 +332,102 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     for (const cmd of PROMOTED_TOOLBAR_COMMANDS) {
       assertCommandRegistered(cmd, "Promoted toolbar action");
     }
+  });
+
+  // Issue #113 [VSIX-MODULE-EXPLORER-TOOLBAR]: the Modules toolbar contract.
+  // Read-only view-state actions render as deterministically ordered inline
+  // icons; mutating actions and server control live in separate ordered
+  // overflow groups (divider between them); inline glyphs never collide; and
+  // the unrefined Fix All is feature-flagged off by default.
+  test("Modules toolbar: deterministic order, read-only inline, no duplicate glyphs", function () {
+    const contributes = loadContributes();
+    const titleMenus = (contributes?.menus?.["view/title"] ?? []).filter(
+      (entry) => entry.when.includes("view == basilisk.moduleExplorer"),
+    );
+    assert.ok(titleMenus.length > 0, "Modules view must contribute toolbar entries");
+
+    for (const entry of titleMenus) {
+      assert.match(
+        entry.group ?? "",
+        /@\d+$/,
+        `"${entry.command}" must carry an explicit @N order, got: ${entry.group}`,
+      );
+    }
+
+    const inline = titleMenus.filter((entry) => entry.group?.startsWith("navigation") === true);
+    const inlineOrdered = [...inline].sort(
+      (a, b) =>
+        Number(a.group?.split("@")[1] ?? 0) - Number(b.group?.split("@")[1] ?? 0),
+    );
+    assert.deepStrictEqual(
+      inlineOrdered.map((entry) => entry.command),
+      [
+        "basilisk.refreshModuleExplorer",
+        "basilisk.collapseModuleExplorer",
+        "basilisk.toggleModuleExplorerView",
+        "basilisk.filterModuleExplorer",
+        "basilisk.sortModuleExplorer",
+      ],
+      "inline toolbar must be exactly the read-only view-state actions, in order",
+    );
+
+    // Mutating + server-control actions live in the overflow menu, in
+    // distinct groups so VS Code renders a divider between them.
+    const overflow = new Map(
+      titleMenus
+        .filter((entry) => entry.group?.startsWith("navigation") !== true)
+        .map((entry) => [entry.command, entry.group ?? ""]),
+    );
+    const fixAllGroup = overflow.get("basilisk.fixWorkspace");
+    const organizeGroup = overflow.get("basilisk.organizeImports");
+    const restartGroup = overflow.get("basilisk.restartServer");
+    assert.ok(fixAllGroup, "fixWorkspace must be an overflow action, not an inline icon");
+    assert.ok(organizeGroup, "organizeImports must be an overflow action, not an inline icon");
+    assert.ok(restartGroup, "restartServer must be an overflow action, not an inline icon");
+    assert.notStrictEqual(
+      restartGroup.split("@")[0],
+      fixAllGroup.split("@")[0],
+      "server control must be divided from mutating actions",
+    );
+
+    // No two inline buttons may render the same (or near-identical) glyph.
+    const commandIcons = new Map(
+      (contributes?.commands ?? []).map((cmd) => [cmd.command, cmd.icon]),
+    );
+    const inlineIcons = inline.map((entry) => commandIcons.get(entry.command));
+    assert.strictEqual(
+      new Set(inlineIcons).size,
+      inlineIcons.length,
+      `inline toolbar icons must be unique, got: ${inlineIcons.join(", ")}`,
+    );
+  });
+
+  test("Fix All is feature-flagged: config default off, when-clause gated", function () {
+    const contributes = loadContributes();
+    const configSections = Array.isArray(contributes?.configuration)
+      ? contributes.configuration
+      : [contributes?.configuration].filter(Boolean) as ConfigurationContribution[];
+    const flag = configSections
+      .map((section) => section.properties?.["basilisk.experimental.fixAll"])
+      .find((prop) => prop !== undefined);
+    assert.ok(flag, "basilisk.experimental.fixAll setting must be declared");
+    assert.strictEqual(flag.type, "boolean");
+    assert.strictEqual(flag.default, false, "Fix All must be off by default");
+
+    const fixAllEntry = (contributes?.menus?.["view/title"] ?? []).find(
+      (entry) =>
+        entry.command === "basilisk.fixWorkspace" &&
+        entry.when.includes("view == basilisk.moduleExplorer"),
+    );
+    assert.ok(fixAllEntry, "fixWorkspace must be contributed to the Modules toolbar");
+    assert.ok(
+      fixAllEntry.when.includes("config.basilisk.experimental.fixAll"),
+      `fixWorkspace must be gated on the experimental flag, got: ${fixAllEntry.when}`,
+    );
+    assert.ok(
+      fixAllEntry.when.includes("basilisk.serverState == 'running'"),
+      "fixWorkspace must stay gated on the server running",
+    );
   });
 
   // Defect 3 of issue #103: Server Info went stale — the provider only

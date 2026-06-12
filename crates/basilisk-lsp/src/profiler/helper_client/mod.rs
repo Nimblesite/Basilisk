@@ -245,15 +245,23 @@ async fn handshake(
     let python_version =
         match timeout(HANDSHAKE_TIMEOUT, read_message::<_, Message>(&mut reader)).await {
             Ok(Ok(Some(Message::Attached { python, .. }))) => python,
+            Ok(Ok(Some(Message::AttachFailed { reason, .. }))) => {
+                // The helper reported the real cause (issue #81) — classify it
+                // into an actionable message instead of a bare EOF.
+                return Err(SamplerError::AttachFailed(classify_attach_failure(
+                    pid, &reason,
+                )));
+            }
             Ok(Ok(Some(Message::Samples { .. } | Message::Stopped))) => {
                 return Err(SamplerError::AttachFailed(
                     "helper sent an unexpected message before confirming attach".to_owned(),
                 ))
             }
             Ok(Ok(None)) => {
-                return Err(SamplerError::AttachFailed(
-                    "helper closed the connection before confirming attach".to_owned(),
-                ))
+                // Clean EOF without an AttachFailed report (old helper binary
+                // or a crash): harvest the helper's exit status so the cause
+                // is at least partially diagnosable (issue #81).
+                return Err(SamplerError::AttachFailed(describe_helper_eof(child).await));
             }
             Ok(Err(err)) => {
                 return Err(SamplerError::AttachFailed(format!(
@@ -274,6 +282,58 @@ async fn handshake(
         writer,
         python_version,
     })
+}
+
+/// Map the helper's raw attach-failure reason to an actionable message.
+///
+/// Distinguishes the three failure modes from issue #81: target gone,
+/// permission denied (needs elevation), and any other py-spy attach error.
+fn classify_attach_failure(pid: u32, reason: &str) -> String {
+    let lowered = reason.to_lowercase();
+    if lowered.contains("no such process")
+        || lowered.contains("no process found")
+        || lowered.contains("process exited")
+        || lowered.contains("esrch")
+    {
+        return format!(
+            "target process (PID {pid}) is no longer running — it may have exited \
+             before the profiler could attach. Underlying error: {reason}"
+        );
+    }
+    if lowered.contains("permission denied")
+        || lowered.contains("operation not permitted")
+        || lowered.contains("task_for_pid")
+        || lowered.contains("access is denied")
+    {
+        return format!(
+            "permission denied attaching to PID {pid} — profiling another \
+             process requires elevated privileges on this platform. \
+             Underlying error: {reason}"
+        );
+    }
+    format!("helper could not attach to PID {pid}: {reason}")
+}
+
+/// Describe a helper that hit EOF before confirming attach, harvesting its
+/// exit status when it terminates promptly.
+async fn describe_helper_eof(mut child: tokio::process::Child) -> String {
+    let exit = timeout(Duration::from_secs(2), child.wait()).await;
+    match exit {
+        Ok(Ok(status)) => format!(
+            "helper closed the connection before confirming attach \
+             (helper exit status: {status}); check the helper's stderr in the log"
+        ),
+        Ok(Err(err)) => format!(
+            "helper closed the connection before confirming attach \
+             (could not read helper exit status: {err})"
+        ),
+        Err(_elapsed) => {
+            let _ = child.start_kill();
+            "helper closed the connection before confirming attach \
+             (helper still running; killed)"
+                .to_owned()
+        }
+    }
 }
 
 /// Spawn the helper process per the requested mode (detached — never awaited).
@@ -414,6 +474,10 @@ async fn read_until_stopped(
             }
             Ok(Some(Message::Stopped) | None) => break,
             Ok(Some(Message::Attached { .. })) => {}
+            Ok(Some(Message::AttachFailed { reason, .. })) => {
+                warn!(pid, %reason, "helper reported attach failure mid-stream");
+                break;
+            }
             Err(err) => {
                 warn!(%err, "error reading from profiler helper");
                 break;

@@ -56,7 +56,12 @@ struct SourceComparison {
 pub(crate) struct CrossTypeDataclassOrderComparison;
 
 impl Rule for CrossTypeDataclassOrderComparison {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let transform_classes = super::guards::collect_transform_classes(module);
 
         let all_dc_classes = collect_dc_classes(module, &transform_classes);

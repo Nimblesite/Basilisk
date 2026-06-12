@@ -53,7 +53,12 @@ fn has_enum_members(cls: &ClassInfo) -> bool {
 pub(crate) struct EnumWithMembersFinal;
 
 impl Rule for EnumWithMembersFinal {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let class_map = super::shared::class_name_map(&module.classes);
 
         for child in &module.classes {

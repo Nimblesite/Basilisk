@@ -39,7 +39,12 @@ pub(crate) struct InvalidTypedDictCall;
 const ALLOWED_KEYWORDS: &[&str] = &["total", "extra_items", "closed"];
 
 impl Rule for InvalidTypedDictCall {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for td in &module.typeddict_calls {
             // Check 1: second arg must be a dict literal.
             if td.second_arg_kind == TypedDictSecondArgKind::NotDictLiteral {

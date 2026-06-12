@@ -32,7 +32,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct MatchArgsFalseAccess;
 
 impl Rule for MatchArgsFalseAccess {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Collect names of dataclasses that have match_args=False AND do not
         // already define __match_args__ in their body.
         let no_match_args: HashSet<&str> = module

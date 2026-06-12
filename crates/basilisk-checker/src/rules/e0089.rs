@@ -39,7 +39,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct Pep695InvalidBound;
 
 impl Rule for Pep695InvalidBound {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for violation in &module.pep695_bound_violations {
             let message = match &violation.kind {
                 Pep695BoundViolationKind::ListLiteralBound => format!(

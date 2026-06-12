@@ -21,7 +21,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct TypeVarSingleConstraint;
 
 impl Rule for TypeVarSingleConstraint {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for tv in &module.typevar_calls {
             check_typevar_constraints(tv, module, diagnostics);
         }

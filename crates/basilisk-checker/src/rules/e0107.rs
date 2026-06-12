@@ -69,7 +69,12 @@ struct VarianceViolation {
 pub(crate) struct VarianceIncompatibleBase;
 
 impl Rule for VarianceIncompatibleBase {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Build a map of TypeVar name -> variance.
         let tv_variance: HashMap<&str, Variance> = module
             .typevar_calls

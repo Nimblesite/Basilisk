@@ -32,7 +32,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct ProtocolNewSelfAttrViolation;
 
 impl Rule for ProtocolNewSelfAttrViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Find protocol classes.
         let protocol_classes: Vec<_> = module
             .classes

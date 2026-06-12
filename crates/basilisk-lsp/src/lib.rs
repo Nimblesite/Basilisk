@@ -59,6 +59,7 @@ pub mod type_definition;
 pub mod type_hierarchy;
 pub mod util;
 pub mod uv_commands;
+pub mod uv_failure;
 pub mod websocket;
 pub mod workspace;
 pub mod workspace_analysis;

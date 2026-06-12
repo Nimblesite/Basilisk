@@ -28,7 +28,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct LambdaMissingAnnotations;
 
 impl Rule for LambdaMissingAnnotations {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Module-level: `f = lambda x: x + 1` without annotation
         for var in &module.module_vars {
             if var.rhs_kind == RhsKind::Lambda && !var.has_annotation {

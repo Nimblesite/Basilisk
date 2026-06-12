@@ -66,6 +66,19 @@ pub struct BasiliskConfig {
     /// Generated `.pyi` files are placed here and automatically included
     /// in the stub search path. Defaults to `".basilisk/stubs"`.
     pub auto_stub_path: PathBuf,
+
+    /// Target Python version for version-aware rules, e.g. `"3.9"`.
+    ///
+    /// `None` means "use the checker's centralized default" (3.12, see
+    /// `basilisk_checker::context::DEFAULT_TARGET_VERSION`). The LSP fills
+    /// this from its `[LSPUV-PYTHON-VERSION-RESOLUTION-ORDER]` cascade.
+    /// Implements [CHKARCH-VERSION-TARGET].
+    pub python_version: Option<String>,
+
+    /// Target platform for platform-aware rules: `"linux"`, `"darwin"`,
+    /// or `"win32"`. `None` means platform-neutral analysis.
+    /// Implements [CHKARCH-VERSION-TARGET].
+    pub python_platform: Option<String>,
 }
 
 impl Default for BasiliskConfig {
@@ -83,6 +96,8 @@ impl Default for BasiliskConfig {
             uv_dependency_diagnostics: false,
             auto_stub_mode: "hybrid".to_owned(),
             auto_stub_path: PathBuf::from(".basilisk/stubs"),
+            python_version: None,
+            python_platform: None,
         }
     }
 }
@@ -206,6 +221,24 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
         cfg.auto_stub_path = PathBuf::from(val);
     }
 
+    // pythonVersion / python-version [CHKARCH-VERSION-TARGET]
+    if let Some(val) = obj
+        .get("pythonVersion")
+        .or_else(|| obj.get("python-version"))
+        .and_then(|v| v.as_str())
+    {
+        cfg.python_version = Some(val.to_owned());
+    }
+
+    // pythonPlatform / python-platform [CHKARCH-VERSION-TARGET]
+    if let Some(val) = obj
+        .get("pythonPlatform")
+        .or_else(|| obj.get("python-platform"))
+        .and_then(|v| v.as_str())
+    {
+        cfg.python_platform = Some(val.to_owned());
+    }
+
     Some(cfg)
 }
 
@@ -299,6 +332,16 @@ pub fn load_from_pyproject(path: &Path) -> Option<BasiliskConfig> {
     // auto-stub-path
     if let Some(val) = basilisk.get("auto-stub-path").and_then(|v| v.as_str()) {
         cfg.auto_stub_path = PathBuf::from(val);
+    }
+
+    // python-version [CHKARCH-VERSION-TARGET]
+    if let Some(val) = basilisk.get("python-version").and_then(|v| v.as_str()) {
+        cfg.python_version = Some(val.to_owned());
+    }
+
+    // python-platform [CHKARCH-VERSION-TARGET]
+    if let Some(val) = basilisk.get("python-platform").and_then(|v| v.as_str()) {
+        cfg.python_platform = Some(val.to_owned());
     }
 
     Some(cfg)

@@ -22,3 +22,5 @@ mod redundant_annotation;
 mod rules_coverage;
 #[path = "checker/suppression_tests.rs"]
 mod suppression;
+#[path = "checker/version_target_tests.rs"]
+mod version_target;

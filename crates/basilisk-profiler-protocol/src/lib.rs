@@ -57,6 +57,15 @@ pub enum Message {
         /// Detected Python version (e.g. `"3.12.0"`).
         python: String,
     },
+    /// The attach failed; carries the real cause so the LSP can diagnose it
+    /// (issue #81 — previously the helper exited without reporting and the
+    /// LSP saw only an undiagnosable EOF).
+    AttachFailed {
+        /// Target PID.
+        pid: u32,
+        /// Human-readable failure cause (e.g. the py-spy attach error).
+        reason: String,
+    },
     /// A batch of stack-trace samples from a single sampling tick.
     Samples {
         /// The sampled traces.

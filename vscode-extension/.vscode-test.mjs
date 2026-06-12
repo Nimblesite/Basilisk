@@ -1,8 +1,22 @@
 import { defineConfig } from '@vscode/test-cli';
+import crypto from 'crypto';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// VS Code listens on a Unix socket inside the user-data dir; macOS caps
+// AF_UNIX socket paths at 104 bytes ("IPC handle longer than 103 chars").
+// Deep checkouts overflow that and the electron main process dies with
+// `listen EINVAL`, so fall back to a short per-checkout dir under tmp.
+const defaultUserDataDir = path.join(__dirname, '.vscode-test', 'user-data');
+const userDataDir = defaultUserDataDir.length > 80
+    ? path.join(
+        os.tmpdir(),
+        `bsk-vsct-${crypto.createHash('sha256').update(__dirname).digest('hex').slice(0, 8)}`,
+    )
+    : defaultUserDataDir;
 
 export default defineConfig({
     tests: [{
@@ -11,7 +25,7 @@ export default defineConfig({
         // This enables whole-module analysis tests that write Python files to the
         // workspace root without opening them in the editor.
         workspaceFolder: path.join(__dirname, 'test-fixtures', 'workspace'),
-        launchArgs: ['--disable-extensions', '--user-data-dir', path.join(__dirname, '.vscode-test', 'user-data')],
+        launchArgs: ['--disable-extensions', '--user-data-dir', userDataDir],
         // Coverage: tell c8 where compiled sources live. Without this,
         // @vscode/test-cli defaults to 'src' (TypeScript sources), so
         // include patterns like 'out/**/*.js' resolve against src/ and

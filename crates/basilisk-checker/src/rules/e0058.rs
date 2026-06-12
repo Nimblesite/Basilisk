@@ -92,7 +92,12 @@ fn check_annotation(ann: &str, name_span: Span, path: &str, diagnostics: &mut Ve
 pub(crate) struct AnnotatedTooFewArguments;
 
 impl Rule for AnnotatedTooFewArguments {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
         let path = &module.path;
 

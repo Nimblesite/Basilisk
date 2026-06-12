@@ -2,8 +2,9 @@
 //! BSK-E0150: Variable defined only in dead version/platform branch.
 //!
 //! When `sys.version_info`, `sys.platform`, or `os.name` is compared against
-//! a constant, one branch may be statically known to be dead for the target
-//! Python version (3.12) and platform.  Variables defined exclusively in a
+//! a constant, one branch may be statically known to be dead for the
+//! *configured* target Python version ([CHKARCH-VERSION-TARGET], issue #93)
+//! and platform.  Variables defined exclusively in a
 //! dead branch are undefined outside that branch.
 //!
 //! ```python
@@ -33,31 +34,43 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0150",
 };
 
-/// Target Python version for dead-branch analysis.
-const TARGET_VERSION: (u32, u32) = (3, 12);
-
 /// Emits BSK-E0150 for variables defined only in dead version/platform branches.
 pub(crate) struct DeadBranchVariable;
 
 impl Rule for DeadBranchVariable {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 
-        check_stmts_for_dead_branches(&parsed.ast.body, &module.path, diagnostics);
+        check_stmts_for_dead_branches(
+            &parsed.ast.body,
+            ctx.target_version,
+            &module.path,
+            diagnostics,
+        );
     }
 }
 
 /// Recursively walk statements looking for version/platform guard if-statements.
-fn check_stmts_for_dead_branches(stmts: &[Stmt], path: &str, diagnostics: &mut Vec<Diagnostic>) {
+fn check_stmts_for_dead_branches(
+    stmts: &[Stmt],
+    target: (u32, u32),
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     for stmt in stmts {
         match stmt {
             Stmt::FunctionDef(func) => {
-                check_function_body(&func.body, path, diagnostics);
+                check_function_body(&func.body, target, path, diagnostics);
             }
             Stmt::ClassDef(cls) => {
-                check_stmts_for_dead_branches(&cls.body, path, diagnostics);
+                check_stmts_for_dead_branches(&cls.body, target, path, diagnostics);
             }
             _ => {}
         }
@@ -65,7 +78,12 @@ fn check_stmts_for_dead_branches(stmts: &[Stmt], path: &str, diagnostics: &mut V
 }
 
 /// Check a function body for version/platform guards and dead-branch variables.
-fn check_function_body(stmts: &[Stmt], path: &str, diagnostics: &mut Vec<Diagnostic>) {
+fn check_function_body(
+    stmts: &[Stmt],
+    target: (u32, u32),
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     // Collect all assignments from dead branches at this level.
     let mut dead_vars: HashSet<String> = HashSet::new();
     // Collect all assignments from live branches to exclude from dead_vars.
@@ -74,7 +92,7 @@ fn check_function_body(stmts: &[Stmt], path: &str, diagnostics: &mut Vec<Diagnos
     for stmt in stmts {
         match stmt {
             Stmt::If(if_stmt) => {
-                if let Some(dead_branch) = identify_dead_branch(&if_stmt.test) {
+                if let Some(dead_branch) = identify_dead_branch(&if_stmt.test, target) {
                     match dead_branch {
                         DeadBranch::IfBody => {
                             // The if-body is dead; else-body is live.
@@ -99,20 +117,22 @@ fn check_function_body(stmts: &[Stmt], path: &str, diagnostics: &mut Vec<Diagnos
                     &assign.value,
                     &dead_vars,
                     &live_vars,
+                    target,
                     path,
                     diagnostics,
                 );
                 // Also check targets (for augmented assignment patterns).
-                for target in &assign.targets {
+                for assign_target in &assign.targets {
                     check_expr_for_dead_var_usage(
-                        target,
+                        assign_target,
                         &dead_vars,
                         &live_vars,
+                        target,
                         path,
                         diagnostics,
                     );
                     // This assignment makes the variable live now.
-                    if let Expr::Name(name) = target {
+                    if let Expr::Name(name) = assign_target {
                         let _ = live_vars.insert(name.id.to_string());
                     }
                 }
@@ -122,17 +142,25 @@ fn check_function_body(stmts: &[Stmt], path: &str, diagnostics: &mut Vec<Diagnos
                     &expr_stmt.value,
                     &dead_vars,
                     &live_vars,
+                    target,
                     path,
                     diagnostics,
                 );
             }
             Stmt::AnnAssign(ann_assign) => {
                 if let Some(value) = &ann_assign.value {
-                    check_expr_for_dead_var_usage(value, &dead_vars, &live_vars, path, diagnostics);
+                    check_expr_for_dead_var_usage(
+                        value,
+                        &dead_vars,
+                        &live_vars,
+                        target,
+                        path,
+                        diagnostics,
+                    );
                 }
             }
             Stmt::FunctionDef(func) => {
-                check_function_body(&func.body, path, diagnostics);
+                check_function_body(&func.body, target, path, diagnostics);
             }
             _ => {}
         }
@@ -149,7 +177,7 @@ enum DeadBranch {
 
 /// Determine if a test expression is a version/platform guard and which branch
 /// is dead.
-fn identify_dead_branch(test: &Expr) -> Option<DeadBranch> {
+fn identify_dead_branch(test: &Expr, target: (u32, u32)) -> Option<DeadBranch> {
     let Expr::Compare(cmp) = test else {
         return None;
     };
@@ -166,10 +194,10 @@ fn identify_dead_branch(test: &Expr) -> Option<DeadBranch> {
 
     // Check for `sys.version_info <op> (major, minor[, micro])`.
     if is_version_info_attr(left) {
-        return check_version_guard(*op, right);
+        return check_version_guard(*op, right, target);
     }
     if is_version_info_attr(right) {
-        return check_version_guard(flip_op(*op), left);
+        return check_version_guard(flip_op(*op), left, target);
     }
 
     // Check for `sys.platform <op> "string"`.
@@ -220,11 +248,10 @@ fn flip_op(op: CmpOp) -> CmpOp {
 
 /// Parse a version tuple `(major, minor)` or `(major, minor, micro)` from an
 /// expression and determine dead branch.
-fn check_version_guard(op: CmpOp, version_expr: &Expr) -> Option<DeadBranch> {
+fn check_version_guard(op: CmpOp, version_expr: &Expr, target: (u32, u32)) -> Option<DeadBranch> {
     let version = parse_version_tuple(version_expr)?;
 
-    // Compare target version against the guard version.
-    let target = (TARGET_VERSION.0, TARGET_VERSION.1);
+    // Compare the configured target version against the guard version.
     let guard = (version.0, version.1);
 
     let condition_true = match op {
@@ -300,8 +327,8 @@ fn collect_assignments(stmts: &[Stmt], out: &mut HashSet<String>) {
     for stmt in stmts {
         match stmt {
             Stmt::Assign(assign) => {
-                for target in &assign.targets {
-                    if let Expr::Name(name) = target {
+                for assign_target in &assign.targets {
+                    if let Expr::Name(name) = assign_target {
                         let _ = out.insert(name.id.to_string());
                     }
                 }
@@ -321,6 +348,7 @@ fn check_expr_for_dead_var_usage(
     expr: &Expr,
     dead_vars: &HashSet<String>,
     live_vars: &HashSet<String>,
+    target: (u32, u32),
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -342,7 +370,7 @@ fn check_expr_for_dead_var_usage(
                     Some(format!(
                         "`{var_name}` is assigned in a branch that is unreachable \
                          for the target Python version ({}.{})",
-                        TARGET_VERSION.0, TARGET_VERSION.1
+                        target.0, target.1
                     )),
                     Some(
                         "PEP 484: type checkers should evaluate version/platform guards \
@@ -353,13 +381,27 @@ fn check_expr_for_dead_var_usage(
             }
         }
         Expr::Call(call) => {
-            check_expr_for_dead_var_usage(&call.func, dead_vars, live_vars, path, diagnostics);
+            check_expr_for_dead_var_usage(
+                &call.func,
+                dead_vars,
+                live_vars,
+                target,
+                path,
+                diagnostics,
+            );
             for arg in &call.arguments.args {
-                check_expr_for_dead_var_usage(arg, dead_vars, live_vars, path, diagnostics);
+                check_expr_for_dead_var_usage(arg, dead_vars, live_vars, target, path, diagnostics);
             }
         }
         Expr::Attribute(attr) => {
-            check_expr_for_dead_var_usage(&attr.value, dead_vars, live_vars, path, diagnostics);
+            check_expr_for_dead_var_usage(
+                &attr.value,
+                dead_vars,
+                live_vars,
+                target,
+                path,
+                diagnostics,
+            );
         }
         _ => {}
     }

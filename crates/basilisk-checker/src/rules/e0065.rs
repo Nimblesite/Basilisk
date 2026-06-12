@@ -35,7 +35,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct FloatParamIntAttrAccess;
 
 impl Rule for FloatParamIntAttrAccess {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for access in &module.float_param_int_attr_accesses {
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),

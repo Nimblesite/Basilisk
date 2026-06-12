@@ -69,7 +69,12 @@ fn keyword_rhs_mismatch(annotation: &str, rhs: &RhsKind) -> Option<&'static str>
 pub(crate) struct InvalidNamedTupleCall;
 
 impl Rule for InvalidNamedTupleCall {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Build map from NamedTuple LHS name → definition.
         let nt_map: HashMap<&str, &NamedTupleDefInfo> = module
             .namedtuple_defs

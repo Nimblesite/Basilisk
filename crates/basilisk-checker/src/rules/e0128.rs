@@ -53,7 +53,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct TypeVarDefaultReferential;
 
 impl Rule for TypeVarDefaultReferential {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let typevar_names: HashSet<&str> =
             basilisk_resolver::collect_name_set(&module.typevar_calls);
 

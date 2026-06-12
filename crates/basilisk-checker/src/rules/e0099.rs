@@ -28,7 +28,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct ProtocolInstantiation;
 
 impl Rule for ProtocolInstantiation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for violation in &module.protocol_instantiation_violations {
             let message = if violation.is_abstract {
                 format!(

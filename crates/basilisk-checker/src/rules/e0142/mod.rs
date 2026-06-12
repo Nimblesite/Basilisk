@@ -45,7 +45,12 @@ use helpers::{
 pub(crate) struct DataclassTransformClassViolation;
 
 impl Rule for DataclassTransformClassViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let transform_bases = collect_transform_base_classes(module);
         if transform_bases.is_empty() {
             return;

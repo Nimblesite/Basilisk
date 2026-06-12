@@ -148,6 +148,17 @@ https://code.visualstudio.com/api/references/vscode-api#commands
 
 This rule applies equally to VS Code, Neovim, and Zed extensions.
 
+### Modules Toolbar Contract (VS Code) {#VSIX-MODULE-EXPLORER-TOOLBAR}
+
+The `basilisk.moduleExplorer` (MODULES) view title-bar follows a fixed contract (issue #113):
+
+1. **Deterministic order.** Every `view/title` entry carries an explicit `@N` index — bare `"group": "navigation"` is forbidden.
+2. **Read-only inline, mutating in overflow.** The inline icon row is exactly the read-only view-state actions, in this order: refresh (`navigation@1`), collapse (`@2`), tree/flat toggle (`@3`), filter (`@4`), sort (`@5`). Mutating actions (`organizeImports`, `fixWorkspace` → group `1_modify`) and server control (`restartServer` → group `9_server`) live in the `…` overflow menu, in distinct groups so VS Code renders a divider between them.
+3. **No colliding glyphs.** No two inline buttons may use the same codicon. Relocating `restartServer` (`$(debug-restart)`) to the overflow keeps it from rendering as a near-duplicate of `$(refresh)`.
+4. **Fix All is feature-flagged.** `basilisk.fixWorkspace` is additionally gated on `config.basilisk.experimental.fixAll` (boolean setting, default `false`). It must not surface to users who have not opted in, and stays gated on `basilisk.serverState == 'running'`.
+
+Enforced by the toolbar contract tests in `vscode-extension/src/test/suite/activity-panel.test.ts`.
+
 ---
 
 ## Custom LSP Commands (`workspace/executeCommand`) {#LSPARCH-CMDS}

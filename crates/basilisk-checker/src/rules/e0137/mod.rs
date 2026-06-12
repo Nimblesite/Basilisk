@@ -52,7 +52,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct GenericProtocolViolation;
 
 impl Rule for GenericProtocolViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
         let path = &module.path;
 

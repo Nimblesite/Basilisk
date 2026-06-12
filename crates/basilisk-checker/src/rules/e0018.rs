@@ -25,7 +25,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct UndefinedVariable;
 
 impl Rule for UndefinedVariable {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Collect all import-bound names (both `import X` and `from X import Y`).
         let import_names: Vec<&str> = module
             .imports

@@ -48,7 +48,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct IncompatibleVariableOverride;
 
 impl Rule for IncompatibleVariableOverride {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Build map: class_name → &ClassInfo
         let class_map = super::shared::class_name_map(&module.classes);
 

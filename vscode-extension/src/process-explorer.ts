@@ -312,26 +312,51 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
 
 // ── Launch actions ───────────────────────────────────────────────────────
 
-/** Guard: narrow to a real selection, warning when an action has no row. */
-function ensureSelection(item: ProcessTreeItem | undefined): item is ProcessTreeItem {
-  if (item === undefined) {
+/**
+ * Resolve the process row an inline action targets (issue #79).
+ *
+ * VS Code normally passes the tree element as the command argument for
+ * inline `view/item/context` buttons, but at runtime the argument has been
+ * observed to arrive `undefined`. The action and its target are the same UI
+ * element, so before warning we fall back to the tree view's current
+ * selection — warning "Select a Python process" while clicking a button ON a
+ * process row is nonsensical.
+ */
+function resolveProcessTarget(
+  item: ProcessTreeItem | undefined,
+  treeView: vscode.TreeView<vscode.TreeItem> | undefined,
+): ProcessTreeItem | undefined {
+  if (item instanceof ProcessTreeItem) { return item; }
+  const selected = treeView?.selection.find(
+    (row): row is ProcessTreeItem => row instanceof ProcessTreeItem,
+  );
+  if (selected === undefined) {
     vscode.window.showWarningMessage("Basilisk: Select a Python process to profile.");
-    return false;
   }
-  return true;
+  return selected;
 }
 
 /** Start CPU profiling the given process row — no input box (the #62 fix). */
-async function profileProcess(store: Store, item: ProcessTreeItem | undefined): Promise<void> {
-  if (!ensureSelection(item)) { return; }
+export async function profileProcess(
+  store: Store,
+  item: ProcessTreeItem | undefined,
+  treeView: vscode.TreeView<vscode.TreeItem> | undefined,
+): Promise<void> {
+  const target = resolveProcessTarget(item, treeView);
+  if (target === undefined) { return; }
   const preset = vscode.workspace.getConfiguration("basilisk").get<string>("profiler.preset", "default");
-  await startProfilingForPid(store, item.process.pid, preset);
+  await startProfilingForPid(store, target.process.pid, preset);
 }
 
 /** Start memory-oriented profiling for the given process row. */
-async function memoryTrackProcess(store: Store, item: ProcessTreeItem | undefined): Promise<void> {
-  if (!ensureSelection(item)) { return; }
-  await startProfilingForPid(store, item.process.pid, "memory");
+export async function memoryTrackProcess(
+  store: Store,
+  item: ProcessTreeItem | undefined,
+  treeView: vscode.TreeView<vscode.TreeItem> | undefined,
+): Promise<void> {
+  const target = resolveProcessTarget(item, treeView);
+  if (target === undefined) { return; }
+  await startProfilingForPid(store, target.process.pid, "memory");
 }
 
 /** Run the active `.py` file under a debug session with profiling on launch. */
@@ -389,10 +414,10 @@ export function registerPythonProcesses(
       provider.setFilter(input ?? "");
     }),
     vscode.commands.registerCommand("basilisk.profileProcess", async (item?: ProcessTreeItem) =>
-      profileProcess(store, item),
+      profileProcess(store, item, treeView),
     ),
     vscode.commands.registerCommand("basilisk.memoryTrackProcess", async (item?: ProcessTreeItem) =>
-      memoryTrackProcess(store, item),
+      memoryTrackProcess(store, item, treeView),
     ),
     vscode.commands.registerCommand("basilisk.profileCurrentFile", async () => profileCurrentFile()),
     vscode.commands.registerCommand("basilisk.copyProcessPid", (item?: ProcessTreeItem) => {

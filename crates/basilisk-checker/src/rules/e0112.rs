@@ -233,7 +233,12 @@ fn build_mismatch_messages(
 }
 
 impl Rule for TypeGuardCallableReturnMismatch {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
 
         let mut func_map: HashMap<&str, &basilisk_resolver::FunctionInfo> = HashMap::new();

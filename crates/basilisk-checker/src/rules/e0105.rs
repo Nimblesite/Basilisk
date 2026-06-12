@@ -26,7 +26,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct BoundedTypeVarAttrAccess;
 
 impl Rule for BoundedTypeVarAttrAccess {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for violation in &module.bounded_typevar_attr_violations {
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),

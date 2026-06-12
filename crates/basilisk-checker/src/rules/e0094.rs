@@ -145,7 +145,12 @@ fn check_func_annotations_for_self(
 pub(crate) struct SelfInvalidLocation;
 
 impl Rule for SelfInvalidLocation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         check_self_invalid_locations(module, diagnostics);
     }
 }

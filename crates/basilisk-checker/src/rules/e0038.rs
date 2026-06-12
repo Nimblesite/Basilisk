@@ -263,7 +263,12 @@ fn check_conflicting_bases(
 pub(crate) struct InvalidTypedDictInheritance;
 
 impl Rule for InvalidTypedDictInheritance {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let class_map = super::shared::class_name_map(&module.classes);
 
         let attr_map: HashMap<(&str, &str), &AttributeInfo> = module

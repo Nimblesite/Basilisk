@@ -282,7 +282,12 @@ fn is_parameters_form(arg: &str, paramspec_names: &HashSet<&str>) -> bool {
 }
 
 impl Rule for TooFewTypeArguments {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let arities = compute_arities(module);
         check_paramspec_slot_args(module, diagnostics);
 

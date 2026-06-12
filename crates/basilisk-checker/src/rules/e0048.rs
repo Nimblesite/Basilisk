@@ -194,7 +194,12 @@ fn paren_has_top_level_comma(s: &str) -> bool {
 pub(crate) struct TypeAliasInvalidRhs;
 
 impl Rule for TypeAliasInvalidRhs {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
         let path = &module.path;
         let type_alias_names = collect_type_alias_names(module);

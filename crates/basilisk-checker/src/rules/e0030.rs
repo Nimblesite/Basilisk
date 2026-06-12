@@ -35,7 +35,12 @@ struct TvMeta {
 pub(crate) struct NonDefaultAfterDefault;
 
 impl Rule for NonDefaultAfterDefault {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let tv_meta: HashMap<&str, TvMeta> = module
             .typevar_calls
             .iter()

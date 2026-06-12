@@ -75,7 +75,12 @@ fn is_protocol_class(name: &str, module: &ResolvedModule) -> bool {
 }
 
 impl Rule for NonProtocolBaseInProtocol {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for class in &module.classes {
             // Only check classes that have Protocol as a base.
             let has_protocol = class.bases.iter().any(|b| b == "Protocol");

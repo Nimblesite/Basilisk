@@ -23,7 +23,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct InvalidCastCall;
 
 impl Rule for InvalidCastCall {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for call in module.calls.iter().filter(|c| c.callee == "cast") {
             let arg_count = call.args.len();
             if arg_count == 2 {

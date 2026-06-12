@@ -154,7 +154,23 @@ async fn run_protocol(
     let (pid, sample_rate, include_native) = read_attach_command(&mut reader).await?;
     info!(pid, sample_rate, include_native, "attaching to process");
 
-    let (spy, python_version) = attach_pyspy(pid, sample_rate, include_native)?;
+    // Report attach failures over the socket BEFORE exiting (issue #81):
+    // exiting silently leaves the LSP with an undiagnosable EOF.
+    let (spy, python_version) = match attach_pyspy(pid, sample_rate, include_native) {
+        Ok(attached) => attached,
+        Err(reason) => {
+            error!(pid, %reason, "attach failed");
+            let _ = send_message(
+                &mut writer,
+                &Message::AttachFailed {
+                    pid,
+                    reason: reason.clone(),
+                },
+            )
+            .await;
+            return Err(reason);
+        }
+    };
 
     send_message(
         &mut writer,

@@ -37,7 +37,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct EnumNonMemberInLiteral;
 
 impl Rule for EnumNonMemberInLiteral {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Build a map of enum class names → ClassInfo for lookup.
         let enum_classes: HashMap<&str, &ClassInfo> = module
             .classes

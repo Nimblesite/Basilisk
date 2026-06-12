@@ -332,7 +332,12 @@ impl VarianceContext<'_> {
 }
 
 impl Rule for ProtocolVarianceViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
 
         // Build TypeVar name -> variance map (skip ParamSpec and TypeVarTuple).

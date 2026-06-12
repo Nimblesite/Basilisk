@@ -33,7 +33,12 @@ use helpers::{
 pub(crate) struct GenericTypeArgViolation;
 
 impl Rule for GenericTypeArgViolation {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };

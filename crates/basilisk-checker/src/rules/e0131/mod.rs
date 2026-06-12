@@ -44,7 +44,12 @@ pub(crate) const CODE: ErrorCode = ErrorCode {
 pub(crate) struct GeneratorTypeMismatch;
 
 impl Rule for GeneratorTypeMismatch {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         // Build a map of function name -> return annotation text for cross-referencing
         // yield-from targets.
         let func_return_annotations: HashMap<&str, &str> = module

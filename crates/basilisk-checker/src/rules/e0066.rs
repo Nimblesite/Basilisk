@@ -36,7 +36,12 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct EnumValueTypeMismatch;
 
 impl Rule for EnumValueTypeMismatch {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         for violation in &module.enum_value_type_violations {
             let (message, help) = match violation.kind {
                 EnumValueTypeViolationKind::MemberValueTypeMismatch => (

@@ -35,7 +35,12 @@ fn has_only_self_or_cls(func: &basilisk_resolver::FunctionInfo) -> bool {
 }
 
 impl Rule for TypeGuardNoNarrowingParam {
-    fn check(&self, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    fn check(
+        &self,
+        module: &ResolvedModule,
+        _ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let source = &module.source;
 
         for func in &module.functions {
