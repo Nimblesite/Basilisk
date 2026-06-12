@@ -87,8 +87,19 @@ fn check_td_to_target(
     source: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // TypedDict → dict[...]: always an error.
+    // TypedDict → dict[...]: an error, except a PEP 728 `extra_items=`
+    // TypedDict whose value types are all assignable to the dict value type.
     if ann_text.starts_with("dict[") || ann_text == "dict" {
+        let dict_value = ann_text
+            .strip_prefix("dict[")
+            .and_then(|inner| inner.strip_suffix(']'))
+            .and_then(|inner| crate::rules::shared::split_top_level_commas(inner).pop())
+            .map(str::trim);
+        if let Some(value_type) = dict_value {
+            if extra_items_values_assignable(rhs_td_name, td_classes, source, value_type) {
+                return;
+            }
+        }
         emit_td_error(
             diagnostics,
             span,
@@ -99,9 +110,14 @@ fn check_td_to_target(
         return;
     }
 
-    // TypedDict → Mapping[str, T]: error unless T is object or Any.
+    // TypedDict → Mapping[str, T]: error unless T is object/Any, or the
+    // TypedDict declares `extra_items=` and every value type is assignable
+    // to T (PEP 728).
     if let Some(val_type) = parse_mapping_value_type(ann_text) {
-        if val_type != "object" && val_type != "Any" {
+        if val_type != "object"
+            && val_type != "Any"
+            && !extra_items_values_assignable(rhs_td_name, td_classes, source, val_type)
+        {
             emit_td_error(
                 diagnostics,
                 span,
@@ -180,6 +196,75 @@ fn build_var_typeddict_map<'a>(
         }
     }
     map
+}
+
+/// `true` when `td_name` declares `extra_items=` (PEP 728) and every value
+/// type of the `TypedDict` — field annotations plus the extra-items type — is
+/// assignable to `target_value_type`.
+fn extra_items_values_assignable(
+    td_name: &str,
+    td_classes: &HashMap<&str, &ClassInfo>,
+    source: &str,
+    target_value_type: &str,
+) -> bool {
+    let Some(cls) = td_classes.get(td_name) else {
+        return false;
+    };
+    let Some(extra_type) = extra_items_type(cls, source) else {
+        return false;
+    };
+    let extra_type = basilisk_resolver::strip_typeddict_qualifiers(extra_type);
+    let mut members: Vec<&str> = vec![extra_type];
+    for attr in &cls.attributes {
+        let Some(ann_span) = attr.annotation_span else {
+            continue;
+        };
+        let Some(ann) = slice_span(source, ann_span) else {
+            return false;
+        };
+        members.push(basilisk_resolver::strip_typeddict_qualifiers(ann.trim()));
+    }
+    members
+        .iter()
+        .all(|member| crate::rules::shared::is_type_compatible(member, target_value_type))
+}
+
+/// The `extra_items=<type>` text from a `TypedDict` class header, if declared.
+fn extra_items_type<'a>(cls: &ClassInfo, source: &'a str) -> Option<&'a str> {
+    let header = source.get(cls.def_span.start_usize()..)?;
+    let open = header.find('(')?;
+    let mut depth = 0i32;
+    let mut close = None;
+    for (idx, ch) in header.get(open..)?.char_indices() {
+        match ch {
+            '(' | '[' => depth += 1,
+            ')' | ']' => {
+                depth -= 1;
+                if depth == 0 {
+                    close = Some(open + idx);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let bases = header.get(open + 1..close?)?;
+    let kw_start = bases.find("extra_items=")? + "extra_items=".len();
+    let rest = bases.get(kw_start..)?;
+    let mut depth = 0i32;
+    let mut end = rest.len();
+    for (idx, ch) in rest.char_indices() {
+        match ch {
+            '[' | '(' => depth += 1,
+            ']' | ')' => depth -= 1,
+            ',' if depth == 0 => {
+                end = idx;
+                break;
+            }
+            _ => {}
+        }
+    }
+    Some(rest.get(..end)?.trim())
 }
 
 /// Extract the value type T from `Mapping[str, T]`.

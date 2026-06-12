@@ -74,13 +74,63 @@ struct SpeedscopeProfile {
     weights: Vec<f64>,
 }
 
+/// Validate that `data` can be rendered by external viewers.
+///
+/// Implements [PROFILE-SPEEDSCOPE-VALIDATE]: speedscope.app indexes
+/// `shared.frames` by every sample entry, walks parallel `samples`/`weights`
+/// arrays, and reads `profiles[activeProfileIndex]` — a file violating any of
+/// those invariants loads as "Something went wrong" in the browser. Refuse to
+/// write such a file and surface an actionable error instead.
+///
+/// # Errors
+///
+/// Returns an error string describing the first violated invariant.
+fn validate_exportable(data: &ProfileData) -> Result<(), String> {
+    let sample_count: usize = data.thread_stacks.values().map(Vec::len).sum();
+    if sample_count == 0 {
+        return Err("no samples were collected — nothing to export".to_owned());
+    }
+    for (tid, stacks) in &data.thread_stacks {
+        validate_thread(data, *tid, stacks)?;
+    }
+    Ok(())
+}
+
+/// Validate one thread's stacks and weights ([PROFILE-SPEEDSCOPE-VALIDATE]).
+fn validate_thread(data: &ProfileData, tid: u64, stacks: &[Vec<usize>]) -> Result<(), String> {
+    let empty: &[f64] = &[];
+    let weights = data.thread_weights.get(&tid).map_or(empty, Vec::as_slice);
+    if stacks.len() != weights.len() {
+        return Err(format!(
+            "thread {tid}: {} samples but {} weights — counts must match",
+            stacks.len(),
+            weights.len()
+        ));
+    }
+    if let Some(bad) = weights.iter().find(|w| !w.is_finite() || **w < 0.0) {
+        return Err(format!(
+            "thread {tid}: weights must be finite and non-negative, got {bad}"
+        ));
+    }
+    let frame_count = data.frames.len();
+    for stack in stacks {
+        if let Some(idx) = stack.iter().find(|&&idx| idx >= frame_count) {
+            return Err(format!(
+                "thread {tid}: frame index {idx} out of bounds ({frame_count} frames)"
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Export `ProfileData` to speedscope JSON format.
 ///
 /// Writes the file to `output_dir` and returns the path.
 ///
 /// # Errors
 ///
-/// Returns an error string if serialization or file writing fails.
+/// Returns an error string if the data is not viewer-loadable
+/// ([PROFILE-SPEEDSCOPE-VALIDATE]) or serialization/file writing fails.
 pub fn export_speedscope(
     data: &ProfileData,
     session_id: &str,
@@ -88,6 +138,8 @@ pub fn export_speedscope(
     duration_secs: f64,
     output_dir: &Path,
 ) -> Result<ExportResult, String> {
+    validate_exportable(data)?;
+
     let frames: Vec<SpeedscopeFrameRef> = data
         .frames
         .iter()
@@ -160,12 +212,15 @@ pub fn export_speedscope(
 ///
 /// # Errors
 ///
-/// Returns an error string if rendering or file writing fails.
+/// Returns an error string if the data is not viewer-loadable
+/// ([PROFILE-SPEEDSCOPE-VALIDATE]) or rendering/file writing fails.
 pub fn export_flamegraph(
     data: &ProfileData,
     session_id: &str,
     output_dir: &Path,
 ) -> Result<ExportResult, String> {
+    validate_exportable(data)?;
+
     // Build collapsed stacks: "root;caller;leaf count\n"
     let collapsed = build_collapsed_stacks(data);
 
@@ -246,6 +301,88 @@ pub fn export(
             export_speedscope(data, session_id, pid, duration_secs, output_dir)
         }
         ExportFormat::Flamegraph => export_flamegraph(data, session_id, output_dir),
+    }
+}
+
+// ── Stop artifacts ───────────────────────────────────────────────────────────
+
+/// Files written when a profiling session stops ([PROFILE-REQUESTS-STOP]).
+#[derive(Debug, Clone)]
+pub struct StopArtifacts {
+    /// Path of the artifact in the requested format (`None` for `summary`).
+    pub output_file: Option<String>,
+    /// Local self-contained flamegraph SVG — always attempted so every editor
+    /// has a viewer that needs no network access ([PROFILE-FLAMEGRAPH]).
+    pub flamegraph_path: Option<String>,
+    /// V8 `.cpuprofile` for VS Code's built-in viewer ([PROFILE-NATIVE]).
+    pub cpu_profile_path: Option<String>,
+    /// Why any export was skipped — surfaced to the editor so a failed export
+    /// is never silent ([PROFILE-SPEEDSCOPE-VALIDATE]).
+    pub export_error: Option<String>,
+}
+
+/// Export all stop artifacts, collecting errors instead of swallowing them.
+///
+/// `format_str` is the editor-requested format: `"speedscope"` (default),
+/// `"flamegraph"`, or `"summary"` (no format artifact).
+#[must_use]
+pub fn export_stop_artifacts(
+    data: &ProfileData,
+    session_id: &str,
+    duration_secs: f64,
+    sample_rate: u64,
+    format_str: &str,
+    output_dir: &Path,
+) -> StopArtifacts {
+    let mut errors: Vec<String> = Vec::new();
+    let mut record = |err: String| {
+        tracing::error!(err = %err, "profile export failed");
+        if !errors.contains(&err) {
+            errors.push(err);
+        }
+    };
+
+    let output_file = if format_str == "summary" {
+        None
+    } else {
+        let export_format = if format_str == "flamegraph" {
+            ExportFormat::Flamegraph
+        } else {
+            ExportFormat::Speedscope
+        };
+        export(
+            data,
+            export_format,
+            session_id,
+            0,
+            duration_secs,
+            output_dir,
+        )
+        .map(|export_result| export_result.path.display().to_string())
+        .map_err(&mut record)
+        .ok()
+    };
+
+    let flamegraph_path = if format_str == "flamegraph" {
+        output_file.clone()
+    } else {
+        export_flamegraph(data, session_id, output_dir)
+            .map(|export_result| export_result.path.display().to_string())
+            .map_err(&mut record)
+            .ok()
+    };
+
+    let cpu_profile_path =
+        super::cpuprofile::export_cpuprofile(data, session_id, sample_rate, output_dir)
+            .map(|path| path.display().to_string())
+            .map_err(&mut record)
+            .ok();
+
+    StopArtifacts {
+        output_file,
+        flamegraph_path,
+        cpu_profile_path,
+        export_error: (!errors.is_empty()).then(|| errors.join("; ")),
     }
 }
 

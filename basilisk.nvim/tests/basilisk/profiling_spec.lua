@@ -391,15 +391,21 @@ describe("basilisk.profiling", function()
       end)
     end)
 
-    it("handles result without speedscopeJson field", function()
+    it("handles result without flamegraphPath field", function()
       assert.has_no.errors(function()
         profiling.export_flamegraph({})
       end)
     end)
 
-    it("writes speedscope JSON to temp file", function()
-      local json_data = '{"$schema":"test","profiles":[]}'
-      local result = { speedscopeJson = json_data }
+    it("opens the LSP-exported flamegraph SVG as a local file", function()
+      local tmpfile = vim.fn.tempname() .. ".flamegraph.svg"
+      local fh = assert(io.open(tmpfile, "w"))
+      fh:write('<svg xmlns="http://www.w3.org/2000/svg"><text>hot_fn</text></svg>')
+      fh:close()
+      local result = {
+        flamegraphPath = tmpfile,
+        outputFile = "/tmp/basilisk-x.speedscope.json",
+      }
 
       -- Mock vim.ui.open to prevent browser launch.
       local original_open = vim.ui.open
@@ -412,9 +418,52 @@ describe("basilisk.profiling", function()
 
       -- Restore.
       vim.ui.open = original_open
+      os.remove(tmpfile)
 
-      assert.truthy(opened_url, "should attempt to open speedscope URL")
-      assert.truthy(opened_url:find("speedscope.app"), "URL should point to speedscope.app")
+      assert.equals("file://" .. tmpfile, opened_url, "must open the local SVG directly")
+    end)
+
+    it("does not open anything when the flamegraph file is missing", function()
+      local original_open = vim.ui.open
+      local opened_url = nil
+      vim.ui.open = function(url)
+        opened_url = url
+      end
+
+      profiling.export_flamegraph({ flamegraphPath = "/nonexistent/basilisk.flamegraph.svg" })
+
+      vim.ui.open = original_open
+      assert.is_nil(opened_url, "missing file must not be handed to the browser")
+    end)
+
+    -- [PROFILE-VIEWER-DELIVERY] regression: speedscope.app cannot fetch
+    -- file:// URLs — an https page may not read local files, so a
+    -- speedscope.app/#profileURL=file://... link ALWAYS fails with
+    -- "Something went wrong". The plugin must never construct one.
+    it("never hands speedscope.app a file:// profileURL", function()
+      local tmpfile = vim.fn.tempname() .. ".flamegraph.svg"
+      local fh = assert(io.open(tmpfile, "w"))
+      fh:write("<svg></svg>")
+      fh:close()
+
+      local original_open = vim.ui.open
+      local opened_urls = {}
+      vim.ui.open = function(url)
+        table.insert(opened_urls, url)
+      end
+
+      profiling.export_flamegraph({ flamegraphPath = tmpfile })
+      profiling.export_flamegraph({ speedscopeJson = '{"profiles":[]}' })
+
+      vim.ui.open = original_open
+      os.remove(tmpfile)
+
+      for _, url in ipairs(opened_urls) do
+        assert.is_nil(
+          url:find("speedscope.app", 1, true),
+          "no opened URL may point at speedscope.app with local data: " .. url
+        )
+      end
     end)
   end)
 

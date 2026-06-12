@@ -109,7 +109,7 @@ if [[ -n "${CI:-}" ]]; then
     echo -e "  ${YELLOW:-}⊘ neovim: coverage check skipped on CI${RESET}"
 else
     header "Neovim extension — coverage threshold"
-    TEST_COVERAGE_NVIM="${TEST_COVERAGE_NVIM:-30}"
+    TEST_COVERAGE_NVIM="$(coverage_threshold_for nvim)"
 
     LUACOV=1 nvim --headless -u tests/minimal_init.lua \
         -l tests/run_coverage.lua 2>&1

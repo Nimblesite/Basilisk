@@ -256,43 +256,7 @@ pub(super) async fn execute_profiler_stop(
 
     match server.profiler_manager.stop(session_id).await {
         Ok(result) => {
-            // Export to file.
-            let output_dir = std::env::temp_dir();
-            let export_format = match format_str {
-                "flamegraph" => crate::profiler::export::ExportFormat::Flamegraph,
-                _ => crate::profiler::export::ExportFormat::Speedscope,
-            };
-
-            let output_file = if format_str == "summary" {
-                None
-            } else {
-                match crate::profiler::export::export(
-                    &result.data,
-                    export_format,
-                    &result.session_id,
-                    0, // PID not stored on StopResult, use 0
-                    result.duration,
-                    &output_dir,
-                ) {
-                    Ok(export_result) => Some(export_result.path.display().to_string()),
-                    Err(err) => {
-                        error!(%err, "failed to export profile data");
-                        None
-                    }
-                }
-            };
-
-            // Always export a V8 `.cpuprofile` too, so the editor can open it in
-            // VS Code's built-in profile viewer (flame chart + tables).
-            let cpu_profile_path = crate::profiler::cpuprofile::export_cpuprofile(
-                &result.data,
-                &result.session_id,
-                result.sample_rate,
-                &output_dir,
-            )
-            .map_err(|err| error!(%err, "failed to export cpuprofile"))
-            .ok()
-            .map(|path| path.display().to_string());
+            let artifacts = export_stop_artifacts(&result, format_str);
 
             publish_profiler_diagnostics(server, &result.data, &result.hotspot_config).await;
 
@@ -314,8 +278,10 @@ pub(super) async fn execute_profiler_stop(
                 "sessionId": result.session_id,
                 "duration": result.duration,
                 "totalSamples": result.total_samples,
-                "outputFile": output_file,
-                "cpuProfilePath": cpu_profile_path,
+                "outputFile": artifacts.output_file,
+                "flamegraphPath": artifacts.flamegraph_path,
+                "cpuProfilePath": artifacts.cpu_profile_path,
+                "exportError": artifacts.export_error,
                 "hotFunctions": hot_funcs_json,
                 "hotLines": hot_lines_json,
             })))
@@ -326,6 +292,21 @@ pub(super) async fn execute_profiler_stop(
             Err(profiler_error(code, err.to_string()))
         }
     }
+}
+
+/// Export all stop artifacts to the temp dir ([PROFILE-REQUESTS-STOP]).
+fn export_stop_artifacts(
+    result: &crate::profiler::StopResult,
+    format_str: &str,
+) -> crate::profiler::export::StopArtifacts {
+    crate::profiler::export::export_stop_artifacts(
+        &result.data,
+        &result.session_id,
+        result.duration,
+        result.sample_rate,
+        format_str,
+        &std::env::temp_dir(),
+    )
 }
 
 /// Handle `basilisk.profiler.snapshot` — take a point-in-time snapshot.

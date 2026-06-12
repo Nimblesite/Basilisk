@@ -25,7 +25,7 @@
       "threshold": 100
     },
     "basilisk-resolver": {
-      "threshold": 94
+      "threshold": 95
     },
     "basilisk-stubs": {
       "threshold": 85
@@ -41,9 +41,9 @@
     }
   },
   "conformance": {
-    "_doc": "Minimum PEP conformance pass percentage (files passing / total files). Ratchet UP only. Current: 137/146 = 93.84% (pinned to python/typing@268d0c4e). 9 files still fail (missed required diagnostics): dataclasses_transform_converter, generics_defaults_specialization, generics_paramspec_components, generics_paramspec_semantics, generics_paramspec_specialization, generics_typevartuple_args, generics_typevartuple_basic, protocols_definition, typeddicts_extra_items.",
-    "threshold": 93,
-    "_fp_ceiling_doc": "Maximum total false positives across the suite (diagnostics on lines without a # E annotation). Ratchet DOWN only — the mirror of the pass-percentage gate. Enforced by conformance_tests.rs. Any change that reintroduces even one FP pushes the total above this ceiling and fails CI. Current measured: 120.",
-    "max_false_positives": 120
+    "_doc": "Minimum PEP conformance pass percentage (files passing / total files). Ratchet UP only. Current: 144/146 = 98.63% (pinned to python/typing@268d0c4e). 2 files still fail (missed required diagnostics): protocols_definition, typeddicts_extra_items.",
+    "threshold": 98,
+    "_fp_ceiling_doc": "Maximum total false positives across the suite (diagnostics on lines without a # E annotation). Ratchet DOWN only \u2014 the mirror of the pass-percentage gate. Enforced by conformance_tests.rs. Any change that reintroduces even one FP pushes the total above this ceiling and fails CI. Current measured: 54.",
+    "max_false_positives": 54
   }
 }

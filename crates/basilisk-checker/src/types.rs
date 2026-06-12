@@ -265,9 +265,13 @@ impl InferredType {
                     // Target is fixed-length: a variable-length source cannot
                     // satisfy it — EXCEPT `tuple[Any, ...]` / `tuple[Unknown, ...]`,
                     // which are bidirectionally compatible with any tuple (PEP 484
-                    // gradual typing).
+                    // gradual typing).  Unresolved `Named` elements (e.g. types from
+                    // unresolvable imports) are gradual too, not provable mismatches.
                     (Some(source_elem), None) => {
-                        matches!(source_elem, InferredType::Any | InferredType::Unknown)
+                        matches!(
+                            source_elem,
+                            InferredType::Any | InferredType::Unknown | InferredType::Named(_)
+                        )
                     }
                     // Both fixed-length: require equal arity and positional assignability.
                     (None, None) => {
@@ -412,6 +416,11 @@ fn tuple_assignable_with_star(source: &[InferredType], target: &[InferredType]) 
     // A variadic source, multiple unpacked segments, or a `*Ts` we can't read
     // all need full PEP 646 unification — be permissive.
     if source.iter().any(is_unpacked_tuple_elem) {
+        return true;
+    }
+    // A homogeneous variadic source (`tuple[X, ...]`) has unknown length —
+    // prefix/middle/suffix decomposition cannot prove a mismatch.
+    if homogeneous_tuple_elem(source).is_some() {
         return true;
     }
     let Some(star_idx) = target.iter().position(is_unpacked_tuple_elem) else {

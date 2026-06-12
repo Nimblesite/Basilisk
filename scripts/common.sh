@@ -13,6 +13,20 @@ header() { echo -e "\n${BOLD}${CYAN}▶ $*${RESET}"; }
 ok()     { echo -e "${GREEN}✓ $*${RESET}"; }
 warn()   { echo -e "${YELLOW}⚠ $*${RESET}"; }
 
+# Coverage threshold for a project, read from coverage-thresholds.json — the
+# single source of truth ([COVERAGE-THRESHOLDS-JSON]). No env vars, no
+# hardcoded fallbacks. Unknown projects get default_threshold.
+coverage_threshold_for() {
+    local repo_root
+    repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    python3 -c '
+import json, sys
+data = json.load(open(sys.argv[1]))
+project = data["projects"].get(sys.argv[2])
+print(project["threshold"] if project else data["default_threshold"])
+' "$repo_root/coverage-thresholds.json" "$1"
+}
+
 # Locate the basilisk binary. Checks BASILISK_BIN env var first, then known
 # build paths. Prints the path on success, returns 1 on failure.
 find_basilisk_bin() {

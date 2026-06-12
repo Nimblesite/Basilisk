@@ -261,10 +261,20 @@ prof.start()
 prof.start(1234)
 prof.stop()
 prof.snapshot()
--- export_flamegraph: nil, no speedscopeJson, with data
+-- export_flamegraph: nil, no flamegraphPath, missing file, real file
 prof.export_flamegraph(nil)
 prof.export_flamegraph({})
-prof.export_flamegraph({ speedscopeJson = '{"version":"0.0.1"}' })
+prof.export_flamegraph({ exportError = "no samples were collected" })
+prof.export_flamegraph({ flamegraphPath = "/nonexistent/basilisk.flamegraph.svg" })
+local cov_svg = vim.fn.tempname() .. ".flamegraph.svg"
+local cov_fh = assert(io.open(cov_svg, "w"))
+cov_fh:write("<svg></svg>")
+cov_fh:close()
+local cov_ui_open = vim.ui.open
+vim.ui.open = function() end
+prof.export_flamegraph({ flamegraphPath = cov_svg, outputFile = "/tmp/x.speedscope.json" })
+vim.ui.open = cov_ui_open
+os.remove(cov_svg)
 
 -- ============================================================
 -- 8. testing.lua — parser, tree, panel, run, debug, coverage
