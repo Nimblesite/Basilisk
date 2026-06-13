@@ -181,12 +181,18 @@ Each `ResolvedModule` carries `imported_symbols: HashMap<String, ExternalSymbol>
 
 ### Invalidation Cascading {#ANALYSIS-SYMBOLS-INVAL}
 
-When a file changes:
+When a file changes — whether on disk (file watcher) or in the editor
+(`didChange` / `didSave` on an **open** file) — its exports are diffed:
 
-1. Re-analyse the changed file
-2. `exported_symbol_names()` compares old and new exports
-3. If exports changed, `invalidate_dependents()` queues transitive importers for re-analysis
-4. If exports unchanged, skip cascade (most edits don't change public API)
+1. Re-analyse the changed file.
+2. `exported_symbol_names()` compares old and new exports.
+3. If exports changed, re-resolve the workspace and re-check importers
+   (`reresolve_imports_and_recheck`) so their cross-module diagnostics refresh
+   without a reload. The watcher path uses `reload_and_diff_exports`; the
+   open-file path uses `set_open_refresh_dependents` — the watcher's
+   `reload_from_disk` skips open files, so editing an open module would
+   otherwise leave dependents stale (GitHub #56).
+4. If exports unchanged, skip the cascade (most edits don't change public API).
 
 ---
 

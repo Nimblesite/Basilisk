@@ -68,8 +68,11 @@ impl ImportSearchPaths {
         Self {
             roots: roots.to_vec(),
             extra_paths: config.extra_paths.clone(),
+            // Discover uv workspace members / `src/` layouts here so every
+            // consumer (CLI and LSP) resolves first-party imports the same
+            // way. Implements [LSPUV-WORKSPACE-IMPORT-RESOLUTION] (issue #24).
+            workspace_members: basilisk_uv::discover_workspace_members(roots),
             stub_paths,
-            workspace_members: Vec::new(),
             site_packages,
             registry,
         }
@@ -86,10 +89,13 @@ pub fn classify_unresolved(
         return UnresolvedReason::Unknown;
     };
 
+    // The registry is keyed by import name (issue #25): look the module up
+    // directly — full dotted name first (`google.protobuf`), then the root.
     let root_module = module_name.split('.').next().unwrap_or(module_name);
-    let import_name = basilisk_uv::import_map::package_to_import_name(root_module);
-
-    if let Some(info) = registry.lookup(&import_name) {
+    if let Some(info) = registry
+        .lookup(module_name)
+        .or_else(|| registry.lookup(root_module))
+    {
         if info.kind == basilisk_uv::DepKind::Transitive {
             return UnresolvedReason::NotInDeps;
         }
@@ -606,10 +612,13 @@ fn enrich_package_metadata(
         return;
     }
 
+    // The registry is keyed by import name (issue #25): look the module up
+    // directly — full dotted name first (`google.protobuf`), then the root.
     let root_module = import.module.split('.').next().unwrap_or(&import.module);
-    let import_name = basilisk_uv::import_map::package_to_import_name(root_module);
-
-    let Some(info) = registry.lookup(&import_name) else {
+    let Some(info) = registry
+        .lookup(&import.module)
+        .or_else(|| registry.lookup(root_module))
+    else {
         return;
     };
 

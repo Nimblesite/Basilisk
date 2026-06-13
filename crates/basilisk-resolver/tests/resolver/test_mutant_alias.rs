@@ -39,3 +39,21 @@ fn alias_name_single_name_is_correct() -> Result<(), Box<dyn std::error::Error>>
     );
     Ok(())
 }
+
+#[test]
+fn alias_name_uses_asname_when_present() -> Result<(), Box<dyn std::error::Error>> {
+    // Issues #107/#64: `from X import Y as Z` binds `Z`, not `Y`.
+    let src = "from nap.api import auth as auth_mod\n".to_owned();
+    let resolved = resolve_src(&src)?;
+    let import = resolved
+        .imports
+        .iter()
+        .find(|i| i.module == "nap.api")
+        .ok_or("no import")?;
+    assert_eq!(
+        import.names,
+        vec!["auth_mod".to_owned()],
+        "the bound alias name must be recorded, not the original"
+    );
+    Ok(())
+}

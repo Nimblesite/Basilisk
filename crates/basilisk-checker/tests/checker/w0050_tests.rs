@@ -200,3 +200,20 @@ fn test_w0050_plain_class_attribute_still_flagged() {
     let diags = run("class Plain:\n    x: int = 42\n").unwrap();
     assert!(diags.iter().any(|d| d.code.code == "BSK-W0050"));
 }
+
+#[test]
+fn test_w0050_pydantic_dataclasses_dotted_decorator_field_not_flagged() {
+    // Regression for issue #39: `@pydantic.dataclasses.dataclass` fields need
+    // their annotation to be fields at all — never redundant.
+    let diags = run(concat!(
+        "import pydantic\n",
+        "@pydantic.dataclasses.dataclass\n",
+        "class ChatTurnInput:\n",
+        "    tool_results_already_persisted: bool = False\n",
+    ))
+    .unwrap();
+    assert!(
+        !diags.iter().any(|d| d.code.code == "BSK-W0050"),
+        "W0050 must not fire on pydantic dataclass fields (issue #39)"
+    );
+}

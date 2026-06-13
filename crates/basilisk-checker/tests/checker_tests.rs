@@ -474,6 +474,20 @@ fn e0015_list_empty_brackets() {
 }
 
 #[test]
+fn deeply_nested_source_rejected_not_crashed() {
+    // [CHKARCH-ARCH-PARSEDEPTH]: a 5000-deep bracket file overflows the recursive
+    // parser/visitors. The parse guard must turn it into a parse error so the
+    // whole pipeline (parse -> resolve -> check) returns cleanly instead of
+    // aborting the process.
+    let src = format!("x = {}1{}\n", "(".repeat(5000), ")".repeat(5000));
+    let err = run(&src).expect_err("pathologically nested source must be rejected, not crash");
+    assert!(
+        err.to_string().contains("too many nested parentheses"),
+        "the depth-guard rejection must propagate through the pipeline, got: {err}"
+    );
+}
+
+#[test]
 fn e0015_correct_list_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: list[int]) -> None: pass\n";
     let diags = run(src)?;

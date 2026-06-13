@@ -54,9 +54,13 @@ pub(super) async fn did_change(server: &LspServer, params: DidChangeTextDocument
 
     let guard = server.index.read().await;
     let Some(index) = guard.as_ref() else { return };
-    let diags = index.set_open(&uri, &text, version);
+    // In cross-module mode an export-changing edit must refresh dependents live,
+    // even though the edited file is open (GitHub #56). [ANALYSIS-SYMBOLS-INVAL]
+    let results = index.set_open_refresh_dependents(&uri, &text, version);
     drop(guard);
-    server.client.publish_diagnostics(uri, diags, None).await;
+    for (target, diags) in results {
+        server.client.publish_diagnostics(target, diags, None).await;
+    }
 }
 
 /// Handle `textDocument/didSave`: re-run the pipeline on the cached text.
@@ -68,12 +72,11 @@ pub(super) async fn did_save(server: &LspServer, params: DidSaveTextDocumentPara
     let Some(text) = index.get_text(&uri) else {
         return;
     };
-    let diags = index.set_open(&uri, &text, 0);
+    let results = index.set_open_refresh_dependents(&uri, &text, 0);
     drop(guard);
-    server
-        .client
-        .publish_diagnostics(uri.clone(), diags, None)
-        .await;
+    for (target, diags) in results {
+        server.client.publish_diagnostics(target, diags, None).await;
+    }
 
     // Notify activity panels that this module changed.
     super::activity_panel::send_module_changed(server, &uri).await;
@@ -188,18 +191,22 @@ pub(super) async fn did_change_watched_files(
         }
     }
 
-    // If uv.lock or pyproject.toml changed, rebuild the package registry and
-    // re-resolve all imports so diagnostics update without an LSP restart.
-    let needs_registry_rebuild = params.changes.iter().any(|change| {
+    // A change to any project config file must update diagnostics without an LSP
+    // restart: reload each root's checker config so version-aware rules and
+    // severity overrides take effect (issue #93 reactivity), then rebuild the uv
+    // package registry and re-resolve + re-check every file.
+    let needs_config_refresh = params.changes.iter().any(|change| {
         let path = change.uri.path();
-        path.ends_with("uv.lock") || path.ends_with("pyproject.toml")
+        path.ends_with("uv.lock")
+            || path.ends_with("pyproject.toml")
+            || path.ends_with("basilisk.json")
+            || path.ends_with(".python-version")
     });
 
-    if needs_registry_rebuild {
-        log_uv_config_changes(&params);
+    log_uv_config_changes(&params);
+    if needs_config_refresh {
+        reload_index_configs(server).await;
         super::init::rebuild_registry_and_resolve(server).await;
-    } else {
-        log_uv_config_changes(&params);
     }
 
     // Classify the incoming changes, filtering to Python files only.
@@ -250,15 +257,25 @@ pub(super) async fn did_change_watched_files(
         let guard = index_lock.read().await;
         let Some(index) = guard.as_ref() else { return };
 
+        // Reload changed files while diffing their exported symbol sets: in
+        // cross-module mode an export change must refresh dependents' stale
+        // symbol diagnostics. Implements [ANALYSIS-SYMBOLS-INVAL] (GitHub #56).
+        let mut exports_changed = false;
+        let cross_module = matches!(index.mode, crate::config::AnalysisMode::CrossModule);
         let reload_results: Vec<_> = reload_targets
             .iter()
-            .filter_map(|uri| index.reload_from_disk(uri))
+            .filter_map(|uri| {
+                let (result, changed) = index.reload_and_diff_exports(uri)?;
+                exports_changed |= changed && cross_module;
+                Some(result)
+            })
             .collect();
 
         // When a new module appeared, its dependents may now resolve imports
         // that were previously unresolved. Re-resolve the whole workspace so
         // their stale BSK-E0010 clears without an LSP reload (GitHub #53).
-        let publish_set = if has_created_module {
+        // Likewise when an edited module's exports changed (GitHub #56).
+        let publish_set = if has_created_module || exports_changed {
             // Drop deleted entries first so the recheck cannot resurrect them.
             for uri in &delete_targets {
                 index.forget_file(uri);
@@ -284,6 +301,16 @@ pub(super) async fn did_change_watched_files(
         old.abort();
     }
     *debounce = Some(abort_handle);
+}
+
+/// Re-read each workspace root's checker config from disk after a watched config
+/// file changed, so version-aware rules and severity overrides update without an
+/// LSP restart. Implements [CHKARCH-VERSION-TARGET] reactivity.
+async fn reload_index_configs(server: &LspServer) {
+    let mut guard = server.index.write().await;
+    if let Some(index) = guard.as_mut() {
+        index.reload_root_configs();
+    }
 }
 
 /// Log changes to uv-related configuration files.

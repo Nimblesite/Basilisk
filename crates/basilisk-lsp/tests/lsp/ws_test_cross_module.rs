@@ -720,3 +720,170 @@ async fn cross_module_wildcard_import() -> TestResult<()> {
     let _ = std::fs::remove_dir_all(&dir);
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Regression: EDITING an existing module's top-level symbols must refresh
+// dependents' cross-module diagnostics live, exactly like module creation
+// (GitHub #56). The file-watcher CHANGED event must re-populate cross-module
+// symbols and re-check dependents when the exported symbol set changes.
+// Implements [ANALYSIS-SYMBOLS-INVAL].
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn changed_module_exports_refresh_dependent_diagnostics() -> TestResult<()> {
+    let (dir, root_uri) = setup_cross_module_workspace(&[
+        ("lib.py", ""),
+        (
+            "main.py",
+            "import lib\n\ndef use() -> int:\n    return thing\n",
+        ),
+    ]);
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+
+    // Startup scan: main.py SHOULD report `thing` as undefined — lib is empty.
+    let startup = collect_all_diagnostics(&mut fixture).await;
+    let main_uri = format!("{root_uri}/main.py");
+    let startup_has_undefined = startup.get(&main_uri).is_some_and(|d| {
+        d["params"]["diagnostics"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().any(is_thing_undefined))
+    });
+    assert!(
+        startup_has_undefined,
+        "precondition: main.py should report `thing` undefined while lib.py is empty"
+    );
+
+    // EDIT lib.py on disk to export `thing`, then notify via the file watcher.
+    std::fs::write(dir.join("lib.py"), "def thing() -> int:\n    return 1\n")?;
+    let lib_uri = format!("{root_uri}/lib.py");
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "workspace/didChangeWatchedFiles",
+            "params": { "changes": [{ "uri": lib_uri, "type": 2 }] }  // 2 = Changed
+        }))
+        .await?;
+
+    // The dependent (main.py) must be re-checked and re-published WITHOUT the
+    // stale diagnostic — no reload required.
+    let after = collect_all_diagnostics(&mut fixture).await;
+    let main_after = after
+        .get(&main_uri)
+        .ok_or("main.py diagnostics not re-published after lib.py's exports changed")?;
+    let empty = vec![];
+    let diagnostics = main_after["params"]["diagnostics"]
+        .as_array()
+        .unwrap_or(&empty);
+    let still_undefined = diagnostics.iter().any(is_thing_undefined);
+    assert!(
+        !still_undefined,
+        "adding `thing` to lib.py must clear the stale diagnostic in main.py \
+         without a reload — got: {diagnostics:#?}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+/// Whether main.py's most recently published diagnostics flag `thing` undefined.
+async fn main_reports_thing_undefined(fixture: &mut WsTestFixture, main_uri: &str) -> bool {
+    collect_all_diagnostics(fixture)
+        .await
+        .get(main_uri)
+        .is_some_and(|d| {
+            d["params"]["diagnostics"]
+                .as_array()
+                .is_some_and(|arr| arr.iter().any(is_thing_undefined))
+        })
+}
+
+/// Send a full-text `didChange` for `uri`.
+async fn did_change_full(
+    fixture: &mut WsTestFixture,
+    uri: &str,
+    version: i64,
+    text: &str,
+) -> TestResult<()> {
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": { "uri": uri, "version": version },
+                "contentChanges": [{ "text": text }]
+            }
+        }))
+        .await?;
+    Ok(())
+}
+
+/// [ANALYSIS-SYMBOLS-INVAL] open-file path (#56): editing an OPEN module's
+/// exports must refresh dependents live, in BOTH directions. The file watcher
+/// skips open files (`reload_from_disk` bails when `is_open`), so the in-editor
+/// `didChange` path drives the cross-module re-resolve. Critically, a renamed or
+/// removed export must STOP suppressing its now-undefined references — a stale
+/// export lingering in `imported_symbols` left dependents green after a rename.
+#[tokio::test]
+async fn open_module_export_edit_refreshes_dependent_diagnostics() -> TestResult<()> {
+    let with_thing = "def thing() -> int:\n    return 1\n";
+    // lib EXPORTS `thing`; main.py uses it cross-module, so it is clean at startup.
+    let (dir, root_uri) = setup_cross_module_workspace(&[
+        ("lib.py", with_thing),
+        (
+            "main.py",
+            "import lib\n\ndef use() -> int:\n    return thing\n",
+        ),
+    ]);
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+
+    let main_uri = format!("{root_uri}/main.py");
+    let lib_uri = format!("{root_uri}/lib.py");
+
+    // Startup: lib exports `thing`, so main.py is clean.
+    assert!(
+        !main_reports_thing_undefined(&mut fixture, &main_uri).await,
+        "precondition: main.py should be clean while lib.py exports `thing`"
+    );
+
+    // OPEN lib.py, then EDIT it to RENAME the export away. The dependent must
+    // report `thing` undefined LIVE — the stale export must not keep it green.
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": { "textDocument": {
+                "uri": lib_uri, "languageId": "python", "version": 1, "text": with_thing
+            }}
+        }))
+        .await?;
+    did_change_full(
+        &mut fixture,
+        &lib_uri,
+        2,
+        "def renamed() -> int:\n    return 1\n",
+    )
+    .await?;
+    assert!(
+        main_reports_thing_undefined(&mut fixture, &main_uri).await,
+        "renaming `thing` away in the OPEN lib.py must make main.py report it undefined live"
+    );
+
+    // Restore the export in the OPEN file: the dependent must clear again.
+    did_change_full(&mut fixture, &lib_uri, 3, with_thing).await?;
+    assert!(
+        !main_reports_thing_undefined(&mut fixture, &main_uri).await,
+        "restoring `thing` in the OPEN lib.py must clear main.py's diagnostic live"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+/// True iff the diagnostic reports `thing` as undefined/unresolved.
+fn is_thing_undefined(d: &serde_json::Value) -> bool {
+    d["message"].as_str().unwrap_or("").contains("`thing`")
+}
