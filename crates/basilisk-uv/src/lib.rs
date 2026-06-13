@@ -21,4 +21,4 @@ pub use error::UvError;
 pub use lockfile::{parse_lock_file, LockFile};
 pub use pyproject::extract_pyproject_deps;
 pub use registry::{DepKind, PackageInfo, PackageRegistry};
-pub use workspace::{parse_uv_workspace, UvWorkspace};
+pub use workspace::{discover_workspace_members, parse_uv_workspace, UvWorkspace};

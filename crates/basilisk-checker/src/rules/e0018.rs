@@ -1,13 +1,17 @@
 //! Implements [BSK-E0018] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0018: Undefined variable used in a return statement.
 //!
-//! When a function contains a `return <name>` statement and the name is not
-//! defined anywhere in the function scope (not a parameter, not assigned via
-//! `=`, `for`, `with`, or a nested `def`), it is flagged as undefined.
+//! Flags any name referenced in a `return` expression — bare (`return x`), the
+//! base of an attribute/subscript chain (`return x.y`), a call argument, or the
+//! **callee of a call** (`return x()`) — that is not defined in scope. A name is
+//! considered defined if it is a parameter, a local assignment (`=`, `for`,
+//! `with`), a module-level function, class, variable, or import, an enclosing
+//! scope's binding, a cross-module imported symbol, or a builtin.
 //!
 //! ```python
 //! def compute() -> int:
-//!     return undefined_name   # undefined_name is never assigned → E0018
+//!     return undefined_name     # never defined → E0018
+//!     return undefined_fn()     # undefined callee → E0018
 //! ```
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
@@ -48,18 +52,30 @@ impl Rule for UndefinedVariable {
         // Collect module-level variable names so functions can reference them.
         let module_var_names: Vec<&str> = basilisk_resolver::collect_names(&module.module_vars);
 
+        // Module-level class names are in scope for any function body, just like
+        // module-level functions, variables, and imports.
+        let class_names: Vec<&str> = module.classes.iter().map(|c| c.name.as_str()).collect();
+
+        let scope = ModuleScope {
+            import_names: &import_names,
+            module_var_names: &module_var_names,
+            class_names: &class_names,
+            imported_symbols: &module.imported_symbols,
+        };
+
         module.functions.iter().for_each(|func| {
-            check_function(
-                func,
-                &module.functions,
-                &import_names,
-                &module_var_names,
-                &module.imported_symbols,
-                &module.path,
-                diagnostics,
-            );
+            check_function(func, &module.functions, &scope, &module.path, diagnostics);
         });
     }
+}
+
+/// Module-scope names visible to every function body.
+struct ModuleScope<'a> {
+    import_names: &'a [&'a str],
+    module_var_names: &'a [&'a str],
+    class_names: &'a [&'a str],
+    imported_symbols:
+        &'a std::collections::HashMap<String, basilisk_resolver::scope::ExternalSymbol>,
 }
 
 /// Check whether `name` is defined in any enclosing function's scope.
@@ -203,9 +219,7 @@ const BUILTINS: &[&str] = &[
 fn check_function(
     func: &FunctionInfo,
     all_functions: &[FunctionInfo],
-    import_names: &[&str],
-    module_var_names: &[&str],
-    imported_symbols: &std::collections::HashMap<String, basilisk_resolver::scope::ExternalSymbol>,
+    scope: &ModuleScope<'_>,
     path: &str,
     out: &mut Vec<Diagnostic>,
 ) {
@@ -217,9 +231,14 @@ fn check_function(
             || func.vararg.as_ref().is_some_and(|v| v.name == name_str)
             || func.kwarg.as_ref().is_some_and(|k| k.name == name_str)
             || func.all_local_assigns.iter().any(|a| a == name)
-            || import_names.contains(&name_str)
-            || module_var_names.contains(&name_str)
-            || imported_symbols.contains_key(name_str)
+            || scope.import_names.contains(&name_str)
+            || scope.module_var_names.contains(&name_str)
+            || scope.class_names.contains(&name_str)
+            || scope.imported_symbols.contains_key(name_str)
+            // Any function defined in the module (sibling, nested, or the function
+            // itself for recursion) is a name in scope — `return helper()` and
+            // `return helper` must not be flagged for a real `def helper`.
+            || all_functions.iter().any(|f| f.name == name_str)
             || is_in_enclosing_scope(name_str, func, all_functions)
             || BUILTINS.contains(&name_str)
         {

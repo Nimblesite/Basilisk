@@ -48,8 +48,9 @@ enum Transport {
 enum Command {
     /// Type check one or more files or directories.
     Check {
-        /// Paths to check. Directories are traversed recursively for `.py` files.
-        #[arg(default_value = ".")]
+        /// Paths to check. Directories are traversed recursively for `.py`
+        /// files. Defaults to the configured `[tool.basilisk] include` roots,
+        /// else the current directory.
         paths: Vec<String>,
         /// Output format: text (default, human-readable) or json (machine-readable).
         #[arg(long, default_value = "text")]
@@ -469,6 +470,26 @@ fn run_check(paths: &[String], format: OutputFormat, cache: &cache_check::CacheO
     }
 }
 
+/// Resolve the paths a check run walks. Implements [CHKARCH-CONFIG-INCLUDE]:
+/// explicit CLI paths win, then the configured `include` roots, then `.`.
+fn effective_check_paths(
+    paths: &[String],
+    config: &basilisk_config::BasiliskConfig,
+    config_root: &std::path::Path,
+) -> Vec<String> {
+    if !paths.is_empty() {
+        return paths.to_vec();
+    }
+    if config.include.is_empty() {
+        return vec![".".to_owned()];
+    }
+    config
+        .include
+        .iter()
+        .map(|inc| config_root.join(inc).to_string_lossy().into_owned())
+        .collect()
+}
+
 fn collect_and_check(
     paths: &[String],
     cache: &cache_check::CacheOptions,
@@ -501,6 +522,9 @@ fn collect_and_check(
         config_root.display()
     );
 
+    // Implements [CHKARCH-CONFIG-INCLUDE] (issue #37): a no-args run walks
+    // only the configured include roots, never the whole repository.
+    let paths = &effective_check_paths(paths, &config, &config_root);
     let python_files = collect_python_files(paths, &excluded)?;
 
     // Build import search paths (venv, uv registry, workspace members).

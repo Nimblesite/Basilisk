@@ -245,3 +245,145 @@ exclude = ["packages/beta"]
         assert!(result.is_none());
     }
 }
+
+/// Discover uv workspace member source directories.
+///
+/// Implements [LSPUV-WORKSPACE-IMPORT-RESOLUTION]. Parses
+/// `[tool.uv.workspace]` from `pyproject.toml` at each workspace root and
+/// returns the resolved member directory paths. For each member, looks for a
+/// `src/` subdirectory (common Python project layout) and adds it; otherwise
+/// adds the member directory itself.
+///
+/// In monorepo layouts (e.g. `ai_cms/agent-backend/`), `pyproject.toml` may
+/// not be at the workspace root itself. If no uv workspace is found at a root,
+/// we search one level of subdirectories for `pyproject.toml` with `src/`
+/// layouts and add those as source roots.
+///
+/// Returns an empty vec if no workspace members are found.
+#[must_use]
+pub fn discover_workspace_members(roots: &[PathBuf]) -> Vec<PathBuf> {
+    let mut members = Vec::new();
+
+    for root in roots {
+        // Try uv workspace at this root first.
+        if let Ok(Some(workspace)) = parse_uv_workspace(root) {
+            for member_dir in &workspace.members {
+                add_source_root(&mut members, member_dir);
+            }
+
+            if !workspace.members.is_empty() {
+                tracing::info!(
+                    root = %root.display(),
+                    member_count = workspace.members.len(),
+                    "discovered uv workspace members"
+                );
+                continue;
+            }
+        }
+
+        // Root itself is a Python project (pyproject.toml at the workspace
+        // root, not inside a uv workspace). Add its source root so first-party
+        // imports resolve under a `src/` layout.
+        if root.join("pyproject.toml").is_file() {
+            add_source_root(&mut members, root);
+            tracing::info!(
+                root = %root.display(),
+                "discovered project at workspace root"
+            );
+        }
+
+        // Also search subdirectories for projects. This handles monorepos
+        // where the IDE root (e.g. `ai_cms/`) is a parent of the actual
+        // Python project (e.g. `ai_cms/agent-backend/`).
+        let Ok(entries) = std::fs::read_dir(root) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() || !path.join("pyproject.toml").is_file() {
+                continue;
+            }
+
+            // Try uv workspace in the subdirectory.
+            if let Ok(Some(workspace)) = parse_uv_workspace(&path) {
+                for member_dir in &workspace.members {
+                    add_source_root(&mut members, member_dir);
+                }
+                if !workspace.members.is_empty() {
+                    tracing::info!(
+                        root = %path.display(),
+                        member_count = workspace.members.len(),
+                        "discovered uv workspace members in subdirectory"
+                    );
+                    continue;
+                }
+            }
+
+            // No uv workspace, but has pyproject.toml — treat as a project.
+            add_source_root(&mut members, &path);
+            tracing::info!(
+                path = %path.display(),
+                "discovered project subdirectory"
+            );
+        }
+    }
+
+    members
+}
+
+/// Add a project directory's source root to the member list.
+///
+/// Prefers `src/` layout if it exists, otherwise adds the directory itself.
+fn add_source_root(members: &mut Vec<PathBuf>, project_dir: &Path) {
+    let src_dir = project_dir.join("src");
+    if src_dir.is_dir() {
+        members.push(src_dir);
+    } else {
+        members.push(project_dir.to_path_buf());
+    }
+}
+
+#[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "test-only code: unwrap acceptable in unit tests"
+)]
+mod discovery_tests {
+    use super::discover_workspace_members;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEST_CTR: AtomicU64 = AtomicU64::new(0);
+
+    fn unique_tmp(prefix: &str) -> std::path::PathBuf {
+        let n = TEST_CTR.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("{prefix}_{n}_{}", std::process::id()))
+    }
+
+    /// Regression: when the workspace root itself is a Python project with a
+    /// `src/` layout (no uv workspace, no subdirectory projects), the `src/`
+    /// directory must be added to workspace members so first-party imports
+    /// like `from agent_backend.config import settings` resolve.
+    #[test]
+    fn root_src_layout_project_is_discovered() {
+        let root = unique_tmp("bsk_uv_root_src");
+        let src = root.join("src");
+        let pkg = src.join("mypkg");
+        std::fs::create_dir_all(&pkg).unwrap();
+        std::fs::write(pkg.join("__init__.py"), "").unwrap();
+        std::fs::write(pkg.join("config.py"), "settings = 1\n").unwrap();
+        std::fs::write(
+            root.join("pyproject.toml"),
+            "[project]\nname = \"mypkg\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+
+        let members = discover_workspace_members(std::slice::from_ref(&root));
+
+        assert!(
+            members.iter().any(|m| m == &src),
+            "expected src/ to be in workspace_members, got: {members:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}

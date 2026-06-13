@@ -72,6 +72,9 @@ This rule applies to:
 - `TypedDict` fields — annotation is always required
 - `NamedTuple` fields — annotation is always required
 - `Protocol` member signatures — annotation is always required
+- `@dataclass` / `@pydantic.dataclasses.dataclass` / attrs (`@define`, `@attr.s`) /
+  pydantic `BaseModel` fields — the annotation is what makes the assignment a
+  field; never redundant (issues #110, #39)
 - `ClassVar` and `Final` — the qualifier itself is non-redundant even if the base type is inferrable
 
 **Interaction with conformance**: This rule does not conflict with PEP 526 or any conformance test. The conformance suite tests that annotations are respected when present; it does not require annotations where inference suffices. Basilisk goes further by enforcing that redundant annotations are absent.

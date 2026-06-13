@@ -530,7 +530,7 @@ The registry feeds into:
 
 ### Hot Reload {#LSPARCH-UV-HOTRELOAD}
 
-All uv commands trigger `rebuild_registry_and_resolve()` on success — re-parses `uv.lock`, rebuilds the registry, re-resolves all imports, and republishes diagnostics for every indexed file. The same function fires when the file watcher detects `uv.lock` or `pyproject.toml` changes. No LSP restart needed.
+All uv commands trigger `rebuild_registry_and_resolve()` on success — re-parses `uv.lock`, rebuilds the registry, re-resolves all imports, and republishes diagnostics for every indexed file. The same path fires when the file watcher detects a `uv.lock`, `pyproject.toml`, `basilisk.json`, or `.python-version` change — first reloading each root's checker config (`reload_root_configs`) so version-aware rules ([CHKARCH-VERSION-TARGET]) and rule-severity overrides update live, then re-checking. No LSP restart needed.
 
 ### uv Binary Resolution {#LSPARCH-UV-BINRES}
 
