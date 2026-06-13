@@ -496,7 +496,10 @@ impl WorkspaceIndex {
                 let checker_diags = if suppressed {
                     Vec::new()
                 } else {
-                    basilisk_checker::check_with_config(&resolved, self.config_for_file(entry.key()))
+                    basilisk_checker::check_with_config(
+                        &resolved,
+                        self.config_for_file(entry.key()),
+                    )
                 };
                 let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
                     .iter()

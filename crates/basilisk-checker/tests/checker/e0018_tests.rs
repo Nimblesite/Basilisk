@@ -123,7 +123,8 @@ fn e0018_sibling_function_call_no_false_positive() -> Result<(), Box<dyn std::er
 #[test]
 fn e0018_bare_sibling_function_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
     // Returning a sibling module-level function by name is valid (it IS defined).
-    let source = "def helper() -> int:\n    return 1\n\n\ndef use() -> object:\n    return helper\n";
+    let source =
+        "def helper() -> int:\n    return 1\n\n\ndef use() -> object:\n    return helper\n";
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0018"),

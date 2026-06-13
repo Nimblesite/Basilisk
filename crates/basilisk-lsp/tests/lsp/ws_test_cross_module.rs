@@ -789,11 +789,14 @@ async fn changed_module_exports_refresh_dependent_diagnostics() -> TestResult<()
 
 /// Whether main.py's most recently published diagnostics flag `thing` undefined.
 async fn main_reports_thing_undefined(fixture: &mut WsTestFixture, main_uri: &str) -> bool {
-    collect_all_diagnostics(fixture).await.get(main_uri).is_some_and(|d| {
-        d["params"]["diagnostics"]
-            .as_array()
-            .is_some_and(|arr| arr.iter().any(is_thing_undefined))
-    })
+    collect_all_diagnostics(fixture)
+        .await
+        .get(main_uri)
+        .is_some_and(|d| {
+            d["params"]["diagnostics"]
+                .as_array()
+                .is_some_and(|arr| arr.iter().any(is_thing_undefined))
+        })
 }
 
 /// Send a full-text `didChange` for `uri`.
@@ -857,7 +860,13 @@ async fn open_module_export_edit_refreshes_dependent_diagnostics() -> TestResult
             }}
         }))
         .await?;
-    did_change_full(&mut fixture, &lib_uri, 2, "def renamed() -> int:\n    return 1\n").await?;
+    did_change_full(
+        &mut fixture,
+        &lib_uri,
+        2,
+        "def renamed() -> int:\n    return 1\n",
+    )
+    .await?;
     assert!(
         main_reports_thing_undefined(&mut fixture, &main_uri).await,
         "renaming `thing` away in the OPEN lib.py must make main.py report it undefined live"
