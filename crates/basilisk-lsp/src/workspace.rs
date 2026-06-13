@@ -189,12 +189,13 @@ impl WorkspaceIndex {
         let config = self.config_for_file(path);
         let (mut entry, lsp_diags) = analyse_with_config(text, path, config);
 
-        // Excluded files (vendored/bundled) are parsed so navigation still
-        // works, but never contribute diagnostics — the editor's per-file path
-        // must match the bulk workspace scan and `basilisk check`, which skip
-        // them. Without this, opening a `bundled/` file squiggles every line.
-        // Implements [CHKARCH-CONFIG-EXCLUDE].
-        if self.is_path_excluded(path) {
+        // Excluded files, and files outside the configured `include` roots, are
+        // parsed so navigation still works but never contribute diagnostics — the
+        // per-file path must match the bulk scan and `basilisk check`, which skip
+        // them. Without this, opening a `bundled/` or out-of-include file
+        // squiggles every line. Implements [CHKARCH-CONFIG-EXCLUDE] /
+        // [CHKARCH-CONFIG-INCLUDE].
+        if self.is_path_excluded(path) || self.is_outside_include_roots(path) {
             entry.diagnostics.clear();
             return (entry, Vec::new());
         }
@@ -255,6 +256,33 @@ impl WorkspaceIndex {
             .exclude
             .iter()
             .any(|pattern| basilisk_config::path_matches_pattern(relative, pattern))
+    }
+
+    /// Whether `file_path` lies outside the owning root's `[tool.basilisk]
+    /// include` roots. When `include` is empty the whole root is included, so
+    /// nothing is "outside". Mirrors the scan's `scan_dirs_for` for the per-file
+    /// path, so an opened file outside the include roots is suppressed just like
+    /// an excluded one. Implements [CHKARCH-CONFIG-INCLUDE].
+    #[must_use]
+    fn is_outside_include_roots(&self, file_path: &std::path::Path) -> bool {
+        let Some(root) = self
+            .roots
+            .iter()
+            .filter(|root| file_path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+        else {
+            return false;
+        };
+        let Some(config) = self.root_configs.get(root) else {
+            return false;
+        };
+        if config.include.is_empty() {
+            return false;
+        }
+        !config
+            .include
+            .iter()
+            .any(|inc| file_path.starts_with(root.join(inc)))
     }
 
     /// Return the `FileEntry` for a URI, if present.
@@ -459,9 +487,17 @@ impl WorkspaceIndex {
         self.files
             .iter_mut()
             .filter_map(|mut entry| {
+                // Excluded / out-of-include files never publish diagnostics, even
+                // on a re-resolve — otherwise an open out-of-scope file's errors
+                // reappear. [CHKARCH-CONFIG-EXCLUDE] / [CHKARCH-CONFIG-INCLUDE].
+                let suppressed = self.is_path_excluded(entry.key())
+                    || self.is_outside_include_roots(entry.key());
                 let resolved = entry.resolved.clone()?;
-                let file_config = self.config_for_file(entry.key());
-                let checker_diags = basilisk_checker::check_with_config(&resolved, file_config);
+                let checker_diags = if suppressed {
+                    Vec::new()
+                } else {
+                    basilisk_checker::check_with_config(&resolved, self.config_for_file(entry.key()))
+                };
                 let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
                     .iter()
                     .map(|d| bsk_to_lsp(d, &entry.text))
@@ -2245,6 +2281,42 @@ mod tests {
             "files outside include roots must NOT be scanned, got: {scanned:?}"
         );
         assert_eq!(file_count, 1, "only the included file should be scanned");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn open_file_outside_include_roots_is_suppressed() {
+        // [CHKARCH-CONFIG-INCLUDE] A file outside the include roots must show no
+        // diagnostics even when opened on demand — consistent with `exclude`.
+        let dir = unique_tmp("bsk_open_outside_include");
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join("gen")).unwrap();
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\ninclude = [\"src\"]\n",
+        )
+        .unwrap();
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        let src = "def f() -> int:\n    return undefined_name\n";
+
+        // Inside the include roots: diagnosed even when opened.
+        let inside = Url::from_file_path(dir.join("src/inside.py")).unwrap();
+        assert!(
+            !idx.set_open(&inside, src, 1).is_empty(),
+            "a file inside include roots must be diagnosed when opened"
+        );
+
+        // Outside the include roots: suppressed when opened.
+        let outside = Url::from_file_path(dir.join("gen/outside.py")).unwrap();
+        assert!(
+            idx.set_open(&outside, src, 1).is_empty(),
+            "a file outside include roots must NOT be diagnosed even when opened"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

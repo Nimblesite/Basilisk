@@ -1200,10 +1200,13 @@ the current directory is scanned. Entries are resolved relative to the
 directory of the configuration file. This keeps vendored or generated trees
 the user excluded by omission out of the walk entirely (issue #37).
 
-The **LSP workspace scan** honors the same `include` roots
-(`WorkspaceIndex::scan_dirs_for`), so the editor analyses exactly the files
-`basilisk check` would: a generated tree outside the include roots is neither
-scanned nor diagnosed in the editor, matching the CLI.
+The **LSP** honors the same `include` roots on both paths, so the editor
+analyses exactly the files `basilisk check` would. The bulk scan walks only the
+include roots (`WorkspaceIndex::scan_dirs_for`), and the per-file/open path
+suppresses diagnostics for any file outside them
+(`WorkspaceIndex::is_outside_include_roots`, applied in `analyse_and_resolve` and
+`recheck_all_files`) — so a file in a generated tree shows no diagnostics even
+when opened, exactly like an `exclude`d file.
 
 ### Exclude Semantics {#CHKARCH-CONFIG-EXCLUDE}
 
