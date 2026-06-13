@@ -260,10 +260,41 @@ pub(super) fn collect_return_name_refs(stmts: &[Stmt]) -> Vec<(String, Span)> {
         if let Stmt::Return(ret) = stmt {
             if let Some(val) = ret.value.as_deref() {
                 collect_name_refs_with_spans(val, &mut out);
+                collect_callee_name_refs(val, &mut out);
             }
         }
     });
     out
+}
+
+/// Collect the base name of every CALLEE in a return expression — `f` in
+/// `f(...)`, `obj` in `obj.method()` — which [`collect_name_refs_with_spans`]
+/// deliberately skips (it walks call *arguments*, not the callee). E0018 uses
+/// this so `return f()` is checked for an undefined `f`, not just bare
+/// `return f`. Kept separate from the shared collector so PEP 695 scoping and
+/// E0149 (which want value references, not callees) are unaffected.
+fn collect_callee_name_refs(expr: &Expr, out: &mut Vec<(String, Span)>) {
+    match expr {
+        Expr::Call(call) => {
+            collect_name_refs_with_spans(&call.func, out);
+            for arg in &call.arguments.args {
+                collect_callee_name_refs(arg, out);
+            }
+        }
+        Expr::BinOp(bin) => {
+            collect_callee_name_refs(&bin.left, out);
+            collect_callee_name_refs(&bin.right, out);
+        }
+        Expr::Tuple(tup) => {
+            for elt in &tup.elts {
+                collect_callee_name_refs(elt, out);
+            }
+        }
+        Expr::Subscript(sub) => collect_callee_name_refs(&sub.value, out),
+        Expr::Attribute(attr) => collect_callee_name_refs(&attr.value, out),
+        Expr::Starred(starred) => collect_callee_name_refs(&starred.value, out),
+        _ => {}
+    }
 }
 
 /// Collects `return <name>` references from the TOP LEVEL of a function body only.

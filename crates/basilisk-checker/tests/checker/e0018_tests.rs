@@ -92,3 +92,69 @@ def _patch_jwt(claims: dict[str, object]) -> object:
     );
     Ok(())
 }
+
+#[test]
+fn e0018_undefined_callee_in_return_call_fires() -> Result<(), Box<dyn std::error::Error>> {
+    // The callee of a call in a return must be checked, not just bare names:
+    // `return undefined_fn()` references `undefined_fn`.
+    let source = "def f() -> object:\n    return undefined_fn()\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-E0018"),
+        "an undefined callee in a return call should fire E0018, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0018_sibling_function_call_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+    // Calling a sibling module-level function must not fire — it is in scope.
+    let source = "def helper() -> int:\n    return 1\n\n\ndef use() -> int:\n    return helper()\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0018"),
+        "`return helper()` for a module-level function must not fire E0018, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0018_bare_sibling_function_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+    // Returning a sibling module-level function by name is valid (it IS defined).
+    let source = "def helper() -> int:\n    return 1\n\n\ndef use() -> object:\n    return helper\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0018"),
+        "`return helper` for a module-level function must not fire E0018, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0018_class_instantiation_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+    // Instantiating a module-level class must not fire.
+    let source = "class Foo:\n    pass\n\n\ndef make() -> Foo:\n    return Foo()\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0018"),
+        "`return Foo()` for a module-level class must not fire E0018, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0018_builtin_call_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+    // A builtin callee must not fire.
+    let source = "def f() -> int:\n    return len([1, 2])\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0018"),
+        "`return len(...)` (builtin callee) must not fire E0018, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
