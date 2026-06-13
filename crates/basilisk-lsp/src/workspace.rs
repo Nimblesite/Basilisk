@@ -98,30 +98,7 @@ impl WorkspaceIndex {
     /// the fallback for that root.
     #[must_use]
     pub fn new(roots: Vec<PathBuf>, mode: AnalysisMode, checker_config: BasiliskConfig) -> Self {
-        // Load per-root configs. Each root may have its own pyproject.toml.
-        // If a root has no config file, fall back to the provided checker_config.
-        let root_configs: std::collections::HashMap<PathBuf, BasiliskConfig> = roots
-            .iter()
-            .map(|root| {
-                let has_config =
-                    root.join("pyproject.toml").is_file() || root.join("basilisk.json").is_file();
-                let mut cfg = if has_config {
-                    basilisk_config::load_basilisk_config(root)
-                } else {
-                    checker_config.clone()
-                };
-                // [CHKARCH-VERSION-TARGET] An explicit `python-version` in the
-                // checker config wins; otherwise detect the project's target
-                // from `.python-version` / `requires-python` / `uv.lock` so
-                // version-aware rules follow the real target (issue #93).
-                if cfg.python_version.is_none() {
-                    cfg.python_version =
-                        basilisk_uv::python_version::resolve_target_python_version(root);
-                }
-                (root.clone(), cfg)
-            })
-            .collect();
-
+        let root_configs = Self::load_root_configs(&roots, &checker_config);
         Self {
             roots,
             files: DashMap::new(),
@@ -132,6 +109,46 @@ impl WorkspaceIndex {
             checker_config,
             search_paths: std::sync::RwLock::new(None),
         }
+    }
+
+    /// Load each root's `BasiliskConfig` from its `pyproject.toml` /
+    /// `basilisk.json`, falling back to `fallback` for roots without a config
+    /// file.
+    ///
+    /// [CHKARCH-VERSION-TARGET] An explicit `python-version` in the config wins;
+    /// otherwise the project's target is detected from `.python-version` /
+    /// `requires-python` / `uv.lock` so version-aware rules follow the real
+    /// target (issue #93).
+    fn load_root_configs(
+        roots: &[PathBuf],
+        fallback: &BasiliskConfig,
+    ) -> std::collections::HashMap<PathBuf, BasiliskConfig> {
+        roots
+            .iter()
+            .map(|root| {
+                let has_config =
+                    root.join("pyproject.toml").is_file() || root.join("basilisk.json").is_file();
+                let mut cfg = if has_config {
+                    basilisk_config::load_basilisk_config(root)
+                } else {
+                    fallback.clone()
+                };
+                if cfg.python_version.is_none() {
+                    cfg.python_version =
+                        basilisk_uv::python_version::resolve_target_python_version(root);
+                }
+                (root.clone(), cfg)
+            })
+            .collect()
+    }
+
+    /// Re-read every root's `BasiliskConfig` from disk so a change to a watched
+    /// config file (`pyproject.toml` / `basilisk.json` / `.python-version`)
+    /// takes effect — version-aware rules and severity overrides — without an
+    /// LSP restart. The caller re-checks open files afterwards (e.g. via
+    /// [`Self::recheck_all_files`]). Implements [CHKARCH-VERSION-TARGET].
+    pub fn reload_root_configs(&mut self) {
+        self.root_configs = Self::load_root_configs(&self.roots, &self.checker_config);
     }
 
     /// Cache the import search paths built during the workspace scan.
@@ -2057,6 +2074,66 @@ mod tests {
         assert!(
             !codes.contains(&"BSK-E0001".to_owned()),
             "reload_from_disk must apply checker_config — disabled E0001 should be absent"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn reload_root_configs_applies_changed_python_version() {
+        // [CHKARCH-VERSION-TARGET] Editing `[tool.basilisk] python-version` must
+        // make version-aware rules (the BSK-E0155 PEP 695 gate) update without an
+        // LSP restart: reload_root_configs re-reads the target, and the next
+        // recheck reflects it.
+        let dir = unique_tmp("bsk_cfg_pyver");
+        std::fs::create_dir_all(&dir).unwrap();
+        let write_version = |v: &str| {
+            std::fs::write(
+                dir.join("pyproject.toml"),
+                format!("[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\npython-version = \"{v}\"\n"),
+            )
+            .unwrap();
+        };
+        write_version("3.11");
+        let src = "type Alias = int\n";
+        let file_path = dir.join("pep695.py");
+        std::fs::write(&file_path, src).unwrap();
+
+        let mut idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        let uri = Url::from_file_path(&file_path).unwrap();
+        let recheck_has_e0155 = |idx: &WorkspaceIndex| {
+            idx.recheck_all_files()
+                .into_iter()
+                .find(|(u, _)| *u == uri)
+                .is_some_and(|(_, d)| lsp_codes(&d).contains(&"BSK-E0155".to_owned()))
+        };
+
+        // 3.11 target: PEP 695 `type` syntax is gated.
+        let initial = idx.set_open(&uri, src, 1);
+        assert!(
+            lsp_codes(&initial).contains(&"BSK-E0155".to_owned()),
+            "PEP 695 on a 3.11 target must fire BSK-E0155"
+        );
+
+        // Switch the configured target to 3.12 on disk.
+        write_version("3.12");
+
+        // A recheck WITHOUT reloading config reuses the target cached at
+        // construction — still stale 3.11 (the bug this guards against).
+        assert!(
+            recheck_has_e0155(&idx),
+            "without reload, the recheck still uses the stale 3.11 target"
+        );
+
+        // Reloading per-root config picks up 3.12, where PEP 695 is native.
+        idx.reload_root_configs();
+        assert!(
+            !recheck_has_e0155(&idx),
+            "reload_root_configs must apply the new python-version (3.12 allows PEP 695)"
         );
 
         let _ = std::fs::remove_dir_all(&dir);

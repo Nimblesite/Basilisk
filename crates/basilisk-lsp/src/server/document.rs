@@ -188,18 +188,22 @@ pub(super) async fn did_change_watched_files(
         }
     }
 
-    // If uv.lock or pyproject.toml changed, rebuild the package registry and
-    // re-resolve all imports so diagnostics update without an LSP restart.
-    let needs_registry_rebuild = params.changes.iter().any(|change| {
+    // A change to any project config file must update diagnostics without an LSP
+    // restart: reload each root's checker config so version-aware rules and
+    // severity overrides take effect (issue #93 reactivity), then rebuild the uv
+    // package registry and re-resolve + re-check every file.
+    let needs_config_refresh = params.changes.iter().any(|change| {
         let path = change.uri.path();
-        path.ends_with("uv.lock") || path.ends_with("pyproject.toml")
+        path.ends_with("uv.lock")
+            || path.ends_with("pyproject.toml")
+            || path.ends_with("basilisk.json")
+            || path.ends_with(".python-version")
     });
 
-    if needs_registry_rebuild {
-        log_uv_config_changes(&params);
+    log_uv_config_changes(&params);
+    if needs_config_refresh {
+        reload_index_configs(server).await;
         super::init::rebuild_registry_and_resolve(server).await;
-    } else {
-        log_uv_config_changes(&params);
     }
 
     // Classify the incoming changes, filtering to Python files only.
@@ -294,6 +298,16 @@ pub(super) async fn did_change_watched_files(
         old.abort();
     }
     *debounce = Some(abort_handle);
+}
+
+/// Re-read each workspace root's checker config from disk after a watched config
+/// file changed, so version-aware rules and severity overrides update without an
+/// LSP restart. Implements [CHKARCH-VERSION-TARGET] reactivity.
+async fn reload_index_configs(server: &LspServer) {
+    let mut guard = server.index.write().await;
+    if let Some(index) = guard.as_mut() {
+        index.reload_root_configs();
+    }
 }
 
 /// Log changes to uv-related configuration files.

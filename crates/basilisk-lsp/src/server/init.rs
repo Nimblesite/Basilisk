@@ -397,6 +397,10 @@ async fn register_file_watchers(client: &Client) {
             glob_pattern: GlobPattern::String("**/pyproject.toml".into()),
             kind: None,
         },
+        FileSystemWatcher {
+            glob_pattern: GlobPattern::String("**/basilisk.json".into()),
+            kind: None,
+        },
     ];
 
     let registration_options =
@@ -419,7 +423,7 @@ async fn register_file_watchers(client: &Client) {
     if let Err(err) = client.register_capability(vec![registration]).await {
         tracing::warn!("failed to register uv file watchers: {err}");
     } else {
-        info!("registered uv file watchers (uv.lock, .python-version, pyproject.toml)");
+        info!("registered config file watchers (uv.lock, .python-version, pyproject.toml, basilisk.json)");
     }
 }
 
