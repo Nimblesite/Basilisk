@@ -889,6 +889,52 @@ All stages are backed by:
 +------------------+
 ```
 
+### Parse Nesting-Depth Guard {#CHKARCH-ARCH-PARSEDEPTH}
+
+`ruff_python_parser` is a recursive-descent parser, and the resolver and checker
+walk the resulting AST recursively (as does the AST's own `Drop`). All three
+overflow the thread stack on pathologically nested input: a bracket expression
+nested past roughly 4 000 levels aborts the process with `SIGABRT`. On the
+language server this manifested as a crash-restart loop the moment a workspace
+containing such a file was scanned. (A single 20 000-deep parenthesised
+expression in a generated file is the canonical trigger.)
+
+To stay crash-safe — and to match CPython, which rejects this input at the
+*tokenizer* rather than crashing — `parse_source` (the workspace's single entry
+point into `ruff_python_parser`) runs a nesting-depth guard **before** handing
+the source to the recursive parser. The guard:
+
+- Measures depth with ruff's **linear lexer** (`lex` + `next_token`), a flat byte
+  scan that never recurses, so the measurement itself can never overflow. It
+  short-circuits at the first violating token, so a pathological file is only
+  lexed up to the offending bracket/indent.
+- Rejects **bracket nesting** (`(`, `[`, `{`, cumulative) deeper than **200**,
+  matching CPython's tokenizer `MAXLEVEL`; the message is CPython's verbatim
+  `too many nested parentheses`.
+- Rejects **indentation** deeper than **99 levels**, matching CPython's
+  `MAXINDENT`; the message is CPython's verbatim `too many levels of
+  indentation`.
+
+Both limits sit one to two orders of magnitude below the ~4 000 stack-overflow
+floor and far above any non-pathological source (real code rarely nests beyond
+~15 brackets / ~10 indents), so the guard is crash-proof without false
+positives. The rejection surfaces as a `ParseError::Syntax` and follows the
+existing parse-error path (`BSK-PARSE` in the LSP).
+
+**Known residual (out of scope for this tokenizer-level guard):** an extremely
+long *un-bracketed* expression — e.g. a 30 000-term `1+1+...` operator chain or a
+deeply nested ternary/`lambda` — parses successfully in ruff but produces an AST
+deep enough to overflow on any later recursive traversal (resolver, checker, or
+`Drop`). This is the class CPython itself bounds only at its *parser* C-stack
+guard (a build-dependent `MemoryError`), not the tokenizer, and a complete fix
+would require iterative AST traversal/teardown rather than a parse-time check.
+Such input does not occur in real or generated code (deep generated data is
+bracketed, and is covered above).
+
+Implemented in `crates/basilisk-parser/src/depth.rs` and `…/src/lib.rs`
+(`parse_source`); covered by `crates/basilisk-parser/tests/parse_tests.rs` and
+the propagation test in `crates/basilisk-checker/tests/checker_tests.rs`.
+
 ### Rust Crate Structure {#CHKARCH-ARCH-CRATES}
 
 ```

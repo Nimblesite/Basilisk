@@ -5,6 +5,7 @@
 //! entire Basilisk workspace. All other crates receive a [`ParsedModule`]
 //! and work exclusively with `ruff_python_ast` types.
 
+mod depth;
 pub mod error;
 
 pub use error::ParseError;
@@ -25,8 +26,19 @@ pub struct ParsedModule {
 ///
 /// # Errors
 ///
-/// Returns [`ParseError::Syntax`] if the source contains syntax errors.
+/// Returns [`ParseError::Syntax`] if the source contains syntax errors or is
+/// nested too deeply to parse without overflowing the stack
+/// ([CHKARCH-ARCH-PARSEDEPTH]).
 pub fn parse_source(source: String, path: String) -> Result<ParsedModule, ParseError> {
+    // Implements [CHKARCH-ARCH-PARSEDEPTH]: reject pathologically nested source
+    // (measured by the linear lexer) before the recursive parser — and the
+    // recursive AST visitors downstream — can overflow the stack.
+    if let Err(message) = depth::check_nesting(&source) {
+        return Err(ParseError::Syntax {
+            path,
+            message: message.to_owned(),
+        });
+    }
     ruff_python_parser::parse_module(&source)
         .map(|parsed| ParsedModule {
             ast: parsed.into_syntax(),
