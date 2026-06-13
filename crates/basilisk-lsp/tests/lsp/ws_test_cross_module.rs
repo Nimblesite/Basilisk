@@ -787,6 +787,93 @@ async fn changed_module_exports_refresh_dependent_diagnostics() -> TestResult<()
     Ok(())
 }
 
+/// Whether main.py's most recently published diagnostics flag `thing` undefined.
+async fn main_reports_thing_undefined(fixture: &mut WsTestFixture, main_uri: &str) -> bool {
+    collect_all_diagnostics(fixture).await.get(main_uri).is_some_and(|d| {
+        d["params"]["diagnostics"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().any(is_thing_undefined))
+    })
+}
+
+/// Send a full-text `didChange` for `uri`.
+async fn did_change_full(
+    fixture: &mut WsTestFixture,
+    uri: &str,
+    version: i64,
+    text: &str,
+) -> TestResult<()> {
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": { "uri": uri, "version": version },
+                "contentChanges": [{ "text": text }]
+            }
+        }))
+        .await?;
+    Ok(())
+}
+
+/// [ANALYSIS-SYMBOLS-INVAL] open-file path (#56): editing an OPEN module's
+/// exports must refresh dependents live, in BOTH directions. The file watcher
+/// skips open files (`reload_from_disk` bails when `is_open`), so the in-editor
+/// `didChange` path drives the cross-module re-resolve. Critically, a renamed or
+/// removed export must STOP suppressing its now-undefined references — a stale
+/// export lingering in `imported_symbols` left dependents green after a rename.
+#[tokio::test]
+async fn open_module_export_edit_refreshes_dependent_diagnostics() -> TestResult<()> {
+    let with_thing = "def thing() -> int:\n    return 1\n";
+    // lib EXPORTS `thing`; main.py uses it cross-module, so it is clean at startup.
+    let (dir, root_uri) = setup_cross_module_workspace(&[
+        ("lib.py", with_thing),
+        (
+            "main.py",
+            "import lib\n\ndef use() -> int:\n    return thing\n",
+        ),
+    ]);
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+
+    let main_uri = format!("{root_uri}/main.py");
+    let lib_uri = format!("{root_uri}/lib.py");
+
+    // Startup: lib exports `thing`, so main.py is clean.
+    assert!(
+        !main_reports_thing_undefined(&mut fixture, &main_uri).await,
+        "precondition: main.py should be clean while lib.py exports `thing`"
+    );
+
+    // OPEN lib.py, then EDIT it to RENAME the export away. The dependent must
+    // report `thing` undefined LIVE — the stale export must not keep it green.
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": { "textDocument": {
+                "uri": lib_uri, "languageId": "python", "version": 1, "text": with_thing
+            }}
+        }))
+        .await?;
+    did_change_full(&mut fixture, &lib_uri, 2, "def renamed() -> int:\n    return 1\n").await?;
+    assert!(
+        main_reports_thing_undefined(&mut fixture, &main_uri).await,
+        "renaming `thing` away in the OPEN lib.py must make main.py report it undefined live"
+    );
+
+    // Restore the export in the OPEN file: the dependent must clear again.
+    did_change_full(&mut fixture, &lib_uri, 3, with_thing).await?;
+    assert!(
+        !main_reports_thing_undefined(&mut fixture, &main_uri).await,
+        "restoring `thing` in the OPEN lib.py must clear main.py's diagnostic live"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
 /// True iff the diagnostic reports `thing` as undefined/unresolved.
 fn is_thing_undefined(d: &serde_json::Value) -> bool {
     d["message"].as_str().unwrap_or("").contains("`thing`")

@@ -54,9 +54,13 @@ pub(super) async fn did_change(server: &LspServer, params: DidChangeTextDocument
 
     let guard = server.index.read().await;
     let Some(index) = guard.as_ref() else { return };
-    let diags = index.set_open(&uri, &text, version);
+    // In cross-module mode an export-changing edit must refresh dependents live,
+    // even though the edited file is open (GitHub #56). [ANALYSIS-SYMBOLS-INVAL]
+    let results = index.set_open_refresh_dependents(&uri, &text, version);
     drop(guard);
-    server.client.publish_diagnostics(uri, diags, None).await;
+    for (target, diags) in results {
+        server.client.publish_diagnostics(target, diags, None).await;
+    }
 }
 
 /// Handle `textDocument/didSave`: re-run the pipeline on the cached text.
@@ -68,12 +72,11 @@ pub(super) async fn did_save(server: &LspServer, params: DidSaveTextDocumentPara
     let Some(text) = index.get_text(&uri) else {
         return;
     };
-    let diags = index.set_open(&uri, &text, 0);
+    let results = index.set_open_refresh_dependents(&uri, &text, 0);
     drop(guard);
-    server
-        .client
-        .publish_diagnostics(uri.clone(), diags, None)
-        .await;
+    for (target, diags) in results {
+        server.client.publish_diagnostics(target, diags, None).await;
+    }
 
     // Notify activity panels that this module changed.
     super::activity_panel::send_module_changed(server, &uri).await;

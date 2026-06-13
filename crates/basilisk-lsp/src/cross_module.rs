@@ -262,6 +262,12 @@ pub fn populate_cross_module_symbols(index: &WorkspaceIndex) {
 
         let mut resolved = Arc::try_unwrap(resolved_arc).unwrap_or_else(|arc| (*arc).clone());
 
+        // Repopulate from current exports: clear stale entries first so a
+        // renamed or removed export disappears from importers. Without this the
+        // old name lingers and keeps suppressing its now-undefined references,
+        // leaving dependents green after an export edit (GitHub #56).
+        resolved.imported_symbols.clear();
+
         for import in &resolved.imports {
             let Some(resolved_path) = &import.resolved_path else {
                 continue;

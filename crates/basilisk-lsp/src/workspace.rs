@@ -355,6 +355,32 @@ impl WorkspaceIndex {
         lsp_diags
     }
 
+    /// Like [`Self::set_open`], but in cross-module mode also refreshes
+    /// dependents when the edited (open) file's exported symbol set changes — so
+    /// editing an OPEN module updates its importers live. `set_open` alone
+    /// re-analyses only the edited file, and the file-watcher path skips open
+    /// files (`reload_from_disk` bails when `is_open`), so without this an
+    /// in-editor export edit leaves dependents stale until the file is closed.
+    /// Implements [ANALYSIS-SYMBOLS-INVAL] for the open-file path (GitHub #56).
+    #[must_use]
+    pub fn set_open_refresh_dependents(
+        &self,
+        uri: &Url,
+        text: &str,
+        version: i32,
+    ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
+        let path = uri.to_file_path().unwrap_or_default();
+        let track_exports = matches!(self.mode, AnalysisMode::CrossModule);
+        let before = track_exports.then(|| self.exported_symbol_names(&path));
+        let own_diags = self.set_open(uri, text, version);
+        if before.is_some_and(|prev| self.exported_symbol_names(&path) != prev) {
+            // Exports changed: re-resolve + re-check so importers' stale symbol
+            // diagnostics refresh without closing the file or reloading the server.
+            return self.reresolve_imports_and_recheck();
+        }
+        vec![(uri.clone(), own_diags)]
+    }
+
     /// Re-read a file from disk (called on `didClose` or file-watcher events).
     ///
     /// If the file is currently open, this is a no-op (editor text is
@@ -483,6 +509,19 @@ impl WorkspaceIndex {
         Some((result, changed))
     }
 
+    /// The directories to scan under `root`: the configured `[tool.basilisk]
+    /// include` roots (relative to `root`) if any, else `root` itself. Mirrors
+    /// the CLI's `effective_check_paths` so the editor and `basilisk check`
+    /// agree on which files are analysed. Implements [CHKARCH-CONFIG-INCLUDE].
+    fn scan_dirs_for(&self, root: &std::path::Path) -> Vec<PathBuf> {
+        match self.root_configs.get(root) {
+            Some(cfg) if !cfg.include.is_empty() => {
+                cfg.include.iter().map(|inc| root.join(inc)).collect()
+            }
+            _ => vec![root.to_path_buf()],
+        }
+    }
+
     /// Scan all workspace roots and populate the index.
     ///
     /// Returns a list of `(Uri, diagnostics)` pairs ready for publishing.
@@ -499,7 +538,9 @@ impl WorkspaceIndex {
 
         for root in &self.roots {
             let cfg = crate::config::load_config(root);
-            collect_python_files(root, &mut all_files, &cfg.exclude, root);
+            for scan_dir in self.scan_dirs_for(root) {
+                collect_python_files(&scan_dir, &mut all_files, &cfg.exclude, root);
+            }
         }
 
         // Prefer .pyi over .py when both exist for the same stem.
@@ -2158,6 +2199,52 @@ mod tests {
             !codes.contains(&"BSK-E0001".to_owned()),
             "set_closed must apply checker_config — disabled E0001 should be absent"
         );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_honors_include_roots() {
+        // [CHKARCH-CONFIG-INCLUDE] The LSP workspace scan must walk only the
+        // configured `[tool.basilisk] include` roots, like `basilisk check` —
+        // a file outside them (e.g. generated code) must not be scanned.
+        let dir = unique_tmp("bsk_scan_include");
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join("gen")).unwrap();
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\ninclude = [\"src\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("src/ok.py"),
+            "def add(a: int, b: int) -> int:\n    return a + b\n",
+        )
+        .unwrap();
+        // A file OUTSIDE the include roots — must not be scanned.
+        std::fs::write(
+            dir.join("gen/outside.py"),
+            "def bad() -> int:\n    return undefined_name\n",
+        )
+        .unwrap();
+
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        let (results, file_count, _errors) = idx.scan();
+        let scanned: Vec<String> = results.iter().map(|(u, _)| u.to_string()).collect();
+
+        assert!(
+            scanned.iter().any(|u| u.ends_with("src/ok.py")),
+            "files inside include roots must be scanned, got: {scanned:?}"
+        );
+        assert!(
+            !scanned.iter().any(|u| u.ends_with("gen/outside.py")),
+            "files outside include roots must NOT be scanned, got: {scanned:?}"
+        );
+        assert_eq!(file_count, 1, "only the included file should be scanned");
 
         let _ = std::fs::remove_dir_all(&dir);
     }
