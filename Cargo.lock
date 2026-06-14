@@ -204,7 +204,7 @@ dependencies = [
  "basilisk-test-macros",
  "basilisk-uv",
  "ruff_python_ast",
- "ruff_text_size",
+ "ruff_text_size 0.0.0 (git+https://github.com/astral-sh/ruff?tag=0.15.17)",
  "serde",
  "serde_json",
  "tempfile",
@@ -351,7 +351,7 @@ dependencies = [
  "basilisk-stubs",
  "basilisk-test-utils",
  "ruff_python_ast",
- "ruff_text_size",
+ "ruff_text_size 0.0.0 (git+https://github.com/astral-sh/ruff?tag=0.15.17)",
  "serde",
  "thiserror",
 ]
@@ -365,7 +365,7 @@ dependencies = [
  "phf_codegen 0.13.1",
  "ruff_python_ast",
  "ruff_python_parser",
- "ruff_text_size",
+ "ruff_text_size 0.0.0 (git+https://github.com/astral-sh/ruff?tag=0.15.17)",
  "serde",
  "serde_json",
  "tempfile",
@@ -2226,7 +2226,7 @@ dependencies = [
  "memchr",
  "ruff_python_trivia",
  "ruff_source_file",
- "ruff_text_size",
+ "ruff_text_size 0.0.0 (git+https://github.com/astral-sh/ruff?tag=0.12.12)",
  "rustc-hash 2.1.1",
  "thiserror",
 ]
@@ -2243,7 +2243,7 @@ dependencies = [
  "memchr",
  "ruff_python_ast",
  "ruff_python_trivia",
- "ruff_text_size",
+ "ruff_text_size 0.0.0 (git+https://github.com/astral-sh/ruff?tag=0.12.12)",
  "rustc-hash 2.1.1",
  "static_assertions",
  "unicode-ident",
@@ -2258,7 +2258,7 @@ source = "git+https://github.com/astral-sh/ruff?tag=0.12.12#c6516e9b60e7b8d3d60b
 dependencies = [
  "itertools 0.14.0",
  "ruff_source_file",
- "ruff_text_size",
+ "ruff_text_size 0.0.0 (git+https://github.com/astral-sh/ruff?tag=0.12.12)",
  "unicode-ident",
 ]
 
@@ -2268,7 +2268,7 @@ version = "0.0.0"
 source = "git+https://github.com/astral-sh/ruff?tag=0.12.12#c6516e9b60e7b8d3d60b1e3a0fb0db04b533de54"
 dependencies = [
  "memchr",
- "ruff_text_size",
+ "ruff_text_size 0.0.0 (git+https://github.com/astral-sh/ruff?tag=0.12.12)",
 ]
 
 [[package]]
@@ -2278,6 +2278,11 @@ source = "git+https://github.com/astral-sh/ruff?tag=0.12.12#c6516e9b60e7b8d3d60b
 dependencies = [
  "get-size2",
 ]
+
+[[package]]
+name = "ruff_text_size"
+version = "0.0.0"
+source = "git+https://github.com/astral-sh/ruff?tag=0.15.17#7c645a9a1be8258b9f9e005208a55a0b7e8e18f0"
 
 [[package]]
 name = "rustc-demangle"
