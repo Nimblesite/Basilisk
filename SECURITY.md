@@ -35,8 +35,8 @@ supported only as noted below.
 
 | Version | Supported |
 | ------- | --------- |
-| 0.12.x  | ✅        |
-| < 0.12  | ❌        |
+| 0.13.x  | ✅        |
+| < 0.13  | ❌        |
 
 ## References
 
