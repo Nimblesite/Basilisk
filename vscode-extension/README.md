@@ -217,6 +217,6 @@ This is the VS Code extension for the [Basilisk](https://github.com/Nimblesite/B
 
 ## License
 
-MIT or Apache-2.0, at your option.
+MIT.
 
 Built by [NIMBLESITE PTY LTD](https://www.nimblesite.co).

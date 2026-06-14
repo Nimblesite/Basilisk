@@ -33,4 +33,4 @@ Phase 2 — extension structure complete, connecting to the Basilisk LSP.
 
 ## License
 
-MIT or Apache-2.0, at your option.
+MIT.
