@@ -9,7 +9,9 @@ use crate::scope::{FloatParamIntAttrAccess, FunctionInfo, Span};
 use super::class_info_ext::expr_simple_name;
 use super::core::{source_slice_range, source_slice_span, text_range_to_span};
 use super::enum_checks::INT_ONLY_FLOAT_ATTRS;
-use super::protocol_ext::{base_type_name, ASYNC_GENERATOR_TYPES, SYNC_GENERATOR_TYPES};
+use super::protocol_ext::{
+    base_type_name, unqualified_base, ASYNC_GENERATOR_TYPES, SYNC_GENERATOR_TYPES,
+};
 
 pub(crate) fn collect_float_param_int_attr_accesses(
     stmts: &[Stmt],
@@ -247,7 +249,7 @@ pub(super) fn collect_generator_violations(
         let Some(ann_text) = source_slice_span(source, ann_span) else {
             continue;
         };
-        let base = base_type_name(ann_text);
+        let base = unqualified_base(base_type_name(ann_text));
 
         let valid_types = if func.is_async {
             ASYNC_GENERATOR_TYPES

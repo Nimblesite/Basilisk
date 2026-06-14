@@ -98,30 +98,7 @@ impl WorkspaceIndex {
     /// the fallback for that root.
     #[must_use]
     pub fn new(roots: Vec<PathBuf>, mode: AnalysisMode, checker_config: BasiliskConfig) -> Self {
-        // Load per-root configs. Each root may have its own pyproject.toml.
-        // If a root has no config file, fall back to the provided checker_config.
-        let root_configs: std::collections::HashMap<PathBuf, BasiliskConfig> = roots
-            .iter()
-            .map(|root| {
-                let has_config =
-                    root.join("pyproject.toml").is_file() || root.join("basilisk.json").is_file();
-                let mut cfg = if has_config {
-                    basilisk_config::load_basilisk_config(root)
-                } else {
-                    checker_config.clone()
-                };
-                // [CHKARCH-VERSION-TARGET] An explicit `python-version` in the
-                // checker config wins; otherwise detect the project's target
-                // from `.python-version` / `requires-python` / `uv.lock` so
-                // version-aware rules follow the real target (issue #93).
-                if cfg.python_version.is_none() {
-                    cfg.python_version =
-                        basilisk_uv::python_version::resolve_target_python_version(root);
-                }
-                (root.clone(), cfg)
-            })
-            .collect();
-
+        let root_configs = Self::load_root_configs(&roots, &checker_config);
         Self {
             roots,
             files: DashMap::new(),
@@ -132,6 +109,46 @@ impl WorkspaceIndex {
             checker_config,
             search_paths: std::sync::RwLock::new(None),
         }
+    }
+
+    /// Load each root's `BasiliskConfig` from its `pyproject.toml` /
+    /// `basilisk.json`, falling back to `fallback` for roots without a config
+    /// file.
+    ///
+    /// [CHKARCH-VERSION-TARGET] An explicit `python-version` in the config wins;
+    /// otherwise the project's target is detected from `.python-version` /
+    /// `requires-python` / `uv.lock` so version-aware rules follow the real
+    /// target (issue #93).
+    fn load_root_configs(
+        roots: &[PathBuf],
+        fallback: &BasiliskConfig,
+    ) -> std::collections::HashMap<PathBuf, BasiliskConfig> {
+        roots
+            .iter()
+            .map(|root| {
+                let has_config =
+                    root.join("pyproject.toml").is_file() || root.join("basilisk.json").is_file();
+                let mut cfg = if has_config {
+                    basilisk_config::load_basilisk_config(root)
+                } else {
+                    fallback.clone()
+                };
+                if cfg.python_version.is_none() {
+                    cfg.python_version =
+                        basilisk_uv::python_version::resolve_target_python_version(root);
+                }
+                (root.clone(), cfg)
+            })
+            .collect()
+    }
+
+    /// Re-read every root's `BasiliskConfig` from disk so a change to a watched
+    /// config file (`pyproject.toml` / `basilisk.json` / `.python-version`)
+    /// takes effect — version-aware rules and severity overrides — without an
+    /// LSP restart. The caller re-checks open files afterwards (e.g. via
+    /// [`Self::recheck_all_files`]). Implements [CHKARCH-VERSION-TARGET].
+    pub fn reload_root_configs(&mut self) {
+        self.root_configs = Self::load_root_configs(&self.roots, &self.checker_config);
     }
 
     /// Cache the import search paths built during the workspace scan.
@@ -172,12 +189,13 @@ impl WorkspaceIndex {
         let config = self.config_for_file(path);
         let (mut entry, lsp_diags) = analyse_with_config(text, path, config);
 
-        // Excluded files (vendored/bundled) are parsed so navigation still
-        // works, but never contribute diagnostics — the editor's per-file path
-        // must match the bulk workspace scan and `basilisk check`, which skip
-        // them. Without this, opening a `bundled/` file squiggles every line.
-        // Implements [CHKARCH-CONFIG-EXCLUDE].
-        if self.is_path_excluded(path) {
+        // Excluded files, and files outside the configured `include` roots, are
+        // parsed so navigation still works but never contribute diagnostics — the
+        // per-file path must match the bulk scan and `basilisk check`, which skip
+        // them. Without this, opening a `bundled/` or out-of-include file
+        // squiggles every line. Implements [CHKARCH-CONFIG-EXCLUDE] /
+        // [CHKARCH-CONFIG-INCLUDE].
+        if self.is_path_excluded(path) || self.is_outside_include_roots(path) {
             entry.diagnostics.clear();
             return (entry, Vec::new());
         }
@@ -238,6 +256,33 @@ impl WorkspaceIndex {
             .exclude
             .iter()
             .any(|pattern| basilisk_config::path_matches_pattern(relative, pattern))
+    }
+
+    /// Whether `file_path` lies outside the owning root's `[tool.basilisk]
+    /// include` roots. When `include` is empty the whole root is included, so
+    /// nothing is "outside". Mirrors the scan's `scan_dirs_for` for the per-file
+    /// path, so an opened file outside the include roots is suppressed just like
+    /// an excluded one. Implements [CHKARCH-CONFIG-INCLUDE].
+    #[must_use]
+    fn is_outside_include_roots(&self, file_path: &std::path::Path) -> bool {
+        let Some(root) = self
+            .roots
+            .iter()
+            .filter(|root| file_path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+        else {
+            return false;
+        };
+        let Some(config) = self.root_configs.get(root) else {
+            return false;
+        };
+        if config.include.is_empty() {
+            return false;
+        }
+        !config
+            .include
+            .iter()
+            .any(|inc| file_path.starts_with(root.join(inc)))
     }
 
     /// Return the `FileEntry` for a URI, if present.
@@ -338,6 +383,32 @@ impl WorkspaceIndex {
         lsp_diags
     }
 
+    /// Like [`Self::set_open`], but in cross-module mode also refreshes
+    /// dependents when the edited (open) file's exported symbol set changes — so
+    /// editing an OPEN module updates its importers live. `set_open` alone
+    /// re-analyses only the edited file, and the file-watcher path skips open
+    /// files (`reload_from_disk` bails when `is_open`), so without this an
+    /// in-editor export edit leaves dependents stale until the file is closed.
+    /// Implements [ANALYSIS-SYMBOLS-INVAL] for the open-file path (GitHub #56).
+    #[must_use]
+    pub fn set_open_refresh_dependents(
+        &self,
+        uri: &Url,
+        text: &str,
+        version: i32,
+    ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
+        let path = uri.to_file_path().unwrap_or_default();
+        let track_exports = matches!(self.mode, AnalysisMode::CrossModule);
+        let before = track_exports.then(|| self.exported_symbol_names(&path));
+        let own_diags = self.set_open(uri, text, version);
+        if before.is_some_and(|prev| self.exported_symbol_names(&path) != prev) {
+            // Exports changed: re-resolve + re-check so importers' stale symbol
+            // diagnostics refresh without closing the file or reloading the server.
+            return self.reresolve_imports_and_recheck();
+        }
+        vec![(uri.clone(), own_diags)]
+    }
+
     /// Re-read a file from disk (called on `didClose` or file-watcher events).
     ///
     /// If the file is currently open, this is a no-op (editor text is
@@ -416,9 +487,20 @@ impl WorkspaceIndex {
         self.files
             .iter_mut()
             .filter_map(|mut entry| {
+                // Excluded / out-of-include files never publish diagnostics, even
+                // on a re-resolve — otherwise an open out-of-scope file's errors
+                // reappear. [CHKARCH-CONFIG-EXCLUDE] / [CHKARCH-CONFIG-INCLUDE].
+                let suppressed = self.is_path_excluded(entry.key())
+                    || self.is_outside_include_roots(entry.key());
                 let resolved = entry.resolved.clone()?;
-                let file_config = self.config_for_file(entry.key());
-                let checker_diags = basilisk_checker::check_with_config(&resolved, file_config);
+                let checker_diags = if suppressed {
+                    Vec::new()
+                } else {
+                    basilisk_checker::check_with_config(
+                        &resolved,
+                        self.config_for_file(entry.key()),
+                    )
+                };
                 let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
                     .iter()
                     .map(|d| bsk_to_lsp(d, &entry.text))
@@ -444,7 +526,39 @@ impl WorkspaceIndex {
         if let Some(search_paths) = self.search_paths_snapshot() {
             crate::import_resolver::resolve_workspace_imports(self, &search_paths);
         }
+        // Implements [ANALYSIS-SYMBOLS-INVAL] (GitHub #56): refresh dependents'
+        // imported symbols so symbol-level diagnostics don't go stale.
+        if matches!(self.mode, AnalysisMode::CrossModule) {
+            crate::cross_module::populate_cross_module_symbols(self);
+            self.build_import_graph();
+        }
         self.recheck_all_files()
+    }
+
+    /// Reload one file from disk, reporting whether its exported top-level
+    /// symbol set changed. Implements [ANALYSIS-SYMBOLS-INVAL] (GitHub #56).
+    pub fn reload_and_diff_exports(
+        &self,
+        uri: &Url,
+    ) -> Option<((Url, Vec<tower_lsp::lsp_types::Diagnostic>), bool)> {
+        let path = uri.to_file_path().ok()?;
+        let before = self.exported_symbol_names(&path);
+        let result = self.reload_from_disk(uri)?;
+        let changed = self.exported_symbol_names(&path) != before;
+        Some((result, changed))
+    }
+
+    /// The directories to scan under `root`: the configured `[tool.basilisk]
+    /// include` roots (relative to `root`) if any, else `root` itself. Mirrors
+    /// the CLI's `effective_check_paths` so the editor and `basilisk check`
+    /// agree on which files are analysed. Implements [CHKARCH-CONFIG-INCLUDE].
+    fn scan_dirs_for(&self, root: &std::path::Path) -> Vec<PathBuf> {
+        match self.root_configs.get(root) {
+            Some(cfg) if !cfg.include.is_empty() => {
+                cfg.include.iter().map(|inc| root.join(inc)).collect()
+            }
+            _ => vec![root.to_path_buf()],
+        }
     }
 
     /// Scan all workspace roots and populate the index.
@@ -463,7 +577,9 @@ impl WorkspaceIndex {
 
         for root in &self.roots {
             let cfg = crate::config::load_config(root);
-            collect_python_files(root, &mut all_files, &cfg.exclude, root);
+            for scan_dir in self.scan_dirs_for(root) {
+                collect_python_files(&scan_dir, &mut all_files, &cfg.exclude, root);
+            }
         }
 
         // Prefer .pyi over .py when both exist for the same stem.
@@ -1389,14 +1505,11 @@ mod tests {
         let test_uri = Url::from_file_path(&test_path).unwrap();
         let _ = idx.set_open(&test_uri, "from tests.helpers import AgentConfig\n", 1);
 
-        // Mirror the LSP init flow: workspace_members get added (src/ for
-        // src-layout projects), then imports are resolved.
-        let mut search_paths = crate::import_resolver::ImportSearchPaths::from_config(
+        // Mirror the LSP init flow: from_config discovers workspace_members
+        // (src/ for src-layout projects), then imports are resolved.
+        let search_paths = crate::import_resolver::ImportSearchPaths::from_config(
             &roots, &config, /*registry=*/ None,
         );
-        // Use the real init.rs discovery helper so this test exercises the
-        // production path, not a hand-built workspace_members list.
-        search_paths.workspace_members = crate::server::init::discover_workspace_members(&roots);
         crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
         recheck_all(&idx);
 
@@ -2047,6 +2160,66 @@ mod tests {
     }
 
     #[test]
+    fn reload_root_configs_applies_changed_python_version() {
+        // [CHKARCH-VERSION-TARGET] Editing `[tool.basilisk] python-version` must
+        // make version-aware rules (the BSK-E0155 PEP 695 gate) update without an
+        // LSP restart: reload_root_configs re-reads the target, and the next
+        // recheck reflects it.
+        let dir = unique_tmp("bsk_cfg_pyver");
+        std::fs::create_dir_all(&dir).unwrap();
+        let write_version = |v: &str| {
+            std::fs::write(
+                dir.join("pyproject.toml"),
+                format!("[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\npython-version = \"{v}\"\n"),
+            )
+            .unwrap();
+        };
+        write_version("3.11");
+        let src = "type Alias = int\n";
+        let file_path = dir.join("pep695.py");
+        std::fs::write(&file_path, src).unwrap();
+
+        let mut idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        let uri = Url::from_file_path(&file_path).unwrap();
+        let recheck_has_e0155 = |idx: &WorkspaceIndex| {
+            idx.recheck_all_files()
+                .into_iter()
+                .find(|(u, _)| *u == uri)
+                .is_some_and(|(_, d)| lsp_codes(&d).contains(&"BSK-E0155".to_owned()))
+        };
+
+        // 3.11 target: PEP 695 `type` syntax is gated.
+        let initial = idx.set_open(&uri, src, 1);
+        assert!(
+            lsp_codes(&initial).contains(&"BSK-E0155".to_owned()),
+            "PEP 695 on a 3.11 target must fire BSK-E0155"
+        );
+
+        // Switch the configured target to 3.12 on disk.
+        write_version("3.12");
+
+        // A recheck WITHOUT reloading config reuses the target cached at
+        // construction — still stale 3.11 (the bug this guards against).
+        assert!(
+            recheck_has_e0155(&idx),
+            "without reload, the recheck still uses the stale 3.11 target"
+        );
+
+        // Reloading per-root config picks up 3.12, where PEP 695 is native.
+        idx.reload_root_configs();
+        assert!(
+            !recheck_has_e0155(&idx),
+            "reload_root_configs must apply the new python-version (3.12 allows PEP 695)"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn config_applies_to_set_closed() {
         let dir = unique_tmp("bsk_cfg_closed");
         std::fs::create_dir_all(&dir).unwrap();
@@ -2064,6 +2237,88 @@ mod tests {
         assert!(
             !codes.contains(&"BSK-E0001".to_owned()),
             "set_closed must apply checker_config — disabled E0001 should be absent"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_honors_include_roots() {
+        // [CHKARCH-CONFIG-INCLUDE] The LSP workspace scan must walk only the
+        // configured `[tool.basilisk] include` roots, like `basilisk check` —
+        // a file outside them (e.g. generated code) must not be scanned.
+        let dir = unique_tmp("bsk_scan_include");
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join("gen")).unwrap();
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\ninclude = [\"src\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("src/ok.py"),
+            "def add(a: int, b: int) -> int:\n    return a + b\n",
+        )
+        .unwrap();
+        // A file OUTSIDE the include roots — must not be scanned.
+        std::fs::write(
+            dir.join("gen/outside.py"),
+            "def bad() -> int:\n    return undefined_name\n",
+        )
+        .unwrap();
+
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        let (results, file_count, _errors) = idx.scan();
+        let scanned: Vec<String> = results.iter().map(|(u, _)| u.to_string()).collect();
+
+        assert!(
+            scanned.iter().any(|u| u.ends_with("src/ok.py")),
+            "files inside include roots must be scanned, got: {scanned:?}"
+        );
+        assert!(
+            !scanned.iter().any(|u| u.ends_with("gen/outside.py")),
+            "files outside include roots must NOT be scanned, got: {scanned:?}"
+        );
+        assert_eq!(file_count, 1, "only the included file should be scanned");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn open_file_outside_include_roots_is_suppressed() {
+        // [CHKARCH-CONFIG-INCLUDE] A file outside the include roots must show no
+        // diagnostics even when opened on demand — consistent with `exclude`.
+        let dir = unique_tmp("bsk_open_outside_include");
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join("gen")).unwrap();
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\ninclude = [\"src\"]\n",
+        )
+        .unwrap();
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        let src = "def f() -> int:\n    return undefined_name\n";
+
+        // Inside the include roots: diagnosed even when opened.
+        let inside = Url::from_file_path(dir.join("src/inside.py")).unwrap();
+        assert!(
+            !idx.set_open(&inside, src, 1).is_empty(),
+            "a file inside include roots must be diagnosed when opened"
+        );
+
+        // Outside the include roots: suppressed when opened.
+        let outside = Url::from_file_path(dir.join("gen/outside.py")).unwrap();
+        assert!(
+            idx.set_open(&outside, src, 1).is_empty(),
+            "a file outside include roots must NOT be diagnosed even when opened"
         );
 
         let _ = std::fs::remove_dir_all(&dir);

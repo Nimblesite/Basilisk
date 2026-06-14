@@ -440,10 +440,16 @@ The LSP registers additional file watchers for uv projects:
 
 | Pattern | Event | Action |
 |---------|-------|--------|
-| `uv.lock` | Create / Change | Re-parse lock, rebuild `PackageRegistry`, re-resolve imports |
-| `.python-version` | Create / Change | Update Python version, re-check stdlib availability |
-| `pyproject.toml` | Change | Re-detect workspace members, check lock staleness |
+| `uv.lock` | Create / Change | Reload checker config, rebuild `PackageRegistry`, re-resolve imports, re-check |
+| `.python-version` | Create / Change | Reload checker config (version-aware rules — [CHKARCH-VERSION-TARGET]), re-check |
+| `pyproject.toml` | Change | Reload checker config, re-detect workspace members, rebuild registry, re-check |
+| `basilisk.json` | Change | Reload checker config (severity overrides, `python-version`), re-check |
 | `.venv/pyvenv.cfg` | Create / Delete | Re-detect environment manager |
+
+On any of these, the LSP first re-reads each root's `BasiliskConfig` from disk
+(`WorkspaceIndex::reload_root_configs`) so a changed `python-version` or rule
+severity takes effect **without an LSP restart**, then re-checks every indexed
+file and republishes diagnostics.
 
 ---
 

@@ -265,3 +265,40 @@ x, y = "wrong", 42
     let _msgs = messages_for(&diags, "BSK-E0014");
     Ok(())
 }
+
+#[test]
+fn e0014_no_false_positive_on_variadic_tuple_of_tuples_annotation(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Regression for issue #26: a concrete-length tuple literal of homogeneous
+    // element types is assignable to the variadic `tuple[T, ...]` annotation.
+    let source = r#"
+_DIRECT_TENANT_TABLES: tuple[tuple[str, str], ...] = (
+    ("tenants", "id"),
+    ("agent_configs", "tenant_id"),
+)
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "BSK-E0014");
+    assert!(
+        msgs.is_empty(),
+        "tuple[tuple[str, str], ...] = (..matching pairs..) should NOT fire E0014, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0014_variadic_tuple_of_tuples_element_mismatch_fires() -> Result<(), Box<dyn std::error::Error>>
+{
+    // The true-positive pair for issue #26: an element violating the variadic
+    // element type must still be flagged.
+    let source = r#"
+_BAD: tuple[tuple[str, str], ...] = (("a", 1), ("c", "d"))
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "BSK-E0014");
+    assert!(
+        !msgs.is_empty(),
+        "a (str, int) element must still fire E0014 against tuple[tuple[str, str], ...]"
+    );
+    Ok(())
+}

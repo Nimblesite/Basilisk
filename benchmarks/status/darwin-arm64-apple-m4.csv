@@ -1,0 +1,27 @@
+# machine: Apple M4
+# cpu: Apple M4
+# arch: arm64
+# os: Darwin 25.0.0
+# cores: 10
+# tools: basilisk=basilisk 0.0.0-dev+g3f0f423-dirty
+# runs: 10 (hyperfine mean wall-clock, milliseconds)
+# generated: 2026-06-13T11:12:24+0500
+# note: <tool>_ms = COLD full-file CLI check from scratch. <tool>-warm_ms = a repeat run using that tool's own cache. basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache, so their warm ~= cold (every run is a full check).
+fixture,basilisk_ms,basilisk-warm_ms,pyright_ms,pyright-warm_ms,mypy_ms,mypy-warm_ms,ty_ms,ty-warm_ms,pyrefly_ms,pyrefly-warm_ms
+e0001_missing_param,403.6,250.3,,,,,,,,
+e0002_missing_return,282.7,101.6,,,,,,,,
+e0010_unresolved_import,154.5,73.0,,,,,,,,
+e0011_explicit_any,391.9,123.1,,,,,,,,
+e0012_argument_type_mismatch,174.8,55.5,,,,,,,,
+e0014_assignment_incompatibility,102.5,63.7,,,,,,,,
+e0016_incompatible_override,155.9,35.5,,,,,,,,
+e0018_undefined_name,273.9,141.6,,,,,,,,
+e0022_unhashable_dict_key,238.9,109.5,,,,,,,,
+e0023_nonexhaustive_match,127.7,38.5,,,,,,,,
+e0026_typevar_single_constraint,134.7,78.6,,,,,,,,
+e0036_classvar_misuse,281.9,103.0,,,,,,,,
+e0038_typeddict_readonly_inheritance,122.1,28.7,,,,,,,,
+e0050_newtype_name_mismatch,139.8,87.7,,,,,,,,
+e0054_final_reassignment,51.6,25.5,,,,,,,,
+e0056_readonly_typeddict_mutation,81.2,28.5,,,,,,,,
+e0093_typeddict_invalid_key,77.6,27.5,,,,,,,,

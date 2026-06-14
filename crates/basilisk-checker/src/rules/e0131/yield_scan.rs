@@ -90,8 +90,14 @@ pub(super) fn find_yield_expressions(body: &str, body_offset: usize) -> Vec<Yiel
 }
 
 /// Extract the expression text after a yield keyword.
+///
+/// Only horizontal whitespace is skipped: a bare `yield` at end of line must
+/// yield the empty expression (`None`), never the next statement's text.
 fn extract_yield_expr(body: &str, start: usize) -> String {
-    let rest = body.get(start..).unwrap_or("").trim_start();
+    let rest = body
+        .get(start..)
+        .unwrap_or("")
+        .trim_start_matches([' ', '\t']);
     // Find the end of the expression: newline, comment, or end of string
     let mut depth = 0i32;
     let mut end = rest.len();
