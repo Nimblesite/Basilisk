@@ -1,4 +1,4 @@
-# agent-pmo:f87d349
+# agent-pmo:0b21609
 name: CI
 
 on:
@@ -516,3 +516,25 @@ jobs:
 
       - name: Build Rust (release)
         run: cargo build --release
+
+  # ── Dependency review ([GITHUB-DEP-REVIEW]) ────────────────────────────────
+  # Blocks PRs that introduce dependencies with known-high vulnerabilities. This
+  # is the repo's ONLY dependency vuln-gate — there is no cargo-deny/osv gate, so
+  # there is no doubling-up. It is SEPARATE from CodeQL (codeql.yml = vulnerable
+  # code) and `make lint` (style/correctness): one owner per concern. PR-only by
+  # construction — dependency-review diffs base vs head — which matches this
+  # workflow's pull_request-only trigger.
+  security:
+    name: security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write # dependency-review posts its PR summary
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Dependency review
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
