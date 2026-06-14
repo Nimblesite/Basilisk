@@ -16,8 +16,9 @@
 //! violating token, so a pathological file is only lexed up to the offending
 //! bracket or indent.
 
+use ruff_python_ast::token::TokenKind;
 use ruff_python_parser::lexer::lex;
-use ruff_python_parser::{Mode, TokenKind};
+use ruff_python_parser::Mode;
 
 /// Maximum simultaneously-open brackets (`(`, `[`, `{`), counted cumulatively
 /// across all three kinds. Matches `CPython`'s tokenizer `MAXLEVEL` (200): a depth
