@@ -38,8 +38,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
 use tracing::{debug, info, warn};
 
-use super::helper_client::to_pyspy_traces;
 use super::sampler::{SampleBatch, SamplerError, SamplerHandle};
+use super::wire::to_pyspy_traces;
 
 /// How long to wait for the injected thread to write its header line.
 const HEADER_TIMEOUT: Duration = Duration::from_secs(15);

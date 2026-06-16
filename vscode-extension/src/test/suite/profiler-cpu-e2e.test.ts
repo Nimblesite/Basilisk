@@ -39,6 +39,15 @@ import {
 const BURNER_LIFETIME_SECS = 120;
 /** Sampling window before stopping a profile. */
 const SAMPLE_WINDOW_MS = 2_500;
+/**
+ * Ceiling for the cooperative sampler to attribute the hot loop. That path runs
+ * the debuggee under debugpy line-tracing, so on a slow/contended CI runner the
+ * interpreter can spend several seconds in Python/debugpy startup before the hot
+ * loop dominates the samples. Poll snapshots up to this budget instead of
+ * assuming a fixed window — keeping the assertion strict without being
+ * timing-fragile. The burner spins for BURNER_LIFETIME_SECS, well beyond this.
+ */
+const HOT_ATTRIBUTION_TIMEOUT_MS = 30_000;
 /** Budget for the LSP attach + first progress notification. */
 const PROGRESS_WAIT_MS = 10_000;
 /** Budget for profiler diagnostics to be published after stop. */
@@ -388,7 +397,21 @@ suite("CPU profiling — real end-to-end", () => {
       assert.ok(session.sessionId.length > 0, "cooperative attach must mint a session");
       assert.ok(session.pythonVersion.startsWith("3."), `expected Python 3.x, got ${session.pythonVersion}`);
 
-      await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
+      // The debuggee runs under debugpy line-tracing, so the hot loop can take
+      // seconds to dominate on a slow CI runner. Poll snapshots until
+      // `hot_function` is actually attributed rather than assuming a fixed
+      // window (the burner keeps spinning for BURNER_LIFETIME_SECS); this keeps
+      // the assertion strict without being timing-fragile.
+      await pollUntilResult({
+        fn: () =>
+          vscode.commands.executeCommand<ProfileResult>("basilisk.profiler.snapshot", {
+            sessionId: session.sessionId,
+            format: "speedscope",
+          }),
+        predicate: (snap) => snap.hotFunctions.some((fn) => fn.name === "hot_function"),
+        timeoutMs: HOT_ATTRIBUTION_TIMEOUT_MS,
+        intervalMs: SAMPLE_WINDOW_MS,
+      });
 
       const result = await vscode.commands.executeCommand<ProfileResult>("basilisk.profiler.stop", {
         sessionId: session.sessionId,

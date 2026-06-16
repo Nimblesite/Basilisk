@@ -1,12 +1,11 @@
 //! Implements [PROFILE-HELPER-SOCKET]. See docs/specs/LSP-PROFILING-SPEC.md#PROFILE-HELPER-SOCKET
 //!
-//! Pure conversion / path / command helpers for the elevated-helper path,
-//! kept separate from the socket orchestration in the parent module.
+//! Elevated-helper launch helpers — the `osascript` elevation command and the
+//! Unix socket path the helper connects back on — kept separate from the
+//! socket orchestration in the parent module.
 
 use std::path::PathBuf;
 use std::time::SystemTime;
-
-use basilisk_profiler_protocol::TraceData;
 
 /// Build the `osascript` command that runs the helper as administrator.
 ///
@@ -18,38 +17,6 @@ use basilisk_profiler_protocol::TraceData;
 #[must_use]
 pub fn build_elevation_script(helper: &str, socket: &str) -> String {
     format!("do shell script \"cd / && '{helper}' '{socket}'\" with administrator privileges")
-}
-
-/// Convert wire-format traces back into the `py_spy` shapes the aggregator eats.
-/// Shared with the cooperative sampler, which produces the same wire shape.
-pub(crate) fn to_pyspy_traces(pid: u32, traces: Vec<TraceData>) -> Vec<py_spy::StackTrace> {
-    let spy_pid = i32::try_from(pid).unwrap_or_default();
-    traces
-        .into_iter()
-        .map(|trace| py_spy::StackTrace {
-            pid: spy_pid,
-            thread_id: trace.thread_id,
-            thread_name: trace.thread_name,
-            owns_gil: trace.owns_gil,
-            active: trace.active,
-            frames: trace
-                .frames
-                .into_iter()
-                .map(|frame| py_spy::Frame {
-                    name: frame.name,
-                    filename: frame.filename,
-                    line: frame.line,
-                    short_filename: None,
-                    module: None,
-                    locals: None,
-                    is_entry: false,
-                    is_shim_entry: false,
-                })
-                .collect(),
-            os_thread_id: None,
-            process_info: None,
-        })
-        .collect()
 }
 
 /// Generate a unique, short Unix socket path for one helper session.
@@ -123,43 +90,5 @@ mod tests {
             display.len() < 104,
             "macOS caps socket paths near 104 bytes: {display}"
         );
-    }
-
-    #[test]
-    fn converts_wire_traces_to_pyspy() {
-        let wire = vec![TraceData {
-            thread_id: 9,
-            thread_name: Some("worker".to_owned()),
-            active: true,
-            owns_gil: true,
-            frames: vec![wire_frame("hot_function", "/app/x.py", 42)],
-        }];
-        let converted = to_pyspy_traces(99, wire);
-        assert_eq!(converted.len(), 1);
-        let frame_names: Vec<&str> = converted
-            .iter()
-            .flat_map(|trace| trace.frames.iter().map(|frame| frame.name.as_str()))
-            .collect();
-        assert_eq!(frame_names, vec!["hot_function"]);
-        let preserved = converted.iter().any(|trace| {
-            trace.thread_id == 9
-                && trace.thread_name.as_deref() == Some("worker")
-                && trace.active
-                && trace.owns_gil
-                && trace
-                    .frames
-                    .iter()
-                    .any(|frame| frame.filename == "/app/x.py" && frame.line == 42)
-        });
-        assert!(preserved, "conversion must preserve every wire field");
-    }
-
-    /// Build a wire frame for the conversion test.
-    fn wire_frame(name: &str, file: &str, line: i32) -> basilisk_profiler_protocol::FrameData {
-        basilisk_profiler_protocol::FrameData {
-            name: name.to_owned(),
-            filename: file.to_owned(),
-            line,
-        }
     }
 }
