@@ -20,7 +20,10 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 
 use serde::Serialize;
-use sysinfo::{get_current_pid, Pid, Process, ProcessesToUpdate, System, Uid, Users};
+use sysinfo::{
+    get_current_pid, Pid, Process, ProcessRefreshKind, ProcessesToUpdate, System, Uid, UpdateKind,
+    Users,
+};
 use tracing::info;
 
 /// Maximum number of distinct interpreter binaries we will invoke with
@@ -97,9 +100,22 @@ pub struct ProcessInfo {
 #[must_use]
 pub fn enumerate_python_processes() -> Vec<ProcessInfo> {
     let mut system = System::new();
-    let _ = system.refresh_processes(ProcessesToUpdate::All, true);
+    // sysinfo's 2-arg `refresh_processes` does NOT request `cmd`, so argv comes
+    // back empty on every platform. macOS recovers it via the `ps` fallback
+    // below, but Linux/Windows have none — leaving script labels, launcher
+    // detection, and the debugger-infrastructure filter blind (a `debugpy.adapter`
+    // would be offered as a target). Refresh the same fields the 2-arg default
+    // does, plus `cmd`, so argv is populated wherever sysinfo can read it.
+    let refresh_kind = ProcessRefreshKind::nothing()
+        .with_memory()
+        .with_cpu()
+        .with_disk_usage()
+        .with_exe(UpdateKind::OnlyIfNotSet)
+        .with_cmd(UpdateKind::OnlyIfNotSet)
+        .with_tasks();
+    let _ = system.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh_kind);
     std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
-    let _ = system.refresh_processes(ProcessesToUpdate::All, true);
+    let _ = system.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh_kind);
 
     let users = Users::new_with_refreshed_list();
     let current_uid = get_current_pid()
