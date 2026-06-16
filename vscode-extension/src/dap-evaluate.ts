@@ -15,14 +15,22 @@
  */
 
 import * as vscode from "vscode";
+import * as fs from "fs";
 import { Logger } from "./logger";
-import { debugOutputCursor, debugOutputSince } from "./dap-output";
+import { ALL_THREADS, debugOutputCursor, debugOutputSince, stoppedThreadIds } from "./dap-output";
+import { POLL_INTERVAL_MS, STARTUP_TIMEOUT_MS } from "./timeouts";
 
 /** The Basilisk debug adapter type. */
 const DEBUG_TYPE = "basilisk-debug";
 
-/** Prefix shared by every memory-script output marker (`__BASILISK_MEM*__`). */
-const MARKER_PREFIX = "__BASILISK_MEM";
+/** Prefix shared by every injection-script output marker (`__BASILISK_MEM*__`,
+ *  `__BASILISK_CPU_ACK__`). */
+const MARKER_PREFIX = "__BASILISK_";
+
+/** Marker a memory script prints when it hands its (large) payload back via a
+ *  temp file instead of stdout — see [PROFILE-MEMORY-COURIER] and
+ *  `scripts.rs::emit_via_file_helper`. The text after it is the file path. */
+const FILE_PAYLOAD_MARKER = "__BASILISK_MEM_FILE__";
 /** How long to wait for a script's (possibly large, chunked) marker output. */
 const MARKER_WAIT_MS = 4000;
 /** Poll interval while waiting for marker output. */
@@ -60,12 +68,35 @@ export async function evaluateInDebugSession(
     if (frameId !== undefined) { request.frameId = frameId; }
     const response = (await session.customRequest("evaluate", request)) as { result?: string };
     const direct = response.result ?? "";
-    if (direct.includes(MARKER_PREFIX)) { return direct; }
+    if (direct.includes(MARKER_PREFIX)) { return await resolveMarkerFilePayload(direct); }
     const printed = await waitForMarkerOutput(session.id, cursor);
-    return printed.length > 0 ? printed : direct;
+    return await resolveMarkerFilePayload(printed.length > 0 ? printed : direct);
   } catch (err: unknown) {
     Logger.warn(`[Memory] evaluate failed: ${err instanceof Error ? err.message : String(err)}`);
     return null;
+  }
+}
+
+/**
+ * Resolve a file-handoff payload. Large memory snapshots are written to a temp
+ * file by the injection script — which prints only `__BASILISK_MEM_FILE__<path>`
+ * — because debugpy truncates a single `print()` at ~20 KB
+ * ([PROFILE-MEMORY-COURIER]). When that marker is present, read the file (the
+ * real `__BASILISK_MEM*__ + json` payload), delete it, and return its contents.
+ * Anything else (CPU acks, small OK markers) passes through untouched.
+ */
+export async function resolveMarkerFilePayload(out: string): Promise<string> {
+  const at = out.indexOf(FILE_PAYLOAD_MARKER);
+  if (at === -1) { return out; }
+  const path = out.slice(at + FILE_PAYLOAD_MARKER.length).split(/\r?\n/, 1)[0]?.trim() ?? "";
+  if (path === "") { return out; }
+  try {
+    const contents = await fs.promises.readFile(path, "utf8");
+    await fs.promises.unlink(path).catch(() => undefined);
+    return contents;
+  } catch (err: unknown) {
+    Logger.warn(`[Memory] could not read payload file: ${err instanceof Error ? err.message : String(err)}`);
+    return out;
   }
 }
 
@@ -97,15 +128,24 @@ async function waitForMarkerOutput(sessionId: string, cursor: number): Promise<s
  * Resolve a frameId for a currently-stopped thread, or null if nothing is
  * paused. debugpy rejects `evaluate` without a stopped frame, so memory
  * profiling requires the debuggee to be paused at a breakpoint.
+ *
+ * "Is anything paused?" cannot be probed with requests: debugpy answers
+ * `stackTrace` for a RUNNING thread with a sampled frame whose id is not
+ * evaluable (`evaluate` then fails with "Unable to find thread for
+ * evaluation"). So this gates on the tracker's `stopped`/`continued`
+ * bookkeeping (dap-output.ts) and only then asks for the top frame.
  */
 export async function currentStoppedFrameId(): Promise<number | null> {
   const session = activeBasiliskSession();
   if (session === undefined) { return null; }
 
+  const stopped = stoppedThreadIds(session.id);
+  if (stopped.length === 0) { return null; }
+
   try {
-    const threads = (await session.customRequest("threads")) as { threads?: { id: number }[] };
-    for (const thread of threads.threads ?? []) {
-      const frameId = await topFrameIdIfStopped(session, thread.id);
+    const candidates = stopped.includes(ALL_THREADS) ? await allThreadIds(session) : stopped;
+    for (const threadId of candidates) {
+      const frameId = await topFrameIdIfStopped(session, threadId);
       if (frameId !== null) { return frameId; }
     }
     return null;
@@ -115,6 +155,87 @@ export async function currentStoppedFrameId(): Promise<number | null> {
     );
     return null;
   }
+}
+
+/** Every thread id the debuggee reports (for `allThreadsStopped` stops). */
+async function allThreadIds(session: vscode.DebugSession): Promise<number[]> {
+  const threads = (await session.customRequest("threads")) as { threads?: { id: number }[] };
+  return (threads.threads ?? []).map((thread) => thread.id);
+}
+
+/** A stopped, evaluable frame plus how to release it when the caller is done. */
+export interface AcquiredFrame {
+  readonly frameId: number;
+  /** Resume the debuggee — only if acquiring paused it. */
+  readonly release: () => Promise<void>;
+}
+
+/**
+ * Acquire an evaluable stopped frame, transparently pausing the debuggee
+ * when it is running — IDE-grade memory snapshots must not demand a manual
+ * breakpoint ([PROFILE-MEMORY-HOWTO]). When acquisition pauses the program,
+ * `release` resumes it; when the user was already stopped at a breakpoint,
+ * `release` is a no-op and their pause is preserved.
+ */
+export async function acquireStoppedFrame(): Promise<AcquiredFrame | null> {
+  const session = activeBasiliskSession();
+  if (session === undefined) { return null; }
+
+  const existing = await currentStoppedFrameId();
+  if (existing !== null) {
+    // The user's own pause: nothing to release.
+    return { frameId: existing, release: async () => { await Promise.resolve(); } };
+  }
+
+  if (!(await pauseDebuggee(session))) { return null; }
+  const frameId = await waitForStoppedFrame();
+  if (frameId === null) {
+    await resumeDebuggee(session);
+    return null;
+  }
+  Logger.info("[Memory] transparently paused the debuggee for evaluation");
+  return { frameId, release: async () => resumeDebuggee(session) };
+}
+
+/** Ask debugpy to pause the first reported thread. */
+async function pauseDebuggee(session: vscode.DebugSession): Promise<boolean> {
+  try {
+    const ids = await allThreadIds(session);
+    if (ids.length === 0) { return false; }
+    await session.customRequest("pause", { threadId: ids[0] });
+    return true;
+  } catch (err: unknown) {
+    Logger.warn(`[Memory] pause failed: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
+  }
+}
+
+/** Resume the first stopped (or reported) thread after a transparent pause. */
+async function resumeDebuggee(session: vscode.DebugSession): Promise<void> {
+  try {
+    const stopped = stoppedThreadIds(session.id).filter((id) => id !== ALL_THREADS);
+    const threadId = stopped[0] ?? (await allThreadIds(session))[0];
+    if (threadId === undefined) { return; }
+    await session.customRequest("continue", { threadId });
+    Logger.info("[Memory] resumed the debuggee after evaluation");
+  } catch (err: unknown) {
+    Logger.warn(`[Memory] resume failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/**
+ * Poll for a stopped frame until the startup budget runs out. Shared by the
+ * memory track-on-launch flow and the cooperative CPU sampler injection,
+ * both of which wait for the `stopOnEntry` pause before evaluating.
+ */
+export async function waitForStoppedFrame(): Promise<number | null> {
+  const deadline = Date.now() + STARTUP_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const frameId = await currentStoppedFrameId();
+    if (frameId !== null) { return frameId; }
+    await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  }
+  return null;
 }
 
 /** Top frameId of `threadId` if it is stopped, else null (running threads error). */

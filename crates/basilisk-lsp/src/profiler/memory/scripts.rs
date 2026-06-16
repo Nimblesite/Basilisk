@@ -33,16 +33,40 @@ print('__BASILISK_MEM_OK__')
 "
 }
 
+/// Python helper that ferries a marker payload back to the editor through a
+/// temp **file** instead of stdout.
+///
+/// debugpy truncates a single `print()` to ~20 KB, which silently corrupts the
+/// large JSON a real `tracemalloc` snapshot produces (100 stats × deep
+/// tracebacks ≈ 200 KB). So every JSON-emitting script writes its
+/// `marker + json` payload to a temp file and prints only
+/// `__BASILISK_MEM_FILE__<path>` (a short, never-truncated line); the editor
+/// reads the file back and posts its contents to `*.ingest` unchanged
+/// ([PROFILE-MEMORY-COURIER]). Local debugging only — the editor and debuggee
+/// share a filesystem, exactly as the cooperative CPU sampler assumes.
+fn emit_via_file_helper() -> &'static str {
+    r"
+def _basilisk_emit(_payload):
+    import tempfile, os
+    _fd, _path = tempfile.mkstemp(prefix='basilisk_mem_', suffix='.txt')
+    with os.fdopen(_fd, 'w') as _f:
+        _f.write(_payload)
+    print('__BASILISK_MEM_FILE__' + _path)
+"
+}
+
 /// Script to take a memory snapshot and return allocation data as JSON.
 ///
 /// Returns top allocations by line, current/peak memory, gc stats.
-/// The output is prefixed with `__BASILISK_MEM__` for parsing.
+/// The payload is the `__BASILISK_MEM__` marker handed back via a temp file
+/// ([`emit_via_file_helper`]) so a large snapshot is never truncated.
 #[must_use]
 pub fn take_snapshot(max_stats: usize) -> String {
+    let emit = emit_via_file_helper();
     format!(
         r"
 import tracemalloc, json, gc
-
+{emit}
 snapshot = tracemalloc.take_snapshot()
 stats = snapshot.statistics('lineno')
 top_stats = []
@@ -64,7 +88,7 @@ mem_info = {{
     'gcCounts': list(gc.get_count()),
     'gcObjects': len(gc.get_objects()),
 }}
-print('__BASILISK_MEM__' + json.dumps(mem_info))
+_basilisk_emit('__BASILISK_MEM__' + json.dumps(mem_info))
 "
     )
 }
@@ -75,10 +99,11 @@ print('__BASILISK_MEM__' + json.dumps(mem_info))
 /// Returns growth data prefixed with `__BASILISK_MEM_DIFF__`.
 #[must_use]
 pub fn diff_snapshot(max_stats: usize) -> String {
+    let emit = emit_via_file_helper();
     format!(
         r"
 import tracemalloc, json
-
+{emit}
 snapshot2 = tracemalloc.take_snapshot()
 # Compare against the stored previous snapshot
 if hasattr(tracemalloc, '_basilisk_prev_snapshot'):
@@ -102,9 +127,9 @@ if hasattr(tracemalloc, '_basilisk_prev_snapshot'):
         'current': current,
         'peak': peak,
     }}
-    print('__BASILISK_MEM_DIFF__' + json.dumps(result))
+    _basilisk_emit('__BASILISK_MEM_DIFF__' + json.dumps(result))
 else:
-    print('__BASILISK_MEM_DIFF__' + json.dumps({{'error': 'no previous snapshot'}}))
+    _basilisk_emit('__BASILISK_MEM_DIFF__' + json.dumps({{'error': 'no previous snapshot'}}))
 
 # Store this snapshot as the previous one for the next diff
 tracemalloc._basilisk_prev_snapshot = snapshot2
@@ -166,11 +191,12 @@ pub fn walk_references(
 ) -> String {
     let repr_filter = target_repr_contains.map_or_else(|| "None".to_owned(), |r| format!("'{r}'"));
     let label_helper = ref_label_helper();
+    let emit = emit_via_file_helper();
 
     format!(
         r"
 import gc, sys, json
-{label_helper}
+{emit}{label_helper}
 def _basilisk_walk_refs():
     gc.collect()
     target_type = '{target_type}'
@@ -258,7 +284,7 @@ def _basilisk_detect_cycles(nodes, edges):
     return {{'nodes': list(nodes.values()), 'edges': edges, 'cycles': cycles}}
 
 result = _basilisk_walk_refs()
-print('__BASILISK_MEM_REFS__' + json.dumps(result))
+_basilisk_emit('__BASILISK_MEM_REFS__' + json.dumps(result))
 "
     )
 }
@@ -268,10 +294,11 @@ print('__BASILISK_MEM_REFS__' + json.dumps(result))
 /// Returns JSON prefixed with `__BASILISK_MEM_OBJECTS__`.
 #[must_use]
 pub fn objects_by_type(type_name: &str, limit: u32) -> String {
+    let emit = emit_via_file_helper();
     format!(
         r"
 import gc, sys, json
-
+{emit}
 gc.collect()
 type_name = '{type_name}'
 limit = {limit}
@@ -301,41 +328,46 @@ result = {{
     'totalSize': type_summary.get(type_name, {{}}).get('size', 0),
     'typeSummary': type_summary,
 }}
-print('__BASILISK_MEM_OBJECTS__' + json.dumps(result))
+_basilisk_emit('__BASILISK_MEM_OBJECTS__' + json.dumps(result))
 "
     )
 }
 
 /// Script to force garbage collection and report results.
 ///
-/// Returns JSON prefixed with `__BASILISK_MEM_GC__`.
+/// Returns JSON prefixed with `__BASILISK_MEM_GC__`, handed back via a temp
+/// file ([`emit_via_file_helper`]) so a large `gc.garbage` report is not
+/// truncated.
 #[must_use]
-pub fn gc_collect() -> &'static str {
-    r"
+pub fn gc_collect() -> String {
+    let emit = emit_via_file_helper();
+    format!(
+        r"
 import gc, sys, json, tracemalloc
-
+{emit}
 before = tracemalloc.get_traced_memory()[0] if tracemalloc.is_tracing() else 0
 collected = gc.collect()
 after = tracemalloc.get_traced_memory()[0] if tracemalloc.is_tracing() else 0
 
 uncollectable = []
 for obj in gc.garbage[:20]:
-    uncollectable.append({
+    uncollectable.append({{
         'id': id(obj),
         'type': type(obj).__name__,
         'size': sys.getsizeof(obj),
         'repr': repr(obj)[:100],
         'reason': 'Instance has __del__ method and is in a reference cycle' if hasattr(obj, '__del__') else 'Uncollectable cycle',
-    })
+    }})
 
-result = {
+result = {{
     'collected': collected,
     'uncollectable': len(gc.garbage),
     'memoryFreed': max(0, before - after),
     'uncollectableObjects': uncollectable,
-}
-print('__BASILISK_MEM_GC__' + json.dumps(result))
+}}
+_basilisk_emit('__BASILISK_MEM_GC__' + json.dumps(result))
 "
+    )
 }
 
 #[cfg(test)]
@@ -354,6 +386,44 @@ mod tests {
         let script = take_snapshot(500);
         assert!(script.contains("__BASILISK_MEM__"));
         assert!(script.contains("stats[:500]"));
+    }
+
+    #[test]
+    fn payload_scripts_hand_off_via_a_file_not_a_raw_print() {
+        // debugpy truncates a single `print()` (~20KB), so large tracemalloc
+        // payloads must be written to a temp file and only the PATH printed
+        // ([PROFILE-MEMORY-COURIER]). Every JSON-emitting script must route
+        // through the file emitter and must NOT print the JSON directly.
+        for script in [
+            take_snapshot(100),
+            diff_snapshot(100),
+            walk_references("Cycle", None, 5, 200),
+            objects_by_type("dict", 50),
+            gc_collect(),
+        ] {
+            assert!(
+                script.contains("__BASILISK_MEM_FILE__"),
+                "script must emit the file-handoff marker: {script}"
+            );
+            assert!(
+                script.contains("_basilisk_emit("),
+                "script must route its payload through the file emitter: {script}"
+            );
+            // The only direct print is the short file-path line; no JSON marker
+            // may be printed (that is what truncates).
+            for json_marker in [
+                "__BASILISK_MEM__",
+                "__BASILISK_MEM_DIFF__",
+                "__BASILISK_MEM_REFS__",
+                "__BASILISK_MEM_OBJECTS__",
+                "__BASILISK_MEM_GC__",
+            ] {
+                assert!(
+                    !script.contains(&format!("print('{json_marker}'")),
+                    "JSON marker {json_marker} must not be printed directly (it would truncate): {script}"
+                );
+            }
+        }
     }
 
     #[test]

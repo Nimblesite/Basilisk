@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use basilisk_profiler_protocol::{classify_attach_error, AttachErrorKind};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
@@ -139,6 +140,20 @@ impl std::fmt::Display for SamplerError {
 
 impl std::error::Error for SamplerError {}
 
+/// Map a classified attach failure onto the matching [`SamplerError`] variant.
+///
+/// Shared by the in-process sampler and the elevated-helper client so both
+/// attach paths report identical, distinct failure modes (issue #81).
+#[must_use]
+pub fn sampler_error_from_kind(kind: AttachErrorKind, pid: u32, message: String) -> SamplerError {
+    match kind {
+        AttachErrorKind::ProcessNotFound => SamplerError::ProcessNotFound(pid),
+        AttachErrorKind::NotPython => SamplerError::NotPython(pid),
+        AttachErrorKind::PermissionDenied => SamplerError::PermissionDenied(message),
+        AttachErrorKind::AttachFailed => SamplerError::AttachFailed(message),
+    }
+}
+
 /// Convert a u32 PID to the platform-specific type py-spy expects.
 ///
 /// py-spy uses `remoteprocess::Pid` which is `i32` on Unix and `u32` on Windows.
@@ -179,15 +194,7 @@ pub fn start_sampler(config: &SamplerConfig) -> Result<SamplerHandle, SamplerErr
 
     let spy = py_spy::PythonSpy::new(pid, &spy_config).map_err(|err| {
         let msg = err.to_string();
-        if msg.contains("ermission") {
-            SamplerError::PermissionDenied(msg)
-        } else if msg.contains("ot a python") || msg.contains("ot Python") {
-            SamplerError::NotPython(config.pid)
-        } else if msg.contains("No such process") || msg.contains("not found") {
-            SamplerError::ProcessNotFound(config.pid)
-        } else {
-            SamplerError::AttachFailed(msg)
-        }
+        sampler_error_from_kind(classify_attach_error(&msg), config.pid, msg)
     })?;
 
     let python_version = format!(

@@ -13,7 +13,9 @@
 import * as vscode from "vscode";
 import { type Store } from "./store";
 import { Logger } from "./logger";
-import { startProfilingForPid } from "./profiler";
+import { registerLaunchCommands } from "./process-launch";
+import { bindProcessPanelReactivity } from "./process-reactivity";
+import { withViewProgress } from "./progress-ops";
 
 // ── LSP response types ───────────────────────────────────────────────────
 
@@ -117,6 +119,8 @@ class ProcessGroupItem extends vscode.TreeItem {
     public readonly members: readonly ProcessInfo[],
   ) {
     super(label, vscode.TreeItemCollapsibleState.Expanded);
+    // Stable identity so VS Code preserves expansion state across refreshes.
+    this.id = `processGroup:${label}`;
     this.description = `${members.length}`;
     this.contextValue = "processGroup";
     this.iconPath = new vscode.ThemeIcon("folder");
@@ -125,31 +129,31 @@ class ProcessGroupItem extends vscode.TreeItem {
 
 /** A single process row with a one-click profiling affordance. */
 class ProcessTreeItem extends vscode.TreeItem {
-  constructor(public readonly process: ProcessInfo) {
+  constructor(public readonly process: ProcessInfo, activeProfilingPid?: number) {
     const scriptName = process.script !== null ? basename(process.script) : undefined;
     super(
       scriptName !== undefined ? `${process.name} — ${scriptName}` : process.name,
       vscode.TreeItemCollapsibleState.None,
     );
 
+    // Stable identity across the panel's 2s auto-refresh: without it VS Code
+    // can fail to map an inline-button click back to a (recreated) element and
+    // invokes the command with no argument (#79).
+    this.id = `pythonProcess:${process.pid}`;
+
+    // The row currently being CPU-profiled gets a distinct look + contextValue
+    // so package.json swaps its inline Profile button for a Stop button
+    // ([PROFILE-PROCESSES-REACTIVE]).
+    const profilingThis = activeProfilingPid !== undefined && activeProfilingPid === process.pid;
     const version = process.pythonVersion ?? "—";
+    const profilingSuffix = profilingThis ? " · profiling" : "";
     this.description =
-      `PID ${process.pid} · ${version} · ${process.cpuPercent.toFixed(1)}% · ${formatBytes(process.memoryBytes)}`;
-
-    this.tooltip = [
-      `${process.name} (PID ${process.pid})`,
-      process.interpreterPath !== null ? `Interpreter: ${process.interpreterPath}` : "",
-      process.script !== null ? `Script: ${process.script}` : "",
-      `Python: ${process.pythonVersion ?? "unknown"}`,
-      `CPU: ${process.cpuPercent.toFixed(1)}%  ·  Memory: ${formatBytes(process.memoryBytes)}`,
-      `Runtime: ${formatRuntime(process.runtimeSecs)}`,
-      process.user !== null ? `User: ${process.user}` : "",
-      process.requiresElevation ? "⚠ Profiling this process will require elevation" : "",
-    ].filter(Boolean).join("\n");
-
-    this.iconPath = processIcon(process);
-    // `pythonProcessElevated` lets package.json offer a distinct affordance set.
-    this.contextValue = process.requiresElevation ? "pythonProcessElevated" : "pythonProcess";
+      `PID ${process.pid} · ${version} · ${process.cpuPercent.toFixed(1)}% · ${formatBytes(process.memoryBytes)}${profilingSuffix}`;
+    this.tooltip = rowTooltip(process, profilingThis);
+    this.iconPath = profilingThis
+      ? new vscode.ThemeIcon("flame", new vscode.ThemeColor("statusBarItem.warningBackground"))
+      : processIcon(process);
+    this.contextValue = rowContextValue(process, profilingThis);
 
     if (process.script !== null) {
       this.command = {
@@ -159,6 +163,30 @@ class ProcessTreeItem extends vscode.TreeItem {
       };
     }
   }
+}
+
+/**
+ * The row's contextValue, which selects its package.json affordances:
+ * `pythonProcessProfiling` (Stop), `pythonProcessElevated` (lock), or plain.
+ */
+function rowContextValue(process: ProcessInfo, profilingThis: boolean): string {
+  if (profilingThis) { return "pythonProcessProfiling"; }
+  return process.requiresElevation ? "pythonProcessElevated" : "pythonProcess";
+}
+
+/** Multi-line hover tooltip for a process row. */
+function rowTooltip(process: ProcessInfo, profilingThis: boolean): string {
+  return [
+    `${process.name} (PID ${process.pid})`,
+    process.interpreterPath !== null ? `Interpreter: ${process.interpreterPath}` : "",
+    process.script !== null ? `Script: ${process.script}` : "",
+    `Python: ${process.pythonVersion ?? "unknown"}`,
+    `CPU: ${process.cpuPercent.toFixed(1)}%  ·  Memory: ${formatBytes(process.memoryBytes)}`,
+    `Runtime: ${formatRuntime(process.runtimeSecs)}`,
+    process.user !== null ? `User: ${process.user}` : "",
+    profilingThis ? "🔥 Basilisk is profiling this process — click Stop to finish" : "",
+    process.requiresElevation ? "⚠ Profiling this process will require elevation" : "",
+  ].filter(Boolean).join("\n");
 }
 
 /** Icon for a process row: a lock badge when elevation is required. */
@@ -183,11 +211,33 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
   private sortMode: SortMode = "cpu";
   private groupMode: GroupMode = "none";
   private filterText = "";
+  /** PID currently being CPU-profiled, so its row renders a Stop affordance. */
+  private activeProfilingPid: number | undefined;
 
   constructor(private readonly store: Store) {}
 
   public refresh(): void {
     this.fetched = false;
+    this.emitter.fire(undefined);
+  }
+
+  /**
+   * Mark which PID is being CPU-profiled ([PROFILE-PROCESSES-REACTIVE]). The
+   * reactive wiring calls this then `refresh()`, so the next render distinguishes
+   * the active row; pass `undefined` to clear.
+   */
+  public setActiveProfilingPid(pid: number | undefined): void {
+    this.activeProfilingPid = pid;
+  }
+
+  /**
+   * Fetch fresh process data, then repaint — awaitable, so the manual Refresh
+   * command can run it under the view's progress bar ([PROFILE-UX-PROGRESS]).
+   * The silent timer-driven [`refresh`] stays untouched: a progress bar
+   * flashing every poll tick would be noise, not feedback.
+   */
+  public async refreshNow(): Promise<void> {
+    await this.fetchProcesses();
     this.emitter.fire(undefined);
   }
 
@@ -221,7 +271,7 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
 
   public async getChildren(element?: TreeItem): Promise<TreeItem[]> {
     if (element instanceof ProcessGroupItem) {
-      return element.members.map((proc) => new ProcessTreeItem(proc));
+      return element.members.map((proc) => new ProcessTreeItem(proc, this.activeProfilingPid));
     }
     if (element instanceof ProcessTreeItem) {
       return [];
@@ -233,7 +283,7 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
 
     const visible = this.sortProcesses(this.applyFilter(this.processes));
     if (this.groupMode === "none") {
-      return visible.map((proc) => new ProcessTreeItem(proc));
+      return visible.map((proc) => new ProcessTreeItem(proc, this.activeProfilingPid));
     }
     return this.buildGroups(visible);
   }
@@ -310,76 +360,6 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
   }
 }
 
-// ── Launch actions ───────────────────────────────────────────────────────
-
-/**
- * Resolve the process row an inline action targets (issue #79).
- *
- * VS Code normally passes the tree element as the command argument for
- * inline `view/item/context` buttons, but at runtime the argument has been
- * observed to arrive `undefined`. The action and its target are the same UI
- * element, so before warning we fall back to the tree view's current
- * selection — warning "Select a Python process" while clicking a button ON a
- * process row is nonsensical.
- */
-function resolveProcessTarget(
-  item: ProcessTreeItem | undefined,
-  treeView: vscode.TreeView<vscode.TreeItem> | undefined,
-): ProcessTreeItem | undefined {
-  if (item instanceof ProcessTreeItem) { return item; }
-  const selected = treeView?.selection.find(
-    (row): row is ProcessTreeItem => row instanceof ProcessTreeItem,
-  );
-  if (selected === undefined) {
-    vscode.window.showWarningMessage("Basilisk: Select a Python process to profile.");
-  }
-  return selected;
-}
-
-/** Start CPU profiling the given process row — no input box (the #62 fix). */
-export async function profileProcess(
-  store: Store,
-  item: ProcessTreeItem | undefined,
-  treeView: vscode.TreeView<vscode.TreeItem> | undefined,
-): Promise<void> {
-  const target = resolveProcessTarget(item, treeView);
-  if (target === undefined) { return; }
-  const preset = vscode.workspace.getConfiguration("basilisk").get<string>("profiler.preset", "default");
-  await startProfilingForPid(store, target.process.pid, preset);
-}
-
-/** Start memory-oriented profiling for the given process row. */
-export async function memoryTrackProcess(
-  store: Store,
-  item: ProcessTreeItem | undefined,
-  treeView: vscode.TreeView<vscode.TreeItem> | undefined,
-): Promise<void> {
-  const target = resolveProcessTarget(item, treeView);
-  if (target === undefined) { return; }
-  await startProfilingForPid(store, target.process.pid, "memory");
-}
-
-/** Run the active `.py` file under a debug session with profiling on launch. */
-async function profileCurrentFile(): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
-  if (editor?.document.languageId !== "python") {
-    vscode.window.showWarningMessage("Basilisk: Open a Python file to run and profile.");
-    return;
-  }
-  const file = editor.document.uri;
-  const folder = vscode.workspace.getWorkspaceFolder(file);
-  const started = await vscode.debug.startDebugging(folder, {
-    type: "basilisk-debug",
-    request: "launch",
-    name: "Run & Profile Current File",
-    program: file.fsPath,
-    profileOnLaunch: true,
-  });
-  if (!started) {
-    vscode.window.showErrorMessage("Basilisk: Could not launch the current file for profiling.");
-  }
-}
-
 // ── Registration ─────────────────────────────────────────────────────────
 
 /** Default poll interval (ms) when the setting is absent. */
@@ -401,9 +381,19 @@ export function registerPythonProcesses(
   context.subscriptions.push(treeView, provider);
 
   wireVisibilityRefresh(treeView, provider);
+  // React to the store's profiling state: live chrome, button-gating context
+  // keys, and the active-row marker ([PROFILE-PROCESSES-REACTIVE]).
+  provider.disposables.push(bindProcessPanelReactivity(store, treeView, provider));
 
   const disposables = [
-    vscode.commands.registerCommand("basilisk.refreshProcesses", () => { provider.refresh(); }),
+    ...registerLaunchCommands(store, treeView),
+    // Manual refresh runs under the view's progress bar so the click visibly
+    // does something; returns the promise so callers/tests can await it.
+    vscode.commands.registerCommand("basilisk.refreshProcesses", async () =>
+      withViewProgress("basilisk.pythonProcesses", "Refresh Python processes", async () =>
+        provider.refreshNow(),
+      ),
+    ),
     vscode.commands.registerCommand("basilisk.sortProcesses", () => { provider.cycleSortMode(); }),
     vscode.commands.registerCommand("basilisk.groupProcesses", () => { provider.cycleGroupMode(); }),
     vscode.commands.registerCommand("basilisk.filterProcesses", async () => {
@@ -413,13 +403,6 @@ export function registerPythonProcesses(
       });
       provider.setFilter(input ?? "");
     }),
-    vscode.commands.registerCommand("basilisk.profileProcess", async (item?: ProcessTreeItem) =>
-      profileProcess(store, item, treeView),
-    ),
-    vscode.commands.registerCommand("basilisk.memoryTrackProcess", async (item?: ProcessTreeItem) =>
-      memoryTrackProcess(store, item, treeView),
-    ),
-    vscode.commands.registerCommand("basilisk.profileCurrentFile", async () => profileCurrentFile()),
     vscode.commands.registerCommand("basilisk.copyProcessPid", (item?: ProcessTreeItem) => {
       if (item !== undefined) {
         void vscode.env.clipboard.writeText(String(item.process.pid));

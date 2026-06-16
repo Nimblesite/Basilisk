@@ -533,30 +533,30 @@ suite('Profiler — Configuration Interaction', () => {
             'sampleRate should be restored to default 100');
     });
 
-    test('lightweight preset implies lower sample rate and no native', () => {
+    test('quick preset is offered for short burst profiling', () => {
         const properties = getPackageJsonProperties();
         const presetProp = properties['basilisk.profiler.preset'] as
             { enum?: string[]; type?: string } | undefined;
         assert.ok(presetProp, 'preset property should exist');
-        assert.ok(Array.isArray(presetProp.enum) && presetProp.enum.includes('lightweight'),
-            'lightweight must be a valid preset');
+        assert.ok(Array.isArray(presetProp.enum) && presetProp.enum.includes('quick'),
+            'quick (10 s @ 100 Hz, presets.rs) must be a valid preset');
         assert.ok(presetProp.type === 'string', 'preset should be a string type');
     });
 
-    test('detailed preset enables includeNative', () => {
+    test('detailed preset is offered and includeNative defaults off', () => {
         const properties = getPackageJsonProperties();
         const presetProp = properties['basilisk.profiler.preset'] as
             { enum?: string[] } | undefined;
         assert.ok(presetProp, 'preset property should exist');
         assert.ok(Array.isArray(presetProp.enum) && presetProp.enum.includes('detailed'),
-            'detailed must be a valid preset');
+            'detailed (60 s @ 200 Hz, presets.rs) must be a valid preset');
 
         const config = vscode.workspace.getConfiguration('basilisk.profiler');
         assert.strictEqual(config.get<boolean>('includeNative'), false,
-            'includeNative default should be false (detailed preset overrides this)');
+            'includeNative default should be false');
     });
 
-    test('all 4 presets are valid enum values with correct count', () => {
+    test('all 4 presets are exactly the ones the server parses', () => {
         const properties = getPackageJsonProperties();
         const presetProp = properties['basilisk.profiler.preset'] as
             { enum?: string[] } | undefined;
@@ -564,12 +564,12 @@ suite('Profiler — Configuration Interaction', () => {
 
         const enumValues = presetProp.enum;
         assert.ok(Array.isArray(enumValues), 'enum should be an array');
-        assert.ok(enumValues.length >= 4,
-            `Should have at least 4 preset values, got ${enumValues.length}`);
-        assert.ok(enumValues.includes('default'), 'Must include "default"');
-        assert.ok(enumValues.includes('lightweight'), 'Must include "lightweight"');
-        assert.ok(enumValues.includes('detailed'), 'Must include "detailed"');
-        assert.ok(enumValues.includes('memory'), 'Must include "memory"');
+        // Mirrors ProfilingPreset::parse_name plus "default" — a name the
+        // server silently ignores (the old "memory"/"lightweight" entries)
+        // degrades to a default CPU session and must never be advertised.
+        assert.deepStrictEqual([...enumValues].sort(),
+            ['default', 'detailed', 'longRunning', 'quick'],
+            'advertised presets must match the server parser exactly');
     });
 
     test('numeric settings have reasonable bounds in config declarations', () => {

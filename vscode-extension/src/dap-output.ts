@@ -1,13 +1,19 @@
 // Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#PROFILE-MEMORY
 /**
- * Per-session capture of debuggee output (DAP `output` events).
+ * Per-session debuggee state fed by the DAP tracker: output and stop-state.
  *
- * Memory injection scripts `print('__BASILISK_MEM*__' + json)` — and debugpy
- * delivers that stdout as DAP `output` events, **not** in the `evaluate`
- * response result (the debuggee's stdout is redirected). So to recover a
- * marker payload after running a script, we accumulate the session's output
- * here (fed by the debug adapter tracker) and slice out what arrived after the
- * `evaluate` was issued. See `dap-evaluate.ts`.
+ * **Output**: memory injection scripts `print('__BASILISK_MEM*__' + json)` —
+ * and debugpy delivers that stdout as DAP `output` events, **not** in the
+ * `evaluate` response result (the debuggee's stdout is redirected). So to
+ * recover a marker payload after running a script, we accumulate the
+ * session's output here and slice out what arrived after the `evaluate` was
+ * issued. See `dap-evaluate.ts`.
+ *
+ * **Stop-state**: debugpy answers `stackTrace` for a RUNNING thread with a
+ * sampled frame whose id is not evaluable (`evaluate` then fails with
+ * "Unable to find thread for evaluation"), so "is anything paused?" cannot
+ * be probed via requests — it must be tracked from `stopped`/`continued`
+ * events, exactly as VS Code's own debug UI does.
  */
 
 /** Cap per-session buffer so a long-lived session can't grow it unbounded. */
@@ -15,6 +21,47 @@ const MAX_BUFFER_CHARS = 1_000_000;
 
 /** sessionId → accumulated output text. */
 const buffers = new Map<string, string>();
+
+/** sessionId → thread ids reported stopped (empty/absent = running). */
+const stoppedThreads = new Map<string, Set<number>>();
+
+/** Sentinel for a `stopped` event carrying `allThreadsStopped` but no id. */
+export const ALL_THREADS = -1;
+
+/**
+ * Record a `stopped`/`continued` event from the DAP tracker. A continue
+ * always invalidates the ALL_THREADS marker — when in doubt we prefer
+ * "running" (an honest "pause first" beats an unevaluable stale frame).
+ */
+export function trackSuspensionEvent(
+  sessionId: string,
+  event: "stopped" | "continued",
+  body: unknown,
+): void {
+  const info = body as
+    | { threadId?: number; allThreadsStopped?: boolean; allThreadsContinued?: boolean }
+    | undefined;
+  if (event === "stopped") {
+    const set = stoppedThreads.get(sessionId) ?? new Set<number>();
+    if (typeof info?.threadId === "number") { set.add(info.threadId); }
+    if (info?.allThreadsStopped === true) { set.add(ALL_THREADS); }
+    if (set.size > 0) { stoppedThreads.set(sessionId, set); }
+    return;
+  }
+  if (info?.allThreadsContinued !== false || typeof info.threadId !== "number") {
+    stoppedThreads.delete(sessionId);
+    return;
+  }
+  const set = stoppedThreads.get(sessionId);
+  set?.delete(info.threadId);
+  set?.delete(ALL_THREADS);
+  if (set?.size === 0) { stoppedThreads.delete(sessionId); }
+}
+
+/** Thread ids currently stopped (may contain [`ALL_THREADS`]); empty = running. */
+export function stoppedThreadIds(sessionId: string): readonly number[] {
+  return [...(stoppedThreads.get(sessionId) ?? [])];
+}
 
 /** Append a chunk of debuggee output for a session (called by the DAP tracker). */
 export function appendDebugOutput(sessionId: string, text: string): void {
@@ -38,7 +85,8 @@ export function debugOutputSince(sessionId: string, cursor: number): string {
   return cursor < all.length ? all.slice(cursor) : "";
 }
 
-/** Drop a session's buffer (called when the debug session ends). */
+/** Drop a session's buffer and stop-state (called when the debug session ends). */
 export function clearDebugOutput(sessionId: string): void {
   buffers.delete(sessionId);
+  stoppedThreads.delete(sessionId);
 }

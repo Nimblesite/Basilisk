@@ -79,6 +79,13 @@ pub mod commands {
     pub const PROFILER_LIST: &str = "basilisk.profiler.list";
     /// Enumerate attachable Python processes for the profiler picker (#62).
     pub const PROFILER_PROCESSES: &str = "basilisk.profiler.processes";
+    /// Mint the cooperative in-process sampling script for the active debug
+    /// session (leg 1 of the courier round-trip — the OOTB macOS CPU path,
+    /// no task ports). See [PROFILE-COOPERATIVE].
+    pub const PROFILER_COOPERATIVE_SCRIPT: &str = "basilisk.profiler.cooperativeScript";
+    /// Adopt the cooperative sample stream after the editor injected the
+    /// script (leg 2); returns the same shape as `basilisk.profiler.start`.
+    pub const PROFILER_COOPERATIVE_ATTACH: &str = "basilisk.profiler.cooperativeAttach";
 
     /// Start memory tracking in the active debug session.
     pub const MEMORY_START: &str = "basilisk.memory.start";
@@ -138,6 +145,8 @@ pub mod commands {
         PROFILER_SNAPSHOT,
         PROFILER_LIST,
         PROFILER_PROCESSES,
+        PROFILER_COOPERATIVE_SCRIPT,
+        PROFILER_COOPERATIVE_ATTACH,
         MEMORY_START,
         MEMORY_SNAPSHOT,
         MEMORY_DIFF,
@@ -237,7 +246,7 @@ pub mod config_keys {
     pub const PROFILER_ENABLED: &str = "enabled";
     /// Samples per second (Hz). Default: 100.
     pub const PROFILER_SAMPLE_RATE: &str = "sampleRate";
-    /// Preset name: `"lightweight"`, `"detailed"`, or `"memory"`.
+    /// Preset name: see [`crate::profiler_presets`].
     pub const PROFILER_PRESET: &str = "preset";
     /// Include native (C extension) frames in profiles.
     pub const PROFILER_INCLUDE_NATIVE: &str = "includeNative";
@@ -352,16 +361,21 @@ pub mod profiler_formats {
 }
 
 /// Profiler preset names used in `basilisk.profiler.start` and workspace config.
+///
+/// Must mirror `ProfilingPreset::parse_name` in the LSP — advertising a name
+/// the server does not parse silently degrades to a default CPU session.
 pub mod profiler_presets {
-    /// Low-overhead preset: 10 Hz sampling, no native frames.
-    pub const LIGHTWEIGHT: &str = "lightweight";
-    /// High-fidelity preset: 200 Hz sampling, native frames included.
+    /// Short burst: 10 seconds at 100 Hz, for quick hotspot checks.
+    pub const QUICK: &str = "quick";
+    /// Thorough analysis: 60 seconds at 200 Hz, higher-fidelity data.
     pub const DETAILED: &str = "detailed";
-    /// Memory-oriented preset: 50 Hz sampling, native frames included.
-    pub const MEMORY: &str = "memory";
+    /// No time limit at 50 Hz, for long-running servers and batch jobs.
+    pub const LONG_RUNNING: &str = "longRunning";
+    /// Not a preset: use the user-tuned `sampleRate`/`includeNative` settings.
+    pub const DEFAULT: &str = "default";
 
-    /// All valid preset names.
-    pub const ALL: &[&str] = &[LIGHTWEIGHT, DETAILED, MEMORY];
+    /// All preset names the server parses (excludes the `default` sentinel).
+    pub const ALL: &[&str] = &[QUICK, DETAILED, LONG_RUNNING];
 }
 
 /// Diagnostic code ranges defined in the Basilisk specification.

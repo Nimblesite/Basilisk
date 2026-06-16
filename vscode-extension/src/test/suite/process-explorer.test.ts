@@ -9,12 +9,8 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { type LanguageClient } from "vscode-languageclient/node";
-import {
-  PythonProcessesProvider,
-  memoryTrackProcess,
-  profileProcess,
-  type ProcessInfo,
-} from "../../process-explorer";
+import { PythonProcessesProvider, type ProcessInfo } from "../../process-explorer";
+import { createProcessRowActions, memoryTrackRoute } from "../../process-launch";
 import { createStore, type Store } from "../../store";
 
 const MB = 1024 * 1024;
@@ -38,16 +34,40 @@ const STUB_PROCESSES: readonly ProcessInfo[] = [
   },
 ];
 
-/** Build a Store whose LSP client returns the given process table. */
-function storeWith(processes: readonly ProcessInfo[]): Store {
+/** One `workspace/executeCommand` request captured by the recording client. */
+interface RecordedRequest {
+  readonly command: string;
+  readonly arguments: readonly unknown[];
+}
+
+/**
+ * Build a Store whose LSP client returns the given process table and records
+ * every executeCommand request so tests can assert what was sent (e.g. that an
+ * inline action really issued `basilisk.profiler.start` with the row's PID).
+ */
+function storeWith(processes: readonly ProcessInfo[], requests?: RecordedRequest[]): Store {
   const store = createStore();
   const client = {
     isRunning: (): boolean => true,
     onDidChangeState: (): vscode.Disposable => ({ dispose: (): undefined => undefined }),
-    sendRequest: async (): Promise<{ processes: readonly ProcessInfo[] }> => ({ processes }),
+    sendRequest: async (_method: string, param?: RecordedRequest): Promise<unknown> => {
+      if (param !== undefined) { requests?.push(param); }
+      if (param?.command === "basilisk.profiler.start") { return undefined; }
+      return { processes };
+    },
   } as unknown as LanguageClient;
   store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, client);
   return store;
+}
+
+/** The `basilisk.profiler.start` requests among the recorded ones. */
+function profilerStarts(requests: readonly RecordedRequest[]): RecordedRequest[] {
+  return requests.filter((req) => req.command === "basilisk.profiler.start");
+}
+
+/** The pid argument of a recorded `basilisk.profiler.start` request. */
+function startPid(request: RecordedRequest): unknown {
+  return (request.arguments[0] as { pid?: unknown } | undefined)?.pid;
 }
 
 /** Read the PID a process row carries (the arg passed to inline commands). */
@@ -146,6 +166,159 @@ suite("Python Processes Panel", () => {
   });
 });
 
+// Tests for [PROFILE-PROCESSES-LAUNCH] issue #79: the inline flame/database
+// buttons arrive with `item === undefined` at runtime and must still profile
+// the row the user clicked instead of warning "Select a Python process".
+suite("Python Processes Panel — inline launch actions (#79)", () => {
+  let provider: PythonProcessesProvider;
+
+  teardown(() => {
+    provider.dispose();
+  });
+
+  test("rows keep a stable id across refreshes so inline buttons survive the auto-refresh", async () => {
+    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    const before = await provider.getChildren();
+    provider.refresh();
+    const after = await provider.getChildren();
+
+    const beforeRow = before.find((row) => pidOf(row) === 200);
+    const afterRow = after.find((row) => pidOf(row) === 200);
+    assert.ok(beforeRow !== undefined && afterRow !== undefined, "PID 200 row must exist in both passes");
+    assert.ok(
+      typeof beforeRow.id === "string" && beforeRow.id.length > 0,
+      "process rows must carry a stable TreeItem.id so VS Code can map an inline click " +
+        `back to the element after a 2s auto-refresh (#79); got: ${String(beforeRow.id)}`,
+    );
+    assert.strictEqual(beforeRow.id, afterRow.id, "the id must be identical across refreshes");
+  });
+
+  test("inline Profile CPU invoked without an argument profiles the selected row", async () => {
+    const requests: RecordedRequest[] = [];
+    const store = storeWith(STUB_PROCESSES, requests);
+    provider = new PythonProcessesProvider(store);
+    const rows = await provider.getChildren();
+    const selectedRow = rows.find((row) => pidOf(row) === 200);
+    assert.ok(selectedRow !== undefined, "PID 200 row must exist");
+
+    const actions = createProcessRowActions(store, { selection: [selectedRow] });
+    // VS Code passed no argument — the runtime shape of issue #79.
+    await actions.profileProcess(undefined);
+
+    const starts = profilerStarts(requests);
+    assert.strictEqual(
+      starts.length,
+      1,
+      "clicking the inline flame button must start profiling (not warn) when a row is selected (#79)",
+    );
+    assert.strictEqual(startPid(starts[0]), 200, "profiling must target the selected row's PID");
+  });
+
+  test("an explicitly passed row wins over a different selection", async () => {
+    const requests: RecordedRequest[] = [];
+    const store = storeWith(STUB_PROCESSES, requests);
+    provider = new PythonProcessesProvider(store);
+    const rows = await provider.getChildren();
+    const clicked = rows.find((row) => pidOf(row) === 300);
+    const selected = rows.find((row) => pidOf(row) === 200);
+    assert.ok(clicked !== undefined && selected !== undefined, "both rows must exist");
+
+    const actions = createProcessRowActions(store, { selection: [selected] });
+    await actions.profileProcess(clicked);
+
+    const starts = profilerStarts(requests);
+    assert.strictEqual(starts.length, 1, "the clicked row must be profiled");
+    assert.strictEqual(startPid(starts[0]), 300, "the explicit item must win over the selection");
+  });
+
+  test("with no item and no selection, nothing is profiled", async () => {
+    const requests: RecordedRequest[] = [];
+    const store = storeWith(STUB_PROCESSES, requests);
+    provider = new PythonProcessesProvider(store);
+    await provider.getChildren();
+
+    const actions = createProcessRowActions(store, { selection: [] });
+    await actions.profileProcess(undefined);
+
+    assert.strictEqual(
+      profilerStarts(requests).length,
+      0,
+      "without any resolvable target the action must not fire a profiler.start",
+    );
+  });
+});
+
+suite("Python Processes Panel — Track Memory routing", () => {
+  // Tests for the memory leg of [PROFILE-PROCESSES-LAUNCH]: tracemalloc rides
+  // the DAP courier, so the row action may only ever target the live debuggee.
+
+  /** Drive the row's Track Memory action against PID 100 with the given session. */
+  async function trackMemoryOnPid100(
+    session: { id: string; type: string } | undefined,
+    arrange: (store: Store) => void = () => undefined,
+  ): Promise<{ requests: RecordedRequest[]; executed: string[] }> {
+    const requests: RecordedRequest[] = [];
+    const executed: string[] = [];
+    const store = storeWith(STUB_PROCESSES, requests);
+    arrange(store);
+    const rows = await new PythonProcessesProvider(store).getChildren();
+    const selectedRow = rows.find((row) => pidOf(row) === 100);
+    assert.ok(selectedRow !== undefined, "PID 100 row must exist");
+
+    const actions = createProcessRowActions(store, { selection: [selectedRow] }, {
+      runCommand: async (command) => { executed.push(command); },
+      activeSession: () => session,
+    });
+    await actions.memoryTrackProcess(undefined);
+    return { requests, executed };
+  }
+
+  test("on the live debuggee it routes to real memory tracking — never a CPU start", async () => {
+    const { requests, executed } = await trackMemoryOnPid100(
+      { id: "session-1", type: "basilisk-debug" },
+      (store) => { store.setDebuggeeProcessId("session-1", 100); },
+    );
+
+    assert.deepStrictEqual(
+      executed,
+      ["basilisk.memoryStart"],
+      "Track Memory on the debuggee row must start tracemalloc tracking",
+    );
+    assert.strictEqual(
+      profilerStarts(requests).length,
+      0,
+      "Track Memory must NEVER start a CPU profiling session (the preset:'memory' defect)",
+    );
+  });
+
+  test("on an external process it starts nothing and offers the launch flow", async () => {
+    // No debug session at all — PID 100 is a foreign process.
+    const { requests, executed } = await trackMemoryOnPid100(undefined);
+
+    assert.deepStrictEqual(executed, [], "no memory command can run against a foreign PID");
+    assert.strictEqual(
+      profilerStarts(requests).length,
+      0,
+      "an external row must not silently fall back to CPU profiling",
+    );
+  });
+
+  test("memoryTrackRoute targets the debuggee only when session and PID both match", () => {
+    const store = storeWith(STUB_PROCESSES);
+    store.setDebuggeeProcessId("session-1", 100);
+    const basilisk = { id: "session-1", type: "basilisk-debug" };
+
+    assert.strictEqual(memoryTrackRoute(store, 100, basilisk), "start-tracking");
+    assert.strictEqual(memoryTrackRoute(store, 200, basilisk), "offer-launch", "PID mismatch");
+    assert.strictEqual(memoryTrackRoute(store, 100, undefined), "offer-launch", "no session");
+    assert.strictEqual(
+      memoryTrackRoute(store, 100, { id: "session-1", type: "python" }),
+      "offer-launch",
+      "foreign debug adapter",
+    );
+  });
+});
+
 suite("Python Processes Panel — launcher visibility", () => {
   let provider: PythonProcessesProvider;
 
@@ -170,39 +343,12 @@ suite("Python Processes Panel — launcher visibility", () => {
 
 // ── Inline action target resolution (issue #79) [PROFILE-PROCESSES-PANEL] ──
 //
-// Clicking the inline flame / database icon on a process row must profile
+// Clicking the inline flame / database icon on a process row must act on
 // THAT row. At runtime VS Code has been observed to invoke the command with
 // `item === undefined`; the handler must fall back to the tree view's current
-// selection before warning "Select a Python process to profile."
+// selection — and only warn when there is truly no target.
 
 suite("Python Processes Panel — inline action target (issue #79)", () => {
-  /** Capture LSP executeCommand calls made through the store's client. */
-  function storeCapturing(
-    processes: readonly ProcessInfo[],
-    calls: { command: string; pid: number | undefined }[],
-  ): Store {
-    const store = createStore();
-    const client = {
-      isRunning: (): boolean => true,
-      onDidChangeState: (): vscode.Disposable => ({ dispose: (): undefined => undefined }),
-      sendRequest: async (
-        _method: string,
-        params: { command?: string; arguments?: { pid?: number }[] },
-      ): Promise<unknown> => {
-        // The panel's own row fetch is also an executeCommand — serve it.
-        if (params?.command?.endsWith(".processes") === true) {
-          return { processes };
-        }
-        if (params?.command !== undefined) {
-          calls.push({ command: params.command, pid: params.arguments?.[0]?.pid });
-        }
-        return undefined;
-      },
-    } as unknown as LanguageClient;
-    store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, client);
-    return store;
-  }
-
   /** Run fn with showWarningMessage stubbed, returning captured warnings. */
   async function captureWarnings(fn: () => Promise<void>): Promise<string[]> {
     const warnings: string[] = [];
@@ -221,62 +367,67 @@ suite("Python Processes Panel — inline action target (issue #79)", () => {
     return warnings;
   }
 
-  test("undefined item falls back to the tree selection and profiles that PID", async () => {
-    const calls: { command: string; pid: number | undefined }[] = [];
-    const store = storeCapturing(STUB_PROCESSES, calls);
+  test("undefined item falls back to the tree selection and profiles that PID — without warning", async () => {
+    const requests: RecordedRequest[] = [];
+    const store = storeWith(STUB_PROCESSES, requests);
     const provider = new PythonProcessesProvider(store);
     try {
       const rows = await provider.getChildren();
       const selected = rows.find((row) => pidOf(row) === 100);
       assert.ok(selected, "expected the PID 100 row");
 
-      const fakeView = { selection: [selected] } as unknown as vscode.TreeView<vscode.TreeItem>;
-      const warnings = await captureWarnings(async () => {
-        await profileProcess(store, undefined, fakeView);
-      });
+      const actions = createProcessRowActions(store, { selection: [selected] });
+      const warnings = await captureWarnings(async () => actions.profileProcess(undefined));
 
       assert.deepStrictEqual(warnings, [], "must not warn when a row is selected");
-      const start = calls.find((c) => c.command.includes("profiler"));
-      assert.ok(start, `profiler start must be requested, got: ${JSON.stringify(calls)}`);
-      assert.strictEqual(start.pid, 100, "must profile the selected row's PID");
+      const starts = profilerStarts(requests);
+      assert.strictEqual(starts.length, 1, "profiler start must be requested");
+      assert.strictEqual(startPid(starts[0]), 100, "must profile the selected row's PID");
     } finally {
       provider.dispose();
     }
   });
 
-  test("memory tracking falls back to the tree selection the same way", async () => {
-    const calls: { command: string; pid: number | undefined }[] = [];
-    const store = storeCapturing(STUB_PROCESSES, calls);
+  test("memory tracking falls back to the tree selection the same way — without warning", async () => {
+    const requests: RecordedRequest[] = [];
+    const executed: string[] = [];
+    const store = storeWith(STUB_PROCESSES, requests);
+    store.setDebuggeeProcessId("session-1", 200);
     const provider = new PythonProcessesProvider(store);
     try {
       const rows = await provider.getChildren();
       const selected = rows.find((row) => pidOf(row) === 200);
       assert.ok(selected, "expected the PID 200 row");
 
-      const fakeView = { selection: [selected] } as unknown as vscode.TreeView<vscode.TreeItem>;
-      const warnings = await captureWarnings(async () => {
-        await memoryTrackProcess(store, undefined, fakeView);
+      const actions = createProcessRowActions(store, { selection: [selected] }, {
+        runCommand: async (command) => { executed.push(command); },
+        activeSession: () => ({ id: "session-1", type: "basilisk-debug" }),
       });
+      const warnings = await captureWarnings(async () => actions.memoryTrackProcess(undefined));
 
       assert.deepStrictEqual(warnings, [], "must not warn when a row is selected");
-      const start = calls.find((c) => c.command.includes("profiler"));
-      assert.ok(start, `profiler start must be requested, got: ${JSON.stringify(calls)}`);
-      assert.strictEqual(start.pid, 200, "must memory-track the selected row's PID");
+      assert.deepStrictEqual(
+        executed,
+        ["basilisk.memoryStart"],
+        "the selection fallback must reach the real memory-tracking flow",
+      );
     } finally {
       provider.dispose();
     }
   });
 
-  test("warns only when there is neither an item nor a selection", async () => {
-    const calls: { command: string; pid: number | undefined }[] = [];
-    const store = storeCapturing(STUB_PROCESSES, calls);
+  test("warns exactly once when there is neither an item nor a selection", async () => {
+    const requests: RecordedRequest[] = [];
+    const store = storeWith(STUB_PROCESSES, requests);
 
-    const fakeView = { selection: [] } as unknown as vscode.TreeView<vscode.TreeItem>;
-    const warnings = await captureWarnings(async () => {
-      await profileProcess(store, undefined, fakeView);
-    });
+    const actions = createProcessRowActions(store, { selection: [] });
+    const warnings = await captureWarnings(async () => actions.profileProcess(undefined));
 
     assert.strictEqual(warnings.length, 1, "must warn exactly once");
-    assert.deepStrictEqual(calls, [], "must not start profiling without a target");
+    assert.strictEqual(
+      profilerStarts(requests).length,
+      0,
+      "must not start profiling without a target",
+    );
   });
 });

@@ -116,6 +116,8 @@ const SERVER_COMMANDS = [
     'basilisk.profiler.snapshot',
     'basilisk.profiler.list',
     'basilisk.profiler.processes',
+    'basilisk.profiler.cooperativeScript',
+    'basilisk.profiler.cooperativeAttach',
     'basilisk.memory.start',
     'basilisk.memory.snapshot',
     'basilisk.memory.diff',

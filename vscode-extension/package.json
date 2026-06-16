@@ -83,7 +83,18 @@
       },
       {
         "view": "basilisk.pythonProcesses",
-        "contents": "No Python processes running.\n[Run & Profile Current File](command:basilisk.profileCurrentFile)\n[Refresh](command:basilisk.refreshProcesses)"
+        "contents": "Connecting to the Basilisk language server…",
+        "when": "basilisk.serverState != running && basilisk.serverState != stopped"
+      },
+      {
+        "view": "basilisk.pythonProcesses",
+        "contents": "The Basilisk language server is not running.\n[Restart Server](command:basilisk.restartServer)",
+        "when": "basilisk.serverState == stopped"
+      },
+      {
+        "view": "basilisk.pythonProcesses",
+        "contents": "No Python processes running. The list refreshes automatically.\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)\n[Refresh](command:basilisk.refreshProcesses)",
+        "when": "basilisk.serverState == running"
       }
     ],
     "commands": [
@@ -308,10 +319,16 @@
         "icon": "$(filter)"
       },
       {
-        "command": "basilisk.profileCurrentFile",
-        "title": "Run & Profile Current File",
+        "command": "basilisk.profileCurrentFileCpu",
+        "title": "Run & Profile CPU (Current File)",
         "category": "Basilisk",
-        "icon": "$(run-all)"
+        "icon": "$(flame)"
+      },
+      {
+        "command": "basilisk.trackMemoryCurrentFile",
+        "title": "Run & Track Memory (Current File)",
+        "category": "Basilisk",
+        "icon": "$(database)"
       },
       {
         "command": "basilisk.profileProcess",
@@ -363,7 +380,11 @@
           "when": "basilisk.profilingEnabled"
         },
         {
-          "command": "basilisk.profileCurrentFile",
+          "command": "basilisk.profileCurrentFileCpu",
+          "when": "basilisk.profilingEnabled"
+        },
+        {
+          "command": "basilisk.trackMemoryCurrentFile",
           "when": "basilisk.profilingEnabled"
         },
         {
@@ -469,29 +490,29 @@
           "group": "9_server@1"
         },
         {
-          "command": "basilisk.profileCurrentFile",
-          "when": "view == basilisk.pythonProcesses",
+          "command": "basilisk.profileCurrentFileCpu",
+          "when": "view == basilisk.pythonProcesses && !basilisk.profilerBusy",
           "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.trackMemoryCurrentFile",
+          "when": "view == basilisk.pythonProcesses && !basilisk.profilerBusy",
+          "group": "navigation@2"
+        },
+        {
+          "command": "basilisk.profileStop",
+          "when": "view == basilisk.pythonProcesses && basilisk.profiling",
+          "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.memoryStop",
+          "when": "view == basilisk.pythonProcesses && basilisk.memoryTracking",
+          "group": "navigation@2"
         },
         {
           "command": "basilisk.refreshProcesses",
           "when": "view == basilisk.pythonProcesses",
-          "group": "navigation@2"
-        },
-        {
-          "command": "basilisk.sortProcesses",
-          "when": "view == basilisk.pythonProcesses",
           "group": "navigation@3"
-        },
-        {
-          "command": "basilisk.groupProcesses",
-          "when": "view == basilisk.pythonProcesses",
-          "group": "navigation@4"
-        },
-        {
-          "command": "basilisk.filterProcesses",
-          "when": "view == basilisk.pythonProcesses",
-          "group": "navigation@5"
         }
       ],
       "view/item/context": [
@@ -511,23 +532,33 @@
           "group": "inline"
         },
         {
+          "command": "basilisk.profileStop",
+          "when": "view == basilisk.pythonProcesses && viewItem == pythonProcessProfiling",
+          "group": "inline@0"
+        },
+        {
           "command": "basilisk.profileProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
           "group": "inline@1"
         },
         {
           "command": "basilisk.memoryTrackProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
           "group": "inline@2"
         },
         {
+          "command": "basilisk.profileStop",
+          "when": "view == basilisk.pythonProcesses && viewItem == pythonProcessProfiling",
+          "group": "1_profile@0"
+        },
+        {
           "command": "basilisk.profileProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
           "group": "1_profile@1"
         },
         {
           "command": "basilisk.memoryTrackProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
           "group": "1_profile@2"
         },
         {
@@ -861,18 +892,18 @@
           "type": "string",
           "enum": [
             "default",
-            "lightweight",
+            "quick",
             "detailed",
-            "memory"
+            "longRunning"
           ],
           "enumDescriptions": [
-            "100 Hz sampling, no native frames (default)",
-            "10 Hz sampling for low overhead",
-            "100 Hz with native C frames included",
-            "CPU + memory tracking combined"
+            "Use the basilisk.profiler.sampleRate / includeNative settings",
+            "Short burst: 10 seconds at 100 Hz, for quick hotspot checks",
+            "Thorough: 60 seconds at 200 Hz, higher-fidelity data",
+            "No time limit at 50 Hz, for long-running servers and batch jobs"
           ],
           "default": "default",
-          "description": "Profiling preset that configures sample rate and options."
+          "description": "Profiling preset that configures sample rate and duration."
         },
         "basilisk.profiler.autoSnapshot": {
           "type": "boolean",

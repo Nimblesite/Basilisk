@@ -16,6 +16,13 @@ use tokio::process::Child;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, Instant};
 
+/// How long a freshly spawned debugpy.adapter gets to bind its port.
+/// Generous on purpose: a cold `CPython` start on a loaded machine can take
+/// well over 5 seconds, and a premature timeout kills a healthy session. A
+/// crashed adapter is caught immediately by child-exit polling, so the long
+/// ceiling only ever applies to genuinely slow starts.
+const ADAPTER_BIND_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Errors that can occur during debug session management.
 #[derive(Debug)]
 pub enum DebugError {
@@ -25,6 +32,8 @@ pub enum DebugError {
     SpawnFailed(std::io::Error),
     /// debugpy did not start accepting connections within the timeout.
     Timeout(u16),
+    /// debugpy exited before accepting connections (carries the exit status).
+    AdapterExited(String),
     /// debugpy is not installed in the Python environment.
     DebugpyNotFound(String),
     /// Python interpreter not found.
@@ -38,7 +47,13 @@ impl fmt::Display for DebugError {
             Self::SpawnFailed(err) => write!(f, "Failed to spawn debugpy: {err}"),
             Self::Timeout(port) => write!(
                 f,
-                "debugpy did not start accepting connections on port {port} within 5 seconds"
+                "debugpy did not start accepting connections on port {port} within {} seconds",
+                ADAPTER_BIND_TIMEOUT.as_secs()
+            ),
+            Self::AdapterExited(status) => write!(
+                f,
+                "debugpy exited before accepting connections ({status}) — \
+                 check the interpreter and that debugpy is importable"
             ),
             Self::DebugpyNotFound(python) => write!(
                 f,
@@ -111,17 +126,20 @@ impl DebugSessionManager {
         if let Some(pythonpath) = bundled_debugpy_pythonpath() {
             let _ = command.env("PYTHONPATH", pythonpath);
         }
-        let child = command.spawn().map_err(|err| {
+        let mut child = command.spawn().map_err(|err| {
             error!(python = python_path, %err, "failed to spawn debugpy");
             DebugError::SpawnFailed(err)
         })?;
 
-        let _ = self.sessions.lock().await.insert(session_id.clone(), child);
-
-        // Wait for debugpy to start accepting connections (up to 5s).
+        // Wait for debugpy to bind its port; a crashed adapter fails fast.
         debug!(port, "waiting for debugpy to accept connections");
-        wait_for_port(port, Duration::from_secs(5)).await?;
+        if let Err(err) = wait_for_port_or_exit(port, Some(&mut child), ADAPTER_BIND_TIMEOUT).await
+        {
+            let _ = child.kill().await;
+            return Err(err);
+        }
 
+        let _ = self.sessions.lock().await.insert(session_id.clone(), child);
         info!(port, session_id = %session_id, "debugpy ready on localhost:{port}");
         Ok(("localhost".to_owned(), port, session_id))
     }
@@ -163,38 +181,54 @@ fn find_free_port() -> Result<u16, DebugError> {
     Ok(port)
 }
 
-/// Poll until something is listening on `port` — without making a connection.
+/// Poll until something is listening on `port` — without making a connection
+/// — failing fast if the adapter process exits first.
 ///
 /// debugpy.adapter in debugServer mode accepts exactly ONE TCP connection.
 /// A probe connection would consume that slot, leaving the real client
 /// (VS Code) with ECONNREFUSED. Instead we check readiness by trying to
 /// **bind** to the port: if binding fails with `AddrInUse`, something is
-/// already listening — i.e. debugpy is ready.
-async fn wait_for_port(port: u16, timeout: Duration) -> Result<(), DebugError> {
+/// already listening — i.e. debugpy is ready. Pass the spawned child so a
+/// crash surfaces as [`DebugError::AdapterExited`] immediately instead of
+/// burning the whole bind budget (`None` skips the liveness check).
+async fn wait_for_port_or_exit(
+    port: u16,
+    mut child: Option<&mut Child>,
+    timeout: Duration,
+) -> Result<(), DebugError> {
     let start = Instant::now();
     loop {
-        match TcpListener::bind(("127.0.0.1", port)) {
-            Err(ref err) if err.kind() == std::io::ErrorKind::AddrInUse => {
-                debug!(
-                    port,
-                    elapsed_ms = start.elapsed().as_millis(),
-                    "port occupied — debugpy ready"
-                );
-                return Ok(());
-            }
-            Ok(_listener) => {
-                // We could bind → port is free → debugpy hasn't started yet.
-                // Dropping the listener frees it again; retry after a short sleep.
-            }
-            Err(err) => {
-                warn!(port, %err, "unexpected bind error during port check");
-            }
+        if port_occupied(port) {
+            debug!(
+                port,
+                elapsed_ms = start.elapsed().as_millis(),
+                "port occupied — debugpy ready"
+            );
+            return Ok(());
+        }
+        if let Some(Ok(Some(status))) = child.as_deref_mut().map(Child::try_wait) {
+            error!(port, %status, "debugpy exited before binding its port");
+            return Err(DebugError::AdapterExited(status.to_string()));
         }
         if start.elapsed() > timeout {
             error!(port, "debugpy did not bind within timeout");
             return Err(DebugError::Timeout(port));
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+/// Is something already listening on `port`? (Bind probe — never connects.)
+fn port_occupied(port: u16) -> bool {
+    match TcpListener::bind(("127.0.0.1", port)) {
+        Err(ref err) if err.kind() == std::io::ErrorKind::AddrInUse => true,
+        // We could bind → the port is free → debugpy hasn't started yet.
+        // Dropping the listener frees it again for the next probe.
+        Ok(_listener) => false,
+        Err(err) => {
+            warn!(port, %err, "unexpected bind error during port check");
+            false
+        }
     }
 }
 
@@ -439,6 +473,48 @@ mod tests {
         assert!(result.is_err(), "nonexistent python must fail");
     }
 
+    /// The user-facing timeout message must name the REAL budget — a stale
+    /// "5 seconds" with a different constant misleads bug reports.
+    #[test]
+    fn timeout_error_names_the_actual_budget() {
+        let message = DebugError::Timeout(1234).to_string();
+        assert!(message.contains("1234"), "must name the port: {message}");
+        assert!(
+            message.contains(&ADAPTER_BIND_TIMEOUT.as_secs().to_string()),
+            "must name the configured budget, got: {message}"
+        );
+    }
+
+    /// A crashed adapter must fail fast with its exit status — not burn the
+    /// whole bind budget and then misreport the crash as a timeout.
+    #[tokio::test]
+    async fn dead_adapter_fails_fast_without_burning_the_timeout() {
+        let port = find_free_port().expect("should allocate a port");
+        let mut child =
+            tokio::process::Command::new(if cfg!(windows) { "python" } else { "python3" })
+                .args(["-c", "import sys; sys.exit(3)"])
+                .spawn()
+                .expect("spawn a promptly-exiting child");
+
+        let started = Instant::now();
+        let err = wait_for_port_or_exit(port, Some(&mut child), Duration::from_secs(30))
+            .await
+            .expect_err("a dead adapter can never bind the port");
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "must fail well before the bind budget, took {:?}",
+            started.elapsed()
+        );
+        assert!(
+            matches!(err, DebugError::AdapterExited(_)),
+            "must classify the crash, got: {err}"
+        );
+        assert!(
+            err.to_string().contains("exited"),
+            "the message must say the adapter exited: {err}"
+        );
+    }
+
     /// Regression test: debugpy.adapter in debugServer mode accepts exactly
     /// ONE TCP connection. The old `wait_for_port` made a probe connection to
     /// check readiness, which consumed that single slot. debugpy starts a DAP
@@ -474,12 +550,12 @@ mod tests {
             drop(conn);
         });
 
-        // wait_for_port makes a TCP probe — debugpy accepts it as "the client".
-        // The probe succeeds, wait_for_port returns Ok. But the probe's
-        // TcpStream is dropped immediately → debugpy sees EOF → exits.
-        wait_for_port(port, Duration::from_secs(3))
+        // A TCP-probing implementation would be accepted as "the client".
+        // The probe succeeds, the wait returns Ok. But the probe's TcpStream
+        // is dropped immediately → debugpy sees EOF → exits.
+        wait_for_port_or_exit(port, None, Duration::from_secs(3))
             .await
-            .expect("wait_for_port should succeed");
+            .expect("wait_for_port_or_exit should succeed");
 
         // Give the simulated debugpy time to process EOF and exit.
         tokio::time::sleep(Duration::from_millis(200)).await;

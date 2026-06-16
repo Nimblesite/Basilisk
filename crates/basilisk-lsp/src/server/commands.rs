@@ -134,6 +134,8 @@ pub(super) async fn dispatch_execute_command(
         | basilisk_common::commands::PROFILER_SNAPSHOT
         | basilisk_common::commands::PROFILER_LIST
         | basilisk_common::commands::PROFILER_PROCESSES
+        | basilisk_common::commands::PROFILER_COOPERATIVE_SCRIPT
+        | basilisk_common::commands::PROFILER_COOPERATIVE_ATTACH
         | basilisk_common::commands::MEMORY_START
         | basilisk_common::commands::MEMORY_SNAPSHOT
         | basilisk_common::commands::MEMORY_DIFF
@@ -177,6 +179,12 @@ async fn dispatch_profiler_or_memory(
         }
         basilisk_common::commands::PROFILER_PROCESSES => {
             super::profiler_handlers::execute_profiler_processes(server, args).await
+        }
+        basilisk_common::commands::PROFILER_COOPERATIVE_SCRIPT => {
+            super::profiler_handlers::execute_profiler_cooperative_script(args)
+        }
+        basilisk_common::commands::PROFILER_COOPERATIVE_ATTACH => {
+            super::profiler_handlers::execute_profiler_cooperative_attach(server, args).await
         }
         basilisk_common::commands::MEMORY_START => {
             super::memory_handlers::execute_memory_start(server, args).await
