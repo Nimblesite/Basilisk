@@ -36,4 +36,4 @@ See [doc/basilisk.txt](doc/basilisk.txt) for full documentation.
 
 ## License
 
-MIT or Apache-2.0, at your option.
+MIT.

@@ -1,0 +1,77 @@
+# agent-pmo:0b21609
+name: CodeQL
+
+# CodeQL static security analysis ([GITHUB-CODE-SCANNING]).
+#
+# SEPARATE from ci.yml on purpose: CodeQL feeds GitHub code-scanning alerts and
+# needs `security-events: write` + a weekly schedule, while ci.yml owns
+# lint/test/build. It does NOT overlap with `make lint` (style/correctness) or
+# the ci.yml `security` job's dependency-review (vulnerable packages) — CodeQL
+# finds vulnerable CODE. Never add security-rule linter plugins that re-cover
+# CodeQL: no doubling up.
+#
+# Matrix = (languages actually in this repo) ∩ (languages CodeQL supports right
+# now). For Basilisk that is `rust` (the type-checker/LSP) and
+# `javascript-typescript` (the VS Code extension + website), plus `actions`
+# (scans the workflow files themselves). Python IS supported by CodeQL, but the
+# only Python in this repo is type-checker test fixtures under conformance/,
+# examples/, and tests/ — deliberately malformed sample code, NOT first-party
+# code that ships or executes. Scanning it would drown the real signal in
+# fixture noise, so it is intentionally excluded. Action SHAs are kept current
+# by the github-actions Dependabot group ([GITHUB-DEPENDABOT]).
+on:
+  pull_request:
+    branches: [main]
+  push:
+    # Run before EVERY release: scan the exact released SHA with the current
+    # query set. A release can ship code last scanned weeks ago — the PR scan
+    # covered the diff, the weekly scan covers drift, this covers the release.
+    tags: ["v*"]
+  schedule:
+    # Weekly, so newly-published CodeQL queries re-scan even without a push.
+    - cron: "27 4 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Code scanning (SARIF upload) requires GitHub Advanced Security on PRIVATE
+    # repos. Gating on public visibility lets a private repo skip cleanly (no red
+    # X) and self-enable the moment it is made public — no follow-up edit needed.
+    if: github.event.repository.visibility == 'public'
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # build-mode: none — Rust and the interpreted langs do not need CodeQL to
+        # drive a compile; ci.yml already builds the Rust workspace.
+        include:
+          - language: actions # scans the workflow files themselves
+            build-mode: none
+          - language: rust
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          category: "/language:${{ matrix.language }}"

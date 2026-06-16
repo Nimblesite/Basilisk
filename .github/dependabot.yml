@@ -1,36 +1,59 @@
-# agent-pmo:f87d349
-# Keeps SHA-pinned GitHub Actions and language dependencies fresh ([SWR-SEC-ACTION-PINNING]).
-# Each ecosystem is grouped into a single combined PR per run to reduce churn.
+# agent-pmo:0b21609
+# Dependabot — supply-chain defense without PR spam ([GITHUB-DEPENDABOT]).
+#
+# Every ecosystem is GROUPED into at most two PRs: <eco>-minor (minor+patch, low
+# risk, merge freely) and <eco>-major (breaking, review individually). Bundling
+# breaking majors with safe patches is avoided on purpose. These group rules also
+# apply to Dependabot security updates, so security fixes land grouped too.
+# SHA-pinned actions are a prime supply-chain target ([SWR-SEC-ACTION-PINNING]),
+# so github-actions is kept current here.
 version: 2
 updates:
   - package-ecosystem: github-actions
-    directory: "/"
+    directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
     groups:
-      actions:
+      github-actions:
         patterns: ["*"]
 
+  # Cargo / Rust — the type checker + LSP workspace (Cargo.toml at the root).
   - package-ecosystem: cargo
-    directory: "/"
+    directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
     groups:
-      cargo:
-        patterns: ["*"]
+      cargo-minor:
+        update-types: ["minor", "patch"]
+      cargo-major:
+        update-types: ["major"]
 
+  # npm — VS Code extension.
   - package-ecosystem: npm
-    directory: "/vscode-extension"
+    directory: /vscode-extension
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
     groups:
-      npm:
-        patterns: ["*"]
+      npm-minor:
+        update-types: ["minor", "patch"]
+      npm-major:
+        update-types: ["major"]
 
+  # npm — documentation website (Eleventy).
   - package-ecosystem: npm
-    directory: "/website"
+    directory: /website
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
     groups:
-      npm:
-        patterns: ["*"]
+      npm-minor:
+        update-types: ["minor", "patch"]
+      npm-major:
+        update-types: ["major"]

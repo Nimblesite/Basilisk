@@ -374,7 +374,8 @@ impl Interpreter {
                 let fd = FuncDef {
                     name: name.clone(),
                     params,
-                    body: func_def.body.clone(),
+                    // ruff 0.15.17 stores AST bodies as ThinVec; FuncDef holds Vec.
+                    body: func_def.body.to_vec(),
                     closure: env.clone(),
                 };
                 let _ = env.insert(name.clone(), Value::Func(fd));
@@ -400,7 +401,8 @@ impl Interpreter {
                             FuncDef {
                                 name: mname,
                                 params,
-                                body: method_def.body.clone(),
+                                // ruff 0.15.17 stores AST bodies as ThinVec; FuncDef holds Vec.
+                                body: method_def.body.to_vec(),
                                 closure: env.clone(),
                             },
                         );
