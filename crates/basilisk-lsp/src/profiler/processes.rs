@@ -326,9 +326,9 @@ fn is_debugger_infrastructure(cmd: &[OsString]) -> bool {
     }
     cmd.iter().skip(1).any(|arg| {
         let token = arg.to_string_lossy();
-        INFRASTRUCTURE_MODULES
-            .iter()
-            .any(|module| token.contains(&format!("/{module}/")) || token.contains(&format!("\\{module}\\")))
+        INFRASTRUCTURE_MODULES.iter().any(|module| {
+            token.contains(&format!("/{module}/")) || token.contains(&format!("\\{module}\\"))
+        })
     })
 }
 

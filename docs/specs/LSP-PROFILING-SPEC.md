@@ -185,6 +185,10 @@ shows a progress surface from click to outcome:
   server…" — the "No Python processes running" message (with its launch
   buttons) is only shown when the server is actually running and the list is
   truly empty.
+- **Reactive session chrome** ([#PROFILE-PROCESSES-REACTIVE]): once a profile
+  is starting or running, the Python Processes panel itself reflects it — a
+  live message + badge, the launch buttons swapped for Stop, and the profiled
+  row marked — so the panel is never offering "Run & Profile" mid-session.
 
 ## Process Enumeration & Selection {#PROFILE-PROCESSES}
 
@@ -285,6 +289,43 @@ CPU% (default, descending), Memory, PID, Name, Runtime, Python version.
 
 None (flat), Python version, Interpreter, User, Parent process. Groups render as
 collapsible parent nodes with a count badge.
+
+#### Reactive session state {#PROFILE-PROCESSES-REACTIVE}
+
+The panel is **reactive to the profiling session**, not a static list of
+launchers. CPU and memory session state is the single reactive `profiler`
+signal owned by the store (`profiler-state.ts`); the status bar, the panel
+chrome, and the gating context keys all derive from it, so nothing on screen
+goes stale (CLAUDE.md: "All state that can change uses Signals for reactivity").
+The state machine per metric is `idle → starting → active → idle`.
+
+One `effect` over the signal (`process-reactivity.ts`) drives the panel:
+
+- **Live chrome.** The view shows a message above the tree and a badge dot
+  while busy: `⏳ Starting CPU profiler…`, then `🔥 Profiling PID 1234 ·
+  12.3K samples (4s) · hot_function` updated live from
+  [#PROFILE-NOTIFICATIONS-PROGRESS]; `⏳ Starting memory tracking…` /
+  `🗄️ Tracking memory allocations…` for the memory leg. The sample-count tick
+  repaints only the message (cheap); the tree rebuilds only on a *gating*
+  transition.
+- **Button gating.** Four context keys flow from the effect:
+  `basilisk.profilerBusy` (any activity starting or running),
+  `basilisk.profiling` (CPU active), `basilisk.memoryTracking` (memory active),
+  and `basilisk.profilerStarting`. While `profilerBusy`, the title-bar
+  "Run & Profile CPU" / "Run & Track Memory" launches and the per-row
+  Profile/Track actions are **hidden** — a session can no longer be started on
+  top of a running one. In their place the title bar shows **Stop Profiling**
+  (when `profiling`) or **Stop Memory Tracking** (when `memoryTracking`).
+- **Active-row marker.** The row whose PID is being CPU-profiled renders with a
+  flame icon, a "· profiling" suffix, and `contextValue = pythonProcessProfiling`,
+  which swaps its inline Profile button for an inline **Stop**.
+
+The launch commands also guard imperatively (`profileCurrentFile`,
+`startProfilingForPid`, `handleProfileAttachToDebug`, `handleMemoryStart`): even
+if invoked from the palette while busy, they decline with a "stop the current
+session first" message instead of spawning a second session. The e2e seams are
+the pure `panelMessage`/`panelBadge` builders plus `pythonProcessesViewState()`
+(reads the live view chrome) and `profilerStatusText()` (reads the status bar).
 
 ### Launch from the panel {#PROFILE-PROCESSES-LAUNCH}
 
@@ -687,6 +728,23 @@ history and diagnostics.
 This is identical for both editors — 100% of the engine is shared. Zed reaches the
 same flow through `workspace/executeCommand`; only the script-running leg is
 editor-specific.
+
+#### Large payloads ride a temp file, not stdout {#PROFILE-MEMORY-COURIER}
+
+debugpy truncates a single `print()` at ~20 KB, and a real snapshot easily
+exceeds that (100 stats × depth-25 tracebacks of absolute paths ≈ 200 KB),
+silently corrupting the JSON ("invalid snapshot JSON: expected `,` or `}`").
+So every JSON-emitting script (`take_snapshot`, `diff_snapshot`,
+`walk_references`, `objects_by_type`, `gc_collect`) does **not** print its
+payload. It writes `marker + json` to a temp file
+(`emit_via_file_helper` in [`scripts.rs`](../../crates/basilisk-lsp/src/profiler/memory/scripts.rs))
+and prints only `__BASILISK_MEM_FILE__<path>` — a short, never-truncated line.
+The editor's `resolveMarkerFilePayload` ([`dap-evaluate.ts`](../../vscode-extension/src/dap-evaluate.ts))
+reads that file back (deleting it), yielding the full payload it posts to
+`ingest` unchanged — so the LSP marker-dispatch (leg 3) is untouched. Local
+debugging only: the editor and debuggee share a filesystem, exactly as the
+cooperative CPU sampler ([#PROFILE-COOPERATIVE]) already assumes. Small acks
+(`__BASILISK_MEM_OK__`, the CPU ack) still go straight over stdout.
 
 ### LSP Commands {#PROFILE-MEMORY-COMMANDS}
 

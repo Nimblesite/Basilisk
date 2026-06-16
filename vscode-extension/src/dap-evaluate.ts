@@ -15,6 +15,7 @@
  */
 
 import * as vscode from "vscode";
+import * as fs from "fs";
 import { Logger } from "./logger";
 import { ALL_THREADS, debugOutputCursor, debugOutputSince, stoppedThreadIds } from "./dap-output";
 import { POLL_INTERVAL_MS, STARTUP_TIMEOUT_MS } from "./timeouts";
@@ -25,6 +26,11 @@ const DEBUG_TYPE = "basilisk-debug";
 /** Prefix shared by every injection-script output marker (`__BASILISK_MEM*__`,
  *  `__BASILISK_CPU_ACK__`). */
 const MARKER_PREFIX = "__BASILISK_";
+
+/** Marker a memory script prints when it hands its (large) payload back via a
+ *  temp file instead of stdout — see [PROFILE-MEMORY-COURIER] and
+ *  `scripts.rs::emit_via_file_helper`. The text after it is the file path. */
+const FILE_PAYLOAD_MARKER = "__BASILISK_MEM_FILE__";
 /** How long to wait for a script's (possibly large, chunked) marker output. */
 const MARKER_WAIT_MS = 4000;
 /** Poll interval while waiting for marker output. */
@@ -62,12 +68,35 @@ export async function evaluateInDebugSession(
     if (frameId !== undefined) { request.frameId = frameId; }
     const response = (await session.customRequest("evaluate", request)) as { result?: string };
     const direct = response.result ?? "";
-    if (direct.includes(MARKER_PREFIX)) { return direct; }
+    if (direct.includes(MARKER_PREFIX)) { return await resolveMarkerFilePayload(direct); }
     const printed = await waitForMarkerOutput(session.id, cursor);
-    return printed.length > 0 ? printed : direct;
+    return await resolveMarkerFilePayload(printed.length > 0 ? printed : direct);
   } catch (err: unknown) {
     Logger.warn(`[Memory] evaluate failed: ${err instanceof Error ? err.message : String(err)}`);
     return null;
+  }
+}
+
+/**
+ * Resolve a file-handoff payload. Large memory snapshots are written to a temp
+ * file by the injection script — which prints only `__BASILISK_MEM_FILE__<path>`
+ * — because debugpy truncates a single `print()` at ~20 KB
+ * ([PROFILE-MEMORY-COURIER]). When that marker is present, read the file (the
+ * real `__BASILISK_MEM*__ + json` payload), delete it, and return its contents.
+ * Anything else (CPU acks, small OK markers) passes through untouched.
+ */
+export async function resolveMarkerFilePayload(out: string): Promise<string> {
+  const at = out.indexOf(FILE_PAYLOAD_MARKER);
+  if (at === -1) { return out; }
+  const path = out.slice(at + FILE_PAYLOAD_MARKER.length).split(/\r?\n/, 1)[0]?.trim() ?? "";
+  if (path === "") { return out; }
+  try {
+    const contents = await fs.promises.readFile(path, "utf8");
+    await fs.promises.unlink(path).catch(() => undefined);
+    return contents;
+  } catch (err: unknown) {
+    Logger.warn(`[Memory] could not read payload file: ${err instanceof Error ? err.message : String(err)}`);
+    return out;
   }
 }
 

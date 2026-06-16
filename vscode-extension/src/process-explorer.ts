@@ -14,6 +14,7 @@ import * as vscode from "vscode";
 import { type Store } from "./store";
 import { Logger } from "./logger";
 import { registerLaunchCommands } from "./process-launch";
+import { bindProcessPanelReactivity } from "./process-reactivity";
 import { withViewProgress } from "./progress-ops";
 
 // ── LSP response types ───────────────────────────────────────────────────
@@ -128,7 +129,7 @@ class ProcessGroupItem extends vscode.TreeItem {
 
 /** A single process row with a one-click profiling affordance. */
 class ProcessTreeItem extends vscode.TreeItem {
-  constructor(public readonly process: ProcessInfo) {
+  constructor(public readonly process: ProcessInfo, activeProfilingPid?: number) {
     const scriptName = process.script !== null ? basename(process.script) : undefined;
     super(
       scriptName !== undefined ? `${process.name} — ${scriptName}` : process.name,
@@ -140,24 +141,19 @@ class ProcessTreeItem extends vscode.TreeItem {
     // invokes the command with no argument (#79).
     this.id = `pythonProcess:${process.pid}`;
 
+    // The row currently being CPU-profiled gets a distinct look + contextValue
+    // so package.json swaps its inline Profile button for a Stop button
+    // ([PROFILE-PROCESSES-REACTIVE]).
+    const profilingThis = activeProfilingPid !== undefined && activeProfilingPid === process.pid;
     const version = process.pythonVersion ?? "—";
+    const profilingSuffix = profilingThis ? " · profiling" : "";
     this.description =
-      `PID ${process.pid} · ${version} · ${process.cpuPercent.toFixed(1)}% · ${formatBytes(process.memoryBytes)}`;
-
-    this.tooltip = [
-      `${process.name} (PID ${process.pid})`,
-      process.interpreterPath !== null ? `Interpreter: ${process.interpreterPath}` : "",
-      process.script !== null ? `Script: ${process.script}` : "",
-      `Python: ${process.pythonVersion ?? "unknown"}`,
-      `CPU: ${process.cpuPercent.toFixed(1)}%  ·  Memory: ${formatBytes(process.memoryBytes)}`,
-      `Runtime: ${formatRuntime(process.runtimeSecs)}`,
-      process.user !== null ? `User: ${process.user}` : "",
-      process.requiresElevation ? "⚠ Profiling this process will require elevation" : "",
-    ].filter(Boolean).join("\n");
-
-    this.iconPath = processIcon(process);
-    // `pythonProcessElevated` lets package.json offer a distinct affordance set.
-    this.contextValue = process.requiresElevation ? "pythonProcessElevated" : "pythonProcess";
+      `PID ${process.pid} · ${version} · ${process.cpuPercent.toFixed(1)}% · ${formatBytes(process.memoryBytes)}${profilingSuffix}`;
+    this.tooltip = rowTooltip(process, profilingThis);
+    this.iconPath = profilingThis
+      ? new vscode.ThemeIcon("flame", new vscode.ThemeColor("statusBarItem.warningBackground"))
+      : processIcon(process);
+    this.contextValue = rowContextValue(process, profilingThis);
 
     if (process.script !== null) {
       this.command = {
@@ -167,6 +163,30 @@ class ProcessTreeItem extends vscode.TreeItem {
       };
     }
   }
+}
+
+/**
+ * The row's contextValue, which selects its package.json affordances:
+ * `pythonProcessProfiling` (Stop), `pythonProcessElevated` (lock), or plain.
+ */
+function rowContextValue(process: ProcessInfo, profilingThis: boolean): string {
+  if (profilingThis) { return "pythonProcessProfiling"; }
+  return process.requiresElevation ? "pythonProcessElevated" : "pythonProcess";
+}
+
+/** Multi-line hover tooltip for a process row. */
+function rowTooltip(process: ProcessInfo, profilingThis: boolean): string {
+  return [
+    `${process.name} (PID ${process.pid})`,
+    process.interpreterPath !== null ? `Interpreter: ${process.interpreterPath}` : "",
+    process.script !== null ? `Script: ${process.script}` : "",
+    `Python: ${process.pythonVersion ?? "unknown"}`,
+    `CPU: ${process.cpuPercent.toFixed(1)}%  ·  Memory: ${formatBytes(process.memoryBytes)}`,
+    `Runtime: ${formatRuntime(process.runtimeSecs)}`,
+    process.user !== null ? `User: ${process.user}` : "",
+    profilingThis ? "🔥 Basilisk is profiling this process — click Stop to finish" : "",
+    process.requiresElevation ? "⚠ Profiling this process will require elevation" : "",
+  ].filter(Boolean).join("\n");
 }
 
 /** Icon for a process row: a lock badge when elevation is required. */
@@ -191,12 +211,23 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
   private sortMode: SortMode = "cpu";
   private groupMode: GroupMode = "none";
   private filterText = "";
+  /** PID currently being CPU-profiled, so its row renders a Stop affordance. */
+  private activeProfilingPid: number | undefined;
 
   constructor(private readonly store: Store) {}
 
   public refresh(): void {
     this.fetched = false;
     this.emitter.fire(undefined);
+  }
+
+  /**
+   * Mark which PID is being CPU-profiled ([PROFILE-PROCESSES-REACTIVE]). The
+   * reactive wiring calls this then `refresh()`, so the next render distinguishes
+   * the active row; pass `undefined` to clear.
+   */
+  public setActiveProfilingPid(pid: number | undefined): void {
+    this.activeProfilingPid = pid;
   }
 
   /**
@@ -240,7 +271,7 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
 
   public async getChildren(element?: TreeItem): Promise<TreeItem[]> {
     if (element instanceof ProcessGroupItem) {
-      return element.members.map((proc) => new ProcessTreeItem(proc));
+      return element.members.map((proc) => new ProcessTreeItem(proc, this.activeProfilingPid));
     }
     if (element instanceof ProcessTreeItem) {
       return [];
@@ -252,7 +283,7 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
 
     const visible = this.sortProcesses(this.applyFilter(this.processes));
     if (this.groupMode === "none") {
-      return visible.map((proc) => new ProcessTreeItem(proc));
+      return visible.map((proc) => new ProcessTreeItem(proc, this.activeProfilingPid));
     }
     return this.buildGroups(visible);
   }
@@ -350,6 +381,9 @@ export function registerPythonProcesses(
   context.subscriptions.push(treeView, provider);
 
   wireVisibilityRefresh(treeView, provider);
+  // React to the store's profiling state: live chrome, button-gating context
+  // keys, and the active-row marker ([PROFILE-PROCESSES-REACTIVE]).
+  provider.disposables.push(bindProcessPanelReactivity(store, treeView, provider));
 
   const disposables = [
     ...registerLaunchCommands(store, treeView),

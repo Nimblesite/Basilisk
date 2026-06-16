@@ -22,6 +22,13 @@ import { Logger, type LogSink } from "./logger";
 import { createServerCommandHandler } from "./lsp-client";
 import type { Result } from "./result";
 import { POLL_INTERVAL_MS, WAIT_MS } from "./timeouts";
+import {
+  createProfilerActions,
+  isProfilerBusy,
+  IDLE_PROFILER_SESSION,
+  type ProfilerActions,
+  type ProfilerSession,
+} from "./profiler-state";
 
 /** LSP lifecycle states exposed to consumers. */
 export type LspState = "idle" | "starting" | "running" | "stopped";
@@ -40,7 +47,7 @@ interface ReadyHandle {
   resolve: () => void;
 }
 
-export interface Store {
+export interface Store extends ProfilerActions {
   // Read-only signals — consumers can .value but cannot assign.
   readonly client: ReadonlySignal<LanguageClient | undefined>;
   readonly serverCommands: ReadonlySignal<ReadonlySet<string>>;
@@ -61,6 +68,14 @@ export interface Store {
   readonly runtimeResolution: ReadonlySignal<RuntimeResolution | undefined>;
   /** Map of VS Code debug session id → debuggee OS process id (from the DAP `process` event). */
   readonly sessionIdToPid: ReadonlySignal<ReadonlyMap<string, number>>;
+  /**
+   * Canonical reactive profiling state ([PROFILE-PROCESSES-REACTIVE]). The CPU
+   * status bar, the Python Processes panel, and the gating context keys all
+   * subscribe to this one signal — mutate it only through the ProfilerActions.
+   */
+  readonly profiler: ReadonlySignal<ProfilerSession>;
+  /** True while any CPU or memory profiling activity is starting or running. */
+  readonly profilerBusy: ReadonlySignal<boolean>;
 
   // Read-only access to the ready handle (for whenReady callers).
   readonly lspReadyPromise: ReadonlySignal<Promise<void> | undefined>;
@@ -96,6 +111,7 @@ interface StoreSignals {
   lspState: Signal<LspState>;
   runtimeResolution: Signal<RuntimeResolution | undefined>;
   sessionIdToPid: Signal<Map<string, number>>;
+  profiler: Signal<ProfilerSession>;
   readyHandle: Signal<ReadyHandle | undefined>;
   analysisRevision: Signal<number>;
   /** Trailing-debounce timer for diagnostics-driven analysisRevision bumps. */
@@ -361,6 +377,7 @@ function resetSignals(signals: StoreSignals): void {
   signals.lspState.value = "idle";
   signals.runtimeResolution.value = undefined;
   signals.sessionIdToPid.value = new Map();
+  signals.profiler.value = IDLE_PROFILER_SESSION;
   signals.readyHandle.value = undefined;
   // outputChannel and logSink are stable logging infrastructure created once by
   // initLogging (and owned by context.subscriptions) — they are deliberately
@@ -411,6 +428,7 @@ function createStoreSignals(): StoreSignals {
     lspState: signal<LspState>("idle"),
     runtimeResolution: signal<RuntimeResolution | undefined>(undefined),
     sessionIdToPid: signal<Map<string, number>>(new Map()),
+    profiler: signal<ProfilerSession>(IDLE_PROFILER_SESSION),
     readyHandle: signal<ReadyHandle | undefined>(undefined),
     analysisRevision: signal<number>(0),
     diagnosticsDebounce: undefined,
@@ -425,6 +443,7 @@ export function createStore(onReset?: () => void): Store {
 
   const isServerReady = computed(() => signals.client.value?.isRunning() === true);
   const lspReadyPromise = computed(async () => signals.readyHandle.value?.promise);
+  const profilerBusy = computed(() => isProfilerBusy(signals.profiler.value));
 
   return {
     client: signals.client,
@@ -436,9 +455,12 @@ export function createStore(onReset?: () => void): Store {
     lspState: signals.lspState,
     runtimeResolution: signals.runtimeResolution,
     sessionIdToPid: signals.sessionIdToPid,
+    profiler: signals.profiler,
+    profilerBusy,
     lspReadyPromise,
     isServerReady,
     analysisRevision: signals.analysisRevision,
+    ...createProfilerActions(signals.profiler),
 
     setClient(context: vscode.ExtensionContext, c: LanguageClient): void {
       signals.client.value = c;

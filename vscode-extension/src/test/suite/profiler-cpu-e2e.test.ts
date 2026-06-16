@@ -18,6 +18,7 @@ import { getStore } from "../../extension";
 import { evaluateInDebugSession, waitForStoppedFrame } from "../../dap-evaluate";
 import { buildProfileLaunchConfig } from "../../process-launch";
 import { profilerStatusText, startProfilingForPid } from "../../profiler";
+import { pythonProcessesViewState } from "../../process-reactivity";
 import { recordedOperations } from "../../progress-ops";
 import {
   applyProfileDecorations,
@@ -309,6 +310,16 @@ suite("CPU profiling — real end-to-end", () => {
     await startProfilingForPid(store, pid, "default");
     assert.ok(profilerStatusText() !== undefined, "status bar must show a profiling state after start");
 
+    // [PROFILE-PROCESSES-REACTIVE] The real session must drive the reactive
+    // store + panel: busy (so the launch buttons gate off) and the panel names
+    // the profiled PID.
+    assert.strictEqual(store.profiler.value.cpu, "active", "the store must mark the CPU profile active");
+    assert.strictEqual(store.profilerBusy.value, true, "an active profile makes the panel busy");
+    assert.ok(
+      pythonProcessesViewState().message?.includes(`PID ${pid}`) === true,
+      `the panel must show the profiled PID live: ${String(pythonProcessesViewState().message)}`,
+    );
+
     // [PROFILE-UX-PROGRESS] The attach must run under a progress notification.
     const startOps = recordedOperations().slice(opsBefore);
     assert.ok(
@@ -327,6 +338,12 @@ suite("CPU profiling — real end-to-end", () => {
 
     await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
     await vscode.commands.executeCommand("basilisk.profileStop");
+
+    // [PROFILE-PROCESSES-REACTIVE] Stop must clear the reactive state so the
+    // panel re-offers the launches and drops its live chrome.
+    assert.strictEqual(store.profiler.value.cpu, "idle", "stop must clear the store session");
+    assert.strictEqual(store.profilerBusy.value, false, "stop must clear busy");
+    assert.strictEqual(pythonProcessesViewState().message, undefined, "stop must clear the panel chrome");
 
     assertHeatMapPainted(burnerPath);
 
@@ -419,7 +436,19 @@ suite("CPU profiling — real end-to-end", () => {
         timeoutMs: 20_000,
       });
 
+      // [PROFILE-PROCESSES-REACTIVE] The OOTB one-click flow must drive the
+      // reactive panel on macOS too: busy + a live "Profiling PID …" readout.
+      const store = getStore();
+      assert.ok(store, "store must be initialized");
+      assert.strictEqual(store.profiler.value.cpu, "active", "the cooperative session must mark the store active");
+      assert.ok(
+        pythonProcessesViewState().message?.includes("Profiling PID") === true,
+        `the panel must show the live profile: ${String(pythonProcessesViewState().message)}`,
+      );
+
       await vscode.commands.executeCommand("basilisk.profileStop");
+      assert.strictEqual(store.profiler.value.cpu, "idle", "stop must clear the reactive store state");
+      assert.strictEqual(pythonProcessesViewState().message, undefined, "stop must clear the panel chrome");
       assertHeatMapPainted(burnerPath);
 
       // [PROFILE-UX-PROGRESS] Both the start and the stop must have run under

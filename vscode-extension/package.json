@@ -491,12 +491,22 @@
         },
         {
           "command": "basilisk.profileCurrentFileCpu",
-          "when": "view == basilisk.pythonProcesses",
+          "when": "view == basilisk.pythonProcesses && !basilisk.profilerBusy",
           "group": "navigation@1"
         },
         {
           "command": "basilisk.trackMemoryCurrentFile",
-          "when": "view == basilisk.pythonProcesses",
+          "when": "view == basilisk.pythonProcesses && !basilisk.profilerBusy",
+          "group": "navigation@2"
+        },
+        {
+          "command": "basilisk.profileStop",
+          "when": "view == basilisk.pythonProcesses && basilisk.profiling",
+          "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.memoryStop",
+          "when": "view == basilisk.pythonProcesses && basilisk.memoryTracking",
           "group": "navigation@2"
         },
         {
@@ -537,23 +547,33 @@
           "group": "inline"
         },
         {
+          "command": "basilisk.profileStop",
+          "when": "view == basilisk.pythonProcesses && viewItem == pythonProcessProfiling",
+          "group": "inline@0"
+        },
+        {
           "command": "basilisk.profileProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
           "group": "inline@1"
         },
         {
           "command": "basilisk.memoryTrackProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
           "group": "inline@2"
         },
         {
+          "command": "basilisk.profileStop",
+          "when": "view == basilisk.pythonProcesses && viewItem == pythonProcessProfiling",
+          "group": "1_profile@0"
+        },
+        {
           "command": "basilisk.profileProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
           "group": "1_profile@1"
         },
         {
           "command": "basilisk.memoryTrackProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
           "group": "1_profile@2"
         },
         {

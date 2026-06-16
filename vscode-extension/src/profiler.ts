@@ -25,11 +25,7 @@ import {
 } from "./profiler-decorations";
 import { disposeFlamegraphPanel, openFlamegraphWebview } from "./profiler-flamegraph-html";
 import { shouldProfileOnLaunch, waitForDebuggeePid } from "./profiler-launch";
-import {
-  createProfilerStatusBar,
-  setProfilerStatus,
-  updateProfilerProgress,
-} from "./profiler-status";
+import { bindProfilerStatusBar } from "./profiler-status";
 
 // Re-exported so tests keep one import site for the profiler's public seams.
 export { profilerStatusText } from "./profiler-status";
@@ -59,9 +55,12 @@ const PROFILER_PROGRESS_NOTIFICATION = "basilisk/profiler/progress";
 const DEFAULT_SAMPLE_RATE = 100;
 
 // ── State ─────────────────────────────────────────────────────────────────
+//
+// Session state (is a profile running? which PID/session?) lives in the store
+// as a reactive signal ([PROFILE-PROCESSES-REACTIVE]) so the status bar and the
+// Python Processes panel react to it. Only the last result is cached here — a
+// UI artifact (re-applied as decorations on editor focus), not session state.
 
-let activeSessionId: string | undefined;
-let activePid: number | undefined;
 let lastResult: ProfileResult | undefined;
 
 // ── Registration ──────────────────────────────────────────────────────────
@@ -76,8 +75,9 @@ export function registerProfiler(
 ): vscode.Disposable[] {
   const disposables: vscode.Disposable[] = [];
 
-  // Status bar item ([PROFILE-UX-PROGRESS] lifecycle lives in profiler-status.ts).
-  disposables.push(createProfilerStatusBar());
+  // Status bar item — renders reactively from the store's profiler signal
+  // ([PROFILE-UX-PROGRESS] lifecycle lives in profiler-status.ts).
+  disposables.push(bindProfilerStatusBar(store));
 
   // Client-side commands that proxy to LSP.
   disposables.push(
@@ -102,17 +102,19 @@ export function registerProfiler(
   // "Profile on Launch" — automatically start profiling when a debug session starts.
   disposables.push(
     vscode.debug.onDidStartDebugSession((session) => {
-      if (shouldProfileOnLaunch(session) && activeSessionId === undefined) {
+      if (shouldProfileOnLaunch(session) && store.profiler.value.cpu === "idle") {
         Logger.info(`Profile on Launch: auto-profiling debug session ${session.id}`);
         void startProfilerOnLaunch(store, session.id);
       }
     }),
   );
 
-  // Auto-stop profiling when debug session ends.
+  // Auto-stop profiling when debug session ends. Only an adopted ("active")
+  // session has results to collect; a start still in flight is cleaned up by
+  // startProfilerOnLaunch's own finally, so don't fire a "no session" warning.
   disposables.push(
     vscode.debug.onDidTerminateDebugSession(() => {
-      if (activeSessionId !== undefined) {
+      if (store.profiler.value.cpu === "active") {
         Logger.info("Debug session ended — auto-stopping profiler");
         void handleProfileStop(store);
       }
@@ -132,18 +134,27 @@ interface StartedSession {
 }
 
 /**
- * Adopt a freshly started session into the shared UI state (status bar,
- * stop/snapshot routing, live progress) and announce it.
+ * Adopt a freshly started session into the shared reactive state. Writing it to
+ * the store drives the status bar, the panel chrome + button gating, and the
+ * stop/snapshot/progress routing — all from one signal
+ * ([PROFILE-PROCESSES-REACTIVE]).
  */
-function adoptSession(result: StartedSession, announcement: string): void {
-  activeSessionId = result.sessionId;
-  activePid = result.pid;
-  void vscode.commands.executeCommand("setContext", "basilisk.profiling", true);
-  setProfilerStatus("profiling", result.pid);
+function adoptSession(store: Store, result: StartedSession, announcement: string): void {
+  store.profilerActive(result.pid, result.sessionId);
   Logger.info(
     `Profiling started: PID ${result.pid}, Python ${result.pythonVersion}, session ${result.sessionId}`,
   );
   vscode.window.showInformationMessage(announcement);
+}
+
+/** A "stop the current session first" warning that names what is already busy. */
+function busyMessage(store: Store): string {
+  const session = store.profiler.value;
+  if (session.cpu !== "idle") {
+    const pid = session.cpuPid !== undefined ? ` PID ${session.cpuPid}` : "";
+    return `Basilisk: Already profiling${pid}. Stop the current session first.`;
+  }
+  return "Basilisk: Memory tracking is active. Stop it before starting a CPU profile.";
 }
 
 // ── Launch flows ([PROFILE-COOPERATIVE], [PROFILE-UX-PROGRESS]) ───────────
@@ -159,7 +170,7 @@ const CPU_START_TITLE = "Basilisk: Starting CPU profiler";
  * followed by silence ([PROFILE-UX-PROGRESS]).
  */
 async function startProfilerOnLaunch(store: Store, debugSessionId: string): Promise<void> {
-  setProfilerStatus("starting");
+  store.profilerStarting();
   try {
     await withUserProgress(CPU_START_TITLE, async (report) => {
       if (process.platform === "darwin") {
@@ -173,14 +184,15 @@ async function startProfilerOnLaunch(store: Store, debugSessionId: string): Prom
       // so wait for it before attaching (avoids a "not ready yet" race).
       report("Waiting for the program to start…");
       const ready = await waitForDebuggeePid(store, debugSessionId);
-      if (ready && activeSessionId === undefined) {
+      if (ready && store.profiler.value.cpu === "starting") {
         report("Attaching the sampler…");
         await handleProfileAttachToDebug(store);
       }
     });
   } finally {
-    // Any failure path above leaves no session — never strand the spinner.
-    if (activeSessionId === undefined) { setProfilerStatus("idle"); }
+    // Any failure path above leaves the start unfinished — never strand the
+    // spinner: only an adopted session reaches "active".
+    if (store.profiler.value.cpu !== "active") { store.profilerStopped(); }
   }
 }
 
@@ -232,8 +244,8 @@ async function startCooperativeProfileOnLaunch(
         arguments: [{ sampleFile: leg1.sampleFile, sampleRate }],
       },
     );
-    if (result !== undefined && result !== null && activeSessionId === undefined) {
-      adoptSession(result, `Basilisk: Profiling current file (PID ${result.pid}, in-process sampler)`);
+    if (result !== undefined && result !== null && store.profiler.value.cpu !== "active") {
+      adoptSession(store, result, `Basilisk: Profiling current file (PID ${result.pid}, in-process sampler)`);
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -268,10 +280,8 @@ export async function startProfilingForPid(store: Store, pid: number, preset: st
     vscode.window.showWarningMessage("Basilisk: Language server not running.");
     return;
   }
-  if (activeSessionId !== undefined) {
-    vscode.window.showWarningMessage(
-      `Basilisk: Already profiling PID ${activePid ?? "?"} (session ${activeSessionId}). Stop it first.`,
-    );
+  if (store.profilerBusy.value) {
+    vscode.window.showWarningMessage(busyMessage(store));
     return;
   }
 
@@ -283,7 +293,7 @@ export async function startProfilingForPid(store: Store, pid: number, preset: st
     includeNative: cfg.get<boolean>("profiler.includeNative", false),
   };
 
-  setProfilerStatus("starting");
+  store.profilerStarting();
   try {
     await withUserProgress(CPU_START_TITLE, async (report) => {
       report(`Attaching to PID ${pid}…`);
@@ -295,7 +305,7 @@ export async function startProfilingForPid(store: Store, pid: number, preset: st
       });
 
       if (result !== undefined && result !== null) {
-        adoptSession(result, `Basilisk: Profiling PID ${result.pid} (Python ${result.pythonVersion})`);
+        adoptSession(store, result, `Basilisk: Profiling PID ${result.pid} (Python ${result.pythonVersion})`);
       }
     });
   } catch (err: unknown) {
@@ -303,13 +313,15 @@ export async function startProfilingForPid(store: Store, pid: number, preset: st
     Logger.error(`Profile start failed: ${msg}`);
     vscode.window.showErrorMessage(`Basilisk: ${msg}`);
   } finally {
-    if (activeSessionId === undefined) { setProfilerStatus("idle"); }
+    // A failed start never reached "active" — clear the spinner.
+    if (store.profiler.value.cpu !== "active") { store.profilerStopped(); }
   }
 }
 
 async function handleProfileStop(store: Store): Promise<void> {
   const client = store.client.value;
-  if (client?.isRunning() !== true || activeSessionId === undefined) {
+  const sessionId = store.profiler.value.cpuSessionId;
+  if (client?.isRunning() !== true || sessionId === undefined) {
     vscode.window.showWarningMessage("Basilisk: No active profiling session.");
     return;
   }
@@ -323,12 +335,12 @@ async function handleProfileStop(store: Store): Promise<void> {
         report("Collecting results…");
         return client.sendRequest<ProfileResult | undefined>("workspace/executeCommand", {
           command: LSP_CMD.stop,
-          arguments: [{ sessionId: activeSessionId, format: "speedscope" }],
+          arguments: [{ sessionId, format: "speedscope" }],
         });
       },
     );
 
-    cleanupSession();
+    store.profilerStopped();
 
     if (result !== undefined && result !== null) {
       lastResult = result;
@@ -357,7 +369,7 @@ async function handleProfileStop(store: Store): Promise<void> {
       );
     }
   } catch (err: unknown) {
-    cleanupSession();
+    store.profilerStopped();
     const msg = err instanceof Error ? err.message : String(err);
     Logger.error(`Profile stop failed: ${msg}`);
     vscode.window.showErrorMessage(`Basilisk: ${msg}`);
@@ -366,7 +378,8 @@ async function handleProfileStop(store: Store): Promise<void> {
 
 async function handleProfileSnapshot(store: Store): Promise<void> {
   const client = store.client.value;
-  if (client?.isRunning() !== true || activeSessionId === undefined) {
+  const sessionId = store.profiler.value.cpuSessionId;
+  if (client?.isRunning() !== true || sessionId === undefined) {
     vscode.window.showWarningMessage("Basilisk: No active profiling session.");
     return;
   }
@@ -374,7 +387,7 @@ async function handleProfileSnapshot(store: Store): Promise<void> {
   try {
     const result = await client.sendRequest<ProfileResult | undefined>("workspace/executeCommand", {
       command: LSP_CMD.snapshot,
-      arguments: [{ sessionId: activeSessionId }],
+      arguments: [{ sessionId }],
     });
 
     if (result !== undefined && result !== null) {
@@ -405,9 +418,9 @@ async function handleProfileAttachToDebug(store: Store): Promise<void> {
     return;
   }
 
-  if (activeSessionId !== undefined) {
+  if (store.profiler.value.cpu === "active") {
     vscode.window.showWarningMessage(
-      `Basilisk: Already profiling (session ${activeSessionId}).`,
+      `Basilisk: Already profiling (session ${store.profiler.value.cpuSessionId ?? "?"}).`,
     );
     return;
   }
@@ -434,7 +447,7 @@ async function handleProfileAttachToDebug(store: Store): Promise<void> {
     });
 
     if (result !== undefined && result !== null) {
-      adoptSession(result, `Basilisk: Profiling debug session (PID ${result.pid})`);
+      adoptSession(store, result, `Basilisk: Profiling debug session (PID ${result.pid})`);
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -457,8 +470,8 @@ function registerProgressListener(store: Store): void {
         duration: number;
         topFunction: string;
       }) => {
-        if (params.sessionId === activeSessionId) {
-          updateProfilerProgress(params.sampleCount, params.duration, params.topFunction);
+        if (params.sessionId === store.profiler.value.cpuSessionId) {
+          store.profilerProgress(params.sampleCount, params.duration, params.topFunction);
         }
       });
     }
@@ -468,18 +481,14 @@ function registerProgressListener(store: Store): void {
   setTimeout(() => { clearInterval(interval); }, STARTUP_TIMEOUT_MS);
 }
 
-// ── Session cleanup ───────────────────────────────────────────────────────
+// ── Disposal ──────────────────────────────────────────────────────────────
 
-function cleanupSession(): void {
-  activeSessionId = undefined;
-  activePid = undefined;
-  void vscode.commands.executeCommand("setContext", "basilisk.profiling", false);
-  setProfilerStatus("idle");
-}
-
-/** Dispose all profiler resources. */
+/**
+ * Dispose the profiler's UI artifacts. Session state lives in the store and is
+ * cleared by `store.reset()` on deactivation; the status bar and context keys
+ * follow reactively, so there is nothing imperative to tear down here.
+ */
 export function disposeProfiler(): void {
-  cleanupSession();
   disposeProfileDecorations();
   disposeFlamegraphPanel();
   lastResult = undefined;

@@ -182,7 +182,16 @@ export function buildProfileLaunchConfig(
 }
 
 /** Run the active `.py` file under a debug session, tracking the given metric. */
-async function profileCurrentFile(metric: LaunchMetric): Promise<void> {
+async function profileCurrentFile(store: Store, metric: LaunchMetric): Promise<void> {
+  // While a session is starting or running the launch button is hidden
+  // ([PROFILE-PROCESSES-REACTIVE]); guard the command too so the palette path
+  // can't spawn a second debug session on top of the active one.
+  if (store.profilerBusy.value) {
+    vscode.window.showWarningMessage(
+      "Basilisk: A profiling session is already active. Stop it before running another.",
+    );
+    return;
+  }
   const editor = vscode.window.activeTextEditor;
   if (editor?.document.languageId !== "python") {
     vscode.window.showWarningMessage("Basilisk: Open a Python file to run and profile.");
@@ -204,7 +213,7 @@ export function registerLaunchCommands(store: Store, view: ProcessRowSource): vs
   return [
     vscode.commands.registerCommand("basilisk.profileProcess", rowActions.profileProcess),
     vscode.commands.registerCommand("basilisk.memoryTrackProcess", rowActions.memoryTrackProcess),
-    vscode.commands.registerCommand("basilisk.profileCurrentFileCpu", async () => profileCurrentFile("cpu")),
-    vscode.commands.registerCommand("basilisk.trackMemoryCurrentFile", async () => profileCurrentFile("memory")),
+    vscode.commands.registerCommand("basilisk.profileCurrentFileCpu", async () => profileCurrentFile(store, "cpu")),
+    vscode.commands.registerCommand("basilisk.trackMemoryCurrentFile", async () => profileCurrentFile(store, "memory")),
   ];
 }

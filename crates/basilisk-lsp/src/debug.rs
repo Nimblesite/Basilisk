@@ -490,14 +490,11 @@ mod tests {
     #[tokio::test]
     async fn dead_adapter_fails_fast_without_burning_the_timeout() {
         let port = find_free_port().expect("should allocate a port");
-        let mut child = tokio::process::Command::new(if cfg!(windows) {
-            "python"
-        } else {
-            "python3"
-        })
-        .args(["-c", "import sys; sys.exit(3)"])
-        .spawn()
-        .expect("spawn a promptly-exiting child");
+        let mut child =
+            tokio::process::Command::new(if cfg!(windows) { "python" } else { "python3" })
+                .args(["-c", "import sys; sys.exit(3)"])
+                .spawn()
+                .expect("spawn a promptly-exiting child");
 
         let started = Instant::now();
         let err = wait_for_port_or_exit(port, Some(&mut child), Duration::from_secs(30))
