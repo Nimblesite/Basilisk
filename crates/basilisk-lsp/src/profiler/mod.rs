@@ -26,6 +26,8 @@ pub mod presets;
 pub mod privilege;
 pub mod processes;
 pub mod sampler;
+/// Shared wire-format → `py_spy` conversion for the cooperative and helper paths.
+pub(crate) mod wire;
 
 #[cfg(test)]
 mod benchmarks;

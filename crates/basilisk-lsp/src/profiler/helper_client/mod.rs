@@ -39,10 +39,11 @@ use super::sampler::{
     sampler_error_from_kind, SampleBatch, SamplerConfig, SamplerError, SamplerHandle,
 };
 
-mod wire;
-pub use wire::build_elevation_script;
-use wire::create_socket_path;
-pub(crate) use wire::to_pyspy_traces;
+mod launch;
+pub use launch::build_elevation_script;
+use launch::create_socket_path;
+
+use super::wire::to_pyspy_traces;
 
 /// How long to wait for the helper to connect back to the bound socket.
 const ACCEPT_TIMEOUT: Duration = Duration::from_secs(20);
