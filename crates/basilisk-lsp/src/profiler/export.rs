@@ -85,7 +85,7 @@ struct SpeedscopeProfile {
 /// # Errors
 ///
 /// Returns an error string describing the first violated invariant.
-fn validate_exportable(data: &ProfileData) -> Result<(), String> {
+pub(crate) fn validate_exportable(data: &ProfileData) -> Result<(), String> {
     let sample_count: usize = data.thread_stacks.values().map(Vec::len).sum();
     if sample_count == 0 {
         return Err("no samples were collected — nothing to export".to_owned());

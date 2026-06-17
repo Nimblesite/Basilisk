@@ -6,9 +6,9 @@ Embed a state-of-the-art Python profiler directly into the Basilisk LSP. No `pip
 
 ## UI Availability Gate {#PROFILE-UI-GATE}
 
-The profiler is complete in the LSP, but its VS Code surfaces are hidden from shipped users until the end-to-end experience is reliable — an entry point that errors or does nothing is worse first-run UX than none.
+The profiling UI has **shipped**: now that the run→profile→view flow is reliable (#145 — the `.cpuprofile` no longer dead-ends, "Run & Profile" runs to completion, and short-program runs are surfaced honestly), its VS Code surfaces are enabled in every session.
 
-A single switch, `isProfilingUiEnabled(context)` (`vscode-extension/src/profiling-ui.ts`), returns `true` only under test (`ExtensionMode.Test`) and `false` in shipped and dev-host sessions, so the suite still exercises the full UI. `extension.ts` mirrors it into the `basilisk.profilingEnabled` context key that every profiling `when` clause keys off; `memory-profiler.ts` reads it for the one surface no `when` clause can reach (the memory status-bar item). Nothing is removed — all commands stay advertised ([PROFILE-REQUESTS]) and registered. To ship profiling, return `true` unconditionally and drop the gate.
+A single switch, `isProfilingUiEnabled(context)` (`vscode-extension/src/profiling-ui.ts`), returns `true` unconditionally. It is kept (rather than deleted) as the one place the gate can be re-narrowed if ever needed: `extension.ts` mirrors it into the `basilisk.profilingEnabled` context key that every profiling `when` clause keys off, and `memory-profiler.ts` reads it for the one surface no `when` clause can reach (the memory status-bar item). All commands stay advertised ([PROFILE-REQUESTS]) and registered.
 
 ## Why py-spy {#PROFILE-PYSPY}
 
@@ -373,6 +373,34 @@ metric-explicit buttons mirror the per-row actions, same labels and icons:
 Both appear in the title bar, the panel's empty state, and (gated on
 [#PROFILE-UI-GATE]) the command palette.
 
+##### Profiling runs complete; they do not stop interactively {#PROFILE-LAUNCH-NOSTOP}
+
+A "Run & Profile" launch is a *profiling run*, not a debug session: it must run
+to completion and surface a profile, never halt at the user's breakpoints or
+exception stops (#145). It **cannot** simply set the DAP `noDebug` flag —
+debugpy then runs the program with no adapter at all, so `stopOnEntry` never
+fires and the macOS cooperative sampler ([#PROFILE-COOPERATIVE]) loses the entry
+pause it injects at.
+
+Instead the DAP proxy (`dap-proxy.ts`) neutralises breakpoints for the session:
+on the `launch` request it records `profileOnLaunch`, and for that session
+rewrites every `setBreakpoints` / `setFunctionBreakpoints` to an empty
+`breakpoints` array and every `setExceptionBreakpoints` to empty
+`filters`/`filterOptions` before forwarding to debugpy. `stopOnEntry` is a launch
+argument, not a breakpoint, so the entry pause (and the cooperative injection) is
+preserved. Normal debug sessions (`profileOnLaunch` unset) forward untouched. The
+pure transformation is `suppressBreakpointsForProfiling`; the DAP order
+guarantees `launch` reaches the proxy before `setBreakpoints`, so the flag is
+known in time.
+
+Both triggers of [#PROFILE-PROCESSES-LAUNCH-FILE] reach this guard: the explicit
+"Run & Profile CPU" entry point sets `profileOnLaunch` directly, and when the
+global `basilisk.profiler.profileOnLaunch` setting is on, the config resolver
+(`applyDebugConfigDefaults` in `debug-adapter.ts`) stamps `profileOnLaunch: true`
+onto every resolved `basilisk-debug` launch — so the proxy sees the flag in the
+launch arguments for both. This keeps the proxy's suppression predicate in lock
+step with `shouldProfileOnLaunch`'s two equivalent triggers.
+
 ## Cooperative In-Process Sampling {#PROFILE-COOPERATIVE}
 
 The out-of-the-box CPU path for **debug-launched** sessions. Modern macOS
@@ -494,9 +522,20 @@ instead) when:
 - any sample's **frame index is out of bounds** for `shared.frames`;
 - a thread's `samples` and `weights` **lengths differ**.
 
-The same validation guards the flamegraph SVG export. Tests assert the full
-invariant set on every exported file, not just key presence
-(`profiler_tests.rs::assert_speedscope_loadable`).
+The same validation guards the flamegraph SVG export **and the V8 `.cpuprofile`
+export** (`export_cpuprofile` calls `validate_exportable`). The `.cpuprofile`
+case matters because VS Code's built-in viewer crashes on a **zero-sample**
+profile: its `buildModel` guard `if (!timeDeltas || !samples)` misfires (an empty
+`samples` array is truthy in JS), then it reads `samples[timeDeltas.length - 1]`
+— i.e. `samples[-1]` = `undefined` — and indexes a node that was never created,
+throwing `Cannot read properties of undefined (reading 'selfTime')` and leaving
+the user on the "could not be opened" error (#145). The exporter therefore
+refuses to write a zero-sample `.cpuprofile`; with no `cpuProfilePath` the editor
+falls back to the self-contained flamegraph ([PROFILE-NATIVE-FALLBACK]).
+
+Tests assert the full invariant set on every exported file, not just key presence
+(`profiler_tests.rs::assert_speedscope_loadable`,
+`cpuprofile.rs::export_refuses_a_zero_sample_profile`).
 
 ### Viewer Delivery {#PROFILE-VIEWER-DELIVERY}
 
@@ -519,6 +558,59 @@ viewer opens natively (flame chart + bottom-up/left-heavy tables) — the same U
 as Node.js profiling (see <https://code.visualstudio.com/docs/nodejs/profiling>).
 The editor opens them with `vscode.open`; the custom flamegraph/dashboard
 webviews remain as fallbacks.
+
+### Never dead-end the user {#PROFILE-NATIVE-FALLBACK}
+
+The built-in `.cpuprofile`/`.heapprofile` viewer is best-effort, not a
+guarantee: it can be **unavailable** in the host (e.g. a dev/extension host with
+the bundled `vscode-js-profile-*` viewer disabled) or **refuse to render** a
+given profile, surfacing VS Code's "The editor could not be opened due to an
+unexpected error" inside the tab. Critically, opening a custom editor via
+`vscode.open` **resolves even when that editor later fails to render** — the
+failure is contained in the tab and does not reject the command — so a completed
+profile must never depend on the built-in viewer to be viewable (#145).
+
+Therefore, on profile stop the editor:
+
+- opens the native `.cpuprofile` beside the source when one was produced, and
+  catches any `vscode.open` rejection, falling back to the self-contained
+  flamegraph webview ([PROFILE-FLAMEGRAPH]); and
+- **always** raises a completion notification that offers an **"Open Flame
+  Chart"** action (the self-contained webview, which needs no external viewer)
+  and a **"Reveal Trace File"** action (reveals the `.cpuprofile`, else the
+  speedscope JSON). The "Profile complete — N samples" toast must carry these
+  affordances, never announce a result the user has no way to reach.
+
+`presentProfileResult` in `profiler-flamegraph-html.ts` owns this routing.
+
+### Programs too short to sample {#PROFILE-SHORT-PROGRAM}
+
+A sampling profiler takes one snapshot per `1/rate` seconds — at the default
+100 Hz, one every 10 ms. A program that runs for a few milliseconds (e.g.
+`examples/debug_demo.py` ≈ 1 ms over ~600 calls) therefore yields ~0 useful
+samples, and **raising the rate cannot fix it**: the in-process sampler is a
+pure-Python GIL-bound daemon, and `ingest_traces` stamps a fixed
+`weight = 1/sample_rate`, so a sub-tick run is structurally un-sampleable and a
+higher rate only distorts the measurement (#145).
+
+**Phase 1 (current) — honest detection.** The signal is **attribution, not raw
+sample count**: a sub-tick program finishes before its work can be sampled, yet
+the session keeps sampling the idle/exiting interpreter, so a result can carry
+dozens of samples (observed: 48) that resolve to **zero** hot functions and zero
+hot lines. When a completed profile has no hot functions and no hot lines, the
+editor does not open the empty flame chart/heat map; it shows a clear "captured
+N samples, but none landed in your code — ran too briefly to profile by
+sampling" message, never an action that promises a higher rate.
+`profileHasNoUsableData` in `profiler-flamegraph-html.ts` gates this.
+
+**Phase 2 (planned) — deterministic profiling.** The real fix for short programs
+is a launch-only deterministic mode: inject `cProfile` at the `stopOnEntry`
+pause via the existing courier ([PROFILE-COOPERATIVE]), dump `pstats` at exit via
+the file courier ([PROFILE-MEMORY-HOWTO]), and ingest into `ProfileData`
+(`ingest_pstats`, sibling of `ingest_traces`). `cProfile` counts every call
+regardless of duration, so "too few samples" vanishes by construction.
+Attach-to-PID stays sampling (no injection seam into a foreign process). This is
+tracked separately and not yet implemented.
 
 - **CPU → `.cpuprofile`** (`Profiler.Profile` schema):
   [`cpuprofile.rs`](../../crates/basilisk-lsp/src/profiler/cpuprofile.rs) merges the

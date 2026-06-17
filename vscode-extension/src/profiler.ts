@@ -23,7 +23,7 @@ import {
   disposeProfileDecorations,
   type ProfileResult,
 } from "./profiler-decorations";
-import { disposeFlamegraphPanel, openFlamegraphWebview } from "./profiler-flamegraph-html";
+import { disposeFlamegraphPanel, presentProfileResult } from "./profiler-flamegraph-html";
 import { shouldProfileOnLaunch, waitForDebuggeePid } from "./profiler-launch";
 import { bindProfilerStatusBar } from "./profiler-status";
 
@@ -345,28 +345,12 @@ async function handleProfileStop(store: Store): Promise<void> {
     if (result !== undefined && result !== null) {
       lastResult = result;
       applyProfileDecorations(result);
-      // Open the V8 .cpuprofile in VS Code's built-in profile viewer (flame
-      // chart + bottom-up/left-heavy tables); fall back to the speedscope-style
-      // webview only if the file wasn't produced. Open BESIDE the source so
-      // the profiled file (and its inline heat map) stays visible — opening
-      // in the active group hides the file and the visible-editors re-apply
-      // would clear its decorations.
-      if (result.cpuProfilePath !== undefined && result.cpuProfilePath !== "") {
-        await vscode.commands.executeCommand(
-          "vscode.open",
-          vscode.Uri.file(result.cpuProfilePath),
-          vscode.ViewColumn.Beside,
-        );
-      } else {
-        openFlamegraphWebview(result);
-      }
-      Logger.info(
-        `Profiling stopped: ${result.totalSamples} samples, ${result.duration.toFixed(1)}s, ` +
-        `output: ${result.outputFile}`,
-      );
-      vscode.window.showInformationMessage(
-        `Basilisk: Profile complete \u2014 ${result.totalSamples} samples in ${result.duration.toFixed(1)}s`,
-      );
+      // Land the user on a viewable result: the built-in `.cpuprofile` viewer
+      // when it renders (opened beside so the heat-mapped source stays visible),
+      // always with a completion toast whose action opens the self-contained
+      // flamegraph webview — a failed or unavailable viewer never dead-ends the
+      // user ([PROFILE-NATIVE-FALLBACK], #145).
+      await presentProfileResult(result);
     }
   } catch (err: unknown) {
     store.profilerStopped();

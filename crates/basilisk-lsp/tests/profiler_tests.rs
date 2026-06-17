@@ -806,6 +806,11 @@ fn stop_artifacts_surface_export_errors_for_empty_session() {
         artifacts.flamegraph_path.is_none(),
         "no flamegraph for empty session"
     );
+    assert!(
+        artifacts.cpu_profile_path.is_none(),
+        "no .cpuprofile for empty session — a zero-sample V8 profile makes VS Code's \
+         built-in viewer throw 'Cannot read properties of undefined (reading selfTime)' (#145)"
+    );
     let err = artifacts
         .export_error
         .expect("export failure must be surfaced");

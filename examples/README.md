@@ -46,6 +46,7 @@ debugger rather than statically checked. Open one and press F5.
 | File | Demonstrates | How to use |
 |---|---|---|
 | [debug_demo.py](debug_demo.py) | Breakpoints, Watch panel, Locals, Debug Console | Set a breakpoint and step through |
+| [profile_demo.py](profile_demo.py) | CPU profiling — a few seconds of CPU-bound work with a clear hot spot, so the flame chart and hot-line heat map fill in | One click: **Run & Profile CPU (Current File)** |
 | [cpu_demo.py](cpu_demo.py) | CPU sampling — hot/warm/cold flame chart, hot-line hints | Attach the CPU profiler to the live session |
 | [memory_demo.py](memory_demo.py) | Memory — sustained leak, transient spike, reference cycle | Breakpoint in the loop, take a snapshot each pass |
 

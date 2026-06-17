@@ -1763,4 +1763,31 @@ suite('Basilisk Debug Config Provider', () => {
         const resolved = applyDebugConfigDefaults(full, 'python');
         assert.strictEqual(resolved.program, '/tmp/a.py');
     });
+
+    // [PROFILE-LAUNCH-NOSTOP] #145: the global `basilisk.profiler.profileOnLaunch`
+    // setting is a second, equivalent trigger of an auto-profiling run (see
+    // shouldProfileOnLaunch). It must mark the launch so the DAP proxy strips
+    // breakpoints — otherwise a plain F5 with the global setting on still halts
+    // at user breakpoints, the exact dead-stop #145 forbids.
+    test('global profiler.profileOnLaunch marks every launch as a profiling run (#145)', () => {
+        const resolved = applyDebugConfigDefaults({} as vscode.DebugConfiguration, 'python', true);
+        assert.strictEqual(resolved.type, 'basilisk-debug', 'still synthesizes a current-file launch');
+        assert.strictEqual(
+            resolved.profileOnLaunch,
+            true,
+            'global profile-on-launch must mark the launch so the proxy neutralises breakpoints (#145)',
+        );
+    });
+
+    test('an explicit profiling launch stays marked (idempotent) and a normal launch is not', () => {
+        const explicit = applyDebugConfigDefaults(
+            { name: 'x', type: 'basilisk-debug', request: 'launch', program: '/tmp/a.py', profileOnLaunch: true },
+            'python',
+            false,
+        );
+        assert.strictEqual(explicit.profileOnLaunch, true, 'an explicit Run & Profile launch stays a profiling run');
+
+        const normal = applyDebugConfigDefaults({} as vscode.DebugConfiguration, 'python', false);
+        assert.notStrictEqual(normal.profileOnLaunch, true, 'ordinary F5 (global off) must remain a real debug session with breakpoints');
+    });
 });

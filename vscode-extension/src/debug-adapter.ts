@@ -375,15 +375,14 @@ function defaultLaunchConfig(): vscode.DebugConfiguration {
 }
 
 /**
- * Fill in a runnable `basilisk-debug` config from an empty or partial one.
+ * Synthesize/complete a runnable `basilisk-debug` config (program defaulting).
  *
  * This is what makes "Run and Debug" / F5 work **without a launch.json**: VS
  * Code calls the provider with an empty config (no type), and for a Python file
  * we synthesize a launch of the current file. A partial config missing
- * `program` defaults to `${file}`. Pure (no VS Code APIs) so it is unit-testable;
- * the active language id is passed in.
+ * `program` defaults to `${file}`. Pure (no VS Code APIs).
  */
-export function applyDebugConfigDefaults(
+function withProgramDefaults(
   config: vscode.DebugConfiguration,
   activeLanguageId: string | undefined,
 ): vscode.DebugConfiguration {
@@ -405,6 +404,35 @@ export function applyDebugConfigDefaults(
 }
 
 /**
+ * Resolve a runnable `basilisk-debug` config, defaulting `program` and marking
+ * profiling runs.
+ *
+ * When the global `basilisk.profiler.profileOnLaunch` setting is on, every
+ * basilisk-debug launch is a profiling run, so it is marked `profileOnLaunch:
+ * true`. That flag makes the DAP proxy neutralise the user's breakpoints so the
+ * run completes instead of stopping interactively ([PROFILE-LAUNCH-NOSTOP],
+ * #145) — matching `shouldProfileOnLaunch`'s two equivalent triggers (the
+ * explicit launch arg, or this global setting). Pure (the setting is passed in)
+ * so it stays unit-testable; the active language id is passed in too.
+ */
+export function applyDebugConfigDefaults(
+  config: vscode.DebugConfiguration,
+  activeLanguageId: string | undefined,
+  profileOnLaunchGlobal = false,
+): vscode.DebugConfiguration {
+  const resolved = withProgramDefaults(config, activeLanguageId);
+  if (
+    profileOnLaunchGlobal &&
+    resolved.type === "basilisk-debug" &&
+    resolved.request === "launch" &&
+    resolved.profileOnLaunch !== true
+  ) {
+    return { ...resolved, profileOnLaunch: true };
+  }
+  return resolved;
+}
+
+/**
  * Provider that lets `basilisk-debug` start with no `launch.json`: it offers a
  * default configuration in the Run-and-Debug picker and resolves empty/partial
  * configs to a launch of the current file.
@@ -418,7 +446,11 @@ export function createBasiliskDebugConfigProvider(): vscode.DebugConfigurationPr
       _folder: vscode.WorkspaceFolder | undefined,
       config: vscode.DebugConfiguration,
     ): vscode.DebugConfiguration {
-      return applyDebugConfigDefaults(config, vscode.window.activeTextEditor?.document.languageId);
+      return applyDebugConfigDefaults(
+        config,
+        vscode.window.activeTextEditor?.document.languageId,
+        vscode.workspace.getConfiguration("basilisk").get<boolean>("profiler.profileOnLaunch", false),
+      );
     },
   };
 }
