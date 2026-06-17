@@ -15,13 +15,9 @@
  * To ship profiling, return `true` here unconditionally and delete this gate.
  */
 
-import type * as vscode from "vscode";
+import * as vscode from "vscode";
 
 /** Whether the profiling UI surfaces should be shown in this session. */
-export function isProfilingUiEnabled(_context: vscode.ExtensionContext): boolean {
-  // Enabled unconditionally: the CPU and memory pipelines are covered by
-  // real end-to-end suites on macOS and Linux (attach, live progress, heat
-  // map, artifacts, courier round-trip) — the reliability bar this gate was
-  // waiting for. The gate function stays so a kill-switch is one line away.
-  return true;
+export function isProfilingUiEnabled(context: vscode.ExtensionContext): boolean {
+  return context.extensionMode === vscode.ExtensionMode.Test;
 }
