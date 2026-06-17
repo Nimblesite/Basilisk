@@ -1,16 +1,37 @@
 # agent-pmo:0b21609
-# Dependabot — supply-chain defense without PR spam ([GITHUB-DEPENDABOT]).
+# Dependabot — supply-chain defense without PR spam, and without burning CI on
+# `main` for routine bumps ([GITHUB-DEPENDABOT]).
 #
-# Every ecosystem is GROUPED into at most two PRs: <eco>-minor (minor+patch, low
-# risk, merge freely) and <eco>-major (breaking, review individually). Bundling
-# breaking majors with safe patches is avoided on purpose. These group rules also
-# apply to Dependabot security updates, so security fixes land grouped too.
+# How this kills the spam:
+#   * VERSION updates -> `target-branch: dependabot-upgrades`. Every routine bump
+#     PR is opened against the long-lived `dependabot-upgrades` STAGING branch,
+#     never against main. ci.yml / codeql.yml only trigger on
+#     `pull_request: [main]` (the filter matches the PR *base*), so these staging
+#     PRs run NO build/test/CodeQL. They are auto-merged into the staging branch
+#     by .github/workflows/dependabot-automerge.yml. When you want the batch in
+#     main you open ONE `dependabot-upgrades -> main` PR and CI runs exactly once.
+#   * SECURITY updates -> still raised automatically against `main`, untouched by
+#     this file. Per GitHub docs, `target-branch` only redirects *version*
+#     updates; security updates always use the repo's default branch. So a real
+#     CVE still opens a PR against main where you see it and CI runs. That channel
+#     is governed by the repo's "Dependabot security updates" setting, NOT here.
+#   * groups with no `update-types` filter -> each ecosystem collapses ALL bumps
+#     (patch, minor AND major) into ONE grouped PR per run. Majors no longer need
+#     their own review PR because nothing reaches main unattended — review happens
+#     once, at the consolidation PR.
+#   * interval: weekly -> one grouped PR per ecosystem each week, not fifty.
+#
 # SHA-pinned actions are a prime supply-chain target ([SWR-SEC-ACTION-PINNING]),
-# so github-actions is kept current here.
+# so github-actions is kept current here too.
+#
+# REQUIREMENT: the `dependabot-upgrades` branch must exist. Cut it from main
+# AFTER this file + dependabot-automerge.yml are on main, so the staging branch
+# carries the auto-merge workflow (pull_request runs from the PR merge ref).
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
+    target-branch: "dependabot-upgrades"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
@@ -22,38 +43,35 @@ updates:
   # Cargo / Rust — the type checker + LSP workspace (Cargo.toml at the root).
   - package-ecosystem: cargo
     directory: /
+    target-branch: "dependabot-upgrades"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
     labels: ["dependencies"]
     groups:
-      cargo-minor:
-        update-types: ["minor", "patch"]
-      cargo-major:
-        update-types: ["major"]
+      cargo:
+        patterns: ["*"]
 
   # npm — VS Code extension.
   - package-ecosystem: npm
     directory: /vscode-extension
+    target-branch: "dependabot-upgrades"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
     labels: ["dependencies"]
     groups:
-      npm-minor:
-        update-types: ["minor", "patch"]
-      npm-major:
-        update-types: ["major"]
+      npm-vscode-extension:
+        patterns: ["*"]
 
   # npm — documentation website (Eleventy).
   - package-ecosystem: npm
     directory: /website
+    target-branch: "dependabot-upgrades"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
     labels: ["dependencies"]
     groups:
-      npm-minor:
-        update-types: ["minor", "patch"]
-      npm-major:
-        update-types: ["major"]
+      npm-website:
+        patterns: ["*"]
