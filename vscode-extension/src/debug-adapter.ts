@@ -8,7 +8,7 @@ import * as net from "net";
 import { type LanguageClient } from "vscode-languageclient/node";
 import { Logger } from "./logger";
 import { DapTcpProxy } from "./dap-proxy";
-import { appendDebugOutput, clearDebugOutput } from "./dap-output";
+import { appendDebugOutput, clearDebugOutput, trackSuspensionEvent } from "./dap-output";
 
 /** Max number of variables to log inline before switching to a count summary. */
 const MAX_INLINE_VARS = 10;
@@ -181,6 +181,11 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
       return;
     }
     Logger.debug(`[DAP ${this.sessionId}] <-- event:${event} ${summarizeBody(body)}`);
+    if (event === "stopped" || event === "continued") {
+      // Pause bookkeeping for the memory/cooperative couriers — see
+      // `currentStoppedFrameId` (dap-evaluate.ts) for why this can't be probed.
+      trackSuspensionEvent(this.fullSessionId, event, body);
+    }
     if (event === "terminated") {
       Logger.info(`[DAP ${this.sessionId}] program terminated`);
     }

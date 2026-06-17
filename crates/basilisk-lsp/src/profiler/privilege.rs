@@ -61,7 +61,8 @@ pub(crate) async fn create_sampler(config: &SamplerConfig) -> Result<SamplerHand
     let status = check_profiling_permissions(config.pid).map_err(ProfileError::ExportFailed)?;
 
     match status {
-        PermissionStatus::Allowed => sampler::start_sampler(config).map_err(ProfileError::Sampler),
+        PermissionStatus::Allowed => sampler::start_sampler(config)
+            .map_err(|err| ProfileError::Sampler(with_platform_guidance(err))),
         PermissionStatus::ElevationRequired(reason) => {
             info!(pid = config.pid, %reason, "elevation required; sampling via elevated helper");
             start_elevated_sampler(config)
@@ -72,6 +73,30 @@ pub(crate) async fn create_sampler(config: &SamplerConfig) -> Result<SamplerHand
             SamplerError::PermissionDenied(reason),
         )),
     }
+}
+
+/// Append platform remedies to a permission failure so a denied attach stays
+/// actionable (issue #81): on Linux a real `EPERM` from py-spy gets the
+/// `ptrace_scope` remedies the upfront check can no longer assert (see
+/// [`classify_ptrace_scope`]). Other errors and platforms pass through.
+#[cfg(target_os = "linux")]
+fn with_platform_guidance(err: SamplerError) -> SamplerError {
+    match err {
+        SamplerError::PermissionDenied(msg) => SamplerError::PermissionDenied(format!(
+            "{msg}. ptrace is restricted on this system: run \
+             `sudo sysctl kernel.yama.ptrace_scope=0`, or \
+             `sudo setcap cap_sys_ptrace+ep $(which basilisk)`, or \
+             profile the process via a debug session."
+        )),
+        other => other,
+    }
+}
+
+/// Non-Linux: no extra guidance to add — macOS routes through elevation and
+/// Windows needs none for same-user targets.
+#[cfg(not(target_os = "linux"))]
+fn with_platform_guidance(err: SamplerError) -> SamplerError {
+    err
 }
 
 /// macOS: stream samples from the elevated helper over a Unix socket.
@@ -182,29 +207,40 @@ fn check_linux_permissions(pid: u32) -> PermissionStatus {
     }
 
     match read_ptrace_scope() {
-        Ok(0) => PermissionStatus::Allowed,
-        Ok(1) => PermissionStatus::Denied(
-            "ptrace_scope is 1 (restricted). Only parent processes can trace children. \
-             Options: run `sudo sysctl kernel.yama.ptrace_scope=0` or \
-             `sudo setcap cap_sys_ptrace+ep $(which basilisk)` or \
-             profile child processes via debug sessions."
-                .to_owned(),
-        ),
-        Ok(2) => PermissionStatus::Denied(
-            "ptrace_scope is 2 (admin-only). Requires CAP_SYS_PTRACE. \
-             Run: `sudo setcap cap_sys_ptrace+ep $(which basilisk)`"
-                .to_owned(),
-        ),
-        Ok(3) => PermissionStatus::Denied(
-            "ptrace_scope is 3 (no ptrace). Profiling external processes is disabled \
-             by kernel policy. Profile child processes via debug sessions instead."
-                .to_owned(),
-        ),
-        Ok(scope) => PermissionStatus::Denied(format!("Unknown ptrace_scope value: {scope}")),
+        Ok(scope) => classify_ptrace_scope(scope),
         Err(err) => {
             warn!(%err, "could not read ptrace_scope, assuming allowed");
             PermissionStatus::Allowed
         }
+    }
+}
+
+/// Map a Yama `ptrace_scope` value to a permission status (pure, so every
+/// platform's test suite can pin the policy).
+///
+/// `1` (restricted) is deliberately **Allowed**: Yama still permits two
+/// grants this precheck cannot see — *ancestor* relationships (a debug
+/// session's debuggee is the LSP's grandchild via `debugpy.adapter`) and
+/// targets that opted in via `PR_SET_PTRACER`. Denying upfront falsely
+/// blocked the flagship "Run & Profile" flows on default Ubuntu; instead the
+/// attach is attempted and a real `EPERM` is surfaced with remedies appended
+/// (see `with_platform_guidance`). Scopes `2`/`3` are kernel-enforced
+/// regardless of relationship, so they stay denied with the remedy.
+#[cfg(any(target_os = "linux", test))]
+fn classify_ptrace_scope(scope: u8) -> PermissionStatus {
+    match scope {
+        0 | 1 => PermissionStatus::Allowed,
+        2 => PermissionStatus::Denied(
+            "ptrace_scope is 2 (admin-only). Requires CAP_SYS_PTRACE. \
+             Run: `sudo setcap cap_sys_ptrace+ep $(which basilisk)`"
+                .to_owned(),
+        ),
+        3 => PermissionStatus::Denied(
+            "ptrace_scope is 3 (no ptrace). Profiling external processes is disabled \
+             by kernel policy. Profile child processes via debug sessions instead."
+                .to_owned(),
+        ),
+        other => PermissionStatus::Denied(format!("Unknown ptrace_scope value: {other}")),
     }
 }
 
@@ -431,6 +467,41 @@ mod tests {
     fn linux_reads_ptrace_scope_without_panic() {
         // Should return a valid status regardless of the actual scope value.
         let _result = check_linux_permissions(1);
+    }
+
+    /// Restricted Yama (`ptrace_scope=1`) must attempt the attach instead of
+    /// denying upfront: the kernel still grants ancestors (debug-session
+    /// debuggees) and `PR_SET_PTRACER` opt-ins, which the precheck cannot see.
+    #[test]
+    fn restricted_ptrace_scope_attempts_attach_instead_of_denying() {
+        assert_eq!(classify_ptrace_scope(0), PermissionStatus::Allowed);
+        assert_eq!(
+            classify_ptrace_scope(1),
+            PermissionStatus::Allowed,
+            "scope=1 (default Ubuntu) must not falsely deny debuggee/opt-in targets"
+        );
+        assert!(
+            matches!(classify_ptrace_scope(2), PermissionStatus::Denied(ref r) if r.contains("setcap")),
+            "scope=2 stays denied with the setcap remedy"
+        );
+        assert!(
+            matches!(classify_ptrace_scope(3), PermissionStatus::Denied(ref r) if r.contains("debug session")),
+            "scope=3 stays denied, pointing at debug sessions"
+        );
+    }
+
+    /// A real EPERM from py-spy must come back with the Linux remedies (#81).
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_permission_failures_carry_ptrace_remedies() {
+        let err = with_platform_guidance(SamplerError::PermissionDenied(
+            "Operation not permitted".to_owned(),
+        ));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("ptrace") && msg.contains("setcap"),
+            "guidance must name the remedies: {msg}"
+        );
     }
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]

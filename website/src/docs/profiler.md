@@ -206,14 +206,14 @@ Panels in the dashboard:
 
 ## Profiling Presets
 
-Basilisk ships four profiling presets that trade coverage for overhead:
+Basilisk ships four profiling presets that trade fidelity for overhead:
 
-| Preset | Sample rate | Native frames | Memory | Overhead |
-|--------|------------|---------------|--------|----------|
-| `default` | 100 Hz | No | No | ~1% |
-| `lightweight` | 25 Hz | No | No | <0.5% |
-| `detailed` | 200 Hz | Yes | No | ~3% |
-| `memory` | 50 Hz | No | Yes | ~2% |
+| Preset | Sample rate | Duration | Overhead |
+|--------|------------|----------|----------|
+| `default` | your `sampleRate` setting (100 Hz) | Unlimited | ~1% |
+| `quick` | 100 Hz | 10 s | ~1% |
+| `detailed` | 200 Hz | 60 s | ~2% |
+| `longRunning` | 50 Hz | Unlimited | <0.5% |
 
 Select a preset from the Basilisk settings panel or set it in `pyproject.toml`:
 

@@ -14,6 +14,7 @@
 
 pub mod aggregator;
 pub mod commands;
+pub mod cooperative;
 pub mod cpuprofile;
 pub mod diagnostics;
 pub mod export;
@@ -25,6 +26,8 @@ pub mod presets;
 pub mod privilege;
 pub mod processes;
 pub mod sampler;
+/// Shared wire-format → `py_spy` conversion for the cooperative and helper paths.
+pub(crate) mod wire;
 
 #[cfg(test)]
 mod benchmarks;
@@ -34,6 +37,7 @@ mod pipeline_tests;
 mod scenario_tests;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 
 use tokio::sync::Mutex;
@@ -134,6 +138,19 @@ pub struct SessionInfo {
     pub duration: f64,
 }
 
+/// A live progress sample for [PROFILE-NOTIFICATIONS-PROGRESS].
+#[derive(Debug, Clone)]
+pub struct ProgressInfo {
+    /// Session being reported.
+    pub session_id: String,
+    /// Samples collected so far.
+    pub sample_count: u64,
+    /// Seconds since the session started.
+    pub duration: f64,
+    /// Hottest function seen so far (empty until data crosses thresholds).
+    pub top_function: String,
+}
+
 /// Result of starting a profiling session.
 #[derive(Debug, Clone)]
 pub struct StartResult {
@@ -173,9 +190,12 @@ pub struct StopResult {
 /// Manages active profiling sessions for the LSP.
 ///
 /// One session per PID. Lives on `LspServer` alongside `DebugSessionManager`.
+/// Cloning shares the session table, so a clone can drive the progress
+/// notifier task ([PROFILE-NOTIFICATIONS-PROGRESS]).
+#[derive(Clone)]
 pub struct ProfileSessionManager {
-    /// Active sessions keyed by session ID.
-    sessions: Mutex<HashMap<String, ProfileSession>>,
+    /// Active sessions keyed by session ID (shared across clones).
+    sessions: Arc<Mutex<HashMap<String, ProfileSession>>>,
 }
 
 impl std::fmt::Debug for ProfileSessionManager {
@@ -196,7 +216,7 @@ impl ProfileSessionManager {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            sessions: Mutex::new(HashMap::new()),
+            sessions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -241,45 +261,38 @@ impl ProfileSessionManager {
         // Pick the right sampler: in-process when we have access, or the
         // elevated helper over a Unix socket when macOS requires `vm_read`.
         let sampler = privilege::create_sampler(&config).await?;
-        let python_version = sampler.python_version.clone();
-        let session_id = generate_session_id();
-        let started_at_iso = iso_now();
+        Ok(insert_session(&mut sessions, sampler, rate))
+    }
 
-        info!(
-            session_id = %session_id,
-            pid,
-            python_version = %python_version,
-            sample_rate = rate,
-            "profiling session started"
-        );
+    /// Start a cooperative (in-process, editor-injected) profiling session by
+    /// tailing the sample file the injected thread streams to. Implements
+    /// [PROFILE-COOPERATIVE] — the out-of-the-box path for debug-launched
+    /// sessions on macOS, where task ports are unavailable to us.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ProfileError` if the injected sampler never reports its
+    /// header, or its PID is already being profiled.
+    pub async fn start_cooperative(
+        &self,
+        sample_file: std::path::PathBuf,
+        sample_rate: Option<u64>,
+    ) -> Result<StartResult, ProfileError> {
+        let rate = sample_rate.unwrap_or(100);
+        let sampler = cooperative::start_cooperative_sampler(sample_file)
+            .await
+            .map_err(ProfileError::Sampler)?;
 
-        let result = StartResult {
-            session_id: session_id.clone(),
-            pid,
-            python_version: python_version.clone(),
-            started_at: started_at_iso.clone(),
-        };
-
-        let sample_weight = 1.0 / f64::from(u32::try_from(rate).unwrap_or(100));
-
-        let _ = sessions.insert(
-            session_id.clone(),
-            ProfileSession {
-                session_id,
-                pid,
-                python_version,
-                started_at: Instant::now(),
-                started_at_iso,
-                data: ProfileData::default(),
-                sampler,
-                hotspot_config: HotspotConfig::default(),
-                sample_weight,
-                sample_rate: rate,
-                include_idle: false,
-            },
-        );
-
-        Ok(result)
+        let mut sessions = self.sessions.lock().await;
+        for session in sessions.values() {
+            if session.pid == sampler.pid {
+                return Err(ProfileError::AlreadyProfiling {
+                    pid: sampler.pid,
+                    session_id: session.session_id.clone(),
+                });
+            }
+        }
+        Ok(insert_session(&mut sessions, sampler, rate))
     }
 
     /// Stop a profiling session and return the results.
@@ -359,6 +372,27 @@ impl ProfileSessionManager {
         })
     }
 
+    /// Drain pending samples and report live progress for one session, or
+    /// `None` once the session has ended (which stops the notifier task).
+    /// Implements [PROFILE-NOTIFICATIONS-PROGRESS].
+    pub async fn progress(&self, session_id: &str) -> Option<ProgressInfo> {
+        let mut sessions = self.sessions.lock().await;
+        let session = sessions.get_mut(session_id)?;
+        drain_samples(session);
+        let top_function = session
+            .data
+            .hot_functions(&session.hotspot_config)
+            .first()
+            .map(|hot| hot.name.clone())
+            .unwrap_or_default();
+        Some(ProgressInfo {
+            session_id: session.session_id.clone(),
+            sample_count: session.data.total_samples,
+            duration: session.started_at.elapsed().as_secs_f64(),
+            top_function,
+        })
+    }
+
     /// List all active profiling sessions.
     pub async fn list(&self) -> Vec<SessionInfo> {
         let mut sessions = self.sessions.lock().await;
@@ -390,6 +424,55 @@ impl ProfileSessionManager {
             session.sampler.stop();
         }
     }
+}
+
+/// Register a freshly attached sampler as a session, whatever its backend
+/// (in-process py-spy, elevated helper, or cooperative tail).
+fn insert_session(
+    sessions: &mut HashMap<String, ProfileSession>,
+    sampler: SamplerHandle,
+    rate: u64,
+) -> StartResult {
+    let pid = sampler.pid;
+    let python_version = sampler.python_version.clone();
+    let session_id = generate_session_id();
+    let started_at_iso = iso_now();
+
+    info!(
+        session_id = %session_id,
+        pid,
+        python_version = %python_version,
+        sample_rate = rate,
+        "profiling session started"
+    );
+
+    let result = StartResult {
+        session_id: session_id.clone(),
+        pid,
+        python_version: python_version.clone(),
+        started_at: started_at_iso.clone(),
+    };
+
+    let sample_weight = 1.0 / f64::from(u32::try_from(rate).unwrap_or(100));
+
+    let _ = sessions.insert(
+        session_id.clone(),
+        ProfileSession {
+            session_id,
+            pid,
+            python_version,
+            started_at: Instant::now(),
+            started_at_iso,
+            data: ProfileData::default(),
+            sampler,
+            hotspot_config: HotspotConfig::default(),
+            sample_weight,
+            sample_rate: rate,
+            include_idle: false,
+        },
+    );
+
+    result
 }
 
 /// Drain all pending sample batches from the mpsc channel into `ProfileData`.

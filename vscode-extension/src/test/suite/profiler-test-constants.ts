@@ -32,6 +32,8 @@ export const PROFILER_SERVER_COMMANDS = [
     'basilisk.profiler.stop',
     'basilisk.profiler.snapshot',
     'basilisk.profiler.list',
+    'basilisk.profiler.cooperativeScript',
+    'basilisk.profiler.cooperativeAttach',
 ] as const;
 
 /** Profiler configuration keys. */
@@ -55,6 +57,21 @@ export interface PackageJsonCommandEntry {
     command: string;
     title?: string;
     category?: string;
+    icon?: string;
+}
+
+/** Shape of a menu contribution entry in package.json contributes.menus. */
+export interface PackageJsonMenuEntry {
+    command: string;
+    when?: string;
+    group?: string;
+}
+
+/** Shape of a viewsWelcome entry in package.json contributes.viewsWelcome. */
+export interface PackageJsonViewsWelcomeEntry {
+    view: string;
+    contents: string;
+    when?: string;
 }
 
 /** Shape of a keybinding entry in package.json contributes.keybindings. */
@@ -75,6 +92,8 @@ interface PackageJson {
         };
         commands?: PackageJsonCommandEntry[];
         keybindings?: PackageJsonKeybinding[];
+        menus?: Record<string, PackageJsonMenuEntry[]>;
+        viewsWelcome?: PackageJsonViewsWelcomeEntry[];
     };
 }
 
@@ -98,4 +117,25 @@ export function getPackageJsonCommands(): PackageJsonCommandEntry[] {
     assert.ok(extension, 'Extension should be found');
     const packageJson = extension.packageJSON as PackageJson;
     return packageJson.contributes?.commands ?? [];
+}
+
+/**
+ * Retrieve a menu's contribution entries from the extension's package.json
+ * (e.g. `view/title`, `view/item/context`).
+ */
+export function getPackageJsonMenu(menuId: string): PackageJsonMenuEntry[] {
+    const extension = vscode.extensions.getExtension(EXTENSION_ID);
+    assert.ok(extension, 'Extension should be found');
+    const packageJson = extension.packageJSON as PackageJson;
+    return packageJson.contributes?.menus?.[menuId] ?? [];
+}
+
+/**
+ * Retrieve the viewsWelcome entries from the extension's package.json.
+ */
+export function getPackageJsonViewsWelcome(): PackageJsonViewsWelcomeEntry[] {
+    const extension = vscode.extensions.getExtension(EXTENSION_ID);
+    assert.ok(extension, 'Extension should be found');
+    const packageJson = extension.packageJSON as PackageJson;
+    return packageJson.contributes?.viewsWelcome ?? [];
 }

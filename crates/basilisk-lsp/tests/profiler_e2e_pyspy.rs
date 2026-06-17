@@ -434,7 +434,7 @@ fn e2e_memory_scripts_are_valid_python_syntax() {
         ),
         (
             "gc_collect",
-            basilisk_lsp::profiler::memory::scripts::gc_collect().to_owned(),
+            basilisk_lsp::profiler::memory::scripts::gc_collect(),
         ),
         (
             "objects_by_type",

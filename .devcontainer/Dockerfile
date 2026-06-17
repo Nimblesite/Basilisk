@@ -1,6 +1,8 @@
 # Dev container matching CI (GitHub Actions ubuntu-22.04-8-cores + dtolnay/rust-toolchain@stable)
 # Pin Rust to match CI's stable channel — this is the critical version.
-FROM rust:1.94.0-bookworm
+# 1.96.0 = current stable on the CI runners; 1.94 fails the workspace build
+# (sysinfo 0.39.3 requires rustc >= 1.95).
+FROM rust:1.96.0-bookworm
 
 # System deps (pinned to Debian bookworm repository versions)
 # VS Code test runner requires: libnspr4, libnss3, libgbm1, libxkbfile1, libsecret-1-0,

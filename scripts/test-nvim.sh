@@ -71,8 +71,14 @@ if command -v nvim &>/dev/null; then
     expected_specs="$(find tests/lsp -name '*_spec.lua' | wc -l | tr -d ' ')"
     lsp_out="$(mktemp)"
     set +e
+    # Per-file timeout: plenary's default is 50s, and the heaviest spec
+    # (coverage_boost_spec.lua) legitimately needs ~51s against the
+    # coverage-instrumented LSP binary — the child gets SIGTERMed mid-summary
+    # and the run fails on "15/16 spec files produced a summary" with zero
+    # actual test failures. 120s keeps the gate strict (every spec must still
+    # summarise clean) without truncating slow-but-passing files.
     LUACOV=1 nvim --headless -u tests/minimal_init.lua \
-        -c "PlenaryBustedDirectory tests/lsp {minimal_init = 'tests/minimal_init.lua', sequential = true}" 2>&1 \
+        -c "PlenaryBustedDirectory tests/lsp {minimal_init = 'tests/minimal_init.lua', sequential = true, timeout = 120000}" 2>&1 \
         | tee "$lsp_out"
     nvim_rc=${PIPESTATUS[0]}
     set -e

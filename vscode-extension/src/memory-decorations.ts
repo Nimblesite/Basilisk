@@ -14,6 +14,7 @@
 
 import * as vscode from "vscode";
 import { Logger } from "./logger";
+import { recordApplied, type AppliedDecoration } from "./profiler-decorations";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,17 @@ export interface MemoryDiffResult {
   totalFreed: number;
   netGrowth: number;
   suspectedLeaks: SuspectedLeak[];
+}
+
+// ── Applied-decoration ledger ─────────────────────────────────────────────
+// Implements [PROFILE-VIS-HEATMAP] (memory track) observability — same e2e
+// seam as the CPU heat map, since `setDecorations` is write-only.
+
+let appliedMemDecorations: AppliedDecoration[] = [];
+
+/** The memory/leak decorations currently applied across visible editors. */
+export function appliedMemoryDecorations(): readonly AppliedDecoration[] {
+  return appliedMemDecorations;
 }
 
 // ── Decoration types ──────────────────────────────────────────────────────
@@ -176,6 +188,7 @@ export function applyMemoryDecorations(result: MemorySnapshotResult): void {
     for (const [color, options] of optionsByColor) {
       editor.setDecorations(getMemDecorationTypeForColor(color), options);
     }
+    recordApplied(appliedMemDecorations, filePath, optionsByColor);
   }
 
   Logger.info(`Memory decorations applied: ${result.topAllocations.length} allocations`);
@@ -230,6 +243,7 @@ export function applyLeakDecorations(result: MemoryDiffResult): void {
     for (const [color, options] of optionsByColor) {
       editor.setDecorations(getMemDecorationTypeForColor(color), options);
     }
+    recordApplied(appliedMemDecorations, filePath, optionsByColor);
   }
 
   Logger.info(`Leak decorations applied: ${result.suspectedLeaks.length} suspected leaks`);
@@ -242,6 +256,7 @@ export function clearMemoryDecorations(): void {
       editor.setDecorations(decorationType, []);
     }
   }
+  appliedMemDecorations = [];
 }
 
 /** Dispose all memory decoration types. */
@@ -250,4 +265,5 @@ export function disposeMemoryDecorations(): void {
     decorationType.dispose();
   }
   memDecorationTypes.clear();
+  appliedMemDecorations = [];
 }

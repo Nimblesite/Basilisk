@@ -1,15 +1,63 @@
 // Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 /**
- * Flamegraph HTML builder for the Basilisk profiler webview.
+ * Flamegraph webview for the Basilisk profiler.
  *
- * Generates the complete HTML document for the profiler results panel,
- * including CSS styling, summary cards, function/line tables, and
- * interactive JavaScript for count-up animations and navigation.
+ * Owns the results panel end to end: the complete HTML document (CSS
+ * styling, summary cards, function/line tables, count-up animations) and
+ * the webview panel that hosts it, including click-to-source navigation.
  *
  * Extracted from profiler.ts to satisfy the 500 LOC file limit.
  */
 
+import * as vscode from "vscode";
 import type { ProfileResult } from "./profiler-decorations";
+
+// ── Webview panel ─────────────────────────────────────────────────────────
+
+let flamegraphPanel: vscode.WebviewPanel | undefined;
+
+/** Open (or reveal) the flamegraph results panel beside the source. */
+export function openFlamegraphWebview(result: ProfileResult): void {
+  if (flamegraphPanel !== undefined) {
+    flamegraphPanel.reveal(vscode.ViewColumn.Beside);
+  } else {
+    flamegraphPanel = vscode.window.createWebviewPanel(
+      "basilisk.flamegraph",
+      "Basilisk Profiler",
+      vscode.ViewColumn.Beside,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [],
+      },
+    );
+    flamegraphPanel.onDidDispose(() => {
+      flamegraphPanel = undefined;
+    });
+  }
+
+  flamegraphPanel.webview.html = buildFlamegraphHtml(result);
+
+  // Handle messages from the webview.
+  flamegraphPanel.webview.onDidReceiveMessage((msg: { type: string; file?: string; line?: number }) => {
+    if (msg.type === "navigateToSource" && msg.file !== undefined && msg.line !== undefined) {
+      const uri = vscode.Uri.file(msg.file);
+      const position = new vscode.Position(msg.line - 1, 0);
+      void vscode.window.showTextDocument(uri, {
+        selection: new vscode.Range(position, position),
+        viewColumn: vscode.ViewColumn.One,
+      });
+    }
+  });
+}
+
+/** Close and forget the panel (extension teardown). */
+export function disposeFlamegraphPanel(): void {
+  if (flamegraphPanel !== undefined) {
+    flamegraphPanel.dispose();
+    flamegraphPanel = undefined;
+  }
+}
 
 /** Build the CSS for the flamegraph webview. */
 function flamegraphCssVars(): string {

@@ -242,20 +242,22 @@ suite('Profiler — Configuration', () => {
         }
     });
 
-    test('preset enum values are correct', () => {
+    test('preset enum offers exactly the presets the server parses', () => {
         const properties = getPackageJsonProperties();
         const presetProp = properties['basilisk.profiler.preset'] as
             { enum?: string[] } | undefined;
         assert.ok(presetProp, 'preset property should exist');
         assert.ok(Array.isArray(presetProp.enum), 'preset should have enum values');
 
-        const expectedValues = ['default', 'lightweight', 'detailed', 'memory'];
-        for (const value of expectedValues) {
-            assert.ok(
-                presetProp.enum.includes(value),
-                `preset enum should include "${value}"`,
-            );
-        }
+        // Must mirror ProfilingPreset::parse_name (presets.rs) plus "default"
+        // (user-tuned sampleRate/includeNative). Advertising a name the server
+        // silently ignores is the preset:"memory" defect — never reintroduce one.
+        const expectedValues = ['default', 'quick', 'detailed', 'longRunning'];
+        assert.deepStrictEqual(
+            [...presetProp.enum].sort(),
+            [...expectedValues].sort(),
+            'every advertised preset must be one the LSP actually parses',
+        );
     });
 });
 

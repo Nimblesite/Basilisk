@@ -26,13 +26,16 @@ pub enum ProfilingPreset {
 impl ProfilingPreset {
     /// Parse a preset name from a JSON string value.
     ///
-    /// Returns `None` for unrecognized names or `"custom"`.
+    /// Accepts the shared [`basilisk_common::profiler_presets`] names (plus
+    /// the `long_running` snake-case alias). Returns `None` for unrecognized
+    /// names or `"custom"`.
     #[must_use]
     pub fn parse_name(name: &str) -> Option<Self> {
+        use basilisk_common::profiler_presets as names;
         match name {
-            "quick" => Some(Self::Quick),
-            "detailed" => Some(Self::Detailed),
-            "longRunning" | "long_running" => Some(Self::LongRunning),
+            names::QUICK => Some(Self::Quick),
+            names::DETAILED => Some(Self::Detailed),
+            names::LONG_RUNNING | "long_running" => Some(Self::LongRunning),
             _ => None,
         }
     }

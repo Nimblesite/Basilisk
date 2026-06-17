@@ -13,15 +13,22 @@
  */
 
 import * as vscode from "vscode";
+import { effect } from "@preact/signals-core";
 import { Logger } from "./logger";
 import type { Store } from "./store";
 import { isProfilingUiEnabled } from "./profiling-ui";
-import { currentStoppedFrameId, evaluateInDebugSession } from "./dap-evaluate";
+import { acquireStoppedFrame, evaluateInDebugSession, waitForStoppedFrame } from "./dap-evaluate";
+import { withUserProgress } from "./progress-ops";
+import {
+  toDashboardDiff,
+  toDashboardSnapshot,
+  asString,
+  type MemoryIngestResult,
+} from "./memory-dashboard-mapping";
 import {
   disposeMemoryDashboard,
   openMemoryDashboard,
   type MemoryDashboardSnapshot,
-  type MemoryDiffData,
 } from "./memory-dashboard";
 import {
   disposeRefGraph,
@@ -51,20 +58,29 @@ const LSP_MEM_CMD = {
 
 /** tracemalloc traceback depth injected at start. */
 const TRACEBACK_DEPTH = 25;
+
+/** [PROFILE-UX-PROGRESS] Progress-notification titles, one per memory operation. */
+const MEM_OP_TITLE: Readonly<Record<string, string>> = {
+  [LSP_MEM_CMD.snapshot]: "Basilisk: Taking memory snapshot",
+  [LSP_MEM_CMD.diff]: "Basilisk: Comparing memory snapshots",
+  [LSP_MEM_CMD.gcCollect]: "Basilisk: Forcing garbage collection",
+  [LSP_MEM_CMD.references]: "Basilisk: Building the reference graph",
+};
+
+/** The progress title for starting memory tracking (shared by both entry points). */
+const MEM_START_TITLE = "Basilisk: Starting memory tracking";
 /** Reference-graph traversal bounds. */
 const REF_GRAPH_MAX_DEPTH = 5;
 const REF_GRAPH_MAX_NODES = 200;
 
-/** A tagged ingest result returned by `basilisk.memory.ingest`. */
-interface MemoryIngestResult {
-  kind: "snapshot" | "diff" | "gc" | "refs" | "objects" | "ack";
-  [field: string]: unknown;
-}
-
 // ── State ─────────────────────────────────────────────────────────────────
+//
+// Memory-tracking session state lives in the store as a reactive signal
+// ([PROFILE-PROCESSES-REACTIVE]); `boundStore` is the handle this module reads
+// it through (and the e2e seam reads it through `activeMemorySession`).
 
 let memoryStatusBarItem: vscode.StatusBarItem | undefined;
-let activeMemorySessionId: string | undefined;
+let boundStore: Store | undefined;
 /** Most recent snapshot, so a later "Compare" can show it alongside the diff. */
 let lastDashboardSnapshot: MemoryDashboardSnapshot | undefined;
 /** [PROFILE-UI-GATE] Whether the (imperative) memory indicator may be shown. */
@@ -80,6 +96,7 @@ export function registerMemoryProfiler(
   /** Status bar priority — lower than main Basilisk item. */
   const MEMORY_STATUS_BAR_PRIORITY = 98;
 
+  boundStore = store;
   memoryStatusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
     MEMORY_STATUS_BAR_PRIORITY,
@@ -87,13 +104,22 @@ export function registerMemoryProfiler(
   // Click the status-bar item to open the memory action menu (no palette needed).
   memoryStatusBarItem.command = "basilisk.memoryMenu";
 
+  // The memory indicator follows the store's tracking state reactively
+  // ([PROFILE-PROCESSES-REACTIVE]); the debug-session listeners below cover the
+  // "debugging but not yet tracking" state, which is not a store signal.
+  const disposeMemoryEffect = effect(() => {
+    void store.profiler.value.memory;
+    refreshMemoryStatusBar(store);
+  });
+
   const disposables: vscode.Disposable[] = [
     memoryStatusBarItem,
+    { dispose: disposeMemoryEffect },
     vscode.commands.registerCommand("basilisk.memoryMenu", async () =>
-      handleMemoryMenu(),
+      handleMemoryMenu(store),
     ),
     vscode.commands.registerCommand("basilisk.memoryStart", async () =>
-      handleMemoryStart(store),
+      withUserProgress(MEM_START_TITLE, async (report) => handleMemoryStart(store, report)),
     ),
     vscode.commands.registerCommand("basilisk.memorySnapshot", async () =>
       handleMemorySnapshot(store),
@@ -111,22 +137,43 @@ export function registerMemoryProfiler(
       handleMemoryReferences(store),
     ),
     // Show/hide the memory status-bar entry as Basilisk debug sessions come and go.
-    vscode.debug.onDidChangeActiveDebugSession(() => { refreshMemoryStatusBar(); }),
-    vscode.debug.onDidStartDebugSession(() => { refreshMemoryStatusBar(); }),
-    vscode.debug.onDidTerminateDebugSession(() => { refreshMemoryStatusBar(); }),
+    vscode.debug.onDidChangeActiveDebugSession(() => { refreshMemoryStatusBar(store); }),
+    vscode.debug.onDidStartDebugSession((session) => {
+      refreshMemoryStatusBar(store);
+      // "Run & Track Memory (Current File)" (#82): the launch stopped on
+      // entry; inject tracemalloc there, then resume the program.
+      if (session.type === "basilisk-debug" && session.configuration.memoryTrackOnLaunch === true) {
+        void startMemoryTrackingOnLaunch(store);
+      }
+    }),
+    vscode.debug.onDidTerminateDebugSession(() => { refreshMemoryStatusBar(store); }),
   ];
 
   // [PROFILE-UI-GATE] The memory indicator is the one profiling surface no `when`
   // clause can reach, so it shares the single switch in code: shown under test,
   // hidden for shipped users (see refreshMemoryStatusBar).
   memoryUiEnabled = isProfilingUiEnabled(context);
-  refreshMemoryStatusBar();
+  refreshMemoryStatusBar(store);
   return disposables;
 }
 
+/** Whether memory tracking is currently live, per the store. */
+function isTracking(): boolean {
+  return boundStore?.profiler.value.memory === "active";
+}
+
+/**
+ * The active memory-tracking session id, or undefined when not tracking.
+ * E2e seam for [PROFILE-MEMORY-HOWTO]/[PROFILE-PROCESSES-LAUNCH-FILE]: lets
+ * tests observe that tracking really started (e.g. the track-on-launch flow).
+ */
+export function activeMemorySession(): string | undefined {
+  return isTracking() ? boundStore?.profiler.value.memorySessionId : undefined;
+}
+
 /** Quick-pick menu of memory actions — the clickable alternative to the palette. */
-async function handleMemoryMenu(): Promise<void> {
-  const tracking = activeMemorySessionId !== undefined;
+async function handleMemoryMenu(store: Store): Promise<void> {
+  const tracking = store.profiler.value.memory === "active";
   const items: { label: string; command: string }[] = tracking
     ? [
         { label: "$(device-camera) Take Memory Snapshot", command: "basilisk.memorySnapshot" },
@@ -137,7 +184,7 @@ async function handleMemoryMenu(): Promise<void> {
       ]
     : [{ label: "$(database) Start Memory Tracking", command: "basilisk.memoryStart" }];
   const pick = await vscode.window.showQuickPick(items, {
-    placeHolder: tracking ? "Basilisk memory profiling" : "Pause the debugger, then start memory tracking",
+    placeHolder: tracking ? "Basilisk memory profiling" : "Start memory tracking (briefly pauses the program)",
   });
   if (pick !== undefined) {
     await vscode.commands.executeCommand(pick.command);
@@ -162,9 +209,11 @@ export function disposeMemoryProfiler(): void {
  *   3. post the raw output back to `basilisk.memory.ingest`,
  *   4. return the LSP's structured, marker-dispatched result.
  *
- * Returns null (with an actionable message) when there is no session, nothing
- * is paused, or evaluation fails — memory profiling requires the debuggee to be
- * stopped at a breakpoint because debugpy cannot evaluate a running program.
+ * Returns null (with an actionable message) when there is no session, the
+ * debuggee cannot be paused, or evaluation fails. debugpy can only `evaluate`
+ * against a stopped frame, so a running program is transparently paused for
+ * the script and resumed afterwards (a user's own breakpoint pause is left
+ * untouched) — IDE-grade snapshots never demand a manual pause.
  */
 async function runMemoryScript(
   store: Store,
@@ -176,14 +225,37 @@ async function runMemoryScript(
     void vscode.window.showErrorMessage("Basilisk LSP not connected");
     return null;
   }
-  if (activeMemorySessionId === undefined) {
+  const memorySessionId = store.profiler.value.memorySessionId;
+  if (store.profiler.value.memory !== "active" || memorySessionId === undefined) {
     void vscode.window.showWarningMessage("Basilisk: Start memory tracking first.");
     return null;
   }
-  const frameId = await currentStoppedFrameId();
-  if (frameId === null) {
+  // The pause → evaluate → analyze round-trip takes a beat; show its stages
+  // under one notification ([PROFILE-UX-PROGRESS]).
+  return withUserProgress(
+    MEM_OP_TITLE[command] ?? "Basilisk: Inspecting memory",
+    async (report) => runMemoryScriptStages({ client, command, extraArgs, report, memorySessionId }),
+  );
+}
+
+/** Everything one staged memory round-trip needs. */
+interface MemoryScriptRun {
+  readonly client: NonNullable<Store["client"]["value"]>;
+  readonly command: string;
+  readonly extraArgs: Record<string, unknown>;
+  readonly report: (message: string) => void;
+  readonly memorySessionId: string;
+}
+
+/** The staged body of [`runMemoryScript`] — acquire, evaluate, ingest. */
+async function runMemoryScriptStages(
+  { client, command, extraArgs, report, memorySessionId }: MemoryScriptRun,
+): Promise<MemoryIngestResult | null> {
+  report("Pausing the program…");
+  const acquired = await acquireStoppedFrame();
+  if (acquired === null) {
     void vscode.window.showWarningMessage(
-      "Basilisk: Pause the debugger at a breakpoint to inspect memory.",
+      "Basilisk: Could not pause the program for memory inspection — pause at a breakpoint and retry.",
     );
     return null;
   }
@@ -191,43 +263,88 @@ async function runMemoryScript(
   try {
     const phase1 = await client.sendRequest<{ script?: string } | null>("workspace/executeCommand", {
       command,
-      arguments: [{ memorySessionId: activeMemorySessionId, ...extraArgs }],
+      arguments: [{ memorySessionId, ...extraArgs }],
     });
     const script = phase1?.script;
     if (script === undefined || script === "") { return null; }
 
-    const output = await evaluateInDebugSession(script, frameId);
+    report("Inspecting the debuggee…");
+    const output = await evaluateInDebugSession(script, acquired.frameId);
     if (output === null) {
       void vscode.window.showWarningMessage("Basilisk: Could not run the memory script in the debuggee.");
       return null;
     }
 
+    report("Analyzing…");
     return await client.sendRequest<MemoryIngestResult | null>("workspace/executeCommand", {
       command: LSP_MEM_CMD.ingest,
-      arguments: [{ memorySessionId: activeMemorySessionId, output }],
+      arguments: [{ memorySessionId, output }],
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     Logger.warn(`[Memory] ${command} round-trip failed: ${msg}`);
     void vscode.window.showWarningMessage(`Basilisk: ${msg}`);
     return null;
+  } finally {
+    await acquired.release();
   }
+}
+
+// ── Track-memory-on-launch ────────────────────────────────────────────────
+
+/**
+ * Auto-start flow for the "Run & Track Memory (Current File)" entry point
+ * (#82). Memory tracking needs a paused debuggee ([PROFILE-MEMORY-HOWTO]), so
+ * the launch config sets `stopOnEntry`; tracemalloc is injected at the entry
+ * pause and the debuggee is resumed so the program runs with tracking on.
+ * Implements [PROFILE-PROCESSES-LAUNCH-FILE] (memory leg).
+ */
+async function startMemoryTrackingOnLaunch(store: Store): Promise<void> {
+  // One notification spans the whole auto-start ([PROFILE-UX-PROGRESS]).
+  await withUserProgress(MEM_START_TITLE, async (report) => {
+    report("Waiting for the program to pause at entry…");
+    const frameId = await waitForStoppedFrame();
+    if (frameId === null) {
+      void vscode.window.showWarningMessage(
+        "Basilisk: The debuggee did not pause at entry — pause at a breakpoint, then start memory tracking.",
+      );
+      return;
+    }
+    await handleMemoryStart(store, report);
+    if (store.profiler.value.memory === "active") {
+      Logger.info("Memory tracking started on launch — resuming the debuggee");
+      report("Resuming the program…");
+      await vscode.commands.executeCommand("workbench.action.debug.continue");
+    }
+  });
 }
 
 // ── Command handlers ──────────────────────────────────────────────────────
 
-async function handleMemoryStart(store: Store): Promise<void> {
+async function handleMemoryStart(
+  store: Store,
+  report: (message: string) => void,
+): Promise<void> {
   const client = store.client.value;
   if (client?.isRunning() !== true) {
     void vscode.window.showErrorMessage("Basilisk LSP not connected");
     return;
   }
-  // tracemalloc must be injected into a paused debuggee, so require a stopped
-  // frame before we even mint a session.
-  const frameId = await currentStoppedFrameId();
-  if (frameId === null) {
+  if (store.profiler.value.memory === "active") {
+    void vscode.window.showWarningMessage("Basilisk: Memory tracking is already active.");
+    return;
+  }
+  // tracemalloc must be injected into a paused debuggee — transparently pause
+  // a running program (and resume it after), like any IDE memory profiler.
+  // From here on the panel reflects a tracking start in flight; every exit path
+  // must settle it back to active or idle ([PROFILE-PROCESSES-REACTIVE]).
+  store.memoryTrackingStarting();
+  report("Pausing the program…");
+  const acquired = await acquireStoppedFrame();
+  if (acquired === null) {
+    store.memoryTrackingStopped();
     void vscode.window.showWarningMessage(
-      "Basilisk: Pause the debugger at a breakpoint, then start memory tracking.",
+      "Basilisk: Could not pause the program — pause at a breakpoint, then start memory tracking.",
     );
     return;
   }
@@ -237,22 +354,29 @@ async function handleMemoryStart(store: Store): Promise<void> {
       command: LSP_MEM_CMD.start,
       arguments: [{ tracebackDepth: TRACEBACK_DEPTH }],
     });
-    if (result?.memorySessionId === undefined || result.script === undefined) { return; }
+    if (result?.memorySessionId === undefined || result.script === undefined) {
+      store.memoryTrackingStopped();
+      return;
+    }
 
-    const ack = await evaluateInDebugSession(result.script, frameId);
+    report("Injecting tracemalloc…");
+    const ack = await evaluateInDebugSession(result.script, acquired.frameId);
     if (ack === null) {
+      store.memoryTrackingStopped();
       void vscode.window.showWarningMessage("Basilisk: Could not start tracemalloc in the debuggee.");
       return;
     }
 
-    activeMemorySessionId = result.memorySessionId;
-    refreshMemoryStatusBar();
+    store.memoryTrackingActive(result.memorySessionId);
     Logger.info(`Memory tracking started: session ${result.memorySessionId}`);
     void vscode.window.showInformationMessage("Basilisk: Memory tracking started. Take a snapshot to inspect allocations.");
   } catch (err) {
+    store.memoryTrackingStopped();
     void vscode.window.showErrorMessage(
       `Memory tracking failed: ${err instanceof Error ? err.message : String(err)}`,
     );
+  } finally {
+    await acquired.release();
   }
 }
 
@@ -264,10 +388,15 @@ async function handleMemorySnapshot(store: Store): Promise<void> {
     lastDashboardSnapshot = toDashboardSnapshot(result);
     Logger.info(`Memory snapshot: ${lastDashboardSnapshot.currentMemory} bytes current`);
     // Open the V8 .heapprofile in VS Code's built-in profile viewer (flame chart
-    // + table, Self/Total size) — the same UI as Node.js heap profiles.
+    // + table, Self/Total size) — the same UI as Node.js heap profiles. Beside
+    // the source, so the snapshotted file keeps its allocation decorations.
     const heapProfilePath = asString(result.heapProfilePath);
     if (heapProfilePath !== "") {
-      await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(heapProfilePath));
+      await vscode.commands.executeCommand(
+        "vscode.open",
+        vscode.Uri.file(heapProfilePath),
+        vscode.ViewColumn.Beside,
+      );
     } else {
       // Fall back to the Basilisk dashboard if the file wasn't produced.
       openMemoryDashboard(lastDashboardSnapshot);
@@ -291,56 +420,6 @@ async function handleMemoryDiff(store: Store): Promise<void> {
   }
 }
 
-/** Coerce an `unknown` JSON field to a string (never an object stringification). */
-function asString(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
-}
-
-/** Coerce an `unknown` JSON field to a finite number. */
-function asNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-/** Map an ingest snapshot result to the dashboard's snapshot shape. */
-function toDashboardSnapshot(result: MemoryIngestResult): MemoryDashboardSnapshot {
-  return {
-    memorySessionId: asString(result.memorySessionId),
-    snapshotId: asString(result.snapshotId),
-    currentMemory: asNumber(result.currentMemory),
-    peakMemory: asNumber(result.peakMemory),
-    gcObjects: asNumber(result.gcObjects),
-    gcCounts: Array.isArray(result.gcCounts) ? (result.gcCounts as number[]) : [],
-    topAllocations: (Array.isArray(result.topAllocations)
-      ? result.topAllocations
-      : []) as MemoryDashboardSnapshot["topAllocations"],
-    timeline: [],
-  };
-}
-
-/** Map an ingest diff result to the dashboard's diff shape (lowercasing confidence). */
-function toDashboardDiff(result: MemoryIngestResult): MemoryDiffData {
-  const leaks = Array.isArray(result.suspectedLeaks) ? result.suspectedLeaks : [];
-  return {
-    totalGrowth: asNumber(result.totalGrowth),
-    totalFreed: asNumber(result.totalFreed),
-    netGrowth: asNumber(result.netGrowth),
-    grownAllocations: [],
-    suspectedLeaks: leaks.map((raw) => {
-      const leak = raw as Record<string, unknown>;
-      return {
-        file: asString(leak.file),
-        line: asNumber(leak.line),
-        sizeGrowth: asNumber(leak.sizeGrowth),
-        countGrowth: asNumber(leak.countGrowth),
-        currentSize: asNumber(leak.currentSize),
-        currentCount: asNumber(leak.currentCount),
-        confidence: asString(leak.confidence, "low").toLowerCase() as MemoryDiffData["suspectedLeaks"][number]["confidence"],
-        reason: asString(leak.reason),
-      };
-    }),
-  };
-}
-
 async function handleMemoryGcCollect(store: Store): Promise<void> {
   const result = await runMemoryScript(store, LSP_MEM_CMD.gcCollect);
   if (result?.kind === "gc") {
@@ -353,16 +432,15 @@ async function handleMemoryGcCollect(store: Store): Promise<void> {
   }
 }
 
-function handleMemoryStop(_store: Store): void {
-  activeMemorySessionId = undefined;
+function handleMemoryStop(store: Store): void {
+  store.memoryTrackingStopped();
   lastDashboardSnapshot = undefined;
-  refreshMemoryStatusBar();
   clearMemoryDecorations();
   Logger.info("Memory tracking stopped");
 }
 
 async function handleMemoryReferences(store: Store): Promise<void> {
-  if (activeMemorySessionId === undefined) {
+  if (store.profiler.value.memory !== "active") {
     void vscode.window.showWarningMessage("Basilisk: Start memory tracking first.");
     return;
   }
@@ -397,13 +475,13 @@ async function handleMemoryReferences(store: Store): Promise<void> {
  * Show the memory status-bar entry whenever a Basilisk debug session is active
  * (or tracking is on) and click it to open the action menu. Hidden otherwise.
  */
-function refreshMemoryStatusBar(): void {
+function refreshMemoryStatusBar(store: Store): void {
   if (memoryStatusBarItem === undefined) { return; }
   // [PROFILE-UI-GATE] Same switch as the declarative surfaces, applied in code.
   if (!memoryUiEnabled) { memoryStatusBarItem.hide(); return; }
 
   const debugging = vscode.debug.activeDebugSession?.type === "basilisk-debug";
-  const tracking = activeMemorySessionId !== undefined;
+  const tracking = store.profiler.value.memory === "active";
   if (!debugging && !tracking) {
     memoryStatusBarItem.hide();
     return;
@@ -415,7 +493,7 @@ function refreshMemoryStatusBar(): void {
     memoryStatusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
   } else {
     memoryStatusBarItem.text = "$(database) Memory";
-    memoryStatusBarItem.tooltip = "Basilisk: click to start memory tracking (pause at a breakpoint first)";
+    memoryStatusBarItem.tooltip = "Basilisk: click to start memory tracking (briefly pauses the program)";
     memoryStatusBarItem.backgroundColor = undefined;
   }
   memoryStatusBarItem.show();

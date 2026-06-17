@@ -20,23 +20,30 @@
 //! inherits an inaccessible working directory.
 
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use basilisk_profiler_protocol::{read_message, write_message, Command, Message};
-use tokio::io::BufReader;
+use basilisk_profiler_protocol::{
+    classify_attach_error, read_message, write_message, AttachErrorKind, Command, Message,
+};
+use tokio::io::{AsyncReadExt, BufReader};
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::UnixListener;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
 use tracing::{info, warn};
 
-use super::sampler::{SampleBatch, SamplerConfig, SamplerError, SamplerHandle};
+use super::sampler::{
+    sampler_error_from_kind, SampleBatch, SamplerConfig, SamplerError, SamplerHandle,
+};
 
-mod wire;
-pub use wire::build_elevation_script;
-use wire::{create_socket_path, to_pyspy_traces};
+mod launch;
+pub use launch::build_elevation_script;
+use launch::create_socket_path;
+
+use super::wire::to_pyspy_traces;
 
 /// How long to wait for the helper to connect back to the bound socket.
 const ACCEPT_TIMEOUT: Duration = Duration::from_secs(20);
@@ -46,6 +53,11 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(20);
 const STOP_POLL_INTERVAL: Duration = Duration::from_millis(50);
 /// How long to wait for the helper's final `stopped` after we send `stop`.
 const STOP_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long to wait for a dead helper's exit status and stderr while
+/// diagnosing a failed handshake (issue #81).
+const EXIT_DIAGNOSIS_TIMEOUT: Duration = Duration::from_secs(3);
+/// How many trailing stderr lines to surface in a handshake diagnosis.
+const STDERR_TAIL_LINES: usize = 5;
 /// Sample-batch channel depth (mirrors the in-process sampler).
 const SAMPLE_CHANNEL_DEPTH: usize = 256;
 
@@ -223,9 +235,12 @@ async fn handshake(
             )))
         }
         Err(_elapsed) => {
-            return Err(SamplerError::AttachFailed(
-                "timed out waiting for the profiler helper to connect".to_owned(),
-            ))
+            // The helper never connected — e.g. the user dismissed the macOS
+            // elevation prompt. Its exit status/stderr say why (issue #81).
+            let diagnosis = helper_exit_diagnosis(child).await;
+            return Err(SamplerError::AttachFailed(format!(
+                "timed out waiting for the profiler helper to connect ({diagnosis})"
+            )));
         }
     };
 
@@ -245,12 +260,10 @@ async fn handshake(
     let python_version =
         match timeout(HANDSHAKE_TIMEOUT, read_message::<_, Message>(&mut reader)).await {
             Ok(Ok(Some(Message::Attached { python, .. }))) => python,
-            Ok(Ok(Some(Message::AttachFailed { reason, .. }))) => {
-                // The helper reported the real cause (issue #81) — classify it
-                // into an actionable message instead of a bare EOF.
-                return Err(SamplerError::AttachFailed(classify_attach_failure(
-                    pid, &reason,
-                )));
+            // The helper reported WHY it failed — surface the real, classified
+            // cause instead of a generic attach error (issue #81).
+            Ok(Ok(Some(Message::Error { kind, message }))) => {
+                return Err(sampler_error_from_kind(kind, pid, message))
             }
             Ok(Ok(Some(Message::Samples { .. } | Message::Stopped))) => {
                 return Err(SamplerError::AttachFailed(
@@ -258,10 +271,15 @@ async fn handshake(
                 ))
             }
             Ok(Ok(None)) => {
-                // Clean EOF without an AttachFailed report (old helper binary
-                // or a crash): harvest the helper's exit status so the cause
-                // is at least partially diagnosable (issue #81).
-                return Err(SamplerError::AttachFailed(describe_helper_eof(child).await));
+                // Bare EOF (e.g. an old helper, or one killed before it could
+                // report) — reap it and surface exit status + stderr (issue #81).
+                let diagnosis = helper_exit_diagnosis(child).await;
+                let message =
+                    format!("helper closed the connection before confirming attach ({diagnosis})");
+                return Err(match classify_attach_error(&message) {
+                    AttachErrorKind::PermissionDenied => SamplerError::PermissionDenied(message),
+                    _ => SamplerError::AttachFailed(message),
+                });
             }
             Ok(Err(err)) => {
                 return Err(SamplerError::AttachFailed(format!(
@@ -269,9 +287,10 @@ async fn handshake(
                 )))
             }
             Err(_elapsed) => {
-                return Err(SamplerError::AttachFailed(
-                    "timed out waiting for the helper to confirm attach".to_owned(),
-                ))
+                let diagnosis = helper_exit_diagnosis(child).await;
+                return Err(SamplerError::AttachFailed(format!(
+                    "timed out waiting for the helper to confirm attach ({diagnosis})"
+                )));
             }
         };
 
@@ -284,56 +303,49 @@ async fn handshake(
     })
 }
 
-/// Map the helper's raw attach-failure reason to an actionable message.
-///
-/// Distinguishes the three failure modes from issue #81: target gone,
-/// permission denied (needs elevation), and any other py-spy attach error.
-fn classify_attach_failure(pid: u32, reason: &str) -> String {
-    let lowered = reason.to_lowercase();
-    if lowered.contains("no such process")
-        || lowered.contains("no process found")
-        || lowered.contains("process exited")
-        || lowered.contains("esrch")
-    {
-        return format!(
-            "target process (PID {pid}) is no longer running — it may have exited \
-             before the profiler could attach. Underlying error: {reason}"
-        );
+/// Reap a helper that failed the handshake and describe its exit status and
+/// trailing stderr — the diagnosable cause issue #81 demanded in place of a
+/// bare EOF. Kills the helper if it refuses to exit within the bounded wait.
+/// Implements [PROFILE-HELPER-PROTOCOL-ERRORS] (exit-diagnosis fallback).
+async fn helper_exit_diagnosis(mut child: tokio::process::Child) -> String {
+    let mut stderr_text = String::new();
+    if let Some(mut stderr) = child.stderr.take() {
+        let _ = timeout(
+            EXIT_DIAGNOSIS_TIMEOUT,
+            stderr.read_to_string(&mut stderr_text),
+        )
+        .await;
     }
-    if lowered.contains("permission denied")
-        || lowered.contains("operation not permitted")
-        || lowered.contains("task_for_pid")
-        || lowered.contains("access is denied")
-    {
-        return format!(
-            "permission denied attaching to PID {pid} — profiling another \
-             process requires elevated privileges on this platform. \
-             Underlying error: {reason}"
-        );
-    }
-    format!("helper could not attach to PID {pid}: {reason}")
-}
-
-/// Describe a helper that hit EOF before confirming attach, harvesting its
-/// exit status when it terminates promptly.
-async fn describe_helper_eof(mut child: tokio::process::Child) -> String {
-    let exit = timeout(Duration::from_secs(2), child.wait()).await;
-    match exit {
-        Ok(Ok(status)) => format!(
-            "helper closed the connection before confirming attach \
-             (helper exit status: {status}); check the helper's stderr in the log"
-        ),
-        Ok(Err(err)) => format!(
-            "helper closed the connection before confirming attach \
-             (could not read helper exit status: {err})"
-        ),
+    let status = match timeout(EXIT_DIAGNOSIS_TIMEOUT, child.wait()).await {
+        Ok(Ok(status)) => format!("helper exited with {status}"),
+        Ok(Err(err)) => format!("helper exit status unavailable: {err}"),
         Err(_elapsed) => {
             let _ = child.start_kill();
-            "helper closed the connection before confirming attach \
-             (helper still running; killed)"
-                .to_owned()
+            "helper did not exit".to_owned()
         }
+    };
+    let tail = stderr_tail(&stderr_text);
+    if tail.is_empty() {
+        status
+    } else {
+        format!("{status}; stderr: {tail}")
     }
+}
+
+/// The last few non-empty stderr lines, joined for a single-line diagnosis.
+fn stderr_tail(stderr: &str) -> String {
+    let lines: Vec<&str> = stderr
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    let skip = lines.len().saturating_sub(STDERR_TAIL_LINES);
+    lines
+        .iter()
+        .skip(skip)
+        .copied()
+        .collect::<Vec<_>>()
+        .join(" | ")
 }
 
 /// Spawn the helper process per the requested mode (detached — never awaited).
@@ -346,8 +358,11 @@ fn spawn_helper(
     socket_path: &Path,
 ) -> Result<tokio::process::Child, SamplerError> {
     match spawn {
+        // Stderr is piped so a failed handshake can surface the helper's own
+        // error output instead of an undiagnosable EOF (issue #81).
         HelperSpawn::Direct(path) => tokio::process::Command::new(path)
             .arg(socket_path)
+            .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()
             .map_err(|err| {
@@ -369,8 +384,11 @@ fn spawn_elevated(socket_path: &Path) -> Result<tokio::process::Child, SamplerEr
         &socket_path.display().to_string(),
     );
     info!(helper = %helper.display(), "spawning elevated profiler helper via osascript");
+    // Stderr is piped so an elevation failure (e.g. the user cancelling the
+    // privilege prompt) is surfaced with osascript's own message (issue #81).
     tokio::process::Command::new("osascript")
         .args(["-e", &script])
+        .stderr(Stdio::piped())
         .kill_on_drop(true)
         .spawn()
         .map_err(|err| {
@@ -473,11 +491,11 @@ async fn read_until_stopped(
                 }
             }
             Ok(Some(Message::Stopped) | None) => break,
-            Ok(Some(Message::Attached { .. })) => {}
-            Ok(Some(Message::AttachFailed { reason, .. })) => {
-                warn!(pid, %reason, "helper reported attach failure mid-stream");
+            Ok(Some(Message::Error { kind, message })) => {
+                warn!(?kind, %message, "helper reported an error during sampling");
                 break;
             }
+            Ok(Some(Message::Attached { .. })) => {}
             Err(err) => {
                 warn!(%err, "error reading from profiler helper");
                 break;

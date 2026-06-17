@@ -22,6 +22,13 @@
 //! LSP    -> {"cmd":"stop"}
 //! helper -> {"type":"stopped"}
 //! ```
+//!
+//! On failure the helper reports a structured error instead of silently
+//! closing the socket (issue #81 — a bare EOF is undiagnosable):
+//!
+//! ```text
+//! helper -> {"type":"error","kind":"process-not-found","message":"..."}
+//! ```
 
 use std::io::{Error, ErrorKind, Result};
 
@@ -57,15 +64,6 @@ pub enum Message {
         /// Detected Python version (e.g. `"3.12.0"`).
         python: String,
     },
-    /// The attach failed; carries the real cause so the LSP can diagnose it
-    /// (issue #81 — previously the helper exited without reporting and the
-    /// LSP saw only an undiagnosable EOF).
-    AttachFailed {
-        /// Target PID.
-        pid: u32,
-        /// Human-readable failure cause (e.g. the py-spy attach error).
-        reason: String,
-    },
     /// A batch of stack-trace samples from a single sampling tick.
     Samples {
         /// The sampled traces.
@@ -73,6 +71,58 @@ pub enum Message {
     },
     /// Sampling has stopped; the helper is about to exit.
     Stopped,
+    /// The helper failed (issue #81). Sent before exiting so the LSP can
+    /// surface the real cause instead of an undiagnosable EOF.
+    Error {
+        /// Coarse failure classification for editor-side error mapping.
+        kind: AttachErrorKind,
+        /// Human-readable cause (e.g. the underlying py-spy error).
+        message: String,
+    },
+}
+
+/// Why an attach failed, classified so each mode gets a distinct, actionable
+/// message ([PROFILE-ERRORS] maps these to LSP error codes).
+///
+/// Implements [PROFILE-HELPER-PROTOCOL-ERRORS]. See
+/// docs/specs/LSP-PROFILING-SPEC.md#PROFILE-HELPER-PROTOCOL-ERRORS
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum AttachErrorKind {
+    /// The target PID does not exist (or exited before attach).
+    ProcessNotFound,
+    /// The target exists but is not a Python process.
+    NotPython,
+    /// Attaching requires privileges the helper does not have.
+    PermissionDenied,
+    /// Any other attach failure.
+    AttachFailed,
+}
+
+/// Classify a py-spy attach error message into an [`AttachErrorKind`].
+///
+/// Shared by the in-process sampler and the elevated helper so both attach
+/// paths report identical, distinct failure modes (issue #81). Matching is
+/// lowercase substring because py-spy's wording varies across platforms
+/// (macOS: "Failed to open process - check if it is running.", Linux:
+/// "Failed to get process executable name. Check that the process is
+/// running.").
+#[must_use]
+pub fn classify_attach_error(message: &str) -> AttachErrorKind {
+    let lowered = message.to_lowercase();
+    if lowered.contains("permission") || lowered.contains("operation not permitted") {
+        AttachErrorKind::PermissionDenied
+    } else if lowered.contains("not a python") {
+        AttachErrorKind::NotPython
+    } else if lowered.contains("no such process")
+        || lowered.contains("not found")
+        || lowered.contains("check if it is running")
+        || lowered.contains("check that the process is running")
+    {
+        AttachErrorKind::ProcessNotFound
+    } else {
+        AttachErrorKind::AttachFailed
+    }
 }
 
 /// A single thread's stack trace, in wire form.
@@ -184,6 +234,64 @@ mod tests {
         let decoded: Option<Message> = read_message(&mut reader).await?;
         assert_eq!(decoded, Some(msg));
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn round_trips_error_message_with_kebab_case_kind() -> Result<()> {
+        let msg = Message::Error {
+            kind: AttachErrorKind::PermissionDenied,
+            message: "py-spy attach failed: Operation not permitted".to_owned(),
+        };
+        let mut buf: Vec<u8> = Vec::new();
+        write_message(&mut buf, &msg).await?;
+        let wire = String::from_utf8_lossy(&buf);
+        assert!(
+            wire.contains(r#""type":"error""#) && wire.contains(r#""kind":"permission-denied""#),
+            "error frames must be tagged and kebab-cased: {wire}"
+        );
+        let mut reader = BufReader::new(buf.as_slice());
+        let decoded: Option<Message> = read_message(&mut reader).await?;
+        assert_eq!(decoded, Some(msg));
+        Ok(())
+    }
+
+    #[test]
+    fn classifies_attach_errors_into_distinct_kinds() {
+        assert_eq!(
+            classify_attach_error("Operation not permitted (os error 1)"),
+            AttachErrorKind::PermissionDenied
+        );
+        assert_eq!(
+            classify_attach_error("Permission denied attaching to PID"),
+            AttachErrorKind::PermissionDenied
+        );
+        assert_eq!(
+            classify_attach_error("PID 7 is not a python process"),
+            AttachErrorKind::NotPython
+        );
+        assert_eq!(
+            classify_attach_error("No such process (os error 3)"),
+            AttachErrorKind::ProcessNotFound
+        );
+        assert_eq!(
+            classify_attach_error("Failed to open process - check if it is running."),
+            AttachErrorKind::ProcessNotFound
+        );
+        // py-spy's Linux wording for a dead PID.
+        assert_eq!(
+            classify_attach_error(
+                "Failed to get process executable name. Check that the process is running."
+            ),
+            AttachErrorKind::ProcessNotFound
+        );
+        assert_eq!(
+            classify_attach_error("PID 9 is Not a Python process"),
+            AttachErrorKind::NotPython
+        );
+        assert_eq!(
+            classify_attach_error("something exotic exploded"),
+            AttachErrorKind::AttachFailed
+        );
     }
 
     #[tokio::test]
