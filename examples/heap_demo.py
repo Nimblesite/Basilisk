@@ -7,11 +7,12 @@ alive in the module-global WAREHOUSE until the program exits. The run needs no
 breakpoint — Basilisk starts tracemalloc at the entry pause, runs to completion,
 and captures a final snapshot as the program exits ([PROFILE-MEMORY-FINAL]).
 
-Why this makes a good `.heapprofile`: the built-in viewer groups allocations by
-*line* (`statistics('lineno')`), so every distinct allocation line below becomes
-its own slice. With big buffers, medium columns, and a long tail of small
-structures, the flame chart and the Self-Size table fill with real, varied
-entries instead of a single dominant bar:
+Why this makes a good `.heapprofile`: Basilisk filters the debugger's own
+allocations out and keeps each allocation's full call stack, so the viewer shows
+a real call tree of *your* code — `warm_cache` branching into each builder below,
+down to the line that allocated. With big buffers, medium columns, and a long
+tail of small structures, the flame chart and the Self-Size table fill with real,
+varied entries instead of a single dominant bar:
 
     allocate_frame_buffers -> a few large contiguous bytearrays (the wide bars)
     build_*_series         -> medium lists of numbers (the mid bars)

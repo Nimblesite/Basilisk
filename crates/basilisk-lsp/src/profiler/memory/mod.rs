@@ -64,7 +64,8 @@ pub struct AllocationSite {
     pub size: u64,
     /// Number of live objects allocated at this site.
     pub count: u64,
-    /// Allocation traceback (deepest frame first).
+    /// Allocation call stack, root frame first (oldest call) → leaf last (the
+    /// allocation site). Empty when no traceback was captured.
     pub traceback: Vec<diff::TraceFrame>,
 }
 

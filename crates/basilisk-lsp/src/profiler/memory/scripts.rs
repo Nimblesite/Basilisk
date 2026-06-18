@@ -86,28 +86,73 @@ def _basilisk_emit(_payload):
 
 /// Python `def _basilisk_snapshot_payload(_max_stats)` returning the
 /// `__BASILISK_MEM__ + json` snapshot payload string from the current
-/// `tracemalloc` state (top allocations by line, current/peak memory, gc stats).
+/// `tracemalloc` state (top allocations with full call stacks, current/peak
+/// memory, gc stats).
 ///
 /// Single source of truth for the snapshot payload, embedded by both the
 /// evaluate-path snapshot ([`take_snapshot`]) and the at-exit final snapshot
 /// ([`start_tracemalloc`]'s `atexit` hook), so both emit a byte-identical
 /// payload the same `basilisk.memory.ingest` parser dispatches. Defined as a
 /// plain `&'static str` (no `format!`) so the dict-literal braces stay literal.
+///
+/// Two deliberate choices make the resulting `.heapprofile` worth reading
+/// ([PROFILE-MEMORY-FINAL]):
+/// 1. `filter_traces` drops allocations whose site is the debugger or the
+///    snapshot machinery (pydevd/debugpy/tracemalloc/`<frozen>`/`<string>`), so
+///    the profile is the *user's* program — code that merely runs under the
+///    debugger keeps its allocations (the leaf frame decides).
+/// 2. `statistics('traceback')` keeps each allocation's full call stack (the
+///    `take_snapshot(25)` depth), root→leaf, with the debugger/runtime glue
+///    stripped — so the editor builds a real call tree, not a flat list.
 fn snapshot_payload_fn() -> &'static str {
     r"
 def _basilisk_snapshot_payload(_max_stats):
-    import tracemalloc, json, gc
-    snapshot = tracemalloc.take_snapshot()
-    stats = snapshot.statistics('lineno')
+    import tracemalloc, json, gc, sysconfig, os
+    _stdlib = sysconfig.get_paths().get('stdlib') or ''
+    def _is_runtime_glue(_fn):
+        # Anchored basename match (never a full-path substring, so a user file/dir
+        # like debugpy_utils/app.py is NOT mistaken for the debugger), plus an
+        # exact path-segment match for the debugger's own package files whose
+        # basename isn't pydevd*/debugpy* (e.g. debugpy/server/api.py).
+        _base = os.path.basename(_fn)
+        _segs = _fn.replace(os.sep, '/').split('/')
+        return (_base.startswith(('pydevd', 'debugpy', '_pydev'))
+                or _base == 'tracemalloc.py'
+                or 'debugpy' in _segs or 'pydevd' in _segs)
+    def _is_stdlib_only(_fn):
+        # Stdlib proper (not site-/dist-packages): the debugger's comm thread
+        # bottoms out here, but a user's own stdlib use always has a user frame too.
+        return bool(_stdlib) and _fn.startswith(_stdlib) and 'site-packages' not in _fn and 'dist-packages' not in _fn
+    snapshot = tracemalloc.take_snapshot().filter_traces((
+        tracemalloc.Filter(False, '*pydevd*'),
+        tracemalloc.Filter(False, '*debugpy*'),
+        tracemalloc.Filter(False, '*_pydev*'),
+        tracemalloc.Filter(False, '*<frozen *'),
+        tracemalloc.Filter(False, '<string>'),
+        tracemalloc.Filter(False, '*tracemalloc.py'),
+    ))
+    stats = snapshot.statistics('traceback')
     top_stats = []
     for stat in stats[:_max_stats]:
-        frame = stat.traceback[0]
+        frames = []
+        has_user = False
+        for _f in stat.traceback:
+            _fn = _f.filename
+            if _is_runtime_glue(_fn) or _fn.startswith('<'):
+                continue
+            frames.append({'file': _fn, 'line': _f.lineno})
+            if not _is_stdlib_only(_fn):
+                has_user = True
+        # Drop pure debugger/runtime noise (no user or library frame survives).
+        if not frames or not has_user:
+            continue
+        _leaf = frames[-1]
         top_stats.append({
-            'file': frame.filename,
-            'line': frame.lineno,
+            'file': _leaf['file'],
+            'line': _leaf['line'],
             'size': stat.size,
             'count': stat.count,
-            'traceback': [{'file': f.filename, 'line': f.lineno} for f in stat.traceback]
+            'traceback': frames,
         })
     current, peak = tracemalloc.get_traced_memory()
     return '__BASILISK_MEM__' + json.dumps({
@@ -483,6 +528,49 @@ mod tests {
         // through to it rather than inlined as a literal slice.
         assert!(script.contains("stats[:_max_stats]"));
         assert!(script.contains("_basilisk_snapshot_payload(500)"));
+    }
+
+    #[test]
+    fn snapshot_keeps_full_call_stacks_and_filters_the_debugger() {
+        // [PROFILE-MEMORY-FINAL] The .heapprofile is only worth reading if it's
+        // the user's program (not pydevd/debugpy/tracemalloc) and carries real
+        // call stacks (not a flat by-line list). Lock both in.
+        let script = take_snapshot(100);
+        assert!(
+            script.contains("statistics('traceback')"),
+            "must keep full tracebacks for a real call tree, not statistics('lineno'): {script}"
+        );
+        assert!(
+            script.contains("filter_traces"),
+            "must filter the debugger/snapshot machinery out of the profile: {script}"
+        );
+        for noise in ["*pydevd*", "*debugpy*", "*tracemalloc.py"] {
+            assert!(
+                script.contains(noise),
+                "must exclude {noise} allocations: {script}"
+            );
+        }
+        // The allocation site is the LEAF frame (frames are root->leaf), not [0].
+        assert!(
+            script.contains("_leaf = frames[-1]"),
+            "the reported site must be the leaf (allocation) frame: {script}"
+        );
+        // Per-frame stripping must match the basename ANCHORED, never an
+        // unanchored full-path substring — else a user file in a dir like
+        // `debugpy_utils/` would be silently deleted from the call tree.
+        assert!(
+            script.contains("startswith(('pydevd', 'debugpy', '_pydev'))"),
+            "frame stripping must use anchored basename matching: {script}"
+        );
+        assert!(
+            !script.contains("'pydevd' in _fn"),
+            "frame stripping must NOT use an unanchored full-path substring match: {script}"
+        );
+        // Pure debugger/runtime stacks (no user or library frame) are dropped.
+        assert!(
+            script.contains("not has_user"),
+            "must drop allocations with no surviving user/library frame: {script}"
+        );
     }
 
     #[test]

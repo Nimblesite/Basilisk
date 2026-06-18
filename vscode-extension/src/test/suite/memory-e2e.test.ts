@@ -128,6 +128,25 @@ async function memoryRoundTrip<T extends IngestResult>(
   return ingested;
 }
 
+/** A node in the V8 `.heapprofile` call tree. */
+interface HeapNode {
+  callFrame?: { url?: string };
+  children?: HeapNode[];
+}
+
+/** Depth of the heapprofile call tree (root counts as 1). */
+function heapTreeDepth(node: HeapNode): number {
+  const children = node.children ?? [];
+  return 1 + children.reduce((deepest, child) => Math.max(deepest, heapTreeDepth(child)), 0);
+}
+
+/** Every `callFrame.url` in the heapprofile tree. */
+function heapNodeUrls(node: HeapNode): string[] {
+  const here = node.callFrame?.url;
+  const childUrls = (node.children ?? []).flatMap(heapNodeUrls);
+  return here !== undefined && here !== "" ? [here, ...childUrls] : childUrls;
+}
+
 /** Assert the snapshot's user-facing surface: heapprofile artifact + purple track. */
 function assertSnapshotSurface(snapshot: MemorySnapshotResult & IngestResult): void {
   assert.ok(snapshot.currentMemory > 0, "tracemalloc must report live memory");
@@ -141,10 +160,22 @@ function assertSnapshotSurface(snapshot: MemorySnapshotResult & IngestResult): v
   const heapProfilePath = snapshot.heapProfilePath;
   assert.ok(typeof heapProfilePath === "string" && heapProfilePath !== "", "heapProfilePath must be returned");
   assert.ok(fs.existsSync(heapProfilePath), ".heapprofile must be written to disk");
-  const heapprofile = JSON.parse(fs.readFileSync(heapProfilePath, "utf8")) as {
-    head?: { children?: unknown[]; selfSize?: number };
-  };
+  const heapprofile = JSON.parse(fs.readFileSync(heapProfilePath, "utf8")) as { head?: HeapNode };
   assert.ok(heapprofile.head !== undefined, ".heapprofile must have a head tree");
+
+  // [PROFILE-MEMORY-FINAL] The profile must be a real call tree of the USER's
+  // program — genuine depth (not a flat by-line list) and zero debugger frames.
+  const head = heapprofile.head;
+  assert.ok(heapTreeDepth(head) >= 3, `the .heapprofile must be a real call tree with depth, got depth ${heapTreeDepth(head)}`);
+  const urls = heapNodeUrls(head);
+  assert.ok(
+    urls.some((url) => url.endsWith("memory_growth.py")),
+    "the user's program must appear in the call tree",
+  );
+  assert.ok(
+    !urls.some((url) => /pydevd|debugpy|_pydev|tracemalloc\.py|<frozen|<string>/.test(url)),
+    `the call tree must be filtered of debugger/runtime frames, got: ${[...new Set(urls)].map((u) => path.basename(u)).join(", ")}`,
+  );
 
   // The purple memory track is really painted ([PROFILE-VIS-HEATMAP]).
   applyMemoryDecorations(snapshot);

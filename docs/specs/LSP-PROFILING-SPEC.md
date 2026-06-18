@@ -887,6 +887,32 @@ The injected path is embedded as a JSON-encoded Python string literal (the same
 cross-platform-safe pattern as the cooperative sampler, [#PROFILE-COOPERATIVE]),
 so a Windows backslash or a quote in `TMPDIR` cannot break the script.
 
+**The snapshot is the user's program, as a real call tree.** Two choices in the
+snapshot script (`snapshot_payload_fn`) make the `.heapprofile` worth reading
+rather than merely valid:
+
+1. **Noise filtering.** `tracemalloc` traces the *whole* process, so a naive
+   snapshot is dominated by the debugger's own allocations (pydevd/debugpy) and
+   the snapshot machinery (`tracemalloc`, `<frozen …>`, `<string>`). The script
+   `filter_traces` drops any allocation whose **site** is one of those, then on
+   each kept stack strips debugger/runtime frames — matching the **basename**
+   (anchored, e.g. `pydevd*`) or an exact **path segment** (`debugpy`/`pydevd`),
+   never an unanchored full-path substring, so a user file or directory such as
+   `debugpy_utils/app.py` is never mistaken for the debugger. An allocation is
+   dropped entirely when nothing but stdlib-proper frames survive (a pure
+   debugger/runtime stack reached via a stdlib leaf); user code **and the
+   libraries it calls** (site-/dist-packages) are kept. Without this, ~two-thirds
+   of the slices are instrumentation, crowding out the user's own.
+2. **Full call stacks.** The script uses `statistics('traceback')` (not
+   `'lineno'`), so each allocation carries its whole call stack
+   (`tracemalloc.start(25)` depth), ordered root→leaf, with the leaf as the
+   reported allocation site. The heapprofile builder
+   ([`heapprofile.rs`](../../crates/basilisk-lsp/src/profiler/memory/heapprofile.rs))
+   merges shared prefixes into a genuine call tree (a flame graph with depth),
+   `selfSize` accruing at each leaf, and labels each frame with its source line
+   (basename fallback) — so the chart reads like the code instead of a flat
+   one-level bar list.
+
 Covered end-to-end by the "Run & Track Memory (Current File): the run finalises
 into a visible memory result on session end (#146)" test (asserts the at-exit
 snapshot paints the allocation track after a breakpoint-free run exits) and the
