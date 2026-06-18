@@ -1,14 +1,13 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Calls And Reveal visitor functions.
 
-use ruff_python_ast::{ExceptHandler, Expr, Stmt};
+use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
 use crate::scope::{AssertTypeCallInfo, CallSite, RevealTypeCallInfo, RhsKind, Span, TypeArg};
 
 use super::class_info_ext::expr_simple_name;
 use super::core::{classify_rhs, source_slice_range, text_range_to_span, types_match};
-use super::function_info::build_param_scope_owned;
 use super::type_alias::is_user_defined_type_alias;
 use super::typeddict::{normalize_type_str, resolve_actual_type};
 use super::unhashable::collect_unhashable_hash_calls_from_expr;
@@ -163,125 +162,24 @@ pub(super) fn expr_to_type_arg(expr: &Expr) -> TypeArg {
 /// For each base class that is a subscript expression (e.g. `Base[T, int]`),
 /// produces an entry with the base name, flat type argument names, rich
 /// structured type args, and the source span.
+/// Collect every `assert_type(...)` call in `stmts`, applying flow-sensitive
+/// narrowing so post-guard assertions compare against the narrowed type.
+///
+/// Delegates to [`super::assert_narrow`]; see that module for the narrowing
+/// rules ([BSK-E0053]).
 pub(crate) fn collect_assert_type_calls_from_stmts(
     stmts: &[Stmt],
-    params: &[(&str, &str)],
     source: &str,
 ) -> Vec<AssertTypeCallInfo> {
-    let mut out = Vec::new();
-    for stmt in stmts {
-        collect_assert_type_calls_from_stmt(stmt, params, source, &mut out);
-    }
-    out
+    super::assert_narrow::collect(stmts, source)
 }
 
-pub(super) fn collect_assert_type_calls_from_stmt(
-    stmt: &Stmt,
-    params: &[(&str, &str)],
-    source: &str,
-    out: &mut Vec<AssertTypeCallInfo>,
-) {
-    match stmt {
-        Stmt::Expr(node) => {
-            if let Expr::Call(call) = node.value.as_ref() {
-                let is_assert_type =
-                    expr_simple_name(&call.func).is_some_and(|n| n == "assert_type");
-                if is_assert_type {
-                    out.push(build_assert_type_call_info(call, params, source));
-                }
-            }
-        }
-        Stmt::FunctionDef(func) => {
-            // Build new param scope for the function body.
-            let new_params: Vec<(String, String)> =
-                build_param_scope_owned(&func.parameters, source);
-            let borrowed: Vec<(&str, &str)> = new_params
-                .iter()
-                .map(|(k, v)| (k.as_str(), v.as_str()))
-                .collect();
-            out.extend(collect_assert_type_calls_from_stmts(
-                &func.body, &borrowed, source,
-            ));
-        }
-        Stmt::ClassDef(cls) => {
-            // Class bodies may contain methods; pass empty params at class level.
-            out.extend(collect_assert_type_calls_from_stmts(&cls.body, &[], source));
-        }
-        Stmt::If(node) => {
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.body, params, source,
-            ));
-            for elif_else in &node.elif_else_clauses {
-                out.extend(collect_assert_type_calls_from_stmts(
-                    &elif_else.body,
-                    params,
-                    source,
-                ));
-            }
-        }
-        Stmt::For(node) => {
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.body, params, source,
-            ));
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.orelse,
-                params,
-                source,
-            ));
-        }
-        Stmt::While(node) => {
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.body, params, source,
-            ));
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.orelse,
-                params,
-                source,
-            ));
-        }
-        Stmt::With(node) => {
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.body, params, source,
-            ));
-        }
-        Stmt::Try(node) => {
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.body, params, source,
-            ));
-            for handler in &node.handlers {
-                let ExceptHandler::ExceptHandler(h) = handler;
-                out.extend(collect_assert_type_calls_from_stmts(
-                    &h.body, params, source,
-                ));
-            }
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.orelse,
-                params,
-                source,
-            ));
-            out.extend(collect_assert_type_calls_from_stmts(
-                &node.finalbody,
-                params,
-                source,
-            ));
-        }
-        Stmt::Match(node) => {
-            for case in &node.cases {
-                out.extend(collect_assert_type_calls_from_stmts(
-                    &case.body, params, source,
-                ));
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Build the parameter scope for a function: a list of `(param_name, annotation_text)` pairs.
-///
-/// Parameters without annotations are excluded (no annotation text to compare against).
+/// Build an [`AssertTypeCallInfo`] from a single `assert_type(...)` call,
+/// resolving the first argument's type against the (possibly narrowed)
+/// parameter environment `params`.
 pub(super) fn build_assert_type_call_info(
     call: &ruff_python_ast::ExprCall,
-    params: &[(&str, &str)],
+    params: &std::collections::HashMap<String, String>,
     source: &str,
 ) -> AssertTypeCallInfo {
     let arg_count = call.arguments.args.len();

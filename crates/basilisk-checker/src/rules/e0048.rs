@@ -579,6 +579,13 @@ fn check_alias_parameterization(
 ) {
     let source = &module.source;
     let path = &module.path;
+    // Names of declared TypeVars: a TypeVar used as a type argument defers its
+    // bound to the use site and must not be bound-checked as a concrete type.
+    let typevar_names: std::collections::HashSet<&str> = module
+        .typevar_calls
+        .iter()
+        .map(|tv| tv.name.as_str())
+        .collect();
 
     // Check function parameter annotations
     for func in &module.functions {
@@ -593,7 +600,7 @@ fn check_alias_parameterization(
                 continue;
             };
             let ann_text = ann_text.trim();
-            check_single_annotation(ann_text, ann_span, alias_map, path, diagnostics);
+            check_single_annotation(ann_text, ann_span, alias_map, path, &typevar_names, diagnostics);
         }
     }
 
@@ -606,7 +613,7 @@ fn check_alias_parameterization(
             continue;
         };
         let ann_text = ann_text.trim();
-        check_single_annotation(ann_text, ann_span, alias_map, path, diagnostics);
+        check_single_annotation(ann_text, ann_span, alias_map, path, &typevar_names, diagnostics);
     }
 }
 
@@ -616,6 +623,7 @@ fn check_single_annotation(
     ann_span: Span,
     alias_map: &std::collections::HashMap<String, AliasInfo>,
     path: &str,
+    typevar_names: &std::collections::HashSet<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let base = annotation_base_name(ann_text);
@@ -693,6 +701,10 @@ fn check_single_annotation(
                 for (idx, arg) in args.iter().enumerate() {
                     if let Some((tv_name, Some(bound))) = info.typevar_bounds.get(idx) {
                         let arg_trimmed = arg.trim();
+                        // A TypeVar argument defers its bound to the use site.
+                        if typevar_names.contains(arg_trimmed) {
+                            continue;
+                        }
                         if !is_assignable_to_bound(arg_trimmed, bound) {
                             diagnostics.push(error_diagnostic_owned(
                                 CODE.clone(),

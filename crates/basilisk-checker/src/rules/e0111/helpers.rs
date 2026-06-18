@@ -217,6 +217,30 @@ pub(super) fn resolve_string_annotation(annotation: &str) -> String {
     }
 }
 
+/// Substitute each `TypeVar` name in `annotation` with its concrete binding,
+/// matching whole identifier tokens only (so `T` in `T | None` is replaced but
+/// the `T` inside `Type` is not). Example: `T | None` with `{T: int}` → `int | None`.
+fn substitute_typevars(annotation: &str, substitutions: &HashMap<&str, &str>) -> String {
+    let mut result = String::with_capacity(annotation.len());
+    let mut ident = String::new();
+    let flush = |ident: &mut String, result: &mut String| {
+        if !ident.is_empty() {
+            result.push_str(substitutions.get(ident.as_str()).copied().unwrap_or(ident));
+            ident.clear();
+        }
+    };
+    for ch in annotation.chars() {
+        if ch.is_alphanumeric() || ch == '_' {
+            ident.push(ch);
+        } else {
+            flush(&mut ident, &mut result);
+            result.push(ch);
+        }
+    }
+    flush(&mut ident, &mut result);
+    result
+}
+
 /// Extract type argument texts from a subscript slice expression.
 pub(super) fn extract_type_args_text(slice: &ruff_python_ast::Expr, source: &str) -> Vec<String> {
     use ruff_python_ast::Expr;
@@ -390,12 +414,9 @@ pub(super) fn check_init_method_args(
 
         let ann_trimmed = ann_text.trim();
 
-        // Substitute type parameters in the annotation.
-        let resolved_type = if let Some(replacement) = substitutions.get(ann_trimmed) {
-            (*replacement).to_owned()
-        } else {
-            ann_trimmed.to_owned()
-        };
+        // Substitute type parameters in the annotation (handles composite forms
+        // such as `T | None`, where the whole string is not a substitution key).
+        let resolved_type = substitute_typevars(ann_trimmed, substitutions);
 
         // If the resolved type is still a TypeVar name (function-scoped, not
         // class-scoped), it can accept any type — skip the check.

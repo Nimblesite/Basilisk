@@ -57,6 +57,7 @@ impl Rule for AssignmentTypeMismatch {
             typeddict: collect_typeddict_names(module),
             typeddict_extra_items: collect_extra_items_typeddict_names(module),
             type_alias: collect_type_alias_names(module),
+            type_alias_type: collect_type_alias_type_names(module),
             value_aliases: alias_match::collect_union_aliases(module),
         };
         let call_index = callable_check::build_index(module);
@@ -164,9 +165,23 @@ struct SkipNames {
     typeddict_extra_items: std::collections::HashSet<String>,
     /// PEP 695 type alias names (lowercase).
     type_alias: std::collections::HashSet<String>,
+    /// `TypeAliasType(...)` call LHS names (lowercase).
+    type_alias_type: std::collections::HashSet<String>,
     /// Legacy `Name = Union[...]` value aliases (lowercase → definition), used
     /// for recursive-alias value matching.
     value_aliases: std::collections::HashMap<String, InferredType>,
+}
+
+/// Collect names defined via `Name = TypeAliasType(...)` (lowercase).
+///
+/// E0014 cannot evaluate an expanded `TypeAliasType` alias, so assignments whose
+/// declared type references such an alias are skipped to avoid false positives.
+fn collect_type_alias_type_names(module: &ResolvedModule) -> std::collections::HashSet<String> {
+    module
+        .type_alias_type_calls
+        .iter()
+        .map(|call| call.lhs_name.to_ascii_lowercase())
+        .collect()
 }
 
 /// Names of `TypedDict` classes declaring `extra_items=` (lowercase).
@@ -254,12 +269,14 @@ fn check_vars(
                 }
             }
 
-            // Skip annotations that reference a PEP 695 type alias. E0014 cannot
-            // evaluate the expanded alias type, so any assignment check would be
-            // unreliable and produce false positives.
+            // Skip annotations that reference a PEP 695 type alias or a
+            // `TypeAliasType(...)` alias. E0014 cannot evaluate the expanded alias
+            // type, so any assignment check would be unreliable (false positives).
             if let InferredType::Named(ref name) = declared_type {
                 let base = name.split('[').next().unwrap_or(name);
-                if skip.type_alias.contains(base) {
+                if skip.type_alias.contains(base)
+                    || skip.type_alias_type.contains(&base.to_ascii_lowercase())
+                {
                     return None;
                 }
             }

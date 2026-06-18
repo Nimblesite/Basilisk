@@ -16,7 +16,9 @@ use super::class_info_ext::{
     match_stmt_info_from,
 };
 use super::function_info::function_info_from;
-use super::typeddict::{td_check_subscript_assign, td_var_type_from_stmts, TdFieldMap};
+use super::typeddict::{
+    canonicalize_type_str, td_check_subscript_assign, td_var_type_from_stmts, TdFieldMap,
+};
 use super::typeddict_ext::{td_check_ann_assign, td_check_expr_reads, td_check_regular_assign};
 
 pub(super) fn collect_from_body(
@@ -370,13 +372,18 @@ pub(super) fn types_match(actual: &str, expected: &str) -> bool {
         }
     }
 
-    false
+    // Equivalent-spelling fallback: `Union[a, b]` == `a | b`, and fixed unpacked
+    // tuples flatten (`tuple[int, *tuple[bool, bool], str]` == `tuple[int, bool, bool, str]`).
+    // Order is preserved, so genuinely different types (e.g. `int` vs `int | str`)
+    // stay distinct. See [BSK-E0053].
+    canonicalize_type_str(actual) == canonicalize_type_str(expected)
 }
 
 /// Recursively check if an expression contains `ReadOnly`.
 pub(super) fn check_td_stmts(
     fields: &TdFieldMap<'_>,
     var_type: &std::collections::HashMap<String, String>,
+    final_consts: &std::collections::HashMap<String, String>,
     stmts: &[Stmt],
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
@@ -386,12 +393,12 @@ pub(super) fn check_td_stmts(
             Stmt::Assign(node) => {
                 td_check_subscript_assign(node, var_type, fields, out);
                 td_check_regular_assign(node, var_type, fields, out);
-                td_check_expr_reads(&node.value, var_type, fields, out);
+                td_check_expr_reads(&node.value, var_type, fields, final_consts, out);
             }
             Stmt::AnnAssign(node) => {
                 td_check_ann_assign(node, fields, out);
                 if let Some(val) = &node.value {
-                    td_check_expr_reads(val, var_type, fields, out);
+                    td_check_expr_reads(val, var_type, fields, final_consts, out);
                 }
             }
             Stmt::Expr(expr_stmt) => {
@@ -423,7 +430,7 @@ pub(super) fn check_td_stmts(
                         }
                     }
                 }
-                td_check_expr_reads(&expr_stmt.value, var_type, fields, out);
+                td_check_expr_reads(&expr_stmt.value, var_type, fields, final_consts, out);
             }
             Stmt::Delete(del) => {
                 // `del td[k]` is only an error when `k` is a literal naming a
@@ -476,7 +483,7 @@ pub(super) fn check_td_stmts(
                         }
                     }
                 }
-                check_td_stmts(fields, &local_vars, &func.body, out);
+                check_td_stmts(fields, &local_vars, final_consts, &func.body, out);
             }
             _ => {}
         }

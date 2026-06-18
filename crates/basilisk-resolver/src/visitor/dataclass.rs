@@ -352,6 +352,20 @@ pub(super) fn resolve_transform_field_attrs(
 // Function info
 // ---------------------------------------------------------------------------
 
+/// Returns `true` when `class` carries a `@dataclass` / `@dataclass(...)` /
+/// `@dataclasses.dataclass` decorator. Used to recognize that the synthesized
+/// `__init__` assigns every (non-`ClassVar`) field, so a `Final` field without an
+/// inline default is valid (it becomes a required constructor parameter).
+pub(super) fn is_dataclass_decorated(class: &StmtClassDef) -> bool {
+    class.decorator_list.iter().any(|dec| {
+        let expr = match &dec.expression {
+            Expr::Call(call) => call.func.as_ref(),
+            other => other,
+        };
+        super::walks::is_name_or_attr_named(expr, "dataclass")
+    })
+}
+
 pub(super) fn dataclass_flag(class: &StmtClassDef, key: &str) -> bool {
     for dec in &class.decorator_list {
         let Expr::Call(call) = &dec.expression else {
