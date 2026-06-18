@@ -698,26 +698,14 @@ impl Interpreter {
         if let Expr::Attribute(attr) = call.func.as_ref() {
             let obj = self.eval_expr(&attr.value, env)?;
             let method_name = attr.attr.as_str();
-            let args: Result<Vec<Value>, _> = call
-                .arguments
-                .args
-                .iter()
-                .map(|a| self.eval_expr(a, env))
-                .collect();
-            let args = args?;
+            let args = self.eval_call_args(call, env)?;
             return self.call_method(&obj, method_name, &args, env, &attr.value);
         }
 
         // Handle builtin function names before evaluating the callable
         // (builtins like `print` are not stored in the environment)
         if let Expr::Name(name) = call.func.as_ref() {
-            let args: Result<Vec<Value>, _> = call
-                .arguments
-                .args
-                .iter()
-                .map(|a| self.eval_expr(a, env))
-                .collect();
-            let args = args?;
+            let args = self.eval_call_args(call, env)?;
             if let Some(result) = self.try_builtin(name.id.as_str(), &args, env)? {
                 return Ok(result);
             }
@@ -728,14 +716,21 @@ impl Interpreter {
 
         // Evaluate the callable
         let func_val = self.eval_expr(&call.func, env)?;
-        let args: Result<Vec<Value>, _> = call
-            .arguments
+        let args = self.eval_call_args(call, env)?;
+        self.call_value(&func_val, &args, env)
+    }
+
+    /// Evaluate the positional arguments of a call expression in order.
+    fn eval_call_args(
+        &mut self,
+        call: &ast::ExprCall,
+        env: &mut Env,
+    ) -> Result<Vec<Value>, CompileError> {
+        call.arguments
             .args
             .iter()
             .map(|a| self.eval_expr(a, env))
-            .collect();
-        let args = args?;
-        self.call_value(&func_val, &args, env)
+            .collect()
     }
 
     fn call_value(

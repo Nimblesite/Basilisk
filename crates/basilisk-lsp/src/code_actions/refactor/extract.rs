@@ -6,7 +6,8 @@ use std::collections::HashMap;
 
 use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit, Url};
 
-use super::helpers::{last_import_line, leading_indent_of_line, selected_text};
+use super::super::last_import_line;
+use super::helpers::{leading_indent_of_line, selected_text};
 
 /// Offer to extract the selected expression into a local variable.
 ///

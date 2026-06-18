@@ -63,6 +63,16 @@ use crate::workspace::WorkspaceIndex;
 /// Debounce interval for file-watcher notifications (milliseconds).
 pub(super) const FILE_WATCHER_DEBOUNCE_MS: u64 = 200;
 
+/// The JSON-RPC error returned when a command needs a workspace root but none
+/// is available. Shared by the uv and stub command handlers.
+pub(super) fn no_workspace_root_error() -> tower_lsp::jsonrpc::Error {
+    tower_lsp::jsonrpc::Error {
+        code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32010),
+        message: "No workspace root available".into(),
+        data: None,
+    }
+}
+
 /// Debounce interval for `basilisk/moduleChanged` notifications (milliseconds).
 pub(super) const MODULE_CHANGED_DEBOUNCE_MS: u64 = 300;
 

@@ -63,18 +63,6 @@ pub(super) fn leading_indent_of_line(source: &str, line: u32) -> String {
         .unwrap_or_default()
 }
 
-/// Return the 0-based line number after the last import statement.
-pub(super) fn last_import_line(source: &str) -> u32 {
-    let mut insert_line: u32 = 0;
-    for (idx, line) in source.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
-            insert_line = u32::try_from(idx + 1).unwrap_or(u32::MAX);
-        }
-    }
-    insert_line
-}
-
 /// Find the position of the closing `]` that matches the bracket at `start`.
 pub(super) fn find_matching_bracket(text: &str, start: usize) -> Option<usize> {
     let mut depth: u32 = 1;
@@ -192,6 +180,74 @@ pub(super) fn byte_offset_to_line(source: &str, offset: u32) -> u32 {
         .min(source.len());
     let before = source.get(..offset_usize).unwrap_or(source);
     u32::try_from(before.chars().filter(|&c| c == '\n').count()).unwrap_or(u32::MAX)
+}
+
+/// Split `text` at top-level commas, respecting bracket/paren/brace nesting.
+///
+/// When `drop_trailing_empty` is set, a final whitespace-only segment is
+/// omitted (used by `.format()` argument splitting); otherwise every segment
+/// is returned, including a trailing empty one.
+pub(super) fn split_top_level_commas(text: &str, drop_trailing_empty: bool) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth: u32 = 0;
+    let mut start = 0;
+
+    for (idx, ch) in text.char_indices() {
+        match ch {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                if let Some(part) = text.get(start..idx) {
+                    parts.push(part);
+                }
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    if let Some(part) = text.get(start..) {
+        if !drop_trailing_empty || !part.trim().is_empty() {
+            parts.push(part);
+        }
+    }
+    parts
+}
+
+/// Build a `CodeAction` with a single text edit spanning one line.
+pub(super) fn build_single_line_action(
+    uri: &Url,
+    line_num: u32,
+    start_char: u32,
+    end_char: u32,
+    new_text: String,
+    title: &str,
+) -> CodeAction {
+    let edit_range = Range {
+        start: Position {
+            line: line_num,
+            character: start_char,
+        },
+        end: Position {
+            line: line_num,
+            character: end_char,
+        },
+    };
+
+    let mut changes = HashMap::new();
+    let _ = changes.insert(
+        uri.clone(),
+        vec![TextEdit {
+            range: edit_range,
+            new_text,
+        }],
+    );
+
+    super::super::code_action_with_changes(
+        title.to_owned(),
+        CodeActionKind::REFACTOR_REWRITE,
+        changes,
+        false,
+    )
 }
 
 // ── Workspace edit builder ──────────────────────────────────────────────────

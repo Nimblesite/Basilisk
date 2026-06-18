@@ -75,7 +75,9 @@ pub(super) fn extract_typevars_from_generic_base(line: &str) -> std::collections
             if let Some(end) = after.find(']') {
                 let params = &after[..end];
                 for param in params.split(',') {
-                    let trimmed = param.trim();
+                    // Strip a leading `*` from a `TypeVarTuple` parameter (PEP 646)
+                    // so `Generic[*Ts]` binds `Ts` to match its use in annotations.
+                    let trimmed = param.trim().strip_prefix('*').unwrap_or(param.trim());
                     if !trimmed.is_empty()
                         && trimmed
                             .chars()
@@ -140,7 +142,11 @@ pub(super) fn extract_pep695_type_params(class_line: &str) -> std::collections::
 
     inner[..close]
         .split(',')
-        .map(|s| s.trim().to_owned())
+        .map(|s| {
+            // Strip a leading `*` from a `TypeVarTuple` parameter (PEP 646).
+            let trimmed = s.trim();
+            trimmed.strip_prefix('*').unwrap_or(trimmed).to_owned()
+        })
         .filter(|s| !s.is_empty())
         .collect()
 }
@@ -177,7 +183,11 @@ pub(super) fn extract_pep695_type_params_ordered(class_line: &str) -> Vec<String
 
     inner[..close]
         .split(',')
-        .map(|s| s.trim().to_owned())
+        .map(|s| {
+            // Strip a leading `*` from a `TypeVarTuple` parameter (PEP 646).
+            let trimmed = s.trim();
+            trimmed.strip_prefix('*').unwrap_or(trimmed).to_owned()
+        })
         .filter(|s| !s.is_empty())
         .collect()
 }
@@ -198,7 +208,11 @@ pub(super) fn extract_typevar_params_from_generic(source_line: &str) -> Vec<Stri
     };
     after[..end]
         .split(',')
-        .map(|s| s.trim().to_owned())
+        .map(|s| {
+            // Strip a leading `*` from a `TypeVarTuple` parameter (PEP 646).
+            let trimmed = s.trim();
+            trimmed.strip_prefix('*').unwrap_or(trimmed).to_owned()
+        })
         .filter(|s| !s.is_empty())
         .collect()
 }

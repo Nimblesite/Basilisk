@@ -1,0 +1,15 @@
+[package]
+name = "basilisk-buildinfo"
+description = "Shared build-script helper: emits the Shipwright `--version` env contract."
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+basilisk-common.workspace = true
+
+[lints]
+workspace = true

@@ -176,6 +176,11 @@ pub(super) fn collect_class_final_violations(
         })
         .unwrap_or_default();
 
+    // In a `@dataclass`, a non-`ClassVar` `Final` field without an inline default
+    // is valid: the synthesized `__init__` assigns it as a required constructor
+    // parameter. A `ClassVar[Final[...]]` is not a field, so it still needs a value.
+    let is_dataclass = super::dataclass::is_dataclass_decorated(cls_def);
+
     // ClassFinalWithoutInit: attr has no initializer AND not in __init__ assignments.
     for (attr_name, has_value) in &this_final_attrs {
         if !has_value && !init_assigns.contains(*attr_name) {
@@ -189,6 +194,12 @@ pub(super) fn collect_class_final_violations(
                 };
                 if n.id.as_str() != *attr_name {
                     continue;
+                }
+                let is_dataclass_field = is_dataclass
+                    && source_slice_range(source, ann.annotation.range())
+                        .is_some_and(|t| !t.trim_start().starts_with("ClassVar"));
+                if is_dataclass_field {
+                    break;
                 }
                 out.push(FinalViolationInfo {
                     kind: FinalViolationKind::ClassFinalWithoutInit,

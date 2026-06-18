@@ -58,14 +58,23 @@ pub(super) fn check_protocol_classvar_conformance(
         return;
     }
 
-    // Step 2: Build a map of non-protocol class names -> their class-level attribute names.
-    let class_level_attrs: Vec<(&str, Vec<&str>)> = module
+    // Step 2: Build a map of non-protocol class names -> their class-level
+    // attributes, each paired with whether it is declared `ClassVar`.
+    let class_level_attrs: Vec<(&str, Vec<(&str, bool)>)> = module
         .classes
         .iter()
         .filter(|cls| !cls.bases.iter().any(|b| b == "Protocol"))
         .map(|cls| {
-            let attr_names: Vec<&str> = basilisk_resolver::collect_names(&cls.attributes);
-            (cls.name.as_str(), attr_names)
+            let attrs: Vec<(&str, bool)> = cls
+                .attributes
+                .iter()
+                .map(|attr| {
+                    let is_cv =
+                        span_text(source, attr.annotation_span).is_some_and(is_classvar_annotation);
+                    (attr.name.as_str(), is_cv)
+                })
+                .collect();
+            (cls.name.as_str(), attrs)
         })
         .collect();
 
@@ -110,7 +119,7 @@ pub(super) fn check_protocol_classvar_conformance(
         }
 
         // Find the implementation class's class-level attributes.
-        let Some((_cls_name, cls_attrs)) = class_level_attrs
+        let Some((_cls_name, impl_attrs)) = class_level_attrs
             .iter()
             .find(|(name, _)| *name == impl_class_name)
         else {
@@ -120,7 +129,7 @@ pub(super) fn check_protocol_classvar_conformance(
         // Check each required ClassVar attribute.
         emit_protocol_violations(
             required_cv_attrs,
-            cls_attrs,
+            impl_attrs,
             impl_class_name,
             ann_trimmed,
             var.name_span,
@@ -130,10 +139,15 @@ pub(super) fn check_protocol_classvar_conformance(
     }
 }
 
-/// Emit diagnostics for any required `ClassVar` attributes missing from the implementation class.
+/// Emit diagnostics when a required `ClassVar` protocol attribute is either
+/// absent from the implementation class or present but not declared `ClassVar`.
+///
+/// A protocol member annotated `ClassVar[...]` requires the implementer to
+/// declare the same name as a class variable; an instance variable (plain
+/// annotation) or a missing attribute both violate the protocol.
 fn emit_protocol_violations(
     required_cv_attrs: &[&str],
-    cls_attrs: &[&str],
+    impl_attrs: &[(&str, bool)],
     impl_class_name: &str,
     ann_trimmed: &str,
     name_span: basilisk_resolver::Span,
@@ -141,8 +155,30 @@ fn emit_protocol_violations(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for cv_attr in required_cv_attrs {
-        if !cls_attrs.contains(cv_attr) {
-            diagnostics.push(error_diagnostic_owned(
+        match impl_attrs.iter().find(|(name, _)| name == cv_attr) {
+            // Present and correctly declared `ClassVar` — conforms.
+            Some((_, true)) => {}
+            // Present but declared as an instance variable — wrong kind.
+            Some((_, false)) => diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
+                    "Class `{impl_class_name}` is not compatible with protocol \
+                     `{ann_trimmed}`: attribute `{cv_attr}` is required to be a \
+                     class variable (`ClassVar`) but is declared as an instance variable",
+                ),
+                name_span,
+                path,
+                Some(format!(
+                    "Annotate `{cv_attr}` as `ClassVar[...]` in `{impl_class_name}`",
+                )),
+                Some(
+                    "Protocol `ClassVar` attributes must be class variables in the \
+                     implementation, not instance variables"
+                        .to_owned(),
+                ),
+            )),
+            // Absent entirely — not defined at class level.
+            None => diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(
                     "Class `{impl_class_name}` is not compatible with protocol \
@@ -161,7 +197,7 @@ fn emit_protocol_violations(
                      in the implementation, not instance variables"
                         .to_owned(),
                 ),
-            ));
+            )),
         }
     }
 }

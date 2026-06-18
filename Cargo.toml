@@ -13,6 +13,7 @@ members = [
     "crates/basilisk-mojo",
     "crates/basilisk-compiler",
     "crates/basilisk-common",
+    "crates/basilisk-buildinfo",
     "crates/basilisk-test-macros",
     "crates/basilisk-test-utils",
     "crates/basilisk-uv",
@@ -63,6 +64,7 @@ basilisk-compiler = { path = "crates/basilisk-compiler" }
 basilisk-stubs      = { path = "crates/basilisk-stubs" }
 basilisk-config     = { path = "crates/basilisk-config" }
 basilisk-common     = { path = "crates/basilisk-common" }
+basilisk-buildinfo  = { path = "crates/basilisk-buildinfo" }
 basilisk-test-macros = { path = "crates/basilisk-test-macros" }
 basilisk-uv         = { path = "crates/basilisk-uv" }
 basilisk-test-utils = { path = "crates/basilisk-test-utils" }

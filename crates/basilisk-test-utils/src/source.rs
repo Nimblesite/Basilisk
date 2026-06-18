@@ -25,11 +25,5 @@ pub fn basilisk_binary() -> String {
 /// Convert a byte offset in `source` into a 1-based (line, col) pair.
 #[must_use]
 pub fn line_col(source: &str, offset: u32) -> (usize, usize) {
-    let clamped = usize::try_from(offset)
-        .unwrap_or(usize::MAX)
-        .min(source.len());
-    let before = source.get(..clamped).unwrap_or(source);
-    let line = before.chars().filter(|&c| c == '\n').count() + 1;
-    let col = before.rfind('\n').map_or(clamped, |pos| clamped - pos - 1) + 1;
-    (line, col)
+    basilisk_common::text::line_col(source, usize::try_from(offset).unwrap_or(usize::MAX))
 }

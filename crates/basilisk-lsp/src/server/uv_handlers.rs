@@ -55,11 +55,7 @@ fn find_uv_project_root(roots: &[std::path::PathBuf]) -> Option<std::path::PathB
 async fn get_workspace_root(server: &LspServer) -> LspResult<Option<std::path::PathBuf>> {
     let roots = server.workspace_roots.read().await;
     if roots.is_empty() {
-        return Err(tower_lsp::jsonrpc::Error {
-            code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32010),
-            message: "No workspace root available".into(),
-            data: None,
-        });
+        return Err(super::no_workspace_root_error());
     }
     Ok(find_uv_project_root(&roots))
 }
@@ -359,11 +355,7 @@ pub(super) async fn execute_uv_create_env(
     } else {
         let roots = server.workspace_roots.read().await;
         let Some(first) = roots.first().cloned() else {
-            return Err(tower_lsp::jsonrpc::Error {
-                code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32010),
-                message: "No workspace root available".into(),
-                data: None,
-            });
+            return Err(super::no_workspace_root_error());
         };
         first
     };

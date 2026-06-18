@@ -130,6 +130,16 @@ impl BasiliskConfig {
     }
 }
 
+/// Look up a JSON object field by its `camelCase` key, falling back to the
+/// `kebab-case` alias. Config files accept both spellings interchangeably.
+fn alias_get<'a>(
+    obj: &'a serde_json::Map<String, serde_json::Value>,
+    camel: &str,
+    kebab: &str,
+) -> Option<&'a serde_json::Value> {
+    obj.get(camel).or_else(|| obj.get(kebab))
+}
+
 /// Collect the string elements of a JSON array field, if present.
 fn json_string_array(
     obj: &serde_json::Map<String, serde_json::Value>,
@@ -170,11 +180,7 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
     }
 
     // stub-paths / stubPaths
-    if let Some(arr) = obj
-        .get("stubPaths")
-        .or_else(|| obj.get("stub-paths"))
-        .and_then(|v| v.as_array())
-    {
+    if let Some(arr) = alias_get(obj, "stubPaths", "stub-paths").and_then(|v| v.as_array()) {
         cfg.stub_paths = arr
             .iter()
             .filter_map(|v| v.as_str().map(PathBuf::from))
@@ -194,16 +200,12 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
 
     // uv section
     if let Some(uv_obj) = obj.get("uv").and_then(|v| v.as_object()) {
-        if let Some(val) = uv_obj
-            .get("stubSuggestions")
-            .or_else(|| uv_obj.get("stub-suggestions"))
+        if let Some(val) = alias_get(uv_obj, "stubSuggestions", "stub-suggestions")
             .and_then(serde_json::Value::as_bool)
         {
             cfg.uv_stub_suggestions = val;
         }
-        if let Some(val) = uv_obj
-            .get("dependencyDiagnostics")
-            .or_else(|| uv_obj.get("dependency-diagnostics"))
+        if let Some(val) = alias_get(uv_obj, "dependencyDiagnostics", "dependency-diagnostics")
             .and_then(serde_json::Value::as_bool)
         {
             cfg.uv_dependency_diagnostics = val;
@@ -211,16 +213,12 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
     }
 
     // perModuleOverrides
-    if let Some(overrides_obj) = obj
-        .get("perModuleOverrides")
-        .or_else(|| obj.get("per-module-overrides"))
-        .and_then(|v| v.as_object())
+    if let Some(overrides_obj) =
+        alias_get(obj, "perModuleOverrides", "per-module-overrides").and_then(|v| v.as_object())
     {
         for (pattern, override_val) in overrides_obj {
             if let Some(override_obj) = override_val.as_object() {
-                let ignore = override_obj
-                    .get("ignoreMissingStubs")
-                    .or_else(|| override_obj.get("ignore-missing-stubs"))
+                let ignore = alias_get(override_obj, "ignoreMissingStubs", "ignore-missing-stubs")
                     .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false);
                 let _ = cfg.per_module_overrides.insert(
@@ -234,37 +232,22 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
     }
 
     // auto-stub-mode / autoStubMode
-    if let Some(val) = obj
-        .get("autoStubMode")
-        .or_else(|| obj.get("auto-stub-mode"))
-        .and_then(|v| v.as_str())
-    {
+    if let Some(val) = alias_get(obj, "autoStubMode", "auto-stub-mode").and_then(|v| v.as_str()) {
         val.clone_into(&mut cfg.auto_stub_mode);
     }
 
     // auto-stub-path / autoStubPath
-    if let Some(val) = obj
-        .get("autoStubPath")
-        .or_else(|| obj.get("auto-stub-path"))
-        .and_then(|v| v.as_str())
-    {
+    if let Some(val) = alias_get(obj, "autoStubPath", "auto-stub-path").and_then(|v| v.as_str()) {
         cfg.auto_stub_path = PathBuf::from(val);
     }
 
     // pythonVersion / python-version [CHKARCH-VERSION-TARGET]
-    if let Some(val) = obj
-        .get("pythonVersion")
-        .or_else(|| obj.get("python-version"))
-        .and_then(|v| v.as_str())
-    {
+    if let Some(val) = alias_get(obj, "pythonVersion", "python-version").and_then(|v| v.as_str()) {
         cfg.python_version = Some(val.to_owned());
     }
 
     // pythonPlatform / python-platform [CHKARCH-VERSION-TARGET]
-    if let Some(val) = obj
-        .get("pythonPlatform")
-        .or_else(|| obj.get("python-platform"))
-        .and_then(|v| v.as_str())
+    if let Some(val) = alias_get(obj, "pythonPlatform", "python-platform").and_then(|v| v.as_str())
     {
         cfg.python_platform = Some(val.to_owned());
     }

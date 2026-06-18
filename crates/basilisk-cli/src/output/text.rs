@@ -104,11 +104,7 @@ pub(super) fn format_one(diag: &Diagnostic, source: Option<&str>) -> String {
 
 /// Convert a byte offset into (1-based line number, 1-based column number).
 pub(super) fn byte_offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
-    let clamped = offset.min(source.len());
-    let before = &source[..clamped];
-    let line = before.chars().filter(|&c| c == '\n').count() + 1;
-    let col = before.rfind('\n').map_or(clamped, |pos| clamped - pos - 1) + 1;
-    (line, col)
+    basilisk_common::text::line_col(source, offset)
 }
 
 /// Format a source line with a `^^^^` underline for the highlighted span.

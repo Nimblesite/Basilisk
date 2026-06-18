@@ -515,12 +515,7 @@ fn collect_and_check(
             basilisk_uv::python_version::resolve_target_python_version(&config_root);
     }
 
-    let excluded: HashSet<&str> = config.exclude.iter().map(String::as_str).collect();
-    info!(
-        excluded_dirs = ?config.exclude,
-        "loaded config from {}",
-        config_root.display()
-    );
+    let excluded = excluded_dirs_and_log(&config, &config_root);
 
     // Implements [CHKARCH-CONFIG-INCLUDE] (issue #37): a no-args run walks
     // only the configured include roots, never the whole repository.
@@ -696,6 +691,21 @@ fn is_excluded_path(
     excluded
         .iter()
         .any(|pattern| basilisk_config::path_matches_pattern(relative, pattern))
+}
+
+/// Build the excluded-directory set from `config` and log that the config at
+/// `config_root` was loaded. Shared setup prologue for the CLI subcommands.
+pub(crate) fn excluded_dirs_and_log<'a>(
+    config: &'a basilisk_config::BasiliskConfig,
+    config_root: &std::path::Path,
+) -> HashSet<&'a str> {
+    let excluded: HashSet<&str> = config.exclude.iter().map(String::as_str).collect();
+    info!(
+        excluded_dirs = ?config.exclude,
+        "loaded config from {}",
+        config_root.display()
+    );
+    excluded
 }
 
 pub(crate) fn collect_python_files(

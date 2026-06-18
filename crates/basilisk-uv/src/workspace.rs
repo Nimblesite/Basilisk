@@ -134,6 +134,13 @@ fn resolve_member_patterns(root: &Path, patterns: &[String]) -> Vec<PathBuf> {
 mod tests {
     use super::*;
 
+    /// Write `src` as the temp dir's `pyproject.toml`, then parse it and unwrap
+    /// the workspace — for success-path tests that expect a workspace to exist.
+    fn write_and_parse(dir: &tempfile::TempDir, src: &str) -> UvWorkspace {
+        std::fs::write(dir.path().join("pyproject.toml"), src).unwrap();
+        parse_uv_workspace(dir.path()).unwrap().unwrap()
+    }
+
     #[test]
     fn parses_workspace_with_members_and_excludes() {
         let dir = tempfile::tempdir().unwrap();
@@ -147,9 +154,7 @@ mod tests {
 members = ["packages/*"]
 exclude = ["packages/beta"]
 "#;
-        std::fs::write(dir.path().join("pyproject.toml"), pyproject).unwrap();
-
-        let ws = parse_uv_workspace(dir.path()).unwrap().unwrap();
+        let ws = write_and_parse(&dir, pyproject);
         assert_eq!(ws.members.len(), 2);
         assert!(ws.members.contains(&member_a));
         assert!(ws.members.contains(&member_b));
@@ -190,9 +195,7 @@ exclude = ["packages/beta"]
         std::fs::create_dir_all(&member).unwrap();
 
         let pyproject = "[tool.uv.workspace]\nmembers = [\"lib\"]\n";
-        std::fs::write(dir.path().join("pyproject.toml"), pyproject).unwrap();
-
-        let ws = parse_uv_workspace(dir.path()).unwrap().unwrap();
+        let ws = write_and_parse(&dir, pyproject);
         assert_eq!(ws.members, vec![member]);
     }
 
@@ -201,9 +204,7 @@ exclude = ["packages/beta"]
         let dir = tempfile::tempdir().unwrap();
 
         let pyproject = "[tool.uv.workspace]\nmembers = [\"nonexistent\"]\n";
-        std::fs::write(dir.path().join("pyproject.toml"), pyproject).unwrap();
-
-        let ws = parse_uv_workspace(dir.path()).unwrap().unwrap();
+        let ws = write_and_parse(&dir, pyproject);
         assert!(ws.members.is_empty());
     }
 
@@ -212,9 +213,7 @@ exclude = ["packages/beta"]
         let dir = tempfile::tempdir().unwrap();
 
         let pyproject = "[tool.uv.workspace]\nmembers = []\nexclude = []\n";
-        std::fs::write(dir.path().join("pyproject.toml"), pyproject).unwrap();
-
-        let ws = parse_uv_workspace(dir.path()).unwrap().unwrap();
+        let ws = write_and_parse(&dir, pyproject);
         assert!(ws.members.is_empty());
         assert!(ws.exclude.is_empty());
     }
@@ -228,9 +227,7 @@ exclude = ["packages/beta"]
         std::fs::write(packages.join("README.md"), "# hi").unwrap();
 
         let pyproject = "[tool.uv.workspace]\nmembers = [\"packages/*\"]\n";
-        std::fs::write(dir.path().join("pyproject.toml"), pyproject).unwrap();
-
-        let ws = parse_uv_workspace(dir.path()).unwrap().unwrap();
+        let ws = write_and_parse(&dir, pyproject);
         assert_eq!(ws.members.len(), 1);
         assert!(ws.members[0].ends_with("real_pkg"));
     }

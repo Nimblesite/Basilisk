@@ -12,27 +12,108 @@ use serde_json::Value;
 
 // ── Slash commands ───────────────────────────────────────────────────────────
 
+/// A slash command: its `(title, body)` builder and the static completion
+/// suggestions offered for its argument.
+struct SlashCommand {
+    /// Command name (without the leading slash).
+    name: &'static str,
+    /// Builds the `(panel title, Markdown body)` pair from the command's args.
+    body: fn(&[String]) -> (String, String),
+    /// Completion suggestions as `(label, new_text, run_command)` tuples.
+    completions: &'static [(&'static str, &'static str, bool)],
+}
+
+/// Every slash command the extension exposes. Single source of truth for both
+/// [`slash_command_output`] and [`slash_completions`] — adding a command here
+/// wires up dispatch and completion in one place.
+const SLASH_COMMANDS: &[SlashCommand] = &[
+    SlashCommand {
+        name: slash_commands::PROFILE,
+        body: slash_profile,
+        completions: &[("<pid>", "", false)],
+    },
+    SlashCommand {
+        name: slash_commands::PROFSTOP,
+        body: slash_profstop,
+        completions: &[],
+    },
+    SlashCommand {
+        name: slash_commands::PROFSNAPSHOT,
+        body: slash_profsnapshot,
+        completions: &[],
+    },
+    SlashCommand {
+        name: slash_commands::MEMLEAK,
+        body: slash_memleak,
+        completions: &[],
+    },
+    SlashCommand {
+        name: slash_commands::MEMSTOP,
+        body: slash_memstop,
+        completions: &[],
+    },
+    SlashCommand {
+        name: slash_commands::MEMREFS,
+        body: slash_memrefs,
+        completions: &[
+            ("DataFrame", "DataFrame", true),
+            ("dict", "dict", true),
+            ("list", "list", true),
+            ("set", "set", true),
+            ("ndarray", "ndarray", true),
+            ("Tensor", "Tensor", true),
+        ],
+    },
+    SlashCommand {
+        name: slash_commands::MODULES,
+        body: slash_modules,
+        completions: &[("<module_prefix>", "", false)],
+    },
+    SlashCommand {
+        name: slash_commands::SYMBOLS,
+        body: slash_symbols,
+        completions: &[("<module_name>", "", false)],
+    },
+    SlashCommand {
+        name: slash_commands::HEALTH,
+        body: slash_health,
+        completions: &[],
+    },
+    SlashCommand {
+        name: slash_commands::BASILISK,
+        body: slash_basilisk,
+        completions: &[],
+    },
+    SlashCommand {
+        name: slash_commands::TESTS,
+        body: slash_tests,
+        completions: &[],
+    },
+    SlashCommand {
+        name: slash_commands::RUNTESTS,
+        body: slash_runtests,
+        completions: &[("<test_id>", "", false)],
+    },
+    SlashCommand {
+        name: slash_commands::TESTFILE,
+        body: slash_testfile,
+        completions: &[("<file.py>", "", false)],
+    },
+];
+
+/// Look up a slash command by name.
+fn find_slash_command(command: &str) -> Option<&'static SlashCommand> {
+    SLASH_COMMANDS.iter().find(|cmd| cmd.name == command)
+}
+
 /// Produce the (label, text) pair for a slash command invocation.
 ///
 /// Output is formatted as Markdown for the Zed AI assistant panel.
 /// Returns `Err` for unknown command names.
 pub fn slash_command_output(command: &str, args: &[String]) -> Result<(String, String), String> {
-    match command {
-        slash_commands::PROFILE => Ok(slash_profile(args)),
-        slash_commands::PROFSTOP => Ok(slash_profstop()),
-        slash_commands::PROFSNAPSHOT => Ok(slash_profsnapshot()),
-        slash_commands::MEMLEAK => Ok(slash_memleak()),
-        slash_commands::MEMSTOP => Ok(slash_memstop()),
-        slash_commands::MEMREFS => Ok(slash_memrefs(args)),
-        slash_commands::MODULES => Ok(slash_modules(args)),
-        slash_commands::SYMBOLS => Ok(slash_symbols(args)),
-        slash_commands::HEALTH => Ok(slash_health()),
-        slash_commands::BASILISK => Ok(slash_basilisk()),
-        slash_commands::TESTS => Ok(slash_tests(args)),
-        slash_commands::RUNTESTS => Ok(slash_runtests(args)),
-        slash_commands::TESTFILE => Ok(slash_testfile(args)),
-        _ => Err(format!("Unknown slash command: {command}")),
-    }
+    find_slash_command(command)
+        .map(|cmd| (cmd.body)(args))
+        .ok_or_else(|| format!("Unknown slash command: {command}"))
 }
 
 fn slash_profile(args: &[String]) -> (String, String) {
@@ -83,7 +164,7 @@ fn slash_profile(args: &[String]) -> (String, String) {
     ("CPU Profiling".to_string(), text)
 }
 
-fn slash_profstop() -> (String, String) {
+fn slash_profstop(_args: &[String]) -> (String, String) {
     let stop = commands::PROFILER_STOP;
     let speedscope = profiler_formats::SPEEDSCOPE;
     let flamegraph = profiler_formats::FLAMEGRAPH;
@@ -110,7 +191,7 @@ fn slash_profstop() -> (String, String) {
     ("Stop Profiling".to_string(), text)
 }
 
-fn slash_profsnapshot() -> (String, String) {
+fn slash_profsnapshot(_args: &[String]) -> (String, String) {
     let snapshot = commands::PROFILER_SNAPSHOT;
     let text = format!(
         "## Profile Snapshot\n\n\
@@ -123,7 +204,7 @@ fn slash_profsnapshot() -> (String, String) {
     ("Profile Snapshot".to_string(), text)
 }
 
-fn slash_memleak() -> (String, String) {
+fn slash_memleak(_args: &[String]) -> (String, String) {
     let start = commands::MEMORY_START;
     let snapshot = commands::MEMORY_SNAPSHOT;
     let diff = commands::MEMORY_DIFF;
@@ -158,7 +239,7 @@ fn slash_memleak() -> (String, String) {
     ("Memory Tracking".to_string(), text)
 }
 
-fn slash_memstop() -> (String, String) {
+fn slash_memstop(_args: &[String]) -> (String, String) {
     let leak = memory_diagnostics::LEAK;
     let cycle = memory_diagnostics::CYCLE;
     let text = format!(
@@ -228,7 +309,7 @@ fn slash_symbols(args: &[String]) -> (String, String) {
     ("Module Symbols".to_string(), text)
 }
 
-fn slash_health() -> (String, String) {
+fn slash_health(_args: &[String]) -> (String, String) {
     let text = "\
         ## Type Health\n\n\
         Fetching workspace health via `basilisk.typeHealth`.\n\n\
@@ -247,7 +328,7 @@ fn slash_health() -> (String, String) {
     ("Type Health".to_string(), text)
 }
 
-fn slash_basilisk() -> (String, String) {
+fn slash_basilisk(_args: &[String]) -> (String, String) {
     let text = "\
         ## Basilisk Server Info\n\n\
         **Basilisk** — strict-by-default Python type checker and LSP built in Rust.\n\n\
@@ -331,28 +412,12 @@ fn slash_testfile(args: &[String]) -> (String, String) {
 
 /// Return completion suggestions for a slash command as `(label, new_text, run_command)`.
 pub fn slash_completions(command: &str) -> Vec<(String, String, bool)> {
-    match command {
-        slash_commands::PROFILE => {
-            vec![("<pid>".to_string(), String::new(), false)]
-        }
-        slash_commands::MEMREFS => ["DataFrame", "dict", "list", "set", "ndarray", "Tensor"]
+    find_slash_command(command).map_or_else(Vec::new, |cmd| {
+        cmd.completions
             .iter()
-            .map(|t| ((*t).to_string(), (*t).to_string(), true))
-            .collect(),
-        slash_commands::MODULES => {
-            vec![("<module_prefix>".to_string(), String::new(), false)]
-        }
-        slash_commands::SYMBOLS => {
-            vec![("<module_name>".to_string(), String::new(), false)]
-        }
-        slash_commands::RUNTESTS => {
-            vec![("<test_id>".to_string(), String::new(), false)]
-        }
-        slash_commands::TESTFILE => {
-            vec![("<file.py>".to_string(), String::new(), false)]
-        }
-        _ => vec![],
-    }
+            .map(|(label, new_text, run)| ((*label).to_string(), (*new_text).to_string(), *run))
+            .collect()
+    })
 }
 
 // ── DAP config building ──────────────────────────────────────────────────────

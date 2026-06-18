@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Diagnostic, Position, Range, TextEdit, Url, WorkspaceEdit,
+    CodeAction, CodeActionKind, Diagnostic, Position, Range, TextEdit, Url,
 };
 
 /// Build a `QUICKFIX` `CodeAction` that performs a single text insertion at `insert_pos`.
@@ -31,17 +31,7 @@ fn single_edit_action(
             new_text,
         }],
     );
-    CodeAction {
-        title,
-        kind: Some(CodeActionKind::QUICKFIX),
-        diagnostics: Some(vec![diag.clone()]),
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(is_preferred),
-        ..Default::default()
-    }
+    super::quickfix_action(title, diag, changes, is_preferred)
 }
 
 /// Append `  # type: ignore[CODE]` at the end of the diagnostic's source line.

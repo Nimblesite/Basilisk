@@ -202,13 +202,18 @@ fn check_functions_self_usage(
     for func in &module.functions {
         match &func.class_name {
             None => {
-                check_func_annotations_for_self(
-                    func,
-                    source,
-                    path,
-                    "module-level function",
-                    diagnostics,
-                );
+                // A closure lexically nested inside a class method still has a
+                // valid `Self` binding (PEP 673), so only genuinely module-level
+                // functions are flagged here.  [BSK-E0094]
+                if !func.nested_in_class {
+                    check_func_annotations_for_self(
+                        func,
+                        source,
+                        path,
+                        "module-level function",
+                        diagnostics,
+                    );
+                }
             }
             Some(class_name) => {
                 let is_static = func.decorators.iter().any(|d| d == "staticmethod");

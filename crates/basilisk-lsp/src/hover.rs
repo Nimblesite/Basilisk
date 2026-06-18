@@ -203,6 +203,13 @@ fn format_import_hover(import_info: &ImportInfo) -> String {
 mod tests {
     use super::*;
 
+    /// Parse and resolve `source` as `test.py` for hover tests.
+    fn parse_and_resolve(source: &str) -> ResolvedModule {
+        let parsed = basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned())
+            .expect("test source should parse");
+        basilisk_resolver::resolve(&parsed).expect("resolution should not fail")
+    }
+
     /// Parse and resolve source code, then patch the first import's resolution
     /// and path fields for testing hover display.
     fn resolve_with_patched_import(
@@ -210,9 +217,7 @@ mod tests {
         resolution: ImportResolution,
         resolved_path: Option<std::path::PathBuf>,
     ) -> ResolvedModule {
-        let parsed = basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned())
-            .expect("test source should parse");
-        let mut resolved = basilisk_resolver::resolve(&parsed).expect("resolution should not fail");
+        let mut resolved = parse_and_resolve(source);
         if let Some(import) = resolved.imports.first_mut() {
             import.resolution = resolution;
             import.resolved_path = resolved_path;
@@ -257,9 +262,7 @@ mod tests {
         use basilisk_resolver::Span;
 
         let source = "from acme import fetch\n\nx = fetch('u')\n";
-        let parsed = basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned())
-            .expect("test source should parse");
-        let mut resolved = basilisk_resolver::resolve(&parsed).expect("resolution should not fail");
+        let mut resolved = parse_and_resolve(source);
 
         let _ = resolved.imported_symbols.insert(
             "fetch".to_owned(),
@@ -354,9 +357,7 @@ mod tests {
     #[test]
     fn test_hover_shows_package_version_and_name() {
         let source = "import requests\n";
-        let parsed = basilisk_parser::parse_source(source.to_owned(), "test.py".to_owned())
-            .expect("test source should parse");
-        let mut resolved = basilisk_resolver::resolve(&parsed).expect("resolution should not fail");
+        let mut resolved = parse_and_resolve(source);
         if let Some(import) = resolved.imports.first_mut() {
             import.resolution = ImportResolution::SourcePy;
             import.resolved_path = Some(std::path::PathBuf::from(
