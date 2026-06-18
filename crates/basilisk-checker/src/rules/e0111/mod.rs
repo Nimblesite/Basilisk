@@ -441,6 +441,10 @@ fn check_no_init_with_args(
 /// Class-based `NamedTuple` subclasses have synthesized `__new__` accepting one
 /// positional argument per annotated field. Fields with defaults are optional.
 /// Extra positional args, unknown keyword args, and type mismatches are errors.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "NamedTuple constructor check needs call, class info, class map, source, typevars"
+)]
 fn check_namedtuple_constructor(
     call: &ruff_python_ast::ExprCall,
     class_name: &str,

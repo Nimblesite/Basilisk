@@ -22,6 +22,7 @@ mod protocol_members;
 mod sig_model;
 mod sig_subtype;
 mod tuple_check;
+mod typeddict_struct;
 mod typeform_check;
 
 use crate::span_util::slice_span;
@@ -59,6 +60,7 @@ impl Rule for AssignmentTypeMismatch {
             type_alias: collect_type_alias_names(module),
             type_alias_type: collect_type_alias_type_names(module),
             value_aliases: alias_match::collect_union_aliases(module),
+            typeddict_schemas: typeddict_struct::build_typeddict_schemas(module),
         };
         let call_index = callable_check::build_index(module);
         check_vars(
@@ -170,6 +172,10 @@ struct SkipNames {
     /// Legacy `Name = Union[...]` value aliases (lowercase → definition), used
     /// for recursive-alias value matching.
     value_aliases: std::collections::HashMap<String, InferredType>,
+    /// Effective field schemas (class name → fields) for every `TypedDict`,
+    /// used for PEP 705 structural assignability of `TypedDict`-to-`TypedDict`
+    /// assignments instead of name equality.
+    typeddict_schemas: typeddict_struct::TdSchemas,
 }
 
 /// Collect names defined via `Name = TypeAliasType(...)` (lowercase).
@@ -334,6 +340,31 @@ fn check_vars(
                             ))
                         };
                     }
+                }
+            }
+
+            // TypedDict → TypedDict: use PEP 705 structural assignability rather
+            // than name equality, which would flag every structurally-valid
+            // cross-name assignment (`v: A = b` where `b: B`). Genuine mismatches
+            // still fire. Only reachable when the RHS resolves to a TypedDict-typed
+            // name (e.g. a parameter), so module-level checks are unaffected.
+            if let (InferredType::Named(decl), InferredType::Named(inf)) =
+                (&declared_type, &inferred_type)
+            {
+                if let (Some(target), Some(src)) = (
+                    skip.typeddict_schemas.get(decl.as_str()),
+                    skip.typeddict_schemas.get(inf.as_str()),
+                ) {
+                    return if typeddict_struct::typeddict_assignable(src, target) {
+                        None
+                    } else {
+                        Some((
+                            var,
+                            annotation_text.to_owned(),
+                            inferred_type,
+                            declared_type,
+                        ))
+                    };
                 }
             }
 

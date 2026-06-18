@@ -360,3 +360,41 @@ pub fn span_to_range(text: &str, span: Span) -> tower_lsp::lsp_types::Range {
         end: byte_offset_to_position(text, span.end_usize()),
     }
 }
+
+/// Get the symbol name at a byte offset, either from the symbol table or from
+/// the identifier under the cursor.
+pub(crate) fn symbol_name_at(
+    resolved: &ResolvedModule,
+    source: &str,
+    byte_offset: usize,
+) -> Option<String> {
+    if let Some(hit) = find_symbol_at_offset(resolved, byte_offset) {
+        return Some(symbol_hit_name(&hit).to_owned());
+    }
+    identifier_at_offset(source, byte_offset)
+}
+
+/// The declared name of a resolved symbol hit.
+fn symbol_hit_name<'a>(hit: &'a SymbolHit<'a>) -> &'a str {
+    match hit {
+        SymbolHit::Function(f) => &f.name,
+        SymbolHit::Class(c) => &c.name,
+        SymbolHit::Variable(v) => &v.name,
+        SymbolHit::Parameter { param, .. } => &param.name,
+        SymbolHit::Attribute { attr, .. } => &attr.name,
+        SymbolHit::Import(i) => &i.module,
+    }
+}
+
+/// The LSP range covering a resolved symbol hit's defining name.
+pub(crate) fn definition_range(hit: &SymbolHit<'_>, source: &str) -> tower_lsp::lsp_types::Range {
+    let span = match hit {
+        SymbolHit::Function(f) => f.name_span,
+        SymbolHit::Class(c) => c.name_span,
+        SymbolHit::Variable(v) => v.name_span,
+        SymbolHit::Parameter { param, .. } => param.name_span,
+        SymbolHit::Attribute { attr, .. } => attr.name_span,
+        SymbolHit::Import(i) => i.span,
+    };
+    span_to_range(source, span)
+}

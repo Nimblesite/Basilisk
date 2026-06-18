@@ -109,7 +109,7 @@ BSK-E0072,overloads_basic.py,overloads,PASS,1,0,0
 BSK-E0020|BSK-E0034,overloads_definitions.py,overloads,PASS,0,0,0
 BSK-E0012|BSK-E0041|BSK-E0076,overloads_evaluation.py,overloads,PASS,4,0,0
 BSK-E0099|BSK-E0146,protocols_class_objects.py,protocols,PASS,8,0,0
-BSK-E0036|BSK-E0121,protocols_definition.py,protocols,FAIL,2,19,0
+BSK-E0036|BSK-E0121,protocols_definition.py,protocols,FAIL,8,13,0
 BSK-E0099|BSK-E0118|BSK-E0123|BSK-E0124,protocols_explicit.py,protocols,PASS,6,0,0
 BSK-E0130|BSK-E0137,protocols_generic.py,protocols,PASS,9,0,0
 BSK-E0098|BSK-E0099|BSK-E0121,protocols_merging.py,protocols,PASS,6,0,0
@@ -140,7 +140,7 @@ BSK-E0056,typeddicts_readonly.py,typeddicts,PASS,6,0,0
 BSK-E0014,typeddicts_readonly_consistency.py,typeddicts,PASS,7,0,5
 BSK-E0038|BSK-E0056|BSK-E0093,typeddicts_readonly_inheritance.py,typeddicts,PASS,11,0,0
 BSK-E0056,typeddicts_readonly_kwargs.py,typeddicts,PASS,1,0,0
-BSK-E0056|BSK-E0093,typeddicts_readonly_update.py,typeddicts,PASS,1,0,1
+BSK-E0056|BSK-E0093,typeddicts_readonly_update.py,typeddicts,PASS,1,0,0
 BSK-E0035,typeddicts_required.py,typeddicts,PASS,4,0,0
 BSK-E0093,typeddicts_type_consistency.py,typeddicts,PASS,9,0,0
 BSK-E0088|BSK-E0093,typeddicts_usage.py,typeddicts,PASS,5,0,0

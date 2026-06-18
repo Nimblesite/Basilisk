@@ -978,6 +978,18 @@ basilisk-plugin (standalone, used by basilisk-checker)
 - CI: `cargo clippy`, `cargo test`, conformance suite, benchmarks, fuzzing (nightly)
 - Release: pre-compiled binaries for all platforms (no build dependencies for users)
 
+#### Shared build-info emitter {#CHKARCH-ARCH-BUILD-VERSIONINFO}
+
+Every binary crate that exposes a Shipwright `--version` payload
+(`basilisk-cli`, `basilisk-profiler-helper`) must stamp the same
+`SHIPWRIGHT_*` env vars (git SHA, a guaranteed `SHIPWRIGHT_GIT_DIRTY`, build
+time, target, toolchain) at compile time. That logic lives once in the
+`basilisk-buildinfo` crate (`emit_version_env`), so each crate's `build.rs` is
+a one-line delegation rather than a copy. The calendar arithmetic that formats
+`SHIPWRIGHT_BUILD_TIME` is the same RFC 3339 formatter the profiler uses for
+sample timestamps; it lives in `basilisk_common::datetime::rfc3339_from_secs`
+so the Howard Hinnant `civil_from_days` algorithm exists in exactly one place.
+
 ---
 
 ## Incremental Computation {#CHKARCH-INCREMENTAL}

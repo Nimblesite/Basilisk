@@ -342,4 +342,116 @@ fn check_protocol_conformance(
             ),
         ));
     }
+
+    // Beyond name presence: a read-write (settable) protocol property requires a
+    // settable implementation member.
+    check_readwrite_property_conformance(
+        protocol_name,
+        protocol_class,
+        rhs_class_name,
+        class_map,
+        var,
+        path,
+        diagnostics,
+    );
+}
+
+/// Names of a protocol's read-write properties: a method decorated `@property`
+/// that also has a sibling `@<name>.setter` (recorded as a `"setter"` decorator).
+fn readwrite_property_members(cls: &basilisk_resolver::ClassInfo) -> Vec<&str> {
+    let mut members: Vec<&str> = Vec::new();
+    for (name, decs) in &cls.method_decorators {
+        let is_property = decs.iter().any(|d| d == "property");
+        let has_setter = cls
+            .method_decorators
+            .iter()
+            .any(|(n, ds)| n == name && ds.iter().any(|d| d == "setter"));
+        if is_property && has_setter && !members.contains(&name.as_str()) {
+            members.push(name.as_str());
+        }
+    }
+    members
+}
+
+/// If `impl_cls` provides `member` but in a form that cannot be written to,
+/// return the human-readable reason; otherwise `None` (settable, or absent —
+/// absence is reported separately as a missing member).
+fn readwrite_property_violation(
+    impl_cls: &basilisk_resolver::ClassInfo,
+    member: &str,
+) -> Option<&'static str> {
+    let has_attr = impl_cls.attributes.iter().any(|a| a.name == member);
+    let has_method = impl_cls.method_names.iter().any(|m| m == member);
+    if !has_attr && !has_method {
+        return None;
+    }
+
+    if impl_cls.bases.iter().any(|b| b == "NamedTuple") {
+        return Some("named tuple fields are immutable");
+    }
+    if impl_cls.is_dataclass_frozen {
+        return Some("frozen dataclass fields are immutable");
+    }
+
+    // A read-only property (a `@property` getter with no `@<name>.setter`) is
+    // not writable; a plain attribute or a property-with-setter is.
+    let entries: Vec<&Vec<String>> = impl_cls
+        .method_decorators
+        .iter()
+        .filter(|(n, _)| n == member)
+        .map(|(_, ds)| ds)
+        .collect();
+    let is_property = entries.iter().any(|ds| ds.iter().any(|d| d == "property"));
+    let has_setter = entries.iter().any(|ds| ds.iter().any(|d| d == "setter"));
+    if is_property && !has_setter {
+        return Some("a read-only property cannot satisfy a writable protocol member");
+    }
+
+    None
+}
+
+/// Check that read-write protocol properties are satisfied by settable members.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "protocol property conformance needs protocol, impl, class map and context"
+)]
+fn check_readwrite_property_conformance(
+    protocol_name: &str,
+    protocol_class: &basilisk_resolver::ClassInfo,
+    rhs_class_name: &str,
+    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
+    var: &basilisk_resolver::VariableInfo,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let rw_props = readwrite_property_members(protocol_class);
+    if rw_props.is_empty() {
+        return;
+    }
+    let Some(impl_cls) = class_map.get(rhs_class_name) else {
+        return;
+    };
+
+    for member in rw_props {
+        if let Some(reason) = readwrite_property_violation(impl_cls, member) {
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
+                    "Class `{rhs_class_name}` is incompatible with protocol `{protocol_name}`: \
+                     `{member}` must be writable but {reason}"
+                ),
+                var.name_span,
+                path,
+                Some(format!(
+                    "Provide `{member}` as a writable attribute or a property with a setter \
+                     in `{rhs_class_name}`"
+                )),
+                Some(
+                    "A protocol property with a setter is read-write; the implementation must \
+                     allow assignment to the member"
+                        .to_owned(),
+                ),
+            ));
+        }
+    }
 }

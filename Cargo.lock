@@ -330,6 +330,7 @@ version = "0.0.0-PLACEHOLDER"
 name = "basilisk-profiler-helper"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
+ "basilisk-buildinfo",
  "basilisk-common",
  "basilisk-profiler-protocol",
  "py-spy",

@@ -18,6 +18,20 @@ use super::core::{classify_rhs, collect_from_body, text_range_to_span};
 use super::dataclass::{field_init_is_false, field_kw_only_override};
 use super::function_info::function_info_from;
 
+/// Flag the closures collected from a method body (those with no `class_name`)
+/// as lexically nested inside the class, starting at index `from`.  This keeps
+/// their `Self` usage valid for [BSK-E0094] instead of being treated as
+/// module-level.
+fn mark_nested_in_class(functions: &mut [FunctionInfo], from: usize) {
+    if let Some(nested) = functions.get_mut(from..) {
+        for func in nested {
+            if func.class_name.is_none() {
+                func.nested_in_class = true;
+            }
+        }
+    }
+}
+
 pub(super) fn collect_class_body(
     class: &StmtClassDef,
     functions: &mut Vec<FunctionInfo>,
@@ -116,11 +130,7 @@ pub(super) fn collect_class_body(
                     match_stmts,
                     false,
                 );
-                for nested in &mut functions[nested_start..] {
-                    if nested.class_name.is_none() {
-                        nested.nested_in_class = true;
-                    }
-                }
+                mark_nested_in_class(functions, nested_start);
                 method_names.push(method_name.clone());
                 method_decorators.push((method_name, decs));
             }
