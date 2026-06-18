@@ -60,6 +60,7 @@ impl Rule for AssignmentTypeMismatch {
             type_alias: collect_type_alias_names(module),
             type_alias_type: collect_type_alias_type_names(module),
             value_aliases: alias_match::collect_union_aliases(module),
+            generic_aliases: alias_match::collect_generic_aliases(module),
             typeddict_schemas: typeddict_struct::build_typeddict_schemas(module),
         };
         let call_index = callable_check::build_index(module);
@@ -172,6 +173,10 @@ struct SkipNames {
     /// Legacy `Name = Union[...]` value aliases (lowercase → definition), used
     /// for recursive-alias value matching.
     value_aliases: std::collections::HashMap<String, InferredType>,
+    /// Generic (`TypeVar`-parameterised) value aliases such as
+    /// `G = list["G[T]" | T]`, keyed by lowercase name. Used to validate
+    /// literal assignments against a specialised recursive alias (`G[str]`).
+    generic_aliases: std::collections::HashMap<String, alias_match::GenericAlias>,
     /// Effective field schemas (class name → fields) for every `TypedDict`,
     /// used for PEP 705 structural assignability of `TypedDict`-to-`TypedDict`
     /// assignments instead of name equality.
@@ -223,7 +228,8 @@ struct ParamMaps {
 /// checking instead of the generic `Unknown` fallback.
 #[expect(
     clippy::too_many_arguments,
-    reason = "assignment checking threads full module context"
+    clippy::too_many_lines,
+    reason = "assignment checking threads full module context across per-variable branches"
 )]
 fn check_vars(
     vars: &[VariableInfo],
@@ -318,28 +324,29 @@ fn check_vars(
                 return None;
             }
 
-            // A bare reference to a legacy `Union` alias (e.g. a recursive
-            // `Json` alias) needs value-level matching against the expanded
-            // definition rather than the `Named`-vs-literal comparison below.
+            // A reference to a legacy value alias — a recursive `Union` alias
+            // (`Json`) or a generic `list[...]`-bodied alias needing `TypeVar`
+            // substitution (`G[str]`) — needs value-level matching against the
+            // expanded definition rather than the `Named`-vs-literal comparison
+            // below.
             if let InferredType::Named(ref name) = declared_type {
-                if !name.contains('[') {
-                    if let Some(def) = skip.value_aliases.get(name.as_str()) {
-                        return if alias_match::alias_assignable(
-                            &inferred_type,
-                            def,
-                            &skip.value_aliases,
-                            0,
-                        ) {
-                            None
-                        } else {
-                            Some((
-                                var,
-                                annotation_text.to_owned(),
-                                inferred_type,
-                                declared_type,
-                            ))
-                        };
-                    }
+                let ctx = alias_match::AliasCtx {
+                    union: &skip.value_aliases,
+                    generic: &skip.generic_aliases,
+                };
+                if let Some(matched) =
+                    alias_match::alias_value_assignable(&inferred_type, name, &ctx)
+                {
+                    return if matched {
+                        None
+                    } else {
+                        Some((
+                            var,
+                            annotation_text.to_owned(),
+                            inferred_type,
+                            declared_type,
+                        ))
+                    };
                 }
             }
 

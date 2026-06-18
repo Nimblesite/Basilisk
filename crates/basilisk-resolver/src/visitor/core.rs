@@ -459,7 +459,11 @@ pub(super) fn check_td_stmts(
                                     if !has_extra_items
                                         && DISALLOWED.contains(&method)
                                         && disallowed_mutator_flagged(
-                                            method, call, field_types, var_type, fields,
+                                            method,
+                                            call,
+                                            field_types,
+                                            var_type,
+                                            fields,
                                         )
                                     {
                                         out.push(TypedDictKeyViolation {

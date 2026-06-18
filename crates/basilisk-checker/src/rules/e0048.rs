@@ -600,7 +600,14 @@ fn check_alias_parameterization(
                 continue;
             };
             let ann_text = ann_text.trim();
-            check_single_annotation(ann_text, ann_span, alias_map, path, &typevar_names, diagnostics);
+            check_single_annotation(
+                ann_text,
+                ann_span,
+                alias_map,
+                path,
+                &typevar_names,
+                diagnostics,
+            );
         }
     }
 
@@ -613,7 +620,14 @@ fn check_alias_parameterization(
             continue;
         };
         let ann_text = ann_text.trim();
-        check_single_annotation(ann_text, ann_span, alias_map, path, &typevar_names, diagnostics);
+        check_single_annotation(
+            ann_text,
+            ann_span,
+            alias_map,
+            path,
+            &typevar_names,
+            diagnostics,
+        );
     }
 }
 

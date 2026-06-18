@@ -244,7 +244,7 @@ fn format_variable_signature(var: &VariableInfo, source: &str) -> String {
     if let Some(ann) = annotation_text(var.annotation_span, source) {
         let _ = write!(sig, ": {ann}");
     } else {
-        let inferred = infer_rhs_display(&var.rhs_kind);
+        let inferred = rhs_type_display(&var.rhs_kind);
         if !inferred.is_empty() {
             let _ = write!(sig, ": {inferred}");
         }
@@ -265,7 +265,7 @@ fn format_attribute_signature(class: &ClassInfo, attr: &AttributeInfo, source: &
     if let Some(ann) = annotation_text(attr.annotation_span, source) {
         let _ = write!(sig, ": {ann}");
     } else {
-        let inferred = infer_rhs_display(&attr.rhs_kind);
+        let inferred = rhs_type_display(&attr.rhs_kind);
         if !inferred.is_empty() {
             let _ = write!(sig, ": {inferred}");
         }
@@ -292,8 +292,8 @@ fn annotation_text(span: Option<Span>, source: &str) -> Option<String> {
     Some(text.trim().to_owned())
 }
 
-/// Simple display for inferred `RhsKind` types.
-fn infer_rhs_display(rhs: &basilisk_resolver::RhsKind) -> &'static str {
+/// Simple type-name display for an inferred `RhsKind` (shared by inlay hints).
+pub(crate) fn rhs_type_display(rhs: &basilisk_resolver::RhsKind) -> &'static str {
     use basilisk_resolver::RhsKind;
     match rhs {
         RhsKind::IntLiteral => "int",
@@ -386,15 +386,19 @@ fn symbol_hit_name<'a>(hit: &'a SymbolHit<'a>) -> &'a str {
     }
 }
 
-/// The LSP range covering a resolved symbol hit's defining name.
-pub(crate) fn definition_range(hit: &SymbolHit<'_>, source: &str) -> tower_lsp::lsp_types::Range {
-    let span = match hit {
+/// The source span of a resolved symbol hit's defining name.
+pub(crate) fn definition_span(hit: &SymbolHit<'_>) -> Span {
+    match hit {
         SymbolHit::Function(f) => f.name_span,
         SymbolHit::Class(c) => c.name_span,
         SymbolHit::Variable(v) => v.name_span,
         SymbolHit::Parameter { param, .. } => param.name_span,
         SymbolHit::Attribute { attr, .. } => attr.name_span,
         SymbolHit::Import(i) => i.span,
-    };
-    span_to_range(source, span)
+    }
+}
+
+/// The LSP range covering a resolved symbol hit's defining name.
+pub(crate) fn definition_range(hit: &SymbolHit<'_>, source: &str) -> tower_lsp::lsp_types::Range {
+    span_to_range(source, definition_span(hit))
 }

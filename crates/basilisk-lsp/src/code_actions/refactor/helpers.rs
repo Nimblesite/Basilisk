@@ -63,18 +63,6 @@ pub(super) fn leading_indent_of_line(source: &str, line: u32) -> String {
         .unwrap_or_default()
 }
 
-/// Return the 0-based line number after the last import statement.
-pub(super) fn last_import_line(source: &str) -> u32 {
-    let mut insert_line: u32 = 0;
-    for (idx, line) in source.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
-            insert_line = u32::try_from(idx + 1).unwrap_or(u32::MAX);
-        }
-    }
-    insert_line
-}
-
 /// Find the position of the closing `]` that matches the bracket at `start`.
 pub(super) fn find_matching_bracket(text: &str, start: usize) -> Option<usize> {
     let mut depth: u32 = 1;

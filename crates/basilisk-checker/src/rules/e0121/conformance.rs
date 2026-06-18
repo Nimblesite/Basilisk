@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{ClassInfo, VariableInfo};
+use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule, VariableInfo};
 
 use super::CODE;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
@@ -210,6 +210,10 @@ fn instance_var_violation(
 
 /// Check that read-write protocol instance variables are satisfied by a
 /// writable, same-type implementation attribute.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "protocol instance-var conformance threads full class/source context"
+)]
 pub(super) fn check_instance_var_conformance(
     protocol_name: &str,
     protocol_class: &ClassInfo,
@@ -246,6 +250,175 @@ pub(super) fn check_instance_var_conformance(
                         .to_owned(),
                 ),
             ));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Method-member conformance: a protocol property must not be satisfied by a
+// plain method, and a protocol method's signature must be compatible.
+// ---------------------------------------------------------------------------
+
+/// Protocol members decorated `@property` (read-only or read-write).
+fn property_members(cls: &ClassInfo) -> Vec<&str> {
+    let mut members: Vec<&str> = Vec::new();
+    for (name, decs) in &cls.method_decorators {
+        if decs.iter().any(|d| d == "property") && !members.contains(&name.as_str()) {
+            members.push(name.as_str());
+        }
+    }
+    members
+}
+
+/// A protocol property member must be satisfied by a property or an attribute,
+/// never by a plain (non-property) method.
+pub(super) fn check_property_method_conformance(
+    protocol_name: &str,
+    protocol_class: &ClassInfo,
+    rhs_class_name: &str,
+    class_map: &HashMap<&str, &ClassInfo>,
+    var: &VariableInfo,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let props = property_members(protocol_class);
+    if props.is_empty() {
+        return;
+    }
+    let Some(impl_cls) = class_map.get(rhs_class_name) else {
+        return;
+    };
+    for member in props {
+        let has_attr = impl_cls.attributes.iter().any(|a| a.name == member);
+        let (impl_is_property, _) = property_kind(impl_cls, member);
+        let has_method = impl_cls.method_names.iter().any(|m| m == member);
+        if has_method && !impl_is_property && !has_attr {
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
+                    "Class `{rhs_class_name}` is incompatible with protocol `{protocol_name}`: \
+                     `{member}` is a property in the protocol but a plain method in the \
+                     implementation"
+                ),
+                var.name_span,
+                path,
+                Some(format!(
+                    "Decorate `{member}` with `@property` in `{rhs_class_name}`"
+                )),
+                None,
+            ));
+        }
+    }
+}
+
+/// Find the `FunctionInfo` for `class_name`'s `method`, if any.
+fn find_method<'a>(
+    module: &'a ResolvedModule,
+    class_name: &str,
+    method: &str,
+) -> Option<&'a FunctionInfo> {
+    module
+        .functions
+        .iter()
+        .find(|f| f.name == method && f.class_name.as_deref() == Some(class_name))
+}
+
+/// Positional parameter names of a method, dropping the implicit `self`/`cls`
+/// receiver for instance and class methods (but not for static methods).
+fn logical_param_names(func: &FunctionInfo) -> Vec<&str> {
+    let is_static = func.decorators.iter().any(|d| d == "staticmethod");
+    let skip = usize::from(!is_static);
+    func.parameters
+        .iter()
+        .skip(skip)
+        .map(|p| p.name.as_str())
+        .collect()
+}
+
+/// Emit a method-signature conformance diagnostic.
+fn push_signature_diag(
+    protocol_name: &str,
+    rhs_class_name: &str,
+    member: &str,
+    reason: &str,
+    var: &VariableInfo,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
+            "Class `{rhs_class_name}` is incompatible with protocol `{protocol_name}`: \
+             method `{member}` signature is incompatible — {reason}"
+        ),
+        var.name_span,
+        path,
+        Some(format!(
+            "Match `{member}`'s signature to the protocol declaration in `{protocol_name}`"
+        )),
+        None,
+    ));
+}
+
+/// Check method-signature compatibility for plain (non-property, non-dunder)
+/// protocol methods: a `@staticmethod` with a `self` receiver, and
+/// positional-or-keyword parameter-name mismatches.
+pub(super) fn check_method_signature_conformance(
+    protocol_name: &str,
+    protocol_class: &ClassInfo,
+    rhs_class_name: &str,
+    module: &ResolvedModule,
+    var: &VariableInfo,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let props = property_members(protocol_class);
+    for member in &protocol_class.method_names {
+        if member.starts_with("__") || props.contains(&member.as_str()) {
+            continue;
+        }
+        let Some(proto_fn) = find_method(module, &protocol_class.name, member) else {
+            continue;
+        };
+        let Some(impl_fn) = find_method(module, rhs_class_name, member) else {
+            continue; // absence is reported by the missing-members check
+        };
+
+        // A `@staticmethod` whose first parameter is `self` cannot satisfy an
+        // instance method — it has no bound receiver.
+        let impl_static = impl_fn.decorators.iter().any(|d| d == "staticmethod");
+        if impl_static && impl_fn.parameters.first().is_some_and(|p| p.name == "self") {
+            push_signature_diag(
+                protocol_name,
+                rhs_class_name,
+                member,
+                "a static method with a `self` parameter cannot satisfy an instance method",
+                var,
+                path,
+                diagnostics,
+            );
+            continue;
+        }
+
+        // Positional-or-keyword parameter names are part of the protocol. Skip
+        // when either side uses `*args` (which accepts arbitrary positionals).
+        if proto_fn.vararg.is_some() || impl_fn.vararg.is_some() {
+            continue;
+        }
+        let proto_params = logical_param_names(proto_fn);
+        let impl_params = logical_param_names(impl_fn);
+        if proto_params != impl_params {
+            push_signature_diag(
+                protocol_name,
+                rhs_class_name,
+                member,
+                &format!(
+                    "parameter names {impl_params:?} do not match the protocol's {proto_params:?}"
+                ),
+                var,
+                path,
+                diagnostics,
+            );
         }
     }
 }

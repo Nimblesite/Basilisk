@@ -279,12 +279,17 @@ fn find_pattern_param(
     while let Some(rel) = slice.get(pos..).and_then(|s| s.find(pattern)) {
         let name_start = base_offset + pos + rel + name_offset_in_pattern;
         let name_end = name_start + param_name.len();
-        results.push(Range {
-            start: crate::util::byte_offset_to_position(source, name_start),
-            end: crate::util::byte_offset_to_position(source, name_end),
-        });
+        push_name_range(results, source, name_start, name_end);
         pos += rel + pattern.len().max(1);
     }
+}
+
+/// Push the LSP range spanning the byte offsets `[name_start, name_end)` onto `results`.
+fn push_name_range(results: &mut Vec<Range>, source: &str, name_start: usize, name_end: usize) {
+    results.push(Range {
+        start: crate::util::byte_offset_to_position(source, name_start),
+        end: crate::util::byte_offset_to_position(source, name_end),
+    });
 }
 
 /// Find Google-style `name (type):` and `NumPy`-style `name :` param references.
@@ -306,10 +311,7 @@ fn find_google_numpy_param_refs(
             if is_match {
                 let name_start = base_offset + byte_pos + whitespace_len;
                 let name_end = name_start + param_name.len();
-                results.push(Range {
-                    start: crate::util::byte_offset_to_position(source, name_start),
-                    end: crate::util::byte_offset_to_position(source, name_end),
-                });
+                push_name_range(results, source, name_start, name_end);
             }
         }
         // Advance past this line plus the newline character.
@@ -373,10 +375,7 @@ fn find_attr_in_span(
         let name_end = name_start + attr_name.len();
 
         if has_word_boundary_after(source, name_end) && !is_in_string_or_comment(source, abs) {
-            results.push(Range {
-                start: crate::util::byte_offset_to_position(source, name_start),
-                end: crate::util::byte_offset_to_position(source, name_end),
-            });
+            push_name_range(&mut results, source, name_start, name_end);
         }
         search_pos += rel + pattern.len().max(1);
     }

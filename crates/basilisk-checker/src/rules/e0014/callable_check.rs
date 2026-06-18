@@ -356,12 +356,12 @@ fn substitute_alias(alias_rhs: &str, args: Option<&[String]>, index: &CallIndex)
 }
 
 /// `true` when `word` appears as a whole identifier in `text`.
-fn contains_word(text: &str, word: &str) -> bool {
+pub(super) fn contains_word(text: &str, word: &str) -> bool {
     replace_word(text, word, "\u{0}") != text
 }
 
 /// Replace whole-identifier occurrences of `word` in `text`.
-fn replace_word(text: &str, word: &str, replacement: &str) -> String {
+pub(super) fn replace_word(text: &str, word: &str, replacement: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
     let is_ident = |c: char| c.is_ascii_alphanumeric() || c == '_';

@@ -68,8 +68,13 @@ pub(super) fn collect_dc_transform_factories(stmts: &[Stmt]) -> Vec<DcTransformF
             continue;
         };
         for dec in &func.decorator_list {
-            let (is_dc_transform, kw_only_default, frozen_default, order_default, field_specifier_names) =
-                parse_dataclass_transform_decorator(&dec.expression);
+            let (
+                is_dc_transform,
+                kw_only_default,
+                frozen_default,
+                order_default,
+                field_specifier_names,
+            ) = parse_dataclass_transform_decorator(&dec.expression);
             if is_dc_transform {
                 out.push(DcTransformFactory {
                     name: func.name.to_string(),

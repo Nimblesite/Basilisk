@@ -20,6 +20,18 @@ mod suppress;
 /// Monotonic counter for unique temp-file names.
 pub(super) static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+/// Return the 0-based line number after the last import statement.
+pub(super) fn last_import_line(source: &str) -> u32 {
+    let mut insert_line: u32 = 0;
+    for (idx, line) in source.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
+            insert_line = u32::try_from(idx + 1).unwrap_or(u32::MAX);
+        }
+    }
+    insert_line
+}
+
 /// Construct a [`CodeAction`] whose edit is a precomputed `changes` map.
 ///
 /// Many code-action builders construct a `HashMap<Url, Vec<TextEdit>>` and
@@ -36,6 +48,29 @@ pub(super) fn code_action_with_changes(
         title,
         kind: Some(kind),
         diagnostics: None,
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }),
+        is_preferred: Some(is_preferred),
+        ..Default::default()
+    }
+}
+
+/// Build a `QUICKFIX` [`CodeAction`] attached to `diag` that applies `changes`.
+///
+/// Like [`code_action_with_changes`] but always `QUICKFIX` kind and carries the
+/// originating diagnostic — the shape every fix/suppression action shares.
+pub(super) fn quickfix_action(
+    title: String,
+    diag: &Diagnostic,
+    changes: HashMap<Url, Vec<TextEdit>>,
+    is_preferred: bool,
+) -> CodeAction {
+    CodeAction {
+        title,
+        kind: Some(CodeActionKind::QUICKFIX),
+        diagnostics: Some(vec![diag.clone()]),
         edit: Some(WorkspaceEdit {
             changes: Some(changes),
             ..Default::default()

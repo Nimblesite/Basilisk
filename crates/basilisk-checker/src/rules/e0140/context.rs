@@ -44,7 +44,7 @@ pub(super) struct FuncSig {
     pub(super) return_type: String,
     /// `true` if this signature originally declared `**kwargs: Unpack[TypedDict]`
     /// that has since been expanded into `kw_only_params`. Distinguishes a
-    /// callable that genuinely accepts the TypedDict's keys via `**kwargs` from
+    /// callable that genuinely accepts the `TypedDict`'s keys via `**kwargs` from
     /// one with only fixed parameters: per the typing spec a destination
     /// `**kwargs: Unpack[TD]` requires the source to also provide `**kwargs`.
     /// [BSK-E0140]
@@ -374,7 +374,7 @@ fn extract_typeddict(cls: &ast::StmtClassDef, known: &[TypedDictDef]) -> TypedDi
 /// Unwrap `Required` / `NotRequired` / `ReadOnly` qualifiers, returning the inner
 /// type text and whether the field is required. `ReadOnly` (PEP 705) has no effect
 /// on a `**kwargs: Unpack[TD]` signature, so it is stripped transparently. Total
-/// TypedDicts default to required. [BSK-E0140]
+/// `TypedDicts` default to required. [BSK-E0140]
 fn unwrap_required_annotation(expr: &Expr) -> (String, bool) {
     if let Expr::Subscript(sub) = expr {
         if let Expr::Name(n) = sub.value.as_ref() {

@@ -728,6 +728,7 @@ list — keep it in sync after adding or renaming a rule.
 | `BSK-E0153` | Invalid call to a constructor-derived callable ([CHKARCH-DIAG-CTOR-CALLABLE](#CHKARCH-DIAG-CTOR-CALLABLE)) |
 | `BSK-E0154` | Access to a module attribute a local stub does not declare ([CHKARCH-DIAG-STUB-MEMBER](#CHKARCH-DIAG-STUB-MEMBER)) |
 | `BSK-E0155` | PEP 695 syntax used below the configured target version ([CHKARCH-VERSION-TARGET](#CHKARCH-VERSION-TARGET)) |
+| `BSK-E0156` | TypedDict `extra_items` / `closed` (PEP 728) violations ([CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS](#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS)) |
 | `BSK-W0011` | Undeclared dependency import |
 | `BSK-W0012` | Unused dependency |
 | `BSK-W0013` | Stale uv lock file |
@@ -786,6 +787,38 @@ construction. Third-party typeshed / `py.typed` packages, instance/class
 attribute access, and dotted/aliased imports are deferred follow-ups. Implemented
 in `crates/basilisk-checker/src/rules/e0154/`; tests in
 `crates/basilisk-checker/src/rules/e0154/tests.rs`.
+
+#### TypedDict `extra_items` / `closed` (PEP 728) {#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS}
+
+`BSK-E0156` implements [PEP 728](https://peps.python.org/pep-0728/) — the
+`extra_items=` and `closed=` class keywords on `TypedDict`. A TypedDict that
+specifies `extra_items=T` defines an infinite set of non-required (or, when `T`
+is `ReadOnly[...]`, read-only) extra items whose value type is `T`; `closed=True`
+forbids any extra items at all. The rule validates four families of usage,
+operating directly on the module AST so it is independent of resolver state:
+
+1. **Class-definition legality.** `closed=` must be a literal `True`/`False`;
+   `extra_items=` may not wrap `Required[...]`/`NotRequired[...]`; a subclass may
+   not set `closed=False` when a superclass is `closed=True` or sets
+   `extra_items`; a subclass may not set `closed=True` when a superclass has a
+   *non-read-only* `extra_items`; and a subclass may not redeclare `extra_items`
+   unless the nearest superclass that declares it does so as `ReadOnly[...]` (a
+   plain TypedDict carries the implicit read-only `extra_items=ReadOnly[object]`,
+   so overriding it is always permitted).
+2. **Dict-literal construction.** When a dict literal is assigned to a TypedDict
+   with `extra_items=T`, every key outside the declared schema must carry a value
+   type assignable to `T`.
+3. **TypedDict-to-TypedDict assignability.** When both sides resolve to
+   TypedDicts, each source field outside the target schema, and the source's
+   effective `extra_items` pseudo-item, must satisfy the target's `extra_items`
+   (covariant when the target is read-only, consistent — and non-required — when
+   it is not). A plain TypedDict contributes the implicit `ReadOnly[object]`.
+4. **Constructor calls.** Calling the class object with a keyword outside the
+   declared schema is rejected unless the TypedDict declares a non-read-only
+   `extra_items=T` whose type the argument matches.
+
+Implemented in `crates/basilisk-checker/src/rules/e0156/`; conformance fixture is
+`crates/basilisk-cli/tests/conformance/typeddicts_extra_items.py`.
 
 #### `ReadOnly` `TypedDict` inheritance {#CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE}
 

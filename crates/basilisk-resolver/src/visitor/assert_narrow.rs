@@ -114,13 +114,18 @@ fn collect_class_metadata(cls: &StmtClassDef, ctx: &mut NarrowCtx<'_>) {
 /// Build [`EnumInfo`] when `cls` derives from an enum base.
 fn enum_info(cls: &StmtClassDef) -> Option<EnumInfo> {
     let bases = base_names(cls);
-    let is_enum = bases
-        .iter()
-        .any(|b| matches!(b.as_str(), "Enum" | "IntEnum" | "StrEnum" | "Flag" | "IntFlag"));
+    let is_enum = bases.iter().any(|b| {
+        matches!(
+            b.as_str(),
+            "Enum" | "IntEnum" | "StrEnum" | "Flag" | "IntFlag"
+        )
+    });
     if !is_enum {
         return None;
     }
-    let is_flag = bases.iter().any(|b| matches!(b.as_str(), "Flag" | "IntFlag"));
+    let is_flag = bases
+        .iter()
+        .any(|b| matches!(b.as_str(), "Flag" | "IntFlag"));
     let members = cls
         .body
         .iter()
@@ -313,7 +318,11 @@ fn else_env(env: &Env, tests: &[&Expr], ctx: &NarrowCtx<'_>) -> Env {
                         let _ = next.insert(var, narrowed);
                     }
                 }
-                ElseFact::EnumMember { var, enum_name, member } => {
+                ElseFact::EnumMember {
+                    var,
+                    enum_name,
+                    member,
+                } => {
                     let _ = excluded.entry((var, enum_name)).or_default().insert(member);
                 }
             }
@@ -321,9 +330,10 @@ fn else_env(env: &Env, tests: &[&Expr], ctx: &NarrowCtx<'_>) -> Env {
     }
     // Drop an enum arm only when all members of a non-`Flag` enum are excluded.
     for ((var, enum_name), members) in excluded {
-        let exhaustive = ctx.enums.get(&enum_name).is_some_and(|info| {
-            !info.is_flag && info.members.iter().all(|m| members.contains(m))
-        });
+        let exhaustive = ctx
+            .enums
+            .get(&enum_name)
+            .is_some_and(|info| !info.is_flag && info.members.iter().all(|m| members.contains(m)));
         if exhaustive {
             if let Some(cur) = next.get(&var) {
                 let narrowed = subtract_arm(cur, &enum_name);
@@ -362,7 +372,10 @@ fn else_facts(test: &Expr, env: &Env, ctx: &NarrowCtx<'_>) -> Vec<ElseFact> {
             .collect(),
         Expr::Call(call) => {
             if let Some((var, ty)) = isinstance_fact(call, ctx) {
-                return when_param(env, var, |var| ElseFact::Subtract { var, ty: ty.clone() });
+                return when_param(env, var, |var| ElseFact::Subtract {
+                    var,
+                    ty: ty.clone(),
+                });
             }
             // Only `TypeIs` narrows the negative branch.
             match guard_then(call, env, ctx) {
@@ -374,7 +387,11 @@ fn else_facts(test: &Expr, env: &Env, ctx: &NarrowCtx<'_>) -> Vec<ElseFact> {
         }
         Expr::Compare(cmp) => match enum_is_fact(cmp, ctx) {
             Some((var, enum_name, member)) if env.contains_key(&var) => {
-                vec![ElseFact::EnumMember { var, enum_name, member }]
+                vec![ElseFact::EnumMember {
+                    var,
+                    enum_name,
+                    member,
+                }]
             }
             _ => Vec::new(),
         },
@@ -383,8 +400,15 @@ fn else_facts(test: &Expr, env: &Env, ctx: &NarrowCtx<'_>) -> Vec<ElseFact> {
 }
 
 enum ElseFact {
-    Subtract { var: String, ty: String },
-    EnumMember { var: String, enum_name: String, member: String },
+    Subtract {
+        var: String,
+        ty: String,
+    },
+    EnumMember {
+        var: String,
+        enum_name: String,
+        member: String,
+    },
 }
 
 fn when_param(env: &Env, var: String, make: impl Fn(String) -> ElseFact) -> Vec<ElseFact> {
@@ -396,7 +420,10 @@ fn when_param(env: &Env, var: String, make: impl Fn(String) -> ElseFact) -> Vec<
 }
 
 /// `isinstance(x, T)` → `(x, "T")`. Only single-class checks are narrowed.
-fn isinstance_fact(call: &ruff_python_ast::ExprCall, ctx: &NarrowCtx<'_>) -> Option<(String, String)> {
+fn isinstance_fact(
+    call: &ruff_python_ast::ExprCall,
+    ctx: &NarrowCtx<'_>,
+) -> Option<(String, String)> {
     if expr_simple_name(&call.func)? != "isinstance" || call.arguments.args.len() != 2 {
         return None;
     }
@@ -410,7 +437,10 @@ fn isinstance_fact(call: &ruff_python_ast::ExprCall, ctx: &NarrowCtx<'_>) -> Opt
 }
 
 /// `x is Enum.MEMBER` → `(x, "Enum", "MEMBER")` when `Enum` is a known enum.
-fn enum_is_fact(cmp: &ruff_python_ast::ExprCompare, ctx: &NarrowCtx<'_>) -> Option<(String, String, String)> {
+fn enum_is_fact(
+    cmp: &ruff_python_ast::ExprCompare,
+    ctx: &NarrowCtx<'_>,
+) -> Option<(String, String, String)> {
     if cmp.ops.as_ref() != [CmpOp::Is] || cmp.comparators.len() != 1 {
         return None;
     }
@@ -426,7 +456,11 @@ fn enum_is_fact(cmp: &ruff_python_ast::ExprCompare, ctx: &NarrowCtx<'_>) -> Opti
 }
 
 /// Positive-branch narrowing for a guard call `f(x)` / `obj.m(x)`.
-fn guard_then(call: &ruff_python_ast::ExprCall, env: &Env, ctx: &NarrowCtx<'_>) -> Option<(String, String)> {
+fn guard_then(
+    call: &ruff_python_ast::ExprCall,
+    env: &Env,
+    ctx: &NarrowCtx<'_>,
+) -> Option<(String, String)> {
     let name = call_name(&call.func)?;
     let guard = ctx.guards.get(&name)?;
     let var = expr_simple_name(call.arguments.args.first()?)?;
@@ -483,7 +517,9 @@ fn bind_type_vars(
     let pattern = pattern.trim();
     let actual = actual.trim();
     if tvars.contains(pattern) {
-        let _ = out.entry(pattern.to_owned()).or_insert_with(|| actual.to_owned());
+        let _ = out
+            .entry(pattern.to_owned())
+            .or_insert_with(|| actual.to_owned());
         return;
     }
     if let (Some((ph, pi)), Some((ah, ai))) = (split_subscript(pattern), split_subscript(actual)) {
@@ -577,7 +613,10 @@ fn subtract_arm(ty: &str, remove: &str) -> String {
     if kept.is_empty() {
         ty.to_owned()
     } else {
-        kept.iter().map(|s| s.trim()).collect::<Vec<_>>().join(" | ")
+        kept.iter()
+            .map(|s| s.trim())
+            .collect::<Vec<_>>()
+            .join(" | ")
     }
 }
 

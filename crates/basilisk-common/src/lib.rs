@@ -7,6 +7,7 @@
 
 pub mod datetime;
 pub mod fs;
+pub mod text;
 
 /// Custom LSP method names used by Basilisk.
 ///

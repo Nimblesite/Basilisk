@@ -97,6 +97,30 @@ pub fn parse_diff_output(json_str: &str) -> Result<MemoryDiff, String> {
 }
 
 /// Parse a single allocation entry from the diff JSON.
+/// Parse a `traceback` array from a memory-event JSON value into trace frames.
+pub(super) fn parse_traceback(value: &serde_json::Value) -> Vec<TraceFrame> {
+    value
+        .get("traceback")
+        .and_then(serde_json::Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .map(|frame| TraceFrame {
+                    file: frame
+                        .get("file")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("")
+                        .to_owned(),
+                    line: frame
+                        .get("line")
+                        .and_then(serde_json::Value::as_i64)
+                        .and_then(|v| i32::try_from(v).ok())
+                        .unwrap_or(0),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn parse_allocation_entry(value: &serde_json::Value) -> AllocationGrowth {
     let file = value
         .get("file")
@@ -125,26 +149,7 @@ fn parse_allocation_entry(value: &serde_json::Value) -> AllocationGrowth {
         .and_then(serde_json::Value::as_u64)
         .unwrap_or(0);
 
-    let traceback = value
-        .get("traceback")
-        .and_then(serde_json::Value::as_array)
-        .map(|arr| {
-            arr.iter()
-                .map(|frame| TraceFrame {
-                    file: frame
-                        .get("file")
-                        .and_then(serde_json::Value::as_str)
-                        .unwrap_or("")
-                        .to_owned(),
-                    line: frame
-                        .get("line")
-                        .and_then(serde_json::Value::as_i64)
-                        .and_then(|v| i32::try_from(v).ok())
-                        .unwrap_or(0),
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let traceback = parse_traceback(value);
 
     AllocationGrowth {
         file,

@@ -69,8 +69,8 @@ pub(super) fn check_protocol_classvar_conformance(
                 .attributes
                 .iter()
                 .map(|attr| {
-                    let is_cv = span_text(source, attr.annotation_span)
-                        .is_some_and(is_classvar_annotation);
+                    let is_cv =
+                        span_text(source, attr.annotation_span).is_some_and(is_classvar_annotation);
                     (attr.name.as_str(), is_cv)
                 })
                 .collect();
