@@ -44,6 +44,17 @@ const LSP_CMD = {
   processes: "basilisk.profiler.processes",
 } as const;
 
+/**
+ * The process-fetch lifecycle, published as the `basilisk.processesState` context
+ * key so the empty-state welcome never lies: "No Python processes running" shows
+ * only after a fetch actually succeeded (`loaded`), while a still-loading or
+ * errored fetch says so honestly ([PROFILE-PROCESSES-PANEL], #147).
+ */
+export type ProcessesState = "loading" | "loaded" | "error";
+
+/** Context key gating the Python Processes welcome states. */
+const PROCESSES_STATE_CONTEXT_KEY = "basilisk.processesState";
+
 /** How long the "sorted/grouped by …" status hint stays visible (ms). */
 const STATUS_HINT_MS = 2000;
 
@@ -208,6 +219,8 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
   public readonly disposables: vscode.Disposable[] = [];
   private processes: readonly ProcessInfo[] = [];
   private fetched = false;
+  /** Fetch lifecycle, mirrored to the `basilisk.processesState` context key (#147). */
+  private fetchState: ProcessesState = "loading";
   private sortMode: SortMode = "cpu";
   private groupMode: GroupMode = "none";
   private filterText = "";
@@ -219,6 +232,20 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
   public refresh(): void {
     this.fetched = false;
     this.emitter.fire(undefined);
+  }
+
+  /**
+   * The current process-fetch state — the e2e seam for [PROFILE-PROCESSES-PANEL]
+   * empty-state honesty (#147), mirrored to the `basilisk.processesState` key.
+   */
+  public get processesState(): ProcessesState {
+    return this.fetchState;
+  }
+
+  /** Record the fetch state and mirror it to the context key gating the welcome. */
+  private setProcessesState(state: ProcessesState): void {
+    this.fetchState = state;
+    void vscode.commands.executeCommand("setContext", PROCESSES_STATE_CONTEXT_KEY, state);
   }
 
   /**
@@ -341,8 +368,11 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
   private async fetchProcesses(): Promise<void> {
     const client = this.store.client.value;
     if (!client?.isRunning()) {
+      // Can't fetch yet — stay honestly "loading"; the serverState welcome shows
+      // the connecting/stopped copy. Never assert "no processes" here (#147).
       this.processes = [];
       this.fetched = true;
+      this.setProcessesState("loading");
       return;
     }
     try {
@@ -352,10 +382,13 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
       );
       this.processes = result?.processes ?? [];
       this.fetched = true;
+      // Only now is an empty list a genuine "no processes" rather than a lie (#147).
+      this.setProcessesState("loaded");
     } catch (err: unknown) {
       Logger.error(`Python Processes fetch failed: ${err instanceof Error ? err.message : String(err)}`);
       this.processes = [];
       this.fetched = true;
+      this.setProcessesState("error");
     }
   }
 }
@@ -374,6 +407,10 @@ export function registerPythonProcesses(
   store: Store,
 ): { provider: PythonProcessesProvider; disposables: vscode.Disposable[] } {
   const provider = new PythonProcessesProvider(store);
+
+  // Seed the welcome gate honestly: until the first fetch resolves the panel is
+  // "loading", never "no processes" ([PROFILE-PROCESSES-PANEL], #147).
+  void vscode.commands.executeCommand("setContext", PROCESSES_STATE_CONTEXT_KEY, "loading");
 
   const treeView = vscode.window.createTreeView("basilisk.pythonProcesses", {
     treeDataProvider: provider,

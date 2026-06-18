@@ -180,11 +180,19 @@ shows a progress surface from click to outcome:
   in flight.
 - **Panel loading states** ([#PROFILE-PROCESSES-PANEL]): manual Refresh runs
   under the view's progress bar; the auto-refresh poll stays silent. The
-  empty state is gated on the `basilisk.serverState` context key: while the
-  language server is starting it reads "Connecting to the Basilisk language
-  server…" — the "No Python processes running" message (with its launch
-  buttons) is only shown when the server is actually running and the list is
-  truly empty.
+  empty state is gated on **two** context keys so it never lies (#147): the
+  `basilisk.serverState` key (while the language server is starting it reads
+  "Connecting to the Basilisk language server…"; when stopped, a one-click
+  Restart), and the `basilisk.processesState` key the provider publishes from
+  its fetch lifecycle (`loading` | `loaded` | `error`). "No Python processes
+  running" is shown **only** when the server is running *and* a fetch has
+  actually succeeded (`processesState == loaded`) and the list is truly empty;
+  a still-loading fetch reads "Loading Python processes…" and a failed one
+  "Couldn't load the Python process list.", so an errored / disconnected panel
+  never asserts the definitive negative. The empty state carries **no**
+  standalone Refresh button and **no** "the list refreshes automatically"
+  narration — a panel should not have to tell the user it refreshes; refresh
+  lives in the view title, and genuine reactivity is #148.
 - **Reactive session chrome** ([#PROFILE-PROCESSES-REACTIVE]): once a profile
   is starting or running, the Python Processes panel itself reflects it — a
   live message + badge, the launch buttons swapped for Stop, and the profiled

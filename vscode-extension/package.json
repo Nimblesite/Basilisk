@@ -93,8 +93,18 @@
       },
       {
         "view": "basilisk.pythonProcesses",
-        "contents": "No Python processes running. The list refreshes automatically.\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)\n[Refresh](command:basilisk.refreshProcesses)",
-        "when": "basilisk.serverState == running"
+        "contents": "Loading Python processes…\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)",
+        "when": "basilisk.serverState == running && basilisk.processesState == loading"
+      },
+      {
+        "view": "basilisk.pythonProcesses",
+        "contents": "Couldn't load the Python process list.\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)",
+        "when": "basilisk.serverState == running && basilisk.processesState == error"
+      },
+      {
+        "view": "basilisk.pythonProcesses",
+        "contents": "No Python processes running.\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)",
+        "when": "basilisk.serverState == running && basilisk.processesState == loaded"
       }
     ],
     "commands": [

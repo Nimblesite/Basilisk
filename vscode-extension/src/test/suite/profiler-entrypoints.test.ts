@@ -12,11 +12,14 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import { buildProfileLaunchConfig } from "../../process-launch";
 import { shouldProfileOnLaunch } from "../../profiler";
+import { PythonProcessesProvider } from "../../process-explorer";
+import { type Store } from "../../store";
 import {
   getPackageJsonCommands,
   getPackageJsonMenu,
   getPackageJsonViewsWelcome,
   type PackageJsonCommandEntry,
+  type PackageJsonViewsWelcomeEntry,
 } from "./profiler-test-constants";
 
 /** The metric-explicit run-and-profile entry points (#82). */
@@ -84,7 +87,7 @@ suite("Python Processes — title-bar entry points state their metric (#82)", ()
     const welcome = getPackageJsonViewsWelcome().find(
       (entry) =>
         entry.view === "basilisk.pythonProcesses" &&
-        entry.when === "basilisk.serverState == running",
+        entry.contents.includes("No Python processes running"),
     );
     assert.ok(welcome, "the Python Processes panel must declare a server-running empty state");
     assert.ok(
@@ -114,6 +117,99 @@ suite("Python Processes — title-bar entry points state their metric (#82)", ()
         `${command} must stay behind the [PROFILE-UI-GATE] context key`,
       );
     }
+  });
+});
+
+// Tests for [PROFILE-PROCESSES-PANEL]. See docs/specs/LSP-PROFILING-SPEC.md#PROFILE-PROCESSES-PANEL
+//
+// Issue #147 (scoped to empty-state honesty; the Signals refactor is #148): the
+// Python Processes empty state must not float a redundant Refresh button, and
+// "No Python processes running" must appear ONLY after a fetch has actually
+// succeeded — loading / couldn't-load states must say so honestly instead of
+// asserting the definitive negative.
+const REFRESH_COMMAND = "basilisk.refreshProcesses";
+
+/** The Python Processes panel's welcome entries. */
+function processWelcomes(): PackageJsonViewsWelcomeEntry[] {
+  return getPackageJsonViewsWelcome().filter((entry) => entry.view === "basilisk.pythonProcesses");
+}
+
+suite("Python Processes — empty state honesty (#147)", () => {
+  test("no standalone Refresh button floats in the empty/welcome state", () => {
+    // The panel auto-refreshes and a view-title Refresh already exists; a Refresh
+    // button in the welcome copy is redundant and self-contradictory (#147).
+    for (const welcome of processWelcomes()) {
+      assert.ok(
+        !welcome.contents.includes(`command:${REFRESH_COMMAND}`),
+        `the empty state must not carry a standalone Refresh button (#147); got: ${welcome.contents}`,
+      );
+    }
+  });
+
+  test('"No Python processes running" appears only after a fetch has succeeded', () => {
+    // The definitive negative must be gated on a SUCCEEDED fetch
+    // (processesState == loaded), not merely a running server — else a loading /
+    // errored / disconnected panel lies that there are no processes (#147).
+    const genuinelyEmpty = processWelcomes().find((entry) =>
+      entry.contents.includes("No Python processes running"),
+    );
+    assert.ok(genuinelyEmpty, "a genuinely-empty welcome must exist");
+    assert.ok(
+      genuinelyEmpty.when?.includes("basilisk.processesState == loaded") === true,
+      `"No Python processes running" must be gated on a successful fetch (processesState == loaded), not just a running server (#147); got: ${String(genuinelyEmpty.when)}`,
+    );
+  });
+
+  test("loading and couldn't-load states are declared, so the panel never lies", () => {
+    const whens = processWelcomes().map((entry) => entry.when ?? "");
+    assert.ok(
+      whens.some((when) => when.includes("basilisk.processesState == loading")),
+      `a loading state must be declared so the panel never asserts "no processes" mid-load (#147); got: ${whens.join(" | ")}`,
+    );
+    assert.ok(
+      whens.some((when) => when.includes("basilisk.processesState == error")),
+      `a couldn't-load state must be declared so a fetch error doesn't masquerade as "no processes" (#147); got: ${whens.join(" | ")}`,
+    );
+  });
+});
+
+/** Build a provider over a fake store whose client behaves as given (#147 seam). */
+function providerWithClient(client: unknown): PythonProcessesProvider {
+  return new PythonProcessesProvider({ client: { value: client } } as unknown as Store);
+}
+
+suite("Python Processes — fetch-state drives the welcome (#147)", () => {
+  // The empty welcome only tells the truth if the provider publishes the right
+  // processesState. A still-loading or errored fetch must NEVER read as "loaded"
+  // (the genuinely-empty state), or "No Python processes running" lies again.
+  test("a freshly created panel is 'loading', never 'no processes'", () => {
+    const provider = providerWithClient({ isRunning: () => false });
+    assert.strictEqual(provider.processesState, "loading");
+    provider.dispose();
+  });
+
+  test("a successful fetch settles to 'loaded' — only then is empty genuine", async () => {
+    const provider = providerWithClient({ isRunning: () => true, sendRequest: async () => ({ processes: [] }) });
+    await provider.refreshNow();
+    assert.strictEqual(provider.processesState, "loaded");
+    provider.dispose();
+  });
+
+  test("a failed fetch settles to 'error', not masquerading as 'no processes'", async () => {
+    const provider = providerWithClient({
+      isRunning: () => true,
+      sendRequest: async () => { throw new Error("disconnected"); },
+    });
+    await provider.refreshNow();
+    assert.strictEqual(provider.processesState, "error");
+    provider.dispose();
+  });
+
+  test("no running client stays 'loading' (the serverState welcome owns the copy)", async () => {
+    const provider = providerWithClient(undefined);
+    await provider.refreshNow();
+    assert.strictEqual(provider.processesState, "loading");
+    provider.dispose();
   });
 });
 
