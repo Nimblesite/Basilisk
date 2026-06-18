@@ -147,6 +147,19 @@ fn check_protocol_varargs_kwargs(ctx: &mut ProtoCheckCtx<'_>) -> bool {
         ));
         return true;
     }
+    // A protocol whose `__call__` declared `**kwargs: Unpack[TypedDict]` (now
+    // expanded into kw-only params) still requires the source callable to supply
+    // `**kwargs` — either a real `**kwargs` or its own `Unpack[TypedDict]`. A source
+    // with only fixed parameters cannot guarantee extra keys are rejected, so the
+    // assignment is disallowed (typing spec: destination `**kwargs: Unpack[TD]` with
+    // a source lacking `**kwargs`). [BSK-E0140]
+    if target.had_unpack_kwargs && !func.has_kwargs && !func.had_unpack_kwargs {
+        ctx.push_err(format!(
+            "Function `{}` incompatible with `{}`: missing `**kwargs`",
+            func.name, proto.name
+        ));
+        return true;
+    }
     false
 }
 

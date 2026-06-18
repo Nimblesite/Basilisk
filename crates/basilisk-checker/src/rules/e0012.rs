@@ -180,11 +180,9 @@ fn arg_rhs_mismatch(
         .trim()
         .to_ascii_lowercase();
 
-    // Check for TypeVarTuple unpack patterns in parameter annotations
-    if annotation.contains("*tuple[Any, ...]") && matches!(rhs, RhsKind::CallExpr | RhsKind::Other)
-    {
-        return Some("a generic type that may be incompatible with TypeVarTuple unpacking");
-    }
+    // A `*tuple[Any, ...]` parameter (PEP 646) accepts any variadic sequence,
+    // so an argument's runtime-determined type is not an E0012 mismatch. Arity
+    // and shape errors for TypeVarTuple parameters are handled by E0085/E0139.
 
     match (base.as_str(), rhs) {
         ("int" | "bool" | "float" | "bytes", RhsKind::StrLiteral) => Some("a `str` literal"),

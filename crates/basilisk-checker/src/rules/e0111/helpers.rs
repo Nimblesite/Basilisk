@@ -203,6 +203,46 @@ pub(super) fn is_namedtuple_class(
     false
 }
 
+/// Return the tuple fields of a `NamedTuple` class.
+///
+/// Per the typing spec (namedtuples.html): "A named tuple class can be
+/// subclassed, but any fields added by the subclass are not considered part of
+/// the named tuple type." So a class that inherits `NamedTuple` *directly*
+/// contributes its own annotated attributes as fields; a subclass of another
+/// `NamedTuple` class inherits exactly that base's fields and its own added
+/// annotations are NOT tuple fields.
+pub(super) fn namedtuple_fields<'a>(
+    class_info: &'a ClassInfo,
+    class_map: &HashMap<&str, &'a ClassInfo>,
+) -> Vec<&'a basilisk_resolver::AttributeInfo> {
+    let own_annotated = || {
+        class_info
+            .attributes
+            .iter()
+            .filter(|a| a.has_annotation)
+            .collect::<Vec<_>>()
+    };
+
+    // Direct `NamedTuple` inheritance: own annotated attributes are the fields.
+    if all_base_names(class_info)
+        .into_iter()
+        .any(|base| base == "NamedTuple")
+    {
+        return own_annotated();
+    }
+
+    // Subclass of another `NamedTuple` class: inherit that base's fields only.
+    for base_name in all_base_names(class_info) {
+        if let Some(base_class) = class_map.get(base_name) {
+            if is_namedtuple_class(base_class, class_map) {
+                return namedtuple_fields(base_class, class_map);
+            }
+        }
+    }
+
+    own_annotated()
+}
+
 /// Resolve a string annotation by stripping surrounding quotes.
 pub(super) fn resolve_string_annotation(annotation: &str) -> String {
     if (annotation.starts_with('"') && annotation.ends_with('"'))

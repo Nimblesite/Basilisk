@@ -194,6 +194,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
+name = "basilisk-buildinfo"
+version = "0.0.0-PLACEHOLDER"
+dependencies = [
+ "basilisk-common",
+]
+
+[[package]]
 name = "basilisk-checker"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
@@ -214,6 +221,7 @@ dependencies = [
 name = "basilisk-cli"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
+ "basilisk-buildinfo",
  "basilisk-checker",
  "basilisk-common",
  "basilisk-config",

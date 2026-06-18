@@ -90,13 +90,16 @@ impl ModuleContext {
         }
 
         // Second pass: collect subclasses of known NamedTuple classes.
+        //
+        // Per the typing spec, "any fields added by the subclass are not
+        // considered part of the named tuple type" — so a NamedTuple subclass
+        // has exactly the same tuple length as its base; its own added
+        // annotations are NOT tuple fields.
         for stmt in stmts {
             if let Stmt::ClassDef(cls) = stmt {
                 if !namedtuple_classes.contains_key(cls.name.as_str()) {
                     if let Some(base_count) = namedtuple_base_count(cls, &namedtuple_classes) {
-                        let own_fields = count_annotated_fields(cls);
-                        let _ = namedtuple_classes
-                            .insert(cls.name.to_string(), base_count + own_fields);
+                        let _ = namedtuple_classes.insert(cls.name.to_string(), base_count);
                     }
                 }
             }

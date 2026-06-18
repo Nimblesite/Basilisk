@@ -103,6 +103,10 @@ pub(super) fn collect_class_body(
                 let method_name = func_info.name.clone();
                 let decs = func_info.decorators.clone();
                 functions.push(func_info);
+                // Any function collected from this method body is a closure
+                // lexically nested inside the class; mark the non-method ones so
+                // [BSK-E0094] does not treat their `Self` as module-level usage.
+                let nested_start = functions.len();
                 collect_from_body(
                     &func.body,
                     functions,
@@ -112,6 +116,11 @@ pub(super) fn collect_class_body(
                     match_stmts,
                     false,
                 );
+                for nested in &mut functions[nested_start..] {
+                    if nested.class_name.is_none() {
+                        nested.nested_in_class = true;
+                    }
+                }
                 method_names.push(method_name.clone());
                 method_decorators.push((method_name, decs));
             }

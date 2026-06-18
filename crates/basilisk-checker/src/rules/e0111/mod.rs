@@ -31,8 +31,8 @@ mod helpers;
 
 use helpers::{
     check_init_method_args, check_self_type_incompatibility, extract_type_args_text,
-    has_custom_init_in_bases, has_unresolved_base, is_namedtuple_class, resolve_string_annotation,
-    CODE,
+    has_custom_init_in_bases, has_unresolved_base, is_namedtuple_class, namedtuple_fields,
+    resolve_string_annotation, CODE,
 };
 
 /// Emits BSK-E0111 for constructor call errors involving `__init__`.
@@ -207,7 +207,7 @@ fn check_constructor_call(
         path,
         class_map,
         method_map,
-        ..
+        typevar_names,
     } = *ctx;
 
     match call.func.as_ref() {
@@ -247,6 +247,7 @@ fn check_constructor_call(
                 class_map,
                 source,
                 path,
+                typevar_names,
                 diagnostics,
             );
 
@@ -447,17 +448,17 @@ fn check_namedtuple_constructor(
     class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
     source: &str,
     path: &str,
+    typevar_names: &[&str],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     if !is_namedtuple_class(class_info, class_map) {
         return;
     }
 
-    let fields: Vec<&basilisk_resolver::AttributeInfo> = class_info
-        .attributes
-        .iter()
-        .filter(|a| a.has_annotation)
-        .collect();
+    // A NamedTuple subclass's tuple fields are exactly its base's fields; its
+    // own added annotations are not tuple fields (typing spec). `namedtuple_fields`
+    // resolves this so subclass constructors aren't over/under-counted.
+    let fields = namedtuple_fields(class_info, class_map);
 
     // Check arg count (too many, too few) — returns true if an error was emitted.
     if check_nt_arg_count(call, class_name, &fields, path, diagnostics) {
@@ -465,8 +466,24 @@ fn check_namedtuple_constructor(
     }
 
     check_nt_unknown_kwargs(call, class_name, &fields, path, diagnostics);
-    check_nt_arg_types(call, class_name, &fields, source, path, diagnostics);
-    check_nt_kwarg_types(call, class_name, &fields, source, path, diagnostics);
+    check_nt_arg_types(
+        call,
+        class_name,
+        &fields,
+        source,
+        path,
+        typevar_names,
+        diagnostics,
+    );
+    check_nt_kwarg_types(
+        call,
+        class_name,
+        &fields,
+        source,
+        path,
+        typevar_names,
+        diagnostics,
+    );
 }
 
 /// Check `NamedTuple` constructor arg count. Returns `true` if a diagnostic was emitted.
@@ -593,6 +610,7 @@ fn check_nt_arg_types(
     fields: &[&basilisk_resolver::AttributeInfo],
     source: &str,
     path: &str,
+    typevar_names: &[&str],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use ruff_text_size::Ranged as _;
@@ -608,6 +626,11 @@ fn check_nt_arg_types(
             continue;
         };
         let ann = ann.trim();
+        // A bare TypeVar field (e.g. `value: T` in an unsubscripted generic
+        // NamedTuple call) accepts any argument type — skip it.
+        if typevar_names.contains(&ann) {
+            continue;
+        }
         let arg_type = infer_expr_literal_type(arg).map(str::to_owned);
         let Some(arg_type_name) = arg_type else {
             continue;
@@ -636,6 +659,7 @@ fn check_nt_kwarg_types(
     fields: &[&basilisk_resolver::AttributeInfo],
     source: &str,
     path: &str,
+    typevar_names: &[&str],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use ruff_text_size::Ranged as _;
@@ -654,6 +678,10 @@ fn check_nt_kwarg_types(
             continue;
         };
         let ann = ann.trim();
+        // A bare TypeVar field accepts any argument type — skip it.
+        if typevar_names.contains(&ann) {
+            continue;
+        }
         let arg_type = infer_expr_literal_type(&kw.value).map(str::to_owned);
         let Some(arg_type_name) = arg_type else {
             continue;
@@ -764,11 +792,7 @@ fn check_generic_nt_arg_types(
         return;
     }
 
-    let fields: Vec<&basilisk_resolver::AttributeInfo> = class_info
-        .attributes
-        .iter()
-        .filter(|a| a.has_annotation)
-        .collect();
+    let fields = namedtuple_fields(class_info, class_map);
 
     for (idx, arg) in call.arguments.args.iter().enumerate() {
         let Some(field) = fields.get(idx) else {

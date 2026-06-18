@@ -25,5 +25,8 @@ tokio = { version = "1", features = ["net", "io-util", "rt", "macros", "sync", "
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 
+[build-dependencies]
+basilisk-buildinfo.workspace = true
+
 [lints]
 workspace = true

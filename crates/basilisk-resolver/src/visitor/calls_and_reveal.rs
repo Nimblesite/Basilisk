@@ -128,10 +128,14 @@ pub(super) fn call_site_from_expr(expr: &Expr) -> Option<CallSite> {
                 .map(|name| (name.to_string(), classify_rhs(&kw.value)))
         })
         .collect();
+    // A keyword entry with no name (`kw.arg == None`) is a `**dict` unpack, which
+    // hides an unknown number of named arguments from the static call view.
+    let has_unpacked_kwargs = call.arguments.keywords.iter().any(|kw| kw.arg.is_none());
     Some(CallSite {
         callee,
         args,
         keywords,
+        has_unpacked_kwargs,
         span: text_range_to_span(call.range()),
     })
 }

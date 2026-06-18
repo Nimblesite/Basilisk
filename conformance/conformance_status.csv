@@ -19,7 +19,7 @@ BSK-E0120|BSK-E0131,annotations_generators.py,annotations,PASS,10,0,0
 ,annotations_methods.py,annotations,PASS,0,0,0
 BSK-E0024|BSK-E0047|BSK-E0048,annotations_typeexpr.py,annotations,PASS,15,0,0
 BSK-E0014|BSK-E0015|BSK-E0122|BSK-E0140,callables_annotation.py,callables,PASS,16,0,0
-BSK-E0012|BSK-E0041|BSK-E0140|BSK-E0141,callables_kwargs.py,callables,PASS,13,0,2
+BSK-E0012|BSK-E0140|BSK-E0141,callables_kwargs.py,callables,PASS,13,0,0
 BSK-E0140,callables_protocol.py,callables,PASS,17,0,0
 BSK-E0014|BSK-E0136,callables_subtyping.py,callables,PASS,32,0,0
 BSK-E0014|BSK-E0036|BSK-E0044,classes_classvar.py,classes,PASS,17,0,0
@@ -43,12 +43,12 @@ BSK-E0108,dataclasses_slots.py,dataclasses,PASS,4,0,0
 BSK-E0142,dataclasses_transform_class.py,dataclasses,PASS,6,0,0
 BSK-E0142,dataclasses_transform_converter.py,dataclasses,PASS,9,0,0
 BSK-E0069,dataclasses_transform_field.py,dataclasses,PASS,2,0,0
-BSK-E0014|BSK-E0052|BSK-E0060|BSK-E0069|BSK-E0111,dataclasses_transform_func.py,dataclasses,PASS,5,0,2
+BSK-E0014|BSK-E0052|BSK-E0060|BSK-E0069|BSK-E0111,dataclasses_transform_func.py,dataclasses,PASS,5,0,0
 BSK-E0138,dataclasses_transform_meta.py,dataclasses,PASS,6,0,0
 BSK-E0041|BSK-E0069|BSK-E0096,dataclasses_usage.py,dataclasses,PASS,8,0,0
 BSK-E0039|BSK-E0053,directives_assert_type.py,directives,PASS,7,0,0
 BSK-E0031,directives_cast.py,directives,PASS,3,0,0
-BSK-E0115,directives_deprecated.py,directives,PASS,12,0,1
+BSK-E0115,directives_deprecated.py,directives,PASS,12,0,0
 BSK-E0012|BSK-E0013|BSK-E0041,directives_no_type_check.py,directives,PASS,1,0,0
 BSK-E0033,directives_reveal_type.py,directives,PASS,2,0,0
 ,directives_type_checking.py,directives,PASS,0,0,0
@@ -77,7 +77,7 @@ BSK-E0117|BSK-E0130,generics_scoping.py,generics,PASS,10,0,0
 BSK-E0075,generics_self_attributes.py,generics,PASS,2,0,0
 BSK-E0078,generics_self_basic.py,generics,PASS,3,0,0
 BSK-E0077,generics_self_protocols.py,generics,PASS,2,0,0
-BSK-E0078|BSK-E0094,generics_self_usage.py,generics,PASS,10,0,2
+BSK-E0078|BSK-E0094,generics_self_usage.py,generics,PASS,11,0,0
 BSK-E0042,generics_syntax_compatibility.py,generics,PASS,2,0,0
 BSK-E0043|BSK-E0089|BSK-E0105,generics_syntax_declarations.py,generics,PASS,10,0,0
 BSK-E0055|BSK-E0130,generics_syntax_infer_variance.py,generics,PASS,18,0,0
@@ -88,8 +88,8 @@ BSK-E0055|BSK-E0083|BSK-E0084|BSK-E0085|BSK-E0086,generics_typevartuple_basic.py
 BSK-E0082,generics_typevartuple_callable.py,generics,PASS,1,0,0
 ,generics_typevartuple_concat.py,generics,PASS,0,0,0
 ,generics_typevartuple_overloads.py,generics,PASS,0,0,0
-BSK-E0012|BSK-E0086|BSK-E0130|BSK-E0139,generics_typevartuple_specialization.py,generics,PASS,6,0,3
-BSK-E0012|BSK-E0081,generics_typevartuple_unpack.py,generics,PASS,1,0,2
+BSK-E0086|BSK-E0130|BSK-E0139,generics_typevartuple_specialization.py,generics,PASS,6,0,0
+BSK-E0081,generics_typevartuple_unpack.py,generics,PASS,1,0,0
 BSK-E0026|BSK-E0055|BSK-E0080,generics_upper_bound.py,generics,PASS,3,0,0
 BSK-E0055|BSK-E0107,generics_variance.py,generics,PASS,9,0,0
 BSK-E0130,generics_variance_inference.py,generics,PASS,23,0,0
@@ -98,10 +98,10 @@ BSK-E0127,literals_interactions.py,literals,PASS,4,0,0
 BSK-E0014|BSK-E0051|BSK-E0109|BSK-E0126|BSK-E0129,literals_literalstring.py,literals,PASS,9,0,0
 BSK-E0014|BSK-E0051|BSK-E0068|BSK-E0117|BSK-E0129|BSK-E0130,literals_parameterizations.py,literals,PASS,17,0,0
 BSK-E0014|BSK-E0129,literals_semantics.py,literals,PASS,4,0,1
-BSK-E0111|BSK-E0116|BSK-E0143,namedtuples_define_class.py,namedtuples,PASS,14,0,2
+BSK-E0111|BSK-E0116|BSK-E0143,namedtuples_define_class.py,namedtuples,PASS,14,0,0
 BSK-E0041|BSK-E0064,namedtuples_define_functional.py,namedtuples,PASS,9,0,0
 BSK-E0073,namedtuples_type_compat.py,namedtuples,PASS,2,0,0
-BSK-E0111|BSK-E0143,namedtuples_usage.py,namedtuples,PASS,8,0,2
+BSK-E0143,namedtuples_usage.py,namedtuples,PASS,8,0,0
 BSK-E0101|BSK-E0112,narrowing_typeguard.py,narrowing,PASS,4,0,0
 BSK-E0101|BSK-E0112|BSK-E0113,narrowing_typeis.py,narrowing,PASS,9,0,0
 BSK-E0072,overloads_basic.py,overloads,PASS,1,0,0
@@ -139,7 +139,7 @@ BSK-E0093,typeddicts_operations.py,typeddicts,PASS,11,0,0
 BSK-E0056,typeddicts_readonly.py,typeddicts,PASS,6,0,0
 BSK-E0014,typeddicts_readonly_consistency.py,typeddicts,PASS,7,0,5
 BSK-E0038|BSK-E0056|BSK-E0093,typeddicts_readonly_inheritance.py,typeddicts,PASS,11,0,0
-BSK-E0056|BSK-E0140,typeddicts_readonly_kwargs.py,typeddicts,PASS,1,0,1
+BSK-E0056,typeddicts_readonly_kwargs.py,typeddicts,PASS,1,0,0
 BSK-E0056|BSK-E0093,typeddicts_readonly_update.py,typeddicts,PASS,1,0,1
 BSK-E0035,typeddicts_required.py,typeddicts,PASS,4,0,0
 BSK-E0093,typeddicts_type_consistency.py,typeddicts,PASS,9,0,0
