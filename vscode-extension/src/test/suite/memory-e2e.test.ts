@@ -26,7 +26,6 @@ import {
   type MemorySnapshotResult,
 } from "../../memory-decorations";
 import {
-  openPythonFile,
   pollUntilResult,
   setupLspTestSuite,
   teardownLspTestSuite,
@@ -273,6 +272,125 @@ async function trackAndSnapshotRunningProgram(): Promise<void> {
   await waitForSessionEnd();
 }
 
+/**
+ * Drive the real "Run & Track Memory (Current File)" launch on the allocating
+ * fixture with NO breakpoint, let it run to completion, and assert the run
+ * finalises into a VISIBLE result: the at-exit snapshot's live allocations
+ * paint the purple track on the real allocation line, and tracking settles back
+ * to idle. This is the #146 dead-end — a run that ended in nothing the user
+ * could look at ([PROFILE-MEMORY-FINAL]).
+ */
+async function runTrackMemoryToCompletionAndAssertResult(): Promise<void> {
+  vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+  clearMemoryDecorations();
+  // The fixture must be the open editor so its at-exit allocations paint.
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(FIXTURE));
+  await vscode.window.showTextDocument(doc, { preview: false });
+
+  const started = await vscode.debug.startDebugging(undefined, buildProfileLaunchConfig("memory", FIXTURE));
+  assert.ok(started, "the metric-explicit memory launch must start");
+
+  // The auto-flow must mint a memory session at the entry pause…
+  await pollUntilResult({
+    fn: async () => activeMemorySession(),
+    predicate: (sessionId) => sessionId !== undefined,
+    timeoutMs: SESSION_WAIT_MS,
+    intervalMs: POLL_MS,
+  });
+
+  // …resume the debuggee so the program actually runs to completion…
+  await waitForSessionEnd();
+
+  // …and the session end must finalise into a visible result: the at-exit
+  // snapshot's live allocations paint the purple memory track on the real
+  // allocation line.
+  const memApplied = await pollUntilResult({
+    fn: async () => appliedMemoryDecorations().filter((entry) => entry.file === FIXTURE),
+    predicate: (entries) =>
+      entries.some((entry) => entry.line === ALLOC_LINE && MEMORY_PALETTE.includes(entry.color)),
+    timeoutMs: SESSION_WAIT_MS,
+    intervalMs: POLL_MS,
+  });
+  assert.ok(
+    memApplied.some((entry) => entry.line === ALLOC_LINE && MEMORY_PALETTE.includes(entry.color)),
+    `the run must end in a visible memory result — a purple track on allocation line ${ALLOC_LINE}, got: ${JSON.stringify(memApplied)}`,
+  );
+
+  // No stale state: tracking settles back to idle once the run is finalised
+  // ([PROFILE-PROCESSES-REACTIVE]); the debuggee is gone, so "tracking" must not linger.
+  await pollUntilResult({
+    fn: async () => activeMemorySession(),
+    predicate: (sessionId) => sessionId === undefined,
+    timeoutMs: SESSION_WAIT_MS,
+    intervalMs: POLL_MS,
+  });
+  assert.strictEqual(
+    activeMemorySession(),
+    undefined,
+    "tracking must settle to idle after the run is finalised into a result",
+  );
+}
+
+/**
+ * Track a run-forever program, then launch and terminate an UNRELATED debug
+ * session. The unrelated session ending must NOT finalise/tear down the live
+ * tracking — only the *tracked* session's own termination may
+ * ([PROFILE-MEMORY-FINAL]). Guards the regression where the terminate handler
+ * keyed on tracking state alone and destroyed tracking for any session.
+ */
+async function trackedRunSurvivesUnrelatedSessionEnd(): Promise<void> {
+  vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+  clearMemoryDecorations();
+  const busyFixture = path.resolve(__dirname, "../../src/test/fixtures/memory_busy.py");
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(busyFixture));
+  await vscode.window.showTextDocument(doc, { preview: false });
+
+  // Session A: a run-forever program with memory tracking active.
+  let sessionA: vscode.DebugSession | undefined;
+  const startSub = vscode.debug.onDidStartDebugSession((s) => { if (s.name === "Tracked A") { sessionA = s; } });
+  const startedA = await vscode.debug.startDebugging(undefined, {
+    name: "Tracked A", type: "basilisk-debug", request: "launch",
+    program: busyFixture, stopOnEntry: false, justMyCode: true, console: "internalConsole",
+  });
+  assert.ok(startedA, "the tracked session must launch");
+  await pollUntilResult({
+    fn: async () => vscode.debug.activeDebugSession, predicate: (s) => s !== undefined,
+    timeoutMs: SESSION_WAIT_MS, intervalMs: POLL_MS,
+  });
+  await vscode.commands.executeCommand("basilisk.memoryStart"); // auto-pause → inject → resume
+  const trackedSession = activeMemorySession();
+  assert.ok(trackedSession !== undefined, "tracking must start on the run-forever program");
+
+  // Session B: an unrelated program that runs to completion and terminates.
+  let sessionBId: string | undefined;
+  const bTerminated = new Promise<void>((resolve) => {
+    const startB = vscode.debug.onDidStartDebugSession((s) => { if (s.name === "Unrelated B") { sessionBId = s.id; } });
+    const endB = vscode.debug.onDidTerminateDebugSession((s) => {
+      if (sessionBId !== undefined && s.id === sessionBId) { startB.dispose(); endB.dispose(); resolve(); }
+    });
+  });
+  const startedB = await vscode.debug.startDebugging(undefined, {
+    name: "Unrelated B", type: "basilisk-debug", request: "launch",
+    program: FIXTURE, stopOnEntry: false, justMyCode: true, console: "internalConsole",
+  });
+  assert.ok(startedB, "the unrelated session must launch");
+  await bTerminated;
+  await new Promise<void>((r) => setTimeout(r, 500)); // let the terminate handler run
+
+  startSub.dispose();
+  assert.ok(sessionBId !== undefined && sessionBId !== sessionA?.id, "the two sessions must be distinct");
+  assert.strictEqual(
+    activeMemorySession(), trackedSession,
+    "an unrelated debug session ending must not finalise or tear down live memory tracking",
+  );
+
+  await vscode.debug.stopDebugging(sessionA);
+  await pollUntilResult({
+    fn: async () => vscode.debug.activeDebugSession, predicate: (s) => s === undefined,
+    timeoutMs: SESSION_WAIT_MS, intervalMs: POLL_MS,
+  });
+}
+
 /** Assert the diff's user-facing surface: leak suspicion + leak decorations. */
 function assertLeakSurface(diff: MemoryDiffResult & IngestResult): void {
   assert.ok(diff.totalGrowth > 0, "allocating a chunk between pauses must register growth");
@@ -394,27 +512,19 @@ suite("Memory profiling — real end-to-end", () => {
     await trackAndSnapshotRunningProgram();
   });
 
-  test("Run & Track Memory (Current File): stop-on-entry inject, auto-resume, program completes (#82)", async function () {
+  test("Run & Track Memory (Current File): the run finalises into a visible memory result on session end (#146)", async function () {
     this.timeout(60_000);
-    vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
-    await openPythonFile(tmpDir, "noop.py", "x = 1\n");
+    // #146: with no breakpoint the program runs to completion, so the OLD flow
+    // dead-ended — tracking started, the program exited, and NOTHING was shown
+    // (no chart / trace / report). The run must instead capture a final snapshot
+    // as the program exits and finalise it into a result the user can see.
+    await runTrackMemoryToCompletionAndAssertResult();
+  });
 
-    const started = await vscode.debug.startDebugging(
-      undefined,
-      buildProfileLaunchConfig("memory", FIXTURE),
-    );
-    assert.ok(started, "the metric-explicit memory launch must start");
-
-    // The auto-flow must mint a memory session at the entry pause…
-    await pollUntilResult({
-      fn: async () => activeMemorySession(),
-      predicate: (sessionId) => sessionId !== undefined,
-      timeoutMs: SESSION_WAIT_MS,
-      intervalMs: POLL_MS,
-    });
-
-    // …and resume the debuggee so the program actually runs to completion.
-    await waitForSessionEnd();
-    assert.ok(activeMemorySession() !== undefined, "tracking must survive until explicitly stopped");
+  test("an unrelated debug session ending does not tear down live memory tracking (#146)", async function () {
+    this.timeout(60_000);
+    // Regression: the terminate handler must finalise ONLY the tracked session,
+    // not destroy tracking whenever any debug session in the window ends.
+    await trackedRunSurvivesUnrelatedSessionEnd();
   });
 });

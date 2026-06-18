@@ -368,7 +368,10 @@ metric-explicit buttons mirror the per-row actions, same labels and icons:
 - **🗄️ Run & Track Memory (Current File)** (`basilisk.trackMemoryCurrentFile`) —
   launches with `stopOnEntry: true` + `memoryTrackOnLaunch: true`; tracemalloc
   needs a paused debuggee ([#PROFILE-MEMORY-HOWTO]), so memory-profiler.ts
-  starts tracking at the entry pause and then resumes the program.
+  starts tracking at the entry pause and then resumes the program. Because this
+  run has no breakpoint, the start script also arms an at-exit snapshot so the
+  run finalises into a visible result on session end rather than dead-ending
+  ([#PROFILE-MEMORY-FINAL]).
 
 Both appear in the title bar, the panel's empty state, and (gated on
 [#PROFILE-UI-GATE]) the command palette.
@@ -838,6 +841,59 @@ debugging only: the editor and debuggee share a filesystem, exactly as the
 cooperative CPU sampler ([#PROFILE-COOPERATIVE]) already assumes. Small acks
 (`__BASILISK_MEM_OK__`, the CPU ack) still go straight over stdout.
 
+#### Final snapshot on session end {#PROFILE-MEMORY-FINAL}
+
+The "Run & Track Memory (Current File)" flow ([#PROFILE-PROCESSES-LAUNCH-FILE])
+runs the program to completion with **no breakpoint**. Every other memory
+operation needs a *paused* debuggee to `evaluate` against
+([#PROFILE-MEMORY-HOWTO]); a run that finishes therefore leaves no frame to
+snapshot from, and the old flow dead-ended — tracking started, the program
+exited, and nothing (chart, trace, report) was ever shown (#146).
+
+The fix mirrors the cooperative CPU sampler ([#PROFILE-COOPERATIVE]): capture to
+a **file during the run, read it at the end**. When tracking starts,
+`basilisk.memory.start` mints a per-session `finalSnapshotFile` path and returns
+it alongside the script; the start script
+([`start_tracemalloc`](../../crates/basilisk-lsp/src/profiler/memory/scripts.rs))
+registers a Python `atexit` hook that takes one `tracemalloc` snapshot **as the
+program exits** and writes it directly to that file. The payload is byte-identical
+to an evaluate-path snapshot — both embed the shared `snapshot_payload_fn` — so it
+ingests through the same [`basilisk.memory.ingest`](#PROFILE-MEMORY-INGEST) path
+with no new parser. A direct in-process write (not the `_basilisk_emit` print
+path) is used because at process exit there is no DAP `evaluate` round-trip
+listening, and writing in-process sidesteps debugpy's print truncation entirely
+([#PROFILE-MEMORY-COURIER]).
+
+When the debug session terminates, `memory-profiler.ts`'s
+`onDidTerminateDebugSession` listener finalises **only the session it is
+tracking** — the store records the tracked `memoryDebugSessionId` at start, and
+the listener matches the terminating session against it, so an unrelated debug
+session ending in the same window never tears down live tracking. For the tracked
+session it calls `finalizeMemorySessionOnEnd`: it settles the now-stale tracking
+state ([#PROFILE-PROCESSES-REACTIVE]), reads the file (briefly polling for the
+terminate-event/flush race, then deleting it), posts it to `ingest`, and presents
+the snapshot exactly like a manual one — the purple allocation track plus the V8
+`.heapprofile` in the built-in viewer ([#PROFILE-NATIVE]). The launch toast states
+this up front ("a final snapshot opens automatically when the program finishes")
+instead of pointing at a manual snapshot the user can never reach. **Stopping
+never silently produces nothing:** if the `atexit` hook didn't run (a crash,
+`os._exit`, or no live allocations), the editor says so explicitly rather than
+clearing state in silence, and the manual `basilisk.memory.stop` likewise reports
+whether a snapshot was captured. Stopping *mid-run* leaves the hook armed, so the
+file it will still write at exit is scheduled for deletion on that session's
+termination — a manual stop never orphans a temp file.
+
+The injected path is embedded as a JSON-encoded Python string literal (the same
+cross-platform-safe pattern as the cooperative sampler, [#PROFILE-COOPERATIVE]),
+so a Windows backslash or a quote in `TMPDIR` cannot break the script.
+
+Covered end-to-end by the "Run & Track Memory (Current File): the run finalises
+into a visible memory result on session end (#146)" test (asserts the at-exit
+snapshot paints the allocation track after a breakpoint-free run exits) and the
+"an unrelated debug session ending does not tear down live memory tracking (#146)"
+regression test, both in
+[`memory-e2e.test.ts`](../../vscode-extension/src/test/suite/memory-e2e.test.ts).
+
 ### LSP Commands {#PROFILE-MEMORY-COMMANDS}
 
 The `start`/`snapshot`/`diff`/`references`/`objectsByType`/`gcCollect` commands are
@@ -846,7 +902,7 @@ and posts the output to [`basilisk.memory.ingest`](#PROFILE-MEMORY-INGEST) (leg 
 
 | Command | Request Fields | Leg-1 Response |
 |---|---|---|
-| `basilisk.memory.start` | `tracebackDepth` (default 25) | `memorySessionId`, `tracingStarted`, `script` |
+| `basilisk.memory.start` | `tracebackDepth` (default 25) | `memorySessionId`, `tracingStarted`, `script`, `finalSnapshotFile` ([#PROFILE-MEMORY-FINAL]) |
 | `basilisk.memory.snapshot` | `memorySessionId` | `memorySessionId`, `script` |
 | `basilisk.memory.diff` | `memorySessionId` | `memorySessionId`, `script` |
 | `basilisk.memory.references` | `memorySessionId`, `targetType`, `targetReprContains`, `maxDepth`, `maxNodes` | `script` |

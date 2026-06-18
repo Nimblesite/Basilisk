@@ -6,17 +6,46 @@
 //! debug adapter's `evaluate` request. They use `tracemalloc` (stdlib)
 //! for allocation tracking and `gc` for reference graph introspection.
 
-/// Script to start tracemalloc with deep tracebacks.
+/// Start `tracemalloc` with deep tracebacks and register an `atexit` hook that
+/// writes one final snapshot to `snapshot_file` as the program exits.
 ///
-/// Injected once when memory profiling begins. The `nframe` parameter
-/// controls traceback depth (default 25 frames).
+/// Injected once when memory tracking begins; `nframe` controls traceback depth
+/// (default 25 frames). The at-exit hook is what makes the "Run & Track Memory
+/// (Current File)" flow end in a *visible result* instead of dead-ending
+/// ([PROFILE-MEMORY-FINAL]): that flow has no breakpoint, so the program runs to
+/// completion and there is never a paused frame to take a snapshot from. The
+/// hook captures one snapshot at process exit and writes it to a file the editor
+/// reads when the debug session terminates. The payload is byte-identical to an
+/// evaluate-path snapshot ([`take_snapshot`]) — both embed [`snapshot_payload_fn`]
+/// — so the editor ingests the file through the same `basilisk.memory.ingest`
+/// path. A direct in-process file write (not the `_basilisk_emit` print path) is
+/// used because at exit there is no DAP `evaluate` round-trip listening, and
+/// writing in-process sidesteps debugpy's print truncation entirely
+/// ([PROFILE-MEMORY-COURIER]). Failures are swallowed: a crash or `os._exit`
+/// leaves no file, and the editor reports "nothing captured" honestly.
 #[must_use]
-pub fn start_tracemalloc(nframe: u32) -> String {
+pub fn start_tracemalloc(nframe: u32, snapshot_file: &str, max_stats: usize) -> String {
+    let payload_fn = snapshot_payload_fn();
+    // Embed the path as a JSON-encoded Python string literal — the same
+    // cross-platform-safe pattern the cooperative sampler uses
+    // ([PROFILE-COOPERATIVE], `cooperative.rs`) — so a Windows backslash or a
+    // quote in `TMPDIR` can't break the script. `to_string` of a `&str` is
+    // infallible; the fallback only keeps this total.
+    let path_literal = serde_json::to_string(snapshot_file).unwrap_or_else(|_| "\"\"".to_owned());
     format!(
         r"
-import tracemalloc, gc
+import tracemalloc, gc, atexit
+{payload_fn}
+def _basilisk_write_exit_snapshot():
+    try:
+        _payload = _basilisk_snapshot_payload({max_stats})
+        with open({path_literal}, 'w') as _f:
+            _f.write(_payload)
+    except Exception:
+        pass
 tracemalloc.start({nframe})
 gc.set_debug(gc.DEBUG_SAVEALL)
+atexit.register(_basilisk_write_exit_snapshot)
 print('__BASILISK_MEM_OK__')
 "
     )
@@ -55,6 +84,42 @@ def _basilisk_emit(_payload):
 "
 }
 
+/// Python `def _basilisk_snapshot_payload(_max_stats)` returning the
+/// `__BASILISK_MEM__ + json` snapshot payload string from the current
+/// `tracemalloc` state (top allocations by line, current/peak memory, gc stats).
+///
+/// Single source of truth for the snapshot payload, embedded by both the
+/// evaluate-path snapshot ([`take_snapshot`]) and the at-exit final snapshot
+/// ([`start_tracemalloc`]'s `atexit` hook), so both emit a byte-identical
+/// payload the same `basilisk.memory.ingest` parser dispatches. Defined as a
+/// plain `&'static str` (no `format!`) so the dict-literal braces stay literal.
+fn snapshot_payload_fn() -> &'static str {
+    r"
+def _basilisk_snapshot_payload(_max_stats):
+    import tracemalloc, json, gc
+    snapshot = tracemalloc.take_snapshot()
+    stats = snapshot.statistics('lineno')
+    top_stats = []
+    for stat in stats[:_max_stats]:
+        frame = stat.traceback[0]
+        top_stats.append({
+            'file': frame.filename,
+            'line': frame.lineno,
+            'size': stat.size,
+            'count': stat.count,
+            'traceback': [{'file': f.filename, 'line': f.lineno} for f in stat.traceback]
+        })
+    current, peak = tracemalloc.get_traced_memory()
+    return '__BASILISK_MEM__' + json.dumps({
+        'current': current,
+        'peak': peak,
+        'stats': top_stats,
+        'gcCounts': list(gc.get_count()),
+        'gcObjects': len(gc.get_objects()),
+    })
+"
+}
+
 /// Script to take a memory snapshot and return allocation data as JSON.
 ///
 /// Returns top allocations by line, current/peak memory, gc stats.
@@ -63,32 +128,11 @@ def _basilisk_emit(_payload):
 #[must_use]
 pub fn take_snapshot(max_stats: usize) -> String {
     let emit = emit_via_file_helper();
+    let payload_fn = snapshot_payload_fn();
     format!(
         r"
-import tracemalloc, json, gc
-{emit}
-snapshot = tracemalloc.take_snapshot()
-stats = snapshot.statistics('lineno')
-top_stats = []
-for stat in stats[:{max_stats}]:
-    frame = stat.traceback[0]
-    top_stats.append({{
-        'file': frame.filename,
-        'line': frame.lineno,
-        'size': stat.size,
-        'count': stat.count,
-        'traceback': [{{'file': f.filename, 'line': f.lineno}} for f in stat.traceback]
-    }})
-
-current, peak = tracemalloc.get_traced_memory()
-mem_info = {{
-    'current': current,
-    'peak': peak,
-    'stats': top_stats,
-    'gcCounts': list(gc.get_count()),
-    'gcObjects': len(gc.get_objects()),
-}}
-_basilisk_emit('__BASILISK_MEM__' + json.dumps(mem_info))
+{emit}{payload_fn}
+_basilisk_emit(_basilisk_snapshot_payload({max_stats}))
 "
     )
 }
@@ -376,16 +420,69 @@ mod tests {
 
     #[test]
     fn start_script_contains_tracemalloc() {
-        let script = start_tracemalloc(25);
+        let script = start_tracemalloc(25, "/tmp/basilisk-final.memfinal", 100);
         assert!(script.contains("tracemalloc.start(25)"));
         assert!(script.contains("gc.set_debug"));
+    }
+
+    #[test]
+    fn start_script_registers_an_atexit_final_snapshot() {
+        // [PROFILE-MEMORY-FINAL] The "Run & Track Memory" flow has no breakpoint,
+        // so the program runs to completion with no paused frame to snapshot from.
+        // The start script must register an `atexit` hook that writes a final
+        // snapshot to the given file as the program exits — that is what makes
+        // the run end in a visible result instead of dead-ending.
+        let script = start_tracemalloc(25, "/tmp/basilisk-final.memfinal", 100);
+        assert!(script.contains("atexit"), "must import atexit: {script}");
+        assert!(
+            script.contains("atexit.register(_basilisk_write_exit_snapshot)"),
+            "must register the exit-snapshot hook: {script}"
+        );
+        // The path is embedded as a JSON-encoded Python string literal (the
+        // cross-platform-safe pattern from cooperative.rs), not a hand-rolled
+        // raw string — so a backslash or quote in the path can't break it.
+        assert!(
+            script.contains("open(\"/tmp/basilisk-final.memfinal\", 'w')"),
+            "the hook must write to the JSON-encoded snapshot file path: {script}"
+        );
+        // The at-exit payload reuses the shared snapshot builder, so its output is
+        // byte-identical to an evaluate-path snapshot the same parser ingests.
+        assert!(
+            script.contains("_basilisk_snapshot_payload(100)"),
+            "the hook must build the shared snapshot payload: {script}"
+        );
+        assert!(
+            script.contains("__BASILISK_MEM__"),
+            "payload must carry the snapshot marker: {script}"
+        );
+    }
+
+    #[test]
+    fn start_script_json_encodes_windows_style_paths() {
+        // A Windows temp path with backslashes (or a stray quote in TMPDIR) must
+        // be embedded as a valid, escaped Python string literal — never a raw
+        // `r'...'` that a trailing backslash could break ([PROFILE-MEMORY-FINAL]).
+        let script = start_tracemalloc(
+            25,
+            r"C:\Users\me\AppData\Local\Temp\basilisk-x.memfinal",
+            100,
+        );
+        assert!(
+            script.contains(
+                r#"open("C:\\Users\\me\\AppData\\Local\\Temp\\basilisk-x.memfinal", 'w')"#
+            ),
+            "a Windows path must be JSON-escaped into the open() call: {script}"
+        );
     }
 
     #[test]
     fn snapshot_script_contains_marker() {
         let script = take_snapshot(500);
         assert!(script.contains("__BASILISK_MEM__"));
-        assert!(script.contains("stats[:500]"));
+        // The snapshot payload now rides the shared builder; the bound is passed
+        // through to it rather than inlined as a literal slice.
+        assert!(script.contains("stats[:_max_stats]"));
+        assert!(script.contains("_basilisk_snapshot_payload(500)"));
     }
 
     #[test]

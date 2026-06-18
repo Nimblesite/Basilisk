@@ -41,6 +41,18 @@ export interface ProfilerSession {
   readonly memory: ProfilerActivity;
   /** LSP memory session id while tracking. */
   readonly memorySessionId: string | undefined;
+  /**
+   * Path the debuggee's `atexit` hook writes a final snapshot to, read when the
+   * debug session ends so the run finalises into a visible result
+   * ([PROFILE-MEMORY-FINAL]). Set alongside `memorySessionId`.
+   */
+  readonly memoryFinalSnapshotFile: string | undefined;
+  /**
+   * The VS Code debug session being tracked, so only *its* termination finalises
+   * the run ([PROFILE-MEMORY-FINAL]) — an unrelated session ending must never
+   * tear down live tracking.
+   */
+  readonly memoryDebugSessionId: string | undefined;
 }
 
 /** The neutral state: nothing profiling, nothing tracking. */
@@ -53,6 +65,8 @@ export const IDLE_PROFILER_SESSION: ProfilerSession = {
   topFunction: undefined,
   memory: "idle",
   memorySessionId: undefined,
+  memoryFinalSnapshotFile: undefined,
+  memoryDebugSessionId: undefined,
 };
 
 /** The only way to mutate profiling state — exposed on the Store. */
@@ -67,8 +81,12 @@ export interface ProfilerActions {
   profilerStopped(): void;
   /** A memory-tracking start is in flight. */
   memoryTrackingStarting(): void;
-  /** Memory tracking is live for `sessionId`. */
-  memoryTrackingActive(sessionId: string): void;
+  /**
+   * Memory tracking is live for `sessionId`. `finalSnapshotFile` is the path the
+   * debuggee writes a final snapshot to at exit, and `debugSessionId` is the VS
+   * Code debug session whose termination finalises the run ([PROFILE-MEMORY-FINAL]).
+   */
+  memoryTrackingActive(sessionId: string, finalSnapshotFile?: string, debugSessionId?: string): void;
   /** Memory tracking ended (or its start failed). */
   memoryTrackingStopped(): void;
 }
@@ -98,13 +116,13 @@ export function createProfilerActions(profiler: Signal<ProfilerSession>): Profil
       patch({ cpu: "idle", cpuPid: undefined, cpuSessionId: undefined, sampleCount: 0, durationSecs: 0, topFunction: undefined });
     },
     memoryTrackingStarting() {
-      patch({ memory: "starting", memorySessionId: undefined });
+      patch({ memory: "starting", memorySessionId: undefined, memoryFinalSnapshotFile: undefined, memoryDebugSessionId: undefined });
     },
-    memoryTrackingActive(sessionId) {
-      patch({ memory: "active", memorySessionId: sessionId });
+    memoryTrackingActive(sessionId, finalSnapshotFile, debugSessionId) {
+      patch({ memory: "active", memorySessionId: sessionId, memoryFinalSnapshotFile: finalSnapshotFile, memoryDebugSessionId: debugSessionId });
     },
     memoryTrackingStopped() {
-      patch({ memory: "idle", memorySessionId: undefined });
+      patch({ memory: "idle", memorySessionId: undefined, memoryFinalSnapshotFile: undefined, memoryDebugSessionId: undefined });
     },
   };
 }
