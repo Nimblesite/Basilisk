@@ -113,10 +113,14 @@ fn parse_annotation(line: &str) -> Option<Annotation> {
         return Some(Annotation::Required);
     }
 
-    // `# E` possibly followed by `: explanation` or nothing
-    if rest.starts_with('E') {
-        let after = rest["E".len()..].trim_start();
-        if after.is_empty() || after.starts_with(':') || after.starts_with(' ') {
+    // `# E` standing alone, or followed by `:`/whitespace + description text
+    // (e.g. `# E`, `# E: explanation`, `# E (see ...)`). The char immediately
+    // after `E` must be a boundary — end-of-marker, `:`, or whitespace — so we
+    // accept the upstream `# E (…)` form while still rejecting words such as
+    // `# Exception` or `# Edge case`. NOTE: inspect the *untrimmed* remainder;
+    // trimming first would erase the space boundary and silently drop `# E (…)`.
+    if let Some(after) = rest.strip_prefix('E') {
+        if after.is_empty() || after.starts_with(':') || after.starts_with(char::is_whitespace) {
             return Some(Annotation::Required);
         }
     }
