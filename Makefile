@@ -5,7 +5,7 @@
 # Exactly 7 standard targets: build, test, lint, fmt, clean, ci, setup
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup mutation-test conformance bench reinstall-vsix reinstall-vsix-prerelease
+.PHONY: build test lint fmt clean ci setup mutation-test conformance bench reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -176,10 +176,21 @@ bench:
 	@cargo build --release --bin basilisk
 	@bash benchmarks/run.sh
 
-## reinstall-vsix: Clean rebuild + reinstall a host-targeted VSIX.
-## Mirrors .github/workflows/release.yml `vsix` job for the host platform.
+## reinstall-vsix: Clean rebuild + reinstall a host-targeted VSIX. Builds the
+## EXACT package the release.yml `vsix` job ships (via the shared _release_vsix
+## recipe) and rebuilds every binary from a clean tree.
+## Implements [VSIX-PACKAGING-PARITY].
 reinstall-vsix: _clean_rust _clean_vsix _release_vsix _uninstall_vsix _install_vsix
 	@echo -e '\033[0;32m✓ reinstall-vsix complete\033[0m'
+
+## reinstall-vsix-macos: Clean rebuild + reinstall the macOS VSIX (darwin-arm64)
+## — byte-for-byte the artifact the release.yml `vsix` darwin job publishes. Pins
+## the target so it matches the shipped macOS package regardless of host, and
+## rebuilds every binary from a clean tree.
+## Implements [VSIX-PACKAGING-PARITY].
+reinstall-vsix-macos: export BSK_VSIX_TARGET := darwin-arm64
+reinstall-vsix-macos: _clean_rust _clean_vsix _release_vsix _uninstall_vsix _install_vsix
+	@echo -e '\033[0;32m✓ reinstall-vsix-macos complete (darwin-arm64)\033[0m'
 
 ## reinstall-vsix-prerelease: Same as reinstall-vsix but packages with
 ## --pre-release so the VSIX matches what the release pipeline builds for
@@ -225,28 +236,43 @@ _build_vsix:
 	cd $(_EXTENSION_DIR) && npm ci && npm run compile && \
 	echo -e '\033[0;32m✓ VS Code extension compiled\033[0m'
 
-# _release_vsix: build a host-targeted VSIX. Mirrors the per-platform steps
-# of the `vsix` job in .github/workflows/release.yml. Single recipe so host
-# detection vars are consistent throughout.
+# _release_vsix: build a host-targeted VSIX — the EXACT artifact the release.yml
+# `vsix` job ships for that platform. Single recipe shared by reinstall-vsix,
+# reinstall-vsix-macos, and the e2e gate (_test_vsix), so tests, local installs,
+# and the published package can never diverge. Set BSK_VSIX_TARGET (e.g.
+# darwin-arm64) to pin the platform regardless of host; unset auto-detects from
+# uname. Implements [VSIX-PACKAGING-PARITY].
 _release_vsix:
 	@set -e; \
-	case "$$(uname -s)" in \
-		Darwin) plat=darwin; exe="" ;; \
-		Linux)  plat=linux;  exe="" ;; \
-		MINGW*|MSYS*|CYGWIN*) plat=win32; exe=".exe" ;; \
-		*) echo "Unsupported OS: $$(uname -s)" >&2; exit 1 ;; \
+	if [ -n "$${BSK_VSIX_TARGET:-}" ]; then \
+		target="$$BSK_VSIX_TARGET"; \
+		plat="$${target%-*}"; arch="$${target##*-}"; \
+	else \
+		case "$$(uname -s)" in \
+			Darwin) plat=darwin ;; \
+			Linux)  plat=linux ;; \
+			MINGW*|MSYS*|CYGWIN*) plat=win32 ;; \
+			*) echo "Unsupported OS: $$(uname -s)" >&2; exit 1 ;; \
+		esac; \
+		case "$$(uname -m)" in \
+			arm64|aarch64) arch=arm64 ;; \
+			x86_64|amd64)  arch=x64 ;; \
+			*) echo "Unsupported arch: $$(uname -m)" >&2; exit 1 ;; \
+		esac; \
+		target="$$plat-$$arch"; \
+	fi; \
+	case "$$arch" in \
+		arm64) rust_arch=aarch64 ;; \
+		x64)   rust_arch=x86_64 ;; \
+		*) echo "Unsupported arch: $$arch" >&2; exit 1 ;; \
 	esac; \
-	case "$$(uname -m)" in \
-		arm64|aarch64) arch=arm64; rust_arch=aarch64 ;; \
-		x86_64|amd64)  arch=x64;   rust_arch=x86_64 ;; \
-		*) echo "Unsupported arch: $$(uname -m)" >&2; exit 1 ;; \
-	esac; \
+	exe=""; \
 	case "$$plat" in \
 		darwin) rust_target="$$rust_arch-apple-darwin" ;; \
 		linux)  rust_target="$$rust_arch-unknown-linux-gnu" ;; \
-		win32)  rust_target="$$rust_arch-pc-windows-msvc" ;; \
+		win32)  rust_target="$$rust_arch-pc-windows-msvc"; exe=".exe" ;; \
+		*) echo "Unsupported platform: $$plat" >&2; exit 1 ;; \
 	esac; \
-	target="$$plat-$$arch"; \
 	echo -e "\033[1m\033[0;36m▶ Building VSIX for $$target ($$rust_target)\033[0m"; \
 	cargo build --release --target "$$rust_target" --bin basilisk; \
 	if [ "$$plat" = "darwin" ]; then \
@@ -257,6 +283,8 @@ _release_vsix:
 	cp NOTICES $(_EXTENSION_DIR)/NOTICES; \
 	repo_root="$$(pwd)"; \
 	cd $(_EXTENSION_DIR) && npm ci && npm run compile && npm run sync:shipwright; \
+	echo -e "\033[1m\033[0;36m▶ Validating Shipwright manifest\033[0m"; \
+	node scripts/verify-shipwright.mjs manifest; \
 	echo -e "\033[1m\033[0;36m▶ Vendoring debugpy into the VSIX bundle\033[0m"; \
 	node scripts/vendor-debugpy.mjs; \
 	prerelease_flag=""; \
@@ -317,29 +345,25 @@ _audit:
 _test_rust:
 	@OPEN=$(OPEN) bash scripts/test-rust.sh
 
+# _test_vsix: run the VS Code E2E suite against the EXACT release bundle. Builds
+# the real per-platform VSIX through the shared _release_vsix recipe — same
+# release binaries, manifest-driven staging, debugpy vendoring, and vsce
+# packaging the release ships — then runs the e2e tests against that staged
+# bundle, so the suite can never validate a different package than what users
+# install. Implements [VSIX-PACKAGING-PARITY].
 _test_vsix:
 	@set -e; \
 	REPO_ROOT="$$(pwd)"; \
-	echo -e '\033[1m\033[0;36m▶ Building bundled runtime binaries (basilisk + profiler-helper)\033[0m'; \
-	cargo build --profile ci --bin basilisk --bin basilisk-profiler-helper; \
-	BASILISK_BIN="$$REPO_ROOT/target/ci/basilisk"; \
-	[ -x "$$BASILISK_BIN" ] || { echo -e '\033[0;31m✗ basilisk binary not found\033[0m'; exit 1; }; \
-	echo -e "\033[0;32m✓ basilisk binary: $$BASILISK_BIN\033[0m"; \
-	echo -e '\033[1m\033[0;36m▶ VS Code extension — compile\033[0m'; \
-	cd $(_EXTENSION_DIR) && npm ci && npm run compile; \
-	echo -e '\033[1m\033[0;36m▶ VS Code extension — stage the REAL release bundle\033[0m'; \
-	node scripts/sync-shipwright-manifest.mjs; \
-	node scripts/stage-runtime.mjs "$$REPO_ROOT/target/ci"; \
-	node scripts/vendor-debugpy.mjs; \
-	node scripts/verify-shipwright.mjs manifest; \
+	echo -e '\033[1m\033[0;36m▶ Building the EXACT release VSIX bundle (shared _release_vsix recipe)\033[0m'; \
+	$(MAKE) --no-print-directory _release_vsix; \
 	echo -e '\033[1m\033[0;36m▶ VS Code extension — ESLint\033[0m'; \
-	npm run lint; \
-	echo -e '\033[1m\033[0;36m▶ VS Code E2E tests\033[0m'; \
+	( cd $(_EXTENSION_DIR) && npm run lint ); \
+	echo -e '\033[1m\033[0;36m▶ VS Code E2E tests (against the staged release bundle)\033[0m'; \
 	VSCODE_TEST_CMD="npm test -- --coverage"; \
 	if [ -z "$${DISPLAY:-}" ] && command -v xvfb-run >/dev/null 2>&1; then \
 	    VSCODE_TEST_CMD="xvfb-run -a $$VSCODE_TEST_CMD"; \
 	fi; \
-	$$VSCODE_TEST_CMD; \
+	( cd $(_EXTENSION_DIR) && $$VSCODE_TEST_CMD ); \
 	echo -e '\033[1m\033[0;36m▶ VS Code extension — coverage threshold\033[0m'; \
 	VSIX_LCOV="$$REPO_ROOT/$(_EXTENSION_DIR)/coverage/lcov.info"; \
 	VSIX_THRESHOLD=$$(python3 -c 'import json; print(json.load(open("'"$$REPO_ROOT"'/$(_COVERAGE_THRESHOLDS_FILE)"))["projects"]["vsix"]["threshold"])'); \

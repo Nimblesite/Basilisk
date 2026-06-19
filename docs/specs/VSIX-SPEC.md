@@ -362,3 +362,42 @@ The VSIX bundles pre-compiled `basilisk` binaries per platform:
 - `basilisk-x86_64-unknown-linux-gnu`
 - `basilisk-aarch64-unknown-linux-gnu`
 - `basilisk-x86_64-pc-windows-msvc`
+
+## Build & Packaging Parity {#VSIX-PACKAGING-PARITY}
+
+The VSIX that ships and the VSIX the tests exercise **must be the same artifact**.
+A green test run against a different bundle than users install is worthless, so a
+single recipe owns packaging and every other path routes through it:
+
+| Path | Entry point | Purpose |
+|---|---|---|
+| Release | `.github/workflows/release.yml` `vsix` job | builds & publishes the per-platform VSIX |
+| Local install | `make reinstall-vsix` / `make reinstall-vsix-macos` | clean rebuild + install the exact release VSIX |
+| E2E gate | `make _test_vsix` (→ `_release_vsix`) | runs the e2e suite against the staged release bundle |
+
+Invariants:
+
+- **One packaging recipe.** `_release_vsix` (Makefile) mirrors the release `vsix`
+  job step for step: `cargo build --release --target <triple>` for every bundled
+  binary, `stage-runtime.mjs` to stage exactly the manifest-declared binaries into
+  `bin/<platform>/`, `vendor-debugpy.mjs`, then
+  `vsce package --target <platform> --ignore-other-target-folders`.
+- **One staging helper.** `stage-runtime.mjs` is the only code that decides which
+  binaries enter the bundle — used by the release workflow, `_release_vsix`, and
+  `_test_vsix` alike — so bundle contents are manifest-driven everywhere and cannot
+  drift between the tested and shipped packages.
+- **Tests run the shipped bytes.** `_test_vsix` builds the bundle via `_release_vsix`
+  and then runs the e2e suite against that staged extension directory — the exact
+  tree `vsce package` zips — so the suite validates the release artifact, not a
+  bespoke debug build.
+- **`reinstall-vsix-macos`** pins `darwin-arm64` (the only macOS target the release
+  ships) and rebuilds every binary from a clean tree (`cargo clean`), so a local
+  install is byte-for-byte the published macOS VSIX.
+- **Intentional difference:** local builds keep the `0.0.0-PLACEHOLDER` version (no
+  release tag), whereas `release.yml` runs `stamp-version.sh` first. Package
+  *structure* and *binaries* are identical; only the embedded version string
+  differs, and it stays internally consistent (manifest and binary agree).
+
+`verify-shipwright.mjs vsix` enforces the bundle matches the manifest on every path
+(rejecting missing, unmanifested, or wrong-platform binaries), so drift fails the
+build rather than shipping.
