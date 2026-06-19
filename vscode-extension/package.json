@@ -1003,5 +1003,8 @@
     "mocha": "^11.7.6",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.6"
   }
 }
