@@ -108,6 +108,8 @@ mutation-test:
 		if [ -n "$$shard" ]; then \
 			echo -e "\033[0;36m  [diag] Shard: $$shard\033[0m"; \
 		fi; \
+		mutation_jobs="$${MUTATION_JOBS:-$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}"; \
+		echo -e "\033[0;36m  [diag] Parallel jobs: $$mutation_jobs\033[0m"; \
 		out_dir="$(_MUTATION_DIR)/mutants.out.$$mode"; \
 		rm -rf "$$out_dir"; \
 		mutants_count="$$(RUSTFLAGS="$$mutation_rustflags" cargo mutants --list --package "$$package" --re "$$examine_re" $$shard_arg | wc -l | tr -d " ")"; \
@@ -118,14 +120,14 @@ mutation-test:
 		echo -e "\033[0;36m  [diag] Total mutants: $$mutants_count\033[0m"; \
 		if [ -n "$$test_filter" ]; then \
 			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
-				--jobs 4 --timeout 60 --baseline skip --copy-target true \
+				--jobs "$$mutation_jobs" --timeout 60 --baseline skip --copy-target true \
 				--package "$$package" --re "$$examine_re" \
 				$$shard_arg \
 				--output "$$out_dir" \
 				-- --test coverage_boost_33_tests --test mutation_kill_tests "$$test_filter" || true; \
 		else \
 			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
-				--jobs 4 --timeout 60 --baseline skip --copy-target true \
+				--jobs "$$mutation_jobs" --timeout 60 --baseline skip --copy-target true \
 				--package "$$package" --re "$$examine_re" \
 				$$shard_arg \
 				--output "$$out_dir" || true; \

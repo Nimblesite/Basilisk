@@ -214,6 +214,18 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@81ee9698f20724138a785d788c7567d40f14cd2d # cargo-llvm-cov
 
+      # The PEP conformance suite is fetched fresh from the upstream typing repo
+      # on every run (network-bound, one HTTP request per test file). Cache it
+      # keyed on conformance.sh, which holds the pinned TYPING_REF — bumping the
+      # ref edits that file and busts the cache; conformance.sh itself re-fetches
+      # whenever the stamped ref differs, so a stale restore self-heals.
+      - name: Cache conformance suite
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: crates/basilisk-cli/tests/conformance
+          key: conformance-suite-${{ hashFiles('scripts/conformance.sh') }}
+          restore-keys: conformance-suite-
+
       - name: Run Rust tests with coverage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -284,6 +296,17 @@ jobs:
           # libasound2 was renamed to libasound2t64 on Ubuntu 24.04+
           sudo apt-get install -y libasound2 2>/dev/null || sudo apt-get install -y libasound2t64
 
+      # @vscode/test-electron downloads a full VS Code build (~150 MB) into
+      # .vscode-test on every run. Cache it keyed on the test config + manifest
+      # so the pinned editor version is reused instead of re-downloaded; a
+      # version bump (config/manifest change) busts the key and re-fetches.
+      - name: Cache VS Code test build
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: vscode-extension/.vscode-test
+          key: vscode-test-${{ runner.os }}-${{ hashFiles('vscode-extension/.vscode-test.mjs', 'vscode-extension/.vscode-test.js', 'vscode-extension/package.json') }}
+          restore-keys: vscode-test-${{ runner.os }}-
+
       - name: Run VS Code extension tests
         run: make _test_vsix
 
@@ -298,9 +321,16 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
+      # Share one release-profile cache scope with the `build` gate below: both
+      # jobs run `cargo build --release`, so they compile the identical external
+      # dependency graph. A single shared scope (instead of two per-job scopes)
+      # halves this pair's cache footprint — relieving the 10 GB repo-cache limit
+      # that was evicting warm caches — and lets `build` (which runs later, after
+      # the test jobs) restore the dependencies this job already compiled.
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-on-failure: true
+          shared-key: release
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
@@ -360,6 +390,18 @@ jobs:
         with:
           neovim: true
           version: v0.11.6
+
+      # The nvim e2e harness git-clones plenary/dap/mini into /tmp on every run.
+      # Cache them so the clones become no-ops — test-nvim.sh skips any dir that
+      # already exists. Bump the key suffix to force a refresh of the pins.
+      - name: Cache Neovim test plugins
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            /tmp/plenary.nvim
+            /tmp/nvim-dap
+            /tmp/mini.nvim
+          key: nvim-test-plugins-${{ runner.os }}-v1
 
       - name: Run Neovim extension tests
         run: |
@@ -427,6 +469,10 @@ jobs:
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-on-failure: true
+          # All four shards share one cache scope (identical job name + flags),
+          # so only the first needs to upload the ~290 MB cache. The other three
+          # restore it but skip the redundant save race (last-writer churn).
+          save-if: ${{ env.RUN == 'true' && matrix.shard == '0/4' }}
 
       - if: env.RUN == 'true'
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -507,9 +553,15 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
+      # Reuse the release-profile dependency cache that `verify-binaries`
+      # populated earlier in this run (shared scope, same Cargo build). save-if
+      # is false because that job already owns the save — this gate only needs to
+      # restore so its `cargo build --release` is a warm, near-no-op compile.
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-on-failure: true
+          shared-key: release
+          save-if: false
 
       - name: Install lld
         run: sudo apt-get update && sudo apt-get install -y lld
