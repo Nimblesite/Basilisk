@@ -50,14 +50,24 @@ export class CompositeSink implements LogSink {
   public error(message: string): void { for (const s of this.sinks) {s.error(message);} }
 }
 
+/**
+ * Log file permission bits: owner read+write only. The log can contain
+ * workspace paths, so it must never be group/world-readable
+ * (defense-in-depth for js/insecure-temporary-file).
+ */
+const LOG_FILE_MODE = 0o600;
+
 /** Sink that appends to a file on disk via synchronous writes. */
 export class FileLogSink implements LogSink {
   private readonly fd: number;
   constructor(filePath: string) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fsModule = require("fs") as typeof FsModule;
-    // Open for append+create, truncating any previous run.
-    this.fd = fsModule.openSync(filePath, "w");
+    // Create+truncate with OWNER-ONLY (0o600) permissions so the log — which
+    // can contain workspace paths — is never world-readable, even if a caller
+    // ever points this at a shared directory (defense-in-depth for
+    // js/insecure-temporary-file; callers pass the extension's private logUri).
+    this.fd = fsModule.openSync(filePath, "w", LOG_FILE_MODE);
   }
   public trace(message: string): void { this.write("TRACE", message); }
   public debug(message: string): void { this.write("DEBUG", message); }
