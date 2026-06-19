@@ -293,4 +293,25 @@ suite("Run & Profile launch configurations (#82)", () => {
       "non-Basilisk sessions are never auto-profiled",
     );
   });
+
+  // dap-1: the global setting is read directly by shouldProfileOnLaunch, so the
+  // stamp carve-out in applyDebugConfigDefaults is not enough on its own — the
+  // CPU auto-start must itself refuse a memory-tracking session.
+  test("a memory-tracking launch is never CPU-auto-profiled, even with the global setting on (dap-1)", async () => {
+    const cfg = vscode.workspace.getConfiguration("basilisk");
+    await cfg.update("profiler.profileOnLaunch", true, vscode.ConfigurationTarget.Global);
+    try {
+      const memorySession = {
+        type: "basilisk-debug",
+        configuration: buildProfileLaunchConfig("memory", "/work/app.py"),
+      };
+      assert.strictEqual(
+        shouldProfileOnLaunch(memorySession),
+        false,
+        "a memory launch must not auto-start the CPU sampler — it would collide with tracemalloc at the entry pause (dap-1)",
+      );
+    } finally {
+      await cfg.update("profiler.profileOnLaunch", undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
 });

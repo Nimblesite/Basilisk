@@ -156,6 +156,22 @@ suite("Python Processes Panel", () => {
     assert.deepStrictEqual(rows.map(pidOf), [300], "PID substring matches");
   });
 
+  // procexp-2: VS Code shows the "No Python processes running" welcome whenever
+  // getChildren returns []. When a filter hides a NON-empty process list, the
+  // tree must NOT be empty — it must say processes are running but filtered.
+  test("a filter that hides every running process shows an honest placeholder, not 'no processes' (procexp-2)", async () => {
+    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider.setFilter("nonexistent-zzz");
+    const rows = await provider.getChildren();
+    assert.strictEqual(rows.length, 1, "must return a placeholder row, not an empty list that triggers the welcome");
+    assert.strictEqual(rows[0].contextValue, "processesMessage", "the row is a non-process placeholder");
+    const label = labelText(rows[0]);
+    assert.ok(
+      label.includes("nonexistent-zzz") && label.includes("3 running"),
+      `the placeholder must explain the filter hid running processes: ${label}`,
+    );
+  });
+
   test("group members expose the full member set for the count badge", async () => {
     provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
     provider.cycleGroupMode();

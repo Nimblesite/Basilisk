@@ -675,4 +675,39 @@ suite("CPU profiling — real end-to-end", () => {
       "the Speedscope link must post an openSpeedscope message the extension handles",
     );
   });
+
+  // [PROFILE-NATIVE-FALLBACK]: frame names/paths come from the profiled (possibly
+  // third-party) program. CPython emits synthetic names like <module>/<lambda>,
+  // and a hostile program can name a function `</script>…`. The webview must
+  // escape them before innerHTML, must not let the embedded JSON close the
+  // inline <script>, and gates that script behind a per-render CSP nonce.
+  test("flamegraph HTML escapes untrusted frame names/paths and nonce-gates its inline script", () => {
+    const hostile = "</script><img src=x onerror=alert(1)>";
+    const result: ProfileResult = {
+      sessionId: "s-test",
+      duration: 3,
+      totalSamples: 600,
+      outputFile: "/tmp/profile.speedscope.json",
+      hotFunctions: [
+        { name: hostile, file: hostile, line: 1, samples: 540, percentage: 90, selfPercentage: 85 },
+        { name: "<module>", file: "/app/main.py", line: 1, samples: 60, percentage: 10, selfPercentage: 10 },
+      ],
+      hotLines: [{ file: hostile, line: 2, samples: 500, percentage: 83 }],
+    };
+    const html = buildFlamegraphHtml(result);
+    assert.ok(
+      !html.includes("</script><img"),
+      "embedded profile data must not close the inline <script> element early",
+    );
+    assert.ok(
+      html.includes("escapeHtml(fn.name)"),
+      "frame names must be escaped before innerHTML",
+    );
+    assert.ok(
+      html.includes("escapeHtml(basename(fn.file))"),
+      "frame file paths must be escaped before innerHTML",
+    );
+    assert.ok(html.includes("Content-Security-Policy"), "the webview must declare a CSP");
+    assert.ok(html.includes('<script nonce="'), "the inline script must carry the CSP nonce");
+  });
 });

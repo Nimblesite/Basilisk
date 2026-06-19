@@ -121,7 +121,21 @@ function basename(path: string): string {
 
 // ── Tree items ───────────────────────────────────────────────────────────
 
-type TreeItem = ProcessGroupItem | ProcessTreeItem;
+type TreeItem = ProcessGroupItem | ProcessTreeItem | MessageTreeItem;
+
+/**
+ * A non-process placeholder row. Returned (instead of an empty list) when a
+ * filter or the "hide launchers" setting empties a NON-empty process list, so
+ * the empty-tree viewsWelcome never claims "No Python processes running" while
+ * processes are in fact running, just hidden (procexp-2).
+ */
+class MessageTreeItem extends vscode.TreeItem {
+  constructor(label: string) {
+    super(label, vscode.TreeItemCollapsibleState.None);
+    this.contextValue = "processesMessage";
+    this.iconPath = new vscode.ThemeIcon("filter");
+  }
+}
 
 /** A collapsible group header (when grouping is active). */
 class ProcessGroupItem extends vscode.TreeItem {
@@ -300,7 +314,7 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
     if (element instanceof ProcessGroupItem) {
       return element.members.map((proc) => new ProcessTreeItem(proc, this.activeProfilingPid));
     }
-    if (element instanceof ProcessTreeItem) {
+    if (element instanceof ProcessTreeItem || element instanceof MessageTreeItem) {
       return [];
     }
 
@@ -309,10 +323,25 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
     }
 
     const visible = this.sortProcesses(this.applyFilter(this.processes));
+    if (visible.length === 0 && this.processes.length > 0) {
+      // Processes ARE running but a filter / "hide launchers" hid them all.
+      // Return an honest placeholder so the empty-tree welcome doesn't claim
+      // zero processes (procexp-2).
+      return [new MessageTreeItem(this.filteredEmptyLabel())];
+    }
     if (this.groupMode === "none") {
       return visible.map((proc) => new ProcessTreeItem(proc, this.activeProfilingPid));
     }
     return this.buildGroups(visible);
+  }
+
+  /** Why the filtered view is empty though processes are running (procexp-2). */
+  private filteredEmptyLabel(): string {
+    const total = this.processes.length;
+    if (this.filterText !== "") {
+      return `No process matches "${this.filterText}" (${total} running)`;
+    }
+    return `${total} launcher process${total === 1 ? "" : "es"} hidden — enable Show Launchers to view`;
   }
 
   /** Apply the search filter and the "hide launchers" setting. */

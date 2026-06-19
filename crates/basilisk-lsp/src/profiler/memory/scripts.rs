@@ -21,8 +21,16 @@
 /// path. A direct in-process file write (not the `_basilisk_emit` print path) is
 /// used because at exit there is no DAP `evaluate` round-trip listening, and
 /// writing in-process sidesteps debugpy's print truncation entirely
-/// ([PROFILE-MEMORY-COURIER]). Failures are swallowed: a crash or `os._exit`
-/// leaves no file, and the editor reports "nothing captured" honestly.
+/// ([PROFILE-MEMORY-COURIER]). The hook deliberately does NOT `gc.collect()`
+/// before measuring: debugpy tears down the user script's `runpy` namespace when
+/// the program ends, so the program's end-state objects are already unreachable
+/// at at-exit time and only `DEBUG_SAVEALL` keeps them tracked for this snapshot
+/// — collecting would free them and empty the profile (ux-2). The hook also runs
+/// on `SIGTERM` and `SIGINT` — the VS Code Stop button and Ctrl-C, which bypass
+/// `atexit` — then re-raises so the process still dies (pyscript-2); the write is
+/// idempotent so the signal and `atexit` paths never double-measure. Only a hard
+/// kill (`SIGKILL`, `os._exit`, a native crash) leaves no file, and the editor
+/// reports "nothing captured" honestly.
 #[must_use]
 pub fn start_tracemalloc(nframe: u32, snapshot_file: &str, max_stats: usize) -> String {
     let payload_fn = snapshot_payload_fn();
@@ -34,18 +42,47 @@ pub fn start_tracemalloc(nframe: u32, snapshot_file: &str, max_stats: usize) -> 
     let path_literal = serde_json::to_string(snapshot_file).unwrap_or_else(|_| "\"\"".to_owned());
     format!(
         r"
-import tracemalloc, gc, atexit
+import tracemalloc, gc, atexit, signal, os
 {payload_fn}
+_basilisk_exit_done = [False]
 def _basilisk_write_exit_snapshot():
+    if _basilisk_exit_done[0]:
+        return
+    _basilisk_exit_done[0] = True
     try:
+        # Must NOT force a garbage collection here. debugpy runs the user script
+        # in a runpy namespace torn down at program end, so the program's
+        # end-state objects (e.g. a module-level cache) are already unreachable by
+        # at-exit time; DEBUG_SAVEALL is exactly what keeps them tracked so this
+        # final snapshot can still show the program's allocations. Freeing them
+        # would empty the profile (ux-2 — the retention is by design).
         _payload = _basilisk_snapshot_payload({max_stats})
-        with open({path_literal}, 'w') as _f:
+        # Atomic write: a reader racing the final flush must see either no file
+        # or the WHOLE payload, never a truncated one it would then destroy
+        # (conform-4). Write a sibling temp, then os.replace into place.
+        _final = {path_literal}
+        _tmp = _final + '.part'
+        with open(_tmp, 'w') as _f:
             _f.write(_payload)
+        os.replace(_tmp, _final)
     except Exception:
         pass
+def _basilisk_signal_exit(_signum, _frame):
+    # The VS Code Stop button terminates the debuggee with SIGTERM (SIGINT for
+    # Ctrl-C), neither of which runs atexit (pyscript-2). Capture the final
+    # snapshot, then restore the default disposition and re-raise so the process
+    # still dies as the signal intended. SIGKILL / os._exit stay unrecoverable.
+    _basilisk_write_exit_snapshot()
+    signal.signal(_signum, signal.SIG_DFL)
+    os.kill(os.getpid(), _signum)
 tracemalloc.start({nframe})
 gc.set_debug(gc.DEBUG_SAVEALL)
 atexit.register(_basilisk_write_exit_snapshot)
+for _sig in (signal.SIGTERM, signal.SIGINT):
+    try:
+        signal.signal(_sig, _basilisk_signal_exit)
+    except (ValueError, OSError):
+        pass  # only settable on the main thread / supported signals
 print('__BASILISK_MEM_OK__')
 "
     )
@@ -97,10 +134,14 @@ def _basilisk_emit(_payload):
 ///
 /// Two deliberate choices make the resulting `.heapprofile` worth reading
 /// ([PROFILE-MEMORY-FINAL]):
-/// 1. `filter_traces` drops allocations whose site is the debugger or the
-///    snapshot machinery (pydevd/debugpy/tracemalloc/`<frozen>`/`<string>`), so
-///    the profile is the *user's* program — code that merely runs under the
-///    debugger keeps its allocations (the leaf frame decides).
+/// 1. Allocations whose site (leaf frame) is the debugger or snapshot machinery
+///    (pydevd/debugpy/tracemalloc/`<frozen>`/`<string>`) are dropped, so the
+///    profile is the *user's* program — code that merely runs under the debugger
+///    keeps its allocations (the leaf frame decides). The match is ANCHORED
+///    (basename / exact path segment), never an unanchored full-path substring,
+///    so a user path like `debugpy_utils/app.py` is never mistaken for the
+///    debugger (pyscript-1); the top-N is taken over the survivors, not the raw
+///    allocations, so debugger noise can't crowd the user out.
 /// 2. `statistics('traceback')` keeps each allocation's full call stack (the
 ///    `take_snapshot(25)` depth), root→leaf, with the debugger/runtime glue
 ///    stripped — so the editor builds a real call tree, not a flat list.
@@ -123,17 +164,22 @@ def _basilisk_snapshot_payload(_max_stats):
         # Stdlib proper (not site-/dist-packages): the debugger's comm thread
         # bottoms out here, but a user's own stdlib use always has a user frame too.
         return bool(_stdlib) and _fn.startswith(_stdlib) and 'site-packages' not in _fn and 'dist-packages' not in _fn
-    snapshot = tracemalloc.take_snapshot().filter_traces((
-        tracemalloc.Filter(False, '*pydevd*'),
-        tracemalloc.Filter(False, '*debugpy*'),
-        tracemalloc.Filter(False, '*_pydev*'),
-        tracemalloc.Filter(False, '*<frozen *'),
-        tracemalloc.Filter(False, '<string>'),
-        tracemalloc.Filter(False, '*tracemalloc.py'),
-    ))
-    stats = snapshot.statistics('traceback')
+    # No tracemalloc Filter pre-pass: a Filter matches the LEAF path with an
+    # UNANCHORED fnmatch, which would silently drop a user allocation whose site
+    # path merely contains 'debugpy'/'pydevd' (e.g. a dir like debugpy_utils/;
+    # pyscript-1). Filter in the loop with the anchored helper instead, and keep
+    # the top _max_stats SURVIVORS by size (iterate the size-sorted stats and
+    # stop at the cap) so debugger noise can't crowd the user out of the top-N.
+    stats = tracemalloc.take_snapshot().statistics('traceback')
     top_stats = []
-    for stat in stats[:_max_stats]:
+    for stat in stats:
+        if len(top_stats) >= _max_stats:
+            break
+        # The allocation SITE (leaf) decides: an anchored debugger/runtime-glue or
+        # synthetic leaf is the debugger's own allocation — drop the whole stat.
+        _site = stat.traceback[-1].filename
+        if _is_runtime_glue(_site) or _site.startswith('<'):
+            continue
         frames = []
         has_user = False
         for _f in stat.traceback:
@@ -143,7 +189,7 @@ def _basilisk_snapshot_payload(_max_stats):
             frames.append({'file': _fn, 'line': _f.lineno})
             if not _is_stdlib_only(_fn):
                 has_user = True
-        # Drop pure debugger/runtime noise (no user or library frame survives).
+        # Drop pure stdlib/runtime noise (no user or library frame survives).
         if not frames or not has_user:
             continue
         _leaf = frames[-1]
@@ -471,6 +517,48 @@ mod tests {
     }
 
     #[test]
+    fn exit_hook_does_not_collect_before_measuring() {
+        // ux-2: debugpy tears down the user script's runpy namespace at program
+        // end, so the program's end-state allocations are unreachable by at-exit
+        // time and only DEBUG_SAVEALL keeps them tracked for the final snapshot.
+        // A gc.collect()/gc.garbage.clear() in the hook would free exactly those
+        // and empty the profile, so the hook must NOT collect before measuring.
+        let script = start_tracemalloc(25, "/tmp/basilisk-final.memfinal", 100);
+        assert!(
+            !script.contains("gc.collect()") && !script.contains("gc.garbage.clear()"),
+            "the at-exit hook must not collect/clear garbage before measuring (ux-2): {script}"
+        );
+    }
+
+    #[test]
+    fn start_script_captures_on_stop_signals() {
+        // pyscript-2: the VS Code Stop button (SIGTERM) and Ctrl-C (SIGINT)
+        // bypass atexit, so the run-to-completion flow would otherwise lose its
+        // result whenever the user stops a long-running target. The start script
+        // must install a handler for both that writes the final snapshot, and
+        // re-raise the default disposition so the process still terminates.
+        let script = start_tracemalloc(25, "/tmp/basilisk-final.memfinal", 100);
+        assert!(
+            script.contains("signal.SIGTERM"),
+            "must handle the Stop button's SIGTERM: {script}"
+        );
+        assert!(
+            script.contains("signal.SIGINT"),
+            "must handle Ctrl-C's SIGINT: {script}"
+        );
+        assert!(
+            script.contains("signal.signal(_signum, signal.SIG_DFL)")
+                && script.contains("os.kill(os.getpid(), _signum)"),
+            "must re-raise the signal so the process still dies as intended: {script}"
+        );
+        // Idempotent: the signal path and the atexit path must not double-measure.
+        assert!(
+            script.contains("_basilisk_exit_done"),
+            "the exit write must be guarded: {script}"
+        );
+    }
+
+    #[test]
     fn start_script_registers_an_atexit_final_snapshot() {
         // [PROFILE-MEMORY-FINAL] The "Run & Track Memory" flow has no breakpoint,
         // so the program runs to completion with no paused frame to snapshot from.
@@ -487,8 +575,9 @@ mod tests {
         // cross-platform-safe pattern from cooperative.rs), not a hand-rolled
         // raw string — so a backslash or quote in the path can't break it.
         assert!(
-            script.contains("open(\"/tmp/basilisk-final.memfinal\", 'w')"),
-            "the hook must write to the JSON-encoded snapshot file path: {script}"
+            script.contains("_final = \"/tmp/basilisk-final.memfinal\"")
+                && script.contains("os.replace(_tmp, _final)"),
+            "the hook must atomically write to the JSON-encoded snapshot file path: {script}"
         );
         // The at-exit payload reuses the shared snapshot builder, so its output is
         // byte-identical to an evaluate-path snapshot the same parser ingests.
@@ -513,10 +602,9 @@ mod tests {
             100,
         );
         assert!(
-            script.contains(
-                r#"open("C:\\Users\\me\\AppData\\Local\\Temp\\basilisk-x.memfinal", 'w')"#
-            ),
-            "a Windows path must be JSON-escaped into the open() call: {script}"
+            script
+                .contains(r#"_final = "C:\\Users\\me\\AppData\\Local\\Temp\\basilisk-x.memfinal""#),
+            "a Windows path must be JSON-escaped into the snapshot-file literal: {script}"
         );
     }
 
@@ -524,9 +612,10 @@ mod tests {
     fn snapshot_script_contains_marker() {
         let script = take_snapshot(500);
         assert!(script.contains("__BASILISK_MEM__"));
-        // The snapshot payload now rides the shared builder; the bound is passed
-        // through to it rather than inlined as a literal slice.
-        assert!(script.contains("stats[:_max_stats]"));
+        // The snapshot payload rides the shared builder; the bound is passed
+        // through and applied to the SURVIVORS (top-N after filtering), not a raw
+        // pre-slice — so debugger noise can't crowd the user out (pyscript-1).
+        assert!(script.contains("len(top_stats) >= _max_stats"));
         assert!(script.contains("_basilisk_snapshot_payload(500)"));
     }
 
@@ -540,31 +629,38 @@ mod tests {
             script.contains("statistics('traceback')"),
             "must keep full tracebacks for a real call tree, not statistics('lineno'): {script}"
         );
+        // pyscript-1/pyscript-5: there must be NO tracemalloc Filter pre-pass —
+        // its fnmatch is unanchored over the leaf path, so a user allocation in a
+        // dir like `debugpy_utils/` would be silently dropped before the anchored
+        // per-frame logic ever runs. All debugger filtering is the anchored helper.
         assert!(
-            script.contains("filter_traces"),
-            "must filter the debugger/snapshot machinery out of the profile: {script}"
+            !script.contains("filter_traces") && !script.contains("tracemalloc.Filter"),
+            "must NOT use an unanchored filter_traces pre-pass: {script}"
         );
-        for noise in ["*pydevd*", "*debugpy*", "*tracemalloc.py"] {
-            assert!(
-                script.contains(noise),
-                "must exclude {noise} allocations: {script}"
-            );
-        }
+        assert!(
+            !script.contains("'*pydevd*'") && !script.contains("'*debugpy*'"),
+            "must NOT bake in unanchored debugger globs: {script}"
+        );
         // The allocation site is the LEAF frame (frames are root->leaf), not [0].
         assert!(
             script.contains("_leaf = frames[-1]"),
             "the reported site must be the leaf (allocation) frame: {script}"
         );
-        // Per-frame stripping must match the basename ANCHORED, never an
-        // unanchored full-path substring — else a user file in a dir like
-        // `debugpy_utils/` would be silently deleted from the call tree.
+        // Debugger detection must match the basename ANCHORED (and exact path
+        // segments), never an unanchored full-path substring — else a user file
+        // in a dir like `debugpy_utils/` would be silently deleted.
         assert!(
             script.contains("startswith(('pydevd', 'debugpy', '_pydev'))"),
-            "frame stripping must use anchored basename matching: {script}"
+            "debugger detection must use anchored basename matching: {script}"
         );
         assert!(
             !script.contains("'pydevd' in _fn"),
-            "frame stripping must NOT use an unanchored full-path substring match: {script}"
+            "debugger detection must NOT use an unanchored full-path substring match: {script}"
+        );
+        // The leaf (allocation site) decides whether a stat is the debugger's own.
+        assert!(
+            script.contains("_site = stat.traceback[-1].filename"),
+            "the allocation site (leaf) must gate the debugger drop: {script}"
         );
         // Pure debugger/runtime stacks (no user or library frame) are dropped.
         assert!(

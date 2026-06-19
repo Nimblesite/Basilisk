@@ -408,12 +408,17 @@ function withProgramDefaults(
  * profiling runs.
  *
  * When the global `basilisk.profiler.profileOnLaunch` setting is on, every
- * basilisk-debug launch is a profiling run, so it is marked `profileOnLaunch:
- * true`. That flag makes the DAP proxy neutralise the user's breakpoints so the
- * run completes instead of stopping interactively ([PROFILE-LAUNCH-NOSTOP],
- * #145) — matching `shouldProfileOnLaunch`'s two equivalent triggers (the
- * explicit launch arg, or this global setting). Pure (the setting is passed in)
- * so it stays unit-testable; the active language id is passed in too.
+ * CPU-profilable basilisk-debug launch is a profiling run, so it is marked
+ * `profileOnLaunch: true`. That flag makes the DAP proxy neutralise the user's
+ * breakpoints so the run completes instead of stopping interactively
+ * ([PROFILE-LAUNCH-NOSTOP], #145) — matching `shouldProfileOnLaunch`'s two
+ * equivalent triggers (the explicit launch arg, or this global setting).
+ *
+ * A "Run & Track Memory" launch (`memoryTrackOnLaunch`) is explicitly excluded:
+ * it is not a CPU run, and stamping it would (a) strip its breakpoints and
+ * (b) make the CPU sampler auto-start alongside tracemalloc, the two fighting
+ * over the single entry pause (dap-1). Pure (the setting is passed in) so it
+ * stays unit-testable; the active language id is passed in too.
  */
 export function applyDebugConfigDefaults(
   config: vscode.DebugConfiguration,
@@ -425,7 +430,8 @@ export function applyDebugConfigDefaults(
     profileOnLaunchGlobal &&
     resolved.type === "basilisk-debug" &&
     resolved.request === "launch" &&
-    resolved.profileOnLaunch !== true
+    resolved.profileOnLaunch !== true &&
+    resolved.memoryTrackOnLaunch !== true
   ) {
     return { ...resolved, profileOnLaunch: true };
   }

@@ -1769,7 +1769,7 @@ suite('Basilisk Debug Config Provider', () => {
     // shouldProfileOnLaunch). It must mark the launch so the DAP proxy strips
     // breakpoints — otherwise a plain F5 with the global setting on still halts
     // at user breakpoints, the exact dead-stop #145 forbids.
-    test('global profiler.profileOnLaunch marks every launch as a profiling run (#145)', () => {
+    test('global profiler.profileOnLaunch marks an ordinary launch as a profiling run (#145)', () => {
         const resolved = applyDebugConfigDefaults({} as vscode.DebugConfiguration, 'python', true);
         assert.strictEqual(resolved.type, 'basilisk-debug', 'still synthesizes a current-file launch');
         assert.strictEqual(
@@ -1777,6 +1777,24 @@ suite('Basilisk Debug Config Provider', () => {
             true,
             'global profile-on-launch must mark the launch so the proxy neutralises breakpoints (#145)',
         );
+    });
+
+    // dap-1: a "Run & Track Memory" launch is NOT a CPU run. The global CPU
+    // setting must not stamp it `profileOnLaunch` — otherwise the proxy strips
+    // its breakpoints and the CPU sampler auto-starts alongside tracemalloc,
+    // both fighting over the single entry pause.
+    test('global profiler.profileOnLaunch does NOT contaminate a memory-tracking launch (dap-1)', () => {
+        const memory = {
+            name: 'Run & Track Memory (Current File)', type: 'basilisk-debug', request: 'launch',
+            program: '/tmp/a.py', memoryTrackOnLaunch: true,
+        } as unknown as vscode.DebugConfiguration;
+        const resolved = applyDebugConfigDefaults(memory, 'python', true);
+        assert.notStrictEqual(
+            resolved.profileOnLaunch,
+            true,
+            'a memory launch must never be stamped as a CPU profiling run, even with the global setting on (dap-1)',
+        );
+        assert.strictEqual(resolved.memoryTrackOnLaunch, true, 'the memory-tracking flag is preserved');
     });
 
     test('an explicit profiling launch stays marked (idempotent) and a normal launch is not', () => {

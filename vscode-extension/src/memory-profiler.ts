@@ -44,6 +44,7 @@ import {
   type MemoryDiffResult,
   type MemorySnapshotResult,
 } from "./memory-decorations";
+import { openNativeProfileViewerBeside } from "./profiler-flamegraph-html";
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -168,7 +169,17 @@ function memoryCommandDisposables(store: Store): vscode.Disposable[] {
     // unrelated debug session ending must never tear down live tracking. A
     // manually-stopped session deletes its now-orphaned at-exit file here.
     vscode.debug.onDidTerminateDebugSession((session) => {
-      if (session.id === store.profiler.value.memoryDebugSessionId && store.profiler.value.memory !== "idle") {
+      // Finalise when the tracked session ends. If we never captured a concrete
+      // session id — `activeDebugSession` was momentarily undefined at start
+      // (memui-3) — fall back to ANY basilisk-debug session ending while tracking
+      // is active: only one memory session exists at a time, so it is the tracked
+      // one. This guarantees tracking always settles instead of hanging on
+      // "Memory: tracking" forever (no stale state on screen).
+      const trackedId = store.profiler.value.memoryDebugSessionId;
+      const tracking = store.profiler.value.memory !== "idle";
+      const isTrackedSession =
+        trackedId !== undefined ? session.id === trackedId : session.type === "basilisk-debug";
+      if (tracking && isTrackedSession) {
         pendingSnapshotCleanup.delete(session.id);
         void finalizeMemorySessionOnEnd(store);
         return;
@@ -481,18 +492,15 @@ async function handleMemorySnapshot(store: Store): Promise<void> {
  */
 async function presentMemorySnapshot(result: MemoryIngestResult): Promise<void> {
   applyMemoryDecorations(result as unknown as MemorySnapshotResult);
-  lastDashboardSnapshot = toDashboardSnapshot(result);
-  Logger.info(`Memory snapshot: ${lastDashboardSnapshot.currentMemory} bytes current`);
-  const heapProfilePath = asString(result.heapProfilePath);
-  if (heapProfilePath !== "") {
-    await vscode.commands.executeCommand(
-      "vscode.open",
-      vscode.Uri.file(heapProfilePath),
-      vscode.ViewColumn.Beside,
-    );
-  } else {
-    openMemoryDashboard(lastDashboardSnapshot);
-  }
+  const dashboard = toDashboardSnapshot(result);
+  lastDashboardSnapshot = dashboard;
+  Logger.info(`Memory snapshot: ${dashboard.currentMemory} bytes current`);
+  // Open the V8 `.heapprofile` in the built-in viewer beside the source; fall
+  // back to the Basilisk dashboard when none was produced OR the viewer refuses
+  // — the shared primitive gives the memory path the same robustness as CPU (dry-1).
+  await openNativeProfileViewerBeside(asString(result.heapProfilePath), () => {
+    openMemoryDashboard(dashboard);
+  });
 }
 
 /**
@@ -514,14 +522,25 @@ async function finalizeMemorySessionOnEnd(store: Store): Promise<void> {
   if (memorySessionId === undefined || finalSnapshotFile === undefined) { return; }
   const output = await readFinalSnapshot(finalSnapshotFile);
   if (output === null) {
+    // No file / no marker: either the program made no tracked allocations, or it
+    // exited too abruptly for even the SIGTERM/SIGINT hook to run (a native
+    // crash, SIGKILL, or os._exit). Don't claim it "finished" — that is wrong
+    // for a kill (ux-1).
     void vscode.window.showInformationMessage(
-      "Basilisk: The program finished before a final memory snapshot could be captured — set a breakpoint and take a snapshot to inspect allocations.",
+      "Basilisk: No final memory snapshot was captured — the program either made no tracked allocations or exited abruptly (a crash, kill, or os._exit). Set a breakpoint and take a snapshot to inspect allocations.",
     );
     return;
   }
 
+  // The snapshot WAS captured; from here every failure to turn it into a view is
+  // surfaced, never swallowed — the spec's "stopping never silently produces
+  // nothing" guarantee covers the post-capture paths too (memui-2).
+  const captured = "Basilisk: Captured a final memory snapshot at exit, but ";
   const client = store.client.value;
-  if (client?.isRunning() !== true) { return; }
+  if (client?.isRunning() !== true) {
+    void vscode.window.showWarningMessage(`${captured}the language server is not running, so it could not be analyzed.`);
+    return;
+  }
   try {
     const result = await client.sendRequest<MemoryIngestResult | null>("workspace/executeCommand", {
       command: LSP_MEM_CMD.ingest,
@@ -532,30 +551,35 @@ async function finalizeMemorySessionOnEnd(store: Store): Promise<void> {
       void vscode.window.showInformationMessage(
         "Basilisk: Captured a final memory snapshot at exit — opened the allocation view.",
       );
+      return;
     }
+    void vscode.window.showWarningMessage(`${captured}it could not be analyzed into an allocation view.`);
   } catch (err: unknown) {
-    Logger.warn(`[Memory] final snapshot ingest failed: ${err instanceof Error ? err.message : String(err)}`);
+    const msg = err instanceof Error ? err.message : String(err);
+    Logger.warn(`[Memory] final snapshot ingest failed: ${msg}`);
+    void vscode.window.showWarningMessage(`${captured}analyzing it failed — ${msg}.`);
   }
 }
 
 /**
- * Read the debuggee's at-exit snapshot payload, deleting the file. The `atexit`
- * write completes (and closes the file) before the process exits, so by the time
- * the debug session terminates the file is whole; a short poll only covers the
- * brief window where the terminate event races the final flush. Returns null
- * when no usable payload was written ([PROFILE-MEMORY-FINAL]).
+ * Read the debuggee's at-exit snapshot payload, deleting the file once it is read
+ * intact. The debuggee writes the payload atomically (sibling temp + `os.replace`),
+ * so a readable file carrying the marker is whole. A short poll covers the window
+ * where the terminate event races the final flush. The file is unlinked ONLY once
+ * a complete (marker-bearing) payload is read — a missing or marker-less read is
+ * never destructive, so a slow flush is recoverable rather than lost
+ * (conform-4 / ux-11). Returns null when no usable payload arrived by the deadline.
  */
 async function readFinalSnapshot(path: string): Promise<string | null> {
   const deadline = Date.now() + FINAL_SNAPSHOT_WAIT_MS;
   for (;;) {
-    try {
-      const contents = await fs.promises.readFile(path, "utf8");
+    const contents = await fs.promises.readFile(path, "utf8").catch(() => null);
+    if (contents?.includes("__BASILISK_MEM__") === true) {
       await fs.promises.unlink(path).catch(() => undefined);
-      return contents.includes("__BASILISK_MEM__") ? contents : null;
-    } catch {
-      if (Date.now() >= deadline) { return null; }
-      await new Promise<void>((resolve) => setTimeout(resolve, FINAL_SNAPSHOT_POLL_MS));
+      return contents;
     }
+    if (Date.now() >= deadline) { return null; }
+    await new Promise<void>((resolve) => setTimeout(resolve, FINAL_SNAPSHOT_POLL_MS));
   }
 }
 

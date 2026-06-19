@@ -104,6 +104,7 @@ export function registerProfiler(
     vscode.debug.onDidStartDebugSession((session) => {
       if (shouldProfileOnLaunch(session) && store.profiler.value.cpu === "idle") {
         Logger.info(`Profile on Launch: auto-profiling debug session ${session.id}`);
+        notifyBreakpointsSuppressedForProfiling();
         void startProfilerOnLaunch(store, session.id);
       }
     }),
@@ -161,6 +162,27 @@ function busyMessage(store: Store): string {
 
 /** The single progress title every CPU-start flow shares. */
 const CPU_START_TITLE = "Basilisk: Starting CPU profiler";
+
+/** Shown once per session: a profiling launch neutralises breakpoints (ux-6). */
+let breakpointSuppressionNoticeShown = false;
+
+/**
+ * Tell the user, once, that a profiling launch runs to completion with their
+ * breakpoints disabled — otherwise a Run & Profile (or a plain F5 with the
+ * global `profiler.profileOnLaunch` setting on) silently never stops at a
+ * breakpoint, which is baffling while the gutter still shows them armed (ux-6).
+ * Only fires when breakpoints are actually set, so a breakpoint-free run is
+ * never narrated.
+ */
+function notifyBreakpointsSuppressedForProfiling(): void {
+  if (breakpointSuppressionNoticeShown || vscode.debug.breakpoints.length === 0) {
+    return;
+  }
+  breakpointSuppressionNoticeShown = true;
+  void vscode.window.showInformationMessage(
+    "Basilisk: Profiling run — your breakpoints are disabled so the program runs to completion. Launch without profiling to debug with breakpoints.",
+  );
+}
 
 /**
  * Auto-start dispatcher for a freshly launched debug session: cooperative
