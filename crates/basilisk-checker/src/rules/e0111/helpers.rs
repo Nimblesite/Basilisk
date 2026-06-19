@@ -203,6 +203,46 @@ pub(super) fn is_namedtuple_class(
     false
 }
 
+/// Return the tuple fields of a `NamedTuple` class.
+///
+/// Per the typing spec (namedtuples.html): "A named tuple class can be
+/// subclassed, but any fields added by the subclass are not considered part of
+/// the named tuple type." So a class that inherits `NamedTuple` *directly*
+/// contributes its own annotated attributes as fields; a subclass of another
+/// `NamedTuple` class inherits exactly that base's fields and its own added
+/// annotations are NOT tuple fields.
+pub(super) fn namedtuple_fields<'a>(
+    class_info: &'a ClassInfo,
+    class_map: &HashMap<&str, &'a ClassInfo>,
+) -> Vec<&'a basilisk_resolver::AttributeInfo> {
+    let own_annotated = || {
+        class_info
+            .attributes
+            .iter()
+            .filter(|a| a.has_annotation)
+            .collect::<Vec<_>>()
+    };
+
+    // Direct `NamedTuple` inheritance: own annotated attributes are the fields.
+    if all_base_names(class_info)
+        .into_iter()
+        .any(|base| base == "NamedTuple")
+    {
+        return own_annotated();
+    }
+
+    // Subclass of another `NamedTuple` class: inherit that base's fields only.
+    for base_name in all_base_names(class_info) {
+        if let Some(base_class) = class_map.get(base_name) {
+            if is_namedtuple_class(base_class, class_map) {
+                return namedtuple_fields(base_class, class_map);
+            }
+        }
+    }
+
+    own_annotated()
+}
+
 /// Resolve a string annotation by stripping surrounding quotes.
 pub(super) fn resolve_string_annotation(annotation: &str) -> String {
     if (annotation.starts_with('"') && annotation.ends_with('"'))
@@ -215,6 +255,30 @@ pub(super) fn resolve_string_annotation(annotation: &str) -> String {
     } else {
         annotation.to_owned()
     }
+}
+
+/// Substitute each `TypeVar` name in `annotation` with its concrete binding,
+/// matching whole identifier tokens only (so `T` in `T | None` is replaced but
+/// the `T` inside `Type` is not). Example: `T | None` with `{T: int}` → `int | None`.
+fn substitute_typevars(annotation: &str, substitutions: &HashMap<&str, &str>) -> String {
+    let mut result = String::with_capacity(annotation.len());
+    let mut ident = String::new();
+    let flush = |ident: &mut String, result: &mut String| {
+        if !ident.is_empty() {
+            result.push_str(substitutions.get(ident.as_str()).copied().unwrap_or(ident));
+            ident.clear();
+        }
+    };
+    for ch in annotation.chars() {
+        if ch.is_alphanumeric() || ch == '_' {
+            ident.push(ch);
+        } else {
+            flush(&mut ident, &mut result);
+            result.push(ch);
+        }
+    }
+    flush(&mut ident, &mut result);
+    result
 }
 
 /// Extract type argument texts from a subscript slice expression.
@@ -390,12 +454,9 @@ pub(super) fn check_init_method_args(
 
         let ann_trimmed = ann_text.trim();
 
-        // Substitute type parameters in the annotation.
-        let resolved_type = if let Some(replacement) = substitutions.get(ann_trimmed) {
-            (*replacement).to_owned()
-        } else {
-            ann_trimmed.to_owned()
-        };
+        // Substitute type parameters in the annotation (handles composite forms
+        // such as `T | None`, where the whole string is not a substitution key).
+        let resolved_type = substitute_typevars(ann_trimmed, substitutions);
 
         // If the resolved type is still a TypeVar name (function-scoped, not
         // class-scoped), it can accept any type — skip the check.

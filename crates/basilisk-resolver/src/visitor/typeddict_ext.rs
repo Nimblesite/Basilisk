@@ -259,6 +259,7 @@ pub(super) fn td_check_expr_reads(
     expr: &Expr,
     var_type: &std::collections::HashMap<String, String>,
     fields: &TdFieldMap<'_>,
+    final_consts: &std::collections::HashMap<String, String>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
     use ruff_text_size::Ranged as _;
@@ -267,8 +268,9 @@ pub(super) fn td_check_expr_reads(
             if let Some(var_name) = expr_simple_name(&sub.value) {
                 if let Some(class_name) = var_type.get(&var_name) {
                     if let Some((all_fields, _, _, _)) = fields.get(class_name.as_str()) {
-                        if let Expr::StringLiteral(key_str) = sub.slice.as_ref() {
-                            let key = key_str.value.to_string();
+                        // A string literal, or a `Final` name bound to a string value
+                        // (PEP 591), is a statically-known key; anything else is not.
+                        if let Some(key) = subscript_key_literal(&sub.slice, final_consts) {
                             if !all_fields.contains(&key.as_str()) {
                                 out.push(TypedDictKeyViolation {
                                     span: text_range_to_span(sub.range()),
@@ -289,21 +291,39 @@ pub(super) fn td_check_expr_reads(
                     }
                 }
             }
-            td_check_expr_reads(&sub.value, var_type, fields, out);
-            td_check_expr_reads(&sub.slice, var_type, fields, out);
+            td_check_expr_reads(&sub.value, var_type, fields, final_consts, out);
+            td_check_expr_reads(&sub.slice, var_type, fields, final_consts, out);
         }
         Expr::Call(call) => {
-            td_check_expr_reads(&call.func, var_type, fields, out);
+            td_check_expr_reads(&call.func, var_type, fields, final_consts, out);
             for arg in &call.arguments.args {
-                td_check_expr_reads(arg, var_type, fields, out);
+                td_check_expr_reads(arg, var_type, fields, final_consts, out);
             }
         }
         Expr::BinOp(binop) => {
-            td_check_expr_reads(&binop.left, var_type, fields, out);
-            td_check_expr_reads(&binop.right, var_type, fields, out);
+            td_check_expr_reads(&binop.left, var_type, fields, final_consts, out);
+            td_check_expr_reads(&binop.right, var_type, fields, final_consts, out);
         }
-        Expr::UnaryOp(unary) => td_check_expr_reads(&unary.operand, var_type, fields, out),
+        Expr::UnaryOp(unary) => {
+            td_check_expr_reads(&unary.operand, var_type, fields, final_consts, out);
+        }
         _ => {}
+    }
+}
+
+/// Resolve a subscript key expression to its statically-known string value.
+///
+/// Returns the value for a string literal, or for a `Name` bound to a module-level
+/// `Final` string constant (PEP 591 — final string values may stand in for string
+/// literals in `TypedDict` operations). Anything else yields `None`.
+fn subscript_key_literal(
+    slice: &Expr,
+    final_consts: &std::collections::HashMap<String, String>,
+) -> Option<String> {
+    match slice {
+        Expr::StringLiteral(key_str) => Some(key_str.value.to_string()),
+        Expr::Name(_) => expr_simple_name(slice).and_then(|n| final_consts.get(&n).cloned()),
+        _ => None,
     }
 }
 

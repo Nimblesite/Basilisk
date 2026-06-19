@@ -44,9 +44,23 @@ impl InferredType {
 
 /// Parse complex (non-primitive) annotation text.
 fn parse_complex_annotation(annotation: &str) -> InferredType {
-    if annotation.starts_with("literal[") && annotation.ends_with(']') {
-        let inner = annotation["literal[".len()..annotation.len() - 1].trim();
-        return parse_literal_annotation(inner);
+    // PEP 604 unions split first (bracket-aware) so `L[1] | L[2]` parses as a
+    // union of `Literal`s rather than one malformed subscript.
+    let union_parts = split_top_level_pipe(annotation);
+    if union_parts.len() > 1 {
+        return InferredType::Union(
+            union_parts
+                .iter()
+                .map(|part| InferredType::from_annotation(part.trim()))
+                .collect(),
+        );
+    }
+    // `Literal[...]`, including the common `from typing import Literal as L`
+    // alias spelled `L[...]` (lowercased to `l[`).
+    if let Some(inner) =
+        strip_subscript(annotation, "literal[").or_else(|| strip_subscript(annotation, "l["))
+    {
+        return parse_literal_annotation(inner.trim());
     }
     if annotation.starts_with("callable[") && annotation.ends_with(']') {
         let inner = annotation["callable[".len()..annotation.len() - 1].trim();
@@ -112,14 +126,43 @@ fn parse_container_annotation(annotation: &str) -> InferredType {
         let inner = &annotation[9..annotation.len() - 1];
         return InferredType::Optional(Box::new(InferredType::from_annotation(inner)));
     }
-    if annotation.contains('|') {
-        let types: Vec<InferredType> = annotation
-            .split('|')
-            .map(|part| InferredType::from_annotation(part.trim()))
-            .collect();
-        return InferredType::Union(types);
-    }
     InferredType::Named(annotation.to_owned())
+}
+
+/// Strip a `prefix...]` subscript wrapper, returning the inner text when the
+/// annotation both starts with `prefix` and ends with `]`.
+fn strip_subscript<'a>(annotation: &'a str, prefix: &str) -> Option<&'a str> {
+    if annotation.starts_with(prefix) && annotation.ends_with(']') {
+        annotation.get(prefix.len()..annotation.len() - 1)
+    } else {
+        None
+    }
+}
+
+/// Split an annotation on top-level `|` (PEP 604 union), ignoring any `|` nested
+/// inside `[...]` or `(...)`. Returns a single-element vector when there is no
+/// top-level `|`.
+fn split_top_level_pipe(annotation: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0usize;
+    for (idx, ch) in annotation.char_indices() {
+        match ch {
+            '[' | '(' => depth += 1,
+            ']' | ')' => depth -= 1,
+            '|' if depth == 0 => {
+                if let Some(part) = annotation.get(start..idx) {
+                    parts.push(part);
+                }
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    if let Some(part) = annotation.get(start..) {
+        parts.push(part);
+    }
+    parts
 }
 
 /// Parses the inner content of a `Literal[...]` annotation into an `InferredType`.

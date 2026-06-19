@@ -22,6 +22,7 @@ mod protocol_members;
 mod sig_model;
 mod sig_subtype;
 mod tuple_check;
+mod typeddict_struct;
 mod typeform_check;
 
 use crate::span_util::slice_span;
@@ -57,7 +58,10 @@ impl Rule for AssignmentTypeMismatch {
             typeddict: collect_typeddict_names(module),
             typeddict_extra_items: collect_extra_items_typeddict_names(module),
             type_alias: collect_type_alias_names(module),
+            type_alias_type: collect_type_alias_type_names(module),
             value_aliases: alias_match::collect_union_aliases(module),
+            generic_aliases: alias_match::collect_generic_aliases(module),
+            typeddict_schemas: typeddict_struct::build_typeddict_schemas(module),
         };
         let call_index = callable_check::build_index(module);
         check_vars(
@@ -164,9 +168,31 @@ struct SkipNames {
     typeddict_extra_items: std::collections::HashSet<String>,
     /// PEP 695 type alias names (lowercase).
     type_alias: std::collections::HashSet<String>,
+    /// `TypeAliasType(...)` call LHS names (lowercase).
+    type_alias_type: std::collections::HashSet<String>,
     /// Legacy `Name = Union[...]` value aliases (lowercase → definition), used
     /// for recursive-alias value matching.
     value_aliases: std::collections::HashMap<String, InferredType>,
+    /// Generic (`TypeVar`-parameterised) value aliases such as
+    /// `G = list["G[T]" | T]`, keyed by lowercase name. Used to validate
+    /// literal assignments against a specialised recursive alias (`G[str]`).
+    generic_aliases: std::collections::HashMap<String, alias_match::GenericAlias>,
+    /// Effective field schemas (class name → fields) for every `TypedDict`,
+    /// used for PEP 705 structural assignability of `TypedDict`-to-`TypedDict`
+    /// assignments instead of name equality.
+    typeddict_schemas: typeddict_struct::TdSchemas,
+}
+
+/// Collect names defined via `Name = TypeAliasType(...)` (lowercase).
+///
+/// E0014 cannot evaluate an expanded `TypeAliasType` alias, so assignments whose
+/// declared type references such an alias are skipped to avoid false positives.
+fn collect_type_alias_type_names(module: &ResolvedModule) -> std::collections::HashSet<String> {
+    module
+        .type_alias_type_calls
+        .iter()
+        .map(|call| call.lhs_name.to_ascii_lowercase())
+        .collect()
 }
 
 /// Names of `TypedDict` classes declaring `extra_items=` (lowercase).
@@ -202,7 +228,8 @@ struct ParamMaps {
 /// checking instead of the generic `Unknown` fallback.
 #[expect(
     clippy::too_many_arguments,
-    reason = "assignment checking threads full module context"
+    clippy::too_many_lines,
+    reason = "assignment checking threads full module context across per-variable branches"
 )]
 fn check_vars(
     vars: &[VariableInfo],
@@ -254,12 +281,14 @@ fn check_vars(
                 }
             }
 
-            // Skip annotations that reference a PEP 695 type alias. E0014 cannot
-            // evaluate the expanded alias type, so any assignment check would be
-            // unreliable and produce false positives.
+            // Skip annotations that reference a PEP 695 type alias or a
+            // `TypeAliasType(...)` alias. E0014 cannot evaluate the expanded alias
+            // type, so any assignment check would be unreliable (false positives).
             if let InferredType::Named(ref name) = declared_type {
                 let base = name.split('[').next().unwrap_or(name);
-                if skip.type_alias.contains(base) {
+                if skip.type_alias.contains(base)
+                    || skip.type_alias_type.contains(&base.to_ascii_lowercase())
+                {
                     return None;
                 }
             }
@@ -295,28 +324,54 @@ fn check_vars(
                 return None;
             }
 
-            // A bare reference to a legacy `Union` alias (e.g. a recursive
-            // `Json` alias) needs value-level matching against the expanded
-            // definition rather than the `Named`-vs-literal comparison below.
+            // A reference to a legacy value alias — a recursive `Union` alias
+            // (`Json`) or a generic `list[...]`-bodied alias needing `TypeVar`
+            // substitution (`G[str]`) — needs value-level matching against the
+            // expanded definition rather than the `Named`-vs-literal comparison
+            // below.
             if let InferredType::Named(ref name) = declared_type {
-                if !name.contains('[') {
-                    if let Some(def) = skip.value_aliases.get(name.as_str()) {
-                        return if alias_match::alias_assignable(
-                            &inferred_type,
-                            def,
-                            &skip.value_aliases,
-                            0,
-                        ) {
-                            None
-                        } else {
-                            Some((
-                                var,
-                                annotation_text.to_owned(),
-                                inferred_type,
-                                declared_type,
-                            ))
-                        };
-                    }
+                let ctx = alias_match::AliasCtx {
+                    union: &skip.value_aliases,
+                    generic: &skip.generic_aliases,
+                };
+                if let Some(matched) =
+                    alias_match::alias_value_assignable(&inferred_type, name, &ctx)
+                {
+                    return if matched {
+                        None
+                    } else {
+                        Some((
+                            var,
+                            annotation_text.to_owned(),
+                            inferred_type,
+                            declared_type,
+                        ))
+                    };
+                }
+            }
+
+            // TypedDict → TypedDict: use PEP 705 structural assignability rather
+            // than name equality, which would flag every structurally-valid
+            // cross-name assignment (`v: A = b` where `b: B`). Genuine mismatches
+            // still fire. Only reachable when the RHS resolves to a TypedDict-typed
+            // name (e.g. a parameter), so module-level checks are unaffected.
+            if let (InferredType::Named(decl), InferredType::Named(inf)) =
+                (&declared_type, &inferred_type)
+            {
+                if let (Some(target), Some(src)) = (
+                    skip.typeddict_schemas.get(decl.as_str()),
+                    skip.typeddict_schemas.get(inf.as_str()),
+                ) {
+                    return if typeddict_struct::typeddict_assignable(src, target) {
+                        None
+                    } else {
+                        Some((
+                            var,
+                            annotation_text.to_owned(),
+                            inferred_type,
+                            declared_type,
+                        ))
+                    };
                 }
             }
 

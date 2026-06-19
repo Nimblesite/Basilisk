@@ -40,16 +40,21 @@ pub(super) fn apply_dataclass_transform(
         cls.is_dataclass = true;
         cls.is_dataclass_kw_only = factory.kw_only_default;
         cls.is_dataclass_frozen = factory.frozen_default;
+        cls.is_dataclass_order = factory.order_default;
 
         // Check for per-class overrides like `@create_model(frozen=True)`
         if let Some(class_def) = find_class_def(stmts, &cls.name) {
             apply_class_decorator_overrides(class_def, &factory.name, cls);
+            // Mark field kw-only-ness from the EFFECTIVE setting (after any
+            // per-class `kw_only=` override), not the factory default — otherwise
+            // a class opting out with `@factory(kw_only=False)` keeps kw-only fields.
+            let effective_kw_only = cls.is_dataclass_kw_only;
             resolve_transform_field_attrs(
                 class_def,
                 &mut cls.attributes,
                 &factory.field_specifier_names,
                 &specifier_overloads,
-                factory.kw_only_default,
+                effective_kw_only,
             );
         }
     }
@@ -63,13 +68,19 @@ pub(super) fn collect_dc_transform_factories(stmts: &[Stmt]) -> Vec<DcTransformF
             continue;
         };
         for dec in &func.decorator_list {
-            let (is_dc_transform, kw_only_default, frozen_default, field_specifier_names) =
-                parse_dataclass_transform_decorator(&dec.expression);
+            let (
+                is_dc_transform,
+                kw_only_default,
+                frozen_default,
+                order_default,
+                field_specifier_names,
+            ) = parse_dataclass_transform_decorator(&dec.expression);
             if is_dc_transform {
                 out.push(DcTransformFactory {
                     name: func.name.to_string(),
                     kw_only_default,
                     frozen_default,
+                    order_default,
                     field_specifier_names,
                 });
             }
@@ -227,6 +238,10 @@ fn apply_class_decorator_overrides(
                     cls.is_dataclass_kw_only =
                         matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
                 }
+                "order" => {
+                    cls.is_dataclass_order =
+                        matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+                }
                 _ => {}
             }
         }
@@ -351,6 +366,20 @@ pub(super) fn resolve_transform_field_attrs(
 // ---------------------------------------------------------------------------
 // Function info
 // ---------------------------------------------------------------------------
+
+/// Returns `true` when `class` carries a `@dataclass` / `@dataclass(...)` /
+/// `@dataclasses.dataclass` decorator. Used to recognize that the synthesized
+/// `__init__` assigns every (non-`ClassVar`) field, so a `Final` field without an
+/// inline default is valid (it becomes a required constructor parameter).
+pub(super) fn is_dataclass_decorated(class: &StmtClassDef) -> bool {
+    class.decorator_list.iter().any(|dec| {
+        let expr = match &dec.expression {
+            Expr::Call(call) => call.func.as_ref(),
+            other => other,
+        };
+        super::walks::is_name_or_attr_named(expr, "dataclass")
+    })
+}
 
 pub(super) fn dataclass_flag(class: &StmtClassDef, key: &str) -> bool {
     for dec in &class.decorator_list {

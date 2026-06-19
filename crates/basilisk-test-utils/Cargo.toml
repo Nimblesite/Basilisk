@@ -7,6 +7,7 @@ license.workspace    = true
 
 [dependencies]
 serde_json = "1"
+basilisk-common = { workspace = true }
 
 # Optional deps — only needed for crates that use the checker/parser/resolver
 basilisk-checker  = { workspace = true, optional = true }

@@ -728,6 +728,7 @@ list — keep it in sync after adding or renaming a rule.
 | `BSK-E0153` | Invalid call to a constructor-derived callable ([CHKARCH-DIAG-CTOR-CALLABLE](#CHKARCH-DIAG-CTOR-CALLABLE)) |
 | `BSK-E0154` | Access to a module attribute a local stub does not declare ([CHKARCH-DIAG-STUB-MEMBER](#CHKARCH-DIAG-STUB-MEMBER)) |
 | `BSK-E0155` | PEP 695 syntax used below the configured target version ([CHKARCH-VERSION-TARGET](#CHKARCH-VERSION-TARGET)) |
+| `BSK-E0156` | TypedDict `extra_items` / `closed` (PEP 728) violations ([CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS](#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS)) |
 | `BSK-W0011` | Undeclared dependency import |
 | `BSK-W0012` | Unused dependency |
 | `BSK-W0013` | Stale uv lock file |
@@ -786,6 +787,38 @@ construction. Third-party typeshed / `py.typed` packages, instance/class
 attribute access, and dotted/aliased imports are deferred follow-ups. Implemented
 in `crates/basilisk-checker/src/rules/e0154/`; tests in
 `crates/basilisk-checker/src/rules/e0154/tests.rs`.
+
+#### TypedDict `extra_items` / `closed` (PEP 728) {#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS}
+
+`BSK-E0156` implements [PEP 728](https://peps.python.org/pep-0728/) — the
+`extra_items=` and `closed=` class keywords on `TypedDict`. A TypedDict that
+specifies `extra_items=T` defines an infinite set of non-required (or, when `T`
+is `ReadOnly[...]`, read-only) extra items whose value type is `T`; `closed=True`
+forbids any extra items at all. The rule validates four families of usage,
+operating directly on the module AST so it is independent of resolver state:
+
+1. **Class-definition legality.** `closed=` must be a literal `True`/`False`;
+   `extra_items=` may not wrap `Required[...]`/`NotRequired[...]`; a subclass may
+   not set `closed=False` when a superclass is `closed=True` or sets
+   `extra_items`; a subclass may not set `closed=True` when a superclass has a
+   *non-read-only* `extra_items`; and a subclass may not redeclare `extra_items`
+   unless the nearest superclass that declares it does so as `ReadOnly[...]` (a
+   plain TypedDict carries the implicit read-only `extra_items=ReadOnly[object]`,
+   so overriding it is always permitted).
+2. **Dict-literal construction.** When a dict literal is assigned to a TypedDict
+   with `extra_items=T`, every key outside the declared schema must carry a value
+   type assignable to `T`.
+3. **TypedDict-to-TypedDict assignability.** When both sides resolve to
+   TypedDicts, each source field outside the target schema, and the source's
+   effective `extra_items` pseudo-item, must satisfy the target's `extra_items`
+   (covariant when the target is read-only, consistent — and non-required — when
+   it is not). A plain TypedDict contributes the implicit `ReadOnly[object]`.
+4. **Constructor calls.** Calling the class object with a keyword outside the
+   declared schema is rejected unless the TypedDict declares a non-read-only
+   `extra_items=T` whose type the argument matches.
+
+Implemented in `crates/basilisk-checker/src/rules/e0156/`; conformance fixture is
+`crates/basilisk-cli/tests/conformance/typeddicts_extra_items.py`.
 
 #### `ReadOnly` `TypedDict` inheritance {#CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE}
 
@@ -977,6 +1010,18 @@ basilisk-plugin (standalone, used by basilisk-checker)
 - Cross-compilation targets: `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, `aarch64-darwin`, `x86_64-windows`
 - CI: `cargo clippy`, `cargo test`, conformance suite, benchmarks, fuzzing (nightly)
 - Release: pre-compiled binaries for all platforms (no build dependencies for users)
+
+#### Shared build-info emitter {#CHKARCH-ARCH-BUILD-VERSIONINFO}
+
+Every binary crate that exposes a Shipwright `--version` payload
+(`basilisk-cli`, `basilisk-profiler-helper`) must stamp the same
+`SHIPWRIGHT_*` env vars (git SHA, a guaranteed `SHIPWRIGHT_GIT_DIRTY`, build
+time, target, toolchain) at compile time. That logic lives once in the
+`basilisk-buildinfo` crate (`emit_version_env`), so each crate's `build.rs` is
+a one-line delegation rather than a copy. The calendar arithmetic that formats
+`SHIPWRIGHT_BUILD_TIME` is the same RFC 3339 formatter the profiler uses for
+sample timestamps; it lives in `basilisk_common::datetime::rfc3339_from_secs`
+so the Howard Hinnant `civil_from_days` algorithm exists in exactly one place.
 
 ---
 
@@ -1352,6 +1397,35 @@ the other:
   slows checking past the gate is not done: optimise it or restructure it.
 - `BENCH_NO_GATE=1` (baseline reset) is reserved for fixture-set changes and
   must be justified in the PR description.
+
+### CI Artifact Storage Policy {#GITHUB-NO-ARTIFACTS}
+
+Basilisk is a **public** repository. Compute on standard GitHub-hosted runners
+(every CI job — all `ubuntu-24.04`) is **free and unlimited**; what GitHub bills
+for is **stored Actions artifacts** (GB-days). Therefore:
+
+- **CI stores no artifacts.** No `actions/upload-artifact` for coverage HTML,
+  mutation reports, logs, screenshots, or any diagnostic. Gates enforce in-job
+  (coverage threshold, mutation-score merge, benchmarks) and reports are
+  reproducible locally (`make test`, `make mutation-test`). External free
+  services (Codecov) consume `lcov.info` directly without GitHub storage.
+- **The only permanent store is the GitHub Release.** Release *assets* attached
+  to a tag are free and unlimited — release binaries and per-platform VSIX live
+  there, never as retained Actions artifacts.
+- **Transient cross-job hand-offs are the sole exception**, and only because
+  matrix jobs run on separate runners that cannot share a filesystem (the four
+  mutation shards → the merge/score job; the release build matrix → the publish
+  job). Each such upload **must** set `retention-days: 1` — the floor — so it is
+  consumed and auto-deleted within the same run and never accrues stored
+  GB-days. The 90-day default is never acceptable.
+- **Existing artifacts are purged, not left to expire.** When this policy is
+  tightened, delete the back-catalogue
+  (`gh api repos/<owner>/<repo>/actions/artifacts` → `DELETE …/artifacts/{id}`).
+
+Implemented by `.github/workflows/ci.yml` and `.github/workflows/release.yml`
+(every `upload-artifact` carries `retention-days: 1` and a `[GITHUB-NO-ARTIFACTS]`
+reference). The Actions **cache** (`Swatinem/rust-cache`, `actions/cache`) is
+separate and free — it does not count toward billed storage and is unaffected.
 
 ---
 

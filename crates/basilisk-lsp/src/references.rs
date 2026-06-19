@@ -10,7 +10,9 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule};
 use tower_lsp::lsp_types::{Location, PrepareRenameResponse, Range, TextEdit, Url, WorkspaceEdit};
 
 use crate::scope_tree;
-use crate::util::{find_symbol_at_offset, identifier_at_offset, span_to_range, SymbolHit};
+use crate::util::{
+    definition_range, find_symbol_at_offset, identifier_at_offset, symbol_name_at, SymbolHit,
+};
 
 /// Find all references to the symbol at a byte offset (scope-aware).
 #[must_use]
@@ -277,12 +279,17 @@ fn find_pattern_param(
     while let Some(rel) = slice.get(pos..).and_then(|s| s.find(pattern)) {
         let name_start = base_offset + pos + rel + name_offset_in_pattern;
         let name_end = name_start + param_name.len();
-        results.push(Range {
-            start: crate::util::byte_offset_to_position(source, name_start),
-            end: crate::util::byte_offset_to_position(source, name_end),
-        });
+        push_name_range(results, source, name_start, name_end);
         pos += rel + pattern.len().max(1);
     }
+}
+
+/// Push the LSP range spanning the byte offsets `[name_start, name_end)` onto `results`.
+fn push_name_range(results: &mut Vec<Range>, source: &str, name_start: usize, name_end: usize) {
+    results.push(Range {
+        start: crate::util::byte_offset_to_position(source, name_start),
+        end: crate::util::byte_offset_to_position(source, name_end),
+    });
 }
 
 /// Find Google-style `name (type):` and `NumPy`-style `name :` param references.
@@ -304,10 +311,7 @@ fn find_google_numpy_param_refs(
             if is_match {
                 let name_start = base_offset + byte_pos + whitespace_len;
                 let name_end = name_start + param_name.len();
-                results.push(Range {
-                    start: crate::util::byte_offset_to_position(source, name_start),
-                    end: crate::util::byte_offset_to_position(source, name_end),
-                });
+                push_name_range(results, source, name_start, name_end);
             }
         }
         // Advance past this line plus the newline character.
@@ -371,10 +375,7 @@ fn find_attr_in_span(
         let name_end = name_start + attr_name.len();
 
         if has_word_boundary_after(source, name_end) && !is_in_string_or_comment(source, abs) {
-            results.push(Range {
-                start: crate::util::byte_offset_to_position(source, name_start),
-                end: crate::util::byte_offset_to_position(source, name_end),
-            });
+            push_name_range(&mut results, source, name_start, name_end);
         }
         search_pos += rel + pattern.len().max(1);
     }
@@ -387,38 +388,6 @@ fn has_word_boundary_after(source: &str, pos: usize) -> bool {
         .as_bytes()
         .get(pos)
         .is_none_or(|&b| !is_ident_byte(b))
-}
-
-/// Get the symbol name at a byte offset, either from the symbol table or from
-/// the identifier under the cursor.
-fn symbol_name_at(resolved: &ResolvedModule, source: &str, byte_offset: usize) -> Option<String> {
-    if let Some(hit) = find_symbol_at_offset(resolved, byte_offset) {
-        return Some(symbol_hit_name(&hit).to_owned());
-    }
-    identifier_at_offset(source, byte_offset)
-}
-
-fn symbol_hit_name<'a>(hit: &'a SymbolHit<'a>) -> &'a str {
-    match hit {
-        SymbolHit::Function(f) => &f.name,
-        SymbolHit::Class(c) => &c.name,
-        SymbolHit::Variable(v) => &v.name,
-        SymbolHit::Parameter { param, .. } => &param.name,
-        SymbolHit::Attribute { attr, .. } => &attr.name,
-        SymbolHit::Import(i) => &i.module,
-    }
-}
-
-fn definition_range(hit: &SymbolHit<'_>, source: &str) -> Range {
-    let span = match hit {
-        SymbolHit::Function(f) => f.name_span,
-        SymbolHit::Class(c) => c.name_span,
-        SymbolHit::Variable(v) => v.name_span,
-        SymbolHit::Parameter { param, .. } => param.name_span,
-        SymbolHit::Attribute { attr, .. } => attr.name_span,
-        SymbolHit::Import(i) => i.span,
-    };
-    span_to_range(source, span)
 }
 
 /// Find all whole-word occurrences of `name` in `source`, returning LSP ranges.

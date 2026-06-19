@@ -286,11 +286,18 @@ impl Rule for TypeVarScopeViolation {
             // TypeAlias inside a class body: class TypeVars are not in scope
             // for type alias definitions. `alias: TypeAlias = list[T]` is invalid
             // when T comes from the enclosing class's Generic[T].
+            //
+            // A `TypeAliasType(...)` call is excluded: unlike the `TypeAlias`
+            // annotation it does not open a new scope, so it may legitimately
+            // capture the enclosing class's TypeVars when `type_params` is omitted.
             {
                 let class_scopes: Vec<&ScopeInfo> =
                     scope_stack.iter().filter(|scope| scope.is_class).collect();
 
-                if class_scopes.len() == 1 && trimmed.contains("TypeAlias") {
+                if class_scopes.len() == 1
+                    && trimmed.contains("TypeAlias")
+                    && !trimmed.contains("TypeAliasType")
+                {
                     let Some(enclosing_tvs) = class_scopes.first().map(|s| &s.bound_typevars)
                     else {
                         continue;

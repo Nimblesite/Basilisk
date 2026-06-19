@@ -134,26 +134,7 @@ fn parse_allocation_site(value: &serde_json::Value) -> AllocationSite {
         .and_then(serde_json::Value::as_u64)
         .unwrap_or(0);
 
-    let traceback = value
-        .get("traceback")
-        .and_then(serde_json::Value::as_array)
-        .map(|arr| {
-            arr.iter()
-                .map(|frame| diff::TraceFrame {
-                    file: frame
-                        .get("file")
-                        .and_then(serde_json::Value::as_str)
-                        .unwrap_or("")
-                        .to_owned(),
-                    line: frame
-                        .get("line")
-                        .and_then(serde_json::Value::as_i64)
-                        .and_then(|v| i32::try_from(v).ok())
-                        .unwrap_or(0),
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let traceback = diff::parse_traceback(value);
 
     AllocationSite {
         file,

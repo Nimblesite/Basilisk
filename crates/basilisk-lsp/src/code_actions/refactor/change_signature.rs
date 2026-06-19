@@ -84,17 +84,10 @@ fn build_param_removal_edit(
     func: &basilisk_resolver::FunctionInfo,
     param_idx: usize,
 ) -> Option<TextEdit> {
-    let def_line_num = line_of_offset(source, func.def_span.start_usize());
-    let line = source.lines().nth(def_line_num)?;
-
-    // Find the opening paren.
-    let paren_start = line.find('(')?;
-    let params_text = line.get(paren_start + 1..)?;
-    let paren_end = find_close_paren(params_text)?;
-    let params_slice = params_text.get(..paren_end)?;
+    let loc = locate_params(source, func)?;
 
     // Split parameters and remove the one at param_idx.
-    let params: Vec<&str> = split_params(params_slice);
+    let params: Vec<&str> = split_params(loc.params_slice);
     if param_idx >= params.len() {
         return None;
     }
@@ -107,23 +100,12 @@ fn build_param_removal_edit(
     }
 
     let new_params_str = new_params.join(", ");
-    let line_u32 = u32::try_from(def_line_num).unwrap_or(u32::MAX);
-    let start_char = u32::try_from(paren_start + 1).unwrap_or(0);
-    let end_char = u32::try_from(paren_start + 1 + paren_end).unwrap_or(0);
-
-    Some(TextEdit {
-        range: Range {
-            start: Position {
-                line: line_u32,
-                character: start_char,
-            },
-            end: Position {
-                line: line_u32,
-                character: end_char,
-            },
-        },
-        new_text: new_params_str,
-    })
+    Some(build_params_edit(
+        loc.def_line_num,
+        loc.paren_start,
+        loc.paren_end,
+        &new_params_str,
+    ))
 }
 
 /// Build text edits that remove the argument at `param_idx` from call sites.
@@ -243,23 +225,21 @@ pub(in crate::code_actions) fn add_parameter(
     position_offset: usize,
 ) -> Option<CodeAction> {
     let func = find_func_at_offset(resolved, position_offset)?;
-
-    let def_line_num = line_of_offset(source, func.def_span.start_usize());
-    let line = source.lines().nth(def_line_num)?;
-
-    let paren_start = line.find('(')?;
-    let params_text = line.get(paren_start + 1..)?;
-    let paren_end = find_close_paren(params_text)?;
-    let params_slice = params_text.get(..paren_end)?;
+    let loc = locate_params(source, func)?;
 
     let new_param = "new_param=None";
-    let new_params = if params_slice.trim().is_empty() {
+    let new_params = if loc.params_slice.trim().is_empty() {
         new_param.to_owned()
     } else {
-        format!("{}, {new_param}", params_slice.trim())
+        format!("{}, {new_param}", loc.params_slice.trim())
     };
 
-    let edit = build_params_edit(def_line_num, paren_start, paren_end, &new_params);
+    let edit = build_params_edit(
+        loc.def_line_num,
+        loc.paren_start,
+        loc.paren_end,
+        &new_params,
+    );
 
     let mut changes = HashMap::new();
     let _ = changes.insert(uri.clone(), vec![edit]);
@@ -285,16 +265,9 @@ pub(in crate::code_actions) fn reorder_parameters(
     position_offset: usize,
 ) -> Option<CodeAction> {
     let func = find_func_at_offset(resolved, position_offset)?;
+    let loc = locate_params(source, func)?;
 
-    let def_line_num = line_of_offset(source, func.def_span.start_usize());
-    let line = source.lines().nth(def_line_num)?;
-
-    let paren_start = line.find('(')?;
-    let params_text = line.get(paren_start + 1..)?;
-    let paren_end = find_close_paren(params_text)?;
-    let params_slice = params_text.get(..paren_end)?;
-
-    let params = split_params(params_slice);
+    let params = split_params(loc.params_slice);
     let non_self = non_self_params(&params);
     // Need at least 3 to make reordering worthwhile.
     if non_self.len() < 3 {
@@ -307,7 +280,7 @@ pub(in crate::code_actions) fn reorder_parameters(
         return None;
     }
 
-    let edit = build_params_edit(def_line_num, paren_start, paren_end, &sorted);
+    let edit = build_params_edit(loc.def_line_num, loc.paren_start, loc.paren_end, &sorted);
 
     let mut changes = HashMap::new();
     let _ = changes.insert(uri.clone(), vec![edit]);
@@ -318,6 +291,33 @@ pub(in crate::code_actions) fn reorder_parameters(
         changes,
         false,
     ))
+}
+
+/// The location of a function's parameter list on its `def` line.
+struct ParamList<'a> {
+    def_line_num: usize,
+    paren_start: usize,
+    paren_end: usize,
+    params_slice: &'a str,
+}
+
+/// Locate the parameter-list slice between the parens on `func`'s `def` line.
+fn locate_params<'a>(
+    source: &'a str,
+    func: &basilisk_resolver::FunctionInfo,
+) -> Option<ParamList<'a>> {
+    let def_line_num = line_of_offset(source, func.def_span.start_usize());
+    let line = source.lines().nth(def_line_num)?;
+    let paren_start = line.find('(')?;
+    let params_text = line.get(paren_start + 1..)?;
+    let paren_end = find_close_paren(params_text)?;
+    let params_slice = params_text.get(..paren_end)?;
+    Some(ParamList {
+        def_line_num,
+        paren_start,
+        paren_end,
+        params_slice,
+    })
 }
 
 /// Find the function whose `def_span` contains the given offset.

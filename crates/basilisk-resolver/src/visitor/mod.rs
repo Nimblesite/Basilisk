@@ -4,6 +4,7 @@
 const ENUM_BASES: &[&str] = &["Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"];
 
 mod annotations;
+mod assert_narrow;
 mod assigns;
 mod calls_and_reveal;
 mod class_info;
@@ -136,11 +137,7 @@ fn collect_analysis_results(
 
     AnalysisResults {
         reveal_type_calls: calls_and_reveal::collect_reveal_type_calls(stmts),
-        assert_type_calls: calls_and_reveal::collect_assert_type_calls_from_stmts(
-            stmts,
-            &[],
-            source,
-        ),
+        assert_type_calls: calls_and_reveal::collect_assert_type_calls_from_stmts(stmts, source),
         typeddict_calls: typeddict::collect_typeddict_calls(stmts),
         newtype_calls: type_alias::collect_newtype_calls(stmts),
         namedtuple_defs: type_alias::collect_namedtuple_defs(stmts, source),

@@ -100,12 +100,24 @@ fn extract_guard_inner(ann: &str) -> Option<&str> {
     inner.strip_suffix(']')
 }
 
+/// `true` when `sub` is a subtype of `sup` for the implicit numeric tower
+/// (`bool <: int <: float <: complex`), or they are identical.
+fn is_subtype(sub: &str, sup: &str) -> bool {
+    sub == sup
+        || matches!(
+            (sub, sup),
+            ("bool", "int" | "float" | "complex")
+                | ("int", "float" | "complex")
+                | ("float", "complex")
+        )
+}
+
 /// Check whether the expected return type is compatible with the actual
 /// TypeGuard/TypeIs return type of the argument function.
 ///
-/// - `bool` is always compatible (`TypeGuard` an`TypeIs`Is are subtypes of bool).
-/// - `TypeGuard[X]` is only compatible with `TypeGuard[Y]` (not `TypeIs`), and
-///   `TypeGuard` is covariant (simplified to exact match here).
+/// - `bool` is always compatible (`TypeGuard` and `TypeIs` are subtypes of bool).
+/// - `TypeGuard[X]` is **covariant**: `TypeGuard[B]` is assignable to
+///   `TypeGuard[A]` when `B` is a subtype of `A` (and not to `TypeIs`).
 /// - `TypeIs[X]` is only compatible with `TypeIs[X]` (not `TypeGuard`), and
 ///   `TypeIs` is **invariant** in its type argument.
 fn is_compatible_return_type(expected_return: &str, actual_return: &str) -> bool {
@@ -118,11 +130,16 @@ fn is_compatible_return_type(expected_return: &str, actual_return: &str) -> bool
     let actual_is_typeguard = actual_return.starts_with("TypeGuard[");
     let actual_is_typeis = actual_return.starts_with("TypeIs[");
 
-    // TypeGuard expected, TypeGuard actual — check inner types match
+    // TypeGuard expected, TypeGuard actual — covariant: actual inner must be a
+    // subtype of the expected inner.
     if expected_is_typeguard && actual_is_typeguard {
-        let expected_inner = extract_guard_inner(expected_return);
-        let actual_inner = extract_guard_inner(actual_return);
-        return expected_inner == actual_inner;
+        return match (
+            extract_guard_inner(expected_return),
+            extract_guard_inner(actual_return),
+        ) {
+            (Some(expected_inner), Some(actual_inner)) => is_subtype(actual_inner, expected_inner),
+            _ => false,
+        };
     }
 
     // TypeIs expected, TypeIs actual — invariant, inner types must match exactly

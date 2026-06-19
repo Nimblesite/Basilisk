@@ -8,9 +8,9 @@
  * notifications.
  */
 
-import { effect } from "@preact/signals-core";
 import * as vscode from "vscode";
 import { type Store } from "./store";
+import { subscribeRevision } from "./reactive-refresh";
 import { Logger } from "./logger";
 
 // ── LSP response types ───────────────────────────────────────────────────
@@ -462,14 +462,5 @@ export function registerModuleExplorer(
  * plumbing.
  */
 export function wireReactiveRefresh(store: Store, provider: ModuleExplorerProvider): void {
-  let lastRevision = store.analysisRevision.value;
-  const dispose = effect(() => {
-    const revision = store.analysisRevision.value;
-    // The effect runs once on subscription — only refresh on real bumps.
-    if (revision !== lastRevision) {
-      lastRevision = revision;
-      provider.refresh();
-    }
-  });
-  provider.disposables.push({ dispose });
+  subscribeRevision(store.analysisRevision, provider);
 }

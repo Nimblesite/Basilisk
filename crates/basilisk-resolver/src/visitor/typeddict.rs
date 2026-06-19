@@ -111,27 +111,21 @@ pub(super) fn expr_is_parameterized(expr: &Expr) -> bool {
 /// Extracts the name from a PEP 695 `TypeParam` (`TypeVar`, `TypeVarTuple`, or `ParamSpec`).
 pub(super) fn resolve_actual_type(
     expr: &Expr,
-    params: &[(&str, &str)],
+    params: &std::collections::HashMap<String, String>,
     _source: &str,
 ) -> Option<String> {
     match expr {
-        Expr::Name(name) => {
-            let param_name = name.id.as_str();
-            params
-                .iter()
-                .find(|(n, _)| *n == param_name)
-                .and_then(|(_, ann)| {
-                    let normalized = normalize_type_str(ann);
-                    // If the normalized annotation still contains quotes, it has forward
-                    // references inside subscripts (e.g. `list["ClassA"]`) that we cannot
-                    // resolve textually — skip the check to avoid false positives.
-                    if normalized.contains('"') || normalized.contains('\'') {
-                        None
-                    } else {
-                        Some(normalized)
-                    }
-                })
-        }
+        Expr::Name(name) => params.get(name.id.as_str()).and_then(|ann| {
+            let normalized = normalize_type_str(ann);
+            // If the normalized annotation still contains quotes, it has forward
+            // references inside subscripts (e.g. `list["ClassA"]`) that we cannot
+            // resolve textually — skip the check to avoid false positives.
+            if normalized.contains('"') || normalized.contains('\'') {
+                None
+            } else {
+                Some(normalized)
+            }
+        }),
         Expr::StringLiteral(_) => Some("str".to_owned()),
         Expr::NumberLiteral(n) => {
             if matches!(n.value, ruff_python_ast::Number::Float(_)) {
@@ -165,6 +159,115 @@ pub(super) fn normalize_type_str(ann: &str) -> String {
         return normalize_type_str(&trimmed[1..trimmed.len() - 1]);
     }
     trimmed.to_owned()
+}
+
+/// Split `s` at every top-level comma, respecting `[](){}` nesting.
+///
+/// Returns trimmed slices into the original string.
+pub(super) fn split_top_level_args(inner: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth: usize = 0;
+    let mut start = 0;
+    for (idx, ch) in inner.char_indices() {
+        match ch {
+            '[' | '(' | '{' => depth += 1,
+            ']' | ')' | '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                parts.push(inner[start..idx].trim());
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(inner[start..].trim());
+    parts
+}
+
+/// Split `name[inner]` into `(name, inner)` when `text` is a single subscript
+/// whose `[` opens at top level and whose matching `]` is the final character.
+pub(super) fn split_subscript(text: &str) -> Option<(&str, &str)> {
+    let open = text.find('[')?;
+    if !text.ends_with(']') {
+        return None;
+    }
+    let name = text[..open].trim();
+    if name.is_empty() {
+        return None;
+    }
+    let inner = &text[open + 1..text.len() - 1];
+    Some((name, inner))
+}
+
+/// Strip a leading unpacked-tuple marker (`*tuple[...]` or `Unpack[tuple[...]]`),
+/// returning the inner element text of the wrapped tuple. Other unpacks (e.g.
+/// `*Ts` for a `TypeVarTuple`) yield `None` — they cannot be expanded textually.
+fn unpacked_tuple_inner(arg: &str) -> Option<&str> {
+    let arg = arg.trim();
+    let tuple_expr = if let Some(star) = arg.strip_prefix('*') {
+        star.trim()
+    } else {
+        arg.strip_prefix("Unpack[")
+            .and_then(|rest| rest.strip_suffix(']'))?
+            .trim()
+    };
+    split_subscript(tuple_expr).and_then(|(name, inner)| (name == "tuple").then_some(inner))
+}
+
+/// Canonicalize a type-expression string so that equivalent spellings compare
+/// equal. Two rewrites are applied recursively:
+///
+/// - `Union[a, b, ...]` → `a | b | ...` (PEP 604 form), preserving member order.
+/// - Fixed unpacked tuples inside `tuple[...]` are spliced in place, e.g.
+///   `tuple[int, *tuple[bool, bool], str]` → `tuple[int, bool, bool, str]`.
+///   Unbounded unpacks (`*tuple[x, ...]`, `Unpack[tuple[x, ...]]`) are left
+///   intact, matching the typing-spec rule that an unbounded tuple is preserved.
+///
+/// Order is preserved (no member sorting), so genuinely different types such as
+/// `int` vs `int | str` stay distinct. Implements part of [BSK-E0053].
+pub(super) fn canonicalize_type_str(ann: &str) -> String {
+    let text = normalize_type_str(ann);
+    let trimmed = text.trim();
+    match split_subscript(trimmed) {
+        Some(("Union", inner)) => split_top_level_args(inner)
+            .iter()
+            .map(|a| canonicalize_type_str(a))
+            .collect::<Vec<_>>()
+            .join(" | "),
+        Some(("tuple", inner)) => format!("tuple[{}]", canonicalize_tuple_args(inner)),
+        Some((name, inner)) => {
+            let args = split_top_level_args(inner)
+                .iter()
+                .map(|a| canonicalize_type_str(a))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{name}[{args}]")
+        }
+        None => trimmed.to_owned(),
+    }
+}
+
+/// Canonicalize the comma-separated argument list inside a `tuple[...]`,
+/// splicing fixed unpacked tuples and preserving unbounded ones.
+fn canonicalize_tuple_args(inner: &str) -> String {
+    split_top_level_args(inner)
+        .iter()
+        .map(|arg| canonicalize_tuple_member(arg))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Canonicalize a single `tuple[...]` member, returning its flattened spelling.
+///
+/// A fixed unpacked tuple is replaced by its (recursively canonicalized) members;
+/// every other member is canonicalized on its own.
+fn canonicalize_tuple_member(arg: &str) -> String {
+    match unpacked_tuple_inner(arg) {
+        // Unbounded unpacks contain a top-level `...` element and are preserved.
+        Some(elem_inner) if !split_top_level_args(elem_inner).contains(&"...") => {
+            canonicalize_tuple_args(elem_inner)
+        }
+        _ => canonicalize_type_str(arg),
+    }
 }
 
 /// If `ann` starts with `Annotated[`, return the first type argument (the actual type).
@@ -241,9 +344,40 @@ pub(super) fn collect_typeddict_key_violations<'a>(
     }
 
     let var_type = td_var_type_from_stmts(stmts, &typeddict_fields);
+    let final_consts = collect_final_str_consts(stmts);
     let mut out = Vec::new();
-    check_td_stmts(&typeddict_fields, &var_type, stmts, &mut out);
+    check_td_stmts(&typeddict_fields, &var_type, &final_consts, stmts, &mut out);
     out
+}
+
+/// Returns `true` when `ann` is a `Final` / `Final[...]` / `typing.Final[...]` annotation.
+fn ann_is_final(ann: &Expr) -> bool {
+    match ann {
+        Expr::Name(n) => n.id.as_str() == "Final",
+        Expr::Attribute(a) => a.attr.as_str() == "Final",
+        Expr::Subscript(s) => ann_is_final(&s.value),
+        _ => false,
+    }
+}
+
+/// Collect module-level `NAME: Final = "literal"` string constants as a
+/// name → value map. Used so a `Final` string name can stand in for a string
+/// literal in `TypedDict` subscript operations (PEP 591).
+fn collect_final_str_consts(stmts: &[Stmt]) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    for stmt in stmts {
+        let Stmt::AnnAssign(ann) = stmt else { continue };
+        if !ann_is_final(&ann.annotation) {
+            continue;
+        }
+        let Some(name) = expr_simple_name(&ann.target) else {
+            continue;
+        };
+        if let Some(Expr::StringLiteral(value)) = ann.value.as_deref() {
+            let _ = map.insert(name, value.value.to_string());
+        }
+    }
+    map
 }
 
 /// `(all_fields, field_types, is_total, has_extra_items)` map keyed by class name.

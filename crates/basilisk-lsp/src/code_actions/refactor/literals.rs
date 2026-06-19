@@ -2,9 +2,9 @@
 //!
 //! Literal conversion refactoring actions: `dict()` to `{}` and `list()` to `[]`.
 
-use std::collections::HashMap;
+use tower_lsp::lsp_types::{CodeAction, Range, Url};
 
-use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit, Url};
+use super::helpers::{build_single_line_action, split_top_level_commas};
 
 /// Offer to convert `dict()` to `{}` and/or `list()` to `[]` literal syntax.
 ///
@@ -70,7 +70,7 @@ fn find_matching_paren(text: &str, start: usize) -> Option<usize> {
 
 /// Parse keyword arguments from `dict(key=val, key2=val2)` into dict literal pairs.
 fn parse_keyword_args(args: &str) -> Option<Vec<(String, String)>> {
-    let parts = split_top_level_commas(args);
+    let parts = split_top_level_commas(args, false);
     let mut pairs = Vec::new();
 
     for part in parts {
@@ -113,7 +113,7 @@ fn dict_call_to_literal(uri: &Url, line: &str, line_num: u32) -> Option<CodeActi
     let start_char = u32::try_from(dict_start).unwrap_or(u32::MAX);
     let end_char = u32::try_from(args_end + 1).unwrap_or(u32::MAX);
 
-    Some(build_action(
+    Some(build_single_line_action(
         uri,
         line_num,
         start_char,
@@ -165,7 +165,7 @@ fn list_call_to_literal(uri: &Url, line: &str, line_num: u32) -> Option<CodeActi
     let start_char = u32::try_from(list_start).unwrap_or(u32::MAX);
     let end_char = u32::try_from(args_end + 1).unwrap_or(u32::MAX);
 
-    Some(build_action(
+    Some(build_single_line_action(
         uri,
         line_num,
         start_char,
@@ -176,65 +176,4 @@ fn list_call_to_literal(uri: &Url, line: &str, line_num: u32) -> Option<CodeActi
 }
 
 // ── Shared helpers ──────────────────────────────────────────────────────────
-
-/// Split text at top-level commas, respecting bracket and paren nesting.
-fn split_top_level_commas(text: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth: u32 = 0;
-    let mut start = 0;
-
-    for (idx, ch) in text.char_indices() {
-        match ch {
-            '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                if let Some(part) = text.get(start..idx) {
-                    parts.push(part);
-                }
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    if let Some(part) = text.get(start..) {
-        parts.push(part);
-    }
-    parts
-}
-
-/// Build a `CodeAction` with a single text edit on one line.
-fn build_action(
-    uri: &Url,
-    line_num: u32,
-    start_char: u32,
-    end_char: u32,
-    new_text: String,
-    title: &str,
-) -> CodeAction {
-    let edit_range = Range {
-        start: Position {
-            line: line_num,
-            character: start_char,
-        },
-        end: Position {
-            line: line_num,
-            character: end_char,
-        },
-    };
-
-    let mut changes = HashMap::new();
-    let _ = changes.insert(
-        uri.clone(),
-        vec![TextEdit {
-            range: edit_range,
-            new_text,
-        }],
-    );
-
-    super::super::code_action_with_changes(
-        title.to_owned(),
-        CodeActionKind::REFACTOR_REWRITE,
-        changes,
-        false,
-    )
-}
+// `build_single_line_action` and `split_top_level_commas` live in `helpers`.

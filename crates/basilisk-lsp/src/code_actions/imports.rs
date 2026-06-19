@@ -151,7 +151,7 @@ pub(crate) fn add_dunder_all(uri: &Url, source: &str) -> Option<CodeAction> {
         .join("\n");
     let all_text = format!("__all__ = [\n{names_str}\n]\n\n");
 
-    let insert_line = last_import_line(source);
+    let insert_line = super::last_import_line(source);
     let insert_pos = Position {
         line: insert_line,
         character: 0,
@@ -212,18 +212,6 @@ fn collect_public_names(source: &str) -> Vec<&str> {
         }
     }
     public_names
-}
-
-/// Return the 0-based line number *after* the last import statement.
-fn last_import_line(source: &str) -> u32 {
-    let mut insert_line: u32 = 0;
-    for (idx, line) in source.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
-            insert_line = u32::try_from(idx + 1).unwrap_or(u32::MAX);
-        }
-    }
-    insert_line
 }
 
 // ── Shared helper ─────────────────────────────────────────────────────────────

@@ -126,6 +126,20 @@ fn should_export(name: &str, all_names: Option<&Vec<String>>) -> bool {
     }
 }
 
+/// Format one parameter as `name: annotation`, or just `name` when untyped.
+fn format_param(param: &ast::ParameterWithDefault, source: &str) -> String {
+    let pname = param.parameter.name.as_str();
+    match param
+        .parameter
+        .annotation
+        .as_ref()
+        .and_then(|a| slice_expr(a, source))
+    {
+        Some(a) => format!("{pname}: {a}"),
+        None => pname.to_owned(),
+    }
+}
+
 /// Format a function definition as a `.pyi` stub line.
 fn format_function_def(func: &ast::StmtFunctionDef, source: &str) -> String {
     let name = func.name.as_str();
@@ -135,17 +149,7 @@ fn format_function_def(func: &ast::StmtFunctionDef, source: &str) -> String {
     let parameters = &func.parameters;
 
     for param in parameters.posonlyargs.iter().chain(parameters.args.iter()) {
-        let pname = param.parameter.name.as_str();
-        let ann = param
-            .parameter
-            .annotation
-            .as_ref()
-            .and_then(|a| slice_expr(a, source));
-        if let Some(a) = ann {
-            params.push(format!("{pname}: {a}"));
-        } else {
-            params.push(pname.to_owned());
-        }
+        params.push(format_param(param, source));
     }
 
     if let Some(vararg) = &parameters.vararg {
@@ -153,17 +157,7 @@ fn format_function_def(func: &ast::StmtFunctionDef, source: &str) -> String {
     }
 
     for param in &parameters.kwonlyargs {
-        let pname = param.parameter.name.as_str();
-        let ann = param
-            .parameter
-            .annotation
-            .as_ref()
-            .and_then(|a| slice_expr(a, source));
-        if let Some(a) = ann {
-            params.push(format!("{pname}: {a}"));
-        } else {
-            params.push(pname.to_owned());
-        }
+        params.push(format_param(param, source));
     }
 
     if let Some(kwarg) = &parameters.kwarg {

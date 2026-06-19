@@ -23,6 +23,11 @@ pub(super) struct DeprecatedInfo {
     pub(super) message: Option<String>,
     /// The defining span (for deduplication).
     pub(super) def_span: Span,
+    /// For a deprecated overload, the simple type name of its first
+    /// (non-`self`/`cls`) parameter — used to resolve which overload a call
+    /// targets. Per PEP 702, only calls resolving to the deprecated overload
+    /// are flagged. `None` for non-overload entities or unannotated params.
+    pub(super) overload_param_type: Option<String>,
 }
 
 /// Collect deprecated function/class definitions from a list of statements.
@@ -71,12 +76,19 @@ pub(super) fn collect_deprecated_definitions(
                             func.name.to_string()
                         };
 
+                        let overload_param_type = if has_overload {
+                            overload_first_param_type(func)
+                        } else {
+                            None
+                        };
+
                         let _ = out.insert(
                             name,
                             DeprecatedInfo {
                                 kind,
                                 message,
                                 def_span: text_range_to_span(func.range()),
+                                overload_param_type,
                             },
                         );
                         break;
@@ -95,6 +107,7 @@ pub(super) fn collect_deprecated_definitions(
                                 kind: "class".to_owned(),
                                 message,
                                 def_span: text_range_to_span(cls.range()),
+                                overload_param_type: None,
                             },
                         );
                         break;
@@ -276,6 +289,24 @@ pub(super) fn collect_param_annotation_types(
             }
         }
     }
+}
+
+/// Return the simple type name of an overload's first non-`self`/`cls`
+/// parameter (e.g. `def foo(x: int)` → `Some("int")`). Used to resolve which
+/// overload a call targets for PEP 702 deprecation checking.
+fn overload_first_param_type(func: &ruff_python_ast::StmtFunctionDef) -> Option<String> {
+    let params = &func.parameters;
+    params
+        .posonlyargs
+        .iter()
+        .chain(params.args.iter())
+        .find(|p| {
+            let name = p.parameter.name.as_str();
+            name != "self" && name != "cls"
+        })
+        .and_then(|p| p.parameter.annotation.as_ref())
+        .and_then(|ann| annotation_to_var_type(ann))
+        .map(|var_type| var_type.class_name)
 }
 
 /// Extract a `VarType` from a type annotation expression.

@@ -23,6 +23,27 @@ fn slash_text(cmd: &str, args: &[String]) -> String {
     slash_command_output(cmd, args).expect("should succeed").1
 }
 
+/// Every slash command Basilisk advertises, in palette order.
+///
+/// Shared by the exhaustive "all commands" tests so the list lives in exactly
+/// one place — adding a command here keeps both the non-empty-output and the
+/// markdown-shape assertions in sync.
+const ALL_SLASH_COMMANDS: [&str; 13] = [
+    slash_commands::PROFILE,
+    slash_commands::PROFSTOP,
+    slash_commands::PROFSNAPSHOT,
+    slash_commands::MEMLEAK,
+    slash_commands::MEMSTOP,
+    slash_commands::MEMREFS,
+    slash_commands::MODULES,
+    slash_commands::SYMBOLS,
+    slash_commands::HEALTH,
+    slash_commands::BASILISK,
+    slash_commands::TESTS,
+    slash_commands::RUNTESTS,
+    slash_commands::TESTFILE,
+];
+
 // ── Slash command output ─────────────────────────────────────────────────
 
 #[test]
@@ -93,22 +114,7 @@ fn unknown_command_errors() {
 
 #[test]
 fn all_slash_commands_produce_output() {
-    let commands = [
-        slash_commands::PROFILE,
-        slash_commands::PROFSTOP,
-        slash_commands::PROFSNAPSHOT,
-        slash_commands::MEMLEAK,
-        slash_commands::MEMSTOP,
-        slash_commands::MEMREFS,
-        slash_commands::MODULES,
-        slash_commands::SYMBOLS,
-        slash_commands::HEALTH,
-        slash_commands::BASILISK,
-        slash_commands::TESTS,
-        slash_commands::RUNTESTS,
-        slash_commands::TESTFILE,
-    ];
-    for cmd in commands {
+    for cmd in ALL_SLASH_COMMANDS {
         let (label, text) = slash_command_output(cmd, &[]).expect(cmd);
         assert!(!label.is_empty(), "empty label for {cmd}");
         assert!(!text.is_empty(), "empty text for {cmd}");
@@ -117,22 +123,7 @@ fn all_slash_commands_produce_output() {
 
 #[test]
 fn slash_output_is_markdown() {
-    let commands = [
-        slash_commands::PROFILE,
-        slash_commands::PROFSTOP,
-        slash_commands::PROFSNAPSHOT,
-        slash_commands::MEMLEAK,
-        slash_commands::MEMSTOP,
-        slash_commands::MEMREFS,
-        slash_commands::MODULES,
-        slash_commands::SYMBOLS,
-        slash_commands::HEALTH,
-        slash_commands::BASILISK,
-        slash_commands::TESTS,
-        slash_commands::RUNTESTS,
-        slash_commands::TESTFILE,
-    ];
-    for cmd in commands {
+    for cmd in ALL_SLASH_COMMANDS {
         let (_, text) = slash_command_output(cmd, &[]).expect(cmd);
         assert!(
             text.contains("##"),

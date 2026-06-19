@@ -4,7 +4,6 @@
 //! For each Python file: parse → resolve → check → generate fixes → apply.
 //! Writes the fixed source back to disk.
 
-use std::collections::HashSet;
 use std::path::Path;
 
 use basilisk_lsp::code_actions::mass_fix::{ALL_FIXABLE_RULES, SAFE_FIXABLE_RULES};
@@ -85,12 +84,7 @@ fn collect_and_fix(paths: &[String], allowed_rules: &[&str]) -> Result<FixSummar
         .unwrap_or_else(|| std::path::PathBuf::from("."));
     let config = basilisk_config::load_basilisk_config(&config_root);
 
-    let excluded: HashSet<&str> = config.exclude.iter().map(String::as_str).collect();
-    info!(
-        excluded_dirs = ?config.exclude,
-        "loaded config from {}",
-        config_root.display()
-    );
+    let excluded = crate::excluded_dirs_and_log(&config, &config_root);
 
     let python_files = crate::collect_python_files(paths, &excluded)?;
 

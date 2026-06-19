@@ -1,7 +1,7 @@
 //! Implements [BSK-E0121] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! BSK-E0121: Protocol conformance violation in annotated assignment.
 //!
-//! Detects two kinds of errors in annotated assignments at module level:
+//! Detects errors in annotated assignments at module level:
 //!
 //! 1. **Missing protocol members**: the annotation names a Protocol class and the
 //!    RHS constructs a class that does not implement all required methods.
@@ -10,6 +10,11 @@
 //!    inherits from a Protocol but does *not* itself include `Protocol` in its
 //!    bases (i.e. it is a concrete/abstract class, not a protocol).  In this case
 //!    structural subtyping does not apply and only nominal subclasses are allowed.
+//!
+//! 3. **Member-kind mismatch** (see [`conformance`]): a member is present but in
+//!    an incompatible *form* — a read-write protocol property satisfied by a
+//!    read-only/immutable member, or a writable protocol instance variable
+//!    satisfied by a `ClassVar`, read-only property, or wrong-typed attribute.
 //!
 //! ```python
 //! class P(Protocol):
@@ -33,7 +38,14 @@ use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
-const CODE: ErrorCode = ErrorCode {
+mod conformance;
+
+use conformance::{
+    check_instance_var_conformance, check_method_signature_conformance,
+    check_property_method_conformance, check_readwrite_property_conformance,
+};
+
+pub(super) const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0121",
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0121",
 };
@@ -289,7 +301,7 @@ fn check_protocol_conformance(
     rhs_class_name: &str,
     class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
     class_methods: &HashMap<&str, Vec<&str>>,
-    _module: &ResolvedModule,
+    module: &ResolvedModule,
     var: &basilisk_resolver::VariableInfo,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
@@ -342,4 +354,53 @@ fn check_protocol_conformance(
             ),
         ));
     }
+
+    // Beyond name presence: a read-write (settable) protocol property requires a
+    // settable implementation member.
+    check_readwrite_property_conformance(
+        protocol_name,
+        protocol_class,
+        rhs_class_name,
+        class_map,
+        var,
+        path,
+        diagnostics,
+    );
+
+    // A read-write protocol instance variable requires a writable, same-type
+    // implementation attribute (not a `ClassVar`, read-only property, or
+    // wrong-typed attribute).
+    check_instance_var_conformance(
+        protocol_name,
+        protocol_class,
+        rhs_class_name,
+        class_map,
+        &module.source,
+        var,
+        path,
+        diagnostics,
+    );
+
+    // A protocol property member must not be satisfied by a plain method.
+    check_property_method_conformance(
+        protocol_name,
+        protocol_class,
+        rhs_class_name,
+        class_map,
+        var,
+        path,
+        diagnostics,
+    );
+
+    // A protocol method's signature (receiver kind and parameter names) must be
+    // compatible with the implementation.
+    check_method_signature_conformance(
+        protocol_name,
+        protocol_class,
+        rhs_class_name,
+        module,
+        var,
+        path,
+        diagnostics,
+    );
 }
