@@ -22,6 +22,14 @@ name: Dependabot auto-merge
 # Lives at the repo root so it is present on `dependabot-upgrades` (cut from
 # main): for `pull_request` the workflow is read from the PR's base branch, so
 # BOTH `main` and the staging branch must carry this file.
+#
+# ⚠️ SECURITY INVARIANT — the trigger MUST stay `pull_request`, NEVER
+# `pull_request_target`. Under `pull_request` a fork PR runs with a READ-ONLY
+# token and no secrets, so merging fork-controlled content here is inert.
+# `pull_request_target` would hand the write token + secrets to that content and
+# turn this merge bot into a real RCE/exfiltration sink — exactly the
+# actions/untrusted-checkout finding, made true. Do not change it.
+# ([GITHUB-CODE-SCANNING])
 on:
   pull_request:
     branches:
@@ -35,7 +43,10 @@ permissions:
 jobs:
   sweep:
     name: Clobber-merge into dependabot-upgrades
-    if: github.actor == 'dependabot[bot]'
+    # Two independent gates, both required: the (unforgeable) Dependabot actor
+    # AND a `dependabot/*` source branch. actor-AND-source keeps the trust
+    # assumption explicit and resilient if the trigger set is ever widened.
+    if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/')
     # Deliberately the standard runner, NOT a larger/paid one: a trivial merge
     # bot must not consume CI minutes meant for the real build matrix.
     runs-on: ubuntu-latest
@@ -56,6 +67,11 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Defense-in-depth: disable git hooks for every git op in this job, so
+          # merging attacker-influenced tree content can never execute a hook by
+          # construction. No hook is reachable today (hooks live in .git, not the
+          # tree), but this holds regardless of any future change.
+          git config --global core.hooksPath /dev/null
           # Pull the bump branch into a stable local ref we can re-merge.
           git fetch origin "+refs/heads/${PR_HEAD}:refs/remotes/origin/${PR_HEAD}"
           # Re-merge onto the LIVE staging tip and retry: concurrent Dependabot

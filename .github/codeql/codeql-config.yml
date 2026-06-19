@@ -1,0 +1,24 @@
+# CodeQL configuration ([GITHUB-CODE-SCANNING]).
+#
+# Wired into codeql.yml's `init` step via `config-file:`. Holds query-level
+# tuning that the `queries:` input cannot express (query-filters).
+#
+# Why exclude actions/untrusted-checkout/MEDIUM:
+# `.github/workflows/dependabot-automerge.yml` is a merge bot, not a build.
+# CodeQL's medium untrusted-checkout query assumes a privileged workflow
+# "checks out and runs the build script from a fork"; ours does neither:
+#   * the trigger is plain `pull_request` (NOT `pull_request_target`) — fork PRs
+#     run with a READ-ONLY token and no secrets;
+#   * the job is gated on the unforgeable `dependabot[bot]` actor AND a
+#     `dependabot/*` source branch;
+#   * it runs ONLY git plumbing (fetch / `merge -X theirs` / push) + `gh pr
+#     close` — it never executes any script, hook, or build from the merged tree
+#     (hooks are also disabled via `core.hooksPath=/dev/null`).
+# Adversarially verified non-exploitable (true-pattern, false-exploit), and at
+# MEDIUM severity it is below the codeql.yml release gate (>= 7.0) regardless.
+# We exclude ONLY the `/medium` id; the genuinely-dangerous
+# `actions/untrusted-checkout/high` (the `pull_request_target` case) stays
+# ACTIVE, so a real misconfiguration is still caught.
+query-filters:
+  - exclude:
+      id: actions/untrusted-checkout/medium
