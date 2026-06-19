@@ -41,10 +41,21 @@ jobs:
       - name: Classify changed paths
         id: classify
         env:
+          ACTOR: ${{ github.actor }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
+          # Dependabot PRs are swept into `dependabot-upgrades` by
+          # dependabot-automerge.yml and never merge into main directly, so the
+          # heavy matrix would only burn minutes on a bump we discard. CI runs
+          # once, on the consolidation PR. ([GITHUB-DEPENDABOT])
+          if [ "$ACTOR" = "dependabot[bot]" ]; then
+            echo "code=false"    >> "$GITHUB_OUTPUT"
+            echo "website=false" >> "$GITHUB_OUTPUT"
+            echo "Dependabot PR — skipping Rust/extension matrix and website build."
+            exit 0
+          fi
           base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
           changed="$(git diff --name-only "$base" "$HEAD_SHA")"
           echo "Changed files:"; printf '%s\n' "$changed"
@@ -231,14 +242,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./scripts/test-rust.sh
 
-      - name: Upload coverage report artifact
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: coverage-report
-          path: target/llvm-cov/html/
-          retention-days: 14
-
+      # No artifact upload of the HTML coverage report ([GITHUB-NO-ARTIFACTS]).
+      # Coverage is enforced in-job (test-rust.sh fails below threshold) and
+      # published to Codecov below; the HTML is reproducible locally via
+      # `make test`, so storing it would just bill GB-days for nothing.
       - name: Upload to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
@@ -493,13 +500,18 @@ jobs:
         if: env.RUN == 'true'
         run: make mutation-test SHARD="${{ matrix.shard }}" MUTATION_CHECK=0
 
+      # The ONLY artifact CI is allowed to create ([GITHUB-NO-ARTIFACTS]): a
+      # transient in-run hand-off so the `mutation-test` job below can merge the
+      # four shards' outcomes and enforce the score gate. retention-days: 1 is
+      # the floor — it is consumed and auto-deleted within the same run, so it
+      # never accrues stored GB-days. It is NOT a retained build output.
       - name: Upload mutation shard output
         if: always() && env.RUN == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mutation-output-${{ matrix.label }}
           path: mutation_testing/mutants.out.working-shard-${{ matrix.output }}/mutants.out/
-          retention-days: 14
+          retention-days: 1
 
   mutation-test:
     name: Mutation Testing
@@ -530,16 +542,10 @@ jobs:
             mutation_testing/mutants_report.html \
             --scores mutation_testing/mutation_scores.json \
             --scope working
-
-      - name: Upload mutation report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: mutation-report
-          path: |
-            mutation_testing/mutants_report.html
-            mutation_testing/mutants.out.working/mutants.out/
-          retention-days: 14
+          # The merge step ABOVE is the gate: it fails the job if the mutation
+          # score regresses against the committed baseline. The HTML report is
+          # not uploaded as an artifact ([GITHUB-NO-ARTIFACTS]) — it is
+          # reproducible locally via `make mutation-test`.
 
   # ── Build gate (standard job name per repo standards) ──────────────────────
   build:
