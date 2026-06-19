@@ -2,10 +2,11 @@
 // extension's `bin/<platform>/`, copying from a build directory.
 //
 // This is the SINGLE source of truth for which binaries the VSIX bundles — used
-// by BOTH the e2e test harness (`_test_vsix`) and the release packager
-// (`_release_vsix`). Keeping one path is what stops the tests from validating a
-// different bundle than what ships (issue #71). Asset components (e.g. debugpy)
-// are vendored separately by `vendor-debugpy.mjs`.
+// by the e2e test harness (`_test_vsix`), the release packager (`_release_vsix`),
+// AND the release.yml `vsix` job. Keeping one path is what stops the tests from
+// validating a different bundle than what ships (issue #71). Asset components
+// (e.g. debugpy) are vendored separately by `vendor-debugpy.mjs`.
+// Implements [VSIX-PACKAGING-PARITY].
 //
 // Usage: node scripts/stage-runtime.mjs <build-dir> [platform]
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";

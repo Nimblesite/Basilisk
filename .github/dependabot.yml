@@ -2,23 +2,24 @@
 # Dependabot — supply-chain defense without PR spam, and without burning CI on
 # `main` for routine bumps ([GITHUB-DEPENDABOT]).
 #
-# How this kills the spam:
+# How this kills the spam — EVERY bump ends up on the `dependabot-upgrades`
+# STAGING branch, swept there automatically by
+# .github/workflows/dependabot-automerge.yml (latest bump clobbers previous):
 #   * VERSION updates -> `target-branch: dependabot-upgrades`. Every routine bump
-#     PR is opened against the long-lived `dependabot-upgrades` STAGING branch,
-#     never against main. ci.yml / codeql.yml only trigger on
-#     `pull_request: [main]` (the filter matches the PR *base*), so these staging
-#     PRs run NO build/test/CodeQL. They are auto-merged into the staging branch
-#     by .github/workflows/dependabot-automerge.yml. When you want the batch in
-#     main you open ONE `dependabot-upgrades -> main` PR and CI runs exactly once.
-#   * SECURITY updates -> still raised automatically against `main`, untouched by
-#     this file. Per GitHub docs, `target-branch` only redirects *version*
-#     updates; security updates always use the repo's default branch. So a real
-#     CVE still opens a PR against main where you see it and CI runs. That channel
-#     is governed by the repo's "Dependabot security updates" setting, NOT here.
-#   * groups with no `update-types` filter -> each ecosystem collapses ALL bumps
-#     (patch, minor AND major) into ONE grouped PR per run. Majors no longer need
-#     their own review PR because nothing reaches main unattended — review happens
-#     once, at the consolidation PR.
+#     PR is opened against the staging branch, never against main. ci.yml /
+#     codeql.yml only trigger on `pull_request: [main]` (the filter matches the
+#     PR *base*), so these staging PRs run NO build/test/CodeQL.
+#   * SECURITY updates -> GitHub IGNORES `target-branch` for these and always
+#     opens them against the repo's default branch (`main`). The auto-merge
+#     workflow therefore also fires on `main` and folds the security bump into
+#     the SAME staging branch, then retires the PR — so a CVE bump never sits on
+#     main waiting for a human either. (ci.yml/codeql.yml skip Dependabot PRs, so
+#     the matrix never burns on a bump we immediately sweep away.)
+#   * groups -> each ecosystem collapses ALL version bumps (patch, minor AND
+#     major) into ONE PR, and a parallel `*-security` group (`applies-to:
+#     security-updates`) collapses CVE bumps the same way. Majors no longer need
+#     their own review PR because nothing reaches main unattended — review
+#     happens once, at the `dependabot-upgrades -> main` consolidation PR.
 #   * interval: weekly -> one grouped PR per ecosystem each week, not fifty.
 #
 # SHA-pinned actions are a prime supply-chain target ([SWR-SEC-ACTION-PINNING]),
@@ -50,6 +51,10 @@ updates:
     labels: ["dependencies"]
     groups:
       cargo:
+        applies-to: version-updates
+        patterns: ["*"]
+      cargo-security:
+        applies-to: security-updates
         patterns: ["*"]
 
   # npm — VS Code extension.
@@ -62,6 +67,10 @@ updates:
     labels: ["dependencies"]
     groups:
       npm-vscode-extension:
+        applies-to: version-updates
+        patterns: ["*"]
+      npm-vscode-extension-security:
+        applies-to: security-updates
         patterns: ["*"]
 
   # npm — documentation website (Eleventy).
@@ -74,4 +83,8 @@ updates:
     labels: ["dependencies"]
     groups:
       npm-website:
+        applies-to: version-updates
+        patterns: ["*"]
+      npm-website-security:
+        applies-to: security-updates
         patterns: ["*"]

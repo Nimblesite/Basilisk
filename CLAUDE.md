@@ -13,6 +13,8 @@ This codebase is held to a high standard: code here should comfortably pass revi
 
 ⚠️ DO NOT KILL A VS Code PROCESS (including in the browser) — it disrupts active debugging and test sessions. ⚠️
 
+⚠️ NEVER STORE CI ARTIFACTS — they cost money even on this PUBLIC repo (compute on standard runners is free; **storage is billed**). The ONLY artifacts we keep are the **GitHub Releases** (Release assets are free + unlimited). NO `actions/upload-artifact` for coverage HTML, mutation reports, logs, screenshots, or any diagnostic. The sole permitted upload is a transient in-run cross-job hand-off, and it MUST set `retention-days: 1` (the floor) so it is consumed and deleted within the same run. Default retention is 90 days — never rely on it. See [GITHUB-NO-ARTIFACTS]. ⚠️
+
 Key design principles:
 
 - We are building a better Python dev experience
