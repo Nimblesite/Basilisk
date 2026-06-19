@@ -68,8 +68,11 @@ fn check_plain_function_calls(module: &ResolvedModule, diagnostics: &mut Vec<Dia
             continue;
         };
 
-        // Skip if there are keyword arguments (conservative approach)
-        if !call.keywords.is_empty() {
+        // Skip if there are keyword arguments or `**kwargs` unpacking. Unpacked
+        // kwargs (`func(**d)`) hide an unknown number of named arguments, so a
+        // positional-arity check would false-positive (e.g. `func2(**td2)` where
+        // `td2` supplies the required parameters). Conservative skip. [BSK-E0041]
+        if !call.keywords.is_empty() || call.has_unpacked_kwargs {
             continue;
         }
 
@@ -326,8 +329,11 @@ fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
             continue;
         };
 
-        // Skip if there are keyword arguments (conservative approach)
-        if !call.keywords.is_empty() {
+        // Skip if there are keyword arguments or `**kwargs` unpacking. Unpacked
+        // kwargs (`func(**d)`) hide an unknown number of named arguments, so a
+        // positional-arity check would false-positive (e.g. `func2(**td2)` where
+        // `td2` supplies the required parameters). Conservative skip. [BSK-E0041]
+        if !call.keywords.is_empty() || call.has_unpacked_kwargs {
             continue;
         }
 

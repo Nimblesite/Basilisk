@@ -24,13 +24,26 @@ fn unique_dir(prefix: &str) -> PathBuf {
 
 /// Run `basilisk check <args...>` from inside `dir` with no ambient venv.
 fn check(dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_basilisk"))
-        .arg("check")
-        .args(args)
-        .current_dir(dir)
-        .env_remove("VIRTUAL_ENV")
-        .output()
-        .expect("spawn basilisk")
+    check_with_venv(dir, args, None)
+}
+
+/// Like [`check`], but points `VIRTUAL_ENV` at `venv` when `Some` (the standard
+/// signal for an active environment) and removes it otherwise. The `Some` form
+/// pins import resolution to a hermetic env so a test never falls back to the
+/// host interpreter's global site-packages (where e.g. Pillow may be installed
+/// and would mask the diagnostic under test).
+fn check_with_venv(dir: &Path, args: &[&str], venv: Option<&Path>) -> Output {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_basilisk"));
+    let _ = cmd.arg("check").args(args).current_dir(dir);
+    match venv {
+        Some(path) => {
+            let _ = cmd.env("VIRTUAL_ENV", path);
+        }
+        None => {
+            let _ = cmd.env_remove("VIRTUAL_ENV");
+        }
+    }
+    cmd.output().expect("spawn basilisk")
 }
 
 /// Issue #25: an unsynced-but-declared dependency whose import name differs
@@ -52,7 +65,15 @@ fn declared_unsynced_pillow_classified_as_needs_sync() {
     std::fs::create_dir_all(dir.join("src")).expect("mkdir src");
     std::fs::write(dir.join("src/app.py"), "from PIL import Image\n").expect("write app");
 
-    let output = check(&dir, &["src"]);
+    // Hermetic empty environment: a venv with NO packages installed models
+    // "declared but not synced" exactly, and pinning `VIRTUAL_ENV` to it stops
+    // the resolver falling back to the host interpreter (which may have Pillow
+    // installed globally and would otherwise resolve PIL and mask E0010).
+    let venv = dir.join(".venv");
+    std::fs::create_dir_all(venv.join("lib/python3.12/site-packages")).expect("venv lib");
+    std::fs::create_dir_all(venv.join("Lib/site-packages")).expect("venv Lib");
+
+    let output = check_with_venv(&dir, &["src"], Some(&venv));
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     assert!(

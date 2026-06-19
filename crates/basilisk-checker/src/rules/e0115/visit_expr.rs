@@ -216,6 +216,11 @@ pub(super) fn visit_expr_for_usage(
                         }
                     }
                     if !handled {
+                        let first_arg_type = call
+                            .arguments
+                            .args
+                            .first()
+                            .and_then(crate::rules::shared::infer_expr_literal_type);
                         check_attribute_deprecated(
                             attr,
                             deprecated,
@@ -225,6 +230,7 @@ pub(super) fn visit_expr_for_usage(
                             path,
                             diagnostics,
                             Some(text_range_to_span(call.range())),
+                            first_arg_type,
                         );
                     }
                 }
@@ -305,6 +311,7 @@ pub(super) fn visit_expr_for_usage(
                     path,
                     diagnostics,
                     None,
+                    None,
                 );
             }
         }
@@ -369,6 +376,25 @@ pub(super) fn visit_expr_for_usage(
     }
 }
 
+/// Returns true if `info` describes a deprecated overload whose parameter type
+/// does not match the call's first-argument type — meaning the call resolves to
+/// a different, non-deprecated overload and must NOT be flagged (PEP 702).
+///
+/// Conservative: returns false (i.e. keep flagging) unless this is an overload
+/// AND both the expected parameter type and the actual argument type are known
+/// AND they are incompatible.
+fn overload_arg_mismatch(info: &DeprecatedInfo, first_arg_type: Option<&str>) -> bool {
+    if info.kind != "overload" {
+        return false;
+    }
+    match (info.overload_param_type.as_deref(), first_arg_type) {
+        (Some(expected), Some(actual)) => {
+            !crate::rules::shared::is_type_compatible(actual, expected)
+        }
+        _ => false,
+    }
+}
+
 /// Check if an attribute access refers to a deprecated member (module-level or qualified).
 #[expect(
     clippy::too_many_arguments,
@@ -383,6 +409,7 @@ fn check_attribute_deprecated(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
     call_span: Option<Span>,
+    first_arg_type: Option<&str>,
 ) {
     let member_name = attr.attr.as_str();
     let span = call_span.unwrap_or_else(|| text_range_to_span(attr.range()));
@@ -393,14 +420,19 @@ fn check_attribute_deprecated(
         // Case 1: `library.func_name` where `library` is a module alias with deprecated members.
         if let Some(members) = deprecated_members.get(alias) {
             if let Some(info) = members.get(member_name) {
-                diagnostics.push(make_diagnostic(
-                    span,
-                    &info.kind,
-                    member_name,
-                    info.message.as_deref(),
-                    path,
-                ));
-                return;
+                // Per PEP 702, a call to an overloaded name is only deprecated
+                // if it resolves to the deprecated overload. Skip when the
+                // first argument's type doesn't match the deprecated overload's.
+                if !overload_arg_mismatch(info, first_arg_type) {
+                    diagnostics.push(make_diagnostic(
+                        span,
+                        &info.kind,
+                        member_name,
+                        info.message.as_deref(),
+                        path,
+                    ));
+                    return;
+                }
             }
         }
 

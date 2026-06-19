@@ -244,7 +244,7 @@ fn format_variable_signature(var: &VariableInfo, source: &str) -> String {
     if let Some(ann) = annotation_text(var.annotation_span, source) {
         let _ = write!(sig, ": {ann}");
     } else {
-        let inferred = infer_rhs_display(&var.rhs_kind);
+        let inferred = rhs_type_display(&var.rhs_kind);
         if !inferred.is_empty() {
             let _ = write!(sig, ": {inferred}");
         }
@@ -265,7 +265,7 @@ fn format_attribute_signature(class: &ClassInfo, attr: &AttributeInfo, source: &
     if let Some(ann) = annotation_text(attr.annotation_span, source) {
         let _ = write!(sig, ": {ann}");
     } else {
-        let inferred = infer_rhs_display(&attr.rhs_kind);
+        let inferred = rhs_type_display(&attr.rhs_kind);
         if !inferred.is_empty() {
             let _ = write!(sig, ": {inferred}");
         }
@@ -292,8 +292,8 @@ fn annotation_text(span: Option<Span>, source: &str) -> Option<String> {
     Some(text.trim().to_owned())
 }
 
-/// Simple display for inferred `RhsKind` types.
-fn infer_rhs_display(rhs: &basilisk_resolver::RhsKind) -> &'static str {
+/// Simple type-name display for an inferred `RhsKind` (shared by inlay hints).
+pub(crate) fn rhs_type_display(rhs: &basilisk_resolver::RhsKind) -> &'static str {
     use basilisk_resolver::RhsKind;
     match rhs {
         RhsKind::IntLiteral => "int",
@@ -359,4 +359,46 @@ pub fn span_to_range(text: &str, span: Span) -> tower_lsp::lsp_types::Range {
         start: byte_offset_to_position(text, span.start_usize()),
         end: byte_offset_to_position(text, span.end_usize()),
     }
+}
+
+/// Get the symbol name at a byte offset, either from the symbol table or from
+/// the identifier under the cursor.
+pub(crate) fn symbol_name_at(
+    resolved: &ResolvedModule,
+    source: &str,
+    byte_offset: usize,
+) -> Option<String> {
+    if let Some(hit) = find_symbol_at_offset(resolved, byte_offset) {
+        return Some(symbol_hit_name(&hit).to_owned());
+    }
+    identifier_at_offset(source, byte_offset)
+}
+
+/// The declared name of a resolved symbol hit.
+fn symbol_hit_name<'a>(hit: &'a SymbolHit<'a>) -> &'a str {
+    match hit {
+        SymbolHit::Function(f) => &f.name,
+        SymbolHit::Class(c) => &c.name,
+        SymbolHit::Variable(v) => &v.name,
+        SymbolHit::Parameter { param, .. } => &param.name,
+        SymbolHit::Attribute { attr, .. } => &attr.name,
+        SymbolHit::Import(i) => &i.module,
+    }
+}
+
+/// The source span of a resolved symbol hit's defining name.
+pub(crate) fn definition_span(hit: &SymbolHit<'_>) -> Span {
+    match hit {
+        SymbolHit::Function(f) => f.name_span,
+        SymbolHit::Class(c) => c.name_span,
+        SymbolHit::Variable(v) => v.name_span,
+        SymbolHit::Parameter { param, .. } => param.name_span,
+        SymbolHit::Attribute { attr, .. } => attr.name_span,
+        SymbolHit::Import(i) => i.span,
+    }
+}
+
+/// The LSP range covering a resolved symbol hit's defining name.
+pub(crate) fn definition_range(hit: &SymbolHit<'_>, source: &str) -> tower_lsp::lsp_types::Range {
+    span_to_range(source, definition_span(hit))
 }

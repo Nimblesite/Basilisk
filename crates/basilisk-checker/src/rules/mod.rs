@@ -161,6 +161,7 @@ pub(crate) mod e0152;
 pub(crate) mod e0153;
 pub(crate) mod e0154;
 pub(crate) mod e0155;
+pub(crate) mod e0156;
 pub(crate) mod guards;
 pub(crate) mod shared;
 pub(crate) mod w0011;
@@ -339,6 +340,7 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &e0153::ConstructorCallableMisuse,
         &e0154::ModuleAttributeUndefined,
         &e0155::Pep695BelowTargetViolation,
+        &e0156::TypedDictExtraItemsViolation,
         &w0011::UndeclaredDependencyImport,
         &w0012::UnusedDependency,
         &w0013::StaleLockFile,

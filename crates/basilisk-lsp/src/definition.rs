@@ -6,7 +6,8 @@ use basilisk_resolver::ResolvedModule;
 use tower_lsp::lsp_types::{GotoDefinitionResponse, Location, Url};
 
 use crate::util::{
-    find_definition_by_name, find_symbol_at_offset, identifier_at_offset, span_to_range, SymbolHit,
+    definition_span, find_definition_by_name, find_symbol_at_offset, identifier_at_offset,
+    span_to_range, SymbolHit,
 };
 
 /// Compute go-to-definition for a byte offset.
@@ -52,16 +53,4 @@ pub fn goto_definition(
         uri: uri.clone(),
         range,
     }))
-}
-
-/// Extract the definition span for a symbol hit.
-fn definition_span(hit: &SymbolHit<'_>) -> basilisk_resolver::Span {
-    match hit {
-        SymbolHit::Function(f) => f.name_span,
-        SymbolHit::Class(c) => c.name_span,
-        SymbolHit::Variable(v) => v.name_span,
-        SymbolHit::Parameter { param, .. } => param.name_span,
-        SymbolHit::Attribute { attr, .. } => attr.name_span,
-        SymbolHit::Import(i) => i.span,
-    }
 }

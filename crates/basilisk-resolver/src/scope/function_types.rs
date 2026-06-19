@@ -121,6 +121,12 @@ pub struct FunctionInfo {
     pub return_annotation_span: Option<Span>,
     /// Name of the containing class, if this function is a method.
     pub class_name: Option<String>,
+    /// `true` when this function is lexically nested inside a class body — e.g.
+    /// a closure defined inside a method — even though it is not itself a method
+    /// (`class_name` is `None`).  Used by [BSK-E0094] to know that `Self` still
+    /// has a valid enclosing-class binding and must not be flagged as
+    /// module-level `Self` usage.
+    pub nested_in_class: bool,
     /// All names assigned anywhere in the function body (for scope analysis).
     pub all_local_assigns: Vec<String>,
     /// Names assigned at the top level of the function body (unconditionally).

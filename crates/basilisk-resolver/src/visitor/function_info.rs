@@ -120,6 +120,9 @@ pub(super) fn function_info_from(
         yield_exprs,
         docstring: extract_docstring(&func.body),
         narrowing_guards,
+        // Set to `true` by the class-body visitor for closures nested inside
+        // methods; top-level and module-function-nested closures keep `false`.
+        nested_in_class: false,
     }
 }
 

@@ -42,6 +42,13 @@ pub(super) struct FuncSig {
     pub(super) kw_only_params: Vec<ParamInfo>,
     /// Return type annotation text (empty if unannotated).
     pub(super) return_type: String,
+    /// `true` if this signature originally declared `**kwargs: Unpack[TypedDict]`
+    /// that has since been expanded into `kw_only_params`. Distinguishes a
+    /// callable that genuinely accepts the `TypedDict`'s keys via `**kwargs` from
+    /// one with only fixed parameters: per the typing spec a destination
+    /// `**kwargs: Unpack[TD]` requires the source to also provide `**kwargs`.
+    /// [BSK-E0140]
+    pub(super) had_unpack_kwargs: bool,
 }
 
 /// Information extracted from a `Protocol` class.
@@ -131,8 +138,11 @@ impl ModuleContext {
                 _ => {}
             }
         }
-        // Expand Unpack[TypedDict] kwargs into effective kw-only params
+        // Expand Unpack[TypedDict] kwargs into effective kw-only params, for both
+        // top-level functions and protocol `__call__` signatures, so the two
+        // compare structurally regardless of which side declared `Unpack`.
         expand_unpack_kwargs(&mut functions, &typeddicts);
+        expand_unpack_kwargs_in_protocols(&mut protocols, &typeddicts);
         Self {
             functions,
             protocols,
@@ -286,6 +296,7 @@ pub(super) fn extract_func_sig(func: &ast::StmtFunctionDef, skip_self: bool) -> 
         kwargs_type,
         kw_only_params,
         return_type,
+        had_unpack_kwargs: false,
     }
 }
 
@@ -360,13 +371,17 @@ fn extract_typeddict(cls: &ast::StmtClassDef, known: &[TypedDictDef]) -> TypedDi
     }
 }
 
-/// Unwrap `Required[T]` / `NotRequired[T]` returning the inner type and required status.
+/// Unwrap `Required` / `NotRequired` / `ReadOnly` qualifiers, returning the inner
+/// type text and whether the field is required. `ReadOnly` (PEP 705) has no effect
+/// on a `**kwargs: Unpack[TD]` signature, so it is stripped transparently. Total
+/// `TypedDicts` default to required. [BSK-E0140]
 fn unwrap_required_annotation(expr: &Expr) -> (String, bool) {
     if let Expr::Subscript(sub) = expr {
         if let Expr::Name(n) = sub.value.as_ref() {
             match n.id.as_str() {
-                "Required" => return (ann_str(&sub.slice), true),
-                "NotRequired" => return (ann_str(&sub.slice), false),
+                "Required" => return (unwrap_required_annotation(&sub.slice).0, true),
+                "NotRequired" => return (unwrap_required_annotation(&sub.slice).0, false),
+                "ReadOnly" => return unwrap_required_annotation(&sub.slice),
                 _ => {}
             }
         }
@@ -375,29 +390,51 @@ fn unwrap_required_annotation(expr: &Expr) -> (String, bool) {
     (ann_str(expr), true)
 }
 
-/// Expand `**kwargs: Unpack[TD]` into effective kw-only params for matching functions.
+/// Expand `**kwargs: Unpack[TD]` into effective kw-only params for every function.
 fn expand_unpack_kwargs(functions: &mut [FuncSig], typeddicts: &[TypedDictDef]) {
     for func in functions.iter_mut() {
-        if !func.has_kwargs {
-            continue;
+        expand_unpack_in_sig(func, typeddicts);
+    }
+}
+
+/// Expand `**kwargs: Unpack[TD]` in protocol `__call__` and overload signatures,
+/// mirroring [`expand_unpack_kwargs`] so a protocol target compares structurally
+/// against a function whose kwargs were already expanded. [BSK-E0140]
+fn expand_unpack_kwargs_in_protocols(protocols: &mut [ProtocolInfo], typeddicts: &[TypedDictDef]) {
+    for proto in protocols.iter_mut() {
+        if let Some(call_sig) = proto.call_sig.as_mut() {
+            expand_unpack_in_sig(call_sig, typeddicts);
         }
-        let Some(td_name) = extract_unpack_type(&func.kwargs_type) else {
-            continue;
-        };
-        let Some(td) = typeddicts.iter().find(|td| td.name == td_name) else {
-            continue;
-        };
-        // Replace kwargs with expanded kw-only params from the TypedDict
-        func.has_kwargs = false;
-        func.kwargs_type = String::new();
-        for field in &td.fields {
-            func.kw_only_params.push(ParamInfo {
-                name: field.name.clone(),
-                type_annotation: field.type_ann.clone(),
-                has_default: !field.is_required,
-                is_positional_only: false,
-            });
+        for overload_sig in &mut proto.overload_sigs {
+            expand_unpack_in_sig(overload_sig, typeddicts);
         }
+    }
+}
+
+/// Expand a single signature's `**kwargs: Unpack[TD]` into kw-only params and record
+/// [`FuncSig::had_unpack_kwargs`]. No-op when the signature has no `**kwargs` or the
+/// annotation is not `Unpack[TypedDict]`. [BSK-E0140]
+fn expand_unpack_in_sig(sig: &mut FuncSig, typeddicts: &[TypedDictDef]) {
+    if !sig.has_kwargs {
+        return;
+    }
+    let Some(td_name) = extract_unpack_type(&sig.kwargs_type) else {
+        return;
+    };
+    let Some(td) = typeddicts.iter().find(|td| td.name == td_name) else {
+        return;
+    };
+    // Replace kwargs with expanded kw-only params from the TypedDict.
+    sig.has_kwargs = false;
+    sig.kwargs_type = String::new();
+    sig.had_unpack_kwargs = true;
+    for field in &td.fields {
+        sig.kw_only_params.push(ParamInfo {
+            name: field.name.clone(),
+            type_annotation: field.type_ann.clone(),
+            has_default: !field.is_required,
+            is_positional_only: false,
+        });
     }
 }
 

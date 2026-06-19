@@ -37,6 +37,10 @@ pub struct CallSite {
     /// Only populated for keyword arguments with an explicit name (`arg=val`).
     /// Star-unpacked kwargs (`**kw`) are not included.
     pub keywords: Vec<(String, RhsKind)>,
+    /// `true` when the call contains any `**kwargs` unpacking (e.g. `func(**d)`).
+    /// Unpacked kwargs are not listed in `keywords`, so arity checks must treat
+    /// their presence as "argument count unknown" to avoid false positives.
+    pub has_unpacked_kwargs: bool,
     /// The span of the entire call expression.
     pub span: Span,
 }

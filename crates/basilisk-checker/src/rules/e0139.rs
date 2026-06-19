@@ -409,11 +409,15 @@ fn check_too_few_args_for_tvt_alias(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // Count only the plain (non-starred) arguments. A starred TypeVarTuple
+    // Count plain arguments plus starred *tuple* unpacks. A bare TypeVarTuple
     // unpack (`*Ts`) absorbs variadic positions but cannot fill regular TypeVar
-    // slots.  Therefore, the number of *plain* arguments must still be at
-    // least `min_required`.
-    let plain_count = args.iter().filter(|a| matches!(a, SliceArg::Plain)).count();
+    // slots. An unbounded `*tuple[X, ...]` unpack, however, can fill both the
+    // TypeVarTuple and the remaining TypeVar slots, so it counts toward the
+    // minimum required arguments.
+    let plain_count = args
+        .iter()
+        .filter(|a| matches!(a, SliceArg::Plain | SliceArg::StarredTuple))
+        .count();
     let provided = args.len();
 
     if plain_count < min_required {

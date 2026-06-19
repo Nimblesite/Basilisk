@@ -67,11 +67,7 @@ pub(super) async fn execute_create_local_stub(
     let root = {
         let roots = server.workspace_roots.read().await;
         let Some(first) = roots.first().cloned() else {
-            return Err(tower_lsp::jsonrpc::Error {
-                code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32010),
-                message: "No workspace root available".into(),
-                data: None,
-            });
+            return Err(super::no_workspace_root_error());
         };
         first
     };

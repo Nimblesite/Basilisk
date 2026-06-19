@@ -117,6 +117,14 @@ pub fn color_presentations(color: &Color, range: &Range) -> Vec<ColorPresentatio
     presentations
 }
 
+/// Parse the first six hex digits of `hex_bytes` into `(r, g, b)` byte values.
+fn parse_rgb(hex_bytes: &[u8]) -> Option<(u8, u8, u8)> {
+    let r = hex_byte(*hex_bytes.first()?, *hex_bytes.get(1)?)?;
+    let g = hex_byte(*hex_bytes.get(2)?, *hex_bytes.get(3)?)?;
+    let b = hex_byte(*hex_bytes.get(4)?, *hex_bytes.get(5)?)?;
+    Some((r, g, b))
+}
+
 /// Try to parse a hex color starting at `start` in `bytes`.
 ///
 /// Returns `(Color, hex_digit_count)` on success.
@@ -142,9 +150,7 @@ fn parse_hex_color(bytes: &[u8], start: usize) -> Option<(Color, usize)> {
             ))
         }
         6 => {
-            let r = hex_byte(*hex_bytes.first()?, *hex_bytes.get(1)?)?;
-            let g = hex_byte(*hex_bytes.get(2)?, *hex_bytes.get(3)?)?;
-            let b = hex_byte(*hex_bytes.get(4)?, *hex_bytes.get(5)?)?;
+            let (r, g, b) = parse_rgb(hex_bytes)?;
             Some((
                 Color {
                     red: f32::from(r) / 255.0_f32,
@@ -156,9 +162,7 @@ fn parse_hex_color(bytes: &[u8], start: usize) -> Option<(Color, usize)> {
             ))
         }
         8 => {
-            let r = hex_byte(*hex_bytes.first()?, *hex_bytes.get(1)?)?;
-            let g = hex_byte(*hex_bytes.get(2)?, *hex_bytes.get(3)?)?;
-            let b = hex_byte(*hex_bytes.get(4)?, *hex_bytes.get(5)?)?;
+            let (r, g, b) = parse_rgb(hex_bytes)?;
             let a = hex_byte(*hex_bytes.get(6)?, *hex_bytes.get(7)?)?;
             Some((
                 Color {

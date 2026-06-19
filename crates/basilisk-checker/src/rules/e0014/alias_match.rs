@@ -9,10 +9,20 @@
 //! j4: Json = {"a": 1, "b": 3j}  # E: complex is not a Json value
 //! ```
 //!
+//! and *generic* recursive aliases such as
+//!
+//! ```python
+//! G = list["G[T]" | T]            # T = TypeVar("T", str, int)
+//! S = G[str]
+//! g1: S = ["hi", ["hi", "hi"]]    # OK
+//! g3: G[str] = ["hi", [2.4]]      # E: float is not a `str` leaf
+//! ```
+//!
 //! cannot be validated by the plain `is_assignable_to` check because the
 //! annotation is a `Named` reference and the right-hand side is a literal
-//! structure. This module resolves a bare alias name to its (possibly
-//! recursive) definition and verifies whether the inferred RHS literal type
+//! structure. This module resolves a bare or specialised alias name to its
+//! (possibly recursive) definition — substituting `TypeVar` arguments for
+//! generic aliases — and verifies whether the inferred RHS literal type
 //! *positively* matches it.
 //!
 //! **Positive-match semantics.** A value matches only when every part is
@@ -21,8 +31,10 @@
 //! incompatible assignments keep firing — this preserves the true positives that
 //! the recursive-alias fixtures expect.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
+use super::callable_check::{contains_word, replace_word};
+use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_resolver::{ResolvedModule, VariableInfo};
@@ -30,11 +42,27 @@ use basilisk_resolver::{ResolvedModule, VariableInfo};
 /// Maximum alias-expansion depth — a safety bound for self-referential aliases.
 const MAX_DEPTH: u32 = 24;
 
+/// A generic value alias such as `Name = list[... T ...]`, retaining the
+/// `TypeVar` parameter names (lowercased) it binds so a use-site `Name[Arg]`
+/// can be specialised before matching.
+pub(super) struct GenericAlias {
+    params: Vec<String>,
+    def_text: String,
+}
+
+/// Alias-resolution context: legacy `Union` aliases plus generic
+/// (`TypeVar`-parameterised) aliases, both keyed by lowercase base name.
+pub(super) struct AliasCtx<'a> {
+    pub(super) union: &'a HashMap<String, InferredType>,
+    pub(super) generic: &'a HashMap<String, GenericAlias>,
+}
+
 /// Collect module-level value-style type aliases whose definition is a `Union`.
 ///
 /// These are legacy aliases written as `Name = Union[...]` or `Name = a | b | …`
 /// (no annotation). Restricting to `Union` definitions deliberately excludes
-/// generic (`list[...]`-bodied) aliases that would need `TypeVar` substitution.
+/// generic (`list[...]`-bodied) aliases, which [`collect_generic_aliases`]
+/// handles instead.
 pub(super) fn collect_union_aliases(module: &ResolvedModule) -> HashMap<String, InferredType> {
     let mut aliases = HashMap::new();
     for var in &module.module_vars {
@@ -51,14 +79,101 @@ pub(super) fn collect_union_aliases(module: &ResolvedModule) -> HashMap<String, 
     aliases
 }
 
+/// Collect generic value aliases keyed by lowercase name, with the `TypeVar`
+/// params each binds.
+///
+/// Two passes: roots whose body references a `TypeVar` (e.g.
+/// `G = list["G[T]" | T]`), then specialisations that reference a root via a
+/// subscript (e.g. `S = G[str]`) and therefore bind no params of their own.
+pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String, GenericAlias> {
+    let typevars: HashSet<String> = module
+        .typevar_calls
+        .iter()
+        .map(|tv| tv.name.to_ascii_lowercase())
+        .collect();
+    let mut generics: HashMap<String, GenericAlias> = HashMap::new();
+
+    for var in &module.module_vars {
+        if var.has_annotation {
+            continue;
+        }
+        let Some(text) = alias_rhs_text(var, &module.source) else {
+            continue;
+        };
+        let lowered = text.to_ascii_lowercase();
+        let params: Vec<String> = typevars
+            .iter()
+            .filter(|tv| contains_word(&lowered, tv))
+            .cloned()
+            .collect();
+        if !params.is_empty() {
+            let _ = generics.insert(
+                var.name.to_ascii_lowercase(),
+                GenericAlias {
+                    params,
+                    def_text: lowered,
+                },
+            );
+        }
+    }
+
+    let mut specialised: Vec<(String, GenericAlias)> = Vec::new();
+    for var in &module.module_vars {
+        if var.has_annotation {
+            continue;
+        }
+        let key = var.name.to_ascii_lowercase();
+        if generics.contains_key(&key) {
+            continue;
+        }
+        let Some(text) = alias_rhs_text(var, &module.source) else {
+            continue;
+        };
+        let lowered = text.to_ascii_lowercase();
+        if generics.contains_key(alias_base(&lowered)) {
+            specialised.push((
+                key,
+                GenericAlias {
+                    params: Vec::new(),
+                    def_text: lowered,
+                },
+            ));
+        }
+    }
+    for (key, alias) in specialised {
+        let _ = generics.insert(key, alias);
+    }
+    generics
+}
+
+/// If `declared_name` references a known value alias (union or generic), return
+/// `Some(true)` when `value` positively matches it and `Some(false)` otherwise.
+/// Returns `None` when the name is not a value alias, so the caller can fall
+/// back to its ordinary assignability check.
+pub(super) fn alias_value_assignable(
+    value: &InferredType,
+    declared_name: &str,
+    ctx: &AliasCtx<'_>,
+) -> Option<bool> {
+    let base = alias_base(declared_name);
+    if ctx.union.contains_key(base) || ctx.generic.contains_key(base) {
+        return Some(match_named_target(value, declared_name, ctx, 0));
+    }
+    None
+}
+
 /// Parse a variable's RHS source text into the alias definition type.
 fn alias_definition(var: &VariableInfo, source: &str) -> Option<InferredType> {
+    Some(InferredType::from_annotation(
+        alias_rhs_text(var, source)?.trim(),
+    ))
+}
+
+/// The trimmed RHS source text of an alias assignment, if non-empty.
+fn alias_rhs_text(var: &VariableInfo, source: &str) -> Option<String> {
     let rhs_span = var.rhs_span?;
     let rhs_text = slice_span(source, rhs_span)?.trim();
-    if rhs_text.is_empty() {
-        return None;
-    }
-    Some(InferredType::from_annotation(rhs_text))
+    (!rhs_text.is_empty()).then(|| rhs_text.to_owned())
 }
 
 /// Returns `true` when `value` positively matches the (possibly recursive)
@@ -66,7 +181,7 @@ fn alias_definition(var: &VariableInfo, source: &str) -> Option<InferredType> {
 pub(super) fn alias_assignable(
     value: &InferredType,
     target: &InferredType,
-    aliases: &HashMap<String, InferredType>,
+    ctx: &AliasCtx<'_>,
     depth: u32,
 ) -> bool {
     if depth > MAX_DEPTH {
@@ -83,53 +198,54 @@ pub(super) fn alias_assignable(
     if let InferredType::Union(members) = value {
         return members
             .iter()
-            .all(|member| alias_assignable(member, target, aliases, depth + 1));
+            .all(|member| alias_assignable(member, target, ctx, depth + 1));
     }
 
     match target {
-        InferredType::Named(name) => match_named_target(value, name, aliases, depth),
+        InferredType::Named(name) => match_named_target(value, name, ctx, depth),
         InferredType::Union(branches) => branches
             .iter()
-            .any(|branch| alias_assignable(value, branch, aliases, depth + 1)),
+            .any(|branch| alias_assignable(value, branch, ctx, depth + 1)),
         InferredType::List(elem) => match value {
-            InferredType::List(v) => alias_assignable(v, elem, aliases, depth + 1),
+            InferredType::List(v) => alias_assignable(v, elem, ctx, depth + 1),
             _ => false,
         },
         InferredType::Set(elem) => match value {
-            InferredType::Set(v) => alias_assignable(v, elem, aliases, depth + 1),
+            InferredType::Set(v) => alias_assignable(v, elem, ctx, depth + 1),
             _ => false,
         },
         InferredType::Dict(key, val) => match value {
             InferredType::Dict(value_key, value_val) => {
-                alias_assignable(value_key, key, aliases, depth + 1)
-                    && alias_assignable(value_val, val, aliases, depth + 1)
+                alias_assignable(value_key, key, ctx, depth + 1)
+                    && alias_assignable(value_val, val, ctx, depth + 1)
             }
             _ => false,
         },
-        InferredType::Tuple(target_elems) => {
-            match_tuple_target(value, target_elems, aliases, depth)
-        }
+        InferredType::Tuple(target_elems) => match_tuple_target(value, target_elems, ctx, depth),
         InferredType::Any => true,
         _ => positive_base_match(value, target),
     }
 }
 
-/// Match a value against a `Named` target, resolving alias references and the
-/// `Mapping[K, V]` ABC (which the parser leaves as a `Named`).
-fn match_named_target(
-    value: &InferredType,
-    name: &str,
-    aliases: &HashMap<String, InferredType>,
-    depth: u32,
-) -> bool {
+/// Match a value against a `Named` target, resolving union aliases, generic
+/// alias specialisations, and the `Mapping[K, V]` ABC (left as a `Named`).
+fn match_named_target(value: &InferredType, name: &str, ctx: &AliasCtx<'_>, depth: u32) -> bool {
     // `Mapping[K, V]` arrives as a Named; treat it structurally like a dict.
     if let Some(dict) = parse_mapping_named(name) {
-        return alias_assignable(value, &dict, aliases, depth + 1);
+        return alias_assignable(value, &dict, ctx, depth + 1);
     }
 
     let base = alias_base(name);
-    if let Some(def) = aliases.get(base) {
-        return alias_assignable(value, def, aliases, depth + 1);
+    if let Some(def) = ctx.union.get(base) {
+        return alias_assignable(value, def, ctx, depth + 1);
+    }
+    if let Some(generic) = ctx.generic.get(base) {
+        return match resolve_generic(name, generic) {
+            Some(resolved) => alias_assignable(value, &resolved, ctx, depth + 1),
+            // Arity mismatch (e.g. a bare generic alias used without args):
+            // the checker cannot prove a mismatch, so stay lenient.
+            None => true,
+        };
     }
 
     // A non-alias class name: a value positively matches only when it is the
@@ -140,12 +256,45 @@ fn match_named_target(
     }
 }
 
+/// Specialise a generic alias use-site (`Name[Arg, …]`) into a concrete type by
+/// substituting its `TypeVar` params. Returns `None` on arity mismatch.
+fn resolve_generic(name: &str, alias: &GenericAlias) -> Option<InferredType> {
+    let args = subscript_args(name);
+    let mut text = alias.def_text.clone();
+    if alias.params.len() == args.len() {
+        for (param, arg) in alias.params.iter().zip(args.iter()) {
+            text = replace_word(&text, param, arg);
+        }
+    } else if !alias.params.is_empty() {
+        return None;
+    }
+    Some(InferredType::from_annotation(&text))
+}
+
+/// Extract the top-level subscript arguments from a `Name[A, B]` reference.
+fn subscript_args(name: &str) -> Vec<String> {
+    let trimmed = name.trim().trim_matches(|c| c == '"' || c == '\'');
+    let Some(open) = trimmed.find('[') else {
+        return Vec::new();
+    };
+    let Some(close) = trimmed.rfind(']') else {
+        return Vec::new();
+    };
+    if close <= open + 1 {
+        return Vec::new();
+    }
+    split_top_level_commas(&trimmed[open + 1..close])
+        .into_iter()
+        .map(|arg| arg.trim().to_owned())
+        .collect()
+}
+
 /// Match a value against a tuple target, handling the homogeneous
 /// `tuple[X, ...]` form (the parser stores the `...` terminator as `Named`).
 fn match_tuple_target(
     value: &InferredType,
     target_elems: &[InferredType],
-    aliases: &HashMap<String, InferredType>,
+    ctx: &AliasCtx<'_>,
     depth: u32,
 ) -> bool {
     let InferredType::Tuple(value_elems) = value else {
@@ -155,14 +304,14 @@ fn match_tuple_target(
         if terminator == "..." {
             return value_elems
                 .iter()
-                .all(|ve| alias_assignable(ve, elem, aliases, depth + 1));
+                .all(|ve| alias_assignable(ve, elem, ctx, depth + 1));
         }
     }
     value_elems.len() == target_elems.len()
         && value_elems
             .iter()
             .zip(target_elems.iter())
-            .all(|(ve, te)| alias_assignable(ve, te, aliases, depth + 1))
+            .all(|(ve, te)| alias_assignable(ve, te, ctx, depth + 1))
 }
 
 /// Positive structural match for primitive base types. Notably `Unknown`/`Any`
@@ -188,7 +337,7 @@ fn positive_base_match(value: &InferredType, target: &InferredType) -> bool {
 }
 
 /// Extract the alias-lookup base from a `Named` text: strip surrounding quotes
-/// and any `[...]` subscript, returning the bare lowercase name.
+/// and any `[...]` subscript, returning the bare name.
 fn alias_base(name: &str) -> &str {
     let trimmed = name.trim_matches(|c| c == '"' || c == '\'');
     trimmed.split('[').next().unwrap_or(trimmed).trim()

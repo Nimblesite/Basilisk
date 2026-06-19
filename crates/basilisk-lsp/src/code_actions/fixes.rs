@@ -7,9 +7,7 @@
 
 use std::collections::HashMap;
 
-use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, Diagnostic, Position, Range, TextEdit, Url, WorkspaceEdit,
-};
+use tower_lsp::lsp_types::{CodeAction, Diagnostic, Position, Range, TextEdit, Url};
 
 // ── Per-diagnostic quick fixes ───────────────────────────────────────────────
 
@@ -97,17 +95,12 @@ pub(super) fn fix_remove_redundant_annotation(
             new_text,
         }],
     );
-    CodeAction {
-        title: "Remove redundant type annotation (basilisk)".to_owned(),
-        kind: Some(CodeActionKind::QUICKFIX),
-        diagnostics: Some(vec![diag.clone()]),
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(true),
-        ..Default::default()
-    }
+    super::quickfix_action(
+        "Remove redundant type annotation (basilisk)".to_owned(),
+        diag,
+        changes,
+        true,
+    )
 }
 
 /// Insert `: Any` after the attribute name for missing class attribute annotations.
@@ -142,15 +135,5 @@ pub(super) fn single_insert(
             new_text: text.to_owned(),
         }],
     );
-    CodeAction {
-        title: title.to_owned(),
-        kind: Some(CodeActionKind::QUICKFIX),
-        diagnostics: Some(vec![diag.clone()]),
-        edit: Some(WorkspaceEdit {
-            changes: Some(changes),
-            ..Default::default()
-        }),
-        is_preferred: Some(true),
-        ..Default::default()
-    }
+    super::quickfix_action(title.to_owned(), diag, changes, true)
 }

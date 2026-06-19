@@ -16,7 +16,9 @@ use super::class_info_ext::{
     match_stmt_info_from,
 };
 use super::function_info::function_info_from;
-use super::typeddict::{td_check_subscript_assign, td_var_type_from_stmts, TdFieldMap};
+use super::typeddict::{
+    canonicalize_type_str, td_check_subscript_assign, td_var_type_from_stmts, TdFieldMap,
+};
 use super::typeddict_ext::{td_check_ann_assign, td_check_expr_reads, td_check_regular_assign};
 
 pub(super) fn collect_from_body(
@@ -370,13 +372,58 @@ pub(super) fn types_match(actual: &str, expected: &str) -> bool {
         }
     }
 
-    false
+    // Equivalent-spelling fallback: `Union[a, b]` == `a | b`, and fixed unpacked
+    // tuples flatten (`tuple[int, *tuple[bool, bool], str]` == `tuple[int, bool, bool, str]`).
+    // Order is preserved, so genuinely different types (e.g. `int` vs `int | str`)
+    // stay distinct. See [BSK-E0053].
+    canonicalize_type_str(actual) == canonicalize_type_str(expected)
 }
 
 /// Recursively check if an expression contains `ReadOnly`.
+/// Whether a disallowed `TypedDict` mutator call should be flagged. Every method in
+/// the disallowed set is always rejected except `update`, which is an error only when
+/// the target declares a `ReadOnly` item whose key the argument `TypedDict` declares
+/// with a non-`Never` value type. A `Never`-typed source key cannot supply a value,
+/// so that update is sound (PEP 705). [BSK-E0093]
+fn disallowed_mutator_flagged(
+    method: &str,
+    call: &ruff_python_ast::ExprCall,
+    target_field_types: &std::collections::HashMap<&str, String>,
+    var_type: &std::collections::HashMap<String, String>,
+    fields: &TdFieldMap<'_>,
+) -> bool {
+    if method != "update" {
+        return true;
+    }
+    // Resolve the update argument to a known `TypedDict` variable, if it is one.
+    let arg_entry = call
+        .arguments
+        .args
+        .first()
+        .and_then(expr_simple_name)
+        .and_then(|name| var_type.get(&name))
+        .and_then(|cls| fields.get(cls.as_str()));
+    let Some((_, arg_field_types, _, _)) = arg_entry else {
+        // A dict literal or otherwise-unresolved argument cannot prove read-only
+        // soundness, so the strict `TypedDict` mutation ban still applies.
+        return true;
+    };
+    // The argument is a known `TypedDict`: the update is sound unless the target has
+    // a `ReadOnly` key for which the argument supplies an actual (non-`Never`) value.
+    target_field_types
+        .iter()
+        .filter(|(_, ann)| ann.to_ascii_lowercase().contains("readonly"))
+        .any(|(key, _)| {
+            arg_field_types
+                .get(*key)
+                .is_some_and(|ann| crate::scope::strip_typeddict_qualifiers(ann).trim() != "Never")
+        })
+}
+
 pub(super) fn check_td_stmts(
     fields: &TdFieldMap<'_>,
     var_type: &std::collections::HashMap<String, String>,
+    final_consts: &std::collections::HashMap<String, String>,
     stmts: &[Stmt],
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
@@ -386,12 +433,12 @@ pub(super) fn check_td_stmts(
             Stmt::Assign(node) => {
                 td_check_subscript_assign(node, var_type, fields, out);
                 td_check_regular_assign(node, var_type, fields, out);
-                td_check_expr_reads(&node.value, var_type, fields, out);
+                td_check_expr_reads(&node.value, var_type, fields, final_consts, out);
             }
             Stmt::AnnAssign(node) => {
                 td_check_ann_assign(node, fields, out);
                 if let Some(val) = &node.value {
-                    td_check_expr_reads(val, var_type, fields, out);
+                    td_check_expr_reads(val, var_type, fields, final_consts, out);
                 }
             }
             Stmt::Expr(expr_stmt) => {
@@ -403,13 +450,22 @@ pub(super) fn check_td_stmts(
                                 // A TypedDict with `extra_items` (PEP 728) behaves
                                 // like `dict[str, VT]`, so the mutating dict methods
                                 // become available and must not be flagged.
-                                if let Some((_, _, _, has_extra_items)) =
+                                if let Some((_, field_types, _, has_extra_items)) =
                                     fields.get(class_name.as_str())
                                 {
                                     const DISALLOWED: &[&str] =
                                         &["clear", "pop", "popitem", "setdefault", "update"];
                                     let method = attr.attr.as_str();
-                                    if !has_extra_items && DISALLOWED.contains(&method) {
+                                    if !has_extra_items
+                                        && DISALLOWED.contains(&method)
+                                        && disallowed_mutator_flagged(
+                                            method,
+                                            call,
+                                            field_types,
+                                            var_type,
+                                            fields,
+                                        )
+                                    {
                                         out.push(TypedDictKeyViolation {
                                             span: text_range_to_span(expr_stmt.value.range()),
                                             class_name: class_name.clone(),
@@ -423,7 +479,7 @@ pub(super) fn check_td_stmts(
                         }
                     }
                 }
-                td_check_expr_reads(&expr_stmt.value, var_type, fields, out);
+                td_check_expr_reads(&expr_stmt.value, var_type, fields, final_consts, out);
             }
             Stmt::Delete(del) => {
                 // `del td[k]` is only an error when `k` is a literal naming a
@@ -476,7 +532,7 @@ pub(super) fn check_td_stmts(
                         }
                     }
                 }
-                check_td_stmts(fields, &local_vars, &func.body, out);
+                check_td_stmts(fields, &local_vars, final_consts, &func.body, out);
             }
             _ => {}
         }

@@ -12,7 +12,16 @@
 max_duplication_percent = 23.0
 
 [defaults]
+# `exclude` drops files during discovery so they are never analysed and never
+# count toward the duplication metric (per https://deslop.live/docs/for-ai/).
+# Built-in defaults already cover node_modules/target/dist/__pycache__ and any
+# path containing "generated"; we add only project-specific patterns on top.
 exclude = [
   "benchmarks/fixtures/**",
   "crates/*/tests/**",
+  # Demo / sample / illustrative code — every `examples/` dir at any depth
+  # (top-level examples/, scripts/examples/, any crate-level examples/).
+  # This code is deliberately illustrative and repetitive, not product source,
+  # so its duplication is expected and must not gate the build.
+  "**/examples/**",
 ]

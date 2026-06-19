@@ -516,6 +516,52 @@ c: int = "hello"
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// E0014 check_vars: type-alias annotation skip (lines 289–290)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Kills mutant: e0014/mod.rs:290 `replace || with &&` in the type-alias skip
+/// guard (`skip.type_alias.contains(base) || skip.type_alias_type.contains(..)`).
+/// E0014 cannot evaluate an expanded alias, so an annotation referencing a PEP
+/// 695 `type` alias OR a `TypeAliasType(...)` alias must be skipped (no E0014),
+/// while a genuine `int`-vs-`str` mismatch must still fire. Each alias form sets
+/// exactly ONE operand true, so flipping `||`→`&&` makes neither skip: both
+/// alias lines would then be processed and wrongly fire E0014, raising the count
+/// from 1 to 3 — observably killing the mutant. Keeping both forms also pins the
+/// individual operands against future deletion mutants.
+#[mutation_safe(rule = "e0014", fns = "check_vars")]
+#[test]
+fn mutant_e0014_type_alias_skip() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import TypeAliasType
+
+# PEP 695 type alias (lowercase name) → only `skip.type_alias` matches.
+type loweralias = list[int]
+a: loweralias = "hello"
+
+# TypeAliasType alias → only `skip.type_alias_type` matches.
+Bar = TypeAliasType("Bar", int)
+b: Bar = "hello"
+
+# Genuine mismatch against a real type — must still fire.
+c: int = "hello"
+"#;
+    let diagnostics = run(source)?;
+    let e0014 = e0014_count(&diagnostics);
+    assert_eq!(
+        e0014,
+        1,
+        "both alias-annotated assignments are skipped; only `c: int = \"hello\"` \
+         fires, got {e0014}: {:?}",
+        diagnostics
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0014")
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // E0014 check_vars: bare recursive-Union-alias interception (line 219)
 // ═══════════════════════════════════════════════════════════════════════
 

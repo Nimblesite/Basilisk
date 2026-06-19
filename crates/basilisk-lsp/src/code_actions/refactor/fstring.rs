@@ -2,9 +2,9 @@
 //!
 //! F-string conversion refactoring actions: f-string to `.format()` and vice versa.
 
-use std::collections::HashMap;
+use tower_lsp::lsp_types::{CodeAction, Range, Url};
 
-use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit, Url};
+use super::helpers::{build_single_line_action, split_top_level_commas};
 
 /// Offer to convert between f-string and `.format()` syntax.
 ///
@@ -106,7 +106,7 @@ fn fstring_to_format(uri: &Url, line: &str, line_num: u32) -> Option<CodeAction>
     // +1 for the closing quote
     let end_char = u32::try_from(body_end + 1).unwrap_or(u32::MAX);
 
-    Some(build_action(
+    Some(build_single_line_action(
         uri,
         line_num,
         start_char,
@@ -195,7 +195,7 @@ fn replace_placeholders(body: &str, args: &[&str]) -> String {
 fn format_to_fstring(uri: &Url, line: &str, line_num: u32) -> Option<CodeAction> {
     let (string_start, quote, body, args_str, total_end) = find_format_call(line)?;
 
-    let args: Vec<&str> = split_format_args(args_str);
+    let args: Vec<&str> = split_top_level_commas(args_str, true);
     if args.is_empty() {
         return None;
     }
@@ -206,7 +206,7 @@ fn format_to_fstring(uri: &Url, line: &str, line_num: u32) -> Option<CodeAction>
     let start_char = u32::try_from(string_start).unwrap_or(u32::MAX);
     let end_char = u32::try_from(total_end).unwrap_or(u32::MAX);
 
-    Some(build_action(
+    Some(build_single_line_action(
         uri,
         line_num,
         start_char,
@@ -216,68 +216,5 @@ fn format_to_fstring(uri: &Url, line: &str, line_num: u32) -> Option<CodeAction>
     ))
 }
 
-/// Split `.format()` arguments at top-level commas, respecting nesting.
-fn split_format_args(text: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth: u32 = 0;
-    let mut start = 0;
-
-    for (idx, ch) in text.char_indices() {
-        match ch {
-            '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                if let Some(part) = text.get(start..idx) {
-                    parts.push(part);
-                }
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    if let Some(part) = text.get(start..) {
-        if !part.trim().is_empty() {
-            parts.push(part);
-        }
-    }
-    parts
-}
-
-// ── Shared action builder ───────────────────────────────────────────────────
-
-/// Build a `CodeAction` with a single text edit on one line.
-fn build_action(
-    uri: &Url,
-    line_num: u32,
-    start_char: u32,
-    end_char: u32,
-    new_text: String,
-    title: &str,
-) -> CodeAction {
-    let edit_range = Range {
-        start: Position {
-            line: line_num,
-            character: start_char,
-        },
-        end: Position {
-            line: line_num,
-            character: end_char,
-        },
-    };
-
-    let mut changes = HashMap::new();
-    let _ = changes.insert(
-        uri.clone(),
-        vec![TextEdit {
-            range: edit_range,
-            new_text,
-        }],
-    );
-
-    super::super::code_action_with_changes(
-        title.to_owned(),
-        CodeActionKind::REFACTOR_REWRITE,
-        changes,
-        false,
-    )
-}
+// ── Shared helpers ──────────────────────────────────────────────────────────
+// `build_single_line_action` and `split_top_level_commas` live in `helpers`.

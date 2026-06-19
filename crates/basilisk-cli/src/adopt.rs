@@ -106,13 +106,7 @@ struct AdoptSummary {
 fn adopt_files(paths: &[String]) -> Result<AdoptSummary, String> {
     let config_root = resolve_config_root(paths);
     let config = basilisk_config::load_basilisk_config(&config_root);
-    let excluded: HashSet<&str> = config.exclude.iter().map(String::as_str).collect();
-
-    info!(
-        excluded_dirs = ?config.exclude,
-        "loaded config from {}",
-        config_root.display()
-    );
+    let excluded = crate::excluded_dirs_and_log(&config, &config_root);
 
     let python_files = crate::collect_python_files(paths, &excluded)?;
 

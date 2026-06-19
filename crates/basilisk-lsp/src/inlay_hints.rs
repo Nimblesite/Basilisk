@@ -2,10 +2,10 @@
 //!
 //! Inlay Hints handler: inferred types and parameter names.
 
-use basilisk_resolver::{ResolvedModule, RhsKind, VariableInfo};
+use basilisk_resolver::{ResolvedModule, VariableInfo};
 use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintLabel};
 
-use crate::util::byte_offset_to_position;
+use crate::util::{byte_offset_to_position, rhs_type_display};
 
 /// Compute inlay hints for a resolved module.
 #[must_use]
@@ -278,21 +278,4 @@ fn typevar_hint_label(tv: &basilisk_resolver::scope::TypeVarCallInfo) -> String 
     }
 
     parts.join(", ")
-}
-
-/// Simple type name from `RhsKind`.
-fn rhs_type_display(rhs: &RhsKind) -> &'static str {
-    match rhs {
-        RhsKind::IntLiteral => "int",
-        RhsKind::FloatLiteral => "float",
-        RhsKind::StrLiteral => "str",
-        RhsKind::BoolLiteral => "bool",
-        RhsKind::BytesLiteral => "bytes",
-        RhsKind::NoneValue => "None",
-        RhsKind::EmptyList | RhsKind::List(_) => "list",
-        RhsKind::EmptyDict | RhsKind::Dict(_) => "dict",
-        RhsKind::Set(_) => "set",
-        RhsKind::Tuple(_) => "tuple",
-        _ => "",
-    }
 }
