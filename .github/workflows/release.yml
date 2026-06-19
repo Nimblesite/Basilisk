@@ -106,11 +106,16 @@ jobs:
         run: |
           Compress-Archive -Path "target/${{ matrix.target }}/release/${{ matrix.binary }}" -DestinationPath "${{ matrix.archive }}"
 
+      # Transient in-run hand-off to the `release` job, which attaches these to
+      # the GitHub Release (the only permanent, free, unlimited store). Pinned to
+      # retention-days: 1 — the floor — instead of the 90-day default so build
+      # outputs never accrue billed storage ([GITHUB-NO-ARTIFACTS]).
       - name: Upload binary artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.archive }}
           path: ${{ matrix.archive }}
+          retention-days: 1
 
   release:
     name: Publish binaries to release
@@ -272,23 +277,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          exe=""
-          if [ "${{ matrix.platform }}" = "win32" ]; then exe=".exe"; fi
-          rm -rf vscode-extension/bin
-          mkdir -p "vscode-extension/bin/${{ env.target }}"
-          cp "runtime-bin/basilisk${exe}" "vscode-extension/bin/${{ env.target }}/"
-          if [ "${{ matrix.platform }}" = "darwin" ]; then
-            cp "runtime-bin/basilisk-profiler-helper" "vscode-extension/bin/${{ env.target }}/"
-          fi
-          # Belt-and-suspenders: the release archives already carry the exec bit,
-          # but re-assert it for POSIX targets so a staged binary is always
-          # runnable regardless of the extractor (Windows .exe needs no bit).
-          if [ "${{ matrix.platform }}" != "win32" ]; then
-            chmod +x "vscode-extension/bin/${{ env.target }}/basilisk"
-          fi
-          if [ "${{ matrix.platform }}" = "darwin" ]; then
-            chmod +x "vscode-extension/bin/${{ env.target }}/basilisk-profiler-helper"
-          fi
+          # Stage exactly the manifest-declared bundled binaries for this target
+          # via the shared stage-runtime helper — the SAME single-source staging
+          # the Makefile (_release_vsix / _test_vsix) uses, so the published VSIX
+          # and the e2e-tested bundle can never diverge. stage-runtime clears
+          # bin/, copies each bundled binary from the extracted release archive,
+          # and re-asserts the exec bit on POSIX targets (the archives already
+          # carry it; Windows .exe needs no bit). Implements
+          # [VSIX-PACKAGING-PARITY].
+          node vscode-extension/scripts/stage-runtime.mjs runtime-bin "${{ env.target }}"
           cp shipwright.json vscode-extension/shipwright.json
           cp NOTICES vscode-extension/NOTICES
 
@@ -342,10 +339,14 @@ jobs:
           fi
           node scripts/verify-shipwright.mjs vsix "basilisk-${{ env.target }}.vsix" "${{ env.target }}"
 
+      # Transient in-run hand-off to `release-assets`, which uploads the VSIX to
+      # the GitHub Release (permanent, free). retention-days: 1 (the floor) keeps
+      # build output out of billed storage ([GITHUB-NO-ARTIFACTS]).
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ env.target }}
           path: vscode-extension/*.vsix
+          retention-days: 1
 
   release-assets:
     name: Attach VSIX + checksums to release

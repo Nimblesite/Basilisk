@@ -1398,6 +1398,35 @@ the other:
 - `BENCH_NO_GATE=1` (baseline reset) is reserved for fixture-set changes and
   must be justified in the PR description.
 
+### CI Artifact Storage Policy {#GITHUB-NO-ARTIFACTS}
+
+Basilisk is a **public** repository. Compute on standard GitHub-hosted runners
+(every CI job — all `ubuntu-24.04`) is **free and unlimited**; what GitHub bills
+for is **stored Actions artifacts** (GB-days). Therefore:
+
+- **CI stores no artifacts.** No `actions/upload-artifact` for coverage HTML,
+  mutation reports, logs, screenshots, or any diagnostic. Gates enforce in-job
+  (coverage threshold, mutation-score merge, benchmarks) and reports are
+  reproducible locally (`make test`, `make mutation-test`). External free
+  services (Codecov) consume `lcov.info` directly without GitHub storage.
+- **The only permanent store is the GitHub Release.** Release *assets* attached
+  to a tag are free and unlimited — release binaries and per-platform VSIX live
+  there, never as retained Actions artifacts.
+- **Transient cross-job hand-offs are the sole exception**, and only because
+  matrix jobs run on separate runners that cannot share a filesystem (the four
+  mutation shards → the merge/score job; the release build matrix → the publish
+  job). Each such upload **must** set `retention-days: 1` — the floor — so it is
+  consumed and auto-deleted within the same run and never accrues stored
+  GB-days. The 90-day default is never acceptable.
+- **Existing artifacts are purged, not left to expire.** When this policy is
+  tightened, delete the back-catalogue
+  (`gh api repos/<owner>/<repo>/actions/artifacts` → `DELETE …/artifacts/{id}`).
+
+Implemented by `.github/workflows/ci.yml` and `.github/workflows/release.yml`
+(every `upload-artifact` carries `retention-days: 1` and a `[GITHUB-NO-ARTIFACTS]`
+reference). The Actions **cache** (`Swatinem/rust-cache`, `actions/cache`) is
+separate and free — it does not count toward billed storage and is unaffected.
+
 ---
 
 ## Migration and Adoption {#CHKARCH-MIGRATION}

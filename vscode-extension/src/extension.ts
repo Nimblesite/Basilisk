@@ -8,7 +8,7 @@
 
 import * as vscode from "vscode";
 import * as path from "path";
-import * as os from "os";
+import * as fs from "fs";
 import { Logger, bindLogger, CompositeSink, FileLogSink, nullSink } from "./logger";
 import type { LogSink } from "./logger";
 import { startLspClient } from "./lsp-client";
@@ -235,7 +235,15 @@ export function deactivate(): Promise<void> | undefined {
 function initLogging(context: vscode.ExtensionContext, s: Store): void {
   const logChannel = vscode.window.createOutputChannel("Basilisk", { log: true });
   s.setOutputChannel(logChannel);
-  const logFilePath = path.join(os.tmpdir(), "basilisk-debug-trace.log");
+  // Logs live in the extension's PRIVATE per-extension log directory
+  // (context.logUri) — never the world-writable OS temp dir. A predictable name
+  // in shared /tmp is open to symlink redirection and cross-user disclosure
+  // (js/insecure-temporary-file); the per-extension dir is owned by this user
+  // and is where [VSIX-OUTPUT-CHANNELS] expects logs to live. VS Code may not
+  // have created logUri on disk yet, so ensure it exists first.
+  const logDir = context.logUri.fsPath;
+  fs.mkdirSync(logDir, { recursive: true });
+  const logFilePath = path.join(logDir, "basilisk-debug-trace.log");
   const fileSink = new FileLogSink(logFilePath);
   const compositeSink = new CompositeSink([new VscodeLogSink(logChannel), fileSink]);
   s.setLogSink(compositeSink);
