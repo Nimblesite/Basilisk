@@ -18,6 +18,7 @@
 
 use std::collections::HashMap;
 use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use sysinfo::{
@@ -91,27 +92,37 @@ pub struct ProcessInfo {
     pub kind: ProcessKind,
 }
 
-/// Enumerate every running Python process, sorted by CPU usage descending.
+/// Enumerate the running Python processes that belong to `roots`, sorted by CPU
+/// usage descending.
+///
+/// Only processes whose working directory, target script, or interpreter lives
+/// inside one of the workspace `roots` are returned — a developer opening their
+/// project should never see an unrelated system Python process they did not
+/// start ([PROFILE-PROCESSES-SCOPE]). When `roots` is empty (a single-file or
+/// no-folder session) there is nothing to scope by, so every Python process is
+/// listed, preserving the original system-wide behaviour.
 ///
 /// This performs two process refreshes spaced by [`sysinfo::MINIMUM_CPU_UPDATE_INTERVAL`]
 /// so the reported CPU percentages are meaningful, then resolves interpreter
 /// versions (bounded by [`VERSION_RESOLVE_BUDGET`]). It blocks for ~200ms and is
 /// intended to be called from a blocking task.
 #[must_use]
-pub fn enumerate_python_processes() -> Vec<ProcessInfo> {
+pub fn enumerate_python_processes(roots: &[PathBuf]) -> Vec<ProcessInfo> {
     let mut system = System::new();
     // sysinfo's 2-arg `refresh_processes` does NOT request `cmd`, so argv comes
     // back empty on every platform. macOS recovers it via the `ps` fallback
     // below, but Linux/Windows have none — leaving script labels, launcher
     // detection, and the debugger-infrastructure filter blind (a `debugpy.adapter`
     // would be offered as a target). Refresh the same fields the 2-arg default
-    // does, plus `cmd`, so argv is populated wherever sysinfo can read it.
+    // does, plus `cmd` and `cwd`, so argv and the working directory (which powers
+    // workspace scoping) are populated wherever sysinfo can read them.
     let refresh_kind = ProcessRefreshKind::nothing()
         .with_memory()
         .with_cpu()
         .with_disk_usage()
         .with_exe(UpdateKind::OnlyIfNotSet)
         .with_cmd(UpdateKind::OnlyIfNotSet)
+        .with_cwd(UpdateKind::OnlyIfNotSet)
         .with_tasks();
     let _ = system.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh_kind);
     std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
@@ -122,6 +133,11 @@ pub fn enumerate_python_processes() -> Vec<ProcessInfo> {
         .ok()
         .and_then(|pid| system.process(pid))
         .and_then(Process::user_id);
+
+    // Canonicalize roots once so symlinked workspace paths (on macOS a temp dir
+    // under `/var/...` resolves to `/private/var/...`) compare against the
+    // process cwd, which sysinfo already reports in canonical form.
+    let normalized_roots: Vec<PathBuf> = roots.iter().map(|root| normalize_path(root)).collect();
 
     let argv_fallback = argv_by_pid();
     let mut cache: HashMap<String, Option<String>> = HashMap::new();
@@ -135,6 +151,7 @@ pub fn enumerate_python_processes() -> Vec<ProcessInfo> {
                 users: &users,
                 current_uid,
                 argv_fallback: &argv_fallback,
+                roots: &normalized_roots,
             };
             build_process_info(*pid, process, &context, &mut cache, &mut budget)
         })
@@ -151,6 +168,9 @@ struct EnumerationContext<'ctx> {
     current_uid: Option<&'ctx Uid>,
     /// macOS argv fallback (sysinfo cannot read other processes' argv there).
     argv_fallback: &'ctx HashMap<u32, Vec<OsString>>,
+    /// Canonicalized workspace roots used to scope enumeration. Empty ⇒ no
+    /// scoping (every Python process is in-scope). See [PROFILE-PROCESSES-SCOPE].
+    roots: &'ctx [PathBuf],
 }
 
 /// Build a [`ProcessInfo`] for `process`, or `None` if it is not Python.
@@ -194,11 +214,30 @@ fn build_process_info(
     }
 
     let interpreter_path = exe.or(cmd0);
-    let script = extract_script(cmd);
+    // A debuggee — debugpy running the developer's *own* program (how VS Code's
+    // debugger launches a script) — is precisely the process to surface and
+    // profile, so detect it first and label the row with the real program
+    // rather than debugpy's bootstrap path.
+    let debuggee_program = debugpy_debuggee_program(cmd);
     // Debugger machinery is never a profiling target: offering the adapter
     // invites profiling the debugger instead of the debuggee, and adapters
-    // orphaned by a hard-killed editor would linger as phantom rows.
-    if is_debugger_infrastructure(cmd) {
+    // orphaned by a hard-killed editor would linger as phantom rows. The
+    // debuggee is exempt — its argv references the bundled `debugpy` package
+    // (path contains `/debugpy/`) but it is the user's running program.
+    if debuggee_program.is_none() && is_debugger_infrastructure(cmd) {
+        return None;
+    }
+    let script = debuggee_program.or_else(|| extract_script(cmd));
+    // Workspace scoping: an interpreter the user never started — a background
+    // system Python with nothing to do with the open project — must not appear
+    // in the panel. Filter before version resolution so out-of-scope processes
+    // never cost a `--version` probe ([PROFILE-PROCESSES-SCOPE]).
+    if !is_workspace_relevant(
+        process.cwd(),
+        script.as_deref(),
+        interpreter_path.as_deref(),
+        context.roots,
+    ) {
         return None;
     }
     let kind = classify_kind(cmd, script.as_deref());
@@ -233,10 +272,70 @@ fn build_process_info(
 
 /// Return the final path component of `path`, or `path` itself if it has none.
 fn file_basename(path: &str) -> &str {
-    std::path::Path::new(path)
+    Path::new(path)
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or(path)
+}
+
+/// Whether a process whose working directory is `cwd`, target `script`, and
+/// `interpreter` belongs to one of the (already canonicalized) workspace
+/// `roots`. A process is relevant when any of those paths resolves to a
+/// location inside a root. With no roots — a single-file or no-folder session —
+/// every process is relevant, preserving the system-wide list rather than
+/// showing nothing. Implements [PROFILE-PROCESSES-SCOPE].
+fn is_workspace_relevant(
+    cwd: Option<&Path>,
+    script: Option<&str>,
+    interpreter: Option<&str>,
+    roots: &[PathBuf],
+) -> bool {
+    if roots.is_empty() {
+        return true;
+    }
+    workspace_candidate_paths(cwd, script, interpreter)
+        .iter()
+        .map(|candidate| normalize_path(candidate))
+        .any(|candidate| path_in_roots(&candidate, roots))
+}
+
+/// The set of paths that tie a process to a workspace: its working directory,
+/// its target script, and its interpreter. Relative script/interpreter paths
+/// are resolved against `cwd` so `python app.py` launched from the project is
+/// attributed to it.
+fn workspace_candidate_paths(
+    cwd: Option<&Path>,
+    script: Option<&str>,
+    interpreter: Option<&str>,
+) -> Vec<PathBuf> {
+    let cwd_candidate = cwd.map(Path::to_path_buf);
+    let arg_candidates = [script, interpreter]
+        .into_iter()
+        .flatten()
+        .map(|raw| resolve_against(raw, cwd));
+    cwd_candidate.into_iter().chain(arg_candidates).collect()
+}
+
+/// Resolve `raw` to an absolute path: absolute paths pass through, relative ones
+/// join onto `base` (the process working directory) when it is known.
+fn resolve_against(raw: &str, base: Option<&Path>) -> PathBuf {
+    let path = Path::new(raw);
+    match base {
+        Some(base) if path.is_relative() => base.join(path),
+        _ => path.to_path_buf(),
+    }
+}
+
+/// Whether `candidate` is equal to, or nested under, any of `roots`.
+fn path_in_roots(candidate: &Path, roots: &[PathBuf]) -> bool {
+    roots.iter().any(|root| candidate.starts_with(root))
+}
+
+/// Best-effort canonicalization so symlinked roots and `.`/`..` segments compare
+/// correctly. Falls back to the input when the path cannot be resolved (e.g. a
+/// script that has since been deleted).
+fn normalize_path(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// Whether `basename` names a Python (or `PyPy`) interpreter: `python`,
@@ -330,9 +429,13 @@ fn argv_by_pid() -> HashMap<u32, Vec<OsString>> {
 const INFRASTRUCTURE_MODULES: &[&str] = &["debugpy", "pydevd"];
 
 /// Whether this Python process is debugger infrastructure rather than a
-/// profilable target: `python -m debugpy.adapter`, `-m pydevd`, or a script
-/// living inside a `debugpy`/`pydevd` package directory (the launcher).
+/// profilable target: `python -m debugpy.adapter`, `-m pydevd`, or the
+/// debugpy/pydevd launcher/adapter living inside the package directory.
 /// Implements [PROFILE-PROCESSES-MODEL] (exclusions).
+///
+/// The caller exempts a *debuggee* ([`debugpy_debuggee_program`]) first, so the
+/// user's own program running under the bundled debugpy — whose path also
+/// contains `/debugpy/` — is surfaced rather than swallowed by the path check.
 fn is_debugger_infrastructure(cmd: &[OsString]) -> bool {
     if let Some(module) = module_arg(cmd) {
         let first_segment = module.split('.').next().unwrap_or(&module);
@@ -346,6 +449,63 @@ fn is_debugger_infrastructure(cmd: &[OsString]) -> bool {
             token.contains(&format!("/{module}/")) || token.contains(&format!("\\{module}\\"))
         })
     })
+}
+
+/// Flags in a debugpy debuggee invocation that consume the following argument,
+/// so the user's program is never mistaken for one of their values (e.g. the
+/// `127.0.0.1:5679` after `--connect`). Mirrors debugpy's launcher cmdline.
+const DEBUGPY_VALUE_FLAGS: &[&str] = &[
+    "--connect",
+    "--listen",
+    "--host",
+    "--port",
+    "--adapter-access-token",
+];
+
+/// If `cmd` runs the developer's own program *under* debugpy
+/// (`python <…>/debugpy --connect <addr> … <program>`, the exact shape VS Code's
+/// debugger launches), return that program. Such a process is a real debuggee —
+/// the thing the user wants to see and profile — not debugger machinery, even
+/// though its argv references the bundled `debugpy` package (whose path contains
+/// `/debugpy/`). Implements [PROFILE-PROCESSES-MODEL] (debuggee surfacing).
+fn debugpy_debuggee_program(cmd: &[OsString]) -> Option<String> {
+    let entry = debugpy_entry_index(cmd)?;
+    let mut skip_next = false;
+    for arg in cmd.iter().skip(entry + 1) {
+        let token = arg.to_string_lossy();
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+        if token.starts_with('-') {
+            if DEBUGPY_VALUE_FLAGS.contains(&token.as_ref()) || token.starts_with("--configure-") {
+                skip_next = true;
+            }
+            continue;
+        }
+        return Some(token.into_owned());
+    }
+    None
+}
+
+/// Index of the `debugpy` package entry in `cmd`: the `<…>/debugpy` directory run
+/// directly (basename `debugpy`) or `-m debugpy`. The `launcher`/`adapter`
+/// submodules have a different basename and are deliberately *not* matched —
+/// those are machinery, caught by [`is_debugger_infrastructure`].
+fn debugpy_entry_index(cmd: &[OsString]) -> Option<usize> {
+    let mut expect_module = false;
+    for (index, arg) in cmd.iter().enumerate().skip(1) {
+        let token = arg.to_string_lossy();
+        if expect_module {
+            return (token == "debugpy").then_some(index);
+        }
+        if token == "-m" {
+            expect_module = true;
+        } else if file_basename(&token) == "debugpy" {
+            return Some(index);
+        }
+    }
+    None
 }
 
 /// Extract the module name from a `python -m <module>` invocation, if present.
@@ -507,13 +667,164 @@ mod tests {
     }
 
     #[test]
+    fn surfaces_debugpy_debuggee_running_user_program() {
+        // The exact argv VS Code's debugger produces with the *bundled* debugpy:
+        // the package nests at `.../debugpy/debugpy`, so the path contains
+        // `/debugpy/` — the over-broad infra filter used to hide the user's own
+        // running script. It must now be surfaced and labelled with the program.
+        let cmd = vec![
+            OsString::from("/usr/bin/python3"),
+            OsString::from("/ext/bundled/debugpy/debugpy"),
+            OsString::from("--connect"),
+            OsString::from("127.0.0.1:5679"),
+            OsString::from("--adapter-access-token"),
+            OsString::from("deadbeef"),
+            OsString::from("/workspace/cpu_demo.py"),
+        ];
+        assert_eq!(
+            debugpy_debuggee_program(&cmd),
+            Some("/workspace/cpu_demo.py".to_owned()),
+            "the debuggee's user program must be recovered past debugpy's flags"
+        );
+        assert!(
+            !is_debugger_infrastructure(&cmd) || debugpy_debuggee_program(&cmd).is_some(),
+            "a debuggee running the user's program must not be hidden as infrastructure"
+        );
+    }
+
+    #[test]
+    fn debuggee_program_handles_listen_and_module_forms() {
+        // `--listen` server form (basename `debugpy`).
+        let listen = vec![
+            OsString::from("python"),
+            OsString::from("/ext/bundled/debugpy/debugpy"),
+            OsString::from("--listen"),
+            OsString::from("127.0.0.1:0"),
+            OsString::from("--wait-for-client"),
+            OsString::from("/ws/app.py"),
+        ];
+        assert_eq!(debugpy_debuggee_program(&listen), Some("/ws/app.py".to_owned()));
+
+        // `-m debugpy` module form.
+        let module = vec![
+            OsString::from("python"),
+            OsString::from("-m"),
+            OsString::from("debugpy"),
+            OsString::from("--connect"),
+            OsString::from("127.0.0.1:1"),
+            OsString::from("/ws/main.py"),
+        ];
+        assert_eq!(debugpy_debuggee_program(&module), Some("/ws/main.py".to_owned()));
+    }
+
+    #[test]
+    fn launcher_and_adapter_remain_infrastructure() {
+        // The launcher (`.../debugpy/launcher`) carries no user program and must
+        // stay hidden.
+        let launcher = vec![
+            OsString::from("python"),
+            OsString::from("/ext/bundled/debugpy/debugpy/launcher"),
+            OsString::from("53412"),
+        ];
+        assert_eq!(debugpy_debuggee_program(&launcher), None);
+        assert!(is_debugger_infrastructure(&launcher));
+
+        // The adapter basilisk itself spawns.
+        let adapter = vec![
+            OsString::from("python"),
+            OsString::from("-m"),
+            OsString::from("debugpy.adapter"),
+            OsString::from("--port"),
+            OsString::from("0"),
+        ];
+        assert_eq!(debugpy_debuggee_program(&adapter), None);
+        assert!(is_debugger_infrastructure(&adapter));
+    }
+
+    #[test]
     fn enumeration_runs_and_excludes_non_python() {
         // The test binary itself is Rust, not Python, so it must not appear.
-        let processes = enumerate_python_processes();
+        // No roots ⇒ no workspace scoping (the system-wide list).
+        let processes = enumerate_python_processes(&[]);
         let own = std::process::id();
         assert!(
             !processes.iter().any(|p| p.pid == own),
             "the non-Python test process must be excluded"
         );
+    }
+
+    #[test]
+    fn no_roots_means_every_process_is_relevant() {
+        // With no workspace open there is nothing to scope by, so scoping is a
+        // no-op rather than an empty panel ([PROFILE-PROCESSES-SCOPE]).
+        assert!(is_workspace_relevant(
+            Some(Path::new("/anywhere/at/all")),
+            Some("/anywhere/at/all/app.py"),
+            Some("/usr/bin/python3"),
+            &[],
+        ));
+    }
+
+    #[test]
+    fn cwd_inside_a_root_is_relevant() {
+        let roots = vec![PathBuf::from("/home/dev/project")];
+        assert!(is_workspace_relevant(
+            Some(Path::new("/home/dev/project/sub")),
+            None,
+            None,
+            &roots,
+        ));
+        // A sibling that merely shares a name prefix is NOT inside the root.
+        assert!(!is_workspace_relevant(
+            Some(Path::new("/home/dev/project-other")),
+            None,
+            None,
+            &roots,
+        ));
+    }
+
+    #[test]
+    fn unrelated_process_outside_every_root_is_filtered() {
+        let roots = vec![PathBuf::from("/home/dev/project")];
+        assert!(!is_workspace_relevant(
+            Some(Path::new("/")),
+            None,
+            Some("/usr/bin/python3"),
+            &roots,
+        ));
+    }
+
+    #[test]
+    fn absolute_script_inside_a_root_is_relevant_even_when_cwd_is_not() {
+        let roots = vec![PathBuf::from("/home/dev/project")];
+        assert!(is_workspace_relevant(
+            Some(Path::new("/home/dev")),
+            Some("/home/dev/project/app.py"),
+            None,
+            &roots,
+        ));
+    }
+
+    #[test]
+    fn relative_script_resolves_against_cwd() {
+        let roots = vec![PathBuf::from("/home/dev/project")];
+        // `python app.py` launched from the project dir: argv[0]'s script is
+        // relative and only lands in the root once joined to the cwd.
+        assert!(is_workspace_relevant(
+            Some(Path::new("/home/dev/project")),
+            Some("app.py"),
+            None,
+            &roots,
+        ));
+    }
+
+    #[test]
+    fn candidate_paths_resolve_relative_args_against_cwd() {
+        let cwd = Path::new("/home/dev/project");
+        let candidates =
+            workspace_candidate_paths(Some(cwd), Some("app.py"), Some("/usr/bin/python3"));
+        assert!(candidates.contains(&PathBuf::from("/home/dev/project")));
+        assert!(candidates.contains(&PathBuf::from("/home/dev/project/app.py")));
+        assert!(candidates.contains(&PathBuf::from("/usr/bin/python3")));
     }
 }

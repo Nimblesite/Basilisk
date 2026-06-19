@@ -207,9 +207,10 @@ old raw PID input box. Design + phased TODO: [LSP-PROFILER-PROCESS-PANEL-PLAN.md
 
 ### basilisk.profiler.processes {#PROFILE-PROCESSES-LSP}
 
-A `workspace/executeCommand` request that returns every attachable Python
-process. It takes no required arguments and responds with
-`{ "processes": ProcessInfo[] }`, sorted by CPU usage descending.
+A `workspace/executeCommand` request that returns the attachable Python
+processes **belonging to the open workspace** (see [#PROFILE-PROCESSES-SCOPE]).
+It takes no required arguments and responds with `{ "processes": ProcessInfo[] }`,
+sorted by CPU usage descending.
 
 Enumeration **only reads the OS process table** and therefore never requires
 elevation — discovery works without `sudo`, which is the whole point. It is
@@ -217,6 +218,25 @@ implemented in [`processes.rs`](../../crates/basilisk-lsp/src/profiler/processes
 over the `sysinfo` crate and is advertised in `executeCommandProvider` like every
 other Basilisk command (editors must not pre-register it — see
 [LSP-ARCHITECTURE-SPEC.md] command registration rule).
+
+### Workspace scoping {#PROFILE-PROCESSES-SCOPE}
+
+The panel lists processes that belong to the project the user opened — never an
+unrelated background interpreter they did not start. Opening a workspace and
+finding a stray system Python sitting in the panel is the defect this rule
+fixes.
+
+A process is **in-scope** when any of its working directory, target script, or
+interpreter path resolves to a location inside one of the editor's workspace
+roots. Relative script/interpreter paths are resolved against the process
+working directory, and both roots and candidate paths are canonicalized so a
+symlinked root (on macOS a temp dir under `/var/…` resolving to `/private/var/…`)
+still matches the working directory `sysinfo` reports in canonical form.
+
+When **no workspace root** is open (a single-file or no-folder session) there is
+nothing to scope by, so every Python process is listed — scoping degrades to the
+original system-wide behaviour rather than an empty panel. The
+debugger-infrastructure exclusion above still applies in both modes.
 
 ### ProcessInfo {#PROFILE-PROCESSES-MODEL}
 
@@ -244,10 +264,23 @@ sanic) running on a Python interpreter are included and tagged `kind = "launcher
 so they are still offered for profiling rather than hidden.
 
 **Exclusions:** debugger machinery is never offered as a target —
-`python -m debugpy.adapter`/`pydevd` and scripts inside `debugpy`/`pydevd`
-package directories are filtered out. Profiling the adapter instead of the
-debuggee is always a mistake, and adapters orphaned by a hard-killed editor
-would otherwise linger in the panel as phantom rows.
+`python -m debugpy.adapter`/`pydevd` and the debugpy/pydevd **launcher**/**adapter**
+submodules are filtered out. Profiling the adapter instead of the debuggee is
+always a mistake, and adapters orphaned by a hard-killed editor would otherwise
+linger in the panel as phantom rows.
+
+**Debuggee surfacing:** the one process this exclusion must *not* swallow is the
+**debuggee** — the developer's own program running under debugpy, which is how
+VS Code's debugger launches a script. Its argv is
+`python <…>/debugpy --connect <addr> … <program>`, and because the extension
+**bundles** debugpy at `…/debugpy/debugpy`, that path contains the substring
+`/debugpy/`. A naive "anything mentioning debugpy is machinery" filter therefore
+hides the user's running script — the panel goes empty and "run a script, it
+never appears" results. So a process is recognised as a debuggee (basename of the
+debugpy entry is `debugpy`, or `-m debugpy`, *carrying a user program* after the
+bootstrap flags) and is **surfaced**, with its `script` set to that program
+rather than debugpy's bootstrap path. Only the `launcher`/`adapter` submodules
+(which carry no user program) stay hidden.
 
 **macOS argv:** sysinfo cannot read other processes' argv on macOS, so the
 enumerator takes one batched `ps -axo pid=,args=` snapshot per enumeration as

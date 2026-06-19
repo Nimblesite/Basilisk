@@ -2858,7 +2858,9 @@ async fn enumeration_hides_debugpy_adapter_but_lists_real_targets() {
     // Let both settle so the process table sees them.
     tokio::time::sleep(std::time::Duration::from_millis(800)).await;
 
-    let processes = basilisk_lsp::profiler::processes::enumerate_python_processes();
+    // No workspace roots ⇒ system-wide list, so this test exercises only the
+    // debugger-infrastructure exclusion, not workspace scoping.
+    let processes = basilisk_lsp::profiler::processes::enumerate_python_processes(&[]);
     let sleeper_pid = sleeper.id();
     let adapter_pid = adapter.id();
     sleeper.kill();
