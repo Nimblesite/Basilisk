@@ -37,5 +37,7 @@
         "titleBar.activeForeground": "#f0f2f7",
         "titleBar.inactiveBackground": "#c43f07",
         "titleBar.inactiveForeground": "#f0f2f7cc"
-    }
+    },
+    "basilisk.enabled": false,
+    "basilisk.uv.enabled": true
 }

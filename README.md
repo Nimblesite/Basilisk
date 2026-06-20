@@ -21,6 +21,8 @@
 
 ---
 
+![alt text](image.png)
+
 ## Try it
 
 The `examples/` folder has ready-to-go Python files:
