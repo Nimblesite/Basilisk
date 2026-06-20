@@ -33,7 +33,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::callable_check::{contains_word, replace_word};
+use super::callable_check::replace_word;
 use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 use crate::types::InferredType;
@@ -79,6 +79,25 @@ pub(super) fn collect_union_aliases(module: &ResolvedModule) -> HashMap<String, 
     aliases
 }
 
+/// The module `TypeVar`s that appear as whole identifiers in `lowered`, in order
+/// of first appearance, de-duplicated.
+///
+/// Equivalent to filtering `typevars` by `contains_word`, but scans the RHS
+/// tokens once (`O(text)`) instead of testing every module `TypeVar` against the
+/// text (`O(text * typevars)` — quadratic and allocation-heavy on
+/// `TypeVar`-dense modules; see the `BSK-E0026` stress fixture). Appearance
+/// order is deterministic, unlike the previous `HashSet` iteration order.
+fn free_typevars(lowered: &str, typevars: &HashSet<String>) -> Vec<String> {
+    let mut params = Vec::new();
+    let mut seen = HashSet::new();
+    for token in lowered.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')) {
+        if !token.is_empty() && typevars.contains(token) && seen.insert(token) {
+            params.push(token.to_owned());
+        }
+    }
+    params
+}
+
 /// Collect generic value aliases keyed by lowercase name, with the `TypeVar`
 /// params each binds.
 ///
@@ -101,11 +120,7 @@ pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String
             continue;
         };
         let lowered = text.to_ascii_lowercase();
-        let params: Vec<String> = typevars
-            .iter()
-            .filter(|tv| contains_word(&lowered, tv))
-            .cloned()
-            .collect();
+        let params = free_typevars(&lowered, &typevars);
         if !params.is_empty() {
             let _ = generics.insert(
                 var.name.to_ascii_lowercase(),

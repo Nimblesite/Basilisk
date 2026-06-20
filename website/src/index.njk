@@ -99,15 +99,8 @@ benchmarkStrings:
 </span></pre>
               </div>
             </div>
-            <div class="diagnostic-block">
-<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0001</span><span class="diag-bar">]: </span><span class="diag-msg">Missing parameter type annotation for `data`</span>
-<span class="diag-bar">  --> </span><span class="diag-path">bad.py:1:13</span>
-<span class="diag-bar">   |</span>
-<span class="diag-bar"> 1 | </span><span class="diag-src">def process(data):</span>
-<span class="diag-bar">   |            </span><span class="diag-caret">^^^^</span> <span class="diag-note">parameter `data` has no type annotation</span>
-<span class="diag-bar">   = </span><span class="diag-help">help: Add a type annotation: `data: &lt;type&gt;`</span>
-
-<span class="diag-note">Found 6 errors in 1 file.</span>
+            <div class="diagnostic-block" style="padding:0;background:transparent;border:0">
+              <img src="/assets/images/cli-demo.png" alt="Real basilisk check output for bad.py — six type errors reported with no configuration" style="width:100%;display:block;border-radius:8px" loading="lazy">
             </div>
           </div>
 
@@ -136,9 +129,8 @@ benchmarkStrings:
         <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {self.name}"</span></pre>
               </div>
             </div>
-            <div class="diagnostic-block diagnostic-block--success">
-<span class="diag-prefix" style="color:var(--color-success)">All checked. No issues found.</span>
-<span class="diag-note">Checked 1 file &mdash; 0 errors, 0 warnings.</span>
+            <div class="diagnostic-block diagnostic-block--success" style="padding:0;background:transparent;border:0">
+              <img src="/assets/images/cli-clean.png" alt="Real basilisk check output for the fixed good.py — all checks pass, no issues found" style="width:100%;display:block;border-radius:8px" loading="lazy">
             </div>
           </div>
 
@@ -272,7 +264,7 @@ benchmarkStrings:
         the same suite used to measure Pyright (~99%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>),
         mypy (~58%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>),
         and Pyrefly (~86%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>).
-        16 of 21 categories at 100%. ParamSpec, TypeVarTuple, and TypedDict edge cases are next.
+        19 of 21 categories pass at 100%, with zero false positives. The remaining two &mdash; a TypeVarTuple generics case and one protocol-definition case &mdash; are next.
       </p>
     </div>
   </div>

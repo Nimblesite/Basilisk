@@ -111,15 +111,8 @@ benchmarkStrings:
 </span></pre>
               </div>
             </div>
-            <div class="diagnostic-block">
-<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0001</span><span class="diag-bar">]: </span><span class="diag-msg">缺少参数 `data` 的类型注解</span>
-<span class="diag-bar">  --> </span><span class="diag-path">bad.py:1:13</span>
-<span class="diag-bar">   |</span>
-<span class="diag-bar"> 1 | </span><span class="diag-src">def process(data):</span>
-<span class="diag-bar">   |            </span><span class="diag-caret">^^^^</span> <span class="diag-note">参数 `data` 缺少类型注解</span>
-<span class="diag-bar">   = </span><span class="diag-help">帮助：添加类型注解：`data: &lt;type&gt;`</span>
-
-<span class="diag-note">在 1 个文件中发现 6 个错误。</span>
+            <div class="diagnostic-block" style="padding:0;background:transparent;border:0">
+              <img src="/assets/images/cli-demo.png" alt="bad.py 的真实 basilisk check 输出 —— 无需配置即报告六个类型错误" style="width:100%;display:block;border-radius:8px" loading="lazy">
             </div>
           </div>
 
@@ -148,9 +141,8 @@ benchmarkStrings:
         <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {self.name}"</span></pre>
               </div>
             </div>
-            <div class="diagnostic-block diagnostic-block--success">
-<span class="diag-prefix" style="color:var(--color-success)">全部检查通过，未发现问题。</span>
-<span class="diag-note">已检查 1 个文件——0 个错误，0 个警告。</span>
+            <div class="diagnostic-block diagnostic-block--success" style="padding:0;background:transparent;border:0">
+              <img src="/assets/images/cli-clean.png" alt="修复后的 good.py 的真实 basilisk check 输出 —— 全部检查通过" style="width:100%;display:block;border-radius:8px" loading="lazy">
             </div>
           </div>
 
@@ -283,7 +275,7 @@ benchmarkStrings:
         与衡量 Pyright（约 99%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）、
         mypy（约 58%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）
         和 Pyrefly（约 86%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）的套件相同。
-        21 个类别中的 16 个达到 100%。ParamSpec、TypeVarTuple 和 TypedDict 边界情况是下一步。
+        21 个类别中的 19 个达到 100%，且零误报。剩余两个 —— 一个 TypeVarTuple 泛型用例和一个协议定义用例 —— 是下一步。
       </p>
     </div>
   </div>

@@ -192,6 +192,20 @@ Please register before starting work.
 - Name classes after what the element IS, not what section it's in.
 - Avoid common LLM-default colors (e.g. purple) — use RNG and color wheels.
 
+## Generating CLI Screenshots (real `basilisk check` output)
+
+Marketing/doc screenshots of CLI output must be **real screen captures of the actual binary**, never hand-typed code fences or synthetic renders (those drift and are usually inaccurate). Canonical location: `website/src/assets/images/` (referenced as `/assets/images/<name>.png`). Rule screenshots are named after the code (`e0001.png` … `e0025.png`); the homepage demo pair is `cli-demo.png` (errors) + `cli-clean.png` (pass).
+
+Process (macOS, Terminal.app + `screencapture` + ImageMagick):
+
+1. **Verify the example first.** Many rule examples do NOT trigger the rule they claim — always run `basilisk check` on the snippet and confirm the *exact* target code appears before screenshotting. E.g. E0003/E0005 fire on empty collections (`data = []`), not plain literals; E0014 needs a single annotated assignment (`count: int = "zero"`); E0016 needs `@override` (else it's E0025); E0018 fires on an undefined name in a `return`. Craft minimal snippets that isolate the target code.
+2. **No PII.** Run from a neutrally-named dir (`/tmp/basilisk-demo`, so the title bar reads "basilisk-demo", not the home-dir/username) and set a clean prompt (`export PS1='$ '`) so no username/host appears. Reference relative filenames so diagnostic paths stay clean (`e0001.py:1:13`).
+3. **Drive Terminal deterministically.** Open an empty window, size it (`set number of columns/rows`), then run `cd /tmp/basilisk-demo; export PS1='$ '; clear` followed by `basilisk check <file>.py` *in that window*. Resize BEFORE typing (resizing mid-type corrupts the line).
+4. **Capture the exact window by CGWindowID** (not a screen region — overlapping windows contaminate region captures). Get the frontmost Terminal window id via JXA/CoreGraphics (`CGWindowListCopyWindowInfo`, first owner=="Terminal" layer 0), then `screencapture -x -o -l<id>`. Close stale Terminal windows first so the wrong one isn't picked.
+5. **Crop** with ImageMagick — flatten the rounded-corner alpha onto the terminal background, then trim: `magick raw.png -background 'srgb(30,30,30)' -alpha remove -alpha off -fuzz 6% -trim +repage out.png`.
+
+After generating, rebuild (`cd website && npm run build`) and confirm the images copy to `_site/assets/images/` and render. VSIX integration tests capture their own editor screenshots to the gitignored `vscode-extension/.screenshots/` (never committed, never a CI artifact — see [GITHUB-NO-ARTIFACTS]).
+
 ## Architecture
 
 Strict-by-default Python type checker and comprehensive LSP built in **Rust**. One IDE extension = complete Python dev experience. Users can flick errors down to warnings and incrementally adopt type safety, or just use the LSP for autofixes, formatting, debugging, and profiling.
