@@ -106,7 +106,7 @@ All rules are **on by default**. There is no way to relax them globally.
 | Code | What it catches |
 |------|----------------|
 | `BSK-E0010` | Import from untyped module |
-| `BSK-E0011` | Implicit `Any` |
+| `BSK-E0011` | Explicit `Any` annotation (warning) |
 | `BSK-E0012` | Argument type mismatch |
 | `BSK-E0013` | Return type mismatch |
 | `BSK-E0014` | Assignment type mismatch |
@@ -195,7 +195,7 @@ scoop install basilisk
 
 Or download a pre-built binary from [GitHub Releases](https://github.com/Nimblesite/Basilisk/releases).
 
-To make this extension use a CLI you installed separately, set `basilisk.executablePath` or `basilisk.binaries.basilisk` to the absolute path of the binary. Building from source also works (`cargo build --release` from the repository — Rust 1.87+ required).
+To make this extension use a CLI you installed separately, set `basilisk.executablePath` or `basilisk.binaries.basilisk` to the absolute path of the binary. Building from source also works — see the [GitHub repository](https://github.com/Nimblesite/Basilisk).
 
 ---
 

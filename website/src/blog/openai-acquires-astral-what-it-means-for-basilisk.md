@@ -1,7 +1,7 @@
 ---
 layout: layouts/blog.njk
 title: "OpenAI Acquires Astral: What It Means for Basilisk"
-description: "OpenAI is acquiring Astral, the makers of Ruff, uv, and ty. Basilisk is built on Ruff. Here is exactly what changes, what does not, and our commitment to keeping it open."
+description: "OpenAI is acquiring Astral, maker of Ruff, uv, and ty. Basilisk is built on Ruff — what changes, what doesn't, and our commitment to keeping it open."
 date: 2026-06-20
 author: The Basilisk Project
 tags: posts

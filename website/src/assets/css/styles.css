@@ -444,10 +444,10 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .docs-content blockquote p { margin-bottom: 0; }
 .docs-content hr { border: none; border-top: 1px solid var(--color-border); margin: var(--space-10) 0; }
 
-.docs-content table { display: block; width: 100%; max-width: 100%; overflow-x: auto; margin-bottom: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 0.875rem; }
-.docs-content th { background: var(--color-bg-elevated); padding: var(--space-3) var(--space-4); text-align: left; font-weight: 600; color: var(--color-text-primary); border-bottom: 1px solid var(--color-border-bright); }
-.docs-content td { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); color: var(--color-text-secondary); vertical-align: top; }
-.docs-content tr:last-child td { border-bottom: none; }
+.docs-content table, .blog-post table { display: block; width: 100%; max-width: 100%; overflow-x: auto; margin-bottom: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 0.875rem; }
+.docs-content th, .blog-post th { background: var(--color-bg-elevated); padding: var(--space-3) var(--space-4); text-align: left; font-weight: 600; color: var(--color-text-primary); border-bottom: 1px solid var(--color-border-bright); }
+.docs-content td, .blog-post td { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); color: var(--color-text-secondary); vertical-align: top; }
+.docs-content tr:last-child td, .blog-post tr:last-child td { border-bottom: none; }
 
 /* Blog — same as docs */
 .blog-post h1 { font-size: clamp(1.875rem, 4vw, 2.25rem); font-weight: 800; letter-spacing: -0.025em; color: var(--color-text-primary); margin-bottom: var(--space-6); line-height: 1.15; }

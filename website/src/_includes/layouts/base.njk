@@ -60,7 +60,7 @@
   {%- endif %}
 
   <!-- Open Graph -->
-  <meta property="og:type" content="{% if page.url.startsWith('/blog/') and page.url != '/blog/' %}article{% else %}website{% endif %}">
+  <meta property="og:type" content="{% if basePath.startsWith('/blog/') and basePath != '/blog/' %}article{% else %}website{% endif %}">
   <meta property="og:url" content="{{ site.url }}{{ page.url }}">
   <meta property="og:title" content="{{ title | default(site.title) }}">
   <meta property="og:description" content="{{ description | default(site.description) }}">
@@ -105,7 +105,7 @@
         }{% endif %}
       },
       {
-        "@type": "{% if page.url.startsWith('/docs/') %}TechArticle{% elif page.url.startsWith('/blog/') and page.url != '/blog/' %}BlogPosting{% else %}WebPage{% endif %}",
+        "@type": "{% if basePath.startsWith('/docs/') %}TechArticle{% elif basePath.startsWith('/blog/') and basePath != '/blog/' %}BlogPosting{% else %}WebPage{% endif %}",
         "@id": "{{ site.url }}{{ page.url }}#webpage",
         "url": "{{ site.url }}{{ page.url }}",
         "name": "{{ title | default(site.title) }}",
