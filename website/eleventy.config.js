@@ -5,12 +5,21 @@ import techdoc from "eleventy-plugin-techdoc";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Patch the techdoc plugin's base layout with our custom version (adds favicon + logo)
-const localOverride = join(__dirname, "src/_includes/layouts/base.njk");
-const pluginTarget = join(__dirname, "node_modules/eleventy-plugin-techdoc/templates/layouts/base.njk");
-
-if (existsSync(localOverride)) {
-  writeFileSync(pluginTarget, readFileSync(localOverride, "utf-8"));
+// Patch the techdoc plugin's layouts with our custom versions. The plugin's
+// own templates dir wins layout resolution over src/_includes/layouts, so an
+// override has to be copied into the plugin (base.njk adds favicon + logo;
+// blog.njk adds the per-post hero banner + image-aware BlogPosting JSON-LD).
+const layoutOverrides = ["base.njk", "blog.njk"];
+for (const layout of layoutOverrides) {
+  const localOverride = join(__dirname, "src/_includes/layouts", layout);
+  const pluginTarget = join(
+    __dirname,
+    "node_modules/eleventy-plugin-techdoc/templates/layouts",
+    layout
+  );
+  if (existsSync(localOverride)) {
+    writeFileSync(pluginTarget, readFileSync(localOverride, "utf-8"));
+  }
 }
 
 // SEO metadata for the plugin-generated blog / tags / categories index pages.

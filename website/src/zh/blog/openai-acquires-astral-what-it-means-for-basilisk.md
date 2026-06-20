@@ -4,6 +4,7 @@ title: "OpenAI 收购 Astral：这对 Basilisk 意味着什么"
 description: "OpenAI 正在收购 Astral——Ruff、uv 和 ty 的缔造者。Basilisk 构建于 Ruff 之上。本文逐条说明什么会变、什么不会变，以及我们对保持开源的承诺。"
 date: 2026-06-20
 author: Basilisk 项目
+image: /assets/images/blog-openai-acquires-astral.png
 tags: posts
 category: announcements
 lang: zh

@@ -4,6 +4,7 @@ title: "介绍 Basilisk：Python 类型系统，真正被强制执行"
 description: "Python 已经有了十年的类型注解。是时候让人们默认强制执行它们了。"
 date: 2026-02-28
 author: Basilisk 项目
+image: /assets/images/blog-introducing-basilisk.png
 tags: posts
 category: announcements
 lang: zh
