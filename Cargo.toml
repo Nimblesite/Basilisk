@@ -31,14 +31,17 @@ repository   = "https://github.com/Nimblesite/Basilisk"
 rust-version = "1.87"
 
 [workspace.dependencies]
-# Ruff AST — not published as standalone crates; pin to a stable tag.
+# Ruff AST — not published as standalone crates; pinned to an immutable commit
+# rev (not a tag, which upstream can move or delete) so the version can never be
+# swapped out from under us. rev 7c645a9 == tag 0.15.17.
 # The whole ruff family MUST move together (shared ruff_text_size/AST types);
-# bump all three tags in lockstep or the tree ends up with two incompatible
+# bump all three revs in lockstep or the tree ends up with two incompatible
 # copies of ruff_text_size. 0.15.17 needs a newer rustc than 0.12.12 did, which
 # the current stable toolchain (CI `dtolnay/rust-toolchain@stable`) provides.
-ruff_python_parser = { git = "https://github.com/astral-sh/ruff", tag = "0.15.17" }
-ruff_python_ast    = { git = "https://github.com/astral-sh/ruff", tag = "0.15.17" }
-ruff_text_size     = { git = "https://github.com/astral-sh/ruff", tag = "0.15.17" }
+# The pip-installed `ruff` binary (CI + Dockerfile) MUST match: ruff==0.15.17.
+ruff_python_parser = { git = "https://github.com/astral-sh/ruff", rev = "7c645a9a1be8258b9f9e005208a55a0b7e8e18f0" }
+ruff_python_ast    = { git = "https://github.com/astral-sh/ruff", rev = "7c645a9a1be8258b9f9e005208a55a0b7e8e18f0" }
+ruff_text_size     = { git = "https://github.com/astral-sh/ruff", rev = "7c645a9a1be8258b9f9e005208a55a0b7e8e18f0" }
 
 # Logging
 tracing            = "0.1"

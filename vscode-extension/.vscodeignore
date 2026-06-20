@@ -1,6 +1,7 @@
 .vscode/**
 .vscode-test/**
 .vscode-test.mjs
+.screenshots/**
 .ruff_cache/**
 coverage/**
 test-fixtures/**

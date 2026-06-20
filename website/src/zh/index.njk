@@ -111,15 +111,8 @@ benchmarkStrings:
 </span></pre>
               </div>
             </div>
-            <div class="diagnostic-block">
-<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0001</span><span class="diag-bar">]: </span><span class="diag-msg">缺少参数类型注解</span>
-<span class="diag-bar">  --> </span><span class="diag-path">bad.py:1:12</span>
-<span class="diag-bar">   |</span>
-<span class="diag-bar"> 1 | </span><span class="diag-src">def process(data):</span>
-<span class="diag-bar">   |            </span><span class="diag-caret">^^^^</span> <span class="diag-note">参数 `data` 缺少类型注解</span>
-<span class="diag-bar">   = </span><span class="diag-help">帮助：添加类型注解：`data: str`</span>
-
-<span class="diag-note">在 1 个文件中发现 5 个错误。</span>
+            <div class="diagnostic-block" style="padding:0;background:transparent;border:0">
+              <img src="/assets/images/cli-demo.png" alt="bad.py 的真实 basilisk check 输出 —— 无需配置即报告六个类型错误" style="width:100%;display:block;border-radius:8px" loading="lazy">
             </div>
           </div>
 
@@ -148,9 +141,8 @@ benchmarkStrings:
         <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {self.name}"</span></pre>
               </div>
             </div>
-            <div class="diagnostic-block diagnostic-block--success">
-<span class="diag-prefix" style="color:var(--color-success)">全部检查通过，未发现问题。</span>
-<span class="diag-note">已检查 1 个文件——0 个错误，0 个警告。</span>
+            <div class="diagnostic-block diagnostic-block--success" style="padding:0;background:transparent;border:0">
+              <img src="/assets/images/cli-clean.png" alt="修复后的 good.py 的真实 basilisk check 输出 —— 全部检查通过" style="width:100%;display:block;border-radius:8px" loading="lazy">
             </div>
           </div>
 
@@ -271,19 +263,19 @@ benchmarkStrings:
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">92.5<span class="stat-block__unit">%</span></span>
+        <span class="stat-block__number">98.6<span class="stat-block__unit">%</span></span>
         <span class="stat-block__label">PEP 符合性得分</span>
       </div>
     </div>
     <div class="feature-row__text">
       <p class="feature-row__num">04 &mdash; PEP 符合性</p>
-      <h2 class="feature-row__title">146 个测试中 135 个通过。<br>目标：100%。</h2>
+      <h2 class="feature-row__title">146 个测试中 144 个通过。<br>目标：100%。</h2>
       <p class="feature-row__body">
         通过<a href="https://github.com/python/typing/blob/main/conformance/results/results.html" style="color:var(--color-accent)">官方 Python 类型符合性套件</a>测试——
         与衡量 Pyright（约 99%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）、
         mypy（约 58%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）
         和 Pyrefly（约 86%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）的套件相同。
-        21 个类别中的 16 个达到 100%。ParamSpec、TypeVarTuple 和 TypedDict 边界情况是下一步。
+        21 个类别中的 19 个达到 100%，且零误报。剩余两个 —— 一个 TypeVarTuple 泛型用例和一个协议定义用例 —— 是下一步。
       </p>
     </div>
   </div>
@@ -390,7 +382,7 @@ benchmarkStrings:
           </tr>
           <tr>
             <td>PEP 符合性 <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a></td>
-            <td class="col-basilisk">92.5% <em style="font-size:0.75rem;color:var(--color-text-muted)">(135/146)</em></td>
+            <td class="col-basilisk">98.6% <em style="font-size:0.75rem;color:var(--color-text-muted)">(144/146)</em></td>
             <td>~99%</td>
             <td>~58% 完全通过</td>
             <td>alpha</td>
@@ -495,27 +487,31 @@ benchmarkStrings:
 <pre><span class="tok-kw">from</span> <span class="tok-fn">typing</span> <span class="tok-kw">import</span> Any
 
 <span class="tok-kw">def</span> <span class="tok-fn">fetch_user</span>(user_id):          <span class="tok-cmt">  # BSK-E0001, BSK-E0002</span>
-    ...
+    <span class="tok-kw">return</span> database.query(user_id)
 
-<span class="tok-kw">def</span> <span class="tok-fn">save_record</span>(data: Any) <span class="tok-kw">-></span> <span class="tok-type">bool</span>:  <span class="tok-cmt"> # BSK-E0011</span>
-    ...</pre>
+<span class="tok-kw">def</span> <span class="tok-fn">save_record</span>(data: Any) <span class="tok-kw">-></span> <span class="tok-type">bool</span>:  <span class="tok-cmt"> # BSK-E0011（警告）</span>
+    <span class="tok-kw">return</span> <span class="tok-kw">True</span></pre>
             </div>
           </div>
           <div class="diagnostic-block">
-<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0001</span><span class="diag-bar">]: </span><span class="diag-msg">缺少参数类型注解</span>
+<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0001</span><span class="diag-bar">]: </span><span class="diag-msg">缺少参数 `user_id` 的类型注解</span>
 <span class="diag-bar">  --> </span><span class="diag-path">api.py:3:16</span>
 <span class="diag-bar">   |</span>
 <span class="diag-bar"> 3 | </span><span class="diag-src">def fetch_user(user_id):</span>
-<span class="diag-bar">   |               </span><span class="diag-caret">^^^^^^^</span> <span class="diag-note">参数 `user_id` 缺少类型注解</span>
-<span class="diag-bar">   = </span><span class="diag-help">帮助：添加类型注解：`user_id: int`</span>
+<span class="diag-bar">   |                </span><span class="diag-caret">^^^^^^^</span>
+<span class="diag-bar">   = </span><span class="diag-help">帮助：添加类型注解：`user_id: &lt;type&gt;`</span>
 
-<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0011</span><span class="diag-bar">]: </span><span class="diag-msg">显式 `Any`——需要说明理由</span>
-<span class="diag-bar">  --> </span><span class="diag-path">api.py:6:20</span>
+<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0002</span><span class="diag-bar">]: </span><span class="diag-msg">函数 `fetch_user` 缺少返回类型注解</span>
+<span class="diag-bar">  --> </span><span class="diag-path">api.py:3:5</span>
+<span class="diag-bar">   = </span><span class="diag-help">帮助：添加返回类型：`def fetch_user(...) -> &lt;type&gt;:`</span>
+
+<span class="diag-prefix" style="color:var(--color-warning)">warning</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0011</span><span class="diag-bar">]: </span><span class="diag-msg">参数 `data` 被注解为 `Any`——建议使用具体类型</span>
+<span class="diag-bar">  --> </span><span class="diag-path">api.py:6:17</span>
 <span class="diag-bar">   |</span>
 <span class="diag-bar"> 6 | </span><span class="diag-src">def save_record(data: Any) -> bool:</span>
-<span class="diag-bar">   |                     </span><span class="diag-caret">^^^</span> <span class="diag-note">使用 `Any` 必须说明理由</span>
-<span class="diag-bar">   = </span><span class="diag-help">帮助：用具体类型替换 `Any`，或添加带理由的抑制注释</span>
-<span class="diag-bar">   = </span><span class="diag-see">参见：https://www.basilisk-python.dev/docs/rules/#BSK-E0011</span>
+<span class="diag-bar">   |                 </span><span class="diag-caret">^^^^</span>
+<span class="diag-bar">   = </span><span class="diag-help">帮助：将 `data` 上的 `Any` 替换为实际期望的类型</span>
+<span class="diag-bar">   = </span><span class="diag-see">参见：https://www.basilisk-python.dev/errors/BSK-E0011</span>
           </div>
         </div>
 

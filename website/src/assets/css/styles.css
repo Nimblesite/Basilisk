@@ -286,7 +286,15 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .blog-container { width: 100%; max-width: var(--max-width); margin-inline: auto; padding: var(--space-10) var(--space-8); }
 
 /* Blog index / listing page */
-.blog-header { margin-bottom: var(--space-4); }
+.blog-header {
+  margin-bottom: var(--space-8);
+  padding: clamp(var(--space-8), 6vw, var(--space-12)) clamp(var(--space-6), 5vw, var(--space-10));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(12, 12, 16, 0.58) 0%, rgba(12, 12, 16, 0.93) 100%),
+    url('/assets/images/og-image.png') center / cover no-repeat;
+}
 .blog-header h1 {
   font-size: clamp(2rem, 5vw, 3rem);
   font-weight: 800;
@@ -324,10 +332,10 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   background: rgba(232, 80, 10, 0.06);
 }
 .post-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
-  max-width: 64ch;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: var(--space-6);
+  max-width: none;
 }
 .post-list .blog-post {
   padding: var(--space-8);
@@ -396,6 +404,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 /* Blog single post page */
 .blog-post { max-width: var(--content-width); margin-inline: auto; padding: var(--space-10) var(--space-8); }
+.blog-hero { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border: 1px solid var(--color-border-bright); border-radius: var(--radius-lg); margin-bottom: var(--space-8); }
 .blog-post-header { margin-bottom: var(--space-10); border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-8); }
 .blog-post-footer { margin-top: var(--space-12); text-align: center; }
 
@@ -444,10 +453,13 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .docs-content blockquote p { margin-bottom: 0; }
 .docs-content hr { border: none; border-top: 1px solid var(--color-border); margin: var(--space-10) 0; }
 
-.docs-content table { display: block; width: 100%; max-width: 100%; overflow-x: auto; margin-bottom: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 0.875rem; }
-.docs-content th { background: var(--color-bg-elevated); padding: var(--space-3) var(--space-4); text-align: left; font-weight: 600; color: var(--color-text-primary); border-bottom: 1px solid var(--color-border-bright); }
-.docs-content td { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); color: var(--color-text-secondary); vertical-align: top; }
-.docs-content tr:last-child td { border-bottom: none; }
+/* Responsive images (rule/diagnostic screenshots): never overflow the column on mobile. */
+.docs-content img, .blog-post img { display: block; max-width: 100%; height: auto; margin: var(--space-5) 0; border: 1px solid var(--color-border-bright); border-radius: var(--radius-md); }
+
+.docs-content table, .blog-post table { display: block; width: 100%; max-width: 100%; overflow-x: auto; margin-bottom: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 0.875rem; }
+.docs-content th, .blog-post th { background: var(--color-bg-elevated); padding: var(--space-3) var(--space-4); text-align: left; font-weight: 600; color: var(--color-text-primary); border-bottom: 1px solid var(--color-border-bright); }
+.docs-content td, .blog-post td { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); color: var(--color-text-secondary); vertical-align: top; }
+.docs-content tr:last-child td, .blog-post tr:last-child td { border-bottom: none; }
 
 /* Blog — same as docs */
 .blog-post h1 { font-size: clamp(1.875rem, 4vw, 2.25rem); font-weight: 800; letter-spacing: -0.025em; color: var(--color-text-primary); margin-bottom: var(--space-6); line-height: 1.15; }

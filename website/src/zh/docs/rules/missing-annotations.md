@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 缺失注解 — E0001–E0009
-description: 标记缺少类型信息的代码的规则。
+description: Basilisk 的缺失注解规则 BSK-E0001 至 E0009，标记缺少类型信息的代码——包括参数与返回类型注解、无法解析的变量类型、`*args` 与 `**kwargs` 以及类属性注解。
 keywords: basilisk, 缺失注解, 类型注解, BSK-E0001, BSK-E0002
 lang: zh
 ---

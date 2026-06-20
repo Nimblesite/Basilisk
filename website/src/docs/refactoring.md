@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "Python Refactoring — Code Actions in Basilisk"
-description: A full suite of refactoring code actions in Basilisk — extract, inline, move, rename, convert, and change signature.
+description: "A full suite of Python refactoring code actions in Basilisk — extract variable or function, inline, move symbol, rename, convert, and change signature safely."
 keywords: basilisk, refactoring, extract variable, extract function, inline, move symbol, rename, code actions
 date: 2026-02-28
 dateModified: 2026-03-31

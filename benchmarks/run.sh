@@ -50,15 +50,20 @@ BENCH_REGRESS_PCT="${BENCH_REGRESS_PCT:-25}"
 mkdir -p "$OUT" "$STATUS_DIR"
 
 # Canonical tool column order for the status CSV / website (stable schema).
-# Every tool gets a COLD column (full check from scratch) and a -warm column
-# (a repeat run using whatever that tool caches):
+# A tool gets a -warm column ONLY if it keeps a real cross-run cache whose
+# repeat-run speed actually differs from a cold check. Otherwise the warm column
+# is just a duplicate of cold — pure noise — so we don't measure it. Only two
+# tools qualify:
 #   * basilisk-warm  — opt-in result-cache hit (basilisk check --cache)
 #   * mypy-warm      — incremental .mypy_cache hit; cold mypy is --no-incremental
-#   * pyright/ty/pyrefly-warm — these keep NO cross-run result cache (verified:
-#     they write zero cache artifacts), so their warm is a genuine repeat run
-#     that lands ~= cold. The (near-)equality is the honest result: they do a
-#     full check every invocation.
-ALL_TOOLS="basilisk basilisk-warm pyright pyright-warm mypy mypy-warm ty ty-warm pyrefly pyrefly-warm"
+# pyright/ty/pyrefly keep NO cross-run result cache (verified: zero cache
+# artifacts), so a repeat run lands ~= cold — they are measured COLD-only.
+# mypy is run with --strict: without it, mypy reports "no issues" on the
+# strictness fixtures (e.g. missing-parameter annotations) and "checks" nothing,
+# making its timing an apples-to-oranges lie. --strict makes mypy perform the
+# strict-mode analysis these fixtures exist to stress, matching basilisk's
+# strict-by-default workload.
+ALL_TOOLS="basilisk basilisk-warm pyright mypy mypy-warm ty pyrefly"
 
 # ─── Preconditions ────────────────────────────────────────────────────────────
 if ! command -v hyperfine >/dev/null 2>&1; then
@@ -82,24 +87,25 @@ rm -rf "$WARMCACHE" "$MYPYCACHE"; mkdir -p "$WARMCACHE" "$MYPYCACHE"
 add_tool "basilisk"      "$BSK check {}"
 add_tool "basilisk-warm" "$BSK check {} --cache --cache-dir $WARMCACHE"
 if command -v pyright >/dev/null 2>&1; then
-  # No result cache; warm is a genuine repeat run (~= cold).
-  add_tool "pyright"      "pyright {}"
-  add_tool "pyright-warm" "pyright {}"
+  # No cross-run result cache → cold-only (a repeat run would just equal cold).
+  add_tool "pyright" "pyright {}"
 fi
 if command -v mypy >/dev/null 2>&1; then
+  # --strict so mypy does the strict-mode analysis the fixtures stress; plain
+  # mypy reports "no issues" on missing-annotation fixtures and times nothing.
   # cold = --no-incremental (full check); warm = incremental .mypy_cache hit.
   # Without --no-incremental the hyperfine warmup turned every cold measurement
   # into a do-nothing cache hit, which is why mypy used to look flat/fast.
-  add_tool "mypy"      "mypy --no-incremental --ignore-missing-imports --no-error-summary {}"
-  add_tool "mypy-warm" "mypy --cache-dir $MYPYCACHE --ignore-missing-imports --no-error-summary {}"
+  add_tool "mypy"      "mypy --strict --no-incremental --ignore-missing-imports --no-error-summary {}"
+  add_tool "mypy-warm" "mypy --strict --cache-dir $MYPYCACHE --ignore-missing-imports --no-error-summary {}"
 fi
 if command -v ty >/dev/null 2>&1; then
-  add_tool "ty"      "ty check {}"
-  add_tool "ty-warm" "ty check {}"
+  # No cross-run result cache → cold-only.
+  add_tool "ty" "ty check {}"
 fi
 if command -v pyrefly >/dev/null 2>&1; then
-  add_tool "pyrefly"      "pyrefly check {}"
-  add_tool "pyrefly-warm" "pyrefly check {}"
+  # No cross-run result cache → cold-only.
+  add_tool "pyrefly" "pyrefly check {}"
 fi
 
 version_of() {
@@ -304,7 +310,7 @@ csv_lines = [
     f"# tools: {os.environ['BENCH_TOOLS']}",
     f"# runs: {os.environ['BENCH_RUNS']} (hyperfine mean wall-clock, milliseconds)",
     f"# generated: {os.environ['BENCH_GENERATED']}",
-    f"# note: <tool>_ms = COLD full-file CLI check from scratch. <tool>-warm_ms = a repeat run using that tool's own cache. basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache, so their warm ~= cold (every run is a full check).",
+    f"# note: <tool>_ms = COLD full-file CLI check from scratch. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures).",
     "fixture," + ",".join(f"{t}_ms" for t in all_tools),
 ]
 for stem, means in rows:

@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: Type Safety — E0010–E0029
-description: "Basilisk rules for type safety — argument mismatches, return type errors, incompatible overrides, unhashable dict keys, and non-exhaustive match statements. BSK-E0010 through E0029."
+description: "Basilisk type-safety rules BSK-E0010 to E0029 — argument mismatches, return type errors, incompatible overrides, unhashable keys, and non-exhaustive matches."
 keywords: basilisk, type safety, type mismatch, BSK-E0012, BSK-E0013, BSK-E0016
 date: 2026-02-28
 dateModified: 2026-03-31
@@ -32,6 +32,10 @@ from legacy_module import process_data
 # stub-paths at a .pyi for it
 ```
 
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0010 for an unresolved import](/assets/images/e0010.png)
+
 ---
 
 ### BSK-E0011 — Explicit `Any` / return type mismatch
@@ -42,15 +46,13 @@ Two checks share this code. An explicit `Any` annotation silences type checking 
 from typing import Any
 
 # Warning — explicit `Any` must carry a reason
-def handle(
-    data: Any,  # basilisk: ignore[BSK-E0011] -- awaiting stubs for third-party SDK
-) -> bool:
-    ...
-
-# Error — int literal is not assignable to `str`
-def name() -> str:
-    return 42
+def handle(data: Any) -> bool:
+    return True
 ```
+
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0011 for an explicit Any annotation](/assets/images/e0011.png)
 
 ---
 
@@ -62,9 +64,12 @@ A function is called with an argument of the wrong type.
 def greet(name: str) -> str:
     return f"Hello, {name}"
 
-# Error — int is not str
-greet(42)
+greet(42)  # Error — int is not str
 ```
+
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0012 for an argument type mismatch](/assets/images/e0012.png)
 
 ---
 
@@ -77,6 +82,10 @@ def get_count() -> int:
     return "many"  # Error — str is not int
 ```
 
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0013 for a return type mismatch](/assets/images/e0013.png)
+
 ---
 
 ### BSK-E0014 — Assignment incompatibility
@@ -84,9 +93,12 @@ def get_count() -> int:
 A value of the wrong type is assigned to an annotated variable.
 
 ```python
-count: int = 0
-count = "zero"  # Error — str is not int
+count: int = "zero"  # Error — str is not int
 ```
+
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0014 for an assignment incompatibility](/assets/images/e0014.png)
 
 ---
 
@@ -95,9 +107,12 @@ count = "zero"  # Error — str is not int
 A generic type is used with the wrong number of type arguments.
 
 ```python
-x: dict[str]        # Error — dict requires 2 type args
-y: dict[str, int]   # Correct
+x: dict[str] = {}   # Error — dict requires 2 type args
 ```
+
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0015 for an invalid type argument count](/assets/images/e0015.png)
 
 ---
 
@@ -106,13 +121,21 @@ y: dict[str, int]   # Correct
 An overridden method in a subclass has an incompatible signature.
 
 ```python
+from typing import override
+
 class Base:
-    def process(self, data: str) -> str: ...
+    def process(self, data: str) -> str:
+        return data
 
 class Child(Base):
+    @override
     def process(self, data: int) -> str:  # Error — parameter type changed
-        ...
+        return str(data)
 ```
+
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0016 for an incompatible method override](/assets/images/e0016.png)
 
 ---
 
@@ -126,6 +149,15 @@ A class variable is overridden with an incompatible type in a subclass.
 
 A name is used that has not been defined in the current scope.
 
+```python
+def f() -> int:
+    return missing_local  # Error — name is not defined
+```
+
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0018 for an undefined variable](/assets/images/e0018.png)
+
 ---
 
 ### BSK-E0019 — Unbound variable
@@ -138,6 +170,10 @@ def check(flag: bool) -> str:
         result = "yes"
     return result  # Error — result may be unbound
 ```
+
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0019 for an unbound variable](/assets/images/e0019.png)
 
 ---
 
@@ -193,10 +229,18 @@ y: int = 0  # Correct
 A method that overrides a parent class method is missing the `@override` decorator (PEP 698).
 
 ```python
+class Base:
+    def process(self) -> str:
+        return "base"
+
 class Child(Base):
     def process(self) -> str:  # Error — missing @override
-        ...
+        return "child"
 ```
+
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0025 for a missing @override decorator](/assets/images/e0025.png)
 
 ---
 
