@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: Type Safety — E0010–E0029
-description: "Basilisk rules for type safety — argument mismatches, return type errors, incompatible overrides, unhashable dict keys, and non-exhaustive match statements. BSK-E0010 through E0029."
+description: "Basilisk type-safety rules BSK-E0010 to E0029 — argument mismatches, return type errors, incompatible overrides, unhashable keys, and non-exhaustive matches."
 keywords: basilisk, type safety, type mismatch, BSK-E0012, BSK-E0013, BSK-E0016
 date: 2026-02-28
 dateModified: 2026-03-31

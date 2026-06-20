@@ -19,27 +19,15 @@
 
 ---
 
+<p align="center">
+  <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in VS Code" width="900">
+</p>
+
 ## What Basilisk does
 
 Basilisk is a **complete Python language server and VS Code extension** that replaces Pylance and Pyright. It is not just a type checker — it provides autocomplete, go-to-definition, hover, code actions, refactoring, integrated debugging, and profiling. All fully open source.
 
-Other type checkers default to permissive and hope you opt into strictness. Basilisk **starts strict** and stays strict. If your code isn't typed, it's an error.
-
-```
-error[BSK-E0001]: Missing parameter type annotation for `name`
-  --> greet.py:1:10
-   |
- 1 | def greet(name):
-   |           ^^^^
-   |
-   = help: Add a type annotation: `name: <type>`
-
-error[BSK-E0002]: Missing return type annotation
-  --> greet.py:1:1
-   |
- 1 | def greet(name):
-   | ^^^^^^^^^^^^^^^^
-```
+Other type checkers default to permissive and hope you opt into strictness. Basilisk **starts strict** and stays strict. If your code isn't typed, it's an error — exactly as the screenshot above shows.
 
 Fix it once. Ship it typed forever:
 

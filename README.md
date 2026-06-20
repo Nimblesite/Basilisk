@@ -21,7 +21,9 @@
 
 ---
 
-![alt text](image.png)
+<p align="center">
+  <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
+</p>
 
 ## Try it
 
@@ -63,24 +65,7 @@ def greet(name: str) -> str:
 </tr>
 </table>
 
-```
-error[BSK-E0001]: Missing parameter type annotation for `name`
-  --> greet.py:1:10
-   |
- 1 | def greet(name):
-   |           ^^^^
-   |
-   = help: Add a type annotation: `name: <type>`
-   = see: https://www.basilisk-python.dev/errors/BSK-E0001
-
-error[BSK-E0002]: Missing return type annotation
-  --> greet.py:1:1
-   |
- 1 | def greet(name):
-   | ^^^^^^^^^^^^^^^^
-   |
-   = see: https://www.basilisk-python.dev/errors/BSK-E0002
-```
+The screenshot above shows the real `basilisk check` output for this file — two errors, no configuration.
 
 ---
 
@@ -103,7 +88,7 @@ All rules are on by default. There is no way to relax them globally.
 | Code | Triggers when |
 |------|---------------|
 | `BSK-E0010` | Import cannot be resolved |
-| `BSK-E0011` | Explicit `Any` annotation, or a return type mismatch |
+| `BSK-E0011` | Explicit `Any` annotation (emitted as a warning), or a return type mismatch |
 | `BSK-E0012` | Argument type does not match parameter type |
 | `BSK-E0013` | Return type does not match declared return type |
 | `BSK-E0014` | Assignment type does not match declared variable type |
@@ -122,7 +107,7 @@ All rules are on by default. There is no way to relax them globally.
 | `BSK-E0027` | Duplicate `TypeVar` in a `Generic[...]` base |
 | `BSK-E0029` | Method defined inside a `TypedDict` class |
 
-These are the most common rules. Basilisk ships **151 diagnostic codes** in total (146 errors, 5 warnings) — see the [complete diagnostic reference](https://www.basilisk-python.dev/docs/rules/) (generated from the checker source by `scripts/gen_rules_reference.py`).
+These are the most common rules. Basilisk ships **155 diagnostic codes** in total (150 errors, 5 warnings) — see the [complete diagnostic reference](https://www.basilisk-python.dev/docs/rules/) (generated from the checker source by `scripts/gen_rules_reference.py`).
 
 ---
 
@@ -158,7 +143,7 @@ Diagnostics use rustc-style output:
 
 ```
 error[BSK-E0001]: Missing parameter type annotation for `data`
-  --> src/utils.py:14:5
+  --> src/utils.py:14:13
    |
 14 | def process(data):
    |             ^^^^

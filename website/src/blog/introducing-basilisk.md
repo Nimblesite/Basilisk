@@ -11,8 +11,6 @@ excerpt: "The Python type annotation ecosystem has a dirty secret: nobody enforc
 keywords: basilisk, python type checker, strict typing, rust, announcement
 ---
 
-# Introducing Basilisk: Python's Type System, Actually Enforced
-
 The Python type annotation ecosystem has a dirty secret: nobody enforces it by default.
 
 PEP 484 landed in 2015. In the decade since, the ecosystem built sophisticated tools — Pyright, mypy, ty, Pyrefly — capable of catching real bugs when pointed at fully-typed code. The Python Typing Council published spec after spec. The `typing` module grew to cover generics, protocols, TypeVarTuple, ParamSpec, TypeIs, and more.

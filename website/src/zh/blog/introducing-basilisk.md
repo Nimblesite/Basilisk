@@ -11,8 +11,6 @@ excerpt: "Python 类型注解生态系统有一个不可告人的秘密：没有
 keywords: basilisk, python类型检查器, 严格类型, rust, 公告
 ---
 
-# 介绍 Basilisk：Python 类型系统，真正被强制执行
-
 Python 类型注解生态系统有一个不可告人的秘密：没有人默认强制执行它。
 
 PEP 484 于 2015 年落地。在此后的十年里，生态系统构建了复杂的工具——Pyright、mypy、ty、Pyrefly——能够在指向完全类型化的代码时捕获真正的错误。Python 类型委员会发布了一个又一个规范。`typing` 模块发展到涵盖泛型、协议、TypeVarTuple、ParamSpec、TypeIs 等更多内容。

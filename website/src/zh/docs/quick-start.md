@@ -37,25 +37,29 @@ basilisk check bad.py
 输出：
 
 ```
-error[BSK-E0001]: Missing parameter type annotation
-  --> bad.py:1:12
-   |
- 1 | def process(data):
-   |             ^^^^ parameter `data` has no type annotation
-   |
-   = help: add type annotation: `data: str`
-   = note: all parameters must be explicitly typed
-   = see: https://www.basilisk-python.dev/docs/rules/#BSK-E0001
+error[BSK-E0001]: Missing parameter type annotation for `data`
+  --> bad.py:1:13
+    |
+1 | def process(data):
+    |             ^^^^
+    |
+   = help: Add a type annotation: `data: <type>`
+   = note: In Basilisk, all function parameters require explicit types
+   = see: https://www.basilisk-python.dev/errors/BSK-E0001
 
-error[BSK-E0002]: Missing return type annotation
-  --> bad.py:1:1
-   |
- 1 | def process(data):
-   |     ^^^^^^^ function has no return type annotation
-   |
-   = help: add return type: `def process(data: str) -> str:`
+error[BSK-E0002]: Missing return type annotation for function `process`
+  --> bad.py:1:5
+    |
+1 | def process(data):
+    |     ^^^^^^^^^^^^^
+    |
+   = help: Add a return type: `def process(...) -> <type>:`
+   = note: In Basilisk, all functions require an explicit return type
+   = see: https://www.basilisk-python.dev/errors/BSK-E0002
 
-Found 5 errors in 1 file.
+... 4 more errors (untyped `name`, `age`, `__init__`, and `greet`) ...
+
+Found 6 diagnostics (6 errors).
 ```
 
 ## 第 2 步——修复错误
@@ -120,16 +124,16 @@ exclude = ["**/migrations/**"]
 Basilisk 使用与 Rust 编译器（`rustc`）相同的输出格式。每个诊断包括：
 
 ```
-error[BSK-E0001]: Missing parameter type annotation
+error[BSK-E0001]: Missing parameter type annotation for `data`
 ^^^^^            ^                                  ← 严重性 + 消息
-  --> bad.py:1:12                                   ← 文件:行:列
-   |
- 1 | def process(data):                             ← 源代码上下文
-   |             ^^^^  parameter `data` ...         ← 指向问题的插入符号
-   |
-   = help: add type annotation: `data: str`         ← 可操作的修复
-   = note: all parameters must be explicitly typed  ← 解释
-   = see: https://www.basilisk-python.dev/docs/rules/#BSK-E0001  ← 文档链接
+  --> bad.py:1:13                                   ← 文件:行:列
+    |
+1 | def process(data):                              ← 源代码上下文
+    |             ^^^^                               ← 指向问题的插入符号
+    |
+   = help: Add a type annotation: `data: <type>`    ← 可操作的修复
+   = note: In Basilisk, all function parameters require explicit types  ← 解释
+   = see: https://www.basilisk-python.dev/errors/BSK-E0001  ← 文档链接
 ```
 
 - **`error[BSK-EXXXX]`** — 带唯一代码的错误（橙色）

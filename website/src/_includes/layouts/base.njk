@@ -112,7 +112,8 @@
         "description": "{{ description | default(site.description) }}",
         "isPartOf": { "@id": "{{ site.url }}/#website" },
         "inLanguage": "{{ lang | default('en') }}"{% if page.date %},
-        "datePublished": "{{ page.date | isoDate }}"{% endif %}{% if author %},
+        "datePublished": "{{ page.date | isoDate }}",
+        "dateModified": "{% if dateModified %}{{ dateModified | isoDate }}{% else %}{{ page.date | isoDate }}{% endif %}"{% endif %}{% if author %},
         "author": {
           "@type": "Person",
           "name": "{{ author }}"
@@ -146,6 +147,25 @@
           "url": "{{ site.url }}{{ site.organization.logo }}"
         }{% endif %}{% if site.organization.sameAs %},
         "sameAs": {{ site.organization.sameAs | dump | safe }}{% endif %}
+      }{% endif %}{% if page.url == '/' or page.url == '/zh/' %},
+      {
+        "@type": "SoftwareApplication",
+        "@id": "{{ site.url }}/#software",
+        "name": "Basilisk",
+        "url": "{{ site.url }}",
+        "applicationCategory": "DeveloperApplication",
+        "applicationSubCategory": "Python type checker and language server",
+        "operatingSystem": "macOS, Linux, Windows",
+        "programmingLanguage": "Python",
+        "softwareRequirements": "Python 3.12",
+        "description": "{{ description | default(site.description) }}",
+        "license": "https://opensource.org/license/mit",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
       }{% endif %}
     ]
   }
