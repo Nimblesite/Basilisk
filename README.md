@@ -30,10 +30,10 @@
 The `examples/` folder has ready-to-go Python files:
 
 ```sh
-cargo run -- check examples/bad.py    # everything flagged
-cargo run -- check examples/good.py   # clean
-cargo run -- check examples/mixed.py  # some errors, some clean
-cargo run -- check examples/          # all three at once
+basilisk check examples/bad.py    # everything flagged
+basilisk check examples/good.py   # clean
+basilisk check examples/mixed.py  # some errors, some clean
+basilisk check examples/          # all three at once
 ```
 
 ---
@@ -64,8 +64,6 @@ def greet(name: str) -> str:
 </td>
 </tr>
 </table>
-
-The screenshot above shows the real `basilisk check` output for this file — two errors, no configuration.
 
 ---
 

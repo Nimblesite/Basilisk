@@ -79,7 +79,29 @@ def greet(name: str) -> str:
 </tr>
 </table>
 
-The screenshot above shows the real `basilisk check` output for this file — two errors, no configuration.
+Running `basilisk check greet.py` on the unannotated version prints two errors — no configuration required:
+
+```
+error[BSK-E0001]: Missing parameter type annotation for `name`
+  --> greet.py:1:11
+    |
+1 | def greet(name):
+    |           ^^^^
+    |
+   = help: Add a type annotation: `name: <type>`
+   = note: In Basilisk, all function parameters require explicit types
+   = see: https://www.basilisk-python.dev/errors/BSK-E0001
+
+error[BSK-E0002]: Missing return type annotation for function `greet`
+  --> greet.py:1:5
+    |
+1 | def greet(name):
+    |     ^^^^^^^^^^^
+    |
+   = help: Add a return type: `def greet(...) -> <type>:`
+   = note: In Basilisk, all functions require an explicit return type
+   = see: https://www.basilisk-python.dev/errors/BSK-E0002
+```
 
 ---
 
