@@ -4,7 +4,7 @@ title: "OpenAI Acquires Astral: What It Means for Basilisk"
 description: "OpenAI is acquiring Astral, maker of Ruff, uv, and ty. Basilisk is built on Ruff — what changes, what doesn't, and our commitment to keeping it open."
 date: 2026-06-20
 author: The Basilisk Project
-image: /assets/images/blog-openai-acquires-astral.png
+image: /assets/images/blog/openai-acquires-astral.png
 tags: posts
 category: announcements
 excerpt: "Basilisk's parser is Ruff. Ruff's owner is about to become OpenAI. Here is what that means — backed by the primary sources, quote by quote — and why your Basilisk install is safe regardless."
