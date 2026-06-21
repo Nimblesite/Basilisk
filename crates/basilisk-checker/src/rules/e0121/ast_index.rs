@@ -16,30 +16,68 @@ use std::collections::{HashMap, HashSet};
 
 use ruff_python_ast::{Expr, Stmt, StmtClassDef, StmtFunctionDef};
 
-/// A method's logical signature, with the implicit receiver removed for instance
-/// and class methods.
+/// A method's logical signature: its parameters with calling conventions, with
+/// the implicit receiver removed for instance and class methods.
 pub(super) struct MethodSignature<'a> {
     /// Logical parameters in declaration order, each paired with its kind.
-    pub params: Vec<(&'a str, ParamKind)>,
-    /// `true` when the method is decorated `@staticmethod`.
-    pub is_static: bool,
-    /// `true` when the method declares `*args` or `**kwargs` (which accept
-    /// arbitrary extra arguments, so strict parameter comparison does not apply).
-    pub has_variadic: bool,
-    /// The receiver parameter name (`self`/`cls`) for instance/class methods,
-    /// before it was stripped; `None` for static methods.
-    pub receiver: Option<&'a str>,
+    params: Vec<(&'a str, ParamKind)>,
 }
 
 /// The calling convention of a parameter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ParamKind {
+enum ParamKind {
     /// Before `/`: may only be passed positionally.
     PositionalOnly,
     /// The default: may be passed positionally or by keyword.
     PositionalOrKeyword,
     /// After `*`: may only be passed by keyword.
     KeywordOnly,
+}
+
+impl ParamKind {
+    /// `true` when a parameter of this kind can be supplied positionally.
+    fn allows_positional(self) -> bool {
+        matches!(self, Self::PositionalOnly | Self::PositionalOrKeyword)
+    }
+
+    /// `true` when a parameter of this kind can be supplied by keyword.
+    fn allows_keyword(self) -> bool {
+        matches!(self, Self::KeywordOnly | Self::PositionalOrKeyword)
+    }
+}
+
+impl MethodSignature<'_> {
+    /// Compare a protocol method against an implementation method that already
+    /// shares its parameter *names*, returning a human-readable reason when the
+    /// implementation cannot be called every way the protocol permits.
+    ///
+    /// The implementation must accept each parameter in every mode (positional
+    /// and/or keyword) the protocol allows: a protocol positional-or-keyword
+    /// parameter cannot be satisfied by a keyword-only or positional-only one.
+    /// Arity differences are reported separately by the name comparison, so a
+    /// differing parameter count yields `None` here.
+    pub(super) fn calling_convention_mismatch(&self, implementation: &Self) -> Option<String> {
+        if self.params.len() != implementation.params.len() {
+            return None;
+        }
+        self.params.iter().zip(&implementation.params).find_map(
+            |((proto_name, proto_kind), (_, impl_kind))| {
+                if proto_kind.allows_positional() && !impl_kind.allows_positional() {
+                    Some(format!(
+                        "parameter `{proto_name}` is positional in the protocol but \
+                         keyword-only in the implementation"
+                    ))
+                } else if proto_kind.allows_keyword() && !impl_kind.allows_keyword() {
+                    Some(format!(
+                        "parameter `{proto_name}` is keyword-accessible in the protocol \
+                         but positional-only in the implementation"
+                    ))
+                } else {
+                    None
+                }
+            },
+        )
+    }
 }
 
 /// Per-module index of class and method definitions read from the AST.
@@ -58,8 +96,7 @@ impl<'a> AstIndex<'a> {
             };
             for member in &class_def.body {
                 if let Stmt::FunctionDef(func) = member {
-                    let _ = method_defs
-                        .insert((class_def.name.as_str(), func.name.as_str()), func);
+                    let _ = method_defs.insert((class_def.name.as_str(), func.name.as_str()), func);
                 }
             }
         }
@@ -80,11 +117,9 @@ impl<'a> AstIndex<'a> {
 
 /// Build the [`MethodSignature`] for a function definition.
 fn signature_of(func: &StmtFunctionDef) -> MethodSignature<'_> {
-    let is_static = func
-        .decorator_list
-        .iter()
-        .any(|dec| matches!(&dec.expression, Expr::Name(name) if name.id.as_str() == "staticmethod"));
-    let has_variadic = func.parameters.vararg.is_some() || func.parameters.kwarg.is_some();
+    let is_static = func.decorator_list.iter().any(
+        |dec| matches!(&dec.expression, Expr::Name(name) if name.id.as_str() == "staticmethod"),
+    );
 
     let mut params: Vec<(&str, ParamKind)> = func
         .parameters
@@ -107,14 +142,24 @@ fn signature_of(func: &StmtFunctionDef) -> MethodSignature<'_> {
 
     // Strip the implicit receiver (`self`/`cls`) for non-static methods: it is
     // the first declared parameter and never part of the call signature.
-    let receiver = (!is_static && !params.is_empty()).then(|| params.remove(0).0);
-
-    MethodSignature {
-        params,
-        is_static,
-        has_variadic,
-        receiver,
+    if !is_static && !params.is_empty() {
+        let _ = params.remove(0);
     }
+
+    MethodSignature { params }
+}
+
+/// Map each class in `body` to the attribute names it assigns via `self.<attr>`
+/// (see [`self_assigned_attrs`]). Keys borrow from the parsed module body.
+pub(super) fn self_attrs_by_class(body: &[Stmt]) -> HashMap<&str, HashSet<String>> {
+    body.iter()
+        .filter_map(|stmt| match stmt {
+            Stmt::ClassDef(class_def) => {
+                Some((class_def.name.as_str(), self_assigned_attrs(class_def)))
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 /// Collect the attribute names assigned via the instance receiver (e.g.
@@ -124,7 +169,7 @@ fn signature_of(func: &StmtFunctionDef) -> MethodSignature<'_> {
 /// These are real instance variables of the class even though they never appear
 /// as class-body attributes, so a protocol member they satisfy must not be
 /// reported as missing.
-pub(super) fn self_assigned_attrs(class_def: &StmtClassDef) -> HashSet<String> {
+fn self_assigned_attrs(class_def: &StmtClassDef) -> HashSet<String> {
     let mut attrs = HashSet::new();
     for member in &class_def.body {
         let Stmt::FunctionDef(func) = member else {

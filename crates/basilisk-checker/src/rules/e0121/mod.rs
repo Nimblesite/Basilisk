@@ -109,23 +109,21 @@ impl Rule for ProtocolAssignmentConformance {
         // parameter kinds (method-signature conformance) and `self.<attr>`
         // assignments (instance-variable presence). Both are optional — if the
         // source fails to re-parse, those refinements are simply skipped.
-        let parsed = super::shared::parse_module(module);
+        // The AST-dependent refinements (parameter kinds, `self.<attr>`
+        // instance variables, protocol-typed call arguments) all require a
+        // locally defined `Protocol` class. Skip the re-parse entirely when none
+        // exists, keeping protocol-free files cheap.
+        let has_protocol_class = module
+            .classes
+            .iter()
+            .any(|cls| cls.bases.iter().any(|base| base == "Protocol"));
+        let parsed = has_protocol_class
+            .then(|| super::shared::parse_module(module))
+            .flatten();
         let ast_index = parsed.as_ref().map(|p| AstIndex::build(&p.ast.body));
         let self_attrs: HashMap<&str, HashSet<String>> = parsed
             .as_ref()
-            .map(|p| {
-                p.ast
-                    .body
-                    .iter()
-                    .filter_map(|stmt| match stmt {
-                        ruff_python_ast::Stmt::ClassDef(class_def) => Some((
-                            class_def.name.as_str(),
-                            ast_index::self_assigned_attrs(class_def),
-                        )),
-                        _ => None,
-                    })
-                    .collect()
-            })
+            .map(|p| ast_index::self_attrs_by_class(&p.ast.body))
             .unwrap_or_default();
 
         // Check each module-level variable assignment.
@@ -198,32 +196,16 @@ impl Rule for ProtocolAssignmentConformance {
                         },
                         diagnostics,
                     );
-                } else {
+                } else if class_inherits_protocol(ann_name, &class_map) {
                     // Case 2: annotation inherits from a Protocol but is not itself
                     // a Protocol. No structural subtyping — flag it.
-                    let inherits_protocol = class_inherits_protocol(ann_name, &class_map);
-                    if inherits_protocol {
-                        diagnostics.push(error_diagnostic_owned(
-                            CODE.clone(),
-                            format!(
-                                "Cannot assign `{rhs_class_name}()` to type `{ann_name}`: \
-                                 `{ann_name}` is not a protocol and does not support structural subtyping"
-                            ),
-                            var.name_span,
-                            path,
-                            Some(format!(
-                                "`{ann_name}` inherits from a protocol but does not include \
-                                 `Protocol` in its bases, so it is a concrete class; \
-                                 `{rhs_class_name}` is not a subclass of `{ann_name}`"
-                            )),
-                            Some(
-                                "Without `Protocol` in the base class list, a class that \
-                                 inherits from a protocol is downgraded to a regular ABC \
-                                 that cannot be used with structural subtyping"
-                                    .to_owned(),
-                            ),
-                        ));
-                    }
+                    report_non_protocol_assignment(
+                        ann_name,
+                        rhs_class_name,
+                        var,
+                        path,
+                        diagnostics,
+                    );
                 }
             }
         }
@@ -234,6 +216,37 @@ impl Rule for ProtocolAssignmentConformance {
             call_args::check_protocol_call_args(module, &parsed.ast.body, &class_map, diagnostics);
         }
     }
+}
+
+/// Report assignment to a non-protocol class that merely inherits from a
+/// Protocol: structural subtyping does not apply, so only nominal subclasses fit.
+fn report_non_protocol_assignment(
+    ann_name: &str,
+    rhs_class_name: &str,
+    var: &basilisk_resolver::VariableInfo,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
+            "Cannot assign `{rhs_class_name}()` to type `{ann_name}`: \
+             `{ann_name}` is not a protocol and does not support structural subtyping"
+        ),
+        var.name_span,
+        path,
+        Some(format!(
+            "`{ann_name}` inherits from a protocol but does not include \
+             `Protocol` in its bases, so it is a concrete class; \
+             `{rhs_class_name}` is not a subclass of `{ann_name}`"
+        )),
+        Some(
+            "Without `Protocol` in the base class list, a class that \
+             inherits from a protocol is downgraded to a regular ABC \
+             that cannot be used with structural subtyping"
+                .to_owned(),
+        ),
+    ));
 }
 
 /// Check if `rhs_class` is a nominal subclass of `target_class`.
@@ -328,6 +341,7 @@ fn collect_protocol_required_methods(
 
 /// Bundled context for one protocol-conformance check, threaded through the
 /// member-presence and member-kind sub-checks.
+#[derive(Clone, Copy)]
 struct ConformanceArgs<'a> {
     protocol_name: &'a str,
     protocol_class: &'a basilisk_resolver::ClassInfo,
@@ -344,7 +358,11 @@ struct ConformanceArgs<'a> {
 }
 
 /// Check if a concrete class satisfies a protocol's structural requirements.
-fn check_protocol_conformance(args: ConformanceArgs, diagnostics: &mut Vec<Diagnostic>) {
+#[expect(
+    clippy::too_many_lines,
+    reason = "orchestrates every protocol member-presence and member-kind sub-check"
+)]
+fn check_protocol_conformance(args: ConformanceArgs<'_>, diagnostics: &mut Vec<Diagnostic>) {
     let ConformanceArgs {
         protocol_name,
         protocol_class,

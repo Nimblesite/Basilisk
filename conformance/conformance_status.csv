@@ -22,7 +22,7 @@ BSK-E0014|BSK-E0015|BSK-E0122|BSK-E0140,callables_annotation.py,callables,PASS,1
 BSK-E0012|BSK-E0140|BSK-E0141,callables_kwargs.py,callables,PASS,13,0,0
 BSK-E0140,callables_protocol.py,callables,PASS,17,0,0
 BSK-E0014|BSK-E0136,callables_subtyping.py,callables,PASS,32,0,0
-BSK-E0014|BSK-E0036|BSK-E0044,classes_classvar.py,classes,PASS,17,0,0
+BSK-E0014|BSK-E0036|BSK-E0044|BSK-E0121,classes_classvar.py,classes,PASS,17,0,0
 ,classes_override.py,classes,PASS,0,0,0
 BSK-E0111|BSK-E0128,constructors_call_init.py,constructors,PASS,5,0,0
 BSK-E0041,constructors_call_metaclass.py,constructors,PASS,2,0,0
@@ -109,7 +109,7 @@ BSK-E0072,overloads_basic.py,overloads,PASS,1,0,0
 BSK-E0020|BSK-E0034,overloads_definitions.py,overloads,PASS,0,0,0
 BSK-E0012|BSK-E0041|BSK-E0076,overloads_evaluation.py,overloads,PASS,4,0,0
 BSK-E0099|BSK-E0146,protocols_class_objects.py,protocols,PASS,8,0,0
-BSK-E0036|BSK-E0097|BSK-E0121,protocols_definition.py,protocols,FAIL,17,4,0
+BSK-E0036|BSK-E0097|BSK-E0121,protocols_definition.py,protocols,PASS,21,0,0
 BSK-E0099|BSK-E0118|BSK-E0123|BSK-E0124,protocols_explicit.py,protocols,PASS,6,0,0
 BSK-E0130|BSK-E0137,protocols_generic.py,protocols,PASS,9,0,0
 BSK-E0098|BSK-E0099|BSK-E0121,protocols_merging.py,protocols,PASS,6,0,0
