@@ -670,7 +670,7 @@ list — keep it in sync after adding or renaming a rule.
 | `BSK-E0094` | `Self` type used in an invalid location |
 | `BSK-E0095` | `InitVar` field validation in dataclasses |
 | `BSK-E0096` | Type mismatch between a dataclass `field(default_factory=…)` and the field's declared type annotation |
-| `BSK-E0097` | Protocol `__new__`/`__init__` sets self-attributes not declared in Protocol |
+| `BSK-E0097` | Protocol method body sets self-attributes not declared in Protocol |
 | `BSK-E0098` | Non-Protocol base class in a Protocol definition |
 | `BSK-E0099` | Direct instantiation of a Protocol class |
 | `BSK-E0100` | Augmented assignment widens `Literal` type |
@@ -694,7 +694,7 @@ list — keep it in sync after adding or renaming a rule.
 | `BSK-E0118` | Calling `super().method()` on an abstract method with no default implementation |
 | `BSK-E0119` | Protocol `isinstance`/`issubclass` violations |
 | `BSK-E0120` | Generator return type and yield type violations |
-| `BSK-E0121` | Protocol conformance violation in annotated assignment |
+| `BSK-E0121` | Protocol conformance violation in an annotated assignment or call argument |
 | `BSK-E0122` | Callable call-site arity and argument validation |
 | `BSK-E0123` | `super()` call on abstract protocol method with no default implementation |
 | `BSK-E0124` | Protocol attribute tuple element type mismatch |

@@ -45,12 +45,14 @@ impl Rule for TypeVarTupleArgCountMismatch {
             return;
         };
 
-        // Unpacked-tuple `*args` validation applies with or without any
-        // `TypeVarTuple` declarations in the module.
-        star_args::check_star_args_calls(&parsed.ast.body, &module.path, diagnostics);
-
-        // Collect TypeVarTuple names.
+        // Collect TypeVarTuple names. Needed by the unpacked-tuple `*args`
+        // validation to recognise the `*args: tuple[*Ts]` shared-binding form.
         let tvt_names = super::shared::typevar_tuple_names(&module.typevar_calls);
+
+        // Unpacked-tuple `*args` validation applies with or without any
+        // `TypeVarTuple` declarations in the module (the `*tuple[...]` forms need
+        // none; the `tuple[*Ts]` form consults `tvt_names`).
+        star_args::check_star_args_calls(&parsed.ast.body, &tvt_names, &module.path, diagnostics);
 
         if tvt_names.is_empty() {
             return;
