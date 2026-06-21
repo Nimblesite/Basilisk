@@ -13,8 +13,18 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { currentStoppedFrameId, evaluateInDebugSession } from "../../dap-evaluate";
+import { currentStoppedFrameId } from "../../dap-evaluate";
 import { activeMemorySession } from "../../memory-profiler";
+import {
+  SESSION_WAIT_MS,
+  POLL_MS,
+  setBreakpoints,
+  waitForPause,
+  resume,
+  waitForSessionEnd,
+  memoryRoundTrip,
+  type IngestResult,
+} from "./debug-e2e-helpers";
 import { recordedOperations } from "../../progress-ops";
 import { buildProfileLaunchConfig } from "../../process-launch";
 import {
@@ -43,90 +53,6 @@ const BP_AFTER_CHUNK3 = 17;
 /** The memory decoration palette (purple track + leak colors). */
 const MEMORY_PALETTE = ["#c084fc", "#a78bfa", "#8b5cf6", "#7c3aed"];
 const LEAK_PALETTE = ["#ef4444", "#f87171", "#fb923c", "#a78bfa"];
-
-/** Budget for a debug session to start / stop / pause. */
-const SESSION_WAIT_MS = 20_000;
-/** Poll cadence for debug-state changes. */
-const POLL_MS = 100;
-
-// ── Slim debug helpers (local to this suite) ─────────────────────────────
-
-function setBreakpoints(filePath: string, lines: number[]): void {
-  vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
-  vscode.debug.addBreakpoints(
-    lines.map(
-      (line) =>
-        new vscode.SourceBreakpoint(
-          new vscode.Location(vscode.Uri.file(filePath), new vscode.Position(line - 1, 0)),
-        ),
-    ),
-  );
-}
-
-/** Wait until the active debuggee is paused, returning the stopped frame id. */
-async function waitForPause(): Promise<number> {
-  const frameId = await pollUntilResult({
-    fn: async () => currentStoppedFrameId(),
-    predicate: (frame) => frame !== null,
-    timeoutMs: SESSION_WAIT_MS,
-    intervalMs: POLL_MS,
-  });
-  assert.ok(frameId !== null, "debuggee must reach a paused state");
-  return frameId;
-}
-
-/** Resume the debuggee (first stopped thread). */
-async function resume(): Promise<void> {
-  const session = vscode.debug.activeDebugSession;
-  assert.ok(session, "an active debug session is required to resume");
-  const threads = (await session.customRequest("threads")) as { threads?: { id: number }[] };
-  const threadId = threads.threads?.[0]?.id;
-  assert.ok(threadId !== undefined, "the debuggee must report a thread");
-  await session.customRequest("continue", { threadId });
-}
-
-/** Wait for the active debug session to terminate. */
-async function waitForSessionEnd(): Promise<void> {
-  await pollUntilResult({
-    fn: async () => vscode.debug.activeDebugSession,
-    predicate: (session) => session === undefined,
-    timeoutMs: SESSION_WAIT_MS,
-    intervalMs: POLL_MS,
-  });
-}
-
-// ── Courier round-trip (leg 1 → evaluate → leg 2) ────────────────────────
-
-/** One marker-tagged ingest result. */
-interface IngestResult {
-  kind: string;
-  [field: string]: unknown;
-}
-
-/** Run one memory command's full courier round-trip against the paused debuggee. */
-async function memoryRoundTrip<T extends IngestResult>(
-  command: string,
-  memorySessionId: string | undefined,
-  frameId: number,
-): Promise<T> {
-  const leg1 = await vscode.commands.executeCommand<
-    { memorySessionId?: string; script?: string } | null
-  >(command, {
-    ...(memorySessionId === undefined ? { tracebackDepth: 25 } : { memorySessionId }),
-  });
-  const script = leg1?.script;
-  assert.ok(script !== undefined && script !== "", `${command} must return an injection script`);
-
-  const output = await evaluateInDebugSession(script, frameId);
-  assert.ok(output !== null, `${command} script must evaluate in the paused debuggee`);
-
-  const ingested = await vscode.commands.executeCommand<T | null>("basilisk.memory.ingest", {
-    memorySessionId: memorySessionId ?? leg1?.memorySessionId,
-    output,
-  });
-  assert.ok(ingested !== null, "ingest must return a kind-tagged result");
-  return ingested;
-}
 
 /** A node in the V8 `.heapprofile` call tree. */
 interface HeapNode {
