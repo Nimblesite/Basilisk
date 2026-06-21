@@ -135,7 +135,7 @@ jobs:
       # this release rather than from raw Actions artifacts, which drop the
       # Unix executable bit. Archives (tar.gz / ditto zip) preserve it.
       - name: Create release with platform binaries
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           generate_release_notes: true
           # Publish immediately — never leave the release as a draft. The action
