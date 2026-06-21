@@ -3,7 +3,7 @@
 //! (PEP 646): `*args: *tuple[int, ...]`, `*args: *tuple[int, str]`, and
 //! mixed forms like `*args: *tuple[int, *tuple[str, ...], str]`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged as _;
@@ -28,6 +28,10 @@ enum StarShape {
         middle: Option<String>,
         suffix: Vec<String>,
     },
+    /// `*args: tuple[*Ts]` — each variadic argument is `tuple[*Ts]`, all sharing
+    /// the same `TypeVarTuple`. The solver joins element *types*, so only the
+    /// arity must agree: every tuple-literal argument must have equal length.
+    SharedTvt,
 }
 
 /// A function whose `*args` carries an unpacked tuple annotation.
@@ -38,7 +42,12 @@ struct StarArgsFunction {
 }
 
 /// Entry point: validate calls to functions with unpacked-tuple `*args`.
-pub(super) fn check_star_args_calls(stmts: &[Stmt], path: &str, diagnostics: &mut Vec<Diagnostic>) {
+pub(super) fn check_star_args_calls(
+    stmts: &[Stmt],
+    tvt_names: &HashSet<&str>,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     let mut functions: HashMap<&str, StarArgsFunction> = HashMap::new();
     for stmt in stmts {
         let Stmt::FunctionDef(func) = stmt else {
@@ -47,10 +56,15 @@ pub(super) fn check_star_args_calls(stmts: &[Stmt], path: &str, diagnostics: &mu
         let Some(vararg) = func.parameters.vararg.as_deref() else {
             continue;
         };
-        let Some(Expr::Starred(starred)) = vararg.annotation.as_deref() else {
-            continue;
+        let shape = match vararg.annotation.as_deref() {
+            // `*args: *tuple[...]` — the annotation is a starred tuple.
+            Some(Expr::Starred(starred)) => parse_star_shape(&starred.value),
+            // `*args: tuple[*Ts]` — the annotation is a (non-starred) `tuple`
+            // subscript whose sole element unpacks a `TypeVarTuple`.
+            Some(other) => parse_shared_tvt_shape(other, tvt_names),
+            None => None,
         };
-        let Some(shape) = parse_star_shape(&starred.value) else {
+        let Some(shape) = shape else {
             continue;
         };
         let leading = func.parameters.posonlyargs.len() + func.parameters.args.len();
@@ -60,6 +74,32 @@ pub(super) fn check_star_args_calls(stmts: &[Stmt], path: &str, diagnostics: &mu
         return;
     }
     scan_stmts(stmts, &functions, path, diagnostics);
+}
+
+/// Parse `tuple[*Ts]` (where `Ts` is a declared `TypeVarTuple`) into the
+/// [`StarShape::SharedTvt`] shape. Returns `None` for any other annotation.
+fn parse_shared_tvt_shape(expr: &Expr, tvt_names: &HashSet<&str>) -> Option<StarShape> {
+    let Expr::Subscript(sub) = expr else {
+        return None;
+    };
+    if ann_str(&sub.value) != "tuple" {
+        return None;
+    }
+    // The slice must be exactly a single `*Name` unpacking a TypeVarTuple. Ruff
+    // may model the lone starred element either directly as `Starred` or wrapped
+    // in a single-element `Tuple`, so accept both shapes.
+    let starred = match sub.slice.as_ref() {
+        Expr::Starred(starred) => starred,
+        Expr::Tuple(tuple) => match tuple.elts.as_slice() {
+            [Expr::Starred(starred)] => starred,
+            _ => return None,
+        },
+        _ => return None,
+    };
+    match starred.value.as_ref() {
+        Expr::Name(name) if tvt_names.contains(name.id.as_str()) => Some(StarShape::SharedTvt),
+        _ => None,
+    }
 }
 
 /// Parse `tuple[...]` into a [`StarShape`].
@@ -172,6 +212,7 @@ fn validate_star_call(
             middle,
             suffix,
         } => validate_mixed(star_args, prefix, middle.as_deref(), suffix),
+        StarShape::SharedTvt => validate_shared_tvt(star_args),
     };
     let Some(problem) = problem else { return };
     let range = call.range();
@@ -236,6 +277,24 @@ fn validate_mixed(
                 .zip(suffix.iter())
                 .find_map(|(arg, expected)| incompatible(arg, expected))
         })
+}
+
+/// Every tuple-literal argument binds the shared `TypeVarTuple` to its arity, so
+/// all such arguments must have the same length. Element types are joined by the
+/// solver and never conflict, so only length is checked. Non-tuple-literal
+/// arguments are not analyzable and are ignored.
+fn validate_shared_tvt(args: &[Expr]) -> Option<String> {
+    let lengths: Vec<usize> = args
+        .iter()
+        .filter_map(|arg| match arg {
+            Expr::Tuple(tuple) => Some(tuple.elts.len()),
+            _ => None,
+        })
+        .collect();
+    let first = lengths.first().copied()?;
+    lengths.iter().any(|&len| len != first).then(|| {
+        format!("every argument must be a tuple of the same length, but found lengths {lengths:?}")
+    })
 }
 
 /// A human-readable problem when `arg` is provably incompatible with
