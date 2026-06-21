@@ -59,7 +59,6 @@ const MANIFEST_COMMANDS = [
     'basilisk.uv.lock',
     'basilisk.uv.createEnv',
     'basilisk.refreshModuleExplorer',
-    'basilisk.collapseModuleExplorer',
     'basilisk.sortModuleExplorer',
     'basilisk.copyImportPath',
     'basilisk.copyQualifiedName',

@@ -178,12 +178,6 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "basilisk.collapseModuleExplorer",
-        "title": "Collapse All",
-        "category": "Basilisk",
-        "icon": "$(collapse-all)"
-      },
-      {
         "command": "basilisk.sortModuleExplorer",
         "title": "Toggle Sort Order",
         "category": "Basilisk",
@@ -455,24 +449,19 @@
           "group": "navigation@1"
         },
         {
-          "command": "basilisk.collapseModuleExplorer",
+          "command": "basilisk.toggleModuleExplorerView",
           "when": "view == basilisk.moduleExplorer",
           "group": "navigation@2"
         },
         {
-          "command": "basilisk.toggleModuleExplorerView",
+          "command": "basilisk.filterModuleExplorer",
           "when": "view == basilisk.moduleExplorer",
           "group": "navigation@3"
         },
         {
-          "command": "basilisk.filterModuleExplorer",
-          "when": "view == basilisk.moduleExplorer",
-          "group": "navigation@4"
-        },
-        {
           "command": "basilisk.sortModuleExplorer",
-          "when": "view == basilisk.moduleExplorer",
-          "group": "navigation@5"
+          "when": "view == basilisk.moduleExplorer && basilisk.moduleExplorerView == 'flat'",
+          "group": "navigation@4"
         },
         {
           "command": "basilisk.organizeImports",
