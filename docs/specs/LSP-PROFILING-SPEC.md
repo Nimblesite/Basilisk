@@ -961,6 +961,78 @@ snapshot paints the allocation track after a breakpoint-free run exits) and the
 regression test, both in
 [`memory-e2e.test.ts`](../../vscode-extension/src/test/suite/memory-e2e.test.ts).
 
+### Autopilot — automatic capture, zero per-pause clicks {#PROFILE-MEMORY-AUTOPILOT}
+
+The interactive leak hunt used to be a manual treadmill: start tracking, then at
+**every** breakpoint pause run *Take Memory Snapshot* and *Compare Memory
+Snapshots* by hand, repeating across three-plus passes to watch confidence climb.
+That is exactly the work the editor should do for the user. The **memory
+autopilot** ([`memory-autopilot.ts`](../../vscode-extension/src/memory-autopilot.ts))
+captures automatically while tracking is active, so the whole flow collapses to
+"set a breakpoint, start tracking (or *Run & Track Memory*), and press Continue."
+
+The capture itself is the shared snapshot-then-diff round-trip in
+[`memory-capture.ts`](../../vscode-extension/src/memory-capture.ts)
+(`captureSnapshotAndDiff`) — the *same* courier legs ([#PROFILE-MEMORY-HOWTO]) the
+manual commands use, so an auto-capture paints the identical purple allocation
+track, leak decorations, dashboard, and timeline. Auto-captures are **quiet**:
+they update the reused dashboard panel and decorations but never pop a fresh
+`.heapprofile` tab on each pass (that stays the manual *Take Memory Snapshot*
+affordance).
+
+#### On every debugger pause {#PROFILE-MEMORY-AUTOPILOT-PAUSE}
+
+While tracking is active, each `stopped` event on the **tracked** debug session
+(the DAP tracker forwards it via the `onStopped` callback in
+[`debug-adapter.ts`](../../vscode-extension/src/debug-adapter.ts)) triggers one
+auto-capture. The first diff self-seeds its baseline; each later pass over a
+growing site escalates leak confidence Low → Medium → High with no extra clicks
+([#PROFILE-MEMORY-CONFIDENCE]). On by default —
+`basilisk.profiler.autoSnapshotOnPause` (set `false` to restore manual pauses).
+
+Two invariants keep it from interfering or looping:
+
+1. **Only genuine user pauses.** Auto-capture is suppressed whenever a memory
+   operation is already in flight (`isMemoryOperationInFlight` in `memory-capture.ts`)
+   — so the transparent pause/resume a capture itself performs
+   ([#PROFILE-MEMORY-HOWTO]), and any in-progress manual op, never trigger a
+   second capture. A synchronous re-entrancy guard in the autopilot closes the
+   gap between two near-simultaneous `stopped` events.
+2. **Only the tracked session.** The autopilot reads the tracked
+   `memoryDebugSessionId` from the store ([#PROFILE-PROCESSES-REACTIVE]); pauses
+   in an unrelated debug session are ignored.
+
+#### At a fixed interval {#PROFILE-MEMORY-AUTOPILOT-INTERVAL}
+
+For a long run that never pauses, `basilisk.profiler.autoSnapshot` (off by
+default) takes an auto-capture every `basilisk.profiler.autoSnapshotInterval`
+seconds (default 30, matching the LSP-side `AutoSnapshotConfig` in
+[`timeline.rs`](../../crates/basilisk-lsp/src/profiler/memory/timeline.rs)). A
+running program is transparently paused for the capture and resumed
+([#PROFILE-MEMORY-HOWTO]); the timer's lifecycle follows the store's tracking
+signal and is torn down when tracking stops, so no timer outlives its session.
+
+#### Proactive leak actions {#PROFILE-MEMORY-LEAK-ACTIONS}
+
+The first time an auto-capture's diff escalates a site to **High** (or a snapshot
+finds a **Definite** cycle), the autopilot surfaces a single actionable
+notification — *Suspected memory leak at `file:line` (HIGH)* — offering one-click
+**Show Reference Graph** and **Force Garbage Collection** (the next steps in
+flow C, without re-opening the palette). Offered at most once per session so the
+Continue loop is never spammed.
+
+### Reference-graph type picker {#PROFILE-MEMORY-REFGRAPH-PICKER}
+
+*Show Reference Graph* used to open a blank input box — the user had to **know
+and type** a type name. It now offers a data-driven Quick Pick built from the
+**document symbols** of the active file (the user's own `class` definitions, via
+`textDocument/documentSymbol` — the same provider listed in
+[#PROFILE-MEMORY-COMMANDS]'s sibling navigation features) plus the common
+container builtins (`dict`, `list`, `set`, `tuple`, `frozenset`), with a final
+"*Other type…*" escape hatch that falls back to free text. Candidate computation
+(`gatherReferenceTypeCandidates`) is a pure, e2e-tested seam over the real symbol
+provider, so the picker is always populated from the real program — no guessing.
+
 ### LSP Commands {#PROFILE-MEMORY-COMMANDS}
 
 The `start`/`snapshot`/`diff`/`references`/`objectsByType`/`gcCollect` commands are

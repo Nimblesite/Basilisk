@@ -1,85 +1,43 @@
 // Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 /**
- * Memory profiler UI module for the Basilisk VS Code extension.
+ * Memory profiler command + lifecycle layer for the Basilisk VS Code extension.
  *
- * Provides:
- * - Memory profiler command handlers (start/snapshot/stop/references)
- * - Reference graph webview (force-directed graph of object retention)
- * - Memory dashboard webview (summary cards, top allocations, leak badges)
- * - Memory status bar indicator
- *
- * All memory analysis logic lives in the LSP. This module handles
- * only the client-side UI and command routing.
+ * Owns the `basilisk.memory*` command registrations, the memory status-bar
+ * indicator, the track-on-launch auto-start, and the at-exit finalisation
+ * ([PROFILE-MEMORY-FINAL]). The editor-as-courier round-trip and result
+ * presentation live in [`memory-capture.ts`](./memory-capture.ts); the
+ * reference-graph type picker in [`memory-ref-picker.ts`](./memory-ref-picker.ts);
+ * the automatic per-pause / interval capture in
+ * [`memory-autopilot.ts`](./memory-autopilot.ts). All memory analysis logic lives
+ * in the LSP — this module is client-side UI and command routing.
  */
 
 import * as vscode from "vscode";
-import * as fs from "fs";
 import { effect } from "@preact/signals-core";
 import { Logger } from "./logger";
 import type { Store } from "./store";
 import { isProfilingUiEnabled } from "./profiling-ui";
 import { acquireStoppedFrame, evaluateInDebugSession, waitForStoppedFrame } from "./dap-evaluate";
 import { withUserProgress } from "./progress-ops";
+import type { MemoryIngestResult } from "./memory-dashboard-mapping";
+import { disposeMemoryDashboard } from "./memory-dashboard";
+import { disposeRefGraph } from "./memory-ref-graph";
 import {
-  toDashboardDiff,
-  toDashboardSnapshot,
-  asString,
-  type MemoryIngestResult,
-} from "./memory-dashboard-mapping";
-import {
-  disposeMemoryDashboard,
-  openMemoryDashboard,
-  type MemoryDashboardSnapshot,
-} from "./memory-dashboard";
-import {
-  disposeRefGraph,
-  openRefGraphWebview,
-  type ReferenceGraphResult,
-} from "./memory-ref-graph";
-import {
-  applyLeakDecorations,
-  applyMemoryDecorations,
   clearMemoryDecorations,
   disposeMemoryDecorations,
-  type MemoryDiffResult,
-  type MemorySnapshotResult,
 } from "./memory-decorations";
-import { openNativeProfileViewerBeside } from "./profiler-flamegraph-html";
-
-// ── Constants ─────────────────────────────────────────────────────────────
-
-const LSP_MEM_CMD = {
-  start: "basilisk.memory.start",
-  snapshot: "basilisk.memory.snapshot",
-  diff: "basilisk.memory.diff",
-  references: "basilisk.memory.references",
-  objectsByType: "basilisk.memory.objectsByType",
-  gcCollect: "basilisk.memory.gcCollect",
-  ingest: "basilisk.memory.ingest",
-} as const;
-
-/** tracemalloc traceback depth injected at start. */
-const TRACEBACK_DEPTH = 25;
-
-/** [PROFILE-UX-PROGRESS] Progress-notification titles, one per memory operation. */
-const MEM_OP_TITLE: Readonly<Record<string, string>> = {
-  [LSP_MEM_CMD.snapshot]: "Basilisk: Taking memory snapshot",
-  [LSP_MEM_CMD.diff]: "Basilisk: Comparing memory snapshots",
-  [LSP_MEM_CMD.gcCollect]: "Basilisk: Forcing garbage collection",
-  [LSP_MEM_CMD.references]: "Basilisk: Building the reference graph",
-};
-
-/** The progress title for starting memory tracking (shared by both entry points). */
-const MEM_START_TITLE = "Basilisk: Starting memory tracking";
-/** Reference-graph traversal bounds. */
-const REF_GRAPH_MAX_DEPTH = 5;
-const REF_GRAPH_MAX_NODES = 200;
-
-/** [PROFILE-MEMORY-FINAL] How long to wait for the at-exit snapshot file after
- *  the program exits (covers the terminate-event/final-flush race), and the poll
- *  cadence while waiting. */
-const FINAL_SNAPSHOT_WAIT_MS = 3000;
-const FINAL_SNAPSHOT_POLL_MS = 100;
+import {
+  LSP_MEM_CMD,
+  MEM_START_TITLE,
+  TRACEBACK_DEPTH,
+  hasCapturedSnapshot,
+  presentDiff,
+  presentSnapshot,
+  readFinalSnapshot,
+  resetCaptureState,
+  runMemoryScript,
+} from "./memory-capture";
+import { pickReferenceType, walkReferences } from "./memory-ref-picker";
 
 // ── State ─────────────────────────────────────────────────────────────────
 //
@@ -89,8 +47,6 @@ const FINAL_SNAPSHOT_POLL_MS = 100;
 
 let memoryStatusBarItem: vscode.StatusBarItem | undefined;
 let boundStore: Store | undefined;
-/** Most recent snapshot, so a later "Compare" can show it alongside the diff. */
-let lastDashboardSnapshot: MemoryDashboardSnapshot | undefined;
 /**
  * Final-snapshot files awaiting cleanup, keyed by debug-session id. When the
  * user stops tracking *mid-run*, the debuggee's `atexit` hook is still armed and
@@ -197,11 +153,12 @@ function memoryCommandDisposables(store: Store): vscode.Disposable[] {
 /** The `basilisk.memoryStart` body: start tracking, then narrate what comes next. */
 async function runMemoryStartCommand(store: Store, report: (message: string) => void): Promise<void> {
   if (await handleMemoryStart(store, report)) {
-    // Snapshots auto-pause a running program ([PROFILE-MEMORY-HOWTO]); and even
-    // if the user just lets it run, a final snapshot is captured at exit
+    // With the autopilot on ([PROFILE-MEMORY-AUTOPILOT]), the user just sets
+    // breakpoints and presses Continue — each pause is captured automatically;
+    // and even a breakpoint-free run captures a final snapshot at exit
     // ([PROFILE-MEMORY-FINAL]) — so this is never a dead end.
     void vscode.window.showInformationMessage(
-      "Basilisk: Memory tracking started. Take a snapshot to inspect allocations, or let the program finish for an automatic final snapshot.",
+      "Basilisk: Memory tracking started. Press Continue to auto-capture each pause, or let the program finish for an automatic final snapshot.",
     );
   }
 }
@@ -210,7 +167,7 @@ async function runMemoryStartCommand(store: Store, report: (message: string) => 
 function runMemoryStopCommand(store: Store): void {
   // Stopping must never silently produce nothing: surface whether a snapshot was
   // captured, or say plainly that none was ([PROFILE-MEMORY-FINAL], #146).
-  const hadSnapshot = lastDashboardSnapshot !== undefined;
+  const hadSnapshot = hasCapturedSnapshot();
   // Stopping mid-run leaves the debuggee's `atexit` hook armed; schedule the
   // file it will write for cleanup when that session terminates, so a manual
   // stop never orphans a temp file.
@@ -267,98 +224,8 @@ export function disposeMemoryProfiler(): void {
   disposeMemoryDecorations();
   disposeRefGraph();
   disposeMemoryDashboard();
-  lastDashboardSnapshot = undefined;
+  resetCaptureState();
   pendingSnapshotCleanup.clear();
-}
-
-// ── Round-trip courier ──────────────────────────────────────────────────────
-
-/**
- * Run one memory operation as the editor-as-courier round-trip:
- *   1. ask the LSP for the injection script (`command` → `{ script }`),
- *   2. run it in the paused debuggee via DAP `evaluate`,
- *   3. post the raw output back to `basilisk.memory.ingest`,
- *   4. return the LSP's structured, marker-dispatched result.
- *
- * Returns null (with an actionable message) when there is no session, the
- * debuggee cannot be paused, or evaluation fails. debugpy can only `evaluate`
- * against a stopped frame, so a running program is transparently paused for
- * the script and resumed afterwards (a user's own breakpoint pause is left
- * untouched) — IDE-grade snapshots never demand a manual pause.
- */
-async function runMemoryScript(
-  store: Store,
-  command: string,
-  extraArgs: Record<string, unknown> = {},
-): Promise<MemoryIngestResult | null> {
-  const client = store.client.value;
-  if (client?.isRunning() !== true) {
-    void vscode.window.showErrorMessage("Basilisk LSP not connected");
-    return null;
-  }
-  const memorySessionId = store.profiler.value.memorySessionId;
-  if (store.profiler.value.memory !== "active" || memorySessionId === undefined) {
-    void vscode.window.showWarningMessage("Basilisk: Start memory tracking first.");
-    return null;
-  }
-  // The pause → evaluate → analyze round-trip takes a beat; show its stages
-  // under one notification ([PROFILE-UX-PROGRESS]).
-  return withUserProgress(
-    MEM_OP_TITLE[command] ?? "Basilisk: Inspecting memory",
-    async (report) => runMemoryScriptStages({ client, command, extraArgs, report, memorySessionId }),
-  );
-}
-
-/** Everything one staged memory round-trip needs. */
-interface MemoryScriptRun {
-  readonly client: NonNullable<Store["client"]["value"]>;
-  readonly command: string;
-  readonly extraArgs: Record<string, unknown>;
-  readonly report: (message: string) => void;
-  readonly memorySessionId: string;
-}
-
-/** The staged body of [`runMemoryScript`] — acquire, evaluate, ingest. */
-async function runMemoryScriptStages(
-  { client, command, extraArgs, report, memorySessionId }: MemoryScriptRun,
-): Promise<MemoryIngestResult | null> {
-  report("Pausing the program…");
-  const acquired = await acquireStoppedFrame();
-  if (acquired === null) {
-    void vscode.window.showWarningMessage(
-      "Basilisk: Could not pause the program for memory inspection — pause at a breakpoint and retry.",
-    );
-    return null;
-  }
-
-  try {
-    const phase1 = await client.sendRequest<{ script?: string } | null>("workspace/executeCommand", {
-      command,
-      arguments: [{ memorySessionId, ...extraArgs }],
-    });
-    const script = phase1?.script;
-    if (script === undefined || script === "") { return null; }
-
-    report("Inspecting the debuggee…");
-    const output = await evaluateInDebugSession(script, acquired.frameId);
-    if (output === null) {
-      void vscode.window.showWarningMessage("Basilisk: Could not run the memory script in the debuggee.");
-      return null;
-    }
-
-    report("Analyzing…");
-    return await client.sendRequest<MemoryIngestResult | null>("workspace/executeCommand", {
-      command: LSP_MEM_CMD.ingest,
-      arguments: [{ memorySessionId, output }],
-    });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    Logger.warn(`[Memory] ${command} round-trip failed: ${msg}`);
-    void vscode.window.showWarningMessage(`Basilisk: ${msg}`);
-    return null;
-  } finally {
-    await acquired.release();
-  }
 }
 
 // ── Track-memory-on-launch ────────────────────────────────────────────────
@@ -367,8 +234,10 @@ async function runMemoryScriptStages(
  * Auto-start flow for the "Run & Track Memory (Current File)" entry point
  * (#82). Memory tracking needs a paused debuggee ([PROFILE-MEMORY-HOWTO]), so
  * the launch config sets `stopOnEntry`; tracemalloc is injected at the entry
- * pause and the debuggee is resumed so the program runs with tracking on.
- * Implements [PROFILE-PROCESSES-LAUNCH-FILE] (memory leg).
+ * pause and the debuggee is resumed so the program runs with tracking on. With a
+ * breakpoint set, the autopilot then captures each pass automatically
+ * ([PROFILE-MEMORY-AUTOPILOT-PAUSE]); with none, a final snapshot opens at exit
+ * ([PROFILE-MEMORY-FINAL]). Implements [PROFILE-PROCESSES-LAUNCH-FILE] (memory leg).
  */
 async function startMemoryTrackingOnLaunch(store: Store): Promise<void> {
   // One notification spans the whole auto-start ([PROFILE-UX-PROGRESS]).
@@ -383,11 +252,14 @@ async function startMemoryTrackingOnLaunch(store: Store): Promise<void> {
     }
     if (await handleMemoryStart(store, report)) {
       Logger.info("Memory tracking started on launch — resuming the debuggee");
-      // State the outcome up front: this run has no breakpoint, so it runs to
-      // completion and a final snapshot opens automatically at exit
-      // ([PROFILE-MEMORY-FINAL], #146) — not a toast that points nowhere.
+      // State the outcome up front so the toast never points nowhere: a run with
+      // a breakpoint auto-captures each pass ([PROFILE-MEMORY-AUTOPILOT-PAUSE]);
+      // one without finalises at exit ([PROFILE-MEMORY-FINAL], #146).
+      const hasBreakpoints = vscode.debug.breakpoints.length > 0;
       void vscode.window.showInformationMessage(
-        "Basilisk: Tracking memory — a final snapshot opens automatically when the program finishes.",
+        hasBreakpoints
+          ? "Basilisk: Tracking memory — press Continue and each pause is captured automatically."
+          : "Basilisk: Tracking memory — a final snapshot opens automatically when the program finishes.",
       );
       report("Resuming the program…");
       await vscode.commands.executeCommand("workbench.action.debug.continue");
@@ -477,30 +349,8 @@ async function handleMemoryStart(
 async function handleMemorySnapshot(store: Store): Promise<void> {
   const result = await runMemoryScript(store, LSP_MEM_CMD.snapshot);
   if (result?.kind === "snapshot") {
-    await presentMemorySnapshot(result);
+    presentSnapshot(result, { openNativeViewer: true });
   }
-}
-
-/**
- * Land the user on a viewable snapshot result: paint the purple allocation
- * track, open the V8 `.heapprofile` in VS Code's built-in profile viewer (flame
- * chart + table, beside the source so its decorations stay visible), and retain
- * it for a later "Compare". Falls back to the Basilisk dashboard when no
- * `.heapprofile` was produced. Shared by the interactive snapshot
- * ([`handleMemorySnapshot`]) and the at-exit finalisation
- * ([`finalizeMemorySessionOnEnd`], [PROFILE-MEMORY-FINAL]).
- */
-async function presentMemorySnapshot(result: MemoryIngestResult): Promise<void> {
-  applyMemoryDecorations(result as unknown as MemorySnapshotResult);
-  const dashboard = toDashboardSnapshot(result);
-  lastDashboardSnapshot = dashboard;
-  Logger.info(`Memory snapshot: ${dashboard.currentMemory} bytes current`);
-  // Open the V8 `.heapprofile` in the built-in viewer beside the source; fall
-  // back to the Basilisk dashboard when none was produced OR the viewer refuses
-  // — the shared primitive gives the memory path the same robustness as CPU (dry-1).
-  await openNativeProfileViewerBeside(asString(result.heapProfilePath), () => {
-    openMemoryDashboard(dashboard);
-  });
 }
 
 /**
@@ -547,7 +397,7 @@ async function finalizeMemorySessionOnEnd(store: Store): Promise<void> {
       arguments: [{ memorySessionId, output }],
     });
     if (result?.kind === "snapshot") {
-      await presentMemorySnapshot(result);
+      presentSnapshot(result, { openNativeViewer: true });
       void vscode.window.showInformationMessage(
         "Basilisk: Captured a final memory snapshot at exit — opened the allocation view.",
       );
@@ -561,40 +411,12 @@ async function finalizeMemorySessionOnEnd(store: Store): Promise<void> {
   }
 }
 
-/**
- * Read the debuggee's at-exit snapshot payload, deleting the file once it is read
- * intact. The debuggee writes the payload atomically (sibling temp + `os.replace`),
- * so a readable file carrying the marker is whole. A short poll covers the window
- * where the terminate event races the final flush. The file is unlinked ONLY once
- * a complete (marker-bearing) payload is read — a missing or marker-less read is
- * never destructive, so a slow flush is recoverable rather than lost
- * (conform-4 / ux-11). Returns null when no usable payload arrived by the deadline.
- */
-async function readFinalSnapshot(path: string): Promise<string | null> {
-  const deadline = Date.now() + FINAL_SNAPSHOT_WAIT_MS;
-  for (;;) {
-    const contents = await fs.promises.readFile(path, "utf8").catch(() => null);
-    if (contents?.includes("__BASILISK_MEM__") === true) {
-      await fs.promises.unlink(path).catch(() => undefined);
-      return contents;
-    }
-    if (Date.now() >= deadline) { return null; }
-    await new Promise<void>((resolve) => setTimeout(resolve, FINAL_SNAPSHOT_POLL_MS));
-  }
-}
-
 async function handleMemoryDiff(store: Store): Promise<void> {
   const result = await runMemoryScript(store, LSP_MEM_CMD.diff);
   if (result?.kind === "diff") {
-    applyLeakDecorations(result as unknown as MemoryDiffResult);
-    const leaks = Array.isArray(result.suspectedLeaks) ? result.suspectedLeaks : [];
-    Logger.info(`Memory diff: ${leaks.length} suspected leak(s)`);
-    // Refresh the dashboard with the leak analysis (needs a prior snapshot).
-    if (lastDashboardSnapshot !== undefined) {
-      openMemoryDashboard(lastDashboardSnapshot, toDashboardDiff(result));
-    }
+    const diff = presentDiff(result);
     void vscode.window.showInformationMessage(
-      `Basilisk: Compared snapshots — ${leaks.length} suspected leak(s)`,
+      `Basilisk: Compared snapshots — ${diff.suspectedLeaks.length} suspected leak(s)`,
     );
   }
 }
@@ -613,39 +435,24 @@ async function handleMemoryGcCollect(store: Store): Promise<void> {
 
 function handleMemoryStop(store: Store): void {
   store.memoryTrackingStopped();
-  lastDashboardSnapshot = undefined;
+  resetCaptureState();
   clearMemoryDecorations();
   Logger.info("Memory tracking stopped");
 }
 
+/**
+ * Show Reference Graph — pick a type from the data-driven Quick Pick (the active
+ * file's classes + container builtins) and walk its retainers
+ * ([PROFILE-MEMORY-REFGRAPH-PICKER]); no blank "type a name" box.
+ */
 async function handleMemoryReferences(store: Store): Promise<void> {
   if (store.profiler.value.memory !== "active") {
     void vscode.window.showWarningMessage("Basilisk: Start memory tracking first.");
     return;
   }
-
-  const typeName = await vscode.window.showInputBox({
-    prompt: "Object type to inspect (e.g. DataFrame, dict, MyClass)",
-    placeHolder: "DataFrame",
-  });
-  if (typeName === undefined || typeName.trim() === "") {
-    return;
-  }
-
-  const result = await runMemoryScript(store, LSP_MEM_CMD.references, {
-    targetType: typeName.trim(),
-    maxDepth: REF_GRAPH_MAX_DEPTH,
-    maxNodes: REF_GRAPH_MAX_NODES,
-  });
-  if (result?.kind === "refs") {
-    openRefGraphWebview({
-      targetType: typeName.trim(),
-      maxDepth: REF_GRAPH_MAX_DEPTH,
-      maxNodes: REF_GRAPH_MAX_NODES,
-      script: "",
-      graph: result.graph as ReferenceGraphResult["graph"],
-    });
-  }
+  const typeName = await pickReferenceType();
+  if (typeName === undefined || typeName.trim() === "") { return; }
+  await walkReferences(store, typeName.trim());
 }
 
 // ── Status bar ────────────────────────────────────────────────────────────

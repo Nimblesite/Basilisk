@@ -39,6 +39,7 @@ Implementation roadmaps tracking phasing, priorities, and progress.
 | [LSP-AI-PLAN.md](plans/LSP-AI-PLAN.md) | AI provider abstraction — model-agnostic hooks for fixes, completions, refactoring. |
 | [LSP-PROFILING-PLAN.md](plans/LSP-PROFILING-PLAN.md) | Embed py-spy profiler into LSP for CPU profiling and hotspot visualization. |
 | [LSP-PROFILER-PROCESS-PANEL-PLAN.md](plans/LSP-PROFILER-PROCESS-PANEL-PLAN.md) | Python Processes activity-bar panel — LSP-driven process enumeration (sysinfo), sort/group, one-click CPU/memory profiling without the Command Palette. |
+| [LSP-PROFILER-MEMORY-AUTOPILOT-PLAN.md](plans/LSP-PROFILER-MEMORY-AUTOPILOT-PLAN.md) | Memory autopilot — auto snapshot+diff on every debugger pause (and on an interval), proactive leak actions, and a data-driven reference-graph type picker. Collapses the manual leak-hunt treadmill to "set a breakpoint and press Continue." |
 | [LSP-UV-INTEGRATION-PLAN.md](plans/LSP-UV-INTEGRATION-PLAN.md) | uv project detection, lock file parsing, dependency intelligence. |
 | [CHECK-ELIMINATE-FALSE-POSITIVES.md](plans/CHECK-ELIMINATE-FALSE-POSITIVES.md) | Eliminate conformance suite false positives — rule-specific fixes and engine work. |
 | [CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | Type narrowing and full inference engine — NarrowingEngine, expression inference, ConstraintSolver, class hierarchy subtyping. |

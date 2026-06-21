@@ -90,24 +90,37 @@ function summarizeCollectionFields(obj: Record<string, unknown>, parts: string[]
 
 // ── DAP message tracker ───────────────────────────────────────────────────
 
+/** Callbacks the DAP tracker fires on profiler-relevant debuggee events. */
+export interface DebugTrackerCallbacks {
+  /** Receives `(sessionId, pid)` once debugpy emits its `process` event. */
+  readonly onDebuggeeProcessId?: DebuggeeProcessIdCallback;
+  /**
+   * Receives `(sessionId, body)` on every `stopped` event — the memory autopilot
+   * captures on pause off this signal ([PROFILE-MEMORY-AUTOPILOT-PAUSE]). Fired
+   * AFTER the suspension bookkeeping is recorded, so a handler can immediately
+   * resolve the stopped frame.
+   */
+  readonly onStopped?: (sessionId: string, body: unknown) => void;
+}
+
 /**
  * Factory that creates per-session DAP message trackers.
  *
  * The tracker is the single observability point for debugpy → VS Code traffic,
- * so it captures both the debuggee `process` event (the PID the CPU profiler
- * targets — "same process") and `output` events (the marker payloads the
- * memory round-trip recovers). `onDebuggeeProcessId`, when supplied, receives
- * `(sessionId, pid)` once the `process` event arrives.
+ * so it captures the debuggee `process` event (the PID the CPU profiler targets —
+ * "same process"), `output` events (the marker payloads the memory round-trip
+ * recovers), and `stopped` events (suspension bookkeeping + the autopilot's
+ * pause trigger). Callbacks, when supplied, route those out.
  */
 export class BasiliskDebugAdapterTrackerFactory
   implements vscode.DebugAdapterTrackerFactory
 {
-  constructor(private readonly onDebuggeeProcessId?: DebuggeeProcessIdCallback) {}
+  constructor(private readonly callbacks: DebugTrackerCallbacks = {}) {}
 
   public createDebugAdapterTracker(
     session: vscode.DebugSession
   ): vscode.ProviderResult<vscode.DebugAdapterTracker> {
-    return new BasiliskDebugAdapterTracker(session, this.onDebuggeeProcessId);
+    return new BasiliskDebugAdapterTracker(session, this.callbacks);
   }
 }
 
@@ -118,7 +131,7 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
 
   constructor(
     session: vscode.DebugSession,
-    private readonly onDebuggeeProcessId?: DebuggeeProcessIdCallback
+    private readonly callbacks: DebugTrackerCallbacks
   ) {
     this.sessionId = session.id.slice(0, SESSION_ID_PREFIX_LEN);
     this.fullSessionId = session.id;
@@ -174,9 +187,9 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
       // The debuggee's OS PID — captured so the CPU profiler can attach to the
       // SAME process the debugger drives (DAP: body.systemProcessId).
       const pid = (body as { systemProcessId?: number } | undefined)?.systemProcessId;
-      if (typeof pid === "number" && this.onDebuggeeProcessId !== undefined) {
+      if (typeof pid === "number" && this.callbacks.onDebuggeeProcessId !== undefined) {
         Logger.info(`[DAP ${this.sessionId}] debuggee systemProcessId=${pid}`);
-        this.onDebuggeeProcessId(this.fullSessionId, pid);
+        this.callbacks.onDebuggeeProcessId(this.fullSessionId, pid);
       }
       return;
     }
@@ -185,6 +198,12 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
       // Pause bookkeeping for the memory/cooperative couriers — see
       // `currentStoppedFrameId` (dap-evaluate.ts) for why this can't be probed.
       trackSuspensionEvent(this.fullSessionId, event, body);
+    }
+    if (event === "stopped") {
+      // The memory autopilot captures on every genuine user pause
+      // ([PROFILE-MEMORY-AUTOPILOT-PAUSE]). Fired after the bookkeeping above so
+      // the handler can resolve the now-stopped frame straight away.
+      this.callbacks.onStopped?.(this.fullSessionId, body);
     }
     if (event === "terminated") {
       Logger.info(`[DAP ${this.sessionId}] program terminated`);

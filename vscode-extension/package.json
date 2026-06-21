@@ -915,15 +915,21 @@
           "default": "default",
           "description": "Profiling preset that configures sample rate and duration."
         },
+        "basilisk.profiler.autoSnapshotOnPause": {
+          "type": "boolean",
+          "default": true,
+          "description": "Memory autopilot: while memory tracking is active, automatically take and compare a snapshot every time the debugger pauses (at a breakpoint or step). Lets you hunt leaks by just pressing Continue — leak confidence escalates automatically. Turn off to capture snapshots manually."
+        },
         "basilisk.profiler.autoSnapshot": {
           "type": "boolean",
           "default": false,
-          "description": "Automatically take memory snapshots at regular intervals during memory tracking."
+          "description": "Memory autopilot: while memory tracking is active, automatically take a memory snapshot every few seconds (see basilisk.profiler.autoSnapshotInterval), even when the program never pauses. The program is briefly paused for each capture and resumed."
         },
         "basilisk.profiler.autoSnapshotInterval": {
           "type": "number",
           "default": 30,
-          "description": "Interval in seconds between automatic memory snapshots (when autoSnapshot is enabled)."
+          "minimum": 1,
+          "description": "Seconds between automatic memory snapshots when basilisk.profiler.autoSnapshot is enabled."
         },
         "basilisk.analysisMode": {
           "type": "string",
