@@ -28,6 +28,7 @@ import {
     waitForDiagnosticsCleared,
     waitForLspReady,
 } from './test-helpers';
+import { captureScreenshot } from './screenshot';
 
 /** Extra buffer (ms) added to test-level timeouts beyond the core wait. */
 const TIMEOUT_BUFFER_MS = 5_000;
@@ -157,6 +158,11 @@ suite('LSP Integration Tests', () => {
             `Expected diagnostics from Basilisk. ` +
             `Got: ${diagnostics.map((d) => `source=${d.source}, code=${JSON.stringify(d.code)}`).join('; ')}`
         );
+
+        // Capture a picture of the editor with live Basilisk diagnostics into
+        // the gitignored .screenshots/ folder for local debugging. Best-effort:
+        // never fails the test, never uploaded as a CI artifact.
+        await captureScreenshot('diagnostics-untyped-parameter');
     });
 
     // ----------------------------------------------------------------

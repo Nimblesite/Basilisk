@@ -52,8 +52,8 @@ suite("Profiler UX — loading & progress states", () => {
     const entries = pythonProcessesWelcome();
     assert.strictEqual(
       entries.length,
-      3,
-      `the panel needs connecting/stopped/running welcome states, got ${entries.length}`,
+      5,
+      `the panel needs connecting/stopped/loading/couldn't-load/empty welcome states (#147), got ${entries.length}`,
     );
 
     const connecting = entries.find((entry) => entry.contents.includes("Connecting"));
@@ -75,10 +75,11 @@ suite("Profiler UX — loading & progress states", () => {
       entry.contents.includes("No Python processes running"),
     );
     assert.ok(running !== undefined, "the true empty state must exist");
-    assert.strictEqual(
-      running.when,
-      "basilisk.serverState == running",
-      "'No Python processes' may only show when the server is actually running",
+    const runningWhen = running.when ?? "";
+    assert.ok(
+      runningWhen.includes("basilisk.serverState == running") &&
+        runningWhen.includes("basilisk.processesState == loaded"),
+      `'No Python processes' may only show when the server runs AND a fetch actually succeeded (#147); when: ${runningWhen}`,
     );
     assert.ok(
       running.contents.includes("command:basilisk.profileCurrentFileCpu") &&

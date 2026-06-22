@@ -114,7 +114,7 @@ Lua-rendered buffers using the nvim LSP client.
 - [x] Implement Server Info section (version, binary, python, analysis mode, file count)
 - [x] Register `basilisk.refreshModuleExplorer` command
 - [x] Register `basilisk.toggleModuleExplorerView` command
-- [x] Register `basilisk.collapseModuleExplorer` command
+- [x] Collapse All uses VS Code's native `showCollapseAll` — no contributed command (issue #113)
 - [x] Register `basilisk.copyImportPath` command (clipboard: `from x.y import Z`)
 - [x] Register `basilisk.copyQualifiedName` command (clipboard: `x.y.Z`)
 - [x] Register `basilisk.refreshTypeHealth` command

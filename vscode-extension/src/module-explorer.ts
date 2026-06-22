@@ -54,16 +54,44 @@ interface WorkspaceModulesResponse {
   readonly workspace: HealthStats;
 }
 
+/**
+ * A node in the client-reconstructed package/folder tree
+ * [EXTACT-MODULES-TREE-STRUCTURE] (#149). The LSP returns a *flat* list of
+ * modules keyed by dotted name (e.g. `pkg.sub.mod`); the nested tree is rebuilt
+ * here by splitting each name into path segments. Intermediate folders that are
+ * not themselves Python packages are synthesised as container nodes with no
+ * `module`, so the panel renders `pkg/ → sub/ → mod` instead of a flat list.
+ */
+interface PackageTreeNode {
+  /** Last path segment — the row's display label (e.g. `auth`). */
+  readonly segment: string;
+  /** Fully-qualified dotted prefix up to and including this node. */
+  readonly fullName: string;
+  /** The module/package file mapping exactly here, if one exists. */
+  module?: ModuleNode;
+  /** Child packages and modules, keyed by their segment. */
+  readonly children: Map<string, PackageTreeNode>;
+  // Diagnostics rolled up across this node's whole subtree (self module +
+  // every descendant). Surfaced on the folder/package row so errors are
+  // visible without drilling into the hierarchy (#149). Set by `rollup`.
+  errors: number;
+  warnings: number;
+}
+
 // ── Tree items ───────────────────────────────────────────────────────────
 
-type TreeItem = ModuleTreeItem | SymbolTreeItem;
+type TreeItem = ModuleTreeItem | SymbolTreeItem | PackageTreeItem;
 
 export class ModuleTreeItem extends vscode.TreeItem {
   constructor(
     public readonly module: ModuleNode,
+    // Tree view labels each module by its last path segment (`auth`); flat view
+    // keeps the full dotted name (`pkg.api.auth`) since there is no folder
+    // nesting to give context. Defaults to the full name.
+    displayName: string = module.name,
   ) {
     super(
-      module.name,
+      displayName,
       module.symbols.length > 0
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None,
@@ -76,6 +104,40 @@ export class ModuleTreeItem extends vscode.TreeItem {
     this.contextValue = "module";
     this.description = moduleDescription(module);
     this.tooltip = moduleTooltip(module);
+    this.resourceUri = vscode.Uri.file(module.path);
+    this.command = {
+      command: "vscode.open",
+      title: "Open Module",
+      arguments: [vscode.Uri.file(module.path)],
+    };
+  }
+}
+
+/**
+ * A package/folder container row in the nested tree view
+ * [EXTACT-MODULES-TREE-STRUCTURE] (#149). Carries its tree node so the provider
+ * can expand it to child packages/modules and — when the folder is a real
+ * Python package (`__init__.py`) — the package's own top-level symbols. A pure
+ * folder (no `__init__.py`) carries no `module`: it is a structural container
+ * with no coverage rollup and no open-on-click action.
+ */
+export class PackageTreeItem extends vscode.TreeItem {
+  constructor(
+    public readonly node: PackageTreeNode,
+  ) {
+    super(node.segment, vscode.TreeItemCollapsibleState.Collapsed);
+    const { module } = node;
+    // Tint by the worst diagnostic in the subtree so a folder containing errors
+    // reads red at a glance; fall back to the package's own coverage colour, or
+    // a neutral folder icon for a pure (non-package) directory (#149).
+    this.iconPath = new vscode.ThemeIcon("symbol-namespace", packageIconColor(node));
+    this.description = packageDescription(node);
+    this.tooltip = packageTooltip(node);
+    if (module === undefined) {
+      this.contextValue = "folder";
+      return;
+    }
+    this.contextValue = "module";
     this.resourceUri = vscode.Uri.file(module.path);
     this.command = {
       command: "vscode.open",
@@ -175,6 +237,49 @@ function moduleTooltip(module: ModuleNode): string {
     `Errors: ${module.errors}`,
     `Warnings: ${module.warnings}`,
     module.adopted ? "Status: Adopted (errors demoted to warnings)" : "",
+  ].filter(Boolean).join("\n");
+}
+
+/** `nE nW` diagnostic tally, or "" when clean. Shared by folder/package rows. */
+function diagnosticTally(errors: number, warnings: number): string {
+  const issues: string[] = [];
+  if (errors > 0) { issues.push(`${errors}E`); }
+  if (warnings > 0) { issues.push(`${warnings}W`); }
+  return issues.join(" ");
+}
+
+/**
+ * Folder/package icon tint: red if the subtree holds any error, else yellow if
+ * any warning, else a package's own coverage colour (a pure folder stays
+ * untinted). Lets a folder with hidden errors read red without expanding (#149).
+ */
+function packageIconColor(node: PackageTreeNode): vscode.ThemeColor | undefined {
+  if (node.errors > 0) { return new vscode.ThemeColor("list.errorForeground"); }
+  if (node.warnings > 0) { return new vscode.ThemeColor("list.warningForeground"); }
+  return node.module !== undefined ? coverageColor(node.module.coveragePercent) : undefined;
+}
+
+/**
+ * Folder/package row description: the subtree's rolled-up `nE nW` so problems
+ * are visible without drilling in (#149). A package (`__init__.py`) also keeps
+ * its own coverage bar.
+ */
+function packageDescription(node: PackageTreeNode): string {
+  const own = node.module !== undefined
+    ? `${coverageBar(node.module.coveragePercent)} ${node.module.coveragePercent}%`
+    : "";
+  return [own, diagnosticTally(node.errors, node.warnings)].filter(Boolean).join(" — ");
+}
+
+/** Folder/package row tooltip: name + (package path/coverage) + subtree diagnostics. */
+function packageTooltip(node: PackageTreeNode): string {
+  const errs = `${node.errors} error${node.errors === 1 ? "" : "s"}`;
+  const warns = `${node.warnings} warning${node.warnings === 1 ? "" : "s"}`;
+  return [
+    node.fullName,
+    node.module?.path,
+    node.module !== undefined ? `Coverage: ${node.module.coveragePercent}%` : "",
+    `Subtree: ${errs}, ${warns}`,
   ].filter(Boolean).join("\n");
 }
 
@@ -285,9 +390,11 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     }
 
     if (element instanceof ModuleTreeItem) {
-      return element.module.symbols.map(
-        (sym) => new SymbolTreeItem(sym, element.module.path, element.module.name),
-      );
+      return ModuleExplorerProvider.symbolItems(element.module);
+    }
+
+    if (element instanceof PackageTreeItem) {
+      return ModuleExplorerProvider.packageChildren(element.node);
     }
 
     // Root: fetch modules from LSP.
@@ -299,10 +406,94 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     const filtered = this.applyFilter(this.modules);
 
     if (this.viewMode === "flat") {
-      // Flat view honours the sort toggle; tree view stays structural.
-      return ModuleExplorerProvider.flattenModules(this.sortModules([...filtered]));
+      // Flat view: one sortable row per module (full dotted name); the sort
+      // toggle reorders this list (#151). Symbols stay grouped under their
+      // owning module — never dumped bare at the tree root (#149).
+      return this.sortModules([...filtered]).map((mod) => new ModuleTreeItem(mod));
     }
-    return filtered.map((mod) => new ModuleTreeItem(mod));
+
+    // Tree view: the nested package/folder hierarchy reconstructed from the
+    // flat dotted names [EXTACT-MODULES-TREE-STRUCTURE] (#149). The order is
+    // structural (containers first, then alphabetical); sort is flat-only.
+    const root = ModuleExplorerProvider.buildPackageTree(filtered);
+    ModuleExplorerProvider.rollup(root);
+    return ModuleExplorerProvider.sortNodes([...root.children.values()])
+      .map((node) => ModuleExplorerProvider.nodeToItem(node));
+  }
+
+  /** Symbol drill-down rows for a module (methods/attributes/top-level defs). */
+  private static symbolItems(module: ModuleNode): TreeItem[] {
+    return module.symbols.map(
+      (sym) => new SymbolTreeItem(sym, module.path, module.name),
+    );
+  }
+
+  /**
+   * Reconstruct the nested package/folder tree from the flat module list the LSP
+   * returns [EXTACT-MODULES-TREE-STRUCTURE] (#149). Each module's dotted name
+   * (e.g. `pkg.sub.mod`) is split into path segments; intermediate folders that
+   * are not Python packages are synthesised as container nodes. The module is
+   * attached to the node at the end of its segment path, so a package
+   * (`pkg/__init__.py`, dotted name `pkg`) shares its node with the `pkg/` folder.
+   */
+  private static buildPackageTree(modules: readonly ModuleNode[]): PackageTreeNode {
+    const root: PackageTreeNode = { segment: "", fullName: "", children: new Map(), errors: 0, warnings: 0 };
+    for (const module of modules) {
+      const segments = module.name.split(".").filter((seg) => seg !== "");
+      let node = root;
+      for (const segment of segments) {
+        const fullName = node.fullName === "" ? segment : `${node.fullName}.${segment}`;
+        const existing = node.children.get(segment);
+        const child = existing ?? { segment, fullName, children: new Map(), errors: 0, warnings: 0 };
+        if (existing === undefined) { node.children.set(segment, child); }
+        node = child;
+      }
+      node.module = module;
+    }
+    return root;
+  }
+
+  /**
+   * Roll each subtree's diagnostics up onto its container node (post-order), so a
+   * folder/package row can show the total errors/warnings hiding beneath it
+   * without the user expanding the whole hierarchy (#149).
+   */
+  private static rollup(node: PackageTreeNode): void {
+    let errors = node.module?.errors ?? 0;
+    let warnings = node.module?.warnings ?? 0;
+    for (const child of node.children.values()) {
+      ModuleExplorerProvider.rollup(child);
+      errors += child.errors;
+      warnings += child.warnings;
+    }
+    node.errors = errors;
+    node.warnings = warnings;
+  }
+
+  /** Render a node: a container becomes a package row, a bare leaf a module row. */
+  private static nodeToItem(node: PackageTreeNode): TreeItem {
+    if (node.children.size === 0 && node.module !== undefined) {
+      return new ModuleTreeItem(node.module, node.segment);
+    }
+    return new PackageTreeItem(node);
+  }
+
+  /** Children of a package/folder: nested nodes first, then the package's symbols. */
+  private static packageChildren(node: PackageTreeNode): TreeItem[] {
+    const childItems = ModuleExplorerProvider.sortNodes([...node.children.values()])
+      .map((child) => ModuleExplorerProvider.nodeToItem(child));
+    if (node.module === undefined) { return childItems; }
+    return [...childItems, ...ModuleExplorerProvider.symbolItems(node.module)];
+  }
+
+  /** Structural sibling order: containers before leaf modules, each alphabetical. */
+  private static sortNodes(nodes: PackageTreeNode[]): PackageTreeNode[] {
+    return nodes.sort((a, b) => {
+      const aContainer = a.children.size > 0;
+      const bContainer = b.children.size > 0;
+      if (aContainer !== bContainer) { return aContainer ? -1 : 1; }
+      return a.segment.localeCompare(b.segment);
+    });
   }
 
   /** Order modules for flat view per the current sort toggle. */
@@ -337,17 +528,6 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     });
   }
 
-  /** Flatten modules into a flat symbol list for flat view mode. */
-  private static flattenModules(modules: readonly ModuleNode[]): TreeItem[] {
-    const items: TreeItem[] = [];
-    for (const mod of modules) {
-      for (const sym of mod.symbols) {
-        items.push(new SymbolTreeItem(sym, mod.path, mod.name));
-      }
-    }
-    return items;
-  }
-
   private async fetchModules(): Promise<void> {
     const client = this.store.client.value;
     if (!client?.isRunning()) {
@@ -368,6 +548,19 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
 
 // ── Registration ─────────────────────────────────────────────────────────
 
+/** The module a row is backed by, if any — a leaf module or a package node. */
+function itemModule(item: TreeItem): ModuleNode | undefined {
+  if (item instanceof ModuleTreeItem) { return item.module; }
+  if (item instanceof PackageTreeItem) { return item.node.module; }
+  return undefined;
+}
+
+/** Copy text to the clipboard and confirm with a toast. */
+function copyToClipboard(text: string): void {
+  void vscode.env.clipboard.writeText(text);
+  vscode.window.showInformationMessage(`Copied: ${text}`);
+}
+
 /**
  * Register clipboard and action commands for the module explorer.
  *
@@ -384,9 +577,6 @@ function registerExplorerCommands(
     vscode.commands.registerCommand("basilisk.refreshModuleExplorer", () => {
       provider.refresh();
     }),
-    vscode.commands.registerCommand("basilisk.collapseModuleExplorer", () => {
-      // TreeView collapse is handled natively by showCollapseAll.
-    }),
     vscode.commands.registerCommand("basilisk.toggleModuleExplorerView", () => {
       provider.toggleViewMode(context);
     }),
@@ -402,24 +592,19 @@ function registerExplorerCommands(
     }),
     vscode.commands.registerCommand("basilisk.copyImportPath", (item: TreeItem) => {
       if (item instanceof SymbolTreeItem) {
-        const importPath = `from ${item.moduleName} import ${item.symbol.name}`;
-        void vscode.env.clipboard.writeText(importPath);
-        vscode.window.showInformationMessage(`Copied: ${importPath}`);
-      } else if (item instanceof ModuleTreeItem) {
-        const importPath = `import ${item.module.name}`;
-        void vscode.env.clipboard.writeText(importPath);
-        vscode.window.showInformationMessage(`Copied: ${importPath}`);
+        copyToClipboard(`from ${item.moduleName} import ${item.symbol.name}`);
+        return;
       }
+      const module = itemModule(item);
+      if (module !== undefined) { copyToClipboard(`import ${module.name}`); }
     }),
     vscode.commands.registerCommand("basilisk.copyQualifiedName", (item: TreeItem) => {
       if (item instanceof SymbolTreeItem) {
-        const name = `${item.moduleName}.${item.symbol.name}`;
-        void vscode.env.clipboard.writeText(name);
-        vscode.window.showInformationMessage(`Copied: ${name}`);
-      } else if (item instanceof ModuleTreeItem) {
-        void vscode.env.clipboard.writeText(item.module.name);
-        vscode.window.showInformationMessage(`Copied: ${item.module.name}`);
+        copyToClipboard(`${item.moduleName}.${item.symbol.name}`);
+        return;
       }
+      const module = itemModule(item);
+      if (module !== undefined) { copyToClipboard(module.name); }
     }),
   ];
 }

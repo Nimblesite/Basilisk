@@ -26,7 +26,12 @@ import {
   appliedProfileDecorations,
   type ProfileResult,
 } from "../../profiler-decorations";
-import { buildFlamegraphHtml } from "../../profiler-flamegraph-html";
+import {
+  buildFlamegraphHtml,
+  disposeFlamegraphPanel,
+  flamegraphPanelOpen,
+  profileHasNoUsableData,
+} from "../../profiler-flamegraph-html";
 import {
   openPythonFile,
   pollUntilResult,
@@ -494,6 +499,89 @@ suite("CPU profiling — real end-to-end", () => {
     }
   });
 
+  // The viewability flow (#145): a completed CPU profile must hand the user a
+  // working flame chart. The built-in `.cpuprofile` viewer can refuse to render
+  // (viewer unavailable, or a profile it rejects), and `vscode.open` doesn't
+  // reject when that happens — so the completion notification itself MUST offer
+  // an action that lands on the self-contained flamegraph webview, never a
+  // dead-end on "the editor could not be opened". Covers [PROFILE-NATIVE-FALLBACK]
+  // (docs/specs/LSP-PROFILING-SPEC.md#PROFILE-NATIVE-FALLBACK) + acceptance
+  // criteria 2/3/4 of the issue.
+  test("run → profile → view: completion notification opens a working flame chart, never a dead-end (#145)", async function () {
+    if (process.platform === "win32") { this.skip(); }
+    this.timeout(60_000);
+    const store = getStore();
+    assert.ok(store, "store must be initialized");
+    const burnerPid = burner?.pid;
+    assert.ok(burnerPid !== undefined && burnerPid > 0, "burner must be running");
+
+    // Adopt a REAL active CPU session through each platform's proven path:
+    // the cooperative auto-launch on macOS, the panel py-spy attach on Linux.
+    if (process.platform === "darwin") {
+      const launched = await vscode.debug.startDebugging(
+        undefined,
+        buildProfileLaunchConfig("cpu", burnerPath),
+      );
+      assert.ok(launched, "the metric-explicit CPU launch must start");
+      await pollUntilResult({
+        fn: async () => store.profiler.value.cpu,
+        predicate: (state) => state === "active",
+        timeoutMs: 30_000,
+      });
+    } else {
+      await startProfilingForPid(store, burnerPid, "default");
+      assert.strictEqual(store.profiler.value.cpu, "active", "the panel attach must activate the session");
+    }
+
+    // Capture the completion notification's actions and simulate the user
+    // taking the flame-chart action when it is offered.
+    const toasts: { message: string; actions: string[] }[] = [];
+    const win = vscode.window as { showInformationMessage: typeof vscode.window.showInformationMessage };
+    const originalShow = win.showInformationMessage;
+    win.showInformationMessage = async (message: string, ...items: unknown[]) => {
+      const actions = items.filter((item): item is string => typeof item === "string");
+      toasts.push({ message, actions });
+      return actions.find((action) => /flame|view|open/i.test(action));
+    };
+
+    disposeFlamegraphPanel(); // known-closed baseline so the post-stop check is meaningful
+    try {
+      await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
+      await vscode.commands.executeCommand("basilisk.profileStop");
+    } finally {
+      win.showInformationMessage = originalShow;
+    }
+
+    const completion = toasts.find((toast) => /Profile complete/i.test(toast.message));
+    assert.ok(
+      completion !== undefined,
+      `a "Profile complete" notification must be shown, got: ${JSON.stringify(toasts)}`,
+    );
+    assert.ok(
+      completion.actions.length > 0,
+      `the "Profile complete" notification must offer an action to reach the result (#145) — ` +
+        `the toast currently dead-ends with no way to open or reveal the trace`,
+    );
+    // The toast is fired-and-forget (sticky notifications must not block the
+    // stop handler), so the action's view opens on a microtask — poll for it.
+    await pollUntilResult({
+      fn: async () => flamegraphPanelOpen(),
+      predicate: (open) => open,
+      timeoutMs: 5_000,
+    }).catch(() => {
+      assert.fail(
+        "taking the completion action must open a working flame chart, never leave the user " +
+          "on the built-in viewer's \"could not be opened\" error (#145)",
+      );
+    });
+
+    if (vscode.debug.activeDebugSession !== undefined) {
+      await vscode.debug.stopDebugging();
+      await waitForDebugSessionEnd();
+    }
+    disposeFlamegraphPanel();
+  });
+
   test("attaching to an exited process fails with a distinct, classified cause (#81)", async function () {
     this.timeout(40_000);
     // A guaranteed-dead PID exercises the classified failure path on every
@@ -522,6 +610,29 @@ suite("CPU profiling — real end-to-end", () => {
     );
   });
 
+  // [PROFILE-SHORT-PROGRAM] #145: a sub-tick program (debug_demo.py runs ~1ms)
+  // finishes before its work can be sampled, so the session can capture dozens
+  // of samples that resolve to ZERO user-code attribution (the real observed
+  // case: 48 samples, 0 hot functions, 0 hot lines). The launch flow flags
+  // "no usable data" honestly instead of presenting an empty chart — keying off
+  // attribution, not raw sample count.
+  test("a profile with no hot functions/lines is flagged unusable; one with hotspots is not (#145)", () => {
+    assert.ok(
+      profileHasNoUsableData({ hotFunctions: [], hotLines: [] }),
+      "the observed 48-sample/0-function idle case has nothing to show",
+    );
+    const withFunction: Pick<ProfileResult, "hotFunctions" | "hotLines"> = {
+      hotFunctions: [{ name: "f", file: "/a.py", line: 1, samples: 3, percentage: 100, selfPercentage: 100 }],
+      hotLines: [],
+    };
+    assert.ok(!profileHasNoUsableData(withFunction), "a real hot function is usable data, even if sparse");
+    const withLine: Pick<ProfileResult, "hotFunctions" | "hotLines"> = {
+      hotFunctions: [],
+      hotLines: [{ file: "/a.py", line: 2, samples: 3, percentage: 100 }],
+    };
+    assert.ok(!profileHasNoUsableData(withLine), "a real hot line is usable data");
+  });
+
   test("flamegraph webview HTML renders the dashboard from a profile result", () => {
     const result: ProfileResult = {
       sessionId: "s-test",
@@ -539,5 +650,64 @@ suite("CPU profiling — real end-to-end", () => {
     assert.ok(html.includes("navigateToSource"), "rows must navigate to source");
     assert.ok(html.includes("fn-body"), "the hot-functions table must render");
     assert.ok(html.includes(String(result.totalSamples)), "the summary must show the real sample count");
+  });
+
+  // [PROFILE-VIEWER-DELIVERY]: speedscope.app is https and cannot read file://
+  // URLs, so a `#profileURL=file://` link always fails ("Something went wrong").
+  // The "Open in Speedscope" link must instead post a message the extension
+  // actually handles (reveal the JSON + open the app for drag-and-drop import).
+  test("the flamegraph's Speedscope link uses a working import path, not a dead file:// URL", () => {
+    const result: ProfileResult = {
+      sessionId: "s-test",
+      duration: 3,
+      totalSamples: 600,
+      outputFile: "/tmp/profile.speedscope.json",
+      hotFunctions: [],
+      hotLines: [],
+    };
+    const html = buildFlamegraphHtml(result);
+    assert.ok(
+      !html.includes("speedscope.app/#profileURL=file://"),
+      "must not emit the always-failing speedscope file:// URL ([PROFILE-VIEWER-DELIVERY])",
+    );
+    assert.ok(
+      html.includes("openSpeedscope"),
+      "the Speedscope link must post an openSpeedscope message the extension handles",
+    );
+  });
+
+  // [PROFILE-NATIVE-FALLBACK]: frame names/paths come from the profiled (possibly
+  // third-party) program. CPython emits synthetic names like <module>/<lambda>,
+  // and a hostile program can name a function `</script>…`. The webview must
+  // escape them before innerHTML, must not let the embedded JSON close the
+  // inline <script>, and gates that script behind a per-render CSP nonce.
+  test("flamegraph HTML escapes untrusted frame names/paths and nonce-gates its inline script", () => {
+    const hostile = "</script><img src=x onerror=alert(1)>";
+    const result: ProfileResult = {
+      sessionId: "s-test",
+      duration: 3,
+      totalSamples: 600,
+      outputFile: "/tmp/profile.speedscope.json",
+      hotFunctions: [
+        { name: hostile, file: hostile, line: 1, samples: 540, percentage: 90, selfPercentage: 85 },
+        { name: "<module>", file: "/app/main.py", line: 1, samples: 60, percentage: 10, selfPercentage: 10 },
+      ],
+      hotLines: [{ file: hostile, line: 2, samples: 500, percentage: 83 }],
+    };
+    const html = buildFlamegraphHtml(result);
+    assert.ok(
+      !html.includes("</script><img"),
+      "embedded profile data must not close the inline <script> element early",
+    );
+    assert.ok(
+      html.includes("escapeHtml(fn.name)"),
+      "frame names must be escaped before innerHTML",
+    );
+    assert.ok(
+      html.includes("escapeHtml(basename(fn.file))"),
+      "frame file paths must be escaped before innerHTML",
+    );
+    assert.ok(html.includes("Content-Security-Policy"), "the webview must declare a CSP");
+    assert.ok(html.includes('<script nonce="'), "the inline script must carry the CSP nonce");
   });
 });

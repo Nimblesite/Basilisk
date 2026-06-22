@@ -2,6 +2,10 @@
 
 Zed editor extension for Basilisk — WASM-based Python type checking and language server integration.
 
+<p align="center">
+  <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
+</p>
+
 ## Role in Basilisk
 
 This is the **Zed editor integration**. It is a native Zed extension compiled to WASM that connects the Basilisk language server to Zed, providing real-time diagnostics, hover, go-to-definition, code actions, and debugging via DAP.

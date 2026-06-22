@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "Basilisk: Open-Source Python Language Server"
-description: "Basilisk is a strict-by-default Python language server with autocomplete, go-to-definition, refactoring, debugging, and profiling — fully open source, built in Rust, in VS Code, Cursor, Zed, and Neovim."
+description: "Get started with Basilisk, the open-source, strict-by-default Python language server built in Rust. Type checking, refactoring, debugging, and profiling docs."
 keywords: basilisk, python, language server, lsp, type checker, vs code, cursor, zed, neovim, strict, rust
 date: 2026-02-28
 dateModified: 2026-03-31
@@ -68,7 +68,7 @@ Basilisk is currently in **alpha** — the core checker, LSP server, and editor 
 |---|---|---|
 | 1 | Parser, resolver, type checker, CLI | Complete |
 | 2 | LSP server, editor extensions (VS Code, Cursor, Zed, Neovim) | Complete |
-| 3 | Expanded rule set, 92.5% PEP conformance, gradual adoption | In progress |
+| 3 | Expanded rule set, 98.6% PEP conformance, gradual adoption | In progress |
 | 4 | Ownership & immutability analysis (Mojo-inspired) | Planned |
 | 5 | WASM plugins, Django/Pydantic/SQLAlchemy | Planned |
 | 6 | 95%+ PEP, SARIF/JUnit, JetBrains extension | Planned |

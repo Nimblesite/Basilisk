@@ -422,7 +422,11 @@ fn e2e_memory_scripts_are_valid_python_syntax() {
     let scripts = [
         (
             "start_tracemalloc",
-            basilisk_lsp::profiler::memory::scripts::start_tracemalloc(25),
+            basilisk_lsp::profiler::memory::scripts::start_tracemalloc(
+                25,
+                "/tmp/basilisk-final-snapshot.memfinal",
+                100,
+            ),
         ),
         (
             "take_snapshot",

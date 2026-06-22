@@ -47,8 +47,9 @@ RUN rustup component add rustfmt clippy
 # Rust cargo tools (pinned)
 RUN cargo install cargo-llvm-cov --version 0.8.4 --locked
 
-# Python packages (pinned — matches CI: pip install debugpy ruff)
-RUN pip install --break-system-packages debugpy==1.8.14 ruff==0.11.2
+# Python packages (pinned — ruff MUST match CI and the ruff_* crate tag in
+# Cargo.toml: pip install debugpy ruff==0.15.17)
+RUN pip install --break-system-packages debugpy==1.8.14 ruff==0.15.17
 
 # GitHub CLI (for PR creation, issue management)
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \

@@ -26,13 +26,17 @@ Every function parameter must have an explicit type annotation.
 
 ```python
 # Error
-def process(data):
+def process(data) -> str:
     return data.upper()
 
 # Correct
 def process(data: str) -> str:
     return data.upper()
 ```
+
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0001 for an unannotated parameter](/assets/images/e0001.png)
 
 ---
 
@@ -50,19 +54,27 @@ def get_user(user_id: int) -> dict[str, int]:
     return {"id": user_id}
 ```
 
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0002 for a missing return type](/assets/images/e0002.png)
+
 ---
 
-### BSK-E0003 — Unresolvable variable type
+### BSK-E0003 — Missing variable type annotation
 
-A variable is assigned a value whose type cannot be inferred. An explicit annotation is required.
+A module-level variable whose type cannot be inferred — for example an empty collection — must carry an explicit annotation.
 
 ```python
-# Error — type of result cannot be determined
-result = some_dynamic_function()
+# Error — element type cannot be inferred from an empty list
+data = []
 
 # Correct
-result: list[str] = some_dynamic_function()
+data: list[str] = []
 ```
+
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0003 for an unannotated empty list](/assets/images/e0003.png)
 
 ---
 
@@ -72,7 +84,7 @@ Variadic arguments must be annotated.
 
 ```python
 # Error
-def log(*args, **kwargs):
+def log(*args, **kwargs) -> None:
     print(args, kwargs)
 
 # Correct
@@ -80,20 +92,26 @@ def log(*args: str, **kwargs: int) -> None:
     print(args, kwargs)
 ```
 
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0004 for unannotated *args and **kwargs](/assets/images/e0004.png)
+
 ---
 
 ### BSK-E0005 — Missing class attribute annotation
 
-Class-level attributes must be explicitly annotated.
+A class attribute whose type cannot be inferred — for example an empty collection — must be explicitly annotated.
 
 ```python
-# Error
-class Config:
-    host = "localhost"
-    port = 8080
+# Error — element type cannot be inferred from an empty list
+class Registry:
+    entries = []
 
 # Correct
-class Config:
-    host: str = "localhost"
-    port: int = 8080
+class Registry:
+    entries: list[str] = []
 ```
+
+Real `basilisk check` output:
+
+![basilisk check output reporting BSK-E0005 for an unannotated class attribute](/assets/images/e0005.png)

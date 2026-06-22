@@ -38,6 +38,14 @@ export interface MemorySnapshotResult {
 /** Leak confidence level matching the LSP's `LeakConfidence` enum. */
 export type LeakConfidence = "LOW" | "MEDIUM" | "HIGH" | "DEFINITE";
 
+/** Severity ordering for leak confidence (Low < Medium < High < Definite). */
+const CONFIDENCE_SEVERITY: readonly LeakConfidence[] = ["LOW", "MEDIUM", "HIGH", "DEFINITE"];
+
+/** Rank a confidence level so callers can pick the worst leak / gate on a threshold. */
+export function confidenceRank(confidence: LeakConfidence): number {
+  return CONFIDENCE_SEVERITY.indexOf(confidence) + 1;
+}
+
 /** Per-line suspected leak data from the LSP diff diagnostics. */
 export interface SuspectedLeak {
   file: string;

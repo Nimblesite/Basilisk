@@ -57,12 +57,26 @@ pub(super) async fn execute_memory_start(
         .and_then(serde_json::Value::as_u64)
         .map_or(25, |d| u32::try_from(d).unwrap_or(25));
 
-    let script = crate::profiler::memory::scripts::start_tracemalloc(traceback_depth);
-
     // Register a real session so subsequent snapshot/diff ingests can accumulate
     // cross-call leak history. The editor runs `script` in the debuggee and posts
     // the output back via `basilisk.memory.ingest` (the LSP holds no DAP wire).
     let memory_session_id = server.memory_manager.start_session(traceback_depth).await;
+
+    // [PROFILE-MEMORY-FINAL] Mint the at-exit snapshot file the injected script's
+    // `atexit` hook writes to, and return its path so the editor can read it when
+    // the debug session terminates — this is what gives the breakpoint-free
+    // "Run & Track Memory (Current File)" flow a visible result instead of a
+    // dead end. The path is unique per session, just like the cooperative
+    // sampler's sample file ([PROFILE-COOPERATIVE]).
+    let final_snapshot_file = std::env::temp_dir()
+        .join(format!("basilisk-{memory_session_id}.memfinal"))
+        .to_string_lossy()
+        .into_owned();
+    let script = crate::profiler::memory::scripts::start_tracemalloc(
+        traceback_depth,
+        &final_snapshot_file,
+        MAX_SNAPSHOT_STATS,
+    );
 
     server
         .client
@@ -79,6 +93,7 @@ pub(super) async fn execute_memory_start(
         "tracingStarted": true,
         "script": script,
         "tracebackDepth": traceback_depth,
+        "finalSnapshotFile": final_snapshot_file,
     })))
 }
 

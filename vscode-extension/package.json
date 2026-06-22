@@ -93,8 +93,18 @@
       },
       {
         "view": "basilisk.pythonProcesses",
-        "contents": "No Python processes running. The list refreshes automatically.\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)\n[Refresh](command:basilisk.refreshProcesses)",
-        "when": "basilisk.serverState == running"
+        "contents": "Loading Python processes…\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)",
+        "when": "basilisk.serverState == running && basilisk.processesState == loading"
+      },
+      {
+        "view": "basilisk.pythonProcesses",
+        "contents": "Couldn't load the Python process list.\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)",
+        "when": "basilisk.serverState == running && basilisk.processesState == error"
+      },
+      {
+        "view": "basilisk.pythonProcesses",
+        "contents": "No Python processes running.\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)",
+        "when": "basilisk.serverState == running && basilisk.processesState == loaded"
       }
     ],
     "commands": [
@@ -176,12 +186,6 @@
         "title": "Refresh Module Explorer",
         "category": "Basilisk",
         "icon": "$(refresh)"
-      },
-      {
-        "command": "basilisk.collapseModuleExplorer",
-        "title": "Collapse All",
-        "category": "Basilisk",
-        "icon": "$(collapse-all)"
       },
       {
         "command": "basilisk.sortModuleExplorer",
@@ -455,24 +459,19 @@
           "group": "navigation@1"
         },
         {
-          "command": "basilisk.collapseModuleExplorer",
+          "command": "basilisk.toggleModuleExplorerView",
           "when": "view == basilisk.moduleExplorer",
           "group": "navigation@2"
         },
         {
-          "command": "basilisk.toggleModuleExplorerView",
+          "command": "basilisk.filterModuleExplorer",
           "when": "view == basilisk.moduleExplorer",
           "group": "navigation@3"
         },
         {
-          "command": "basilisk.filterModuleExplorer",
-          "when": "view == basilisk.moduleExplorer",
-          "group": "navigation@4"
-        },
-        {
           "command": "basilisk.sortModuleExplorer",
-          "when": "view == basilisk.moduleExplorer",
-          "group": "navigation@5"
+          "when": "view == basilisk.moduleExplorer && basilisk.moduleExplorerView == 'flat'",
+          "group": "navigation@4"
         },
         {
           "command": "basilisk.organizeImports",
@@ -491,12 +490,12 @@
         },
         {
           "command": "basilisk.profileCurrentFileCpu",
-          "when": "view == basilisk.pythonProcesses && !basilisk.profilerBusy",
+          "when": "view == basilisk.pythonProcesses && !basilisk.cpuBusy",
           "group": "navigation@1"
         },
         {
           "command": "basilisk.trackMemoryCurrentFile",
-          "when": "view == basilisk.pythonProcesses && !basilisk.profilerBusy",
+          "when": "view == basilisk.pythonProcesses && !basilisk.memoryBusy",
           "group": "navigation@2"
         },
         {
@@ -538,12 +537,12 @@
         },
         {
           "command": "basilisk.profileProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.cpuBusy",
           "group": "inline@1"
         },
         {
           "command": "basilisk.memoryTrackProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
+          "when": "view == basilisk.pythonProcesses && viewItem == pythonProcessDebuggee && !basilisk.memoryBusy",
           "group": "inline@2"
         },
         {
@@ -553,12 +552,12 @@
         },
         {
           "command": "basilisk.profileProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.cpuBusy",
           "group": "1_profile@1"
         },
         {
           "command": "basilisk.memoryTrackProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
+          "when": "view == basilisk.pythonProcesses && viewItem == pythonProcessDebuggee && !basilisk.memoryBusy",
           "group": "1_profile@2"
         },
         {
@@ -883,11 +882,6 @@
           "minimum": 250,
           "description": "Poll interval (ms) for refreshing the Python Processes panel while it is visible."
         },
-        "basilisk.profiler.showLaunchers": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show Python launchers (uvicorn, gunicorn, pytest, …) in the Python Processes panel, not just bare interpreters."
-        },
         "basilisk.profiler.preset": {
           "type": "string",
           "enum": [
@@ -905,15 +899,21 @@
           "default": "default",
           "description": "Profiling preset that configures sample rate and duration."
         },
+        "basilisk.profiler.autoSnapshotOnPause": {
+          "type": "boolean",
+          "default": true,
+          "description": "Memory autopilot: while memory tracking is active, automatically take and compare a snapshot every time the debugger pauses (at a breakpoint or step). Lets you hunt leaks by just pressing Continue — leak confidence escalates automatically. Turn off to capture snapshots manually."
+        },
         "basilisk.profiler.autoSnapshot": {
           "type": "boolean",
           "default": false,
-          "description": "Automatically take memory snapshots at regular intervals during memory tracking."
+          "description": "Memory autopilot: while memory tracking is active, automatically take a memory snapshot every few seconds (see basilisk.profiler.autoSnapshotInterval), even when the program never pauses. The program is briefly paused for each capture and resumed."
         },
         "basilisk.profiler.autoSnapshotInterval": {
           "type": "number",
           "default": 30,
-          "description": "Interval in seconds between automatic memory snapshots (when autoSnapshot is enabled)."
+          "minimum": 1,
+          "description": "Seconds between automatic memory snapshots when basilisk.profiler.autoSnapshot is enabled."
         },
         "basilisk.analysisMode": {
           "type": "string",

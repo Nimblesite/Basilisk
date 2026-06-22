@@ -18,3 +18,49 @@ class Proto(Protocol):
     );
     Ok(())
 }
+
+#[test]
+fn e0097_undeclared_self_attr_in_method_body() -> Result<(), Box<dyn std::error::Error>> {
+    // PEP 544: attributes set via `self` in ANY method (not just __init__) must
+    // be declared. `name` is declared and must not fire; `temp` must.
+    let source = r"
+from typing import Protocol
+
+class Proto(Protocol):
+    name: str
+    def method(self) -> None:
+        self.name = 'ok'
+        self.temp: list[int] = []
+";
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "BSK-E0097");
+    assert!(
+        msgs.iter().any(|m| m.contains("temp")),
+        "undeclared `temp` in a non-init method must fire E0097, got: {msgs:?}"
+    );
+    assert!(
+        !msgs.iter().any(|m| m.contains("`name`")),
+        "declared `name` must not be flagged, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0097_staticmethod_param_is_not_a_receiver() -> Result<(), Box<dyn std::error::Error>> {
+    // A `@staticmethod`'s first parameter is not `self`, so assigning to its
+    // attribute is not an undeclared-self-attribute violation.
+    let source = r"
+from typing import Protocol
+
+class Proto(Protocol):
+    @staticmethod
+    def make(target) -> None:
+        target.cache = 1
+";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0097"),
+        "a static method's parameter is not an instance receiver"
+    );
+    Ok(())
+}

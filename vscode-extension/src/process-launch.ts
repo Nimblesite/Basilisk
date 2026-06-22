@@ -183,12 +183,15 @@ export function buildProfileLaunchConfig(
 
 /** Run the active `.py` file under a debug session, tracking the given metric. */
 async function profileCurrentFile(store: Store, metric: LaunchMetric): Promise<void> {
-  // While a session is starting or running the launch button is hidden
-  // ([PROFILE-PROCESSES-REACTIVE]); guard the command too so the palette path
-  // can't spawn a second debug session on top of the active one.
-  if (store.profilerBusy.value) {
+  // While the matching metric is starting or running the launch button is hidden
+  // ([PROFILE-PROCESSES-REACTIVE]); guard the command per metric too so the
+  // palette path can't spawn a second SAME-metric session on top of the active
+  // one — yet a CPU run while memory tracking is live (and vice versa) is fine.
+  const metricBusy = metric === "cpu" ? store.cpuBusy.value : store.memoryBusy.value;
+  if (metricBusy) {
+    const label = metric === "cpu" ? "CPU profile" : "memory tracking session";
     vscode.window.showWarningMessage(
-      "Basilisk: A profiling session is already active. Stop it before running another.",
+      `Basilisk: A ${label} is already active. Stop it before running another.`,
     );
     return;
   }
