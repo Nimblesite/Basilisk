@@ -304,3 +304,68 @@ def _join() -> str:
     );
     Ok(())
 }
+
+#[test]
+fn e0018_function_local_import_attribute_call_in_return_no_false_positive(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #175 (headline repro): a plain function-local `import math` binds
+    // `math` for the rest of the body, including a `return math.ceil(x)` where
+    // `math` heads an attribute/call chain in the return expression. This is the
+    // standard lazy-import / cycle-breaking pattern — it runs without NameError
+    // and must fire neither E0018 ("not defined") nor E0019 ("may be unbound"),
+    // since a top-level import binds the name unconditionally.
+    let source = "def ceil_cost(x: float) -> int:\n    import math\n    return math.ceil(x)\n";
+    let diags = run(source)?;
+    let fired: Vec<&str> = codes(&diags)
+        .into_iter()
+        .filter(|c| *c == "BSK-E0018" || *c == "BSK-E0019")
+        .collect();
+    assert!(
+        fired.is_empty(),
+        "a function-local `import math` used in `return math.ceil(x)` must not fire E0018/E0019, got: {fired:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0018_function_local_from_import_callee_in_return_no_false_positive(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #175 (`from ... import` callee shape): a function-local
+    // `from os import getpid` binds `getpid`, which is then the callee of the
+    // return expression `return getpid()`. The callee path of E0018 must see the
+    // local import binding, not just bare-name references.
+    let source = "def extract() -> int | None:\n    from os import getpid\n    return getpid()\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0018"),
+        "a function-local `from ... import f` used as a return callee must not fire E0018, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0018")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn e0018_function_local_aliased_import_attribute_in_return_no_false_positive(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #175 (aliased plain-import shape): an aliased function-local
+    // `import datetime as _dt` binds `_dt`, used as the attribute base of the
+    // return expression `return _dt.datetime(...)`. The alias — not the module
+    // name — must be the in-scope local binding.
+    let source =
+        "def make_dt() -> object:\n    import datetime as _dt\n    return _dt.datetime(2020, 1, 1)\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0018"),
+        "an aliased function-local import used as a return attribute base must not fire E0018, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0018")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
