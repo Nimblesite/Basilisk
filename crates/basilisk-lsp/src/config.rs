@@ -86,8 +86,23 @@ impl Default for WorkspaceConfig {
 /// 3. `pyproject.toml` `[tool.basilisk]` or `[tool.pyright]`
 ///
 /// Returns `Default` if no config file is found.
+///
+/// Relative `stub-paths` are resolved against `root` so that a bare
+/// `stub-paths = ["stubs"]` points at `<root>/stubs` regardless of the
+/// process's current working directory (issue #173).
 #[must_use]
 pub fn load_config(root: &Path) -> WorkspaceConfig {
+    let mut cfg = load_config_raw(root);
+    cfg.stub_paths = cfg
+        .stub_paths
+        .into_iter()
+        .map(|p| if p.is_absolute() { p } else { root.join(p) })
+        .collect();
+    cfg
+}
+
+/// Parse the config file without post-processing the resulting paths.
+fn load_config_raw(root: &Path) -> WorkspaceConfig {
     // 1. basilisk.json
     let basilisk_json = root.join("basilisk.json");
     if basilisk_json.is_file() {
@@ -107,7 +122,13 @@ pub fn load_config(root: &Path) -> WorkspaceConfig {
     // 3. pyproject.toml — look for [tool.basilisk] or [tool.pyright]
     let pyproject = root.join("pyproject.toml");
     if pyproject.is_file() {
-        if let Some(cfg) = load_pyproject_config(&pyproject) {
+        if let Some(mut cfg) = load_pyproject_config(&pyproject) {
+            // `load_pyproject_config` is a line scanner that cannot parse TOML
+            // arrays, so `stub-paths = ["stubs", "typings"]` was silently
+            // dropped (issue #173). Delegate that one field to the canonical
+            // toml-crate parser in `basilisk-config`, which reads the same
+            // `[tool.basilisk]` section correctly.
+            cfg.stub_paths = basilisk_config::load_basilisk_config(root).stub_paths;
             return cfg;
         }
     }
