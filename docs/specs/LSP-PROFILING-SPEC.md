@@ -6,9 +6,9 @@ Embed a state-of-the-art Python profiler directly into the Basilisk LSP. No `pip
 
 ## UI Availability Gate {#PROFILE-UI-GATE}
 
-The profiling UI has **shipped**: now that the run→profile→view flow is reliable (#145 — the `.cpuprofile` no longer dead-ends, "Run & Profile" runs to completion, and short-program runs are surfaced honestly), its VS Code surfaces are enabled in every session.
+The profiler is complete in the LSP, but its VS Code surfaces are hidden from shipped users until the end-to-end experience is reliable — an entry point that errors or does nothing is worse first-run UX than none.
 
-A single switch, `isProfilingUiEnabled(context)` (`vscode-extension/src/profiling-ui.ts`), returns `true` unconditionally. It is kept (rather than deleted) as the one place the gate can be re-narrowed if ever needed: `extension.ts` mirrors it into the `basilisk.profilingEnabled` context key that every profiling `when` clause keys off, and `memory-profiler.ts` reads it for the one surface no `when` clause can reach (the memory status-bar item). All commands stay advertised ([PROFILE-REQUESTS]) and registered.
+A single switch, `isProfilingUiEnabled(context)` (`vscode-extension/src/profiling-ui.ts`), returns `true` only under test (`ExtensionMode.Test`) and `false` in shipped and dev-host sessions, so the suite still exercises the full UI. `extension.ts` mirrors it into the `basilisk.profilingEnabled` context key that every profiling `when` clause keys off; `memory-profiler.ts` reads it for the one surface no `when` clause can reach (the memory status-bar item). Nothing is removed — all commands stay advertised ([PROFILE-REQUESTS]) and registered. To ship profiling, return `true` unconditionally and drop the gate.
 
 ## Why py-spy {#PROFILE-PYSPY}
 
