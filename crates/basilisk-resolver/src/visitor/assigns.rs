@@ -1,13 +1,38 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Assigns visitor functions.
 
-use ruff_python_ast::{ExceptHandler, Expr, Stmt, StmtAssign};
+use ruff_python_ast::{ExceptHandler, Expr, Stmt, StmtAssign, StmtImport, StmtImportFrom};
 use ruff_text_size::Ranged;
 
 use crate::scope::VariableInfo;
 
-use super::class_info_ext::expr_simple_name;
+use super::class_info_ext::{alias_name, expr_simple_name};
 use super::core::{classify_rhs, text_range_to_span};
+
+/// Names a plain `import` statement binds into the enclosing scope.
+/// `import a.b.c` binds the top-level package `a`; `import a.b as d` binds `d`.
+fn plain_import_bound_names(node: &StmtImport) -> Vec<String> {
+    node.names
+        .iter()
+        .map(|alias| {
+            alias.asname.as_ref().map_or_else(
+                || top_level_module(alias.name.as_str()).to_owned(),
+                ToString::to_string,
+            )
+        })
+        .collect()
+}
+
+/// Names a `from ... import` statement binds into the enclosing scope.
+/// `from m import X, Y as z` binds `X` and `z`; the `as` alias takes priority.
+fn from_import_bound_names(node: &StmtImportFrom) -> Vec<String> {
+    node.names.iter().map(alias_name).collect()
+}
+
+/// The top-level package component of a dotted module path (`a` in `a.b.c`).
+fn top_level_module(dotted: &str) -> &str {
+    dotted.split('.').next().unwrap_or(dotted)
+}
 
 pub(super) fn extract_target_names(expr: &Expr) -> Vec<String> {
     match expr {
@@ -40,6 +65,19 @@ pub(super) fn collect_all_assigns(stmts: &[Stmt]) -> Vec<String> {
                 // Nested function name is defined in enclosing scope.
                 out.push(func.name.to_string());
                 // Do NOT recurse into nested function body.
+            }
+            Stmt::ClassDef(class) => {
+                // A nested class binds its name in the enclosing scope, exactly
+                // like a nested function. Do NOT recurse into the class body.
+                out.push(class.name.to_string());
+            }
+            Stmt::Import(node) => {
+                // A function-local import binds names in the enclosing scope and
+                // is reachable by nested scopes (incl. methods of nested classes).
+                out.extend(plain_import_bound_names(node));
+            }
+            Stmt::ImportFrom(node) => {
+                out.extend(from_import_bound_names(node));
             }
             Stmt::If(node) => {
                 out.extend(collect_all_assigns(&node.body));
@@ -97,6 +135,16 @@ pub(super) fn collect_unconditional_assigns(stmts: &[Stmt]) -> Vec<String> {
             }
             Stmt::FunctionDef(func) => {
                 assignments.push(func.name.to_string());
+            }
+            Stmt::ClassDef(class) => {
+                assignments.push(class.name.to_string());
+            }
+            Stmt::Import(node) => {
+                // Top-level imports bind their names unconditionally.
+                assignments.extend(plain_import_bound_names(node));
+            }
+            Stmt::ImportFrom(node) => {
+                assignments.extend(from_import_bound_names(node));
             }
             Stmt::If(node) => {
                 // Check if this is an if-else statement that guarantees assignment
