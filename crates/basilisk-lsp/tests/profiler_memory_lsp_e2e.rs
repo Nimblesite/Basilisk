@@ -235,6 +235,8 @@ async fn memory_gc_collect_via_wire_detects_cycle() -> TestResult<()> {
         .to_owned();
 
     let cycle = "\
+import gc
+gc.disable()  # deterministic: the explicit gc.collect() in the gcCollect script must be the collection event — with auto-GC on, the generational collector reclaims these cycles first on some runners (Linux CI), so the explicit collect would report 0
 class _Cycle:
     def __del__(self):
         pass

@@ -294,6 +294,7 @@ async fn gc_collect_detects_real_reference_cycle() -> Result<(), String> {
     let workload = "\
 import gc
 gc.set_debug(gc.DEBUG_SAVEALL)
+gc.disable()  # keep our dropped cycles alive until the explicit gc.collect() below: with auto-GC on, the generational collector reclaims them first on some runners (Linux CI) and the explicit collect then reports 0
 class _Cycle:
     def __del__(self):
         pass
