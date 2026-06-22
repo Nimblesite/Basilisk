@@ -223,6 +223,38 @@ myapp/
       +-- def now() -> datetime
 ```
 
+**Reconstruction (client-side).** `basilisk/workspaceModules` returns a **flat**
+list of modules keyed by fully-qualified dotted name (`pkg.sub.mod`), with no
+`children` nesting (the server keeps the wire format flat for performance). The
+VS Code provider rebuilds the hierarchy above by splitting each module's dotted
+name into path segments and threading it into a node trie
+(`module-explorer.ts::ModuleExplorerProvider.buildPackageTree`):
+
+- Each segment becomes a tree node labelled by that **segment** (`auth`), never
+  the full dotted name (`myapp.api.auth`) — a flat dotted list at the root is the
+  exact #149 defect.
+- A segment that corresponds to a real package file (`pkg/__init__.py`, dotted
+  name `pkg`) attaches that `ModuleNode` to its node, so the folder row carries
+  the package's coverage rollup and its own symbols.
+- Intermediate folders that are **not** Python packages (no `__init__.py`, e.g.
+  `models/` above) have no `ModuleNode`; they are **synthesised** as structural
+  container nodes with a namespace icon, no coverage rollup, and no open action.
+- Sibling order is structural: containers (packages/folders) before leaf
+  modules, each alphabetical by segment. The flat-view sort toggle does not
+  apply in tree view ([EXTACT-MODULES-TOOLBAR](#EXTACT-MODULES-TOOLBAR)).
+- **Diagnostics roll up onto containers.** Each folder/package row shows the
+  total `nE nW` rolled up across its whole subtree and tints its icon red (any
+  descendant error) / yellow (any descendant warning), so a branch hiding errors
+  is visible at a glance without expanding it. Coverage % stays per-module (the
+  flat list carries no per-module symbol counts to weight a folder rollup).
+
+**Flat view (`flat`, opt-in toggle).** Flat view drops the folder nesting and
+lists **every module** as one sortable row labelled by its full dotted name,
+ordered by the sort toggle (worst/best/alpha). It is "flat" only in that folders
+are not nested — symbols still expand **under their owning module** and are
+**never** dumped bare at the tree root (the #149 §2 flat-mode defect). The
+default view is always the nested tree.
+
 ### Tree Item Properties {#EXTACT-MODULES-ITEM-PROPERTIES}
 
 | Property | Value |
@@ -257,11 +289,11 @@ myapp/
 | Action | Description |
 |--------|-------------|
 | Refresh | Re-fetch module tree from LSP |
-| Collapse All | Standard collapse |
+| Collapse All | VS Code's **native** `showCollapseAll` button — never a contributed command. A custom collapse command alongside it is a duplicate (issue #113). |
 | Filter | Toggle filter input to search modules/symbols by name |
-| Toggle View | Switch between tree (grouped by module) and flat (all symbols) |
-| Sort | Cycle worst-first -> best-first -> alphabetical. Applied only in flat view; tree view stays structural. Carried over from the merged Type Health panel. |
-| Fix All | Run `basilisk.fixWorkspace`. Promoted from the info panel (issue #103); `when`-gated on `basilisk.serverState == 'running'`. |
+| Toggle View | Switch between tree (nested folder/package hierarchy, default) and flat (every module as one sortable row) |
+| Sort | Cycle worst-first -> best-first -> alphabetical. Applied only in flat view; tree view stays structural. Its toolbar entry is **gated on `basilisk.moduleExplorerView == 'flat'`** so it is hidden in tree view rather than rendering as a silent no-op (issue #151). Carried over from the merged Type Health panel. |
+| Fix All | Run `basilisk.fixWorkspace`. Promoted from the info panel (issue #103); `when`-gated on `basilisk.serverState == 'running'` **and** the `config.basilisk.experimental.fixAll` flag (default off, issue #113). |
 | Organize Imports | Run `basilisk.organizeImports`. Same promotion + gating. |
 | Restart Server | Run `basilisk.restartServer`. Same promotion + gating. |
 
@@ -603,46 +635,42 @@ Full native support via TreeView API. This is the reference implementation.
         }
     ],
     "menus": {
+        "//": "Collapse All is VS Code's native showCollapseAll button — never contributed here. Ordering/overflow grouping, the flat-gated Sort, and the Fix All feature-flag are the fixed contract in [VSIX-MODULE-EXPLORER-TOOLBAR].",
         "view/title": [
             {
                 "command": "basilisk.refreshModuleExplorer",
                 "when": "view == basilisk.moduleExplorer",
-                "group": "navigation"
-            },
-            {
-                "command": "basilisk.collapseModuleExplorer",
-                "when": "view == basilisk.moduleExplorer",
-                "group": "navigation"
+                "group": "navigation@1"
             },
             {
                 "command": "basilisk.toggleModuleExplorerView",
                 "when": "view == basilisk.moduleExplorer",
-                "group": "navigation"
+                "group": "navigation@2"
             },
             {
                 "command": "basilisk.filterModuleExplorer",
                 "when": "view == basilisk.moduleExplorer",
-                "group": "navigation"
+                "group": "navigation@3"
             },
             {
                 "command": "basilisk.sortModuleExplorer",
-                "when": "view == basilisk.moduleExplorer",
-                "group": "navigation"
-            },
-            {
-                "command": "basilisk.fixWorkspace",
-                "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running'",
-                "group": "navigation"
+                "when": "view == basilisk.moduleExplorer && basilisk.moduleExplorerView == 'flat'",
+                "group": "navigation@4"
             },
             {
                 "command": "basilisk.organizeImports",
                 "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running'",
-                "group": "navigation"
+                "group": "1_modify@1"
+            },
+            {
+                "command": "basilisk.fixWorkspace",
+                "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running' && config.basilisk.experimental.fixAll",
+                "group": "1_modify@2"
             },
             {
                 "command": "basilisk.restartServer",
                 "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running'",
-                "group": "navigation"
+                "group": "9_server@1"
             }
         ],
         "view/item/context": [
@@ -682,7 +710,6 @@ Full native support via TreeView API. This is the reference implementation.
 |---------|-------|
 | `basilisk.refreshModuleExplorer` | Basilisk: Refresh Module Explorer |
 | `basilisk.toggleModuleExplorerView` | Basilisk: Toggle Tree/Flat View |
-| `basilisk.collapseModuleExplorer` | Basilisk: Collapse All |
 | `basilisk.filterModuleExplorer` | Basilisk: Filter Modules |
 | `basilisk.sortModuleExplorer` | Basilisk: Toggle Sort Order (folded Type Health) |
 | `basilisk.copyImportPath` | Basilisk: Copy Import Path |

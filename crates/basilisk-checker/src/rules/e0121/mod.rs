@@ -30,7 +30,7 @@
 //! y: NotP = C()    # E — NotP is not a Protocol, no structural subtyping (case 2)
 //! ```
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::ResolvedModule;
 
@@ -38,8 +38,11 @@ use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
+mod ast_index;
+mod call_args;
 mod conformance;
 
+use ast_index::AstIndex;
 use conformance::{
     check_instance_var_conformance, check_method_signature_conformance,
     check_property_method_conformance, check_readwrite_property_conformance,
@@ -102,6 +105,27 @@ impl Rule for ProtocolAssignmentConformance {
             })
             .collect();
 
+        // Parse the AST once for structural checks the resolver does not retain:
+        // parameter kinds (method-signature conformance) and `self.<attr>`
+        // assignments (instance-variable presence). Both are optional — if the
+        // source fails to re-parse, those refinements are simply skipped.
+        // The AST-dependent refinements (parameter kinds, `self.<attr>`
+        // instance variables, protocol-typed call arguments) all require a
+        // locally defined `Protocol` class. Skip the re-parse entirely when none
+        // exists, keeping protocol-free files cheap.
+        let has_protocol_class = module
+            .classes
+            .iter()
+            .any(|cls| cls.bases.iter().any(|base| base == "Protocol"));
+        let parsed = has_protocol_class
+            .then(|| super::shared::parse_module(module))
+            .flatten();
+        let ast_index = parsed.as_ref().map(|p| AstIndex::build(&p.ast.body));
+        let self_attrs: HashMap<&str, HashSet<String>> = parsed
+            .as_ref()
+            .map(|p| ast_index::self_attrs_by_class(&p.ast.body))
+            .unwrap_or_default();
+
         // Check each module-level variable assignment.
         for var in &module.module_vars {
             if !var.has_annotation {
@@ -158,46 +182,71 @@ impl Rule for ProtocolAssignmentConformance {
                 if ann_is_protocol {
                     // Case 1: annotation is a Protocol. Check structural conformance.
                     check_protocol_conformance(
+                        ConformanceArgs {
+                            protocol_name: ann_name,
+                            protocol_class: ann_class,
+                            rhs_class_name,
+                            class_map: &class_map,
+                            class_methods: &class_methods,
+                            module,
+                            var,
+                            path,
+                            ast_index: ast_index.as_ref(),
+                            rhs_self_attrs: self_attrs.get(rhs_class_name),
+                        },
+                        diagnostics,
+                    );
+                } else if class_inherits_protocol(ann_name, &class_map) {
+                    // Case 2: annotation inherits from a Protocol but is not itself
+                    // a Protocol. No structural subtyping — flag it.
+                    report_non_protocol_assignment(
                         ann_name,
-                        ann_class,
                         rhs_class_name,
-                        &class_map,
-                        &class_methods,
-                        module,
                         var,
                         path,
                         diagnostics,
                     );
-                } else {
-                    // Case 2: annotation inherits from a Protocol but is not itself
-                    // a Protocol. No structural subtyping — flag it.
-                    let inherits_protocol = class_inherits_protocol(ann_name, &class_map);
-                    if inherits_protocol {
-                        diagnostics.push(error_diagnostic_owned(
-                            CODE.clone(),
-                            format!(
-                                "Cannot assign `{rhs_class_name}()` to type `{ann_name}`: \
-                                 `{ann_name}` is not a protocol and does not support structural subtyping"
-                            ),
-                            var.name_span,
-                            path,
-                            Some(format!(
-                                "`{ann_name}` inherits from a protocol but does not include \
-                                 `Protocol` in its bases, so it is a concrete class; \
-                                 `{rhs_class_name}` is not a subclass of `{ann_name}`"
-                            )),
-                            Some(
-                                "Without `Protocol` in the base class list, a class that \
-                                 inherits from a protocol is downgraded to a regular ABC \
-                                 that cannot be used with structural subtyping"
-                                    .to_owned(),
-                            ),
-                        ));
-                    }
                 }
             }
         }
+
+        // Check protocol-typed function-call arguments (e.g. passing a list of
+        // built-in literals where an `Iterable[SomeProtocol]` is expected).
+        if let Some(parsed) = parsed.as_ref() {
+            call_args::check_protocol_call_args(module, &parsed.ast.body, &class_map, diagnostics);
+        }
     }
+}
+
+/// Report assignment to a non-protocol class that merely inherits from a
+/// Protocol: structural subtyping does not apply, so only nominal subclasses fit.
+fn report_non_protocol_assignment(
+    ann_name: &str,
+    rhs_class_name: &str,
+    var: &basilisk_resolver::VariableInfo,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
+            "Cannot assign `{rhs_class_name}()` to type `{ann_name}`: \
+             `{ann_name}` is not a protocol and does not support structural subtyping"
+        ),
+        var.name_span,
+        path,
+        Some(format!(
+            "`{ann_name}` inherits from a protocol but does not include \
+             `Protocol` in its bases, so it is a concrete class; \
+             `{rhs_class_name}` is not a subclass of `{ann_name}`"
+        )),
+        Some(
+            "Without `Protocol` in the base class list, a class that \
+             inherits from a protocol is downgraded to a regular ABC \
+             that cannot be used with structural subtyping"
+                .to_owned(),
+        ),
+    ));
 }
 
 /// Check if `rhs_class` is a nominal subclass of `target_class`.
@@ -290,22 +339,43 @@ fn collect_protocol_required_methods(
     methods
 }
 
+/// Bundled context for one protocol-conformance check, threaded through the
+/// member-presence and member-kind sub-checks.
+#[derive(Clone, Copy)]
+struct ConformanceArgs<'a> {
+    protocol_name: &'a str,
+    protocol_class: &'a basilisk_resolver::ClassInfo,
+    rhs_class_name: &'a str,
+    class_map: &'a HashMap<&'a str, &'a basilisk_resolver::ClassInfo>,
+    class_methods: &'a HashMap<&'a str, Vec<&'a str>>,
+    module: &'a ResolvedModule,
+    var: &'a basilisk_resolver::VariableInfo,
+    path: &'a str,
+    /// AST index for parameter-kind aware method-signature comparison.
+    ast_index: Option<&'a AstIndex<'a>>,
+    /// Names assigned via `self.<attr>` in the RHS class's methods.
+    rhs_self_attrs: Option<&'a HashSet<String>>,
+}
+
 /// Check if a concrete class satisfies a protocol's structural requirements.
 #[expect(
-    clippy::too_many_arguments,
-    reason = "protocol conformance check requires full context"
+    clippy::too_many_lines,
+    reason = "orchestrates every protocol member-presence and member-kind sub-check"
 )]
-fn check_protocol_conformance(
-    protocol_name: &str,
-    protocol_class: &basilisk_resolver::ClassInfo,
-    rhs_class_name: &str,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    class_methods: &HashMap<&str, Vec<&str>>,
-    module: &ResolvedModule,
-    var: &basilisk_resolver::VariableInfo,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
+fn check_protocol_conformance(args: ConformanceArgs<'_>, diagnostics: &mut Vec<Diagnostic>) {
+    let ConformanceArgs {
+        protocol_name,
+        protocol_class,
+        rhs_class_name,
+        class_map,
+        class_methods,
+        module,
+        var,
+        path,
+        ast_index,
+        rhs_self_attrs,
+    } = args;
+
     let required_members = collect_protocol_required_methods(protocol_class, class_map);
 
     // Get the RHS class methods.
@@ -355,6 +425,22 @@ fn check_protocol_conformance(
         ));
     }
 
+    // A protocol's writable instance variables must also be present (as a class
+    // attribute, a `self.<attr>` assignment, or a property). Absence is a
+    // separate violation from the wrong-kind/wrong-type cases handled below.
+    check_missing_instance_vars(
+        protocol_name,
+        protocol_class,
+        rhs_class_name,
+        &module.source,
+        &rhs_methods,
+        &rhs_attributes,
+        rhs_self_attrs,
+        var,
+        path,
+        diagnostics,
+    );
+
     // Beyond name presence: a read-write (settable) protocol property requires a
     // settable implementation member.
     check_readwrite_property_conformance(
@@ -392,15 +478,82 @@ fn check_protocol_conformance(
         diagnostics,
     );
 
-    // A protocol method's signature (receiver kind and parameter names) must be
-    // compatible with the implementation.
+    // A protocol method's signature (receiver kind, parameter names, and
+    // parameter calling convention) must be compatible with the implementation.
     check_method_signature_conformance(
         protocol_name,
         protocol_class,
         rhs_class_name,
         module,
+        ast_index,
         var,
         path,
         diagnostics,
     );
+}
+
+/// Report each writable protocol instance variable that the implementation does
+/// not provide in any form: not a class-body attribute, not a `self.<attr>`
+/// assignment, and not a (property) method of the same name.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "missing-instance-var check needs the full protocol/impl context"
+)]
+fn check_missing_instance_vars(
+    protocol_name: &str,
+    protocol_class: &basilisk_resolver::ClassInfo,
+    rhs_class_name: &str,
+    source: &str,
+    rhs_methods: &[&str],
+    rhs_attributes: &[&str],
+    rhs_self_attrs: Option<&HashSet<String>>,
+    var: &basilisk_resolver::VariableInfo,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for member in protocol_instance_var_names(protocol_class, source) {
+        let provided = rhs_attributes.contains(&member)
+            || rhs_methods.contains(&member)
+            || rhs_self_attrs.is_some_and(|set| set.contains(member));
+        if provided {
+            continue;
+        }
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
+                "Class `{rhs_class_name}` is incompatible with protocol `{protocol_name}`: \
+                 missing instance variable `{member}`"
+            ),
+            var.name_span,
+            path,
+            Some(format!(
+                "Declare `{member}` in `{rhs_class_name}` (as a class attribute, a \
+                 `self.{member}` assignment, or a property)"
+            )),
+            Some(
+                "Protocol instance variables must be provided by the implementation; a \
+                 class that declares none of them does not satisfy the protocol"
+                    .to_owned(),
+            ),
+        ));
+    }
+}
+
+/// Names of a protocol's writable instance variables: class-body attributes
+/// whose annotation is **not** `ClassVar` (those are covered by BSK-E0036).
+fn protocol_instance_var_names<'a>(
+    protocol_class: &'a basilisk_resolver::ClassInfo,
+    source: &str,
+) -> Vec<&'a str> {
+    protocol_class
+        .attributes
+        .iter()
+        .filter(|attr| {
+            attr.annotation_span
+                .and_then(|sp| slice_span(source, sp))
+                .map(str::trim)
+                .is_some_and(|ann| !conformance::is_classvar_ann(ann))
+        })
+        .map(|attr| attr.name.as_str())
+        .collect()
 }

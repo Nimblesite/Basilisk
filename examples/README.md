@@ -7,13 +7,13 @@ clean, fully-typed code looks like.
 
 ```bash
 # Check a single file
-cargo run -- check examples/bad.py
+basilisk check examples/bad.py
 
 # Check every example at once
-cargo run -- check examples/
+basilisk check examples/
 
 # JSON output (for editors / CI)
-cargo run -- check examples/bad.py --output json
+basilisk check examples/bad.py --output json
 ```
 
 ## Files

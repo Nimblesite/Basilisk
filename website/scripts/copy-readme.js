@@ -35,12 +35,13 @@ permalink: /readme/
 `;
 
 // The root README uses a repo-relative logo path (`images/basilisk-logo.png`)
-// that resolves on GitHub but 404s on the site at /readme/. Rewrite it to the
-// site's absolute logo asset so the page renders without a broken image.
-const readme = readFileSync(readmePath, "utf8").replace(
-  /images\/basilisk-logo\.png/g,
-  "/assets/images/logo.svg",
-);
+// that resolve on GitHub but 404 on the site at /readme/. Rewrite them to the
+// site's absolute asset paths so the page renders without broken images.
+// `images/screenshot.png` is a symlink to the canonical website asset, so both
+// references resolve to the same file.
+const readme = readFileSync(readmePath, "utf8")
+  .replace(/images\/basilisk-logo\.png/g, "/assets/images/logo.svg")
+  .replace(/images\/screenshot\.png/g, "/assets/images/screenshot.png");
 
 mkdirSync(dirname(outPath), { recursive: true });
 writeFileSync(outPath, frontmatter + readme, "utf8");

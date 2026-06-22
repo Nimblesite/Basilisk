@@ -5,13 +5,12 @@ description: "Python has had type annotations for ten years. It's time someone e
 date: 2026-02-28
 dateModified: 2026-03-31
 author: The Basilisk Project
+image: /assets/images/blog/introducing-basilisk.png
 tags: posts
 category: announcements
 excerpt: "The Python type annotation ecosystem has a dirty secret: nobody enforces it by default. We built Basilisk to fix that."
 keywords: basilisk, python type checker, strict typing, rust, announcement
 ---
-
-# Introducing Basilisk: Python's Type System, Actually Enforced
 
 The Python type annotation ecosystem has a dirty secret: nobody enforces it by default.
 

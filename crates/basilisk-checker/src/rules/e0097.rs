@@ -1,9 +1,11 @@
 //! Implements [BSK-E0097] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0097: Protocol `__new__`/`__init__` sets self-attributes not declared in Protocol.
+//! BSK-E0097: Protocol method sets self-attributes not declared in the Protocol.
 //!
-//! When a Protocol class defines `__new__` or `__init__` that assigns to
-//! `self.attr` where `attr` is not a declared member of the Protocol, this is
-//! a violation: Protocol members must be explicitly declared.
+//! When a Protocol class defines a method (including `__init__`/`__new__`) that
+//! assigns to `self.attr` where `attr` is not a declared member of the Protocol,
+//! this is a violation: per the typing spec, "additional attributes only defined
+//! in the body of a method by assignment via self are not allowed". Protocol
+//! members must be explicitly declared at the class level.
 //!
 //! ```python
 //! from typing import Protocol
@@ -12,7 +14,12 @@
 //!     x: int
 //!     def __init__(self) -> None:
 //!         self.y = 0  # E — `y` is not declared in the Protocol
+//!     def method(self) -> None:
+//!         self.z: int = 0  # E — `z` is not declared in the Protocol
 //! ```
+//!
+//! `@staticmethod`/`@classmethod` members have no instance receiver, so their
+//! first parameter is not `self` and is not analysed here.
 
 use std::collections::HashSet;
 
@@ -65,7 +72,7 @@ impl Rule for ProtocolNewSelfAttrViolation {
 
             // Find the corresponding class def in the AST.
             if let Some(class_def) = find_class_def(&parsed.ast.body, &cls_info.name) {
-                check_class_init_new(
+                check_class_methods(
                     class_def,
                     &declared_attrs,
                     &declared_methods,
@@ -89,8 +96,10 @@ fn find_class_def<'a>(stmts: &'a [Stmt], name: &str) -> Option<&'a ruff_python_a
     None
 }
 
-/// Check `__init__` and `__new__` methods in a protocol class for undeclared self-attr assignments.
-fn check_class_init_new(
+/// Check every instance method in a protocol class for undeclared self-attr
+/// assignments. `@staticmethod`/`@classmethod` members have no instance receiver
+/// and are skipped to avoid mis-reading their first parameter as `self`.
+fn check_class_methods(
     class_def: &ruff_python_ast::StmtClassDef,
     declared_attrs: &HashSet<&str>,
     declared_methods: &HashSet<&str>,
@@ -98,38 +107,44 @@ fn check_class_init_new(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for stmt in &class_def.body {
-        if let Stmt::FunctionDef(func_def) = stmt {
-            let name = func_def.name.as_str();
-            if name == "__init__" || name == "__new__" {
-                // Get the first parameter name (usually `self` or `cls`).
-                let self_name = func_def
-                    .parameters
-                    .args
-                    .first()
-                    .map(|p| p.parameter.name.as_str())
-                    .or_else(|| {
-                        func_def
-                            .parameters
-                            .posonlyargs
-                            .first()
-                            .map(|p| p.parameter.name.as_str())
-                    });
-
-                let Some(self_param) = self_name else {
-                    continue;
-                };
-
-                check_body_for_self_attrs(
-                    &func_def.body,
-                    self_param,
-                    declared_attrs,
-                    declared_methods,
-                    path,
-                    diagnostics,
-                );
-            }
+        let Stmt::FunctionDef(func_def) = stmt else {
+            continue;
+        };
+        if has_no_instance_receiver(func_def) {
+            continue;
         }
+        // Get the first parameter name (the instance receiver, usually `self`).
+        let self_name = func_def
+            .parameters
+            .posonlyargs
+            .first()
+            .or_else(|| func_def.parameters.args.first())
+            .map(|p| p.parameter.name.as_str());
+
+        let Some(self_param) = self_name else {
+            continue;
+        };
+
+        check_body_for_self_attrs(
+            &func_def.body,
+            self_param,
+            declared_attrs,
+            declared_methods,
+            path,
+            diagnostics,
+        );
     }
+}
+
+/// `true` when the method is decorated `@staticmethod` or `@classmethod`, so its
+/// first parameter is not an instance receiver.
+fn has_no_instance_receiver(func_def: &ruff_python_ast::StmtFunctionDef) -> bool {
+    func_def.decorator_list.iter().any(|dec| {
+        matches!(
+            &dec.expression,
+            Expr::Name(name) if name.id.as_str() == "staticmethod" || name.id.as_str() == "classmethod"
+        )
+    })
 }
 
 /// Walk function body looking for `self.attr = ...` assignments to undeclared attributes.
@@ -256,7 +271,7 @@ fn check_self_attr_target(
             )),
             Some(
                 "Protocol members must be explicitly declared; assigning to undeclared \
-                 self-attributes in `__init__`/`__new__` is not allowed"
+                 self-attributes in a method body is not allowed"
                     .to_owned(),
             ),
         ));

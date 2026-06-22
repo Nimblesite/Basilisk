@@ -10,12 +10,13 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule, VariableInfo};
 
+use super::ast_index::AstIndex;
 use super::CODE;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 use crate::span_util::slice_span;
 
 /// Returns `true` when the annotation text is a `ClassVar` form.
-fn is_classvar_ann(ann: &str) -> bool {
+pub(super) fn is_classvar_ann(ann: &str) -> bool {
     ann.starts_with("ClassVar[") || ann.starts_with("ClassVar ") || ann == "ClassVar"
 }
 
@@ -363,11 +364,16 @@ fn push_signature_diag(
 /// Check method-signature compatibility for plain (non-property, non-dunder)
 /// protocol methods: a `@staticmethod` with a `self` receiver, and
 /// positional-or-keyword parameter-name mismatches.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "method-signature conformance threads full protocol/impl context plus the AST index"
+)]
 pub(super) fn check_method_signature_conformance(
     protocol_name: &str,
     protocol_class: &ClassInfo,
     rhs_class_name: &str,
     module: &ResolvedModule,
+    ast_index: Option<&AstIndex<'_>>,
     var: &VariableInfo,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
@@ -415,6 +421,27 @@ pub(super) fn check_method_signature_conformance(
                 &format!(
                     "parameter names {impl_params:?} do not match the protocol's {proto_params:?}"
                 ),
+                var,
+                path,
+                diagnostics,
+            );
+            continue;
+        }
+
+        // Names match — the parameter *calling conventions* must be compatible
+        // too: a protocol positional-or-keyword parameter cannot be satisfied by
+        // a keyword-only or positional-only one. This needs parameter-kind data
+        // the resolver flattens away, so it consults the AST index.
+        if let Some(reason) = ast_index.and_then(|index| {
+            let proto_sig = index.method_signature(&protocol_class.name, member)?;
+            let impl_sig = index.method_signature(rhs_class_name, member)?;
+            proto_sig.calling_convention_mismatch(&impl_sig)
+        }) {
+            push_signature_diag(
+                protocol_name,
+                rhs_class_name,
+                member,
+                &reason,
                 var,
                 path,
                 diagnostics,

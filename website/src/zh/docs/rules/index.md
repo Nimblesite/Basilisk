@@ -12,7 +12,7 @@ lang: zh
 
 规则默认全部启用。您可以通过编辑器或 `pyproject.toml`，按文件或路径将单个规则调低——严格是默认值，而不是牢笼。
 
-Basilisk 内置 **151 个诊断代码**（146 个错误，5 个警告），覆盖完整的 Python 类型表面（泛型、协议、dataclass、TypedDict、重载、字面量、枚举等），通过[官方 Python 类型符合性套件](https://github.com/python/typing/blob/main/conformance/results/results.html)验证（当前符合率 **92.5%**，135 / 146）。下面记录了两个基础组；完整集合由检查器强制执行。
+Basilisk 内置 **155 个诊断代码**（150 个错误，5 个警告），覆盖完整的 Python 类型表面（泛型、协议、dataclass、TypedDict、重载、字面量、枚举等），通过[官方 Python 类型符合性套件](https://github.com/python/typing/blob/main/conformance/results/results.html)验证（当前符合率 **98.6%**，144 / 146）。下面记录了两个基础组；完整集合由检查器强制执行。
 
 | 组 | 代码 | 描述 |
 |---|---|---|

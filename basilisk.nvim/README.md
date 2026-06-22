@@ -2,6 +2,10 @@
 
 First-class Neovim plugin for Basilisk — zero-config Python type checking, debugging, profiling, and test exploration.
 
+<p align="center">
+  <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
+</p>
+
 ## Role in Basilisk
 
 This is the **Neovim editor integration**. It connects Neovim's built-in LSP client to the Basilisk language server, providing the same feature set as the VS Code extension: real-time diagnostics, hover, go-to-definition, code actions, inlay hints, integrated debugging, and profiling.

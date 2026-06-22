@@ -19,27 +19,15 @@
 
 ---
 
+<p align="center">
+  <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in VS Code" width="900">
+</p>
+
 ## What Basilisk does
 
 Basilisk is a **complete Python language server and VS Code extension** that replaces Pylance and Pyright. It is not just a type checker — it provides autocomplete, go-to-definition, hover, code actions, refactoring, integrated debugging, and profiling. All fully open source.
 
-Other type checkers default to permissive and hope you opt into strictness. Basilisk **starts strict** and stays strict. If your code isn't typed, it's an error.
-
-```
-error[BSK-E0001]: Missing parameter type annotation for `name`
-  --> greet.py:1:10
-   |
- 1 | def greet(name):
-   |           ^^^^
-   |
-   = help: Add a type annotation: `name: <type>`
-
-error[BSK-E0002]: Missing return type annotation
-  --> greet.py:1:1
-   |
- 1 | def greet(name):
-   | ^^^^^^^^^^^^^^^^
-```
+Other type checkers default to permissive and hope you opt into strictness. Basilisk **starts strict** and stays strict. If your code isn't typed, it's an error — exactly as the screenshot above shows.
 
 Fix it once. Ship it typed forever:
 
@@ -118,7 +106,7 @@ All rules are **on by default**. There is no way to relax them globally.
 | Code | What it catches |
 |------|----------------|
 | `BSK-E0010` | Import from untyped module |
-| `BSK-E0011` | Implicit `Any` |
+| `BSK-E0011` | Explicit `Any` annotation (warning) |
 | `BSK-E0012` | Argument type mismatch |
 | `BSK-E0013` | Return type mismatch |
 | `BSK-E0014` | Assignment type mismatch |
@@ -207,7 +195,7 @@ scoop install basilisk
 
 Or download a pre-built binary from [GitHub Releases](https://github.com/Nimblesite/Basilisk/releases).
 
-To make this extension use a CLI you installed separately, set `basilisk.executablePath` or `basilisk.binaries.basilisk` to the absolute path of the binary. Building from source also works (`cargo build --release` from the repository — Rust 1.87+ required).
+To make this extension use a CLI you installed separately, set `basilisk.executablePath` or `basilisk.binaries.basilisk` to the absolute path of the binary. Building from source also works — see the [GitHub repository](https://github.com/Nimblesite/Basilisk).
 
 ---
 

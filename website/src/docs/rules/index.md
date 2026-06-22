@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "Basilisk Diagnostic Rules — All BSK Error and Warning Codes"
-description: "Complete reference for every Basilisk diagnostic code (BSK-E errors and BSK-W warnings) — missing annotations, type safety, generics, protocols, dataclasses, TypedDicts, and more."
+description: "Reference for every Basilisk diagnostic code and rule — BSK-E errors and BSK-W warnings from the strict Python type checker, with causes and fixes for each."
 keywords: basilisk rules, type errors, BSK-E, BSK-W, diagnostic codes
 date: 2026-02-28
 dateModified: 2026-05-30
@@ -17,7 +17,7 @@ Every Basilisk diagnostic has a unique code in the format `BSK-EXXXX` (error) or
 
 Rules are enabled by default. You can dial individual rules down per-file or per-path from your editor or `pyproject.toml` — strict is the default, not a cage.
 
-Basilisk ships **151 diagnostic codes** (146 errors, 5 warnings) spanning the full Python typing surface — generics, protocols, dataclasses, TypedDicts, overloads, literals, enums, and more — and is validated against the [official Python typing conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) (currently **92.5%**, 135 / 146). The two foundational groups have worked examples:
+Basilisk ships **155 diagnostic codes** (150 errors, 5 warnings) spanning the full Python typing surface — generics, protocols, dataclasses, TypedDicts, overloads, literals, enums, and more — and is validated against the [official Python typing conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) (currently **98.6%**, 144 / 146). The two foundational groups have worked examples:
 
 | Group | Codes | Description |
 |---|---|---|

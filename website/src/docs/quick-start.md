@@ -42,25 +42,29 @@ basilisk check bad.py
 Output:
 
 ```
-error[BSK-E0001]: Missing parameter type annotation
-  --> bad.py:1:12
-   |
- 1 | def process(data):
-   |             ^^^^ parameter `data` has no type annotation
-   |
-   = help: add type annotation: `data: str`
-   = note: all parameters must be explicitly typed
-   = see: https://www.basilisk-python.dev/docs/rules/#BSK-E0001
+error[BSK-E0001]: Missing parameter type annotation for `data`
+  --> bad.py:1:13
+    |
+1 | def process(data):
+    |             ^^^^
+    |
+   = help: Add a type annotation: `data: <type>`
+   = note: In Basilisk, all function parameters require explicit types
+   = see: https://www.basilisk-python.dev/errors/BSK-E0001
 
-error[BSK-E0002]: Missing return type annotation
-  --> bad.py:1:1
-   |
- 1 | def process(data):
-   |     ^^^^^^^ function has no return type annotation
-   |
-   = help: add return type: `def process(data: str) -> str:`
+error[BSK-E0002]: Missing return type annotation for function `process`
+  --> bad.py:1:5
+    |
+1 | def process(data):
+    |     ^^^^^^^^^^^^^
+    |
+   = help: Add a return type: `def process(...) -> <type>:`
+   = note: In Basilisk, all functions require an explicit return type
+   = see: https://www.basilisk-python.dev/errors/BSK-E0002
 
-Found 5 errors in 1 file.
+... 4 more errors (untyped `name`, `age`, `__init__`, and `greet`) ...
+
+Found 6 diagnostics (6 errors).
 ```
 
 ## Step 2 — Fix the errors
@@ -125,16 +129,16 @@ With a config file present, running `basilisk check` uses these settings automat
 Basilisk uses the same output format as the Rust compiler (`rustc`). Every diagnostic includes:
 
 ```
-error[BSK-E0001]: Missing parameter type annotation
+error[BSK-E0001]: Missing parameter type annotation for `data`
 ^^^^^            ^                                  ← severity + message
-  --> bad.py:1:12                                   ← file:line:column
-   |
- 1 | def process(data):                             ← source context
-   |             ^^^^  parameter `data` ...         ← caret pointing at the issue
-   |
-   = help: add type annotation: `data: str`         ← actionable fix
-   = note: all parameters must be explicitly typed  ← explanation
-   = see: https://www.basilisk-python.dev/docs/rules/#BSK-E0001  ← documentation link
+  --> bad.py:1:13                                   ← file:line:column
+    |
+1 | def process(data):                              ← source context
+    |             ^^^^                               ← caret pointing at the issue
+    |
+   = help: Add a type annotation: `data: <type>`    ← actionable fix
+   = note: In Basilisk, all function parameters require explicit types  ← explanation
+   = see: https://www.basilisk-python.dev/errors/BSK-E0001  ← documentation link
 ```
 
 - **`error[BSK-EXXXX]`** — error with its unique code (orange)

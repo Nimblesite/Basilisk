@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 类型安全 — E0010–E0029
-description: 捕获类型不匹配、错误注解和不健全类型使用的规则。
+description: Basilisk 的类型安全规则 BSK-E0010 至 E0029，捕获参数与返回类型不匹配、赋值不兼容、不兼容的方法覆盖、不可哈希类型、非穷举模式匹配以及不健全的类型使用。
 keywords: basilisk, 类型安全, 类型不匹配, BSK-E0012, BSK-E0013, BSK-E0016
 lang: zh
 ---

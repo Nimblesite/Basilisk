@@ -22,7 +22,7 @@ BSK-E0014|BSK-E0015|BSK-E0122|BSK-E0140,callables_annotation.py,callables,PASS,1
 BSK-E0012|BSK-E0140|BSK-E0141,callables_kwargs.py,callables,PASS,13,0,0
 BSK-E0140,callables_protocol.py,callables,PASS,17,0,0
 BSK-E0014|BSK-E0136,callables_subtyping.py,callables,PASS,32,0,0
-BSK-E0014|BSK-E0036|BSK-E0044,classes_classvar.py,classes,PASS,17,0,0
+BSK-E0014|BSK-E0036|BSK-E0044|BSK-E0121,classes_classvar.py,classes,PASS,17,0,0
 ,classes_override.py,classes,PASS,0,0,0
 BSK-E0111|BSK-E0128,constructors_call_init.py,constructors,PASS,5,0,0
 BSK-E0041,constructors_call_metaclass.py,constructors,PASS,2,0,0
@@ -83,7 +83,7 @@ BSK-E0043|BSK-E0089|BSK-E0105,generics_syntax_declarations.py,generics,PASS,10,0
 BSK-E0055|BSK-E0130,generics_syntax_infer_variance.py,generics,PASS,18,0,0
 BSK-E0149,generics_syntax_scoping.py,generics,PASS,7,0,0
 BSK-E0111|BSK-E0125,generics_type_erasure.py,generics,PASS,7,0,0
-BSK-E0085,generics_typevartuple_args.py,generics,FAIL,7,1,0
+BSK-E0085,generics_typevartuple_args.py,generics,PASS,8,0,0
 BSK-E0055|BSK-E0083|BSK-E0084|BSK-E0085|BSK-E0086,generics_typevartuple_basic.py,generics,PASS,13,0,0
 BSK-E0082,generics_typevartuple_callable.py,generics,PASS,1,0,0
 ,generics_typevartuple_concat.py,generics,PASS,0,0,0
@@ -109,7 +109,7 @@ BSK-E0072,overloads_basic.py,overloads,PASS,1,0,0
 BSK-E0020|BSK-E0034,overloads_definitions.py,overloads,PASS,0,0,0
 BSK-E0012|BSK-E0041|BSK-E0076,overloads_evaluation.py,overloads,PASS,4,0,0
 BSK-E0099|BSK-E0146,protocols_class_objects.py,protocols,PASS,8,0,0
-BSK-E0036|BSK-E0121,protocols_definition.py,protocols,FAIL,16,5,0
+BSK-E0036|BSK-E0097|BSK-E0121,protocols_definition.py,protocols,PASS,21,0,0
 BSK-E0099|BSK-E0118|BSK-E0123|BSK-E0124,protocols_explicit.py,protocols,PASS,6,0,0
 BSK-E0130|BSK-E0137,protocols_generic.py,protocols,PASS,9,0,0
 BSK-E0098|BSK-E0099|BSK-E0121,protocols_merging.py,protocols,PASS,6,0,0
