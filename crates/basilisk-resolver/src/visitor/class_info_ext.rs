@@ -359,7 +359,15 @@ pub(super) fn import_infos_from(node: &StmtImport) -> Vec<ImportInfo> {
         .iter()
         .map(|alias| ImportInfo {
             module: alias.name.to_string(),
-            names: Vec::new(),
+            // `import X as Y` binds `Y`, not the module name — capture the alias so
+            // scope-resolution rules (e.g. BSK-E0018) see the real binding. Plain
+            // `import X` / `import X.Y` keeps `names` empty; its bound name is the
+            // top-level module, derived from `module`.
+            names: alias
+                .asname
+                .as_ref()
+                .map(|asname| vec![asname.to_string()])
+                .unwrap_or_default(),
             span: text_range_to_span(node.range),
             kind: ImportKind::Plain,
             resolution: ImportResolution::Unresolved,
