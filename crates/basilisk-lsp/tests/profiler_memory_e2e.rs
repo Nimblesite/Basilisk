@@ -105,7 +105,10 @@ async fn snapshot_measures_and_attributes_real_allocations() -> Result<(), Strin
     let result = manager.ingest(&session, &payloads[0]).await?;
 
     let IngestOutcome::Snapshot(snapshot) = &result.outcome else {
-        return Err(format!("expected snapshot outcome, got {:?}", result.outcome));
+        return Err(format!(
+            "expected snapshot outcome, got {:?}",
+            result.outcome
+        ));
     };
 
     assert!(
@@ -190,7 +193,10 @@ async fn atexit_final_snapshot_file_captures_end_state() -> Result<(), String> {
     let session = manager.start_session(DEPTH).await;
     let result = manager.ingest(&session, &payload).await?;
     let IngestOutcome::Snapshot(snapshot) = &result.outcome else {
-        return Err(format!("expected snapshot outcome, got {:?}", result.outcome));
+        return Err(format!(
+            "expected snapshot outcome, got {:?}",
+            result.outcome
+        ));
     };
     assert!(
         snapshot.current_memory >= 4_000_000,
@@ -248,7 +254,10 @@ async fn repeated_real_growth_escalates_leak_confidence() -> Result<(), String> 
     for (idx, payload) in payloads.iter().enumerate() {
         let result = manager.ingest(&session, payload).await?;
         let IngestOutcome::Diff { leaks, .. } = &result.outcome else {
-            return Err(format!("diff {idx} must be a Diff outcome, got {:?}", result.outcome));
+            return Err(format!(
+                "diff {idx} must be a Diff outcome, got {:?}",
+                result.outcome
+            ));
         };
         let ours = leaks
             .iter()
@@ -344,7 +353,10 @@ async fn objects_by_type_counts_real_live_objects() -> Result<(), String> {
     let session = manager.start_session(DEPTH).await;
     let result = manager.ingest(&session, &payloads[0]).await?;
     let IngestOutcome::Objects(value) = &result.outcome else {
-        return Err(format!("expected objects outcome, got {:?}", result.outcome));
+        return Err(format!(
+            "expected objects outcome, got {:?}",
+            result.outcome
+        ));
     };
 
     let total = value
@@ -414,7 +426,10 @@ _BASILISK_WIDGETS = [_Widget() for _ in range(12)]
         "our `_Widget` targets must appear as target nodes in the graph"
     );
     assert!(
-        graph.get("edges").and_then(serde_json::Value::as_array).is_some(),
+        graph
+            .get("edges")
+            .and_then(serde_json::Value::as_array)
+            .is_some(),
         "graph must carry an edges array"
     );
     Ok(())

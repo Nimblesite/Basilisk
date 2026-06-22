@@ -763,12 +763,21 @@ mod tests {
         if cfg!(target_os = "macos") {
             // macOS needs root (vm_read) for ANY external process — even a
             // same-user one started in another terminal (the Flask-server report).
-            assert!(same_user, "macOS: a same-user external process still needs elevation");
-            assert!(other_user, "macOS: another user's external process needs elevation");
+            assert!(
+                same_user,
+                "macOS: a same-user external process still needs elevation"
+            );
+            assert!(
+                other_user,
+                "macOS: another user's external process needs elevation"
+            );
         } else {
             // Linux/Windows: a same-user external process attaches without
             // elevation; only another user's process needs it.
-            assert!(!same_user, "same-user external process attaches without elevation");
+            assert!(
+                !same_user,
+                "same-user external process attaches without elevation"
+            );
             assert!(other_user, "another user's process needs elevation");
         }
     }
@@ -787,7 +796,10 @@ mod tests {
         ];
         let adapter_is_machinery =
             debugpy_debuggee_program(&adapter).is_none() && is_debugger_infrastructure(&adapter);
-        assert!(adapter_is_machinery, "the adapter must be flagged machinery");
+        assert!(
+            adapter_is_machinery,
+            "the adapter must be flagged machinery"
+        );
 
         // A debuggee running the user's program is NOT machinery — it stays
         // debuggable and surfaced.
@@ -843,7 +855,10 @@ mod tests {
             OsString::from("--wait-for-client"),
             OsString::from("/ws/app.py"),
         ];
-        assert_eq!(debugpy_debuggee_program(&listen), Some("/ws/app.py".to_owned()));
+        assert_eq!(
+            debugpy_debuggee_program(&listen),
+            Some("/ws/app.py".to_owned())
+        );
 
         // `-m debugpy` module form.
         let module = vec![
@@ -854,7 +869,10 @@ mod tests {
             OsString::from("127.0.0.1:1"),
             OsString::from("/ws/main.py"),
         ];
-        assert_eq!(debugpy_debuggee_program(&module), Some("/ws/main.py".to_owned()));
+        assert_eq!(
+            debugpy_debuggee_program(&module),
+            Some("/ws/main.py".to_owned())
+        );
     }
 
     #[test]

@@ -243,8 +243,8 @@ async fn test_ws_profiler_processes_excludes_non_python_noise() -> TestResult<()
 /// workspace root are BOTH listed — workspace membership now only drives the
 /// green-row `inWorkspace` flag, never inclusion.
 #[tokio::test]
-async fn test_ws_profiler_processes_lists_all_python_and_flags_workspace_membership() -> TestResult<()>
-{
+async fn test_ws_profiler_processes_lists_all_python_and_flags_workspace_membership(
+) -> TestResult<()> {
     let in_dir = unique_temp_dir("bsk_ws_proc_in");
     let out_dir = unique_temp_dir("bsk_ws_proc_out");
     std::fs::create_dir_all(&in_dir)?;

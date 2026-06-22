@@ -103,7 +103,11 @@ async fn memory_full_lsp_roundtrip_snapshot() -> TestResult<()> {
         run.stderr
     );
     let payloads = harvest_mem_payloads(&run.stdout);
-    assert_eq!(payloads.len(), 1, "one snapshot payload expected: {payloads:?}");
+    assert_eq!(
+        payloads.len(),
+        1,
+        "one snapshot payload expected: {payloads:?}"
+    );
 
     // Leg 2: post the genuine output back through ingest.
     let ingest_resp = execute_command(
@@ -132,9 +136,9 @@ async fn memory_full_lsp_roundtrip_snapshot() -> TestResult<()> {
     assert!(!allocations.is_empty(), "real allocations must be reported");
     let fname = run.script_file_name();
     assert!(
-        allocations
-            .iter()
-            .any(|site| site["file"].as_str().is_some_and(|file| file.ends_with(&fname))),
+        allocations.iter().any(|site| site["file"]
+            .as_str()
+            .is_some_and(|file| file.ends_with(&fname))),
         "the program's own allocation site must be attributed: {allocations:?}"
     );
 
@@ -246,10 +250,18 @@ for _ in range(40):
         return Ok(());
     };
     let _ = std::fs::remove_file(&final_file);
-    assert!(run.success, "gc program must run cleanly.\nstderr:\n{}", run.stderr);
+    assert!(
+        run.success,
+        "gc program must run cleanly.\nstderr:\n{}",
+        run.stderr
+    );
 
     let payloads = harvest_mem_payloads(&run.stdout);
-    assert_eq!(payloads.len(), 1, "gc collect couriers one payload: {payloads:?}");
+    assert_eq!(
+        payloads.len(),
+        1,
+        "gc collect couriers one payload: {payloads:?}"
+    );
 
     let ingest_resp = execute_command(
         &mut fixture,

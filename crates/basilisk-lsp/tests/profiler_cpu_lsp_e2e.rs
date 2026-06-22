@@ -220,7 +220,8 @@ async fn assert_session_listed(
     session_id: &str,
     present: bool,
 ) -> TestResult<()> {
-    let resp = execute_command(fixture, id, "basilisk.profiler.list", serde_json::json!({})).await?;
+    let resp =
+        execute_command(fixture, id, "basilisk.profiler.list", serde_json::json!({})).await?;
     let result = command_result(&resp, "list")?;
     let sessions = result["sessions"]
         .as_array()
