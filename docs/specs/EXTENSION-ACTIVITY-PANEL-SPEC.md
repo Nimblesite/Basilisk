@@ -242,6 +242,11 @@ name into path segments and threading it into a node trie
 - Sibling order is structural: containers (packages/folders) before leaf
   modules, each alphabetical by segment. The flat-view sort toggle does not
   apply in tree view ([EXTACT-MODULES-TOOLBAR](#EXTACT-MODULES-TOOLBAR)).
+- **Diagnostics roll up onto containers.** Each folder/package row shows the
+  total `nE nW` rolled up across its whole subtree and tints its icon red (any
+  descendant error) / yellow (any descendant warning), so a branch hiding errors
+  is visible at a glance without expanding it. Coverage % stays per-module (the
+  flat list carries no per-module symbol counts to weight a folder rollup).
 
 **Flat view (`flat`, opt-in toggle).** Flat view drops the folder nesting and
 lists **every module** as one sortable row labelled by its full dotted name,

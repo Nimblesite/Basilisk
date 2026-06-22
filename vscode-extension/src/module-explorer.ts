@@ -71,6 +71,11 @@ interface PackageTreeNode {
   module?: ModuleNode;
   /** Child packages and modules, keyed by their segment. */
   readonly children: Map<string, PackageTreeNode>;
+  // Diagnostics rolled up across this node's whole subtree (self module +
+  // every descendant). Surfaced on the folder/package row so errors are
+  // visible without drilling into the hierarchy (#149). Set by `rollup`.
+  errors: number;
+  warnings: number;
 }
 
 // ── Tree items ───────────────────────────────────────────────────────────
@@ -122,15 +127,17 @@ export class PackageTreeItem extends vscode.TreeItem {
   ) {
     super(node.segment, vscode.TreeItemCollapsibleState.Collapsed);
     const { module } = node;
+    // Tint by the worst diagnostic in the subtree so a folder containing errors
+    // reads red at a glance; fall back to the package's own coverage colour, or
+    // a neutral folder icon for a pure (non-package) directory (#149).
+    this.iconPath = new vscode.ThemeIcon("symbol-namespace", packageIconColor(node));
+    this.description = packageDescription(node);
+    this.tooltip = packageTooltip(node);
     if (module === undefined) {
-      this.iconPath = new vscode.ThemeIcon("symbol-namespace");
       this.contextValue = "folder";
       return;
     }
-    this.iconPath = new vscode.ThemeIcon("symbol-namespace", coverageColor(module.coveragePercent));
     this.contextValue = "module";
-    this.description = moduleDescription(module);
-    this.tooltip = moduleTooltip(module);
     this.resourceUri = vscode.Uri.file(module.path);
     this.command = {
       command: "vscode.open",
@@ -230,6 +237,49 @@ function moduleTooltip(module: ModuleNode): string {
     `Errors: ${module.errors}`,
     `Warnings: ${module.warnings}`,
     module.adopted ? "Status: Adopted (errors demoted to warnings)" : "",
+  ].filter(Boolean).join("\n");
+}
+
+/** `nE nW` diagnostic tally, or "" when clean. Shared by folder/package rows. */
+function diagnosticTally(errors: number, warnings: number): string {
+  const issues: string[] = [];
+  if (errors > 0) { issues.push(`${errors}E`); }
+  if (warnings > 0) { issues.push(`${warnings}W`); }
+  return issues.join(" ");
+}
+
+/**
+ * Folder/package icon tint: red if the subtree holds any error, else yellow if
+ * any warning, else a package's own coverage colour (a pure folder stays
+ * untinted). Lets a folder with hidden errors read red without expanding (#149).
+ */
+function packageIconColor(node: PackageTreeNode): vscode.ThemeColor | undefined {
+  if (node.errors > 0) { return new vscode.ThemeColor("list.errorForeground"); }
+  if (node.warnings > 0) { return new vscode.ThemeColor("list.warningForeground"); }
+  return node.module !== undefined ? coverageColor(node.module.coveragePercent) : undefined;
+}
+
+/**
+ * Folder/package row description: the subtree's rolled-up `nE nW` so problems
+ * are visible without drilling in (#149). A package (`__init__.py`) also keeps
+ * its own coverage bar.
+ */
+function packageDescription(node: PackageTreeNode): string {
+  const own = node.module !== undefined
+    ? `${coverageBar(node.module.coveragePercent)} ${node.module.coveragePercent}%`
+    : "";
+  return [own, diagnosticTally(node.errors, node.warnings)].filter(Boolean).join(" — ");
+}
+
+/** Folder/package row tooltip: name + (package path/coverage) + subtree diagnostics. */
+function packageTooltip(node: PackageTreeNode): string {
+  const errs = `${node.errors} error${node.errors === 1 ? "" : "s"}`;
+  const warns = `${node.warnings} warning${node.warnings === 1 ? "" : "s"}`;
+  return [
+    node.fullName,
+    node.module?.path,
+    node.module !== undefined ? `Coverage: ${node.module.coveragePercent}%` : "",
+    `Subtree: ${errs}, ${warns}`,
   ].filter(Boolean).join("\n");
 }
 
@@ -366,6 +416,7 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     // flat dotted names [EXTACT-MODULES-TREE-STRUCTURE] (#149). The order is
     // structural (containers first, then alphabetical); sort is flat-only.
     const root = ModuleExplorerProvider.buildPackageTree(filtered);
+    ModuleExplorerProvider.rollup(root);
     return ModuleExplorerProvider.sortNodes([...root.children.values()])
       .map((node) => ModuleExplorerProvider.nodeToItem(node));
   }
@@ -386,20 +437,37 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
    * (`pkg/__init__.py`, dotted name `pkg`) shares its node with the `pkg/` folder.
    */
   private static buildPackageTree(modules: readonly ModuleNode[]): PackageTreeNode {
-    const root: PackageTreeNode = { segment: "", fullName: "", children: new Map() };
+    const root: PackageTreeNode = { segment: "", fullName: "", children: new Map(), errors: 0, warnings: 0 };
     for (const module of modules) {
       const segments = module.name.split(".").filter((seg) => seg !== "");
       let node = root;
       for (const segment of segments) {
         const fullName = node.fullName === "" ? segment : `${node.fullName}.${segment}`;
         const existing = node.children.get(segment);
-        const child = existing ?? { segment, fullName, children: new Map() };
+        const child = existing ?? { segment, fullName, children: new Map(), errors: 0, warnings: 0 };
         if (existing === undefined) { node.children.set(segment, child); }
         node = child;
       }
       node.module = module;
     }
     return root;
+  }
+
+  /**
+   * Roll each subtree's diagnostics up onto its container node (post-order), so a
+   * folder/package row can show the total errors/warnings hiding beneath it
+   * without the user expanding the whole hierarchy (#149).
+   */
+  private static rollup(node: PackageTreeNode): void {
+    let errors = node.module?.errors ?? 0;
+    let warnings = node.module?.warnings ?? 0;
+    for (const child of node.children.values()) {
+      ModuleExplorerProvider.rollup(child);
+      errors += child.errors;
+      warnings += child.warnings;
+    }
+    node.errors = errors;
+    node.warnings = warnings;
   }
 
   /** Render a node: a container becomes a package row, a bare leaf a module row. */

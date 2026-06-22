@@ -47,7 +47,7 @@ function sym(name: string): TestSymbol {
 function mod(
   name: string,
   kind: "package" | "module",
-  opts: { coverage: number; symbols?: readonly TestSymbol[] },
+  opts: { coverage: number; symbols?: readonly TestSymbol[]; errors?: number; warnings?: number },
 ): TestModule {
   return {
     name,
@@ -55,8 +55,8 @@ function mod(
     symbols: opts.symbols ?? [],
     coveragePercent: opts.coverage,
     path: `/ws/${name.split(".").join("/")}.py`,
-    errors: 0,
-    warnings: 0,
+    errors: opts.errors ?? 0,
+    warnings: opts.warnings ?? 0,
     adopted: false,
   };
 }
@@ -249,6 +249,46 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
         labelsOf(await provider.getChildren()),
         ["app", "app.api", "app.api.auth", "app.models.user", "util"],
         "alphabetical orders by module name",
+      );
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  test("folder/package rows roll up subtree errors/warnings so problems show without drilling in (#149)", async () => {
+    const modules = [
+      mod("app", "package", { coverage: 90 }),
+      mod("app.api.auth", "module", { coverage: 50, errors: 9, warnings: 2 }),
+      mod("app.models.user", "module", { coverage: 30, errors: 1 }),
+      mod("util", "module", { coverage: 100 }),
+    ];
+    const provider = new ModuleExplorerProvider(storeWith(modules));
+    try {
+      const roots = await provider.getChildren();
+
+      const app = roots.find((row) => labelOf(row) === "app");
+      assert.ok(app instanceof PackageTreeItem, "'app' is a package container");
+      const appDesc = String(app.description);
+      assert.ok(appDesc.includes("10E"), `'app' must roll up all descendant errors (9+1), got: ${appDesc}`);
+      assert.ok(appDesc.includes("2W"), `'app' must roll up descendant warnings, got: ${appDesc}`);
+      assert.strictEqual(app.node.errors, 10, "rolled-up error count on the node");
+      assert.strictEqual(app.node.warnings, 2, "rolled-up warning count on the node");
+
+      // A synthesised intermediate folder rolls up too.
+      const appChildren = await provider.getChildren(app);
+      const api = appChildren.find((row) => labelOf(row) === "api");
+      assert.ok(api instanceof PackageTreeItem, "'api' is a synthesised folder");
+      assert.ok(
+        String(api.description).includes("9E"),
+        `'api' folder must surface auth's 9 errors without drilling in, got: ${String(api.description)}`,
+      );
+
+      // A clean leaf must NOT show a spurious tally.
+      const util = roots.find((row) => labelOf(row) === "util");
+      assert.ok(util instanceof ModuleTreeItem, "'util' is a clean leaf module");
+      assert.ok(
+        !String(util.description).includes("E") && !String(util.description).includes("W"),
+        `clean module must show no error/warning tally, got: ${String(util.description)}`,
       );
     } finally {
       provider.dispose();
