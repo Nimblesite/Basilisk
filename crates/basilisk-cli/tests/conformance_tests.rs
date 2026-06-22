@@ -7,10 +7,14 @@
     clippy::panic,
     clippy::as_conversions
 )]
-//! PEP conformance test harness.
+//! PEP conformance test harness — faithful port of the **official** scoring.
 //!
-//! Runs every `.py` file from the `python/typing` conformance suite against
-//! the Basilisk pipeline and prints a scored report.
+//! Runs every `.py` file from the `python/typing` conformance suite against the
+//! Basilisk pipeline and scores it with the **exact** algorithm the upstream
+//! `python/typing` tool uses (`conformance/src/main.py`,
+//! `get_expected_errors` + `diff_expected_errors`).  There are **no
+//! Basilisk-specific scoring rules** and **no excluded diagnostic codes** — a
+//! file passes iff the official `errors_diff` is empty.
 //!
 //! ## Prerequisites
 //!
@@ -21,25 +25,38 @@
 //! make conformance FETCH=1  # force re-download + run
 //! ```
 //!
-//! ## Annotation format (from the python/typing spec)
+//! ## Annotation format (verbatim from `python/typing`)
 //!
-//! Each line in a conformance file may carry one of these trailing comments:
+//! For every source line, the upstream tool first strips the comment
+//! (`line.split('#')[0]`); if nothing but whitespace precedes the first `#`,
+//! the whole line is **ignored** (this is how commented-out cases are skipped).
+//! Otherwise it scans the *raw* line for these markers:
 //!
-//! | Annotation  | Meaning                                               |
-//! |-------------|-------------------------------------------------------|
-//! | `# E`       | A type error MUST be reported on this line            |
-//! | `# E?`      | A type error MAY be reported (optional)               |
-//! | `# E[tag]`  | Exactly one line sharing this tag must error          |
-//! | `# E[tag+]` | One or more lines sharing this tag may error          |
+//! | Marker      | Regex (upstream)            | Meaning                                  |
+//! |-------------|-----------------------------|------------------------------------------|
+//! | `# E`       | `# E\??(?=:\|$\| )`          | An error MUST be reported on this line   |
+//! | `# E?`      | `# E\??(?=:\|$\| )`          | An error MAY be reported (optional)      |
+//! | `# E[tag]`  | `# E\[([^\]]+)\]`            | Exactly one line in the group must error |
+//! | `# E[tag+]` | `# E\[([^\]]+)\]`            | One or more lines in the group may error |
 //!
-//! Anything after the annotation (e.g. `# E: some explanation`) is ignored.
+//! The `(?=:|$| )` lookahead means the marker must be followed by `:`, end of
+//! line, or a space — so `# Exception` and `# E0001` do **not** match.
 //!
-//! ## Scoring
+//! ## Scoring (official `diff_expected_errors`)
 //!
-//! A file **passes** when every required `# E` line has at least one
-//! diagnostic from Basilisk.  Optional `# E?` lines and tag groups are
-//! tracked but do not affect pass/fail.  False positives (Basilisk reports
-//! errors on unmarked lines) are counted separately for visibility.
+//! A file's `errors_diff` collects three kinds of discrepancy:
+//!
+//! 1. **Missed required** — a `# E` line where Basilisk reported no error.
+//! 2. **Missed tag group** — a `# E[tag]` group where no line errored (or, for
+//!    the non-`+` form, more than one line errored).
+//! 3. **Unexpected error** — Basilisk reported an error on a line carrying
+//!    neither a `# E`/`# E?` marker nor a satisfied tag-group line.  These are
+//!    the **false positives**, and — unlike the previous in-repo harness — they
+//!    **fail the file**, exactly as upstream does
+//!    (`conformance_automated = "Fail" if errors_diff.strip() else "Pass"`).
+//!
+//! Every `Severity::Error` diagnostic Basilisk emits is counted; **no code is
+//! excluded**.  This is the same number a user sees from `basilisk check`.
 //!
 //! ## Skip behaviour
 //!
@@ -47,7 +64,7 @@
 //! and exits with success so that CI on a fresh checkout does not break.
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fs,
     path::Path,
 };
@@ -57,319 +74,225 @@ use basilisk_parser::parse_file;
 use basilisk_resolver::resolve;
 
 // ---------------------------------------------------------------------------
-// Annotation parsing
+// Expected-error parsing — faithful port of `get_expected_errors` (main.py)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Annotation {
-    /// Error must be reported on this line.
-    Required,
-    /// Error may optionally be reported.
-    Optional,
-    /// Tagged group: exactly one line with this tag must error.
-    TaggedExact(String),
-    /// Tagged group: one or more lines with this tag may error.
-    TaggedMulti(String),
+/// Expected-error annotations parsed from one conformance file.
+struct Expected {
+    /// 1-based line → (required count, optional count). A line is present iff
+    /// it carries at least one `# E` or `# E?` marker.
+    lines: HashMap<usize, (u32, u32)>,
+    /// tag → (line numbers carrying the tag, `allow_multiple`).
+    groups: HashMap<String, (Vec<usize>, bool)>,
 }
 
-/// Parse a single source line and return the annotation, if any.
-fn parse_annotation(line: &str) -> Option<Annotation> {
-    // Skip full-line comments — a `# E` inside a comment is not a real
-    // annotation because the line contains no executable code for the
-    // checker to flag.
-    if line.trim_start().starts_with('#') {
-        // Allow lines that are ONLY a `# E` marker (pure annotation lines
-        // are used in some conformance files), but skip lines where real
-        // code has been commented out with a trailing `# E`.
-        let trimmed = line.trim();
-        // Pure annotation: `# E`, `# E: explanation`, `# E[tag]`, `# E?`
-        let after_hash = trimmed.strip_prefix('#')?.trim_start();
-        if !after_hash.starts_with('E') {
-            return None;
-        }
-    }
+/// Apply the upstream `(?=:|$| )` lookahead: the char immediately after the
+/// marker must be `:`, a space, or the end of the line.
+fn lookahead_ok(after: &str) -> bool {
+    matches!(after.chars().next(), None | Some(':') | Some(' '))
+}
 
-    // Find the last `# E` marker on the line.
-    let marker = line.rfind("# E")?;
-    let rest = line[marker + 2..].trim(); // everything after "#"
-
-    if rest.starts_with("E?") {
-        return Some(Annotation::Optional);
-    }
-
-    if rest.starts_with("E[") {
-        let inner = rest.strip_prefix("E[")?;
-        // Find closing ] — ignore anything after it (description text)
-        if let Some(close) = inner.find(']') {
-            let tag = &inner[..close];
-            if tag.ends_with('+') {
-                return Some(Annotation::TaggedMulti(
-                    tag.trim_end_matches('+').to_owned(),
-                ));
+/// Count `# E` (required) and `# E?` (optional) markers on a line, matching the
+/// upstream regex `# E\??(?=:|$| )` exactly.
+fn count_markers(line: &str) -> (u32, u32) {
+    let (mut required, mut optional) = (0u32, 0u32);
+    let mut search_from = 0usize;
+    while let Some(rel) = line[search_from..].find("# E") {
+        let idx = search_from + rel;
+        let after = &line[idx + 3..]; // chars after "# E"
+        if let Some(rest) = after.strip_prefix('?') {
+            // `\??` greedily consumed the `?`; lookahead applies to what follows.
+            if lookahead_ok(rest) {
+                optional += 1;
             }
-            return Some(Annotation::TaggedExact(tag.to_owned()));
+        } else if lookahead_ok(after) {
+            required += 1;
         }
-        // No closing ] at all — malformed, treat as required
-        return Some(Annotation::Required);
+        // Advance past this "# E" occurrence (upstream finditer is non-overlapping).
+        search_from = idx + 3;
+    }
+    (required, optional)
+}
+
+/// Parse `# E[tag]` / `# E[tag+]` groups on a line, matching the upstream regex
+/// `# E\[([^\]]+)\]` exactly.
+fn parse_groups(line: &str) -> Vec<(String, bool)> {
+    let mut out = Vec::new();
+    let mut search_from = 0usize;
+    while let Some(rel) = line[search_from..].find("# E[") {
+        let open = search_from + rel + "# E[".len();
+        let Some(close_rel) = line[open..].find(']') else {
+            break;
+        };
+        let inner = &line[open..open + close_rel];
+        if !inner.is_empty() {
+            let (tag, allow_multiple) = inner
+                .strip_suffix('+')
+                .map_or((inner, false), |stripped| (stripped, true));
+            out.push((tag.to_owned(), allow_multiple));
+        }
+        search_from = open + close_rel + 1;
+    }
+    out
+}
+
+/// Faithful port of upstream `get_expected_errors`.
+fn get_expected_errors(source: &str) -> Expected {
+    let mut lines: HashMap<usize, (u32, u32)> = HashMap::new();
+    let mut groups: HashMap<String, (Vec<usize>, bool)> = HashMap::new();
+
+    for (idx, line) in source.lines().enumerate() {
+        let lineno = idx + 1;
+        // `line.split('#')[0]` — skip lines with no code before the first '#'
+        // (this is how upstream ignores commented-out test cases).
+        let before_hash = line.split('#').next().unwrap_or("");
+        if before_hash.trim().is_empty() {
+            continue;
+        }
+
+        let (required, optional) = count_markers(line);
+        if required > 0 || optional > 0 {
+            let _ = lines.insert(lineno, (required, optional));
+        }
+
+        for (tag, allow_multiple) in parse_groups(line) {
+            let entry = groups.entry(tag).or_insert_with(|| (Vec::new(), allow_multiple));
+            entry.0.push(lineno);
+        }
     }
 
-    // `# E` standing alone, or followed by `:`/whitespace + description text
-    // (e.g. `# E`, `# E: explanation`, `# E (see ...)`). The char immediately
-    // after `E` must be a boundary — end-of-marker, `:`, or whitespace — so we
-    // accept the upstream `# E (…)` form while still rejecting words such as
-    // `# Exception` or `# Edge case`. NOTE: inspect the *untrimmed* remainder;
-    // trimming first would erase the space boundary and silently drop `# E (…)`.
-    if let Some(after) = rest.strip_prefix('E') {
-        if after.is_empty() || after.starts_with(':') || after.starts_with(char::is_whitespace) {
-            return Some(Annotation::Required);
-        }
-    }
-
-    None
+    Expected { lines, groups }
 }
 
 // ---------------------------------------------------------------------------
-// Line-number helper (byte offset → 1-based line)
+// Diagnostic collection — every Severity::Error, NO exclusions
 // ---------------------------------------------------------------------------
+
+/// Line numbers (1-based) where Basilisk reported an `Error`, with the codes
+/// that fired there. This is exactly what `basilisk check` prints — no code is
+/// filtered out.
+struct Diagnostics {
+    by_line: HashMap<usize, Vec<String>>,
+    rules_seen: BTreeSet<String>,
+}
 
 fn byte_offset_to_line(source: &str, offset: u32) -> usize {
     let clamped = (offset as usize).min(source.len());
     source[..clamped].chars().filter(|&c| c == '\n').count() + 1
 }
 
-// ---------------------------------------------------------------------------
-// Per-file result
-// ---------------------------------------------------------------------------
+fn collect_diagnostics(path: &Path, source: &str) -> Diagnostics {
+    let mut by_line: HashMap<usize, Vec<String>> = HashMap::new();
+    let mut rules_seen = BTreeSet::new();
 
-#[derive(Debug, Default)]
-struct FileResult {
-    /// `# E` lines that Basilisk caught.
-    caught: usize,
-    /// `# E` lines that Basilisk missed.
-    missed: usize,
-    /// Lines Basilisk flagged that had no annotation (false positives).
-    false_positives: usize,
-    /// `# E?` optional lines where Basilisk did fire.
-    #[expect(dead_code, reason = "tracked for future reporting")]
-    optional_caught: usize,
-    /// `# E[tag]` groups satisfied.
-    tagged_exact_satisfied: usize,
-    /// `# E[tag]` groups missed.
-    tagged_exact_missed: usize,
-    /// Distinct Basilisk rule codes fired on this file (conformance-relevant only).
-    rules_fired: Vec<String>,
-}
-
-impl FileResult {
-    fn passes(&self) -> bool {
-        self.missed == 0
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Annotation collection
-// ---------------------------------------------------------------------------
-
-struct Annotations {
-    required: HashSet<usize>,
-    optional: HashSet<usize>,
-    tagged_exact: HashMap<String, HashSet<usize>>,
-    tagged_multi: HashMap<String, HashSet<usize>>,
-}
-
-/// Scan source lines and collect all conformance annotations by 1-based line
-/// number.
-fn collect_annotations(source: &str) -> Annotations {
-    let mut required: HashSet<usize> = HashSet::new();
-    let mut optional: HashSet<usize> = HashSet::new();
-    let mut tagged_exact: HashMap<String, HashSet<usize>> = HashMap::new();
-    let mut tagged_multi: HashMap<String, HashSet<usize>> = HashMap::new();
-
-    for (idx, line) in source.lines().enumerate() {
-        let lineno = idx + 1;
-        match parse_annotation(line) {
-            Some(Annotation::Required) => {
-                let _ = required.insert(lineno);
+    if let Ok(parsed) = parse_file(path.to_string_lossy().as_ref()) {
+        if let Ok(resolved) = resolve(&parsed) {
+            for diag in check(&resolved)
+                .iter()
+                .filter(|d| d.severity == basilisk_checker::Severity::Error)
+            {
+                let _ = rules_seen.insert(diag.code.code.to_owned());
+                let line = byte_offset_to_line(source, diag.span.start);
+                by_line.entry(line).or_default().push(diag.code.code.to_owned());
             }
-            Some(Annotation::Optional) => {
-                let _ = optional.insert(lineno);
-            }
-            Some(Annotation::TaggedExact(tag)) => {
-                let _ = tagged_exact.entry(tag).or_default().insert(lineno);
-            }
-            Some(Annotation::TaggedMulti(tag)) => {
-                let _ = tagged_multi.entry(tag).or_default().insert(lineno);
-            }
-            None => {}
         }
     }
 
-    Annotations {
-        required,
-        optional,
-        tagged_exact,
-        tagged_multi,
+    Diagnostics { by_line, rules_seen }
+}
+
+// ---------------------------------------------------------------------------
+// The official diff — faithful port of `diff_expected_errors` (main.py)
+// ---------------------------------------------------------------------------
+
+/// One scored conformance file.
+#[derive(Debug, Default)]
+struct FileResult {
+    /// Required lines Basilisk caught.
+    required_caught: usize,
+    /// `# E` lines + tag groups Basilisk missed (false negatives).
+    missed: usize,
+    /// Lines Basilisk flagged that no annotation expected (false positives).
+    false_positives: usize,
+    /// Distinct Basilisk codes that fired on this file.
+    rules_fired: Vec<String>,
+    /// The upstream-style discrepancy strings (empty ⇒ Pass).
+    diffs: Vec<String>,
+}
+
+impl FileResult {
+    /// A file passes iff the official `errors_diff` is empty.
+    fn passes(&self) -> bool {
+        self.diffs.is_empty()
     }
 }
-
-// ---------------------------------------------------------------------------
-// Diagnostic collection
-// ---------------------------------------------------------------------------
-
-struct DiagnosticOutput {
-    diag_lines: HashSet<usize>,
-    rules_seen: std::collections::BTreeSet<String>,
-    diag_line_rules: HashMap<usize, Vec<String>>,
-}
-
-/// Run the Basilisk pipeline on `path` and collect diagnostic lines, filtering
-/// out strictness-only rules.
-fn collect_diagnostics(path: &Path, source: &str) -> DiagnosticOutput {
-    // Rules that are Basilisk-specific strictness requirements not covered by
-    // the PEP conformance suite.  These codes are excluded from both the
-    // "caught" count and the false-positive count so they do not inflate or
-    // deflate the conformance score:
-    //
-    // - E0001–E0005: annotation completeness (PEP suite fixtures are unannotated)
-    // - E0010, E0011: import strictness and Any warnings
-    // - E0023: non-exhaustive match — PEP conformance suite tests type narrowing
-    //          inside match arms but does not require a wildcard `case _:` branch
-    // - E0025: missing @override (PEP 698 makes @override optional documentation)
-    const STRICTNESS_ONLY: &[&str] = &[
-        "BSK-E0001",
-        "BSK-E0002",
-        "BSK-E0003",
-        "BSK-E0004",
-        "BSK-E0005",
-        "BSK-E0010",
-        "BSK-E0011",
-        "BSK-E0023",
-        "BSK-E0025",
-    ];
-
-    let mut rules_seen = std::collections::BTreeSet::new();
-    let mut diag_line_rules: HashMap<usize, Vec<String>> = HashMap::new();
-
-    let diag_lines: HashSet<usize> = match parse_file(path.to_string_lossy().as_ref()) {
-        Ok(parsed) => match resolve(&parsed) {
-            Ok(resolved) => {
-                let diags = check(&resolved);
-                diags
-                    .iter()
-                    .filter(|d| d.severity == basilisk_checker::Severity::Error)
-                    .filter(|d| !STRICTNESS_ONLY.contains(&d.code.code))
-                    .map(|d| {
-                        let _ = rules_seen.insert(d.code.code.to_owned());
-                        let line = byte_offset_to_line(source, d.span.start);
-                        diag_line_rules
-                            .entry(line)
-                            .or_default()
-                            .push(d.code.code.to_owned());
-                        line
-                    })
-                    .collect()
-            }
-            Err(_) => HashSet::new(),
-        },
-        Err(_) => HashSet::new(),
-    };
-
-    DiagnosticOutput {
-        diag_lines,
-        rules_seen,
-        diag_line_rules,
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Run one conformance file
-// ---------------------------------------------------------------------------
 
 fn run_file(path: &Path) -> FileResult {
     let Ok(source) = fs::read_to_string(path) else {
         return FileResult::default();
     };
 
-    let annotations = collect_annotations(&source);
+    let expected = get_expected_errors(&source);
     let diagnostics = collect_diagnostics(path, &source);
+    let errors = &diagnostics.by_line;
 
-    // Score required lines.
-    let caught = annotations
-        .required
-        .iter()
-        .filter(|l| diagnostics.diag_lines.contains(l))
-        .count();
-    let missed = annotations.required.len() - caught;
+    let mut diffs: Vec<String> = Vec::new();
+    let mut missed = 0usize;
+    let mut false_positives = 0usize;
 
-    // Score optional lines.
-    let optional_caught = annotations
-        .optional
-        .iter()
-        .filter(|l| diagnostics.diag_lines.contains(l))
-        .count();
-
-    // Score tagged-exact groups: a group passes if at least one line errored.
-    let mut tagged_exact_satisfied = 0usize;
-    let mut tagged_exact_missed = 0usize;
-    for lines in annotations.tagged_exact.values() {
-        if lines.iter().any(|l| diagnostics.diag_lines.contains(l)) {
-            tagged_exact_satisfied += 1;
-        } else {
-            tagged_exact_missed += 1;
+    // 1. Missed required lines.
+    let mut required_caught = 0usize;
+    for (&lineno, &(required, _optional)) in &expected.lines {
+        if required > 0 {
+            if errors.contains_key(&lineno) {
+                required_caught += 1;
+            } else {
+                missed += 1;
+                diffs.push(format!("Line {lineno}: Expected {required} errors"));
+            }
         }
     }
 
-    // All annotated lines (don't count false positives on annotated lines).
-    let all_annotated: HashSet<usize> = annotations
-        .required
-        .iter()
-        .chain(annotations.optional.iter())
-        .chain(annotations.tagged_exact.values().flatten())
-        .chain(annotations.tagged_multi.values().flatten())
-        .copied()
-        .collect();
+    // 2. Tag groups (and the set of group lines that "absorb" an error so they
+    //    are not later counted as unexpected).
+    let mut linenos_used_by_groups: HashSet<usize> = HashSet::new();
+    for (tag, (linenos, allow_multiple)) in &expected.groups {
+        let num_errors = linenos.iter().filter(|l| errors.contains_key(l)).count();
+        if num_errors == 0 {
+            missed += 1;
+            diffs.push(format!("Lines {linenos:?}: Expected error (tag {tag:?})"));
+        } else if num_errors == 1 || *allow_multiple {
+            linenos_used_by_groups.extend(linenos.iter().copied());
+        } else {
+            missed += 1;
+            diffs.push(format!("Lines {linenos:?}: Expected exactly one error (tag {tag:?})"));
+        }
+    }
 
-    let false_positives = diagnostics
-        .diag_lines
-        .iter()
-        .filter(|l| !all_annotated.contains(l))
-        .count();
+    // 3. Unexpected errors (false positives).
+    let mut fp_lines: Vec<(usize, String)> = Vec::new();
+    for (&lineno, codes) in errors {
+        if !expected.lines.contains_key(&lineno) && !linenos_used_by_groups.contains(&lineno) {
+            false_positives += 1;
+            fp_lines.push((lineno, codes.join("|")));
+            diffs.push(format!("Line {lineno}: Unexpected errors {codes:?}"));
+        }
+    }
 
     let file_name = path.file_name().unwrap_or_default().to_string_lossy();
-    if missed > 0 {
-        let missed_lines: Vec<usize> = annotations
-            .required
-            .iter()
-            .filter(|l| !diagnostics.diag_lines.contains(l))
-            .copied()
-            .collect();
-        println!("  DEBUG {file_name}: missed={missed} lines={missed_lines:?}");
-    }
-    if false_positives > 0 {
-        let mut fp_details: Vec<(usize, String)> = diagnostics
-            .diag_lines
-            .iter()
-            .filter(|l| !all_annotated.contains(l))
-            .map(|&l| {
-                let rules = diagnostics
-                    .diag_line_rules
-                    .get(&l)
-                    .map_or_else(String::new, |codes| codes.join("|"));
-                (l, rules)
-            })
-            .collect();
-        fp_details.sort_by_key(|(l, _)| *l);
-        println!("  FP    {file_name}: count={false_positives} lines={fp_details:?}");
+    if missed > 0 || false_positives > 0 {
+        fp_lines.sort_by_key(|(l, _)| *l);
+        println!(
+            "  {file_name}: missed={missed} fp={false_positives} fp_lines={fp_lines:?}"
+        );
     }
 
     FileResult {
-        caught,
+        required_caught,
         missed,
         false_positives,
-        optional_caught,
-        tagged_exact_satisfied,
-        tagged_exact_missed,
         rules_fired: diagnostics.rules_seen.into_iter().collect(),
+        diffs,
     }
 }
 
@@ -383,48 +306,43 @@ fn category(name: &str) -> &str {
 }
 
 // ---------------------------------------------------------------------------
-// Threshold from coverage-thresholds.json
+// Thresholds from coverage-thresholds.json
 // ---------------------------------------------------------------------------
 
-/// Read the PEP conformance pass-percentage threshold from the repo-root
-/// `coverage-thresholds.json`.  Falls back to 0 if the file is missing or
-/// malformed so the test still runs (the coverage script enforces separately).
+/// Read the PEP conformance pass-percentage threshold (ratchets UP only).
 fn read_conformance_threshold() -> usize {
     read_conformance_field("threshold").unwrap_or(0)
 }
 
-/// The maximum total false positives allowed across the suite, from
-/// `coverage-thresholds.json` → `conformance.max_false_positives`.
-///
-/// Ratchets DOWN only — like the pass-percentage gate but in the opposite
-/// direction. Returns `None` when the key is absent (gate disabled).
+/// Read the maximum total false positives allowed across the suite (ratchets
+/// DOWN only). `None` ⇒ gate disabled.
 fn read_conformance_fp_ceiling() -> Option<usize> {
     read_conformance_field("max_false_positives")
 }
 
 /// Read a numeric field nested under the `"conformance"` object in
-/// `coverage-thresholds.json`.
-///
-/// Minimal JSON extraction — avoids adding a serde dependency to this test
-/// crate. Looks for `"conformance"` then the first occurrence of the requested
-/// key, then parses the following integer.
+/// `coverage-thresholds.json` (minimal extraction — no serde in this crate).
 fn read_conformance_field(key: &str) -> Option<usize> {
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let repo_root = manifest
-        .ancestors()
-        .find(|p| p.join("Cargo.toml").exists() && p.join("crates").exists())?;
+    let repo_root = repo_root()?;
     let content = fs::read_to_string(repo_root.join("coverage-thresholds.json")).ok()?;
     let conformance_idx = content.find("\"conformance\"")?;
     let rest = &content[conformance_idx..];
     let key_pat = format!("\"{key}\"");
     let key_idx = rest.find(&key_pat)?;
     let after = &rest[key_idx + key_pat.len()..];
-    // Skip `:` and whitespace, then parse the number.
     let num_start = after.find(|c: char| c.is_ascii_digit())?;
     let num_end = after[num_start..]
         .find(|c: char| !c.is_ascii_digit())
         .map_or(after.len(), |i| num_start + i);
     after[num_start..num_end].parse().ok()
+}
+
+/// Walk up from the manifest dir to the workspace root (has both `Cargo.toml`
+/// and a `crates/` subdirectory).
+fn repo_root() -> Option<&'static Path> {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .find(|p| p.join("Cargo.toml").exists() && p.join("crates").exists())
 }
 
 // ---------------------------------------------------------------------------
@@ -439,7 +357,6 @@ fn conformance_score() {
         println!();
         println!("  ⚠  Conformance suite not downloaded.");
         println!("  Run: make conformance");
-        println!("  Or: cargo test --test conformance_tests -- --nocapture");
         println!();
         return;
     }
@@ -469,8 +386,8 @@ fn conformance_score() {
         "No conformance files found. Run make conformance first."
     );
 
-    // Enforce minimum conformance percentage from coverage-thresholds.json.
-    // This prevents regressions — the threshold ratchets UP only.
+    // Pass-percentage gate (ratchets UP only). This is the OFFICIAL pass rate:
+    // files with an empty errors_diff over total files.
     let threshold = read_conformance_threshold();
     let pct = (totals.pass * 100).checked_div(totals.files).unwrap_or(0);
     assert!(
@@ -485,8 +402,7 @@ fn conformance_score() {
         totals.pass, totals.files
     );
 
-    // Enforce the false-positive ceiling from coverage-thresholds.json.
-    // False positives ratchet DOWN only: introducing new ones fails the gate.
+    // False-positive ceiling (ratchets DOWN only).
     if let Some(ceiling) = read_conformance_fp_ceiling() {
         assert!(
             totals.fp <= ceiling,
@@ -508,26 +424,14 @@ struct Totals {
     caught: usize,
     missed: usize,
     fp: usize,
-    tag_ok: usize,
-    tag_missed: usize,
 }
 
-/// Write a CSV snapshot of per-file conformance results.
-///
-/// Output path: `conformance/conformance_status.csv` (repo root).
-/// Columns: file, category, status, caught, missed, `false_positives`
-///
-/// This file is the rolling log — commit it after each run to track regressions.
+/// Write a CSV snapshot of per-file conformance results to
+/// `conformance/conformance_status.csv` (repo root).
 fn write_csv(detail_lines: &DetailLines) {
     use std::fmt::Write;
 
-    // Walk up from the manifest dir to find the workspace root (contains both
-    // Cargo.toml and a `crates/` subdirectory — distinguishes it from crate-level Cargo.toml).
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let Some(repo_root) = manifest
-        .ancestors()
-        .find(|p| p.join("Cargo.toml").exists() && p.join("crates").exists())
-    else {
+    let Some(repo_root) = repo_root() else {
         eprintln!("  [conformance csv] could not locate repo root");
         return;
     };
@@ -543,7 +447,7 @@ fn write_csv(detail_lines: &DetailLines) {
         let _ = writeln!(
             out,
             "{rules},{name},{cat},{status},{},{},{}",
-            result.caught, result.missed, result.false_positives
+            result.required_caught, result.missed, result.false_positives
         );
     }
 
@@ -562,8 +466,6 @@ fn collect_results(files: &[std::fs::DirEntry]) -> (Totals, CategoryMap, DetailL
         caught: 0,
         missed: 0,
         fp: 0,
-        tag_ok: 0,
-        tag_missed: 0,
     };
 
     for entry in files {
@@ -582,11 +484,9 @@ fn collect_results(files: &[std::fs::DirEntry]) -> (Totals, CategoryMap, DetailL
             totals.pass += 1;
         }
         totals.files += 1;
-        totals.caught += result.caught;
+        totals.caught += result.required_caught;
         totals.missed += result.missed;
         totals.fp += result.false_positives;
-        totals.tag_ok += result.tagged_exact_satisfied;
-        totals.tag_missed += result.tagged_exact_missed;
         detail_lines.push((name, result));
     }
     (totals, by_category, detail_lines)
@@ -607,23 +507,19 @@ fn print_scorecard(t: &Totals, by_category: &CategoryMap, detail_lines: &DetailL
     let fail = t.files - t.pass;
     println!();
     println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║           BASILISK PEP CONFORMANCE SCORECARD                 ║");
+    println!("║      BASILISK PEP CONFORMANCE SCORECARD (OFFICIAL SCORING)    ║");
     println!("╠══════════════════════════════════════════════════════════════╣");
     println!(
         "║  Files:    {:>4} total │ {:>4} pass │ {fail:>4} fail            ║",
         t.files, t.pass
     );
-    println!("║  Score:    {pct:.1}%                                           ║");
+    println!("║  Score:    {pct:.1}%  (empty errors_diff = Pass, upstream rule) ║");
     println!(
         "║  Required: {:>4} caught │ {:>4} missed                       ║",
         t.caught, t.missed
     );
     println!(
-        "║  Tagged:   {:>4} groups ok │ {:>4} groups missed              ║",
-        t.tag_ok, t.tag_missed
-    );
-    println!(
-        "║  False+:   {:>4} unexpected diagnostics                       ║",
+        "║  False+:   {:>4} unexpected diagnostics (THESE FAIL FILES)    ║",
         t.fp
     );
     println!("╠══════════════════════════════════════════════════════════════╣");
