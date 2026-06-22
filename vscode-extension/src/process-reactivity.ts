@@ -6,9 +6,10 @@
  * starts, streams samples, or stops:
  *   1. the view's native chrome — a live message ("🔥 Profiling PID 1234 ·
  *      12.3K samples (4s)") and a badge dot;
- *   2. the gating context keys (`basilisk.profilerBusy` / `.profiling` /
- *      `.memoryTracking` / `.profilerStarting`) that hide the "Run & Profile"
- *      launches and reveal the Stop affordances in package.json;
+ *   2. the per-activity gating context keys (`basilisk.cpuBusy` / `.memoryBusy`,
+ *      plus the aggregate `.profilerBusy` and `.profiling` / `.memoryTracking` /
+ *      `.profilerStarting`) that hide the matching "Run & Profile" launch and
+ *      reveal the Stop affordances in package.json;
  *   3. the provider's "which row is being profiled" marker, so that row swaps
  *      its inline Profile button for a Stop button.
  *
@@ -61,10 +62,53 @@ export function bindProcessPanelReactivity(
   };
 }
 
+/**
+ * Keep the panel's "which row is the active debuggee" marker in sync, so only
+ * that row exposes the inline Track Memory action ([PROFILE-PROCESSES-PANEL]).
+ * Memory tracking rides the DAP courier ([PROFILE-MEMORY-HOWTO]), so it can only
+ * ever target the process of the active `basilisk-debug` session — never an
+ * external process in the list. The debuggee changes when the active session
+ * changes or when the DAP `process` event resolves its PID into the store's
+ * `sessionIdToPid` map, so react to both.
+ */
+export function bindDebuggeeTracking(
+  store: Store,
+  provider: PythonProcessesProvider,
+): vscode.Disposable {
+  function update(): void {
+    const session = vscode.debug.activeDebugSession;
+    const pid = session?.type === "basilisk-debug" ? store.getDebuggeeProcessId(session.id) : undefined;
+    provider.setActiveDebuggeePid(pid);
+    provider.refresh();
+  }
+  const disposeEffect = effect(() => {
+    void store.sessionIdToPid.value; // re-run when a debuggee PID resolves/clears
+    update();
+  });
+  const subscriptions = [
+    vscode.debug.onDidChangeActiveDebugSession(update),
+    vscode.debug.onDidStartDebugSession(update),
+    vscode.debug.onDidTerminateDebugSession(update),
+  ];
+  return {
+    dispose() {
+      disposeEffect();
+      for (const sub of subscriptions) { sub.dispose(); }
+    },
+  };
+}
+
 /** Push the gating context keys every profiling `when` clause keys off. */
 function applyContextKeys(session: ProfilerSession): void {
-  const busy = session.cpu !== "idle" || session.memory !== "idle";
-  void vscode.commands.executeCommand("setContext", "basilisk.profilerBusy", busy);
+  const cpuBusy = session.cpu !== "idle";
+  const memoryBusy = session.memory !== "idle";
+  // Per-activity gates: CPU starts hide on cpuBusy, memory starts on memoryBusy,
+  // so the two metrics can run concurrently while a second SAME-metric start
+  // stays blocked ([PROFILE-PROCESSES-REACTIVE]).
+  void vscode.commands.executeCommand("setContext", "basilisk.cpuBusy", cpuBusy);
+  void vscode.commands.executeCommand("setContext", "basilisk.memoryBusy", memoryBusy);
+  // Aggregate, kept as a convenience key for any "anything running?" consumer.
+  void vscode.commands.executeCommand("setContext", "basilisk.profilerBusy", cpuBusy || memoryBusy);
   void vscode.commands.executeCommand("setContext", "basilisk.profiling", session.cpu === "active");
   void vscode.commands.executeCommand("setContext", "basilisk.memoryTracking", session.memory === "active");
   void vscode.commands.executeCommand(

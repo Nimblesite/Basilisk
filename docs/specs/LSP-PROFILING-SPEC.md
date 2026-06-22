@@ -207,10 +207,11 @@ old raw PID input box. Design + phased TODO: [LSP-PROFILER-PROCESS-PANEL-PLAN.md
 
 ### basilisk.profiler.processes {#PROFILE-PROCESSES-LSP}
 
-A `workspace/executeCommand` request that returns the attachable Python
-processes **belonging to the open workspace** (see [#PROFILE-PROCESSES-SCOPE]).
-It takes no required arguments and responds with `{ "processes": ProcessInfo[] }`,
-sorted by CPU usage descending.
+A `workspace/executeCommand` request that returns **every** Python process
+running on the machine (see [#PROFILE-PROCESSES-SCOPE]). It takes no required
+arguments and responds with `{ "processes": ProcessInfo[] }`, sorted by CPU usage
+descending — except that processes the profiler cannot attach to are always sorted
+last (see [#PROFILE-PROCESSES-DISPLAY]).
 
 Enumeration **only reads the OS process table** and therefore never requires
 elevation — discovery works without `sudo`, which is the whole point. It is
@@ -219,24 +220,29 @@ over the `sysinfo` crate and is advertised in `executeCommandProvider` like ever
 other Basilisk command (editors must not pre-register it — see
 [LSP-ARCHITECTURE-SPEC.md] command registration rule).
 
-### Workspace scoping {#PROFILE-PROCESSES-SCOPE}
+### Enumeration scope — system-wide, zero filters {#PROFILE-PROCESSES-SCOPE}
 
-The panel lists processes that belong to the project the user opened — never an
-unrelated background interpreter they did not start. Opening a workspace and
-finding a stray system Python sitting in the panel is the defect this rule
-fixes.
+The panel lists **every** Python process on the machine. Nothing is hidden:
+not background system interpreters, not processes outside the open workspace,
+and not debugger machinery. The enumerator **filters nothing** — it only *reads*
+the OS process table and tags each row with the attributes the panel needs to
+render it informatively (see [#PROFILE-PROCESSES-MODEL]).
 
-A process is **in-scope** when any of its working directory, target script, or
-interpreter path resolves to a location inside one of the editor's workspace
-roots. Relative script/interpreter paths are resolved against the process
-working directory, and both roots and candidate paths are canonicalized so a
-symlinked root (on macOS a temp dir under `/var/…` resolving to `/private/var/…`)
-still matches the working directory `sysinfo` reports in canonical form.
+Workspace membership is still computed, but it now drives **display** rather than
+inclusion: a process is a **workspace process** when any of its working
+directory, target script, or interpreter path resolves to a location inside one
+of the editor's workspace roots. Relative script/interpreter paths are resolved
+against the process working directory, and both roots and candidate paths are
+canonicalized so a symlinked root (on macOS a temp dir under `/var/…` resolving
+to `/private/var/…`) still matches the working directory `sysinfo` reports in
+canonical form. Workspace processes are rendered green ([#PROFILE-PROCESSES-DISPLAY]).
+When **no workspace root** is open there is no workspace to belong to, so no
+process is a workspace process and none is greened — the full system-wide list is
+still shown.
 
-When **no workspace root** is open (a single-file or no-folder session) there is
-nothing to scope by, so every Python process is listed — scoping degrades to the
-original system-wide behaviour rather than an empty panel. The
-debugger-infrastructure exclusion above still applies in both modes.
+Narrowing the list is **user-driven**, never automatic: the panel's Filter
+command (by name, script, or PID) and the sort/group controls let the user
+focus the view. The enumerator never silently drops a process.
 
 ### ProcessInfo {#PROFILE-PROCESSES-MODEL}
 
@@ -254,33 +260,43 @@ Each entry in the `processes[]` response:
 | `memoryBytes` | number | Resident memory in bytes |
 | `runtimeSecs` | number | Seconds since process start |
 | `user` | string \| null | Owner login name |
-| `requiresElevation` | boolean | `true` if not owned by the current user |
-| `kind` | `"interpreter"` \| `"launcher"` | Bare interpreter vs. launcher |
+| `requiresElevation` | boolean | `true` when attaching the profiler would need elevation: on macOS, any **external** process (not a debuggee/child Basilisk launched) — even same-user — needs `vm_read` (root); on Linux/Windows only another user's process does. Drives the lock badge, not a blocker |
+| `inWorkspace` | boolean | `true` when the process belongs to an open workspace root ([#PROFILE-PROCESSES-SCOPE]); drives the green row |
+| `launcher` | string \| null | The framework name (`uvicorn`, `pytest`, …) when the process is a known launcher, else `null`; rendered as a chip |
+| `debuggable` | boolean | `false` when the profiler cannot attach (debugger machinery, or no resolvable interpreter); drives the 🚫 marker, the greyed row, and the sort-to-bottom. Elevation is *not* a blocker — see `requiresElevation` |
+| `undebuggableReason` | string \| null | Short human-readable reason shown in the tooltip when `debuggable` is `false`, else `null` |
 
 **Detection:** a process is "Python" when its name, interpreter exe basename, or
 `argv[0]` basename matches `python`, `python3`, `pythonX.Y`, or `pypy`. Known
 launchers (uvicorn, gunicorn, pytest, celery, flask, hypercorn, daphne, uwsgi,
-sanic) running on a Python interpreter are included and tagged `kind = "launcher"`
-so they are still offered for profiling rather than hidden.
+sanic) running on a Python interpreter have `launcher` set to the framework name.
 
-**Exclusions:** debugger machinery is never offered as a target —
-`python -m debugpy.adapter`/`pydevd` and the debugpy/pydevd **launcher**/**adapter**
-submodules are filtered out. Profiling the adapter instead of the debuggee is
-always a mistake, and adapters orphaned by a hard-killed editor would otherwise
-linger in the panel as phantom rows.
+**No exclusions — everything is shown, machinery is marked.** Debugger machinery
+(`python -m debugpy.adapter`/`pydevd` and the debugpy/pydevd
+**launcher**/**adapter** submodules) is **not** hidden: it is listed like any
+other process but flagged `debuggable = false` with
+`undebuggableReason = "debugger machinery"`, so the panel can grey it, mark it
+🚫, and sink it to the bottom ([#PROFILE-PROCESSES-DISPLAY]). Profiling the
+adapter is still a mistake, but the user can *see* it rather than wondering why a
+process is missing.
 
-**Debuggee surfacing:** the one process this exclusion must *not* swallow is the
-**debuggee** — the developer's own program running under debugpy, which is how
-VS Code's debugger launches a script. Its argv is
-`python <…>/debugpy --connect <addr> … <program>`, and because the extension
-**bundles** debugpy at `…/debugpy/debugpy`, that path contains the substring
-`/debugpy/`. A naive "anything mentioning debugpy is machinery" filter therefore
-hides the user's running script — the panel goes empty and "run a script, it
-never appears" results. So a process is recognised as a debuggee (basename of the
-debugpy entry is `debugpy`, or `-m debugpy`, *carrying a user program* after the
-bootstrap flags) and is **surfaced**, with its `script` set to that program
-rather than debugpy's bootstrap path. Only the `launcher`/`adapter` submodules
-(which carry no user program) stay hidden.
+**Debuggee surfacing:** the **debuggee** — the developer's own program running
+under debugpy, which is how VS Code's debugger launches a script — is a real,
+debuggable target. Its argv is `python <…>/debugpy --connect <addr> … <program>`,
+and because the extension **bundles** debugpy at `…/debugpy/debugpy`, that path
+contains the substring `/debugpy/`. A process is recognised as a debuggee
+(basename of the debugpy entry is `debugpy`, or `-m debugpy`, *carrying a user
+program* after the bootstrap flags) and its `script` is set to that program
+rather than debugpy's bootstrap path; it stays `debuggable = true`. Only the
+`launcher`/`adapter` submodules (carrying no user program) are the machinery
+marked `debuggable = false`.
+
+**Debuggability:** `debuggable` is `false` when the row is debugger machinery or
+no interpreter path could be resolved; otherwise it is `true`. A process owned by
+another user is **still debuggable** — it carries the `requiresElevation` lock
+hint and the privilege helper attaches at profile time ([#PROFILE-PERMISSIONS]) —
+so it is not greyed or sunk. This is a *display* hint; the authoritative
+attach-time permission check is unchanged.
 
 **macOS argv:** sysinfo cannot read other processes' argv on macOS, so the
 enumerator takes one batched `ps -axo pid=,args=` snapshot per enumeration as
@@ -311,16 +327,56 @@ VS Code contributes a `basilisk.pythonProcesses` tree view in the
 [`process-explorer.ts`](../../vscode-extension/src/process-explorer.ts). It calls
 `basilisk.profiler.processes` and renders one row per process:
 
-- **label** `python3.12 — app.py` · **description** `PID 82875 · 3.12.13 · 12.4% · 88 MB`
-- **tooltip** interpreter path, script, user, runtime, elevation note
-- **icon** a Python glyph, with a `$(lock)` badge when `requiresElevation`
+- **label** `python3.12 — app.py`, prefixed with 🚫 when the row is not
+  `debuggable`
+- **description** chips then metrics: `[uvicorn] PID 82875 · 3.12.13 · 12.4% · 88 MB`
+- **tooltip** interpreter path, script, version, CPU/memory, runtime, user,
+  workspace membership, launcher, and (when not debuggable) the reason
+- **icon** a Python glyph; `$(rocket)` for launchers, `$(circle-slash)` for
+  non-debuggable rows, the flame for the actively-profiled row
 
 Auto-refresh is gated on view visibility (interval from
 `basilisk.profiler.processRefreshMs`, default 2000); a manual refresh button is
 always present. Process rows carry a stable `TreeItem.id` (`pythonProcess:<pid>`)
 so VS Code can map inline-button clicks back to elements across refreshes
-(issue #79). An empty state (`viewsWelcome`) offers the two metric-explicit
-launches described in [#PROFILE-PROCESSES-LAUNCH-FILE].
+(issue #79). The empty state (`viewsWelcome`) — reached only when the machine is
+running no Python at all — offers the two metric-explicit launches described in
+[#PROFILE-PROCESSES-LAUNCH-FILE].
+
+**Pinned launch rows.** VS Code only renders `viewsWelcome` for an *empty* view,
+so the moment any process appears the big welcome buttons vanish. To keep the
+current-file launches reachable alongside a populated list, the panel pins them
+as the **top rows** of the tree (`contextValue = launchAction`, flame/database
+icons) — gated per activity exactly like the title-bar buttons: the CPU launch
+row is hidden while CPU profiling is busy, the memory launch row while memory
+tracking is busy ([#PROFILE-PROCESSES-REACTIVE]). When the list is empty the rows
+are omitted so the welcome buttons show instead — the launches are always
+present one way or the other.
+
+#### Visual treatment {#PROFILE-PROCESSES-DISPLAY}
+
+Because the panel now lists **every** Python process ([#PROFILE-PROCESSES-SCOPE]),
+the rows carry visual cues so the user can tell at a glance what each one is and
+whether it can be profiled:
+
+- **Workspace processes are green.** When `inWorkspace`, the whole row label is
+  coloured green (via a `FileDecorationProvider` keyed on a synthetic
+  `basilisk-process:` `resourceUri`), marking the processes that belong to the
+  project the user opened.
+- **Non-debuggable rows are de-emphasised and sink.** When `debuggable` is
+  `false`, the row label is greyed (the same decoration provider, using
+  `disabledForeground`), prefixed with 🚫, and **always sorted to the bottom**
+  of the list (and of its group) regardless of the active sort mode — so the
+  processes the user can actually act on stay at the top. The greying takes
+  precedence over the workspace green: a process you cannot debug is never shown
+  as an actionable workspace row.
+- **Launcher chips.** When `launcher` is set, its framework name renders as a
+  `[uvicorn]`-style chip at the head of the description. (VS Code tree rows have
+  no native chip control, so the chip is rendered as bracketed text.)
+- **All available detail is surfaced.** Every resolved attribute — PID, Python
+  version, CPU%, memory, runtime, user, interpreter, script, workspace
+  membership, launcher, debuggability reason — is shown across the label,
+  description, and tooltip; nothing the enumerator resolved is dropped.
 
 #### Sort modes {#PROFILE-PROCESSES-PANEL-SORT}
 
@@ -349,22 +405,31 @@ One `effect` over the signal (`process-reactivity.ts`) drives the panel:
   `🗄️ Tracking memory allocations…` for the memory leg. The sample-count tick
   repaints only the message (cheap); the tree rebuilds only on a *gating*
   transition.
-- **Button gating.** Four context keys flow from the effect:
-  `basilisk.profilerBusy` (any activity starting or running),
+- **Button gating — per activity.** The effect pushes **per-activity** context
+  keys so the two metrics gate independently: `basilisk.cpuBusy` (CPU starting or
+  active) and `basilisk.memoryBusy` (memory starting or active), alongside
   `basilisk.profiling` (CPU active), `basilisk.memoryTracking` (memory active),
-  and `basilisk.profilerStarting`. While `profilerBusy`, the title-bar
-  "Run & Profile CPU" / "Run & Track Memory" launches and the per-row
-  Profile/Track actions are **hidden** — a session can no longer be started on
-  top of a running one. In their place the title bar shows **Stop Profiling**
-  (when `profiling`) or **Stop Memory Tracking** (when `memoryTracking`).
+  `basilisk.profilerStarting`, and the aggregate `basilisk.profilerBusy` (kept as
+  a convenience signal). While `cpuBusy`, the "Run & Profile CPU" launch and the
+  per-row **Profile** action are hidden; while `memoryBusy`, the "Run & Track
+  Memory" launch and the per-row **Track** action are hidden. In their place the
+  title bar shows **Stop Profiling** (when `profiling`) or **Stop Memory
+  Tracking** (when `memoryTracking`). Gating each metric on its *own* activity is
+  deliberate: there is at most one active CPU session **and** at most one active
+  memory session per store ([profiler-state.ts]) — the two legs are independent.
+  A second start of the *same* metric would orphan the first, so it stays
+  blocked; but starting CPU while memory is tracking (and vice versa) is safe and
+  now permitted.
 - **Active-row marker.** The row whose PID is being CPU-profiled renders with a
   flame icon, a "· profiling" suffix, and `contextValue = pythonProcessProfiling`,
   which swaps its inline Profile button for an inline **Stop**.
 
 The launch commands also guard imperatively (`profileCurrentFile`,
 `startProfilingForPid`, `handleProfileAttachToDebug`, `handleMemoryStart`): even
-if invoked from the palette while busy, they decline with a "stop the current
-session first" message instead of spawning a second session. The e2e seams are
+if invoked from the palette while the **matching metric** is busy (CPU launches
+check `cpuBusy`, memory launches check `memoryBusy`), they decline with a "stop
+the current session first" message instead of spawning a second same-metric
+session. The e2e seams are
 the pure `panelMessage`/`panelBadge` builders plus `pythonProcessesViewState()`
 (reads the live view chrome) and `profilerStatusText()` (reads the status bar).
 
@@ -375,14 +440,18 @@ This is the headline fix for #62. Per-row inline buttons act on that row's
 
 - **▶ Profile CPU** (`basilisk.profileProcess`) starts a CPU sampling session
   for the row's PID.
-- **🧠 Track Memory** (`basilisk.memoryTrackProcess`) routes honestly: memory
-  tracking rides the DAP-`evaluate` courier ([#PROFILE-MEMORY-HOWTO]), so it
-  can only target the **live Basilisk debuggee**. When the row's PID is the
-  active `basilisk-debug` debuggee it runs `basilisk.memoryStart`; for any
-  other process it must **never** fall back to a CPU session — it explains
-  the constraint and offers the "Run & Track Memory (Current File)" launch
-  ([#PROFILE-PROCESSES-LAUNCH-FILE]). The routing decision is
-  `memoryTrackRoute` in `process-launch.ts`.
+- **🧠 Track Memory** (`basilisk.memoryTrackProcess`) — memory tracking rides
+  the DAP-`evaluate` courier ([#PROFILE-MEMORY-HOWTO]), so it can only ever
+  target the **live Basilisk debuggee**, never an external process in the list.
+  Rather than offer it everywhere and refuse on click, the action is **shown
+  only on the active-debuggee row**: that row alone carries
+  `contextValue = pythonProcessDebuggee` (computed reactively from the active
+  `basilisk-debug` session's PID via `bindDebuggeeTracking`), and the inline/
+  context Track Memory entries gate on `viewItem == pythonProcessDebuggee`. Every
+  other row hides the action and its tooltip points at "Run & Track Memory
+  (Current File)" ([#PROFILE-PROCESSES-LAUNCH-FILE]) instead. The runtime routing
+  (`memoryTrackRoute` in `process-launch.ts`) still guards the debuggee/other
+  decision and **never** falls back to a CPU session.
 
 The row context menu adds Copy PID and Reveal Script. The old palette command
 `basilisk.profileStart` is **kept but rewritten**: instead of prompting for a PID

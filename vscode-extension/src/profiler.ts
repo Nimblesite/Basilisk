@@ -148,14 +148,14 @@ function adoptSession(store: Store, result: StartedSession, announcement: string
   vscode.window.showInformationMessage(announcement);
 }
 
-/** A "stop the current session first" warning that names what is already busy. */
+/**
+ * A "stop the current CPU session first" warning. Only the CPU leg blocks a CPU
+ * start ([PROFILE-PROCESSES-REACTIVE]), so this names the active CPU profile.
+ */
 function busyMessage(store: Store): string {
   const session = store.profiler.value;
-  if (session.cpu !== "idle") {
-    const pid = session.cpuPid !== undefined ? ` PID ${session.cpuPid}` : "";
-    return `Basilisk: Already profiling${pid}. Stop the current session first.`;
-  }
-  return "Basilisk: Memory tracking is active. Stop it before starting a CPU profile.";
+  const pid = session.cpuPid !== undefined ? ` PID ${session.cpuPid}` : "";
+  return `Basilisk: Already profiling${pid}. Stop the current CPU session first.`;
 }
 
 // ── Launch flows ([PROFILE-COOPERATIVE], [PROFILE-UX-PROGRESS]) ───────────
@@ -302,7 +302,10 @@ export async function startProfilingForPid(store: Store, pid: number, preset: st
     vscode.window.showWarningMessage("Basilisk: Language server not running.");
     return;
   }
-  if (store.profilerBusy.value) {
+  // CPU starts gate on the CPU leg only — a CPU profile may begin while memory
+  // tracking is live, but never a second CPU run on top of an active one
+  // ([PROFILE-PROCESSES-REACTIVE]).
+  if (store.cpuBusy.value) {
     vscode.window.showWarningMessage(busyMessage(store));
     return;
   }
@@ -424,7 +427,7 @@ async function handleProfileAttachToDebug(store: Store): Promise<void> {
     return;
   }
 
-  if (store.profiler.value.cpu === "active") {
+  if (store.cpuBusy.value) {
     vscode.window.showWarningMessage(
       `Basilisk: Already profiling (session ${store.profiler.value.cpuSessionId ?? "?"}).`,
     );

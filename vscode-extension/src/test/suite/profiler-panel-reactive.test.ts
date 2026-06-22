@@ -45,11 +45,33 @@ function assertLacks(text: string | undefined, needle: string): void {
 }
 
 suite("Python Processes panel — reactive button gating (manifest)", () => {
-  test("the Run & Profile launches are hidden while a session is busy", () => {
+  test("the Run & Profile launches gate per activity — CPU on cpuBusy, memory on memoryBusy", () => {
     const title = panelMenu("view/title");
-    for (const command of ["basilisk.profileCurrentFileCpu", "basilisk.trackMemoryCurrentFile"]) {
-      assertWhenHas(title.find((item) => item.command === command), command, "!basilisk.profilerBusy");
-    }
+    assertWhenHas(
+      title.find((item) => item.command === "basilisk.profileCurrentFileCpu"),
+      "basilisk.profileCurrentFileCpu",
+      "!basilisk.cpuBusy",
+    );
+    assertWhenHas(
+      title.find((item) => item.command === "basilisk.trackMemoryCurrentFile"),
+      "basilisk.trackMemoryCurrentFile",
+      "!basilisk.memoryBusy",
+    );
+  });
+
+  test("the CPU launch does NOT gate on the memory activity, so it stays available during memory tracking", () => {
+    const cpu = panelMenu("view/title").find((item) => item.command === "basilisk.profileCurrentFileCpu");
+    assert.ok(cpu, "the CPU launch must be declared");
+    assert.ok(
+      !(cpu.when ?? "").includes("memoryBusy"),
+      `the CPU launch must not key off memoryBusy: ${cpu.when ?? "(none)"}`,
+    );
+    const mem = panelMenu("view/title").find((item) => item.command === "basilisk.trackMemoryCurrentFile");
+    assert.ok(mem, "the memory launch must be declared");
+    assert.ok(
+      !(mem.when ?? "").includes("cpuBusy"),
+      `the memory launch must not key off cpuBusy: ${mem.when ?? "(none)"}`,
+    );
   });
 
   test("the title bar reveals a Stop button keyed on the active metric", () => {
@@ -58,11 +80,31 @@ suite("Python Processes panel — reactive button gating (manifest)", () => {
     assertWhenHas(title.find((item) => item.command === "basilisk.memoryStop"), "Stop Memory", "basilisk.memoryTracking");
   });
 
-  test("the per-row Profile/Track inline actions are hidden while busy", () => {
+  test("the per-row Profile/Track inline actions gate per activity", () => {
     const inline = panelMenu("view/item/context").filter((entry) => (entry.group ?? "").startsWith("inline"));
-    for (const command of ["basilisk.profileProcess", "basilisk.memoryTrackProcess"]) {
-      assertWhenHas(inline.find((item) => item.command === command), command, "!basilisk.profilerBusy");
+    assertWhenHas(
+      inline.find((item) => item.command === "basilisk.profileProcess"),
+      "basilisk.profileProcess",
+      "!basilisk.cpuBusy",
+    );
+    assertWhenHas(
+      inline.find((item) => item.command === "basilisk.memoryTrackProcess"),
+      "basilisk.memoryTrackProcess",
+      "!basilisk.memoryBusy",
+    );
+  });
+
+  test("Track Memory is offered only on the active-debuggee row, never an external process", () => {
+    // Memory tracking can't target an external process, so its row action gates
+    // on the debuggee-only contextValue ([PROFILE-PROCESSES-LAUNCH]).
+    for (const entry of panelMenu("view/item/context").filter((e) => e.command === "basilisk.memoryTrackProcess")) {
+      assertWhenHas(entry, "basilisk.memoryTrackProcess", "viewItem == pythonProcessDebuggee");
     }
+    // The CPU Profile action, by contrast, stays available on every process row.
+    const profile = panelMenu("view/item/context").find(
+      (e) => e.command === "basilisk.profileProcess" && (e.group ?? "").startsWith("inline"),
+    );
+    assertWhenHas(profile, "basilisk.profileProcess", "/^pythonProcess/");
   });
 
   test("the actively-profiled row carries an inline Stop action", () => {
@@ -188,5 +230,24 @@ suite("Python Processes panel — reactive chrome (store-driven, live)", () => {
     store.memoryTrackingStopped();
     assert.strictEqual(pythonProcessesViewState().message, undefined, "stop clears the memory chrome");
     assert.strictEqual(store.profilerBusy.value, false);
+  });
+
+  // The crux of "both": each metric's busy signal is independent, so a CPU run
+  // can start while memory tracks (and vice versa), but never a second of the
+  // same metric ([PROFILE-PROCESSES-REACTIVE]).
+  test("per-activity busy signals gate independently — CPU free during memory, memory free during CPU", () => {
+    const store = liveStore();
+
+    store.profilerActive(1234, "sess-cpu");
+    assert.strictEqual(store.cpuBusy.value, true, "an active CPU profile makes cpuBusy true");
+    assert.strictEqual(store.memoryBusy.value, false, "an active CPU profile leaves memory free");
+    store.profilerStopped();
+
+    store.memoryTrackingActive("sess-mem");
+    assert.strictEqual(store.memoryBusy.value, true, "active memory tracking makes memoryBusy true");
+    assert.strictEqual(store.cpuBusy.value, false, "active memory tracking leaves CPU free");
+    assert.strictEqual(store.profilerBusy.value, true, "the aggregate still reflects either leg");
+    store.memoryTrackingStopped();
+    assert.strictEqual(store.profilerBusy.value, false, "stopping the last leg clears the aggregate");
   });
 });

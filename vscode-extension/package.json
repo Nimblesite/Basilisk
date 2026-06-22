@@ -490,12 +490,12 @@
         },
         {
           "command": "basilisk.profileCurrentFileCpu",
-          "when": "view == basilisk.pythonProcesses && !basilisk.profilerBusy",
+          "when": "view == basilisk.pythonProcesses && !basilisk.cpuBusy",
           "group": "navigation@1"
         },
         {
           "command": "basilisk.trackMemoryCurrentFile",
-          "when": "view == basilisk.pythonProcesses && !basilisk.profilerBusy",
+          "when": "view == basilisk.pythonProcesses && !basilisk.memoryBusy",
           "group": "navigation@2"
         },
         {
@@ -537,12 +537,12 @@
         },
         {
           "command": "basilisk.profileProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.cpuBusy",
           "group": "inline@1"
         },
         {
           "command": "basilisk.memoryTrackProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
+          "when": "view == basilisk.pythonProcesses && viewItem == pythonProcessDebuggee && !basilisk.memoryBusy",
           "group": "inline@2"
         },
         {
@@ -552,12 +552,12 @@
         },
         {
           "command": "basilisk.profileProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.cpuBusy",
           "group": "1_profile@1"
         },
         {
           "command": "basilisk.memoryTrackProcess",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.profilerBusy",
+          "when": "view == basilisk.pythonProcesses && viewItem == pythonProcessDebuggee && !basilisk.memoryBusy",
           "group": "1_profile@2"
         },
         {
@@ -881,11 +881,6 @@
           "default": 2000,
           "minimum": 250,
           "description": "Poll interval (ms) for refreshing the Python Processes panel while it is visible."
-        },
-        "basilisk.profiler.showLaunchers": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show Python launchers (uvicorn, gunicorn, pytest, …) in the Python Processes panel, not just bare interpreters."
         },
         "basilisk.profiler.preset": {
           "type": "string",

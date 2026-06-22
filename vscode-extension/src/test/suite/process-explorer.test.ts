@@ -9,28 +9,31 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { type LanguageClient } from "vscode-languageclient/node";
-import { PythonProcessesProvider, type ProcessInfo } from "../../process-explorer";
+import { ProcessDecorationProvider, PythonProcessesProvider, type ProcessInfo } from "../../process-explorer";
 import { createProcessRowActions, memoryTrackRoute } from "../../process-launch";
 import { createStore, type Store } from "../../store";
 
 const MB = 1024 * 1024;
 
-/** A representative process table covering both kinds, users, and versions. */
+/** A representative process table covering launchers, users, and versions. */
 const STUB_PROCESSES: readonly ProcessInfo[] = [
   {
     pid: 100, ppid: 1, name: "python3.12", interpreterPath: "/usr/bin/python3.12",
     script: "/app/web.py", pythonVersion: "3.12.1", cpuPercent: 5, memoryBytes: 50 * MB,
-    runtimeSecs: 10, user: "alice", requiresElevation: false, kind: "interpreter",
+    runtimeSecs: 10, user: "alice", requiresElevation: false,
+    inWorkspace: true, launcher: null, debuggable: true, undebuggableReason: null,
   },
   {
     pid: 200, ppid: 1, name: "python3.11", interpreterPath: "/usr/bin/python3.11",
     script: "/app/worker.py", pythonVersion: "3.11.7", cpuPercent: 42, memoryBytes: 10 * MB,
-    runtimeSecs: 99, user: "bob", requiresElevation: true, kind: "interpreter",
+    runtimeSecs: 99, user: "bob", requiresElevation: true,
+    inWorkspace: false, launcher: null, debuggable: true, undebuggableReason: null,
   },
   {
     pid: 300, ppid: 200, name: "python3.12", interpreterPath: "/usr/bin/python3.12",
     script: "/app/uvicorn.py", pythonVersion: "3.12.1", cpuPercent: 1, memoryBytes: 99 * MB,
-    runtimeSecs: 5, user: "alice", requiresElevation: false, kind: "launcher",
+    runtimeSecs: 5, user: "alice", requiresElevation: false,
+    inWorkspace: false, launcher: "uvicorn", debuggable: true, undebuggableReason: null,
   },
 ];
 
@@ -85,6 +88,41 @@ function labelText(item: vscode.TreeItem): string {
   return (item as unknown as { label?: string }).label ?? "";
 }
 
+// ── Display-cue helpers ([PROFILE-PROCESSES-DISPLAY]) ──────────────────────
+
+/** The vscode.ThemeColor / ThemeIcon `id` a row or decoration resolves to. */
+function colorId(value: { id?: string } | undefined): string | undefined {
+  return value?.id;
+}
+function iconId(item: vscode.TreeItem): string | undefined {
+  return (item.iconPath as vscode.ThemeIcon | undefined)?.id;
+}
+function resourceUri(item: vscode.TreeItem): vscode.Uri | undefined {
+  return (item as unknown as { resourceUri?: vscode.Uri }).resourceUri;
+}
+/** The row's tooltip narrowed to its string form (rowTooltip always returns one). */
+function tooltipText(item: vscode.TreeItem): string {
+  return typeof item.tooltip === "string" ? item.tooltip : "";
+}
+
+/** Drop the pinned "Run & …(Current File)" launch-action rows from a root listing. */
+function processRows(rows: vscode.TreeItem[]): vscode.TreeItem[] {
+  return rows.filter((r) => r.contextValue !== "launchAction");
+}
+/** Just the pinned launch-action rows. */
+function actionRows(rows: vscode.TreeItem[]): vscode.TreeItem[] {
+  return rows.filter((r) => r.contextValue === "launchAction");
+}
+
+/** A debugger-machinery row: listed, but non-debuggable (the 🚫 / grey / sunk case). */
+const MACHINERY: ProcessInfo = {
+  pid: 900, ppid: 1, name: "python3.12", interpreterPath: "/usr/bin/python3.12",
+  script: null, pythonVersion: "3.12.1", cpuPercent: 99, memoryBytes: 5 * MB,
+  runtimeSecs: 3, user: "alice", requiresElevation: false,
+  inWorkspace: false, launcher: null, debuggable: false,
+  undebuggableReason: "debugger machinery",
+};
+
 suite("Python Processes Panel", () => {
   let provider: PythonProcessesProvider;
 
@@ -94,13 +132,13 @@ suite("Python Processes Panel", () => {
 
   test("lists every process sorted by CPU descending by default", async () => {
     provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
-    const rows = await provider.getChildren();
+    const rows = processRows(await provider.getChildren());
     assert.deepStrictEqual(rows.map(pidOf), [200, 100, 300], "CPU 42 > 5 > 1");
   });
 
   test("each row carries its PID so inline Profile starts with no input box", async () => {
     provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
-    const rows = await provider.getChildren();
+    const rows = processRows(await provider.getChildren());
     for (const row of rows) {
       assert.strictEqual(typeof pidOf(row), "number", "row must carry a numeric pid for the command arg");
     }
@@ -124,14 +162,14 @@ suite("Python Processes Panel", () => {
   test("sort by memory orders rows by resident size descending", async () => {
     provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
     provider.cycleSortMode(); // cpu → memory
-    const rows = await provider.getChildren();
+    const rows = processRows(await provider.getChildren());
     assert.deepStrictEqual(rows.map(pidOf), [300, 100, 200], "memory 99 > 50 > 10 MB");
   });
 
   test("group by Python version buckets processes under collapsible headers", async () => {
     provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
     provider.cycleGroupMode(); // none → version
-    const groups = await provider.getChildren();
+    const groups = processRows(await provider.getChildren());
     assert.deepStrictEqual(
       groups.map(labelText),
       ["3.11.7", "3.12.1"],
@@ -148,24 +186,25 @@ suite("Python Processes Panel", () => {
   test("filter narrows rows by name, script, or PID substring", async () => {
     provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
     provider.setFilter("worker");
-    let rows = await provider.getChildren();
+    let rows = processRows(await provider.getChildren());
     assert.deepStrictEqual(rows.map(pidOf), [200], "only worker.py matches");
 
     provider.setFilter("300");
-    rows = await provider.getChildren();
+    rows = processRows(await provider.getChildren());
     assert.deepStrictEqual(rows.map(pidOf), [300], "PID substring matches");
   });
 
   // procexp-2: VS Code shows the "No Python processes running" welcome whenever
   // getChildren returns []. When a filter hides a NON-empty process list, the
-  // tree must NOT be empty — it must say processes are running but filtered.
+  // tree must NOT be empty — it must say processes are running but filtered
+  // (the pinned launch rows stay too).
   test("a filter that hides every running process shows an honest placeholder, not 'no processes' (procexp-2)", async () => {
     provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
     provider.setFilter("nonexistent-zzz");
-    const rows = await provider.getChildren();
-    assert.strictEqual(rows.length, 1, "must return a placeholder row, not an empty list that triggers the welcome");
-    assert.strictEqual(rows[0].contextValue, "processesMessage", "the row is a non-process placeholder");
-    const label = labelText(rows[0]);
+    const nonAction = processRows(await provider.getChildren());
+    assert.strictEqual(nonAction.length, 1, "must return a placeholder row, not an empty list that triggers the welcome");
+    assert.strictEqual(nonAction[0].contextValue, "processesMessage", "the row is a non-process placeholder");
+    const label = labelText(nonAction[0]);
     assert.ok(
       label.includes("nonexistent-zzz") && label.includes("3 running"),
       `the placeholder must explain the filter hid running processes: ${label}`,
@@ -335,25 +374,263 @@ suite("Python Processes Panel — Track Memory routing", () => {
   });
 });
 
-suite("Python Processes Panel — launcher visibility", () => {
+// Tests for [PROFILE-PROCESSES-DISPLAY] / [PROFILE-PROCESSES-SCOPE]: the panel
+// shows EVERY process (zero filters) and renders cues — launcher chips, a green
+// workspace row, and a 🚫 / greyed / sunk row for anything it can't profile.
+suite("Python Processes Panel — zero-filter display cues", () => {
   let provider: PythonProcessesProvider;
+  teardown(() => { provider.dispose(); });
 
-  function basiliskConfig(): vscode.WorkspaceConfiguration {
-    return vscode.workspace.getConfiguration("basilisk");
-  }
-
-  teardown(async () => {
-    provider.dispose();
-    await basiliskConfig().update("profiler.showLaunchers", undefined, vscode.ConfigurationTarget.Global);
-  });
-
-  test("hides launcher processes when profiler.showLaunchers is false", async () => {
-    await basiliskConfig().update("profiler.showLaunchers", false, vscode.ConfigurationTarget.Global);
+  test("launchers are always listed and carry a framework chip (zero filters)", async () => {
     provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
     const rows = await provider.getChildren();
-    const pids = rows.map(pidOf);
-    assert.ok(!pids.includes(300), "the uvicorn launcher must be hidden");
-    assert.ok(pids.includes(100) && pids.includes(200), "bare interpreters remain visible");
+    const uvicorn = rows.find((r) => pidOf(r) === 300);
+    assert.ok(uvicorn, "the uvicorn launcher must always be listed — nothing is hidden");
+    assert.ok(
+      String(uvicorn.description).includes("[uvicorn]"),
+      `the launcher framework must render as a chip: ${String(uvicorn.description)}`,
+    );
+  });
+
+  test("a workspace process resolves to a green decoration; an outside one does not", async () => {
+    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    const decorations = new ProcessDecorationProvider(provider);
+    try {
+      const rows = await provider.getChildren();
+      const inside = rows.find((r) => pidOf(r) === 100); // inWorkspace: true
+      const outside = rows.find((r) => pidOf(r) === 300); // inWorkspace: false, debuggable
+      assert.ok(inside && outside, "both the workspace and outside rows must exist");
+      const insideUri = resourceUri(inside);
+      const outsideUri = resourceUri(outside);
+      assert.ok(insideUri && outsideUri, "process rows must carry a resourceUri for decoration");
+
+      const insideDeco = decorations.provideFileDecoration(insideUri);
+      assert.strictEqual(colorId(insideDeco?.color), "charts.green", "a workspace row must be green");
+      const outsideDeco = decorations.provideFileDecoration(outsideUri);
+      assert.strictEqual(outsideDeco, undefined, "a non-workspace debuggable row keeps the default colour");
+
+      // A non-process URI is ignored, and a tree refresh re-fires decorations.
+      assert.strictEqual(
+        decorations.provideFileDecoration(vscode.Uri.file("/tmp/unrelated")),
+        undefined,
+        "URIs from other schemes are not decorated",
+      );
+      let fired = false;
+      const sub = decorations.onDidChangeFileDecorations(() => { fired = true; });
+      provider.refresh();
+      sub.dispose();
+      assert.ok(fired, "a tree refresh must re-fire decorations so colours never go stale");
+    } finally {
+      decorations.dispose();
+    }
+  });
+
+  test("a non-debuggable process is 🚫-marked, greyed, and sorted to the bottom", async () => {
+    // MACHINERY has the highest CPU (99%) but must still sink below the others.
+    provider = new PythonProcessesProvider(storeWith([MACHINERY, ...STUB_PROCESSES]));
+    const decorations = new ProcessDecorationProvider(provider);
+    try {
+      const rows = await provider.getChildren();
+      assert.strictEqual(
+        pidOf(rows[rows.length - 1]),
+        900,
+        "the non-debuggable row sinks to the bottom despite the highest CPU",
+      );
+      const machineryRow = rows.find((r) => pidOf(r) === 900);
+      assert.ok(machineryRow, "the machinery process must still be LISTED, not hidden");
+      assert.ok(
+        labelText(machineryRow).startsWith("🚫"),
+        `a non-debuggable row must be prefixed with 🚫: ${labelText(machineryRow)}`,
+      );
+      assert.strictEqual(iconId(machineryRow), "circle-slash", "non-debuggable icon is circle-slash");
+
+      const machineryUri = resourceUri(machineryRow);
+      assert.ok(machineryUri, "the machinery row must carry a resourceUri");
+      const deco = decorations.provideFileDecoration(machineryUri);
+      assert.strictEqual(colorId(deco?.color), "disabledForeground", "a non-debuggable row is greyed");
+      assert.ok(
+        tooltipText(machineryRow).includes("debugger machinery"),
+        `the tooltip must explain why it can't be profiled: ${tooltipText(machineryRow)}`,
+      );
+    } finally {
+      decorations.dispose();
+    }
+  });
+});
+
+// Icons, decoration precedence, tooltip detail, and within-group sinking —
+// [PROFILE-PROCESSES-DISPLAY] (R4, R5, R6, R8).
+suite("Python Processes Panel — display cues: icons, precedence, tooltip, grouping", () => {
+  let provider: PythonProcessesProvider;
+  teardown(() => { provider.dispose(); });
+
+  test("each process state renders its own info icon (R4)", async () => {
+    const plain: ProcessInfo = { ...STUB_PROCESSES[0], pid: 111, inWorkspace: false };
+    provider = new PythonProcessesProvider(storeWith([MACHINERY, plain, ...STUB_PROCESSES]));
+    provider.setActiveProfilingPid(100); // mark PID 100 as actively profiled
+    const rows = await provider.getChildren();
+    const icons = new Map(rows.map((r) => [pidOf(r), iconId(r)]));
+    assert.strictEqual(icons.get(100), "flame", "the actively-profiled row shows the flame");
+    assert.strictEqual(icons.get(200), "lock", "an elevation row stays debuggable but shows the lock");
+    assert.strictEqual(icons.get(300), "rocket", "a launcher row shows the rocket");
+    assert.strictEqual(icons.get(111), "vm-running", "a plain interpreter shows the running-VM glyph");
+    assert.strictEqual(icons.get(900), "circle-slash", "a non-debuggable row shows circle-slash");
+  });
+
+  test("greying wins over green for a non-debuggable workspace process (R5 > R6)", async () => {
+    const wsMachinery: ProcessInfo = { ...MACHINERY, inWorkspace: true };
+    provider = new PythonProcessesProvider(storeWith([wsMachinery]));
+    const decorations = new ProcessDecorationProvider(provider);
+    try {
+      const row = processRows(await provider.getChildren()).find((r) => pidOf(r) === 900);
+      assert.ok(row, "the process row must exist");
+      const uri = resourceUri(row);
+      assert.ok(uri, "the row must carry a resourceUri");
+      const deco = decorations.provideFileDecoration(uri);
+      assert.strictEqual(
+        colorId(deco?.color),
+        "disabledForeground",
+        "a workspace process you can't debug must be greyed, not green",
+      );
+    } finally {
+      decorations.dispose();
+    }
+  });
+
+  test("the tooltip surfaces every resolved detail (R8)", async () => {
+    const rich: ProcessInfo = {
+      pid: 555, ppid: 1, name: "python3.12", interpreterPath: "/usr/bin/python3.12",
+      script: "/app/svc.py", pythonVersion: "3.12.1", cpuPercent: 7, memoryBytes: 12 * MB,
+      runtimeSecs: 65, user: "carol", requiresElevation: false,
+      inWorkspace: true, launcher: "gunicorn", debuggable: true, undebuggableReason: null,
+    };
+    provider = new PythonProcessesProvider(storeWith([rich]));
+    const row = processRows(await provider.getChildren()).find((r) => pidOf(r) === 555);
+    assert.ok(row, "the process row must exist");
+    const tip = tooltipText(row);
+    for (const needle of [
+      "PID 555", "Interpreter: /usr/bin/python3.12", "Script: /app/svc.py",
+      "Python: 3.12.1", "Runtime:", "User: carol", "Launcher: gunicorn", "Workspace",
+    ]) {
+      assert.ok(tip.includes(needle), `tooltip must surface "${needle}": ${tip}`);
+    }
+  });
+
+  test("when grouped, a non-debuggable process sinks within its group (R5)", async () => {
+    const machinery: ProcessInfo = { ...MACHINERY, pythonVersion: "3.12.1" }; // shares 100 & 300's group
+    provider = new PythonProcessesProvider(storeWith([machinery, ...STUB_PROCESSES]));
+    provider.cycleGroupMode(); // none → version
+    const groups = await provider.getChildren();
+    const twelve = groups.find((g) => labelText(g) === "3.12.1");
+    assert.ok(twelve, "the 3.12.1 group must exist");
+    const members = await provider.getChildren(twelve);
+    assert.deepStrictEqual(
+      members.map(pidOf),
+      [100, 300, 900],
+      "debuggable rows first (CPU-ordered), the non-debuggable one sinks last within the group",
+    );
+  });
+});
+
+// The big "Run & …(Current File)" buttons can't live in viewsWelcome once the
+// tree is populated (VS Code renders welcome only for an EMPTY view), so they are
+// pinned as rows at the top — gated per activity. [PROFILE-PROCESSES-LAUNCH-FILE]
+// / [PROFILE-PROCESSES-REACTIVE].
+suite("Python Processes Panel — pinned launch buttons", () => {
+  let provider: PythonProcessesProvider;
+  teardown(() => { provider.dispose(); });
+
+  function commandsOf(rows: vscode.TreeItem[]): (string | undefined)[] {
+    return actionRows(rows).map((r) => r.command?.command);
+  }
+
+  test("the current-file launches are pinned above the process rows even when a process is listed", async () => {
+    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    const rows = await provider.getChildren();
+    assert.deepStrictEqual(
+      commandsOf(rows),
+      ["basilisk.profileCurrentFileCpu", "basilisk.trackMemoryCurrentFile"],
+      "both launches must be pinned, CPU then memory",
+    );
+    assert.strictEqual(rows[0].contextValue, "launchAction", "a launch row is first");
+    assert.ok(processRows(rows).length > 0, "the process rows still follow the launches");
+  });
+
+  test("a busy metric hides ITS launch row but leaves the other (both: CPU during memory, memory during CPU)", async () => {
+    const store = storeWith(STUB_PROCESSES);
+    provider = new PythonProcessesProvider(store);
+
+    store.profilerActive(4242, "sess-cpu"); // CPU busy
+    assert.deepStrictEqual(
+      commandsOf(await provider.getChildren()),
+      ["basilisk.trackMemoryCurrentFile"],
+      "while CPU profiles, the CPU launch is hidden but the memory launch remains",
+    );
+
+    store.profilerStopped();
+    store.memoryTrackingActive("sess-mem"); // memory busy
+    assert.deepStrictEqual(
+      commandsOf(await provider.getChildren()),
+      ["basilisk.profileCurrentFileCpu"],
+      "while memory tracks, the memory launch is hidden but the CPU launch remains",
+    );
+    store.memoryTrackingStopped();
+  });
+
+  test("with no processes the tree is empty so the viewsWelcome big buttons render", async () => {
+    provider = new PythonProcessesProvider(storeWith([]));
+    assert.deepStrictEqual(
+      await provider.getChildren(),
+      [],
+      "an empty process list defers to the welcome buttons rather than pinning rows",
+    );
+  });
+});
+
+// Memory tracking can only target the active Basilisk debuggee, so the panel
+// reveals the inline Track Memory action on that row alone and warns elsewhere —
+// answering "why not grey it out beforehand?" ([PROFILE-PROCESSES-LAUNCH]).
+suite("Python Processes Panel — Track Memory is debuggee-only", () => {
+  let provider: PythonProcessesProvider;
+  teardown(() => { provider.dispose(); });
+
+  test("only the active-debuggee row carries the Track-Memory-enabling contextValue", async () => {
+    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider.setActiveDebuggeePid(100); // PID 100 is the active debuggee
+    const rows = processRows(await provider.getChildren());
+    function ctxOf(pid: number): string | undefined {
+      return rows.find((r) => pidOf(r) === pid)?.contextValue;
+    }
+    assert.strictEqual(ctxOf(100), "pythonProcessDebuggee", "the debuggee row enables Track Memory");
+    assert.strictEqual(ctxOf(200), "pythonProcessElevated", "an external (elevated) row does not");
+    assert.strictEqual(ctxOf(300), "pythonProcess", "an external launcher row does not");
+  });
+
+  test("non-debuggee rows warn that memory tracking is unavailable here; the debuggee does not", async () => {
+    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider.setActiveDebuggeePid(100);
+    const rows = processRows(await provider.getChildren());
+    const debuggee = rows.find((r) => pidOf(r) === 100);
+    const external = rows.find((r) => pidOf(r) === 300);
+    assert.ok(debuggee && external, "both rows must exist");
+    assert.ok(
+      !tooltipText(debuggee).includes("Memory tracking needs"),
+      "the debuggee row offers tracking, so it shows no caveat",
+    );
+    assert.ok(
+      tooltipText(external).includes("Memory tracking needs"),
+      `a non-debuggee row must warn memory tracking is unavailable: ${tooltipText(external)}`,
+    );
+  });
+
+  test("with no active debuggee, no row enables Track Memory", async () => {
+    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider.setActiveDebuggeePid(undefined);
+    const rows = processRows(await provider.getChildren());
+    assert.ok(
+      !rows.some((r) => r.contextValue === "pythonProcessDebuggee"),
+      "no row may offer Track Memory when nothing runs under Basilisk",
+    );
   });
 });
 

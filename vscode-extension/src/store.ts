@@ -25,6 +25,8 @@ import { POLL_INTERVAL_MS, WAIT_MS } from "./timeouts";
 import {
   createProfilerActions,
   isProfilerBusy,
+  isCpuBusy,
+  isMemoryBusy,
   IDLE_PROFILER_SESSION,
   type ProfilerActions,
   type ProfilerSession,
@@ -76,6 +78,10 @@ export interface Store extends ProfilerActions {
   readonly profiler: ReadonlySignal<ProfilerSession>;
   /** True while any CPU or memory profiling activity is starting or running. */
   readonly profilerBusy: ReadonlySignal<boolean>;
+  /** True while the CPU leg is starting or running (gates CPU starts only). */
+  readonly cpuBusy: ReadonlySignal<boolean>;
+  /** True while the memory leg is starting or running (gates memory starts only). */
+  readonly memoryBusy: ReadonlySignal<boolean>;
 
   // Read-only access to the ready handle (for whenReady callers).
   readonly lspReadyPromise: ReadonlySignal<Promise<void> | undefined>;
@@ -457,6 +463,8 @@ export function createStore(onReset?: () => void): Store {
     sessionIdToPid: signals.sessionIdToPid,
     profiler: signals.profiler,
     profilerBusy,
+    cpuBusy: computed(() => isCpuBusy(signals.profiler.value)),
+    memoryBusy: computed(() => isMemoryBusy(signals.profiler.value)),
     lspReadyPromise,
     isServerReady,
     analysisRevision: signals.analysisRevision,

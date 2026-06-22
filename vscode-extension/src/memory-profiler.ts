@@ -286,7 +286,9 @@ async function handleMemoryStart(
     void vscode.window.showErrorMessage("Basilisk LSP not connected");
     return false;
   }
-  if (store.profiler.value.memory === "active") {
+  // Memory starts gate on the memory leg only ([PROFILE-PROCESSES-REACTIVE]) —
+  // independent of any live CPU profile, but never a second memory session.
+  if (store.memoryBusy.value) {
     void vscode.window.showWarningMessage("Basilisk: Memory tracking is already active.");
     return false;
   }

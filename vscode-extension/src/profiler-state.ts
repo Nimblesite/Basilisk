@@ -96,6 +96,20 @@ export function isProfilerBusy(session: ProfilerSession): boolean {
   return session.cpu !== "idle" || session.memory !== "idle";
 }
 
+/**
+ * True while the CPU leg is starting or running. Gates CPU starts independently
+ * of memory so a CPU run can begin while memory tracking is live, but never a
+ * second CPU run on top of an active one ([PROFILE-PROCESSES-REACTIVE]).
+ */
+export function isCpuBusy(session: ProfilerSession): boolean {
+  return session.cpu !== "idle";
+}
+
+/** True while the memory leg is starting or running. The mirror of [`isCpuBusy`]. */
+export function isMemoryBusy(session: ProfilerSession): boolean {
+  return session.memory !== "idle";
+}
+
 /** Build the profiler actions over the store's backing Signal. */
 export function createProfilerActions(profiler: Signal<ProfilerSession>): ProfilerActions {
   function patch(next: Partial<ProfilerSession>): void {

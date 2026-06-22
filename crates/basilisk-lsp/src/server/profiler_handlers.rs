@@ -429,8 +429,9 @@ pub(super) async fn execute_profiler_processes(
 ) -> LspResult<Option<serde_json::Value>> {
     info!("execute_profiler_processes called");
 
-    // Scope enumeration to the open workspace so an unrelated system Python
-    // never shows up in the panel ([PROFILE-PROCESSES-SCOPE]).
+    // Enumeration is system-wide and zero-filter ([PROFILE-PROCESSES-SCOPE]); the
+    // roots are passed only to compute each row's `in_workspace` flag (the green
+    // row hint), never to exclude a process.
     let roots = server.workspace_roots.read().await.clone();
 
     // Enumeration blocks (~200ms for CPU sampling + `--version` probes), so run

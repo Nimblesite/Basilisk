@@ -173,24 +173,34 @@ async fn test_ws_profiler_processes_lists_running_python() -> TestResult<()> {
             .is_some_and(|p| !p.is_empty()),
         "interpreterPath should be resolved: {entry:?}"
     );
-    // Our own child is owned by the current user — no elevation prompt.
+    // This Python is a direct child of the (in-process) LSP, so its parent can
+    // trace it without elevation on every platform ([PROFILE-PROCESSES-MODEL] /
+    // [PROFILE-PERMISSIONS]) — even on macOS, where an *external* same-user
+    // process WOULD need elevation.
     assert_eq!(
         entry
             .get("requiresElevation")
             .and_then(serde_json::Value::as_bool),
         Some(false),
-        "a process owned by the current user must not require elevation: {entry:?}"
+        "a process we spawned ourselves must not require elevation: {entry:?}"
     );
     // Every documented field must be present (value may be null for lazy ones).
     for field in [
         "pid",
         "ppid",
         "name",
+        "interpreterPath",
+        "script",
         "pythonVersion",
         "cpuPercent",
         "memoryBytes",
         "runtimeSecs",
-        "kind",
+        "user",
+        "requiresElevation",
+        "inWorkspace",
+        "launcher",
+        "debuggable",
+        "undebuggableReason",
     ] {
         assert!(
             entry.get(field).is_some(),
@@ -228,12 +238,13 @@ async fn test_ws_profiler_processes_excludes_non_python_noise() -> TestResult<()
     Ok(())
 }
 
-/// Implements [PROFILE-PROCESSES-SCOPE]: enumeration is scoped to the open
-/// workspace. A Python process running *inside* the workspace root is listed; a
-/// Python process running entirely *outside* it — the "random process a user
-/// never started" defect — must be filtered out.
+/// Implements [PROFILE-PROCESSES-SCOPE]: enumeration is **system-wide and
+/// zero-filter**. A Python process inside *and* one entirely outside the
+/// workspace root are BOTH listed — workspace membership now only drives the
+/// green-row `inWorkspace` flag, never inclusion.
 #[tokio::test]
-async fn test_ws_profiler_processes_scoped_to_open_workspace() -> TestResult<()> {
+async fn test_ws_profiler_processes_lists_all_python_and_flags_workspace_membership() -> TestResult<()>
+{
     let in_dir = unique_temp_dir("bsk_ws_proc_in");
     let out_dir = unique_temp_dir("bsk_ws_proc_out");
     std::fs::create_dir_all(&in_dir)?;
@@ -254,19 +265,36 @@ async fn test_ws_profiler_processes_scoped_to_open_workspace() -> TestResult<()>
     let _ = initialize_with_root(&mut fixture, &root_uri, "openFilesOnly").await?;
 
     let processes = fetch_processes(&mut fixture, 720).await?;
-    let listed = |pid: u64| {
+    let entry = |pid: u64| {
         processes
             .iter()
-            .any(|p| p.get("pid").and_then(serde_json::Value::as_u64) == Some(pid))
+            .find(|p| p.get("pid").and_then(serde_json::Value::as_u64) == Some(pid))
+    };
+    let in_workspace = |pid: u64| {
+        entry(pid)
+            .and_then(|p| p.get("inWorkspace"))
+            .and_then(serde_json::Value::as_bool)
     };
 
+    // Zero filters: BOTH the in-workspace and the out-of-workspace process appear.
     assert!(
-        listed(inside_pid),
+        entry(inside_pid).is_some(),
         "a Python process whose cwd is inside the workspace must be listed (pid {inside_pid}): {processes:?}"
     );
     assert!(
-        !listed(outside_pid),
-        "a Python process running outside the workspace must NOT be listed (pid {outside_pid}): {processes:?}"
+        entry(outside_pid).is_some(),
+        "a Python process running OUTSIDE the workspace must also be listed now (pid {outside_pid}): {processes:?}"
+    );
+    // ...but only the inside one is flagged a workspace member (rendered green).
+    assert_eq!(
+        in_workspace(inside_pid),
+        Some(true),
+        "the in-workspace process must be flagged inWorkspace=true (pid {inside_pid}): {processes:?}"
+    );
+    assert_eq!(
+        in_workspace(outside_pid),
+        Some(false),
+        "the out-of-workspace process must be flagged inWorkspace=false (pid {outside_pid}): {processes:?}"
     );
 
     drop(inside);

@@ -2824,16 +2824,17 @@ while time.time() - start < 10:
     println!("  DISTRIBUTION TEST COMPLETE");
 }
 
-// ── Process enumeration must hide debugger infrastructure ───────────────────
-// Tests for [PROFILE-PROCESSES-MODEL]. A debugpy adapter is machinery, not a
-// profiling target: offering it in the panel invites profiling the debugger
-// itself, and adapters orphaned by a hard-killed editor linger as phantom
-// rows (the "process shown without running anything" defect).
+// ── Process enumeration shows debugger machinery but marks it non-debuggable ─
+// Tests for [PROFILE-PROCESSES-MODEL] / [PROFILE-PROCESSES-DISPLAY]. Enumeration
+// is zero-filter: a debugpy adapter IS listed (so the user can see it), but it
+// is flagged `debuggable = false` so the panel greys it, marks it 🚫, and sinks
+// it to the bottom — never offering it as a one-click profiling target.
 
-/// Spawn a real `python -m debugpy.adapter`, a plain Python sleeper, and
-/// assert enumeration lists the sleeper but never the adapter.
+/// Spawn a real `python -m debugpy.adapter` and a plain Python sleeper, then
+/// assert enumeration lists BOTH — the sleeper debuggable, the adapter marked
+/// non-debuggable.
 #[tokio::test]
-async fn enumeration_hides_debugpy_adapter_but_lists_real_targets() {
+async fn enumeration_lists_debugpy_adapter_but_marks_it_non_debuggable() {
     use std::process::{Command, Stdio};
 
     let python = std::env::var("PYTHON").unwrap_or_else(|_| "python3".to_owned());
@@ -2858,20 +2859,32 @@ async fn enumeration_hides_debugpy_adapter_but_lists_real_targets() {
     // Let both settle so the process table sees them.
     tokio::time::sleep(std::time::Duration::from_millis(800)).await;
 
-    // No workspace roots ⇒ system-wide list, so this test exercises only the
-    // debugger-infrastructure exclusion, not workspace scoping.
+    // No workspace roots ⇒ nothing is greened, but every Python process is
+    // listed (zero filters — [PROFILE-PROCESSES-SCOPE]).
     let processes = basilisk_lsp::profiler::processes::enumerate_python_processes(&[]);
     let sleeper_pid = sleeper.id();
     let adapter_pid = adapter.id();
     sleeper.kill();
     adapter.kill();
 
+    let sleeper_row = processes.iter().find(|p| p.pid == sleeper_pid);
+    let adapter_row = processes.iter().find(|p| p.pid == adapter_pid);
+
     assert!(
-        processes.iter().any(|p| p.pid == sleeper_pid),
-        "a plain python process must be offered for profiling"
+        sleeper_row.is_some_and(|p| p.debuggable),
+        "a plain python process must be listed and debuggable"
     );
     assert!(
-        !processes.iter().any(|p| p.pid == adapter_pid),
-        "debugger infrastructure (debugpy.adapter) must NEVER be listed as a target"
+        adapter_row.is_some(),
+        "debugger machinery (debugpy.adapter) must now be LISTED, not hidden"
+    );
+    assert!(
+        adapter_row.is_some_and(|p| !p.debuggable),
+        "the debugpy.adapter must be flagged debuggable = false (the 🚫 row)"
+    );
+    assert_eq!(
+        adapter_row.and_then(|p| p.undebuggable_reason.as_deref()),
+        Some("debugger machinery"),
+        "the adapter's tooltip reason must name it as debugger machinery"
     );
 }

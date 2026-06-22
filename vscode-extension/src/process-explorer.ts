@@ -14,12 +14,12 @@ import * as vscode from "vscode";
 import { type Store } from "./store";
 import { Logger } from "./logger";
 import { registerLaunchCommands } from "./process-launch";
-import { bindProcessPanelReactivity } from "./process-reactivity";
+import { bindDebuggeeTracking, bindProcessPanelReactivity } from "./process-reactivity";
 import { withViewProgress } from "./progress-ops";
 
 // ── LSP response types ───────────────────────────────────────────────────
 
-/** One attachable Python process; mirrors the LSP `ProcessInfo` model. */
+/** One Python process; mirrors the LSP `ProcessInfo` model ([PROFILE-PROCESSES-MODEL]). */
 export interface ProcessInfo {
   readonly pid: number;
   readonly ppid: number;
@@ -32,7 +32,14 @@ export interface ProcessInfo {
   readonly runtimeSecs: number;
   readonly user: string | null;
   readonly requiresElevation: boolean;
-  readonly kind: "interpreter" | "launcher";
+  /** `true` when the process belongs to an open workspace root — renders green. */
+  readonly inWorkspace: boolean;
+  /** Framework name (`uvicorn`, …) when a known launcher, else `null` — chip. */
+  readonly launcher: string | null;
+  /** `false` when the profiler can't attach — renders 🚫, greyed, sorted last. */
+  readonly debuggable: boolean;
+  /** Tooltip reason shown when `debuggable` is `false`. */
+  readonly undebuggableReason: string | null;
 }
 
 interface ProcessesResponse {
@@ -71,6 +78,16 @@ const SORT_LABEL: Readonly<Record<SortMode, string>> = {
   name: "Name",
   runtime: "Runtime",
   version: "Python version",
+};
+
+/** Per-mode row comparators; `sortProcesses` wraps these to sink non-debuggable rows. */
+const SORT_COMPARATORS: Readonly<Record<SortMode, (a: ProcessInfo, b: ProcessInfo) => number>> = {
+  cpu: (a, b) => b.cpuPercent - a.cpuPercent,
+  memory: (a, b) => b.memoryBytes - a.memoryBytes,
+  pid: (a, b) => a.pid - b.pid,
+  name: (a, b) => a.name.localeCompare(b.name),
+  runtime: (a, b) => b.runtimeSecs - a.runtimeSecs,
+  version: (a, b) => (a.pythonVersion ?? "").localeCompare(b.pythonVersion ?? ""),
 };
 
 type GroupMode = "none" | "version" | "interpreter" | "user" | "parent";
@@ -121,19 +138,37 @@ function basename(path: string): string {
 
 // ── Tree items ───────────────────────────────────────────────────────────
 
-type TreeItem = ProcessGroupItem | ProcessTreeItem | MessageTreeItem;
+type TreeItem = LaunchActionItem | ProcessGroupItem | ProcessTreeItem | MessageTreeItem;
 
 /**
- * A non-process placeholder row. Returned (instead of an empty list) when a
- * filter or the "hide launchers" setting empties a NON-empty process list, so
- * the empty-tree viewsWelcome never claims "No Python processes running" while
- * processes are in fact running, just hidden (procexp-2).
+ * A non-process placeholder row. Returned (instead of an empty list) when the
+ * user's search filter empties a NON-empty process list, so the empty-tree
+ * viewsWelcome never claims "No Python processes running" while processes are in
+ * fact running, just filtered (procexp-2).
  */
 class MessageTreeItem extends vscode.TreeItem {
   constructor(label: string) {
     super(label, vscode.TreeItemCollapsibleState.None);
     this.contextValue = "processesMessage";
     this.iconPath = new vscode.ThemeIcon("filter");
+  }
+}
+
+/**
+ * A persistent "Run & …(Current File)" launch row pinned to the top of the tree.
+ * VS Code only renders the big `viewsWelcome` buttons when the tree is EMPTY, so
+ * once any process appears those buttons vanish — these rows keep the current-file
+ * launches reachable alongside a populated list ([PROFILE-PROCESSES-LAUNCH-FILE]).
+ * Gated per-activity (hidden while the matching metric is busy) like the title-bar
+ * buttons, so a second same-metric run is never offered ([PROFILE-PROCESSES-REACTIVE]).
+ */
+class LaunchActionItem extends vscode.TreeItem {
+  constructor(label: string, command: string, icon: string) {
+    super(label, vscode.TreeItemCollapsibleState.None);
+    this.id = `launchAction:${command}`;
+    this.contextValue = "launchAction";
+    this.iconPath = new vscode.ThemeIcon(icon, new vscode.ThemeColor("textLink.foreground"));
+    this.command = { command, title: label };
   }
 }
 
@@ -152,12 +187,24 @@ class ProcessGroupItem extends vscode.TreeItem {
   }
 }
 
-/** A single process row with a one-click profiling affordance. */
+/** 🚫 marker prefixed to the label of a process the profiler can't attach to. */
+const BLOCKED_MARK = "🚫 ";
+
+/**
+ * A single process row. Carries the visual cues for [PROFILE-PROCESSES-DISPLAY]:
+ * a 🚫-prefixed, greyed, sunk row when not `debuggable`; a green row when
+ * `inWorkspace`; a launcher chip; and the flame for the actively-profiled row.
+ */
 class ProcessTreeItem extends vscode.TreeItem {
-  constructor(public readonly process: ProcessInfo, activeProfilingPid?: number) {
+  constructor(
+    public readonly process: ProcessInfo,
+    activeProfilingPid?: number,
+    activeDebuggeePid?: number,
+  ) {
     const scriptName = process.script !== null ? basename(process.script) : undefined;
+    const base = scriptName !== undefined ? `${process.name} — ${scriptName}` : process.name;
     super(
-      scriptName !== undefined ? `${process.name} — ${scriptName}` : process.name,
+      process.debuggable ? base : `${BLOCKED_MARK}${base}`,
       vscode.TreeItemCollapsibleState.None,
     );
 
@@ -170,15 +217,18 @@ class ProcessTreeItem extends vscode.TreeItem {
     // so package.json swaps its inline Profile button for a Stop button
     // ([PROFILE-PROCESSES-REACTIVE]).
     const profilingThis = activeProfilingPid !== undefined && activeProfilingPid === process.pid;
-    const version = process.pythonVersion ?? "—";
-    const profilingSuffix = profilingThis ? " · profiling" : "";
-    this.description =
-      `PID ${process.pid} · ${version} · ${process.cpuPercent.toFixed(1)}% · ${formatBytes(process.memoryBytes)}${profilingSuffix}`;
-    this.tooltip = rowTooltip(process, profilingThis);
-    this.iconPath = profilingThis
-      ? new vscode.ThemeIcon("flame", new vscode.ThemeColor("statusBarItem.warningBackground"))
-      : processIcon(process);
-    this.contextValue = rowContextValue(process, profilingThis);
+    // Only the active Basilisk debuggee can be memory-tracked (tracemalloc rides
+    // the DAP courier — [PROFILE-MEMORY-HOWTO]); its row gets a contextValue that
+    // reveals the inline Track Memory action, hidden everywhere else so the
+    // action is never offered where it would just refuse.
+    const memoryTrackable = activeDebuggeePid !== undefined && activeDebuggeePid === process.pid;
+    this.description = rowDescription(process, profilingThis);
+    this.tooltip = rowTooltip(process, profilingThis, memoryTrackable);
+    this.iconPath = processIcon(process, profilingThis);
+    this.contextValue = rowContextValue(process, profilingThis, memoryTrackable);
+    // The FileDecorationProvider keys off this synthetic URI to colour the whole
+    // label green (workspace) or grey (non-debuggable) — [PROFILE-PROCESSES-DISPLAY].
+    this.resourceUri = processResourceUri(process);
 
     if (process.script !== null) {
       this.command = {
@@ -190,17 +240,41 @@ class ProcessTreeItem extends vscode.TreeItem {
   }
 }
 
+/** Scheme of the synthetic per-row URI the decoration provider colours. */
+const PROCESS_URI_SCHEME = "basilisk-process";
+
+/** A synthetic URI encoding the row's workspace + debuggability for decoration. */
+function processResourceUri(process: ProcessInfo): vscode.Uri {
+  const ws = process.inWorkspace ? "1" : "0";
+  const dbg = process.debuggable ? "1" : "0";
+  return vscode.Uri.from({ scheme: PROCESS_URI_SCHEME, path: `/${process.pid}`, query: `ws=${ws}&dbg=${dbg}` });
+}
+
+/** The launcher chip (`[uvicorn] `) for a row's description, or empty. */
+function launcherChip(process: ProcessInfo): string {
+  return process.launcher !== null ? `[${process.launcher}] ` : "";
+}
+
+/** The description line: launcher chip, then the key live metrics. */
+function rowDescription(process: ProcessInfo, profilingThis: boolean): string {
+  const version = process.pythonVersion ?? "—";
+  const profilingSuffix = profilingThis ? " · profiling" : "";
+  return `${launcherChip(process)}PID ${process.pid} · ${version} · ${process.cpuPercent.toFixed(1)}% · ${formatBytes(process.memoryBytes)}${profilingSuffix}`;
+}
+
 /**
  * The row's contextValue, which selects its package.json affordances:
- * `pythonProcessProfiling` (Stop), `pythonProcessElevated` (lock), or plain.
+ * `pythonProcessProfiling` (Stop), `pythonProcessDebuggee` (Track Memory enabled),
+ * `pythonProcessElevated` (lock), or plain `pythonProcess`.
  */
-function rowContextValue(process: ProcessInfo, profilingThis: boolean): string {
+function rowContextValue(process: ProcessInfo, profilingThis: boolean, memoryTrackable: boolean): string {
   if (profilingThis) { return "pythonProcessProfiling"; }
+  if (memoryTrackable) { return "pythonProcessDebuggee"; }
   return process.requiresElevation ? "pythonProcessElevated" : "pythonProcess";
 }
 
-/** Multi-line hover tooltip for a process row. */
-function rowTooltip(process: ProcessInfo, profilingThis: boolean): string {
+/** Multi-line hover tooltip surfacing every resolved detail for a process row. */
+function rowTooltip(process: ProcessInfo, profilingThis: boolean, memoryTrackable: boolean): string {
   return [
     `${process.name} (PID ${process.pid})`,
     process.interpreterPath !== null ? `Interpreter: ${process.interpreterPath}` : "",
@@ -209,19 +283,45 @@ function rowTooltip(process: ProcessInfo, profilingThis: boolean): string {
     `CPU: ${process.cpuPercent.toFixed(1)}%  ·  Memory: ${formatBytes(process.memoryBytes)}`,
     `Runtime: ${formatRuntime(process.runtimeSecs)}`,
     process.user !== null ? `User: ${process.user}` : "",
+    process.launcher !== null ? `Launcher: ${process.launcher}` : "",
+    process.inWorkspace ? "📁 Workspace process" : "",
     profilingThis ? "🔥 Basilisk is profiling this process — click Stop to finish" : "",
-    process.requiresElevation ? "⚠ Profiling this process will require elevation" : "",
+    !process.debuggable && process.undebuggableReason !== null
+      ? `🚫 Can't profile — ${process.undebuggableReason}`
+      : "",
+    // An external process is profilable only with elevation.
+    process.debuggable && process.requiresElevation
+      ? "🔒 Profiling this process will prompt for elevation"
+      : "",
+    // Memory tracking (tracemalloc via the DAP courier — [PROFILE-MEMORY-HOWTO])
+    // only works on a process Basilisk launched, so it is offered only on the
+    // active debuggee; elsewhere point at the current-file launch.
+    process.debuggable && !memoryTrackable
+      ? "🧠 Memory tracking needs the process under Basilisk — use “Run & Track Memory (Current File)”"
+      : "",
   ].filter(Boolean).join("\n");
 }
 
-/** Icon for a process row: a lock badge when elevation is required. */
-function processIcon(process: ProcessInfo): vscode.ThemeIcon {
+/**
+ * Leading icon for a process row: the flame while profiling, `circle-slash` when
+ * not debuggable, a `lock` when it needs elevation, `rocket` for launchers, else
+ * a running-VM glyph. In-workspace debuggable rows are tinted green to match the
+ * label decoration.
+ */
+function processIcon(process: ProcessInfo, profilingThis: boolean): vscode.ThemeIcon {
+  if (profilingThis) {
+    return new vscode.ThemeIcon("flame", new vscode.ThemeColor("statusBarItem.warningBackground"));
+  }
+  if (!process.debuggable) {
+    return new vscode.ThemeIcon("circle-slash", new vscode.ThemeColor("disabledForeground"));
+  }
   if (process.requiresElevation) {
     return new vscode.ThemeIcon("lock", new vscode.ThemeColor("list.warningForeground"));
   }
-  return process.kind === "launcher"
-    ? new vscode.ThemeIcon("rocket")
-    : new vscode.ThemeIcon("vm-running");
+  const glyph = process.launcher !== null ? "rocket" : "vm-running";
+  return process.inWorkspace
+    ? new vscode.ThemeIcon(glyph, new vscode.ThemeColor("charts.green"))
+    : new vscode.ThemeIcon(glyph);
 }
 
 // ── Provider ─────────────────────────────────────────────────────────────
@@ -240,6 +340,8 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
   private filterText = "";
   /** PID currently being CPU-profiled, so its row renders a Stop affordance. */
   private activeProfilingPid: number | undefined;
+  /** PID of the active Basilisk debuggee, the only row that can be memory-tracked. */
+  private activeDebuggeePid: number | undefined;
 
   constructor(private readonly store: Store) {}
 
@@ -269,6 +371,15 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
    */
   public setActiveProfilingPid(pid: number | undefined): void {
     this.activeProfilingPid = pid;
+  }
+
+  /**
+   * Mark which PID is the active Basilisk debuggee — the only row whose inline
+   * Track Memory action is shown, since tracemalloc can only target a process
+   * Basilisk launched ([PROFILE-MEMORY-HOWTO]). Pass `undefined` to clear.
+   */
+  public setActiveDebuggeePid(pid: number | undefined): void {
+    this.activeDebuggeePid = pid;
   }
 
   /**
@@ -312,9 +423,17 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
 
   public async getChildren(element?: TreeItem): Promise<TreeItem[]> {
     if (element instanceof ProcessGroupItem) {
-      return element.members.map((proc) => new ProcessTreeItem(proc, this.activeProfilingPid));
+      // Re-sort so non-debuggable rows sink to the bottom *within the group* too,
+      // not just in the flat list ([PROFILE-PROCESSES-DISPLAY]).
+      return this.sortProcesses([...element.members]).map(
+        (proc) => new ProcessTreeItem(proc, this.activeProfilingPid, this.activeDebuggeePid),
+      );
     }
-    if (element instanceof ProcessTreeItem || element instanceof MessageTreeItem) {
+    if (
+      element instanceof ProcessTreeItem ||
+      element instanceof MessageTreeItem ||
+      element instanceof LaunchActionItem
+    ) {
       return [];
     }
 
@@ -322,50 +441,71 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
       await this.fetchProcesses();
     }
 
+    // With no processes at all, return [] so the empty/loading/error
+    // `viewsWelcome` (which carries the big launch buttons) renders honestly.
+    if (this.processes.length === 0) {
+      return [];
+    }
+
+    // Processes exist → the welcome can't show, so pin the current-file launches
+    // to the top as rows ([PROFILE-PROCESSES-LAUNCH-FILE]).
+    const actions = this.launchActionRows();
     const visible = this.sortProcesses(this.applyFilter(this.processes));
-    if (visible.length === 0 && this.processes.length > 0) {
-      // Processes ARE running but a filter / "hide launchers" hid them all.
-      // Return an honest placeholder so the empty-tree welcome doesn't claim
-      // zero processes (procexp-2).
-      return [new MessageTreeItem(this.filteredEmptyLabel())];
+    if (visible.length === 0) {
+      // The user's search filter hid every running process — keep the launches
+      // and an honest placeholder rather than an empty list (procexp-2).
+      return [...actions, new MessageTreeItem(this.filteredEmptyLabel())];
     }
-    if (this.groupMode === "none") {
-      return visible.map((proc) => new ProcessTreeItem(proc, this.activeProfilingPid));
+    const rows = this.groupMode === "none"
+      ? visible.map((proc) => new ProcessTreeItem(proc, this.activeProfilingPid, this.activeDebuggeePid))
+      : this.buildGroups(visible);
+    return [...actions, ...rows];
+  }
+
+  /**
+   * The pinned current-file launch rows, gated per-activity: the CPU launch is
+   * hidden while CPU profiling is busy, the memory launch while memory tracking
+   * is busy — so a second same-metric run is never offered, yet either can start
+   * while the other runs ([PROFILE-PROCESSES-REACTIVE]).
+   */
+  private launchActionRows(): LaunchActionItem[] {
+    const rows: LaunchActionItem[] = [];
+    if (!this.store.cpuBusy.value) {
+      rows.push(new LaunchActionItem("Run & Profile CPU (Current File)", "basilisk.profileCurrentFileCpu", "flame"));
     }
-    return this.buildGroups(visible);
+    if (!this.store.memoryBusy.value) {
+      rows.push(new LaunchActionItem("Run & Track Memory (Current File)", "basilisk.trackMemoryCurrentFile", "database"));
+    }
+    return rows;
   }
 
   /** Why the filtered view is empty though processes are running (procexp-2). */
   private filteredEmptyLabel(): string {
-    const total = this.processes.length;
-    if (this.filterText !== "") {
-      return `No process matches "${this.filterText}" (${total} running)`;
-    }
-    return `${total} launcher process${total === 1 ? "" : "es"} hidden — enable Show Launchers to view`;
+    return `No process matches "${this.filterText}" (${this.processes.length} running)`;
   }
 
-  /** Apply the search filter and the "hide launchers" setting. */
+  /**
+   * Apply only the user's explicit search filter. Enumeration is zero-filter
+   * ([PROFILE-PROCESSES-SCOPE]); the panel never auto-hides a process.
+   */
   private applyFilter(processes: readonly ProcessInfo[]): ProcessInfo[] {
-    const showLaunchers = vscode.workspace
-      .getConfiguration("basilisk")
-      .get<boolean>("profiler.showLaunchers", true);
+    if (this.filterText === "") { return [...processes]; }
     return processes.filter((proc) => {
-      if (!showLaunchers && proc.kind === "launcher") { return false; }
-      if (this.filterText === "") { return true; }
       const haystack = `${proc.name} ${proc.script ?? ""} ${proc.pid}`.toLowerCase();
       return haystack.includes(this.filterText);
     });
   }
 
+  /**
+   * Sort by the active mode, but always sink non-`debuggable` rows to the bottom
+   * so the processes the user can act on stay on top ([PROFILE-PROCESSES-DISPLAY]).
+   */
   private sortProcesses(processes: ProcessInfo[]): ProcessInfo[] {
-    switch (this.sortMode) {
-      case "cpu": return processes.sort((a, b) => b.cpuPercent - a.cpuPercent);
-      case "memory": return processes.sort((a, b) => b.memoryBytes - a.memoryBytes);
-      case "pid": return processes.sort((a, b) => a.pid - b.pid);
-      case "name": return processes.sort((a, b) => a.name.localeCompare(b.name));
-      case "runtime": return processes.sort((a, b) => b.runtimeSecs - a.runtimeSecs);
-      case "version": return processes.sort((a, b) => (a.pythonVersion ?? "").localeCompare(b.pythonVersion ?? ""));
-    }
+    const byMode = SORT_COMPARATORS[this.sortMode];
+    return processes.sort((a, b) => {
+      if (a.debuggable !== b.debuggable) { return a.debuggable ? -1 : 1; }
+      return byMode(a, b);
+    });
   }
 
   private buildGroups(processes: readonly ProcessInfo[]): ProcessGroupItem[] {
@@ -422,6 +562,46 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
   }
 }
 
+// ── Row decorations (green / grey) ─────────────────────────────────────────
+
+/**
+ * Colours whole process-row labels green (workspace) or grey (non-debuggable),
+ * keyed on the synthetic `basilisk-process:` URI each row carries — the only way
+ * to tint a tree item's full label. Implements [PROFILE-PROCESSES-DISPLAY].
+ *
+ * Greying wins over green: a process you cannot debug is never shown as an
+ * actionable workspace row.
+ */
+export class ProcessDecorationProvider implements vscode.FileDecorationProvider, vscode.Disposable {
+  private readonly emitter = new vscode.EventEmitter<undefined>();
+  public readonly onDidChangeFileDecorations = this.emitter.event;
+  private readonly subscription: vscode.Disposable;
+  private readonly scheme = PROCESS_URI_SCHEME;
+
+  constructor(provider: PythonProcessesProvider) {
+    // Rows are recreated on every refresh with state baked into their URI query;
+    // re-query decorations whenever the tree repaints so colours never go stale.
+    this.subscription = provider.onDidChangeTreeData(() => this.emitter.fire(undefined));
+  }
+
+  public provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
+    if (uri.scheme !== this.scheme) { return undefined; }
+    const params = new URLSearchParams(uri.query);
+    if (params.get("dbg") === "0") {
+      return { color: new vscode.ThemeColor("disabledForeground"), tooltip: "Can't profile" };
+    }
+    if (params.get("ws") === "1") {
+      return { color: new vscode.ThemeColor("charts.green"), tooltip: "Workspace process" };
+    }
+    return undefined;
+  }
+
+  public dispose(): void {
+    this.subscription.dispose();
+    this.emitter.dispose();
+  }
+}
+
 // ── Registration ─────────────────────────────────────────────────────────
 
 /** Default poll interval (ms) when the setting is absent. */
@@ -450,6 +630,12 @@ export function registerPythonProcesses(
   // React to the store's profiling state: live chrome, button-gating context
   // keys, and the active-row marker ([PROFILE-PROCESSES-REACTIVE]).
   provider.disposables.push(bindProcessPanelReactivity(store, treeView, provider));
+  // Reveal the inline Track Memory action only on the active debuggee row
+  // ([PROFILE-PROCESSES-PANEL]) — memory tracking can't target external processes.
+  provider.disposables.push(bindDebuggeeTracking(store, provider));
+  // Colour workspace rows green and non-debuggable rows grey ([PROFILE-PROCESSES-DISPLAY]).
+  const decorations = new ProcessDecorationProvider(provider);
+  provider.disposables.push(decorations, vscode.window.registerFileDecorationProvider(decorations));
 
   const disposables = [
     ...registerLaunchCommands(store, treeView),
