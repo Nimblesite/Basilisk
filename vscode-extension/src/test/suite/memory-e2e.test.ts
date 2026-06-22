@@ -13,8 +13,18 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { currentStoppedFrameId, evaluateInDebugSession } from "../../dap-evaluate";
+import { currentStoppedFrameId } from "../../dap-evaluate";
 import { activeMemorySession } from "../../memory-profiler";
+import {
+  SESSION_WAIT_MS,
+  POLL_MS,
+  setBreakpoints,
+  waitForPause,
+  resume,
+  waitForSessionEnd,
+  memoryRoundTrip,
+  type IngestResult,
+} from "./debug-e2e-helpers";
 import { recordedOperations } from "../../progress-ops";
 import { buildProfileLaunchConfig } from "../../process-launch";
 import {
@@ -26,7 +36,6 @@ import {
   type MemorySnapshotResult,
 } from "../../memory-decorations";
 import {
-  openPythonFile,
   pollUntilResult,
   setupLspTestSuite,
   teardownLspTestSuite,
@@ -45,88 +54,23 @@ const BP_AFTER_CHUNK3 = 17;
 const MEMORY_PALETTE = ["#c084fc", "#a78bfa", "#8b5cf6", "#7c3aed"];
 const LEAK_PALETTE = ["#ef4444", "#f87171", "#fb923c", "#a78bfa"];
 
-/** Budget for a debug session to start / stop / pause. */
-const SESSION_WAIT_MS = 20_000;
-/** Poll cadence for debug-state changes. */
-const POLL_MS = 100;
-
-// ── Slim debug helpers (local to this suite) ─────────────────────────────
-
-function setBreakpoints(filePath: string, lines: number[]): void {
-  vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
-  vscode.debug.addBreakpoints(
-    lines.map(
-      (line) =>
-        new vscode.SourceBreakpoint(
-          new vscode.Location(vscode.Uri.file(filePath), new vscode.Position(line - 1, 0)),
-        ),
-    ),
-  );
+/** A node in the V8 `.heapprofile` call tree. */
+interface HeapNode {
+  callFrame?: { url?: string };
+  children?: HeapNode[];
 }
 
-/** Wait until the active debuggee is paused, returning the stopped frame id. */
-async function waitForPause(): Promise<number> {
-  const frameId = await pollUntilResult({
-    fn: async () => currentStoppedFrameId(),
-    predicate: (frame) => frame !== null,
-    timeoutMs: SESSION_WAIT_MS,
-    intervalMs: POLL_MS,
-  });
-  assert.ok(frameId !== null, "debuggee must reach a paused state");
-  return frameId;
+/** Depth of the heapprofile call tree (root counts as 1). */
+function heapTreeDepth(node: HeapNode): number {
+  const children = node.children ?? [];
+  return 1 + children.reduce((deepest, child) => Math.max(deepest, heapTreeDepth(child)), 0);
 }
 
-/** Resume the debuggee (first stopped thread). */
-async function resume(): Promise<void> {
-  const session = vscode.debug.activeDebugSession;
-  assert.ok(session, "an active debug session is required to resume");
-  const threads = (await session.customRequest("threads")) as { threads?: { id: number }[] };
-  const threadId = threads.threads?.[0]?.id;
-  assert.ok(threadId !== undefined, "the debuggee must report a thread");
-  await session.customRequest("continue", { threadId });
-}
-
-/** Wait for the active debug session to terminate. */
-async function waitForSessionEnd(): Promise<void> {
-  await pollUntilResult({
-    fn: async () => vscode.debug.activeDebugSession,
-    predicate: (session) => session === undefined,
-    timeoutMs: SESSION_WAIT_MS,
-    intervalMs: POLL_MS,
-  });
-}
-
-// ── Courier round-trip (leg 1 → evaluate → leg 2) ────────────────────────
-
-/** One marker-tagged ingest result. */
-interface IngestResult {
-  kind: string;
-  [field: string]: unknown;
-}
-
-/** Run one memory command's full courier round-trip against the paused debuggee. */
-async function memoryRoundTrip<T extends IngestResult>(
-  command: string,
-  memorySessionId: string | undefined,
-  frameId: number,
-): Promise<T> {
-  const leg1 = await vscode.commands.executeCommand<
-    { memorySessionId?: string; script?: string } | null
-  >(command, {
-    ...(memorySessionId === undefined ? { tracebackDepth: 25 } : { memorySessionId }),
-  });
-  const script = leg1?.script;
-  assert.ok(script !== undefined && script !== "", `${command} must return an injection script`);
-
-  const output = await evaluateInDebugSession(script, frameId);
-  assert.ok(output !== null, `${command} script must evaluate in the paused debuggee`);
-
-  const ingested = await vscode.commands.executeCommand<T | null>("basilisk.memory.ingest", {
-    memorySessionId: memorySessionId ?? leg1?.memorySessionId,
-    output,
-  });
-  assert.ok(ingested !== null, "ingest must return a kind-tagged result");
-  return ingested;
+/** Every `callFrame.url` in the heapprofile tree. */
+function heapNodeUrls(node: HeapNode): string[] {
+  const here = node.callFrame?.url;
+  const childUrls = (node.children ?? []).flatMap(heapNodeUrls);
+  return here !== undefined && here !== "" ? [here, ...childUrls] : childUrls;
 }
 
 /** Assert the snapshot's user-facing surface: heapprofile artifact + purple track. */
@@ -142,10 +86,22 @@ function assertSnapshotSurface(snapshot: MemorySnapshotResult & IngestResult): v
   const heapProfilePath = snapshot.heapProfilePath;
   assert.ok(typeof heapProfilePath === "string" && heapProfilePath !== "", "heapProfilePath must be returned");
   assert.ok(fs.existsSync(heapProfilePath), ".heapprofile must be written to disk");
-  const heapprofile = JSON.parse(fs.readFileSync(heapProfilePath, "utf8")) as {
-    head?: { children?: unknown[]; selfSize?: number };
-  };
+  const heapprofile = JSON.parse(fs.readFileSync(heapProfilePath, "utf8")) as { head?: HeapNode };
   assert.ok(heapprofile.head !== undefined, ".heapprofile must have a head tree");
+
+  // [PROFILE-MEMORY-FINAL] The profile must be a real call tree of the USER's
+  // program — genuine depth (not a flat by-line list) and zero debugger frames.
+  const head = heapprofile.head;
+  assert.ok(heapTreeDepth(head) >= 3, `the .heapprofile must be a real call tree with depth, got depth ${heapTreeDepth(head)}`);
+  const urls = heapNodeUrls(head);
+  assert.ok(
+    urls.some((url) => url.endsWith("memory_growth.py")),
+    "the user's program must appear in the call tree",
+  );
+  assert.ok(
+    !urls.some((url) => /pydevd|debugpy|_pydev|tracemalloc\.py|<frozen|<string>/.test(url)),
+    `the call tree must be filtered of debugger/runtime frames, got: ${[...new Set(urls)].map((u) => path.basename(u)).join(", ")}`,
+  );
 
   // The purple memory track is really painted ([PROFILE-VIS-HEATMAP]).
   applyMemoryDecorations(snapshot);
@@ -273,6 +229,125 @@ async function trackAndSnapshotRunningProgram(): Promise<void> {
   await waitForSessionEnd();
 }
 
+/**
+ * Drive the real "Run & Track Memory (Current File)" launch on the allocating
+ * fixture with NO breakpoint, let it run to completion, and assert the run
+ * finalises into a VISIBLE result: the at-exit snapshot's live allocations
+ * paint the purple track on the real allocation line, and tracking settles back
+ * to idle. This is the #146 dead-end — a run that ended in nothing the user
+ * could look at ([PROFILE-MEMORY-FINAL]).
+ */
+async function runTrackMemoryToCompletionAndAssertResult(): Promise<void> {
+  vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+  clearMemoryDecorations();
+  // The fixture must be the open editor so its at-exit allocations paint.
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(FIXTURE));
+  await vscode.window.showTextDocument(doc, { preview: false });
+
+  const started = await vscode.debug.startDebugging(undefined, buildProfileLaunchConfig("memory", FIXTURE));
+  assert.ok(started, "the metric-explicit memory launch must start");
+
+  // The auto-flow must mint a memory session at the entry pause…
+  await pollUntilResult({
+    fn: async () => activeMemorySession(),
+    predicate: (sessionId) => sessionId !== undefined,
+    timeoutMs: SESSION_WAIT_MS,
+    intervalMs: POLL_MS,
+  });
+
+  // …resume the debuggee so the program actually runs to completion…
+  await waitForSessionEnd();
+
+  // …and the session end must finalise into a visible result: the at-exit
+  // snapshot's live allocations paint the purple memory track on the real
+  // allocation line.
+  const memApplied = await pollUntilResult({
+    fn: async () => appliedMemoryDecorations().filter((entry) => entry.file === FIXTURE),
+    predicate: (entries) =>
+      entries.some((entry) => entry.line === ALLOC_LINE && MEMORY_PALETTE.includes(entry.color)),
+    timeoutMs: SESSION_WAIT_MS,
+    intervalMs: POLL_MS,
+  });
+  assert.ok(
+    memApplied.some((entry) => entry.line === ALLOC_LINE && MEMORY_PALETTE.includes(entry.color)),
+    `the run must end in a visible memory result — a purple track on allocation line ${ALLOC_LINE}, got: ${JSON.stringify(memApplied)}`,
+  );
+
+  // No stale state: tracking settles back to idle once the run is finalised
+  // ([PROFILE-PROCESSES-REACTIVE]); the debuggee is gone, so "tracking" must not linger.
+  await pollUntilResult({
+    fn: async () => activeMemorySession(),
+    predicate: (sessionId) => sessionId === undefined,
+    timeoutMs: SESSION_WAIT_MS,
+    intervalMs: POLL_MS,
+  });
+  assert.strictEqual(
+    activeMemorySession(),
+    undefined,
+    "tracking must settle to idle after the run is finalised into a result",
+  );
+}
+
+/**
+ * Track a run-forever program, then launch and terminate an UNRELATED debug
+ * session. The unrelated session ending must NOT finalise/tear down the live
+ * tracking — only the *tracked* session's own termination may
+ * ([PROFILE-MEMORY-FINAL]). Guards the regression where the terminate handler
+ * keyed on tracking state alone and destroyed tracking for any session.
+ */
+async function trackedRunSurvivesUnrelatedSessionEnd(): Promise<void> {
+  vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+  clearMemoryDecorations();
+  const busyFixture = path.resolve(__dirname, "../../src/test/fixtures/memory_busy.py");
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(busyFixture));
+  await vscode.window.showTextDocument(doc, { preview: false });
+
+  // Session A: a run-forever program with memory tracking active.
+  let sessionA: vscode.DebugSession | undefined;
+  const startSub = vscode.debug.onDidStartDebugSession((s) => { if (s.name === "Tracked A") { sessionA = s; } });
+  const startedA = await vscode.debug.startDebugging(undefined, {
+    name: "Tracked A", type: "basilisk-debug", request: "launch",
+    program: busyFixture, stopOnEntry: false, justMyCode: true, console: "internalConsole",
+  });
+  assert.ok(startedA, "the tracked session must launch");
+  await pollUntilResult({
+    fn: async () => vscode.debug.activeDebugSession, predicate: (s) => s !== undefined,
+    timeoutMs: SESSION_WAIT_MS, intervalMs: POLL_MS,
+  });
+  await vscode.commands.executeCommand("basilisk.memoryStart"); // auto-pause → inject → resume
+  const trackedSession = activeMemorySession();
+  assert.ok(trackedSession !== undefined, "tracking must start on the run-forever program");
+
+  // Session B: an unrelated program that runs to completion and terminates.
+  let sessionBId: string | undefined;
+  const bTerminated = new Promise<void>((resolve) => {
+    const startB = vscode.debug.onDidStartDebugSession((s) => { if (s.name === "Unrelated B") { sessionBId = s.id; } });
+    const endB = vscode.debug.onDidTerminateDebugSession((s) => {
+      if (sessionBId !== undefined && s.id === sessionBId) { startB.dispose(); endB.dispose(); resolve(); }
+    });
+  });
+  const startedB = await vscode.debug.startDebugging(undefined, {
+    name: "Unrelated B", type: "basilisk-debug", request: "launch",
+    program: FIXTURE, stopOnEntry: false, justMyCode: true, console: "internalConsole",
+  });
+  assert.ok(startedB, "the unrelated session must launch");
+  await bTerminated;
+  await new Promise<void>((r) => setTimeout(r, 500)); // let the terminate handler run
+
+  startSub.dispose();
+  assert.ok(sessionBId !== undefined && sessionBId !== sessionA?.id, "the two sessions must be distinct");
+  assert.strictEqual(
+    activeMemorySession(), trackedSession,
+    "an unrelated debug session ending must not finalise or tear down live memory tracking",
+  );
+
+  await vscode.debug.stopDebugging(sessionA);
+  await pollUntilResult({
+    fn: async () => vscode.debug.activeDebugSession, predicate: (s) => s === undefined,
+    timeoutMs: SESSION_WAIT_MS, intervalMs: POLL_MS,
+  });
+}
+
 /** Assert the diff's user-facing surface: leak suspicion + leak decorations. */
 function assertLeakSurface(diff: MemoryDiffResult & IngestResult): void {
   assert.ok(diff.totalGrowth > 0, "allocating a chunk between pauses must register growth");
@@ -394,27 +469,19 @@ suite("Memory profiling — real end-to-end", () => {
     await trackAndSnapshotRunningProgram();
   });
 
-  test("Run & Track Memory (Current File): stop-on-entry inject, auto-resume, program completes (#82)", async function () {
+  test("Run & Track Memory (Current File): the run finalises into a visible memory result on session end (#146)", async function () {
     this.timeout(60_000);
-    vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
-    await openPythonFile(tmpDir, "noop.py", "x = 1\n");
+    // #146: with no breakpoint the program runs to completion, so the OLD flow
+    // dead-ended — tracking started, the program exited, and NOTHING was shown
+    // (no chart / trace / report). The run must instead capture a final snapshot
+    // as the program exits and finalise it into a result the user can see.
+    await runTrackMemoryToCompletionAndAssertResult();
+  });
 
-    const started = await vscode.debug.startDebugging(
-      undefined,
-      buildProfileLaunchConfig("memory", FIXTURE),
-    );
-    assert.ok(started, "the metric-explicit memory launch must start");
-
-    // The auto-flow must mint a memory session at the entry pause…
-    await pollUntilResult({
-      fn: async () => activeMemorySession(),
-      predicate: (sessionId) => sessionId !== undefined,
-      timeoutMs: SESSION_WAIT_MS,
-      intervalMs: POLL_MS,
-    });
-
-    // …and resume the debuggee so the program actually runs to completion.
-    await waitForSessionEnd();
-    assert.ok(activeMemorySession() !== undefined, "tracking must survive until explicitly stopped");
+  test("an unrelated debug session ending does not tear down live memory tracking (#146)", async function () {
+    this.timeout(60_000);
+    // Regression: the terminate handler must finalise ONLY the tracked session,
+    // not destroy tracking whenever any debug session in the window ends.
+    await trackedRunSurvivesUnrelatedSessionEnd();
   });
 });

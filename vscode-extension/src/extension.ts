@@ -21,6 +21,7 @@ import { registerPythonProcesses } from "./process-explorer";
 import { createStore, type Store } from "./store";
 import { registerProfiler, disposeProfiler } from "./profiler";
 import { registerMemoryProfiler, disposeMemoryProfiler } from "./memory-profiler";
+import { registerMemoryAutopilot, disposeMemoryAutopilot, notifyDebuggeePause } from "./memory-autopilot";
 import { isProfilingUiEnabled } from "./profiling-ui";
 import { reportRuntimeFailure, resolveBasiliskRuntime } from "./shipwright-runtime";
 
@@ -191,6 +192,10 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
   const memoryDisposables = registerMemoryProfiler(context, s);
   singletonDisposables.push(...memoryDisposables);
 
+  // Memory autopilot — auto snapshot+diff on every pause / interval, so the leak
+  // hunt is "set a breakpoint and press Continue" ([PROFILE-MEMORY-AUTOPILOT]).
+  singletonDisposables.push(...registerMemoryAutopilot(s));
+
   // Walkthrough command.
   singletonDisposables.push(
     vscode.commands.registerCommand("basilisk.openWalkthrough", () => {
@@ -205,6 +210,7 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
 export function deactivate(): Promise<void> | undefined {
   disposeProfiler();
   disposeMemoryProfiler();
+  disposeMemoryAutopilot();
   const result = store?.client.value?.stop();
   // Set store = undefined BEFORE calling reset() so the onReset callback
   // (which checks `store !== undefined`) does NOT restart the LSP client.
@@ -287,10 +293,12 @@ function registerDebugSupport(context: vscode.ExtensionContext, s: Store): void 
   singletonDisposables.push(
     vscode.debug.registerDebugAdapterTrackerFactory(
       "basilisk-debug",
-      // The tracker captures the debuggee's PID (from the DAP `process` event)
-      // so the CPU profiler can attach to the SAME process the debugger drives.
-      new BasiliskDebugAdapterTrackerFactory((sessionId, pid) => {
-        s.setDebuggeeProcessId(sessionId, pid);
+      new BasiliskDebugAdapterTrackerFactory({
+        // The tracker captures the debuggee's PID (from the DAP `process` event)
+        // so the CPU profiler can attach to the SAME process the debugger drives.
+        onDebuggeeProcessId: (sessionId, pid) => { s.setDebuggeeProcessId(sessionId, pid); },
+        // …and every pause drives the memory autopilot ([PROFILE-MEMORY-AUTOPILOT-PAUSE]).
+        onStopped: (sessionId) => { notifyDebuggeePause(sessionId); },
       })
     )
   );

@@ -9,8 +9,163 @@
  * Extracted from profiler.ts to satisfy the 500 LOC file limit.
  */
 
+import { randomBytes } from "node:crypto";
 import * as vscode from "vscode";
+import { Logger } from "./logger";
 import type { ProfileResult } from "./profiler-decorations";
+import { PROFILER_JS_UTILS } from "./profiler-styles";
+
+// Implements [PROFILE-NATIVE-FALLBACK]. See docs/specs/LSP-PROFILING-SPEC.md#PROFILE-NATIVE-FALLBACK
+// ── Result presentation (#145) ─────────────────────────────────────────────
+
+/** Completion-toast actions that always reach a working view (#145). */
+const OPEN_FLAME_CHART = "Open Flame Chart";
+const REVEAL_TRACE = "Reveal Trace File";
+
+/** Entropy (bytes) for the per-render webview CSP nonce. */
+const CSP_NONCE_BYTES = 16;
+
+// Implements [PROFILE-SHORT-PROGRAM]. See docs/specs/LSP-PROFILING-SPEC.md#PROFILE-SHORT-PROGRAM
+/**
+ * Whether a completed profile has nothing worth showing — no hot functions and
+ * no hot lines (#145).
+ *
+ * Raw sample count is the wrong signal: a sub-tick program (e.g.
+ * `debug_demo.py` ≈ 1 ms) finishes before its work can be sampled, yet the
+ * session keeps sampling the idle/exiting interpreter — so the result can carry
+ * dozens of samples that resolve to zero user-code attribution. A sampling
+ * profiler at 100 Hz cannot fix this by raising the rate; deterministic
+ * profiling can (Phase 2). When there is no attribution, say so honestly instead
+ * of presenting an empty flame chart/heat map as a result.
+ */
+export function profileHasNoUsableData(
+  result: Pick<ProfileResult, "hotFunctions" | "hotLines">,
+): boolean {
+  return result.hotFunctions.length === 0 && result.hotLines.length === 0;
+}
+
+/**
+ * Land a completed CPU profile on a viewable result ([PROFILE-NATIVE-FALLBACK], #145).
+ *
+ * Opens VS Code's built-in `.cpuprofile` viewer when one was produced, but never
+ * *relies* on it: that viewer can refuse to render (unavailable in the host, or
+ * a profile it rejects) and `vscode.open` does not reject when it does. So the
+ * completion notification always offers an "Open Flame Chart" action onto the
+ * self-contained flamegraph webview (plus "Reveal Trace File") — the user is
+ * never stranded on "the editor could not be opened".
+ */
+export async function presentProfileResult(result: ProfileResult): Promise<void> {
+  if (profileHasNoUsableData(result)) {
+    presentNoUsableData(result);
+    return;
+  }
+  await openNativeViewerOrFallback(result);
+  Logger.info(
+    `Profiling stopped: ${result.totalSamples} samples, ${result.duration.toFixed(1)}s, ` +
+    `output: ${result.outputFile}`,
+  );
+  // A failed/refused export is never silent — even when there is still data to
+  // show, surface why an artifact is missing ([PROFILE-SPEEDSCOPE-VALIDATE]).
+  if (result.exportError !== undefined && result.exportError !== "") {
+    void vscode.window.showWarningMessage(
+      `Basilisk: Some profile artifacts could not be exported — ${result.exportError}`,
+    );
+  }
+  // Fire-and-forget: a notification carrying action buttons is sticky (VS Code
+  // does not auto-dismiss it), so awaiting it would block the stop handler until
+  // the user clicks. Let it float — its actions open their views when chosen —
+  // but swallow any rejection so it never surfaces as an unhandled promise.
+  void offerProfileResultActions(result).catch((err: unknown) => {
+    Logger.warn(`Profile completion action failed: ${err instanceof Error ? err.message : String(err)}`);
+  });
+}
+
+/**
+ * A profile with no attribution (#145, [PROFILE-SHORT-PROGRAM]). Be honest —
+ * don't present an empty flame chart/heat map as a real result, and don't
+ * promise a "higher sample rate" that provably cannot help a sub-tick run.
+ * Fire-and-forget (a notification is sticky if it carries a button, but even
+ * plain ones must not block the stop handler).
+ */
+function presentNoUsableData(result: ProfileResult): void {
+  const detail =
+    result.exportError !== undefined && result.exportError !== "" ? ` (${result.exportError})` : "";
+  if (result.totalSamples === 0) {
+    void vscode.window.showWarningMessage(
+      `Basilisk: Profiling captured no samples — the program finished before sampling began${detail}. ` +
+        "Sampling needs a longer-running target; short scripts need precise (deterministic) profiling.",
+    );
+    return;
+  }
+  void vscode.window.showWarningMessage(
+    `Basilisk: Captured ${result.totalSamples} sample${result.totalSamples === 1 ? "" : "s"}, but none ` +
+      "landed in your code — the program ran its work too briefly to profile by sampling. " +
+      "Short scripts need precise (deterministic) profiling.",
+  );
+}
+
+/** The on-disk trace a "Reveal" action points at: the `.cpuprofile`, else the speedscope JSON. */
+function traceFileFor(result: ProfileResult): string {
+  const cpu = result.cpuProfilePath ?? "";
+  return cpu !== "" ? cpu : result.outputFile;
+}
+
+/**
+ * Open a generated profile artifact in VS Code's built-in viewer beside the
+ * source, falling back to an in-extension view when no file was produced OR when
+ * the built-in viewer's open throws (unavailable in the host, or a file it
+ * rejects). Opening beside keeps the profiled file (and its inline decorations)
+ * visible. Shared by the CPU (`.cpuprofile`) and memory (`.heapprofile`) paths
+ * so the open-beside-else-fall-back primitive lives once and both get the same
+ * robustness (dry-1).
+ */
+export async function openNativeProfileViewerBeside(
+  filePath: string,
+  fallback: () => void,
+): Promise<void> {
+  if (filePath === "") {
+    fallback();
+    return;
+  }
+  try {
+    await vscode.commands.executeCommand(
+      "vscode.open",
+      vscode.Uri.file(filePath),
+      vscode.ViewColumn.Beside,
+    );
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    Logger.warn(`Built-in profile viewer failed to open (${msg}); using the in-extension fallback`);
+    fallback();
+  }
+}
+
+/**
+ * Open the native `.cpuprofile` viewer beside the source, falling back to the
+ * self-contained flamegraph webview.
+ */
+async function openNativeViewerOrFallback(result: ProfileResult): Promise<void> {
+  await openNativeProfileViewerBeside(result.cpuProfilePath ?? "", () => {
+    openFlamegraphWebview(result);
+  });
+}
+
+/** Completion toast that always offers a path to a working view (#145). */
+async function offerProfileResultActions(result: ProfileResult): Promise<void> {
+  const choice = await vscode.window.showInformationMessage(
+    `Basilisk: Profile complete — ${result.totalSamples} samples in ${result.duration.toFixed(1)}s`,
+    OPEN_FLAME_CHART,
+    REVEAL_TRACE,
+  );
+  if (choice === OPEN_FLAME_CHART) {
+    openFlamegraphWebview(result);
+  } else if (choice === REVEAL_TRACE) {
+    const trace = traceFileFor(result);
+    if (trace !== "") {
+      await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(trace));
+    }
+  }
+}
 
 // ── Webview panel ─────────────────────────────────────────────────────────
 
@@ -34,21 +189,49 @@ export function openFlamegraphWebview(result: ProfileResult): void {
     flamegraphPanel.onDidDispose(() => {
       flamegraphPanel = undefined;
     });
+    // Register the message handler ONCE — re-opening reveals the same panel, so
+    // re-registering on every call would fire each action N times.
+    flamegraphPanel.webview.onDidReceiveMessage(handleFlamegraphMessage);
   }
 
   flamegraphPanel.webview.html = buildFlamegraphHtml(result);
+}
 
-  // Handle messages from the webview.
-  flamegraphPanel.webview.onDidReceiveMessage((msg: { type: string; file?: string; line?: number }) => {
-    if (msg.type === "navigateToSource" && msg.file !== undefined && msg.line !== undefined) {
-      const uri = vscode.Uri.file(msg.file);
-      const position = new vscode.Position(msg.line - 1, 0);
-      void vscode.window.showTextDocument(uri, {
-        selection: new vscode.Range(position, position),
-        viewColumn: vscode.ViewColumn.One,
-      });
-    }
-  });
+/** Route a message posted from the flamegraph webview. */
+function handleFlamegraphMessage(msg: { type: string; file?: string; line?: number }): void {
+  if (msg.type === "navigateToSource" && msg.file !== undefined && msg.line !== undefined) {
+    const uri = vscode.Uri.file(msg.file);
+    const position = new vscode.Position(msg.line - 1, 0);
+    void vscode.window.showTextDocument(uri, {
+      selection: new vscode.Range(position, position),
+      viewColumn: vscode.ViewColumn.One,
+    });
+  } else if (msg.type === "openSpeedscope" && msg.file !== undefined && msg.file !== "") {
+    void openSpeedscopeImport(msg.file);
+  }
+}
+
+/**
+ * "Open in Speedscope": speedscope.app is served over https and cannot read
+ * `file://` URLs, so a `#profileURL=file://…` deep link always fails with
+ * "Something went wrong" ([PROFILE-VIEWER-DELIVERY]). Instead reveal the
+ * speedscope JSON and open the app so the user can drag-and-drop it in.
+ */
+async function openSpeedscopeImport(file: string): Promise<void> {
+  await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(file));
+  await vscode.env.openExternal(vscode.Uri.parse("https://www.speedscope.app/"));
+  vscode.window.showInformationMessage(
+    `Basilisk: Drag the revealed file into speedscope.app to view it — ${file}`,
+  );
+}
+
+/**
+ * Test seam: is the self-contained flamegraph results panel currently open?
+ * Lets the run→profile→view e2e assert the user reaches a working flame chart
+ * rather than dead-ending on the built-in viewer's error ([PROFILE-NATIVE]).
+ */
+export function flamegraphPanelOpen(): boolean {
+  return flamegraphPanel !== undefined;
 }
 
 /** Close and forget the panel (extension teardown). */
@@ -182,10 +365,19 @@ function flamegraphBody(): string {
   <div id="speedscope-section"></div>`;
 }
 
+/**
+ * Serialize a value for embedding inside an inline `<script>`. `JSON.stringify`
+ * does not escape `<`, so a profiled frame name/path containing `</script>`
+ * would close the script element early; `<` keeps it an opaque JS string.
+ */
+function embedJson(value: unknown): string {
+  return JSON.stringify(value).split("<").join("\\u003c");
+}
+
 /** Build the script initialization and helpers for the flamegraph webview. */
 function flamegraphScriptInit(result: ProfileResult): string {
-  const hotFunctionsJson = JSON.stringify(result.hotFunctions);
-  const hotLinesJson = JSON.stringify(result.hotLines);
+  const hotFunctionsJson = embedJson(result.hotFunctions);
+  const hotLinesJson = embedJson(result.hotLines);
 
   return `
     const vscode = acquireVsCodeApi();
@@ -193,7 +385,7 @@ function flamegraphScriptInit(result: ProfileResult): string {
     const hotLines = ${hotLinesJson};
     const totalSamples = ${result.totalSamples};
     const duration = ${result.duration};
-    const outputFile = ${JSON.stringify(result.outputFile)};
+    const outputFile = ${embedJson(result.outputFile)};
     function animateValue(el, target, suffix) {
       const start = 0;
       const stepTime = Math.max(10, Math.floor(400 / target));
@@ -213,8 +405,7 @@ function flamegraphScriptInit(result: ProfileResult): string {
       if (pct >= 10) return 'hot';
       if (pct >= 5) return 'warm';
       return 'cool';
-    }
-    function basename(filePath) { return filePath.split(/[\\/\\\\]/).pop() || filePath; }`;
+    }`;
 }
 
 /** Build the table rendering and speedscope link script. */
@@ -224,9 +415,12 @@ function flamegraphScriptRender(): string {
     for (const fn of hotFunctions) {
       const tr = document.createElement('tr');
       tr.onclick = () => vscode.postMessage({ type: 'navigateToSource', file: fn.file, line: fn.line });
+      // fn.name/fn.file are CPython co_name/co_filename from the profiled (possibly
+      // third-party) program — escape before innerHTML. This also renders synthetic
+      // frames like <module>/<lambda> literally instead of as broken HTML elements.
       tr.innerHTML = [
-        '<td>' + fn.name + '</td>',
-        '<td class="file-link">' + basename(fn.file) + ':' + fn.line + '</td>',
+        '<td>' + escapeHtml(fn.name) + '</td>',
+        '<td class="file-link">' + escapeHtml(basename(fn.file)) + ':' + fn.line + '</td>',
         '<td class="pct">' + fn.percentage.toFixed(1) + '%</td>',
         '<td class="pct">' + fn.selfPercentage.toFixed(1) + '%</td>',
         '<td class="bar-cell"><div class="bar ' + heatClass(fn.percentage) + '" style="width:' + Math.max(4, fn.percentage * 2) + 'px"></div></td>',
@@ -238,7 +432,7 @@ function flamegraphScriptRender(): string {
       const tr = document.createElement('tr');
       tr.onclick = () => vscode.postMessage({ type: 'navigateToSource', file: line.file, line: line.line });
       tr.innerHTML = [
-        '<td class="file-link">' + basename(line.file) + ':' + line.line + '</td>',
+        '<td class="file-link">' + escapeHtml(basename(line.file)) + ':' + line.line + '</td>',
         '<td class="pct">' + line.percentage.toFixed(1) + '%</td>',
         '<td>' + line.samples + '</td>',
         '<td class="bar-cell"><div class="bar ' + heatClass(line.percentage) + '" style="width:' + Math.max(4, line.percentage * 2) + 'px"></div></td>',
@@ -250,9 +444,9 @@ function flamegraphScriptRender(): string {
       const link = document.createElement('div');
       link.className = 'speedscope-link';
       link.textContent = 'Open in Speedscope (external)';
-      link.title = outputFile;
+      link.title = 'Reveal the trace and open speedscope.app to drag it in';
       link.onclick = () => {
-        vscode.postMessage({ type: 'openExternal', url: 'https://www.speedscope.app/#profileURL=file://' + encodeURIComponent(outputFile) });
+        vscode.postMessage({ type: 'openSpeedscope', file: outputFile });
       };
       section.appendChild(link);
     }`;
@@ -260,16 +454,22 @@ function flamegraphScriptRender(): string {
 
 /** Build the complete flamegraph HTML for the profiler webview panel. */
 export function buildFlamegraphHtml(result: ProfileResult): string {
+  // A per-render nonce gates the (self-generated) inline script: even if a
+  // profiled program's frame name/path slipped an escape, the browser refuses
+  // to run any inline <script> without this nonce, and `default-src 'none'`
+  // blocks loading any external resource the webview never needs ([PROFILE-NATIVE-FALLBACK]).
+  const nonce = randomBytes(CSP_NONCE_BYTES).toString("base64");
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Basilisk Profiler</title>
   <style>${flamegraphCss()}</style>
 </head>
 <body>${flamegraphBody()}
-  <script>${flamegraphScriptInit(result)}${flamegraphScriptRender()}</script>
+  <script nonce="${nonce}">${PROFILER_JS_UTILS}${flamegraphScriptInit(result)}${flamegraphScriptRender()}</script>
 </body>
 </html>`;
 }

@@ -80,7 +80,6 @@ interface PackageJSON {
  */
 const MODULE_EXPLORER_COMMANDS = [
   "basilisk.refreshModuleExplorer",
-  "basilisk.collapseModuleExplorer",
   "basilisk.toggleModuleExplorerView",
   "basilisk.sortModuleExplorer",
   "basilisk.filterModuleExplorer",
@@ -240,10 +239,6 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     await vscode.commands.executeCommand("basilisk.refreshModuleExplorer");
   });
 
-  test("collapseModuleExplorer command is executable", async function () {
-    await vscode.commands.executeCommand("basilisk.collapseModuleExplorer");
-  });
-
   test("toggleModuleExplorerView command is executable", async function () {
     await vscode.commands.executeCommand("basilisk.toggleModuleExplorerView");
   });
@@ -363,12 +358,12 @@ suite("Basilisk Activity Panel E2E Tests", function () {
       inlineOrdered.map((entry) => entry.command),
       [
         "basilisk.refreshModuleExplorer",
-        "basilisk.collapseModuleExplorer",
         "basilisk.toggleModuleExplorerView",
         "basilisk.filterModuleExplorer",
         "basilisk.sortModuleExplorer",
       ],
-      "inline toolbar must be exactly the read-only view-state actions, in order",
+      "inline toolbar must be exactly the read-only view-state actions, in order " +
+        "(Collapse All is VS Code's native showCollapseAll button, never contributed — #113)",
     );
 
     // Mutating + server-control actions live in the overflow menu, in
@@ -399,6 +394,66 @@ suite("Basilisk Activity Panel E2E Tests", function () {
       new Set(inlineIcons).size,
       inlineIcons.length,
       `inline toolbar icons must be unique, got: ${inlineIcons.join(", ")}`,
+    );
+  });
+
+  // Issue #113 [VSIX-MODULE-EXPLORER-TOOLBAR]: the panel must ship exactly ONE
+  // Collapse All — VS Code's native showCollapseAll button. The custom no-op
+  // `basilisk.collapseModuleExplorer` was the duplicate; it (and any command
+  // re-glyphed as $(collapse-all)) must never be contributed again.
+  test("Modules toolbar contributes no Collapse All — only the native showCollapseAll exists", function () {
+    const contributes = loadContributes();
+
+    const collapseCommand = (contributes?.commands ?? []).find(
+      (cmd) => cmd.command === "basilisk.collapseModuleExplorer",
+    );
+    assert.strictEqual(
+      collapseCommand,
+      undefined,
+      "basilisk.collapseModuleExplorer must not exist — Collapse All is native (showCollapseAll)",
+    );
+
+    const moduleToolbar = (contributes?.menus?.["view/title"] ?? []).filter(
+      (entry) => entry.when.includes("view == basilisk.moduleExplorer"),
+    );
+    const collapseEntries = moduleToolbar.filter(
+      (entry) => entry.command === "basilisk.collapseModuleExplorer",
+    );
+    assert.strictEqual(
+      collapseEntries.length,
+      0,
+      "no custom Collapse All may be contributed to the Modules toolbar",
+    );
+
+    // Defence-in-depth: no Modules toolbar command may re-introduce the
+    // $(collapse-all) glyph, which would render as a second collapse button
+    // next to the native one.
+    const commandIcons = new Map(
+      (contributes?.commands ?? []).map((cmd) => [cmd.command, cmd.icon]),
+    );
+    for (const entry of moduleToolbar) {
+      assert.notStrictEqual(
+        commandIcons.get(entry.command),
+        "$(collapse-all)",
+        `"${entry.command}" must not use the $(collapse-all) glyph — Collapse All is native (#113)`,
+      );
+    }
+  });
+
+  // Issue #151: the Sort button silently no-ops in the default tree view (sort is
+  // flat-only per [EXTACT-MODULES-TOOLBAR]). It must only appear where it works —
+  // gated on the flat view — so it is never a visible, enabled no-op.
+  test("Sort is gated to flat view so it is never a no-op in the tree view", function () {
+    const contributes = loadContributes();
+    const sortEntry = (contributes?.menus?.["view/title"] ?? []).find(
+      (entry) =>
+        entry.command === "basilisk.sortModuleExplorer" &&
+        entry.when.includes("view == basilisk.moduleExplorer"),
+    );
+    assert.ok(sortEntry, "sortModuleExplorer must be contributed to the Modules toolbar");
+    assert.ok(
+      sortEntry.when.includes("basilisk.moduleExplorerView == 'flat'"),
+      `Sort must be gated on the flat view so it never no-ops in tree view, got: ${sortEntry.when}`,
     );
   });
 
@@ -533,15 +588,20 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     const titleMenus = contributes?.menus?.["view/title"] ?? [];
 
     const moduleMenus = titleMenus.filter(
-      (entry) => entry.when === "view == basilisk.moduleExplorer",
+      (entry) => entry.when.includes("view == basilisk.moduleExplorer"),
     );
     const menuCommands = moduleMenus.map((entry) => entry.command);
 
     assert.ok(menuCommands.includes("basilisk.refreshModuleExplorer"), "Should include refresh");
-    assert.ok(menuCommands.includes("basilisk.collapseModuleExplorer"), "Should include collapse");
     assert.ok(menuCommands.includes("basilisk.toggleModuleExplorerView"), "Should include view toggle");
     assert.ok(menuCommands.includes("basilisk.filterModuleExplorer"), "Should include filter");
     assert.ok(menuCommands.includes("basilisk.sortModuleExplorer"), "Should include sort (folded Type Health)");
+    // Collapse All is VS Code's native showCollapseAll button — never a
+    // contributed command. A contributed collapse is the #113 duplicate.
+    assert.ok(
+      !menuCommands.includes("basilisk.collapseModuleExplorer"),
+      "must NOT contribute a custom Collapse All — the native showCollapseAll is the only one (#113)",
+    );
   });
 
   test("module explorer has context menu for copy actions", function () {

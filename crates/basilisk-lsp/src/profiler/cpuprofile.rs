@@ -96,15 +96,25 @@ pub fn build_cpuprofile(data: &ProfileData, sample_rate: u64) -> Value {
 
 /// Export `ProfileData` to a `.cpuprofile` file in `output_dir`; returns the path.
 ///
+/// Refuses to write an unloadable profile, reusing the same invariants as the
+/// speedscope export ([PROFILE-SPEEDSCOPE-VALIDATE]). In particular a
+/// **zero-sample** profile is rejected: VS Code's built-in V8 viewer reads
+/// `samples[timeDeltas.length - 1]` (i.e. `samples[-1]` = `undefined`) on such a
+/// file and throws `Cannot read properties of undefined (reading 'selfTime')`,
+/// dead-ending the user (#145). On refusal the editor falls back to the
+/// self-contained flamegraph instead ([PROFILE-NATIVE-FALLBACK]).
+///
 /// # Errors
 ///
-/// Returns an error string if serialization or the file write fails.
+/// Returns an error string if the profile is unloadable, or if serialization or
+/// the file write fails.
 pub fn export_cpuprofile(
     data: &ProfileData,
     session_id: &str,
     sample_rate: u64,
     output_dir: &Path,
 ) -> Result<PathBuf, String> {
+    super::export::validate_exportable(data)?;
     let profile = build_cpuprofile(data, sample_rate);
     let json = serde_json::to_string(&profile)
         .map_err(|err| format!("Failed to serialize cpuprofile: {err}"))?;
@@ -204,6 +214,24 @@ mod tests {
         );
         assert_eq!(profile.get("endTime").and_then(Value::as_i64), Some(20_000));
         Ok(())
+    }
+
+    #[test]
+    fn export_refuses_a_zero_sample_profile() {
+        // A zero-sample profile (only the synthetic root, empty `samples`) makes
+        // VS Code's built-in viewer throw `Cannot read properties of undefined
+        // (reading 'selfTime')`: buildModel's guard treats the empty `samples`
+        // array as truthy, then reads `samples[timeDeltas.length - 1]` (i.e.
+        // `samples[-1]` = undefined) and indexes a node that was never created
+        // (#145). Refuse to write such a file, exactly like the speedscope export
+        // ([PROFILE-SPEEDSCOPE-VALIDATE]); the editor then falls back to the
+        // self-contained flamegraph instead of dead-ending on the viewer error.
+        let data = ProfileData::default();
+        let result = export_cpuprofile(&data, "basilisk-empty-test", 100, &std::env::temp_dir());
+        assert!(
+            result.is_err(),
+            "a zero-sample profile must be refused, not written as an unloadable .cpuprofile",
+        );
     }
 
     #[test]

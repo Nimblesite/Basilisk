@@ -43,6 +43,11 @@ export interface ProfileResult {
   outputFile: string;
   /** Path to the V8 `.cpuprofile` for VS Code's built-in profile viewer. */
   cpuProfilePath?: string;
+  /**
+   * Why an export was refused or failed ([PROFILE-SPEEDSCOPE-VALIDATE]) — e.g.
+   * a zero-sample run. Surfaced to the user; never silent (#145).
+   */
+  exportError?: string;
   hotFunctions: ProfileHotFunction[];
   hotLines: ProfileHotLine[];
 }

@@ -23,7 +23,7 @@ import {
   disposeProfileDecorations,
   type ProfileResult,
 } from "./profiler-decorations";
-import { disposeFlamegraphPanel, openFlamegraphWebview } from "./profiler-flamegraph-html";
+import { disposeFlamegraphPanel, presentProfileResult } from "./profiler-flamegraph-html";
 import { shouldProfileOnLaunch, waitForDebuggeePid } from "./profiler-launch";
 import { bindProfilerStatusBar } from "./profiler-status";
 
@@ -104,6 +104,7 @@ export function registerProfiler(
     vscode.debug.onDidStartDebugSession((session) => {
       if (shouldProfileOnLaunch(session) && store.profiler.value.cpu === "idle") {
         Logger.info(`Profile on Launch: auto-profiling debug session ${session.id}`);
+        notifyBreakpointsSuppressedForProfiling();
         void startProfilerOnLaunch(store, session.id);
       }
     }),
@@ -147,20 +148,41 @@ function adoptSession(store: Store, result: StartedSession, announcement: string
   vscode.window.showInformationMessage(announcement);
 }
 
-/** A "stop the current session first" warning that names what is already busy. */
+/**
+ * A "stop the current CPU session first" warning. Only the CPU leg blocks a CPU
+ * start ([PROFILE-PROCESSES-REACTIVE]), so this names the active CPU profile.
+ */
 function busyMessage(store: Store): string {
   const session = store.profiler.value;
-  if (session.cpu !== "idle") {
-    const pid = session.cpuPid !== undefined ? ` PID ${session.cpuPid}` : "";
-    return `Basilisk: Already profiling${pid}. Stop the current session first.`;
-  }
-  return "Basilisk: Memory tracking is active. Stop it before starting a CPU profile.";
+  const pid = session.cpuPid !== undefined ? ` PID ${session.cpuPid}` : "";
+  return `Basilisk: Already profiling${pid}. Stop the current CPU session first.`;
 }
 
 // ── Launch flows ([PROFILE-COOPERATIVE], [PROFILE-UX-PROGRESS]) ───────────
 
 /** The single progress title every CPU-start flow shares. */
 const CPU_START_TITLE = "Basilisk: Starting CPU profiler";
+
+/** Shown once per session: a profiling launch neutralises breakpoints (ux-6). */
+let breakpointSuppressionNoticeShown = false;
+
+/**
+ * Tell the user, once, that a profiling launch runs to completion with their
+ * breakpoints disabled — otherwise a Run & Profile (or a plain F5 with the
+ * global `profiler.profileOnLaunch` setting on) silently never stops at a
+ * breakpoint, which is baffling while the gutter still shows them armed (ux-6).
+ * Only fires when breakpoints are actually set, so a breakpoint-free run is
+ * never narrated.
+ */
+function notifyBreakpointsSuppressedForProfiling(): void {
+  if (breakpointSuppressionNoticeShown || vscode.debug.breakpoints.length === 0) {
+    return;
+  }
+  breakpointSuppressionNoticeShown = true;
+  void vscode.window.showInformationMessage(
+    "Basilisk: Profiling run — your breakpoints are disabled so the program runs to completion. Launch without profiling to debug with breakpoints.",
+  );
+}
 
 /**
  * Auto-start dispatcher for a freshly launched debug session: cooperative
@@ -280,7 +302,10 @@ export async function startProfilingForPid(store: Store, pid: number, preset: st
     vscode.window.showWarningMessage("Basilisk: Language server not running.");
     return;
   }
-  if (store.profilerBusy.value) {
+  // CPU starts gate on the CPU leg only — a CPU profile may begin while memory
+  // tracking is live, but never a second CPU run on top of an active one
+  // ([PROFILE-PROCESSES-REACTIVE]).
+  if (store.cpuBusy.value) {
     vscode.window.showWarningMessage(busyMessage(store));
     return;
   }
@@ -345,28 +370,12 @@ async function handleProfileStop(store: Store): Promise<void> {
     if (result !== undefined && result !== null) {
       lastResult = result;
       applyProfileDecorations(result);
-      // Open the V8 .cpuprofile in VS Code's built-in profile viewer (flame
-      // chart + bottom-up/left-heavy tables); fall back to the speedscope-style
-      // webview only if the file wasn't produced. Open BESIDE the source so
-      // the profiled file (and its inline heat map) stays visible — opening
-      // in the active group hides the file and the visible-editors re-apply
-      // would clear its decorations.
-      if (result.cpuProfilePath !== undefined && result.cpuProfilePath !== "") {
-        await vscode.commands.executeCommand(
-          "vscode.open",
-          vscode.Uri.file(result.cpuProfilePath),
-          vscode.ViewColumn.Beside,
-        );
-      } else {
-        openFlamegraphWebview(result);
-      }
-      Logger.info(
-        `Profiling stopped: ${result.totalSamples} samples, ${result.duration.toFixed(1)}s, ` +
-        `output: ${result.outputFile}`,
-      );
-      vscode.window.showInformationMessage(
-        `Basilisk: Profile complete \u2014 ${result.totalSamples} samples in ${result.duration.toFixed(1)}s`,
-      );
+      // Land the user on a viewable result: the built-in `.cpuprofile` viewer
+      // when it renders (opened beside so the heat-mapped source stays visible),
+      // always with a completion toast whose action opens the self-contained
+      // flamegraph webview — a failed or unavailable viewer never dead-ends the
+      // user ([PROFILE-NATIVE-FALLBACK], #145).
+      await presentProfileResult(result);
     }
   } catch (err: unknown) {
     store.profilerStopped();
@@ -418,7 +427,7 @@ async function handleProfileAttachToDebug(store: Store): Promise<void> {
     return;
   }
 
-  if (store.profiler.value.cpu === "active") {
+  if (store.cpuBusy.value) {
     vscode.window.showWarningMessage(
       `Basilisk: Already profiling (session ${store.profiler.value.cpuSessionId ?? "?"}).`,
     );

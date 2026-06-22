@@ -24,13 +24,64 @@ fn python_path() -> String {
 /// the process is guaranteed to be in the OS process table when we enumerate.
 /// Returns `None` if python is unavailable (the test then skips).
 fn spawn_idle_python() -> Option<ProcessGuard> {
-    let child = Command::new(python_path())
+    spawn_idle_python_in(None)
+}
+
+/// Spawn a process whose argv mimics a debugpy **debuggee** — the bundled-debugpy
+/// shape `python <…>/debugpy/debugpy --connect <addr> … <program>` that VS Code's
+/// debugger produces — running with `workspace` as its cwd. Returns the guard and
+/// the user-program path. Implements the regression case for [PROFILE-PROCESSES-MODEL]:
+/// such a process is the user's running script, not debugger machinery.
+fn spawn_fake_debuggee(workspace: &std::path::Path) -> Option<(ProcessGuard, String)> {
+    // A fake *bundled* debugpy package nests at `<pkg>/debugpy/debugpy`, so the
+    // entry path contains `/debugpy/` exactly like the shipped extension — the
+    // substring the over-broad infra filter used to trip on.
+    let entry_dir = unique_temp_dir("bsk_fake_debugpy")
+        .join("debugpy")
+        .join("debugpy");
+    std::fs::create_dir_all(&entry_dir).ok()?;
+    std::fs::write(
+        entry_dir.join("__main__.py"),
+        "import time, sys\nprint('READY', flush=True)\ntime.sleep(60)\n",
+    )
+    .ok()?;
+    let program = workspace.join("myscript.py");
+    std::fs::write(&program, "print('hello')\n").ok()?;
+
+    let mut command = Command::new(python_path());
+    let _ = command
+        .arg(&entry_dir)
+        .arg("--connect")
+        .arg("127.0.0.1:5679")
+        .arg("--adapter-access-token")
+        .arg("deadbeef")
+        .arg(&program)
+        .current_dir(workspace)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    let child = command.spawn().ok()?;
+
+    let mut guard = ProcessGuard::new(child);
+    if wait_for_ready(&mut guard) {
+        Some((guard, program.to_string_lossy().into_owned()))
+    } else {
+        None
+    }
+}
+
+/// As [`spawn_idle_python`], but runs the interpreter with `dir` as its working
+/// directory — the signal workspace scoping ([PROFILE-PROCESSES-SCOPE]) keys on.
+fn spawn_idle_python_in(dir: Option<&std::path::Path>) -> Option<ProcessGuard> {
+    let mut command = Command::new(python_path());
+    let _ = command
         .arg("-c")
         .arg("import time, sys; print('READY', flush=True); time.sleep(60)")
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
+        .stderr(Stdio::null());
+    if let Some(dir) = dir {
+        let _ = command.current_dir(dir);
+    }
+    let child = command.spawn().ok()?;
 
     let mut guard = ProcessGuard::new(child);
     if wait_for_ready(&mut guard) {
@@ -122,24 +173,34 @@ async fn test_ws_profiler_processes_lists_running_python() -> TestResult<()> {
             .is_some_and(|p| !p.is_empty()),
         "interpreterPath should be resolved: {entry:?}"
     );
-    // Our own child is owned by the current user — no elevation prompt.
+    // This Python is a direct child of the (in-process) LSP, so its parent can
+    // trace it without elevation on every platform ([PROFILE-PROCESSES-MODEL] /
+    // [PROFILE-PERMISSIONS]) — even on macOS, where an *external* same-user
+    // process WOULD need elevation.
     assert_eq!(
         entry
             .get("requiresElevation")
             .and_then(serde_json::Value::as_bool),
         Some(false),
-        "a process owned by the current user must not require elevation: {entry:?}"
+        "a process we spawned ourselves must not require elevation: {entry:?}"
     );
     // Every documented field must be present (value may be null for lazy ones).
     for field in [
         "pid",
         "ppid",
         "name",
+        "interpreterPath",
+        "script",
         "pythonVersion",
         "cpuPercent",
         "memoryBytes",
         "runtimeSecs",
-        "kind",
+        "user",
+        "requiresElevation",
+        "inWorkspace",
+        "launcher",
+        "debuggable",
+        "undebuggableReason",
     ] {
         assert!(
             entry.get(field).is_some(),
@@ -174,5 +235,111 @@ async fn test_ws_profiler_processes_excludes_non_python_noise() -> TestResult<()
     );
 
     drop(python);
+    Ok(())
+}
+
+/// Implements [PROFILE-PROCESSES-SCOPE]: enumeration is **system-wide and
+/// zero-filter**. A Python process inside *and* one entirely outside the
+/// workspace root are BOTH listed — workspace membership now only drives the
+/// green-row `inWorkspace` flag, never inclusion.
+#[tokio::test]
+async fn test_ws_profiler_processes_lists_all_python_and_flags_workspace_membership(
+) -> TestResult<()> {
+    let in_dir = unique_temp_dir("bsk_ws_proc_in");
+    let out_dir = unique_temp_dir("bsk_ws_proc_out");
+    std::fs::create_dir_all(&in_dir)?;
+    std::fs::create_dir_all(&out_dir)?;
+
+    let (Some(inside), Some(outside)) = (
+        spawn_idle_python_in(Some(&in_dir)),
+        spawn_idle_python_in(Some(&out_dir)),
+    ) else {
+        eprintln!("SKIP: python3 not available for process-scope e2e");
+        return Ok(());
+    };
+    let inside_pid = u64::from(inside.id());
+    let outside_pid = u64::from(outside.id());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let root_uri = format!("file://{}", in_dir.display());
+    let _ = initialize_with_root(&mut fixture, &root_uri, "openFilesOnly").await?;
+
+    let processes = fetch_processes(&mut fixture, 720).await?;
+    let entry = |pid: u64| {
+        processes
+            .iter()
+            .find(|p| p.get("pid").and_then(serde_json::Value::as_u64) == Some(pid))
+    };
+    let in_workspace = |pid: u64| {
+        entry(pid)
+            .and_then(|p| p.get("inWorkspace"))
+            .and_then(serde_json::Value::as_bool)
+    };
+
+    // Zero filters: BOTH the in-workspace and the out-of-workspace process appear.
+    assert!(
+        entry(inside_pid).is_some(),
+        "a Python process whose cwd is inside the workspace must be listed (pid {inside_pid}): {processes:?}"
+    );
+    assert!(
+        entry(outside_pid).is_some(),
+        "a Python process running OUTSIDE the workspace must also be listed now (pid {outside_pid}): {processes:?}"
+    );
+    // ...but only the inside one is flagged a workspace member (rendered green).
+    assert_eq!(
+        in_workspace(inside_pid),
+        Some(true),
+        "the in-workspace process must be flagged inWorkspace=true (pid {inside_pid}): {processes:?}"
+    );
+    assert_eq!(
+        in_workspace(outside_pid),
+        Some(false),
+        "the out-of-workspace process must be flagged inWorkspace=false (pid {outside_pid}): {processes:?}"
+    );
+
+    drop(inside);
+    drop(outside);
+    let _ = std::fs::remove_dir_all(&in_dir);
+    let _ = std::fs::remove_dir_all(&out_dir);
+    Ok(())
+}
+
+/// Implements [PROFILE-PROCESSES-MODEL] (debuggee surfacing): a script launched
+/// under the (bundled) debugpy debugger runs *inside* a process whose argv
+/// references `…/debugpy/debugpy`. It is the user's running program — it MUST
+/// appear in the panel, labelled with the program, not be hidden as debugger
+/// machinery. This is the "run a script, it doesn't show up" defect.
+#[tokio::test]
+async fn test_ws_profiler_processes_surfaces_debug_launched_script() -> TestResult<()> {
+    let ws = unique_temp_dir("bsk_ws_debuggee");
+    std::fs::create_dir_all(&ws)?;
+
+    let Some((debuggee, program)) = spawn_fake_debuggee(&ws) else {
+        eprintln!("SKIP: python3 not available for debuggee e2e");
+        return Ok(());
+    };
+    let pid = u64::from(debuggee.id());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let root_uri = format!("file://{}", ws.display());
+    let _ = initialize_with_root(&mut fixture, &root_uri, "openFilesOnly").await?;
+
+    let processes = fetch_processes(&mut fixture, 730).await?;
+    let entry = processes
+        .iter()
+        .find(|p| p.get("pid").and_then(serde_json::Value::as_u64) == Some(pid))
+        .unwrap_or_else(|| {
+            panic!("a debug-launched script (pid {pid}) must appear in the panel: {processes:?}")
+        });
+
+    // The row is labelled with the user's program, not debugpy's bootstrap path.
+    assert_eq!(
+        entry.get("script").and_then(serde_json::Value::as_str),
+        Some(program.as_str()),
+        "the debuggee row must show the user program as its script: {entry:?}"
+    );
+
+    drop(debuggee);
+    let _ = std::fs::remove_dir_all(&ws);
     Ok(())
 }

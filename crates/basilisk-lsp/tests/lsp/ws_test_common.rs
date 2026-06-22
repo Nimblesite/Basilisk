@@ -208,6 +208,48 @@ impl WsTestFixture {
 
 // ── Shared helper functions ─────────────────────────────────────────────────
 
+/// Send a `workspace/executeCommand` request and return the parsed JSON-RPC
+/// response object (with `result` or `error`). `arg` is wrapped as the single
+/// command argument, matching how the editor invokes `basilisk.*` commands.
+///
+/// # Errors
+///
+/// Returns an error if sending fails or no response with the matching id arrives.
+pub async fn execute_command(
+    fixture: &mut WsTestFixture,
+    id: u64,
+    command: &str,
+    arg: serde_json::Value,
+) -> TestResult<serde_json::Value> {
+    let resp = fixture
+        .request(
+            id,
+            "workspace/executeCommand",
+            serde_json::json!({ "command": command, "arguments": [arg] }),
+        )
+        .await?
+        .ok_or_else(|| format!("no response to {command}"))?;
+    Ok(serde_json::from_str(&resp)?)
+}
+
+/// Extract the `result` of a JSON-RPC response, turning a present `error` (or a
+/// missing/null `result`) into an `Err` with context.
+///
+/// # Errors
+///
+/// Returns an error if the response carries a JSON-RPC error or no result.
+pub fn command_result<'a>(
+    resp: &'a serde_json::Value,
+    ctx: &str,
+) -> Result<&'a serde_json::Value, String> {
+    if let Some(err) = resp.get("error").filter(|err| !err.is_null()) {
+        return Err(format!("{ctx} returned an error: {err}"));
+    }
+    resp.get("result")
+        .filter(|value| !value.is_null())
+        .ok_or_else(|| format!("{ctx}: response carried no result: {resp}"))
+}
+
 /// Initialize + open a file + wait for diagnostics. Returns the fixture.
 ///
 /// # Errors

@@ -19,6 +19,12 @@ export function shouldProfileOnLaunch(
   session: Pick<vscode.DebugSession, "type" | "configuration">,
 ): boolean {
   if (session.type !== "basilisk-debug") { return false; }
+  // A "Run & Track Memory" launch tracks memory, not CPU. Never auto-start the
+  // CPU sampler on it — even when the global setting is on (read directly
+  // below, so the stamp carve-out in applyDebugConfigDefaults is not enough) —
+  // or the cooperative sampler and tracemalloc collide on the single entry
+  // pause (dap-1).
+  if (session.configuration.memoryTrackOnLaunch === true) { return false; }
   if (session.configuration.profileOnLaunch === true) { return true; }
   return vscode.workspace
     .getConfiguration("basilisk")
