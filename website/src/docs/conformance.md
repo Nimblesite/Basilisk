@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "How Basilisk Measures PEP Conformance"
-description: "How Basilisk's PEP conformance score is measured with the official python/typing conformance suite — what the suite is, how scoring works, the byte-identical pinned calculator we run, and the correction we made to our own scoring."
+description: "How Basilisk's PEP conformance score is measured with the official python/typing conformance suite — what the suite is, how scoring works, the byte-identical pinned calculator we run, and the spec-conformance mode the binary runs in."
 keywords: pep conformance, python typing conformance suite, basilisk conformance score, type checker scoring, python/typing calculator
 date: 2026-06-23
 dateModified: 2026-06-23
@@ -62,18 +62,15 @@ To keep the calculator trustworthy, the vendored copy is **sha256-pinned**. `sco
 
 Keeping the official file untouched is the whole point: the adapter and gate live in a separate, auditable file, so the calculator stays byte-for-byte the suite's own.
 
-## A correction we made
+## What the checker runs in — spec-conformance mode
 
-Our score used to be measured by an in-repo script of our own, and it was **wrong**. That script excluded several diagnostic codes from scoring and did not count false positives, so it reported numbers that climbed all the way to 100%. It was an honest mistake, not a tuned result — but it was still incorrect.
+The suite tests the **type system** — generics, protocols, overloads, `TypedDict`, and the rest. Basilisk is strict by default and layers on house-style rules the typing spec doesn't define: chiefly *require an annotation* on every parameter, return, and `*args`/`**kwargs`, a redundant-annotation warning, and an explicit-`Any` nudge. Those are the right defaults for day-to-day Basilisk, but the spec treats an unannotated type as **inferred**, not an error — so firing them on the suite would be a false positive on nearly every file.
 
-We replaced it with the official calculator described above. With every diagnostic counted and nothing excluded, the honest number is **{{ conformance.scorePct }}%**:
+So, exactly as pyright's conformance run leaves `reportMissingParameterType` and its siblings off, we run the binary in a **spec-conformance mode** that disables those house-style rules (a committed `basilisk.json` the scorer drops beside the test files). This sets **what the binary emits** — the same lever every checker on the results page pulls — not how the result is scored. The pinned calculator above still counts every diagnostic the binary does emit, with nothing excluded.
 
-<div class="conf-correction">
-  <span class="conf-correction__old">100%</span>
-  <span class="conf-correction__arrow">→</span>
-  <span class="conf-correction__new">{{ conformance.scorePct }}%</span>
-  <span class="conf-correction__text">The checker did not get worse — the measurement got correct. 100% is the target we are working toward, not a claim about today.</span>
-</div>
+## How the score changed
+
+The site has always shown a conformance number; it hasn't always been right. We used to measure with an in-repo script that excluded some diagnostic codes and didn't count false positives, so it reported figures that climbed to 100%. That was an honest mistake, not a tuned result. The official calculator above replaced it — counting every diagnostic, the honest figure is **{{ conformance.scorePct }}%**. The checker didn't get worse; the measurement got correct, and 100% is the target we ratchet toward, not a claim about today.
 
 The chart below is read straight from the **git history of `conformance/conformance_status.csv`** at build time: one point per commit that changed it, plotting the score that commit actually recorded.
 
