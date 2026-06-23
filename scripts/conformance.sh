@@ -60,8 +60,17 @@ for i, f in enumerate(files, 1):
         print(f'  {i}/{len(files)}')
 " "$CONFORMANCE_DIR"
 
+    # Also fetch the OFFICIAL scorer (conformance/src/main.py). score.py runs
+    # upstream's own get_expected_errors + diff_expected_errors from this exact
+    # file — we never reimplement the algorithm. Cached under .tool/ (a subdir,
+    # so the *.py glob that collects fixtures never picks it up).
+    mkdir -p "$CONFORMANCE_DIR/.tool"
+    curl "${CURL_ARGS[@]}" \
+        "https://raw.githubusercontent.com/${TYPING_REPO}/${TYPING_REF}/conformance/src/main.py" \
+        -o "$CONFORMANCE_DIR/.tool/main.py"
+
     echo "$TYPING_REF" > "$REF_STAMP_FILE"
-    ok "${COUNT} conformance files written to ${CONFORMANCE_DIR}/ (ref: ${TYPING_REF})"
+    ok "${COUNT} conformance files + official scorer written to ${CONFORMANCE_DIR}/ (ref: ${TYPING_REF})"
 }
 
 FETCH_ONLY=0
@@ -87,21 +96,40 @@ if [[ "${1:-}" == "--fetch" ]] || \
     fi
     fetch_conformance
 else
-    COUNT=$(find "$CONFORMANCE_DIR" -name "*.py" | wc -l | tr -d ' ')
+    COUNT=$(find "$CONFORMANCE_DIR" -maxdepth 1 -name "*.py" | wc -l | tr -d ' ')
     ok "Conformance suite present ($COUNT files, ref ${TYPING_REF}) — skipping download"
+    # Self-heal: caches created before the scorer was added lack .tool/main.py.
+    # Fetch just the scorer so score.py never has to download it at test time.
+    if [[ ! -f "$CONFORMANCE_DIR/.tool/main.py" ]]; then
+        mkdir -p "$CONFORMANCE_DIR/.tool"
+        HEAL_ARGS=(-fsSL)
+        [[ -n "${GITHUB_TOKEN:-}" ]] && HEAL_ARGS+=(-H "Authorization: token ${GITHUB_TOKEN}")
+        curl "${HEAL_ARGS[@]}" \
+            "https://raw.githubusercontent.com/${TYPING_REPO}/${TYPING_REF}/conformance/src/main.py" \
+            -o "$CONFORMANCE_DIR/.tool/main.py"
+        ok "Fetched official scorer into existing cache"
+    fi
 fi
 
 if [[ "$FETCH_ONLY" -eq 1 ]]; then
     exit 0
 fi
 
-# ── Run the harness ──────────────────────────────────────────────────────────
-header "Running PEP conformance harness"
-echo ""
+# ── Score with the OFFICIAL python/typing calculator ─────────────────────────
+# We do NOT compute the score ourselves. conformance/score.py downloads
+# python/typing's own conformance tool (pinned ref) and runs its real
+# get_expected_errors + diff_expected_errors against the actual `basilisk`
+# binary. No excluded diagnostic codes; a file passes only with an empty
+# upstream errors_diff.
+header "Building basilisk binary"
+cargo build -p basilisk-cli --bin basilisk
 
-cargo test --test conformance_tests -- --nocapture 2>&1
+header "Scoring with the official python/typing calculator"
+echo ""
+python3 conformance/score.py --bin target/debug/basilisk 2>&1
 
 echo ""
 header "Done"
-echo -e "  See ${CYAN}docs/PEP_CONFORMANCE.md${RESET} for score interpretation and the road to 95%."
+echo -e "  Score computed by the REAL python/typing calculator (pinned ${TYPING_REF})."
+echo -e "  Per-file results: ${CYAN}conformance/conformance_status.csv${RESET}"
 echo ""

@@ -98,7 +98,12 @@ structural matcher (positive-match semantics already reject `float`→`str`).
 ---
 
 ### Status
-- B3 lane (E0111/E0143/E0115) = DONE, verified: 144/146, caught=917, missed=37
+- NOTE: the "144/146 / suite FP 21→11" figures below were produced by a rigged
+  in-repo harness (excluded 9 codes, ignored false positives) and are FALSE. The
+  official `python/typing` scorer (run unmodified, pinned commit) reports
+  **70/146 passing (47.9%, errors-only), 219 false positives, 36 missed errors**.
+  Treat the per-lane numbers below as historical, not verified.
+- B3 lane (E0111/E0143/E0115) = DONE, (legacy/rigged) figures: 144/146, caught=917, missed=37
   (unchanged, both pre-failing files), suite FP 21→11.
 - Items 1 & 2 above are low-risk quick wins; 3 & 4 need structural work but the
   TP-safety traps are spelled out.

@@ -68,7 +68,7 @@ Basilisk is currently in **alpha** — the core checker, LSP server, and editor 
 |---|---|---|
 | 1 | Parser, resolver, type checker, CLI | Complete |
 | 2 | LSP server, editor extensions (VS Code, Cursor, Zed, Neovim) | Complete |
-| 3 | Expanded rule set, 98.6% PEP conformance, gradual adoption | In progress |
+| 3 | Expanded rule set, PEP conformance push (currently 47.9%, target 100%), gradual adoption | In progress |
 | 4 | Ownership & immutability analysis (Mojo-inspired) | Planned |
 | 5 | WASM plugins, Django/Pydantic/SQLAlchemy | Planned |
 | 6 | 95%+ PEP, SARIF/JUnit, JetBrains extension | Planned |

@@ -6,7 +6,7 @@
 
 ## Status
 
-Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols all operational. Phase 3.5 (PEP conformance push) is ACTIVE — currently at 84.9% (124/146 files, 18 FPs).
+Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols all operational. Phase 3.5 (PEP conformance push) is ACTIVE — the official `python/typing` scorer (run unmodified, pinned commit) currently reports **70/146 files passing (47.9%, errors-only)**, with 219 false positives and 36 missed required errors still to clear. (Earlier in-repo figures such as "124/146, 18 FPs" came from a rigged harness that excluded codes and ignored false positives; they are superseded.)
 
 ---
 

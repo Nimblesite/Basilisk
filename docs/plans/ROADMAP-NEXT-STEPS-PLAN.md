@@ -112,9 +112,11 @@ the inline visualization / Speedscope hand-off wants a real-world pass for UX ro
 The bar to credibly displace Pylance is feature *and* correctness parity on the things people
 actually feel day to day. Rough priorities (refine with human judgment — see TODO):
 
-- **Conformance & correctness**: PEP conformance currently **135/146 files PASS (~92.5%)**. The 11
-  failing files cluster in Protocols, Callables, TypeVarTuple, ParamSpec, TypedDicts. There are also
-  ~18 remaining false positives (`CHECK-ELIMINATE-FALSE-POSITIVES.md`). FPs hurt credibility more
+- **Conformance & correctness**: per the official `python/typing` scorer (run unmodified, pinned
+  commit), PEP conformance is currently **70/146 files PASS (47.9%, errors-only)**, with **219 false
+  positives** and 36 missed required errors. (Earlier "135/146 / ~18 FPs" figures came from a rigged
+  in-repo harness that excluded codes and ignored false positives; they are superseded.) Failing files
+  cluster in Protocols, Callables, TypeVarTuple, ParamSpec, TypedDicts. FPs hurt credibility more
   than missed cases — prioritize accordingly.
 - **Latency**: sub-10ms incremental checks are the promise (Salsa). Need a published benchmark vs.
   Pyright/Pylance — see §5 for the scale/resource methodology.

@@ -1,5 +1,17 @@
 # Plan: Eliminate False Positives in PEP Conformance Suite
 
+> ⚠️ **SUPERSEDED.** The numbers in this doc ("136/146 PASS / 93.15%", "170
+> false positives", "FP-ceiling … Set to 161", `diag_line_rules`,
+> `missed == 0` pass rule) describe an earlier in-repo harness that has been
+> **removed**. The score is now computed by the **real `python/typing`
+> calculator** (`conformance/score.py` downloads and runs upstream's own
+> `get_expected_errors` + `diff_expected_errors`; see [CHKARCH-CONFORMANCE]).
+> A file passes only with an **empty upstream `errors_diff`** (false positives
+> fail the file), and **no diagnostic codes are excluded**. Honest current
+> baseline: **70/146 = 47.9%**, **219 false positives**, 36 missed. The
+> still-valid part of this plan is the *strategy* — driving specific rules'
+> false positives down; the *counts* below are stale.
+
 ## Context
 
 False positives are diagnostics Basilisk reports on lines that have NO `# E`

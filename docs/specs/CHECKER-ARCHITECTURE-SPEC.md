@@ -58,7 +58,8 @@ See the project README for competitive analysis.
 | Implementation | TypeScript | Python/C | Rust | Rust | Rust | Rust | **Rust** |
 | License | MIT | MIT | MIT | MIT | AGPL | MIT | **MIT** |
 | Default strictness | Gradual | Gradual | Gradual | Gradual | Gradual | N/A | **Strict only** |
-| PEP conformance target | ~95% | ~85% | ~15% | ~58% | ~69% | N/A | **100%** |
+| PEP conformance (current) | ~95% | ~85% | ~15% | ~58% | ~69% | N/A | **47.9%** |
+| PEP conformance target | — | — | — | — | — | N/A | **100%** |
 | LSP server | Yes | No | Yes | Yes | Yes | No | **Yes** |
 | Incremental computation | Lazy eval | Daemon | Salsa | Module-level | No | N/A | **Salsa** |
 | Ownership analysis | No | No | No | No | No | No | **Yes** |
@@ -285,7 +286,7 @@ The `# type:` prefix ensures compatibility with editors and tools that already r
 
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
-Basilisk targets **100% conformance** with the Python typing specification. We run the official conformance test suite (`python/typing` repository) in CI.
+Basilisk targets **100% conformance** with the Python typing specification. This is a target, not a present-day achievement: the official `python/typing` conformance scorer (pinned commit, run unmodified in CI) currently reports **70 of 146 files passing (47.9%, errors-only)**, with 219 false positives and 36 missed required errors still to clear. We run that suite in CI on every change and ratchet the pass rate up.
 
 #### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
@@ -1362,6 +1363,40 @@ Comparison baselines: Pyright, ty, Pyrefly, Zuban.
 | Fuzzing | `cargo-fuzz` | Crash resistance, soundness |
 | Property tests | `proptest` crate | Type system invariants |
 | Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly | Performance tracking + regression gate (fails if basilisk regresses >25% vs the committed per-machine `benchmarks/status/<machine>.csv`) |
+
+### PEP Conformance Scoring {#CHKARCH-CONFORMANCE}
+
+The conformance score is computed by the **real `python/typing` conformance
+calculator**, not a Basilisk reimplementation. This is non-negotiable: the
+number must be one anyone can reproduce with the same tooling the reference
+checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with.
+
+- **Scorer**: [`conformance/score.py`](../../conformance/score.py) **downloads**
+  `python/typing`'s `conformance/src/main.py` (pinned to the same commit the
+  fixtures come from, `scripts/conformance.sh` → `TYPING_REF`) and executes its
+  own `get_expected_errors` + `diff_expected_errors` functions **unmodified**
+  (extracted verbatim from the downloaded file). The only Basilisk-specific code
+  is a checker *adapter* that runs the real `basilisk` binary and turns its JSON
+  output into the `{line: [errors]}` mapping the upstream algorithm consumes —
+  exactly the role of upstream's per-checker adapters in `type_checker.py`.
+- **Pass rule** (upstream's, verbatim): a file passes iff the upstream
+  `errors_diff` is empty — every `# E` line gets an error, every `# E[tag]`
+  group is satisfied, and **no error lands on a line the suite does not mark**.
+  `conformance_automated = "Fail" if errors_diff.strip() else "Pass"`.
+- **No excluded codes.** Every `severity == "error"` diagnostic `basilisk check`
+  emits is counted, including the strict-by-default completeness rules
+  (E0001–E0005, E0010, E0011, E0023, E0025). One firing on an unannotated line
+  is a real false positive and fails the file — same as for any other checker.
+- **Gate**: [`crates/basilisk-cli/tests/conformance_tests.rs`](../../crates/basilisk-cli/tests/conformance_tests.rs)
+  is a thin wrapper that runs `score.py --gate` inside `make test`. The
+  pass-percentage floor and false-positive ceiling live in
+  `coverage-thresholds.json` (`conformance.threshold`,
+  `conformance.max_false_positives`); the former ratchets **up**, the latter
+  **down**. Per-file results are written to `conformance/conformance_status.csv`.
+- **Honest baseline** (replacing a previously rigged in-repo harness that
+  excluded the 9 codes above and ignored false positives to fake 100%):
+  **70 / 146 = 47.9%** (errors-only), 219 false positives, 36 missed required
+  errors. The errors+warnings variant is 59 / 146 = 40.4%. Target: 100%.
 
 ### Mutation Testing Ratchet {#CHKARCH-TESTING-MUTATION-RATCHET}
 
