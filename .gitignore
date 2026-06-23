@@ -106,7 +106,9 @@ deslop-*.log
 benchmarks/results/
 
 # =============================================================================
-# Conformance test suite (fetched on demand via make conformance / score.py)
+# Conformance test FIXTURES: downloaded on demand into conformance/tests/ (via
+# make conformance / score.py --fetch) — never committed. NOTE: the official
+# calculator conformance/upstream_main.py IS committed and is NOT ignored.
 # =============================================================================
 conformance/tests/
 

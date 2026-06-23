@@ -25,13 +25,17 @@ grading and matches how the reference checker pyright is graded upstream
 errors-only view. Either way, any diagnostic on a line the suite does not mark
 `# E` is a real false positive and fails the file — same as for any checker.
 
-This one file is the whole Basilisk side of conformance: it fetches the
-git-ignored `# E`-annotated test fixtures on demand (`--fetch` / `--fetch-only`),
-runs the binary, scores with the official functions, writes
-`conformance/conformance_status.csv`, and enforces the ratchet gate (`--gate`).
-There is no separate shell script. The vendored calculator is committed at
-`conformance/upstream_main.py`; refresh it ONLY when bumping the pinned ref:
-    python3 conformance/score.py --refresh-upstream
+This one file is the whole Basilisk side of conformance: it runs the binary,
+scores with the official functions, writes `conformance/conformance_status.csv`,
+and enforces the ratchet gate (`--gate`). There is no Rust test and no shell
+script. Everything it needs is committed to the repo — nothing is a moving
+target, nothing is fetched at score time:
+  • the official calculator → `conformance/upstream_main.py` (sha256-pinned)
+  • the `# E`-annotated test fixtures → `conformance/tests/*.py`
+
+Both are refreshed ONLY as deliberate maintenance, then committed:
+    python3 conformance/score.py --refresh-upstream   # re-pin the calculator
+    python3 conformance/score.py --fetch              # re-download the fixtures
 
 Usage:
     python3 conformance/score.py [--bin PATH] [--gate] [--errors-only]
@@ -63,8 +67,8 @@ UPSTREAM_MAIN = Path(__file__).resolve().parent / "upstream_main.py"
 UPSTREAM_MAIN_SHA256 = "b4e3bd089c73856f9920ef494350d622c2914fac238c9193ec0bb3f93f0fc6a2"
 # The two functions that constitute the official scoring algorithm.
 OFFICIAL_FUNCS = ("get_expected_errors", "diff_expected_errors")
-# The `# E`-annotated test fixtures live under conformance/tests at the same
-# pinned ref. They are git-ignored and fetched on demand (one HTTP GET each).
+# The `# E`-annotated test fixtures are committed under conformance/tests. This
+# API lists them at the pinned ref for the maintenance-only `--fetch` refresh.
 FIXTURES_API = (
     "https://api.github.com/repos/python/typing/contents/conformance/tests"
     f"?ref={PINNED_TYPING_REF}"
@@ -149,16 +153,18 @@ def refresh_upstream() -> int:
 
 
 # ---------------------------------------------------------------------------
-# Fetch the test fixtures (the `# E`-annotated .py files) — git-ignored
+# MAINTENANCE: re-download the committed test fixtures (run periodically, commit)
 # ---------------------------------------------------------------------------
 
 
 def ensure_fixtures(conf_dir: Path, force: bool) -> None:
     """Download python/typing's conformance `.py` fixtures into `conf_dir`.
 
-    No-op when they are already present at the pinned ref (a `.ref-sha` stamp
-    records it) unless `force`. Bumping `PINNED_TYPING_REF` invalidates the stamp
-    and triggers a re-fetch. Honors `GITHUB_TOKEN` to raise the API rate limit.
+    The fixtures are COMMITTED to the repo — this is a maintenance helper invoked
+    only by `--fetch` / `--fetch-only`, after which the result is committed. The
+    normal score path never calls it. No-op when already present at the pinned ref
+    (a `.ref-sha` stamp records it) unless `force`. Honors `GITHUB_TOKEN` to raise
+    the API rate limit.
     """
     import os
     import urllib.request  # local: network only happens here and in refresh
@@ -424,21 +430,24 @@ def main(argv: list[str]) -> int:
     root = repo_root()
     conf_dir = Path(opts["dir"]) if opts["dir"] else root / "conformance/tests"
 
-    # Fetch fixtures when forced, in fetch-only mode, or when they are absent.
-    # A network failure is fatal only if a fetch was explicitly requested; on the
-    # plain score path a missing suite is skipped (fresh checkout, offline CI).
-    present = conf_dir.exists() and any(conf_dir.glob("*.py"))
-    if opts["fetch"] or opts["fetch_only"] or not present:
+    # MAINTENANCE ONLY: --fetch / --fetch-only re-download the fixtures so they can
+    # be committed. The fixtures are committed to the repo (not a moving target);
+    # the normal score path NEVER touches the network.
+    if opts["fetch"] or opts["fetch_only"]:
         try:
-            ensure_fixtures(conf_dir, force=opts["fetch"])
+            ensure_fixtures(conf_dir, force=True)
         except Exception as exc:  # noqa: BLE001 — surface fetch failure clearly
-            if opts["fetch"] or opts["fetch_only"]:
-                print(f"  ✗ could not fetch conformance fixtures: {exc}", file=sys.stderr)
-                return 1
-            print("  ⚠  Conformance suite not present and fetch failed — skipping.")
+            print(f"  ✗ could not fetch conformance fixtures: {exc}", file=sys.stderr)
+            return 1
+        if opts["fetch_only"]:
             return 0
-    if opts["fetch_only"]:
-        return 0
+
+    if not conf_dir.exists() or not any(conf_dir.glob("*.py")):
+        print("  ✗ conformance fixtures missing at conformance/tests/. They are "
+              "committed to the repo; restore them from git, or run "
+              "`python3 conformance/score.py --fetch` to re-download then commit.",
+              file=sys.stderr)
+        return 1
 
     binary = find_binary(opts["bin"], root)
     if binary is None:

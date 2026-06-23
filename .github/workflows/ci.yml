@@ -225,21 +225,10 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@81ee9698f20724138a785d788c7567d40f14cd2d # cargo-llvm-cov
 
-      # The PEP conformance suite is fetched fresh from the upstream typing repo
-      # on every run (network-bound, one HTTP request per test file). Cache it
-      # keyed on score.py, which holds the pinned ref (PINNED_TYPING_REF) — bumping
-      # the ref edits that file and busts the cache; score.py itself re-fetches
-      # whenever the stamped ref differs, so a stale prefix restore self-heals.
-      - name: Cache conformance suite
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: conformance/tests
-          key: conformance-suite-${{ hashFiles('conformance/score.py') }}
-          restore-keys: conformance-suite-
-
+      # The PEP conformance suite (fixtures + the official calculator) is
+      # committed under conformance/ — nothing is fetched at test time, so there
+      # is no cache step and no network dependency.
       - name: Run Rust tests with coverage
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./scripts/test-rust.sh
 
       # No artifact upload of the HTML coverage report ([GITHUB-NO-ARTIFACTS]).
