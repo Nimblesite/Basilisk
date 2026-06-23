@@ -41,9 +41,9 @@
     }
   },
   "conformance": {
-    "_doc": "Minimum PEP conformance pass percentage (files passing / total files), computed by the REAL python/typing conformance calculator (conformance/score.py downloads upstream main.py at the pinned ref and runs its own get_expected_errors + diff_expected_errors; NO excluded diagnostic codes). A file passes only when upstream's errors_diff is empty. Ratchet UP only. HONEST baseline (replacing a previously rigged 100% from a lenient in-repo harness): 70/146 = 47.9% (errors only), pinned to python/typing@268d0c4e. Target is 100%; this is the real current number.",
-    "threshold": 47,
-    "_fp_ceiling_doc": "Maximum total false-positive diagnostics across the suite (errors Basilisk reports on lines the suite does NOT mark with # E, plus errors outside satisfied # E[tag] groups). Ratchet DOWN only \u2014 the mirror of the pass-percentage gate. Enforced via conformance/score.py --gate (run by conformance_tests.rs inside make test). HONEST baseline: 219 (the prior 0 was a lie produced by excluding 9 diagnostic codes from scoring). Drive this DOWN.",
-    "max_false_positives": 219
+    "_doc": "Minimum PEP conformance pass percentage (files passing / total files), computed by the REAL python/typing conformance calculator (conformance/score.py downloads upstream main.py at the pinned ref and runs its own get_expected_errors + diff_expected_errors; NO excluded diagnostic codes). A file passes only when upstream's errors_diff is empty. The score uses the STRICTEST grading: every basilisk diagnostic (errors AND warnings) counts, matching how the reference checker pyright is graded. Ratchet UP only. HONEST baseline (replacing a previously rigged 100% from a lenient in-repo harness): 59/146 = 40.4%, pinned to python/typing@268d0c4e. (The looser errors-only view is 70/146 = 47.9%, available via score.py --errors-only.) Target is 100%; this is the real current number.",
+    "threshold": 40,
+    "_fp_ceiling_doc": "Maximum total false-positive diagnostics across the suite (diagnostics Basilisk reports on lines the suite does NOT mark with # E, plus diagnostics outside satisfied # E[tag] groups) under the strictest errors+warnings grading. Ratchet DOWN only \u2014 the mirror of the pass-percentage gate. Enforced via conformance/score.py --gate (run by conformance_tests.rs inside make test). HONEST baseline: 285 (the prior 0 was a lie produced by excluding 9 diagnostic codes from scoring). Drive this DOWN.",
+    "max_false_positives": 285
   }
 }

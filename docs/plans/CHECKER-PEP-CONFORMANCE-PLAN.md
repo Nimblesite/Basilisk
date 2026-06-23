@@ -4,8 +4,8 @@
 > 93.84%", category "100%" rows) came from a since-removed in-repo harness that
 > excluded 9 diagnostic codes and ignored false positives. The score is now
 > computed by the **real `python/typing` calculator** (`conformance/score.py`,
-> see [CHKARCH-CONFORMANCE]); the honest current number is **70/146 = 47.9%**
-> (errors-only), 219 false positives, 36 missed. Treat the figures below as
+> see [CHKARCH-CONFORMANCE]); the honest current number is **59/146 = 40.4%**
+> (errors+warnings, strictest), 285 false positives, 36 missed. Treat the figures below as
 > historical task notes, not the live score.
 >
 > **Run**: `make conformance` · **Status CSV**: `conformance/conformance_status.csv`

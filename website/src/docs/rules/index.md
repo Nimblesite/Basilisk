@@ -17,7 +17,7 @@ Every Basilisk diagnostic has a unique code in the format `BSK-EXXXX` (error) or
 
 Rules are enabled by default. You can dial individual rules down per-file or per-path from your editor or `pyproject.toml` — strict is the default, not a cage.
 
-Basilisk ships **155 diagnostic codes** (150 errors, 5 warnings) spanning the full Python typing surface — generics, protocols, dataclasses, TypedDicts, overloads, literals, enums, and more — and is scored by the [official Python typing conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) (currently **47.9%**, 70 / 146 errors-only; target 100%). The two foundational groups have worked examples:
+Basilisk ships **155 diagnostic codes** (150 errors, 5 warnings) spanning the full Python typing surface — generics, protocols, dataclasses, TypedDicts, overloads, literals, enums, and more — and is scored by the [official Python typing conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) (currently **40.4%**, 59 / 146 (errors+warnings, strictest); target 100%). The two foundational groups have worked examples:
 
 | Group | Codes | Description |
 |---|---|---|

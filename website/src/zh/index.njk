@@ -263,19 +263,19 @@ benchmarkStrings:
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">47.9<span class="stat-block__unit">%</span></span>
+        <span class="stat-block__number">40.4<span class="stat-block__unit">%</span></span>
         <span class="stat-block__label">PEP 符合性得分</span>
       </div>
     </div>
     <div class="feature-row__text">
       <p class="feature-row__num">04 &mdash; PEP 符合性</p>
-      <h2 class="feature-row__title">146 个测试中 70 个通过（47.9%）。<br>目标：100%。</h2>
+      <h2 class="feature-row__title">146 个测试中 59 个通过（40.4%）。<br>目标：100%。</h2>
       <p class="feature-row__body">
         由<a href="https://github.com/python/typing/blob/main/conformance/results/results.html" style="color:var(--color-accent)">官方 Python 类型符合性套件</a>评分——
         与衡量 Pyright（约 99%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）、
         mypy（约 58%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）
         和 Pyrefly（约 86%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）的套件相同。
-        目前 22 个类别中有 3 个达到 100%；套件报告 219 处误报和 36 处遗漏的必需错误，我们正将两者都降到零。100% 是目标，而非当下的宣称 —— 这是诚实、进行中的工作，由我们无法操控的评分器衡量。
+        目前 21 个类别中有 3 个达到 100%；套件报告 285 处误报和 36 处遗漏的必需错误，我们正将两者都降到零。100% 是目标，而非当下的宣称 —— 这是诚实、进行中的工作，由我们无法操控的评分器衡量。
       </p>
     </div>
   </div>
@@ -382,7 +382,7 @@ benchmarkStrings:
           </tr>
           <tr>
             <td>PEP 符合性 <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a></td>
-            <td class="col-basilisk">47.9% <em style="font-size:0.75rem;color:var(--color-text-muted)">(70/146，目标 100%)</em></td>
+            <td class="col-basilisk">40.4% <em style="font-size:0.75rem;color:var(--color-text-muted)">(59/146，目标 100%)</em></td>
             <td>~99%</td>
             <td>~58% 完全通过</td>
             <td>alpha</td>
@@ -458,7 +458,7 @@ benchmarkStrings:
     <p class="section-label">我们如何衡量符合性</p>
     <h2 class="section-heading">一个我们无法操控的评分器。</h2>
     <p class="section-subhead">
-      我们的 47.9% 不是我们自己打的分。我们下载并运行 python/typing 自己的符合性工具——
+      我们的 40.4% 不是我们自己打的分。我们下载并运行 python/typing 自己的符合性工具——
       正是用来为 pyright、mypy、pyrefly、ty、zuban 和 pycroscope 打分的同一套程序。
     </p>
     <ol class="conformance-method">
@@ -478,9 +478,9 @@ benchmarkStrings:
         哪怕多出一个诊断（一处误报）也会使整个文件失败。
       </li>
       <li>
-        今天的结果是 <strong>146 个文件中 70 个通过（47.9%，仅错误）</strong>，
-        还有 219 处误报和 36 处遗漏的必需错误待清除。更严格的「错误加警告」变体得分为
-        40.4%（59/146）。头条数字是仅错误的 47.9%。
+        今天的结果是 <strong>146 个文件中 59 个通过（40.4%）</strong>——
+        计入 basilisk 发出的所有诊断（错误和警告），这是最严格的评分（也是 pyright 的评分方式）；
+        285 处误报、36 处遗漏待清除；更宽松的「仅错误」视图为 70/146（47.9%）。头条数字是严格的 40.4%。
       </li>
     </ol>
     <p class="conformance-method__note">

@@ -17,10 +17,12 @@ binary and turns its output into the `{line: [errors]}` mapping the upstream
 algorithm consumes. A file passes iff upstream's `errors_diff` is empty —
 upstream's exact rule: `"Fail" if errors_diff.strip() else "Pass"`.
 
-No diagnostic codes are excluded. Every `severity == "error"` diagnostic
-`basilisk check` emits is counted, including the strict-by-default completeness
-rules. If one fires where the suite does not mark `# E`, that is a real false
-positive and it fails the file — same as for any other checker.
+No diagnostic codes are excluded. By default this counts EVERY diagnostic
+`basilisk check` emits — both errors AND warnings — which is the strictest
+grading and matches how the reference checker pyright is graded upstream
+(`if kind not in ("error", "warning")`). Pass `--errors-only` for the looser
+errors-only view. Either way, any diagnostic on a line the suite does not mark
+`# E` is a real false positive and fails the file — same as for any checker.
 
 Usage:
     python3 conformance/score.py [--bin PATH] [--gate] [--count-warnings]
@@ -282,7 +284,11 @@ def write_csv(root: Path, rows: list[Row]) -> None:
 
 
 def parse_args(argv: list[str]) -> dict:
-    opts: dict = {"bin": None, "gate": False, "warn": False, "dir": None, "offline": False}
+    # Default is the STRICTEST grading: every diagnostic basilisk emits (errors
+    # AND warnings) is counted as "an error was reported", which is also how the
+    # reference checker pyright is graded upstream. `--errors-only` reports the
+    # looser errors-only view. `--count-warnings` is accepted for back-compat.
+    opts: dict = {"bin": None, "gate": False, "warn": True, "dir": None, "offline": False}
     it = iter(argv)
     for a in it:
         if a == "--bin":
@@ -291,6 +297,8 @@ def parse_args(argv: list[str]) -> dict:
             opts["gate"] = True
         elif a == "--count-warnings":
             opts["warn"] = True
+        elif a == "--errors-only":
+            opts["warn"] = False
         elif a == "--conformance-dir":
             opts["dir"] = next(it, None)
         elif a == "--offline":

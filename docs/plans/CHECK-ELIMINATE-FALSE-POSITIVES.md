@@ -8,7 +8,7 @@
 > `get_expected_errors` + `diff_expected_errors`; see [CHKARCH-CONFORMANCE]).
 > A file passes only with an **empty upstream `errors_diff`** (false positives
 > fail the file), and **no diagnostic codes are excluded**. Honest current
-> baseline: **70/146 = 47.9%**, **219 false positives**, 36 missed. The
+> baseline: **59/146 = 40.4%**, **285 false positives**, 36 missed. The
 > still-valid part of this plan is the *strategy* — driving specific rules'
 > false positives down; the *counts* below are stale.
 

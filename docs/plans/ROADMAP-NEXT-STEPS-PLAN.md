@@ -113,7 +113,7 @@ The bar to credibly displace Pylance is feature *and* correctness parity on the 
 actually feel day to day. Rough priorities (refine with human judgment — see TODO):
 
 - **Conformance & correctness**: per the official `python/typing` scorer (run unmodified, pinned
-  commit), PEP conformance is currently **70/146 files PASS (47.9%, errors-only)**, with **219 false
+  commit), PEP conformance is currently **59/146 files PASS (40.4%, errors+warnings strictest)**, with **285 false
   positives** and 36 missed required errors. (Earlier "135/146 / ~18 FPs" figures came from a rigged
   in-repo harness that excluded codes and ignored false positives; they are superseded.) Failing files
   cluster in Protocols, Callables, TypeVarTuple, ParamSpec, TypedDicts. FPs hurt credibility more
