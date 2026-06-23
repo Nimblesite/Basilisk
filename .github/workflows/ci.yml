@@ -115,6 +115,11 @@ jobs:
 
       - name: Build site
         working-directory: website
+        # GITHUB_TOKEN raises the GitHub API rate limit for _data/releases.js
+        # (the releases page is generated from the live Releases API at build
+        # time); the build still degrades gracefully if the call fails.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run build
 
   # ── Lint (runs in parallel with all test jobs) ─────────────────────────────

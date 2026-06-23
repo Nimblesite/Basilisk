@@ -43,8 +43,9 @@ Every TODO item is tagged so we know who picks it up:
    install everywhere. The single biggest "people actually find out" lever.
 
 3. **Get listed on the official Python typing conformance results** *(TODO H + G)* — **Effort: medium.
-   Reward: very high.** We're at 92.5%; closing the 11 failing files earns a spot on the scoreboard the
-   whole target audience watches. Correctness + credibility + organic discovery in one (the
+   Reward: very high.** We're at 40.4% (59/146, per the unmodified python/typing scorer); even at this
+   score, submitting results earns a spot on the scoreboard the whole target audience watches (mypy sits
+   at ~58%), and every failing file we close lifts our standing. Correctness + credibility + organic discovery in one (the
    Zuban/David Halter precedent proves it draws eyes).
 
 4. **Ship Neovim + Zed for real** *(TODO A/B)* — **Effort: low-medium. Reward: high.** Both are ~95%
@@ -114,7 +115,7 @@ actually feel day to day. Rough priorities (refine with human judgment — see T
 
 - **Conformance & correctness**: per the official `python/typing` scorer (run unmodified, pinned
   commit), PEP conformance is currently **59/146 files PASS (40.4%, errors+warnings strictest)**, with **285 false
-  positives** and 36 missed required errors. (Earlier "135/146 / ~18 FPs" figures came from a rigged
+  positives** and 36 missed required errors. (Earlier "135/146 / ~18 FPs" figures came from an earlier in-repo (miscalculating)
   in-repo harness that excluded codes and ignored false positives; they are superseded.) Failing files
   cluster in Protocols, Callables, TypeVarTuple, ParamSpec, TypedDicts. FPs hurt credibility more
   than missed cases — prioritize accordingly.
@@ -190,14 +191,16 @@ hermetic, plus an opt-in integration test against the real agent.
 
 ## 9. Finish near-complete plans (bang for buck)
 
-These are close enough that finishing them is cheap and visibly improves the product:
+Several of these are close enough that finishing them is cheap and visibly improves the product (the
+conformance and false-positive work is larger — sized honestly below against the unmodified scorer):
 
-- **`CHECK-ELIMINATE-FALSE-POSITIVES.md`** (~93%): ~18 FPs left, mostly 1–2 per rule. **Plus an open
-  showstopper**: `BSK-E0149` line-scans source text and misfires on docstrings containing
-  `class`/`def` prefixes + bracketed tokens (e.g. our own `[SPEC-ID]` convention). Re-ground the rule
-  on the AST. High credibility payoff.
-- **`CHECKER-PEP-CONFORMANCE-PLAN.md`** (~92.5%): clear the 11 failing files toward the conformance
-  results listing.
+- **`CHECK-ELIMINATE-FALSE-POSITIVES.md`** (active): the real python/typing scorer reports **285 false
+  positives** to drive down (the old "~18 FPs left" came from the earlier in-repo harness — a
+  miscalculation — and is superseded). **Plus an open showstopper**: `BSK-E0149` line-scans source text and misfires on
+  docstrings containing `class`/`def` prefixes + bracketed tokens (e.g. our own `[SPEC-ID]` convention).
+  Re-ground the rule on the AST. High credibility payoff.
+- **`CHECKER-PEP-CONFORMANCE-PLAN.md`** (active, 40.4% — 59/146): clear the **87 failing files** toward the
+  conformance results listing.
 - **`CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md`** (~40%): the E0149 fix above is part of this; finish
   Phase 4 (wire the no-line-scanning lint into CI so the anti-pattern can't return).
 - **`LSP-STUBBING-PLAN.md`** (~95%, Phase 5 deferred): essentially shippable; decide whether the
@@ -316,8 +319,8 @@ Rough plan (most of this is human-led — voice, accounts, timing, relationships
 ## G. Finish near-complete plans
 
 - [ ] **`[AGENT]`** Fix `BSK-E0149` docstring/line-scanning showstopper — re-ground the rule on the AST (`CHECK-ELIMINATE-FALSE-POSITIVES.md`).
-- [ ] **`[AGENT]`** Clear remaining ~18 false positives.
-- [ ] **`[AGENT]`** Close the 11 failing PEP-conformance files (Protocols, Callables, TypeVarTuple, ParamSpec, TypedDicts).
+- [ ] **`[AGENT]`** Clear the 285 false positives.
+- [ ] **`[AGENT]`** Close the 87 failing PEP-conformance files (Protocols, Callables, TypeVarTuple, ParamSpec, TypedDicts).
 - [ ] **`[AGENT]`** Finish `CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md` Phase 4 — wire the no-line-scanning lint into CI.
 - [ ] **`[HUMAN]`** Decide whether `LSP-STUBBING-PLAN.md` Phase 5 (Salsa perf) ships now or later.
 

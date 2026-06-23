@@ -1403,8 +1403,8 @@ checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with.
   in `coverage-thresholds.json` (`conformance.threshold`,
   `conformance.max_false_positives`); the former ratchets **up**, the latter
   **down**. Per-file results are written to `conformance/conformance_status.csv`.
-- **Honest baseline** (replacing a previously rigged in-repo harness that
-  excluded the 9 codes above and ignored false positives to fake 100%):
+- **Honest baseline** (replacing an earlier in-repo harness that
+  excluded the 9 codes above and didn't count false positives — a miscalculation that reported 100%):
   **59 / 146 = 40.4%** (strictest grading: every diagnostic, errors AND warnings,
   counted — as pyright is graded), 285 false positives, 36 missed required errors.
   The looser errors-only view is 70 / 146 = 47.9%. Target: 100%.

@@ -61,7 +61,9 @@ UPSTREAM_MAIN_URL = (
 )
 # The committed, byte-identical copy of upstream's calculator, and its sha256.
 UPSTREAM_MAIN = Path(__file__).resolve().parent / "upstream_main.py"
-UPSTREAM_MAIN_SHA256 = "b4e3bd089c73856f9920ef494350d622c2914fac238c9193ec0bb3f93f0fc6a2"
+UPSTREAM_MAIN_SHA256 = (
+    "b4e3bd089c73856f9920ef494350d622c2914fac238c9193ec0bb3f93f0fc6a2"
+)
 # The two functions that constitute the official scoring algorithm.
 OFFICIAL_FUNCS = ("get_expected_errors", "diff_expected_errors")
 # The `# E`-annotated test fixtures are downloaded (git-ignored) into
@@ -103,10 +105,19 @@ def load_official_calc() -> tuple[Callable, Callable, str]:
             "modified. Restore it from git, or run --refresh-upstream to re-pin."
         )
 
-    for dep in ("tomli", "tomlkit", "options", "reporting", "test_groups", "type_checker"):
+    for dep in (
+        "tomli",
+        "tomlkit",
+        "options",
+        "reporting",
+        "test_groups",
+        "type_checker",
+    ):
         sys.modules.setdefault(dep, _StubModule(dep))
 
-    spec = importlib.util.spec_from_file_location("typing_conformance_main", UPSTREAM_MAIN)
+    spec = importlib.util.spec_from_file_location(
+        "typing_conformance_main", UPSTREAM_MAIN
+    )
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot build an import spec for {UPSTREAM_MAIN}")
     module = importlib.util.module_from_spec(spec)
@@ -171,7 +182,9 @@ def ensure_fixtures(conf_dir: Path, force: bool) -> None:
     listing_req = urllib.request.Request(FIXTURES_API, headers=headers)
     with urllib.request.urlopen(listing_req, timeout=60) as resp:  # noqa: S310 (pinned https)
         entries = json.loads(resp.read())
-    fixtures = [e for e in entries if e.get("type") == "file" and e["name"].endswith(".py")]
+    fixtures = [
+        e for e in entries if e.get("type") == "file" and e["name"].endswith(".py")
+    ]
     if not fixtures:
         raise RuntimeError(f"no .py fixtures found at {FIXTURES_API}")
 
@@ -182,8 +195,10 @@ def ensure_fixtures(conf_dir: Path, force: bool) -> None:
         with urllib.request.urlopen(entry["download_url"], timeout=60) as resp:  # noqa: S310
             (conf_dir / entry["name"]).write_bytes(resp.read())
     stamp.write_text(PINNED_TYPING_REF + "\n", encoding="utf-8")
-    print(f"  fetched {len(fixtures)} conformance fixtures "
-          f"(python/typing@{PINNED_TYPING_REF}) -> {conf_dir}")
+    print(
+        f"  fetched {len(fixtures)} conformance fixtures "
+        f"(python/typing@{PINNED_TYPING_REF}) -> {conf_dir}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -208,9 +223,17 @@ class BasiliskTypeChecker:
 
     def run_test(self, test_case: Path) -> str:
         proc = subprocess.run(
-            [str(self.binary), "check", str(test_case),
-             "--output", "json", "--color", "never"],
-            capture_output=True, text=True,
+            [
+                str(self.binary),
+                "check",
+                str(test_case),
+                "--output",
+                "json",
+                "--color",
+                "never",
+            ],
+            capture_output=True,
+            text=True,
         )
         return proc.stdout
 
@@ -317,7 +340,9 @@ def print_scorecard(
     print("=" * 68)
     print(f"  BASILISK PEP CONFORMANCE — REAL python/typing CALCULATOR [{label}]")
     print("  calc: imported verbatim from committed conformance/upstream_main.py")
-    print(f"  ref:  python/typing@{PINNED_TYPING_REF}  ({digest})  funcs: {', '.join(OFFICIAL_FUNCS)}")
+    print(
+        f"  ref:  python/typing@{PINNED_TYPING_REF}  ({digest})  funcs: {', '.join(OFFICIAL_FUNCS)}"
+    )
     print("=" * 68)
     print(f"  Files:    {n} total | {totals['pass']} pass | {n - totals['pass']} fail")
     print(f"  Score:    {pct:.1f}%   (Pass = empty errors_diff, upstream rule)")
@@ -353,8 +378,13 @@ def parse_args(argv: list[str]) -> dict:
     # reference checker pyright is graded upstream. `--errors-only` reports the
     # looser errors-only view. `--count-warnings` is accepted for back-compat.
     opts: dict = {
-        "bin": None, "gate": False, "warn": True, "dir": None,
-        "refresh": False, "fetch": False, "fetch_only": False,
+        "bin": None,
+        "gate": False,
+        "warn": True,
+        "dir": None,
+        "refresh": False,
+        "fetch": False,
+        "fetch_only": False,
     }
     it = iter(argv)
     for a in it:
@@ -385,15 +415,22 @@ def enforce_gate(root: Path, files: list[Path], totals: Totals) -> bool:
     failed = False
     if threshold is not None:
         if pct < threshold:
-            print(f"  ✗ PEP conformance regression: {pct}% ({totals['pass']}/{n}) "
-                  f"< {threshold}% threshold.", file=sys.stderr)
+            print(
+                f"  ✗ PEP conformance regression: {pct}% ({totals['pass']}/{n}) "
+                f"< {threshold}% threshold.",
+                file=sys.stderr,
+            )
             failed = True
         else:
-            print(f"  Conformance gate: {pct}% ({totals['pass']}/{n}) >= {threshold}% — PASS")
+            print(
+                f"  Conformance gate: {pct}% ({totals['pass']}/{n}) >= {threshold}% — PASS"
+            )
     if ceiling is not None:
         if totals["fp"] > ceiling:
-            print(f"  ✗ False-positive regression: {totals['fp']} FPs > {ceiling} ceiling.",
-                  file=sys.stderr)
+            print(
+                f"  ✗ False-positive regression: {totals['fp']} FPs > {ceiling} ceiling.",
+                file=sys.stderr,
+            )
             failed = True
         else:
             print(f"  FP gate: {totals['fp']} <= {ceiling} ceiling — PASS")
@@ -418,7 +455,9 @@ def main(argv: list[str]) -> int:
             ensure_fixtures(conf_dir, force=opts["fetch"])
         except Exception as exc:  # noqa: BLE001 — surface fetch failure clearly
             if opts["fetch"] or opts["fetch_only"]:
-                print(f"  ✗ could not fetch conformance fixtures: {exc}", file=sys.stderr)
+                print(
+                    f"  ✗ could not fetch conformance fixtures: {exc}", file=sys.stderr
+                )
                 return 1
             print("  ⚠  Conformance suite not present and fetch failed — skipping.")
             return 0
@@ -427,7 +466,10 @@ def main(argv: list[str]) -> int:
 
     binary = find_binary(opts["bin"], root)
     if binary is None:
-        print("  ✗ basilisk binary not found. Build it or pass --bin <path>.", file=sys.stderr)
+        print(
+            "  ✗ basilisk binary not found. Build it or pass --bin <path>.",
+            file=sys.stderr,
+        )
         return 1
 
     try:

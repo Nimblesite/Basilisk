@@ -418,5 +418,5 @@ Phases 1 and 2 are independent and can be parallelized. Phase 3 depends on Phase
   - [x] 5a. E0014 — `VarCheckContext` with `SubtypeContext`, uses `is_subtype_with_context()` for assignability
   - [x] 5b. E0013 — `SubtypeContext` passed to `check_function()`, removed `contains_named` early exit for Named types
   - [x] 5c. E0053 — `is_likely_narrowed()` heuristic suppresses narrowing-dependent FPs; Union normalization in `types_match()`
-  - [x] 5d. Full conformance suite verification — the "**18 FPs** (target < 71)" result came from a rigged in-repo harness and is FALSE; the official `python/typing` scorer reports **285 false positives** (59/146 files passing, 40.4% counting errors+warnings). Driving FPs down remains active work.
+  - [x] 5d. Full conformance suite verification — the "**18 FPs** (target < 71)" result came from an earlier in-repo harness (a miscalculation) and is superseded; the official `python/typing` scorer reports **285 false positives** (59/146 files passing, 40.4% counting errors+warnings). Driving FPs down remains active work.
   - [x] Checker-side modules: `narrowing.rs` (NarrowingContext), `expr_inference.rs` (ExpressionInferrer), `constraint_solver.rs` (ConstraintSolver)

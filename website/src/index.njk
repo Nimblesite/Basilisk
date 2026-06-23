@@ -252,19 +252,19 @@ benchmarkStrings:
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">40.4<span class="stat-block__unit">%</span></span>
+        <span class="stat-block__number">{{ conformance.scorePct }}<span class="stat-block__unit">%</span></span>
         <span class="stat-block__label">PEP conformance score</span>
       </div>
     </div>
     <div class="feature-row__text">
       <p class="feature-row__num">04 &mdash; PEP conformance</p>
-      <h2 class="feature-row__title">59 of 146 tests passing (40.4%).<br>Target: 100%.</h2>
+      <h2 class="feature-row__title">{{ conformance.pass }} of {{ conformance.total }} tests passing ({{ conformance.scorePct }}%).<br>Target: 100%.</h2>
       <p class="feature-row__body">
-        Scored by the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" style="color:var(--color-accent)">official Python typing conformance suite</a> &mdash;
+        Scored by the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">official Python typing conformance suite</a> &mdash;
         the same harness used to measure Pyright (~99%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>),
         mypy (~58%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>),
         and Pyrefly (~86%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>).
-        Today 3 of 21 categories pass at 100%; the suite reports 285 false-positive diagnostics and 36 missed required errors, and we are driving both to zero. 100% is the target, not a present-day claim &mdash; this is honest, in-progress work, measured by a scorer we don&rsquo;t control.
+        Today {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories pass at 100%; the suite reports {{ conformance.fp }} false-positive diagnostics and {{ conformance.missed }} missed required errors, and we are driving both to zero. 100% is the target, not a present-day claim. <a href="/docs/conformance/">How we measure this &rarr;</a>
       </p>
     </div>
   </div>
@@ -372,7 +372,7 @@ benchmarkStrings:
           </tr>
           <tr>
             <td>PEP conformance <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a></td>
-            <td class="col-basilisk">40.4% <em style="font-size:0.75rem;color:var(--color-text-muted)">(59/146, target 100%)</em></td>
+            <td class="col-basilisk">{{ conformance.scorePct }}% <em style="font-size:0.75rem;color:var(--color-text-muted)">({{ conformance.pass }}/{{ conformance.total }}, target 100%)</em></td>
             <td>~99%</td>
             <td>~58% full-pass</td>
             <td>alpha</td>
@@ -437,51 +437,6 @@ benchmarkStrings:
         </tbody>
       </table>
     </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════
-     HOW WE MEASURE CONFORMANCE
-═══════════════════════════════════════════════════ -->
-<section class="comparison-section" id="conformance-methodology">
-  <div class="container">
-    <p class="section-label">How we measure conformance</p>
-    <h2 class="section-heading">A scorer we don&rsquo;t control.</h2>
-    <p class="section-subhead">
-      Our 40.4% is not graded by us. We download and run python/typing&rsquo;s own
-      conformance tooling &mdash; the exact harness that grades pyright, mypy,
-      pyrefly, ty, zuban, and pycroscope.
-    </p>
-    <ol class="conformance-method">
-      <li>
-        We pin python/typing&rsquo;s conformance tool to commit <code>268d0c4e</code> and
-        run its <code>get_expected_errors</code> and <code>diff_expected_errors</code>
-        functions <strong>unmodified</strong> &mdash; we do not reimplement or relax the scorer.
-      </li>
-      <li>
-        For each of the 146 test files, the real <code>basilisk check</code> output is
-        compared against the suite&rsquo;s <code>&#35; E</code> annotations. Every
-        <code>severity == error</code> diagnostic counts &mdash; <strong>no diagnostic
-        codes are excluded</strong>.
-      </li>
-      <li>
-        A file <strong>passes only with zero discrepancies</strong>: every
-        <code>&#35; E</code> line gets an error, every <code>&#35; E[tag]</code> group is
-        satisfied, and <strong>no error lands on a line the suite does not mark</strong>.
-        One extra diagnostic (a false positive) fails the whole file.
-      </li>
-      <li>
-        Today that yields <strong>59 of 146 files passing (40.4%)</strong> &mdash; counting
-        every diagnostic basilisk emits, errors and warnings, the strictest grading (and how
-        pyright is graded). 285 false positives and 36 missed required errors remain to clear.
-        The looser errors-only view is 70 of 146 (47.9%). The headline is the strict 40.4%.
-      </li>
-    </ol>
-    <p class="conformance-method__note">
-      Full methodology and annotation rules are documented in the
-      <a href="https://github.com/python/typing/blob/main/conformance/README.md" target="_blank" rel="noopener">python/typing conformance README</a>.
-      100% remains the target &mdash; not a claim we make today.
-    </p>
   </div>
 </section>
 

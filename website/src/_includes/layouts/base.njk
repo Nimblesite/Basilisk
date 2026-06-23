@@ -3,7 +3,7 @@
     path straight from the URL, so language alternates never double-prefix
     (/zh/zh/...) even when an auto-generated page reports the wrong `lang`.
     Set `noTranslation: true` in a page's front matter to opt it out of the
-    language cluster entirely (e.g. the English-only README). -#}
+    language cluster entirely (e.g. the English-only Releases page). -#}
 {%- set effLang = 'zh' if (page.url == '/zh/' or page.url.startsWith('/zh/')) else (lang | default('en')) -%}
 {%- set basePath = (page.url | replace('/zh/', '/')) if effLang == 'zh' else page.url -%}
 <html lang="{{ effLang }}">

@@ -40,7 +40,7 @@ Basilisk removes the choice. There is no permissive mode to fall back to.
 | Feature | Basilisk | Pyright | mypy | ty | Pyrefly |
 |---|---|---|---|---|---|
 | Strict by default | ✅ | ❌ opt-in | ❌ opt-in | ❌ opt-in | ❌ opt-in |
-| PEP conformance¹ | 40.4% current (→100% target) | ~99% | ~58% | early alpha | ~86% |
+| PEP conformance¹ | {{ conformance.scorePct }}% current (→100% target) | ~99% | ~58% | early alpha | ~86% |
 | Implementation | Rust | TypeScript | Python/C | Rust | Rust |
 | Runtime required | None | Node.js | Python | None | None |
 | Full LSP (completions, hover, goto) | ✅ | Pylance only | ❌ | Basic | Basic |
@@ -158,7 +158,7 @@ Basilisk is not a faster version of an existing tool. It occupies a different po
 5. WASM plugin system (planned) — extensible without forking, secure by design
 
 **Where Basilisk is not yet the best choice:**
-- PEP conformance: Basilisk currently passes 40.4% of the official conformance suite (59/146, counting errors+warnings — the strictest grading), with 285 false positives and 36 missed required errors still being driven down. Pyright covers far more edge cases today. Basilisk's target is 100%; it's not there yet.
+- PEP conformance: Basilisk currently passes {{ conformance.scorePct }}% of the official conformance suite ({{ conformance.pass }}/{{ conformance.total }}, counting errors+warnings — the strictest grading), with {{ conformance.fp }} false positives and {{ conformance.missed }} missed required errors still being driven down. Pyright covers far more edge cases today. Basilisk's target is 100%; it's not there yet. See [how we measure conformance](/docs/conformance/).
 - Plugin ecosystem: mypy's Django and SQLAlchemy plugins are mature. Basilisk's WASM plugins are planned.
 - Maturity: Pylance is feature-complete today (though proprietary and VS Code only). Basilisk is in alpha.
 

@@ -31,22 +31,29 @@ rustup component add llvm-tools-preview 2>/dev/null || true
 header "Ensuring PEP conformance fixtures are current"
 python3 "$REPO_ROOT/conformance/score.py" --fetch-only
 
-# ── Rust tests with coverage ─────────────────────────────────────────────────
-# cargo-llvm-cov uses target/llvm-cov-target/ as its target directory,
-# so the basilisk binary lands there — not in target/release/.
+# ── Rust tests + conformance, one instrumented coverage pool ─────────────────
+# Coverage is gathered in TWO phases that share ONE profile pool, reported once:
+#   1. the workspace test suite, then
+#   2. the REAL basilisk binary scored over all 146 PEP conformance fixtures.
+# Phase 2 is BOTH the conformance gate AND the source of the checker/resolver
+# coverage those files exercise — the compiled binary's own instrumented run
+# provides it (there is no in-repo conformance test).
+#
+# cargo-llvm-cov's `show-env` is the supported way to fold an external binary's
+# runs into coverage: source it ONCE, then build + test + run the binary all under
+# that single environment so every profraw lands in one pool under target/, then
+# report. (Mixing a `cargo llvm-cov <run>` with `show-env` is unsupported — the
+# run subcommand redirects to target/llvm-cov-target while show-env uses target/,
+# so the pools diverge and the report finds no data.)
 
 header "Running tests with coverage instrumentation"
+cargo llvm-cov clean --workspace
+eval "$(cargo llvm-cov show-env --export-prefix)"
+
 set +e
-cargo llvm-cov \
-    --profile ci \
-    --workspace \
-    --exclude basilisk-compiler \
-    --all-targets \
-    --lcov \
-    --output-path "$LCOV_FILE"
+cargo test --profile ci --workspace --exclude basilisk-compiler --all-targets
 TESTS_EXIT=$?
 set -e
-ok "lcov.info → $LCOV_FILE"
 if [[ "$TESTS_EXIT" -ne 0 ]]; then
     echo ""
     echo -e "${RED}${BOLD}TESTS FAILED (exit $TESTS_EXIT).${RESET}"
@@ -56,22 +63,31 @@ if [[ "$TESTS_EXIT" -ne 0 ]]; then
 fi
 ok "All workspace tests passed"
 
-# Verify the basilisk binary exists.
+# The freshly-built instrumented binary lives under the show-env build dir
+# (target/ci/). Pin BASILISK_BIN to it so the conformance phase scores the exact
+# binary whose objects the report reads — not a stale one from another target dir.
+export BASILISK_BIN="$REPO_ROOT/target/ci/basilisk"
 BASILISK_BIN=$(find_basilisk_bin) || {
     echo -e "${RED}${BOLD}FATAL: basilisk binary not found after coverage build.${RESET}"
-    echo -e "${RED}Checked: target/llvm-cov-target/ci/ and fallback paths${RESET}"
+    echo -e "${RED}Checked: target/ci/ and fallback paths${RESET}"
     exit 1
 }
 ok "basilisk binary ready: $BASILISK_BIN"
 
-# ── PEP conformance gate ──────────────────────────────────────────────────────
+# ── PEP conformance gate (also contributes coverage) ──────────────────────────
 # Score the REAL compiled binary with the official python/typing calculator
 # (conformance/score.py imports the committed, sha256-verified upstream_main.py)
-# and enforce the ratchet gate from coverage-thresholds.json. This is the whole
-# conformance system: two Python files + the gitignored fixtures. No Rust test.
+# and enforce the ratchet gate from coverage-thresholds.json. The binary runs
+# under the sourced llvm-cov env, so its profile data joins the test pool and the
+# checker/resolver paths these 146 files exercise count toward coverage. The whole
+# conformance system is these two Python files + the gitignored fixtures, scored
+# on the compiled binary — no Rust test.
 header "Enforcing PEP conformance gate (official python/typing calculator)"
 python3 "$REPO_ROOT/conformance/score.py" --bin "$BASILISK_BIN" --gate
 
+# ── Finalize coverage from BOTH phases (tests + conformance binary runs) ──────
+cargo llvm-cov report --profile ci --lcov --output-path "$LCOV_FILE"
+ok "lcov.info → $LCOV_FILE"
 cargo llvm-cov report --profile ci --html --output-dir "$HTML_DIR"
 ok "HTML report → $HTML_DIR/index.html"
 
