@@ -359,6 +359,66 @@ x = 42
 }
 
 #[tokio::test]
+async fn test_ws_goto_definition_member_through_aliased_stub_import() -> TestResult<()> {
+    // The user's exact #180 case: an aliased import of a module backed by a
+    // `.pyi` STUB (`import datetime as _dt`, datetime.pyi) — clicking a member
+    // (`_dt.datetime`, here `g.area`) must jump into the stub. The #180 alias
+    // capture made cross-module resolution treat the aliased import as a
+    // `from`-import and publish nothing, returning `result: null`; cbee4ff
+    // restores it by discriminating on `kind`. Proven to fail (null) without the
+    // fix and resolve with it.
+    let dir = unique_temp_dir("bsk_goto_stub_alias");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(
+        dir.join("geometry.pyi"),
+        "def area(r: float) -> float: ...\n",
+    )?;
+    let main_src = "import geometry as g\n\n\ndef use() -> float:\n    return g.area(1.0)\n";
+    std::fs::write(dir.join("main.py"), main_src)?;
+    let root_uri = format!("file://{}", dir.display());
+    let main_uri = format!("file://{}", dir.join("main.py").display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+    for _ in 0..20 {
+        let msg = tokio::time::timeout(Duration::from_millis(500), fixture.ws_read.next()).await;
+        if msg.is_err() {
+            break;
+        }
+    }
+    fixture.did_open(&main_uri, main_src).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // main.py line 4: `    return g.area(1.0)` — `area` begins at character 13.
+    let resp = fixture
+        .request(
+            730,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": main_uri },
+                "position": { "line": 4, "character": 14 }
+            }),
+        )
+        .await?
+        .ok_or("no response to member goto-def through aliased stub import")?;
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "member goto-def through an aliased .pyi-stub import must resolve: {resp}"
+    );
+    assert!(
+        parsed["result"]["uri"]
+            .as_str()
+            .unwrap_or("")
+            .contains("geometry.pyi"),
+        "goto-def should jump into the stub geometry.pyi: {resp}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_ws_goto_definition_cross_file_function() -> TestResult<()> {
     // Set up a workspace with two files: helpers.py defines `greet`,
     // main.py imports and uses it.
@@ -424,6 +484,68 @@ async fn test_ws_goto_definition_cross_file_function() -> TestResult<()> {
     assert_eq!(
         start["character"], 4,
         "cross-file goto-def should land at char 4 where 'greet' is defined: {resp}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_definition_member_through_dotted_aliased_import() -> TestResult<()> {
+    // Regression (follow-up to #180): clicking a member accessed through a
+    // *dotted, aliased* import — `import pkg.sub as ps` → `ps.helper(...)`, the
+    // same shape as `import os.path as _osp` → `_osp.join(...)` — must jump to
+    // the member's cross-file definition. The #180 alias capture briefly routed
+    // such imports as `from`-imports and published no symbols; cbee4ff restores
+    // it by discriminating on `kind`.
+    let dir = unique_temp_dir("bsk_goto_dotted_alias");
+    std::fs::create_dir_all(dir.join("pkg"))?;
+    std::fs::write(dir.join("pkg/__init__.py"), "")?;
+    std::fs::write(
+        dir.join("pkg/sub.py"),
+        "def helper(x: int) -> int:\n    return x\n",
+    )?;
+    let main_src = "import pkg.sub as ps\n\n\ndef use() -> int:\n    return ps.helper(1)\n";
+    std::fs::write(dir.join("main.py"), main_src)?;
+    let root_uri = format!("file://{}", dir.display());
+    let main_uri = format!("file://{}", dir.join("main.py").display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+    for _ in 0..20 {
+        let msg = tokio::time::timeout(Duration::from_millis(500), fixture.ws_read.next()).await;
+        if msg.is_err() {
+            break;
+        }
+    }
+    fixture.did_open(&main_uri, main_src).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // main.py line 4: `    return ps.helper(1)` — `helper` begins at character 14.
+    let resp = fixture
+        .request(
+            720,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": main_uri },
+                "position": { "line": 4, "character": 16 }
+            }),
+        )
+        .await?
+        .ok_or("no response to member goto-def through dotted aliased import")?;
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "member goto-def through a dotted aliased import must resolve: {resp}"
+    );
+    let result_uri = parsed["result"]["uri"].as_str().unwrap_or("");
+    assert!(
+        result_uri.contains("sub.py"),
+        "goto-def should jump to pkg/sub.py, got: {result_uri}"
+    );
+    assert_eq!(
+        parsed["result"]["range"]["start"]["line"], 0,
+        "goto-def should land on `helper` at line 0 of pkg/sub.py: {resp}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);

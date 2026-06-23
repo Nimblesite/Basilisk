@@ -65,8 +65,10 @@ pub enum UnresolvedReason {
 pub struct ImportInfo {
     /// The dotted module name being imported (e.g. `"os.path"`, `"requests"`).
     pub module: String,
-    /// Names imported from the module (`from X import A, B` → `["A", "B"]`).
-    /// Empty for plain `import X` statements.
+    /// Locally-bound names introduced by the import.
+    /// `from X import A, B` → `["A", "B"]` (alias-aware: `import C as D` → `["D"]`).
+    /// Plain `import X` / `import X.Y` is empty — the bound name is the top-level
+    /// module (see `module`); aliased `import X as Y` → `["Y"]`.
     pub names: Vec<String>,
     /// The source span of the import statement.
     pub span: Span,

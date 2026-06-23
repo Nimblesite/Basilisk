@@ -11,6 +11,11 @@
 //!
 //! Protocol implementations are exempt: when a class satisfies a `Protocol`
 //! contract, it is expected to define the protocol methods without `@override`.
+//!
+//! Version gate (issue #171): `@override` (PEP 698 / `typing.override`) was
+//! introduced in Python 3.12, so suggesting it on an older configured target is
+//! a false positive — the decorator cannot be imported there. E0025 is silent
+//! when the configured `python_version` is below 3.12.
 
 use std::collections::HashMap;
 
@@ -25,6 +30,9 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0025",
 };
 
+/// The first Python version with `typing.override` (PEP 698).
+const OVERRIDE_MIN_VERSION: (u32, u32) = (3, 12);
+
 /// Emits BSK-E0025 for methods that override a same-module base-class method
 /// but are not decorated with `@override`.
 pub(crate) struct MissingOverrideDecorator;
@@ -33,9 +41,15 @@ impl Rule for MissingOverrideDecorator {
     fn check(
         &self,
         module: &ResolvedModule,
-        _ctx: &super::CheckContext,
+        ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
+        // `@override` (PEP 698) only exists from Python 3.12 — don't suggest it
+        // on an older configured target (issue #171).
+        if ctx.target_version < OVERRIDE_MIN_VERSION {
+            return;
+        }
+
         // Build a raw class map first (name → ClassInfo).
         let raw_map = super::shared::class_name_map(&module.classes);
 
