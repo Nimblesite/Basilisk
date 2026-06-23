@@ -53,6 +53,13 @@ impl Rule for LambdaMissingAnnotations {
 
         // Class attributes: `converter = lambda x: str(x)` without annotation
         for class in &module.classes {
+            // Enum bodies legitimately assign bare lambdas as non-member
+            // callables (e.g. a `converter`); the typing spec discourages
+            // annotating them, so a missing-annotation nudge here is a false
+            // positive (conformance enums_members.py).
+            if class.is_enum {
+                continue;
+            }
             for attr in &class.attributes {
                 if attr.rhs_is_lambda && !attr.has_annotation {
                     diagnostics.push(warning_diagnostic_owned(

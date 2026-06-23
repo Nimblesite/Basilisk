@@ -42,6 +42,15 @@ pub(crate) fn is_stub_context(func: &FunctionInfo, classes: &[ClassInfo]) -> boo
     })
 }
 
+/// Returns `true` when a function is decorated with `@no_type_check`.
+///
+/// PEP 484 / `typing.no_type_check` directs checkers to suppress *body* type
+/// checks for the function, so return-value/assignment diagnostics (E0011) must
+/// not fire. Argument-count (E0041) and similar signature checks still apply.
+pub(crate) fn is_no_type_check(func: &FunctionInfo) -> bool {
+    func.decorators.iter().any(|d| d == "no_type_check")
+}
+
 /// Returns `true` when a class is an Enum subclass.
 ///
 /// Enum members are unannotated by design — their type is `Literal[EnumClass.member]`,

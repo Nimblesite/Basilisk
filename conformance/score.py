@@ -229,6 +229,7 @@ SPEC_CONFORMANCE_RULES: dict[str, str] = {
     "BSK-E0001": "disabled",  # missing parameter type annotation
     "BSK-E0002": "disabled",  # missing return type annotation
     "BSK-E0004": "disabled",  # missing *args/**kwargs annotation
+    "BSK-E0025": "disabled",  # missing @override decorator (PEP 698 is opt-in)
     "BSK-W0014": "disabled",  # explicit-`Any` nudge (style, not a spec error)
     "BSK-W0050": "disabled",  # redundant type annotation (house style)
 }
