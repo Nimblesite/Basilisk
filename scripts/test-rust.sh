@@ -25,10 +25,11 @@ HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
 rustup component add llvm-tools-preview 2>/dev/null || true
 
 # ── Fetch conformance suite if missing or stale ──────────────────────────────
-# `conformance.sh` is the single source of truth — it pins TYPING_REF and
-# re-fetches when the cached ref differs. Do not duplicate that logic here.
+# `conformance/score.py` is the single source of truth — it pins the upstream
+# ref (PINNED_TYPING_REF) and re-fetches when the cached ref differs. Do not
+# duplicate that logic here.
 header "Ensuring PEP conformance suite is current"
-bash "$REPO_ROOT/scripts/conformance.sh" --fetch-only
+python3 "$REPO_ROOT/conformance/score.py" --fetch-only
 
 # ── Rust tests with coverage ─────────────────────────────────────────────────
 # cargo-llvm-cov uses target/llvm-cov-target/ as its target directory,

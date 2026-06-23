@@ -1375,7 +1375,7 @@ checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with.
   committed [`conformance/upstream_main.py`](../../conformance/upstream_main.py)** —
   a byte-identical, sha256-verified copy of `python/typing`'s
   `conformance/src/main.py`, pinned to the same commit the fixtures come from
-  (`scripts/conformance.sh` → `TYPING_REF`, currently `268d0c4e`, sha256
+  (`score.py` → `PINNED_TYPING_REF`, currently `268d0c4e`, sha256
   `b4e3bd08…0fc6a2`) — and calls its own `get_expected_errors` +
   `diff_expected_errors` functions **unmodified**. Nothing is downloaded at score
   time; the verbatim upstream file lives in the repo and `score.py` refuses to run

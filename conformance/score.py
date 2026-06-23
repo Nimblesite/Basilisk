@@ -25,13 +25,18 @@ grading and matches how the reference checker pyright is graded upstream
 errors-only view. Either way, any diagnostic on a line the suite does not mark
 `# E` is a real false positive and fails the file — same as for any checker.
 
-The vendored calculator is committed at `conformance/upstream_main.py`. Refresh
-it ONLY when bumping the pinned ref:
+This one file is the whole Basilisk side of conformance: it fetches the
+git-ignored `# E`-annotated test fixtures on demand (`--fetch` / `--fetch-only`),
+runs the binary, scores with the official functions, writes
+`conformance/conformance_status.csv`, and enforces the ratchet gate (`--gate`).
+There is no separate shell script. The vendored calculator is committed at
+`conformance/upstream_main.py`; refresh it ONLY when bumping the pinned ref:
     python3 conformance/score.py --refresh-upstream
 
 Usage:
     python3 conformance/score.py [--bin PATH] [--gate] [--errors-only]
-                                 [--conformance-dir DIR] [--refresh-upstream]
+                                 [--conformance-dir DIR] [--fetch | --fetch-only]
+                                 [--refresh-upstream]
 """
 
 from __future__ import annotations
@@ -45,8 +50,9 @@ import types
 from pathlib import Path
 from typing import Callable, Sequence
 
-# Pinned to the SAME commit the fixtures are fetched from
-# (scripts/conformance.sh TYPING_REF). Bump both together, then --refresh-upstream.
+# The single home for the pinned upstream commit. The fixtures (FIXTURES_API)
+# and the vendored calculator (UPSTREAM_MAIN) both track it. To bump: edit this,
+# run `--refresh-upstream` (re-pins upstream_main.py + its sha256), then `--fetch`.
 PINNED_TYPING_REF = "268d0c4e"
 UPSTREAM_MAIN_URL = (
     f"https://raw.githubusercontent.com/python/typing/{PINNED_TYPING_REF}"
@@ -57,6 +63,12 @@ UPSTREAM_MAIN = Path(__file__).resolve().parent / "upstream_main.py"
 UPSTREAM_MAIN_SHA256 = "b4e3bd089c73856f9920ef494350d622c2914fac238c9193ec0bb3f93f0fc6a2"
 # The two functions that constitute the official scoring algorithm.
 OFFICIAL_FUNCS = ("get_expected_errors", "diff_expected_errors")
+# The `# E`-annotated test fixtures live under conformance/tests at the same
+# pinned ref. They are git-ignored and fetched on demand (one HTTP GET each).
+FIXTURES_API = (
+    "https://api.github.com/repos/python/typing/contents/conformance/tests"
+    f"?ref={PINNED_TYPING_REF}"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +146,50 @@ def refresh_upstream() -> int:
     if digest != UPSTREAM_MAIN_SHA256:
         print(f'  -> update UPSTREAM_MAIN_SHA256 = "{digest}" (ref changed)')
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Fetch the test fixtures (the `# E`-annotated .py files) — git-ignored
+# ---------------------------------------------------------------------------
+
+
+def ensure_fixtures(conf_dir: Path, force: bool) -> None:
+    """Download python/typing's conformance `.py` fixtures into `conf_dir`.
+
+    No-op when they are already present at the pinned ref (a `.ref-sha` stamp
+    records it) unless `force`. Bumping `PINNED_TYPING_REF` invalidates the stamp
+    and triggers a re-fetch. Honors `GITHUB_TOKEN` to raise the API rate limit.
+    """
+    import os
+    import urllib.request  # local: network only happens here and in refresh
+
+    stamp = conf_dir / ".ref-sha"
+    cached_ref = stamp.read_text(encoding="utf-8").strip() if stamp.exists() else ""
+    present = conf_dir.exists() and any(conf_dir.glob("*.py"))
+    if present and cached_ref == PINNED_TYPING_REF and not force:
+        return
+
+    headers = {"Accept": "application/vnd.github+json"}
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"token {token}"
+
+    listing_req = urllib.request.Request(FIXTURES_API, headers=headers)
+    with urllib.request.urlopen(listing_req, timeout=60) as resp:  # noqa: S310 (pinned https)
+        entries = json.loads(resp.read())
+    fixtures = [e for e in entries if e.get("type") == "file" and e["name"].endswith(".py")]
+    if not fixtures:
+        raise RuntimeError(f"no .py fixtures found at {FIXTURES_API}")
+
+    conf_dir.mkdir(parents=True, exist_ok=True)
+    for stale in conf_dir.glob("*.py"):
+        stale.unlink()
+    for entry in fixtures:
+        with urllib.request.urlopen(entry["download_url"], timeout=60) as resp:  # noqa: S310
+            (conf_dir / entry["name"]).write_bytes(resp.read())
+    stamp.write_text(PINNED_TYPING_REF + "\n", encoding="utf-8")
+    print(f"  fetched {len(fixtures)} conformance fixtures "
+          f"(python/typing@{PINNED_TYPING_REF}) -> {conf_dir}")
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +368,10 @@ def parse_args(argv: list[str]) -> dict:
     # AND warnings) is counted as "an error was reported", which is also how the
     # reference checker pyright is graded upstream. `--errors-only` reports the
     # looser errors-only view. `--count-warnings` is accepted for back-compat.
-    opts: dict = {"bin": None, "gate": False, "warn": True, "dir": None, "refresh": False}
+    opts: dict = {
+        "bin": None, "gate": False, "warn": True, "dir": None,
+        "refresh": False, "fetch": False, "fetch_only": False,
+    }
     it = iter(argv)
     for a in it:
         if a == "--bin":
@@ -327,6 +386,10 @@ def parse_args(argv: list[str]) -> dict:
             opts["dir"] = next(it, None)
         elif a == "--refresh-upstream":
             opts["refresh"] = True
+        elif a == "--fetch":
+            opts["fetch"] = True
+        elif a == "--fetch-only":
+            opts["fetch_only"] = True
     return opts
 
 
@@ -361,9 +424,21 @@ def main(argv: list[str]) -> int:
     root = repo_root()
     conf_dir = Path(opts["dir"]) if opts["dir"] else root / "crates/basilisk-cli/tests/conformance"
 
-    if not conf_dir.exists() or not any(conf_dir.glob("*.py")):
-        print("  ⚠  Conformance suite not downloaded. Run: make conformance")
-        return 0  # fresh checkout: skip, do not fail CI
+    # Fetch fixtures when forced, in fetch-only mode, or when they are absent.
+    # A network failure is fatal only if a fetch was explicitly requested; on the
+    # plain score path a missing suite is skipped (fresh checkout, offline CI).
+    present = conf_dir.exists() and any(conf_dir.glob("*.py"))
+    if opts["fetch"] or opts["fetch_only"] or not present:
+        try:
+            ensure_fixtures(conf_dir, force=opts["fetch"])
+        except Exception as exc:  # noqa: BLE001 — surface fetch failure clearly
+            if opts["fetch"] or opts["fetch_only"]:
+                print(f"  ✗ could not fetch conformance fixtures: {exc}", file=sys.stderr)
+                return 1
+            print("  ⚠  Conformance suite not present and fetch failed — skipping.")
+            return 0
+    if opts["fetch_only"]:
+        return 0
 
     binary = find_binary(opts["bin"], root)
     if binary is None:

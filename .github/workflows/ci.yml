@@ -227,14 +227,14 @@ jobs:
 
       # The PEP conformance suite is fetched fresh from the upstream typing repo
       # on every run (network-bound, one HTTP request per test file). Cache it
-      # keyed on conformance.sh, which holds the pinned TYPING_REF — bumping the
-      # ref edits that file and busts the cache; conformance.sh itself re-fetches
-      # whenever the stamped ref differs, so a stale restore self-heals.
+      # keyed on score.py, which holds the pinned ref (PINNED_TYPING_REF) — bumping
+      # the ref edits that file and busts the cache; score.py itself re-fetches
+      # whenever the stamped ref differs, so a stale prefix restore self-heals.
       - name: Cache conformance suite
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: crates/basilisk-cli/tests/conformance
-          key: conformance-suite-${{ hashFiles('scripts/conformance.sh') }}
+          key: conformance-suite-${{ hashFiles('conformance/score.py') }}
           restore-keys: conformance-suite-
 
       - name: Run Rust tests with coverage
