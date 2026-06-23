@@ -64,6 +64,14 @@ BASILISK_BIN=$(find_basilisk_bin) || {
 }
 ok "basilisk binary ready: $BASILISK_BIN"
 
+# ── PEP conformance gate ──────────────────────────────────────────────────────
+# Score the REAL compiled binary with the official python/typing calculator
+# (conformance/score.py imports the committed, sha256-verified upstream_main.py)
+# and enforce the ratchet gate from coverage-thresholds.json. This is the whole
+# conformance system: two Python files + the gitignored fixtures. No Rust test.
+header "Enforcing PEP conformance gate (official python/typing calculator)"
+python3 "$REPO_ROOT/conformance/score.py" --bin "$BASILISK_BIN" --gate
+
 cargo llvm-cov report --profile ci --html --output-dir "$HTML_DIR"
 ok "HTML report → $HTML_DIR/index.html"
 

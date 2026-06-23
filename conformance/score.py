@@ -422,7 +422,7 @@ def main(argv: list[str]) -> int:
         return refresh_upstream()
 
     root = repo_root()
-    conf_dir = Path(opts["dir"]) if opts["dir"] else root / "crates/basilisk-cli/tests/conformance"
+    conf_dir = Path(opts["dir"]) if opts["dir"] else root / "conformance/tests"
 
     # Fetch fixtures when forced, in fetch-only mode, or when they are absent.
     # A network failure is fatal only if a fetch was explicitly requested; on the

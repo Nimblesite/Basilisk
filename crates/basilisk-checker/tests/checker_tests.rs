@@ -2100,7 +2100,7 @@ fn debug_e0047_qualifiers_annotated_fp() -> Result<(), Box<dyn std::error::Error
     use basilisk_resolver::resolve;
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../basilisk-cli/tests/conformance/qualifiers_annotated.py"
+        "/../../conformance/tests/qualifiers_annotated.py"
     );
     if !std::path::Path::new(path).exists() {
         eprintln!("Skipping: conformance file not present (local-only)");
@@ -2127,7 +2127,7 @@ fn debug_all_diags_qualifiers_annotated() -> Result<(), Box<dyn std::error::Erro
     use basilisk_resolver::resolve;
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../basilisk-cli/tests/conformance/qualifiers_annotated.py"
+        "/../../conformance/tests/qualifiers_annotated.py"
     );
     if !std::path::Path::new(path).exists() {
         eprintln!("Skipping: conformance file not present (local-only)");

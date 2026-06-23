@@ -108,7 +108,7 @@ benchmarks/results/
 # =============================================================================
 # Conformance test suite (fetched on demand via make conformance / score.py)
 # =============================================================================
-crates/basilisk-cli/tests/conformance/
+conformance/tests/
 
 # =============================================================================
 # Tool / agent state
