@@ -819,7 +819,7 @@ operating directly on the module AST so it is independent of resolver state:
    `extra_items=T` whose type the argument matches.
 
 Implemented in `crates/basilisk-checker/src/rules/e0156/`; conformance fixture is
-`crates/basilisk-cli/tests/conformance/typeddicts_extra_items.py`.
+`conformance/tests/typeddicts_extra_items.py`.
 
 #### `ReadOnly` `TypedDict` inheritance {#CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE}
 
@@ -1395,10 +1395,12 @@ checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with.
   grading; pass `--errors-only` for the looser errors-only view.) One firing on an
   unannotated line is a real false positive and fails the file — same as for any
   other checker.
-- **Gate**: [`crates/basilisk-cli/tests/conformance_tests.rs`](../../crates/basilisk-cli/tests/conformance_tests.rs)
-  is a thin wrapper that runs `score.py --gate` inside `make test`. The
-  pass-percentage floor and false-positive ceiling live in
-  `coverage-thresholds.json` (`conformance.threshold`,
+- **Gate**: `make test` (via [`scripts/test-rust.sh`](../../scripts/test-rust.sh))
+  builds the `basilisk` binary, then runs `python3 conformance/score.py --gate`
+  on it — there is **no Rust conformance test**; the whole conformance system is
+  the two committed Python files plus the git-ignored downloaded fixtures under
+  `conformance/tests/`. The pass-percentage floor and false-positive ceiling live
+  in `coverage-thresholds.json` (`conformance.threshold`,
   `conformance.max_false_positives`); the former ratchets **up**, the latter
   **down**. Per-file results are written to `conformance/conformance_status.csv`.
 - **Honest baseline** (replacing a previously rigged in-repo harness that
