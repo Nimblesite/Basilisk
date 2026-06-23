@@ -6,7 +6,7 @@
 use std::fmt::Write as _;
 
 use basilisk_resolver::{
-    AttributeInfo, ClassInfo, FunctionInfo, ImportInfo, ParameterInfo, ResolvedModule,
+    AttributeInfo, ClassInfo, FunctionInfo, ImportInfo, ImportKind, ParameterInfo, ResolvedModule,
     ReturnAnnotationKind, Span, VariableInfo,
 };
 use tower_lsp::lsp_types::Position;
@@ -274,14 +274,21 @@ fn format_attribute_signature(class: &ClassInfo, attr: &AttributeInfo, source: &
 }
 
 fn format_import_signature(imp: &ImportInfo) -> String {
-    if imp.names.is_empty() {
-        format!("(module) import {}", imp.module)
-    } else {
-        format!(
-            "(import) from {} import {}",
-            imp.module,
-            imp.names.join(", ")
-        )
+    // Route on `kind`, not `names.is_empty()`: a plain `import X as Y` carries its
+    // alias `Y` in `names`, so a names-based check would mislabel it a `from`-import.
+    match imp.kind {
+        ImportKind::From => {
+            format!(
+                "(import) from {} import {}",
+                imp.module,
+                imp.names.join(", ")
+            )
+        }
+        ImportKind::Star => format!("(module) from {} import *", imp.module),
+        ImportKind::Plain => match imp.names.first() {
+            Some(alias) => format!("(module) import {} as {alias}", imp.module),
+            None => format!("(module) import {}", imp.module),
+        },
     }
 }
 

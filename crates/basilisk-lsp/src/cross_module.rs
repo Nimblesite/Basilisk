@@ -9,7 +9,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use basilisk_resolver::scope::{ExternalSymbol, ExternalSymbolKind};
+use basilisk_resolver::scope::{ExternalSymbol, ExternalSymbolKind, ImportKind};
 use basilisk_resolver::Span;
 use basilisk_stubs::types::{StubFunction, StubSource, StubTier};
 use basilisk_stubs::TypeProvenance;
@@ -291,16 +291,11 @@ pub fn populate_cross_module_symbols(index: &WorkspaceIndex) {
                 continue;
             };
 
-            if import.names.is_empty() {
-                // `import foo` — make all exports available under the module name.
-                // We store them individually for now.
-                for (name, symbol) in target_exports {
-                    let _ = resolved
-                        .imported_symbols
-                        .insert(name.clone(), symbol.clone());
-                }
-            } else {
-                // `from foo import bar, baz` — only import named symbols.
+            // Discriminate on `kind`, not `names.is_empty()`: a plain `import foo
+            // as f` carries its alias in `names`, but the alias binds the module
+            // object — it is not a member to look up in `foo`'s exports.
+            if import.kind == ImportKind::From {
+                // `from foo import bar, baz` — only import the named symbols.
                 for import_name in &import.names {
                     if let Some((_, symbol)) =
                         target_exports.iter().find(|(name, _)| name == import_name)
@@ -309,6 +304,14 @@ pub fn populate_cross_module_symbols(index: &WorkspaceIndex) {
                             .imported_symbols
                             .insert(import_name.clone(), symbol.clone());
                     }
+                }
+            } else {
+                // `import foo`, `import foo as f`, or `from foo import *` — make all
+                // of the module's exports available under their own names.
+                for (name, symbol) in target_exports {
+                    let _ = resolved
+                        .imported_symbols
+                        .insert(name.clone(), symbol.clone());
                 }
             }
         }
@@ -382,6 +385,63 @@ mod tests {
             .get("greet")
             .expect("greet should exist");
         assert_eq!(greet_sym.kind, ExternalSymbolKind::Function);
+        assert_eq!(greet_sym.source_path, path_a);
+    }
+
+    /// Regression (follow-up to #180): a module-level *plain aliased* import
+    /// (`import cross_a as ca`) must publish the target module's exports into
+    /// `imported_symbols`, exactly like the non-aliased `import cross_a`.
+    /// Cross-file go-to-definition (cmd+click) reads this map. Routing the
+    /// plain-vs-from decision off `names.is_empty()` regressed this: capturing
+    /// the alias in `names` made aliased plain imports take the `from`-import
+    /// path, which searched the module's exports for a member literally named
+    /// `ca`, found none, and published nothing. The decision must use `kind`.
+    #[test]
+    fn cross_module_plain_aliased_import_publishes_exports() {
+        let index = WorkspaceIndex::new(
+            vec![],
+            AnalysisMode::CrossModule,
+            basilisk_config::BasiliskConfig::default(),
+        );
+
+        let uri_a = make_uri("/tmp/cross_alias_a.py");
+        let src_a = "def greet(name: str) -> str:\n    return f'Hello {name}'\n";
+        let _ = index.set_open(&uri_a, src_a, 1);
+
+        // File B references module A through a plain *aliased* import.
+        let uri_b = make_uri("/tmp/cross_alias_b.py");
+        let src_b = "import cross_alias_a as ca\n\nx: str = ca.greet('world')\n";
+        let _ = index.set_open(&uri_b, src_b, 1);
+
+        let path_a = uri_a.to_file_path().unwrap();
+        let path_b = uri_b.to_file_path().unwrap();
+
+        if let Some(mut entry) = index.files.get_mut(&path_b) {
+            if let Some(resolved_arc) = entry.resolved.take() {
+                let mut resolved =
+                    Arc::try_unwrap(resolved_arc).unwrap_or_else(|arc| (*arc).clone());
+                for import in &mut resolved.imports {
+                    if import.module == "cross_alias_a" {
+                        import.resolved_path = Some(path_a.clone());
+                    }
+                }
+                entry.resolved = Some(Arc::new(resolved));
+            }
+        }
+
+        populate_cross_module_symbols(&index);
+
+        let entry_b = index.files.get(&path_b).unwrap();
+        let resolved_b = entry_b.resolved.as_ref().unwrap();
+        assert!(
+            resolved_b.imported_symbols.contains_key("greet"),
+            "an aliased plain import must still publish the module's exports for cmd+click, got keys: {:?}",
+            resolved_b.imported_symbols.keys().collect::<Vec<_>>()
+        );
+        let greet_sym = resolved_b
+            .imported_symbols
+            .get("greet")
+            .expect("greet should be reachable via the aliased import");
         assert_eq!(greet_sym.source_path, path_a);
     }
 
