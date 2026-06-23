@@ -23,7 +23,7 @@
 {%- for tick in ch.yTicks %}
 <line class="conf-chart__grid" x1="{{ ch.left }}" y1="{{ tick.y }}" x2="{{ ch.width - ch.right }}" y2="{{ tick.y }}"></line><text class="conf-chart__axis" x="{{ ch.left - 8 }}" y="{{ tick.y + 4 }}" text-anchor="end">{{ tick.value }}%</text>
 {%- endfor %}
-<polyline class="conf-chart__line conf-chart__line--prev" points="{{ ch.riggedPolyline }}"></polyline>
+<polyline class="conf-chart__line conf-chart__line--prev" points="{{ ch.prevPolyline }}"></polyline>
 {%- if ch.drop %}
 <line class="conf-chart__drop" x1="{{ ch.drop.x1 }}" y1="{{ ch.drop.y1 }}" x2="{{ ch.drop.x2 }}" y2="{{ ch.drop.y2 }}"></line>
 {%- endif %}

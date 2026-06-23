@@ -25,9 +25,10 @@ const STATUS_CSV = join(CONF_DIR, "conformance_status.csv");
 const SCORE_PY = join(CONF_DIR, "score.py");
 const UPSTREAM_MAIN = join(CONF_DIR, "upstream_main.py");
 
-// The day the REAL python/typing calculator replaced the rigged in-repo harness
-// (the harness excluded 9 diagnostic codes and ignored false positives, inflating
-// the score to a fake 100%). Commits dated on/after this used the official scorer.
+// The day the official python/typing calculator replaced our earlier in-repo
+// script. That script excluded some diagnostic codes and did not count false
+// positives, so it miscalculated the score (up to 100%). Commits dated on/after
+// this used the official calculator; before, the earlier in-repo measurement.
 const OFFICIAL_SINCE = "2026-06-23";
 
 // The CSV stores lowercase category slugs; these render the few that are not a
@@ -127,7 +128,7 @@ function git(args) {
 // The over-time series, read from the GIT history of conformance_status.csv.
 // One real data point per commit that changed the file: its commit date and the
 // score that commit recorded. Points dated before OFFICIAL_SINCE were produced
-// by the rigged harness; on/after, by the official calculator.
+// by the earlier in-repo script; on/after, by the official calculator.
 function gitHistory() {
   let log;
   try {
@@ -180,9 +181,9 @@ function buildChart(points) {
   });
   const yTicks = [0, 25, 50, 75, 100].map((value) => ({ value, y: yAt(value) }));
 
-  const rigged = pts.filter((p) => !p.official);
+  const previous = pts.filter((p) => !p.official);
   const official = pts.filter((p) => p.official);
-  const lastRigged = rigged[rigged.length - 1];
+  const lastPrevious = previous[previous.length - 1];
   const firstOfficial = official[0];
   const peak = pts.reduce((a, b) => (b.score > a.score ? b : a), pts[0]);
 
@@ -191,11 +192,11 @@ function buildChart(points) {
     baselineY: yAt(0),
     pts,
     yTicks,
-    riggedPolyline: rigged.map((p) => `${p.x},${p.y}`).join(" "),
+    prevPolyline: previous.map((p) => `${p.x},${p.y}`).join(" "),
     officialPolyline: official.map((p) => `${p.x},${p.y}`).join(" "),
-    // The correction "cliff": last rigged point down to the first official one.
-    drop: lastRigged && firstOfficial
-      ? { x1: lastRigged.x, y1: lastRigged.y, x2: firstOfficial.x, y2: firstOfficial.y, from: lastRigged.score, to: firstOfficial.score }
+    // The correction "cliff": last earlier-era point down to the first official one.
+    drop: lastPrevious && firstOfficial
+      ? { x1: lastPrevious.x, y1: lastPrevious.y, x2: firstOfficial.x, y2: firstOfficial.y, from: lastPrevious.score, to: firstOfficial.score }
       : null,
     peak,
     current: pts[pts.length - 1],

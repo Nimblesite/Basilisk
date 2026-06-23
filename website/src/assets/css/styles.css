@@ -1019,14 +1019,16 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .conf-chart__grid { stroke: var(--color-border); stroke-width: 1; }
 .conf-chart__axis, .conf-chart__date { fill: var(--color-text-muted); font-family: var(--font-mono); font-size: 11px; }
 .conf-chart__line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
-.conf-chart__line--rigged { stroke: var(--color-warning); stroke-dasharray: 5 4; opacity: 0.85; }
-.conf-chart__line--official { stroke: var(--color-primary); }
-.conf-chart__drop { stroke: var(--color-error); stroke-width: 3; stroke-linecap: round; }
-.conf-chart__dot--rigged { fill: var(--color-bg-secondary); stroke: var(--color-warning); stroke-width: 2; }
-.conf-chart__dot--official { fill: var(--color-primary); }
+/* Climb to 100% = the earlier (incorrect) era, in red. */
+.conf-chart__line--prev { stroke: var(--color-error); }
+/* The drop and everything after = the official (correct) era, in green. */
+.conf-chart__line--official { stroke: var(--color-success); }
+.conf-chart__drop { stroke: var(--color-success); stroke-width: 3; stroke-linecap: round; }
+.conf-chart__dot--prev { fill: var(--color-error); }
+.conf-chart__dot--official { fill: var(--color-success); }
 .conf-chart__value { font-family: var(--font-mono); font-size: 14px; font-weight: 700; }
-.conf-chart__value--peak { fill: var(--color-warning); }
-.conf-chart__value--current { fill: var(--color-error); }
+.conf-chart__value--peak { fill: var(--color-error); }
+.conf-chart__value--current { fill: var(--color-success); }
 .conf-chart__drop-note {
   margin: var(--space-5) 0 0;
   font-size: 0.9375rem;
@@ -1046,8 +1048,8 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 .conf-chart__legend li { display: flex; align-items: center; gap: var(--space-2); }
 .conf-chart__swatch { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
-.conf-chart__swatch--rigged { background: var(--color-warning); }
-.conf-chart__swatch--official { background: var(--color-primary); }
+.conf-chart__swatch--prev { background: var(--color-error); }
+.conf-chart__swatch--official { background: var(--color-success); }
 .conf-chart__caption { margin: var(--space-4) 0 0; font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.6; }
 .conf-chart__caption code { font-family: var(--font-mono); font-size: 0.85em; }
 

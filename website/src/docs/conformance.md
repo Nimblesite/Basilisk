@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
-title: "How Basilisk Calculates PEP Conformance"
-description: "Exactly how Basilisk's PEP conformance score is computed — the byte-identical, sha256-pinned python/typing calculator, the wrapper, the proof it isn't an approximation, and the honest correction from a rigged 100% to the real number."
+title: "How Basilisk Measures PEP Conformance"
+description: "How Basilisk's PEP conformance score is measured with the official python/typing conformance suite — what the suite is, how scoring works, the byte-identical pinned calculator we run, and the correction we made to our own scoring."
 keywords: pep conformance, python typing conformance suite, basilisk conformance score, type checker scoring, python/typing calculator
 date: 2026-06-23
 dateModified: 2026-06-23
@@ -12,110 +12,94 @@ eleventyNavigation:
 ---
 {% from "conformance-chart.njk" import chart %}
 
-# How we calculate PEP conformance
+# How we measure PEP conformance
 
-Basilisk's headline conformance number is **{{ conformance.scorePct }}%** — **{{ conformance.pass }} of {{ conformance.total }}** test files passing, with **{{ conformance.fp }} false positives** and **{{ conformance.missed }} missed required errors** still to clear. {{ conformance.caught }} required errors are caught. {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories pass at 100%.
+Basilisk is scored by the **official `python/typing` conformance suite** — the same test suite and scoring tool the typing community uses to grade pyright, mypy, pyrefly, ty, and others. We run that tool unmodified, on the real `basilisk` binary, on every change.
 
-We do not grade ourselves. The number above is produced by the **official `python/typing` conformance calculator** — the exact tool that grades pyright, mypy, pyrefly, ty, zuban, and pycroscope — run **unmodified**. This page shows precisely how, proves it is the real tool and not an approximation, and is fully transparent about the bug that once inflated this number to a fake 100%.
+Today that gives **{{ conformance.scorePct }}%** — **{{ conformance.pass }} of {{ conformance.total }}** test files passing, {{ conformance.caught }} required errors caught, with **{{ conformance.fp }} false positives** and **{{ conformance.missed }} missed required errors** left to clear. {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories pass at 100%. The target is 100%; we ratchet toward it.
+
+<p class="conf-links">
+  <a href="https://typing.python.org/en/latest/spec/" target="_blank" rel="noopener">Python typing spec ↗</a>
+  <a href="https://github.com/python/typing/blob/main/conformance/README.md" target="_blank" rel="noopener">Conformance suite &amp; README ↗</a>
+  <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">Published results ↗</a>
+  <a href="https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py" target="_blank" rel="noopener">Our scorer — score.py ↗</a>
+  <a href="https://github.com/Nimblesite/Basilisk/blob/main/conformance/upstream_main.py" target="_blank" rel="noopener">Vendored calculator ↗</a>
+</p>
+
+## What the conformance suite is
+
+The [Python typing specification](https://typing.python.org/en/latest/spec/) defines how the type system is supposed to behave — generics, protocols, dataclasses, `TypedDict`, overloads, literals, and the rest. To stop the spec from being aspirational, the typing community maintains a **conformance test suite** alongside it in the [`python/typing`](https://github.com/python/typing/tree/main/conformance) repository.
+
+It works like this:
+
+- Each spec chapter has one or more **test files** — ordinary Python modules that exercise a feature and mark, with `# E` comments, every line where a conforming type checker **must** report an error (and, with `# E[tag]` groups, where one of several related errors is acceptable).
+- A small **scoring tool** runs a type checker over those files and diffs its output against the annotations. A file *passes* only if the diff is empty: every required error is reported, and nothing is reported on a line the suite does not mark.
+- The maintainers run every checker through it and publish the [results table](https://github.com/python/typing/blob/main/conformance/results/results.html), which is how figures like pyright's ~99% or pyrefly's ~86% are produced.
+
+This is the suite we use, at the pinned commit [`{{ conformance.pinnedRef }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance). Because the same tool and the same files grade everyone, the number is comparable across checkers and is not something we can tune in our favour.
+
+## How a file is scored
+
+The entire algorithm is two functions in the suite's `main.py` — `get_expected_errors` (reads the `# E` annotations) and `diff_expected_errors` (diffs them against the checker's output). A file passes **iff** that diff is empty:
+
+- the suite's rule (`upstream_main.py:185`): `"Fail" if errors_diff.strip() else "Pass"`
+
+We count **every** diagnostic the checker emits — errors *and* warnings, with **no diagnostic codes excluded**. That is the strictest reading of the suite and matches how the reference checker, pyright, is graded. One unexpected diagnostic (a false positive) fails the whole file, which is why our false-positive count matters as much as the pass count.
+
+## How we run it without forking it
+
+The suite's `main.py` is a batch harness for the `python/typing` maintainers: it grades all the known checkers at once, pulls in TOML config/reporting dependencies, and writes a results matrix. It has no way to invoke our binary. So, exactly as the suite does for every checker (`PyrightTypeChecker`, `MypyTypeChecker`, …), we add a thin **adapter** and reuse the suite's own scoring rather than reimplementing it. Our [`score.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py):
+
+1. **Adapter** — runs `basilisk check --output json` and shapes the result into the `{line: [errors]}` dict the suite's functions expect (the one thing the suite can't do for us).
+2. **Calculator** — imports `get_expected_errors` and `diff_expected_errors` from a committed, byte-identical copy of the suite's `main.py` and calls them unmodified (`score.py:287` mirrors the suite's own call at `upstream_main.py:175`). It contains no scoring logic of its own.
+3. **Gate** — compares the result against `coverage-thresholds.json` and fails CI on any regression.
+
+To keep the calculator trustworthy, the vendored copy is **sha256-pinned**. `score.py` re-hashes it on every run and refuses to score if it has drifted (`score.py:99`), and this website re-hashes it again at build time:
 
 {% if conformance.verified %}
-<p><span class="conf-verified">✓ verified at build — upstream_main.py sha256 {{ conformance.sha256Short }}… matches the pin</span></p>
+<p><span class="conf-verified">✓ verified at build — conformance/upstream_main.py is {{ conformance.upstreamBytes }} bytes, sha256 {{ conformance.sha256Short }}…, matching the pin</span></p>
 {% endif %}
 
-## Full transparency: the number used to be wrong
+Keeping the official file untouched is the whole point: the adapter and gate live in a separate, auditable file, so the calculator stays byte-for-byte the suite's own.
 
-For months this site reported a number that climbed all the way to **100%**. That was a lie produced by a since-removed *in-repo* harness that **excluded 9 diagnostic codes from scoring and ignored false positives entirely**. When we replaced it with the real `python/typing` calculator, the honest number dropped to **{{ conformance.scorePct }}%**.
+## A correction we made
+
+Our score used to be measured by an in-repo script of our own, and it was **wrong**. That script excluded several diagnostic codes from scoring and did not count false positives, so it reported numbers that climbed all the way to 100%. It was an honest mistake, not a tuned result — but it was still incorrect.
+
+We replaced it with the official calculator described above. With every diagnostic counted and nothing excluded, the honest number is **{{ conformance.scorePct }}%**:
 
 <div class="conf-correction">
   <span class="conf-correction__old">100%</span>
-  <span class="conf-correction__arrow">&rarr;</span>
+  <span class="conf-correction__arrow">→</span>
   <span class="conf-correction__new">{{ conformance.scorePct }}%</span>
-  <span class="conf-correction__text">Not a regression — a correction. The checker did not get worse; the scorer got honest. 100% remains the <strong>target</strong>, not a present-day claim.</span>
+  <span class="conf-correction__text">The checker did not get worse — the measurement got correct. 100% is the target we are working toward, not a claim about today.</span>
 </div>
 
-The chart below is read straight from the **git history of `conformance/conformance_status.csv`** at build time — one point per commit that changed the file, plotting the score that commit actually recorded. Nothing here is hand-typed.
+The chart below is read straight from the **git history of `conformance/conformance_status.csv`** at build time: one point per commit that changed it, plotting the score that commit actually recorded.
 
 {{ chart(conformance, {
   "label": "Conformance score over time",
-  "heading": "A rigged climb to 100%, then the official calculator told the truth",
-  "riggedLegend": "Old in-repo harness — excluded 9 codes, ignored false positives",
+  "heading": "From the earlier in-repo number to the official calculator",
+  "prevLegend": "Earlier in-repo script (some codes excluded, false positives not counted)",
   "officialLegend": "Official <code>python/typing</code> calculator",
-  "dropNote": "On <strong>" + conformance.chart.peak.shortDate + "</strong> the in-repo harness reported a full <strong>" + conformance.chart.peak.score + "%</strong>. Run for the first time on <strong>" + conformance.chart.current.shortDate + "</strong>, the official calculator reports <strong>" + conformance.chart.current.score + "%</strong>.",
-  "caption": "Each dot is a real commit to <code>conformance/conformance_status.csv</code>; the series is its git log, recomputed every build. Hover a point for its date, commit, score, and false-positive count."
+  "dropNote": "On <strong>" + conformance.chart.peak.shortDate + "</strong> the in-repo script reported <strong>" + conformance.chart.peak.score + "%</strong>. The official calculator, first run on <strong>" + conformance.chart.current.shortDate + "</strong>, reports <strong>" + conformance.chart.current.score + "%</strong> — a correction, not a regression.",
+  "caption": "Each dot is a real commit to <code>conformance/conformance_status.csv</code>, recomputed every build. Hover a point for its date, commit, score, and false-positive count."
 }) }}
-
-## Proof the scoring is the official tool, not an approximation
-
-Four checks, all reproducible against the files in this repository.
-
-### (a) The calculator is byte-identical to upstream
-
-Download `conformance/src/main.py` from [`python/typing@{{ conformance.pinnedRef }}`](https://github.com/python/typing/blob/main/conformance/src/main.py) and diff it against our committed [`conformance/upstream_main.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/upstream_main.py):
-
-- **upstream (downloaded):** `{{ conformance.sha256Short }}…`
-- **committed in repo:** `{{ conformance.liveSha256Short }}…`
-
-Same sha256, same {{ conformance.upstreamBytes }} bytes, **zero-line diff**. It is *the* file, not a copy-with-edits.
-
-### (b) We call upstream's own functions — we don't reimplement them
-
-The entire scoring algorithm is two functions, `get_expected_errors` and `diff_expected_errors`, inside that committed file. `score.py` imports them and calls them; it contains **zero scoring logic of its own**. The call shapes match upstream's own call in the same file:
-
-- upstream (`upstream_main.py:175`): `diff_expected_errors(type_checker, test_case, output, ignored_errors)`
-- ours (`score.py:287`): `diff_errors(checker, f, output, [])`
-
-Same four arguments, same order.
-
-### (c) Pass/fail is upstream's exact rule
-
-A file passes **iff** the diff string is empty — upstream's literal rule:
-
-- upstream (`upstream_main.py:185`): `"Fail" if errors_diff.strip() else "Pass"`
-- ours (`score.py:291`): `passed = not diff.strip()`
-
-### (d) Tamper-proofing is live
-
-`score.py` re-hashes the calculator on **every run** and refuses to score if the sha256 doesn't match the pin (`score.py:99`), so the official file cannot silently drift. This website re-hashes it again at build time — that is the green badge above.
-
-### (e) It runs and produces the number
-
-Live, against the real compiled binary: **{{ conformance.scorePct }}% ({{ conformance.pass }}/{{ conformance.total }})**, {{ conformance.fp }} false positives, {{ conformance.missed }} missed — gate **PASS**. That is the strictest grading: **errors *and* warnings count**, the same way the reference checker pyright is graded upstream.
-
-## Why a wrapper exists at all
-
-The only Basilisk-specific code is a `BasiliskTypeChecker` **adapter** — and even that is not a departure from the method. Upstream requires one adapter per checker (`PyrightTypeChecker`, `MypyTypeChecker`, …); ours runs `basilisk check --output json` and shapes the result into the `{line: [errors]}` dict the official functions consume. That is the contract every checker fulfills.
-
-`upstream_main.py` cannot be run directly to score Basilisk — **by design**. It is a batch test harness for the `python/typing` maintainers, not a single-checker scorer:
-
-- it imports `tomli`, `tomlkit`, `options`, `reporting`, `test_groups`, `type_checker` at module load — extra deps and a TOML config/reporting pipeline irrelevant to "score this one binary";
-- it has no Basilisk adapter — it only knows pyright/mypy/pyrefly/ty, with no way to invoke our binary;
-- it writes per-checker TOML result files and an HTML matrix across all checkers — not a CI gate.
-
-So the wrapper is the **minimum glue** to use upstream's real scoring without forking it:
-
-1. **Adapter** — run the `basilisk` binary, turn its JSON into the `{line: errors}` dict (the one thing upstream genuinely can't do for us).
-2. **Loader** — import the two scoring functions out of the committed file behind stubs for those unrelated imports, *after* verifying the sha256. The stub module is not manipulation of the scoring — the two functions touch none of those imports; it just lets the file import when `tomlkit` et al. aren't installed.
-3. **Gate** — compare the live {{ conformance.scorePct }}% / {{ conformance.fp }} against `coverage-thresholds.json` and exit non-zero on any regression.
-
-The alternative — editing `upstream_main.py` to add our adapter and strip its deps — would break the byte-identical guarantee that makes proof (a) possible. The wrapper exists precisely so the official file stays untouched and verifiable. **The split is the honest one: official calculator = committed and unmodified; our glue = a separate, auditable file.**
 
 ## Where each category stands today
 
 Read live from `conformance/conformance_status.csv` at build time:
 
+<div class="table-wrapper">
 <table>
-  <thead><tr><th>Category</th><th>Passing</th><th>Score</th><th></th></tr></thead>
-  <tbody>
-  {% for cat in conformance.categories %}
-    <tr>
-      <td>{{ cat.label }}</td>
-      <td>{{ cat.pass }} / {{ cat.total }}</td>
-      <td>{{ cat.pct }}%</td>
-      <td><span class="conf-cat-bar" style="width: {{ (cat.pct * 1.2) | round }}px; opacity: {{ 0.35 + cat.pct / 154 }}"></span></td>
-    </tr>
-  {% endfor %}
-  </tbody>
+<thead><tr><th>Category</th><th>Passing</th><th>Score</th><th></th></tr></thead>
+<tbody>
+{%- for cat in conformance.categories %}
+<tr><td>{{ cat.label }}</td><td>{{ cat.pass }} / {{ cat.total }}</td><td>{{ cat.pct }}%</td><td><span class="conf-cat-bar" style="width: {{ (cat.pct * 1.2) | round }}px; opacity: {{ 0.4 + cat.pct / 170 }}"></span></td></tr>
+{%- endfor %}
+</tbody>
 </table>
+</div>
 
 ## Reproduce it yourself
 
@@ -126,4 +110,4 @@ Read live from `conformance/conformance_status.csv` at build time:
 make conformance
 ```
 
-Everything above lives in two files: [`conformance/score.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py) (our auditable glue) and [`conformance/upstream_main.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/upstream_main.py) (the official calculator, committed and sha256-pinned). The full annotation rules are documented in the [python/typing conformance README](https://github.com/python/typing/blob/main/conformance/README.md).
+It all lives in two files: [`conformance/score.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py) (our adapter + gate) and [`conformance/upstream_main.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/upstream_main.py) (the suite's calculator, committed and sha256-pinned). The full annotation rules are in the [python/typing conformance README](https://github.com/python/typing/blob/main/conformance/README.md).
