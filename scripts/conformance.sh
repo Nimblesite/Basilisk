@@ -60,17 +60,12 @@ for i, f in enumerate(files, 1):
         print(f'  {i}/{len(files)}')
 " "$CONFORMANCE_DIR"
 
-    # Also fetch the OFFICIAL scorer (conformance/src/main.py). score.py runs
-    # upstream's own get_expected_errors + diff_expected_errors from this exact
-    # file — we never reimplement the algorithm. Cached under .tool/ (a subdir,
-    # so the *.py glob that collects fixtures never picks it up).
-    mkdir -p "$CONFORMANCE_DIR/.tool"
-    curl "${CURL_ARGS[@]}" \
-        "https://raw.githubusercontent.com/${TYPING_REPO}/${TYPING_REF}/conformance/src/main.py" \
-        -o "$CONFORMANCE_DIR/.tool/main.py"
-
+    # The OFFICIAL scorer (conformance/src/main.py) is NOT fetched here — it is
+    # committed to the repo at conformance/upstream_main.py (byte-identical,
+    # sha256-verified) and score.py imports it directly. To re-pin it after a
+    # ref bump: `python3 conformance/score.py --refresh-upstream`.
     echo "$TYPING_REF" > "$REF_STAMP_FILE"
-    ok "${COUNT} conformance files + official scorer written to ${CONFORMANCE_DIR}/ (ref: ${TYPING_REF})"
+    ok "${COUNT} conformance files written to ${CONFORMANCE_DIR}/ (ref: ${TYPING_REF})"
 }
 
 FETCH_ONLY=0
@@ -98,17 +93,6 @@ if [[ "${1:-}" == "--fetch" ]] || \
 else
     COUNT=$(find "$CONFORMANCE_DIR" -maxdepth 1 -name "*.py" | wc -l | tr -d ' ')
     ok "Conformance suite present ($COUNT files, ref ${TYPING_REF}) — skipping download"
-    # Self-heal: caches created before the scorer was added lack .tool/main.py.
-    # Fetch just the scorer so score.py never has to download it at test time.
-    if [[ ! -f "$CONFORMANCE_DIR/.tool/main.py" ]]; then
-        mkdir -p "$CONFORMANCE_DIR/.tool"
-        HEAL_ARGS=(-fsSL)
-        [[ -n "${GITHUB_TOKEN:-}" ]] && HEAL_ARGS+=(-H "Authorization: token ${GITHUB_TOKEN}")
-        curl "${HEAL_ARGS[@]}" \
-            "https://raw.githubusercontent.com/${TYPING_REPO}/${TYPING_REF}/conformance/src/main.py" \
-            -o "$CONFORMANCE_DIR/.tool/main.py"
-        ok "Fetched official scorer into existing cache"
-    fi
 fi
 
 if [[ "$FETCH_ONLY" -eq 1 ]]; then
@@ -116,8 +100,9 @@ if [[ "$FETCH_ONLY" -eq 1 ]]; then
 fi
 
 # ── Score with the OFFICIAL python/typing calculator ─────────────────────────
-# We do NOT compute the score ourselves. conformance/score.py downloads
-# python/typing's own conformance tool (pinned ref) and runs its real
+# We do NOT compute the score ourselves. conformance/score.py imports the
+# committed, sha256-verified conformance/upstream_main.py (byte-identical to
+# python/typing's own conformance tool at the pinned ref) and runs its real
 # get_expected_errors + diff_expected_errors against the actual `basilisk`
 # binary. No excluded diagnostic codes; a file passes only with an empty
 # upstream errors_diff.

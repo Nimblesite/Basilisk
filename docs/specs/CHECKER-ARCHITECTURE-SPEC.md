@@ -1371,13 +1371,18 @@ calculator**, not a Basilisk reimplementation. This is non-negotiable: the
 number must be one anyone can reproduce with the same tooling the reference
 checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with.
 
-- **Scorer**: [`conformance/score.py`](../../conformance/score.py) **downloads**
-  `python/typing`'s `conformance/src/main.py` (pinned to the same commit the
-  fixtures come from, `scripts/conformance.sh` → `TYPING_REF`) and executes its
-  own `get_expected_errors` + `diff_expected_errors` functions **unmodified**
-  (extracted verbatim from the downloaded file). The only Basilisk-specific code
-  is a checker *adapter* that runs the real `basilisk` binary and turns its JSON
-  output into the `{line: [errors]}` mapping the upstream algorithm consumes —
+- **Scorer**: [`conformance/score.py`](../../conformance/score.py) **imports the
+  committed [`conformance/upstream_main.py`](../../conformance/upstream_main.py)** —
+  a byte-identical, sha256-verified copy of `python/typing`'s
+  `conformance/src/main.py`, pinned to the same commit the fixtures come from
+  (`scripts/conformance.sh` → `TYPING_REF`, currently `268d0c4e`, sha256
+  `b4e3bd08…0fc6a2`) — and calls its own `get_expected_errors` +
+  `diff_expected_errors` functions **unmodified**. Nothing is downloaded at score
+  time; the verbatim upstream file lives in the repo and `score.py` refuses to run
+  if its hash drifts. Refresh it only when bumping the ref:
+  `python3 conformance/score.py --refresh-upstream`. The only Basilisk-specific
+  code is a checker *adapter* that runs the real `basilisk` binary and turns its
+  JSON output into the `{line: [errors]}` mapping the upstream algorithm consumes —
   exactly the role of upstream's per-checker adapters in `type_checker.py`.
 - **Pass rule** (upstream's, verbatim): a file passes iff the upstream
   `errors_diff` is empty — every `# E` line gets an error, every `# E[tag]`

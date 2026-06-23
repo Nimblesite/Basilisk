@@ -3,12 +3,14 @@
 //! PEP conformance gate — thin wrapper around the OFFICIAL Python scorer.
 //!
 //! The conformance score is **not** computed in Rust. It is computed by
-//! `conformance/score.py`, which **downloads** the `python/typing` conformance
-//! tool (`conformance/src/main.py`, pinned to the same commit the fixtures come
-//! from) and **runs its own `get_expected_errors` + `diff_expected_errors`
-//! functions unmodified**. That guarantees Basilisk is graded by the exact same
-//! algorithm as pyright, mypy, pyrefly, ty, zuban and pycroscope — no
-//! Basilisk-specific scoring, no excluded diagnostic codes.
+//! `conformance/score.py`, which **imports the committed, sha256-verified
+//! `conformance/upstream_main.py`** (a byte-identical copy of the
+//! `python/typing` conformance tool `conformance/src/main.py`, pinned to the
+//! same commit the fixtures come from) and **runs its own `get_expected_errors`
+//! + `diff_expected_errors` functions unmodified**. That guarantees Basilisk is
+//! graded by the exact same algorithm as pyright, mypy, pyrefly, ty, zuban and
+//! pycroscope — no Basilisk-specific scoring, no excluded diagnostic codes, and
+//! nothing fetched from the network at score time.
 //!
 //! This test exists only so the gate runs inside `make test`: it builds the
 //! real `basilisk` binary (via `CARGO_BIN_EXE_basilisk`), invokes the scorer

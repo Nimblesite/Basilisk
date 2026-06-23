@@ -2,13 +2,14 @@
 # Implements [CHKARCH-CONFORMANCE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md
 """Grade Basilisk with the REAL python/typing conformance calculator.
 
-This script does NOT reimplement the conformance scoring. It **downloads the
-actual upstream tool** (`conformance/src/main.py` from `python/typing`, pinned
-to the same commit the test fixtures come from) and **runs upstream's own
-`get_expected_errors` + `diff_expected_errors` functions unmodified**. Those
-two functions are the entire conformance algorithm — the same code that grades
-pyright, mypy, pyrefly, ty, zuban and pycroscope. We extract them straight from
-the downloaded file and execute them; nothing about the calculation is ours.
+This script does NOT reimplement the conformance scoring. It **imports the
+committed upstream tool** — `conformance/upstream_main.py`, a byte-identical,
+sha256-verified copy of `conformance/src/main.py` from `python/typing` pinned to
+the same commit the test fixtures come from — and **calls upstream's own
+`get_expected_errors` + `diff_expected_errors` functions unmodified**. Those two
+functions are the entire conformance algorithm: the same code that grades
+pyright, mypy, pyrefly, ty, zuban and pycroscope. Nothing about the calculation
+is ours, and nothing is downloaded at score time.
 
 The only Basilisk-specific code here is a checker *adapter* — exactly what
 upstream itself has for every checker (`PyrightTypeChecker`, `MypyTypeChecker`,
@@ -24,93 +25,115 @@ grading and matches how the reference checker pyright is graded upstream
 errors-only view. Either way, any diagnostic on a line the suite does not mark
 `# E` is a real false positive and fails the file — same as for any checker.
 
+The vendored calculator is committed at `conformance/upstream_main.py`. Refresh
+it ONLY when bumping the pinned ref:
+    python3 conformance/score.py --refresh-upstream
+
 Usage:
-    python3 conformance/score.py [--bin PATH] [--gate] [--count-warnings]
-                                 [--conformance-dir DIR] [--offline]
+    python3 conformance/score.py [--bin PATH] [--gate] [--errors-only]
+                                 [--conformance-dir DIR] [--refresh-upstream]
 """
 
 from __future__ import annotations
 
-import ast
+import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
-import urllib.request
+import types
 from pathlib import Path
 from typing import Callable, Sequence
 
 # Pinned to the SAME commit the fixtures are fetched from
-# (scripts/conformance.sh TYPING_REF). Bump both together.
+# (scripts/conformance.sh TYPING_REF). Bump both together, then --refresh-upstream.
 PINNED_TYPING_REF = "268d0c4e"
 UPSTREAM_MAIN_URL = (
     f"https://raw.githubusercontent.com/python/typing/{PINNED_TYPING_REF}"
     "/conformance/src/main.py"
 )
+# The committed, byte-identical copy of upstream's calculator, and its sha256.
+UPSTREAM_MAIN = Path(__file__).resolve().parent / "upstream_main.py"
+UPSTREAM_MAIN_SHA256 = "b4e3bd089c73856f9920ef494350d622c2914fac238c9193ec0bb3f93f0fc6a2"
 # The two functions that constitute the official scoring algorithm.
 OFFICIAL_FUNCS = ("get_expected_errors", "diff_expected_errors")
 
 
 # ---------------------------------------------------------------------------
-# Download + run the REAL upstream calculator
+# Import the REAL upstream calculator (committed, sha256-verified — no download)
 # ---------------------------------------------------------------------------
 
 
-def _download(url: str, dest: Path) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310 (pinned https)
-        dest.write_bytes(resp.read())
+def _stub_module(name: str, **attrs: object) -> None:
+    """Register an empty stand-in module so upstream's unrelated top-level
+    imports resolve. The two scoring functions touch none of these."""
+    module = types.ModuleType(name)
+    for attr, value in attrs.items():
+        setattr(module, attr, value)
+    sys.modules[name] = module
 
 
-def load_official_calc(
-    cache: Path, offline: bool
-) -> tuple[Callable, Callable, str]:
+def load_official_calc() -> tuple[Callable, Callable, str]:
     """Return upstream's real (get_expected_errors, diff_expected_errors).
 
-    Downloads the upstream `main.py` (pinned SHA) to `cache` if absent, then
-    extracts those two function definitions verbatim from the downloaded source
-    and executes them. The executed code is byte-for-byte upstream's — we only
-    skip `main.py`'s unrelated module-level imports (tomli/tomlkit/reporting/…),
-    which the scoring functions never touch.
+    Reads the committed `conformance/upstream_main.py`, verifies it is byte-for-
+    byte the pinned upstream `conformance/src/main.py` (sha256), imports it, and
+    hands back its two functions unmodified. No network access; no code of ours
+    in the calculation. `main.py` also imports tomli/tomlkit/options/reporting/
+    test_groups/type_checker at module scope — the scoring functions use none of
+    them, so empty stubs let the import succeed.
     """
-    if not cache.exists():
-        if offline:
-            raise FileNotFoundError(
-                f"upstream calc not cached at {cache} and --offline set; "
-                "run `make conformance FETCH=1` with network once"
-            )
-        _download(UPSTREAM_MAIN_URL, cache)
-
-    source = cache.read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    wanted = [
-        node
-        for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name in OFFICIAL_FUNCS
-    ]
-    found = {node.name for node in wanted}
-    missing = set(OFFICIAL_FUNCS) - found
-    if missing:
+    raw = UPSTREAM_MAIN.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != UPSTREAM_MAIN_SHA256:
         raise RuntimeError(
-            f"downloaded upstream main.py is missing {missing}; the upstream "
-            "layout changed — re-check the pinned ref"
+            f"{UPSTREAM_MAIN.name} sha256 {digest[:12]}… != pinned "
+            f"{UPSTREAM_MAIN_SHA256[:12]}… — the vendored upstream calculator was "
+            "modified. Restore it from git, or run --refresh-upstream to re-pin."
         )
 
-    # `from __future__ import annotations` so upstream's type hints (which name
-    # types like `TypeChecker` that we don't import) are not evaluated.
-    future = ast.ImportFrom(
-        module="__future__", names=[ast.alias(name="annotations")], level=0
-    )
-    module = ast.Module(body=[future, *wanted], type_ignores=[])
-    ast.fix_missing_locations(module)
-    code = compile(module, filename=str(cache), mode="exec")
+    _stub_module("tomli")
+    _stub_module("tomlkit")
+    _stub_module("options", parse_options=None)
+    _stub_module("reporting", generate_summary=None)
+    _stub_module("test_groups", get_test_cases=None, get_test_groups=None)
+    _stub_module("type_checker", TYPE_CHECKERS=(), TypeChecker=object)
 
-    import re  # the only runtime import the scoring functions need
+    spec = importlib.util.spec_from_file_location("typing_conformance_main", UPSTREAM_MAIN)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot build an import spec for {UPSTREAM_MAIN}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
 
-    namespace: dict = {"re": re, "Path": Path}
-    exec(code, namespace)  # noqa: S102 — executing pinned, verified upstream source
-    # Provenance: short hash of the exact bytes we ran, for the scorecard.
-    digest = f"{len(source)}b"
-    return namespace[OFFICIAL_FUNCS[0]], namespace[OFFICIAL_FUNCS[1]], digest
+    missing = [name for name in OFFICIAL_FUNCS if not hasattr(module, name)]
+    if missing:
+        raise RuntimeError(
+            f"committed upstream main.py is missing {missing}; the upstream "
+            "layout changed — re-check the pinned ref"
+        )
+    get_expected = getattr(module, OFFICIAL_FUNCS[0])
+    diff_errors = getattr(module, OFFICIAL_FUNCS[1])
+    return get_expected, diff_errors, f"sha256:{digest[:12]}"
+
+
+def refresh_upstream() -> int:
+    """Re-download upstream main.py to the committed path and print its sha256.
+
+    Maintenance only — run when bumping PINNED_TYPING_REF. This is the ONLY code
+    path that touches the network; the normal score path never does.
+    """
+    import urllib.request  # local import: never loaded on the score path
+
+    with urllib.request.urlopen(UPSTREAM_MAIN_URL, timeout=30) as resp:  # noqa: S310 (pinned https)
+        raw = resp.read()
+    UPSTREAM_MAIN.write_bytes(raw)
+    digest = hashlib.sha256(raw).hexdigest()
+    print(f"  fetched {UPSTREAM_MAIN_URL}")
+    print(f"  wrote   {UPSTREAM_MAIN} ({len(raw)} bytes)")
+    print(f"  sha256  {digest}")
+    if digest != UPSTREAM_MAIN_SHA256:
+        print(f'  -> update UPSTREAM_MAIN_SHA256 = "{digest}" (ref changed)')
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -121,9 +144,10 @@ def load_official_calc(
 class BasiliskTypeChecker:
     """Runs the real `basilisk` binary; parses its JSON into {line: [errors]}.
 
-    Counts only `severity == "error"` — the analog of the suite's `# E`
-    ("an error MUST be reported"). Warnings are advisory and reported
-    separately, never folded into the official figure.
+    Each diagnostic is the analog of the suite's `# E` ("an error MUST be
+    reported on this line"). When `count_warnings` is set (the default for the
+    strictest grading, matching how pyright is graded upstream) both `error` and
+    `warning` severities count; otherwise only `error` does.
     """
 
     name = "basilisk"
@@ -247,8 +271,8 @@ def print_scorecard(
     print()
     print("=" * 68)
     print(f"  BASILISK PEP CONFORMANCE — REAL python/typing CALCULATOR [{label}]")
-    print(f"  calc: downloaded + executed verbatim from python/typing@{PINNED_TYPING_REF}")
-    print(f"  funcs: {', '.join(OFFICIAL_FUNCS)}  ({digest} of upstream main.py)")
+    print("  calc: imported verbatim from committed conformance/upstream_main.py")
+    print(f"  ref:  python/typing@{PINNED_TYPING_REF}  ({digest})  funcs: {', '.join(OFFICIAL_FUNCS)}")
     print("=" * 68)
     print(f"  Files:    {n} total | {totals['pass']} pass | {n - totals['pass']} fail")
     print(f"  Score:    {pct:.1f}%   (Pass = empty errors_diff, upstream rule)")
@@ -288,7 +312,7 @@ def parse_args(argv: list[str]) -> dict:
     # AND warnings) is counted as "an error was reported", which is also how the
     # reference checker pyright is graded upstream. `--errors-only` reports the
     # looser errors-only view. `--count-warnings` is accepted for back-compat.
-    opts: dict = {"bin": None, "gate": False, "warn": True, "dir": None, "offline": False}
+    opts: dict = {"bin": None, "gate": False, "warn": True, "dir": None, "refresh": False}
     it = iter(argv)
     for a in it:
         if a == "--bin":
@@ -301,8 +325,8 @@ def parse_args(argv: list[str]) -> dict:
             opts["warn"] = False
         elif a == "--conformance-dir":
             opts["dir"] = next(it, None)
-        elif a == "--offline":
-            opts["offline"] = True
+        elif a == "--refresh-upstream":
+            opts["refresh"] = True
     return opts
 
 
@@ -331,6 +355,9 @@ def enforce_gate(root: Path, files: list[Path], totals: Totals) -> bool:
 
 def main(argv: list[str]) -> int:
     opts = parse_args(argv)
+    if opts["refresh"]:
+        return refresh_upstream()
+
     root = repo_root()
     conf_dir = Path(opts["dir"]) if opts["dir"] else root / "crates/basilisk-cli/tests/conformance"
 
@@ -343,10 +370,9 @@ def main(argv: list[str]) -> int:
         print("  ✗ basilisk binary not found. Build it or pass --bin <path>.", file=sys.stderr)
         return 1
 
-    cache = conf_dir / ".tool" / "main.py"
     try:
-        get_expected, diff_errors, digest = load_official_calc(cache, opts["offline"])
-    except Exception as exc:  # noqa: BLE001 — surface any fetch/parse failure clearly
+        get_expected, diff_errors, digest = load_official_calc()
+    except Exception as exc:  # noqa: BLE001 — surface any load/verify failure clearly
         print(f"  ✗ could not load the official calculator: {exc}", file=sys.stderr)
         return 1
 
