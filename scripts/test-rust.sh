@@ -24,9 +24,12 @@ HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
 # Ensure llvm-tools-preview is installed so cargo-llvm-cov never prompts.
 rustup component add llvm-tools-preview 2>/dev/null || true
 
-# The PEP conformance suite (fixtures + the official calculator) is committed
-# under conformance/ — nothing is fetched here. The gate runs after the build
-# (see below): build the binary, then score it with the official calculator.
+# ── Fetch the (git-ignored) conformance fixtures if missing or stale ──────────
+# Only the fixtures are downloaded; the official calculator
+# (conformance/upstream_main.py) is committed and never fetched. score.py pins
+# the ref and re-fetches when the cached ref differs — single source of truth.
+header "Ensuring PEP conformance fixtures are current"
+python3 "$REPO_ROOT/conformance/score.py" --fetch-only
 
 # ── Rust tests with coverage ─────────────────────────────────────────────────
 # cargo-llvm-cov uses target/llvm-cov-target/ as its target directory,

@@ -28,14 +28,11 @@ errors-only view. Either way, any diagnostic on a line the suite does not mark
 This one file is the whole Basilisk side of conformance: it runs the binary,
 scores with the official functions, writes `conformance/conformance_status.csv`,
 and enforces the ratchet gate (`--gate`). There is no Rust test and no shell
-script. Everything it needs is committed to the repo — nothing is a moving
-target, nothing is fetched at score time:
-  • the official calculator → `conformance/upstream_main.py` (sha256-pinned)
-  • the `# E`-annotated test fixtures → `conformance/tests/*.py`
-
-Both are refreshed ONLY as deliberate maintenance, then committed:
-    python3 conformance/score.py --refresh-upstream   # re-pin the calculator
-    python3 conformance/score.py --fetch              # re-download the fixtures
+script. Two upstream inputs, handled differently:
+  • the official calculator → `conformance/upstream_main.py`: COMMITTED and
+    sha256-pinned, never downloaded at score time (re-pin with --refresh-upstream).
+  • the `# E`-annotated test fixtures → `conformance/tests/*.py`: git-ignored and
+    DOWNLOADED on demand (--fetch / --fetch-only; auto-fetched if missing).
 
 Usage:
     python3 conformance/score.py [--bin PATH] [--gate] [--errors-only]
@@ -67,8 +64,8 @@ UPSTREAM_MAIN = Path(__file__).resolve().parent / "upstream_main.py"
 UPSTREAM_MAIN_SHA256 = "b4e3bd089c73856f9920ef494350d622c2914fac238c9193ec0bb3f93f0fc6a2"
 # The two functions that constitute the official scoring algorithm.
 OFFICIAL_FUNCS = ("get_expected_errors", "diff_expected_errors")
-# The `# E`-annotated test fixtures are committed under conformance/tests. This
-# API lists them at the pinned ref for the maintenance-only `--fetch` refresh.
+# The `# E`-annotated test fixtures are downloaded (git-ignored) into
+# conformance/tests. This API lists them at the pinned ref for the fetch.
 FIXTURES_API = (
     "https://api.github.com/repos/python/typing/contents/conformance/tests"
     f"?ref={PINNED_TYPING_REF}"
@@ -80,24 +77,22 @@ FIXTURES_API = (
 # ---------------------------------------------------------------------------
 
 
-def _stub_module(name: str, **attrs: object) -> None:
-    """Register an empty stand-in module so upstream's unrelated top-level
-    imports resolve. The two scoring functions touch none of these."""
-    module = types.ModuleType(name)
-    for attr, value in attrs.items():
-        setattr(module, attr, value)
-    sys.modules[name] = module
+class _StubModule(types.ModuleType):
+    """Stand-in that resolves ANY attribute to a dummy, so upstream main.py's
+    unrelated top-level imports (tomli/tomlkit/options/reporting/test_groups/
+    type_checker) succeed. The two scoring functions reference none of them."""
+
+    def __getattr__(self, _name: str) -> object:
+        return object
 
 
 def load_official_calc() -> tuple[Callable, Callable, str]:
     """Return upstream's real (get_expected_errors, diff_expected_errors).
 
     Reads the committed `conformance/upstream_main.py`, verifies it is byte-for-
-    byte the pinned upstream `conformance/src/main.py` (sha256), imports it, and
-    hands back its two functions unmodified. No network access; no code of ours
-    in the calculation. `main.py` also imports tomli/tomlkit/options/reporting/
-    test_groups/type_checker at module scope — the scoring functions use none of
-    them, so empty stubs let the import succeed.
+    byte the pinned upstream `conformance/src/main.py` (sha256), imports it behind
+    module stubs (above), and hands back its two functions unmodified. No network
+    access; no code of ours in the calculation.
     """
     raw = UPSTREAM_MAIN.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
@@ -108,12 +103,8 @@ def load_official_calc() -> tuple[Callable, Callable, str]:
             "modified. Restore it from git, or run --refresh-upstream to re-pin."
         )
 
-    _stub_module("tomli")
-    _stub_module("tomlkit")
-    _stub_module("options", parse_options=None)
-    _stub_module("reporting", generate_summary=None)
-    _stub_module("test_groups", get_test_cases=None, get_test_groups=None)
-    _stub_module("type_checker", TYPE_CHECKERS=(), TypeChecker=object)
+    for dep in ("tomli", "tomlkit", "options", "reporting", "test_groups", "type_checker"):
+        sys.modules.setdefault(dep, _StubModule(dep))
 
     spec = importlib.util.spec_from_file_location("typing_conformance_main", UPSTREAM_MAIN)
     if spec is None or spec.loader is None:
@@ -121,15 +112,13 @@ def load_official_calc() -> tuple[Callable, Callable, str]:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    missing = [name for name in OFFICIAL_FUNCS if not hasattr(module, name)]
-    if missing:
+    funcs = tuple(getattr(module, name, None) for name in OFFICIAL_FUNCS)
+    if not all(funcs):
         raise RuntimeError(
-            f"committed upstream main.py is missing {missing}; the upstream "
+            f"committed upstream main.py is missing {OFFICIAL_FUNCS}; the upstream "
             "layout changed — re-check the pinned ref"
         )
-    get_expected = getattr(module, OFFICIAL_FUNCS[0])
-    diff_errors = getattr(module, OFFICIAL_FUNCS[1])
-    return get_expected, diff_errors, f"sha256:{digest[:12]}"
+    return funcs[0], funcs[1], f"sha256:{digest[:12]}"
 
 
 def refresh_upstream() -> int:
@@ -153,18 +142,17 @@ def refresh_upstream() -> int:
 
 
 # ---------------------------------------------------------------------------
-# MAINTENANCE: re-download the committed test fixtures (run periodically, commit)
+# Download the (git-ignored) test fixtures on demand
 # ---------------------------------------------------------------------------
 
 
 def ensure_fixtures(conf_dir: Path, force: bool) -> None:
     """Download python/typing's conformance `.py` fixtures into `conf_dir`.
 
-    The fixtures are COMMITTED to the repo — this is a maintenance helper invoked
-    only by `--fetch` / `--fetch-only`, after which the result is committed. The
-    normal score path never calls it. No-op when already present at the pinned ref
-    (a `.ref-sha` stamp records it) unless `force`. Honors `GITHUB_TOKEN` to raise
-    the API rate limit.
+    The fixtures are git-ignored and fetched on demand (auto when missing, or via
+    `--fetch` / `--fetch-only`). No-op when already present at the pinned ref (a
+    `.ref-sha` stamp records it) unless `force`; bumping `PINNED_TYPING_REF`
+    invalidates the stamp. Honors `GITHUB_TOKEN` to raise the API rate limit.
     """
     import os
     import urllib.request  # local: network only happens here and in refresh
@@ -284,7 +272,6 @@ def category(name: str) -> str:
 
 Row = tuple[str, str, bool, int, int, int, list[str]]
 Totals = dict[str, int]
-ByCat = dict[str, list[int]]
 
 
 def score(
@@ -292,9 +279,9 @@ def score(
     get_expected: Callable,
     diff_errors: Callable,
     conf_dir: Path,
-) -> tuple[list[Path], list[Row], Totals, ByCat]:
+) -> tuple[list[Path], list[Row], Totals]:
     files = sorted(conf_dir.glob("*.py"))
-    rows, totals, by_cat = [], {"pass": 0, "missed": 0, "fp": 0, "caught": 0}, {}
+    rows, totals = [], {"pass": 0, "missed": 0, "fp": 0, "caught": 0}
     for f in files:
         output = checker.run_test(f)
         diff = diff_errors(checker, f, output, [])
@@ -314,17 +301,13 @@ def score(
         totals["missed"] += missed
         totals["fp"] += fp
         totals["caught"] += caught
-        cat = by_cat.setdefault(category(f.name), [0, 0])
-        cat[0] += int(passed)
-        cat[1] += 1
-    return files, rows, totals, by_cat
+    return files, rows, totals
 
 
 def print_scorecard(
     files: list[Path],
     rows: list[Row],
     totals: Totals,
-    by_cat: ByCat,
     label: str,
     digest: str,
 ) -> None:
@@ -340,11 +323,6 @@ def print_scorecard(
     print(f"  Score:    {pct:.1f}%   (Pass = empty errors_diff, upstream rule)")
     print(f"  Required: {totals['caught']} caught | {totals['missed']} missed")
     print(f"  False+:   {totals['fp']} unexpected diagnostics (THESE FAIL FILES)")
-    print("-" * 68)
-    print("  Category breakdown:")
-    for cat in sorted(by_cat):
-        p, t = by_cat[cat]
-        print(f"    {cat:<24} {p:>2}/{t:<2}  {p * 100.0 / t:>5.1f}%")
     print("-" * 68)
     print("  Failing files:")
     any_fail = False
@@ -430,24 +408,22 @@ def main(argv: list[str]) -> int:
     root = repo_root()
     conf_dir = Path(opts["dir"]) if opts["dir"] else root / "conformance/tests"
 
-    # MAINTENANCE ONLY: --fetch / --fetch-only re-download the fixtures so they can
-    # be committed. The fixtures are committed to the repo (not a moving target);
-    # the normal score path NEVER touches the network.
-    if opts["fetch"] or opts["fetch_only"]:
+    # The fixtures are downloaded (git-ignored), unlike the committed calculator.
+    # Fetch them when forced (--fetch), in fetch-only mode, or when absent. A
+    # network failure is fatal only if a fetch was explicitly requested; on the
+    # plain score path a missing suite is skipped (fresh checkout, offline).
+    present = conf_dir.exists() and any(conf_dir.glob("*.py"))
+    if opts["fetch"] or opts["fetch_only"] or not present:
         try:
-            ensure_fixtures(conf_dir, force=True)
+            ensure_fixtures(conf_dir, force=opts["fetch"])
         except Exception as exc:  # noqa: BLE001 — surface fetch failure clearly
-            print(f"  ✗ could not fetch conformance fixtures: {exc}", file=sys.stderr)
-            return 1
-        if opts["fetch_only"]:
+            if opts["fetch"] or opts["fetch_only"]:
+                print(f"  ✗ could not fetch conformance fixtures: {exc}", file=sys.stderr)
+                return 1
+            print("  ⚠  Conformance suite not present and fetch failed — skipping.")
             return 0
-
-    if not conf_dir.exists() or not any(conf_dir.glob("*.py")):
-        print("  ✗ conformance fixtures missing at conformance/tests/. They are "
-              "committed to the repo; restore them from git, or run "
-              "`python3 conformance/score.py --fetch` to re-download then commit.",
-              file=sys.stderr)
-        return 1
+    if opts["fetch_only"]:
+        return 0
 
     binary = find_binary(opts["bin"], root)
     if binary is None:
@@ -461,9 +437,9 @@ def main(argv: list[str]) -> int:
         return 1
 
     checker = BasiliskTypeChecker(binary, count_warnings=opts["warn"])
-    files, rows, totals, by_cat = score(checker, get_expected, diff_errors, conf_dir)
+    files, rows, totals = score(checker, get_expected, diff_errors, conf_dir)
     label = "errors+warnings" if opts["warn"] else "errors only"
-    print_scorecard(files, rows, totals, by_cat, label, digest)
+    print_scorecard(files, rows, totals, label, digest)
     write_csv(root, rows)
 
     if not opts["gate"]:
