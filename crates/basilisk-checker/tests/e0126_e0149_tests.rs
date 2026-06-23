@@ -58,6 +58,8 @@ mod e0147;
 mod e0148;
 #[path = "checker/e0149_tests.rs"]
 mod e0149;
+#[path = "checker/w0014_tests.rs"]
+mod w0014;
 #[path = "checker/w0040_tests.rs"]
 mod w0040;
 #[path = "checker/w0050_tests.rs"]

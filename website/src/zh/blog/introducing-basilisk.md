@@ -5,6 +5,9 @@ description: "Python 已经有了十年的类型注解。是时候让人们默�
 date: 2026-02-28
 author: Basilisk 项目
 image: /assets/images/blog/introducing-basilisk.png
+imageAlt: "Basilisk 类型检查流水线的抽象图像，包含验证节点与严格分析面板"
+imageWidth: 1200
+imageHeight: 675
 tags: posts
 category: announcements
 lang: zh

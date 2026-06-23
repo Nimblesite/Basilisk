@@ -1,10 +1,10 @@
 ---
 layout: layouts/docs.njk
 title: "How Basilisk Measures PEP Conformance"
-description: "How Basilisk's PEP conformance score is measured with the official python/typing conformance suite — what the suite is, how scoring works, the byte-identical pinned calculator we run, and the correction we made to our own scoring."
+description: "How Basilisk's PEP conformance score is measured with the official python/typing conformance suite — what the suite is, how scoring works, the byte-identical pinned calculator we run, and the spec-conformance mode the binary runs in."
 keywords: pep conformance, python typing conformance suite, basilisk conformance score, type checker scoring, python/typing calculator
 date: 2026-06-23
-dateModified: 2026-06-23
+dateModified: 2026-06-24
 author: The Basilisk Project
 eleventyNavigation:
   key: Conformance
@@ -28,7 +28,7 @@ Today that gives **{{ conformance.scorePct }}%** — **{{ conformance.pass }} of
 
 ## What the conformance suite is
 
-The [Python typing specification](https://typing.python.org/en/latest/spec/) defines how the type system is supposed to behave — generics, protocols, dataclasses, `TypedDict`, overloads, literals, and the rest. To stop the spec from being aspirational, the typing community maintains a **conformance test suite** alongside it in the [`python/typing`](https://github.com/python/typing/tree/main/conformance) repository.
+The [Python typing specification](https://typing.python.org/en/latest/spec/) defines how the type system should behave — generics, protocols, `TypedDict`, overloads, and the rest. To keep it honest, the typing community maintains a **conformance test suite** beside it in the [`python/typing`](https://github.com/python/typing/tree/main/conformance) repository.
 
 It works like this:
 
@@ -36,7 +36,7 @@ It works like this:
 - A small **scoring tool** runs a type checker over those files and diffs its output against the annotations. A file *passes* only if the diff is empty: every required error is reported, and nothing is reported on a line the suite does not mark.
 - The maintainers run every checker through it and publish the [results table](https://github.com/python/typing/blob/main/conformance/results/results.html), which is how figures like pyright's ~99% or pyrefly's ~86% are produced.
 
-This is the suite we use, at the pinned commit [`{{ conformance.pinnedRef }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance). Because the same tool and the same files grade everyone, the number is comparable across checkers and is not something we can tune in our favour.
+We use that suite at the pinned commit [`{{ conformance.pinnedRef }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance). The same tool and files grade everyone, so the number is comparable across checkers and not something we can tune in our favour.
 
 ## How a file is scored
 
@@ -44,11 +44,11 @@ The entire algorithm is two functions in the suite's `main.py` — `get_expected
 
 - the suite's rule (`upstream_main.py:185`): `"Fail" if errors_diff.strip() else "Pass"`
 
-We count **every** diagnostic the checker emits — errors *and* warnings, with **no diagnostic codes excluded**. That is the strictest reading of the suite and matches how the reference checker, pyright, is graded. One unexpected diagnostic (a false positive) fails the whole file, which is why our false-positive count matters as much as the pass count.
+We count **every** diagnostic the checker emits — errors *and* warnings, **no codes excluded**. That's the strictest reading, and how pyright (the reference checker) is graded: one unexpected diagnostic — a false positive — fails the whole file, so our false-positive count matters as much as the pass count.
 
 ## How we run it without forking it
 
-The suite's `main.py` is a batch harness for the `python/typing` maintainers: it grades all the known checkers at once, pulls in TOML config/reporting dependencies, and writes a results matrix. It has no way to invoke our binary. So, exactly as the suite does for every checker (`PyrightTypeChecker`, `MypyTypeChecker`, …), we add a thin **adapter** and reuse the suite's own scoring rather than reimplementing it. Our [`score.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py):
+The suite's `main.py` is the maintainers' batch harness — it grades every known checker at once and has no way to invoke ours. So, exactly as it does for every checker (`PyrightTypeChecker`, `MypyTypeChecker`, …), we add a thin **adapter** and reuse the suite's own scoring instead of reimplementing it. Our [`score.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py):
 
 1. **Adapter** — runs `basilisk check --output json` and shapes the result into the `{line: [errors]}` dict the suite's functions expect (the one thing the suite can't do for us).
 2. **Calculator** — imports `get_expected_errors` and `diff_expected_errors` from a committed, byte-identical copy of the suite's `main.py` and calls them unmodified (`score.py:287` mirrors the suite's own call at `upstream_main.py:175`). It contains no scoring logic of its own.
@@ -60,20 +60,17 @@ To keep the calculator trustworthy, the vendored copy is **sha256-pinned**. `sco
 <p><span class="conf-verified">✓ verified at build — conformance/upstream_main.py is {{ conformance.upstreamBytes }} bytes, sha256 {{ conformance.sha256Short }}…, matching the pin</span></p>
 {% endif %}
 
-Keeping the official file untouched is the whole point: the adapter and gate live in a separate, auditable file, so the calculator stays byte-for-byte the suite's own.
+The adapter and gate live in a separate, auditable file, so the calculator stays byte-for-byte the suite's own.
 
-## A correction we made
+## What the checker runs in — spec-conformance mode
 
-Our score used to be measured by an in-repo script of our own, and it was **wrong**. That script excluded several diagnostic codes from scoring and did not count false positives, so it reported numbers that climbed all the way to 100%. It was an honest mistake, not a tuned result — but it was still incorrect.
+The suite tests the **type system** — generics, protocols, overloads, `TypedDict`, and the rest. Basilisk is strict by default and layers on house-style rules the typing spec doesn't define: chiefly *require an annotation* on every parameter, return, and `*args`/`**kwargs`, a redundant-annotation warning, and an explicit-`Any` nudge. Those are the right defaults for day-to-day Basilisk, but the spec treats an unannotated type as **inferred**, not an error — so firing them on the suite would be a false positive on nearly every file.
 
-We replaced it with the official calculator described above. With every diagnostic counted and nothing excluded, the honest number is **{{ conformance.scorePct }}%**:
+So, exactly as pyright's conformance run leaves `reportMissingParameterType` and its siblings off, we run the binary in a **spec-conformance mode** that disables those house-style rules (a committed `basilisk.json` the scorer drops beside the test files). This sets **what the binary emits** — the same lever every checker on the results page pulls — not how the result is scored. The pinned calculator above still counts every diagnostic the binary does emit, with nothing excluded.
 
-<div class="conf-correction">
-  <span class="conf-correction__old">100%</span>
-  <span class="conf-correction__arrow">→</span>
-  <span class="conf-correction__new">{{ conformance.scorePct }}%</span>
-  <span class="conf-correction__text">The checker did not get worse — the measurement got correct. 100% is the target we are working toward, not a claim about today.</span>
-</div>
+## How the score changed
+
+The site has always shown a conformance number; it hasn't always been right. We used to measure with an in-repo script that excluded some diagnostic codes and didn't count false positives, so it reported figures that climbed to 100%. That was an honest mistake, not a tuned result. The official calculator above replaced it; counting every diagnostic, today's honest figure is **{{ conformance.scorePct }}%** — reached first by correcting the measurement, then by closing real conformance gaps. The checker didn't get worse; 100% is the target we ratchet toward, not a claim about today.
 
 The chart below is read straight from the **git history of `conformance/conformance_status.csv`** at build time: one point per commit that changed it, plotting the score that commit actually recorded.
 
@@ -82,7 +79,7 @@ The chart below is read straight from the **git history of `conformance/conforma
   "heading": "From the earlier in-repo number to the official calculator",
   "prevLegend": "Earlier in-repo script (some codes excluded, false positives not counted)",
   "officialLegend": "Official <code>python/typing</code> calculator",
-  "dropNote": "On <strong>" + conformance.chart.peak.shortDate + "</strong> the in-repo script reported <strong>" + conformance.chart.peak.score + "%</strong>. The official calculator, first run on <strong>" + conformance.chart.current.shortDate + "</strong>, reports <strong>" + conformance.chart.current.score + "%</strong> — a correction, not a regression.",
+  "dropNote": "On <strong>" + conformance.chart.peak.shortDate + "</strong> the in-repo script reported <strong>" + conformance.chart.peak.score + "%</strong>. Re-scored by the official calculator, the honest figure was <strong>" + conformance.chart.drop.to + "%</strong>; real fixes have since lifted it to <strong>" + conformance.chart.current.score + "%</strong> — a correction, then genuine progress, never a regression.",
   "caption": "Each dot is a real commit to <code>conformance/conformance_status.csv</code>, recomputed every build. Hover a point for its date, commit, score, and false-positive count."
 }) }}
 

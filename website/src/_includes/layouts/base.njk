@@ -60,6 +60,9 @@
   {%- endif %}
 
   <!-- Open Graph -->
+  {% set metaImage = image | default(site.ogImage) %}
+  {% set metaImageWidth = imageWidth | default(site.ogImageWidth) | default('1200') %}
+  {% set metaImageHeight = imageHeight | default(site.ogImageHeight) | default('630') %}
   <meta property="og:type" content="{% if basePath.startsWith('/blog/') and basePath != '/blog/' %}article{% else %}website{% endif %}">
   <meta property="og:url" content="{{ site.url }}{{ page.url }}">
   <meta property="og:title" content="{{ title | default(site.title) }}">
@@ -71,10 +74,10 @@
   <meta property="og:locale:alternate" content="{{ langCode | toOgLocale }}">
   {% endif %}{% endfor %}
   {%- endif %}
-  {% if site.ogImage %}
-  <meta property="og:image" content="{{ site.url }}{{ site.ogImage }}">
-  <meta property="og:image:width" content="{{ site.ogImageWidth | default('1200') }}">
-  <meta property="og:image:height" content="{{ site.ogImageHeight | default('630') }}">
+  {% if metaImage %}
+  <meta property="og:image" content="{{ site.url }}{{ metaImage }}">
+  <meta property="og:image:width" content="{{ metaImageWidth }}">
+  <meta property="og:image:height" content="{{ metaImageHeight }}">
   {% endif %}
 
   <!-- Twitter -->
@@ -84,7 +87,7 @@
   <meta name="twitter:description" content="{{ description | default(site.description) }}">
   {% if site.twitterSite %}<meta name="twitter:site" content="{{ site.twitterSite }}">{% endif %}
   {% if site.twitterCreator %}<meta name="twitter:creator" content="{{ site.twitterCreator }}">{% endif %}
-  {% if site.ogImage %}<meta name="twitter:image" content="{{ site.url }}{{ site.ogImage }}">{% endif %}
+  {% if metaImage %}<meta name="twitter:image" content="{{ site.url }}{{ metaImage }}">{% endif %}
 
   <!-- JSON-LD Structured Data -->
   <script type="application/ld+json">
@@ -117,7 +120,8 @@
         "author": {
           "@type": "Person",
           "name": "{{ author }}"
-        }{% endif %}
+        }{% endif %}{% if metaImage %},
+        "image": "{{ site.url }}{{ metaImage }}"{% endif %}
       },
       {
         "@type": "BreadcrumbList",

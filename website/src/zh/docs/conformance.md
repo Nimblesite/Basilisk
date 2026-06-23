@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "Basilisk 如何衡量 PEP 符合性"
-description: "Basilisk 的 PEP 符合性得分如何用官方 python/typing 符合性套件衡量——套件是什么、评分如何进行、我们运行的字节级一致且 sha256 固定的计算器，以及我们对自己评分所做的更正。"
+description: "Basilisk 的 PEP 符合性得分如何用官方 python/typing 符合性套件衡量——套件是什么、评分如何进行、我们运行的字节级一致且 sha256 固定的计算器，以及二进制文件所运行的符合性模式。"
 keywords: pep 符合性, python 类型符合性套件, basilisk 符合性得分, 类型检查器评分, python/typing 计算器
 lang: zh
 ---
@@ -23,7 +23,7 @@ Basilisk 由**官方 `python/typing` 符合性套件**评分——也就是类�
 
 ## 符合性套件是什么
 
-[Python 类型规范](https://typing.python.org/en/latest/spec/)定义了类型系统应当如何运作——泛型、协议、dataclass、`TypedDict`、重载、字面量等。为了让规范不停留在纸面上，类型社区在 [`python/typing`](https://github.com/python/typing/tree/main/conformance) 仓库中与规范并行维护着一套**符合性测试套件**。
+[Python 类型规范](https://typing.python.org/en/latest/spec/)定义了类型系统应当如何运作——泛型、协议、`TypedDict`、重载等。为使其名副其实，类型社区在 [`python/typing`](https://github.com/python/typing/tree/main/conformance) 仓库中与规范并行维护着一套**符合性测试套件**。
 
 它的工作方式是：
 
@@ -31,7 +31,7 @@ Basilisk 由**官方 `python/typing` 符合性套件**评分——也就是类�
 - 一个小型**评分工具**对这些文件运行某个类型检查器，并将其输出与注释做差异比对。文件只有在差异为空时才*通过*：每个必需错误都被报告，且没有任何诊断落在套件未标记的行上。
 - 维护者用它为每个检查器打分，并发布[结果表](https://github.com/python/typing/blob/main/conformance/results/results.html)——pyright 约 99%、pyrefly 约 86% 等数字便是这样得出的。
 
-我们使用的正是这套套件，固定在提交 [`{{ conformance.pinnedRef }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance)。因为同样的工具与文件为所有人打分，这个数字在各检查器之间可比，也不是我们能朝自己有利方向调整的。
+我们使用这套套件，固定在提交 [`{{ conformance.pinnedRef }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance)。同样的工具与文件为所有人打分，因此这个数字在各检查器之间可比，也不是我们能朝有利方向调整的。
 
 ## 一个文件如何评分
 
@@ -39,11 +39,11 @@ Basilisk 由**官方 `python/typing` 符合性套件**评分——也就是类�
 
 - 套件的规则（`upstream_main.py:185`）：`"Fail" if errors_diff.strip() else "Pass"`
 
-我们计入检查器发出的**每一个**诊断——错误*和*警告，**不排除任何诊断代码**。这是套件最严格的读法，也是参考检查器 pyright 的评分方式。一个多余的诊断（一处误报）就会让整个文件失败，这正是误报数与通过数同样重要的原因。
+我们计入检查器发出的**每一个**诊断——错误*和*警告，**不排除任何代码**。这是最严格的读法，也是 pyright（参考检查器）的评分方式：一个多余的诊断（一处误报）就会让整个文件失败，因此误报数与通过数同样重要。
 
 ## 我们如何在不分叉的情况下运行它
 
-套件的 `main.py` 是给 `python/typing` 维护者用的批处理工具：它一次性为所有已知检查器打分，引入 TOML 配置/报告依赖，并写出结果矩阵。它无法调用我们的二进制文件。因此，正如套件为每个检查器所做的那样（`PyrightTypeChecker`、`MypyTypeChecker` 等），我们加一个薄薄的**适配器**，复用套件自己的评分而非重新实现。我们的 [`score.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py)：
+套件的 `main.py` 是维护者的批处理工具——它一次性为所有已知检查器打分，且无法调用我们的二进制文件。因此，正如它为每个检查器所做的那样（`PyrightTypeChecker`、`MypyTypeChecker` 等），我们加一个薄薄的**适配器**，复用套件自己的评分而非重新实现。我们的 [`score.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py)：
 
 1. **适配器**——运行 `basilisk check --output json`，把结果整理成套件函数期望的 `{line: [errors]}` 字典（这是套件唯一无法替我们做的事）。
 2. **计算器**——从一份字节级一致的套件 `main.py` committed 副本中导入 `get_expected_errors` 与 `diff_expected_errors` 并原样调用（`score.py:287` 对应套件自己在 `upstream_main.py:175` 的调用）。它不含任何自己的评分逻辑。
@@ -55,20 +55,17 @@ Basilisk 由**官方 `python/typing` 符合性套件**评分——也就是类�
 <p><span class="conf-verified">✓ 构建时已校验 —— conformance/upstream_main.py 为 {{ conformance.upstreamBytes }} 字节，sha256 {{ conformance.sha256Short }}…，与固定值一致</span></p>
 {% endif %}
 
-保持官方文件不被改动正是要点所在：适配器与门禁住在另一个可审计的文件里，因此计算器逐字节就是套件自己的那一份。
+适配器与门禁住在另一个可审计的文件里，因此计算器逐字节就是套件自己的那一份。
 
-## 我们做的一处更正
+## 检查器以何种模式运行——符合性模式
 
-我们的得分过去由仓库内自己的一个脚本衡量，而它是**错误的**。该脚本将若干诊断代码排除在评分之外，且未计入误报，因此报出的数字一路爬到了 100%。这是一个诚实的失误，并非有意调高——但它仍然是错的。
+该套件测试的是**类型系统**——泛型、协议、重载、`TypedDict` 等。Basilisk 默认严格，并在其上叠加了类型规范未定义的内部风格规则：主要是要求每个参数、返回值以及 `*args`/`**kwargs` 都带注解、一条冗余注解警告，以及一个显式 `Any` 提示。这些是 Basilisk 日常使用的合理默认，但规范将未注解的类型视为**推断**而非错误——因此在套件上触发它们会让几乎每个文件都产生误报。
 
-我们用上面所述的官方计算器替换了它。在计入每个诊断、不排除任何代码之后，诚实的数字是 **{{ conformance.scorePct }}%**：
+因此，正如 pyright 的符合性运行不启用 `reportMissingParameterType` 及其同类规则一样，我们以一种**符合性模式**运行二进制文件，关闭这些内部风格规则（评分器会在测试文件旁放置一份 committed 的 `basilisk.json`）。这设定的是**二进制文件发出什么**——也是结果页上每个检查器所用的同一杠杆——而非结果如何评分。上面那个固定的计算器仍会计入二进制文件实际发出的每一个诊断，不排除任何内容。
 
-<div class="conf-correction">
-  <span class="conf-correction__old">100%</span>
-  <span class="conf-correction__arrow">→</span>
-  <span class="conf-correction__new">{{ conformance.scorePct }}%</span>
-  <span class="conf-correction__text">检查器没有变差——是衡量变正确了。100% 是我们正在努力达成的目标，而非对当下的宣称。</span>
-</div>
+## 得分如何变化
+
+本站一直显示一个符合性数字，但它并非一直正确。我们过去用一个仓库内脚本来衡量，它将若干诊断代码排除在评分之外、且未计入误报，因此报出的数字一路爬到了 100%。这是一个诚实的失误，并非有意调高。上面所述的官方计算器替换了它——在计入每个诊断后，如今诚实的数字是 **{{ conformance.scorePct }}%**：先更正衡量，再修复真实的符合性缺口。检查器没有变差；100% 是我们逐步逼近的目标，而非对当下的宣称。
 
 下面的图表在构建时直接读取 **`conformance/conformance_status.csv` 的 git 历史**：每个改动该文件的提交对应一个点，绘制该提交实际记录的得分。
 
@@ -77,7 +74,7 @@ Basilisk 由**官方 `python/typing` 符合性套件**评分——也就是类�
   "heading": "从早期仓库内数字到官方计算器",
   "prevLegend": "早期仓库内脚本（排除部分代码、未计入误报）",
   "officialLegend": "官方 <code>python/typing</code> 计算器",
-  "dropNote": "在 <strong>" + conformance.chart.peak.shortDate + "</strong>，仓库内脚本报告了 <strong>" + conformance.chart.peak.score + "%</strong>。官方计算器首次于 <strong>" + conformance.chart.current.shortDate + "</strong> 运行，报出 <strong>" + conformance.chart.current.score + "%</strong>——这是更正，而非回归。",
+  "dropNote": "在 <strong>" + conformance.chart.peak.shortDate + "</strong>，仓库内脚本报告了 <strong>" + conformance.chart.peak.score + "%</strong>。经官方计算器重新评分，诚实的数字是 <strong>" + conformance.chart.drop.to + "%</strong>；此后的真实修复已将其提升至 <strong>" + conformance.chart.current.score + "%</strong>——先更正，再真实进步，绝非回归。",
   "caption": "每个点都是对 <code>conformance/conformance_status.csv</code> 的真实提交，每次构建重新计算。悬停某点可查看其日期、提交、得分与误报数。"
 }) }}
 
