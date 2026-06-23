@@ -21,9 +21,10 @@ upstream's exact rule: `"Fail" if errors_diff.strip() else "Pass"`.
 Nothing is excluded from *scoring*: the calculator counts EVERY diagnostic
 `basilisk check` emits — both errors AND warnings — which is the strictest
 grading and matches how the reference checker pyright is graded upstream
-(`if kind not in ("error", "warning")`). Pass `--errors-only` for the looser
-errors-only view. Either way, any diagnostic on a line the suite does not mark
-`# E` is a real false positive and fails the file — same as for any checker.
+(`if kind not in ("error", "warning")`). There is exactly ONE grading, applied
+on every run — no looser mode and no opt-out. Any diagnostic on a line the suite
+does not mark `# E` is a real false positive and fails the file — same as for
+any checker.
 
 What we DO configure (not exclude) is the binary itself. Basilisk is
 "strict-by-default": on top of the type system it ships opinionated *house-style*
@@ -48,7 +49,7 @@ script. Two upstream inputs, handled differently:
     DOWNLOADED on demand (--fetch / --fetch-only; auto-fetched if missing).
 
 Usage:
-    python3 conformance/score.py [--bin PATH] [--gate] [--errors-only]
+    python3 conformance/score.py [--bin PATH] [--gate]
                                  [--conformance-dir DIR] [--fetch | --fetch-only]
                                  [--refresh-upstream]
 """
@@ -257,16 +258,15 @@ class BasiliskTypeChecker:
     """Runs the real `basilisk` binary; parses its JSON into {line: [errors]}.
 
     Each diagnostic is the analog of the suite's `# E` ("an error MUST be
-    reported on this line"). When `count_warnings` is set (the default for the
-    strictest grading, matching how pyright is graded upstream) both `error` and
-    `warning` severities count; otherwise only `error` does.
+    reported on this line"). Both `error` and `warning` severities always count —
+    the single, strictest grading, matching how the reference checker pyright is
+    graded upstream. There is no looser mode.
     """
 
     name = "basilisk"
 
-    def __init__(self, binary: Path, count_warnings: bool = False) -> None:
+    def __init__(self, binary: Path) -> None:
         self.binary = binary
-        self.count_warnings = count_warnings
 
     def run_test(self, test_case: Path) -> str:
         proc = subprocess.run(
@@ -291,7 +291,7 @@ class BasiliskTypeChecker:
             diags = json.loads(text) if text.strip() else []
         except json.JSONDecodeError:
             return {}
-        accepted = {"error", "warning"} if self.count_warnings else {"error"}
+        accepted = {"error", "warning"}
         line_to_errors: dict[int, list[str]] = {}
         for d in diags:
             if d.get("severity") not in accepted:
@@ -378,14 +378,15 @@ def print_scorecard(
     files: list[Path],
     rows: list[Row],
     totals: Totals,
-    label: str,
     digest: str,
 ) -> None:
     n = len(files)
     pct = (totals["pass"] * 100.0 / n) if n else 0.0
     print()
     print("=" * 68)
-    print(f"  BASILISK PEP CONFORMANCE — REAL python/typing CALCULATOR [{label}]")
+    print(
+        "  BASILISK PEP CONFORMANCE — REAL python/typing CALCULATOR [errors+warnings]"
+    )
     print("  calc: imported verbatim from committed conformance/upstream_main.py")
     print(
         f"  ref:  python/typing@{PINNED_TYPING_REF}  ({digest})  funcs: {', '.join(OFFICIAL_FUNCS)}"
@@ -420,14 +421,13 @@ def write_csv(root: Path, rows: list[Row]) -> None:
 
 
 def parse_args(argv: list[str]) -> dict:
-    # Default is the STRICTEST grading: every diagnostic basilisk emits (errors
-    # AND warnings) is counted as "an error was reported", which is also how the
-    # reference checker pyright is graded upstream. `--errors-only` reports the
-    # looser errors-only view. `--count-warnings` is accepted for back-compat.
+    # ONE grading, always: every diagnostic basilisk emits (errors AND warnings)
+    # is counted as "an error was reported" — the strictest reading, and how the
+    # reference checker pyright is graded upstream. There is no looser view and
+    # no flag to weaken it; the scorer always does a full, strict generation.
     opts: dict = {
         "bin": None,
         "gate": False,
-        "warn": True,
         "dir": None,
         "refresh": False,
         "fetch": False,
@@ -439,10 +439,6 @@ def parse_args(argv: list[str]) -> dict:
             opts["bin"] = next(it, None)
         elif a == "--gate":
             opts["gate"] = True
-        elif a == "--count-warnings":
-            opts["warn"] = True
-        elif a == "--errors-only":
-            opts["warn"] = False
         elif a == "--conformance-dir":
             opts["dir"] = next(it, None)
         elif a == "--refresh-upstream":
@@ -530,10 +526,9 @@ def main(argv: list[str]) -> int:
     # emitted diagnostic. See [CHKARCH-CONFORMANCE-MODE].
     write_conformance_config(conf_dir)
 
-    checker = BasiliskTypeChecker(binary, count_warnings=opts["warn"])
+    checker = BasiliskTypeChecker(binary)
     files, rows, totals = score(checker, get_expected, diff_errors, conf_dir)
-    label = "errors+warnings" if opts["warn"] else "errors only"
-    print_scorecard(files, rows, totals, label, digest)
+    print_scorecard(files, rows, totals, digest)
     write_csv(root, rows)
 
     if not opts["gate"]:

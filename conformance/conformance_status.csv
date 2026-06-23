@@ -61,7 +61,7 @@ BSK-E0040,enums_behaviors.py,enums,FAIL,1,2,0
 BSK-E0061,enums_expansion.py,enums,PASS,1,0,0
 ,enums_member_names.py,enums,PASS,0,0,0
 BSK-E0066,enums_member_values.py,enums,PASS,2,0,0
-BSK-E0046|BSK-E0067,enums_members.py,enums,PASS,7,0,0
+BSK-E0046|BSK-E0067|BSK-W0040,enums_members.py,enums,FAIL,7,0,1
 BSK-E0011,exceptions_context_managers.py,exceptions,FAIL,0,0,2
 BSK-E0027|BSK-E0047|BSK-E0092|BSK-E0132|BSK-E0134,generics_base_class.py,generics,PASS,7,0,0
 BSK-E0026|BSK-E0027|BSK-E0043|BSK-E0148,generics_basic.py,generics,PASS,13,0,0

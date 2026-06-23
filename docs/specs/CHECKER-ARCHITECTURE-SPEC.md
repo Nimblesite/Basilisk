@@ -1391,7 +1391,8 @@ checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with.
   `conformance_automated = "Fail" if errors_diff.strip() else "Pass"`.
 - **Nothing excluded from scoring.** The scorer counts **every** diagnostic the
   binary emits — errors **and** warnings, the strictest grading and how pyright is
-  graded. (`score.py` defaults to this; pass `--errors-only` for the looser view.)
+  graded. `score.py` applies this single grading on every run; there is no looser
+  mode and no opt-out flag, so every run produces the same canonical figure.
   One firing on an unannotated line is a real false positive and fails the file —
   same as for any other checker. What *is* configured is the **binary**, not the
   scorer: it runs in spec-conformance mode (house-style rules off) per

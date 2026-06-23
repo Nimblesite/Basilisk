@@ -52,11 +52,13 @@ function shortDate(iso) {
 }
 
 // Pull a `NAME = "value"` string constant straight out of score.py so the pin
-// shown on the website is the exact one the scorer enforces, not a copy.
+// shown on the website is the exact one the scorer enforces, not a copy. Handles
+// both single-line (`NAME = "v"`) and the formatter's parenthesised wrap
+// (`NAME = (\n    "v"\n)`) the 64-char sha256 gets — `\(?\s*` spans the newline.
 function constFromScorePy(name) {
   if (!existsSync(SCORE_PY)) return null;
   const src = readFileSync(SCORE_PY, "utf-8");
-  const m = src.match(new RegExp(`^${name}\\s*=\\s*"([^"]+)"`, "m"));
+  const m = src.match(new RegExp(`^${name}\\s*=\\s*\\(?\\s*"([^"]+)"`, "m"));
   return m ? m[1] : null;
 }
 
