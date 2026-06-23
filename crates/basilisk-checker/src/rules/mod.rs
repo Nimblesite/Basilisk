@@ -167,6 +167,7 @@ pub(crate) mod shared;
 pub(crate) mod w0011;
 pub(crate) mod w0012;
 pub(crate) mod w0013;
+pub(crate) mod w0014;
 pub(crate) mod w0040;
 pub(crate) mod w0050;
 
@@ -344,6 +345,7 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &w0011::UndeclaredDependencyImport,
         &w0012::UnusedDependency,
         &w0013::StaleLockFile,
+        &w0014::ExplicitAny,
         &w0040::LambdaMissingAnnotations,
         &w0050::RedundantAnnotationWarning,
     ]

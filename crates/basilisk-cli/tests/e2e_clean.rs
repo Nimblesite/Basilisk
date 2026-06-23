@@ -224,19 +224,19 @@ fn clean_stdlib_imports_are_silent() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0011 — typing.Any import itself must NOT trigger E0010/E0011
+// W0014 — concrete annotations must NOT trigger the explicit-Any warning
 // ---------------------------------------------------------------------------
 
 #[test]
-fn clean_any_with_comment_is_silent() -> Result<(), Box<dyn std::error::Error>> {
+fn clean_concrete_annotations_no_any_warning() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("clean/typed_any_justified.py")?;
-    let e0011: Vec<_> = diags
+    let any_warnings: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0011")
+        .filter(|d| d.code.code == "BSK-W0014")
         .collect();
     assert!(
-        e0011.is_empty(),
-        "justified Any must not produce E0011, got:\n{e0011:#?}"
+        any_warnings.is_empty(),
+        "concrete annotations must not produce the W0014 explicit-Any warning, got:\n{any_warnings:#?}"
     );
     Ok(())
 }

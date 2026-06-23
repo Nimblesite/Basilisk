@@ -972,7 +972,7 @@ query("SELECT * FROM " + table)    # BSK-E0015 — not LiteralString
 
 ## Conformance Test Coverage {#TYPEINF-CONFORMANCE}
 
-The [Python typing conformance suite](https://github.com/python/typing/tree/main/conformance) is the canonical benchmark. Basilisk **targets** 100% conformance (Pass on all 146 test files) — a target, not a present-day achievement. The official `python/typing` scorer currently reports **59 of 146 files passing (40.4%, counting errors and warnings — the strictest grading)**.
+The [Python typing conformance suite](https://github.com/python/typing/tree/main/conformance) is the canonical benchmark. Basilisk **targets** 100% conformance (Pass on all 146 test files) — a target, not a present-day achievement. The official `python/typing` scorer currently reports **121 of 146 files passing (82.9%, counting errors and warnings — the strictest grading)**, running the binary in spec-conformance mode (house-style rules off).
 
 Inference-relevant conformance tests:
 

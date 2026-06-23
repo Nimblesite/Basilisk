@@ -101,7 +101,9 @@ structural matcher (positive-match semantics already reject `float`→`str`).
 - NOTE: the "144/146 / suite FP 21→11" figures below were produced by an earlier
   in-repo harness (excluded 9 codes, didn't count false positives) — a miscalculation. The
   official `python/typing` scorer (run unmodified, pinned commit) reports
-  **59/146 passing (40.4%, errors+warnings strictest), 285 false positives, 36 missed errors**.
+  **121/146 passing (82.9%, errors+warnings strictest), 24 false positives, 36 missed errors**,
+  running the binary in spec-conformance mode (non-spec house-style rules off — see
+  CHKARCH-CONFORMANCE-MODE; the honest number with them on was 40.4% / 285 FPs).
   Treat the per-lane numbers below as historical, not verified.
 - B3 lane (E0111/E0143/E0115) = DONE, (legacy/superseded) figures: 144/146, caught=917, missed=37
   (unchanged, both pre-failing files), suite FP 21→11.

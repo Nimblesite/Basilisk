@@ -1,29 +1,20 @@
 //! Implements [BSK-E0011] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0011: Explicit `Any` annotation / return type mismatch.
+//! BSK-E0011: Return type mismatch.
 //!
-//! Two categories of diagnostic share this code:
+//! Emitted as an `Error` when the literal value returned by a function is
+//! clearly incompatible with the declared return type annotation (e.g.
+//! returning an `int` literal from a `-> str` function).
 //!
-//! 1. **Explicit `Any`** — emitted as a `Warning` when a function parameter or
-//!    return annotation is written as `Any` (from `typing`).  `Any` silences all
-//!    type-checking for the annotated value and should be used only when
-//!    intentional, with a comment explaining why.
-//!
-//! 2. **Return type mismatch** — emitted as an `Error` when the literal value
-//!    returned by a function is clearly incompatible with the declared return
-//!    type annotation (e.g. returning an `int` literal from a `-> str` function).
+//! The explicit-`Any` *warning* used to share this code; it now lives under its
+//! own warning code ([BSK-W0014]) so the opinionated style nudge can be
+//! silenced independently of this genuine type-safety error.
 //!
 //! ```python
-//! from typing import Any
-//!
-//! # BAD (explicit Any)
-//! def greet(name: Any) -> str: ...  # W: parameter `name` is annotated Any
-//!
 //! # BAD (return type mismatch)
 //! def count() -> str:
 //!     return 42   # E: int literal is not assignable to str
 //!
 //! # GOOD
-//! def greet(name: str) -> str: ...
 //! def count() -> int:
 //!     return 42
 //! ```
@@ -31,9 +22,9 @@
 use crate::inference::infer_rhs;
 use crate::span_util::slice_span;
 use crate::types::InferredType;
-use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule, ReturnAnnotationKind};
+use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
-use crate::diagnostic::{error_diagnostic_owned, warning_diagnostic_owned, Diagnostic, ErrorCode};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::{guards::is_stub_context, Rule};
 
@@ -42,8 +33,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/BSK-E0011",
 };
 
-/// Emits BSK-E0011 for explicit `Any` annotations and for detectable return
-/// type mismatches.
+/// Emits BSK-E0011 for detectable return type mismatches.
 pub(crate) struct ReturnTypeMismatch;
 
 impl Rule for ReturnTypeMismatch {
@@ -54,77 +44,11 @@ impl Rule for ReturnTypeMismatch {
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         for func in &module.functions {
-            check_explicit_any(func, &module.path, diagnostics);
-
             if !is_stub_context(func, &module.classes) {
                 check_return_type_mismatch(func, module, diagnostics);
             }
         }
     }
-}
-
-// ---------------------------------------------------------------------------
-// Explicit Any
-// ---------------------------------------------------------------------------
-
-fn check_explicit_any(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
-    if func.return_annotation == ReturnAnnotationKind::Any {
-        out.push(make_return_any_diagnostic(func, path));
-    }
-
-    for param in &func.parameters {
-        if param.annotation_is_any {
-            out.push(make_param_any_diagnostic(param, path));
-        }
-    }
-
-    if let Some(vararg) = &func.vararg {
-        if vararg.annotation_is_any {
-            out.push(make_param_any_diagnostic(vararg, path));
-        }
-    }
-
-    if let Some(kwarg) = &func.kwarg {
-        if kwarg.annotation_is_any {
-            out.push(make_param_any_diagnostic(kwarg, path));
-        }
-    }
-}
-
-fn make_return_any_diagnostic(func: &FunctionInfo, path: &str) -> Diagnostic {
-    warning_diagnostic_owned(
-        CODE.clone(),
-        format!(
-            "Function `{}` has `Any` as its return annotation — prefer a concrete type",
-            func.name
-        ),
-        func.name_span,
-        path,
-        Some("Replace `Any` with the actual return type of this function".to_owned()),
-        Some(
-            "`Any` disables type checking for this return value; use only when unavoidable"
-                .to_owned(),
-        ),
-    )
-}
-
-fn make_param_any_diagnostic(param: &ParameterInfo, path: &str) -> Diagnostic {
-    warning_diagnostic_owned(
-        CODE.clone(),
-        format!(
-            "Parameter `{}` is annotated `Any` — prefer a concrete type",
-            param.name
-        ),
-        param.name_span,
-        path,
-        Some(format!(
-            "Replace `Any` on `{}` with the actual expected type",
-            param.name
-        )),
-        Some(
-            "`Any` disables type checking for this parameter; use only when unavoidable".to_owned(),
-        ),
-    )
 }
 
 // ---------------------------------------------------------------------------

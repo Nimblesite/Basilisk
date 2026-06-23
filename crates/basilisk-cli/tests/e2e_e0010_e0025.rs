@@ -33,35 +33,35 @@ fn e0010_import_from_untyped_module() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 // ---------------------------------------------------------------------------
-// E0011 — explicit Any without justification
+// W0014 — explicit Any without justification (split from E0011)
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0011_explicit_any_in_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn w0014_explicit_any_in_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0011_explicit_any.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
-        codes.contains(&"BSK-E0011"),
-        "should emit E0011 for explicit Any annotations, got: {diags:#?}"
+        codes.contains(&"BSK-W0014"),
+        "should emit W0014 for explicit Any annotations, got: {diags:#?}"
     );
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// E0011 — Any on vararg, kwarg, and return annotation
+// W0014 — Any on vararg, kwarg, and return annotation (split from E0011)
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0011_any_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error::Error>> {
+fn w0014_any_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0011_vararg_kwarg_any.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0011_vararg_kwarg_any.py"))?;
     assert_diagnostics(
         &src,
         &diags,
         &[
-            Expected::warning("BSK-E0011", "return annotation", 4, 5),
-            Expected::warning("BSK-E0011", "`args`", 4, 14),
-            Expected::warning("BSK-E0011", "`kwargs`", 4, 27),
+            Expected::warning("BSK-W0014", "return annotation", 4, 5),
+            Expected::warning("BSK-W0014", "`args`", 4, 14),
+            Expected::warning("BSK-W0014", "`kwargs`", 4, 27),
         ],
     );
     Ok(())

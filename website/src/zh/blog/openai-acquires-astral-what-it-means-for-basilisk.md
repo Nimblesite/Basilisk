@@ -5,6 +5,9 @@ description: "OpenAI 正在收购 Astral——Ruff、uv 和 ty 的缔造者。Ba
 date: 2026-06-20
 author: Basilisk 项目
 image: /assets/images/blog/openai-acquires-astral.png
+imageAlt: "开源工具链星图汇聚在稳定 Basilisk 基础之上的抽象图像"
+imageWidth: 1200
+imageHeight: 675
 tags: posts
 category: announcements
 lang: zh

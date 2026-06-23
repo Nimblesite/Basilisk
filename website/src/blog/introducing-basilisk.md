@@ -6,6 +6,9 @@ date: 2026-02-28
 dateModified: 2026-03-31
 author: The Basilisk Project
 image: /assets/images/blog/introducing-basilisk.png
+imageAlt: "Abstract Basilisk type-checking pipeline with validation nodes and strict analysis panels"
+imageWidth: 1200
+imageHeight: 675
 tags: posts
 category: announcements
 excerpt: "The Python type annotation ecosystem has a dirty secret: nobody enforces it by default. We built Basilisk to fix that."

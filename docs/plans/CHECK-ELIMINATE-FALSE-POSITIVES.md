@@ -7,8 +7,10 @@
 > calculator** (`conformance/score.py` downloads and runs upstream's own
 > `get_expected_errors` + `diff_expected_errors`; see [CHKARCH-CONFORMANCE]).
 > A file passes only with an **empty upstream `errors_diff`** (false positives
-> fail the file), and **no diagnostic codes are excluded**. Honest current
-> baseline: **59/146 = 40.4%**, **285 false positives**, 36 missed. The
+> fail the file), and **nothing is excluded from scoring** (the binary runs in
+> spec-conformance mode — non-spec house-style rules off, see CHKARCH-CONFORMANCE-MODE).
+> Honest current baseline: **121/146 = 82.9%**, **24 false positives**, 36 missed
+> (40.4% / 285 FPs with house-style rules on). The
 > still-valid part of this plan is the *strategy* — driving specific rules'
 > false positives down; the *counts* below are stale.
 
