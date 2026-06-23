@@ -37,7 +37,12 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
+      # fetch-depth: 0 — the conformance over-time chart (_data/conformance.js)
+      # reads the full git history of conformance/conformance_status.csv. A
+      # shallow clone would collapse the chart to a single point.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
