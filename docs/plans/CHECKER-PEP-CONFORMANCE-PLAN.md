@@ -1,9 +1,15 @@
 # PEP Conformance — Plan
 
-> **Score**: 137/146 (93.84%)
-> **Tests**: `crates/basilisk-cli/tests/conformance/`
-> **Status CSV**: `conformance/conformance_status.csv`
-> **Run**: `make conformance` or `cargo test --test conformance_tests -- --nocapture`
+> ⚠️ **SUPERSEDED SCORES BELOW.** Every percentage in this plan (e.g. "137/146,
+> 93.84%", category "100%" rows) came from a since-removed in-repo harness that
+> excluded 9 diagnostic codes and ignored false positives. The score is now
+> computed by the **real `python/typing` calculator** (`conformance/score.py`,
+> see [CHKARCH-CONFORMANCE]); the honest current number is **59/146 = 40.4%**
+> (errors+warnings, strictest), 285 false positives, 36 missed. Treat the figures below as
+> historical task notes, not the live score.
+>
+> **Run**: `make conformance` · **Status CSV**: `conformance/conformance_status.csv`
+> · **Tests**: `crates/basilisk-cli/tests/conformance/`
 
 ---
 

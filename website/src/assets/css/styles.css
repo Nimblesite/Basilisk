@@ -964,6 +964,185 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 .citations-list a:hover { color: var(--color-accent); }
 
+/* ── Conformance methodology ───────────────────────────────── */
+.conformance-method {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  max-width: 68ch;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--color-text-secondary);
+}
+.conformance-method li + li { margin-top: var(--space-3); }
+.conformance-method strong { color: var(--color-text-primary); font-weight: 600; }
+.conformance-method code,
+.conformance-method__note code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--color-code-type);
+  background: var(--color-bg-elevated);
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+.conformance-method__note {
+  margin-top: var(--space-6);
+  max-width: 68ch;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+.conformance-method__note a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ── PEP conformance over-time chart ───────────────────────── */
+.conf-chart {
+  margin: var(--space-8) 0;
+  padding: var(--space-6);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.conf-chart__head { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-4); }
+.conf-chart__label {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+.conf-chart__title { font-size: 1.125rem; font-weight: 600; color: var(--color-text-primary); }
+.conf-chart__svg { display: block; width: 100%; height: auto; overflow: visible; }
+.conf-chart__grid { stroke: var(--color-border); stroke-width: 1; }
+.conf-chart__axis, .conf-chart__date { fill: var(--color-text-muted); font-family: var(--font-mono); font-size: 11px; }
+.conf-chart__line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+/* Climb to 100% = the earlier (incorrect) era, in red. */
+.conf-chart__line--prev { stroke: var(--color-error); }
+/* The drop and everything after = the official (correct) era, in green. */
+.conf-chart__line--official { stroke: var(--color-success); }
+.conf-chart__drop { stroke: var(--color-success); stroke-width: 3; stroke-linecap: round; }
+.conf-chart__dot--prev { fill: var(--color-error); }
+.conf-chart__dot--official { fill: var(--color-success); }
+.conf-chart__value { font-family: var(--font-mono); font-size: 14px; font-weight: 700; }
+.conf-chart__value--peak { fill: var(--color-error); }
+.conf-chart__value--current { fill: var(--color-success); }
+.conf-chart__drop-note {
+  margin: var(--space-5) 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+.conf-chart__drop-note strong { color: var(--color-error); }
+.conf-chart__legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+.conf-chart__legend li { display: flex; align-items: center; gap: var(--space-2); }
+.conf-chart__swatch { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+.conf-chart__swatch--prev { background: var(--color-error); }
+.conf-chart__swatch--official { background: var(--color-success); }
+.conf-chart__caption { margin: var(--space-4) 0 0; font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.6; }
+.conf-chart__caption code { font-family: var(--font-mono); font-size: 0.85em; }
+
+/* ── Conformance methodology page bits ─────────────────────── */
+.conf-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-6) 0;
+}
+.conf-links a {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border-bright);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+.conf-links a:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.conf-correction {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin: var(--space-6) 0;
+  padding: var(--space-5) var(--space-6);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-bright);
+  border-radius: var(--radius-lg);
+}
+.conf-correction__old, .conf-correction__new { font-family: var(--font-mono); font-weight: 700; font-size: 1.75rem; }
+.conf-correction__old { color: var(--color-warning); text-decoration: line-through; text-decoration-thickness: 2px; }
+.conf-correction__new { color: var(--color-primary); }
+.conf-correction__arrow { color: var(--color-text-muted); font-size: 1.5rem; }
+.conf-correction__text { font-size: 0.9375rem; color: var(--color-text-secondary); flex: 1; min-width: 220px; }
+.conf-cat-bar {
+  display: inline-block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--color-primary);
+  vertical-align: middle;
+  min-width: 2px;
+}
+.conf-verified {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  color: var(--color-success);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+
+/* ── Releases (/docs/releases/) ────────────────────────────── */
+.releases-intro { font-size: 1.0625rem; }
+.release-list { display: flex; flex-direction: column; gap: var(--space-6); margin-top: var(--space-8); }
+.release {
+  padding: var(--space-6);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-bright);
+  border-radius: var(--radius-lg);
+}
+.release-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-4); }
+.release-title { font-family: var(--font-mono); font-size: 1.25rem; font-weight: 700; margin: 0; padding: 0; border: none; }
+.release-title a { color: var(--color-text-primary); text-decoration: none; }
+.release-title a:hover { color: var(--color-primary); }
+.release-badge { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.15em 0.5em; border-radius: var(--radius-sm); }
+.release-badge--latest { color: var(--color-success); background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.35); }
+.release-badge--pre { color: var(--color-warning); background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.35); }
+.release-date { margin-left: auto; font-size: 0.8125rem; color: var(--color-text-muted); font-family: var(--font-mono); }
+/* Tame the heading scale of the maintainer-authored notes so a release's own
+   `## headings` don't impersonate the docs page's top-level sections. */
+.release-notes > :first-child { margin-top: 0; }
+.release-notes h1, .release-notes h2, .release-notes h3, .release-notes h4 {
+  font-size: 1rem; font-weight: 600; margin-top: var(--space-5); margin-bottom: var(--space-2);
+  padding: 0; border: none; color: var(--color-text-primary); letter-spacing: 0;
+}
+.release-assets { margin-top: var(--space-5); border-top: 1px solid var(--color-border); padding-top: var(--space-4); }
+.release-assets summary { cursor: pointer; font-size: 0.875rem; font-weight: 600; color: var(--color-text-secondary); }
+.release-assets summary:hover { color: var(--color-primary); }
+.release-asset-list { list-style: none !important; padding-left: 0 !important; margin-top: var(--space-3); }
+.release-asset-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-3); margin-bottom: var(--space-2); }
+.release-asset-list a { font-family: var(--font-mono); font-size: 0.875rem; }
+.release-asset-meta { font-size: 0.75rem; color: var(--color-text-muted); font-family: var(--font-mono); }
+
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .section-heading { font-size: 1.75rem; }

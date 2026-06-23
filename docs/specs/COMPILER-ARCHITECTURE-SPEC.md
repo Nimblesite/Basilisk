@@ -21,7 +21,7 @@ python3 script.py               # still works -- it's valid Python
 ### What This Is {#COMPILER-WHAT}
 
 - A **strict subset** of Python 3.12 that compiles to native code
-- 100% PEP compliant for the features it supports
+- Aims to be PEP compliant for the features it supports
 - LLVM-based: JIT for development, AOT for deployment
 - Interoperable with the Python ecosystem via CPython embedding
 - A single binary (`basilisk`) that checks, compiles, and runs
