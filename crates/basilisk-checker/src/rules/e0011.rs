@@ -26,7 +26,10 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::{guards::is_stub_context, Rule};
+use super::{
+    guards::{is_no_type_check, is_stub_context},
+    Rule,
+};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-E0011",
@@ -44,7 +47,8 @@ impl Rule for ReturnTypeMismatch {
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         for func in &module.functions {
-            if !is_stub_context(func, &module.classes) {
+            // @no_type_check suppresses body checks (E0011); E0041 arity still applies.
+            if !is_stub_context(func, &module.classes) && !is_no_type_check(func) {
                 check_return_type_mismatch(func, module, diagnostics);
             }
         }
@@ -99,6 +103,17 @@ fn check_return_type_mismatch(
 
         // Parse annotation text to InferredType
         let declared_type = InferredType::from_annotation(ann_text);
+
+        // Skip targets the kind-only return inference cannot reliably verify —
+        // quoted forward references (`"int | Meta2"` → a union of `Named`
+        // fragments), structural `Named` types (`Sequence[int]`), and
+        // `Literal[...]` targets (`return True` infers `Bool`, not
+        // `Literal[True]`). Shared with E0013 so the two sibling return-mismatch
+        // rules stay in lock-step. Concrete primitive/None/container mismatches
+        // (e.g. `-> str: return 42`) are NOT unverifiable and still fire.
+        if super::shared::is_unverifiable_return_type(&declared_type) {
+            continue;
+        }
 
         // Check assignability using inference system
         if !inferred_type.is_assignable_to(&declared_type) {

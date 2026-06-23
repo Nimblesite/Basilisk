@@ -49,3 +49,46 @@ fn e0011_return_mismatch_stub_exempt() -> Result<(), Box<dyn std::error::Error>>
     );
     Ok(())
 }
+
+#[test]
+fn e0011_literal_target_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    // `return True` infers `Bool`, not `Literal[True]`; the kind-only return
+    // inference cannot verify a `Literal[...]` target, so E0011 must NOT fire
+    // (matches __exit__ -> Literal[True] in conformance exceptions_context_managers.py).
+    let source = "from typing import Literal\ndef ok() -> Literal[True]:\n    return True\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0011"),
+        "Literal[True] target must not fire E0011 (value-less inference is unverifiable), got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0011_quoted_forward_ref_union_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    // A quoted forward-ref union annotation parses into `Named` fragments with no
+    // concrete member; E0011 must skip it rather than flag a valid `return 1`
+    // (conformance constructors_call_metaclass.py).
+    let source = "class Meta2: ...\ndef f() -> \"int | Meta2\":\n    return 1\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0011"),
+        "quoted forward-ref union target must not fire E0011, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0011_concrete_mismatch_still_fires_after_guard() -> Result<(), Box<dyn std::error::Error>> {
+    // The unverifiability guard must NOT suppress genuine, concrete mismatches.
+    let source = "def f() -> None:\n    return 42\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-E0011"),
+        "returning a value from -> None must still fire E0011, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}

@@ -58,7 +58,7 @@ See the project README for competitive analysis.
 | Implementation | TypeScript | Python/C | Rust | Rust | Rust | Rust | **Rust** |
 | License | MIT | MIT | MIT | MIT | AGPL | MIT | **MIT** |
 | Default strictness | Gradual | Gradual | Gradual | Gradual | Gradual | N/A | **Strict only** |
-| PEP conformance (current) | ~95% | ~85% | ~15% | ~58% | ~69% | N/A | **82.9%** |
+| PEP conformance (current) | ~95% | ~85% | ~15% | ~58% | ~69% | N/A | **90.4%** |
 | PEP conformance target | — | — | — | — | — | N/A | **100%** |
 | LSP server | Yes | No | Yes | Yes | Yes | No | **Yes** |
 | Incremental computation | Lazy eval | Daemon | Salsa | Module-level | No | N/A | **Salsa** |
@@ -286,7 +286,7 @@ The `# type:` prefix ensures compatibility with editors and tools that already r
 
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
-Basilisk targets **100% conformance** with the Python typing specification. This is a target, not a present-day achievement: the official `python/typing` conformance scorer (pinned commit, run unmodified in CI) currently reports **121 of 146 files passing (82.9%, counting errors and warnings — the strictest grading)**, with 24 false positives and 36 missed required errors still to clear, running the binary in spec-conformance mode ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)). We run that suite in CI on every change and ratchet the pass rate up.
+Basilisk targets **100% conformance** with the Python typing specification. This is a target, not a present-day achievement: the official `python/typing` conformance scorer (pinned commit, run unmodified in CI) currently reports **132 of 146 files passing (90.4%, counting errors and warnings — the strictest grading)**, with 3 false positives and 36 missed required errors still to clear, running the binary in spec-conformance mode ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)). We run that suite in CI on every change and ratchet the pass rate up.
 
 #### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
@@ -1405,13 +1405,13 @@ checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with.
   in `coverage-thresholds.json` (`conformance.threshold`,
   `conformance.max_false_positives`); the former ratchets **up**, the latter
   **down**. Per-file results are written to `conformance/conformance_status.csv`.
-- **Current score**: **121 / 146 = 82.9%** (strictest grading: every diagnostic,
-  errors AND warnings, counted — as pyright is graded), 24 false positives, 36
+- **Current score**: **132 / 146 = 90.4%** (strictest grading: every diagnostic,
+  errors AND warnings, counted — as pyright is graded), 3 false positives, 36
   missed required errors, binary in spec-conformance mode. This replaces an earlier
   in-repo harness that *excluded codes from the scorer itself* (a rig that reported
   100%); the honest number with house-style rules **on** was 40.4%, and
   configuring the binary to its type-system mode (§ below) — not touching the
-  scorer — lifts it to 82.9%. Target: 100%.
+  scorer — plus eliminating false positives lifts it to 90.4%. Target: 100%.
 
 #### Spec-conformance mode {#CHKARCH-CONFORMANCE-MODE}
 
@@ -1423,6 +1423,7 @@ Basilisk is **strict-by-default**: on top of the type system it ships opinionate
 | `BSK-E0001` | Missing parameter type annotation | unannotated params have an inferred/`Any` type, not an error |
 | `BSK-E0002` | Missing return type annotation | an unannotated return type is **inferred**, not an error |
 | `BSK-E0004` | Missing `*args`/`**kwargs` annotation | same — inference, not a requirement |
+| `BSK-E0025` | Missing `@override` decorator | PEP 698 `@override` is **opt-in**; a checker is not required to demand it |
 | `BSK-W0050` | Redundant type annotation | redundancy is a style smell, never a type error |
 | `BSK-W0014` | Explicit `Any` nudge | `Any` is a fully valid type per the spec |
 

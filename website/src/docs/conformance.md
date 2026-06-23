@@ -64,7 +64,7 @@ The adapter and gate live in a separate, auditable file, so the calculator stays
 
 ## What the checker runs in — spec-conformance mode
 
-The suite tests the **type system** — generics, protocols, overloads, `TypedDict`, and the rest. Basilisk is strict by default and layers on house-style rules the typing spec doesn't define: chiefly *require an annotation* on every parameter, return, and `*args`/`**kwargs`, a redundant-annotation warning, and an explicit-`Any` nudge. Those are the right defaults for day-to-day Basilisk, but the spec treats an unannotated type as **inferred**, not an error — so firing them on the suite would be a false positive on nearly every file.
+The suite tests the **type system** — generics, protocols, overloads, `TypedDict`, and the rest. Basilisk is strict by default and layers on house-style rules the typing spec doesn't define: chiefly *require an annotation* on every parameter, return, and `*args`/`**kwargs`, a redundant-annotation warning, a missing-`@override` nudge, and an explicit-`Any` nudge. Those are the right defaults for day-to-day Basilisk, but the spec treats an unannotated type as **inferred**, not an error — so firing them on the suite would be a false positive on nearly every file.
 
 So, exactly as pyright's conformance run leaves `reportMissingParameterType` and its siblings off, we run the binary in a **spec-conformance mode** that disables those house-style rules (a committed `basilisk.json` the scorer drops beside the test files). This sets **what the binary emits** — the same lever every checker on the results page pulls — not how the result is scored. The pinned calculator above still counts every diagnostic the binary does emit, with nothing excluded.
 

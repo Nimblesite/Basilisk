@@ -37,44 +37,6 @@ impl Rule for ReturnTypeMismatch {
     }
 }
 
-/// Returns true when E0013 cannot reliably verify a return against `ty` — at the
-/// top level or nested inside a union, container, optional, callable, or type-form.
-///
-/// Two kinds defeat E0013's value-less return inference:
-/// - `Named`: protocols/classes/aliases (and quote-mangled forward references)
-///   need class-hierarchy/structural analysis E0013 cannot perform.
-/// - `Literal`: verifying a `Literal[v]` target requires the *value* of the
-///   returned expression, but `infer_rhs` only knows the kind (`return True`
-///   infers `Bool`, not `Literal[True]`). Any `Literal`-target check is therefore
-///   unreliable, so it is skipped.
-///
-/// See `check_function` for the rationale.
-fn is_unverifiable_return_type(ty: &InferredType) -> bool {
-    match ty {
-        InferredType::Named(_) | InferredType::Literal(_) => true,
-        InferredType::Optional(inner)
-        | InferredType::List(inner)
-        | InferredType::Set(inner)
-        | InferredType::TypeForm(inner) => is_unverifiable_return_type(inner),
-        InferredType::Dict(key, value) => {
-            is_unverifiable_return_type(key) || is_unverifiable_return_type(value)
-        }
-        InferredType::Union(types) => types.iter().any(is_unverifiable_return_type),
-        // The variable-length form `tuple[X, ...]` parses the `...` terminator to
-        // `Named("...")`; that is a structural marker handled by `is_assignable_to`,
-        // not an unresolvable type, so it must not trigger the skip.
-        InferredType::Tuple(types) => types.iter().any(|elem| {
-            !matches!(elem, InferredType::Named(name) if name == "...")
-                && is_unverifiable_return_type(elem)
-        }),
-        InferredType::Callable(info) => {
-            is_unverifiable_return_type(&info.return_type)
-                || info.param_types.iter().any(is_unverifiable_return_type)
-        }
-        _ => false,
-    }
-}
-
 fn check_function(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec<Diagnostic>) {
     // Generator functions have their own return type validation (E0120).
     // Return values in generators go through Generator[Y, S, R]'s ReturnType,
@@ -106,7 +68,7 @@ fn check_function(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec<Di
     // be flagged. Empty-tuple forms like `tuple[()]` parse the `()` to
     // `Named("()")`. `Literal[...]` targets need the returned value, which the
     // kind-only return inference does not have. All are skipped.
-    if is_unverifiable_return_type(&declared_type) {
+    if super::shared::is_unverifiable_return_type(&declared_type) {
         return;
     }
 

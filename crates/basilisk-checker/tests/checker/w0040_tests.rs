@@ -42,3 +42,31 @@ fn w0040_lambda_is_warning_not_error() -> Result<(), Box<dyn std::error::Error>>
     );
     Ok(())
 }
+
+#[test]
+fn w0040_enum_body_lambda_exempt() -> Result<(), Box<dyn std::error::Error>> {
+    // Enum bodies legitimately assign bare lambdas as non-member callables;
+    // annotating them is discouraged, so W0040 must not fire
+    // (conformance enums_members.py).
+    let source = "from enum import Enum\nclass Color(Enum):\n    RED = 1\n    converter = lambda x: str(x)\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-W0040"),
+        "lambda in an enum body must not fire W0040, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn w0040_non_enum_class_lambda_still_fires() -> Result<(), Box<dyn std::error::Error>> {
+    // The enum exemption must NOT leak to ordinary classes.
+    let source = "class Plain:\n    converter = lambda x: str(x)\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-W0040"),
+        "lambda in a non-enum class must still fire W0040, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
