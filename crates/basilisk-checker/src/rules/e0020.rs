@@ -34,17 +34,14 @@ impl Rule for MissingOverloadImpl {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Build a set of Protocol/ABC class names so we can exempt their methods.
-        let exempt_classes: std::collections::HashSet<&str> = module
+        // Build a set of Protocol class names so we can exempt their methods.
+        // ABC classes are NOT blanket-exempt: only their `@abstractmethod`
+        // overload groups skip the implementation requirement — a *non*-abstract
+        // overloaded method in an ABC still needs a concrete implementation.
+        let protocol_classes: std::collections::HashSet<&str> = module
             .classes
             .iter()
-            .filter(|cls| {
-                is_protocol_class(cls)
-                    || cls
-                        .bases
-                        .iter()
-                        .any(|b| b == "ABC" || b == "abc.ABC" || b == "ABCMeta")
-            })
+            .filter(|cls| is_protocol_class(cls))
             .map(|cls| cls.name.as_str())
             .collect();
 
@@ -82,12 +79,16 @@ impl Rule for MissingOverloadImpl {
                 if overloaded.len() < 2 {
                     continue;
                 }
-                let is_exempt_class = class_name.is_some_and(|cls| exempt_classes.contains(cls));
+                let is_protocol = class_name.is_some_and(|cls| protocol_classes.contains(cls));
                 let has_abstract = overloaded
                     .iter()
                     .any(|f| has_decorator(&f.decorators, "abstractmethod"));
+                // Stub files (`.pyi`) declare overloads without an implementation.
+                let is_stub = std::path::Path::new(&module.path)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("pyi"));
 
-                if !is_exempt_class && !has_abstract {
+                if !is_protocol && !has_abstract && !is_stub {
                     if let Some(first) = overloaded.first() {
                         diagnostics.push(make_diagnostic(
                             first,

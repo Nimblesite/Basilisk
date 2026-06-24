@@ -172,7 +172,15 @@ def refresh_upstream() -> int:
 
 
 def ensure_fixtures(conf_dir: Path, force: bool) -> None:
-    """Download python/typing's conformance `.py` fixtures into `conf_dir`.
+    """Download python/typing's conformance fixtures into `conf_dir`.
+
+    Fetches BOTH the `.py` test fixtures AND the `.pyi` support stubs they import
+    (e.g. `qualifiers_final_decorator.py` does `from _qualifiers_final_decorator
+    import Base3` — a cross-module `@final` test that is meaningless unless that
+    sibling stub is on disk). Upstream ships both side by side; fetching only
+    `.py` silently drops the stubs and makes any import-resolving check score
+    those files wrong. Only `*.py` are ever SCORED (see `score()`); the `.pyi`
+    are import-only inputs.
 
     The fixtures are git-ignored and fetched on demand (auto when missing, or via
     `--fetch` / `--fetch-only`). No-op when already present at the pinned ref (a
@@ -184,7 +192,12 @@ def ensure_fixtures(conf_dir: Path, force: bool) -> None:
 
     stamp = conf_dir / ".ref-sha"
     cached_ref = stamp.read_text(encoding="utf-8").strip() if stamp.exists() else ""
-    present = conf_dir.exists() and any(conf_dir.glob("*.py"))
+    # Require BOTH the `.py` fixtures and the `.pyi` support stubs: a restored
+    # cache (or older checkout) that predates stub-fetching has `.py` but no
+    # `.pyi`, and must re-fetch rather than score the cross-module tests wrong.
+    present = (
+        conf_dir.exists() and any(conf_dir.glob("*.py")) and any(conf_dir.glob("*.pyi"))
+    )
     if present and cached_ref == PINNED_TYPING_REF and not force:
         return
 
@@ -197,13 +210,15 @@ def ensure_fixtures(conf_dir: Path, force: bool) -> None:
     with urllib.request.urlopen(listing_req, timeout=60) as resp:  # noqa: S310 (pinned https)
         entries = json.loads(resp.read())
     fixtures = [
-        e for e in entries if e.get("type") == "file" and e["name"].endswith(".py")
+        e
+        for e in entries
+        if e.get("type") == "file" and e["name"].endswith((".py", ".pyi"))
     ]
     if not fixtures:
-        raise RuntimeError(f"no .py fixtures found at {FIXTURES_API}")
+        raise RuntimeError(f"no .py/.pyi fixtures found at {FIXTURES_API}")
 
     conf_dir.mkdir(parents=True, exist_ok=True)
-    for stale in conf_dir.glob("*.py"):
+    for stale in (*conf_dir.glob("*.py"), *conf_dir.glob("*.pyi")):
         stale.unlink()
     for entry in fixtures:
         with urllib.request.urlopen(entry["download_url"], timeout=60) as resp:  # noqa: S310
@@ -240,8 +255,8 @@ def write_conformance_config(conf_dir: Path) -> None:
 
     `basilisk check <file>` auto-discovers config from the file's directory, so a
     `basilisk.json` here is picked up for every fixture. It survives re-fetches
-    (`ensure_fixtures` only unlinks `*.py`). Committed in spirit — its content is
-    this constant, version-controlled in score.py for full transparency.
+    (`ensure_fixtures` only unlinks `*.py`/`*.pyi`). Committed in spirit — its
+    content is this constant, version-controlled in score.py for full transparency.
     """
     conf_dir.mkdir(parents=True, exist_ok=True)
     (conf_dir / "basilisk.json").write_text(

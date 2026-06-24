@@ -6,6 +6,7 @@ const ENUM_BASES: &[&str] = &["Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "
 mod annotations;
 mod assert_narrow;
 mod assigns;
+mod call_return;
 mod calls_and_reveal;
 mod class_info;
 mod class_info_ext;
@@ -210,6 +211,7 @@ fn build_resolved_module(
         readonly_violations: results.readonly_issues,
         annotated_direct_call_spans: module_level::collect_annotated_direct_calls(stmts),
         imported_final_names: final_readonly::collect_imported_final_names(stmts, &module.path),
+        imported_final_methods: final_readonly::collect_imported_final_methods(stmts, &module.path),
         type_alias_type_calls: type_alias::collect_type_alias_type_calls(stmts),
         type_alias_type_violations,
         type_statements: type_alias::collect_type_statements(stmts),

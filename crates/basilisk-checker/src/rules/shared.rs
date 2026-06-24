@@ -6,10 +6,26 @@
 
 use std::collections::{HashMap, HashSet};
 
+use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_parser::ParsedModule;
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule, Span, TypeVarCallInfo};
 use ruff_python_ast::{self as ast, Expr};
+
+/// Returns `true` when the annotation text denotes a `ClassVar[...]` type.
+///
+/// `ClassVar` fields are excluded from the dataclass `__init__` parameter list,
+/// so dataclass rules (field ordering, constructor arity) skip them.
+pub(crate) fn annotation_is_classvar(source: &str, span: Option<Span>) -> bool {
+    let Some(text) = span.and_then(|span| slice_span(source, span)) else {
+        return false;
+    };
+    let t = text.trim();
+    t.starts_with("ClassVar[")
+        || t.starts_with("ClassVar ")
+        || t == "ClassVar"
+        || t.contains(".ClassVar[")
+}
 
 // ---------------------------------------------------------------------------
 // Source-text geometry

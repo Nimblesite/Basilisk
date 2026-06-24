@@ -107,6 +107,13 @@ impl Rule for FinalViolation {
                         }
                     }
                 }
+                // Bases imported from a sibling module (e.g. a `.pyi` stub) carry
+                // their `@final` methods in `imported_final_methods`.
+                if let Some(methods) = module.imported_final_methods.get(base_name.as_str()) {
+                    for method_name in methods {
+                        let _ = final_base_methods.insert(method_name.as_str());
+                    }
+                }
             }
 
             // Emit an error for each child method that overrides a @final base method.

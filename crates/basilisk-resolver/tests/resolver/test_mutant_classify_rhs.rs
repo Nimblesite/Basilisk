@@ -59,21 +59,40 @@ fn classify_rhs_empty_dict_vs_nonempty() -> Result<(), Box<dyn std::error::Error
 }
 
 #[test]
-fn is_wildcard_pattern_named_match_as_is_not_wildcard() -> Result<(), Box<dyn std::error::Error>> {
+fn is_wildcard_pattern_bare_capture_is_wildcard() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "x = 1\n",
         "match x:\n",
-        "    case y:\n", // MatchAs with name — NOT wildcard
+        "    case y:\n", // bare capture (no guard) — irrefutable, IS a wildcard
         "        pass\n",
     )
     .to_owned();
     let resolved = resolve_src(&src)?;
-    // A MatchAs with a name is a capture pattern, not a wildcard.
-    // The match stmt must be resolved with has_wildcard = false.
+    // A bare capture `case y:` always matches (like `case _:`), so the match is
+    // exhaustive and has_wildcard must be true.
+    let stmt = resolved.match_stmts.first().ok_or("no match stmt")?;
+    assert!(
+        stmt.has_wildcard,
+        "bare capture pattern `case y:` must be treated as a wildcard"
+    );
+    Ok(())
+}
+
+#[test]
+fn is_wildcard_pattern_guarded_capture_is_not_wildcard() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "x = 1\n",
+        "match x:\n",
+        "    case y if y > 0:\n", // capture WITH guard — refutable, NOT a wildcard
+        "        pass\n",
+    )
+    .to_owned();
+    let resolved = resolve_src(&src)?;
+    // A guard makes the capture refutable, so it is not a wildcard.
     let stmt = resolved.match_stmts.first().ok_or("no match stmt")?;
     assert!(
         !stmt.has_wildcard,
-        "capture pattern `case y:` must not be wildcard"
+        "guarded capture `case y if ...:` must not be a wildcard"
     );
     Ok(())
 }

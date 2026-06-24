@@ -129,8 +129,12 @@ pub struct TypeVarCallInfo {
 pub struct MatchStmtInfo {
     /// The span of the `match` keyword.
     pub span: Span,
-    /// `true` when at least one case uses a wildcard pattern (`case _:`).
+    /// `true` when at least one case is irrefutable — a bare `case _:` or a bare
+    /// capture `case name:` (without a guard) — making the match exhaustive.
     pub has_wildcard: bool,
+    /// `true` when at least one case decomposes structurally (a sequence or
+    /// mapping pattern). Exhaustiveness checking does not apply to these.
+    pub has_structural_pattern: bool,
 }
 
 /// A `reveal_type(...)` call found anywhere in the module.

@@ -26,7 +26,7 @@ use super::calls_and_reveal::build_assert_type_call_info;
 use super::class_info_ext::expr_simple_name;
 use super::core::source_slice_range;
 use super::function_info::build_param_scope_owned;
-use super::typeddict::{split_subscript, split_top_level_args};
+use super::typeddict::{resolve_actual_type, split_subscript, split_top_level_args};
 
 /// Variable → current (possibly narrowed) type-annotation text.
 type Env = HashMap<String, String>;
@@ -55,6 +55,9 @@ struct NarrowCtx<'a> {
     /// Context-manager classes whose `__exit__` may suppress (`bool`/`Literal[True]`).
     suppress_cms: HashSet<String>,
     type_vars: HashSet<String>,
+    /// Signatures / class names / module vars / `TypeVar` metadata used to infer
+    /// the return type of a call inside `assert_type(...)`.
+    call_return: super::call_return::CallReturnCtx,
 }
 
 /// Collect every `assert_type(...)` call in `stmts`, applying flow narrowing.
@@ -65,6 +68,7 @@ pub(super) fn collect(stmts: &[Stmt], source: &str) -> Vec<AssertTypeCallInfo> {
         guards: HashMap::new(),
         suppress_cms: HashSet::new(),
         type_vars: HashSet::new(),
+        call_return: super::call_return::collect(stmts, source),
     };
     collect_metadata(stmts, &mut ctx);
     let mut out = Vec::new();
@@ -205,6 +209,33 @@ fn class_suppresses(cls: &StmtClassDef, source: &str) -> bool {
 // Body walker (mirrors the generic traversal, adding narrowing at `if`)
 // ---------------------------------------------------------------------------
 
+/// Infer the static type of `assert_type`'s first argument: the existing
+/// name/literal resolution, plus call/subscript inference (enum lookup, generic
+/// function/method returns) that the string-based resolver cannot do alone.
+fn infer_actual_type(expr: &Expr, env: &Env, ctx: &NarrowCtx<'_>) -> Option<String> {
+    if let Some(simple) = resolve_actual_type(expr, env, ctx.source) {
+        return Some(simple);
+    }
+    match expr {
+        // `Enum["MEMBER"]` performs a member lookup → the enum type.
+        Expr::Subscript(sub) => {
+            let base = expr_simple_name(&sub.value)?;
+            ctx.enums.contains_key(base.as_str()).then_some(base)
+        }
+        // `Enum(value)` performs a value-based member lookup → the enum type;
+        // otherwise try generic function/method return-type inference.
+        Expr::Call(call) => {
+            if let Some(callee) = expr_simple_name(&call.func) {
+                if ctx.enums.contains_key(callee.as_str()) {
+                    return Some(callee);
+                }
+            }
+            super::call_return::infer_call_return(call, env, &ctx.type_vars, &ctx.call_return)
+        }
+        _ => None,
+    }
+}
+
 fn walk_body(stmts: &[Stmt], env: &Env, ctx: &NarrowCtx<'_>, out: &mut Vec<AssertTypeCallInfo>) {
     let mut env = env.clone();
     for stmt in stmts {
@@ -212,7 +243,12 @@ fn walk_body(stmts: &[Stmt], env: &Env, ctx: &NarrowCtx<'_>, out: &mut Vec<Asser
             Stmt::Expr(node) => {
                 if let Expr::Call(call) = node.value.as_ref() {
                     if expr_simple_name(&call.func).is_some_and(|n| n == "assert_type") {
-                        out.push(build_assert_type_call_info(call, &env, ctx.source));
+                        let actual = call
+                            .arguments
+                            .args
+                            .first()
+                            .and_then(|first| infer_actual_type(first, &env, ctx));
+                        out.push(build_assert_type_call_info(call, actual, ctx.source));
                     }
                 }
             }
@@ -508,7 +544,7 @@ fn arg_type(arg: &Expr, env: &Env, ctx: &NarrowCtx<'_>) -> Option<String> {
 
 /// Structurally match `pattern` against `actual`, binding any `TypeVar` in
 /// `tvars` to the corresponding `actual` sub-expression.
-fn bind_type_vars(
+pub(super) fn bind_type_vars(
     pattern: &str,
     actual: &str,
     tvars: &HashSet<String>,
@@ -536,7 +572,7 @@ fn bind_type_vars(
 }
 
 /// Replace whole-identifier `TypeVar` tokens in `ty` with their bindings.
-fn substitute_type_vars(ty: &str, bindings: &HashMap<String, String>) -> String {
+pub(super) fn substitute_type_vars(ty: &str, bindings: &HashMap<String, String>) -> String {
     if bindings.is_empty() {
         return ty.to_owned();
     }

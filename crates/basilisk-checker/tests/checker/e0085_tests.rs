@@ -64,3 +64,52 @@ func4((0,), ("1",))
     );
     Ok(())
 }
+
+#[test]
+fn e0085_typevartuple_element_order_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
+    // Right arity, but the constructor reorders the declared dimensions.
+    let source = r#"
+from typing import Generic, NewType, TypeVarTuple
+Shape = TypeVarTuple("Shape")
+
+class Array(Generic[*Shape]):
+    def __init__(self, shape: tuple[*Shape]):
+        self._shape: tuple[*Shape] = shape
+
+Height = NewType("Height", int)
+Width = NewType("Width", int)
+
+v: Array[Height, Width] = Array((Width(1), Height(2)))
+"#;
+    let diags = run(source)?;
+    assert!(
+        has_code(&diags, "BSK-E0085"),
+        "a permuted constructor must fire E0085, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0085_typevartuple_element_order_correct_ok() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import Generic, NewType, TypeVarTuple
+Shape = TypeVarTuple("Shape")
+
+class Array(Generic[*Shape]):
+    def __init__(self, shape: tuple[*Shape]):
+        self._shape: tuple[*Shape] = shape
+
+Height = NewType("Height", int)
+Width = NewType("Width", int)
+
+v: Array[Height, Width] = Array((Height(1), Width(2)))
+"#;
+    let diags = run(source)?;
+    assert!(
+        !has_code(&diags, "BSK-E0085"),
+        "correct element order must not fire E0085, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}

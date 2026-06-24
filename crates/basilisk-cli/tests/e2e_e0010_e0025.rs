@@ -212,6 +212,8 @@ fn e0021_exact_diagnostics_for_overlapping_overloads() -> Result<(), Box<dyn std
         &[
             Expected::error("BSK-E0001", "`x`", 5, 13),
             Expected::error("BSK-E0021", "`process`", 9, 5),
+            // The second overload returns `str`, not assignable to the impl's `int`.
+            Expected::error("BSK-E0160", "`process`", 9, 5),
             Expected::error("BSK-E0001", "`x`", 9, 13),
         ],
     );

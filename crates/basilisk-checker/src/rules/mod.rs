@@ -162,6 +162,10 @@ pub(crate) mod e0153;
 pub(crate) mod e0154;
 pub(crate) mod e0155;
 pub(crate) mod e0156;
+pub(crate) mod e0157;
+pub(crate) mod e0158;
+pub(crate) mod e0159;
+pub(crate) mod e0160;
 pub(crate) mod guards;
 pub(crate) mod shared;
 pub(crate) mod w0011;
@@ -342,6 +346,10 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &e0154::ModuleAttributeUndefined,
         &e0155::Pep695BelowTargetViolation,
         &e0156::TypedDictExtraItemsViolation,
+        &e0157::DataclassFieldOrder,
+        &e0158::OverloadDecoratorConsistency,
+        &e0159::OverrideWithoutBaseMethod,
+        &e0160::OverloadImplConsistency,
         &w0011::UndeclaredDependencyImport,
         &w0012::UnusedDependency,
         &w0013::StaleLockFile,

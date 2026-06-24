@@ -843,6 +843,30 @@ def classify(x: int) -> str:
     Ok(())
 }
 
+// Kills `replace && with ||` (and `replace !has_structural_pattern with true`)
+// in `NonExhaustiveMatch::check`'s filter `!has_wildcard && !has_structural_pattern`.
+// A `match` with a structural (sequence/mapping) pattern and NO wildcard is
+// exempt: with `&&` no diagnostic fires; the `||` mutant would wrongly flag it.
+#[mutation_safe(rule = "e0023")]
+#[test]
+fn mutant_e0023_structural_pattern_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def handle(seq: list) -> str:
+    match seq:
+        case [a]:
+            return 'one'
+        case [a, b]:
+            return 'two'
+    return 'other'
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "BSK-E0023") == 0,
+        "E0023 must NOT fire for a match with a structural pattern (no wildcard): {diagnostics:?}"
+    );
+    Ok(())
+}
+
 #[mutation_safe(rule = "e0027")]
 #[test]
 fn mutant_e0027_smoke() -> Result<(), Box<dyn std::error::Error>> {

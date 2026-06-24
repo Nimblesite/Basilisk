@@ -95,6 +95,11 @@ pub struct ResolvedModule {
     ///
     /// Populated lazily by the resolver when the imported module can be found.
     pub imported_final_names: std::collections::HashSet<String>,
+    /// For each base class imported from a sibling module, the set of its method
+    /// names declared `@final`. Lets BSK-E0034 detect overriding a `@final`
+    /// method whose definition lives in an imported (e.g. `.pyi`) base.
+    pub imported_final_methods:
+        std::collections::HashMap<String, std::collections::HashSet<String>>,
     /// Module-level `TypeAliasType(...)` call sites.
     pub type_alias_type_calls: Vec<TypeAliasTypeCallInfo>,
     /// Violations detected in `TypeAliasType(...)` calls.
