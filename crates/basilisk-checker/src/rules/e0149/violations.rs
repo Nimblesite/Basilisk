@@ -305,6 +305,65 @@ pub(super) fn check_type_alias_circular(
             );
         }
     }
+
+    check_mutual_alias_cycles(scoping, path, diagnostics);
+}
+
+/// Detect *mutual* / longer cycles between aliases connected by bare references
+/// (`type A = B`, `type B = A`). Only top-level bare references count — recursion
+/// through a container (`type A = list[B]`) terminates and is legitimate, so it
+/// is excluded via `rhs_bare_refs`.
+fn check_mutual_alias_cycles(
+    scoping: &Pep695Scoping,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    use std::collections::HashMap;
+
+    let alias_by_name: HashMap<&str, &Pep695AliasDef> = scoping
+        .aliases
+        .iter()
+        .map(|a| (a.name.as_str(), a))
+        .collect();
+
+    for alias in &scoping.aliases {
+        if reaches_self(&alias.name, alias, &alias_by_name) {
+            push_circular(
+                alias,
+                "is part of a circular alias chain",
+                path,
+                diagnostics,
+            );
+        }
+    }
+}
+
+/// `true` when following bare references from `current` returns to `start`
+/// through a chain of length ≥ 2 (a self-loop is handled separately).
+fn reaches_self(
+    start: &str,
+    current: &Pep695AliasDef,
+    alias_by_name: &std::collections::HashMap<&str, &Pep695AliasDef>,
+) -> bool {
+    let mut visited = std::collections::HashSet::new();
+    let mut stack: Vec<&str> = current
+        .rhs_bare_refs
+        .iter()
+        .filter(|r| r.as_str() != start) // exclude the trivial self-loop
+        .map(String::as_str)
+        .collect();
+    while let Some(name) = stack.pop() {
+        if name == start {
+            return true;
+        }
+        if !visited.insert(name) {
+            continue;
+        }
+        if let Some(next) = alias_by_name.get(name) {
+            stack.extend(next.rhs_bare_refs.iter().map(String::as_str));
+        }
+    }
+    false
 }
 
 fn push_circular(

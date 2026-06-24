@@ -10,7 +10,8 @@ use std::collections::HashMap;
 use crate::rules::shared::is_type_compatible;
 
 use super::model::{
-    ancestor_closed_true, effective_extra, explicit_extra, transitive_fields, Qualifier, TdModel,
+    ancestor_closed_true, effective_extra, explicit_extra, transitive_fields, Qualifier, TdField,
+    TdModel,
 };
 
 /// `a` and `b` are *consistent* (mutually assignable) — the invariance check a
@@ -30,7 +31,79 @@ pub(super) fn class_def_errors(model: &TdModel, map: &HashMap<&str, &TdModel>) -
     closed_inheritance_errors(model, map, &mut errors);
     extra_items_qualifier_error(model, &mut errors);
     change_extra_items_error(model, map, &mut errors);
+    closed_inherited_extra_key_error(model, map, &mut errors);
+    inherited_extra_items_field_errors(model, map, &mut errors);
     errors
+}
+
+/// Union of all transitive fields declared on `model`'s base classes.
+fn base_transitive_fields(model: &TdModel, map: &HashMap<&str, &TdModel>) -> Vec<TdField> {
+    model
+        .bases
+        .iter()
+        .flat_map(|base| transitive_fields(base, map))
+        .collect()
+}
+
+/// A subclass that *inherits* closure (`closed=True` on an ancestor) but is not
+/// itself the closing class may not introduce a new key. (PEP 728 — a subclass
+/// of a closed `TypedDict` is also closed.)
+fn closed_inherited_extra_key_error(
+    model: &TdModel,
+    map: &HashMap<&str, &TdModel>,
+    errors: &mut Vec<String>,
+) {
+    let self_closed = model.closed.as_ref().is_some_and(|c| c.value == Some(true));
+    if self_closed || !ancestor_closed_true_via_base(model, map) {
+        return;
+    }
+    let base_fields = base_transitive_fields(model, map);
+    if let Some(field) = model
+        .fields
+        .iter()
+        .find(|f| !base_fields.iter().any(|bf| bf.name == f.name))
+    {
+        errors.push(format!(
+            "`{}` is a closed TypedDict; extra key `{}` is not allowed",
+            model.name, field.name
+        ));
+    }
+}
+
+/// A new key added by a subclass must satisfy an `extra_items` pseudo-item
+/// declared by an *ancestor* (PEP 728): a read-only pseudo-item requires the
+/// value type be assignable to it; a non-read-only one additionally forbids a
+/// `Required` key and requires the value type be *consistent* with it.
+fn inherited_extra_items_field_errors(
+    model: &TdModel,
+    map: &HashMap<&str, &TdModel>,
+    errors: &mut Vec<String>,
+) {
+    let Some(extra) = explicit_extra(&model.name, map, false) else {
+        return;
+    };
+    let base_fields = base_transitive_fields(model, map);
+    for field in &model.fields {
+        if base_fields.iter().any(|bf| bf.name == field.name) {
+            continue; // redeclaring / narrowing an inherited key is allowed
+        }
+        let message = if extra.readonly {
+            (!is_type_compatible(&field.ty, &extra.ty))
+                .then(|| format!("`{}` is not assignable to `{}`", field.ty, extra.ty))
+        } else if field.required {
+            Some(format!(
+                "Required key `{}` is not allowed under the inherited `extra_items` of `{}`",
+                field.name, model.name
+            ))
+        } else {
+            (!is_consistent(&field.ty, &extra.ty))
+                .then(|| format!("`{}` is not consistent with `{}`", extra.ty, field.ty))
+        };
+        if let Some(message) = message {
+            errors.push(message);
+            return;
+        }
+    }
 }
 
 /// `closed=` must be a literal `True`/`False`.

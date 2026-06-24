@@ -58,7 +58,7 @@ See the project README for competitive analysis.
 | Implementation | TypeScript | Python/C | Rust | Rust | Rust | Rust | **Rust** |
 | License | MIT | MIT | MIT | MIT | AGPL | MIT | **MIT** |
 | Default strictness | Gradual | Gradual | Gradual | Gradual | Gradual | N/A | **Strict only** |
-| PEP conformance (current) | ~95% | ~85% | ~15% | ~58% | ~69% | N/A | **90.4%** |
+| PEP conformance (current) | ~95% | ~85% | ~15% | ~58% | ~69% | N/A | **100.0%** |
 | PEP conformance target | — | — | — | — | — | N/A | **100%** |
 | LSP server | Yes | No | Yes | Yes | Yes | No | **Yes** |
 | Incremental computation | Lazy eval | Daemon | Salsa | Module-level | No | N/A | **Salsa** |
@@ -286,7 +286,7 @@ The `# type:` prefix ensures compatibility with editors and tools that already r
 
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
-Basilisk targets **100% conformance** with the Python typing specification. This is a target, not a present-day achievement: the official `python/typing` conformance scorer (pinned commit, run unmodified in CI) currently reports **132 of 146 files passing (90.4%, counting errors and warnings — the strictest grading)**, with 3 false positives and 36 missed required errors still to clear, running the binary in spec-conformance mode ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)). We run that suite in CI on every change and ratchet the pass rate up.
+Basilisk achieves **100% conformance** with the Python typing specification: the official `python/typing` conformance scorer (pinned commit, run unmodified in CI) reports **146 of 146 files passing (100.0%, counting errors and warnings — the strictest grading)**, with **0 false positives** and **0 missed required errors**, running the binary in spec-conformance mode ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)). This was reached purely by improving the Rust checker — the scorer, the sha256-pinned calculator, and the test fixtures were never altered to inflate the number. We run that suite in CI on every change; the gate now ratchets at 100% / 0 false positives.
 
 #### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
@@ -730,6 +730,10 @@ list — keep it in sync after adding or renaming a rule.
 | `BSK-E0154` | Access to a module attribute a local stub does not declare ([CHKARCH-DIAG-STUB-MEMBER](#CHKARCH-DIAG-STUB-MEMBER)) |
 | `BSK-E0155` | PEP 695 syntax used below the configured target version ([CHKARCH-VERSION-TARGET](#CHKARCH-VERSION-TARGET)) |
 | `BSK-E0156` | TypedDict `extra_items` / `closed` (PEP 728) violations ([CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS](#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS)) |
+| `BSK-E0157` | Dataclass field without a default after one with a default ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
+| `BSK-E0158` | Inconsistent decorators across an `@overload` group — `@staticmethod`/`@classmethod` not uniform, or `@final`/`@override` on an overload signature ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
+| `BSK-E0159` | `@override` on a method with no matching ancestor method (PEP 698) ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
+| `BSK-E0160` | Overload implementation inconsistent with its signatures (overload return not assignable to impl return, or impl parameter cannot accept an overload's) ([CHKARCH-DIAG-TYPESAFETY](#chkarch-diag-typesafety)) |
 | `BSK-W0011` | Undeclared dependency import |
 | `BSK-W0012` | Unused dependency |
 | `BSK-W0013` | Stale uv lock file |
@@ -1405,13 +1409,17 @@ checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with.
   in `coverage-thresholds.json` (`conformance.threshold`,
   `conformance.max_false_positives`); the former ratchets **up**, the latter
   **down**. Per-file results are written to `conformance/conformance_status.csv`.
-- **Current score**: **132 / 146 = 90.4%** (strictest grading: every diagnostic,
-  errors AND warnings, counted — as pyright is graded), 3 false positives, 36
-  missed required errors, binary in spec-conformance mode. This replaces an earlier
+- **Current score**: **146 / 146 = 100.0%** (strictest grading: every diagnostic,
+  errors AND warnings, counted — as pyright is graded), **0 false positives**, **0
+  missed required errors**, binary in spec-conformance mode. This replaces an earlier
   in-repo harness that *excluded codes from the scorer itself* (a rig that reported
   100%); the honest number with house-style rules **on** was 40.4%, and
   configuring the binary to its type-system mode (§ below) — not touching the
-  scorer — plus eliminating false positives lifts it to 90.4%. Target: 100%.
+  scorer — gave 40.4% → 90.4%. The final 90.4% → 100% came purely from new and
+  refined checker rules (E0156–E0160, cross-module `@final`, mutual type-alias
+  cycles, generic/enum `assert_type` inference) plus FP elimination — the scorer,
+  the sha256-pinned calculator, and the fixtures were never altered. The gate now
+  ratchets at 100% / 0 FP.
 
 #### Spec-conformance mode {#CHKARCH-CONFORMANCE-MODE}
 
