@@ -47,14 +47,14 @@ function sym(name: string): TestSymbol {
 function mod(
   name: string,
   kind: "package" | "module",
-  opts: { coverage: number; symbols?: readonly TestSymbol[]; errors?: number; warnings?: number },
+  opts: { coverage: number; symbols?: readonly TestSymbol[]; errors?: number; warnings?: number; path?: string },
 ): TestModule {
   return {
     name,
     kind,
     symbols: opts.symbols ?? [],
     coveragePercent: opts.coverage,
-    path: `/ws/${name.split(".").join("/")}.py`,
+    path: opts.path ?? `/ws/${name.split(".").join("/")}.py`,
     errors: opts.errors ?? 0,
     warnings: opts.warnings ?? 0,
     adopted: false,
@@ -222,33 +222,73 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
     }
   });
 
-  test("flat-view sort toggle visibly reorders the module list — never a no-op (#151)", async () => {
+  test("flat-view exposes explicit name/path/coverage sort modes with a visible active mode (#151, #189)", async () => {
     const provider = new ModuleExplorerProvider(storeWith(MODULES));
     try {
       await provider.getChildren();
       provider.toggleViewMode(FAKE_CONTEXT); // -> flat
 
-      const worst = labelsOf(await provider.getChildren());
+      // Default surfaces the least-typed modules first (ascending coverage).
+      assert.strictEqual(provider.getSortMode(), "coverage", "default flat sort is by coverage");
+      const byCoverage = labelsOf(await provider.getChildren());
       assert.deepStrictEqual(
-        worst,
+        byCoverage,
         ["app.models.user", "app.api.auth", "app.api", "app", "util"],
-        "worst-first orders by ascending coverage (30, 50, 80, 90, 100)",
+        "coverage sort orders by ascending coverage (30, 50, 80, 90, 100)",
       );
 
-      provider.cycleSortMode(); // worst -> best
-      const best = labelsOf(await provider.getChildren());
+      provider.setSortMode("name");
+      const byName = labelsOf(await provider.getChildren());
       assert.deepStrictEqual(
-        best,
-        ["util", "app", "app.api", "app.api.auth", "app.models.user"],
-        "best-first orders by descending coverage",
+        byName,
+        ["app", "app.api", "app.api.auth", "app.models.user", "util"],
+        "name sort orders alphabetically by dotted module name",
       );
-      assert.notDeepStrictEqual(best, worst, "toggling sort must change the rendered order");
+      assert.notDeepStrictEqual(byName, byCoverage, "switching sort must change the rendered order");
 
-      provider.cycleSortMode(); // best -> alpha
+      provider.setSortMode("path");
+      assert.strictEqual(provider.getSortMode(), "path", "explicit selection sticks");
+
+      // The three modes are explicit + labelled, and the active one is marked —
+      // never a blind toggle (#189).
+      const options = provider.sortOptions();
+      assert.deepStrictEqual(
+        options.map((option) => option.label),
+        ["Module Name", "Path", "Type Coverage"],
+        "exactly the three labelled sort modes are offered, in order",
+      );
+      assert.deepStrictEqual(
+        options.filter((option) => option.current).map((option) => option.mode),
+        ["path"],
+        "exactly the active mode is marked current so the picker can show it",
+      );
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  test("flat-view offers an explicit sort-by-path mode (#189)", async () => {
+    // Paths are chosen so file-path order (a/ < b/ < c/) differs from BOTH name
+    // order (alpha < beta < gamma) and score order (10 < 50 < 90) — so only a
+    // genuine path sort can produce [beta, alpha, gamma].
+    const byPath: readonly TestModule[] = [
+      mod("beta", "module", { coverage: 10, path: "/ws/a/beta.py" }),
+      mod("alpha", "module", { coverage: 90, path: "/ws/b/alpha.py" }),
+      mod("gamma", "module", { coverage: 50, path: "/ws/c/gamma.py" }),
+    ];
+    const provider = new ModuleExplorerProvider(storeWith(byPath));
+    try {
+      await provider.getChildren();
+      provider.toggleViewMode(FAKE_CONTEXT); // -> flat
+
+      // #189 replaces the blind worst/best/alpha cycle with explicit
+      // name/path/coverage modes; selecting "path" sorts by file path.
+      provider.setSortMode("path");
+
       assert.deepStrictEqual(
         labelsOf(await provider.getChildren()),
-        ["app", "app.api", "app.api.auth", "app.models.user", "util"],
-        "alphabetical orders by module name",
+        ["beta", "alpha", "gamma"],
+        "path sort orders modules by file path, distinct from name/score order (#189)",
       );
     } finally {
       provider.dispose();

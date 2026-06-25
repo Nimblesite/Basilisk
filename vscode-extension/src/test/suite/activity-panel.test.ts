@@ -243,8 +243,18 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     await vscode.commands.executeCommand("basilisk.toggleModuleExplorerView");
   });
 
-  test("sortModuleExplorer command is executable", async function () {
-    await vscode.commands.executeCommand("basilisk.sortModuleExplorer");
+  test("sortModuleExplorer command opens the sort picker (#189)", async function () {
+    // The command now shows a QuickPick of the explicit sort modes; dismiss it
+    // so the test exercises the command without blocking on user input.
+    const dismiss = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        void vscode.commands.executeCommand("workbench.action.closeQuickOpen").then(() => { resolve(); });
+      }, 200);
+    });
+    await Promise.all([
+      vscode.commands.executeCommand("basilisk.sortModuleExplorer"),
+      dismiss,
+    ]);
   });
 
   // ── Info Panel Commands ───────────────────────────────────────────────

@@ -316,10 +316,20 @@ export function workspaceHealthBadge(stats: HealthStats | undefined): vscode.Vie
 /** View mode for module explorer: tree (hierarchical) or flat (all symbols). */
 type ViewMode = "tree" | "flat";
 
-/** Sort mode applied in flat view (tree view stays structural). */
-type SortMode = "worst" | "best" | "alpha";
+/** Sort mode applied in flat view (tree view stays structural) — #189. */
+type SortMode = "name" | "path" | "coverage";
 
-const SORT_CYCLE: readonly SortMode[] = ["worst", "best", "alpha"];
+/**
+ * The three explicit, labelled sort options surfaced in the picker (#189),
+ * replacing the old blind worst/best/alpha cycle. `coverage` is labelled "Type
+ * Coverage" to match the panel's existing "Coverage"/"% typed" wording (the
+ * `coveragePercent` field is type-coverage, not the PEP conformance score).
+ */
+const SORT_OPTIONS: readonly { readonly mode: SortMode; readonly label: string }[] = [
+  { mode: "name", label: "Module Name" },
+  { mode: "path", label: "Path" },
+  { mode: "coverage", label: "Type Coverage" },
+];
 
 export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>, vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<TreeItem | undefined>();
@@ -329,7 +339,7 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
   private workspace: HealthStats | undefined;
   public readonly disposables: vscode.Disposable[] = [];
   private viewMode: ViewMode = "tree";
-  private sortMode: SortMode = "worst";
+  private sortMode: SortMode = "coverage";
   private filterPattern = "";
   private treeView: vscode.TreeView<TreeItem> | undefined;
 
@@ -346,11 +356,20 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     this.emitter.fire(undefined);
   }
 
-  /** Cycle the flat-view sort: worst-first -> best-first -> alphabetical. */
-  public cycleSortMode(): void {
-    const idx = SORT_CYCLE.indexOf(this.sortMode);
-    this.sortMode = SORT_CYCLE[(idx + 1) % SORT_CYCLE.length];
+  /** The active flat-view sort mode (surfaced in the picker, #189). */
+  public getSortMode(): SortMode {
+    return this.sortMode;
+  }
+
+  /** Select the flat-view sort mode explicitly and re-render (#189). */
+  public setSortMode(mode: SortMode): void {
+    this.sortMode = mode;
     this.emitter.fire(undefined);
+  }
+
+  /** Labelled sort options with the active one marked, to drive the picker (#189). */
+  public sortOptions(): readonly { readonly mode: SortMode; readonly label: string; readonly current: boolean }[] {
+    return SORT_OPTIONS.map((option) => ({ ...option, current: option.mode === this.sortMode }));
   }
 
   /** Toggle between tree and flat view modes, persisted in workspaceState. */
@@ -496,12 +515,13 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     });
   }
 
-  /** Order modules for flat view per the current sort toggle. */
+  /** Order modules for flat view per the current sort selection (#189). */
   private sortModules(modules: ModuleNode[]): ModuleNode[] {
     switch (this.sortMode) {
-      case "worst": return modules.sort((a, b) => a.coveragePercent - b.coveragePercent);
-      case "best": return modules.sort((a, b) => b.coveragePercent - a.coveragePercent);
-      case "alpha": return modules.sort((a, b) => a.name.localeCompare(b.name));
+      case "name": return modules.sort((a, b) => a.name.localeCompare(b.name));
+      case "path": return modules.sort((a, b) => a.path.localeCompare(b.path));
+      // Ascending coverage surfaces the least-typed modules first.
+      case "coverage": return modules.sort((a, b) => a.coveragePercent - b.coveragePercent);
     }
   }
 
@@ -580,8 +600,18 @@ function registerExplorerCommands(
     vscode.commands.registerCommand("basilisk.toggleModuleExplorerView", () => {
       provider.toggleViewMode(context);
     }),
-    vscode.commands.registerCommand("basilisk.sortModuleExplorer", () => {
-      provider.cycleSortMode();
+    vscode.commands.registerCommand("basilisk.sortModuleExplorer", async () => {
+      // Explicit picker with the active mode checked, so the current sort is
+      // always visible — never a blind cycle (#189).
+      const items = provider.sortOptions().map((option) => ({
+        label: option.current ? `$(check) ${option.label}` : option.label,
+        mode: option.mode,
+      }));
+      const choice = await vscode.window.showQuickPick(items, {
+        title: "Sort Modules",
+        placeHolder: "Sort the flat module list by…",
+      });
+      if (choice !== undefined) { provider.setSortMode(choice.mode); }
     }),
     vscode.commands.registerCommand("basilisk.filterModuleExplorer", async () => {
       const input = await vscode.window.showInputBox({
