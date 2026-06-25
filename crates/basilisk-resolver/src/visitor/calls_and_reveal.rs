@@ -9,7 +9,7 @@ use crate::scope::{AssertTypeCallInfo, CallSite, RevealTypeCallInfo, RhsKind, Sp
 use super::class_info_ext::expr_simple_name;
 use super::core::{classify_rhs, source_slice_range, text_range_to_span, types_match};
 use super::type_alias::is_user_defined_type_alias;
-use super::typeddict::{normalize_type_str, resolve_actual_type};
+use super::typeddict::normalize_type_str;
 use super::unhashable::collect_unhashable_hash_calls_from_expr;
 
 pub(super) fn call_func_name(expr: &Expr) -> Option<&str> {
@@ -183,7 +183,7 @@ pub(crate) fn collect_assert_type_calls_from_stmts(
 /// parameter environment `params`.
 pub(super) fn build_assert_type_call_info(
     call: &ruff_python_ast::ExprCall,
-    params: &std::collections::HashMap<String, String>,
+    actual_type: Option<String>,
     source: &str,
 ) -> AssertTypeCallInfo {
     let arg_count = call.arguments.args.len();
@@ -218,9 +218,7 @@ pub(super) fn build_assert_type_call_info(
             type_mismatch: false,
         };
     };
-
-    // Determine the actual type of the first argument.
-    let actual_type = resolve_actual_type(first_arg, params, source);
+    let _ = first_arg;
 
     // Extract the expected type text from the second argument.
     let expected_type = extract_type_text(second_arg, source);

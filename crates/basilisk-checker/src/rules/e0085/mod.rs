@@ -164,6 +164,14 @@ fn check_bare_constructor_shapes(
             _ => return,
         };
         if supplied == Some(type_arg_count) {
+            check_element_order(
+                class_name,
+                ann_sub.slice.as_ref(),
+                single_arg,
+                call,
+                path,
+                diagnostics,
+            );
             return;
         }
         let range = call.range();
@@ -191,6 +199,83 @@ fn check_bare_constructor_shapes(
             None,
         ));
     });
+}
+
+/// The simple name of a declared type-argument element (`Height` → `"Height"`).
+fn type_arg_name(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Name(name) => Some(name.id.as_str()),
+        _ => None,
+    }
+}
+
+/// The simple name of a constructor-tuple element: the callee of `Height(1)` or
+/// a bare `Height` (`"Height"`).
+fn ctor_elt_name(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Call(call) => expr_simple_name(call.func.as_ref()),
+        Expr::Name(name) => Some(name.id.as_str()),
+        _ => None,
+    }
+}
+
+/// When the constructor tuple has the right arity but its element types are a
+/// *permutation* of the declared specialization (`Array[A, B] = Array((B(), A()))`),
+/// the dimensions are out of order. Only a pure reordering is flagged — a
+/// differing/subtype element name is left alone to avoid false positives.
+fn check_element_order(
+    class_name: &str,
+    decl_slice: &Expr,
+    ctor_arg: &Expr,
+    call: &ruff_python_ast::ExprCall,
+    path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let (Expr::Tuple(decl), Expr::Tuple(ctor)) = (decl_slice, ctor_arg) else {
+        return;
+    };
+    let Some(declared) = decl
+        .elts
+        .iter()
+        .map(type_arg_name)
+        .collect::<Option<Vec<_>>>()
+    else {
+        return;
+    };
+    let Some(got) = ctor
+        .elts
+        .iter()
+        .map(ctor_elt_name)
+        .collect::<Option<Vec<_>>>()
+    else {
+        return;
+    };
+    if declared.len() != got.len() || declared == got {
+        return;
+    }
+    let (mut sorted_declared, mut sorted_got) = (declared.clone(), got.clone());
+    sorted_declared.sort_unstable();
+    sorted_got.sort_unstable();
+    if sorted_declared != sorted_got {
+        return; // not a permutation — could be a subtype; stay conservative
+    }
+    let range = call.range();
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
+            "TypeVarTuple element order mismatch: `{class_name}` is declared `[{}]` but the \
+             constructor provides `[{}]`",
+            declared.join(", "),
+            got.join(", ")
+        ),
+        Span {
+            start: range.start().to_u32(),
+            end: range.end().to_u32(),
+        },
+        path,
+        Some("Reorder the constructor arguments to match the declared specialization".to_owned()),
+        None,
+    ));
 }
 
 /// When a function binds the same `TypeVarTuple` in several parameters

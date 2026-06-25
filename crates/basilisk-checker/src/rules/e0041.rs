@@ -21,12 +21,13 @@
 use std::collections::HashMap;
 
 use basilisk_resolver::{
-    AttributeInfo, ClassInfo, FunctionInfo, NamedTupleDefInfo, ResolvedModule, RhsKind, Span,
+    AttributeInfo, ClassInfo, FunctionInfo, NamedTupleDefInfo, ResolvedModule, RhsKind,
 };
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
+use super::shared::annotation_is_classvar;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
@@ -177,23 +178,6 @@ fn metaclass_passes_through(
 
     // The metaclass __call__ must use *args and **kwargs to pass through
     call_fn.vararg.is_some() && call_fn.kwarg.is_some()
-}
-
-/// Returns `true` when the annotation text denotes a `ClassVar[...]` type.
-///
-/// `ClassVar` fields are excluded from the dataclass `__init__` parameter list.
-fn annotation_is_classvar(source: &str, span: Option<Span>) -> bool {
-    let Some(span) = span else {
-        return false;
-    };
-    let Some(text) = slice_span(source, span) else {
-        return false;
-    };
-    let t = text.trim();
-    t.starts_with("ClassVar[")
-        || t.starts_with("ClassVar ")
-        || t == "ClassVar"
-        || t.contains(".ClassVar[")
 }
 
 /// Collects the positional (non-kw_only, non-init_false, non-ClassVar) fields of a

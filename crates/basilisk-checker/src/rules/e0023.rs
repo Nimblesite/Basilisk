@@ -1,10 +1,17 @@
 //! Implements [BSK-E0023] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
 //! BSK-E0023: Non-exhaustive `match` statement.
 //!
-//! A `match` statement that has no wildcard `case _:` branch may fail to
-//! handle certain runtime values, leading to a silent fall-through (Python
+//! A value-dispatch `match` statement that has no irrefutable branch may fail
+//! to handle certain runtime values, leading to a silent fall-through (Python
 //! does not raise an error for unmatched `match` subjects).  Basilisk treats
 //! this as an error in strict mode.
+//!
+//! Two cases are *not* flagged, matching the reference checkers:
+//!   * a bare capture `case name:` (no guard) is irrefutable — like `case _:`,
+//!     it makes the match exhaustive;
+//!   * a structural match (sequence/mapping patterns) decomposes open-ended
+//!     shapes — e.g. narrowing a tuple union of mixed arity — where a catch-all
+//!     is not required for correctness.
 
 use basilisk_resolver::{MatchStmtInfo, ResolvedModule};
 
@@ -30,7 +37,7 @@ impl Rule for NonExhaustiveMatch {
         module
             .match_stmts
             .iter()
-            .filter(|stmt| !stmt.has_wildcard)
+            .filter(|stmt| !stmt.has_wildcard && !stmt.has_structural_pattern)
             .for_each(|stmt| diagnostics.push(make_diagnostic(stmt, &module.path)));
     }
 }
