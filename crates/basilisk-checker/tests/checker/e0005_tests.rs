@@ -339,3 +339,60 @@ class Mixed:
     );
     Ok(())
 }
+
+#[test]
+fn e0005_type_alias_type_in_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
+    // A class-body `X = TypeAliasType("X", ...)` is a type-alias definition, not
+    // a data attribute, so it must not require an annotation
+    // (conformance aliases_typealiastype.py).
+    let source = "from typing import TypeAliasType\nclass A:\n    GoodAlias = TypeAliasType(\"GoodAlias\", list[int])\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0005"),
+        "TypeAliasType alias in a class body must not fire E0005, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0005_tuple_literal_match_args_exempt() -> Result<(), Box<dyn std::error::Error>> {
+    // A tuple literal of inferrable elements is fully inferrable; `__match_args__`
+    // must not require an annotation (conformance dataclasses_match_args.py).
+    let source = "class DC:\n    __match_args__ = (\"a\", \"b\")\n    empty = ()\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0005"),
+        "tuple-literal class attrs must not fire E0005, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0005_pep695_type_param_attr_exempt() -> Result<(), Box<dyn std::error::Error>> {
+    // An attribute whose name matches one of the class's PEP 695 type parameters
+    // is the type variable in scope, not a data attribute
+    // (conformance generics_syntax_scoping.py).
+    let source = "class C[T]:\n    T = 0\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0005"),
+        "PEP 695 type-param-named attr must not fire E0005, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0005_empty_collection_still_fires() -> Result<(), Box<dyn std::error::Error>> {
+    // The tuple exemption must NOT leak to empty list/dict (element types unknown).
+    let source = "class Foo:\n    data = []\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-E0005"),
+        "empty-list class attr must still fire E0005 (element type unknown), got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}

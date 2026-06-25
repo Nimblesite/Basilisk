@@ -432,6 +432,79 @@ async fn cross_module_goto_definition() -> TestResult<()> {
     Ok(())
 }
 
+/// Regression (follow-up to #180): cmd+click (go-to-definition) on a symbol
+/// accessed through a *plain aliased* import (`import definitions as d` →
+/// `d.target_func(...)`) must jump to the symbol's cross-file definition.
+/// Capturing the alias in `ImportInfo.names` made cross-module resolution treat
+/// the aliased import as a `from`-import and publish no symbols, so this stopped
+/// working. The user-reported symptom of the #180 fix.
+#[tokio::test]
+async fn cross_module_goto_definition_through_aliased_import() -> TestResult<()> {
+    let (dir, root_uri) = setup_cross_module_workspace(&[
+        (
+            "definitions.py",
+            "def target_func(x: int) -> int:\n    return x\n",
+        ),
+        (
+            "caller.py",
+            "import definitions as d\n\ndef use_it() -> int:\n    return d.target_func(1)\n",
+        ),
+    ]);
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+    let _ = collect_all_diagnostics(&mut fixture).await;
+
+    let caller_uri = format!("{root_uri}/caller.py");
+    fixture
+        .did_open(
+            &caller_uri,
+            "import definitions as d\n\ndef use_it() -> int:\n    return d.target_func(1)\n",
+        )
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // Go to definition on `target_func` within `d.target_func(1)` (line 3).
+    // `    return d.target_func(1)` — `target_func` begins at character 13.
+    let resp = fixture
+        .request(
+            11,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": caller_uri },
+                "position": { "line": 3, "character": 18 }
+            }),
+        )
+        .await?;
+
+    let resp = resp.expect("should get a definition response");
+    let resp_json: serde_json::Value = serde_json::from_str(&resp)?;
+    let result = &resp_json["result"];
+    assert!(
+        !result.is_null(),
+        "cmd+click through an aliased import must resolve, got null: {resp_json}"
+    );
+    let location = if result.is_array() {
+        result.as_array().and_then(|arr| arr.first())
+    } else {
+        Some(result)
+    };
+    let loc = location.expect("a definition location");
+    assert!(
+        loc["uri"].as_str().unwrap_or("").contains("definitions.py"),
+        "goto-def through alias should point to definitions.py, got: {}",
+        loc["uri"]
+    );
+    assert_eq!(
+        loc["range"]["start"]["line"].as_u64(),
+        Some(0),
+        "goto-def should land on `target_func` at line 0 of definitions.py"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Cross-module: Find All References across files
 // ---------------------------------------------------------------------------

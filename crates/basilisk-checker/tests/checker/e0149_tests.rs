@@ -107,3 +107,39 @@ class Outer[T]:
     );
     Ok(())
 }
+
+#[test]
+fn e0149_mutual_alias_cycle_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "type A = B\ntype B = A\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-E0149"),
+        "mutually-recursive bare type aliases must fire E0149, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0149_recursion_through_container_ok() -> Result<(), Box<dyn std::error::Error>> {
+    // Recursion through a container terminates and is legitimate.
+    let source = "type A = list[B]\ntype B = list[A]\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0149"),
+        "recursion through a container must not fire E0149, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0149_self_recursion_through_list_ok() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "type Tree[T] = T | list[Tree[T]]\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0149"),
+        "parameterized self-recursion through list must not fire E0149"
+    );
+    Ok(())
+}

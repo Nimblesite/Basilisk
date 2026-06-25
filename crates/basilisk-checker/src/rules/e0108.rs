@@ -47,6 +47,33 @@ impl Rule for DataclassSlotsViolation {
     ) {
         check_self_attr_assignments(module, diagnostics);
         check_slots_access_on_non_slots_class(module, diagnostics);
+        check_slots_already_defined(module, diagnostics);
+    }
+}
+
+/// Detect a class that requests `@dataclass(slots=True)` *and* declares
+/// `__slots__` manually — `slots=True` synthesizes `__slots__`, so both together
+/// is an error (the manual one collides with the generated one).
+fn check_slots_already_defined(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    for class in &module.classes {
+        if class.is_dataclass && class.is_dataclass_slots && class.has_manual_slots {
+            diagnostics.push(error_diagnostic_owned(
+                CODE.clone(),
+                format!(
+                    "`__slots__` is already defined in `{}`: cannot also use \
+                     `@dataclass(slots=True)`",
+                    class.name
+                ),
+                class.name_span,
+                &module.path,
+                Some("Remove the manual `__slots__` assignment or drop `slots=True`".to_owned()),
+                Some(
+                    "`@dataclass(slots=True)` synthesizes `__slots__`; defining it manually \
+                     conflicts"
+                        .to_owned(),
+                ),
+            ));
+        }
     }
 }
 

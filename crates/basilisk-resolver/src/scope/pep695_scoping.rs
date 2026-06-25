@@ -82,6 +82,12 @@ pub struct Pep695AliasDef {
     pub params: Vec<Pep695Param>,
     /// Simple names referenced in the RHS value expression.
     pub rhs_refs: Vec<String>,
+    /// Names referenced at the *top level* of the RHS — a bare `Name` or a direct
+    /// member of a top-level `X | Y` union — but NOT names nested inside a
+    /// subscript/container. A bare reference to another alias is non-terminating
+    /// (`type A = B`), whereas one through a container (`type A = list[B]`) is
+    /// legitimate recursion; this powers mutual-cycle detection (BSK-E0149).
+    pub rhs_bare_refs: Vec<String>,
     /// When the RHS contains a self-referential subscript `Name[args]`, the
     /// simple argument names of the first such subscript.
     pub self_ref_args: Option<Vec<String>>,

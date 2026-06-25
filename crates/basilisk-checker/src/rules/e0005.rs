@@ -41,6 +41,16 @@ impl Rule for MissingAttributeAnnotation {
             .map(|tv| tv.name.as_str())
             .collect();
 
+        // Likewise exempt `X = TypeAliasType("X", ...)` alias definitions: these
+        // are type-system declarations (static type `typing.TypeAliasType`), not
+        // data attributes, so requiring an annotation is wrong. The resolver
+        // already collects these call-sites recursively (including class bodies).
+        let alias_names: std::collections::HashSet<&str> = module
+            .type_alias_type_calls
+            .iter()
+            .map(|c| c.lhs_name.as_str())
+            .collect();
+
         module
             .classes
             .iter()
@@ -52,6 +62,7 @@ impl Rule for MissingAttributeAnnotation {
                     class,
                     &module.path,
                     &typevar_names,
+                    &alias_names,
                     &module.classes,
                     diagnostics,
                 );
@@ -63,6 +74,7 @@ fn check_class(
     class: &ClassInfo,
     path: &str,
     typevar_names: &std::collections::HashSet<&str>,
+    alias_names: &std::collections::HashSet<&str>,
     all_classes: &[ClassInfo],
     out: &mut Vec<Diagnostic>,
 ) {
@@ -72,24 +84,34 @@ fn check_class(
         .filter(|attr| {
             !attr.has_annotation
                 && !typevar_names.contains(attr.name.as_str())
-                && !is_scalar_literal(&attr.rhs_kind)
+                && !alias_names.contains(attr.name.as_str())
+                && !is_inferrable_literal(&attr.rhs_kind)
+                && !class
+                    .pep695_type_param_names
+                    .iter()
+                    .any(|p| p == &attr.name)
                 && !parent_has_annotated_attr(&attr.name, class, all_classes)
         })
         .for_each(|attr| out.push(make_diagnostic(attr, &class.name, path)));
 }
 
-/// Returns `true` when the RHS is a scalar literal whose type is trivially
-/// inferrable (int, float, str, bool, bytes, None).
-fn is_scalar_literal(rhs: &RhsKind) -> bool {
-    matches!(
-        rhs,
+/// Returns `true` when the RHS is a literal whose type is fully inferrable
+/// without an annotation: a scalar (int, float, str, bool, bytes, None) or a
+/// tuple literal whose elements are all themselves inferrable (so `()` and
+/// `("a", "b")` — e.g. dataclass `__match_args__` — are exempt). Empty
+/// list/dict/set are deliberately excluded: their element types are unknown
+/// without an annotation, so they still require one.
+fn is_inferrable_literal(rhs: &RhsKind) -> bool {
+    match rhs {
         RhsKind::IntLiteral
-            | RhsKind::FloatLiteral
-            | RhsKind::StrLiteral
-            | RhsKind::BoolLiteral
-            | RhsKind::BytesLiteral
-            | RhsKind::NoneValue
-    )
+        | RhsKind::FloatLiteral
+        | RhsKind::StrLiteral
+        | RhsKind::BoolLiteral
+        | RhsKind::BytesLiteral
+        | RhsKind::NoneValue => true,
+        RhsKind::Tuple(elems) => elems.iter().all(is_inferrable_literal),
+        _ => false,
+    }
 }
 
 /// Returns `true` when any ancestor class declares an attribute with the same

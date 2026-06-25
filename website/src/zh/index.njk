@@ -263,19 +263,19 @@ benchmarkStrings:
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">98.6<span class="stat-block__unit">%</span></span>
+        <span class="stat-block__number">{{ conformance.scorePct }}<span class="stat-block__unit">%</span></span>
         <span class="stat-block__label">PEP 符合性得分</span>
       </div>
     </div>
     <div class="feature-row__text">
       <p class="feature-row__num">04 &mdash; PEP 符合性</p>
-      <h2 class="feature-row__title">146 个测试中 144 个通过。<br>目标：100%。</h2>
+      <h2 class="feature-row__title">{{ conformance.total }} 个测试中 {{ conformance.pass }} 个通过（{{ conformance.scorePct }}%）。<br>目标：100%。</h2>
       <p class="feature-row__body">
-        通过<a href="https://github.com/python/typing/blob/main/conformance/results/results.html" style="color:var(--color-accent)">官方 Python 类型符合性套件</a>测试——
+        由<a href="https://github.com/python/typing/blob/main/conformance/results/results.html">官方 Python 类型符合性套件</a>评分——
         与衡量 Pyright（约 99%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）、
         mypy（约 58%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）
         和 Pyrefly（约 86%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）的套件相同。
-        21 个类别中的 19 个达到 100%，且零误报。剩余两个 —— 一个 TypeVarTuple 泛型用例和一个协议定义用例 —— 是下一步。
+        目前 {{ conformance.categoriesTotal }} 个类别中有 {{ conformance.categoriesPass100 }} 个达到 100%；套件报告 {{ conformance.fp }} 处误报和 {{ conformance.missed }} 处遗漏的必需错误，我们正将两者都降到零。100% 是目标，而非当下的宣称。<a href="/zh/docs/conformance/">我们如何衡量 &rarr;</a>
       </p>
     </div>
   </div>
@@ -382,7 +382,7 @@ benchmarkStrings:
           </tr>
           <tr>
             <td>PEP 符合性 <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a></td>
-            <td class="col-basilisk">98.6% <em style="font-size:0.75rem;color:var(--color-text-muted)">(144/146)</em></td>
+            <td class="col-basilisk">{{ conformance.scorePct }}% <em style="font-size:0.75rem;color:var(--color-text-muted)">({{ conformance.pass }}/{{ conformance.total }}，目标 100%)</em></td>
             <td>~99%</td>
             <td>~58% 完全通过</td>
             <td>alpha</td>

@@ -106,9 +106,11 @@ deslop-*.log
 benchmarks/results/
 
 # =============================================================================
-# Conformance test suite (fetched via make conformance / scripts/conformance.sh)
+# Conformance test FIXTURES: downloaded on demand into conformance/tests/ (via
+# make conformance / score.py --fetch) — never committed. NOTE: the official
+# calculator conformance/upstream_main.py IS committed and is NOT ignored.
 # =============================================================================
-crates/basilisk-cli/tests/conformance/
+conformance/tests/
 
 # =============================================================================
 # Tool / agent state
@@ -143,9 +145,15 @@ nohup.out
 tmp/
 temp/
 scratch/
+scratchpad/
 URGENT_READ_ME_NOW.md
 
 
 
 .deslop-cache/
 .ghissues/
+
+website/_verify/
+
+
+/*.png

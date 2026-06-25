@@ -343,3 +343,89 @@ pub(super) fn collect_imported_final_names(
     }
     out
 }
+
+/// `true` when a decorator names `final` / `typing.final`.
+fn decorator_is_final(dec: &ruff_python_ast::Decorator) -> bool {
+    match &dec.expression {
+        Expr::Name(n) => n.id.as_str() == "final",
+        Expr::Attribute(a) => a.attr.as_str() == "final",
+        _ => false,
+    }
+}
+
+/// The `@final` method names of every class defined in `body`. A method counts
+/// as `@final` when *any* of its definitions (e.g. the first overload of a stub)
+/// carries `@final`.
+fn collect_file_final_methods(
+    body: &[Stmt],
+) -> std::collections::HashMap<String, std::collections::HashSet<String>> {
+    let mut out: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+    for stmt in body {
+        let Stmt::ClassDef(cls) = stmt else {
+            continue;
+        };
+        let finals: std::collections::HashSet<String> = cls
+            .body
+            .iter()
+            .filter_map(|s| match s {
+                Stmt::FunctionDef(func) if func.decorator_list.iter().any(decorator_is_final) => {
+                    Some(func.name.to_string())
+                }
+                _ => None,
+            })
+            .collect();
+        if !finals.is_empty() {
+            let _ = out.insert(cls.name.to_string(), finals);
+        }
+    }
+    out
+}
+
+/// Map each imported class to its `@final` method names, read from a sibling
+/// module (`.pyi` preferred, then `.py`). Mirrors [`collect_imported_final_names`]
+/// but records per-class method sets so cross-module `@final`-override checks
+/// (BSK-E0034) can see base methods declared `@final` in an imported stub.
+pub(super) fn collect_imported_final_methods(
+    stmts: &[Stmt],
+    module_path: &str,
+) -> std::collections::HashMap<String, std::collections::HashSet<String>> {
+    let mut out: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+    let Some(module_dir) = std::path::Path::new(module_path).parent() else {
+        return out;
+    };
+    for stmt in stmts {
+        let Stmt::ImportFrom(import_from) = stmt else {
+            continue;
+        };
+        let Some(module_name) = import_from.module.as_ref() else {
+            continue;
+        };
+        let module_str = module_name.to_string();
+        if module_str.contains('.') {
+            continue;
+        }
+        let sibling = ["pyi", "py"].iter().find_map(|ext| {
+            let path = module_dir.join(format!("{module_str}.{ext}"));
+            path.to_str()
+                .and_then(|s| basilisk_parser::parse_file(s).ok())
+        });
+        let Some(sibling) = sibling else {
+            continue;
+        };
+        let class_finals = collect_file_final_methods(&sibling.ast.body);
+        let is_star = import_from.names.iter().any(|a| a.name.as_str() == "*");
+        for (class_name, methods) in class_finals {
+            let imported = is_star
+                || import_from
+                    .names
+                    .iter()
+                    .any(|a| a.name.as_str() == class_name);
+            if imported {
+                out.entry(class_name).or_default().extend(methods);
+            }
+        }
+    }
+    out
+}

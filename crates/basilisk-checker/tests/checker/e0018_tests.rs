@@ -159,3 +159,213 @@ fn e0018_builtin_call_no_false_positive() -> Result<(), Box<dyn std::error::Erro
     );
     Ok(())
 }
+
+#[test]
+fn e0018_function_local_import_in_nested_class_method_no_false_positive(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #172: a function-local import is in scope for the body of a method
+    // defined on a class nested in that SAME function. Python resolves the free
+    // variable through the enclosing function scope (LEGB skips the class scope
+    // for method bodies, but NOT the enclosing function), so this code is valid
+    // and runs without NameError — it must not fire E0018.
+    let source = r#"
+from __future__ import annotations
+
+
+def make_store() -> object:
+    from collections import OrderedDict
+
+    class _Stub:
+        def put(self, body: bytes) -> OrderedDict:
+            return OrderedDict(size=len(body))
+
+    return _Stub()
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0018"),
+        "function-local import used in a nested class method must not fire E0018, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0018")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn e0018_function_local_import_returned_bare_no_false_positive(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #172 (direct shape): a function-local import bound and returned in the
+    // same function is a local binding. It must fire neither E0018 ("not defined")
+    // nor E0019 ("may be unbound") — the import unconditionally binds the name.
+    let source =
+        "def f() -> object:\n    from collections import OrderedDict\n    return OrderedDict\n";
+    let diags = run(source)?;
+    let fired: Vec<&str> = codes(&diags)
+        .into_iter()
+        .filter(|c| *c == "BSK-E0018" || *c == "BSK-E0019")
+        .collect();
+    assert!(
+        fired.is_empty(),
+        "an unconditional function-local import returned bare must not fire E0018/E0019, got: {fired:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0018_function_local_dotted_and_aliased_imports_no_false_positive(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #172, remaining import shapes: a dotted `import a.b` binds the
+    // top-level package `a`; an `import a.b as d` and `from m import X as z` bind
+    // their aliases. All are valid local bindings reachable from a nested method.
+    let source = r#"
+def make() -> object:
+    import os.path
+    import os.path as op
+    from collections import OrderedDict as OD
+
+    class _Stub:
+        def paths(self) -> object:
+            return os.path.join(op.sep, "x")
+
+        def store(self) -> object:
+            return OD()
+
+    return _Stub()
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0018"),
+        "dotted/aliased function-local imports used in nested methods must not fire E0018, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0018")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn e0018_nested_class_returned_from_enclosing_function_no_false_positive(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #172 corollary: a class defined inside a function binds its name in
+    // the enclosing scope, so `return _Stub()` from that function is valid.
+    let source = "def make() -> object:\n    class _Stub:\n        pass\n    return _Stub()\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0018"),
+        "returning a function-local class must not fire E0018, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0018")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn e0018_module_level_plain_aliased_import_in_return_no_false_positive(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #180: a module-level plain `import X as Y` binds `Y` (not `X`) at
+    // module scope. Referencing `Y` in a function's return expression is valid —
+    // a regression of #107/#64 for the plain (non-`from`) import form, whose alias
+    // the resolver previously dropped. Must not fire E0018. The non-aliased
+    // `import contextlib` is the control: it was never affected.
+    let source = r#"
+import datetime as _dt
+import contextlib
+import os.path as _osp
+
+
+def _now() -> _dt.datetime:
+    return _dt.datetime.now(tz=_dt.timezone.utc)
+
+
+def _suppressor() -> object:
+    return contextlib.suppress(ValueError)
+
+
+def _join() -> str:
+    return _osp.join("a", "b")
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0018"),
+        "module-level plain aliased import used in a return expression must not fire E0018, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0018")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn e0018_function_local_import_attribute_call_in_return_no_false_positive(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #175 (headline repro): a plain function-local `import math` binds
+    // `math` for the rest of the body, including a `return math.ceil(x)` where
+    // `math` heads an attribute/call chain in the return expression. This is the
+    // standard lazy-import / cycle-breaking pattern — it runs without NameError
+    // and must fire neither E0018 ("not defined") nor E0019 ("may be unbound"),
+    // since a top-level import binds the name unconditionally.
+    let source = "def ceil_cost(x: float) -> int:\n    import math\n    return math.ceil(x)\n";
+    let diags = run(source)?;
+    let fired: Vec<&str> = codes(&diags)
+        .into_iter()
+        .filter(|c| *c == "BSK-E0018" || *c == "BSK-E0019")
+        .collect();
+    assert!(
+        fired.is_empty(),
+        "a function-local `import math` used in `return math.ceil(x)` must not fire E0018/E0019, got: {fired:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn e0018_function_local_from_import_callee_in_return_no_false_positive(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #175 (`from ... import` callee shape): a function-local
+    // `from os import getpid` binds `getpid`, which is then the callee of the
+    // return expression `return getpid()`. The callee path of E0018 must see the
+    // local import binding, not just bare-name references.
+    let source = "def extract() -> int | None:\n    from os import getpid\n    return getpid()\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0018"),
+        "a function-local `from ... import f` used as a return callee must not fire E0018, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0018")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn e0018_function_local_aliased_import_attribute_in_return_no_false_positive(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Issue #175 (aliased plain-import shape): an aliased function-local
+    // `import datetime as _dt` binds `_dt`, used as the attribute base of the
+    // return expression `return _dt.datetime(...)`. The alias — not the module
+    // name — must be the in-scope local binding.
+    let source =
+        "def make_dt() -> object:\n    import datetime as _dt\n    return _dt.datetime(2020, 1, 1)\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0018"),
+        "an aliased function-local import used as a return attribute base must not fire E0018, got: {:?}",
+        diags
+            .iter()
+            .filter(|d| d.code.code == "BSK-E0018")
+            .map(|d| d.message.as_str())
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}

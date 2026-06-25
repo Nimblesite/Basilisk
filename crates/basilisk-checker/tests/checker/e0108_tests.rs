@@ -71,3 +71,27 @@ DC2.__slots__
     let _ = codes(&diags);
     Ok(())
 }
+
+#[test]
+fn e0108_slots_true_with_manual_slots_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "from dataclasses import dataclass\n@dataclass(slots=True)\nclass C:\n    x: int\n    __slots__ = ()\n";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"BSK-E0108"),
+        "@dataclass(slots=True) plus a manual __slots__ must fire E0108, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn e0108_slots_true_without_manual_slots_ok() -> Result<(), Box<dyn std::error::Error>> {
+    let source =
+        "from dataclasses import dataclass\n@dataclass(slots=True)\nclass D:\n    x: int\n";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0108"),
+        "slots=True alone must not fire the already-defined check"
+    );
+    Ok(())
+}

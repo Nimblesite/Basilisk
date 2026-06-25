@@ -311,6 +311,33 @@ mod tests {
     }
 
     #[test]
+    fn test_hover_on_plain_aliased_import_shows_alias_not_from() {
+        // Regression (follow-up to #180): a plain `import X as Y` must hover as
+        // `import X as Y`, never be mislabeled `from X import Y`. Capturing the
+        // alias in `ImportInfo.names` made a names-based signature render a `from`.
+        let source = "import datetime as _dt\n";
+        let resolved = parse_and_resolve(source);
+
+        // Offset 10 is inside `datetime`, within the import statement's span.
+        let hover = hover_at(&resolved, source, 10, &[]);
+        let hover = hover.expect("hover should be Some on an aliased import");
+        let HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected Markup hover contents");
+        };
+
+        assert!(
+            markup.value.contains("import datetime as _dt"),
+            "aliased plain import must hover as `import X as Y`: {}",
+            markup.value
+        );
+        assert!(
+            !markup.value.contains("from datetime import"),
+            "aliased plain import must NOT render as a `from`-import: {}",
+            markup.value
+        );
+    }
+
+    #[test]
     fn test_hover_on_source_py_import_shows_no_stubs() {
         let source = "import mymodule\n";
         let resolved = resolve_with_patched_import(

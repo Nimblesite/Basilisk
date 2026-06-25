@@ -5,13 +5,13 @@
   "type": "module",
   "description": "Documentation website for Basilisk — strict-by-default Python type checker",
   "scripts": {
-    "prebuild": "node scripts/copy-readme.js",
     "build": "eleventy",
-    "start": "node scripts/copy-readme.js && eleventy --serve --watch",
+    "start": "eleventy --serve --watch",
     "clean": "rm -rf _site"
   },
   "devDependencies": {
     "@11ty/eleventy": "^3.1.6",
-    "eleventy-plugin-techdoc": "^0.2.0"
+    "eleventy-plugin-techdoc": "^0.2.0",
+    "markdown-it": "^14.2.0"
   }
 }

@@ -359,7 +359,15 @@ pub(super) fn import_infos_from(node: &StmtImport) -> Vec<ImportInfo> {
         .iter()
         .map(|alias| ImportInfo {
             module: alias.name.to_string(),
-            names: Vec::new(),
+            // `import X as Y` binds `Y`, not the module name — capture the alias so
+            // scope-resolution rules (e.g. BSK-E0018) see the real binding. Plain
+            // `import X` / `import X.Y` keeps `names` empty; its bound name is the
+            // top-level module, derived from `module`.
+            names: alias
+                .asname
+                .as_ref()
+                .map(|asname| vec![asname.to_string()])
+                .unwrap_or_default(),
             span: text_range_to_span(node.range),
             kind: ImportKind::Plain,
             resolution: ImportResolution::Unresolved,
@@ -426,22 +434,45 @@ pub(super) fn alias_name(alias: &Alias) -> String {
 
 pub(super) fn match_stmt_info_from(node: &StmtMatch) -> MatchStmtInfo {
     let has_wildcard = node.cases.iter().any(is_wildcard_case);
+    let has_structural_pattern = node.cases.iter().any(case_has_structural_pattern);
     MatchStmtInfo {
         span: text_range_to_span(node.range),
         has_wildcard,
+        has_structural_pattern,
     }
 }
 
 pub(super) fn is_wildcard_case(case: &MatchCase) -> bool {
-    is_wildcard_pattern(&case.pattern)
+    // A case with a guard (`case x if cond:`) is never irrefutable.
+    case.guard.is_none() && is_wildcard_pattern(&case.pattern)
 }
 
+/// A pattern that matches *every* value. The bare `case _:` (`MatchAs` with no
+/// name and no sub-pattern) and a bare capture `case name:` (`MatchAs` with a
+/// name but no sub-pattern) are both irrefutable — Python binds the subject and
+/// always succeeds — so each makes a `match` exhaustive.
 pub(super) fn is_wildcard_pattern(pattern: &Pattern) -> bool {
     match pattern {
-        Pattern::MatchAs(ma) => ma.name.is_none() && ma.pattern.is_none(),
+        Pattern::MatchAs(ma) => ma.pattern.is_none(),
         Pattern::MatchOr(mo) => mo.patterns.iter().any(is_wildcard_pattern),
         _ => false,
     }
+}
+
+/// `true` if the match performs structural decomposition (sequence/mapping
+/// patterns). Such matches narrow open-ended shapes (e.g. tuple unions of mixed
+/// arity) where a catch-all is not required for correctness, so exhaustiveness
+/// (BSK-E0023) does not apply — matching the reference checkers, which do not
+/// flag these.
+fn case_has_structural_pattern(case: &MatchCase) -> bool {
+    fn is_structural(pattern: &Pattern) -> bool {
+        match pattern {
+            Pattern::MatchSequence(_) | Pattern::MatchMapping(_) => true,
+            Pattern::MatchOr(mo) => mo.patterns.iter().any(is_structural),
+            _ => false,
+        }
+    }
+    is_structural(&case.pattern)
 }
 
 // ---------------------------------------------------------------------------

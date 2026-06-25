@@ -167,7 +167,8 @@ mutation-test:
 ## conformance/conformance_status.csv. Fetches the upstream suite if missing;
 ## use FETCH=1 to force a re-download.
 conformance:
-	@bash scripts/conformance.sh $(if $(filter 1,$(FETCH)),--fetch,)
+	@cargo build -p basilisk-cli --bin basilisk
+	@python3 conformance/score.py --bin target/debug/basilisk $(if $(filter 1,$(FETCH)),--fetch,)
 
 ## bench: Benchmark Basilisk vs pyright/mypy/ty/pyrefly on the fixture suite.
 ## Requires hyperfine; competitor tools are skipped if not installed.

@@ -63,7 +63,7 @@ Basilisk 目前处于 **alpha**——核心检查器、LSP 服务器和编辑器
 |---|---|---|
 | 1 | 解析器、解析器、类型检查器、CLI | 完成 |
 | 2 | LSP 服务器、编辑器扩展（VS Code、Cursor、Zed、Neovim） | 完成 |
-| 3 | 扩展规则集，98.6% PEP 符合性，渐进式采用 | 进行中 |
+| 3 | 扩展规则集，PEP 符合性攻坚（当前 {{ conformance.scorePct }}%，目标 100%），渐进式采用 | 进行中 |
 | 4 | 所有权与不可变性分析（Mojo 启发） | 计划中 |
 | 5 | WASM 插件，Django/Pydantic/SQLAlchemy | 计划中 |
 | 6 | 95%+ PEP，SARIF/JUnit，JetBrains 扩展 | 计划中 |

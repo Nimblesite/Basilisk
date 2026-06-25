@@ -15,7 +15,6 @@ ROOT="/Users/christianfindlay/Documents/Code/Basilisk"
 cd "$ROOT"
 BASELINE="/tmp/conf_baseline.csv"
 CSV="conformance/conformance_status.csv"
-FPLOG="/tmp/fp_current.txt"
 
 if [[ "${1:-}" == "--save-baseline" ]]; then
   cp "$CSV" "$BASELINE"
@@ -23,9 +22,10 @@ if [[ "${1:-}" == "--save-baseline" ]]; then
   exit 0
 fi
 
-# Run the conformance suite (release), capturing FP lines.
-cargo test --test conformance_tests --release -- --nocapture 2>&1 \
-  | grep -E '^  FP ' | sort > "$FPLOG" || true
+# Regenerate the conformance CSV with the official scorer against the release
+# binary. score.py writes per-file caught/missed/fp to $CSV, which we diff below.
+cargo build --release -p basilisk-cli --bin basilisk >/dev/null 2>&1
+python3 conformance/score.py --bin target/release/basilisk >/dev/null 2>&1 || true
 
 echo "=== totals (current) ==="
 awk -F, 'NR>1{c+=$5;m+=$6;f+=$7; if($4=="PASS")p++; else if($4=="FAIL")fl++} \

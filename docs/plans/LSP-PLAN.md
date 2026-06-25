@@ -6,7 +6,7 @@
 
 ## Status
 
-Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols all operational. Phase 3.5 (PEP conformance push) is ACTIVE — currently at 84.9% (124/146 files, 18 FPs).
+Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols all operational. Phase 3.5 (PEP conformance push) is ACTIVE — the official `python/typing` scorer (run unmodified, pinned commit) currently reports **121/146 files passing (82.9%, errors+warnings strictest)**, with 24 false positives and 36 missed required errors still to clear, running the binary in spec-conformance mode (basilisk's non-spec house-style rules off — see CHKARCH-CONFORMANCE-MODE; the honest number with them on was 40.4%). (Earlier in-repo figures such as "124/146, 18 FPs" came from an earlier in-repo harness that excluded codes from the *scorer* and didn't count false positives — a miscalculation; they are superseded.)
 
 ---
 
@@ -25,7 +25,7 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 | 7.6 | Third-party type stubs — typeshed bundling, `py.typed` marker detection (PEP 561) | Medium | DONE — `phf` stdlib module set, `py.typed` detection, stub package discovery |
 | 7.7 | Config file reading — `pyproject.toml`, `basilisk.json` | Medium | DONE — `basilisk-config` crate with per-module/per-path overrides |
 
-## Phase 7.5 — PEP Conformance Push (ACTIVE — 82.2% → 85%)
+## Phase 7.5 — PEP Conformance Push (ACTIVE — 82.9% → 100%)
 
 > **BLOCKING for Phase 9.** The type system needs these capabilities to stop producing
 > false positives and to catch real typing errors conformance expects.
