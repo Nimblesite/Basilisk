@@ -280,9 +280,30 @@ pub mod coverage_notifications {
 }
 
 /// GitHub release asset naming for binary distribution.
+///
+/// The shapes here are the single source of truth for how editor extensions
+/// locate, download, and unpack the binaries published by the release pipeline
+/// (`.github/workflows/release.yml`). They MUST track that workflow exactly —
+/// the Zed extension downloads a release asset, so any drift breaks zero-config
+/// install. Implements the asset side of [ZED-DIST].
 pub mod release {
     /// GitHub owner/repo for release downloads.
     pub const GITHUB_REPO: &str = "Nimblesite/Basilisk";
+
+    /// OS token used in release asset names for macOS.
+    const MACOS_OS: &str = "apple-darwin";
+
+    /// Profiler helper binary name (bundled alongside `basilisk` on macOS).
+    pub const PROFILER_HELPER: &str = "basilisk-profiler-helper";
+
+    /// Parent directory embedded in the macOS release archive.
+    ///
+    /// The macOS archive is built with `ditto -c -k --keepParent` over a
+    /// staging directory named `basilisk-darwin`, so every entry is prefixed
+    /// with this directory. The Linux (`tar`) and Windows (`Compress-Archive`)
+    /// archives are flat. Consumers that unpack the macOS zip must descend into
+    /// this directory to reach the binary. Mirrors `release.yml`.
+    pub const MACOS_ARCHIVE_DIR: &str = "basilisk-darwin";
 
     /// Well-known filesystem locations where the basilisk binary might live.
     pub const WELL_KNOWN_PATHS: &[&str] = &[
@@ -291,6 +312,23 @@ pub mod release {
         "/opt/homebrew/bin/basilisk",
     ];
 
+    /// Whether the release archive for a platform is a zip (vs. a gzipped tar).
+    ///
+    /// macOS (`ditto` zip) and Windows (`Compress-Archive` zip) ship `.zip`;
+    /// Linux (`tar czf`) ships `.tar.gz`. Mirrors `release.yml`.
+    ///
+    /// # Examples
+    /// ```
+    /// # use basilisk_common::release::is_zip_archive;
+    /// assert!(is_zip_archive("apple-darwin", false));
+    /// assert!(is_zip_archive("pc-windows-msvc", true));
+    /// assert!(!is_zip_archive("unknown-linux-gnu", false));
+    /// ```
+    #[must_use]
+    pub fn is_zip_archive(os: &str, is_windows: bool) -> bool {
+        is_windows || os == MACOS_OS
+    }
+
     /// Build a release asset filename from OS and architecture strings.
     ///
     /// # Examples
@@ -298,7 +336,11 @@ pub mod release {
     /// # use basilisk_common::release::asset_name;
     /// assert_eq!(
     ///     asset_name("apple-darwin", "aarch64", false),
-    ///     "basilisk-aarch64-apple-darwin.tar.gz"
+    ///     "basilisk-aarch64-apple-darwin.zip"
+    /// );
+    /// assert_eq!(
+    ///     asset_name("unknown-linux-gnu", "x86_64", false),
+    ///     "basilisk-x86_64-unknown-linux-gnu.tar.gz"
     /// );
     /// assert_eq!(
     ///     asset_name("pc-windows-msvc", "x86_64", true),
@@ -307,8 +349,38 @@ pub mod release {
     /// ```
     #[must_use]
     pub fn asset_name(os: &str, arch: &str, is_windows: bool) -> String {
-        let ext = if is_windows { "zip" } else { "tar.gz" };
+        let ext = if is_zip_archive(os, is_windows) {
+            "zip"
+        } else {
+            "tar.gz"
+        };
         format!("basilisk-{arch}-{os}.{ext}")
+    }
+
+    /// Path to the extracted binary relative to the download directory.
+    ///
+    /// The macOS zip nests entries under [`MACOS_ARCHIVE_DIR`]; the Linux and
+    /// Windows archives are flat. `binary_name` is `basilisk` (POSIX) or
+    /// `basilisk.exe` (Windows). Used to locate either the main binary or the
+    /// profiler helper after unpacking.
+    ///
+    /// # Examples
+    /// ```
+    /// # use basilisk_common::release::extracted_binary_path;
+    /// assert_eq!(
+    ///     extracted_binary_path("basilisk", "apple-darwin"),
+    ///     "basilisk-darwin/basilisk"
+    /// );
+    /// assert_eq!(extracted_binary_path("basilisk", "unknown-linux-gnu"), "basilisk");
+    /// assert_eq!(extracted_binary_path("basilisk.exe", "pc-windows-msvc"), "basilisk.exe");
+    /// ```
+    #[must_use]
+    pub fn extracted_binary_path(binary_name: &str, os: &str) -> String {
+        if os == MACOS_OS {
+            format!("{MACOS_ARCHIVE_DIR}/{binary_name}")
+        } else {
+            binary_name.to_string()
+        }
     }
 }
 

@@ -8,7 +8,7 @@ dateModified: 2026-03-31
 author: The Basilisk Project
 eleventyNavigation:
   key: Profiler
-  order: 5
+  order: 6
 ---
 
 # Profiler

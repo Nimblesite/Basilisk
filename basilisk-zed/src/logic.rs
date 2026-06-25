@@ -557,9 +557,23 @@ pub fn find_env_var<'a>(env: &'a [(String, String)], name: &str) -> Option<&'a s
         .map(|(_, value)| value.as_str())
 }
 
-/// Build the cargo bin path from a home directory.
-pub fn cargo_bin_path(home: &str) -> String {
-    format!("{home}/.cargo/bin/basilisk")
+/// Resolve an explicit, user-provided binary override, if any.
+///
+/// Precedence: the Zed LSP `binary.path` setting, then the `BASILISK_PATH`
+/// environment variable. Returns `None` when neither is set — the signal to
+/// fall back to the managed GitHub-release download.
+///
+/// There is deliberately **no** filesystem default (e.g. `~/.cargo/bin`):
+/// installing the extension alone must be enough to get a working binary, so
+/// the absence of an explicit override means "download the matching release
+/// asset", never "guess a path that probably does not exist". Implements
+/// [ZED-DIST].
+#[must_use]
+pub fn resolve_binary_override(
+    settings_path: Option<&str>,
+    env_path: Option<&str>,
+) -> Option<String> {
+    settings_path.or(env_path).map(str::to_string)
 }
 
 #[cfg(test)]

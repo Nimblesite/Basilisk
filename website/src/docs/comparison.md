@@ -8,7 +8,7 @@ dateModified: 2026-03-31
 author: The Basilisk Project
 eleventyNavigation:
   key: Comparison
-  order: 6
+  order: 8
 ---
 
 # Comparing Type Checkers

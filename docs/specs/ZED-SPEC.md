@@ -306,32 +306,34 @@ Bundling `[grammars.python]` would force Zed to compile the grammar from source 
 
 ## Binary Distribution {#ZED-DIST}
 
-The extension downloads the `basilisk` binary from GitHub Releases on first activation:
+**Installing the extension is enough — there is no separate binary install.** This is the Shipwright contract: the binary ships with every release (`.github/workflows/release.yml`), and the extension downloads the matching asset on first activation, caches it in the extension's data directory, and reuses it until a newer release appears. There is **no filesystem default** (no `~/.cargo/bin`, no PATH guess) — a missing override means "download", never "guess a path that probably does not exist".
+
+Resolution order (`basilisk-zed/src/lib.rs::resolve_binary`):
 
 ```rust
-fn resolve_binary(&self, worktree: &zed::Worktree) -> Result<String> {
-    // 1. Check if basilisk is already on PATH
-    // 2. Check ~/.cargo/bin/basilisk
-    // 3. Check extension's data directory for cached download
-    // 4. Download from GitHub releases:
-    let (os, arch) = zed::current_platform();
+fn resolve_binary(&mut self, worktree: &zed::Worktree) -> Result<String> {
+    // 1. Explicit override — `binary.path` in the Zed LSP settings
+    // 2. Explicit override — the `BASILISK_PATH` environment variable
+    // 3. Default — download the matching binary from the latest GitHub release
     let release = zed::latest_github_release(
-        "basilisk-lang/basilisk",
-        zed::GithubReleaseOptions {
-            require_assets: true,
-            pre_release: false,
-        },
+        basilisk_common::release::GITHUB_REPO, // "Nimblesite/Basilisk"
+        zed::GithubReleaseOptions { require_assets: true, pre_release: false },
     )?;
-    // Match platform to asset name, download, make executable
+    // asset_name() / is_zip_archive() / extracted_binary_path() pick the asset,
+    // archive kind, and in-archive path — one source of truth shared with release.yml.
 }
 ```
 
-Target assets:
-- `basilisk-x86_64-apple-darwin.tar.gz`
-- `basilisk-aarch64-apple-darwin.tar.gz`
+The two overrides exist only for development (point at a locally built binary) and for pointing at a system install (Homebrew/Scoop). They are never required for a normal install.
+
+Target assets (must match `release.yml` exactly — see `basilisk_common::release::asset_name`):
+- `basilisk-aarch64-apple-darwin.zip` — macOS ships a **zip** (`ditto`), nested under `basilisk-darwin/`, carrying both `basilisk` and `basilisk-profiler-helper`
 - `basilisk-x86_64-unknown-linux-gnu.tar.gz`
 - `basilisk-aarch64-unknown-linux-gnu.tar.gz`
 - `basilisk-x86_64-pc-windows-msvc.zip`
+- `basilisk-aarch64-pc-windows-msvc.zip`
+
+Archive kind and the binary's path inside the archive are platform-specific (macOS zip is nested; Linux `tar.gz` and Windows zip are flat) and are derived from `basilisk_common::release::{is_zip_archive, extracted_binary_path}` so the downloader can never drift from the release pipeline.
 
 ## Zed Settings {#ZED-CONFIG}
 

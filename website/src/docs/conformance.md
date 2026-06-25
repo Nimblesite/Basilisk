@@ -8,7 +8,7 @@ dateModified: 2026-06-24
 author: The Basilisk Project
 eleventyNavigation:
   key: Conformance
-  order: 8
+  order: 10
 ---
 {% from "conformance-chart.njk" import chart %}
 
