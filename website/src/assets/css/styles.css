@@ -248,7 +248,11 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   .sidebar { position: static; max-height: none; padding-right: 0; border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-6); }
 }
 @media (max-width: 768px) {
+  /* [WEBSITE-MOBILE-DOCS-NAV] On phones the docs sidebar collapses, but the
+     hamburger (mobile-menu.js toggles `.open`) must be able to reveal it — else
+     the per-section submenu is unreachable. Mirrors the `.nav-links.open` rule. */
   .sidebar { display: none; }
+  .sidebar.open { display: block; }
 }
 
 .docs-nav, .sidebar nav { padding: 0; }

@@ -250,7 +250,8 @@ name into path segments and threading it into a node trie
 
 **Flat view (`flat`, opt-in toggle).** Flat view drops the folder nesting and
 lists **every module** as one sortable row labelled by its full dotted name,
-ordered by the sort toggle (worst/best/alpha). It is "flat" only in that folders
+ordered by the selected sort mode (module name / path / type coverage — #189).
+It is "flat" only in that folders
 are not nested — symbols still expand **under their owning module** and are
 **never** dumped bare at the tree root (the #149 §2 flat-mode defect). The
 default view is always the nested tree.
@@ -292,7 +293,7 @@ default view is always the nested tree.
 | Collapse All | VS Code's **native** `showCollapseAll` button — never a contributed command. A custom collapse command alongside it is a duplicate (issue #113). |
 | Filter | Toggle filter input to search modules/symbols by name |
 | Toggle View | Switch between tree (nested folder/package hierarchy, default) and flat (every module as one sortable row) |
-| Sort | Cycle worst-first -> best-first -> alphabetical. Applied only in flat view; tree view stays structural. Its toolbar entry is **gated on `basilisk.moduleExplorerView == 'flat'`** so it is hidden in tree view rather than rendering as a silent no-op (issue #151). Carried over from the merged Type Health panel. |
+| Sort | Open an explicit picker of three labelled modes — **Module Name**, **Path**, **Type Coverage** — with the active mode checked, so the current sort is always visible (no blind cycle, issue #189). Coverage sorts ascending (least-typed first), the default. Applied only in flat view; tree view stays structural. Its toolbar entry is **gated on `basilisk.moduleExplorerView == 'flat'`** so it is hidden in tree view rather than rendering as a silent no-op (issue #151). Carried over from the merged Type Health panel. |
 | Fix All | Run `basilisk.fixWorkspace`. Promoted from the info panel (issue #103); `when`-gated on `basilisk.serverState == 'running'` **and** the `config.basilisk.experimental.fixAll` flag (default off, issue #113). |
 | Organize Imports | Run `basilisk.organizeImports`. Same promotion + gating. |
 | Restart Server | Run `basilisk.restartServer`. Same promotion + gating. |
@@ -338,8 +339,11 @@ At-a-glance view of how well-typed the codebase is. Answers: "How much of my cod
 > command, `TypeHealthResponse`, and the tree structure below remain the **shared
 > health surface** for editors without a unified panel (Zed `/health`, Neovim
 > `:BasiliskHealth`), computed from the same per-file figures as the folded rollup.
-> The icon thresholds, coverage bar, `[adopted]` badge, and worst-first sort
-> described here all carry over to the merged panel.
+> The icon thresholds, coverage bar, and `[adopted]` badge described here all
+> carry over to the merged panel — whose flat-view sort is the explicit
+> Module Name / Path / Type Coverage picker
+> ([EXTACT-MODULES-TOOLBAR](#EXTACT-MODULES-TOOLBAR), #189), defaulting to
+> least-typed-first.
 
 ### Tree Structure {#EXTACT-HEALTH-TREE-STRUCTURE}
 

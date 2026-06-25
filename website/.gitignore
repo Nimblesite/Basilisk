@@ -3,3 +3,8 @@ _site/
 .eleventy-cache/
 .DS_Store
 *.local
+
+# Playwright local outputs — never committed, never a CI artifact ([GITHUB-NO-ARTIFACTS])
+test-results/
+playwright-report/
+playwright/.cache/
