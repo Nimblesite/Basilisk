@@ -12,9 +12,6 @@
 "case" @keyword
 "type" @keyword
 
-; Exception keywords
-["except*"] @keyword
-
 ; Builtins
 ((identifier) @function.builtin
   (#any-of? @function.builtin
@@ -85,16 +82,13 @@
 (type (attribute attribute: (identifier) @type))
 (type (subscript value: (identifier) @type))
 
-; Generic type parameters (PEP 695 — Python 3.12+)
-(type_parameter (identifier) @type)
-
 ; Class definitions
 (class_definition name: (identifier) @type)
 (class_definition superclasses: (argument_list (identifier) @type))
 
 ; String literals
 (string) @string
-(string (escape_sequence) @string.escape)
+(escape_sequence) @string.escape
 
 ; F-string interpolations
 (interpolation) @string.special
