@@ -196,17 +196,19 @@ Please register before starting work.
 
 ## Generating CLI Screenshots (real `basilisk check` output)
 
-Marketing/doc screenshots of CLI output must be **real screen captures of the actual binary**, never hand-typed code fences or synthetic renders (those drift and are usually inaccurate). Canonical location: `website/src/assets/images/` (referenced as `/assets/images/<name>.png`). Rule screenshots are named after the code (`e0001.png` … `e0025.png`); the homepage demo pair is `cli-demo.png` (errors) + `cli-clean.png` (pass).
+Marketing/doc screenshots of CLI output must be **real output of the actual binary**, never hand-typed code fences or synthetic renders (those drift and are usually inaccurate). Canonical location: `website/src/assets/images/` (referenced as `/assets/images/<name>.png`). Rule screenshots are named after the code (`e0001.png` … `e0025.png`); the homepage demo pair is `cli-demo.png` (errors) + `cli-clean.png` (pass).
 
-Process (macOS, Terminal.app + `screencapture` + ImageMagick):
+These are now generated **automatically** — no manual Terminal.app / `screencapture` / ImageMagick. From `website/`:
 
-1. **Verify the example first.** Many rule examples do NOT trigger the rule they claim — always run `basilisk check` on the snippet and confirm the *exact* target code appears before screenshotting. E.g. E0003/E0005 fire on empty collections (`data = []`), not plain literals; E0014 needs a single annotated assignment (`count: int = "zero"`); E0016 needs `@override` (else it's E0025); E0018 fires on an undefined name in a `return`. Craft minimal snippets that isolate the target code.
-2. **No PII.** Run from a neutrally-named dir (`/tmp/basilisk-demo`, so the title bar reads "basilisk-demo", not the home-dir/username) and set a clean prompt (`export PS1='$ '`) so no username/host appears. Reference relative filenames so diagnostic paths stay clean (`e0001.py:1:13`).
-3. **Drive Terminal deterministically.** Open an empty window, size it (`set number of columns/rows`), then run `cd /tmp/basilisk-demo; export PS1='$ '; clear` followed by `basilisk check <file>.py` *in that window*. Resize BEFORE typing (resizing mid-type corrupts the line).
-4. **Capture the exact window by CGWindowID** (not a screen region — overlapping windows contaminate region captures). Get the frontmost Terminal window id via JXA/CoreGraphics (`CGWindowListCopyWindowInfo`, first owner=="Terminal" layer 0), then `screencapture -x -o -l<id>`. Close stale Terminal windows first so the wrong one isn't picked.
-5. **Crop** with ImageMagick — flatten the rounded-corner alpha onto the terminal background, then trim: `magick raw.png -background 'srgb(30,30,30)' -alpha remove -alpha off -fuzz 6% -trim +repage out.png`.
+```bash
+npm run screenshots                       # regenerate every image
+node screenshots/generate.mjs e0001 e0012 # a subset by name
+BASILISK_BIN=../target/release/basilisk npm run screenshots  # pin the binary
+```
 
-After generating, rebuild (`cd website && npm run build`) and confirm the images copy to `_site/assets/images/` and render. VSIX integration tests capture their own editor screenshots to the gitignored `vscode-extension/.screenshots/` (never committed, never a CI artifact — see [GITHUB-NO-ARTIFACTS]).
+`screenshots/generate.mjs` runs the real `basilisk check --color always` on each snippet in `screenshots/shots.mjs` (in a throwaway, neutrally-named temp dir so paths read `e0001.py:1:13` with no PII), **asserts the documented diagnostic actually fires** (the snippet→code pairing lives in the manifest, so a checker change can't silently ship a misleading image), then renders the genuine coloured output in a faithful macOS Terminal window via Playwright. See `[WEBSITE-SCREENSHOTS]` (`docs/specs/WEBSITE-SCREENSHOTS-SPEC.md`).
+
+To add/change a screenshot, edit `screenshots/shots.mjs` (snippet + expected code) and rerun — never craft images by hand. The committed PNGs are regenerated locally when CLI output changes; CI only verifies they render (`website/tests/e2e/screenshots.spec.ts`, `[WEBSITE-SCREENSHOTS-VERIFY]`), never captures, per `[GITHUB-NO-ARTIFACTS]`. After regenerating, rebuild (`npm run build`) and confirm the images copy to `_site/assets/images/`. VSIX integration tests capture their own editor screenshots to the gitignored `vscode-extension/.screenshots/` (never committed, never a CI artifact).
 
 ## Architecture
 

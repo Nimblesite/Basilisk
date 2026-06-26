@@ -122,13 +122,16 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm run build
 
-      # Navigation smoke tests ([WEBSITE-E2E-SMOKE]). Both presets (Desktop
-      # Chrome + Pixel 5) run on Chromium, so only chromium is installed.
+      # Navigation smoke tests ([WEBSITE-E2E-SMOKE]) and CLI-screenshot render
+      # checks ([WEBSITE-SCREENSHOTS-VERIFY]). Both presets (Desktop Chrome +
+      # Pixel 5) run on Chromium, so only chromium is installed. The screenshots
+      # are committed, regenerated locally with `npm run screenshots` against the
+      # real binary — CI only verifies they render, it never captures them.
       - name: Install Playwright browser
         working-directory: website
         run: npx playwright install --with-deps chromium
 
-      - name: Run navigation smoke tests (desktop + mobile)
+      - name: Run navigation + screenshot smoke tests (desktop + mobile)
         working-directory: website
         # CI uses the stdout `list` reporter only — no HTML report, trace,
         # video or screenshot is produced or uploaded ([GITHUB-NO-ARTIFACTS]).

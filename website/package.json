@@ -8,6 +8,7 @@
     "build": "eleventy",
     "start": "eleventy --serve --watch",
     "clean": "rm -rf _site",
+    "screenshots": "node screenshots/generate.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
