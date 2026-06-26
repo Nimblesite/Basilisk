@@ -68,6 +68,15 @@ Flag any gap between what we claim and what the official script says, and push o
 that script wherever it currently doesn't. The score only moves **up**, and only because we genuinely
 got more conformant — target **100%** — never because we changed how we count.
 
+**Disabling any conformance rule to move the score is absolutely forbidden — a punishable offence.**
+PEP conformance MUST run the `basilisk` binary with **every rule enabled**: no `basilisk.json`, no
+per-rule override, no "spec-conformance mode", no skipped fixtures, no exceptions. The score is
+exactly what a real user gets out of the box. If a strict default fires on spec-valid code, **fix the
+checker** so it stops firing — never silence the rule to inflate the number. This is precisely how the
+number was once faked: house-style rules were switched off at score time to report a hollow 100% while
+the false positives were merely hidden, not eliminated. That disabling has been removed; the only
+legitimate path to 100% is making the checker smarter with every rule still on ([CHKARCH-CONFORMANCE]).
+
 ### 3. Maintain and improve code quality
 
 Review AI-authored PRs against the bar in [`CLAUDE.md`](CLAUDE.md): *code here should
@@ -168,6 +177,11 @@ follow it exactly. This section is a map, not a restatement (we don't duplicate)
 - **The ratchets only move one way.** Conformance score up; false positives and benchmark
   regressions down; coverage up; mutation score up. A conformance fix that blows the benchmark gate
   isn't done.
+- **Never disable a conformance rule to move the score — a punishable offence.** PEP conformance runs
+  the `basilisk` binary with **every rule enabled**: no `basilisk.json`, no per-rule override, no
+  "spec-conformance mode", no skipped fixtures, no exceptions. The score is exactly what a real user
+  gets out of the box. If a strict default fires on spec-valid code, **fix the checker** so it stops
+  firing — never silence the rule to inflate the number ([CHKARCH-CONFORMANCE]).
 - **`make` is the interface.** `make build | test | lint | fmt | clean | ci | setup` — exactly seven
   targets, don't add more. `make test` is fail-fast and enforces the coverage threshold from
   `coverage-thresholds.json`.

@@ -7,10 +7,29 @@
 > calculator** (`conformance/score.py` downloads and runs upstream's own
 > `get_expected_errors` + `diff_expected_errors`; see [CHKARCH-CONFORMANCE]).
 > A file passes only with an **empty upstream `errors_diff`** (false positives
-> fail the file), and **nothing is excluded from scoring** (the binary runs in
-> spec-conformance mode — non-spec house-style rules off, see CHKARCH-CONFORMANCE-MODE).
-> Honest current baseline: **121/146 = 82.9%**, **24 false positives**, 36 missed
-> (40.4% / 285 FPs with house-style rules on). The
+> fail the file), and **nothing is excluded from scoring**: the binary runs with
+> **EVERY rule enabled** — no config, no `basilisk.json`, no "spec-conformance
+> mode". There is NO rules-off variant; see CHKARCH-CONFORMANCE-MODE, which now
+> documents that no such mode exists. Disabling any conformance rule for scoring
+> is FORBIDDEN.
+> Honest current baseline (2026-06-26): **68/146 = 46.6%**, **265 false
+> positives**, **0 missed** — the checker catches every required error; every
+> failing fixture is false positives from strict-by-default house-style rules
+> (require-annotation E0001/E0002/E0004, missing-`@override` E0025, explicit-`Any`
+> W0014, redundant-annotation W0050) firing on spec-valid code where the spec
+> treats unannotated as inferred (not an error). The only legitimate path to 100%
+> is fixing the checker so these strict defaults stop firing on spec-valid code —
+> with every rule still enabled — never by disabling a rule.
+>
+> **HISTORY (stated plainly, not hidden):** the last HONEST score was
+> **59/146 = 40.4% (285 FPs)** at PR #183. PRs #184/#185/#191 then inflated the
+> reported number to a FAKE 100% by writing a `basilisk.json` that DISABLED those
+> 6 house rules at score time (the so-called "spec-conformance mode"). The checker
+> was NOT made smarter; the false positives were merely hidden. That disabling has
+> been REMOVED, and disabling any conformance rule is now a punishable offence.
+> Genuine progress over that span was real but modest: 40.4% → 46.6%.
+>
+> The
 > still-valid part of this plan is the *strategy* — driving specific rules'
 > false positives down; the *counts* below are stale.
 

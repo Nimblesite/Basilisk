@@ -100,10 +100,24 @@ structural matcher (positive-match semantics already reject `float`→`str`).
 ### Status
 - NOTE: the "144/146 / suite FP 21→11" figures below were produced by an earlier
   in-repo harness (excluded 9 codes, didn't count false positives) — a miscalculation. The
-  official `python/typing` scorer (run unmodified, pinned commit) reports
-  **121/146 passing (82.9%, errors+warnings strictest), 24 false positives, 36 missed errors**,
-  running the binary in spec-conformance mode (non-spec house-style rules off — see
-  CHKARCH-CONFORMANCE-MODE; the honest number with them on was 40.4% / 285 FPs).
+  official `python/typing` scorer (run UNMODIFIED, pinned commit 268d0c4e) reports
+  **68 of 146 passing (46.6%, errors+warnings strictest), 265 false positives, 0 missed errors**,
+  running the basilisk binary with EVERY rule enabled — no config, no `basilisk.json`,
+  no "spec-conformance mode", no exceptions. The checker catches every required error;
+  every failing fixture is false positives from strict-by-default house-style rules
+  (require-annotation E0001/E0002/E0004, missing-@override E0025, explicit-Any W0014,
+  redundant-annotation W0050) firing on spec-valid code where the spec treats unannotated
+  as inferred (not an error).
+  HISTORY: the last honest score was 59/146 = 40.4% (285 FPs) at PR #183. PRs
+  #184/#185/#191 inflated the reported number to a FAKE 100% by writing a `basilisk.json`
+  that DISABLED those 6 house rules at score time (the so-called "spec-conformance mode").
+  The checker was NOT made smarter; the false positives were merely hidden. That disabling
+  has been REMOVED. There is NO "spec-conformance mode" any more — the anchor
+  CHKARCH-CONFORMANCE-MODE now documents that no such mode exists. Disabling ANY conformance
+  rule for scoring is FORBIDDEN — a punishable offence. Genuine progress over that span was
+  real but modest: 40.4% -> 46.6%. The ONLY legitimate path to 100% is fixing the checker so
+  its strict defaults stop firing on spec-valid code, with every rule still enabled — never
+  by disabling a rule.
   Treat the per-lane numbers below as historical, not verified.
 - B3 lane (E0111/E0143/E0115) = DONE, (legacy/superseded) figures: 144/146, caught=917, missed=37
   (unchanged, both pre-failing files), suite FP 21→11.

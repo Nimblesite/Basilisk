@@ -3,12 +3,30 @@
 > ⚠️ **SUPERSEDED SCORES BELOW.** Every percentage in this plan (e.g. "137/146,
 > 93.84%", category "100%" rows) came from a since-removed in-repo harness that
 > excluded 9 diagnostic codes and ignored false positives. The score is now
-> computed by the **real `python/typing` calculator** (`conformance/score.py`,
-> see [CHKARCH-CONFORMANCE]); the honest current number is **121/146 = 82.9%**
-> (errors+warnings, strictest), 24 false positives, 36 missed, running the binary in
-> spec-conformance mode (non-spec house-style rules off — see CHKARCH-CONFORMANCE-MODE;
-> the number with them on was 40.4% / 285 FPs). Treat the figures below as
-> historical task notes, not the live score.
+> computed by the **unmodified `python/typing` calculator** (pinned `268d0c4e`,
+> `conformance/score.py`, see [CHKARCH-CONFORMANCE]) with the `basilisk` binary run
+> with **EVERY rule enabled** — no config, no `basilisk.json`, no exceptions. The
+> honest current number is **68/146 = 46.6%** (errors+warnings, strictest):
+> **265 false positives, 0 missed required errors**. The checker catches every
+> required error; each failing fixture fails purely on false positives from
+> strict-by-default house-style rules (require-annotation E0001/E0002/E0004,
+> missing-`@override` E0025, explicit-`Any` W0014, redundant-annotation W0050)
+> firing on spec-valid code where the spec treats unannotated as inferred, not an
+> error.
+>
+> **There is NO "spec-conformance mode" any more** — see CHKARCH-CONFORMANCE-MODE,
+> which now documents that no such mode exists. Disabling ANY conformance rule for
+> scoring is **FORBIDDEN** — a punishable offence. The only legitimate path to
+> 100% is fixing the checker so its strict defaults stop firing on spec-valid code,
+> with every rule still enabled — never by disabling a rule.
+>
+> **HISTORY (not the current figure):** the last honest score was 59/146 = 40.4%
+> (285 FPs) at PR #183. PRs #184/#185/#191 inflated the reported number to a fake
+> 100% by writing a `basilisk.json` that disabled those 6 house rules at score time
+> (the so-called "spec-conformance mode") — the checker was not made smarter, the
+> false positives were merely hidden. That disabling has been removed. Genuine
+> progress over that span was real but modest: 40.4% → 46.6%. Treat the figures
+> below as historical task notes, not the live score.
 >
 > **Run**: `make conformance` · **Status CSV**: `conformance/conformance_status.csv`
 > · **Tests**: `crates/basilisk-cli/tests/conformance/`
