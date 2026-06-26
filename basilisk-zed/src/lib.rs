@@ -46,9 +46,7 @@ impl BasiliskExtension {
         let env = worktree.shell_env();
         let env_path = logic::find_env_var(&env, "BASILISK_PATH");
 
-        if let Some(path) =
-            logic::resolve_binary_override(settings_path.as_deref(), env_path)
-        {
+        if let Some(path) = logic::resolve_binary_override(settings_path.as_deref(), env_path) {
             self.cached_binary_path = Some(path.clone());
             return Ok(path);
         }
@@ -162,9 +160,8 @@ impl BasiliskExtension {
                     "{download_dir}/{}",
                     release::extracted_binary_path(release::PROFILER_HELPER, os_str)
                 );
-                zed::make_file_executable(&helper).map_err(|err| {
-                    format!("Failed to make profiler helper executable: {err}")
-                })?;
+                zed::make_file_executable(&helper)
+                    .map_err(|err| format!("Failed to make profiler helper executable: {err}"))?;
             }
         }
 
