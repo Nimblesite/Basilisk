@@ -1,14 +1,14 @@
 ---
 layout: layouts/docs.njk
 title: "How Basilisk Measures PEP Conformance"
-description: "How Basilisk's PEP conformance score is measured with the official python/typing conformance suite — what the suite is, how scoring works, the byte-identical pinned calculator we run, and the spec-conformance mode the binary runs in."
+description: "How Basilisk's PEP conformance score is measured with the official python/typing conformance suite — what the suite is, how scoring works, the byte-identical pinned calculator we run, and why we score with every rule enabled and never disable one."
 keywords: pep conformance, python typing conformance suite, basilisk conformance score, type checker scoring, python/typing calculator
 date: 2026-06-23
 dateModified: 2026-06-24
 author: The Basilisk Project
 eleventyNavigation:
   key: Conformance
-  order: 8
+  order: 10
 ---
 {% from "conformance-chart.njk" import chart %}
 
@@ -62,24 +62,28 @@ To keep the calculator trustworthy, the vendored copy is **sha256-pinned**. `sco
 
 The adapter and gate live in a separate, auditable file, so the calculator stays byte-for-byte the suite's own.
 
-## What the checker runs in — spec-conformance mode
+## Every rule runs — there is no "conformance mode"
 
-The suite tests the **type system** — generics, protocols, overloads, `TypedDict`, and the rest. Basilisk is strict by default and layers on house-style rules the typing spec doesn't define: chiefly *require an annotation* on every parameter, return, and `*args`/`**kwargs`, a redundant-annotation warning, a missing-`@override` nudge, and an explicit-`Any` nudge. Those are the right defaults for day-to-day Basilisk, but the spec treats an unannotated type as **inferred**, not an error — so firing them on the suite would be a false positive on nearly every file.
+We score the binary exactly as a real user runs it: **every rule enabled, no configuration, nothing disabled.** Before scoring, `score.py` *deletes* any `basilisk.json` from the fixtures directory so nothing can quietly silence a rule. Disabling a rule to lift the number is forbidden.
 
-So, exactly as pyright's conformance run leaves `reportMissingParameterType` and its siblings off, we run the binary in a **spec-conformance mode** that disables those house-style rules (a committed `basilisk.json` the scorer drops beside the test files). This sets **what the binary emits** — the same lever every checker on the results page pulls — not how the result is scored. The pinned calculator above still counts every diagnostic the binary does emit, with nothing excluded.
+That honesty costs us points, on purpose. Basilisk is strict by default and layers on house-style rules the typing spec doesn't define — chiefly *require an annotation* on every parameter, return, and `*args`/`**kwargs`, plus a redundant-annotation warning, a missing-`@override` nudge, and an explicit-`Any` nudge. The spec treats an unannotated type as **inferred**, not an error, so these rules fire across the suite and count as false positives. They are the bulk of today's **{{ conformance.fp }}** false positives.
+
+We could make the number look better tomorrow by turning those rules off at score time. We won't. The published figure has to mean *what you actually get out of the box*. The only legitimate way to 100% is to make the checker smarter — so its strict defaults stop firing on spec-valid code — with every rule still switched on. (You're free to relax any rule **in your own project**; the conformance scorer never does.)
 
 ## How the score changed
 
-The site has always shown a conformance number; it hasn't always been right. We used to measure with an in-repo script that excluded some diagnostic codes and didn't count false positives, so it reported figures that climbed to 100%. That was an honest mistake, not a tuned result. The official calculator above replaced it; counting every diagnostic, today's honest figure is **{{ conformance.scorePct }}%** — reached first by correcting the measurement, then by closing real conformance gaps. The checker didn't get worse; 100% is the target we ratchet toward, not a claim about today.
+The site has shown a conformance number for a while; it hasn't always been honest, and we'd rather say so plainly than quietly fix it. Two different measurement shortcuts once inflated it. First, an in-repo script that excluded some diagnostic codes and didn't count false positives. We replaced that with the official calculator — but then a second shortcut crept in: the scorer ran the binary in a "spec-conformance mode" that **disabled six strict-by-default rules** before scoring, which pushed the reported number to a **fake 100%**. That is exactly the kind of gaming this page exists to prevent.
 
-The chart below is read straight from the **git history of `conformance/conformance_status.csv`** at build time: one point per commit that changed it, plotting the score that commit actually recorded.
+Both shortcuts are gone. We now run the official calculator over the binary with **every rule enabled** — the real out-of-the-box experience — and the honest figure today is **{{ conformance.scorePct }}%** ({{ conformance.pass }} / {{ conformance.total }} files, {{ conformance.fp }} false positives, {{ conformance.missed }} missed required errors). The number dropped not because the checker got worse, but because we stopped measuring it dishonestly. 100% is the target we ratchet toward — by fixing the checker, never by switching a rule off.
+
+The chart below is read straight from the **git history of `conformance/conformance_status.csv`** at build time: one point per commit that changed it, plotting the score that commit actually recorded — including the drop from the gamed 100% to the honest figure.
 
 {{ chart(conformance, {
   "label": "Conformance score over time",
-  "heading": "From the earlier in-repo number to the official calculator",
-  "prevLegend": "Earlier in-repo script (some codes excluded, false positives not counted)",
-  "officialLegend": "Official <code>python/typing</code> calculator",
-  "dropNote": "On <strong>" + conformance.chart.peak.shortDate + "</strong> the in-repo script reported <strong>" + conformance.chart.peak.score + "%</strong>. Re-scored by the official calculator, the honest figure was <strong>" + conformance.chart.drop.to + "%</strong>; real fixes have since lifted it to <strong>" + conformance.chart.current.score + "%</strong> — a correction, then genuine progress, never a regression.",
+  "heading": "From a rules-disabled 100% to the honest, every-rule-enabled figure",
+  "prevLegend": "Measured with rules disabled or codes excluded (not the real out-of-box behaviour)",
+  "officialLegend": "Official <code>python/typing</code> calculator, every rule enabled",
+  "dropNote": "Earlier runs reported up to <strong>" + conformance.chart.peak.score + "%</strong> — but only by disabling rules or excluding codes. Scored honestly with every rule enabled, the real figure is <strong>" + conformance.chart.current.score + "%</strong>. The drop is a correction, not a regression: the checker never got worse, the measurement got honest.",
   "caption": "Each dot is a real commit to <code>conformance/conformance_status.csv</code>, recomputed every build. Hover a point for its date, commit, score, and false-positive count."
 }) }}
 

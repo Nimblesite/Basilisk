@@ -1,3 +1,5 @@
+<p align="center"><strong>English</strong> · <a href="README.zh.md">简体中文</a></p>
+
 # Basilisk Examples
 
 Realistic Python scripts that demonstrate what Basilisk catches — and what

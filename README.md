@@ -4,6 +4,8 @@
 
 <h1 align="center">Basilisk</h1>
 
+<p align="center"><strong>English</strong> · <a href="README.zh.md">简体中文</a></p>
+
 <p align="center">
   <strong>The open-source Python language server.</strong><br>
   Complete language server, type checker, debugger, and profiler — strict by default.<br>
@@ -216,6 +218,15 @@ cargo fmt            # format
 ```
 
 Rust 1.87+ required.
+
+---
+
+## Contributing
+
+Basilisk is built by a human + AI partnership, with the work split on purpose. See
+[CONTRIBUTING.md](CONTRIBUTING.md) — **For Humans** (testing, code-quality review,
+conformance/security audits, IDE feature parity, sharpening the AI instructions) and
+**For AI** (the technical execution, under the standing rules in [CLAUDE.md](CLAUDE.md)).
 
 ---
 

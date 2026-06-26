@@ -43,7 +43,8 @@ Every TODO item is tagged so we know who picks it up:
    install everywhere. The single biggest "people actually find out" lever.
 
 3. **Get listed on the official Python typing conformance results** *(TODO H + G)* — **Effort: medium.
-   Reward: very high.** We're at 82.9% (121/146, per the unmodified python/typing scorer, binary in spec-conformance mode); even at this
+   Reward: very high.** We're at 46.6% (68/146, per the unmodified python/typing scorer, every rule
+   enabled — no config, no "spec-conformance mode"); even at this
    score, submitting results earns a spot on the scoreboard the whole target audience watches (mypy sits
    at ~58%), and every failing file we close lifts our standing. Correctness + credibility + organic discovery in one (the
    Zuban/David Halter precedent proves it draws eyes).
@@ -114,12 +115,18 @@ The bar to credibly displace Pylance is feature *and* correctness parity on the 
 actually feel day to day. Rough priorities (refine with human judgment — see TODO):
 
 - **Conformance & correctness**: per the official `python/typing` scorer (run unmodified, pinned
-  commit), PEP conformance is currently **121/146 files PASS (82.9%, errors+warnings strictest)**, with **24 false
-  positives** and 36 missed required errors, running the binary in spec-conformance mode (basilisk's non-spec
-  house-style rules off — see CHKARCH-CONFORMANCE-MODE; the honest number with them on was 40.4%). (Earlier
-  "135/146 / ~18 FPs" figures came from an earlier in-repo (miscalculating) harness that excluded codes from the
-  *scorer* and ignored false positives; they are superseded.) Failing files
-  cluster in Protocols, Callables, TypeVarTuple, ParamSpec, TypedDicts. FPs hurt credibility more
+  commit `268d0c4e`), PEP conformance is currently **68/146 files PASS (46.6%, errors+warnings strictest)**, with **265 false
+  positives** and **0 missed required errors** — the checker catches every required error; every failing fixture is
+  false positives from strict-by-default house-style rules (require-annotation E0001/E0002/E0004, missing-@override
+  E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code where the spec treats unannotated
+  as inferred, not an error. The score is run with **every rule enabled** — no config, no `basilisk.json`, no
+  "spec-conformance mode" (no such mode exists any more — see CHKARCH-CONFORMANCE-MODE). *(History: the previous
+  honest score was 40.4% / 285 FPs at PR #183; PRs #184/#185/#191 inflated the reported number to a fake 100% by
+  writing a `basilisk.json` that disabled those 6 house rules at score time — the false positives were merely hidden,
+  not fixed. That disabling has been removed; disabling any conformance rule for scoring is now forbidden. Genuine
+  progress over that span was real but modest: 40.4% → 46.6%.)* Failing files
+  cluster in Protocols, Callables, TypeVarTuple, ParamSpec, TypedDicts. The only legitimate path to 100% is fixing
+  the checker so its strict defaults stop firing on spec-valid code — never by disabling a rule. FPs hurt credibility more
   than missed cases — prioritize accordingly.
 - **Latency**: sub-10ms incremental checks are the promise (Salsa). Need a published benchmark vs.
   Pyright/Pylance — see §5 for the scale/resource methodology.
@@ -196,13 +203,14 @@ hermetic, plus an opt-in integration test against the real agent.
 Several of these are close enough that finishing them is cheap and visibly improves the product (the
 conformance and false-positive work is larger — sized honestly below against the unmodified scorer):
 
-- **`CHECK-ELIMINATE-FALSE-POSITIVES.md`** (active): the real python/typing scorer reports **24 false
-  positives** to drive down (down from 285 — most were basilisk's non-spec house-style rules, now off in
-  spec-conformance mode; the old "~18 FPs left" came from the earlier in-repo harness — a
-  miscalculation — and is superseded). **Plus an open showstopper**: `BSK-E0149` line-scans source text and misfires on
+- **`CHECK-ELIMINATE-FALSE-POSITIVES.md`** (active): the real python/typing scorer (every rule enabled, no
+  config) reports **265 false positives** to drive down — all from basilisk's strict-by-default house-style rules
+  firing on spec-valid code. The only legitimate fix is making the checker smarter so those defaults stop firing on
+  inferred-not-an-error code; disabling a rule to hide them is forbidden (history: PRs #184/#185/#191 did exactly
+  that to fake a 100% score, now reverted). **Plus an open showstopper**: `BSK-E0149` line-scans source text and misfires on
   docstrings containing `class`/`def` prefixes + bracketed tokens (e.g. our own `[SPEC-ID]` convention).
   Re-ground the rule on the AST. High credibility payoff.
-- **`CHECKER-PEP-CONFORMANCE-PLAN.md`** (active, 82.9% — 121/146): clear the **25 failing files** toward the
+- **`CHECKER-PEP-CONFORMANCE-PLAN.md`** (active, 46.6% — 68/146, every rule enabled): clear the **78 failing files** toward the
   conformance results listing.
 - **`CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md`** (~40%): the E0149 fix above is part of this; finish
   Phase 4 (wire the no-line-scanning lint into CI so the anti-pattern can't return).
@@ -227,9 +235,15 @@ shipped and stable? If we go: start with a spec + plan doc (`docs/specs/JETBRAIN
 
 ## 11. Internationalization & translation
 
-**Current state:** the Eleventy site has `i18n: false`; a Chinese mirror exists under
-`website/src/zh/` but it's **hand-maintained parallel pages**, not a real i18n system. That doesn't
-scale to more languages. The product itself (diagnostic messages, CLI output) is English-only.
+**Current state:** the Eleventy site now runs the `eleventy-plugin-techdoc` i18n system with
+`features.i18n: true` (`defaultLanguage: en`, `languages: [en, zh]`). The existing Simplified-Chinese
+content under `website/src/zh/` is folded into it and ships **in the standard way**: `<html lang>`,
+a reciprocal `hreflang` cluster (en/zh/x-default), per-locale canonicals, `og:locale`, a bidirectional
+language switcher on every page, translated nav/footer strings (`src/_data/i18n.json`), and all `/zh/`
+URLs in the sitemap. What remains is **content discipline, not plumbing**: zh pages are still authored
+as parallel files that can drift from English, so we need a drift/staleness guard and native-speaker
+review before any locale is treated as authoritative — and the same wiring extended to ja and pt-BR.
+The product itself (diagnostic messages, CLI output) is still English-only.
 
 **Target languages (ranked by community size × English-proficiency gap):**
 
@@ -322,8 +336,8 @@ Rough plan (most of this is human-led — voice, accounts, timing, relationships
 ## G. Finish near-complete plans
 
 - [ ] **`[AGENT]`** Fix `BSK-E0149` docstring/line-scanning showstopper — re-ground the rule on the AST (`CHECK-ELIMINATE-FALSE-POSITIVES.md`).
-- [ ] **`[AGENT]`** Clear the remaining 24 false positives.
-- [ ] **`[AGENT]`** Close the 25 failing PEP-conformance files (Protocols, Callables, TypeVarTuple, ParamSpec, TypedDicts).
+- [ ] **`[AGENT]`** Clear the remaining 265 false positives (by making the checker smarter — every rule stays enabled; never by disabling a rule).
+- [ ] **`[AGENT]`** Close the 78 failing PEP-conformance files (Protocols, Callables, TypeVarTuple, ParamSpec, TypedDicts).
 - [ ] **`[AGENT]`** Finish `CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md` Phase 4 — wire the no-line-scanning lint into CI.
 - [ ] **`[HUMAN]`** Decide whether `LSP-STUBBING-PLAN.md` Phase 5 (Salsa perf) ships now or later.
 
@@ -352,8 +366,9 @@ Rough plan (most of this is human-led — voice, accounts, timing, relationships
 
 ## L. Internationalization & translation
 
-- [ ] **`[AGENT]`** Build a real Eleventy i18n system; fold existing `/zh` content into it (replace the manual parallel pages).
-- [ ] **`[AGENT]`** Machine-translate the website into the top 3 (zh-Hans, ja, pt-BR) as a first pass.
+- [x] **`[AGENT]`** Build a real Eleventy i18n system; fold existing `/zh` content into it (replace the manual parallel pages). *(Done — `eleventy-plugin-techdoc` i18n with `features.i18n: true`; zh ships with standard hreflang/switcher/sitemap. See §11.)*
+- [ ] **`[AGENT]`** Add a drift/staleness guard so a translated page that falls behind its English source is flagged (English is canonical; mark each locale page with the source commit/date it was synced from).
+- [ ] **`[AGENT]`** Extend the existing i18n wiring to the next two languages (ja, pt-BR): add their `i18n.json` strings + `src/<lang>/` content. Machine-translate as a first pass.
 - [ ] **`[AGENT]`** Investigate VSIX localization (`package.nls.<locale>.json`) and report what's feasible for Zed/Neovim; then translate command/setting strings into the top 3.
 - [ ] **`[AGENT]`** Add a message-catalog / localization layer to the Rust core (locale from config/`LANG`, keyed by diagnostic code) and translate **LSP/CLI diagnostic output** into the top 3.
 - [ ] **`[HUMAN]`** Native-speaker review of every locale before go-live — especially diagnostics (consider hiring reviewers).

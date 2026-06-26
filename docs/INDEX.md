@@ -1,5 +1,14 @@
 # Documentation Index
 
+## Contributing
+
+How the human + AI partnership divides the work — what humans own (testing, code-quality
+review, conformance/security audits, parity, AI-instruction tuning) and what agents drive.
+
+| File | Description |
+|---|---|
+| [CONTRIBUTING.md](../CONTRIBUTING.md) | Contribution guide, split into **For Humans** (judgment, taste, trust) and **For AI** (technical execution under the `CLAUDE.md` rules). |
+
 ## Specs
 
 Specifications define the target behavior and architecture. They are the source of truth.

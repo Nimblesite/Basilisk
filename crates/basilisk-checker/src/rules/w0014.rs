@@ -7,10 +7,12 @@
 //!
 //! This is an opinionated *strictness nudge*, not a type-system requirement:
 //! the typing spec treats `Any` as a fully valid type. It is therefore a
-//! distinct (suppressible) code from the genuine return-type-mismatch error
-//! ([BSK-E0011]); the two used to share a code, which prevented users (and the
-//! PEP-conformance run) from silencing the style nudge while keeping the real
-//! type check. See [CHKARCH-CONFORMANCE-MODE].
+//! distinct (user-suppressible) code from the genuine return-type-mismatch
+//! error ([BSK-E0011]); the two used to share a code, so a user could not
+//! silence the style nudge while keeping the real type check. W0014 itself is
+//! never disabled for PEP conformance — like every rule it runs fully enabled
+//! during scoring; there is no "spec-conformance mode" that turns it off. See
+//! [CHKARCH-CONFORMANCE-MODE].
 //!
 //! ```python
 //! from typing import Any

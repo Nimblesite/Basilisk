@@ -8,7 +8,7 @@ dateModified: 2026-03-31
 author: The Basilisk Project
 eleventyNavigation:
   key: Comparison
-  order: 6
+  order: 8
 ---
 
 # Comparing Type Checkers
@@ -158,7 +158,7 @@ Basilisk is not a faster version of an existing tool. It occupies a different po
 5. WASM plugin system (planned) — extensible without forking, secure by design
 
 **Where Basilisk is not yet the best choice:**
-- PEP conformance: Basilisk currently passes {{ conformance.scorePct }}% of the official conformance suite ({{ conformance.pass }}/{{ conformance.total }}, counting errors+warnings — the strictest grading), with {{ conformance.fp }} false positives and {{ conformance.missed }} missed required errors still being driven down. Pyright covers far more edge cases today. Basilisk's target is 100%; it's not there yet. See [how we measure conformance](/docs/conformance/).
+- PEP conformance: Basilisk currently passes {{ conformance.scorePct }}% of the official conformance suite ({{ conformance.pass }}/{{ conformance.total }}, counting errors+warnings — the strictest grading), with {{ conformance.missed }} missed required errors (the checker catches every required error) and {{ conformance.fp }} false positives still being driven down. Every failing fixture fails on false positives from Basilisk's strict-by-default house rules firing on spec-valid code, not on missed errors. The only legitimate path to 100% is fixing those rules with every rule still enabled — never by disabling a rule. Pyright covers far more edge cases today. Basilisk's target is 100%; it's not there yet. See [how we measure conformance](/docs/conformance/).
 - Plugin ecosystem: mypy's Django and SQLAlchemy plugins are mature. Basilisk's WASM plugins are planned.
 - Maturity: Pylance is feature-complete today (though proprietary and VS Code only). Basilisk is in alpha.
 

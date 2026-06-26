@@ -17,6 +17,8 @@
   <a href="https://github.com/Nimblesite/Basilisk">GitHub</a>
 </p>
 
+<p align="center"><strong>English</strong> · <a href="README.zh.md">简体中文</a></p>
+
 ---
 
 <p align="center">

@@ -6,7 +6,7 @@
 
 ## Status
 
-Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols all operational. Phase 3.5 (PEP conformance push) is ACTIVE — the official `python/typing` scorer (run unmodified, pinned commit) currently reports **121/146 files passing (82.9%, errors+warnings strictest)**, with 24 false positives and 36 missed required errors still to clear, running the binary in spec-conformance mode (basilisk's non-spec house-style rules off — see CHKARCH-CONFORMANCE-MODE; the honest number with them on was 40.4%). (Earlier in-repo figures such as "124/146, 18 FPs" came from an earlier in-repo harness that excluded codes from the *scorer* and didn't count false positives — a miscalculation; they are superseded.)
+Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols all operational. Phase 3.5 (PEP conformance push) is ACTIVE — the official `python/typing` scorer (run unmodified, pinned commit 268d0c4e) currently reports **68/146 files passing (46.6%, errors+warnings strictest)**, with the basilisk binary run with EVERY rule enabled (NO config, NO `basilisk.json`, NO "spec-conformance mode" — see CHKARCH-CONFORMANCE-MODE, which documents that no such mode exists). The checker catches EVERY required error: 0 missed required errors, and the 265 remaining false positives all come from strict-by-default house-style rules (require-annotation E0001/E0002/E0004, missing-@override E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code where the spec treats unannotated as inferred rather than an error. HISTORY (stated plainly): the last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#185/#191 then inflated the reported number to a FAKE 100% by writing a `basilisk.json` that DISABLED those 6 house rules at score time (the so-called "spec-conformance mode") — the checker was not made smarter, the false positives were merely hidden. That disabling has been REMOVED and is now FORBIDDEN; genuine progress over that span was real but modest (40.4% → 46.6%). The ONLY legitimate path to 100% is fixing the checker so its strict defaults stop firing on spec-valid code, with every rule still enabled — never by disabling a rule.
 
 ---
 
@@ -25,7 +25,7 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 | 7.6 | Third-party type stubs — typeshed bundling, `py.typed` marker detection (PEP 561) | Medium | DONE — `phf` stdlib module set, `py.typed` detection, stub package discovery |
 | 7.7 | Config file reading — `pyproject.toml`, `basilisk.json` | Medium | DONE — `basilisk-config` crate with per-module/per-path overrides |
 
-## Phase 7.5 — PEP Conformance Push (ACTIVE — 82.9% → 100%)
+## Phase 7.5 — PEP Conformance Push (ACTIVE — 46.6% → 100%)
 
 > **BLOCKING for Phase 9.** The type system needs these capabilities to stop producing
 > false positives and to catch real typing errors conformance expects.

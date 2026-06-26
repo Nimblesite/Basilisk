@@ -23,44 +23,35 @@ struct BasiliskExtension {
 // ── Binary resolution ────────────────────────────────────────────────────────
 
 impl BasiliskExtension {
-    /// Resolve the basilisk binary to an absolute path.
+    /// Resolve the basilisk binary to an absolute path. Implements [ZED-DIST].
     ///
     /// Resolution order:
-    /// 1. User-configured path from Zed LSP settings
-    /// 2. `BASILISK_PATH` environment variable
-    /// 3. `~/.cargo/bin/basilisk`
-    /// 4. Download from GitHub releases
+    /// 1. Explicit override — `binary.path` in the Zed LSP settings
+    /// 2. Explicit override — the `BASILISK_PATH` environment variable
+    /// 3. Default — download the matching binary from the latest GitHub release
+    ///
+    /// There is no filesystem default. Installing the extension alone is enough:
+    /// with no explicit override, the binary is downloaded from the release, so
+    /// users never install it separately (the Shipwright contract). The two
+    /// overrides exist for development and for pointing at a system install.
     fn resolve_binary(&mut self, worktree: &zed::Worktree) -> Result<String> {
         if let Some(ref path) = self.cached_binary_path {
             return Ok(path.clone());
         }
 
-        // 1. Check user-configured binary path from Zed LSP settings.
-        if let Ok(settings) = zed::settings::LspSettings::for_worktree("basilisk", worktree) {
-            if let Some(binary) = settings.binary.as_ref() {
-                if let Some(ref path) = binary.path {
-                    self.cached_binary_path = Some(path.clone());
-                    return Ok(path.clone());
-                }
-            }
-        }
-
-        // 2. Check BASILISK_PATH environment variable.
+        let settings_path = zed::settings::LspSettings::for_worktree("basilisk", worktree)
+            .ok()
+            .and_then(|settings| settings.binary)
+            .and_then(|binary| binary.path);
         let env = worktree.shell_env();
-        if let Some(path) = logic::find_env_var(&env, "BASILISK_PATH") {
-            let owned = path.to_string();
-            self.cached_binary_path = Some(owned.clone());
-            return Ok(owned);
-        }
+        let env_path = logic::find_env_var(&env, "BASILISK_PATH");
 
-        // 3. Default: ~/.cargo/bin/basilisk (where cargo install puts it).
-        if let Some(home) = logic::find_env_var(&env, "HOME") {
-            let path = logic::cargo_bin_path(home);
+        if let Some(path) = logic::resolve_binary_override(settings_path.as_deref(), env_path) {
             self.cached_binary_path = Some(path.clone());
             return Ok(path);
         }
 
-        // 4. Download from GitHub releases.
+        // Default: download from the latest GitHub release (zero-config install).
         let (path, version) = Self::download_binary()?;
         self.cached_binary_path = Some(path.clone());
         self.cached_binary_version = Some(version);
@@ -109,6 +100,7 @@ impl BasiliskExtension {
             zed::Os::Linux => ("unknown-linux-gnu", false),
             zed::Os::Windows => ("pc-windows-msvc", true),
         };
+        let is_mac = matches!(platform, zed::Os::Mac);
 
         let arch_str = match arch {
             zed::Architecture::Aarch64 => "aarch64",
@@ -137,24 +129,40 @@ impl BasiliskExtension {
             "basilisk"
         };
 
+        // The archive type and the binary's location inside it are
+        // platform-specific (macOS nests under basilisk-darwin/, Linux/Windows
+        // are flat) — both derived from the same single source of truth as the
+        // asset name so they can never drift from release.yml.
         let download_dir = format!("basilisk-{}", release.version);
-        let binary_path = format!("{download_dir}/{binary_name}");
+        let binary_path = format!(
+            "{download_dir}/{}",
+            release::extracted_binary_path(binary_name, os_str)
+        );
 
         // Only download if the binary isn't already cached in the extension dir.
         if std::fs::metadata(&binary_path).is_err() {
-            zed::download_file(
-                &asset.download_url,
-                &download_dir,
-                if is_windows {
-                    zed::DownloadedFileType::Zip
-                } else {
-                    zed::DownloadedFileType::GzipTar
-                },
-            )
-            .map_err(|err| format!("Failed to download basilisk: {err}"))?;
+            let file_type = if release::is_zip_archive(os_str, is_windows) {
+                zed::DownloadedFileType::Zip
+            } else {
+                zed::DownloadedFileType::GzipTar
+            };
+            zed::download_file(&asset.download_url, &download_dir, file_type)
+                .map_err(|err| format!("Failed to download basilisk: {err}"))?;
 
             zed::make_file_executable(&binary_path)
                 .map_err(|err| format!("Failed to make basilisk executable: {err}"))?;
+
+            // Zed's zip extraction drops the Unix exec bit, and the macOS
+            // archive also carries the profiler helper next to the binary —
+            // restore its bit so profiling works without a separate install.
+            if is_mac {
+                let helper = format!(
+                    "{download_dir}/{}",
+                    release::extracted_binary_path(release::PROFILER_HELPER, os_str)
+                );
+                zed::make_file_executable(&helper)
+                    .map_err(|err| format!("Failed to make profiler helper executable: {err}"))?;
+            }
         }
 
         Ok((binary_path, release.version))
