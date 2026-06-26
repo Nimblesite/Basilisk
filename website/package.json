@@ -7,10 +7,14 @@
   "scripts": {
     "build": "eleventy",
     "start": "eleventy --serve --watch",
-    "clean": "rm -rf _site"
+    "clean": "rm -rf _site",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "devDependencies": {
     "@11ty/eleventy": "^3.1.6",
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^26.0.0",
     "eleventy-plugin-techdoc": "^0.2.0",
     "markdown-it": "^14.2.0"
   }

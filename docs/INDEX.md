@@ -33,6 +33,7 @@ Specifications define the target behavior and architecture. They are the source 
 | [ZED-SPEC.md](specs/ZED-SPEC.md) | Zed extension (WASM) — LSP integration, tree-sitter grammars, DAP debugging. |
 | [LSP-TEST-INTEGRATION-SPEC.md](specs/LSP-TEST-INTEGRATION-SPEC.md) | Test discovery, execution, and editor integration — pytest/unittest, TestItem model, coverage overlay. |
 | [EXTENSION-ACTIVITY-PANEL-SPEC.md](specs/EXTENSION-ACTIVITY-PANEL-SPEC.md) | Cross-editor activity panel — module explorer, type health, feature dashboard (VS Code, Zed, Neovim). |
+| [WEBSITE-E2E-SPEC.md](specs/WEBSITE-E2E-SPEC.md) | Website navigation/e2e smoke tests (Playwright, desktop + mobile) — top-nav resolution, docs sidebar, and the mobile docs-submenu reachability guard. |
 
 ## Plans
 

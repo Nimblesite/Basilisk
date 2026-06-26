@@ -189,7 +189,7 @@
       },
       {
         "command": "basilisk.sortModuleExplorer",
-        "title": "Toggle Sort Order",
+        "title": "Sort Modules…",
         "category": "Basilisk",
         "icon": "$(sort-precedence)"
       },
