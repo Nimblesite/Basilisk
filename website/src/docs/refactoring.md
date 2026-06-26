@@ -15,6 +15,10 @@ eleventyNavigation:
 
 Basilisk provides **a full suite of refactoring code actions** via the LSP protocol. They appear in the lightbulb menu in VS Code, Zed, and Neovim automatically (Cursor/Windsurf via Open VSX coming very soon) — no additional extensions or configuration required.
 
+![Basilisk Quick Fix menu in VS Code — fix-all, add annotation, demote or disable a rule, and move-function refactorings](/assets/images/vscode-quickfix.png)
+
+*The Quick Fix menu (`Cmd/Ctrl+.`) on a Basilisk diagnostic: autofixes, per-rule controls, and refactorings.*
+
 Every refactoring produces a `WorkspaceEdit` that the editor applies atomically. Multi-file refactorings (move symbol, module rename) use `DocumentChanges` with `CreateFile` operations.
 
 ## Extract

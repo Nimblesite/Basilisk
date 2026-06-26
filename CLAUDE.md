@@ -220,6 +220,16 @@ python3 scripts/gen_rules_reference.py --data   # writes website/src/_data/rules
 
 It extracts the `//! BSK-XXXX:` summary + doc-comment body (prose and ```python examples) from each `crates/basilisk-checker/src/rules/*.rs`. **After adding or renaming a rule, rerun it** — CI fails otherwise: the website job regenerates and `diff`s `rules.json` (`[WEBSITE-ERROR-PAGES-DRIFT]`), and rule-source edits are classified as website changes so the guard runs. The same data drives the `/docs/rules/` table and counts (no hand-maintained code lists). Pages render via `website/src/errors/error.njk`; a worked-example screenshot appears automatically for any code present in `screenshots/shots.mjs`.
 
+## VS Code editor screenshots (`vscode-*.png`)
+
+Real screenshots of the extension running in VS Code (diagnostics, hover, quick-fix, activity panel) are captured automatically — see `[VSIX-EDITOR-SCREENSHOTS]` (`docs/specs/VSIX-EDITOR-SCREENSHOTS-SPEC.md`). From `vscode-extension/`, after `cargo build -p basilisk-cli -p basilisk-profiler-helper`:
+
+```bash
+npm run screenshots:editor
+```
+
+This stages the binary into the dev extension, copies `shipwright.json` (gitignored dev artifacts), launches the **headed** "Editor screenshots" suite with `BASILISK_SCREENSHOTS=1`, and a dependency-free CDP sidecar (`screenshot-watcher.mjs`, Node's built-in WebSocket — no Playwright) captures the window to `website/src/assets/images/vscode-*.png`. The suite is a no-op without the env flag, so normal `npm test` never opens these windows. To add one, add a `test(...)` that makes the feature visible and calls `takeWindowScreenshot(...)`. As with the CLI shots, PNGs are committed and regenerated locally; CI only verifies they render (`website/tests/e2e/screenshots.spec.ts`), per `[GITHUB-NO-ARTIFACTS]`.
+
 ## Architecture
 
 Strict-by-default Python type checker and comprehensive LSP built in **Rust**. One IDE extension = complete Python dev experience. Users can flick errors down to warnings and incrementally adopt type safety, or just use the LSP for autofixes, formatting, debugging, and profiling.

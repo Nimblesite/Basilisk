@@ -25,6 +25,10 @@ The extension is published to the **[VS Code Marketplace](https://marketplace.vi
 
 Open a Python file and Basilisk activates automatically — diagnostics, completions, hover, go-to-definition, rename, refactoring, formatting, debugging (F5), and profiling.
 
+![Basilisk in VS Code — strict-by-default type errors shown inline with red squiggles and listed in the Problems panel](/assets/images/vscode-diagnostics.png)
+
+*Strict-by-default diagnostics the moment you open a file — no configuration.*
+
 ## The binary is bundled — no separate install
 
 **The extension ships the matching Basilisk binary for your platform inside the VSIX.** A default install needs no extra setup: no `cargo install`, no PATH configuration, no manual download.

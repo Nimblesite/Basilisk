@@ -36,6 +36,7 @@ Specifications define the target behavior and architecture. They are the source 
 | [WEBSITE-E2E-SPEC.md](specs/WEBSITE-E2E-SPEC.md) | Website navigation/e2e smoke tests (Playwright, desktop + mobile) — top-nav resolution, docs sidebar, and the mobile docs-submenu reachability guard. |
 | [WEBSITE-SCREENSHOTS-SPEC.md](specs/WEBSITE-SCREENSHOTS-SPEC.md) | Automated CLI screenshots — `npm run screenshots` runs the real binary on each documented snippet, self-verifies the diagnostic fires, and renders it in a faithful Terminal window (no manual screencapture). |
 | [WEBSITE-ERROR-PAGES-SPEC.md](specs/WEBSITE-ERROR-PAGES-SPEC.md) | Per-diagnostic `/errors/BSK-XXXX/` pages generated from the checker source so every CLI `see:` link resolves — with severity, explanation, worked example, drift guard, and render verification. |
+| [VSIX-EDITOR-SCREENSHOTS-SPEC.md](specs/VSIX-EDITOR-SCREENSHOTS-SPEC.md) | Automated real VS Code editor screenshots (`npm run screenshots:editor`) — drives the extension headed, captures the window over CDP (no Playwright dep), embeds diagnostics/hover/quick-fix/activity-panel on the docs. |
 
 ## Plans
 

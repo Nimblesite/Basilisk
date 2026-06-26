@@ -72,4 +72,21 @@ test.describe("CLI screenshots render", () => {
     await page.locator('.demo-tab[data-tab="after"]').click();
     await expectRendered(page, "/assets/images/cli-clean.png");
   });
+
+  // Real VS Code editor screenshots ([VSIX-EDITOR-SCREENSHOTS]) embedded on the
+  // feature docs — assert each decodes so a missing/zero-byte capture fails CI.
+  const EDITOR_SHOTS: Array<{ path: string; image: string }> = [
+    { path: "/docs/install-vscode/", image: "vscode-diagnostics.png" },
+    { path: "/docs/refactoring/", image: "vscode-quickfix.png" },
+    { path: "/docs/", image: "vscode-module-explorer.png" },
+    { path: "/docs/quick-start/", image: "vscode-hover.png" },
+  ];
+
+  for (const { path, image } of EDITOR_SHOTS) {
+    test(`${path} embeds the ${image} editor screenshot`, async ({ page }) => {
+      const stems = await screenshotStemsOn(page, path);
+      expect(stems.includes(image.replace(/\.png$/, "")), `${path} must embed ${image}`).toBe(true);
+      await expectRendered(page, `/assets/images/${image}`);
+    });
+  }
 });
