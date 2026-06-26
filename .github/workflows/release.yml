@@ -621,6 +621,86 @@ jobs:
             git push origin "${GITHUB_REF_NAME}"
           fi
 
+  publish-zed:
+    name: Publish Zed extension
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # The zed-industries/extensions registry compiles the extension to WASM
+      # standalone, so the mirror must build outside the monorepo. Gate the push
+      # on that exact build here — never publish a tree the registry cannot
+      # compile. Same target the `zed` CI job uses ([ZED-MIRROR]).
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: wasm32-wasip2
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: release-zed-wasm
+          cache-on-failure: true
+
+      - name: Render standalone Zed extension and push to the basilisk-zed mirror
+        # Same write convention as publish-nvim: clone the sibling Nimblesite/*
+        # repo with the x-access-token credential, replace its content, then
+        # commit as github-actions[bot] and push. Unlike the nvim plugin, the
+        # Zed crate carries the 0.0.0-PLACEHOLDER version and a workspace path
+        # dep on basilisk-common, so it cannot be pinned or built by the registry
+        # as-is. render-zed-mirror.sh vendors basilisk-common, stamps the
+        # version, and emits a self-contained tree; the WASM build below gates
+        # the push. The PAT must be able to write to Nimblesite/basilisk-zed.
+        env:
+          BREW_SCOOP_PAT: ${{ secrets.BREW_SCOOP_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BREW_SCOOP_PAT:-}" ]; then
+            echo "::error::BREW_SCOOP_PAT not accessible. The Nimblesite org secret exists; ensure Basilisk is in its allowed repositories AND that the token can write to Nimblesite/basilisk-zed (Org Settings → Secrets and variables → Actions → BREW_SCOOP_PAT → Repository access)."
+            exit 1
+          fi
+
+          export BASILISK_VERSION="${GITHUB_REF_NAME#v}"
+
+          # Render into a staging tree, then prove it builds standalone before
+          # anything is pushed. cargo build also writes the Cargo.lock that the
+          # registry uses for a reproducible build, so commit the generated lock.
+          scripts/render-zed-mirror.sh staging "${BASILISK_VERSION}"
+          ( cd staging && cargo build --release --target wasm32-wasip2 )
+
+          git clone "https://x-access-token:${BREW_SCOOP_PAT}@github.com/Nimblesite/basilisk-zed.git" mirror
+
+          # Replace the mirror's tracked content with the rendered tree,
+          # preserving the mirror's own .git. The build's target/ dir is large
+          # and machine-specific — never publish it.
+          rm -rf staging/target
+          find mirror -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -R staging/. mirror/
+
+          cd mirror
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "basilisk-zed already up to date for ${BASILISK_VERSION}"
+          else
+            git commit -m "basilisk ${BASILISK_VERSION}"
+            git push
+          fi
+
+          # Tag the mirror with the SAME tag as the monorepo. The registry pins a
+          # commit; the tag gives the registry PR a stable, human-readable ref
+          # and keeps the extension version and the binary that resolve_binary
+          # auto-downloads from Nimblesite/Basilisk releases identical.
+          # Idempotent: skip if the tag already exists.
+          if git ls-remote --exit-code --tags origin "refs/tags/${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "Tag ${GITHUB_REF_NAME} already present on the mirror"
+          else
+            git tag "${GITHUB_REF_NAME}"
+            git push origin "${GITHUB_REF_NAME}"
+          fi
+
   publish-scoop:
     name: Publish Scoop manifest
     needs: release

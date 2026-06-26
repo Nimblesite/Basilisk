@@ -102,7 +102,7 @@ version = "0.1.0"
 schema_version = 1
 authors = ["Basilisk Contributors"]
 description = "Strict-by-default Python type checker with debugging and profiling"
-repository = "https://github.com/basilisk-lang/basilisk"
+repository = "https://github.com/Nimblesite/Basilisk"
 
 # No [grammars.python] block — see [ZED-GRAMMAR]. The language reuses Zed's
 # built-in tree-sitter-python grammar, so no grammar is compiled from source.
@@ -316,7 +316,7 @@ fn resolve_binary(&self, worktree: &zed::Worktree) -> Result<String> {
     // 4. Download from GitHub releases:
     let (os, arch) = zed::current_platform();
     let release = zed::latest_github_release(
-        "basilisk-lang/basilisk",
+        release::GITHUB_REPO, // "Nimblesite/Basilisk" — see basilisk_common::release
         zed::GithubReleaseOptions {
             require_assets: true,
             pre_release: false,
@@ -332,6 +332,40 @@ Target assets:
 - `basilisk-x86_64-unknown-linux-gnu.tar.gz`
 - `basilisk-aarch64-unknown-linux-gnu.tar.gz`
 - `basilisk-x86_64-pc-windows-msvc.zip`
+
+## Registry Publishing {#ZED-MIRROR}
+
+Zed has no upload API. Extensions are listed in the central
+[`zed-industries/extensions`](https://github.com/zed-industries/extensions)
+repo as **git submodules**; that repo's CI compiles each extension to WASM from
+the pinned commit and publishes on merge. Two properties of the in-repo
+`basilisk-zed/` crate make it unpublishable as-is, so the release pipeline
+renders a self-contained mirror instead:
+
+1. **Placeholder version.** Every monorepo commit carries
+   `0.0.0-PLACEHOLDER` in `Cargo.toml` + `extension.toml`; real versions are
+   stamped only during CI (see [ZED-CARGOTOML](#ZED-CARGOTOML)). The registry
+   pins a commit, so it cannot point at `main`.
+2. **Workspace path dependency.** The crate depends on `basilisk-common` via
+   `{ path = "../crates/basilisk-common" }`, which does not resolve when the
+   registry builds the submodule standalone.
+
+`scripts/render-zed-mirror.sh` resolves both: it vendors `basilisk-common`
+(zero-dependency, WASM-safe) under `vendor/basilisk-common`, rewrites the path
+dependency, stamps the release version, makes the mirror dir its own workspace
+root, and drops the workspace-only `[lints]` inheritance. The `publish-zed` job
+in `release.yml` renders the tree, **gates the push on a real
+`cargo build --release --target wasm32-wasip2`** (so a tree the registry cannot
+build is never published), then pushes the rendered tree to
+[`Nimblesite/basilisk-zed`](https://github.com/Nimblesite/basilisk-zed) and tags
+it with the monorepo tag — the same clone-replace-commit-push convention as
+`publish-nvim`, using the `BREW_SCOOP_PAT` org secret.
+
+The mirror version equals the monorepo tag (`v1.2.3` → `1.2.3`); the binary
+[ZED-DIST](#ZED-DIST) updates independently at runtime. The first registry
+listing is a one-time human-reviewed PR adding the submodule to
+`zed-industries/extensions`; subsequent version bumps amend that submodule
+pointer.
 
 ## Zed Settings {#ZED-CONFIG}
 
@@ -472,4 +506,5 @@ See [ZED-PLAN.md](../plans/ZED-PLAN.md) for the full implementation plan with ph
 
 ### Polish & Publishing {#ZED-STATUS-POLISH}
 - [x] Create Basilisk dark theme (`themes/basilisk-dark.json`)
-- [ ] Publish to Zed extension registry
+- [x] Render + publish self-contained mirror to `Nimblesite/basilisk-zed` on tag (`publish-zed` job, `scripts/render-zed-mirror.sh`, gated on a standalone WASM build — see [ZED-MIRROR](#ZED-MIRROR))
+- [ ] One-time human-reviewed PR adding the submodule to `zed-industries/extensions`
