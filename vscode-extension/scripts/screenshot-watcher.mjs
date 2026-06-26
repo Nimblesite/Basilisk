@@ -11,8 +11,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// src/test/suite -> repo root is four levels up.
-const repoRoot = path.resolve(__dirname, "../../../../");
+// vscode-extension/scripts -> repo root is two levels up.
+const repoRoot = path.resolve(__dirname, "../../");
 const outputDir = path.resolve(repoRoot, "website/src/assets/images");
 const CDP_PORT = Number.parseInt(process.env.BASILISK_SCREENSHOT_CDP_PORT ?? "9229", 10);
 const POLL_MS = 200;

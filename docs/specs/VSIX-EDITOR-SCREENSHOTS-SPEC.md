@@ -42,7 +42,7 @@ npm run screenshots:editor
    (`src/test/suite/screenshots-capture.test.ts`) headed, with
    `BASILISK_SCREENSHOTS=1`. The harness (`.vscode-test.mjs`) then adds
    `--remote-debugging-port` so the window is reachable over CDP.
-3. Runs the sidecar `src/test/suite/screenshot-watcher.mjs`, which speaks the
+3. Runs the sidecar `scripts/screenshot-watcher.mjs`, which speaks the
    Chrome DevTools Protocol over Node's **built-in WebSocket** (no Playwright
    dependency, no browser download), forces a uniform Retina viewport
    (1440×900 @2×), and captures the workbench page on demand.

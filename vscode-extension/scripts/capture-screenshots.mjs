@@ -42,7 +42,7 @@ run("npm", ["run", "compile"], { cwd: extensionRoot });
 
 // 4. Launch the CDP screenshot sidecar.
 const env = { ...process.env, BASILISK_SCREENSHOTS: "1", BASILISK_SCREENSHOT_CDP_PORT: CDP_PORT };
-const watcher = spawn("node", [join(extensionRoot, "src", "test", "suite", "screenshot-watcher.mjs")], {
+const watcher = spawn("node", [join(extensionRoot, "scripts", "screenshot-watcher.mjs")], {
   stdio: "inherit",
   cwd: extensionRoot,
   env,

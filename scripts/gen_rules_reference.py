@@ -187,10 +187,14 @@ def main() -> int:
         out.write_text(json.dumps(records, indent=2) + "\n", encoding="utf-8")
         errors = sum(r["severity"] == "error" for r in records)
         warnings = len(records) - errors
-        print(f"Wrote {len(records)} codes ({errors} errors, {warnings} warnings) -> {out}")
+        print(
+            f"Wrote {len(records)} codes ({errors} errors, {warnings} warnings) -> {out}"
+        )
         return 0
     if "--check" in sys.argv:
-        target = Path(sys.argv[sys.argv.index("--check") + 1]).read_text(encoding="utf-8")
+        target = Path(sys.argv[sys.argv.index("--check") + 1]).read_text(
+            encoding="utf-8"
+        )
         missing = [r["code"] for r in records if r["code"] not in target]
         if missing:
             print(f"MISSING {len(missing)} codes: {', '.join(missing)}")
