@@ -148,6 +148,10 @@ error[BSK-E0001]: Missing parameter type annotation for `data`
 - **`= note:`** — why the rule exists
 - **`= see:`** — link to full documentation
 
+The same information is available in your editor — hover any symbol for its inferred type:
+
+![Basilisk hover in VS Code — hovering a function shows its full inferred signature](/assets/images/vscode-hover.png)
+
 ## Step 6 — Intentional suppressions
 
 When you genuinely need to use `Any` or suppress a diagnostic, you can — but you must provide a reason:

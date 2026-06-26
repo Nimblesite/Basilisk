@@ -1142,3 +1142,31 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   .demo-section { padding: var(--space-12) 0; }
   .cta-section { padding: var(--space-12) 0; }
 }
+
+/* ── Error reference pages ([WEBSITE-ERROR-PAGES]) ─────────────────── */
+.breadcrumb { font-size: 0.8125rem; color: var(--color-text-muted); margin-bottom: var(--space-5); }
+.breadcrumb a { color: var(--color-text-secondary); }
+.breadcrumb a:hover { color: var(--color-primary-light); }
+.breadcrumb span[aria-hidden] { margin: 0 0.4em; color: var(--color-border-bright); }
+
+.error-title { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.error-title code { font-size: 1.5rem; color: var(--color-text-primary); background: var(--color-bg-tertiary); border: 1px solid var(--color-border-bright); padding: 0.1em 0.4em; }
+
+.badge { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.2em 0.6em; border-radius: var(--radius-sm); }
+.badge--error { color: var(--color-error); background: var(--color-error-dim); border: 1px solid rgba(248, 113, 113, 0.35); }
+.badge--warning { color: var(--color-warning); background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.35); }
+
+.error-summary { font-size: 1.125rem; color: var(--color-text-secondary); margin: var(--space-4) 0 var(--space-6); }
+.error-screenshot { max-width: 100%; height: auto; border-radius: var(--radius-lg); border: 1px solid var(--color-border-bright); display: block; }
+.error-perma { font-size: 0.8125rem; color: var(--color-text-muted); border-top: 1px solid var(--color-border); padding-top: var(--space-4); margin-top: var(--space-8); word-break: break-all; }
+
+.error-list { list-style: none; padding: 0; margin: 0 0 var(--space-8); display: grid; gap: var(--space-2); }
+.error-list li { display: flex; gap: var(--space-3); align-items: baseline; padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border); }
+.error-list a { flex: 0 0 auto; }
+.error-list__summary { color: var(--color-text-secondary); font-size: 0.9375rem; }
+.error-count { color: var(--color-text-muted); font-weight: 400; font-size: 0.875rem; }
+
+.rules-table { width: 100%; border-collapse: collapse; margin-bottom: var(--space-6); font-size: 0.9375rem; }
+.rules-table th, .rules-table td { text-align: left; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border); vertical-align: top; }
+.rules-table th { color: var(--color-text-muted); font-weight: 600; font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.rules-table td:first-child { white-space: nowrap; }

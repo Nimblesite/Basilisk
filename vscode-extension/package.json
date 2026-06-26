@@ -980,7 +980,8 @@
     "test": "vscode-test",
     "test:shipwright": "node scripts/verify-shipwright.mjs manifest",
     "vscode:prepublish": "npm run sync:shipwright && npm run compile",
-    "package": "npm run sync:shipwright && vsce package"
+    "package": "npm run sync:shipwright && vsce package",
+    "screenshots:editor": "node scripts/capture-screenshots.mjs"
   },
   "dependencies": {
     "@nimblesite/shipwright-vscode": "^0.10.0",

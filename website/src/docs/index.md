@@ -38,6 +38,10 @@ Basilisk takes a different position. It brings the whole stack — type checking
 - **uv integration** — workspace detection, lock file parsing, and package management commands
 - Written in **Rust** — ships as a single binary with no runtime dependencies
 
+![Basilisk activity panel in VS Code — Module Explorer with typed-coverage percentage, Python Processes for CPU and memory profiling, and type-checking status](/assets/images/vscode-module-explorer.png)
+
+*The Basilisk activity panel: module type-coverage, one-click CPU/memory profiling, and live server status.*
+
 ## What Basilisk is not
 
 - Not a compiler — your Python code runs on CPython as normal

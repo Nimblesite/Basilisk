@@ -25,7 +25,16 @@ export default defineConfig({
         // This enables whole-module analysis tests that write Python files to the
         // workspace root without opening them in the editor.
         workspaceFolder: path.join(__dirname, 'test-fixtures', 'workspace'),
-        launchArgs: ['--disable-extensions', '--user-data-dir', userDataDir],
+        launchArgs: [
+            '--disable-extensions',
+            '--user-data-dir', userDataDir,
+            // [VSIX-EDITOR-SCREENSHOTS]: when capturing website screenshots, expose
+            // the headed VS Code window over CDP so the Playwright watcher
+            // (screenshot-watcher.mjs) can grab it. No effect on normal test runs.
+            ...(process.env.BASILISK_SCREENSHOTS
+                ? [`--remote-debugging-port=${process.env.BASILISK_SCREENSHOT_CDP_PORT ?? '9229'}`]
+                : []),
+        ],
         // Coverage: tell c8 where compiled sources live. Without this,
         // @vscode/test-cli defaults to 'src' (TypeScript sources), so
         // include patterns like 'out/**/*.js' resolve against src/ and

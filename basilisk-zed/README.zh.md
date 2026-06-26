@@ -7,7 +7,7 @@
 Basilisk 的 Zed 编辑器扩展 —— 基于 WASM 的 Python 类型检查与语言服务器集成。
 
 <p align="center">
-  <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
+  <img src="images/zed-screenshot.png" alt="Zed 编辑器中的 Basilisk —— 行内 Python 类型检查与诊断" width="900">
 </p>
 
 ## 在 Basilisk 中的角色
