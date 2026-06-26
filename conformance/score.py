@@ -26,18 +26,15 @@ on every run — no looser mode and no opt-out. Any diagnostic on a line the sui
 does not mark `# E` is a real false positive and fails the file — same as for
 any checker.
 
-What we DO configure (not exclude) is the binary itself. Basilisk is
-"strict-by-default": on top of the type system it ships opinionated *house-style*
-rules — require-annotations (BSK-E0001/E0002/E0004), redundant-annotation
-(BSK-W0050) and the explicit-`Any` nudge (BSK-W0014) — that the typing spec does
-not define (an unannotated function has an *inferred* return type, not an error;
-`Any` is a valid type). The PEP suite measures *type-system* conformance, so the
-binary is run in a documented spec-conformance config (`SPEC_CONFORMANCE_RULES`,
-written to `<tests>/basilisk.json`) that turns those house-style rules off —
-exactly as every checker on the conformance page is configured to its
-type-checking mode. This changes what the binary EMITS, not how the calculator
-SCORES; every diagnostic the configured binary emits is still counted in full.
-See [CHKARCH-CONFORMANCE-MODE].
+⚠️ DISABLING ANY RULE FOR CONFORMANCE SCORING IS FORBIDDEN. ⚠️
+The binary is run in its FULL, DEFAULT, strict-by-default configuration with
+EVERY rule enabled — no `basilisk.json`, no `--disable`, no per-rule override, no
+"spec-conformance mode", no exceptions, no matter what. Before scoring, this
+script DELETES any `basilisk.json` from the fixtures directory so a stale config
+can never silence a rule. The conformance number must reflect exactly what a real
+user gets out of the box. If basilisk's strict defaults flag valid type-system
+code, that is a REAL conformance gap to FIX in the Rust checker — never to hide by
+turning a rule off. The honest number is the only number. See [CHKARCH-CONFORMANCE].
 
 This one file is the whole Basilisk side of conformance: it runs the binary,
 scores with the official functions, writes `conformance/conformance_status.csv`,
@@ -231,38 +228,23 @@ def ensure_fixtures(conf_dir: Path, force: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Spec-conformance config — run the binary in type-system mode
+# Run the binary with EVERY rule enabled — no disabling, ever
 # ---------------------------------------------------------------------------
 
-# Basilisk's opinionated, strict-by-default *house-style* rules that the typing
-# spec does not define. They produce only false positives against the PEP suite
-# (an unannotated function has an inferred return type, not an error; `Any` is a
-# valid type). Disabling them measures basilisk's *type-system* conformance,
-# apples-to-apples with the other checkers — it changes what the binary EMITS,
-# never how the official calculator SCORES. See [CHKARCH-CONFORMANCE-MODE].
-SPEC_CONFORMANCE_RULES: dict[str, str] = {
-    "BSK-E0001": "disabled",  # missing parameter type annotation
-    "BSK-E0002": "disabled",  # missing return type annotation
-    "BSK-E0004": "disabled",  # missing *args/**kwargs annotation
-    "BSK-E0025": "disabled",  # missing @override decorator (PEP 698 is opt-in)
-    "BSK-W0014": "disabled",  # explicit-`Any` nudge (style, not a spec error)
-    "BSK-W0050": "disabled",  # redundant type annotation (house style)
-}
 
+def purge_rule_config(conf_dir: Path) -> None:
+    """Guarantee the binary scores with ALL rules enabled.
 
-def write_conformance_config(conf_dir: Path) -> None:
-    """Write the spec-conformance `basilisk.json` into the fixtures dir.
-
-    `basilisk check <file>` auto-discovers config from the file's directory, so a
-    `basilisk.json` here is picked up for every fixture. It survives re-fetches
-    (`ensure_fixtures` only unlinks `*.py`/`*.pyi`). Committed in spirit — its
-    content is this constant, version-controlled in score.py for full transparency.
+    Disabling any rule for conformance is forbidden (see module docstring). The
+    only way `basilisk check <file>` could silence a rule is a `basilisk.json` it
+    auto-discovers in the fixtures directory, so we DELETE any such file before
+    scoring. With no config present the binary runs in its full, default,
+    strict-by-default mode — every rule on — which is exactly what a real user
+    gets. There is no config to write and no rule to turn off.
     """
-    conf_dir.mkdir(parents=True, exist_ok=True)
-    (conf_dir / "basilisk.json").write_text(
-        json.dumps({"rules": SPEC_CONFORMANCE_RULES}, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    stale = conf_dir / "basilisk.json"
+    if stale.exists():
+        stale.unlink()
 
 
 # ---------------------------------------------------------------------------
@@ -537,10 +519,10 @@ def main(argv: list[str]) -> int:
         print(f"  ✗ could not load the official calculator: {exc}", file=sys.stderr)
         return 1
 
-    # Run the binary in spec-conformance mode (house-style rules off). This
-    # configures the binary, not the calculator — scoring still counts every
-    # emitted diagnostic. See [CHKARCH-CONFORMANCE-MODE].
-    write_conformance_config(conf_dir)
+    # Run the binary with EVERY rule enabled. Disabling any rule for conformance
+    # is forbidden — delete any stale config so nothing can silence a rule. The
+    # honest number is what a real user gets out of the box. See [CHKARCH-CONFORMANCE].
+    purge_rule_config(conf_dir)
 
     checker = BasiliskTypeChecker(binary)
     files, rows, totals = score(checker, get_expected, diff_errors, conf_dir)

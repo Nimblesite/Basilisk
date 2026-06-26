@@ -7,6 +7,8 @@ This codebase is held to a high standard: code here should comfortably pass revi
 
 ⚠️ CONFORMANCE SCORE INCREASES MONOTONICALLY, BENCHMARKS AND FALSE POSITIVES DECREASE MONOTONICALLY ⚠️
 
+⚠️ DISABLING ANY CONFORMANCE RULE IS ABSOLUTELY ⛔️ ILLEGAL ⚠️ PEP conformance MUST run the `basilisk` binary with **EVERY rule enabled** — no `basilisk.json`, no per-rule override, no "spec-conformance mode", no skipped fixtures, **NO EXCEPTIONS, NO MATTER WHAT**. The score is exactly what a real user gets out of the box. If a strict default fires on valid type-system code, **FIX the checker** — never silence the rule to move the number. Turning a conformance rule off to inflate the score is a punishable offence. `conformance/score.py` deletes any stale config before scoring so nothing can silence a rule. See [CHKARCH-CONFORMANCE]. ⚠️
+
 ⚠️ AVOID DUPLICATION OF ALL KINDS AND PRACTICE TOKEN ECONOMICS ⚠️
 
 ⚠️ DO NOT STOP TO ASK QUESTIONS. USE YOUR JUDGMENT WITHOUT ASKING THE USER ⚠️
