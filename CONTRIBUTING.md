@@ -53,9 +53,9 @@ The dodges, across every metric:
 - **Measure less** — excluding diagnostic codes, skipping fixtures, narrowing mutation scope, grading
   a subset. A high percentage over part of the suite is not a real percentage.
 
-Conformance is the most worth faking, so guard it hardest: it must be **exactly what a real user gets
-out of the box, every rule enabled**, scored by the official `python/typing` calculator unmodified at
-a pinned commit — never a rule turned off, deleted, or unregistered, never a reimplementation. Every
+Conformance is the most critical metric, so guard it hardest: it must **strictly track the official PEP
+standard**, scored by the official `python/typing` calculator unmodified at a pinned commit — never a
+rule turned off, deleted, or unregistered, never a reimplementation. Every
 metric only ever moves the *honest* way — conformance, coverage, and mutation **up**; false positives
 and benchmark times **down** — because the work genuinely got better, never because someone changed
 how we count. **Gaming any of them is a punishable offence** ([CHKARCH-CONFORMANCE]).
