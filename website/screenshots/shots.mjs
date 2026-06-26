@@ -140,6 +140,135 @@ class Child(Base):
         return "child"
 `,
   },
+  {
+    name: "e0017",
+    expect: "BSK-E0017",
+    code: `class Base:
+    x: int
+
+
+class Child(Base):
+    x: str
+`,
+  },
+  {
+    name: "e0020",
+    expect: "BSK-E0020",
+    code: `from typing import overload
+
+
+@overload
+def f(x: int) -> int: ...
+@overload
+def f(x: str) -> str: ...
+`,
+  },
+  {
+    name: "e0023",
+    expect: "BSK-E0023",
+    code: `def classify(x: int | str) -> str:
+    match x:
+        case int():
+            return "number"
+`,
+  },
+  {
+    name: "e0026",
+    expect: "BSK-E0026",
+    code: `from typing import TypeVar
+
+T = TypeVar("T", int)
+`,
+  },
+  {
+    name: "e0027",
+    expect: "BSK-E0027",
+    code: `from typing import Generic, TypeVar
+
+T = TypeVar("T")
+
+
+class Box(Generic[T, T]):
+    ...
+`,
+  },
+  {
+    name: "e0029",
+    expect: "BSK-E0029",
+    code: `from typing import TypedDict
+
+
+class Movie(TypedDict):
+    title: str
+
+    def play(self) -> None:
+        ...
+`,
+  },
+  {
+    name: "e0031",
+    expect: "BSK-E0031",
+    code: `from typing import cast
+
+x = cast(int)
+`,
+  },
+  {
+    name: "e0033",
+    expect: "BSK-E0033",
+    code: `reveal_type()
+`,
+  },
+  {
+    name: "e0040",
+    expect: "BSK-E0040",
+    code: `from enum import Enum
+
+
+class Base(Enum):
+    A = 1
+
+
+class Sub(Base):
+    B = 2
+`,
+  },
+  {
+    name: "e0041",
+    expect: "BSK-E0041",
+    code: `def add(x: int, y: int) -> int:
+    return x + y
+
+
+add(1)
+`,
+  },
+  {
+    name: "e0099",
+    expect: "BSK-E0099",
+    code: `from typing import Protocol
+
+
+class P(Protocol):
+    def f(self) -> None: ...
+
+
+P()
+`,
+  },
+  {
+    name: "e0115",
+    expect: "BSK-E0115",
+    code: `from warnings import deprecated
+
+
+@deprecated("use bar")
+def foo() -> None: ...
+
+
+foo()
+`,
+  },
 ];
 
 // Homepage before/after demo. `bad.py` must report exactly six errors and

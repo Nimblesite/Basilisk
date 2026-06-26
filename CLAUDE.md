@@ -210,6 +210,16 @@ BASILISK_BIN=../target/release/basilisk npm run screenshots  # pin the binary
 
 To add/change a screenshot, edit `screenshots/shots.mjs` (snippet + expected code) and rerun — never craft images by hand. The committed PNGs are regenerated locally when CLI output changes; CI only verifies they render (`website/tests/e2e/screenshots.spec.ts`, `[WEBSITE-SCREENSHOTS-VERIFY]`), never captures, per `[GITHUB-NO-ARTIFACTS]`. After regenerating, rebuild (`npm run build`) and confirm the images copy to `_site/assets/images/`. VSIX integration tests capture their own editor screenshots to the gitignored `vscode-extension/.screenshots/` (never committed, never a CI artifact).
 
+## Per-diagnostic error pages (`/errors/BSK-XXXX/`)
+
+Every diagnostic the CLI prints ends with `see: https://www.basilisk-python.dev/errors/BSK-XXXX` (the `docs_url` on each rule's `ErrorCode`). Those pages are **generated for all codes** from the checker source — see `[WEBSITE-ERROR-PAGES]` (`docs/specs/WEBSITE-ERROR-PAGES-SPEC.md`). The single source is `website/src/_data/rules.json`, produced by:
+
+```bash
+python3 scripts/gen_rules_reference.py --data   # writes website/src/_data/rules.json
+```
+
+It extracts the `//! BSK-XXXX:` summary + doc-comment body (prose and ```python examples) from each `crates/basilisk-checker/src/rules/*.rs`. **After adding or renaming a rule, rerun it** — CI fails otherwise: the website job regenerates and `diff`s `rules.json` (`[WEBSITE-ERROR-PAGES-DRIFT]`), and rule-source edits are classified as website changes so the guard runs. The same data drives the `/docs/rules/` table and counts (no hand-maintained code lists). Pages render via `website/src/errors/error.njk`; a worked-example screenshot appears automatically for any code present in `screenshots/shots.mjs`.
+
 ## Architecture
 
 Strict-by-default Python type checker and comprehensive LSP built in **Rust**. One IDE extension = complete Python dev experience. Users can flick errors down to warnings and incrementally adopt type safety, or just use the LSP for autofixes, formatting, debugging, and profiling.

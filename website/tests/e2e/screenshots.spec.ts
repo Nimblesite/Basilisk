@@ -8,9 +8,9 @@ import { SHOTS } from "../../screenshots/shots.mjs";
 // See docs/specs/WEBSITE-SCREENSHOTS-SPEC.md.
 
 // Derived from the generator manifest so the test can never drift from the set of
-// images we actually produce: `e00*` shots live on the rule docs, the rest
-// (cli-demo / cli-clean) on the homepage before/after demo.
-const RULE_STEMS = SHOTS.map((s) => s.name).filter((n) => n.startsWith("e0"));
+// images we actually produce. Rule shots are embedded on their per-code
+// /errors/<code>/ page (see errors.spec.ts); the homepage demo (cli-demo /
+// cli-clean) is asserted here.
 const HOME_STEMS = SHOTS.map((s) => s.name).filter((n) => !n.startsWith("e0"));
 
 const stemOf = (src: string): string => src.split("/").pop()!.replace(/\.png$/, "");
@@ -49,19 +49,14 @@ const screenshotStemsOn = async (page: Page, path: string): Promise<string[]> =>
 };
 
 test.describe("CLI screenshots render", () => {
-  test("rule docs embed every rule screenshot and each renders", async ({ page }) => {
-    const seen = new Set<string>();
+  test("rule docs embed worked-example screenshots and none are broken", async ({ page }) => {
     for (const path of ["/docs/rules/missing-annotations/", "/docs/rules/type-safety/"]) {
       const stems = await screenshotStemsOn(page, path);
-      for (const stem of stems) {
-        if (stem.startsWith("e0")) {
-          await expectRendered(page, `/assets/images/${stem}.png`);
-          seen.add(stem);
-        }
+      const ruleShots = stems.filter((stem) => stem.startsWith("e0"));
+      expect(ruleShots.length, `${path} should embed rule screenshots`).toBeGreaterThan(0);
+      for (const stem of ruleShots) {
+        await expectRendered(page, `/assets/images/${stem}.png`);
       }
-    }
-    for (const stem of RULE_STEMS) {
-      expect(seen.has(stem), `rule docs must embed ${stem}.png`).toBe(true);
     }
   });
 
