@@ -64,7 +64,7 @@ The adapter and gate live in a separate, auditable file, so the calculator stays
 
 ## Every rule runs — there is no "conformance mode"
 
-We score the binary exactly as a real user runs it: **every rule enabled, no configuration, nothing disabled.** Before scoring, `score.py` *deletes* any `basilisk.json` from the fixtures directory so nothing can quietly silence a rule. Disabling a rule to lift the number is forbidden.
+We score the binary exactly as a real user runs it: **every rule enabled and present, no configuration, nothing disabled, nothing deleted.** Before scoring, `score.py` *deletes* any `basilisk.json` from the fixtures directory so config cannot quietly silence a rule. Disabling a rule to lift the number is forbidden — and so is *deleting* the rule's source file or unregistering it from the checker, which is the same dishonesty by another route.
 
 That honesty costs us points, on purpose. Basilisk is strict by default and layers on house-style rules the typing spec doesn't define — chiefly *require an annotation* on every parameter, return, and `*args`/`**kwargs`, plus a redundant-annotation warning, a missing-`@override` nudge, and an explicit-`Any` nudge. The spec treats an unannotated type as **inferred**, not an error, so these rules fire across the suite and count as false positives. They are the bulk of today's **{{ conformance.fp }}** false positives.
 

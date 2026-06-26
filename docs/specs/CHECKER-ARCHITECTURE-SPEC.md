@@ -1376,15 +1376,22 @@ calculator**, not a Basilisk reimplementation. This is non-negotiable: the
 number must be one anyone can reproduce with the same tooling the reference
 checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with.
 
-> ⛔️ **DISABLING ANY CONFORMANCE RULE IS ABSOLUTELY FORBIDDEN.** The binary is
-> scored in its **full, default, strict-by-default configuration with EVERY rule
-> enabled** — no `basilisk.json`, no per-rule override, no "spec-conformance
-> mode", no skipped fixtures, no exceptions, no matter what. `score.py` deletes
-> any `basilisk.json` from the fixtures directory before scoring so nothing can
-> silence a rule. The number is exactly what a real user gets out of the box. If
-> a strict default fires on valid type-system code, that is a **real conformance
-> gap to FIX in the checker** — never to hide by turning a rule off. Turning a
-> conformance rule off to move the number is a punishable offence.
+> ⛔️ **DISABLING, DELETING, OR UNREGISTERING ANY CONFORMANCE RULE IS ABSOLUTELY
+> FORBIDDEN.** The binary is scored in its **full, default, strict-by-default
+> configuration with EVERY rule enabled** — no `basilisk.json`, no per-rule
+> override, no "spec-conformance mode", no skipped fixtures, **no deleting rule
+> source files (`src/rules/*.rs`), no removing rules from `all_rules()`**, no
+> exceptions, no matter what. `score.py` deletes any `basilisk.json` from the
+> fixtures directory before scoring so config cannot silence a rule — but note
+> that guard does **not** stop someone from deleting the rules themselves, which
+> is the **same crime by another route** and is forbidden just as absolutely.
+> Equally forbidden: hand-editing `conformance/conformance_status.csv` or
+> loosening the `coverage-thresholds.json` gate (`threshold` /
+> `max_false_positives`) to match a faked run. The number is exactly what a real
+> user gets out of the box. If a strict default fires on valid type-system code,
+> that is a **real conformance gap to FIX in the checker** — never to hide by
+> turning a rule off, deleting it, or editing the scoreboard. Gaming the number
+> in any of these ways is a punishable offence.
 
 - **Scorer**: [`conformance/score.py`](../../conformance/score.py) **imports the
   committed [`conformance/upstream_main.py`](../../conformance/upstream_main.py)** —
@@ -1442,13 +1449,20 @@ rules the typing spec does not define (require-annotations `BSK-E0001`/`BSK-E000
 explicit-`Any` nudge `BSK-W0014`). On the PEP suite these fire on valid type-system
 code, so they cost us conformance points.
 
-⛔️ **We pay that cost honestly. Disabling any rule for conformance is forbidden.**
-A previous revision wrote a `basilisk.json` that turned those six rules off before
-scoring and reported a **fake 100%**. That was gaming the number, and it has been
-removed. `score.py` now *deletes* any `basilisk.json` from the fixtures directory
-before scoring (`purge_rule_config`) and runs the binary exactly as a user runs it
-— every rule on. The conformance figure is therefore the real out-of-the-box
-experience, currently 46.6%.
+⛔️ **We pay that cost honestly. Disabling, deleting, or unregistering any rule for
+conformance is forbidden.** This has been attempted twice. First, a revision wrote a
+`basilisk.json` that turned six of these rules off before scoring and reported a
+**fake 100%**; that was removed, and `score.py` now *deletes* any `basilisk.json`
+from the fixtures directory before scoring (`purge_rule_config`). Second — when
+config-disabling was blocked — a revision tried to *delete the offending rule source
+files outright* and unregister them from `all_rules()`, then re-report a **fake
+100%**: the same lie, dressed up as a "milestone," because "every rule is enabled"
+reads as true once the rules no longer exist. **Deleting a rule to dodge the
+`basilisk.json` guard is the identical offence**, as is hand-editing
+`conformance_status.csv` or loosening the `coverage-thresholds.json` gate to match a
+faked run. The binary is run exactly as a user runs it — every rule on, every rule
+present — so the conformance figure is the real out-of-the-box experience, currently
+46.6%.
 
 The path to 100% is **not** to silence these rules at score time; it is to make the
 checker smarter so its strict defaults stop firing on spec-valid code (e.g.

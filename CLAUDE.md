@@ -5,9 +5,11 @@ This codebase is held to a high standard: code here should comfortably pass revi
 
 ⚠️ USING GIT IS ⛔️ ILLEGAL ⚠️ SIGNING A GIT COMMIT WITH CLAUDE CODE AS A COAUTHOR IS SUPER ⛔️ ILEGAL ⚠️
 
-⚠️ CONFORMANCE SCORE INCREASES MONOTONICALLY, BENCHMARKS AND FALSE POSITIVES DECREASE MONOTONICALLY ⚠️
+⚠️ DISABLING, DELETING, OR UNREGISTERING ANY CONFORMANCE RULE IS ABSOLUTELY ⛔️ ILLEGAL ⚠️ PEP conformance MUST run the `basilisk` binary with **EVERY rule enabled** — no `basilisk.json`, no per-rule override, no "spec-conformance mode", no skipped fixtures, **no deleting rule source files (`crates/basilisk-checker/src/rules/*.rs`), no removing rules from `all_rules()`**, **NO EXCEPTIONS, NO MATTER WHAT**. Equally ⛔️ ILLEGAL: hand-editing `conformance/conformance_status.csv` or loosening the `coverage-thresholds.json` gate (`threshold` / `max_false_positives`) to match a faked run. The score is exactly what a real user gets out of the box. If a strict default fires on valid type-system code, **FIX the checker** — never silence, delete, or unregister the rule to move the number. Gaming the conformance score in ANY of these ways is a punishable offence. `conformance/score.py` deletes any stale config before scoring; **deleting the rules themselves to dodge that guard is the same crime, not a loophole.** See [CHKARCH-CONFORMANCE]. 
 
-⚠️ DISABLING ANY CONFORMANCE RULE IS ABSOLUTELY ⛔️ ILLEGAL ⚠️ PEP conformance MUST run the `basilisk` binary with **EVERY rule enabled** — no `basilisk.json`, no per-rule override, no "spec-conformance mode", no skipped fixtures, **NO EXCEPTIONS, NO MATTER WHAT**. The score is exactly what a real user gets out of the box. If a strict default fires on valid type-system code, **FIX the checker** — never silence the rule to move the number. Turning a conformance rule off to inflate the score is a punishable offence. `conformance/score.py` deletes any stale config before scoring so nothing can silence a rule. See [CHKARCH-CONFORMANCE]. ⚠️
+CONFORMANCE SCORE INCREASES MONOTONICALLY, BENCHMARKS AND FALSE POSITIVES DECREASE MONOTONICALLY
+
+⚠️
 
 ⚠️ AVOID DUPLICATION OF ALL KINDS AND PRACTICE TOKEN ECONOMICS ⚠️
 

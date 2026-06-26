@@ -78,27 +78,6 @@ benchmarkStrings:
         <div class="demo-wrapper">
 
           <div class="demo-panel active" data-panel="before">
-            <div class="code-window">
-              <div class="code-window__chrome">
-                <span class="code-window__dot code-window__dot--close"></span>
-                <span class="code-window__dot code-window__dot--min"></span>
-                <span class="code-window__dot code-window__dot--expand"></span>
-                <span class="code-window__filename">bad.py</span>
-              </div>
-              <div class="code-window__body">
-<pre><span class="tok-kw">def</span> <span class="tok-fn">process</span>(data):
-<span class="code-error-line">    <span class="tok-kw">return</span> data.upper()
-</span>
-<span class="tok-kw">class</span> <span class="tok-fn">User</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name, age):
-        <span class="tok-kw">self</span>.name <span class="tok-kw">=</span> name
-        <span class="tok-kw">self</span>.age  <span class="tok-kw">=</span> age
-
-    <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>):
-<span class="code-error-line">        <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {self.name}"</span>
-</span></pre>
-              </div>
-            </div>
             <div class="diagnostic-block" style="padding:0;background:transparent;border:0">
               <img src="/assets/images/vscode-diagnostics.png" alt="Basilisk flagging bad.py live in VS Code — inline diagnostics with the Problems panel listing each type error" style="width:100%;display:block;border-radius:8px" loading="lazy">
             </div>
