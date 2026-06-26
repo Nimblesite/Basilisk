@@ -129,8 +129,8 @@ copy_extension_tree() {
     for item in "${COPY_ITEMS[@]}"; do
         if [[ -e "$src/$item" ]]; then
             # -L dereferences symlinks so the mirror is self-contained: e.g.
-            # images/screenshot.png links into website/, which does not exist in
-            # the standalone tree — copy the real file, not a dangling link.
+            # images/zed-screenshot.png links into website/, which does not exist
+            # in the standalone tree — copy the real file, not a dangling link.
             cp -RL "$src/$item" "$dest/$item"
         fi
     done
