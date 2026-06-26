@@ -227,9 +227,15 @@ shipped and stable? If we go: start with a spec + plan doc (`docs/specs/JETBRAIN
 
 ## 11. Internationalization & translation
 
-**Current state:** the Eleventy site has `i18n: false`; a Chinese mirror exists under
-`website/src/zh/` but it's **hand-maintained parallel pages**, not a real i18n system. That doesn't
-scale to more languages. The product itself (diagnostic messages, CLI output) is English-only.
+**Current state:** the Eleventy site now runs the `eleventy-plugin-techdoc` i18n system with
+`features.i18n: true` (`defaultLanguage: en`, `languages: [en, zh]`). The existing Simplified-Chinese
+content under `website/src/zh/` is folded into it and ships **in the standard way**: `<html lang>`,
+a reciprocal `hreflang` cluster (en/zh/x-default), per-locale canonicals, `og:locale`, a bidirectional
+language switcher on every page, translated nav/footer strings (`src/_data/i18n.json`), and all `/zh/`
+URLs in the sitemap. What remains is **content discipline, not plumbing**: zh pages are still authored
+as parallel files that can drift from English, so we need a drift/staleness guard and native-speaker
+review before any locale is treated as authoritative — and the same wiring extended to ja and pt-BR.
+The product itself (diagnostic messages, CLI output) is still English-only.
 
 **Target languages (ranked by community size × English-proficiency gap):**
 
@@ -352,8 +358,9 @@ Rough plan (most of this is human-led — voice, accounts, timing, relationships
 
 ## L. Internationalization & translation
 
-- [ ] **`[AGENT]`** Build a real Eleventy i18n system; fold existing `/zh` content into it (replace the manual parallel pages).
-- [ ] **`[AGENT]`** Machine-translate the website into the top 3 (zh-Hans, ja, pt-BR) as a first pass.
+- [x] **`[AGENT]`** Build a real Eleventy i18n system; fold existing `/zh` content into it (replace the manual parallel pages). *(Done — `eleventy-plugin-techdoc` i18n with `features.i18n: true`; zh ships with standard hreflang/switcher/sitemap. See §11.)*
+- [ ] **`[AGENT]`** Add a drift/staleness guard so a translated page that falls behind its English source is flagged (English is canonical; mark each locale page with the source commit/date it was synced from).
+- [ ] **`[AGENT]`** Extend the existing i18n wiring to the next two languages (ja, pt-BR): add their `i18n.json` strings + `src/<lang>/` content. Machine-translate as a first pass.
 - [ ] **`[AGENT]`** Investigate VSIX localization (`package.nls.<locale>.json`) and report what's feasible for Zed/Neovim; then translate command/setting strings into the top 3.
 - [ ] **`[AGENT]`** Add a message-catalog / localization layer to the Rust core (locale from config/`LANG`, keyed by diagnostic code) and translate **LSP/CLI diagnostic output** into the top 3.
 - [ ] **`[HUMAN]`** Native-speaker review of every locale before go-live — especially diagnostics (consider hiring reviewers).

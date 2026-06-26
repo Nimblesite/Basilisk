@@ -1,3 +1,5 @@
+<p align="center"><strong>English</strong> · <a href="README.zh.md">简体中文</a></p>
+
 # basilisk.nvim
 
 First-class Neovim plugin for Basilisk — zero-config Python type checking, debugging, profiling, and test exploration.

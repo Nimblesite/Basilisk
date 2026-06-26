@@ -1,5 +1,7 @@
 # basilisk-zed
 
+<p align="center"><strong>English</strong> · <a href="README.zh.md">简体中文</a></p>
+
 Zed editor extension for Basilisk — WASM-based Python type checking and language server integration.
 
 <p align="center">
