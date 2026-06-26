@@ -100,7 +100,7 @@ benchmarkStrings:
               </div>
             </div>
             <div class="diagnostic-block" style="padding:0;background:transparent;border:0">
-              <img src="/assets/images/cli-demo.png" alt="Real basilisk check output for bad.py — six type errors reported with no configuration" style="width:100%;display:block;border-radius:8px" loading="lazy">
+              <img src="/assets/images/vscode-diagnostics.png" alt="Basilisk flagging bad.py live in VS Code — inline diagnostics with the Problems panel listing each type error" style="width:100%;display:block;border-radius:8px" loading="lazy">
             </div>
           </div>
 
@@ -128,9 +128,6 @@ benchmarkStrings:
     <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
         <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {self.name}"</span></pre>
               </div>
-            </div>
-            <div class="diagnostic-block diagnostic-block--success" style="padding:0;background:transparent;border:0">
-              <img src="/assets/images/cli-clean.png" alt="Real basilisk check output for the fixed good.py — all checks pass, no issues found" style="width:100%;display:block;border-radius:8px" loading="lazy">
             </div>
           </div>
 
@@ -193,8 +190,8 @@ benchmarkStrings:
     </div>
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">0<span class="stat-block__unit">%</span></span>
-        <span class="stat-block__label">untyped code, by default</span>
+        <span class="stat-block__number">{{ ruleStats.total }}</span>
+        <span class="stat-block__label">rules enabled, zero config</span>
       </div>
     </div>
   </div>

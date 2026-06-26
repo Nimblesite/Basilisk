@@ -5,10 +5,6 @@
 //! clearly incompatible with the declared return type annotation (e.g.
 //! returning an `int` literal from a `-> str` function).
 //!
-//! The explicit-`Any` *warning* used to share this code; it now lives under its
-//! own warning code ([BSK-W0014]) so the opinionated style nudge can be
-//! silenced independently of this genuine type-safety error.
-//!
 //! ```python
 //! # BAD (return type mismatch)
 //! def count() -> str:
