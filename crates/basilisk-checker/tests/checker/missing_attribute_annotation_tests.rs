@@ -6,7 +6,7 @@ use super::common::*;
 #[test]
 fn e0005_scalar_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     let source = "class Foo:\n    value = 42\n";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0005"),
         "scalar literal (int) class attr should not fire E0005 — type is trivially inferrable"
@@ -17,7 +17,7 @@ fn e0005_scalar_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn e0005_annotated_class_attr_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "class Foo:\n    value: int = 42\n";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0005"),
         "annotated class attr should not fire E0005"
@@ -28,7 +28,7 @@ fn e0005_annotated_class_attr_no_diagnostic() -> Result<(), Box<dyn std::error::
 #[test]
 fn e0005_enum_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from enum import Enum\n\nclass Color(Enum):\n    RED = 1\n    GREEN = 2\n";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0005"),
         "Enum class should be exempt from E0005"
@@ -40,7 +40,7 @@ fn e0005_enum_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
 fn e0005_protocol_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let source =
         "from typing import Protocol\n\nclass MyProto(Protocol):\n    name = \"default\"\n";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0005"),
         "Protocol class should be exempt from E0005"
@@ -51,7 +51,7 @@ fn e0005_protocol_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn e0005_namedtuple_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import NamedTuple\n\nclass Point(NamedTuple):\n    x = 0\n";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0005"),
         "NamedTuple class should be exempt from E0005"
@@ -69,7 +69,7 @@ class BaseRoute:
 class AdminRoute(BaseRoute):
     priority = 100
 ";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     let e0005_diags: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0005")
@@ -93,7 +93,7 @@ class Config:
     magic = b\"\\x00\"
     nothing = None
 ";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     let e0005_diags: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0005")
@@ -109,7 +109,7 @@ class Config:
 #[test]
 fn e0005_scalar_string_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     let source = "class Foo:\n    label = \"hello\"\n";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0005"),
         "scalar string literal class attr should not fire E0005 — type is trivially str"
@@ -120,7 +120,7 @@ fn e0005_scalar_string_literal_suppressed() -> Result<(), Box<dyn std::error::Er
 #[test]
 fn e0005_scalar_bool_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     let source = "class Foo:\n    flag = True\n";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0005"),
         "scalar bool literal class attr should not fire E0005 — type is trivially bool"
@@ -131,7 +131,7 @@ fn e0005_scalar_bool_literal_suppressed() -> Result<(), Box<dyn std::error::Erro
 #[test]
 fn e0005_multiple_scalar_attrs_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     let source = "class Foo:\n    a = 1\n    b = 2\n    c = 3\n";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     let count = diags.iter().filter(|d| d.code.code == "BSK-E0005").count();
     assert_eq!(
         count, 0,
@@ -150,7 +150,7 @@ class AdminRoute(BaseRoute):
     priority = 100
     new_attr = 42
 ";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     let e0005_diags: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0005")
@@ -170,7 +170,7 @@ class Foo:
     result = some_function()
     computed = x + y
 ";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     let e0005_diags: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0005")
@@ -208,7 +208,7 @@ class Snake(Animal):
     legs = 0
     sound = \"hiss\"
 ";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     let e0005_diags: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0005")
@@ -242,7 +242,7 @@ class StagingDB(DatabaseConfig):
     host = \"db.staging.internal\"
     pool_size = 5
 ";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     let e0005_diags: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0005")
@@ -271,7 +271,7 @@ class ChildOfUnannotated(UnannotatedParent):
 class UnrelatedToBaseRoute:
     path = \"/unrelated\"
 ";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     let e0005_diags: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0005")
@@ -296,7 +296,7 @@ fn e0005_regression_each_scalar_type_individually() -> Result<(), Box<dyn std::e
         ("None", "class F:\n    x = None\n"),
     ];
     for (type_name, source) in cases {
-        let diags = run(source)?;
+        let diags = run_strict(source)?;
         let e0005_diags: Vec<_> = diags
             .iter()
             .filter(|d| d.code.code == "BSK-E0005")
@@ -321,7 +321,7 @@ class Mixed:
     flag = False
     unknown = some_call()
 ";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     let e0005_diags: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0005")
@@ -346,7 +346,7 @@ fn e0005_type_alias_type_in_class_exempt() -> Result<(), Box<dyn std::error::Err
     // a data attribute, so it must not require an annotation
     // (conformance aliases_typealiastype.py).
     let source = "from typing import TypeAliasType\nclass A:\n    GoodAlias = TypeAliasType(\"GoodAlias\", list[int])\n";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0005"),
         "TypeAliasType alias in a class body must not fire E0005, got: {:?}",
@@ -360,7 +360,7 @@ fn e0005_tuple_literal_match_args_exempt() -> Result<(), Box<dyn std::error::Err
     // A tuple literal of inferrable elements is fully inferrable; `__match_args__`
     // must not require an annotation (conformance dataclasses_match_args.py).
     let source = "class DC:\n    __match_args__ = (\"a\", \"b\")\n    empty = ()\n";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0005"),
         "tuple-literal class attrs must not fire E0005, got: {:?}",
@@ -375,7 +375,7 @@ fn e0005_pep695_type_param_attr_exempt() -> Result<(), Box<dyn std::error::Error
     // is the type variable in scope, not a data attribute
     // (conformance generics_syntax_scoping.py).
     let source = "class C[T]:\n    T = 0\n";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0005"),
         "PEP 695 type-param-named attr must not fire E0005, got: {:?}",
@@ -388,7 +388,7 @@ fn e0005_pep695_type_param_attr_exempt() -> Result<(), Box<dyn std::error::Error
 fn e0005_empty_collection_still_fires() -> Result<(), Box<dyn std::error::Error>> {
     // The tuple exemption must NOT leak to empty list/dict (element types unknown).
     let source = "class Foo:\n    data = []\n";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0005"),
         "empty-list class attr must still fire E0005 (element type unknown), got: {:?}",

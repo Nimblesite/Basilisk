@@ -5,7 +5,7 @@ use super::common::*;
 
 #[test]
 fn e0003_empty_list_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("items = []\n")?;
+    let diags = run_strict("items = []\n")?;
     assert!(
         codes(&diags).contains(&"BSK-E0003"),
         "unannotated empty list should fire E0003, got: {:?}",
@@ -16,7 +16,7 @@ fn e0003_empty_list_fires() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn e0003_empty_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("mapping = {}\n")?;
+    let diags = run_strict("mapping = {}\n")?;
     assert!(
         codes(&diags).contains(&"BSK-E0003"),
         "unannotated empty dict should fire E0003, got: {:?}",
@@ -27,7 +27,7 @@ fn e0003_empty_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn e0003_none_value_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("result = None\n")?;
+    let diags = run_strict("result = None\n")?;
     assert!(
         codes(&diags).contains(&"BSK-E0003"),
         "unannotated None should fire E0003, got: {:?}",
@@ -38,7 +38,7 @@ fn e0003_none_value_fires() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn e0003_annotated_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("items: list[int] = []\n")?;
+    let diags = run_strict("items: list[int] = []\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "annotated empty list should not fire E0003"
@@ -48,7 +48,7 @@ fn e0003_annotated_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn e0003_annotated_none_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("result: int | None = None\n")?;
+    let diags = run_strict("result: int | None = None\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "annotated None should not fire E0003"
@@ -58,7 +58,7 @@ fn e0003_annotated_none_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn e0003_non_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("items = [1, 2, 3]\n")?;
+    let diags = run_strict("items = [1, 2, 3]\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "non-empty list with inferrable element types should not fire E0003"
@@ -68,7 +68,7 @@ fn e0003_non_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn e0003_string_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("name = \"hello\"\n")?;
+    let diags = run_strict("name = \"hello\"\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "string literal should not fire E0003 — type is trivially str"
@@ -78,7 +78,7 @@ fn e0003_string_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn e0003_int_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("count = 42\n")?;
+    let diags = run_strict("count = 42\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "int literal should not fire E0003 — type is trivially int"
@@ -88,7 +88,7 @@ fn e0003_int_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn e0003_bool_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("flag = True\n")?;
+    let diags = run_strict("flag = True\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "bool literal should not fire E0003 — type is trivially bool"
@@ -98,7 +98,7 @@ fn e0003_bool_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> 
 
 #[test]
 fn e0003_call_expr_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("result = some_function()\n")?;
+    let diags = run_strict("result = some_function()\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "call expression should not fire E0003 — type resolution is deferred"
@@ -108,7 +108,7 @@ fn e0003_call_expr_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn e0003_diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("items = []\n")?;
+    let diags = run_strict("items = []\n")?;
     let e0003 = diags.iter().find(|d| d.code.code == "BSK-E0003");
     assert!(e0003.is_some(), "should fire E0003");
     let Some(diag) = e0003 else {
@@ -135,7 +135,7 @@ fn e0003_regression_each_scalar_type_no_false_positive() -> Result<(), Box<dyn s
         ("bytes", "data = b\"raw\"\n"),
     ];
     for (type_name, source) in cases {
-        let diags = run(source)?;
+        let diags = run_strict(source)?;
         let e0003_diags: Vec<_> = diags
             .iter()
             .filter(|d| d.code.code == "BSK-E0003")
@@ -160,7 +160,7 @@ debug = True
 version = 1.0
 magic = b\"\\x00\"
 ";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     let e0003_diags: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0003")
@@ -176,7 +176,7 @@ magic = b\"\\x00\"
 /// Lambda assignments at module level — not unresolvable, no E0003.
 #[test]
 fn e0003_regression_lambda_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("fn = lambda x: x * 2\n")?;
+    let diags = run_strict("fn = lambda x: x * 2\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "lambda assignment should not fire E0003 (regression)"
@@ -191,7 +191,7 @@ fn e0003_regression_example_file_pattern() -> Result<(), Box<dyn std::error::Err
 double = 2
 fn = lambda x: x * 2
 ";
-    let diags = run(source)?;
+    let diags = run_strict(source)?;
     let e0003_diags: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0003")
@@ -213,7 +213,7 @@ fn e0003_regression_unresolvable_types_still_fire() -> Result<(), Box<dyn std::e
         ("None", "result = None\n"),
     ];
     for (desc, source) in cases {
-        let diags = run(source)?;
+        let diags = run_strict(source)?;
         assert!(
             codes(&diags).contains(&"BSK-E0003"),
             "{desc} must still fire E0003 — type is genuinely unresolvable, got: {:?}",

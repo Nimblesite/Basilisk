@@ -520,13 +520,19 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12);
   border-bottom: 1px solid var(--color-border);
 }
-.hero > .container { width: 100%; }
+/* Hero spans most of the viewport width with an even gutter that matches the
+   vertical breathing room (both ≈ --space-12 on wide screens). */
+.hero > .container {
+  width: 100%;
+  max-width: 2200px;
+  padding-inline: clamp(var(--space-6), 3vw, var(--space-12));
+}
 
 .hero__split {
   display: grid;
   grid-template-columns: 1fr 1.1fr;
   gap: var(--space-12);
-  align-items: stretch;
+  align-items: center;
 }
 
 .hero__kicker {
@@ -575,15 +581,13 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .hero__meta strong { color: var(--color-text-secondary); font-weight: 500; }
 
 /* Code side of hero */
-.hero__code { position: relative; height: 100%; }
+.hero__code { position: relative; }
 
-/* Product screenshot in hero — fills the column to match the text block's height */
+/* Product screenshot in hero — shown whole at its natural aspect, NEVER cropped */
 .hero__shot {
   display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: left center;
+  height: auto;
   border: 1px solid var(--color-border-bright);
   border-radius: var(--radius-lg);
   box-shadow: 0 30px 70px -25px rgba(0, 0, 0, 0.65);
@@ -595,9 +599,6 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   .hero__split > * { min-width: 0; }
   .hero__subheadline { max-width: none; }
   .hero__meta { gap: var(--space-3) var(--space-4); }
-  /* Stacked: show the screenshot at its natural aspect, no crop */
-  .hero__code { height: auto; }
-  .hero__shot { height: auto; object-fit: fill; }
 }
 @media (max-width: 640px) {
   .hero { padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12); }

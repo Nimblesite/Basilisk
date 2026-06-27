@@ -9,6 +9,23 @@ pub fn run(source: &str) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> 
     Ok(check(&resolved))
 }
 
+/// Run with every Basilisk-only opt-in rule enabled.
+///
+/// The `BSK-`prefixed rules (strict annotations, uv dependency hygiene, stub
+/// suggestions) are off by default so the out-of-the-box experience is pure PEP
+/// conformance. Tests that assert those rules fire must opt in via this helper.
+pub fn run_strict(source: &str) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
+    let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    let config = basilisk_config::BasiliskConfig {
+        strict_annotations: true,
+        uv_stub_suggestions: true,
+        uv_dependency_diagnostics: true,
+        ..basilisk_config::BasiliskConfig::default()
+    };
+    Ok(basilisk_checker::check_with_config(&resolved, &config))
+}
+
 pub fn codes(diags: &[Diagnostic]) -> Vec<&str> {
     diags.iter().map(|d| d.code.code).collect()
 }
