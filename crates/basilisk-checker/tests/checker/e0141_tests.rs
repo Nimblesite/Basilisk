@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0141] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0141: Unpack kwargs violations.
+//! Tests for [callables_kwargs] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for callables_kwargs: Unpack kwargs violations.
 
 use super::common::*;
 
@@ -17,7 +17,7 @@ def func(**kwargs: Unpack[Config]) -> None:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0141"),
+        !codes(&diags).contains(&"callables_kwargs"),
         "valid Unpack kwargs should not fire E0141"
     );
     Ok(())

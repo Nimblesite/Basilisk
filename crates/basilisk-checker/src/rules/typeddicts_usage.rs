@@ -1,5 +1,5 @@
-//! Implements [BSK-E0088] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0088: `TypedDict` runtime violation.
+//! Implements [typeddicts_usage] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! typeddicts_usage: `TypedDict` runtime violation.
 //!
 //! PEP 589 defines constraints on what you can do with `TypedDict` type objects at runtime:
 //!
@@ -25,11 +25,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0088",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0088",
+    code: "typeddicts_usage",
+    docs_url: "https://www.basilisk-python.dev/errors/typeddicts_usage",
 };
 
-/// Emits BSK-E0088 for `TypedDict` runtime violations.
+/// Emits typeddicts_usage for `TypedDict` runtime violations.
 pub(crate) struct TypedDictRuntimeViolation;
 
 impl Rule for TypedDictRuntimeViolation {

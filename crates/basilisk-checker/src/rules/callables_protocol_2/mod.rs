@@ -1,4 +1,4 @@
-//! BSK-E0140: Callable and Protocol assignment compatibility.
+//! callables_protocol_2: Callable and Protocol assignment compatibility.
 //!
 //! Checks that when a function is assigned to a variable annotated with a
 //! `Callable` type or a callback `Protocol`, the signatures are compatible.
@@ -17,11 +17,11 @@ use checks::check_stmts;
 use context::ModuleContext;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0140",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0140",
+    code: "callables_protocol_2",
+    docs_url: "https://www.basilisk-python.dev/errors/callables_protocol_2",
 };
 
-/// Emits BSK-E0140 for incompatible callable/protocol assignments.
+/// Emits callables_protocol_2 for incompatible callable/protocol assignments.
 pub(crate) struct CallableAssignmentViolation;
 
 impl Rule for CallableAssignmentViolation {

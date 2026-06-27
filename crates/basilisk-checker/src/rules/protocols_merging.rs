@@ -1,5 +1,5 @@
-//! Implements [BSK-E0098] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0098: Non-Protocol base class in a Protocol definition.
+//! Implements [protocols_merging] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! protocols_merging: Non-Protocol base class in a Protocol definition.
 //!
 //! Per PEP 544, a Protocol class may only inherit from other Protocol classes
 //! (with the exception of `object`). Inheriting from a non-Protocol concrete
@@ -21,8 +21,8 @@ use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0098",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0098",
+    code: "protocols_merging",
+    docs_url: "https://www.basilisk-python.dev/errors/protocols_merging",
 };
 
 /// Names that are always allowed as bases alongside `Protocol`.
@@ -63,7 +63,7 @@ const KNOWN_PROTOCOLS: &[&str] = &[
     "runtime_checkable",
 ];
 
-/// Emits BSK-E0098 when a Protocol class inherits from a non-Protocol base.
+/// Emits protocols_merging when a Protocol class inherits from a non-Protocol base.
 pub(crate) struct NonProtocolBaseInProtocol;
 
 /// Check if a class name refers to a Protocol class (has `Protocol` in its bases).

@@ -17,7 +17,7 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
 fn e0014_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
     diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .count()
 }
 
@@ -49,7 +49,7 @@ d: int = None
         "at least 2 mismatches expected (c and d), got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -219,7 +219,7 @@ h: bytes = 42
         "at least 3 named type mismatches, got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -276,7 +276,7 @@ class MyProto(Protocol):
     let diagnostics = run(source)?;
     let e0097: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0097")
+        .filter(|d| d.code.code == "protocols_definition")
         .collect();
     // Must flag z and w
     assert!(
@@ -318,7 +318,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         e0150.iter().any(|d| d.message.contains("dead")),
@@ -349,7 +349,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         e0150.iter().any(|d| d.message.contains("dead")),
@@ -378,7 +378,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         !e0150.is_empty(),
@@ -402,7 +402,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         !e0150.is_empty(),
@@ -444,7 +444,7 @@ n: bytes = b"data"
         "at least 6 type mismatches expected, got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -508,7 +508,7 @@ c: int = "hello"
          annotations are skipped, got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -554,7 +554,7 @@ c: int = "hello"
          fires, got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -592,7 +592,7 @@ bad: Json = {"a": 3j}
          value fires, got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -837,7 +837,7 @@ def classify(x: int) -> str:
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0023") >= 1,
+        count_code(&diagnostics, "match_exhaustiveness") >= 1,
         "E0023 must fire for non-exhaustive match: {diagnostics:?}"
     );
     Ok(())
@@ -861,7 +861,7 @@ def handle(seq: list) -> str:
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0023") == 0,
+        count_code(&diagnostics, "match_exhaustiveness") == 0,
         "E0023 must NOT fire for a match with a structural pattern (no wildcard): {diagnostics:?}"
     );
     Ok(())
@@ -880,7 +880,7 @@ class Dup(Generic[T, T]):
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0027") >= 1,
+        count_code(&diagnostics, "generics_base_class") >= 1,
         "E0027 must fire for duplicate TypeVar in Generic: {diagnostics:?}"
     );
     Ok(())
@@ -901,7 +901,7 @@ class Movie(TypedDict):
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0029") >= 1,
+        count_code(&diagnostics, "typeddicts_class_syntax") >= 1,
         "E0029 must fire for TypedDict method: {diagnostics:?}"
     );
     Ok(())
@@ -916,7 +916,7 @@ reveal_type(1, 2)
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0033") >= 1,
+        count_code(&diagnostics, "directives_reveal_type") >= 1,
         "E0033 must fire for invalid reveal_type call: {diagnostics:?}"
     );
     Ok(())
@@ -931,7 +931,7 @@ assert_type(1, int, 'extra')
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0039") >= 1,
+        count_code(&diagnostics, "directives_assert_type") >= 1,
         "E0039 must fire for invalid assert_type call: {diagnostics:?}"
     );
     Ok(())
@@ -950,7 +950,7 @@ def f(t: tuple[*tuple[str, ...], *tuple[int, ...]]) -> None:
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0049") >= 1,
+        count_code(&diagnostics, "tuples_type_form") >= 1,
         "E0049 must fire for multiple unbounded tuple components: {diagnostics:?}"
     );
     Ok(())
@@ -970,7 +970,7 @@ isinstance(x, TD)
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0088") >= 1,
+        count_code(&diagnostics, "typeddicts_usage") >= 1,
         "E0088 must fire for isinstance() with TypedDict: {diagnostics:?}"
     );
     Ok(())
@@ -986,7 +986,7 @@ class C[T: str]:
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0105") >= 1,
+        count_code(&diagnostics, "generics_syntax_declarations_2") >= 1,
         "E0105 must fire for invalid attr on bounded TypeVar: {diagnostics:?}"
     );
     Ok(())
@@ -1004,7 +1004,7 @@ class C[T: str]:
 // ═══════════════════════════════════════════════════════════════════════
 
 fn e0038_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
-    count_code(diagnostics, "BSK-E0038")
+    count_code(diagnostics, "typeddicts_inheritance")
 }
 
 /// Common prelude importing every `TypedDict` qualifier the tests use.
@@ -1309,7 +1309,7 @@ def func(int_cb: IntCb, str_cb: StrCb) -> None:
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert_eq!(
         e0014.len(),
@@ -1355,7 +1355,7 @@ def func(int_first: IntFirst, str_first: StrFirst) -> None:
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert_eq!(
         e0014.len(),
@@ -1475,7 +1475,7 @@ class Movie(TypedDict):
     let diagnostics = run(source)?;
     let e0029: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0029")
+        .filter(|d| d.code.code == "typeddicts_class_syntax")
         .collect();
     assert_eq!(
         e0029.len(),

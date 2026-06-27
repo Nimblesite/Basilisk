@@ -87,25 +87,25 @@ All rules are on by default. There is no way to relax them globally.
 
 | Code | Triggers when |
 |------|---------------|
-| `BSK-E0010` | Import cannot be resolved |
-| `BSK-E0011` | Explicit `Any` annotation (emitted as a warning), or a return type mismatch |
-| `BSK-E0012` | Argument type does not match parameter type |
-| `BSK-E0013` | Return type does not match declared return type |
-| `BSK-E0014` | Assignment type does not match declared variable type |
-| `BSK-E0015` | Wrong number of type arguments (e.g. `list[int, str]`) |
-| `BSK-E0016` | Method override has incompatible signature |
-| `BSK-E0017` | Class variable override has incompatible type |
-| `BSK-E0018` | Reference to an undefined name |
-| `BSK-E0019` | Variable used before it is assigned |
-| `BSK-E0020` | `@overload` group has no non-decorated implementation |
-| `BSK-E0021` | Two `@overload` signatures overlap |
-| `BSK-E0022` | Dict key type is not hashable |
-| `BSK-E0023` | `match` statement is not exhaustive |
-| `BSK-E0024` | Type expression is not valid (e.g. a numeric literal used as a type) |
+| `imports_unresolved` | Import cannot be resolved |
+| `returns_compatibility` | Explicit `Any` annotation (emitted as a warning), or a return type mismatch |
+| `calls_argument_type` | Argument type does not match parameter type |
+| `returns_compatibility_2` | Return type does not match declared return type |
+| `assignment_compatibility` | Assignment type does not match declared variable type |
+| `callables_annotation` | Wrong number of type arguments (e.g. `list[int, str]`) |
+| `classes_override` | Method override has incompatible signature |
+| `classes_override_2` | Class variable override has incompatible type |
+| `names_undefined` | Reference to an undefined name |
+| `names_unbound` | Variable used before it is assigned |
+| `overloads_definitions` | `@overload` group has no non-decorated implementation |
+| `overloads_consistency` | Two `@overload` signatures overlap |
+| `dict_key_hashable` | Dict key type is not hashable |
+| `match_exhaustiveness` | `match` statement is not exhaustive |
+| `annotations_typeexpr` | Type expression is not valid (e.g. a numeric literal used as a type) |
 | `BSK-E0025` | Override method is missing the `@override` decorator |
-| `BSK-E0026` | `TypeVar` declared with a single constraint |
-| `BSK-E0027` | Duplicate `TypeVar` in a `Generic[...]` base |
-| `BSK-E0029` | Method defined inside a `TypedDict` class |
+| `generics_basic` | `TypeVar` declared with a single constraint |
+| `generics_base_class` | Duplicate `TypeVar` in a `Generic[...]` base |
+| `typeddicts_class_syntax` | Method defined inside a `TypedDict` class |
 
 These are the most common rules. Basilisk ships **155 diagnostic codes** in total (150 errors, 5 warnings) — see the [complete diagnostic reference](https://www.basilisk-python.dev/docs/rules/) (generated from the checker source by `scripts/gen_rules_reference.py`).
 

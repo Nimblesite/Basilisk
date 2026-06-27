@@ -27,11 +27,11 @@ The spec ([CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-OVERVIEW](../specs/CHECKER-T
 
 ### What This Unblocks
 
-**BSK-E0014 (~98 FP)**: Assignment checks compare annotation text to RHS literal kind. When the RHS is a function call, parameter reference, class instantiation, or any non-literal expression, the checker cannot determine the RHS type. Named-to-Named subtyping (e.g., `x: Animal = Dog()`) requires resolving class hierarchies and protocol structural conformance.
+**assignment_compatibility (~98 FP)**: Assignment checks compare annotation text to RHS literal kind. When the RHS is a function call, parameter reference, class instantiation, or any non-literal expression, the checker cannot determine the RHS type. Named-to-Named subtyping (e.g., `x: Animal = Dog()`) requires resolving class hierarchies and protocol structural conformance.
 
-**BSK-E0053 (~12 FP)**: `assert_type()` validation is deliberately disabled (comment in source: "requires full type inference to avoid false positives"). Re-enabling requires knowing the inferred type at every expression site, including after narrowing guards.
+**directives_assert_type_2 (~12 FP)**: `assert_type()` validation is deliberately disabled (comment in source: "requires full type inference to avoid false positives"). Re-enabling requires knowing the inferred type at every expression site, including after narrowing guards.
 
-**BSK-E0013 (~15 FP)**: Return type checking skips function call RHS entirely. Protocol property return types, narrowing function return types, and context manager `__exit__` return types all require resolving call targets.
+**returns_compatibility_2 (~15 FP)**: Return type checking skips function call RHS entirely. Protocol property return types, narrowing function return types, and context manager `__exit__` return types all require resolving call targets.
 
 ---
 

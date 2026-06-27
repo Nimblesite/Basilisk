@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0127] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0127: Tuple index out of range.
+//! Tests for [tuples_index_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for tuples_index_2: Tuple index out of range.
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ def f(v: tuple[int, str, float]) -> None:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0127"),
+        !codes(&diags).contains(&"tuples_index_2"),
         "valid tuple indices should not fire E0127"
     );
     Ok(())

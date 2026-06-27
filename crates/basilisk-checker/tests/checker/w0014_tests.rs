@@ -1,5 +1,5 @@
 //! Tests for [BSK-W0014] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// E2E tests for BSK-W0014: Explicit `Any` annotation warning (split from BSK-E0011).
+// E2E tests for BSK-W0014: Explicit `Any` annotation warning (split from returns_compatibility).
 
 use super::common::*;
 
@@ -47,7 +47,7 @@ fn w0014_explicit_any_is_a_warning_not_e0011() -> Result<(), Box<dyn std::error:
     let source = "from typing import Any\n\ndef greet(name: Any) -> str:\n    return name\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0011"),
+        !codes(&diags).contains(&"returns_compatibility"),
         "explicit Any must NOT fire the E0011 error code anymore, got: {:?}",
         codes(&diags)
     );

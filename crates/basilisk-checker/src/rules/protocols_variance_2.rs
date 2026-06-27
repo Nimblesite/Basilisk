@@ -1,5 +1,5 @@
-//! Implements [BSK-E0133] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0133: Protocol `TypeVar` variance mismatch.
+//! Implements [protocols_variance_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! protocols_variance_2: Protocol `TypeVar` variance mismatch.
 //!
 //! When a generic protocol class declares a `TypeVar` as invariant but the
 //! inferred variance (from method parameter and return positions) is strictly
@@ -28,8 +28,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0133",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0133",
+    code: "protocols_variance_2",
+    docs_url: "https://www.basilisk-python.dev/errors/protocols_variance_2",
 };
 
 /// Extract text from source at the given span.
@@ -132,7 +132,7 @@ enum InferredVariance {
     Unused,
 }
 
-/// Emits BSK-E0133 for protocol `TypeVar` variance mismatches.
+/// Emits protocols_variance_2 for protocol `TypeVar` variance mismatches.
 pub(crate) struct ProtocolVarianceMismatch;
 
 impl Rule for ProtocolVarianceMismatch {

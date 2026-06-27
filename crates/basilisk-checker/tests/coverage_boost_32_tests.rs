@@ -36,7 +36,7 @@ ref = old_func
     let diagnostics = run(source)?;
     let e0115: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0115")
+        .filter(|d| d.code.code == "directives_deprecated")
         .collect();
     assert!(
         !e0115.is_empty(),
@@ -68,7 +68,7 @@ cls_ref = OldClass
     let diagnostics = run(source)?;
     let e0115: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0115")
+        .filter(|d| d.code.code == "directives_deprecated")
         .collect();
     assert!(
         !e0115.is_empty(),
@@ -625,7 +625,7 @@ GoodAlias: TA = int | str
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert!(!e0048.is_empty(), "should flag invalid TA RHS: {e0048:?}");
     Ok(())
@@ -642,7 +642,7 @@ BadAlias: TypeAlias = eval("int")
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert!(!e0048.is_empty(), "eval() should be flagged");
     Ok(())

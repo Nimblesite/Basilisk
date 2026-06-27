@@ -1,5 +1,5 @@
-//! Implements [BSK-E0041] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! BSK-E0041: Too few arguments in a function call.
+//! Implements [calls_argument_count] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! calls_argument_count: Too few arguments in a function call.
 //!
 //! When a function is called with fewer positional arguments than it has
 //! required parameters (parameters without default values), Basilisk reports
@@ -31,11 +31,11 @@ use super::shared::annotation_is_classvar;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0041",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0041",
+    code: "calls_argument_count",
+    docs_url: "https://www.basilisk-python.dev/errors/calls_argument_count",
 };
 
-/// Emits BSK-E0041 for call sites with too few positional arguments.
+/// Emits calls_argument_count for call sites with too few positional arguments.
 pub(crate) struct TooFewArguments;
 
 impl Rule for TooFewArguments {
@@ -72,7 +72,7 @@ fn check_plain_function_calls(module: &ResolvedModule, diagnostics: &mut Vec<Dia
         // Skip if there are keyword arguments or `**kwargs` unpacking. Unpacked
         // kwargs (`func(**d)`) hide an unknown number of named arguments, so a
         // positional-arity check would false-positive (e.g. `func2(**td2)` where
-        // `td2` supplies the required parameters). Conservative skip. [BSK-E0041]
+        // `td2` supplies the required parameters). Conservative skip. [calls_argument_count]
         if !call.keywords.is_empty() || call.has_unpacked_kwargs {
             continue;
         }
@@ -316,7 +316,7 @@ fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
         // Skip if there are keyword arguments or `**kwargs` unpacking. Unpacked
         // kwargs (`func(**d)`) hide an unknown number of named arguments, so a
         // positional-arity check would false-positive (e.g. `func2(**td2)` where
-        // `td2` supplies the required parameters). Conservative skip. [BSK-E0041]
+        // `td2` supplies the required parameters). Conservative skip. [calls_argument_count]
         if !call.keywords.is_empty() || call.has_unpacked_kwargs {
             continue;
         }

@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
 title: 类型安全 — E0010–E0029
-description: Basilisk 的类型安全规则 BSK-E0010 至 E0029，捕获参数与返回类型不匹配、赋值不兼容、不兼容的方法覆盖、不可哈希类型、非穷举模式匹配以及不健全的类型使用。
-keywords: basilisk, 类型安全, 类型不匹配, BSK-E0012, BSK-E0013, BSK-E0016
+description: Basilisk 的类型安全规则 imports_unresolved 至 E0029，捕获参数与返回类型不匹配、赋值不兼容、不兼容的方法覆盖、不可哈希类型、非穷举模式匹配以及不健全的类型使用。
+keywords: basilisk, 类型安全, 类型不匹配, calls_argument_type, returns_compatibility_2, classes_override
 lang: zh
 ---
 
@@ -14,7 +14,7 @@ lang: zh
 
 ---
 
-### BSK-E0010 — 无法解析的导入 (Unresolved import)
+### imports_unresolved — 无法解析的导入 (Unresolved import)
 
 `import` 语句引用了在已配置的搜索路径中无法找到的模块。
 
@@ -28,7 +28,7 @@ from legacy_module import process_data
 
 ---
 
-### BSK-E0011 — 显式 `Any` 注解 / 返回类型不匹配 (Explicit `Any` / return type mismatch)
+### returns_compatibility — 显式 `Any` 注解 / 返回类型不匹配 (Explicit `Any` / return type mismatch)
 
 此代码覆盖两种检查：显式 `Any` 注解会屏蔽类型检查，必须附带理由；返回值与声明的返回类型明显不兼容也会触发此报告。
 
@@ -37,7 +37,7 @@ from typing import Any
 
 # 警告——显式 `Any` 必须注明原因
 def handle(
-    data: Any,  # basilisk: ignore[BSK-E0011] -- awaiting stubs for third-party SDK
+    data: Any,  # basilisk: ignore[returns_compatibility] -- awaiting stubs for third-party SDK
 ) -> bool:
     ...
 
@@ -48,7 +48,7 @@ def name() -> str:
 
 ---
 
-### BSK-E0012 — 参数类型不匹配
+### calls_argument_type — 参数类型不匹配
 
 用错误类型的参数调用函数。
 
@@ -62,7 +62,7 @@ greet(42)
 
 ---
 
-### BSK-E0013 — 返回类型不匹配
+### returns_compatibility_2 — 返回类型不匹配
 
 返回值的类型与声明的返回类型不匹配。
 
@@ -73,7 +73,7 @@ def get_count() -> int:
 
 ---
 
-### BSK-E0014 — 赋值不兼容
+### assignment_compatibility — 赋值不兼容
 
 将错误类型的值赋给注解变量。
 
@@ -84,7 +84,7 @@ count = "zero"  # 错误——str 不是 int
 
 ---
 
-### BSK-E0015 — 无效的类型参数数量
+### callables_annotation — 无效的类型参数数量
 
 泛型类型使用了错误数量的类型参数。
 
@@ -95,7 +95,7 @@ y: dict[str, int]   # 正确
 
 ---
 
-### BSK-E0016 — 不兼容的方法覆盖
+### classes_override — 不兼容的方法覆盖
 
 子类中的覆盖方法具有不兼容的签名。
 
@@ -110,19 +110,19 @@ class Child(Base):
 
 ---
 
-### BSK-E0017 — 不兼容的变量覆盖
+### classes_override_2 — 不兼容的变量覆盖
 
 类变量在子类中以不兼容的类型被覆盖。
 
 ---
 
-### BSK-E0018 — 未定义变量
+### names_undefined — 未定义变量
 
 使用了在当前范围中未定义的名称。
 
 ---
 
-### BSK-E0019 — 未绑定变量
+### names_unbound — 未绑定变量
 
 在所有代码路径中赋值之前使用了变量。
 
@@ -135,19 +135,19 @@ def check(flag: bool) -> str:
 
 ---
 
-### BSK-E0020 — 缺少重载实现
+### overloads_definitions — 缺少重载实现
 
 `@overload` 组没有具体的实现函数。
 
 ---
 
-### BSK-E0021 — 重叠的重载
+### overloads_consistency — 重叠的重载
 
 两个 `@overload` 签名从调用者的角度看无法区分。
 
 ---
 
-### BSK-E0022 — 哈希上下文中的不可哈希类型
+### dict_key_hashable — 哈希上下文中的不可哈希类型
 
 可变类型（如 `list`）用作字典键或集合元素。
 
@@ -157,7 +157,7 @@ d: dict[list[int], str] = {}  # 错误——list 不可哈希
 
 ---
 
-### BSK-E0023 — 非穷举模式匹配
+### match_exhaustiveness — 非穷举模式匹配
 
 `match` 语句没有涵盖匹配类型的所有可能情况。
 
@@ -171,7 +171,7 @@ def classify(x: int | str) -> str:
 
 ---
 
-### BSK-E0024 — 无效类型形式
+### annotations_typeexpr — 无效类型形式
 
 在类型位置使用了非有效类型的值，例如将数字字面量用作注解。
 
@@ -194,7 +194,7 @@ class Child(Base):
 
 ---
 
-### BSK-E0026 — `TypeVar` 只有一个约束
+### generics_basic — `TypeVar` 只有一个约束
 
 声明仅有一个约束的 `TypeVar` 没有意义——约束需要两个或更多。
 
@@ -207,7 +207,7 @@ U = TypeVar("U", int, str)   # 正确——两个或更多
 
 ---
 
-### BSK-E0027 — `Generic[...]` 基类中重复的 `TypeVar`
+### generics_base_class — `Generic[...]` 基类中重复的 `TypeVar`
 
 同一 `TypeVar` 在 `Generic[...]`（或 `Protocol[...]`）基类中出现了不止一次。
 
@@ -221,7 +221,7 @@ class Box(Generic[T, T]):  # 错误——`T` 出现两次
 
 ---
 
-### BSK-E0029 — 在 `TypedDict` 类中定义方法
+### typeddicts_class_syntax — 在 `TypedDict` 类中定义方法
 
 `TypedDict` 类仅描述数据结构，不允许定义方法。
 

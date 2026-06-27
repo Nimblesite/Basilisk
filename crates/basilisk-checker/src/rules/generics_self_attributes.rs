@@ -1,5 +1,5 @@
-//! Implements [BSK-E0075] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
-//! BSK-E0075: Incompatible type for `Self`-typed attribute.
+//! Implements [generics_self_attributes] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! generics_self_attributes: Incompatible type for `Self`-typed attribute.
 //!
 //! When a class declares an attribute annotated with `Self` (or `Self | None`,
 //! `Optional[Self]`, etc.), that attribute's type is bound to the *concrete*
@@ -39,11 +39,11 @@ use super::shared::extract_callee_name;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0075",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0075",
+    code: "generics_self_attributes",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_self_attributes",
 };
 
-/// Emits BSK-E0075 when a parent-class instance is used where a `Self`-typed
+/// Emits generics_self_attributes when a parent-class instance is used where a `Self`-typed
 /// attribute expects the concrete subclass.
 pub(crate) struct SelfTypeAttributeIncompatible;
 

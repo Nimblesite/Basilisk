@@ -1,5 +1,5 @@
-//! Implements [BSK-E0018] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0018: Undefined variable used in a return statement.
+//! Implements [names_undefined] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! names_undefined: Undefined variable used in a return statement.
 //!
 //! Flags any name referenced in a `return` expression — bare (`return x`), the
 //! base of an attribute/subscript chain (`return x.y`), a call argument, or the
@@ -21,11 +21,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0018",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0018",
+    code: "names_undefined",
+    docs_url: "https://www.basilisk-python.dev/errors/names_undefined",
 };
 
-/// Emits BSK-E0018 for return statements that reference undefined names.
+/// Emits names_undefined for return statements that reference undefined names.
 pub(crate) struct UndefinedVariable;
 
 impl Rule for UndefinedVariable {

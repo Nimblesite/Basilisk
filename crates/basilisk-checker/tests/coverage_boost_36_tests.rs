@@ -707,16 +707,16 @@ type Bad2 = [int, str]
 #[test]
 fn suppression_block_directive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
-# basilisk: disable-block=BSK-E0014
+# basilisk: disable-block=assignment_compatibility
 x: int = "hello"
 y: str = 42
 
 z: int = "should still warn"
 
-# basilisk: warning=BSK-E0014
+# basilisk: warning=assignment_compatibility
 a: int = "downgraded"
 
-# basilisk: info=BSK-E0014
+# basilisk: info=assignment_compatibility
 b: int = "info level"
 "#;
     let diagnostics = run(source)?;

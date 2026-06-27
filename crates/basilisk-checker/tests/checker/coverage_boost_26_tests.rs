@@ -22,7 +22,7 @@ d = v[2]
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0103")
+        .filter(|d| d.code.code == "tuples_index")
         .count();
     Ok(())
 }
@@ -46,7 +46,7 @@ class Circle:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0077")
+        .filter(|d| d.code.code == "generics_self_protocols")
         .count();
     Ok(())
 }
@@ -74,7 +74,7 @@ def bad(c: Literal["Color.RED"]) -> None:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0068")
+        .filter(|d| d.code.code == "literals_parameterizations_2")
         .count();
     Ok(())
 }
@@ -95,7 +95,7 @@ def g(y: float) -> int:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0065")
+        .filter(|d| d.code.code == "specialtypes_promotions")
         .count();
     Ok(())
 }
@@ -120,7 +120,7 @@ takes_type(Proto)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0106")
+        .filter(|d| d.code.code == "protocols_class_objects")
         .count();
     Ok(())
 }
@@ -140,7 +140,7 @@ x += 1
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0100")
+        .filter(|d| d.code.code == "literals_semantics")
         .count();
     Ok(())
 }
@@ -162,7 +162,7 @@ class Bad(Generic[Ts]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0083")
+        .filter(|d| d.code.code == "generics_typevartuple_basic_2")
         .count();
     Ok(())
 }
@@ -180,7 +180,7 @@ class Good(Generic[*Ts]):
     let diagnostics = run(source)?;
     let e0083 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0083")
+        .filter(|d| d.code.code == "generics_typevartuple_basic_2")
         .count();
     // Correct usage should not trigger
     let _ = e0083;
@@ -206,7 +206,7 @@ args = NoMatch.__match_args__
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0059")
+        .filter(|d| d.code.code == "dataclasses_match_args")
         .count();
     Ok(())
 }
@@ -225,7 +225,7 @@ Wrong = TypedDict("Right", {"x": int, "y": str})
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0037")
+        .filter(|d| d.code.code == "typeddicts_alt_syntax")
         .count();
     Ok(())
 }
@@ -240,7 +240,7 @@ TD = TypedDict("TD", {"x": int}, badarg=True)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0037")
+        .filter(|d| d.code.code == "typeddicts_alt_syntax")
         .count();
     Ok(())
 }
@@ -284,7 +284,7 @@ T = TypeVar("T", int)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0026")
+        .filter(|d| d.code.code == "generics_basic")
         .count();
     Ok(())
 }
@@ -301,7 +301,7 @@ T3 = TypeVar("T3", int, str, float)
     let diagnostics = run(source)?;
     let e0026 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0026")
+        .filter(|d| d.code.code == "generics_basic")
         .count();
     assert_eq!(e0026, 0, "Valid constraints should not trigger");
     Ok(())
@@ -324,7 +324,7 @@ class Bad(Generic[T1, T2]): ...
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0030")
+        .filter(|d| d.code.code == "generics_defaults")
         .count();
     Ok(())
 }
@@ -343,7 +343,7 @@ class Good(Generic[T1, T2, T3]): ...
     let diagnostics = run(source)?;
     let e0030 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0030")
+        .filter(|d| d.code.code == "generics_defaults")
         .count();
     let _ = e0030;
     Ok(())
@@ -364,7 +364,7 @@ y: Tuple[int] = (1,)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0092")
+        .filter(|d| d.code.code == "generics_defaults_specialization")
         .count();
     Ok(())
 }
@@ -393,7 +393,7 @@ class Child(Base):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0108")
+        .filter(|d| d.code.code == "dataclasses_slots")
         .count();
     Ok(())
 }

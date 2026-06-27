@@ -14,7 +14,7 @@ const CODE: ErrorCode = ErrorCode {
 
 /// Emits BSK-E0001 for every unannotated regular parameter (not `*args`/`**kwargs`).
 ///
-/// `*args` and `**kwargs` are handled by [`super::e0004`].
+/// `*args` and `**kwargs` are handled by [`super::missing_vararg_annotation`].
 /// Skipped for `@overload`, `@abstractmethod`, and `Protocol` methods.
 pub(crate) struct MissingParameterAnnotation;
 

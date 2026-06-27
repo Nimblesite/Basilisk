@@ -1,5 +1,5 @@
-//! Implements [BSK-E0084] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0084: `TypeVarTuple` variance/bounds/constraints violation.
+//! Implements [generics_typevartuple_basic_3] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_typevartuple_basic_3: `TypeVarTuple` variance/bounds/constraints violation.
 //!
 //! `TypeVarTuple` does not support specification of variance, bounds, or constraints.
 //! Using these parameters with `TypeVarTuple` is invalid.
@@ -21,11 +21,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0084",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0084",
+    code: "generics_typevartuple_basic_3",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_typevartuple_basic_3",
 };
 
-/// Emits BSK-E0084 when a `TypeVarTuple` has invalid parameters.
+/// Emits generics_typevartuple_basic_3 when a `TypeVarTuple` has invalid parameters.
 pub(crate) struct TypeVarTupleInvalidParams;
 
 impl Rule for TypeVarTupleInvalidParams {

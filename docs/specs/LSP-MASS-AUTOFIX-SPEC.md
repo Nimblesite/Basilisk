@@ -123,7 +123,7 @@ Gradual Adoption Mode **demotes all remaining unfixable errors to warnings per-f
 [overrides]
 
 [overrides."src/utils.py"]
-demoted = ["BSK-E0001", "BSK-E0003", "BSK-E0012"]
+demoted = ["BSK-E0001", "BSK-E0003", "calls_argument_type"]
 
 [overrides."src/models/user.py"]
 demoted = ["BSK-E0001", "BSK-E0002"]

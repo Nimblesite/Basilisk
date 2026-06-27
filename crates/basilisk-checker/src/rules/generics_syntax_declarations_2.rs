@@ -1,5 +1,5 @@
-//! Implements [BSK-E0105] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0105: Invalid attribute access on bounded type variable.
+//! Implements [generics_syntax_declarations_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_syntax_declarations_2: Invalid attribute access on bounded type variable.
 //!
 //! When a PEP 695 type parameter has a bound (e.g., `T: str`), attribute
 //! accesses on parameters typed as `T` must be valid for the bound type.
@@ -18,11 +18,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0105",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0105",
+    code: "generics_syntax_declarations_2",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_syntax_declarations_2",
 };
 
-/// Emits BSK-E0105 for invalid attribute accesses on bounded type variables.
+/// Emits generics_syntax_declarations_2 for invalid attribute accesses on bounded type variables.
 pub(crate) struct BoundedTypeVarAttrAccess;
 
 impl Rule for BoundedTypeVarAttrAccess {

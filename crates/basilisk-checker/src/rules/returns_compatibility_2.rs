@@ -1,5 +1,5 @@
-//! Implements [BSK-E0013] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0013: Return type mismatch — inferred return type incompatible with annotation.
+//! Implements [returns_compatibility_2] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! returns_compatibility_2: Return type mismatch — inferred return type incompatible with annotation.
 //!
 //! When a function has a return type annotation, the inferred return type must be
 //! assignable to the declared type. This extends the original `-> None` check to
@@ -15,11 +15,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0013",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0013",
+    code: "returns_compatibility_2",
+    docs_url: "https://www.basilisk-python.dev/errors/returns_compatibility_2",
 };
 
-/// Emits BSK-E0013 for return type mismatches using inference system.
+/// Emits returns_compatibility_2 for return type mismatches using inference system.
 pub(crate) struct ReturnTypeMismatch;
 
 impl Rule for ReturnTypeMismatch {

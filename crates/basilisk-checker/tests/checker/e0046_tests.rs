@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0046] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
-// Integration tests for BSK-E0046: Enum member annotated (covered also in `e0040_e0046`).
+//! Tests for [enums_members] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+// Integration tests for enums_members: Enum member annotated (covered also in `e0040_e0046`).
 
 use super::common::*;
 
@@ -14,7 +14,7 @@ class Color(Enum):
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0046"),
+        codes(&diags).contains(&"enums_members"),
         "annotated enum member should fire E0046, got: {:?}",
         codes(&diags)
     );
@@ -32,7 +32,7 @@ class Color(Enum):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0046"),
+        !codes(&diags).contains(&"enums_members"),
         "unannotated enum member should not fire E0046"
     );
     Ok(())

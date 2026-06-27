@@ -1,5 +1,5 @@
-//! Implements [BSK-E0021] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0021: Overlapping `@overload` signatures.
+//! Implements [overloads_consistency] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! overloads_consistency: Overlapping `@overload` signatures.
 //!
 //! Within a group of `@overload` functions for the same name, every overload
 //! must be distinguishable.  This rule uses a structural heuristic: two
@@ -18,11 +18,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0021",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0021",
+    code: "overloads_consistency",
+    docs_url: "https://www.basilisk-python.dev/errors/overloads_consistency",
 };
 
-/// Emits BSK-E0021 for `@overload` variants whose parameter signatures are
+/// Emits overloads_consistency for `@overload` variants whose parameter signatures are
 /// structurally identical to an earlier variant in the same group.
 pub(crate) struct OverlappingOverloads;
 

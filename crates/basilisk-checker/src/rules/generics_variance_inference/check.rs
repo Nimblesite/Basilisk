@@ -1,5 +1,5 @@
-//! Implements [BSK-E0130] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Method-call and constructor-call type checking for BSK-E0130.
+//! Implements [generics_variance_inference] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Method-call and constructor-call type checking for generics_variance_inference.
 
 use std::collections::{HashMap, HashSet};
 
@@ -15,8 +15,8 @@ use super::collect::{collect_generic_classes, collect_generic_instances};
 use super::utils::{find_matching_close, infer_literal_type, span_for_line};
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0130",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0130",
+    code: "generics_variance_inference",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_variance_inference",
 };
 
 /// Check module-level method calls on generic class instances for type mismatches.

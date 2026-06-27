@@ -1,5 +1,5 @@
-//! Implements [BSK-E0058] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! BSK-E0058: `Annotated[...]` requires at least two arguments.
+//! Implements [qualifiers_annotated_2] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! qualifiers_annotated_2: `Annotated[...]` requires at least two arguments.
 //!
 //! PEP 593 requires `Annotated` to be subscripted with at least two arguments:
 //! a type and one or more metadata values. `Annotated[int]` with only a single
@@ -18,8 +18,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0058",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0058",
+    code: "qualifiers_annotated_2",
+    docs_url: "https://www.basilisk-python.dev/errors/qualifiers_annotated_2",
 };
 
 fn make_diag(span: Span, path: &str) -> Diagnostic {
@@ -88,7 +88,7 @@ fn check_annotation(ann: &str, name_span: Span, path: &str, diagnostics: &mut Ve
     }
 }
 
-/// Emits BSK-E0058 when `Annotated[X]` has fewer than two arguments.
+/// Emits qualifiers_annotated_2 when `Annotated[X]` has fewer than two arguments.
 pub(crate) struct AnnotatedTooFewArguments;
 
 impl Rule for AnnotatedTooFewArguments {

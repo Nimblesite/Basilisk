@@ -74,7 +74,7 @@ pub struct WorkspaceIndex {
     ///
     /// Reused by the incremental single-file analysis path (`didOpen` /
     /// `didChange` / disk reload) so third-party import resolution matches the
-    /// full scan and the editor does not resurrect false `BSK-E0010`.
+    /// full scan and the editor does not resurrect false `imports_unresolved`.
     /// Implements [ANALYSIS-INCR-IMPORTS]. See
     /// docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-INCR-IMPORTS
     pub search_paths: std::sync::RwLock<Option<Arc<crate::import_resolver::ImportSearchPaths>>>,
@@ -179,7 +179,7 @@ impl WorkspaceIndex {
     /// populated the search paths, incremental edits resolve third-party and
     /// workspace imports exactly like the full scan — without this, every
     /// `didOpen` / `didChange` re-marks imports `Unresolved`, resurrecting
-    /// false `BSK-E0010` in the editor for packages the CLI resolves fine.
+    /// false `imports_unresolved` in the editor for packages the CLI resolves fine.
     /// Implements [ANALYSIS-INCR-IMPORTS].
     fn analyse_and_resolve(
         &self,
@@ -516,7 +516,7 @@ impl WorkspaceIndex {
     /// then re-check all files.
     ///
     /// Called when the package layout changes (e.g. a new module is created) so
-    /// that files importing the new module stop reporting `BSK-E0010` without an
+    /// that files importing the new module stop reporting `imports_unresolved` without an
     /// LSP reload. When no search paths are cached yet this degrades to a plain
     /// recheck. Implements [ANALYSIS-INCR-IMPORTS].
     #[must_use]
@@ -1319,8 +1319,8 @@ mod tests {
         recheck_all(&idx);
         let diags_before = get_diagnostics(&idx, &uri);
         assert!(
-            has_diag(&diags_before, "BSK-E0010", "flask"),
-            "expected BSK-E0010 for unresolved flask import, got: {diags_before:?}"
+            has_diag(&diags_before, "imports_unresolved", "flask"),
+            "expected imports_unresolved for unresolved flask import, got: {diags_before:?}"
         );
 
         // Now add flask to the lock file and rebuild.
@@ -1337,7 +1337,7 @@ mod tests {
         // NotInstalled. The diagnostic message changes accordingly.
         let diags_after = get_diagnostics(&idx, &uri);
         assert!(
-            !has_diag(&diags_after, "BSK-E0010", "not a dependency"),
+            !has_diag(&diags_after, "imports_unresolved", "not a dependency"),
             "flask should no longer show 'not a dependency' after being added to lock: {diags_after:?}"
         );
 
@@ -1375,8 +1375,8 @@ mod tests {
 
         let diags = get_diagnostics(&idx, &uri);
         assert!(
-            has_diag(&diags, "BSK-E0010", "flask"),
-            "expected BSK-E0010 for flask after removal from lock, got: {diags:?}"
+            has_diag(&diags, "imports_unresolved", "flask"),
+            "expected imports_unresolved for flask after removal from lock, got: {diags:?}"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -1387,7 +1387,7 @@ mod tests {
     // `import configure_agent_backend` from `scripts/configure_agent_backend_test.py`
     // must resolve to the sibling `scripts/configure_agent_backend.py` even when
     // the workspace root is the project root (not `scripts/`). This mirrors
-    // Python's `sys.path[0]` behaviour and prevents BSK-E0010 false positives
+    // Python's `sys.path[0]` behaviour and prevents imports_unresolved false positives
     // for the common scripts-with-tests pattern.
     #[test]
     fn test_sibling_import_in_scripts_dir_does_not_emit_e0010() {
@@ -1425,9 +1425,9 @@ mod tests {
 
         let diags = get_diagnostics(&idx, &uri);
         assert!(
-            !has_diag(&diags, "BSK-E0010", "configure_agent_backend"),
+            !has_diag(&diags, "imports_unresolved", "configure_agent_backend"),
             "sibling-module import in a script directory must resolve via sys.path[0] \
-             fallback; got BSK-E0010: {diags:?}"
+             fallback; got imports_unresolved: {diags:?}"
         );
 
         let _ = std::fs::remove_dir_all(&project_root);
@@ -1516,28 +1516,28 @@ mod tests {
         // tests/helpers.py — imports agent_backend.db.models (via src/).
         let helpers_diags = get_diagnostics(&idx, &helpers_uri);
         assert!(
-            !has_diag(&helpers_diags, "BSK-E0010", "agent_backend"),
-            "BSK-E0010 false positive: src-layout production import from a test \
+            !has_diag(&helpers_diags, "imports_unresolved", "agent_backend"),
+            "imports_unresolved false positive: src-layout production import from a test \
              helper must resolve via src/ on the search path; got: {helpers_diags:?}"
         );
 
         // tests/test_foo.py — imports tests.helpers (via workspace root).
         let test_diags = get_diagnostics(&idx, &test_uri);
         assert!(
-            !has_diag(&test_diags, "BSK-E0010", "tests.helpers"),
-            "BSK-E0010 false positive: `tests.helpers` import must resolve when the \
+            !has_diag(&test_diags, "imports_unresolved", "tests.helpers"),
+            "imports_unresolved false positive: `tests.helpers` import must resolve when the \
              workspace root is on the search path; got: {test_diags:?}"
         );
 
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    // ── Editor edits must resolve third-party imports (no false BSK-E0010) ───
+    // ── Editor edits must resolve third-party imports (no false imports_unresolved) ───
     //
     // Regression: the full workspace scan resolves `import requests` against the
-    // venv site-packages (no BSK-E0010), but opening/editing a file ran parse →
+    // venv site-packages (no imports_unresolved), but opening/editing a file ran parse →
     // syntactic-resolve → check WITHOUT the import search paths, so every
-    // third-party import was re-marked `Unresolved` and BSK-E0010 fired in the
+    // third-party import was re-marked `Unresolved` and imports_unresolved fired in the
     // editor for packages the CLI resolves fine. The diagnostics that
     // `set_open` *publishes* must already reflect import resolution.
     // Implements [ANALYSIS-INCR-IMPORTS].
@@ -1574,20 +1574,20 @@ mod tests {
         });
 
         // Simulate the editor opening the file. The diagnostics it PUBLISHES
-        // (the return value) must not contain BSK-E0010 for `requests`.
+        // (the return value) must not contain imports_unresolved for `requests`.
         let uri = Url::from_file_path(&main_path).unwrap();
         let published = idx.set_open(&uri, "import requests\n", 1);
         assert!(
-            !lsp_codes(&published).iter().any(|c| c == "BSK-E0010"),
+            !lsp_codes(&published).iter().any(|c| c == "imports_unresolved"),
             "editor-opened file must resolve `requests` via the cached search \
-             paths; got BSK-E0010 in published diagnostics: {published:?}"
+             paths; got imports_unresolved in published diagnostics: {published:?}"
         );
 
         // The cached checker diagnostics must agree (used by other features).
         let stored = get_diagnostics(&idx, &uri);
         assert!(
-            !has_diag(&stored, "BSK-E0010", "requests"),
-            "stored diagnostics must not carry BSK-E0010 for resolved `requests`: {stored:?}"
+            !has_diag(&stored, "imports_unresolved", "requests"),
+            "stored diagnostics must not carry imports_unresolved for resolved `requests`: {stored:?}"
         );
 
         let _ = std::fs::remove_dir_all(&root);
@@ -2162,7 +2162,7 @@ mod tests {
     #[test]
     fn reload_root_configs_applies_changed_python_version() {
         // [CHKARCH-VERSION-TARGET] Editing `[tool.basilisk] python-version` must
-        // make version-aware rules (the BSK-E0155 PEP 695 gate) update without an
+        // make version-aware rules (the version_target_syntax PEP 695 gate) update without an
         // LSP restart: reload_root_configs re-reads the target, and the next
         // recheck reflects it.
         let dir = unique_tmp("bsk_cfg_pyver");
@@ -2189,14 +2189,14 @@ mod tests {
             idx.recheck_all_files()
                 .into_iter()
                 .find(|(u, _)| *u == uri)
-                .is_some_and(|(_, d)| lsp_codes(&d).contains(&"BSK-E0155".to_owned()))
+                .is_some_and(|(_, d)| lsp_codes(&d).contains(&"version_target_syntax".to_owned()))
         };
 
         // 3.11 target: PEP 695 `type` syntax is gated.
         let initial = idx.set_open(&uri, src, 1);
         assert!(
-            lsp_codes(&initial).contains(&"BSK-E0155".to_owned()),
-            "PEP 695 on a 3.11 target must fire BSK-E0155"
+            lsp_codes(&initial).contains(&"version_target_syntax".to_owned()),
+            "PEP 695 on a 3.11 target must fire version_target_syntax"
         );
 
         // Switch the configured target to 3.12 on disk.

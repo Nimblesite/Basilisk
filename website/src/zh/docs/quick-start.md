@@ -149,7 +149,7 @@ error[BSK-E0001]: Missing parameter type annotation for `data`
 
 ```python
 # 此抑制需要原因注释
-result: Any = legacy_sdk_call()  # basilisk: ignore[BSK-E0011] -- tracked in #847
+result: Any = legacy_sdk_call()  # basilisk: ignore[returns_compatibility] -- tracked in #847
 ```
 
 没有原因的抑制本身会被标记。这是故意的：如果您需要抑制诊断，您应该能够解释原因。

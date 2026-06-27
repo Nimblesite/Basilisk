@@ -1178,8 +1178,8 @@ class MyProtocol(Protocol[T], Generic[T]):
     def method(self) -> T: ...
 "#;
     let diags = run(source)?;
-    let has_e0137 = diags.iter().any(|d| d.code.code == "BSK-E0137");
-    assert!(has_e0137, "Expected BSK-E0137 for Protocol[T]+Generic[T]");
+    let has_e0137 = diags.iter().any(|d| d.code.code == "protocols_generic");
+    assert!(has_e0137, "Expected protocols_generic for Protocol[T]+Generic[T]");
     Ok(())
 }
 
@@ -1200,8 +1200,8 @@ class DC:
 v: Hashable = DC(0)
 "#;
     let diags = run(source)?;
-    let has_e0063 = diags.iter().any(|d| d.code.code == "BSK-E0063");
-    assert!(has_e0063, "Expected BSK-E0063 for non-hashable dataclass");
+    let has_e0063 = diags.iter().any(|d| d.code.code == "dataclasses_hash");
+    assert!(has_e0063, "Expected dataclasses_hash for non-hashable dataclass");
     Ok(())
 }
 
@@ -1218,7 +1218,7 @@ class DC:
 v: Hashable = DC(0)
 "#;
     let diags = run(source)?;
-    let has_e0063 = diags.iter().any(|d| d.code.code == "BSK-E0063");
+    let has_e0063 = diags.iter().any(|d| d.code.code == "dataclasses_hash");
     assert!(!has_e0063, "Frozen dataclass should not trigger E0063");
     Ok(())
 }

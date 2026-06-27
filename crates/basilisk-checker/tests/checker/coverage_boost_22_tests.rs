@@ -20,7 +20,7 @@ def func(a: Literal[0], b: Literal[False]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0129")
+        .filter(|d| d.code.code == "literals_semantics_2")
         .count();
     Ok(())
 }
@@ -36,7 +36,7 @@ def func(a: Literal[3, 4, 5]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0129")
+        .filter(|d| d.code.code == "literals_semantics_2")
         .count();
     Ok(())
 }
@@ -55,7 +55,7 @@ def func(a: Literal[1, 2], b: Literal[10]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0129")
+        .filter(|d| d.code.code == "literals_semantics_2")
         .count();
     Ok(())
 }
@@ -72,7 +72,7 @@ def func(a: Literal[1], b: Literal[True]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0129")
+        .filter(|d| d.code.code == "literals_semantics_2")
         .count();
     Ok(())
 }
@@ -88,7 +88,7 @@ def func(a: Literal["hello"]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0129")
+        .filter(|d| d.code.code == "literals_semantics_2")
         .count();
     Ok(())
 }
@@ -105,7 +105,7 @@ def func(a: Literal[0xFF]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0129")
+        .filter(|d| d.code.code == "literals_semantics_2")
         .count();
     Ok(())
 }
@@ -122,7 +122,7 @@ def func(a: Literal[1, 2, 3]):
     let diagnostics = run(source)?;
     let e0129 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0129")
+        .filter(|d| d.code.code == "literals_semantics_2")
         .count();
     // Valid assignment should not trigger.
     let _ = e0129;
@@ -157,7 +157,7 @@ ratio: float = "1.5"
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .count();
     Ok(())
 }
@@ -171,7 +171,7 @@ y: bool = -1
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .count();
     Ok(())
 }
@@ -185,7 +185,7 @@ y: str = b"world"
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .count();
     Ok(())
 }
@@ -200,7 +200,7 @@ z: float = None
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .count();
     Ok(())
 }
@@ -215,7 +215,7 @@ z: bytes = True
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .count();
     Ok(())
 }
@@ -231,7 +231,7 @@ w: int = (1, 2)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .count();
     Ok(())
 }
@@ -245,7 +245,7 @@ y: int = {}
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .count();
     Ok(())
 }

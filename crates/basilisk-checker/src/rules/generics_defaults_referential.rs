@@ -1,5 +1,5 @@
-//! Implements [BSK-E0102] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0102: Invalid `TypeVar` default referencing another `TypeVar`.
+//! Implements [generics_defaults_referential] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_defaults_referential: Invalid `TypeVar` default referencing another `TypeVar`.
 //!
 //! PEP 696 specifies constraints on `TypeVar` defaults that reference other `TypeVars`:
 //!
@@ -41,8 +41,8 @@ use super::Rule;
 use crate::rules::shared::is_numeric_subtype;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0102",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0102",
+    code: "generics_defaults_referential",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_defaults_referential",
 };
 
 /// Check if type `t1` is a subtype of type `t2` for bound compatibility.
@@ -56,7 +56,7 @@ fn is_constraint_subset(c1: &[String], c2: &[String]) -> bool {
     c1.iter().all(|constraint| c2.contains(constraint))
 }
 
-/// Emits BSK-E0102 for `TypeVar` default referential violations.
+/// Emits generics_defaults_referential for `TypeVar` default referential violations.
 pub(crate) struct TypeVarDefaultReferential;
 
 /// Format a list of constraint names as backtick-quoted, comma-separated string.

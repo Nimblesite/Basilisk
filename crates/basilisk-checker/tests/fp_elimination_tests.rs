@@ -1,5 +1,5 @@
 //! Tests for [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! Coarse e2e tests locking in the BSK-E0014 false-positive eliminations from
+//! Coarse e2e tests locking in the assignment_compatibility false-positive eliminations from
 //! `docs/plans/CHECK-ELIMINATE-FALSE-POSITIVES.md`.
 //!
 //! Each test asserts BOTH directions: the valid (`# OK`) forms are NOT flagged
@@ -19,7 +19,7 @@ mod common;
 
 use common::{has_code, run};
 
-const E0014: &str = "BSK-E0014";
+const E0014: &str = "assignment_compatibility";
 
 fn e0014_count(diags: &[common::Diagnostic]) -> usize {
     diags.iter().filter(|d| d.code.code == E0014).count()

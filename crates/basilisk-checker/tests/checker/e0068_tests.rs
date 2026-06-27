@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0068] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
-// Integration tests for BSK-E0068: Literal string enum.
+//! Tests for [literals_parameterizations_2] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+// Integration tests for literals_parameterizations_2: Literal string enum.
 
 use super::common::*;
 

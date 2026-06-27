@@ -1,5 +1,5 @@
-//! Implements [BSK-E0024] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0024: Invalid type form — numeric literal used as type annotation.
+//! Implements [annotations_typeexpr] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! annotations_typeexpr: Invalid type form — numeric literal used as type annotation.
 //!
 //! Type annotations must be type expressions, not literal values.  Using a
 //! number such as `42`, `3.14`, or `True` as a type annotation is always a
@@ -17,13 +17,13 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0024",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0024",
+    code: "annotations_typeexpr",
+    docs_url: "https://www.basilisk-python.dev/errors/annotations_typeexpr",
 };
 
 const HELP: &str = "Use a type name like `int`, `str`, `float` instead of a literal value";
 
-/// Emits BSK-E0024 for function parameters and return annotations that are
+/// Emits annotations_typeexpr for function parameters and return annotations that are
 /// numeric or boolean literals.
 pub(crate) struct InvalidTypeForm;
 

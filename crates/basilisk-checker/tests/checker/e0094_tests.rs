@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0094] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
-// Integration tests for BSK-E0094: Self type in invalid location.
+//! Tests for [generics_self_usage] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+// Integration tests for generics_self_usage: Self type in invalid location.
 
 use super::common::*;
 
@@ -14,7 +14,7 @@ class Foo:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0094"),
+        !codes(&diags).contains(&"generics_self_usage"),
         "Self in method return should not fire E0094"
     );
     Ok(())

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0062] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! BSK-E0062: `-> NoReturn` / `-> Never` function can fall through.
+//! Implements [specialtypes_never] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! specialtypes_never: `-> NoReturn` / `-> Never` function can fall through.
 //!
 //! A function declared with a return type of `NoReturn` or `Never` must
 //! unconditionally raise an exception or call another `NoReturn` function on
@@ -40,11 +40,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0062",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0062",
+    code: "specialtypes_never",
+    docs_url: "https://www.basilisk-python.dev/errors/specialtypes_never",
 };
 
-/// Emits BSK-E0062 when a `-> NoReturn` or `-> Never` function can fall through.
+/// Emits specialtypes_never when a `-> NoReturn` or `-> Never` function can fall through.
 pub(crate) struct NoReturnFallThrough;
 
 impl Rule for NoReturnFallThrough {

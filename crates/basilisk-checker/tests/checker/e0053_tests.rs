@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0053] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
-// Integration tests for BSK-E0053: `assert_type()` type mismatch.
+//! Tests for [directives_assert_type_2] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+// Integration tests for directives_assert_type_2: `assert_type()` type mismatch.
 
 use super::common::*;
 
@@ -42,7 +42,7 @@ assert_type(ident(1), Literal[1])
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0053"),
+        codes(&diags).contains(&"directives_assert_type_2"),
         "generic-call return inference should flag the Literal mismatch, got: {:?}",
         codes(&diags)
     );
@@ -66,7 +66,7 @@ assert_type(Color(1), Color)
     // satisfies the conformance group; both come from the enum-lookup inference.
     let codes = codes(&diags);
     assert!(
-        codes.contains(&"BSK-E0061") || codes.contains(&"BSK-E0053"),
+        codes.contains(&"enums_expansion") || codes.contains(&"directives_assert_type_2"),
         "enum member-lookup inference should flag the Literal assertion, got: {codes:?}"
     );
     Ok(())
@@ -84,7 +84,7 @@ assert_type(func1(0), Any)
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0053"),
+        codes(&diags).contains(&"directives_assert_type_2"),
         "an unbound defaulted TypeVar resolves to its default; Any assertion mismatches, got: {:?}",
         codes(&diags)
     );
@@ -106,7 +106,7 @@ def f(m: MyStr) -> None:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0053"),
+        !codes(&diags).contains(&"directives_assert_type_2"),
         "constrained TypeVar must not be inferred (no false positive), got: {:?}",
         codes(&diags)
     );
@@ -124,7 +124,7 @@ assert_type(Box(1), Box)
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0053"),
+        !codes(&diags).contains(&"directives_assert_type_2"),
         "constructor calls must not be inferred as a mismatch, got: {:?}",
         codes(&diags)
     );

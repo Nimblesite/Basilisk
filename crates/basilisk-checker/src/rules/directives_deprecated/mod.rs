@@ -1,4 +1,4 @@
-//! BSK-E0115: Use of deprecated class, function, or method.
+//! directives_deprecated: Use of deprecated class, function, or method.
 //!
 //! PEP 702 introduces `@deprecated` from `typing` / `typing_extensions`.
 //! Using a deprecated entity (calling, importing, accessing) should produce
@@ -10,7 +10,7 @@
 //! @deprecated("Use new_func instead")
 //! def old_func() -> None: ...
 //!
-//! old_func()  # BSK-E0115
+//! old_func()  # directives_deprecated
 //! ```
 
 mod collect;
@@ -35,11 +35,11 @@ use types::DeprecatedUsageContext;
 use visit_stmt::visit_stmt_for_usage;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0115",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0115",
+    code: "directives_deprecated",
+    docs_url: "https://www.basilisk-python.dev/errors/directives_deprecated",
 };
 
-/// Emits BSK-E0115 for usage of `@deprecated` decorated entities.
+/// Emits directives_deprecated for usage of `@deprecated` decorated entities.
 pub(crate) struct DeprecatedUsage;
 
 impl Rule for DeprecatedUsage {
@@ -123,7 +123,7 @@ impl Rule for DeprecatedUsage {
     }
 }
 
-/// Build a `BSK-E0115` diagnostic for a deprecated entity usage.
+/// Build a `directives_deprecated` diagnostic for a deprecated entity usage.
 pub(super) fn make_diagnostic(
     span: Span,
     kind: &str,

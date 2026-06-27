@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0018] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0018: Undefined variable in return.
+//! Tests for [names_undefined] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for names_undefined: Undefined variable in return.
 
 use super::common::*;
 
@@ -8,7 +8,7 @@ fn e0018_undefined_name_in_return_fires() -> Result<(), Box<dyn std::error::Erro
     let source = "def compute() -> int:\n    return undefined_name\n";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0018"),
+        codes(&diags).contains(&"names_undefined"),
         "undefined name in return should fire E0018, got: {:?}",
         codes(&diags)
     );
@@ -20,7 +20,7 @@ fn e0018_defined_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
     let source = "def compute(x: int) -> int:\n    return x\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0018"),
+        !codes(&diags).contains(&"names_undefined"),
         "returning a parameter should not fire E0018"
     );
     Ok(())
@@ -31,7 +31,7 @@ fn e0018_locally_assigned_no_diagnostic() -> Result<(), Box<dyn std::error::Erro
     let source = "def compute() -> int:\n    result = 42\n    return result\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0018"),
+        !codes(&diags).contains(&"names_undefined"),
         "returning a locally assigned variable should not fire E0018"
     );
     Ok(())
@@ -49,7 +49,7 @@ def validate(text: str) -> str:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0018"),
+        !codes(&diags).contains(&"names_undefined"),
         "returning a module-level variable should not fire E0018, got: {:?}",
         codes(&diags)
     );
@@ -60,7 +60,7 @@ def validate(text: str) -> str:
 fn e0018_diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def compute() -> int:\n    return missing\n";
     let diags = run(source)?;
-    let e0018 = diags.iter().find(|d| d.code.code == "BSK-E0018");
+    let e0018 = diags.iter().find(|d| d.code.code == "names_undefined");
     assert!(e0018.is_some(), "should fire E0018");
     let Some(diag) = e0018 else {
         return Err("E0018 diagnostic missing after assertion".into());
@@ -82,11 +82,11 @@ def _patch_jwt(claims: dict[str, object]) -> object:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0018"),
+        !codes(&diags).contains(&"names_undefined"),
         "aliased module import used in a return expression must not fire E0018, got: {:?}",
         diags
             .iter()
-            .filter(|d| d.code.code == "BSK-E0018")
+            .filter(|d| d.code.code == "names_undefined")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
     );
@@ -100,7 +100,7 @@ fn e0018_undefined_callee_in_return_call_fires() -> Result<(), Box<dyn std::erro
     let source = "def f() -> object:\n    return undefined_fn()\n";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0018"),
+        codes(&diags).contains(&"names_undefined"),
         "an undefined callee in a return call should fire E0018, got: {:?}",
         codes(&diags)
     );
@@ -113,7 +113,7 @@ fn e0018_sibling_function_call_no_false_positive() -> Result<(), Box<dyn std::er
     let source = "def helper() -> int:\n    return 1\n\n\ndef use() -> int:\n    return helper()\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0018"),
+        !codes(&diags).contains(&"names_undefined"),
         "`return helper()` for a module-level function must not fire E0018, got: {:?}",
         codes(&diags)
     );
@@ -127,7 +127,7 @@ fn e0018_bare_sibling_function_no_false_positive() -> Result<(), Box<dyn std::er
         "def helper() -> int:\n    return 1\n\n\ndef use() -> object:\n    return helper\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0018"),
+        !codes(&diags).contains(&"names_undefined"),
         "`return helper` for a module-level function must not fire E0018, got: {:?}",
         codes(&diags)
     );
@@ -140,7 +140,7 @@ fn e0018_class_instantiation_no_false_positive() -> Result<(), Box<dyn std::erro
     let source = "class Foo:\n    pass\n\n\ndef make() -> Foo:\n    return Foo()\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0018"),
+        !codes(&diags).contains(&"names_undefined"),
         "`return Foo()` for a module-level class must not fire E0018, got: {:?}",
         codes(&diags)
     );
@@ -153,7 +153,7 @@ fn e0018_builtin_call_no_false_positive() -> Result<(), Box<dyn std::error::Erro
     let source = "def f() -> int:\n    return len([1, 2])\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0018"),
+        !codes(&diags).contains(&"names_undefined"),
         "`return len(...)` (builtin callee) must not fire E0018, got: {:?}",
         codes(&diags)
     );
@@ -183,11 +183,11 @@ def make_store() -> object:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0018"),
+        !codes(&diags).contains(&"names_undefined"),
         "function-local import used in a nested class method must not fire E0018, got: {:?}",
         diags
             .iter()
-            .filter(|d| d.code.code == "BSK-E0018")
+            .filter(|d| d.code.code == "names_undefined")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
     );
@@ -205,7 +205,7 @@ fn e0018_function_local_import_returned_bare_no_false_positive(
     let diags = run(source)?;
     let fired: Vec<&str> = codes(&diags)
         .into_iter()
-        .filter(|c| *c == "BSK-E0018" || *c == "BSK-E0019")
+        .filter(|c| *c == "names_undefined" || *c == "names_unbound")
         .collect();
     assert!(
         fired.is_empty(),
@@ -237,11 +237,11 @@ def make() -> object:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0018"),
+        !codes(&diags).contains(&"names_undefined"),
         "dotted/aliased function-local imports used in nested methods must not fire E0018, got: {:?}",
         diags
             .iter()
-            .filter(|d| d.code.code == "BSK-E0018")
+            .filter(|d| d.code.code == "names_undefined")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
     );
@@ -256,11 +256,11 @@ fn e0018_nested_class_returned_from_enclosing_function_no_false_positive(
     let source = "def make() -> object:\n    class _Stub:\n        pass\n    return _Stub()\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0018"),
+        !codes(&diags).contains(&"names_undefined"),
         "returning a function-local class must not fire E0018, got: {:?}",
         diags
             .iter()
-            .filter(|d| d.code.code == "BSK-E0018")
+            .filter(|d| d.code.code == "names_undefined")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
     );
@@ -294,11 +294,11 @@ def _join() -> str:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0018"),
+        !codes(&diags).contains(&"names_undefined"),
         "module-level plain aliased import used in a return expression must not fire E0018, got: {:?}",
         diags
             .iter()
-            .filter(|d| d.code.code == "BSK-E0018")
+            .filter(|d| d.code.code == "names_undefined")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
     );
@@ -318,7 +318,7 @@ fn e0018_function_local_import_attribute_call_in_return_no_false_positive(
     let diags = run(source)?;
     let fired: Vec<&str> = codes(&diags)
         .into_iter()
-        .filter(|c| *c == "BSK-E0018" || *c == "BSK-E0019")
+        .filter(|c| *c == "names_undefined" || *c == "names_unbound")
         .collect();
     assert!(
         fired.is_empty(),
@@ -337,11 +337,11 @@ fn e0018_function_local_from_import_callee_in_return_no_false_positive(
     let source = "def extract() -> int | None:\n    from os import getpid\n    return getpid()\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0018"),
+        !codes(&diags).contains(&"names_undefined"),
         "a function-local `from ... import f` used as a return callee must not fire E0018, got: {:?}",
         diags
             .iter()
-            .filter(|d| d.code.code == "BSK-E0018")
+            .filter(|d| d.code.code == "names_undefined")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
     );
@@ -359,11 +359,11 @@ fn e0018_function_local_aliased_import_attribute_in_return_no_false_positive(
         "def make_dt() -> object:\n    import datetime as _dt\n    return _dt.datetime(2020, 1, 1)\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0018"),
+        !codes(&diags).contains(&"names_undefined"),
         "an aliased function-local import used as a return attribute base must not fire E0018, got: {:?}",
         diags
             .iter()
-            .filter(|d| d.code.code == "BSK-E0018")
+            .filter(|d| d.code.code == "names_undefined")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
     );

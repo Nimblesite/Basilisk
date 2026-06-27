@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0065] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
-// Integration tests for BSK-E0065: Float param int attr access.
+//! Tests for [specialtypes_promotions] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+// Integration tests for specialtypes_promotions: Float param int attr access.
 
 use super::common::*;
 
@@ -22,7 +22,7 @@ def func(x: int) -> int:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0065"),
+        !codes(&diags).contains(&"specialtypes_promotions"),
         "int has numerator attr, should not fire E0065"
     );
     Ok(())

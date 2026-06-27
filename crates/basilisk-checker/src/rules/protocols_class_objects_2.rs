@@ -1,5 +1,5 @@
-//! Implements [BSK-E0146] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0146: Protocol class object violations.
+//! Implements [protocols_class_objects_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! protocols_class_objects_2: Protocol class object violations.
 //!
 //! Detects two related violations involving Protocol classes and class objects:
 //!
@@ -43,11 +43,11 @@ use crate::rules::shared::{ann_str, expr_name};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0146",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0146",
+    code: "protocols_class_objects_2",
+    docs_url: "https://www.basilisk-python.dev/errors/protocols_class_objects_2",
 };
 
-/// Emits BSK-E0146 for Protocol class object violations.
+/// Emits protocols_class_objects_2 for Protocol class object violations.
 pub(crate) struct ProtocolClassObjectViolation;
 
 impl Rule for ProtocolClassObjectViolation {

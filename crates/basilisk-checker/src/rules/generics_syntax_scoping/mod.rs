@@ -1,4 +1,4 @@
-//! BSK-E0149: PEP 695 generic type parameter scoping violations.
+//! generics_syntax_scoping: PEP 695 generic type parameter scoping violations.
 //!
 //! Detects violations of PEP 695 type-parameter scoping rules, driven entirely
 //! by `ruff_python_ast` nodes (via [`basilisk_resolver::Pep695Scoping`]) — never
@@ -39,11 +39,11 @@ use crate::diagnostic::{Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0149",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0149",
+    code: "generics_syntax_scoping",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_syntax_scoping",
 };
 
-/// Emits BSK-E0149 for PEP 695 generic type parameter scoping violations.
+/// Emits generics_syntax_scoping for PEP 695 generic type parameter scoping violations.
 pub(crate) struct Pep695TypeParamScopingViolation;
 
 impl Rule for Pep695TypeParamScopingViolation {

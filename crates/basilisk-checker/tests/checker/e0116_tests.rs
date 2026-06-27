@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0116] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0116: `NamedTuple` class definition errors.
+//! Tests for [namedtuples_define_class] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for namedtuples_define_class: `NamedTuple` class definition errors.
 
 use super::common::*;
 
@@ -14,7 +14,7 @@ class Point(NamedTuple):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0116"),
+        !codes(&diags).contains(&"namedtuples_define_class"),
         "valid NamedTuple should not fire E0116"
     );
     Ok(())
@@ -59,7 +59,7 @@ class Good(NamedTuple):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0116"),
+        !codes(&diags).contains(&"namedtuples_define_class"),
         "valid default ordering should not fire E0116"
     );
     Ok(())

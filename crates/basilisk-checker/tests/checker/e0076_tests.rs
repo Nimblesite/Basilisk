@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0076] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
-// Integration tests for BSK-E0076: Overload union expansion.
+//! Tests for [overloads_evaluation] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
+// Integration tests for overloads_evaluation: Overload union expansion.
 
 use super::common::*;
 

@@ -56,7 +56,7 @@ pub struct AttributeInfo {
     pub rhs_is_descriptor_call: bool,
     /// `true` when the annotation contains `ReadOnly[...]` (directly or nested).
     ///
-    /// Used by `BSK-E0056` to detect mutation of read-only `TypedDict` fields.
+    /// Used by `typeddicts_readonly` to detect mutation of read-only `TypedDict` fields.
     pub is_readonly: bool,
     /// `true` when the field is keyword-only in a dataclass `__init__`.
     ///

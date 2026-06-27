@@ -1,5 +1,5 @@
-//! Implements [BSK-E0067] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! BSK-E0067: Non-member referenced in `Literal[EnumClass.X]` annotation.
+//! Implements [enums_members_2] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! enums_members_2: Non-member referenced in `Literal[EnumClass.X]` annotation.
 //!
 //! The `Literal[EnumClass.X]` type is only valid when `X` is an actual enum
 //! member. Using it with a non-member (a method, property, lambda, nested
@@ -29,11 +29,11 @@ use crate::span_util::slice_span;
 use super::{guards::is_enum_class, Rule};
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0067",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0067",
+    code: "enums_members_2",
+    docs_url: "https://www.basilisk-python.dev/errors/enums_members_2",
 };
 
-/// Emits BSK-E0067 when a non-member is referenced in `Literal[EnumClass.X]`.
+/// Emits enums_members_2 when a non-member is referenced in `Literal[EnumClass.X]`.
 pub(crate) struct EnumNonMemberInLiteral;
 
 impl Rule for EnumNonMemberInLiteral {

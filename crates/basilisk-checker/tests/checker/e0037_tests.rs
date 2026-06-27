@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0037] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
-// Integration tests for BSK-E0037: Invalid `TypedDict` functional-syntax call.
+//! Tests for [typeddicts_alt_syntax] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+// Integration tests for typeddicts_alt_syntax: Invalid `TypedDict` functional-syntax call.
 
 use super::common::*;
 
@@ -11,7 +11,7 @@ Movie = TypedDict("Movie", {"title": str, "year": int})
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0037");
+    let msgs = messages_for(&diags, "typeddicts_alt_syntax");
     assert!(
         msgs.is_empty(),
         "valid TypedDict should not fire E0037, got: {msgs:?}"
@@ -27,7 +27,7 @@ Movie = TypedDict("Film", {"title": str})
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0037");
+    let msgs = messages_for(&diags, "typeddicts_alt_syntax");
     assert!(
         msgs.iter().any(|m| m.contains("does not match")),
         "name mismatch should fire E0037, got: {msgs:?}"
@@ -43,7 +43,7 @@ Movie = TypedDict("Movie", title=str, year=int)
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0037");
+    let msgs = messages_for(&diags, "typeddicts_alt_syntax");
     // Keyword-only form should NOT flag keyword names as unrecognised
     let unrecognised: Vec<_> = msgs
         .iter()

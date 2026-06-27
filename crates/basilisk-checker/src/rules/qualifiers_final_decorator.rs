@@ -1,5 +1,5 @@
-//! Implements [BSK-E0034] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! BSK-E0034: `@final` decorator violations.
+//! Implements [qualifiers_final_decorator] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! qualifiers_final_decorator: `@final` decorator violations.
 //!
 //! Three violations are detected:
 //!
@@ -21,8 +21,8 @@ use crate::diagnostic::{error_diag_help_note, error_diagnostic_owned, Diagnostic
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0034",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0034",
+    code: "qualifiers_final_decorator",
+    docs_url: "https://www.basilisk-python.dev/errors/qualifiers_final_decorator",
 };
 
 /// Returns `true` if the decorator name is `final` or `typing.final`.
@@ -30,7 +30,7 @@ fn is_final_decorator(d: &str) -> bool {
     d == "final" || d.rsplit('.').next() == Some("final")
 }
 
-/// Emits BSK-E0034 for `@final` decorator violations.
+/// Emits qualifiers_final_decorator for `@final` decorator violations.
 pub(crate) struct FinalViolation;
 
 impl Rule for FinalViolation {

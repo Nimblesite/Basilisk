@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0040] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
-// Integration tests for BSK-E0040: Invalid Enum subclassing.
+//! Tests for [enums_behaviors] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+// Integration tests for enums_behaviors: Invalid Enum subclassing.
 
 use super::common::*;
 
@@ -15,7 +15,7 @@ class Color(Enum):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0040"),
+        !codes(&diags).contains(&"enums_behaviors"),
         "valid enum should not fire E0040"
     );
     Ok(())
@@ -51,7 +51,7 @@ class Child(Base):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0040"),
+        !codes(&diags).contains(&"enums_behaviors"),
         "subclassing memberless enum should not fire E0040"
     );
     Ok(())

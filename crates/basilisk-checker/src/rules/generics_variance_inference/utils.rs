@@ -1,5 +1,5 @@
-//! Implements [BSK-E0130] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Utility functions for BSK-E0130.
+//! Implements [generics_variance_inference] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Utility functions for generics_variance_inference.
 
 use crate::rules::shared::contains_typevar_reference;
 

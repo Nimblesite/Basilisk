@@ -1,5 +1,5 @@
-//! Implements [BSK-E0151] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0151: Invalid `TypeAliasType(...)` call.
+//! Implements [aliases_typealiastype] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! aliases_typealiastype: Invalid `TypeAliasType(...)` call.
 //!
 //! Detects violations in `TypeAliasType(...)` calls:
 //!
@@ -34,11 +34,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0151",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0151",
+    code: "aliases_typealiastype",
+    docs_url: "https://www.basilisk-python.dev/errors/aliases_typealiastype",
 };
 
-/// Emits BSK-E0151 for invalid `TypeAliasType(...)` calls.
+/// Emits aliases_typealiastype for invalid `TypeAliasType(...)` calls.
 pub(crate) struct TypeAliasTypeViolation;
 
 impl Rule for TypeAliasTypeViolation {

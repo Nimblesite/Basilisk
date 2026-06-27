@@ -97,7 +97,7 @@ check(Callable)
     let diagnostics = run(source)?;
     let e0145 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0145")
+        .filter(|d| d.code.code == "specialtypes_type")
         .collect::<Vec<_>>();
     assert!(
         !e0145.is_empty(),
@@ -126,7 +126,7 @@ check(Bird)
     let diagnostics = run(source)?;
     let e0145 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0145")
+        .filter(|d| d.code.code == "specialtypes_type")
         .collect::<Vec<_>>();
     assert!(
         !e0145.is_empty(),
@@ -390,7 +390,7 @@ def gen() -> Generator[int, None, None]:
     let diagnostics = run(source)?;
     let e0131 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0131")
+        .filter(|d| d.code.code == "annotations_generators_2")
         .collect::<Vec<_>>();
     assert!(
         !e0131.is_empty(),
@@ -411,7 +411,7 @@ def gen() -> Generator[int, None, str]:
     let diagnostics = run(source)?;
     let e0131 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0131")
+        .filter(|d| d.code.code == "annotations_generators_2")
         .collect::<Vec<_>>();
     // Return type mismatch may be checked
     let _ = e0131;
@@ -437,7 +437,7 @@ def gen2() -> Generator[str, None, None]:
     let diagnostics = run(source)?;
     let gen_errors = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0120" || d.code.code == "BSK-E0131")
+        .filter(|d| d.code.code == "BSK-E0120" || d.code.code == "annotations_generators_2")
         .count();
     assert!(
         gen_errors >= 1,
@@ -540,7 +540,7 @@ takes_str_check(is_int)
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0112")
+        .filter(|d| d.code.code == "narrowing_typeis")
         .collect::<Vec<_>>();
     assert!(
         !e0112.is_empty(),
@@ -565,7 +565,7 @@ takes_typeguard(is_str_typeis)
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0112")
+        .filter(|d| d.code.code == "narrowing_typeis")
         .collect::<Vec<_>>();
     assert!(
         !e0112.is_empty(),
@@ -590,7 +590,7 @@ takes_bool(is_str)
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0112")
+        .filter(|d| d.code.code == "narrowing_typeis")
         .collect::<Vec<_>>();
     assert!(
         e0112.is_empty(),
@@ -646,7 +646,7 @@ x: Extended = Impl()
     let diagnostics = run(source)?;
     let e0121 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0121")
+        .filter(|d| d.code.code == "protocols_definition_2")
         .collect::<Vec<_>>();
     assert!(
         !e0121.is_empty(),
@@ -912,7 +912,7 @@ check_union(Callable)
     let diagnostics = run(source)?;
     let e0145 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0145")
+        .filter(|d| d.code.code == "specialtypes_type")
         .count();
     assert!(
         e0145 >= 1,
@@ -951,7 +951,7 @@ isinstance(y, NotRuntime)
     let diagnostics = run(source)?;
     let e0119 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0119")
+        .filter(|d| d.code.code == "protocols_runtime_checkable_2")
         .count();
     assert!(
         e0119 >= 1,
@@ -1055,7 +1055,7 @@ takes_bool(is_str_is)
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0112")
+        .filter(|d| d.code.code == "narrowing_typeis")
         .count();
     assert!(
         e0112 >= 2,
@@ -1089,7 +1089,7 @@ def gen_multiple_yields() -> Generator[int, None, None]:
     let diagnostics = run(source)?;
     let gen_errors = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0120" || d.code.code == "BSK-E0131")
+        .filter(|d| d.code.code == "BSK-E0120" || d.code.code == "annotations_generators_2")
         .count();
     assert!(
         gen_errors >= 1,
@@ -1132,7 +1132,7 @@ d.Z = False
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0054")
+        .filter(|d| d.code.code == "qualifiers_final_annotation_2")
         .count();
     assert!(
         e0054 >= 3,
@@ -1175,7 +1175,7 @@ print(s.debug)
     let diagnostics = run(source)?;
     let e0095 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0095")
+        .filter(|d| d.code.code == "dataclasses_postinit")
         .count();
     assert!(
         e0095 >= 1,

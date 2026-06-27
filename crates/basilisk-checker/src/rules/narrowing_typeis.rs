@@ -1,5 +1,5 @@
-//! Implements [BSK-E0112] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0112: TypeGuard/TypeIs return type incompatibility in callable arguments.
+//! Implements [narrowing_typeis] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! narrowing_typeis: TypeGuard/TypeIs return type incompatibility in callable arguments.
 //!
 //! When a function returning `TypeGuard[X]` or `TypeIs[X]` is passed as an
 //! argument where the expected callable return type is NOT `bool`, this rule
@@ -26,11 +26,11 @@ use super::guards::is_protocol_class;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0112",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0112",
+    code: "narrowing_typeis",
+    docs_url: "https://www.basilisk-python.dev/errors/narrowing_typeis",
 };
 
-/// Emits BSK-E0112 when a TypeGuard/TypeIs function is passed to a callable
+/// Emits narrowing_typeis when a TypeGuard/TypeIs function is passed to a callable
 /// parameter whose return type is not `bool`.
 pub(crate) struct TypeGuardCallableReturnMismatch;
 

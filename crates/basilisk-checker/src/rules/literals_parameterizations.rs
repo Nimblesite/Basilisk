@@ -1,5 +1,5 @@
-//! Implements [BSK-E0051] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! BSK-E0051: Invalid `Literal` parameterization.
+//! Implements [literals_parameterizations] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! literals_parameterizations: Invalid `Literal` parameterization.
 //!
 //! PEP 586 restricts what values may appear inside `Literal[...]`.
 //! Only these are legal:
@@ -29,8 +29,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0051",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0051",
+    code: "literals_parameterizations",
+    docs_url: "https://www.basilisk-python.dev/errors/literals_parameterizations",
 };
 
 fn make_diag(message: String, span: basilisk_resolver::Span, path: &str) -> Diagnostic {
@@ -181,7 +181,7 @@ fn is_complete_string_literal(arg: &str) -> bool {
 // Rule
 // ---------------------------------------------------------------------------
 
-/// Emits BSK-E0051 for invalid `Literal[...]` parameterizations.
+/// Emits literals_parameterizations for invalid `Literal[...]` parameterizations.
 pub(crate) struct InvalidLiteralParam;
 
 impl Rule for InvalidLiteralParam {

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0103] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0103: Tuple index out of bounds.
+//! Tests for [tuples_index] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for tuples_index: Tuple index out of bounds.
 
 use super::common::*;
 
@@ -12,7 +12,7 @@ y = t[1]
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0103"),
+        !codes(&diags).contains(&"tuples_index"),
         "valid tuple index should not fire E0103"
     );
     Ok(())
@@ -53,7 +53,7 @@ z = t[-3]
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0103"),
+        !codes(&diags).contains(&"tuples_index"),
         "valid negative indices should not fire E0103"
     );
     Ok(())

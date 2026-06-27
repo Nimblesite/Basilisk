@@ -1,6 +1,6 @@
 from typing import Literal
 
-# BSK-E0023: Non-exhaustive match statements
+# match_exhaustiveness: Non-exhaustive match statements
 # 500 match blocks missing cases
 
 T1 = Literal["a1", "b1", "c1"]

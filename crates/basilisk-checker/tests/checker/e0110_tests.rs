@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0110] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0110: Protocol variance violation.
+//! Tests for [protocols_variance] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for protocols_variance: Protocol variance violation.
 
 use super::common::*;
 
@@ -39,7 +39,7 @@ class GoodProto(Protocol[T_co]):
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0110"),
+        !codes(&diags).contains(&"protocols_variance"),
         "covariant in output position should not fire E0110"
     );
     Ok(())
@@ -55,7 +55,7 @@ class GoodProto2(Protocol[T_contra]):
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0110"),
+        !codes(&diags).contains(&"protocols_variance"),
         "contravariant in input position should not fire E0110"
     );
     Ok(())

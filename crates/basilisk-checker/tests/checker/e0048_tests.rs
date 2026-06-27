@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0048] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
-// Integration tests for BSK-E0048: `TypeAlias` invalid RHS.
+//! Tests for [aliases_implicit] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+// Integration tests for aliases_implicit: `TypeAlias` invalid RHS.
 
 use super::common::*;
 
@@ -11,7 +11,7 @@ MyType: TypeAlias = list[int]
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0048"),
+        !codes(&diags).contains(&"aliases_implicit"),
         "valid TypeAlias should not fire E0048"
     );
     Ok(())
@@ -25,7 +25,7 @@ NumOrStr: TypeAlias = int | str
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0048"),
+        !codes(&diags).contains(&"aliases_implicit"),
         "union TypeAlias should not fire E0048"
     );
     Ok(())
@@ -117,7 +117,7 @@ Outer: TypeAlias = dict[str, Inner]
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0048"),
+        !codes(&diags).contains(&"aliases_implicit"),
         "nested valid TypeAlias should not fire E0048"
     );
     Ok(())

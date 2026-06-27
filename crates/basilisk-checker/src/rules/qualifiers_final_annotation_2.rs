@@ -1,5 +1,5 @@
-//! Implements [BSK-E0054] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! BSK-E0054: `Final` type qualifier annotation violations.
+//! Implements [qualifiers_final_annotation_2] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! qualifiers_final_annotation_2: `Final` type qualifier annotation violations.
 //!
 //! Detects violations of PEP 591's rules for the `Final` qualifier, beyond the
 //! positional errors handled by E0044. Specifically:
@@ -40,8 +40,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0054",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0054",
+    code: "qualifiers_final_annotation_2",
+    docs_url: "https://www.basilisk-python.dev/errors/qualifiers_final_annotation_2",
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str, help: &str) -> Diagnostic {
@@ -103,7 +103,7 @@ fn collect_class_final_attr_map(module: &ResolvedModule) -> HashMap<String, Hash
         .collect()
 }
 
-/// Emits BSK-E0054 for `Final` annotation violations collected during resolution.
+/// Emits qualifiers_final_annotation_2 for `Final` annotation violations collected during resolution.
 pub(crate) struct FinalAnnotationViolation;
 
 impl Rule for FinalAnnotationViolation {

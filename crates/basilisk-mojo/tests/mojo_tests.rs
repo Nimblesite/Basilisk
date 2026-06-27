@@ -11,7 +11,7 @@
 
 #[test]
 fn ownership_checker_detects_mutation_of_borrowed() {
-    // Phase 4: mutation of a `Borrowed` parameter must be flagged as BSK-E0031.
+    // Phase 4: mutation of a `Borrowed` parameter must be flagged as directives_cast.
     // Currently returns no violations (placeholder).
     let source = "def foo(x: Borrowed[list]) -> None:\n    x.append(1)\n";
     let violations = basilisk_mojo::check_ownership(source);

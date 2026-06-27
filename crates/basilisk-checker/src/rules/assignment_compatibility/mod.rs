@@ -1,4 +1,4 @@
-//! BSK-E0014: Assignment type incompatibility (literal mismatches).
+//! assignment_compatibility: Assignment type incompatibility (literal mismatches).
 //!
 //! Detects annotated module-level variables where the declared type and the
 //! literal kind of the right-hand side are clearly incompatible, for example:
@@ -38,11 +38,11 @@ use literal_parse::infer_with_literal_value;
 use tuple_check::check_tuple_reassignments;
 
 pub(crate) const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0014",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0014",
+    code: "assignment_compatibility",
+    docs_url: "https://www.basilisk-python.dev/errors/assignment_compatibility",
 };
 
-/// Emits BSK-E0014 for annotated module variables whose annotation and literal
+/// Emits assignment_compatibility for annotated module variables whose annotation and literal
 /// RHS are obviously incompatible.
 pub(crate) struct AssignmentTypeMismatch;
 
@@ -126,7 +126,7 @@ fn drop_unchecked_block_diagnostics(module: &ResolvedModule, diagnostics: &mut V
 
 /// Collect names of `TypedDict` classes defined in this module.
 ///
-/// BSK-E0014 cannot do structural field-level type checking on `TypedDict`
+/// assignment_compatibility cannot do structural field-level type checking on `TypedDict`
 /// subclasses, so dict literal assignments to `TypedDict` annotations are
 /// skipped to avoid false positives.
 fn collect_typeddict_names(module: &ResolvedModule) -> std::collections::HashSet<String> {

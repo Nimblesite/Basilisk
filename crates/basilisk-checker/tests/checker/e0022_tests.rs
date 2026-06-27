@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0022] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0022: Unhashable dict key.
+//! Tests for [dict_key_hashable] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for dict_key_hashable: Unhashable dict key.
 
 use super::common::*;
 
@@ -11,7 +11,7 @@ def good_key() -> None:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0022"),
+        !codes(&diags).contains(&"dict_key_hashable"),
         "string key should not fire E0022"
     );
     Ok(())

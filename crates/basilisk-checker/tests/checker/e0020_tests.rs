@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0020] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0020: Missing @overload implementation.
+//! Tests for [overloads_definitions] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for overloads_definitions: Missing @overload implementation.
 
 use super::common::*;
 
@@ -16,7 +16,7 @@ def process(x: str) -> str: ...
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0020"),
+        codes(&diags).contains(&"overloads_definitions"),
         "overloads without implementation should fire E0020, got: {:?}",
         codes(&diags)
     );
@@ -39,7 +39,7 @@ def process(x: int | str) -> int | str:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0020"),
+        !codes(&diags).contains(&"overloads_definitions"),
         "overloads with implementation should not fire E0020"
     );
     Ok(())
@@ -50,7 +50,7 @@ fn e0020_single_function_no_diagnostic() -> Result<(), Box<dyn std::error::Error
     let source = "def process(x: int) -> int:\n    return x\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0020"),
+        !codes(&diags).contains(&"overloads_definitions"),
         "single function should not fire E0020"
     );
     Ok(())

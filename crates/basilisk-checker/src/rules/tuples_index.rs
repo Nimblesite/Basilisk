@@ -1,5 +1,5 @@
-//! Implements [BSK-E0103] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0103: Tuple index out of bounds.
+//! Implements [tuples_index] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! tuples_index: Tuple index out of bounds.
 //!
 //! When a fixed-length `tuple[T1, T2, ...]` variable is indexed with a literal
 //! integer or a `Literal[N]`-typed variable that is outside the valid range
@@ -17,11 +17,11 @@ use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0103",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0103",
+    code: "tuples_index",
+    docs_url: "https://www.basilisk-python.dev/errors/tuples_index",
 };
 
-/// Emits BSK-E0103 for out-of-bounds tuple indexing with literal integers.
+/// Emits tuples_index for out-of-bounds tuple indexing with literal integers.
 pub(crate) struct TupleIndexOutOfBounds;
 
 impl Rule for TupleIndexOutOfBounds {

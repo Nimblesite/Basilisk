@@ -117,7 +117,7 @@ def func(a: int = 0, b: int = 1) -> None:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0030");
+    let msgs = messages_for(&diags, "generics_defaults");
     assert!(msgs.is_empty(), "all-default params should not fire E0030");
     Ok(())
 }
@@ -136,7 +136,7 @@ class Bad(Generic[int]):
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0043");
+    let msgs = messages_for(&diags, "generics_basic_2");
     assert!(
         !msgs.is_empty(),
         "non-TypeVar in Generic should fire E0043, got: {msgs:?}"
@@ -156,7 +156,7 @@ MyType: TypeAlias = list[int]
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0048");
+    let msgs = messages_for(&diags, "aliases_implicit");
     assert!(
         msgs.is_empty(),
         "valid TypeAlias should not fire E0048, got: {msgs:?}"
@@ -177,7 +177,7 @@ x: tuple[str, int]
 ";
     let diags = run(source)?;
 
-    let _msgs = messages_for(&diags, "BSK-E0049");
+    let _msgs = messages_for(&diags, "tuples_type_form");
     Ok(())
 }
 

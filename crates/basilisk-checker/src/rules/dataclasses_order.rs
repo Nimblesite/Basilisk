@@ -1,5 +1,5 @@
-//! Implements [BSK-E0060] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! BSK-E0060: Invalid ordering comparison of dataclass instances.
+//! Implements [dataclasses_order] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! dataclasses_order: Invalid ordering comparison of dataclass instances.
 //!
 //! When `@dataclass(order=True)`, Python synthesizes `__lt__`, `__le__`, `__gt__`,
 //! and `__ge__` methods.  These methods raise `TypeError` at runtime if the other
@@ -39,8 +39,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0060",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0060",
+    code: "dataclasses_order",
+    docs_url: "https://www.basilisk-python.dev/errors/dataclasses_order",
 };
 
 /// A comparison extracted from source text.
@@ -50,7 +50,7 @@ struct SourceComparison {
     span: Span,
 }
 
-/// Emits BSK-E0060 for invalid ordering comparisons of dataclass instances:
+/// Emits dataclasses_order for invalid ordering comparisons of dataclass instances:
 /// - Cross-type comparisons between different `order=True` dataclass classes.
 /// - Any ordering comparison on dataclass instances where `order` is not enabled.
 pub(crate) struct CrossTypeDataclassOrderComparison;

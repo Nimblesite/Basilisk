@@ -29,7 +29,7 @@ class BadContainer(Generic[T_co]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0107")
+        .filter(|d| d.code.code == "generics_variance")
         .count();
     Ok(())
 }
@@ -53,7 +53,7 @@ class BadWrapper(Generic[T_co]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0107")
+        .filter(|d| d.code.code == "generics_variance")
         .count();
     Ok(())
 }
@@ -267,7 +267,7 @@ x: Optional[int, str] = None
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .count();
     Ok(())
 }
@@ -282,7 +282,7 @@ x: Dict[str, int, float] = {}
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .count();
     Ok(())
 }
@@ -315,7 +315,7 @@ def is_int(x: str) -> TypeIs[int]:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0113")
+        .filter(|d| d.code.code == "narrowing_typeis_2")
         .count();
     Ok(())
 }

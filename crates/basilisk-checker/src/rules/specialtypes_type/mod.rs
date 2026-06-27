@@ -1,4 +1,4 @@
-//! BSK-E0145: Invalid `type[X]` usage violations.
+//! specialtypes_type: Invalid `type[X]` usage violations.
 //!
 //! Detects several categories of invalid use of `type[X]` (or `Type[X]`):
 //!
@@ -37,11 +37,11 @@ use helpers::{
 };
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0145",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0145",
+    code: "specialtypes_type",
+    docs_url: "https://www.basilisk-python.dev/errors/specialtypes_type",
 };
 
-/// Emits BSK-E0145 for invalid `type[X]` usages.
+/// Emits specialtypes_type for invalid `type[X]` usages.
 pub(crate) struct TypeBracketViolation;
 
 impl Rule for TypeBracketViolation {

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0086] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0086: Multiple `TypeVarTuple` unpacks in generic or tuple type.
+//! Implements [generics_typevartuple_specialization] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_typevartuple_specialization: Multiple `TypeVarTuple` unpacks in generic or tuple type.
 //!
 //! Only a single `TypeVarTuple` unpack (`*Ts`) may appear in a type parameter
 //! list or in a `tuple[...]` type expression.
@@ -26,8 +26,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0086",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0086",
+    code: "generics_typevartuple_specialization",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_typevartuple_specialization",
 };
 
 fn make_diag(message: String, span: Span, path: &str) -> Diagnostic {
@@ -90,7 +90,7 @@ fn find_matching_bracket(content: &str) -> Option<usize> {
     None
 }
 
-/// Emits BSK-E0086 when multiple `TypeVarTuples` are used in a generic or
+/// Emits generics_typevartuple_specialization when multiple `TypeVarTuples` are used in a generic or
 /// multiple unpacks appear in a `tuple[...]` type expression.
 pub(crate) struct MultipleTypeVarTuplesInGeneric;
 

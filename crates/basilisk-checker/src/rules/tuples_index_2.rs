@@ -1,5 +1,5 @@
-//! Implements [BSK-E0127] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0127: Tuple index out of range.
+//! Implements [tuples_index_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! tuples_index_2: Tuple index out of range.
 //!
 //! Detects subscript access on a fixed-length `tuple[T1, T2, ...]` parameter
 //! where the index is a known integer literal (either an inline `int` literal
@@ -22,11 +22,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0127",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0127",
+    code: "tuples_index_2",
+    docs_url: "https://www.basilisk-python.dev/errors/tuples_index_2",
 };
 
-/// Emits BSK-E0127 when a tuple is subscripted with an out-of-range literal index.
+/// Emits tuples_index_2 when a tuple is subscripted with an out-of-range literal index.
 pub(crate) struct TupleIndexOutOfRange;
 
 impl Rule for TupleIndexOutOfRange {

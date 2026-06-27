@@ -1,4 +1,4 @@
-//! BSK-E0045: Invalid first argument to `Annotated[...]`.
+//! qualifiers_annotated: Invalid first argument to `Annotated[...]`.
 //!
 //! PEP 593 requires that the first argument to `Annotated[...]` be a valid type
 //! expression. The following are errors:
@@ -42,8 +42,8 @@ use helpers::{
 };
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0045",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0045",
+    code: "qualifiers_annotated",
+    docs_url: "https://www.basilisk-python.dev/errors/qualifiers_annotated",
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
@@ -59,7 +59,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     )
 }
 
-/// Emits BSK-E0045 when `Annotated[...]` has an invalid first argument, too few args,
+/// Emits qualifiers_annotated when `Annotated[...]` has an invalid first argument, too few args,
 /// or when `Annotated` (or a `TypeAlias`) is called directly as a function.
 pub(crate) struct AnnotatedInvalidFirstArg;
 

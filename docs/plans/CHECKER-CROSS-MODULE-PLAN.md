@@ -44,7 +44,7 @@ A project adopting Basilisk with third-party imports:
 See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-DETECT](../specs/LSP-UV-INTEGRATION-SPEC.md#LSPUV-DETECT):
 
 1. **Zero config**: auto-detect `uv.lock`, `.python-version`, full dependency graph
-2. **Actionable diagnostics**: BSK-E0010 says "run `uv add requests`" with one-click code action
+2. **Actionable diagnostics**: imports_unresolved says "run `uv add requests`" with one-click code action
 3. **Stub suggestions**: BSK-E0152 offers `uv add --dev types-requests`
 4. **Hot reload**: `uv.lock` changes picked up via file watcher — no LSP restart
 5. **Workspace support**: uv workspaces map to LSP multi-root with cross-member import resolution

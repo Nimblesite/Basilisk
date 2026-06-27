@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0064] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
-// Integration tests for BSK-E0064: Invalid `NamedTuple` call.
+//! Tests for [namedtuples_define_functional] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+// Integration tests for namedtuples_define_functional: Invalid `NamedTuple` call.
 
 use super::common::*;
 
@@ -14,7 +14,7 @@ class Point(NamedTuple):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0064"),
+        !codes(&diags).contains(&"namedtuples_define_functional"),
         "valid NamedTuple should not fire E0064"
     );
     Ok(())
@@ -41,7 +41,7 @@ p = Point(x=1, z=3)
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0064"),
+        codes(&diags).contains(&"namedtuples_define_functional"),
         "unknown keyword field should fire E0064, got: {:?}",
         codes(&diags)
     );
@@ -57,7 +57,7 @@ p = Point(x="hello", y="world")
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0064"),
+        codes(&diags).contains(&"namedtuples_define_functional"),
         "keyword type mismatch should fire E0064, got: {:?}",
         codes(&diags)
     );
@@ -73,7 +73,7 @@ p = Point("hello", "world")
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0064"),
+        codes(&diags).contains(&"namedtuples_define_functional"),
         "positional type mismatch should fire E0064, got: {:?}",
         codes(&diags)
     );
@@ -89,7 +89,7 @@ p = Point(x=1, y=2)
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0064"),
+        !codes(&diags).contains(&"namedtuples_define_functional"),
         "valid keyword args should not fire E0064, got: {:?}",
         codes(&diags)
     );
@@ -105,7 +105,7 @@ r = Record(count=b"data", label="ok")
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0064"),
+        codes(&diags).contains(&"namedtuples_define_functional"),
         "bytes literal for int field should fire E0064, got: {:?}",
         codes(&diags)
     );
@@ -121,7 +121,7 @@ r = Record(count=3.14, label="ok")
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0064"),
+        codes(&diags).contains(&"namedtuples_define_functional"),
         "float literal for int field should fire E0064, got: {:?}",
         codes(&diags)
     );

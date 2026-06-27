@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0075] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
-// Integration tests for BSK-E0075: Self-typed attribute incompatibility.
+//! Tests for [generics_self_attributes] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
+// Integration tests for generics_self_attributes: Self-typed attribute incompatibility.
 
 use super::common::*;
 
@@ -67,7 +67,7 @@ xs = LinkedList[int](value=1, next=LinkedList[int](value=2))
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0075"),
+        !codes(&diags).contains(&"generics_self_attributes"),
         "same-class Self attr should not fire E0075"
     );
     Ok(())

@@ -1,4 +1,4 @@
-//! Implements [BSK-E0014] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [assignment_compatibility] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Signature model for structural callable/protocol subtyping: parameter and
 //! signature types, plus extraction from `ruff` AST class/function definitions.
 

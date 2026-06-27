@@ -1,5 +1,5 @@
-//! Implements [BSK-E0130] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Data types for BSK-E0130.
+//! Implements [generics_variance_inference] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Data types for generics_variance_inference.
 
 use std::collections::{HashMap, HashSet};
 

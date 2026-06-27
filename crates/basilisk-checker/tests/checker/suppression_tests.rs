@@ -90,15 +90,15 @@ fn type_info_demotes_to_info() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn block_disabled_suppresses_range() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"# type: disabled[BSK-E0010]
+    let source = r"# type: disabled[imports_unresolved]
 import numpy
 import pandas
-# type: end-disabled[BSK-E0010]
+# type: end-disabled[imports_unresolved]
 import os
 ";
     let diags = run(source)?;
     // E0010 should be suppressed for numpy and pandas but not os (os is stdlib anyway)
-    let e0010_count = diags.iter().filter(|d| d.code.code == "BSK-E0010").count();
+    let e0010_count = diags.iter().filter(|d| d.code.code == "imports_unresolved").count();
     assert_eq!(
         e0010_count, 0,
         "block disabled should suppress E0010 for imports within the block"

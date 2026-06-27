@@ -1,5 +1,5 @@
-//! Implements [BSK-E0056] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! BSK-E0056: Mutation of `ReadOnly` `TypedDict` fields
+//! Implements [typeddicts_readonly] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! typeddicts_readonly: Mutation of `ReadOnly` `TypedDict` fields
 //!
 //! Fields marked as `ReadOnly` in `TypedDict`s cannot be mutated through:
 //! - Direct assignment: `td["key"] = value`
@@ -25,8 +25,8 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0056",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0056",
+    code: "typeddicts_readonly",
+    docs_url: "https://www.basilisk-python.dev/errors/typeddicts_readonly",
 };
 
 /// Rule E0056: Detect mutation of `ReadOnly` `TypedDict` fields

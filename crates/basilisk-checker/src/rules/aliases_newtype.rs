@@ -1,5 +1,5 @@
-//! Implements [BSK-E0050] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! BSK-E0050: Invalid `NewType(...)` call.
+//! Implements [aliases_newtype] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! aliases_newtype: Invalid `NewType(...)` call.
 //!
 //! PEP 484 places restrictions on `NewType`:
 //!
@@ -22,8 +22,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0050",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0050",
+    code: "aliases_newtype",
+    docs_url: "https://www.basilisk-python.dev/errors/aliases_newtype",
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
@@ -225,7 +225,7 @@ fn check_newtype_call(
     }
 }
 
-/// Emits BSK-E0050 for invalid `NewType(...)` calls.
+/// Emits aliases_newtype for invalid `NewType(...)` calls.
 pub(crate) struct InvalidNewType;
 
 impl Rule for InvalidNewType {

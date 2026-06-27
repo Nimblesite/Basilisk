@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0019] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0019: Unbound variable on some code paths.
+//! Tests for [names_unbound] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for names_unbound: Unbound variable on some code paths.
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ def maybe_assign(flag: bool) -> int:
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0019"),
+        codes(&diags).contains(&"names_unbound"),
         "conditionally assigned variable should fire E0019, got: {:?}",
         codes(&diags)
     );
@@ -29,7 +29,7 @@ def always_assign() -> int:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0019"),
+        !codes(&diags).contains(&"names_unbound"),
         "unconditionally assigned variable should not fire E0019"
     );
     Ok(())
@@ -40,7 +40,7 @@ fn e0019_parameter_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def identity(x: int) -> int:\n    return x\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0019"),
+        !codes(&diags).contains(&"names_unbound"),
         "parameter should not fire E0019"
     );
     Ok(())

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0029] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0029: Method defined inside a `TypedDict` class.
+//! Implements [typeddicts_class_syntax] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! typeddicts_class_syntax: Method defined inside a `TypedDict` class.
 //!
 //! `TypedDict` classes (PEP 589) are restricted to key declarations only.
 //! Defining methods (other than `__init__` which is synthesised) is an error.
@@ -11,11 +11,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0029",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0029",
+    code: "typeddicts_class_syntax",
+    docs_url: "https://www.basilisk-python.dev/errors/typeddicts_class_syntax",
 };
 
-/// Emits BSK-E0029 when a method is defined inside a `TypedDict` class.
+/// Emits typeddicts_class_syntax when a method is defined inside a `TypedDict` class.
 pub(crate) struct TypedDictMethodNotAllowed;
 
 impl Rule for TypedDictMethodNotAllowed {

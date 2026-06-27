@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0117] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0117: Unbound type variable in scope.
+//! Tests for [generics_scoping] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for generics_scoping: Unbound type variable in scope.
 
 use super::common::*;
 
@@ -15,7 +15,7 @@ def fun(x: T) -> list[T]:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0117"),
+        !codes(&diags).contains(&"generics_scoping"),
         "TypeVar bound in function sig should not fire E0117"
     );
     Ok(())
@@ -50,7 +50,7 @@ class Container(Generic[T]):
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0117"),
+        !codes(&diags).contains(&"generics_scoping"),
         "TypeVar bound in Generic class should not fire E0117"
     );
     Ok(())

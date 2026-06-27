@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0134] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0134: Invariant generic type mismatch.
+//! Tests for [generics_base_class_3] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for generics_base_class_3: Invariant generic type mismatch.
 
 use super::common::*;
 
@@ -32,7 +32,7 @@ def test(s: SymbolTable) -> None:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0134"),
+        !codes(&diags).contains(&"generics_base_class_3"),
         "exact invariant match should not fire E0134"
     );
     Ok(())

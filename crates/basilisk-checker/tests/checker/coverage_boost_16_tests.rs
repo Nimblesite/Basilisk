@@ -503,7 +503,7 @@ del p.x
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0143")
+        .filter(|d| d.code.code == "namedtuples_usage")
         .collect::<Vec<_>>();
     assert!(
         !e0143.is_empty(),
@@ -527,7 +527,7 @@ del p[0]
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0143")
+        .filter(|d| d.code.code == "namedtuples_usage")
         .collect::<Vec<_>>();
     assert!(
         !e0143.is_empty(),
@@ -552,7 +552,7 @@ a, b = p
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0143")
+        .filter(|d| d.code.code == "namedtuples_usage")
         .collect::<Vec<_>>();
     assert!(
         !e0143.is_empty(),
@@ -612,7 +612,7 @@ p.x = 10
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0143")
+        .filter(|d| d.code.code == "namedtuples_usage")
         .collect::<Vec<_>>();
     assert!(
         !e0143.is_empty(),
@@ -636,7 +636,7 @@ p[0] = 10
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0143")
+        .filter(|d| d.code.code == "namedtuples_usage")
         .collect::<Vec<_>>();
     assert!(
         !e0143.is_empty(),
@@ -660,7 +660,7 @@ a, b, c, d = p
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0143")
+        .filter(|d| d.code.code == "namedtuples_usage")
         .collect::<Vec<_>>();
     assert!(
         !e0143.is_empty(),
@@ -692,7 +692,7 @@ x = c.debug
     let diagnostics = run(source)?;
     let e0095 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0095")
+        .filter(|d| d.code.code == "dataclasses_postinit")
         .collect::<Vec<_>>();
     assert!(
         !e0095.is_empty(),
@@ -718,7 +718,7 @@ class Config:
     let diagnostics = run(source)?;
     let e0095 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0095")
+        .filter(|d| d.code.code == "dataclasses_postinit")
         .collect::<Vec<_>>();
     assert!(
         !e0095.is_empty(),
@@ -744,7 +744,7 @@ class Config:
     let diagnostics = run(source)?;
     let e0095 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0095")
+        .filter(|d| d.code.code == "dataclasses_postinit")
         .collect::<Vec<_>>();
     assert!(
         !e0095.is_empty(),
@@ -773,7 +773,7 @@ if True:
     let diagnostics = run(source)?;
     let e0095 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0095")
+        .filter(|d| d.code.code == "dataclasses_postinit")
         .collect::<Vec<_>>();
     assert!(
         !e0095.is_empty(),
@@ -800,7 +800,7 @@ def process(handler: Callable[[int, str], None]) -> None:
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0122")
+        .filter(|d| d.code.code == "callables_protocol")
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
@@ -821,7 +821,7 @@ def process(fn: Callable[[int, str], None]) -> None:
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0122")
+        .filter(|d| d.code.code == "callables_protocol")
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
@@ -842,7 +842,7 @@ def process(fn: Callable[[int, str], None]) -> None:
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0122")
+        .filter(|d| d.code.code == "callables_protocol")
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
@@ -865,7 +865,7 @@ def process(fn: Callable[[int, str], None]) -> None:
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0122")
+        .filter(|d| d.code.code == "callables_protocol")
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
@@ -886,7 +886,7 @@ def process(fn: Callable[[int], None]) -> None:
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0122")
+        .filter(|d| d.code.code == "callables_protocol")
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
@@ -906,7 +906,7 @@ def process(fn: Callable[[int, str], int]) -> int:
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0122")
+        .filter(|d| d.code.code == "callables_protocol")
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
@@ -926,7 +926,7 @@ def process(fn: Callable[[int, str], int]) -> None:
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0122")
+        .filter(|d| d.code.code == "callables_protocol")
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
@@ -946,7 +946,7 @@ def process(fn: Callable[[int], str]) -> None:
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0122")
+        .filter(|d| d.code.code == "callables_protocol")
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
@@ -966,7 +966,7 @@ def process(fn: Callable[[int], int], gn: Callable[[str], str]) -> None:
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0122")
+        .filter(|d| d.code.code == "callables_protocol")
         .collect::<Vec<_>>();
     assert!(
         !e0122.is_empty(),
@@ -1029,7 +1029,7 @@ c.MAX_SIZE = 200
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0054")
+        .filter(|d| d.code.code == "qualifiers_final_annotation_2")
         .collect::<Vec<_>>();
     assert!(
         !e0054.is_empty(),
@@ -1051,7 +1051,7 @@ Config.MAX_SIZE = 200
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0054")
+        .filter(|d| d.code.code == "qualifiers_final_annotation_2")
         .collect::<Vec<_>>();
     assert!(
         !e0054.is_empty(),
@@ -1071,7 +1071,7 @@ MAX = 200
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0054")
+        .filter(|d| d.code.code == "qualifiers_final_annotation_2")
         .collect::<Vec<_>>();
     assert!(
         !e0054.is_empty(),
@@ -1094,7 +1094,7 @@ s.DEBUG = True
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0054")
+        .filter(|d| d.code.code == "qualifiers_final_annotation_2")
         .collect::<Vec<_>>();
     assert!(
         !e0054.is_empty(),
@@ -1162,7 +1162,7 @@ class BadWriter(MyReader[T_contra]):
     let diagnostics = run(source)?;
     let e0107 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0107")
+        .filter(|d| d.code.code == "generics_variance")
         .collect::<Vec<_>>();
     // The alias expansion path should be exercised
     let _ = e0107;
@@ -1186,7 +1186,7 @@ class Bad(Container[T_contra]):
     let diagnostics = run(source)?;
     let e0107 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0107")
+        .filter(|d| d.code.code == "generics_variance")
         .collect::<Vec<_>>();
     assert!(
         !e0107.is_empty(),
@@ -1379,7 +1379,7 @@ y: Optional[int, str] = None
 ";
     let diagnostics = run(source)?;
     // Optional[int, str] gets caught by e0015 (type arg count), not e0148
-    let has_type_arg_error = diagnostics.iter().any(|d| d.code.code == "BSK-E0015");
+    let has_type_arg_error = diagnostics.iter().any(|d| d.code.code == "callables_annotation");
     assert!(
         has_type_arg_error,
         "Should detect wrong type arg count: {diagnostics:?}"
@@ -1418,7 +1418,7 @@ T = TypeVar("T", bound=int, default=str)
     // This is caught by e0091, not e0102
     let e0091 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0091")
+        .filter(|d| d.code.code == "generics_defaults_2")
         .collect::<Vec<_>>();
     assert!(
         !e0091.is_empty(),
@@ -1556,7 +1556,7 @@ del r[1]
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0143")
+        .filter(|d| d.code.code == "namedtuples_usage")
         .count();
     assert!(
         e0143 >= 4,
@@ -1674,7 +1674,7 @@ def test(fn: Callable[[int, str], None], gn: Callable[[int], int]) -> int:
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0122")
+        .filter(|d| d.code.code == "callables_protocol")
         .count();
     assert!(
         e0122 >= 3,
@@ -1712,7 +1712,7 @@ print(s.debug)
     let diagnostics = run(source)?;
     let e0095 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0095")
+        .filter(|d| d.code.code == "dataclasses_postinit")
         .count();
     assert!(
         e0095 >= 1,
@@ -1749,7 +1749,7 @@ MIN = -1
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0054")
+        .filter(|d| d.code.code == "qualifiers_final_annotation_2")
         .count();
     assert!(
         e0054 >= 2,
@@ -1836,7 +1836,7 @@ class BadNested(Wrapper[Consumer[T_co]]):
     let diagnostics = run(source)?;
     let e0107 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0107")
+        .filter(|d| d.code.code == "generics_variance")
         .count();
     assert!(
         e0107 >= 2,

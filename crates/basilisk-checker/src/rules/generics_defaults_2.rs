@@ -1,5 +1,5 @@
-//! Implements [BSK-E0091] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0091: Incompatible `TypeVar` bound or constraint with its default.
+//! Implements [generics_defaults_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_defaults_2: Incompatible `TypeVar` bound or constraint with its default.
 //!
 //! PEP 696 specifies two constraints on `TypeVar` defaults:
 //!
@@ -29,11 +29,11 @@ use super::Rule;
 use crate::rules::shared::is_numeric_subtype;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0091",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0091",
+    code: "generics_defaults_2",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_defaults_2",
 };
 
-/// Emits BSK-E0091 for `TypeVar` bound/constraint vs default incompatibilities.
+/// Emits generics_defaults_2 for `TypeVar` bound/constraint vs default incompatibilities.
 pub(crate) struct TypeVarDefaultIncompatible;
 
 impl Rule for TypeVarDefaultIncompatible {

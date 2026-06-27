@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0147] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0147: Tuple starred-unpack compatibility.
+//! Tests for [tuples_type_compat] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for tuples_type_compat: Tuple starred-unpack compatibility.
 
 use super::common::*;
 
@@ -32,7 +32,7 @@ t1: tuple[int, *tuple[str, ...]] = (1, "a", "b", "c")
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0147"),
+        !codes(&diags).contains(&"tuples_type_compat"),
         "valid starred unpack should not fire E0147"
     );
     Ok(())

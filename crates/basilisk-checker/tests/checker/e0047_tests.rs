@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0047] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
-// Integration tests for BSK-E0047: Invalid type expression.
+//! Tests for [annotations_forward_refs] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+// Integration tests for annotations_forward_refs: Invalid type expression.
 
 use super::common::*;
 
@@ -21,7 +21,7 @@ y: list[str] = []
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0047"),
+        !codes(&diags).contains(&"annotations_forward_refs"),
         "valid type annotations should not fire E0047"
     );
     Ok(())

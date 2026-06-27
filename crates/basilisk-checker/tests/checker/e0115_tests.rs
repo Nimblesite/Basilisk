@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0115] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0115: Deprecated usage.
+//! Tests for [directives_deprecated] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for directives_deprecated: Deprecated usage.
 
 use super::common::*;
 
@@ -44,7 +44,7 @@ normal_func()
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0115"),
+        !codes(&diags).contains(&"directives_deprecated"),
         "non-deprecated function should not fire E0115"
     );
     Ok(())

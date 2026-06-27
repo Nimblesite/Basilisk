@@ -1,5 +1,5 @@
-//! Implements [BSK-E0043] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! BSK-E0043: Non-TypeVar argument in `Generic[...]` or `Protocol[...]`.
+//! Implements [generics_basic_2] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! generics_basic_2: Non-TypeVar argument in `Generic[...]` or `Protocol[...]`.
 //!
 //! PEP 484 requires that all arguments to `Generic[...]` and `Protocol[...]`
 //! be type variable names (`TypeVar`, `TypeVarTuple`, or `ParamSpec`).
@@ -19,8 +19,8 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0043",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0043",
+    code: "generics_basic_2",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_basic_2",
 };
 
 fn make_diagnostic(message: String, span: basilisk_resolver::Span, path: &str) -> Diagnostic {
@@ -38,7 +38,7 @@ fn make_diagnostic(message: String, span: basilisk_resolver::Span, path: &str) -
     )
 }
 
-/// Emits BSK-E0043 when a non-TypeVar appears in `Generic[...]` or `Protocol[...]`.
+/// Emits generics_basic_2 when a non-TypeVar appears in `Generic[...]` or `Protocol[...]`.
 pub(crate) struct NonTypeVarInGeneric;
 
 impl Rule for NonTypeVarInGeneric {

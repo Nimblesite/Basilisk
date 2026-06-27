@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0050] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
-// E2E tests for BSK-E0050: Invalid `NewType(...)` call.
+//! Tests for [aliases_newtype] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+// E2E tests for aliases_newtype: Invalid `NewType(...)` call.
 
 use super::common::*;
 
@@ -98,7 +98,7 @@ u1 = UserId(42)
     let diags = run(source)?;
     let e0050_diags: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0050")
+        .filter(|d| d.code.code == "aliases_newtype")
         .collect();
     assert!(
         e0050_diags.is_empty(),

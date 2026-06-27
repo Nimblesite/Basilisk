@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0079] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
-// Integration tests for BSK-E0079: Module-level protocol incompatibility.
+//! Tests for [protocols_modules] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
+// Integration tests for protocols_modules: Module-level protocol incompatibility.
 
 use super::common::*;
 
@@ -41,7 +41,7 @@ x: Drawable = Circle()
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0079"),
+        !codes(&diags).contains(&"protocols_modules"),
         "valid protocol conformance should not fire E0079"
     );
     Ok(())

@@ -1,6 +1,6 @@
-//! Tests for [BSK-E0153] from [CHKARCH-DIAG-CTOR-CALLABLE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CTOR-CALLABLE
+//! Tests for [constructors_callable] from [CHKARCH-DIAG-CTOR-CALLABLE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CTOR-CALLABLE
 //!
-//! BSK-E0153 validates calls to a variable bound to a class's
+//! constructors_callable validates calls to a variable bound to a class's
 //! constructor-to-callable conversion (the typing-spec rule "Converting a
 //! constructor to callable").
 #![allow(
@@ -31,7 +31,7 @@ def accepts_callable(cb: Callable[P, R]) -> Callable[P, R]:
 fn check(body: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let source = format!("{PRELUDE}\n{body}");
     let diagnostics = run(&source)?;
-    Ok(messages_for(&diagnostics, "BSK-E0153")
+    Ok(messages_for(&diagnostics, "constructors_callable")
         .into_iter()
         .map(str::to_owned)
         .collect())

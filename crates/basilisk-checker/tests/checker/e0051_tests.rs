@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0051] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
-// Integration tests for BSK-E0051: Invalid Literal parameterization.
+//! Tests for [literals_parameterizations] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+// Integration tests for literals_parameterizations: Invalid Literal parameterization.
 
 use super::common::*;
 
@@ -11,7 +11,7 @@ x: Literal[1] = 1
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0051");
+    let msgs = messages_for(&diags, "literals_parameterizations");
     assert!(msgs.is_empty(), "valid Literal[1] should not fire E0051");
     Ok(())
 }
@@ -24,7 +24,7 @@ x: Literal["hello"] = "hello"
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0051");
+    let msgs = messages_for(&diags, "literals_parameterizations");
     assert!(
         msgs.is_empty(),
         "valid Literal[\"hello\"] should not fire E0051"
@@ -40,7 +40,7 @@ x: Literal[True] = True
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0051");
+    let msgs = messages_for(&diags, "literals_parameterizations");
     assert!(msgs.is_empty(), "valid Literal[True] should not fire E0051");
     Ok(())
 }
@@ -53,7 +53,7 @@ x: Literal[None] = None
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0051");
+    let msgs = messages_for(&diags, "literals_parameterizations");
     assert!(msgs.is_empty(), "valid Literal[None] should not fire E0051");
     Ok(())
 }
@@ -66,7 +66,7 @@ x: Literal[3.14] = 3.14
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0051");
+    let msgs = messages_for(&diags, "literals_parameterizations");
     assert!(
         !msgs.is_empty(),
         "Literal[3.14] should fire E0051, got: {msgs:?}"
@@ -82,7 +82,7 @@ x: Literal
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0051");
+    let msgs = messages_for(&diags, "literals_parameterizations");
     assert!(
         !msgs.is_empty(),
         "bare Literal should fire E0051, got: {msgs:?}"
@@ -98,7 +98,7 @@ x: Literal[int]
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0051");
+    let msgs = messages_for(&diags, "literals_parameterizations");
     assert!(
         !msgs.is_empty(),
         "Literal[int] should fire E0051, got: {msgs:?}"
@@ -114,7 +114,7 @@ x: Literal[...]
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0051");
+    let msgs = messages_for(&diags, "literals_parameterizations");
     assert!(
         !msgs.is_empty(),
         "Literal[...] should fire E0051, got: {msgs:?}"
@@ -130,7 +130,7 @@ x: Literal[-1] = -1
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0051");
+    let msgs = messages_for(&diags, "literals_parameterizations");
     assert!(msgs.is_empty(), "Literal[-1] should not fire E0051");
     Ok(())
 }
@@ -148,7 +148,7 @@ x: Literal[Color.RED]
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0051");
+    let msgs = messages_for(&diags, "literals_parameterizations");
     assert!(msgs.is_empty(), "Literal[Color.RED] should not fire E0051");
     Ok(())
 }

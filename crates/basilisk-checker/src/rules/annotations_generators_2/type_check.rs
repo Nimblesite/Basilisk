@@ -1,5 +1,5 @@
-//! Implements [BSK-E0131] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Type checking helpers for BSK-E0131.
+//! Implements [annotations_generators_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Type checking helpers for annotations_generators_2.
 //!
 //! Contains compatibility checks for yield/send/return types and the
 //! diagnostic-emitting functions for individual yield expressions.

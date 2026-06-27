@@ -1,5 +1,5 @@
-//! Implements [BSK-E0070] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
-//! BSK-E0070: `Never` type compatibility violations.
+//! Implements [specialtypes_never_2] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! specialtypes_never_2: `Never` type compatibility violations.
 //!
 //! Detects type compatibility errors involving the `Never` bottom type:
 //!
@@ -32,11 +32,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0070",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0070",
+    code: "specialtypes_never_2",
+    docs_url: "https://www.basilisk-python.dev/errors/specialtypes_never_2",
 };
 
-/// Emits BSK-E0070 for Never type compatibility violations.
+/// Emits specialtypes_never_2 for Never type compatibility violations.
 pub(crate) struct NeverTypeCompatibility;
 
 impl Rule for NeverTypeCompatibility {

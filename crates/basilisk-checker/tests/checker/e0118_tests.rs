@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0118] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0118: Super call on abstract method with no implementation.
+//! Tests for [protocols_explicit_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for protocols_explicit_2: Super call on abstract method with no implementation.
 
 use super::common::*;
 
@@ -36,7 +36,7 @@ class Child(Base):
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0118"),
+        !codes(&diags).contains(&"protocols_explicit_2"),
         "super() on concrete method should not fire E0118"
     );
     Ok(())

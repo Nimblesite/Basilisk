@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0013] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0013: Return type mismatch (inference-based).
+//! Tests for [returns_compatibility_2] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for returns_compatibility_2: Return type mismatch (inference-based).
 
 use super::common::*;
 
@@ -11,7 +11,7 @@ def get_name() -> str:
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0013") || codes(&diags).contains(&"BSK-E0011"),
+        codes(&diags).contains(&"returns_compatibility_2") || codes(&diags).contains(&"returns_compatibility"),
         "returning list for str should fire E0013 or E0011, got: {:?}",
         codes(&diags)
     );
@@ -26,7 +26,7 @@ def get_name() -> str:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0013"),
+        !codes(&diags).contains(&"returns_compatibility_2"),
         "correct return type should not fire E0013"
     );
     Ok(())

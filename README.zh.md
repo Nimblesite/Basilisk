@@ -89,25 +89,25 @@ def greet(name: str) -> str:
 
 | Code | 触发条件 |
 |------|---------------|
-| `BSK-E0010` | 无法解析导入 |
-| `BSK-E0011` | 显式的 `Any` 注解（以警告形式发出），或返回类型不匹配 |
-| `BSK-E0012` | 实参类型与形参类型不匹配 |
-| `BSK-E0013` | 返回类型与声明的返回类型不匹配 |
-| `BSK-E0014` | 赋值类型与声明的变量类型不匹配 |
-| `BSK-E0015` | 类型参数数量错误（例如 `list[int, str]`） |
-| `BSK-E0016` | 方法重写的签名不兼容 |
-| `BSK-E0017` | 类变量重写的类型不兼容 |
-| `BSK-E0018` | 引用了未定义的名称 |
-| `BSK-E0019` | 变量在赋值前被使用 |
-| `BSK-E0020` | `@overload` 分组缺少未加装饰器的实现 |
-| `BSK-E0021` | 两个 `@overload` 签名相互重叠 |
-| `BSK-E0022` | 字典键类型不可哈希 |
-| `BSK-E0023` | `match` 语句不完备 |
-| `BSK-E0024` | 类型表达式无效（例如把数字字面量当作类型使用） |
+| `imports_unresolved` | 无法解析导入 |
+| `returns_compatibility` | 显式的 `Any` 注解（以警告形式发出），或返回类型不匹配 |
+| `calls_argument_type` | 实参类型与形参类型不匹配 |
+| `returns_compatibility_2` | 返回类型与声明的返回类型不匹配 |
+| `assignment_compatibility` | 赋值类型与声明的变量类型不匹配 |
+| `callables_annotation` | 类型参数数量错误（例如 `list[int, str]`） |
+| `classes_override` | 方法重写的签名不兼容 |
+| `classes_override_2` | 类变量重写的类型不兼容 |
+| `names_undefined` | 引用了未定义的名称 |
+| `names_unbound` | 变量在赋值前被使用 |
+| `overloads_definitions` | `@overload` 分组缺少未加装饰器的实现 |
+| `overloads_consistency` | 两个 `@overload` 签名相互重叠 |
+| `dict_key_hashable` | 字典键类型不可哈希 |
+| `match_exhaustiveness` | `match` 语句不完备 |
+| `annotations_typeexpr` | 类型表达式无效（例如把数字字面量当作类型使用） |
 | `BSK-E0025` | 重写方法缺少 `@override` 装饰器 |
-| `BSK-E0026` | `TypeVar` 仅声明了单个约束 |
-| `BSK-E0027` | `Generic[...]` 基类中存在重复的 `TypeVar` |
-| `BSK-E0029` | 在 `TypedDict` 类内部定义了方法 |
+| `generics_basic` | `TypeVar` 仅声明了单个约束 |
+| `generics_base_class` | `Generic[...]` 基类中存在重复的 `TypeVar` |
+| `typeddicts_class_syntax` | 在 `TypedDict` 类内部定义了方法 |
 
 以上是最常见的规则。Basilisk 总共提供 **155 个诊断代码**（150 个错误、5 个警告）—— 参见[完整诊断参考](https://www.basilisk-python.dev/zh/docs/rules/)（由 `scripts/gen_rules_reference.py` 从检查器源码生成）。
 

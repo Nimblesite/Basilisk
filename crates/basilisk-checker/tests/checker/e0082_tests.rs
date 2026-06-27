@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0082] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
-// Integration tests for BSK-E0082: `TypeVarTuple` callable/tuple mismatch.
+//! Tests for [generics_typevartuple_callable] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
+// Integration tests for generics_typevartuple_callable: `TypeVarTuple` callable/tuple mismatch.
 
 use super::common::*;
 
@@ -36,7 +36,7 @@ Process(target=func1, args=(0, ""))
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0082"),
+        !codes(&diags).contains(&"generics_typevartuple_callable"),
         "correct tuple arg order should not fire E0082"
     );
     Ok(())

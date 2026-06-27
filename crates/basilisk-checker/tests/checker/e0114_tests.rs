@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0114] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0114: Protocol isinstance/issubclass violations.
+//! Tests for [protocols_runtime_checkable] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for protocols_runtime_checkable: Protocol isinstance/issubclass violations.
 
 use super::common::*;
 
@@ -17,7 +17,7 @@ isinstance(x, Proto)
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0114"),
+        !codes(&diags).contains(&"protocols_runtime_checkable"),
         "runtime_checkable protocol isinstance should not fire E0114"
     );
     Ok(())

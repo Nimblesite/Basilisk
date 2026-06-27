@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0062] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
-// Integration tests for BSK-E0062: NoReturn/Never function can fall through.
+//! Tests for [specialtypes_never] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+// Integration tests for specialtypes_never: NoReturn/Never function can fall through.
 
 use super::common::*;
 
@@ -14,7 +14,7 @@ def bad(x: int) -> NoReturn:
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0062"),
+        codes(&diags).contains(&"specialtypes_never"),
         "NoReturn with fallthrough should fire E0062, got: {:?}",
         codes(&diags)
     );
@@ -31,7 +31,7 @@ def stop() -> NoReturn:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0062"),
+        !codes(&diags).contains(&"specialtypes_never"),
         "NoReturn that always raises should not fire E0062"
     );
     Ok(())
@@ -42,7 +42,7 @@ fn e0062_normal_return_type_no_diagnostic() -> Result<(), Box<dyn std::error::Er
     let source = "def normal() -> int:\n    return 42\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0062"),
+        !codes(&diags).contains(&"specialtypes_never"),
         "normal return type should not fire E0062"
     );
     Ok(())

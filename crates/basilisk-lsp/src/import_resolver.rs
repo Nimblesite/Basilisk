@@ -498,7 +498,7 @@ pub fn resolve_workspace_imports(index: &WorkspaceIndex, search_paths: &ImportSe
 /// Sets each `ImportInfo`'s `resolution`, `resolved_path`, `unresolved_reason`,
 /// and uv package metadata. Shared by the whole-workspace scan
 /// ([`resolve_workspace_imports`]) and the incremental single-file analysis
-/// path so both agree on what resolves — preventing false `BSK-E0010` in the
+/// path so both agree on what resolves — preventing false `imports_unresolved` in the
 /// editor for third-party imports that the CLI resolves.
 /// Implements [ANALYSIS-INCR-IMPORTS].
 pub fn resolve_module_imports(
@@ -527,7 +527,7 @@ pub fn resolve_module_imports(
         }
 
         // Capture the member API of plain `import X` statements backed by a
-        // user/local stub, so `BSK-E0154` can flag `X.undeclared_attr`. Only
+        // user/local stub, so `imports_module_attribute` can flag `X.undeclared_attr`. Only
         // single-segment plain imports resolved to a `.pyi` under a configured
         // `stub-paths` dir (Phase 1: the stubs the developer owns).
         if let Some((binding, api)) = capture_user_stub_api(import, search_paths) {
@@ -963,7 +963,7 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    // BSK-E0010 false positive: sibling-module import — issue #22
+    // imports_unresolved false positive: sibling-module import — issue #22
     // `import configure_agent_backend` in scripts/configure_agent_backend_test.py
     // should resolve to the sibling configure_agent_backend.py even when the
     // scripts/ directory is not listed as a workspace root.
@@ -983,7 +983,7 @@ mod tests {
             resolve_module_with_importer("configure_agent_backend", &paths, Some(&importing_file));
         assert!(
             result.is_some(),
-            "BSK-E0010 false positive: sibling module in the same directory as the importing \
+            "imports_unresolved false positive: sibling module in the same directory as the importing \
              file should resolve without the directory being listed as a workspace root"
         );
         let r = result.unwrap();
@@ -1012,7 +1012,7 @@ mod tests {
 
         assert!(
             result.is_some(),
-            "BSK-E0010 false positive: PEP 420 namespace package `tests/` (no __init__.py) \
+            "imports_unresolved false positive: PEP 420 namespace package `tests/` (no __init__.py) \
              must resolve when the project root is on the search path"
         );
         let r = result.unwrap();
@@ -1086,7 +1086,7 @@ mod tests {
 
     /// Regression for issue #25: when the user activates a venv outside the
     /// workspace (e.g. CI installs to `/tmp/nap-ci-prep-py312`), Basilisk
-    /// could not locate site-packages and reported BSK-E0010 `NeedsSync` for
+    /// could not locate site-packages and reported imports_unresolved `NeedsSync` for
     /// every installed dep. Honour the `VIRTUAL_ENV` environment variable —
     /// the standard Python convention set by `source .venv/bin/activate`.
     #[test]

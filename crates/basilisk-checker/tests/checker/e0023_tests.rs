@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0023] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0023: Non-exhaustive match statement.
+//! Tests for [match_exhaustiveness] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for match_exhaustiveness: Non-exhaustive match statement.
 
 use super::common::*;
 
@@ -16,7 +16,7 @@ def check_val(x: int) -> str:
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0023"),
+        codes(&diags).contains(&"match_exhaustiveness"),
         "match without wildcard should fire E0023, got: {:?}",
         codes(&diags)
     );
@@ -35,7 +35,7 @@ def check_val(x: int) -> str:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0023"),
+        !codes(&diags).contains(&"match_exhaustiveness"),
         "match with wildcard should not fire E0023"
     );
     Ok(())
@@ -56,7 +56,7 @@ def check_val(x: int) -> str:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0023"),
+        !codes(&diags).contains(&"match_exhaustiveness"),
         "bare capture pattern is irrefutable and must not fire E0023, got: {:?}",
         codes(&diags)
     );
@@ -78,7 +78,7 @@ def check_val(x: int) -> str:
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0023"),
+        codes(&diags).contains(&"match_exhaustiveness"),
         "guarded capture is refutable and must still fire E0023, got: {:?}",
         codes(&diags)
     );
@@ -102,7 +102,7 @@ def func6(val: tuple[int] | tuple[str, str] | tuple[int, str, int]) -> None:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0023"),
+        !codes(&diags).contains(&"match_exhaustiveness"),
         "structural sequence-pattern match must not fire E0023, got: {:?}",
         codes(&diags)
     );

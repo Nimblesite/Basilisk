@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0043] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
-// Integration tests for BSK-E0043: Non-`TypeVar` in Generic[...].
+//! Tests for [generics_basic_2] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+// Integration tests for generics_basic_2: Non-`TypeVar` in Generic[...].
 
 use super::common::*;
 
@@ -12,7 +12,7 @@ class Bad(Generic[int]):
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0043"),
+        codes(&diags).contains(&"generics_basic_2"),
         "concrete type in Generic should fire E0043, got: {:?}",
         codes(&diags)
     );
@@ -29,7 +29,7 @@ class Good(Generic[T]):
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0043"),
+        !codes(&diags).contains(&"generics_basic_2"),
         "TypeVar in Generic should not fire E0043"
     );
     Ok(())
@@ -44,7 +44,7 @@ class Bad(Protocol[int]):
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0043"),
+        codes(&diags).contains(&"generics_basic_2"),
         "concrete type in Protocol should fire E0043, got: {:?}",
         codes(&diags)
     );
@@ -62,7 +62,7 @@ class Bad(Iterable[T], Generic[S]):
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0043"),
+        codes(&diags).contains(&"generics_basic_2"),
         "undeclared TypeVar in base should fire E0043, got: {:?}",
         codes(&diags)
     );
@@ -80,7 +80,7 @@ class Good(Generic[T, U]):
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0043"),
+        !codes(&diags).contains(&"generics_basic_2"),
         "Multiple TypeVars in Generic should not fire E0043, got: {:?}",
         codes(&diags)
     );
@@ -97,7 +97,7 @@ class Good(Protocol[T]):
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0043"),
+        !codes(&diags).contains(&"generics_basic_2"),
         "TypeVar in Protocol should not fire E0043, got: {:?}",
         codes(&diags)
     );

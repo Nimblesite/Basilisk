@@ -1,5 +1,5 @@
-//! Implements [BSK-E0155] from [CHKARCH-VERSION-TARGET]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET
-//! BSK-E0155: PEP 695 syntax used below the configured target version.
+//! Implements [version_target_syntax] from [CHKARCH-VERSION-TARGET]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET
+//! version_target_syntax: PEP 695 syntax used below the configured target version.
 //!
 //! `type X = ...` aliases and `class Foo[T]` / `def f[T]()` type-parameter
 //! lists are Python 3.12+ syntax (PEP 695). When the configured
@@ -20,14 +20,14 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::{CheckContext, Rule};
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0155",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0155",
+    code: "version_target_syntax",
+    docs_url: "https://www.basilisk-python.dev/errors/version_target_syntax",
 };
 
 /// The first Python version with native PEP 695 syntax.
 const PEP695_MIN_VERSION: (u32, u32) = (3, 12);
 
-/// Emits BSK-E0155 for PEP 695 syntax on sub-3.12 targets.
+/// Emits version_target_syntax for PEP 695 syntax on sub-3.12 targets.
 pub(crate) struct Pep695BelowTargetViolation;
 
 impl Rule for Pep695BelowTargetViolation {

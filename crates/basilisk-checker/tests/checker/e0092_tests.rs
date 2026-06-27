@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0092] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
-// Integration tests for BSK-E0092: Too few type arguments.
+//! Tests for [generics_defaults_specialization] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+// Integration tests for generics_defaults_specialization: Too few type arguments.
 
 use super::common::*;
 
@@ -17,7 +17,7 @@ x: Pair[int, str] = Pair()
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0092"),
+        !codes(&diags).contains(&"generics_defaults_specialization"),
         "correct type arg count should not fire E0092"
     );
     Ok(())

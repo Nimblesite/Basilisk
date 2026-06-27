@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0146] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0146: Protocol class object violations.
+//! Tests for [protocols_class_objects_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for protocols_class_objects_2: Protocol class object violations.
 
 use super::common::*;
 
@@ -22,7 +22,7 @@ fun(Concrete)
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0146"),
+        !codes(&diags).contains(&"protocols_class_objects_2"),
         "concrete subtype should not fire E0146"
     );
     Ok(())

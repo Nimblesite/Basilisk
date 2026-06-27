@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0099] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
-// Integration tests for BSK-E0099: Protocol instantiation.
+//! Tests for [protocols_explicit] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+// Integration tests for protocols_explicit: Protocol instantiation.
 
 use super::common::*;
 
@@ -15,7 +15,7 @@ obj = MyProto()
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0099"),
+        codes(&diags).contains(&"protocols_explicit"),
         "direct Protocol instantiation should fire E0099, got: {:?}",
         codes(&diags)
     );
@@ -33,7 +33,7 @@ obj = MyClass()
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0099"),
+        !codes(&diags).contains(&"protocols_explicit"),
         "non-Protocol instantiation should not fire E0099"
     );
     Ok(())

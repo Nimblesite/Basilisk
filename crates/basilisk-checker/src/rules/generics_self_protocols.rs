@@ -1,5 +1,5 @@
-//! Implements [BSK-E0077] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
-//! BSK-E0077: Protocol `Self`-return conformance violation.
+//! Implements [generics_self_protocols] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! generics_self_protocols: Protocol `Self`-return conformance violation.
 //!
 //! When a `Protocol` declares a method returning `Self`, any class passed where
 //! that protocol is expected must have the corresponding method return `Self` or
@@ -27,11 +27,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0077",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0077",
+    code: "generics_self_protocols",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_self_protocols",
 };
 
-/// Emits BSK-E0077 for classes passed where a `Protocol` with `Self`-returning
+/// Emits generics_self_protocols for classes passed where a `Protocol` with `Self`-returning
 /// methods is expected, but the class's corresponding method returns a different type.
 pub(crate) struct ProtocolSelfViolation;
 

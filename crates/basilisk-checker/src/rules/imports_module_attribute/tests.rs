@@ -50,7 +50,7 @@ fn flags_undeclared_attribute_inside_function() {
         "import cowsay\ndef moo(m: str) -> str:\n    return cowsay.get_output_string(\"cow\", m)\n";
     let diags = run(src, imported("cowsay", &["tux"], false));
     assert_eq!(diags.len(), 1, "{diags:#?}");
-    assert_eq!(diags[0].code.code, "BSK-E0154");
+    assert_eq!(diags[0].code.code, "imports_module_attribute");
     assert!(diags[0].message.contains("has no attribute"));
     assert!(diags[0].message.contains("cowsay"));
     assert!(diags[0].message.contains("get_output_string"));

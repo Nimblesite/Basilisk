@@ -1,5 +1,5 @@
-//! Implements [BSK-E0094] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0094: `Self` type used in an invalid location.
+//! Implements [generics_self_usage] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_self_usage: `Self` type used in an invalid location.
 //!
 //! PEP 673 defines `Self` as a special type that refers to the current class.
 //! It is only valid in specific locations:
@@ -43,8 +43,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0094",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0094",
+    code: "generics_self_usage",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_self_usage",
 };
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
@@ -141,7 +141,7 @@ fn check_func_annotations_for_self(
     }
 }
 
-/// Emits BSK-E0094 when `Self` is used in a location where it has no valid binding.
+/// Emits generics_self_usage when `Self` is used in a location where it has no valid binding.
 pub(crate) struct SelfInvalidLocation;
 
 impl Rule for SelfInvalidLocation {
@@ -204,7 +204,7 @@ fn check_functions_self_usage(
             None => {
                 // A closure lexically nested inside a class method still has a
                 // valid `Self` binding (PEP 673), so only genuinely module-level
-                // functions are flagged here.  [BSK-E0094]
+                // functions are flagged here.  [generics_self_usage]
                 if !func.nested_in_class {
                     check_func_annotations_for_self(
                         func,

@@ -40,18 +40,18 @@ def kelly_criterion(win_prob, win_amount, loss_amount):  # BSK-E0001
     return edge / win_amount  # BSK-E0002: no return type
 
 
-# ── BSK-E0011: Any type with no justification ─────────────────────────────────
-def execute_order(order: Any) -> Any:  # BSK-E0011 ×2
+# ── returns_compatibility: Any type with no justification ─────────────────────────────────
+def execute_order(order: Any) -> Any:  # returns_compatibility ×2
     return order
 
 
-# ── BSK-E0014: currency constant assigned wrong type ─────────────────────────
-BASE_CURRENCY: str = 42  # BSK-E0014: int assigned to str
-RISK_FREE_RATE: float = "0.05"  # BSK-E0014: str assigned to float
-MAX_POSITION_SIZE: int = 1_000_000.0  # BSK-E0014: float assigned to int
+# ── assignment_compatibility: currency constant assigned wrong type ─────────────────────────
+BASE_CURRENCY: str = 42  # assignment_compatibility: int assigned to str
+RISK_FREE_RATE: float = "0.05"  # assignment_compatibility: str assigned to float
+MAX_POSITION_SIZE: int = 1_000_000.0  # assignment_compatibility: float assigned to int
 
 
-# ── BSK-E0017: subclass changes field type in class hierarchy ────────────────
+# ── classes_override_2: subclass changes field type in class hierarchy ────────────────
 class Instrument:
     ticker: str
     notional: float
@@ -59,22 +59,22 @@ class Instrument:
 
 
 class Future(Instrument):
-    notional: int = 0  # BSK-E0017: int overrides float
+    notional: int = 0  # classes_override_2: int overrides float
 
 
 class Option(Instrument):
-    is_derivative: str = "yes"  # BSK-E0017: str overrides bool
+    is_derivative: str = "yes"  # classes_override_2: str overrides bool
 
 
-# ── BSK-E0018: forward reference to name assigned later ──────────────────────
+# ── names_undefined: forward reference to name assigned later ──────────────────────
 def get_benchmark() -> str:
-    return BENCHMARK_INDEX  # BSK-E0018: referenced before assignment
+    return BENCHMARK_INDEX  # names_undefined: referenced before assignment
 
 
 BENCHMARK_INDEX: str = "SP500"
 
 
-# ── BSK-E0019: VaR only assigned inside the risk branch ──────────────────────
+# ── names_unbound: VaR only assigned inside the risk branch ──────────────────────
 def compute_portfolio_risk(
     returns: list[float], confidence: float, stressed: bool
 ) -> float:
@@ -82,35 +82,35 @@ def compute_portfolio_risk(
         sorted_returns = sorted(returns)
         cutoff = int(len(sorted_returns) * (1 - confidence))
         var = abs(sorted_returns[cutoff])
-    return var  # BSK-E0019: var may be unbound
+    return var  # names_unbound: var may be unbound
 
 
-# ── BSK-E0021: unannotated params make overloads identical ───────────────────
+# ── overloads_consistency: unannotated params make overloads identical ───────────────────
 @overload
 def round_to_tick(price, tick) -> float: ...  # BSK-E0001: price, tick untyped
 
 
 @overload
-def round_to_tick(price, tick) -> float: ...  # BSK-E0001 + BSK-E0021: duplicate
+def round_to_tick(price, tick) -> float: ...  # BSK-E0001 + overloads_consistency: duplicate
 
 
 def round_to_tick(price: float, tick: int) -> float:
     return round(price / tick) * tick
 
 
-# ── BSK-E0022: list literal used as a dict key in a position record ───────────
+# ── dict_key_hashable: list literal used as a dict key in a position record ───────────
 def empty_book() -> dict[list[str], float]:
-    return {["AAPL", "MSFT"]: 0.0}  # BSK-E0022: list literal as key
+    return {["AAPL", "MSFT"]: 0.0}  # dict_key_hashable: list literal as key
 
 
-# ── BSK-E0023: non-exhaustive match on order side ────────────────────────────
+# ── match_exhaustiveness: non-exhaustive match on order side ────────────────────────────
 def apply_slippage(side: str, price: float, bps: float) -> float:
     match side:
         case "buy":
             return price * (1 + bps / 10_000)
         case "sell":
             return price * (1 - bps / 10_000)
-    # BSK-E0023: no wildcard — "short", "cover", etc. fall through
+    # match_exhaustiveness: no wildcard — "short", "cover", etc. fall through
 
 
 # ── BSK-E0025: settlement override missing @override ────────────────────────

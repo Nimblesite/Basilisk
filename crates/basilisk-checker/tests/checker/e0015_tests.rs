@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0015] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Tests for BSK-E0015: Invalid type argument count for generic type.
+//! Tests for [callables_annotation] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Tests for callables_annotation: Invalid type argument count for generic type.
 //
 // This rule detects when a generic type is subscripted with the wrong number
 // of type arguments. For example:
@@ -16,7 +16,7 @@ x: list[int, str]
     let diags = run(src)?;
     let e0015: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert!(
         !e0015.is_empty(),
@@ -33,7 +33,7 @@ x: dict[str]
     let diags = run(src)?;
     let e0015: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert!(
         !e0015.is_empty(),
@@ -50,7 +50,7 @@ x: dict[str, int, float]
     let diags = run(src)?;
     let e0015: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert!(
         !e0015.is_empty(),
@@ -67,7 +67,7 @@ x: tuple[int, str, float]
     let diags = run(src)?;
     let e0015: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert!(
         e0015.is_empty(),
@@ -84,7 +84,7 @@ x: set[int]
     let diags = run(src)?;
     let e0015: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert!(
         e0015.is_empty(),
@@ -101,7 +101,7 @@ x: set[int, str]
     let diags = run(src)?;
     let e0015: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert!(
         !e0015.is_empty(),
@@ -118,7 +118,7 @@ x: optional[int]
     let diags = run(src)?;
     let e0015: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert!(
         e0015.is_empty(),
@@ -135,7 +135,7 @@ x: optional[int, str]
     let diags = run(src)?;
     let e0015: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert!(
         !e0015.is_empty(),
@@ -152,7 +152,7 @@ x: union[int, str, float]
     let diags = run(src)?;
     let e0015: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert!(
         e0015.is_empty(),
@@ -169,7 +169,7 @@ x: callable[[int, str], bool]
     let diags = run(src)?;
     let e0015: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert!(
         e0015.is_empty(),
@@ -186,7 +186,7 @@ x: callable[int, str, bool]
     let diags = run(src)?;
     let e0015: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert!(
         !e0015.is_empty(),

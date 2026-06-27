@@ -1,5 +1,5 @@
-//! Implements [BSK-E0153] from [CHKARCH-DIAG-CTOR-CALLABLE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ctor-callable
-//! BSK-E0153: Invalid call to a constructor-derived callable.
+//! Implements [constructors_callable] from [CHKARCH-DIAG-CTOR-CALLABLE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ctor-callable
+//! constructors_callable: Invalid call to a constructor-derived callable.
 //!
 //! Implements the typing spec rule "Converting a constructor to callable"
 //! (<https://typing.readthedocs.io/en/latest/spec/constructors.html#converting-a-constructor-to-callable>).
@@ -36,14 +36,14 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0153",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0153",
+    code: "constructors_callable",
+    docs_url: "https://www.basilisk-python.dev/errors/constructors_callable",
 };
 
 /// Method-map key: `(class_name, method_name)` → method definitions.
 type MethodMap<'a> = HashMap<(&'a str, &'a str), Vec<&'a FunctionInfo>>;
 
-/// Emits BSK-E0153 for invalid calls to constructor-derived callables.
+/// Emits constructors_callable for invalid calls to constructor-derived callables.
 pub(crate) struct ConstructorCallableMisuse;
 
 impl Rule for ConstructorCallableMisuse {

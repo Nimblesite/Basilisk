@@ -135,7 +135,7 @@ GoodSubscript: TypeAlias = list[int]
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
 
     // Each invalid form must be individually caught
@@ -187,7 +187,7 @@ Good: TA = int | str
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert!(
         e0048.iter().any(|d| d.message.contains("Bad")),
@@ -207,7 +207,7 @@ x: Simple[int] = 42
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert!(
         e0048.iter().any(|d| d.message.contains("not generic")),
@@ -238,7 +238,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         !e0150.is_empty(),
@@ -271,7 +271,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         !e0150.is_empty(),
@@ -300,7 +300,7 @@ ok: int = 42
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(
         e0014.len() >= 3,
@@ -333,7 +333,7 @@ class MyProto(Protocol):
     let diagnostics = run(source)?;
     let e0097: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0097")
+        .filter(|d| d.code.code == "protocols_definition")
         .collect();
     assert!(
         !e0097.is_empty(),
@@ -376,7 +376,7 @@ b.set(42)
     let diagnostics = run(source)?;
     let e0130: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0130")
+        .filter(|d| d.code.code == "generics_variance_inference")
         .collect();
     assert!(
         e0130.len() >= 2,
@@ -411,7 +411,7 @@ ref = old_func
     let diagnostics = run(source)?;
     let e0115: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0115")
+        .filter(|d| d.code.code == "directives_deprecated")
         .collect();
     assert!(
         e0115.len() >= 2,
@@ -568,7 +568,7 @@ good: int = 42
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
 
     // EXACTLY one e0014 diagnostic: `bad: int = "hello"`
@@ -599,7 +599,7 @@ x: int = "hello"
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     // x should be flagged
     assert!(
@@ -634,7 +634,7 @@ x: int = "hello"
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(
         !e0014.iter().any(|d| d.message.contains("MyAlias")),
@@ -658,7 +658,7 @@ def func(x: int, y: str) -> None:
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(
         !e0014.is_empty(),
@@ -697,7 +697,7 @@ BadTernary: TypeAlias = int if True else str
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
 
     let flagged_names: Vec<&str> = e0048
@@ -742,7 +742,7 @@ fn e0014_mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::err
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(
         e0014.len() >= 2,

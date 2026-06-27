@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0090] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
-// Integration tests for BSK-E0090: Invalid tuple syntax.
+//! Tests for [tuples_type_form_2] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+// Integration tests for tuples_type_form_2: Invalid tuple syntax.
 
 use super::common::*;
 
@@ -21,7 +21,7 @@ y: tuple[int, ...] = (1, 2, 3)
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0090"),
+        !codes(&diags).contains(&"tuples_type_form_2"),
         "valid tuple syntax should not fire E0090"
     );
     Ok(())

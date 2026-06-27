@@ -70,7 +70,7 @@ fn stub_paths_stubs_subdir_resolves_local_stub() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     assert!(
-        !stdout.contains("BSK-E0010"),
+        !stdout.contains("imports_unresolved"),
         "stub-paths = [\"stubs\"] must resolve notinstalledpkg from stubs/notinstalledpkg.pyi \
          (no unresolved-import diagnostic), got: {stdout}"
     );
@@ -98,7 +98,7 @@ fn stub_paths_typings_subdir_resolves_local_stub() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     assert!(
-        !stdout.contains("BSK-E0010"),
+        !stdout.contains("imports_unresolved"),
         "stub-paths = [\"typings\"] must resolve notinstalledpkg from typings/notinstalledpkg.pyi, \
          got: {stdout}"
     );
@@ -139,7 +139,7 @@ fn without_stub_paths_subdir_stub_is_not_found() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     assert!(
-        stdout.contains("BSK-E0010"),
+        stdout.contains("imports_unresolved"),
         "without stub-paths the subdir stub must NOT be searched, so the import is unresolved, \
          got: {stdout}"
     );

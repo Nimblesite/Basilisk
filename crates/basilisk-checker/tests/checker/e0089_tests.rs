@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0089] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
-// Tests for BSK-E0089: Invalid PEP 695 type parameter bound.
+//! Tests for [generics_syntax_declarations] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
+// Tests for generics_syntax_declarations: Invalid PEP 695 type parameter bound.
 //
 // PEP 695 introduced a compact syntax for declaring generic classes:
 // ```python
@@ -19,7 +19,7 @@ class MyClass[T: [int, str]]:
     let diags = run(src)?;
     let e0089: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0089")
+        .filter(|d| d.code.code == "generics_syntax_declarations")
         .collect();
     assert!(!e0089.is_empty(), "list literal bound should fire E0089");
     Ok(())
@@ -34,7 +34,7 @@ class MyClass[T: ()]:
     let diags = run(src)?;
     let e0089: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0089")
+        .filter(|d| d.code.code == "generics_syntax_declarations")
         .collect();
     assert!(!e0089.is_empty(), "empty tuple bound should fire E0089");
     Ok(())
@@ -49,7 +49,7 @@ class MyClass[T: (int,)]:
     let diags = run(src)?;
     let e0089: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0089")
+        .filter(|d| d.code.code == "generics_syntax_declarations")
         .collect();
     assert!(
         !e0089.is_empty(),
@@ -67,7 +67,7 @@ class MyClass[T: int | str]:
     let diags = run(src)?;
     let e0089: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0089")
+        .filter(|d| d.code.code == "generics_syntax_declarations")
         .collect();
     assert!(e0089.is_empty(), "valid union bound should not fire E0089");
     Ok(())
@@ -82,7 +82,7 @@ class MyClass[T: int]:
     let diags = run(src)?;
     let e0089: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0089")
+        .filter(|d| d.code.code == "generics_syntax_declarations")
         .collect();
     assert!(e0089.is_empty(), "valid single bound should not fire E0089");
     Ok(())
@@ -97,7 +97,7 @@ class MyClass[T: (int, 42)]:
     let diags = run(src)?;
     let e0089: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0089")
+        .filter(|d| d.code.code == "generics_syntax_declarations")
         .collect();
     assert!(
         !e0089.is_empty(),
@@ -116,7 +116,7 @@ class Outer[V: int]:
     let diags = run(src)?;
     let e0089: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0089")
+        .filter(|d| d.code.code == "generics_syntax_declarations")
         .collect();
     assert!(
         !e0089.is_empty(),

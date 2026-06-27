@@ -1,5 +1,5 @@
-//! Implements [BSK-E0104] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0104: Cyclical type alias reference.
+//! Implements [aliases_recursive] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! aliases_recursive: Cyclical type alias reference.
 //!
 //! A `TypeAlias`-annotated assignment whose RHS contains a forward-reference
 //! string that resolves back to the alias itself (directly or through a chain
@@ -26,11 +26,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0104",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0104",
+    code: "aliases_recursive",
+    docs_url: "https://www.basilisk-python.dev/errors/aliases_recursive",
 };
 
-/// Emits BSK-E0104 when a `TypeAlias`-annotated assignment's RHS contains a
+/// Emits aliases_recursive when a `TypeAlias`-annotated assignment's RHS contains a
 /// cyclical forward reference (self-referential or mutually referential).
 pub(crate) struct CyclicalTypeAliasReference;
 

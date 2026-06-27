@@ -1,4 +1,4 @@
-//! Implements [BSK-E0014] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [assignment_compatibility] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! PEP 696 default-specialization mismatch for bare generic class assignments.
 //!
 //! A bare reference to a generic class whose remaining free type parameters

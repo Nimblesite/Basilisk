@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0039] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
-// Integration tests for BSK-E0039: Invalid `assert_type()` call.
+//! Tests for [directives_assert_type] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+// Integration tests for directives_assert_type: Invalid `assert_type()` call.
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ assert_type(x, int)
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0039"),
+        !codes(&diags).contains(&"directives_assert_type"),
         "valid assert_type call should not fire E0039"
     );
     Ok(())

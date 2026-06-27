@@ -375,7 +375,7 @@ pub(super) fn types_match(actual: &str, expected: &str) -> bool {
     // Equivalent-spelling fallback: `Union[a, b]` == `a | b`, and fixed unpacked
     // tuples flatten (`tuple[int, *tuple[bool, bool], str]` == `tuple[int, bool, bool, str]`).
     // Order is preserved, so genuinely different types (e.g. `int` vs `int | str`)
-    // stay distinct. See [BSK-E0053].
+    // stay distinct. See [directives_assert_type_2].
     canonicalize_type_str(actual) == canonicalize_type_str(expected)
 }
 
@@ -384,7 +384,7 @@ pub(super) fn types_match(actual: &str, expected: &str) -> bool {
 /// the disallowed set is always rejected except `update`, which is an error only when
 /// the target declares a `ReadOnly` item whose key the argument `TypedDict` declares
 /// with a non-`Never` value type. A `Never`-typed source key cannot supply a value,
-/// so that update is sound (PEP 705). [BSK-E0093]
+/// so that update is sound (PEP 705). [typeddicts_operations]
 fn disallowed_mutator_flagged(
     method: &str,
     call: &ruff_python_ast::ExprCall,

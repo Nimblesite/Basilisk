@@ -1,5 +1,5 @@
-//! Implements [BSK-E0143] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0143: `NamedTuple` usage violations.
+//! Implements [namedtuples_usage] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! namedtuples_usage: `NamedTuple` usage violations.
 //!
 //! Detects invalid usage of `NamedTuple` instances:
 //!
@@ -38,11 +38,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0143",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0143",
+    code: "namedtuples_usage",
+    docs_url: "https://www.basilisk-python.dev/errors/namedtuples_usage",
 };
 
-/// Emits BSK-E0143 for invalid `NamedTuple` usage.
+/// Emits namedtuples_usage for invalid `NamedTuple` usage.
 pub(crate) struct NamedTupleUsageViolation;
 
 impl Rule for NamedTupleUsageViolation {

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0093] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
-// Tests for BSK-E0093: Invalid key or value type in `TypedDict` assignment.
+//! Tests for [typeddicts_operations] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+// Tests for typeddicts_operations: Invalid key or value type in `TypedDict` assignment.
 
 use super::common::*;
 
@@ -18,7 +18,7 @@ movie["director"] = "Ridley Scott"  # Invalid key
     let diags = run(src)?;
     let e0093: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0093")
+        .filter(|d| d.code.code == "typeddicts_operations")
         .collect();
     assert!(
         !e0093.is_empty(),
@@ -42,7 +42,7 @@ movie["year"] = "1982"  # Wrong type: str instead of int
     let diags = run(src)?;
     let e0093: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0093")
+        .filter(|d| d.code.code == "typeddicts_operations")
         .collect();
     assert!(
         !e0093.is_empty(),
@@ -65,7 +65,7 @@ movie: Movie = {"title": "Blade Runner", "year": 1982}  # Invalid key 'title'
     let diags = run(src)?;
     let e0093: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0093")
+        .filter(|d| d.code.code == "typeddicts_operations")
         .collect();
     assert!(
         !e0093.is_empty(),
@@ -89,7 +89,7 @@ movie.pop("name")  # Cannot pop required key
     let diags = run(src)?;
     let e0093: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0093")
+        .filter(|d| d.code.code == "typeddicts_operations")
         .collect();
     assert!(!e0093.is_empty(), "pop() on required key should fire E0093");
     Ok(())
@@ -110,7 +110,7 @@ movie.update({"director": "Ridley Scott"})  # Unknown key 'director'
     let diags = run(src)?;
     let e0093: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0093")
+        .filter(|d| d.code.code == "typeddicts_operations")
         .collect();
     assert!(
         !e0093.is_empty(),
@@ -134,7 +134,7 @@ del movie["name"]  # Cannot delete required key
     let diags = run(src)?;
     let e0093: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0093")
+        .filter(|d| d.code.code == "typeddicts_operations")
         .collect();
     assert!(!e0093.is_empty(), "del on required key should fire E0093");
     Ok(())
@@ -154,7 +154,7 @@ movie: Movie = {"name": "Blade Runner", "year": 1982}
     let diags = run(src)?;
     let e0093: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0093")
+        .filter(|d| d.code.code == "typeddicts_operations")
         .collect();
     assert!(
         e0093.is_empty(),
@@ -178,7 +178,7 @@ director = movie["director"]  # Invalid key read
     let diags = run(src)?;
     let e0093: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0093")
+        .filter(|d| d.code.code == "typeddicts_operations")
         .collect();
     assert!(
         !e0093.is_empty(),
@@ -202,7 +202,7 @@ movie: Movie = {key: "Blade Runner", "year": 1982}  # Non-literal key
     let diags = run(src)?;
     let e0093: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0093")
+        .filter(|d| d.code.code == "typeddicts_operations")
         .collect();
     assert!(!e0093.is_empty(), "Non-literal dict key should fire E0093");
     Ok(())
@@ -222,7 +222,7 @@ movie: Movie = {"name": "Blade Runner"}  # Missing 'year' is OK when total=False
     let diags = run(src)?;
     let e0093: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0093")
+        .filter(|d| d.code.code == "typeddicts_operations")
         .collect();
     assert!(
         e0093.is_empty(),
@@ -408,7 +408,7 @@ movie: Movie = {"name": "Blade Runner"}
     let diags = run(src)?;
     let e0093: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0093")
+        .filter(|d| d.code.code == "typeddicts_operations")
         .collect();
     assert!(
         !e0093.is_empty(),

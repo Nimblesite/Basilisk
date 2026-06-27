@@ -1,5 +1,5 @@
-//! Implements [BSK-E0122] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0122: Callable call-site arity and argument validation.
+//! Implements [callables_protocol] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! callables_protocol: Callable call-site arity and argument validation.
 //!
 //! When a parameter is annotated as `Callable[[int, str], T]`, calls to that
 //! parameter must match the expected argument count. Additionally, `Callable`
@@ -17,14 +17,14 @@ use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0122",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0122",
+    code: "callables_protocol",
+    docs_url: "https://www.basilisk-python.dev/errors/callables_protocol",
 };
 
 mod hof_paramspec;
 mod paramspec_components;
 
-/// Emits BSK-E0122 for invalid call-site usage of `Callable`-typed parameters.
+/// Emits callables_protocol for invalid call-site usage of `Callable`-typed parameters.
 pub(crate) struct CallableCallSiteViolation;
 
 impl Rule for CallableCallSiteViolation {

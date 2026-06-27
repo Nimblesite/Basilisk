@@ -18,7 +18,7 @@ def old_func() -> None:
 old_func()
 "#;
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0115"));
+    assert!(diags.iter().any(|d| d.code.code == "directives_deprecated"));
     Ok(())
 }
 
@@ -34,7 +34,7 @@ class OldClass:
 x = OldClass()
 "#;
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0115"));
+    assert!(diags.iter().any(|d| d.code.code == "directives_deprecated"));
     Ok(())
 }
 
@@ -255,7 +255,7 @@ b = MyBytes()
 b[""]
 "#;
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0072"));
+    assert!(diags.iter().any(|d| d.code.code == "overloads_basic"));
     Ok(())
 }
 
@@ -276,7 +276,7 @@ b = MyBytes()
 b[0]
 ";
     let diags = run(source)?;
-    let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0072").count();
+    let cnt = diags.iter().filter(|d| d.code.code == "overloads_basic").count();
     assert_eq!(cnt, 0);
     Ok(())
 }
@@ -298,7 +298,7 @@ c = Container()
 c[3.14]
 ";
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0072"));
+    assert!(diags.iter().any(|d| d.code.code == "overloads_basic"));
     Ok(())
 }
 
@@ -479,7 +479,7 @@ class Bad(Base[T_co]):
     pass
 ";
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0107"));
+    assert!(diags.iter().any(|d| d.code.code == "generics_variance"));
     Ok(())
 }
 
@@ -498,7 +498,7 @@ class Bad(Base[T_contra]):
     pass
 ";
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0107"));
+    assert!(diags.iter().any(|d| d.code.code == "generics_variance"));
     Ok(())
 }
 
@@ -516,7 +516,7 @@ class Sub(ReadOnly[T_co]):
     pass
 ";
     let diags = run(source)?;
-    let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0107").count();
+    let cnt = diags.iter().filter(|d| d.code.code == "generics_variance").count();
     assert_eq!(cnt, 0);
     Ok(())
 }
@@ -537,7 +537,7 @@ class BadPair(Pair[T_co, T_co]):
     pass
 ";
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0107"));
+    assert!(diags.iter().any(|d| d.code.code == "generics_variance"));
     Ok(())
 }
 
@@ -555,7 +555,7 @@ class Sub(Sink[T_contra]):
     pass
 ";
     let diags = run(source)?;
-    let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0107").count();
+    let cnt = diags.iter().filter(|d| d.code.code == "generics_variance").count();
     assert_eq!(cnt, 0);
     Ok(())
 }
@@ -575,7 +575,7 @@ class Bad(Sink[T_co]):
     pass
 ";
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0107"));
+    assert!(diags.iter().any(|d| d.code.code == "generics_variance"));
     Ok(())
 }
 
@@ -592,7 +592,7 @@ def func(c: list[Never]) -> None:
     v: list[int] = c
 ";
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0070"));
+    assert!(diags.iter().any(|d| d.code.code == "specialtypes_never_2"));
     Ok(())
 }
 
@@ -611,7 +611,7 @@ def func(x: U) -> ClassC[U]:
     return ClassC[Never]()
 ";
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0070"));
+    assert!(diags.iter().any(|d| d.code.code == "specialtypes_never_2"));
     Ok(())
 }
 
@@ -629,7 +629,7 @@ def func() -> ReadOnly[int]:
     return ReadOnly[Never]()
 ";
     let diags = run(source)?;
-    let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0070").count();
+    let cnt = diags.iter().filter(|d| d.code.code == "specialtypes_never_2").count();
     assert_eq!(cnt, 0);
     Ok(())
 }
@@ -643,7 +643,7 @@ def func(c: list[Never]) -> None:
     v: list[Any] = c
 ";
     let diags = run(source)?;
-    let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0070").count();
+    let cnt = diags.iter().filter(|d| d.code.code == "specialtypes_never_2").count();
     assert_eq!(cnt, 0);
     Ok(())
 }
@@ -657,7 +657,7 @@ def func(c: list[Never]) -> None:
     v: list[Never] = c
 ";
     let diags = run(source)?;
-    let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0070").count();
+    let cnt = diags.iter().filter(|d| d.code.code == "specialtypes_never_2").count();
     assert_eq!(cnt, 0);
     Ok(())
 }
@@ -701,7 +701,7 @@ class HasAttr(Protocol):
     name: str
 ";
     let diags = run(source)?;
-    let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0079").count();
+    let cnt = diags.iter().filter(|d| d.code.code == "protocols_modules").count();
     assert_eq!(cnt, 0);
     Ok(())
 }
@@ -728,7 +728,7 @@ c: Connectable = os
 fn e0047_list_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def f(x: [int, str]) -> None:\n    pass\n";
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0047"));
+    assert!(diags.iter().any(|d| d.code.code == "annotations_forward_refs"));
     Ok(())
 }
 
@@ -736,7 +736,7 @@ fn e0047_list_literal() -> Result<(), Box<dyn std::error::Error>> {
 fn e0047_dict_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = "y: {} = {}\n";
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0047"));
+    assert!(diags.iter().any(|d| d.code.code == "annotations_forward_refs"));
     Ok(())
 }
 
@@ -744,7 +744,7 @@ fn e0047_dict_literal() -> Result<(), Box<dyn std::error::Error>> {
 fn e0047_conditional() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def g(x: int if True else str) -> None:\n    pass\n";
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0047"));
+    assert!(diags.iter().any(|d| d.code.code == "annotations_forward_refs"));
     Ok(())
 }
 
@@ -794,7 +794,7 @@ fn e0047_unannotated_var() -> Result<(), Box<dyn std::error::Error>> {
 fn e0047_valid() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import Optional, Union\ndef f(x: int, y: Optional[int], z: Union[int, str]) -> None:\n    pass\n";
     let diags = run(source)?;
-    let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0047").count();
+    let cnt = diags.iter().filter(|d| d.code.code == "annotations_forward_refs").count();
     assert_eq!(cnt, 0);
     Ok(())
 }

@@ -1,10 +1,10 @@
-//! Implements [BSK-E0012] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0012: Argument type mismatch at a call site.
+//! Implements [calls_argument_type] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! calls_argument_type: Argument type mismatch at a call site.
 //!
 //! When a function is called with a literal argument whose type is clearly
 //! incompatible with the declared parameter annotation, Basilisk reports the
 //! mismatch.  The check mirrors the literal-kind vs annotation comparison
-//! used by BSK-E0014.
+//! used by assignment_compatibility.
 //!
 //! ```python
 //! def add(x: int, y: int) -> int:
@@ -23,11 +23,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0012",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0012",
+    code: "calls_argument_type",
+    docs_url: "https://www.basilisk-python.dev/errors/calls_argument_type",
 };
 
-/// Emits BSK-E0012 for call sites where a literal argument is incompatible
+/// Emits calls_argument_type for call sites where a literal argument is incompatible
 /// with the declared parameter type.
 pub(crate) struct ArgumentTypeMismatch;
 

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0021] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0021: Overlapping @overload signatures.
+//! Tests for [overloads_consistency] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for overloads_consistency: Overlapping @overload signatures.
 
 use super::common::*;
 
@@ -20,7 +20,7 @@ def process(x: int) -> int:
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0021"),
+        codes(&diags).contains(&"overloads_consistency"),
         "identical unannotated overloads should fire E0021, got: {:?}",
         codes(&diags)
     );
@@ -43,7 +43,7 @@ def process(x: int | str) -> int | str:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0021"),
+        !codes(&diags).contains(&"overloads_consistency"),
         "distinct overloads should not fire E0021"
     );
     Ok(())

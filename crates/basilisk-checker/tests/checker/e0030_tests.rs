@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0030] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
-// Integration tests for BSK-E0030: Non-default after default `TypeVar`.
+//! Tests for [generics_defaults] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+// Integration tests for generics_defaults: Non-default after default `TypeVar`.
 
 use super::common::*;
 
@@ -14,7 +14,7 @@ class Foo(Generic[T, U]):
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0030"),
+        codes(&diags).contains(&"generics_defaults"),
         "non-default TypeVar after default should fire E0030, got: {:?}",
         codes(&diags)
     );
@@ -32,7 +32,7 @@ class Foo(Generic[T, U]):
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0030"),
+        !codes(&diags).contains(&"generics_defaults"),
         "all default TypeVars should not fire E0030"
     );
     Ok(())

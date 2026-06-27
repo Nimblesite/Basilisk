@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0137] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0137: Generic protocol violations.
+//! Tests for [protocols_generic] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for protocols_generic: Generic protocol violations.
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ class Proto(Protocol[T_co], Generic[T_co]):
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0137"),
+        codes(&diags).contains(&"protocols_generic"),
         "Protocol[T] + Generic[T] should fire E0137, got: {:?}",
         codes(&diags)
     );
@@ -30,7 +30,7 @@ class Proto(Protocol[T]):
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0137"),
+        !codes(&diags).contains(&"protocols_generic"),
         "Protocol[T] alone should not fire E0137"
     );
     Ok(())

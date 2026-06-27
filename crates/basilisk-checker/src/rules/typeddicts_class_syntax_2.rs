@@ -1,5 +1,5 @@
-//! Implements [BSK-E0032] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! BSK-E0032: Invalid keyword argument in `TypedDict` class definition.
+//! Implements [typeddicts_class_syntax_2] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! typeddicts_class_syntax_2: Invalid keyword argument in `TypedDict` class definition.
 //!
 //! `TypedDict` class syntax only accepts `total=True/False` as a keyword argument.
 //! Using `metaclass=` or any unrecognised keyword is an error per PEP 589.
@@ -14,11 +14,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0032",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0032",
+    code: "typeddicts_class_syntax_2",
+    docs_url: "https://www.basilisk-python.dev/errors/typeddicts_class_syntax_2",
 };
 
-/// Emits BSK-E0032 for invalid keyword arguments or bases in a `TypedDict` class.
+/// Emits typeddicts_class_syntax_2 for invalid keyword arguments or bases in a `TypedDict` class.
 pub(crate) struct InvalidTypedDictBase;
 
 /// Keywords with defined `TypedDict` semantics — anything else is an error.

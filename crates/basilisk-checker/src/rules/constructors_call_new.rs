@@ -1,5 +1,5 @@
-//! Implements [BSK-E0074] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
-//! BSK-E0074: Constructor call type mismatch with specialized generic class.
+//! Implements [constructors_call_new] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! constructors_call_new: Constructor call type mismatch with specialized generic class.
 //!
 //! When a generic class is called with explicit type arguments (e.g.
 //! `Class1[int](1.0)`), Basilisk substitutes the type parameters into the
@@ -37,11 +37,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0074",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0074",
+    code: "constructors_call_new",
+    docs_url: "https://www.basilisk-python.dev/errors/constructors_call_new",
 };
 
-/// Emits BSK-E0074 for constructor calls on specialized generic classes where
+/// Emits constructors_call_new for constructor calls on specialized generic classes where
 /// the provided arguments are incompatible with the substituted parameter types.
 pub(crate) struct ConstructorCallNewMismatch;
 

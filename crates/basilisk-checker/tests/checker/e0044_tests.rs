@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0044] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
-// Integration tests for BSK-E0044: Final used in invalid position.
+//! Tests for [qualifiers_final_annotation] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+// Integration tests for qualifiers_final_annotation: Final used in invalid position.
 
 use super::common::*;
 
@@ -11,7 +11,7 @@ X: Final[int] = 42
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0044");
+    let msgs = messages_for(&diags, "qualifiers_final_annotation");
     assert!(
         msgs.is_empty(),
         "valid module-level Final should not fire E0044, got: {msgs:?}"
@@ -28,7 +28,7 @@ def f(x: Final[int]) -> None:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0044");
+    let msgs = messages_for(&diags, "qualifiers_final_annotation");
     assert!(
         !msgs.is_empty(),
         "Final in function parameter should fire E0044, got: {msgs:?}"
@@ -44,7 +44,7 @@ x: list[Final[int]] = []
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0044");
+    let msgs = messages_for(&diags, "qualifiers_final_annotation");
     assert!(
         !msgs.is_empty(),
         "Final nested in list should fire E0044, got: {msgs:?}"
@@ -62,7 +62,7 @@ class MyClass:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0044");
+    let msgs = messages_for(&diags, "qualifiers_final_annotation");
     assert!(
         !msgs.is_empty(),
         "ClassVar[Final[...]] should fire E0044, got: {msgs:?}"
@@ -78,7 +78,7 @@ BAD: Final
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0044");
+    let msgs = messages_for(&diags, "qualifiers_final_annotation");
     assert!(
         !msgs.is_empty(),
         "bare Final with no assignment should fire E0044, got: {msgs:?}"
@@ -94,7 +94,7 @@ BAD: Final[str, int] = ""
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0044");
+    let msgs = messages_for(&diags, "qualifiers_final_annotation");
     assert!(
         !msgs.is_empty(),
         "Final[str, int] should fire E0044, got: {msgs:?}"
@@ -112,7 +112,7 @@ class MyClass:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0044");
+    let msgs = messages_for(&diags, "qualifiers_final_annotation");
     assert!(
         msgs.is_empty(),
         "Final in class body should not fire E0044, got: {msgs:?}"

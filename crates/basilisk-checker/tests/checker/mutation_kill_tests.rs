@@ -9,7 +9,7 @@ use basilisk_test_macros::mutation_safe;
 fn e0014_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
     diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .count()
 }
 
@@ -41,7 +41,7 @@ d: int = None
         "at least 2 mismatches expected (c and d), got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -211,7 +211,7 @@ h: bytes = 42
         "at least 3 named type mismatches, got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -268,7 +268,7 @@ class MyProto(Protocol):
     let diagnostics = run(source)?;
     let e0097: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0097")
+        .filter(|d| d.code.code == "protocols_definition")
         .collect();
     // Must flag z and w
     assert!(
@@ -310,7 +310,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         e0150.iter().any(|d| d.message.contains("dead")),
@@ -341,7 +341,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         e0150.iter().any(|d| d.message.contains("dead")),
@@ -370,7 +370,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         !e0150.is_empty(),
@@ -394,7 +394,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         !e0150.is_empty(),
@@ -436,7 +436,7 @@ n: bytes = b"data"
         "at least 6 type mismatches expected, got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );

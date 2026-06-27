@@ -49,8 +49,8 @@ Basilisk 有一种单一的操作模式。没有 `--basic`、`--standard` 或 `-
 
 ```toml
 [tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["BSK-E0011"]        # 为遗留代码完全禁用某规则
-rules."BSK-E0010" = "warning"   # 或仅降低其严重性
+disabled = ["returns_compatibility"]        # 为遗留代码完全禁用某规则
+rules."imports_unresolved" = "warning"   # 或仅降低其严重性
 ```
 
 这承认大型代码库不能在一夜之间完全类型化，同时使放宽保持明确并限定在需要的路径上。

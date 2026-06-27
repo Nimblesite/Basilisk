@@ -35,8 +35,8 @@ include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
 
 [tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["BSK-E0011"]
-rules."BSK-E0010" = "warning"
+disabled = ["returns_compatibility"]
+rules."imports_unresolved" = "warning"
 ```
 
 ---
@@ -115,17 +115,17 @@ Apply different settings to specific paths. The glob is matched against file pat
 ```toml
 [tool.basilisk.per-path-overrides."legacy/**"]
 # Turn rules off entirely for matching files
-disabled = ["BSK-E0011"]
+disabled = ["returns_compatibility"]
 
 [tool.basilisk.per-path-overrides."tests/**"]
 # Or soften a rule's severity instead of disabling it
-rules."BSK-E0011" = "warning"
+rules."returns_compatibility" = "warning"
 ```
 
 ### `disabled`
 
 **Type:** `string[]`
-**Example:** `["BSK-E0011", "BSK-E0001"]`
+**Example:** `["returns_compatibility", "BSK-E0001"]`
 
 Rule codes to disable entirely for files matching this glob.
 
@@ -133,7 +133,7 @@ Rule codes to disable entirely for files matching this glob.
 
 **Type:** table of rule code → severity
 **Severities:** `"error"`, `"warning"`, `"info"`, `"disabled"`
-**Example:** `rules."BSK-E0011" = "warning"`
+**Example:** `rules."returns_compatibility" = "warning"`
 
 Override the severity of specific rules for matching files. Prefer softening or disabling individual rules over relaxing broad swaths of checking.
 
@@ -144,7 +144,7 @@ Override the severity of specific rules for matching files. Prefer softening or 
 To suppress a diagnostic on a specific line, add a comment with the rule code and a mandatory reason:
 
 ```python
-result: Any = get_legacy_value()  # basilisk: ignore[BSK-E0011] -- no stub available, tracked in #123
+result: Any = get_legacy_value()  # basilisk: ignore[returns_compatibility] -- no stub available, tracked in #123
 ```
 
 To suppress all diagnostics on a line:

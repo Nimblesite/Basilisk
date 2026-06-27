@@ -1,5 +1,5 @@
-//! Implements [BSK-E0068] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! BSK-E0068: `Literal["EnumClass.MEMBER"]` (string) used where
+//! Implements [literals_parameterizations_2] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! literals_parameterizations_2: `Literal["EnumClass.MEMBER"]` (string) used where
 //! `Literal[EnumClass.MEMBER]` (enum member reference) is required.
 //!
 //! A quoted string like `"Color.RED"` is a `str` literal — it is NOT the same
@@ -25,11 +25,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0068",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0068",
+    code: "literals_parameterizations_2",
+    docs_url: "https://www.basilisk-python.dev/errors/literals_parameterizations_2",
 };
 
-/// Emits BSK-E0068 when a `Literal["Class.Member"]` string annotation is used
+/// Emits literals_parameterizations_2 when a `Literal["Class.Member"]` string annotation is used
 /// where `Literal[Class.Member]` is required.
 pub(crate) struct LiteralStringEnumMismatch;
 

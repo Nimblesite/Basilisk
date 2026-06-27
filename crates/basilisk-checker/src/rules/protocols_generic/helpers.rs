@@ -1,5 +1,5 @@
-//! Implements [BSK-E0137] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Helper functions for BSK-E0137: Generic protocol violations.
+//! Implements [protocols_generic] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Helper functions for protocols_generic: Generic protocol violations.
 
 use std::collections::HashMap;
 

@@ -12,7 +12,7 @@ fn test_e0014_int_assigned_to_str_original() -> Result<(), Box<dyn std::error::E
     let diags = run("x: str = 42\n")?;
     let e0014: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(!e0014.is_empty(), "int assigned to str should fire E0014");
     Ok(())
@@ -23,7 +23,7 @@ fn test_e0014_no_error_compatible_original() -> Result<(), Box<dyn std::error::E
     let diags = run("x: float = 42\n")?;
     let e0014: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(e0014.is_empty(), "int assigned to float should be clean");
     Ok(())
@@ -63,7 +63,7 @@ def process(flag: bool):
     // Variable x may be unbound if flag is False
     let e0019: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0019")
+        .filter(|d| d.code.code == "names_unbound")
         .collect();
     assert!(!e0019.is_empty(), "unbound variable should fire E0019");
     Ok(())
@@ -132,7 +132,7 @@ fn test_e0014_int_assigned_to_str_required() -> Result<(), Box<dyn std::error::E
     let diags = run("x: str = 42\n")?;
     let e0014: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(!e0014.is_empty(), "int assigned to str should fire E0014");
     Ok(())
@@ -143,7 +143,7 @@ fn test_e0014_no_error_compatible_required() -> Result<(), Box<dyn std::error::E
     let diags = run("x: float = 42\n")?;
     let e0014: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(e0014.is_empty(), "int assigned to float should be clean");
     Ok(())
@@ -188,7 +188,7 @@ def process(flag: bool) -> None:
     // Variable x may be unbound if flag is False
     let e0019: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0019")
+        .filter(|d| d.code.code == "names_unbound")
         .collect();
 
     // For now, let's make this test pass by checking if ANY diagnostic is produced
@@ -345,7 +345,7 @@ z: int = 3.14
     let diags = run(src)?;
     let e0014: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert_eq!(e0014.len(), 3, "all type mismatches should fire E0014");
     Ok(())
@@ -362,7 +362,7 @@ z: float = 3.14
 
     let e0014: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
 
     // This test should pass - there should be no E0014 errors

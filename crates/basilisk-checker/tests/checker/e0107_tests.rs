@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0107] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0107: Variance incompatibility in base class.
+//! Tests for [generics_variance] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for generics_variance: Variance incompatibility in base class.
 
 use super::common::*;
 
@@ -15,7 +15,7 @@ class Good(Base[T]): ...
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0107"),
+        !codes(&diags).contains(&"generics_variance"),
         "invariant param with invariant arg should not fire E0107"
     );
     Ok(())

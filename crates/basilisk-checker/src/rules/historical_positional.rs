@@ -1,5 +1,5 @@
-//! Implements [BSK-E0071] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
-//! BSK-E0071: Historical positional-only parameter violations.
+//! Implements [historical_positional] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! historical_positional: Historical positional-only parameter violations.
 //!
 //! Before PEP 570 (Python 3.8), the convention for marking parameters as
 //! positional-only was to prefix their names with `__` (double underscore)
@@ -31,11 +31,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0071",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0071",
+    code: "historical_positional",
+    docs_url: "https://www.basilisk-python.dev/errors/historical_positional",
 };
 
-/// Emits BSK-E0071 for historical positional-only parameter violations.
+/// Emits historical_positional for historical positional-only parameter violations.
 pub(crate) struct HistoricalPositionalViolation;
 
 impl Rule for HistoricalPositionalViolation {

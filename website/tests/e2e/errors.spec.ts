@@ -41,7 +41,7 @@ test.describe("error reference pages", () => {
   });
 
   test("a sampled page renders its code, title and severity", async ({ page }) => {
-    for (const code of ["BSK-E0001", "BSK-W0014", "BSK-E0099", RULES[RULES.length - 1].code]) {
+    for (const code of ["BSK-E0001", "BSK-W0014", "protocols_explicit", RULES[RULES.length - 1].code]) {
       const rule = RULES.find((r) => r.code === code)!;
       await page.goto(`/errors/${code}/`);
       await expect(page.locator("h1.error-title code")).toHaveText(code);

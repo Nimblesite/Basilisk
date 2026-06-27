@@ -6,7 +6,7 @@
 
 Good news: there is **zero `regex` / `fancy_regex` crate usage** in `crates/basilisk-checker/`. No `Cargo.toml` depends on a regex engine.
 
-Bad news: 13 rules implement the **moral equivalent** — they iterate `source.lines()` and `String::starts_with` / `find` / `contains` Python keywords to reconstruct structure that already exists in `basilisk_resolver::ResolvedModule`. This is exactly the anti-pattern that produced the BSK-E0149 showstopper false positive (issue [#43](https://github.com/Nimblesite/Basilisk/issues/43)): a line *inside a module docstring* whose trimmed prefix happens to start with `class ` was parsed as a real class definition, polluting the type-param table and triggering a hard error on innocent prose.
+Bad news: 13 rules implement the **moral equivalent** — they iterate `source.lines()` and `String::starts_with` / `find` / `contains` Python keywords to reconstruct structure that already exists in `basilisk_resolver::ResolvedModule`. This is exactly the anti-pattern that produced the generics_syntax_scoping showstopper false positive (issue [#43](https://github.com/Nimblesite/Basilisk/issues/43)): a line *inside a module docstring* whose trimmed prefix happens to start with `class ` was parsed as a real class definition, polluting the type-param table and triggering a hard error on innocent prose.
 
 This plan eliminates line-based scanning across all 13 rules and re-grounds them on the AST.
 
@@ -14,7 +14,7 @@ This plan eliminates line-based scanning across all 13 rules and re-grounds them
 
 ## Scope: 13 rules, 31 `.lines()` call sites
 
-Inventory produced by repo-wide grep audit (2026-05-23). Severity reflects false-positive blast radius — HIGH means the rule shares BSK-E0149's exact bug class (string-matching `class `/`def `/`type ` prefixes that fire inside docstrings).
+Inventory produced by repo-wide grep audit (2026-05-23). Severity reflects false-positive blast radius — HIGH means the rule shares generics_syntax_scoping's exact bug class (string-matching `class `/`def `/`type ` prefixes that fire inside docstrings).
 
 | Rule | Files | Scans for | Severity | AST already has it? |
 |------|-------|-----------|----------|---------------------|

@@ -214,7 +214,7 @@ fn clean_stdlib_imports_are_silent() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("clean/typed_stdlib_imports.py")?;
     let e0010: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0010")
+        .filter(|d| d.code.code == "imports_unresolved")
         .collect();
     assert!(
         e0010.is_empty(),
@@ -250,7 +250,7 @@ fn clean_match_with_wildcard_is_silent() -> Result<(), Box<dyn std::error::Error
     let diags = run("clean/typed_match.py")?;
     let e0023: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0023")
+        .filter(|d| d.code.code == "match_exhaustiveness")
         .collect();
     assert!(
         e0023.is_empty(),
@@ -286,7 +286,7 @@ fn clean_overloads_with_implementation_is_silent() -> Result<(), Box<dyn std::er
     let diags = run("clean/typed_overloads.py")?;
     let e0020: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0020")
+        .filter(|d| d.code.code == "overloads_definitions")
         .collect();
     assert!(
         e0020.is_empty(),

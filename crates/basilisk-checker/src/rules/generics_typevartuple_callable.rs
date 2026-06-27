@@ -1,5 +1,5 @@
-//! Implements [BSK-E0082] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0082: `TypeVarTuple` callable/tuple argument mismatch.
+//! Implements [generics_typevartuple_callable] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_typevartuple_callable: `TypeVarTuple` callable/tuple argument mismatch.
 //!
 //! When a constructor (or function) links two parameters via a `TypeVarTuple`
 //! -- one as `Callable[[*Ts], R]` and the other as `tuple[*Ts]` -- passing a
@@ -30,11 +30,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0082",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0082",
+    code: "generics_typevartuple_callable",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_typevartuple_callable",
 };
 
-/// Emits BSK-E0082 when a tuple literal argument has elements whose types do
+/// Emits generics_typevartuple_callable when a tuple literal argument has elements whose types do
 /// not match the order inferred from a `TypeVarTuple`-linked `Callable` argument.
 pub(crate) struct TypeVarTupleCallableMismatch;
 

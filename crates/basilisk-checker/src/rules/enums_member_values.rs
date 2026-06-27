@@ -1,5 +1,5 @@
-//! Implements [BSK-E0066] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! BSK-E0066: Enum member value incompatible with `_value_` type annotation.
+//! Implements [enums_member_values] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! enums_member_values: Enum member value incompatible with `_value_` type annotation.
 //!
 //! When an enum class declares `_value_: T` (annotation-only, no value), all
 //! member values assigned in the class body must be compatible with `T`.
@@ -28,11 +28,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0066",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0066",
+    code: "enums_member_values",
+    docs_url: "https://www.basilisk-python.dev/errors/enums_member_values",
 };
 
-/// Emits BSK-E0066 when an enum member value is incompatible with `_value_: T`.
+/// Emits enums_member_values when an enum member value is incompatible with `_value_: T`.
 pub(crate) struct EnumValueTypeMismatch;
 
 impl Rule for EnumValueTypeMismatch {

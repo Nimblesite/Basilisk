@@ -513,14 +513,19 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
    HERO — Split layout: big text left, code right
 ══════════════════════════════════════════════════════════ */
 .hero {
-  padding: calc(var(--header-height) + var(--space-16)) 0 var(--space-16);
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12);
   border-bottom: 1px solid var(--color-border);
 }
+.hero > .container { width: 100%; }
 
 .hero__split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-16);
+  grid-template-columns: 1fr 1.15fr;
+  gap: var(--space-12);
   align-items: center;
 }
 
@@ -572,7 +577,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .hero__code { position: relative; }
 
 /* Product screenshot in hero */
-.hero__shot { display: block; width: 100%; height: auto; border: 1px solid var(--color-border-bright); border-radius: var(--radius-lg); }
+.hero__shot { display: block; width: 100%; height: auto; border: 1px solid var(--color-border-bright); border-radius: var(--radius-lg); box-shadow: 0 30px 70px -25px rgba(0, 0, 0, 0.65); }
 
 @media (max-width: 900px) {
   .hero__split { grid-template-columns: 1fr; }

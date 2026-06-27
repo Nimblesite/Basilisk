@@ -28,7 +28,7 @@ x: Literal[Color.display]
     let diagnostics = run(source)?;
     let e0067 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0067")
+        .filter(|d| d.code.code == "enums_members_2")
         .collect::<Vec<_>>();
     assert!(
         !e0067.is_empty(),
@@ -78,7 +78,7 @@ x = b["invalid"]
     let diagnostics = run(source)?;
     let e0072 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0072")
+        .filter(|d| d.code.code == "overloads_basic")
         .collect::<Vec<_>>();
     // Overload getitem checking not fully implemented
     let _ = e0072;
@@ -100,7 +100,7 @@ def is_str(x: int) -> TypeIs[str]:
     let diagnostics = run(source)?;
     let e0113 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0113")
+        .filter(|d| d.code.code == "narrowing_typeis_2")
         .collect::<Vec<_>>();
     assert!(
         !e0113.is_empty(),
@@ -121,7 +121,7 @@ def is_str(x: object) -> TypeIs[str]:
     let diagnostics = run(source)?;
     let e0113 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0113")
+        .filter(|d| d.code.code == "narrowing_typeis_2")
         .collect::<Vec<_>>();
     assert!(
         e0113.is_empty(),
@@ -146,7 +146,7 @@ greet("Alice")
     let diagnostics = run(source)?;
     let e0041 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0041")
+        .filter(|d| d.code.code == "calls_argument_count")
         .collect::<Vec<_>>();
     assert!(
         !e0041.is_empty(),
@@ -168,7 +168,7 @@ p = Point(1)
     let diagnostics = run(source)?;
     let e0041 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0041")
+        .filter(|d| d.code.code == "calls_argument_count")
         .collect::<Vec<_>>();
     assert!(
         !e0041.is_empty(),
@@ -193,7 +193,7 @@ p = Point(1)
     let diagnostics = run(source)?;
     let e0041 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0041")
+        .filter(|d| d.code.code == "calls_argument_count")
         .collect::<Vec<_>>();
     // NamedTuple constructor checking not fully implemented
     let _ = e0041;
@@ -211,7 +211,7 @@ greet()
     let diagnostics = run(source)?;
     let e0041 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0041")
+        .filter(|d| d.code.code == "calls_argument_count")
         .collect::<Vec<_>>();
     assert!(
         !e0041.is_empty(),
@@ -256,7 +256,7 @@ w: Set[int, str, float] = set()
     let diagnostics = run(source)?;
     let e0015 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .count();
     assert!(
         e0015 >= 1,
@@ -474,7 +474,7 @@ del r[1]
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0143")
+        .filter(|d| d.code.code == "namedtuples_usage")
         .count();
     assert!(
         e0143 >= 2,
@@ -518,7 +518,7 @@ z: Literal[Status.label]
     let diagnostics = run(source)?;
     let e0067 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0067")
+        .filter(|d| d.code.code == "enums_members_2")
         .count();
     assert!(
         e0067 >= 1,
@@ -565,7 +565,7 @@ r = Record(1)
     let diagnostics = run(source)?;
     let e0041 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0041")
+        .filter(|d| d.code.code == "calls_argument_count")
         .count();
     assert!(
         e0041 >= 3,
@@ -593,7 +593,7 @@ def is_list(x: object) -> TypeIs[list]:
     let diagnostics = run(source)?;
     let e0113 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0113")
+        .filter(|d| d.code.code == "narrowing_typeis_2")
         .count();
     assert!(
         e0113 >= 1,
@@ -626,7 +626,7 @@ z = c[1:3]
     let diagnostics = run(source)?;
     let e0072 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0072")
+        .filter(|d| d.code.code == "overloads_basic")
         .count();
     // Overload getitem checking not fully implemented
     let _ = e0072;
@@ -672,7 +672,7 @@ g: Type[int, str] = int
     let diagnostics = run(source)?;
     let e0015 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .count();
     assert!(
         e0015 >= 3,

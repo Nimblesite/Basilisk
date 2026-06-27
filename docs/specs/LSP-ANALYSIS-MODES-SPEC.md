@@ -244,7 +244,7 @@ Incremental text edits are applied to the in-memory buffer, then parse → resol
 
 The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk reload, dependent invalidation) MUST resolve third-party and workspace imports against the **same** `ImportSearchPaths` (venv site-packages, workspace members, stub paths, uv registry) that the full workspace scan used. The full scan builds these once and caches them on the workspace index; incremental re-checks reuse the cached value rather than recomputing it (site-packages discovery may touch the filesystem or spawn a subprocess and MUST NOT run per keystroke).
 
-Without this, the syntactic resolver marks every import `Unresolved`, so opening or editing a file resurrects false `BSK-E0010` ("Cannot resolve import … no type information available") in the editor for packages that resolve cleanly on the CLI and during the startup scan. The diagnostics an incremental re-check **publishes** MUST already reflect import resolution — not just the cached symbol table used by navigation features.
+Without this, the syntactic resolver marks every import `Unresolved`, so opening or editing a file resurrects false `imports_unresolved` ("Cannot resolve import … no type information available") in the editor for packages that resolve cleanly on the CLI and during the startup scan. The diagnostics an incremental re-check **publishes** MUST already reflect import resolution — not just the cached symbol table used by navigation features.
 
 ### File-Watcher Event {#ANALYSIS-INCR-WATCH}
 

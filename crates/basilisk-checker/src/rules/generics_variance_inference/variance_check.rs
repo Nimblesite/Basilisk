@@ -1,5 +1,5 @@
-//! Implements [BSK-E0130] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Variance assignment checking for BSK-E0130.
+//! Implements [generics_variance_inference] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Variance assignment checking for generics_variance_inference.
 //!
 //! Checks module-level and function-body assignments for variance
 //! compatibility with inferred type parameter variances.
@@ -15,8 +15,8 @@ use super::utils::span_for_line;
 use super::variance::Variance;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0130",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0130",
+    code: "generics_variance_inference",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_variance_inference",
 };
 
 /// Split at top-level commas (respecting brackets), returning owned trimmed strings.

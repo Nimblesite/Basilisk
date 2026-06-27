@@ -1,5 +1,5 @@
-//! Implements [BSK-E0048] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! BSK-E0048: Invalid right-hand side for a `TypeAlias` annotation.
+//! Implements [aliases_implicit] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! aliases_implicit: Invalid right-hand side for a `TypeAlias` annotation.
 //!
 //! PEP 613 requires that the RHS of an explicit `TypeAlias` annotation must be
 //! a valid type expression. The following are errors:
@@ -32,8 +32,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0048",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0048",
+    code: "aliases_implicit",
+    docs_url: "https://www.basilisk-python.dev/errors/aliases_implicit",
 };
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
@@ -190,7 +190,7 @@ fn paren_has_top_level_comma(s: &str) -> bool {
     crate::rules::shared::contains_top_level_comma(&s[1..s.len() - 1])
 }
 
-/// Emits BSK-E0048 when a `TypeAlias`-annotated variable has an invalid RHS type expression.
+/// Emits aliases_implicit when a `TypeAlias`-annotated variable has an invalid RHS type expression.
 pub(crate) struct TypeAliasInvalidRhs;
 
 impl Rule for TypeAliasInvalidRhs {

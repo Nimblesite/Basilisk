@@ -1,5 +1,5 @@
-//! Implements [BSK-E0114] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0114: Protocol `isinstance`/`issubclass` violations.
+//! Implements [protocols_runtime_checkable] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! protocols_runtime_checkable: Protocol `isinstance`/`issubclass` violations.
 //!
 //! Per PEP 544:
 //! - A protocol can be used as the second argument to `isinstance()` or
@@ -30,11 +30,11 @@ use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0114",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0114",
+    code: "protocols_runtime_checkable",
+    docs_url: "https://www.basilisk-python.dev/errors/protocols_runtime_checkable",
 };
 
-/// Emits BSK-E0114 for `isinstance`/`issubclass` calls violating protocol
+/// Emits protocols_runtime_checkable for `isinstance`/`issubclass` calls violating protocol
 /// runtime-checkable constraints.
 pub(crate) struct ProtocolRuntimeCheckableViolation;
 

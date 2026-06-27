@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0040]-[BSK-E0046] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
-// Integration tests for BSK-E0040 (enum subclassing) and BSK-E0046 (enum member annotated).
+//! Tests for [enums_behaviors]-[enums_members] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+// Integration tests for enums_behaviors (enum subclassing) and enums_members (enum member annotated).
 
 use super::common::*;
 
@@ -19,7 +19,7 @@ class ExtendedColor(Color):
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0040");
+    let msgs = messages_for(&diags, "enums_behaviors");
     assert!(
         msgs.iter()
             .any(|m| m.contains("Cannot subclass") && m.contains("Color")),
@@ -41,7 +41,7 @@ class Child(BaseEnum):
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0040");
+    let msgs = messages_for(&diags, "enums_behaviors");
     assert!(
         msgs.is_empty(),
         "subclassing memberless enum should not fire E0040, got: {msgs:?}"
@@ -60,7 +60,7 @@ class Child(Base):
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0040");
+    let msgs = messages_for(&diags, "enums_behaviors");
     assert!(
         msgs.is_empty(),
         "non-enum subclassing should not fire E0040"
@@ -80,7 +80,7 @@ class Pet(Enum):
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0046");
+    let msgs = messages_for(&diags, "enums_members");
     assert!(
         msgs.iter()
             .any(|m| m.contains("should not have an explicit type annotation")),
@@ -99,7 +99,7 @@ class Pet(Enum):
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0046");
+    let msgs = messages_for(&diags, "enums_members");
     assert!(
         msgs.is_empty(),
         "unannotated enum member should not fire E0046"
@@ -117,7 +117,7 @@ class Pet(Enum):
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0046");
+    let msgs = messages_for(&diags, "enums_members");
     assert!(
         msgs.is_empty(),
         "annotation-only non-member should not fire E0046"
@@ -133,7 +133,7 @@ class Regular:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0046");
+    let msgs = messages_for(&diags, "enums_members");
     assert!(
         msgs.is_empty(),
         "annotated attribute in non-enum class should not fire E0046"

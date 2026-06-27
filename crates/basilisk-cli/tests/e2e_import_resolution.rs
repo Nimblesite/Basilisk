@@ -120,7 +120,7 @@ fn src_layout_first_party_imports_resolve() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     assert!(
-        !stdout.contains("BSK-E0010"),
+        !stdout.contains("imports_unresolved"),
         "first-party src-layout imports must resolve, got: {stdout}"
     );
     assert_eq!(
@@ -153,7 +153,7 @@ fn sibling_script_import_resolves_from_project_root() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     assert!(
-        !stdout.contains("BSK-E0010"),
+        !stdout.contains("imports_unresolved"),
         "sibling-module script imports must resolve (issue #22), got: {stdout}"
     );
 }

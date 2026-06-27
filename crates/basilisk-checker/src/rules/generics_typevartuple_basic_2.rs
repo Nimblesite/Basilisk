@@ -1,5 +1,5 @@
-//! Implements [BSK-E0083] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0083: `TypeVarTuple` must be unpacked with `*` operator.
+//! Implements [generics_typevartuple_basic_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_typevartuple_basic_2: `TypeVarTuple` must be unpacked with `*` operator.
 //!
 //! When a `TypeVarTuple` is used in a generic class base list or as a direct
 //! type annotation, it must be unpacked using the `*` operator.  Using a
@@ -35,8 +35,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0083",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0083",
+    code: "generics_typevartuple_basic_2",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_typevartuple_basic_2",
 };
 
 fn make_diag(msg: String, span: basilisk_resolver::Span, path: &str) -> Diagnostic {
@@ -107,7 +107,7 @@ fn find_matching_bracket(content: &str) -> Option<usize> {
     None
 }
 
-/// Emits BSK-E0083 when a `TypeVarTuple` is used without unpacking.
+/// Emits generics_typevartuple_basic_2 when a `TypeVarTuple` is used without unpacking.
 pub(crate) struct TypeVarTupleUnpackRequired;
 
 impl Rule for TypeVarTupleUnpackRequired {

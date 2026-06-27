@@ -1,5 +1,5 @@
-//! Implements [BSK-E0128] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0128: ```TypeVar``` default referential violations.
+//! Implements [generics_defaults_referential_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_defaults_referential_2: ```TypeVar``` default referential violations.
 //!
 //! PEP 696 defines rules for when a `TypeVar` default references another
 //! `TypeVar`:
@@ -38,18 +38,18 @@ use crate::span_util::slice_span;
 
 use crate::rules::shared::{is_numeric_subtype, split_top_level_commas};
 
-use super::e0128_helpers::{
+use super::generics_defaults_referential_2_helpers::{
     find_matching_bracket, literal_type_mismatch, parse_typevar_info_from_source,
     resolve_generic_params, TypeVarInfo,
 };
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0128",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0128",
+    code: "generics_defaults_referential_2",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_defaults_referential_2",
 };
 
-/// Emits BSK-E0128 for `TypeVar` default referential violations.
+/// Emits generics_defaults_referential_2 for `TypeVar` default referential violations.
 pub(crate) struct TypeVarDefaultReferential;
 
 impl Rule for TypeVarDefaultReferential {

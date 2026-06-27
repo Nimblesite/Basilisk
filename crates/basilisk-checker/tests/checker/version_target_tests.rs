@@ -1,8 +1,8 @@
 //! Tests for [CHKARCH-VERSION-TARGET] / [CHKARCH-VERSION-NARROWING].
 //! See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET
 //!
-//! Issue #93: the configured `python_version` must reach every rule. BSK-E0150
-//! dead-branch analysis and the BSK-E0155 PEP 695 syntax gate must follow the
+//! Issue #93: the configured `python_version` must reach every rule. directives_version_platform
+//! dead-branch analysis and the version_target_syntax PEP 695 syntax gate must follow the
 //! *configured* target, not a hardcoded 3.12.
 
 use super::common::*;
@@ -34,7 +34,7 @@ fn run_with_python_version(source: &str, version: &str) -> Vec<Diagnostic> {
 #[test]
 fn test_e0150_default_target_flags_sub_3_10_branch() {
     let diags = run(VERSION_GUARD_SOURCE).unwrap();
-    let messages = messages_for(&diags, "BSK-E0150");
+    let messages = messages_for(&diags, "directives_version_platform");
     assert!(
         messages.iter().any(|m| m.contains("`val`")),
         "on the default 3.12 target the `< (3, 10)` body is dead: {messages:?}"
@@ -48,7 +48,7 @@ fn test_e0150_default_target_flags_sub_3_10_branch() {
 #[test]
 fn test_e0150_follows_configured_3_9_target() {
     let diags = run_with_python_version(VERSION_GUARD_SOURCE, "3.9");
-    let messages = messages_for(&diags, "BSK-E0150");
+    let messages = messages_for(&diags, "directives_version_platform");
     assert!(
         messages.iter().any(|m| m.contains("`other`")),
         "on a 3.9 target the else body is dead: {messages:?}"
@@ -63,7 +63,7 @@ fn test_e0150_follows_configured_3_9_target() {
 fn test_e0155_pep695_type_alias_below_3_12() {
     let diags = run_with_python_version("type Alias = int\n", "3.11");
     assert!(
-        has_code(&diags, "BSK-E0155"),
+        has_code(&diags, "version_target_syntax"),
         "PEP 695 `type` statement requires Python 3.12+, target is 3.11"
     );
 }
@@ -72,7 +72,7 @@ fn test_e0155_pep695_type_alias_below_3_12() {
 fn test_e0155_pep695_generic_class_below_3_12() {
     let diags = run_with_python_version("class Box[T]:\n    pass\n", "3.10");
     assert!(
-        has_code(&diags, "BSK-E0155"),
+        has_code(&diags, "version_target_syntax"),
         "PEP 695 `class Box[T]` requires Python 3.12+, target is 3.10"
     );
 }
@@ -84,7 +84,7 @@ fn test_e0155_pep695_generic_function_below_3_12() {
         "3.11",
     );
     assert!(
-        has_code(&diags, "BSK-E0155"),
+        has_code(&diags, "version_target_syntax"),
         "PEP 695 `def first[T]` requires Python 3.12+, target is 3.11"
     );
 }
@@ -96,7 +96,7 @@ fn test_e0155_silent_on_3_12_target() {
         "3.12",
     );
     assert!(
-        !has_code(&diags, "BSK-E0155"),
+        !has_code(&diags, "version_target_syntax"),
         "PEP 695 syntax is native on 3.12 — no diagnostic"
     );
 }
@@ -105,7 +105,7 @@ fn test_e0155_silent_on_3_12_target() {
 fn test_e0155_silent_without_configured_version() {
     // The centralized default target is 3.12 — PEP 695 is allowed.
     let diags = run("type Alias = int\n").unwrap();
-    assert!(!has_code(&diags, "BSK-E0155"));
+    assert!(!has_code(&diags, "version_target_syntax"));
 }
 
 #[test]
@@ -127,5 +127,5 @@ fn test_malformed_python_version_falls_back_to_default() {
     // An unparsable version must behave exactly like the 3.12 default,
     // not panic and not produce spurious version gating.
     let diags = run_with_python_version("type Alias = int\n", "not-a-version");
-    assert!(!has_code(&diags, "BSK-E0155"));
+    assert!(!has_code(&diags, "version_target_syntax"));
 }

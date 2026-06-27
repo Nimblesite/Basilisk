@@ -284,7 +284,7 @@ pub(super) fn is_valid_constraint_element(expr: &Expr) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// Multiple unbounded tuple detection (for BSK-E0047)
+// Multiple unbounded tuple detection (for annotations_forward_refs)
 // ---------------------------------------------------------------------------
 
 /// Counts the number of "unbounded" components in a `tuple[...]` slice expression.

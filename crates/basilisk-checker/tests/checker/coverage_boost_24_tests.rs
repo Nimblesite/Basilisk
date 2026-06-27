@@ -17,7 +17,7 @@ count: int = "hello"  # type: ignore
     // Should be suppressed
     let e0014 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .count();
     assert_eq!(e0014, 0, "type: ignore should suppress diagnostic");
     Ok(())
@@ -52,7 +52,7 @@ count: int = "hello"  # type: disabled
     let diagnostics = run(source)?;
     let e0014 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .count();
     assert_eq!(e0014, 0, "type: disabled should suppress diagnostic");
     Ok(())
@@ -61,13 +61,13 @@ count: int = "hello"  # type: disabled
 #[test]
 fn suppression_type_ignore_with_code() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
-count: int = "hello"  # type: ignore[BSK-E0014]
-label: str = 42  # type: ignore[BSK-E0014]
+count: int = "hello"  # type: ignore[assignment_compatibility]
+label: str = 42  # type: ignore[assignment_compatibility]
 "#;
     let diagnostics = run(source)?;
     let e0014 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .count();
     assert_eq!(e0014, 0, "type: ignore with code should suppress");
     Ok(())
@@ -141,7 +141,7 @@ flag: bool = "yes"
 
 #[test]
 fn suppression_file_disabled_specific() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"# basilisk: file-disabled[BSK-E0014]
+    let source = r#"# basilisk: file-disabled[assignment_compatibility]
 count: int = "hello"
 label: str = 42
 "#;
@@ -152,7 +152,7 @@ label: str = 42
 
 #[test]
 fn suppression_file_warning_specific() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"# basilisk: file-warning[BSK-E0014]
+    let source = r#"# basilisk: file-warning[assignment_compatibility]
 count: int = "hello"
 "#;
     let diagnostics = run(source)?;
@@ -162,7 +162,7 @@ count: int = "hello"
 
 #[test]
 fn suppression_file_info_specific() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"# basilisk: file-info[BSK-E0014]
+    let source = r#"# basilisk: file-info[assignment_compatibility]
 count: int = "hello"
 "#;
     let diagnostics = run(source)?;
@@ -780,7 +780,7 @@ count5: int = "world"  # type: disabled
 count6: str = 42
 count7: bool = "yes"
 # type: end-disabled
-count8: int = "last"  # type: ignore[BSK-E0014]
+count8: int = "last"  # type: ignore[assignment_compatibility]
 "#;
     let diagnostics = run(source)?;
     // With relaxed + various suppressions, some diagnostics should be removed/demoted

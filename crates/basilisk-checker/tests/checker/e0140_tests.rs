@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0140] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0140: Callable assignment compatibility.
+//! Tests for [callables_protocol_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for callables_protocol_2: Callable assignment compatibility.
 
 use super::common::*;
 
@@ -42,7 +42,7 @@ cb: Callable[[int], int] = add
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0140"),
+        !codes(&diags).contains(&"callables_protocol_2"),
         "compatible callable assignment should not fire E0140"
     );
     Ok(())

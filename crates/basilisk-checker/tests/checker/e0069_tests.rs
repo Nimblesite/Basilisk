@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0069] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
-// Integration tests for BSK-E0069: dataclass `kw_only`.
+//! Tests for [dataclasses_kwonly] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+// Integration tests for dataclasses_kwonly: dataclass `kw_only`.
 
 use super::common::*;
 
@@ -34,7 +34,7 @@ p = Point(x=1, y=2)
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0069"),
+        !codes(&diags).contains(&"dataclasses_kwonly"),
         "keyword args to kw_only dataclass should not fire E0069"
     );
     Ok(())

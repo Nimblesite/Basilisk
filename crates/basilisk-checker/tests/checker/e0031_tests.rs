@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0031] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
-// Integration tests for BSK-E0031: Invalid `cast()` call.
+//! Tests for [directives_cast] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+// Integration tests for directives_cast: Invalid `cast()` call.
 
 use super::common::*;
 
@@ -12,7 +12,7 @@ y = cast(1, x)
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0031"),
+        codes(&diags).contains(&"directives_cast"),
         "cast with literal first arg should fire E0031, got: {:?}",
         codes(&diags)
     );
@@ -27,7 +27,7 @@ y = cast()
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0031"),
+        codes(&diags).contains(&"directives_cast"),
         "cast() with no args should fire E0031, got: {:?}",
         codes(&diags)
     );
@@ -43,7 +43,7 @@ y = cast(str, x)
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0031"),
+        !codes(&diags).contains(&"directives_cast"),
         "valid cast should not fire E0031"
     );
     Ok(())

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0065] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! BSK-E0065: Access to an `int`-only attribute on a `float`-typed parameter.
+//! Implements [specialtypes_promotions] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! specialtypes_promotions: Access to an `int`-only attribute on a `float`-typed parameter.
 //!
 //! The Python typing spec (PEP 484 / typing spec §Special cases for float and complex)
 //! states that `int` is not a subtype of `float` for static type-checking purposes.
@@ -27,11 +27,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0065",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0065",
+    code: "specialtypes_promotions",
+    docs_url: "https://www.basilisk-python.dev/errors/specialtypes_promotions",
 };
 
-/// Emits BSK-E0065 for `int`-only attribute accesses on `float`-typed parameters.
+/// Emits specialtypes_promotions for `int`-only attribute accesses on `float`-typed parameters.
 pub(crate) struct FloatParamIntAttrAccess;
 
 impl Rule for FloatParamIntAttrAccess {

@@ -64,10 +64,10 @@ pub struct InlineOverride {
     pub is_block_end: bool,
 }
 
-/// A BSK diagnostic code such as `BSK-E0011`.
+/// A BSK diagnostic code such as `returns_compatibility`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErrorCode {
-    /// The full code string, e.g. `"BSK-E0011"`.
+    /// The full code string, e.g. `"returns_compatibility"`.
     pub code: &'static str,
     /// URL to the documentation for this diagnostic.
     pub docs_url: &'static str,

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0158] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! BSK-E0158: Inconsistent decorators across an overloaded method.
+//! Implements [overloads_consistency_2] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! overloads_consistency_2: Inconsistent decorators across an overloaded method.
 //!
 //! The typing spec constrains how decorators may be spread across an
 //! `@overload` group and its implementation:
@@ -23,8 +23,8 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0158",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0158",
+    code: "overloads_consistency_2",
+    docs_url: "https://www.basilisk-python.dev/errors/overloads_consistency_2",
 };
 
 fn has_dec(decorators: &[String], name: &str) -> bool {
@@ -33,7 +33,7 @@ fn has_dec(decorators: &[String], name: &str) -> bool {
         .any(|d| d == name || d.ends_with(&format!(".{name}")))
 }
 
-/// Emits BSK-E0158 for decorator inconsistencies within an overload group.
+/// Emits overloads_consistency_2 for decorator inconsistencies within an overload group.
 pub(crate) struct OverloadDecoratorConsistency;
 
 impl Rule for OverloadDecoratorConsistency {

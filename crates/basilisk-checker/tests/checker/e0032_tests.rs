@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0032] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
-// Integration tests for BSK-E0032: Invalid `TypedDict` keyword.
+//! Tests for [typeddicts_class_syntax_2] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+// Integration tests for typeddicts_class_syntax_2: Invalid `TypedDict` keyword.
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ class Movie(TypedDict, metaclass=type):
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0032"),
+        codes(&diags).contains(&"typeddicts_class_syntax_2"),
         "invalid keyword in TypedDict should fire E0032, got: {:?}",
         codes(&diags)
     );
@@ -30,7 +30,7 @@ class Movie(TypedDict, total=False):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0032"),
+        !codes(&diags).contains(&"typeddicts_class_syntax_2"),
         "total keyword should not fire E0032"
     );
     Ok(())

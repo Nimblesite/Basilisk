@@ -22,7 +22,7 @@ class slice2(Generic[Start2T, Stop2T]): ...
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0128")
+        .filter(|d| d.code.code == "generics_defaults_referential_2")
         .count();
     Ok(())
 }
@@ -41,7 +41,7 @@ class Foo3(Generic[S1]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0128")
+        .filter(|d| d.code.code == "generics_defaults_referential_2")
         .count();
     Ok(())
 }
@@ -57,7 +57,7 @@ Invalid2 = TypeVar("Invalid2", float, str, default=Y1)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0128")
+        .filter(|d| d.code.code == "generics_defaults_referential_2")
         .count();
     Ok(())
 }
@@ -96,7 +96,7 @@ v: Hashable = DC1(0)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0063")
+        .filter(|d| d.code.code == "dataclasses_hash")
         .count();
     Ok(())
 }
@@ -116,7 +116,7 @@ v2: Hashable = DC2(0)
     let diagnostics = run(source)?;
     let e0063 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0063")
+        .filter(|d| d.code.code == "dataclasses_hash")
         .count();
     // Frozen dataclass should be hashable
     let _ = e0063;
@@ -174,7 +174,7 @@ BadAlias1: TypeAlias = [int, str]
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .count();
     Ok(())
 }
@@ -189,7 +189,7 @@ BadAlias2: TypeAlias = True
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .count();
     Ok(())
 }
@@ -204,7 +204,7 @@ BadAlias3: TypeAlias = 1
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .count();
     Ok(())
 }
@@ -219,7 +219,7 @@ BadAlias4: TypeAlias = {"a": "b"}
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .count();
     Ok(())
 }
@@ -235,7 +235,7 @@ BadAlias5: TypeAlias = int if cond else str
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .count();
     Ok(())
 }
@@ -278,7 +278,7 @@ Good5: TypeAlias = dict[str, int]
     let diagnostics = run(source)?;
     let e0048 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .count();
     assert_eq!(e0048, 0, "Valid type aliases should not trigger e0048");
     Ok(())

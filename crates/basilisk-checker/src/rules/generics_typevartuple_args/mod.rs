@@ -1,5 +1,5 @@
-//! Implements [BSK-E0085] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0085: `TypeVarTuple` argument count mismatch.
+//! Implements [generics_typevartuple_args] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_typevartuple_args: `TypeVarTuple` argument count mismatch.
 //!
 //! When a constructor with `TypeVarTuple` parameters is called, the number of
 //! arguments must match the expected count inferred from the `TypeVarTuple`.
@@ -27,11 +27,11 @@ use crate::span_util::slice_span;
 mod star_args;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0085",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0085",
+    code: "generics_typevartuple_args",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_typevartuple_args",
 };
 
-/// Emits BSK-E0085 when a constructor call has incorrect argument count for `TypeVarTuple`.
+/// Emits generics_typevartuple_args when a constructor call has incorrect argument count for `TypeVarTuple`.
 pub(crate) struct TypeVarTupleArgCountMismatch;
 
 impl Rule for TypeVarTupleArgCountMismatch {

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0085] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
-// Integration tests for BSK-E0085: `TypeVarTuple` arg count.
+//! Tests for [generics_typevartuple_args] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
+// Integration tests for generics_typevartuple_args: `TypeVarTuple` arg count.
 
 use super::common::*;
 
@@ -38,7 +38,7 @@ func4((0,), (1, 2))
 "#;
     let diags = run(source)?;
     assert!(
-        has_code(&diags, "BSK-E0085"),
+        has_code(&diags, "generics_typevartuple_args"),
         "differing tuple lengths must fire E0085"
     );
     Ok(())
@@ -59,7 +59,7 @@ func4((0,), ("1",))
 "#;
     let diags = run(source)?;
     assert!(
-        !has_code(&diags, "BSK-E0085"),
+        !has_code(&diags, "generics_typevartuple_args"),
         "equal tuple lengths must not fire E0085"
     );
     Ok(())
@@ -83,7 +83,7 @@ v: Array[Height, Width] = Array((Width(1), Height(2)))
 "#;
     let diags = run(source)?;
     assert!(
-        has_code(&diags, "BSK-E0085"),
+        has_code(&diags, "generics_typevartuple_args"),
         "a permuted constructor must fire E0085, got: {:?}",
         codes(&diags)
     );
@@ -107,7 +107,7 @@ v: Array[Height, Width] = Array((Height(1), Width(2)))
 "#;
     let diags = run(source)?;
     assert!(
-        !has_code(&diags, "BSK-E0085"),
+        !has_code(&diags, "generics_typevartuple_args"),
         "correct element order must not fire E0085, got: {:?}",
         codes(&diags)
     );

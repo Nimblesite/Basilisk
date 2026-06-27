@@ -1,5 +1,5 @@
-//! Implements [BSK-E0076] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
-//! BSK-E0076: Overload union expansion failure.
+//! Implements [overloads_evaluation] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! overloads_evaluation: Overload union expansion failure.
 //!
 //! When a function-body call passes a union-typed argument to an overloaded
 //! function and, after expanding the union, at least one member fails to
@@ -27,11 +27,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0076",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0076",
+    code: "overloads_evaluation",
+    docs_url: "https://www.basilisk-python.dev/errors/overloads_evaluation",
 };
 
-/// Emits BSK-E0076 when union expansion of arguments to an overloaded function
+/// Emits overloads_evaluation when union expansion of arguments to an overloaded function
 /// fails for some union member across all overloads.
 pub(crate) struct OverloadUnionExpansionFailure;
 

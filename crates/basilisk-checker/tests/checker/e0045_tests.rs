@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0045] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
-// Integration tests for BSK-E0045: Invalid first argument to Annotated.
+//! Tests for [qualifiers_annotated] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+// Integration tests for qualifiers_annotated: Invalid first argument to Annotated.
 
 use super::common::*;
 
@@ -12,7 +12,7 @@ x: Annotated[int, "metadata"] = 42
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0045"),
+        !codes(&diags).contains(&"qualifiers_annotated"),
         "valid Annotated usage should not fire E0045"
     );
     Ok(())
@@ -75,7 +75,7 @@ x: Annotated[Callable[[int], str], "meta"] = lambda a: str(a)
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0045"),
+        !codes(&diags).contains(&"qualifiers_annotated"),
         "Annotated with Callable first arg should not fire E0045"
     );
     Ok(())

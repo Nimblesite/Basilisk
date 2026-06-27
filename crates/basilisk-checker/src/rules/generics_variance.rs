@@ -1,5 +1,5 @@
-//! Implements [BSK-E0107] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0107: Variance incompatibility in base class parameterisation.
+//! Implements [generics_variance] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_variance: Variance incompatibility in base class parameterisation.
 //!
 //! When a class inherits from a generic base class (directly or through a type
 //! alias), the `TypeVar` arguments must have compatible variance with the
@@ -25,8 +25,8 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0107",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0107",
+    code: "generics_variance",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_variance",
 };
 
 /// The variance of a `TypeVar`.
@@ -65,7 +65,7 @@ struct VarianceViolation {
     expected_variance: Variance,
 }
 
-/// Emits BSK-E0107 for variance-incompatible `TypeVar` arguments in base classes.
+/// Emits generics_variance for variance-incompatible `TypeVar` arguments in base classes.
 pub(crate) struct VarianceIncompatibleBase;
 
 impl Rule for VarianceIncompatibleBase {

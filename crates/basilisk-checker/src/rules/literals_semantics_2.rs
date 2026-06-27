@@ -1,5 +1,5 @@
-//! Implements [BSK-E0129] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0129: Literal value assignment incompatibility.
+//! Implements [literals_semantics_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! literals_semantics_2: Literal value assignment incompatibility.
 //!
 //! Detects two classes of Literal-related assignment errors inside function bodies:
 //!
@@ -30,11 +30,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0129",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0129",
+    code: "literals_semantics_2",
+    docs_url: "https://www.basilisk-python.dev/errors/literals_semantics_2",
 };
 
-/// Emits BSK-E0129 for Literal value assignment incompatibilities.
+/// Emits literals_semantics_2 for Literal value assignment incompatibilities.
 pub(crate) struct LiteralValueIncompatible;
 
 impl Rule for LiteralValueIncompatible {

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0081] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0081: `TypeVarTuple` unpack minimum type argument violation.
+//! Implements [generics_typevartuple_unpack] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_typevartuple_unpack: `TypeVarTuple` unpack minimum type argument violation.
 //!
 //! When a function parameter has a type annotation containing a `TypeVarTuple`
 //! unpack pattern like `Array[Batch, *tuple[Any, ...], Channels]`, the type has
@@ -28,11 +28,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0081",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0081",
+    code: "generics_typevartuple_unpack",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_typevartuple_unpack",
 };
 
-/// Emits BSK-E0081 when a function-body call passes a value whose generic type
+/// Emits generics_typevartuple_unpack when a function-body call passes a value whose generic type
 /// does not have enough type arguments to satisfy a `TypeVarTuple` unpack pattern.
 pub(crate) struct TypeVarTupleUnpackViolation;
 

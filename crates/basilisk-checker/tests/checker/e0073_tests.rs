@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0073] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
-// Integration tests for BSK-E0073: `NamedTuple` tuple compatibility.
+//! Tests for [namedtuples_type_compat] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
+// Integration tests for namedtuples_type_compat: `NamedTuple` tuple compatibility.
 
 use super::common::*;
 
@@ -32,7 +32,7 @@ t: tuple[int, int] = Point(1, 2)
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0073"),
+        !codes(&diags).contains(&"namedtuples_type_compat"),
         "compatible tuple assignment should not fire E0073"
     );
     Ok(())

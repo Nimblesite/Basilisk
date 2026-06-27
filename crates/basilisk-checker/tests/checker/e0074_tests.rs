@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0074] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
-// Integration tests for BSK-E0074: `Constructor __new__ mismatch`.
+//! Tests for [constructors_call_new] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
+// Integration tests for constructors_call_new: `Constructor __new__ mismatch`.
 
 use super::common::*;
 
@@ -32,7 +32,7 @@ Class1[int](42)
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0074"),
+        !codes(&diags).contains(&"constructors_call_new"),
         "valid specialized call should not fire E0074"
     );
     Ok(())

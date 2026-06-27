@@ -1,5 +1,5 @@
-//! Implements [BSK-E0154] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0154: Access to a module attribute the local stub does not declare.
+//! Implements [imports_module_attribute] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! imports_module_attribute: Access to a module attribute the local stub does not declare.
 //!
 //! When `import X` resolves to a **user/local stub** (a `.pyi` under a
 //! configured `stub-paths` dir, including the auto-discovered `.basilisk/stubs`),
@@ -40,8 +40,8 @@ use super::Rule;
 mod tests;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0154",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0154",
+    code: "imports_module_attribute",
+    docs_url: "https://www.basilisk-python.dev/errors/imports_module_attribute",
 };
 
 /// Dunder attributes that exist on every module object regardless of the stub,
@@ -61,7 +61,7 @@ const MODULE_DUNDERS: &[&str] = &[
     "__all__",
 ];
 
-/// Emits BSK-E0154 for `module.attr` where a user stub does not declare `attr`.
+/// Emits imports_module_attribute for `module.attr` where a user stub does not declare `attr`.
 pub(crate) struct ModuleAttributeUndefined;
 
 impl Rule for ModuleAttributeUndefined {
@@ -123,7 +123,7 @@ impl<'a> Visitor<'a> for AttrVisitor {
     }
 }
 
-/// Emit BSK-E0154 if `access` targets an undeclared attribute of a user stub.
+/// Emit imports_module_attribute if `access` targets an undeclared attribute of a user stub.
 fn check_access(access: &AttrAccess, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
     let Some(api) = module.imported_modules.get(&access.base) else {
         return; // not a user-stub-backed module binding
@@ -140,7 +140,7 @@ fn check_access(access: &AttrAccess, module: &ResolvedModule, diagnostics: &mut 
     diagnostics.push(make_diagnostic(access, api, &module.path));
 }
 
-/// Build the BSK-E0154 diagnostic.
+/// Build the imports_module_attribute diagnostic.
 fn make_diagnostic(access: &AttrAccess, api: &ImportedModuleApi, path: &str) -> Diagnostic {
     error_diagnostic_owned(
         CODE,

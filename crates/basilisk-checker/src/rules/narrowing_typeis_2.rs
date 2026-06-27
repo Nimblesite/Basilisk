@@ -1,5 +1,5 @@
-//! Implements [BSK-E0113] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0113: `TypeIs` narrows to a type inconsistent with the input type.
+//! Implements [narrowing_typeis_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! narrowing_typeis_2: `TypeIs` narrows to a type inconsistent with the input type.
 //!
 //! Per the typing spec: "It is an error to narrow to a type that is not
 //! consistent with the input type." For `TypeIs`, the narrowed type must
@@ -12,11 +12,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0113",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0113",
+    code: "narrowing_typeis_2",
+    docs_url: "https://www.basilisk-python.dev/errors/narrowing_typeis_2",
 };
 
-/// Emits BSK-E0113 when a function returns `TypeIs[X]` but `X` is not
+/// Emits narrowing_typeis_2 when a function returns `TypeIs[X]` but `X` is not
 /// consistent with the first parameter type.
 pub(crate) struct TypeIsInconsistentNarrowing;
 

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0109] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0109: `TypeVar` bound violation at call site.
+//! Tests for [generics_upper_bound_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for generics_upper_bound_2: `TypeVar` bound violation at call site.
 
 use super::common::*;
 
@@ -15,7 +15,7 @@ def literal_identity(s: TLiteral) -> TLiteral:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0109"),
+        !codes(&diags).contains(&"generics_upper_bound_2"),
         "valid bound usage should not fire E0109"
     );
     Ok(())

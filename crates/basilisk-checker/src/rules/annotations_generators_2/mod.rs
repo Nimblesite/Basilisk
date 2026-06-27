@@ -1,4 +1,4 @@
-//! BSK-E0131: Generator yield/send/return type mismatch.
+//! annotations_generators_2: Generator yield/send/return type mismatch.
 //!
 //! When a function is annotated with `Generator[Y, S, R]`, `Iterator[Y]`,
 //! or `Iterable[Y]`, the yield expressions must produce values compatible
@@ -36,11 +36,11 @@ use type_check::{check_missing_generator_return, check_yield_from, check_yield_v
 use yield_scan::find_yield_expressions;
 
 pub(crate) const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0131",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0131",
+    code: "annotations_generators_2",
+    docs_url: "https://www.basilisk-python.dev/errors/annotations_generators_2",
 };
 
-/// Emits BSK-E0131 for generator yield/send/return type mismatches.
+/// Emits annotations_generators_2 for generator yield/send/return type mismatches.
 pub(crate) struct GeneratorTypeMismatch;
 
 impl Rule for GeneratorTypeMismatch {

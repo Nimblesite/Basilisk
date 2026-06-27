@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0066] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
-// Integration tests for BSK-E0066: Enum value type mismatch.
+//! Tests for [enums_member_values] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+// Integration tests for enums_member_values: Enum value type mismatch.
 
 use super::common::*;
 
@@ -25,7 +25,7 @@ class Color(IntEnum):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0066"),
+        !codes(&diags).contains(&"enums_member_values"),
         "valid IntEnum values should not fire E0066"
     );
     Ok(())

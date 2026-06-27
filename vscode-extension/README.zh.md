@@ -109,21 +109,21 @@ Basilisk 以单个 Rust 二进制文件的形式发布。无需 Python 运行时
 
 | Code | 检测内容 |
 |------|----------------|
-| `BSK-E0010` | 从未标注类型的模块导入 |
-| `BSK-E0011` | 显式 `Any` 标注（警告） |
-| `BSK-E0012` | 参数类型不匹配 |
-| `BSK-E0013` | 返回类型不匹配 |
-| `BSK-E0014` | 赋值类型不匹配 |
-| `BSK-E0015` | 类型参数数量错误 |
-| `BSK-E0016` | 不兼容的方法重写 |
-| `BSK-E0017` | 不兼容的类变量重写 |
-| `BSK-E0018` | 未定义的名称 |
-| `BSK-E0019` | 在赋值前使用 |
-| `BSK-E0020` | `@overload` 缺少实现 |
-| `BSK-E0021` | 重叠的 `@overload` 签名 |
-| `BSK-E0022` | 不可哈希的字典键 |
-| `BSK-E0023` | 非穷尽的 `match` |
-| `BSK-E0024` | 无效的类型表达式 |
+| `imports_unresolved` | 从未标注类型的模块导入 |
+| `returns_compatibility` | 显式 `Any` 标注（警告） |
+| `calls_argument_type` | 参数类型不匹配 |
+| `returns_compatibility_2` | 返回类型不匹配 |
+| `assignment_compatibility` | 赋值类型不匹配 |
+| `callables_annotation` | 类型参数数量错误 |
+| `classes_override` | 不兼容的方法重写 |
+| `classes_override_2` | 不兼容的类变量重写 |
+| `names_undefined` | 未定义的名称 |
+| `names_unbound` | 在赋值前使用 |
+| `overloads_definitions` | `@overload` 缺少实现 |
+| `overloads_consistency` | 重叠的 `@overload` 签名 |
+| `dict_key_hashable` | 不可哈希的字典键 |
+| `match_exhaustiveness` | 非穷尽的 `match` |
+| `annotations_typeexpr` | 无效的类型表达式 |
 | `BSK-E0025` | 缺少 `@override` 装饰器 |
 
 ---

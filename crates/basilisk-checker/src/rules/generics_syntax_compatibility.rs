@@ -1,5 +1,5 @@
-//! Implements [BSK-E0042] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! BSK-E0042: PEP 695 type parameter syntax mixed with traditional `TypeVars`.
+//! Implements [generics_syntax_compatibility] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! generics_syntax_compatibility: PEP 695 type parameter syntax mixed with traditional `TypeVars`.
 //!
 //! PEP 695 introduced a new syntax for declaring type parameters (`class Foo[T]`
 //! and `def foo[T]()`). When a class or function uses this new syntax, it must
@@ -25,8 +25,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0042",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0042",
+    code: "generics_syntax_compatibility",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_syntax_compatibility",
 };
 
 fn make_diagnostic(message: String, span: basilisk_resolver::Span, path: &str) -> Diagnostic {
@@ -77,7 +77,7 @@ fn is_word_boundary_match(haystack: &str, needle: &str) -> bool {
         })
 }
 
-/// Emits BSK-E0042 when PEP 695 syntax is mixed with traditional `TypeVars`.
+/// Emits generics_syntax_compatibility when PEP 695 syntax is mixed with traditional `TypeVars`.
 pub(crate) struct Pep695TraditionalTypeVarMix;
 
 impl Rule for Pep695TraditionalTypeVarMix {

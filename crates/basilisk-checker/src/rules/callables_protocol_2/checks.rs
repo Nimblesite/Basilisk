@@ -1,5 +1,5 @@
-//! Implements [BSK-E0140] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Compatibility check functions for BSK-E0140.
+//! Implements [callables_protocol_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Compatibility check functions for callables_protocol_2.
 
 use std::collections::HashMap;
 

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0143] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0143: `NamedTuple` usage violations.
+//! Tests for [namedtuples_usage] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for namedtuples_usage: `NamedTuple` usage violations.
 
 use super::common::*;
 
@@ -88,7 +88,7 @@ x, y = p
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0143"),
+        !codes(&diags).contains(&"namedtuples_usage"),
         "valid NamedTuple access should not fire E0143"
     );
     Ok(())

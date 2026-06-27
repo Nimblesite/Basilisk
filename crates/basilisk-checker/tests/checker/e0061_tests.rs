@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0061] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
-// Tests for BSK-E0061: `assert_type` with `Literal[Enum.MEMBER]` on enum-typed param.
+//! Tests for [enums_expansion] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+// Tests for enums_expansion: `assert_type` with `Literal[Enum.MEMBER]` on enum-typed param.
 //
 // This rule detects when `assert_type()` is used with a `Literal[Enum.MEMBER]` type
 // on a parameter that is already typed as the enum itself.
@@ -22,7 +22,7 @@ def process(status: Status) -> None:
     let diags = run(src)?;
     let e0061: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0061")
+        .filter(|d| d.code.code == "enums_expansion")
         .collect();
     assert!(
         !e0061.is_empty(),
@@ -47,7 +47,7 @@ def process(status: Status) -> None:
     let diags = run(src)?;
     let e0061: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0061")
+        .filter(|d| d.code.code == "enums_expansion")
         .collect();
     assert!(
         e0061.is_empty(),
@@ -73,7 +73,7 @@ def check_perms(perms: Permissions) -> None:
     let diags = run(src)?;
     let e0061: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0061")
+        .filter(|d| d.code.code == "enums_expansion")
         .collect();
     assert!(
         !e0061.is_empty(),
@@ -100,7 +100,7 @@ def set_color(color: Color) -> None:
     let diags = run(src)?;
     let e0061: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0061")
+        .filter(|d| d.code.code == "enums_expansion")
         .collect();
     assert_eq!(
         e0061.len(),
@@ -134,7 +134,7 @@ def handle_status(status: Status) -> None:
     }
     let e0061: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0061")
+        .filter(|d| d.code.code == "enums_expansion")
         .collect();
     assert!(!e0061.is_empty(), "Nested enum hierarchy should fire E0061");
     Ok(())
@@ -156,7 +156,7 @@ def process(status: Status) -> None:
     let diags = run(src)?;
     let _e0061: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0061")
+        .filter(|d| d.code.code == "enums_expansion")
         .collect();
     // Literal unions are not handled by E0061 - they might be handled by other rules
     // This test documents the current behavior

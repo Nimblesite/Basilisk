@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0060] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
-// Integration tests for BSK-E0060: dataclass ordering invalid.
+//! Tests for [dataclasses_order] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+// Integration tests for dataclasses_order: dataclass ordering invalid.
 
 use super::common::*;
 
@@ -38,7 +38,7 @@ result = p1 < p2
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0060"),
+        !codes(&diags).contains(&"dataclasses_order"),
         "order=True dataclass comparison should not fire E0060"
     );
     Ok(())
@@ -60,7 +60,7 @@ result = p1 == p2
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0060"),
+        !codes(&diags).contains(&"dataclasses_order"),
         "== comparison always valid for dataclass"
     );
     Ok(())

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0132] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0132: Inconsistent `TypeVar` ordering.
+//! Tests for [generics_base_class_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for generics_base_class_2: Inconsistent `TypeVar` ordering.
 
 use super::common::*;
 
@@ -17,7 +17,7 @@ class GoodChild(Parent[T1, T2], Grandparent[T1, T2]): ...
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0132"),
+        !codes(&diags).contains(&"generics_base_class_2"),
         "consistent TypeVar ordering should not fire E0132"
     );
     Ok(())

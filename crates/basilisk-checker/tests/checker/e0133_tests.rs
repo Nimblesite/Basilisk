@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0133] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0133: Protocol `TypeVar` variance mismatch.
+//! Tests for [protocols_variance_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for protocols_variance_2: Protocol `TypeVar` variance mismatch.
 
 use super::common::*;
 
@@ -15,7 +15,7 @@ class MyProto(Protocol[T_co]):
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0133"),
+        !codes(&diags).contains(&"protocols_variance_2"),
         "correctly declared covariant protocol should not fire E0133"
     );
     Ok(())

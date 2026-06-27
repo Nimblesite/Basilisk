@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0102] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0102: `TypeVar` default referential violation.
+//! Tests for [generics_defaults_referential] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for generics_defaults_referential: `TypeVar` default referential violation.
 
 use super::common::*;
 
@@ -12,7 +12,7 @@ T = TypeVar("T", default=int)
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0102"),
+        !codes(&diags).contains(&"generics_defaults_referential"),
         "valid TypeVar default should not fire E0102"
     );
     Ok(())

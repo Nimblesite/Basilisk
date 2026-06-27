@@ -1,5 +1,5 @@
-//! Implements [BSK-E0055] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! BSK-E0055: Invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword argument combination.
+//! Implements [generics_typevartuple_basic] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! generics_typevartuple_basic: Invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword argument combination.
 //!
 //! PEP 484 / PEP 695 forbid certain combinations of keyword arguments in
 //! `TypeVar(...)` calls, and PEP 646 / PEP 612 restrict what kwargs
@@ -30,8 +30,8 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0055",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0055",
+    code: "generics_typevartuple_basic",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_typevartuple_basic",
 };
 
 fn make_diag(msg: &str, span: basilisk_resolver::Span, path: &str) -> Diagnostic {
@@ -53,7 +53,7 @@ fn make_diag(msg: &str, span: basilisk_resolver::Span, path: &str) -> Diagnostic
     )
 }
 
-/// Emits BSK-E0055 for invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword combinations.
+/// Emits generics_typevartuple_basic for invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword combinations.
 pub(crate) struct TypeVarInvalidKwargs;
 
 impl Rule for TypeVarInvalidKwargs {

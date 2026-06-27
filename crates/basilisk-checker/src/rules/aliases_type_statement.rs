@@ -1,8 +1,8 @@
-//! Implements [BSK-E0057] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! BSK-E0057: Invalid RHS in a PEP 695 `type X = rhs` statement.
+//! Implements [aliases_type_statement] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! aliases_type_statement: Invalid RHS in a PEP 695 `type X = rhs` statement.
 //!
 //! PEP 695 requires the RHS of a `type` statement to be a valid type expression.
-//! The same restrictions as `TypeAlias` (BSK-E0048) apply.
+//! The same restrictions as `TypeAlias` (aliases_implicit) apply.
 //!
 //! ```python
 //! type BadAlias1 = [int, str]   # E — list literal
@@ -20,8 +20,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0057",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0057",
+    code: "aliases_type_statement",
+    docs_url: "https://www.basilisk-python.dev/errors/aliases_type_statement",
 };
 
 fn make_diag(name: &str, span: Span, path: &str) -> Diagnostic {
@@ -144,7 +144,7 @@ fn is_non_type_name(rhs: &str, non_type_names: &HashSet<String>) -> bool {
     non_type_names.contains(rhs)
 }
 
-/// Emits BSK-E0057 when a `type X = rhs` statement has an invalid type expression.
+/// Emits aliases_type_statement when a `type X = rhs` statement has an invalid type expression.
 pub(crate) struct TypeStatementInvalidRhs;
 
 impl Rule for TypeStatementInvalidRhs {

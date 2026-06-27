@@ -1,4 +1,4 @@
-//! BSK-E0093: Invalid key or value type in `TypedDict` assignment.
+//! typeddicts_operations: Invalid key or value type in `TypedDict` assignment.
 //!
 //! PEP 589 defines `TypedDict` as a typed dict with a fixed set of keys and associated types.
 //! This rule detects:
@@ -30,11 +30,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0093",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0093",
+    code: "typeddicts_operations",
+    docs_url: "https://www.basilisk-python.dev/errors/typeddicts_operations",
 };
 
-/// Emits BSK-E0093 for invalid key or value-type violations on `TypedDict` instances.
+/// Emits typeddicts_operations for invalid key or value-type violations on `TypedDict` instances.
 pub(crate) struct TypedDictKeyValidation;
 
 impl Rule for TypedDictKeyValidation {

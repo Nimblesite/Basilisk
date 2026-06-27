@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0027] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0027: Duplicate `TypeVar` in Generic[...].
+//! Tests for [generics_base_class] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for generics_base_class: Duplicate `TypeVar` in Generic[...].
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ class Foo(Generic[T, T]):
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0027"),
+        codes(&diags).contains(&"generics_base_class"),
         "duplicate TypeVar in Generic should fire E0027, got: {:?}",
         codes(&diags)
     );
@@ -31,7 +31,7 @@ class Foo(Generic[T, U]):
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0027"),
+        !codes(&diags).contains(&"generics_base_class"),
         "unique TypeVars should not fire E0027"
     );
     Ok(())

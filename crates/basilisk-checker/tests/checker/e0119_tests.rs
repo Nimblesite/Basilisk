@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0119] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0119: Protocol isinstance/issubclass violations.
+//! Tests for [protocols_runtime_checkable_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for protocols_runtime_checkable_2: Protocol isinstance/issubclass violations.
 
 use super::common::*;
 
@@ -51,7 +51,7 @@ isinstance(x, Proto3)
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0119"),
+        !codes(&diags).contains(&"protocols_runtime_checkable_2"),
         "runtime_checkable non-data protocol isinstance should not fire E0119"
     );
     Ok(())

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0145] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0145: Invalid type[X] usage violations.
+//! Tests for [specialtypes_type] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for specialtypes_type: Invalid type[X] usage violations.
 
 use super::common::*;
 
@@ -19,7 +19,7 @@ func(A)
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0145"),
+        !codes(&diags).contains(&"specialtypes_type"),
         "valid type usage should not fire E0145"
     );
     Ok(())

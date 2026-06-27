@@ -1,5 +1,5 @@
-//! Implements [BSK-E0033] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! BSK-E0033: Invalid `reveal_type()` call.
+//! Implements [directives_reveal_type] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! directives_reveal_type: Invalid `reveal_type()` call.
 //!
 //! `reveal_type(expr)` must be called with exactly one positional argument.
 //!
@@ -13,11 +13,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0033",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0033",
+    code: "directives_reveal_type",
+    docs_url: "https://www.basilisk-python.dev/errors/directives_reveal_type",
 };
 
-/// Emits BSK-E0033 for invalid `reveal_type()` calls.
+/// Emits directives_reveal_type for invalid `reveal_type()` calls.
 pub(crate) struct InvalidRevealTypeCall;
 
 impl Rule for InvalidRevealTypeCall {

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0016] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0016: Incompatible method override.
+//! Tests for [classes_override] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for classes_override: Incompatible method override.
 
 use super::common::*;
 
@@ -19,7 +19,7 @@ class Child(Base):
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0016"),
+        codes(&diags).contains(&"classes_override"),
         "incompatible param type in @override should fire E0016, got: {:?}",
         codes(&diags)
     );
@@ -42,7 +42,7 @@ class Child(Base):
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0016"),
+        codes(&diags).contains(&"classes_override"),
         "incompatible return type in @override should fire E0016, got: {:?}",
         codes(&diags)
     );
@@ -65,7 +65,7 @@ class Child(Base):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0016"),
+        !codes(&diags).contains(&"classes_override"),
         "compatible override should not fire E0016"
     );
     Ok(())

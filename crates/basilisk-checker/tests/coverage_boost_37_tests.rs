@@ -396,10 +396,10 @@ fn suppression_ignore_patterns() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: int = "hello"  # type: ignore[assignment]
 y: int = "world"  # type: ignore
-z: int = "test"  # basilisk: ignore[BSK-E0014]
-w: int = "test"  # basilisk: disable=BSK-E0014
-v: int = "test"  # basilisk: warning=BSK-E0014
-u: int = "test"  # basilisk: info=BSK-E0014
+z: int = "test"  # basilisk: ignore[assignment_compatibility]
+w: int = "test"  # basilisk: disable=assignment_compatibility
+v: int = "test"  # basilisk: warning=assignment_compatibility
+u: int = "test"  # basilisk: info=assignment_compatibility
 "#;
     let diagnostics = run(source)?;
     let _ = diagnostics;

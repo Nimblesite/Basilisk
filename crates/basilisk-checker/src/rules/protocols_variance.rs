@@ -1,5 +1,5 @@
-//! Implements [BSK-E0110] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0110: Protocol variance violation.
+//! Implements [protocols_variance] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! protocols_variance: Protocol variance violation.
 //!
 //! Detects when a Protocol class declares `TypeVar`s with incorrect variance
 //! based on how they are used in method signatures:
@@ -21,8 +21,8 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0110",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0110",
+    code: "protocols_variance",
+    docs_url: "https://www.basilisk-python.dev/errors/protocols_variance",
 };
 
 /// Methods exempt from variance inference per the typing spec.
@@ -53,7 +53,7 @@ enum Variance {
     Contravariant,
 }
 
-/// BSK-E0110: Protocol variance violation.
+/// protocols_variance: Protocol variance violation.
 pub(crate) struct ProtocolVarianceViolation;
 
 /// Check whether `text` contains `name` as a whole word (not as a substring

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0131] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Yield expression scanning for BSK-E0131.
+//! Implements [annotations_generators_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Yield expression scanning for annotations_generators_2.
 //!
 //! Provides a byte-level scanner that finds `yield` and `yield from`
 //! expressions in a function body substring, skipping string literals and

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0125] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0125: Access to instance attribute on a class object.
+//! Implements [generics_type_erasure] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_type_erasure: Access to instance attribute on a class object.
 //!
 //! Instance attributes (annotations without `ClassVar` in the class body that
 //! lack a default value) exist only on instances, not on the class object
@@ -31,11 +31,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0125",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0125",
+    code: "generics_type_erasure",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_type_erasure",
 };
 
-/// Emits BSK-E0125 for accessing instance-only attributes on class objects.
+/// Emits generics_type_erasure for accessing instance-only attributes on class objects.
 pub(crate) struct InstanceAttrOnClass;
 
 /// Bundles shared context for the line-scanning helpers.

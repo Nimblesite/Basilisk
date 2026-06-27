@@ -1,5 +1,5 @@
-//! Implements [BSK-E0010] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0010: Unresolved import.
+//! Implements [imports_unresolved] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! imports_unresolved: Unresolved import.
 //!
 //! Fires when an import cannot be resolved and the module is not part of the
 //! Python standard library.  When uv package-registry context is available the
@@ -15,11 +15,11 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0010",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0010",
+    code: "imports_unresolved",
+    docs_url: "https://www.basilisk-python.dev/errors/imports_unresolved",
 };
 
-/// Emits BSK-E0010 for imports from modules outside the known stdlib/typing
+/// Emits imports_unresolved for imports from modules outside the known stdlib/typing
 /// ecosystem.
 ///
 /// Uses the compiled typeshed index from `basilisk-stubs` for O(1) module
@@ -242,7 +242,7 @@ mod tests {
     #[test]
     fn diagnostic_has_correct_code() {
         let diag = check_single("numpy", None);
-        assert_eq!(diag.code.code, "BSK-E0010");
+        assert_eq!(diag.code.code, "imports_unresolved");
     }
 
     #[test]

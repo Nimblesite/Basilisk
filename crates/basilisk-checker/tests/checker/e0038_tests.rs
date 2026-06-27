@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0038] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
-// Integration tests for BSK-E0038: Invalid `TypedDict` inheritance.
+//! Tests for [typeddicts_inheritance] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+// Integration tests for typeddicts_inheritance: Invalid `TypedDict` inheritance.
 
 use super::common::*;
 
@@ -16,7 +16,7 @@ class Child(Base):
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0038"),
+        codes(&diags).contains(&"typeddicts_inheritance"),
         "TypedDict field type conflict should fire E0038, got: {:?}",
         codes(&diags)
     );
@@ -37,7 +37,7 @@ class Child(Base):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0038"),
+        !codes(&diags).contains(&"typeddicts_inheritance"),
         "compatible TypedDict inheritance should not fire E0038"
     );
     Ok(())

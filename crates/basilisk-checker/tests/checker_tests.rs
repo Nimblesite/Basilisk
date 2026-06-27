@@ -166,7 +166,7 @@ fn e0012_bool_param_receives_str_literal() -> Result<(), Box<dyn std::error::Err
     let diags = run(src)?;
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert_eq!(e12.len(), 1, "bool param + str literal must fire E0012");
     Ok(())
@@ -178,7 +178,7 @@ fn e0012_float_param_receives_str_literal() -> Result<(), Box<dyn std::error::Er
     let diags = run(src)?;
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert_eq!(e12.len(), 1, "float param + str literal must fire E0012");
     Ok(())
@@ -190,7 +190,7 @@ fn e0012_bytes_param_receives_str_literal() -> Result<(), Box<dyn std::error::Er
     let diags = run(src)?;
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert_eq!(e12.len(), 1, "bytes param + str literal must fire E0012");
     Ok(())
@@ -202,7 +202,7 @@ fn e0012_int_param_receives_bytes_literal() -> Result<(), Box<dyn std::error::Er
     let diags = run(src)?;
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert_eq!(e12.len(), 1, "int param + bytes literal must fire E0012");
     Ok(())
@@ -214,7 +214,7 @@ fn e0012_str_param_receives_bytes_literal() -> Result<(), Box<dyn std::error::Er
     let diags = run(src)?;
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert_eq!(e12.len(), 1, "str param + bytes literal must fire E0012");
     Ok(())
@@ -226,7 +226,7 @@ fn e0012_float_param_receives_bytes_literal() -> Result<(), Box<dyn std::error::
     let diags = run(src)?;
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert_eq!(e12.len(), 1, "float param + bytes literal must fire E0012");
     Ok(())
@@ -238,7 +238,7 @@ fn e0012_int_param_receives_float_literal() -> Result<(), Box<dyn std::error::Er
     let diags = run(src)?;
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert_eq!(e12.len(), 1, "int param + float literal must fire E0012");
     Ok(())
@@ -250,7 +250,7 @@ fn e0012_str_param_receives_float_literal() -> Result<(), Box<dyn std::error::Er
     let diags = run(src)?;
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert_eq!(e12.len(), 1, "str param + float literal must fire E0012");
     Ok(())
@@ -262,7 +262,7 @@ fn e0012_bool_param_receives_float_literal() -> Result<(), Box<dyn std::error::E
     let diags = run(src)?;
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert_eq!(e12.len(), 1, "bool param + float literal must fire E0012");
     Ok(())
@@ -274,7 +274,7 @@ fn e0012_str_param_receives_int_literal() -> Result<(), Box<dyn std::error::Erro
     let diags = run(src)?;
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert_eq!(e12.len(), 1, "str param + int literal must fire E0012");
     Ok(())
@@ -286,7 +286,7 @@ fn e0012_bytes_param_receives_int_literal() -> Result<(), Box<dyn std::error::Er
     let diags = run(src)?;
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert_eq!(e12.len(), 1, "bytes param + int literal must fire E0012");
     Ok(())
@@ -299,7 +299,7 @@ fn e0012_compatible_int_arg_does_not_fire() -> Result<(), Box<dyn std::error::Er
     let diags = run(src)?;
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert!(e12.is_empty(), "compatible int arg must not fire E0012");
     Ok(())
@@ -312,7 +312,7 @@ fn e0012_unknown_callee_does_not_fire() -> Result<(), Box<dyn std::error::Error>
     let diags = run(src)?;
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert!(
         e12.is_empty(),
@@ -329,7 +329,7 @@ fn e0012_extra_args_beyond_params_does_not_crash() -> Result<(), Box<dyn std::er
     // Only the first arg is checked (x: int, arg=1) — no E0012
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert!(
         e12.is_empty(),
@@ -345,7 +345,7 @@ fn e0012_unannotated_param_does_not_fire() -> Result<(), Box<dyn std::error::Err
     let diags = run(src)?;
     let e12: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0012")
+        .filter(|d| d.code.code == "calls_argument_type")
         .collect();
     assert!(e12.is_empty(), "unannotated param must not fire E0012");
     Ok(())
@@ -360,7 +360,7 @@ fn e0014_bool_annotation_with_str_literal() -> Result<(), Box<dyn std::error::Er
     let diags = run("flag: bool = \"yes\"\n")?;
     let e14: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert_eq!(e14.len(), 1, "bool: str mismatch must fire E0014");
     Ok(())
@@ -371,7 +371,7 @@ fn e0014_float_annotation_with_str_literal() -> Result<(), Box<dyn std::error::E
     let diags = run("ratio: float = \"1.5\"\n")?;
     let e14: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert_eq!(e14.len(), 1, "float: str mismatch must fire E0014");
     Ok(())
@@ -383,7 +383,7 @@ fn e0014_compatible_annotation_does_not_fire() -> Result<(), Box<dyn std::error:
     let diags = run("count: int = 42\n")?;
     let e14: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(e14.is_empty(), "compatible int=int must not fire E0014");
     Ok(())
@@ -395,7 +395,7 @@ fn e0014_annotation_at_end_of_file_no_newline() -> Result<(), Box<dyn std::error
     let diags = run("x: int = \"str\"")?;
     let e14: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert_eq!(
         e14.len(),
@@ -413,7 +413,7 @@ fn e0014_annotation_without_space_after_colon_does_not_fire(
     let diags = run("x:str = 42\n")?;
     let e14: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(
         e14.is_empty(),
@@ -432,7 +432,7 @@ fn e0015_frozenset_with_two_args() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(src)?;
     let e15: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert_eq!(e15.len(), 1, "frozenset[int, str] must fire E0015");
     Ok(())
@@ -444,7 +444,7 @@ fn e0015_set_with_two_args() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(src)?;
     let e15: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert_eq!(e15.len(), 1, "set[int, str] must fire E0015");
     Ok(())
@@ -456,7 +456,7 @@ fn e0015_dict_with_one_arg() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(src)?;
     let e15: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert_eq!(e15.len(), 1, "dict[str] (one arg) must fire E0015");
     Ok(())
@@ -493,7 +493,7 @@ fn e0015_correct_list_does_not_fire() -> Result<(), Box<dyn std::error::Error>> 
     let diags = run(src)?;
     let e15: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert!(e15.is_empty(), "correct list[int] must not fire E0015");
     Ok(())
@@ -508,7 +508,7 @@ fn e0015_param_annotation_without_space_after_colon_does_not_fire(
     let diags = run(src)?;
     let e15: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert!(
         e15.is_empty(),
@@ -523,7 +523,7 @@ fn e0015_vararg_with_invalid_annotation() -> Result<(), Box<dyn std::error::Erro
     let diags = run(src)?;
     let e15: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert_eq!(e15.len(), 1, "vararg with list[int, str] must fire E0015");
     Ok(())
@@ -535,7 +535,7 @@ fn e0015_kwarg_with_invalid_annotation() -> Result<(), Box<dyn std::error::Error
     let diags = run(src)?;
     let e15: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert_eq!(e15.len(), 1, "kwarg with dict[str] must fire E0015");
     Ok(())
@@ -548,7 +548,7 @@ fn e0015_nested_generic_correct_count() -> Result<(), Box<dyn std::error::Error>
     let diags = run(src)?;
     let e15: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .collect();
     assert!(e15.is_empty(), "dict[list[int], str] has correct arg count");
     Ok(())
@@ -571,7 +571,7 @@ fn e0016_different_param_count_fires() -> Result<(), Box<dyn std::error::Error>>
     let diags = run(src)?;
     let e16: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0016")
+        .filter(|d| d.code.code == "classes_override")
         .collect();
     assert_eq!(e16.len(), 1, "different param count must fire E0016");
     Ok(())
@@ -590,7 +590,7 @@ fn e0016_only_return_type_differs_fires() -> Result<(), Box<dyn std::error::Erro
     let diags = run(src)?;
     let e16: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0016")
+        .filter(|d| d.code.code == "classes_override")
         .collect();
     assert_eq!(e16.len(), 1, "different return type must fire E0016");
     Ok(())
@@ -609,7 +609,7 @@ fn e0016_compatible_override_does_not_fire() -> Result<(), Box<dyn std::error::E
     let diags = run(src)?;
     let e16: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0016")
+        .filter(|d| d.code.code == "classes_override")
         .collect();
     assert!(e16.is_empty(), "compatible override must not fire E0016");
     Ok(())
@@ -627,7 +627,7 @@ fn e0016_base_not_in_module_does_not_fire() -> Result<(), Box<dyn std::error::Er
     let diags = run(src)?;
     let e16: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0016")
+        .filter(|d| d.code.code == "classes_override")
         .collect();
     assert!(e16.is_empty(), "external base must not fire E0016");
     Ok(())
@@ -645,7 +645,7 @@ fn e0016_method_without_override_decorator_not_checked() -> Result<(), Box<dyn s
     let diags = run(src)?;
     let e16: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0016")
+        .filter(|d| d.code.code == "classes_override")
         .collect();
     assert!(
         e16.is_empty(),
@@ -669,7 +669,7 @@ fn e0017_unannotated_child_attr_does_not_fire() -> Result<(), Box<dyn std::error
     let diags = run(src)?;
     let e17: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0017")
+        .filter(|d| d.code.code == "classes_override_2")
         .collect();
     assert!(
         e17.is_empty(),
@@ -689,7 +689,7 @@ fn e0017_base_attr_not_annotated_does_not_fire() -> Result<(), Box<dyn std::erro
     let diags = run(src)?;
     let e17: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0017")
+        .filter(|d| d.code.code == "classes_override_2")
         .collect();
     assert!(
         e17.is_empty(),
@@ -709,7 +709,7 @@ fn e0017_same_annotation_does_not_fire() -> Result<(), Box<dyn std::error::Error
     let diags = run(src)?;
     let e17: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0017")
+        .filter(|d| d.code.code == "classes_override_2")
         .collect();
     assert!(e17.is_empty(), "same annotation must not fire E0017");
     Ok(())
@@ -727,7 +727,7 @@ fn e0017_attr_only_in_child_not_in_base_does_not_fire() -> Result<(), Box<dyn st
     let diags = run(src)?;
     let e17: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0017")
+        .filter(|d| d.code.code == "classes_override_2")
         .collect();
     assert!(
         e17.is_empty(),
@@ -747,7 +747,7 @@ fn e0020_single_overload_function_does_not_fire() -> Result<(), Box<dyn std::err
     let diags = run(src)?;
     let e20: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0020")
+        .filter(|d| d.code.code == "overloads_definitions")
         .collect();
     assert!(
         e20.is_empty(),
@@ -769,7 +769,7 @@ fn e0020_overloads_with_impl_does_not_fire() -> Result<(), Box<dyn std::error::E
     let diags = run(src)?;
     let e20: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0020")
+        .filter(|d| d.code.code == "overloads_definitions")
         .collect();
     assert!(
         e20.is_empty(),
@@ -800,7 +800,7 @@ fn e0021_three_overlapping_overloads_emits_one_per_later() -> Result<(), Box<dyn
     let diags = run(src)?;
     let e21: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0021")
+        .filter(|d| d.code.code == "overloads_consistency")
         .collect();
     // overload[1] overlaps overload[0], overload[2] overlaps overload[0] → 2 E0021
     assert_eq!(
@@ -824,7 +824,7 @@ fn e0021_different_param_count_does_not_overlap() -> Result<(), Box<dyn std::err
     let diags = run(src)?;
     let e21: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0021")
+        .filter(|d| d.code.code == "overloads_consistency")
         .collect();
     assert!(e21.is_empty(), "different param count must not fire E0021");
     Ok(())
@@ -845,7 +845,7 @@ fn e0021_same_param_count_different_names_does_not_overlap(
     let diags = run(src)?;
     let e21: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0021")
+        .filter(|d| d.code.code == "overloads_consistency")
         .collect();
     assert!(
         e21.is_empty(),
@@ -930,7 +930,7 @@ fn e0016_override_when_base_has_no_methods_does_not_fire() -> Result<(), Box<dyn
     let diags = run(src)?;
     let e16: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0016")
+        .filter(|d| d.code.code == "classes_override")
         .collect();
     assert!(
         e16.is_empty(),
@@ -955,7 +955,7 @@ fn e0016_override_without_self_param_compatible_does_not_fire(
     let diags = run(src)?;
     let e16: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0016")
+        .filter(|d| d.code.code == "classes_override")
         .collect();
     assert!(
         e16.is_empty(),
@@ -1146,7 +1146,7 @@ fn guards_protocol_class_is_detected() -> Result<(), Box<dyn std::error::Error>>
     let diags = run(src)?;
     let e20: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0020")
+        .filter(|d| d.code.code == "overloads_definitions")
         .collect();
     assert!(
         e20.is_empty(),
@@ -1194,7 +1194,7 @@ fn e0013_none_annotated_with_valued_return_fires() -> Result<(), Box<dyn std::er
     let diags = run(src)?;
     let e13: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0013")
+        .filter(|d| d.code.code == "returns_compatibility_2")
         .collect();
     assert!(!e13.is_empty(), "-> None with `return 0` must fire E0013");
     Ok(())
@@ -1213,7 +1213,7 @@ fn e0013_none_annotated_with_call_return_does_not_fire() -> Result<(), Box<dyn s
     let diags = run(src)?;
     let e13: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0013")
+        .filter(|d| d.code.code == "returns_compatibility_2")
         .collect();
     assert!(
         e13.is_empty(),
@@ -1240,7 +1240,7 @@ fn e0017_typed_dict_hierarchy_exempt() -> Result<(), Box<dyn std::error::Error>>
     let diags = run(src)?;
     let e17: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0017")
+        .filter(|d| d.code.code == "classes_override_2")
         .collect();
     assert!(
         e17.is_empty(),
@@ -1263,7 +1263,7 @@ fn e0017_matching_annotations_no_diagnostic() -> Result<(), Box<dyn std::error::
     let diags = run(src)?;
     let e17: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0017")
+        .filter(|d| d.code.code == "classes_override_2")
         .collect();
     assert!(
         e17.is_empty(),
@@ -1285,7 +1285,7 @@ fn e0017_base_unannotated_no_diagnostic() -> Result<(), Box<dyn std::error::Erro
     let diags = run(src)?;
     let e17: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0017")
+        .filter(|d| d.code.code == "classes_override_2")
         .collect();
     assert!(
         e17.is_empty(),
@@ -1308,7 +1308,7 @@ fn e0017_readonly_qualifier_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(src)?;
     let e17: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0017")
+        .filter(|d| d.code.code == "classes_override_2")
         .collect();
     assert!(
         e17.is_empty(),
@@ -1331,7 +1331,7 @@ fn e0017_required_qualifier_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(src)?;
     let e17: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0017")
+        .filter(|d| d.code.code == "classes_override_2")
         .collect();
     assert!(
         e17.is_empty(),
@@ -1362,7 +1362,7 @@ fn e0020_abc_class_overload_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(src)?;
     let e20: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0020")
+        .filter(|d| d.code.code == "overloads_definitions")
         .collect();
     assert!(
         e20.is_empty(),
@@ -1386,7 +1386,7 @@ fn e0020_single_overload_with_impl_fires() -> Result<(), Box<dyn std::error::Err
     let diags = run(src)?;
     let e20: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0020")
+        .filter(|d| d.code.code == "overloads_definitions")
         .collect();
     assert!(
         !e20.is_empty(),
@@ -1412,7 +1412,7 @@ fn e0020_two_overloads_with_impl_no_diagnostic() -> Result<(), Box<dyn std::erro
     let diags = run(src)?;
     let e20: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0020")
+        .filter(|d| d.code.code == "overloads_definitions")
         .collect();
     assert!(
         e20.is_empty(),
@@ -1440,7 +1440,7 @@ fn e0021_different_param_count_no_overlap() -> Result<(), Box<dyn std::error::Er
     let diags = run(src)?;
     let e21: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0021")
+        .filter(|d| d.code.code == "overloads_consistency")
         .collect();
     assert!(
         e21.is_empty(),
@@ -1464,7 +1464,7 @@ fn e0021_both_fully_annotated_no_overlap() -> Result<(), Box<dyn std::error::Err
     let diags = run(src)?;
     let e21: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0021")
+        .filter(|d| d.code.code == "overloads_consistency")
         .collect();
     assert!(
         e21.is_empty(),
@@ -1488,7 +1488,7 @@ fn e0021_same_names_unannotated_overlaps() -> Result<(), Box<dyn std::error::Err
     let diags = run(src)?;
     let e21: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0021")
+        .filter(|d| d.code.code == "overloads_consistency")
         .collect();
     assert!(!e21.is_empty(), "same unannotated params must fire E0021");
     Ok(())
@@ -1659,7 +1659,7 @@ fn e0026_single_constraint_fires() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(src)?;
     let e26: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0026")
+        .filter(|d| d.code.code == "generics_basic")
         .collect();
     assert!(!e26.is_empty(), "TypeVar with 1 constraint must fire E0026");
     Ok(())
@@ -1672,7 +1672,7 @@ fn e0026_two_constraints_no_diagnostic() -> Result<(), Box<dyn std::error::Error
     let diags = run(src)?;
     let e26: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0026")
+        .filter(|d| d.code.code == "generics_basic")
         .collect();
     assert!(
         e26.is_empty(),
@@ -1697,7 +1697,7 @@ fn e0027_duplicate_typevar_fires() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(src)?;
     let e27: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0027")
+        .filter(|d| d.code.code == "generics_base_class")
         .collect();
     assert!(
         !e27.is_empty(),
@@ -1722,7 +1722,7 @@ fn e0029_method_in_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> 
     let diags = run(src)?;
     let e29: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0029")
+        .filter(|d| d.code.code == "typeddicts_class_syntax")
         .collect();
     assert!(!e29.is_empty(), "method in TypedDict must fire E0029");
     Ok(())
@@ -1740,7 +1740,7 @@ fn e0029_init_subclass_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(src)?;
     let e29: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0029")
+        .filter(|d| d.code.code == "typeddicts_class_syntax")
         .collect();
     assert!(
         e29.is_empty(),
@@ -1762,7 +1762,7 @@ fn e0029_only_exempt_dunders_are_skipped() -> Result<(), Box<dyn std::error::Err
     let diags = run(src)?;
     let e29: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0029")
+        .filter(|d| d.code.code == "typeddicts_class_syntax")
         .collect();
     assert!(
         !e29.is_empty(),
@@ -1788,7 +1788,7 @@ fn e0030_non_default_after_default_fires() -> Result<(), Box<dyn std::error::Err
     let diags = run(src)?;
     let e30: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0030")
+        .filter(|d| d.code.code == "generics_defaults")
         .collect();
     assert!(
         !e30.is_empty(),
@@ -1808,7 +1808,7 @@ fn e0031_wrong_arg_count_fires() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(src)?;
     let e31: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0031")
+        .filter(|d| d.code.code == "directives_cast")
         .collect();
     assert!(
         !e31.is_empty(),
@@ -1825,7 +1825,7 @@ fn e0031_valid_cast_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(src)?;
     let e31: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0031")
+        .filter(|d| d.code.code == "directives_cast")
         .collect();
     assert!(
         e31.is_empty(),
@@ -1849,7 +1849,7 @@ fn e0032_unknown_keyword_fires() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(src)?;
     let e32: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0032")
+        .filter(|d| d.code.code == "typeddicts_class_syntax_2")
         .collect();
     assert!(
         !e32.is_empty(),
@@ -1870,7 +1870,7 @@ fn e0032_known_keyword_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
     let diags = run(src)?;
     let e32: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0032")
+        .filter(|d| d.code.code == "typeddicts_class_syntax_2")
         .collect();
     assert!(
         e32.is_empty(),
@@ -1896,7 +1896,7 @@ fn e0035_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::error::E
     let diags = run(src)?;
     let e35: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0035")
+        .filter(|d| d.code.code == "typeddicts_required")
         .collect();
     assert!(
         !e35.is_empty(),
@@ -1916,7 +1916,7 @@ fn e0035_not_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::erro
     let diags = run(src)?;
     let e35: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0035")
+        .filter(|d| d.code.code == "typeddicts_required")
         .collect();
     assert!(
         !e35.is_empty(),
@@ -1938,7 +1938,7 @@ fn e0035_non_typed_dict_class_not_exempt() -> Result<(), Box<dyn std::error::Err
     let diags = run(src)?;
     let e35: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0035")
+        .filter(|d| d.code.code == "typeddicts_required")
         .collect();
     assert!(
         !e35.is_empty(),
@@ -1960,7 +1960,7 @@ fn e0035_required_inside_typed_dict_no_diagnostic() -> Result<(), Box<dyn std::e
     let diags = run(src)?;
     let e35: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0035")
+        .filter(|d| d.code.code == "typeddicts_required")
         .collect();
     assert!(
         e35.is_empty(),
@@ -1983,7 +1983,7 @@ fn e0035_annotation_text_reads_actual_source() -> Result<(), Box<dyn std::error:
     let diags = run(src)?;
     let e35: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0035")
+        .filter(|d| d.code.code == "typeddicts_required")
         .collect();
     // If annotation_text returned "xyzzy", has_required_wrapper("xyzzy") = false → no E0035.
     assert!(
@@ -2007,7 +2007,7 @@ fn e0035_transitive_typed_dict_exempt() -> Result<(), Box<dyn std::error::Error>
     let diags = run(src)?;
     let e35: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0035")
+        .filter(|d| d.code.code == "typeddicts_required")
         .collect();
     assert!(
         e35.is_empty(),
@@ -2028,7 +2028,7 @@ fn e0035_nested_required_in_typed_dict_fires() -> Result<(), Box<dyn std::error:
     let diags = run(src)?;
     let e35: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0035")
+        .filter(|d| d.code.code == "typeddicts_required")
         .collect();
     assert!(
         !e35.is_empty(),
@@ -2047,7 +2047,7 @@ fn e0035_required_on_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(src)?;
     let e35: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0035")
+        .filter(|d| d.code.code == "typeddicts_required")
         .collect();
     assert!(
         !e35.is_empty(),
@@ -2080,7 +2080,7 @@ Bad13: Annotated[int]
     let diags = run(src)?;
     let e45: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0045")
+        .filter(|d| d.code.code == "qualifiers_annotated")
         .collect();
     eprintln!("E0045 diagnostics: {}", e45.len());
     for d in &e45 {
@@ -2263,7 +2263,7 @@ fn e0011_int_return_for_str_annotation_fires() -> Result<(), Box<dyn std::error:
     let diags = run(src)?;
     let e11: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0011")
+        .filter(|d| d.code.code == "returns_compatibility")
         .collect();
     assert!(
         !e11.is_empty(),
@@ -2278,7 +2278,7 @@ fn e0011_str_return_for_int_annotation_fires() -> Result<(), Box<dyn std::error:
     let diags = run(src)?;
     let e11: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0011")
+        .filter(|d| d.code.code == "returns_compatibility")
         .collect();
     assert!(
         !e11.is_empty(),
@@ -2293,7 +2293,7 @@ fn e0011_compatible_return_no_diagnostic() -> Result<(), Box<dyn std::error::Err
     let diags = run(src)?;
     let e11: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0011")
+        .filter(|d| d.code.code == "returns_compatibility")
         .collect();
     assert!(
         e11.is_empty(),
@@ -2308,7 +2308,7 @@ fn e0011_call_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run(src)?;
     let e11: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0011")
+        .filter(|d| d.code.code == "returns_compatibility")
         .collect();
     assert!(
         e11.is_empty(),
@@ -2323,7 +2323,7 @@ fn e0011_unannotated_return_no_diagnostic() -> Result<(), Box<dyn std::error::Er
     let diags = run(src)?;
     let e11: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0011")
+        .filter(|d| d.code.code == "returns_compatibility")
         .collect();
     assert!(e11.is_empty(), "unannotated return must not fire E0011");
     Ok(())

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0067] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
-// Integration tests for BSK-E0067: Enum non-member literal.
+//! Tests for [enums_members_2] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+// Integration tests for enums_members_2: Enum non-member literal.
 
 use super::common::*;
 
@@ -26,7 +26,7 @@ class Color(Enum):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0067"),
+        !codes(&diags).contains(&"enums_members_2"),
         "valid enum members should not fire E0067"
     );
     Ok(())

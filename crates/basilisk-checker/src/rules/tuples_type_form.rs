@@ -1,5 +1,5 @@
-//! Implements [BSK-E0049] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! BSK-E0049: Multiple unbounded tuple components in a single tuple type.
+//! Implements [tuples_type_form] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! tuples_type_form: Multiple unbounded tuple components in a single tuple type.
 //!
 //! A `tuple[...]` type annotation may contain at most one unbounded component.
 //! An unbounded component is:
@@ -23,11 +23,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0049",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0049",
+    code: "tuples_type_form",
+    docs_url: "https://www.basilisk-python.dev/errors/tuples_type_form",
 };
 
-/// Emits BSK-E0049 when a tuple type annotation has more than one unbounded component.
+/// Emits tuples_type_form when a tuple type annotation has more than one unbounded component.
 pub(crate) struct MultipleUnboundedTupleTypes;
 
 impl Rule for MultipleUnboundedTupleTypes {

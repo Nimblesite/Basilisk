@@ -1,7 +1,7 @@
-//! Implements [BSK-E0038] from [CHKARCH-DIAG-OWNERSHIP] and
+//! Implements [typeddicts_inheritance] from [CHKARCH-DIAG-OWNERSHIP] and
 //! [CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE]. See
 //! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE
-//! BSK-E0038: Invalid `TypedDict` inheritance.
+//! typeddicts_inheritance: Invalid `TypedDict` inheritance.
 //!
 //! PEP 589 and the typing spec place constraints on `TypedDict` inheritance:
 //!
@@ -29,8 +29,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0038",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0038",
+    code: "typeddicts_inheritance",
+    docs_url: "https://www.basilisk-python.dev/errors/typeddicts_inheritance",
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
@@ -259,7 +259,7 @@ fn check_conflicting_bases(
     }
 }
 
-/// Emits BSK-E0038 for invalid `TypedDict` inheritance.
+/// Emits typeddicts_inheritance for invalid `TypedDict` inheritance.
 pub(crate) struct InvalidTypedDictInheritance;
 
 impl Rule for InvalidTypedDictInheritance {

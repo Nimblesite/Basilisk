@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0139] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0139: `TypeVarTuple` specialization violations.
+//! Tests for [generics_typevartuple_specialization_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for generics_typevartuple_specialization_2: `TypeVarTuple` specialization violations.
 
 use super::common::*;
 
@@ -15,7 +15,7 @@ x: IntTupleGeneric[str] = (1, "hello")
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0139"),
+        !codes(&diags).contains(&"generics_typevartuple_specialization_2"),
         "valid specialization should not fire E0139"
     );
     Ok(())

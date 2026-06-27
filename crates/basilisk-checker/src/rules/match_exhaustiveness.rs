@@ -1,5 +1,5 @@
-//! Implements [BSK-E0023] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0023: Non-exhaustive `match` statement.
+//! Implements [match_exhaustiveness] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! match_exhaustiveness: Non-exhaustive `match` statement.
 //!
 //! A value-dispatch `match` statement that has no irrefutable branch may fail
 //! to handle certain runtime values, leading to a silent fall-through (Python
@@ -20,11 +20,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0023",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0023",
+    code: "match_exhaustiveness",
+    docs_url: "https://www.basilisk-python.dev/errors/match_exhaustiveness",
 };
 
-/// Emits BSK-E0023 for every `match` statement that lacks a wildcard branch.
+/// Emits match_exhaustiveness for every `match` statement that lacks a wildcard branch.
 pub(crate) struct NonExhaustiveMatch;
 
 impl Rule for NonExhaustiveMatch {

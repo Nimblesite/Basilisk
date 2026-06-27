@@ -1,5 +1,5 @@
-//! Implements [BSK-E0096] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0096: Type mismatch between a dataclass `field(default_factory=…)` and
+//! Implements [dataclasses_usage] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! dataclasses_usage: Type mismatch between a dataclass `field(default_factory=…)` and
 //! the field's declared type annotation.
 //!
 //! When a dataclass field uses `field(default_factory=T)` where `T` is a known
@@ -23,11 +23,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0096",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0096",
+    code: "dataclasses_usage",
+    docs_url: "https://www.basilisk-python.dev/errors/dataclasses_usage",
 };
 
-/// Emits BSK-E0096 for dataclass fields whose `default_factory` type is
+/// Emits dataclasses_usage for dataclass fields whose `default_factory` type is
 /// incompatible with the declared field annotation.
 pub(crate) struct DataclassFieldDefaultFactoryMismatch;
 

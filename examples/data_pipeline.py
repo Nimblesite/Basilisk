@@ -32,18 +32,18 @@ def load(records, destination):  # BSK-E0001: records, destination untyped
     # implicit return None — no annotation # BSK-E0002: no return type
 
 
-# ── BSK-E0011: Any annotation without justification ──────────────────────────
-def coerce_field(value: Any, target_type: Any) -> Any:  # BSK-E0011 ×3
+# ── returns_compatibility: Any annotation without justification ──────────────────────────
+def coerce_field(value: Any, target_type: Any) -> Any:  # returns_compatibility ×3
     return target_type(value)
 
 
-# ── BSK-E0014: type-incompatible constant assignments ────────────────────────
-BATCH_SIZE: int = "1000"  # BSK-E0014: str, not int
-NULL_SENTINEL: float = "NaN"  # BSK-E0014: str, not float
-MAX_ERRORS: int = 0.5  # BSK-E0014: float, not int
+# ── assignment_compatibility: type-incompatible constant assignments ────────────────────────
+BATCH_SIZE: int = "1000"  # assignment_compatibility: str, not int
+NULL_SENTINEL: float = "NaN"  # assignment_compatibility: str, not float
+MAX_ERRORS: int = 0.5  # assignment_compatibility: float, not int
 
 
-# ── BSK-E0017: subclass narrows column type incompatibly ─────────────────────
+# ── classes_override_2: subclass narrows column type incompatibly ─────────────────────
 class Column:
     name: str
     dtype: str
@@ -51,43 +51,43 @@ class Column:
 
 
 class PartitionKey(Column):
-    nullable: int = 0  # BSK-E0017: int overrides bool
+    nullable: int = 0  # classes_override_2: int overrides bool
 
 
-# ── BSK-E0018: name used before any assignment in the module ─────────────────
+# ── names_undefined: name used before any assignment in the module ─────────────────
 def validate_schema(name: str) -> bool:
-    return name in _known_types  # BSK-E0018: _known_types undefined
+    return name in _known_types  # names_undefined: _known_types undefined
 
 
 _known_types: set[str] = {"int", "str", "float", "bool"}
 
 
-# ── BSK-E0019: conditionally assigned variable returned unconditionally ───────
+# ── names_unbound: conditionally assigned variable returned unconditionally ───────
 def detect_encoding(raw_bytes: bytes) -> str:
     if raw_bytes[:3] == b"\xef\xbb\xbf":
         encoding = "utf-8-sig"
     elif raw_bytes[:2] in (b"\xff\xfe", b"\xfe\xff"):
         encoding = "utf-16"
     # no else branch — encoding may be unbound if no BOM matches
-    return encoding  # BSK-E0019: encoding may be unbound
+    return encoding  # names_unbound: encoding may be unbound
 
 
-# ── BSK-E0021: unannotated overload params produce a duplicate ───────────────
+# ── overloads_consistency: unannotated overload params produce a duplicate ───────────────
 @overload
 def read_source(path) -> list[dict[str, str]]: ...  # BSK-E0001: path untyped
 
 
 @overload
-def read_source(path) -> list[dict[str, str]]: ...  # BSK-E0001 + BSK-E0021: duplicate
+def read_source(path) -> list[dict[str, str]]: ...  # BSK-E0001 + overloads_consistency: duplicate
 
 
 def read_source(path: str) -> list[dict[str, str]]:
     return []
 
 
-# ── BSK-E0022: list literal used as a dict key ───────────────────────────────
+# ── dict_key_hashable: list literal used as a dict key ───────────────────────────────
 def empty_schema() -> dict[list[str], str]:  # unhashable key type in annotation
-    return {["a", "b"]: "string"}  # BSK-E0022: list literal as key
+    return {["a", "b"]: "string"}  # dict_key_hashable: list literal as key
 
 
 # ── BSK-E0025: override not decorated ───────────────────────────────────────

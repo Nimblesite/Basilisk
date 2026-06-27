@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0029] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0029: Method defined in `TypedDict`.
+//! Tests for [typeddicts_class_syntax] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for typeddicts_class_syntax: Method defined in `TypedDict`.
 
 use super::common::*;
 
@@ -17,7 +17,7 @@ class Movie(TypedDict):
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0029"),
+        codes(&diags).contains(&"typeddicts_class_syntax"),
         "method in TypedDict should fire E0029, got: {:?}",
         codes(&diags)
     );
@@ -35,7 +35,7 @@ class Movie(TypedDict):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0029"),
+        !codes(&diags).contains(&"typeddicts_class_syntax"),
         "TypedDict with only fields should not fire E0029"
     );
     Ok(())

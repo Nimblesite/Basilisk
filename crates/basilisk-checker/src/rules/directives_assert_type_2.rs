@@ -1,5 +1,5 @@
-//! Implements [BSK-E0053] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! BSK-E0053: `assert_type()` type mismatch.
+//! Implements [directives_assert_type_2] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! directives_assert_type_2: `assert_type()` type mismatch.
 //!
 //! `assert_type(expr, Type)` is a static-analysis directive that verifies the
 //! inferred type of `expr` equals `Type`.  When the resolver can determine both
@@ -19,11 +19,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0053",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0053",
+    code: "directives_assert_type_2",
+    docs_url: "https://www.basilisk-python.dev/errors/directives_assert_type_2",
 };
 
-/// Emits BSK-E0053 when `assert_type(expr, T)` has a detectable type mismatch.
+/// Emits directives_assert_type_2 when `assert_type(expr, T)` has a detectable type mismatch.
 ///
 /// Currently disabled — requires full type inference to avoid false positives.
 /// Re-enable in `mod.rs` `run_all()` once the type engine is in place.

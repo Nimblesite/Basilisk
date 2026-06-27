@@ -8,7 +8,7 @@
     clippy::as_conversions
 )]
 //! Integration tests for advanced checker rules with low coverage.
-//! Exercises BSK-E0057 through BSK-E0149 and complex type scenarios.
+//! Exercises aliases_type_statement through generics_syntax_scoping and complex type scenarios.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;
@@ -344,7 +344,7 @@ class Base:
 class MyProto(Protocol, Base):
     def method(self) -> None: ...
 ";
-    let msgs = messages_for(&run(source)?, "BSK-E0098");
+    let msgs = messages_for(&run(source)?, "protocols_merging");
     // Exercises the rule whether or not it fires
     let _ = msgs;
     Ok(())
@@ -364,7 +364,7 @@ class Drawable(Protocol):
 
 d = Drawable()
 ";
-    let msgs = messages_for(&run(source)?, "BSK-E0099");
+    let msgs = messages_for(&run(source)?, "protocols_explicit");
     let _ = msgs;
     Ok(())
 }

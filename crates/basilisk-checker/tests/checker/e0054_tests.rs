@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0054] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
-// Integration tests for BSK-E0054: Final type qualifier violations.
+//! Tests for [qualifiers_final_annotation_2] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+// Integration tests for qualifiers_final_annotation_2: Final type qualifier violations.
 
 use super::common::*;
 
@@ -12,7 +12,7 @@ RATE = 300
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0054");
+    let msgs = messages_for(&diags, "qualifiers_final_annotation_2");
     assert!(
         !msgs.is_empty(),
         "reassignment to module-level Final should fire E0054, got: {msgs:?}"
@@ -28,7 +28,7 @@ RATE: Final = 3000
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0054");
+    let msgs = messages_for(&diags, "qualifiers_final_annotation_2");
     assert!(
         msgs.is_empty(),
         "module Final with no reassignment should not fire E0054"
@@ -48,7 +48,7 @@ Config.DEFAULT_ID = 42
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0054");
+    let msgs = messages_for(&diags, "qualifiers_final_annotation_2");
     assert!(
         !msgs.is_empty(),
         "class Final attr reassignment should fire E0054, got: {msgs:?}"
@@ -69,7 +69,7 @@ class Child(Base):
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0054");
+    let msgs = messages_for(&diags, "qualifiers_final_annotation_2");
     assert!(
         !msgs.is_empty(),
         "subclass overriding Final attr should fire E0054, got: {msgs:?}"
@@ -88,7 +88,7 @@ def func() -> None:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0054");
+    let msgs = messages_for(&diags, "qualifiers_final_annotation_2");
     assert!(
         !msgs.is_empty(),
         "local Final modification should fire E0054, got: {msgs:?}"
@@ -107,7 +107,7 @@ class MyClass:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0054");
+    let msgs = messages_for(&diags, "qualifiers_final_annotation_2");
     assert!(
         !msgs.is_empty(),
         "instance Final outside __init__ should fire E0054, got: {msgs:?}"
@@ -126,7 +126,7 @@ class MyClass:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0054");
+    let msgs = messages_for(&diags, "qualifiers_final_annotation_2");
     assert!(
         msgs.is_empty(),
         "instance Final in __init__ should not fire E0054, got: {msgs:?}"

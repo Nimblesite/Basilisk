@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0014] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0014: Assignment type incompatibility.
+//! Tests for [assignment_compatibility] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for assignment_compatibility: Assignment type incompatibility.
 
 use super::common::*;
 
@@ -8,7 +8,7 @@ fn e0014_int_annotated_str_literal_fires() -> Result<(), Box<dyn std::error::Err
     let source = "count: int = \"hello\"\n";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         !msgs.is_empty(),
         "int annotation with str literal should fire E0014, got: {msgs:?}"
@@ -21,7 +21,7 @@ fn e0014_str_annotated_int_literal_fires() -> Result<(), Box<dyn std::error::Err
     let source = "label: str = 42\n";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         !msgs.is_empty(),
         "str annotation with int literal should fire E0014, got: {msgs:?}"
@@ -34,7 +34,7 @@ fn e0014_bool_annotated_str_literal_fires() -> Result<(), Box<dyn std::error::Er
     let source = "flag: bool = \"yes\"\n";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         !msgs.is_empty(),
         "bool annotation with str literal should fire E0014, got: {msgs:?}"
@@ -47,7 +47,7 @@ fn e0014_float_annotated_str_literal_fires() -> Result<(), Box<dyn std::error::E
     let source = "ratio: float = \"1.5\"\n";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         !msgs.is_empty(),
         "float annotation with str literal should fire E0014, got: {msgs:?}"
@@ -60,7 +60,7 @@ fn e0014_compatible_assignment_no_diagnostic() -> Result<(), Box<dyn std::error:
     let source = "count: int = 42\n";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         msgs.is_empty(),
         "compatible assignment should not fire E0014"
@@ -73,7 +73,7 @@ fn e0014_str_annotated_str_literal_no_diagnostic() -> Result<(), Box<dyn std::er
     let source = "name: str = \"hello\"\n";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         msgs.is_empty(),
         "str annotation with str literal should not fire E0014"
@@ -89,7 +89,7 @@ def func() -> None:
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         !msgs.is_empty(),
         "local variable type mismatch should fire E0014, got: {msgs:?}"
@@ -105,7 +105,7 @@ def func() -> None:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         msgs.is_empty(),
         "compatible local var should not fire E0014"
@@ -118,7 +118,7 @@ fn e0014_bytes_annotated_str_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "data: bytes = \"text\"\n";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         !msgs.is_empty(),
         "bytes annotation with str literal should fire E0014"
@@ -132,7 +132,7 @@ fn e0014_int_annotated_bool_no_diagnostic() -> Result<(), Box<dyn std::error::Er
     let source = "x: int = True\n";
     let diags = run(source)?;
 
-    let _msgs = messages_for(&diags, "BSK-E0014");
+    let _msgs = messages_for(&diags, "assignment_compatibility");
     // This may or may not fire depending on implementation; bool is subtype of int
     // Just exercise the code path
     Ok(())
@@ -144,7 +144,7 @@ fn e0014_float_annotated_int_no_diagnostic() -> Result<(), Box<dyn std::error::E
     let source = "x: float = 42\n";
     let diags = run(source)?;
 
-    let _msgs = messages_for(&diags, "BSK-E0014");
+    let _msgs = messages_for(&diags, "assignment_compatibility");
     // int -> float widening may or may not be handled
     Ok(())
 }
@@ -155,7 +155,7 @@ fn e0014_optional_none_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
     let source = "from typing import Optional\nmaybe_int: Optional[int] = None\n";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         msgs.is_empty(),
         "Optional[int] = None should NOT fire E0014, got: {msgs:?}"
@@ -169,7 +169,7 @@ fn e0014_union_member_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> 
     let source = "from typing import Union\neither: Union[int, str] = 42\n";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         msgs.is_empty(),
         "Union[int, str] = 42 should NOT fire E0014, got: {msgs:?}"
@@ -183,7 +183,7 @@ fn e0014_final_with_type_no_diagnostic() -> Result<(), Box<dyn std::error::Error
     let source = "from typing import Final\nMAX_SIZE: Final[int] = 100\n";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         msgs.is_empty(),
         "Final[int] = 100 should NOT fire E0014, got: {msgs:?}"
@@ -203,7 +203,7 @@ r1_1: RecursiveTypeAlias1[int] = 1
 r1_2: RecursiveTypeAlias1[int] = [1, [1, 2, 3]]
 "#;
     let diags = run(source)?;
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         msgs.is_empty(),
         "E0014 should not fire on variables annotated with a PEP 695 type alias, got: {msgs:?}"
@@ -222,7 +222,7 @@ _MODEL_SETTING_KEYS: tuple[str, ...] = ("max_tokens", "temperature", "top_p", "t
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         msgs.is_empty(),
         "tuple[str, ...] = (..all strings..) should NOT fire E0014, got: {msgs:?}"
@@ -244,7 +244,7 @@ _LLM_DISPLAY_NAMES: dict[tuple[str, str], str] = {
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         msgs.is_empty(),
         "dict[tuple[str, str], str] = {{matching literal}} should NOT fire E0014, got: {msgs:?}"
@@ -262,7 +262,7 @@ x, y = "wrong", 42
     // Just exercise the tuple reassignment path
     let diags = run(source)?;
 
-    let _msgs = messages_for(&diags, "BSK-E0014");
+    let _msgs = messages_for(&diags, "assignment_compatibility");
     Ok(())
 }
 
@@ -278,7 +278,7 @@ _DIRECT_TENANT_TABLES: tuple[tuple[str, str], ...] = (
 )
 "#;
     let diags = run(source)?;
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         msgs.is_empty(),
         "tuple[tuple[str, str], ...] = (..matching pairs..) should NOT fire E0014, got: {msgs:?}"
@@ -295,7 +295,7 @@ fn e0014_variadic_tuple_of_tuples_element_mismatch_fires() -> Result<(), Box<dyn
 _BAD: tuple[tuple[str, str], ...] = (("a", 1), ("c", "d"))
 "#;
     let diags = run(source)?;
-    let msgs = messages_for(&diags, "BSK-E0014");
+    let msgs = messages_for(&diags, "assignment_compatibility");
     assert!(
         !msgs.is_empty(),
         "a (str, int) element must still fire E0014 against tuple[tuple[str, str], ...]"

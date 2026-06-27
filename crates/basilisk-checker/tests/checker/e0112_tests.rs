@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0112] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0112: `TypeGuard` callable return type mismatch.
+//! Tests for [narrowing_typeis] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for narrowing_typeis: `TypeGuard` callable return type mismatch.
 
 use super::common::*;
 
@@ -26,7 +26,7 @@ takes_callable_bool(simple_typeguard)
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0112"),
+        !codes(&diags).contains(&"narrowing_typeis"),
         "TypeGuard is a subtype of bool; should not fire E0112"
     );
     Ok(())

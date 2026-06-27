@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0022]-[BSK-E0023] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0022 (unhashable dict key) and BSK-E0023 (non-exhaustive match).
+//! Tests for [dict_key_hashable]-[match_exhaustiveness] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for dict_key_hashable (unhashable dict key) and match_exhaustiveness (non-exhaustive match).
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ def bad() -> None:
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0022"),
+        codes(&diags).contains(&"dict_key_hashable"),
         "list as dict key should fire E0022, got: {:?}",
         codes(&diags)
     );
@@ -28,7 +28,7 @@ def good() -> None:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0022"),
+        !codes(&diags).contains(&"dict_key_hashable"),
         "string key should not fire E0022"
     );
     Ok(())
@@ -48,7 +48,7 @@ def check_val(x: int) -> None:
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0023"),
+        codes(&diags).contains(&"match_exhaustiveness"),
         "match without wildcard should fire E0023, got: {:?}",
         codes(&diags)
     );
@@ -67,7 +67,7 @@ def check_val(x: int) -> None:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0023"),
+        !codes(&diags).contains(&"match_exhaustiveness"),
         "match with wildcard should not fire E0023"
     );
     Ok(())

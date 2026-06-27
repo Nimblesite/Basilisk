@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0113] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0113: `TypeIs` inconsistent narrowing.
+//! Tests for [narrowing_typeis_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for narrowing_typeis_2: `TypeIs` inconsistent narrowing.
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ def is_str(x: object) -> TypeIs[str]:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0113"),
+        !codes(&diags).contains(&"narrowing_typeis_2"),
         "valid TypeIs should not fire E0113"
     );
     Ok(())

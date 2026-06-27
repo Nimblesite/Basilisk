@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0129] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0129: Literal value assignment incompatibility.
+//! Tests for [literals_semantics_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for literals_semantics_2: Literal value assignment incompatibility.
 
 use super::common::*;
 
@@ -37,7 +37,7 @@ def func(a: Literal[1]) -> None:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0129"),
+        !codes(&diags).contains(&"literals_semantics_2"),
         "matching literal assignment should not fire E0129"
     );
     Ok(())

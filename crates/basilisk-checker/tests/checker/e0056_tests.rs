@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0056] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
-// Integration tests for BSK-E0056: `ReadOnly` `TypedDict` mutation.
+//! Tests for [typeddicts_readonly] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+// Integration tests for typeddicts_readonly: `ReadOnly` `TypedDict` mutation.
 
 use super::common::*;
 
@@ -14,7 +14,7 @@ class Config(TypedDict):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0056"),
+        !codes(&diags).contains(&"typeddicts_readonly"),
         "TypedDict without ReadOnly fields should not fire E0056"
     );
     Ok(())

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0125] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0125: Instance attribute on class object.
+//! Tests for [generics_type_erasure] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for generics_type_erasure: Instance attribute on class object.
 
 use super::common::*;
 
@@ -18,7 +18,7 @@ x = n1.label
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0125"),
+        !codes(&diags).contains(&"generics_type_erasure"),
         "instance attr access on instance should not fire E0125"
     );
     Ok(())

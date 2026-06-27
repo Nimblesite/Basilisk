@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0097] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
-// Integration tests for BSK-E0097: Protocol self attribute violation.
+//! Tests for [protocols_definition] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+// Integration tests for protocols_definition: Protocol self attribute violation.
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ class Proto(Protocol):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0097"),
+        !codes(&diags).contains(&"protocols_definition"),
         "valid protocol should not fire E0097"
     );
     Ok(())
@@ -33,7 +33,7 @@ class Proto(Protocol):
         self.temp: list[int] = []
 ";
     let diags = run(source)?;
-    let msgs = messages_for(&diags, "BSK-E0097");
+    let msgs = messages_for(&diags, "protocols_definition");
     assert!(
         msgs.iter().any(|m| m.contains("temp")),
         "undeclared `temp` in a non-init method must fire E0097, got: {msgs:?}"
@@ -59,7 +59,7 @@ class Proto(Protocol):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0097"),
+        !codes(&diags).contains(&"protocols_definition"),
         "a static method's parameter is not an instance receiver"
     );
     Ok(())

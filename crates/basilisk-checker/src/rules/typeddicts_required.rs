@@ -1,5 +1,5 @@
-//! Implements [BSK-E0035] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! BSK-E0035: `Required` / `NotRequired` used in an invalid context.
+//! Implements [typeddicts_required] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! typeddicts_required: `Required` / `NotRequired` used in an invalid context.
 //!
 //! PEP 655 and the typing spec restrict `Required[T]` and `NotRequired[T]` to:
 //!
@@ -32,8 +32,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0035",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0035",
+    code: "typeddicts_required",
+    docs_url: "https://www.basilisk-python.dev/errors/typeddicts_required",
 };
 
 /// Returns `true` when the annotation string uses `Required[` or `NotRequired[`.
@@ -79,7 +79,7 @@ fn is_in_typed_dict_hierarchy(cls: &ClassInfo, class_map: &HashMap<&str, &ClassI
     })
 }
 
-/// Emits BSK-E0035 for `Required`/`NotRequired` used outside `TypedDict` or nested.
+/// Emits typeddicts_required for `Required`/`NotRequired` used outside `TypedDict` or nested.
 pub(crate) struct RequiredNotRequiredContext;
 
 impl Rule for RequiredNotRequiredContext {

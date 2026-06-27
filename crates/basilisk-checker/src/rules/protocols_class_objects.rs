@@ -1,5 +1,5 @@
-//! Implements [BSK-E0106] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0106: Protocol class used where `type[Proto]` is expected.
+//! Implements [protocols_class_objects] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! protocols_class_objects: Protocol class used where `type[Proto]` is expected.
 //!
 //! The typing spec states: "Variables and parameters annotated with
 //! `Type[Proto]` accept only concrete (non-protocol) subtypes of Proto."
@@ -31,11 +31,11 @@ use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0106",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0106",
+    code: "protocols_class_objects",
+    docs_url: "https://www.basilisk-python.dev/errors/protocols_class_objects",
 };
 
-/// Emits BSK-E0106 when a Protocol class is used where `type[Proto]` is expected.
+/// Emits protocols_class_objects when a Protocol class is used where `type[Proto]` is expected.
 pub(crate) struct ProtocolClassObject;
 
 impl Rule for ProtocolClassObject {

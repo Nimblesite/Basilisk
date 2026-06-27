@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0122] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0122: Callable call-site arity violations.
+//! Tests for [callables_protocol] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for callables_protocol: Callable call-site arity violations.
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ def invoke(cb: Callable[[int, str], bool]) -> bool:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0122"),
+        !codes(&diags).contains(&"callables_protocol"),
         "correct arity should not fire E0122"
     );
     Ok(())

@@ -30,8 +30,8 @@ include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
 
 [tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["BSK-E0011"]
-rules."BSK-E0010" = "warning"
+disabled = ["returns_compatibility"]
+rules."imports_unresolved" = "warning"
 ```
 
 ---
@@ -86,17 +86,17 @@ rules."BSK-E0010" = "warning"
 ```toml
 [tool.basilisk.per-path-overrides."legacy/**"]
 # 为匹配的文件完全禁用规则
-disabled = ["BSK-E0011"]
+disabled = ["returns_compatibility"]
 
 [tool.basilisk.per-path-overrides."tests/**"]
 # 或降低规则的严重性而不是完全禁用
-rules."BSK-E0011" = "warning"
+rules."returns_compatibility" = "warning"
 ```
 
 ### `disabled`
 
 **类型：** `string[]`
-**示例：** `["BSK-E0011", "BSK-E0001"]`
+**示例：** `["returns_compatibility", "BSK-E0001"]`
 
 为匹配此 glob 的文件完全禁用的规则代码。
 
@@ -104,7 +104,7 @@ rules."BSK-E0011" = "warning"
 
 **类型：** 规则代码 → 严重性的表
 **严重性：** `"error"`、`"warning"`、`"info"`、`"disabled"`
-**示例：** `rules."BSK-E0011" = "warning"`
+**示例：** `rules."returns_compatibility" = "warning"`
 
 为匹配的文件覆盖特定规则的严重性。尽可能选择降低或禁用单个规则，而不是放宽大范围的检查。
 
@@ -115,7 +115,7 @@ rules."BSK-E0011" = "warning"
 要在特定行上抑制诊断，请添加带有规则代码和强制原因的注释：
 
 ```python
-result: Any = get_legacy_value()  # basilisk: ignore[BSK-E0011] -- no stub available, tracked in #123
+result: Any = get_legacy_value()  # basilisk: ignore[returns_compatibility] -- no stub available, tracked in #123
 ```
 
 要抑制一行上的所有诊断：

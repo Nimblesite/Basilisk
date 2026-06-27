@@ -1,5 +1,5 @@
-//! Implements [BSK-E0089] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0089: Invalid PEP 695 type parameter bound or constraint.
+//! Implements [generics_syntax_declarations] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_syntax_declarations: Invalid PEP 695 type parameter bound or constraint.
 //!
 //! PEP 695 introduced a new syntax for declaring type parameters in class and
 //! function definitions.  The bound/constraint expression after `:` is restricted
@@ -31,11 +31,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0089",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0089",
+    code: "generics_syntax_declarations",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_syntax_declarations",
 };
 
-/// Emits BSK-E0089 when a PEP 695 type parameter has an invalid bound or constraint.
+/// Emits generics_syntax_declarations when a PEP 695 type parameter has an invalid bound or constraint.
 pub(crate) struct Pep695InvalidBound;
 
 impl Rule for Pep695InvalidBound {

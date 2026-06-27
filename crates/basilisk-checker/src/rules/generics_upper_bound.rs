@@ -1,5 +1,5 @@
-//! Implements [BSK-E0080] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0080: `TypeVar` upper bound violation at call site.
+//! Implements [generics_upper_bound] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_upper_bound: `TypeVar` upper bound violation at call site.
 //!
 //! When a function parameter is annotated with a `TypeVar` that has an upper
 //! bound (e.g. `bound=Sized`), and the call site passes a literal value whose
@@ -28,11 +28,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0080",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0080",
+    code: "generics_upper_bound",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_upper_bound",
 };
 
-/// Emits BSK-E0080 when a call site passes a value whose type does not satisfy
+/// Emits generics_upper_bound when a call site passes a value whose type does not satisfy
 /// the `TypeVar` upper bound declared on the corresponding parameter.
 pub(crate) struct TypeVarBoundViolation;
 

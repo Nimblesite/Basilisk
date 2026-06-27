@@ -1,5 +1,5 @@
-//! Implements [BSK-E0139] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0139: Invalid `TypeVarTuple` specialization of generic alias.
+//! Implements [generics_typevartuple_specialization_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_typevartuple_specialization_2: Invalid `TypeVarTuple` specialization of generic alias.
 //!
 //! Two related violations are detected:
 //!
@@ -41,11 +41,11 @@ use crate::rules::shared::split_top_level_commas;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0139",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0139",
+    code: "generics_typevartuple_specialization_2",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_typevartuple_specialization_2",
 };
 
-/// Emits BSK-E0139 for invalid `TypeVarTuple` specializations of generic aliases.
+/// Emits generics_typevartuple_specialization_2 for invalid `TypeVarTuple` specializations of generic aliases.
 pub(crate) struct TypeVarTupleSpecializationViolation;
 
 impl Rule for TypeVarTupleSpecializationViolation {

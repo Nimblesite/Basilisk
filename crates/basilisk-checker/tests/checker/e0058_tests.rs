@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0058] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
-// Integration tests for BSK-E0058: Annotated too few arguments.
+//! Tests for [qualifiers_annotated_2] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+// Integration tests for qualifiers_annotated_2: Annotated too few arguments.
 
 use super::common::*;
 
@@ -11,7 +11,7 @@ x: Annotated[int]
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0058"),
+        codes(&diags).contains(&"qualifiers_annotated_2"),
         "Annotated with single arg should fire E0058, got: {:?}",
         codes(&diags)
     );
@@ -26,7 +26,7 @@ x: Annotated[int, "metadata"]
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0058"),
+        !codes(&diags).contains(&"qualifiers_annotated_2"),
         "Annotated with two args should not fire E0058"
     );
     Ok(())

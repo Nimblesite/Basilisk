@@ -1,5 +1,5 @@
-//! Implements [BSK-E0011] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0011: Return type mismatch.
+//! Implements [returns_compatibility] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! returns_compatibility: Return type mismatch.
 //!
 //! Emitted as an `Error` when the literal value returned by a function is
 //! clearly incompatible with the declared return type annotation (e.g.
@@ -28,11 +28,11 @@ use super::{
 };
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0011",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0011",
+    code: "returns_compatibility",
+    docs_url: "https://www.basilisk-python.dev/errors/returns_compatibility",
 };
 
-/// Emits BSK-E0011 for detectable return type mismatches.
+/// Emits returns_compatibility for detectable return type mismatches.
 pub(crate) struct ReturnTypeMismatch;
 
 impl Rule for ReturnTypeMismatch {

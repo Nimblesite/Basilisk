@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0080] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
-// Tests for BSK-E0080: `TypeVar` upper bound violation at call site.
+//! Tests for [generics_upper_bound] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
+// Tests for generics_upper_bound: `TypeVar` upper bound violation at call site.
 //
 // This rule detects when a call site passes a value whose type does not satisfy
 // the `TypeVar` upper bound declared on the corresponding parameter.
@@ -23,7 +23,7 @@ longer(3, 3)  # E -- int does not implement Sized (__len__)
     let diags = run(src)?;
     let e0080: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0080")
+        .filter(|d| d.code.code == "generics_upper_bound")
         .collect();
     assert!(!e0080.is_empty(), "int should violate Sized bound");
     Ok(())
@@ -46,7 +46,7 @@ longer("hello", "world")  # OK -- str implements Sized
     let diags = run(src)?;
     let e0080: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0080")
+        .filter(|d| d.code.code == "generics_upper_bound")
         .collect();
     assert!(e0080.is_empty(), "str should satisfy Sized bound");
     Ok(())
@@ -67,7 +67,7 @@ process(42)  # E -- int does not implement Sized
     let diags = run(src)?;
     let e0080: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0080")
+        .filter(|d| d.code.code == "generics_upper_bound")
         .collect();
     assert!(!e0080.is_empty(), "int should violate Sized bound");
     Ok(())
@@ -88,7 +88,7 @@ process("hello")  # E -- str does not satisfy int bound
     let diags = run(src)?;
     let e0080: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0080")
+        .filter(|d| d.code.code == "generics_upper_bound")
         .collect();
     assert!(!e0080.is_empty(), "str should violate int bound");
     Ok(())
@@ -111,7 +111,7 @@ outer(3.14)  # E -- float does not implement Sized
     let diags = run(src)?;
     let e0080: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0080")
+        .filter(|d| d.code.code == "generics_upper_bound")
         .collect();
     assert!(!e0080.is_empty(), "float should violate Sized bound");
     Ok(())
@@ -132,7 +132,7 @@ process(1, 2, 3)  # E -- all ints violate Sized bound
     let diags = run(src)?;
     let e0080: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0080")
+        .filter(|d| d.code.code == "generics_upper_bound")
         .collect();
     assert!(!e0080.is_empty(), "ints should violate Sized bound");
     Ok(())
@@ -158,7 +158,7 @@ p.process(42)  # No E0080 - method calls not checked
     let diags = run(src)?;
     let e0080: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0080")
+        .filter(|d| d.code.code == "generics_upper_bound")
         .collect();
     assert!(e0080.is_empty(), "method calls should not trigger E0080");
     Ok(())
@@ -179,7 +179,7 @@ handle(True)  # E -- bool does not implement Sized
     let diags = run(src)?;
     let e0080: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0080")
+        .filter(|d| d.code.code == "generics_upper_bound")
         .collect();
     assert!(!e0080.is_empty(), "bool should violate Sized bound");
     Ok(())
@@ -200,7 +200,7 @@ process(None)  # E -- None does not implement Sized
     let diags = run(src)?;
     let e0080: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0080")
+        .filter(|d| d.code.code == "generics_upper_bound")
         .collect();
     assert!(!e0080.is_empty(), "None should violate Sized bound");
     Ok(())
@@ -221,7 +221,7 @@ process(b"hello")  # OK -- bytes implements Sized
     let diags = run(src)?;
     let e0080: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0080")
+        .filter(|d| d.code.code == "generics_upper_bound")
         .collect();
     assert!(e0080.is_empty(), "bytes should satisfy Sized bound");
     Ok(())
@@ -242,7 +242,7 @@ process(42)  # OK -- int satisfies int bound
     let diags = run(src)?;
     let e0080: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0080")
+        .filter(|d| d.code.code == "generics_upper_bound")
         .collect();
     assert!(e0080.is_empty(), "int should satisfy int bound");
     Ok(())
@@ -263,7 +263,7 @@ process(42)  # OK -- int satisfies float bound (widening)
     let diags = run(src)?;
     let e0080: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0080")
+        .filter(|d| d.code.code == "generics_upper_bound")
         .collect();
     assert!(e0080.is_empty(), "int should satisfy float bound");
     Ok(())
@@ -286,7 +286,7 @@ process(3.14)  # OK -- unbound TypeVar accepts any type
     let diags = run(src)?;
     let e0080: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0080")
+        .filter(|d| d.code.code == "generics_upper_bound")
         .collect();
     assert!(e0080.is_empty(), "unbound TypeVar should accept any type");
     Ok(())
@@ -310,7 +310,7 @@ process(42)  # E -- int does not implement SomeProtocol
     let diags = run(src)?;
     let e0080: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0080")
+        .filter(|d| d.code.code == "generics_upper_bound")
         .collect();
     // This test may fail if the rule doesn't handle custom protocol bounds yet
     // That's OK - failing test shows missing functionality

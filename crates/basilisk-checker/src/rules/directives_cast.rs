@@ -1,5 +1,5 @@
-//! Implements [BSK-E0031] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! BSK-E0031: Invalid `cast()` call.
+//! Implements [directives_cast] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! directives_cast: Invalid `cast()` call.
 //!
 //! `typing.cast(typ, val)` must be called with exactly two positional arguments,
 //! and the first argument must be a type expression, not a value literal.
@@ -15,11 +15,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0031",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0031",
+    code: "directives_cast",
+    docs_url: "https://www.basilisk-python.dev/errors/directives_cast",
 };
 
-/// Emits BSK-E0031 for invalid `cast()` calls.
+/// Emits directives_cast for invalid `cast()` calls.
 pub(crate) struct InvalidCastCall;
 
 impl Rule for InvalidCastCall {

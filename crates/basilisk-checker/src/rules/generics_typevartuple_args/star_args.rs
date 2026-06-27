@@ -1,4 +1,4 @@
-//! Implements [BSK-E0085] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [generics_typevartuple_args] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Call-site validation for `*args` annotated with an unpacked tuple type
 //! (PEP 646): `*args: *tuple[int, ...]`, `*args: *tuple[int, str]`, and
 //! mixed forms like `*args: *tuple[int, *tuple[str, ...], str]`.

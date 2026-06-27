@@ -2,7 +2,7 @@
 
 ## Context
 
-When users import third-party libraries (FastAPI, SQLAlchemy, etc.) that lack type stubs, Basilisk fires BSK-E0010 at the import — but then **cascades dozens of downstream errors** for every use of the imported symbols. This noise buries real bugs. The fix: track where type information came from (provenance), fire one error at the import site, and suppress all downstream noise.
+When users import third-party libraries (FastAPI, SQLAlchemy, etc.) that lack type stubs, Basilisk fires imports_unresolved at the import — but then **cascades dozens of downstream errors** for every use of the imported symbols. This noise buries real bugs. The fix: track where type information came from (provenance), fire one error at the import site, and suppress all downstream noise.
 
 Additionally, users need a way to auto-generate best-effort stubs for untyped packages, and all of this must be configurable via `pyproject.toml`.
 
@@ -72,11 +72,11 @@ if !untyped_names.is_empty() && should_suppress_cascade(&diag, &untyped_names, s
 }
 ```
 
-`should_suppress_cascade()` checks if the diagnostic's span references any name in `untyped_names`. BSK-E0010 itself is NOT suppressed — only downstream rules (E0012, E0013, etc.).
+`should_suppress_cascade()` checks if the diagnostic's span references any name in `untyped_names`. imports_unresolved itself is NOT suppressed — only downstream rules (E0012, E0013, etc.).
 
 ### 1.6 Tests
 
-- Test that importing an unresolved module fires BSK-E0010 exactly once
+- Test that importing an unresolved module fires imports_unresolved exactly once
 - Test that using symbols from that unresolved module does NOT fire downstream errors
 - Test that resolved imports still fire downstream errors normally
 - Test provenance `From` conversions
@@ -93,7 +93,7 @@ if !untyped_names.is_empty() && should_suppress_cascade(&diag, &untyped_names, s
 
 Add `pub provenance: Option<TypeProvenance>` field (defaults to `None`). Existing rule code unaffected.
 
-### 2.2 Tag BSK-E0010 and BSK-E0152 with provenance
+### 2.2 Tag imports_unresolved and BSK-E0152 with provenance
 
 **Files**: `crates/basilisk-checker/src/rules/e0010.rs`, `e0152.rs`
 
@@ -239,7 +239,7 @@ All stub/provenance config via `[tool.basilisk]` — already partially implement
 | Key | Type | Default | Status |
 |-----|------|---------|--------|
 | `stub-paths` | `string[]` | `[]` | DONE |
-| `rules."BSK-E0010"` | severity | `"error"` | DONE |
+| `rules."imports_unresolved"` | severity | `"error"` | DONE |
 | `per-module-overrides.{mod}.ignore-missing-stubs` | `bool` | `false` | DONE |
 | `per-path-overrides.{glob}.disabled` | `string[]` | `[]` | DONE |
 | `uv.stub-suggestions` | `bool` | `true` | DONE |
@@ -272,12 +272,12 @@ All stub/provenance config via `[tool.basilisk]` — already partially implement
 
 ## Verification
 
-1. **Cascade suppression**: Create a Python file that imports an untyped package and uses it extensively. Confirm BSK-E0010 fires once at import, zero downstream errors.
+1. **Cascade suppression**: Create a Python file that imports an untyped package and uses it extensively. Confirm imports_unresolved fires once at import, zero downstream errors.
 2. **Provenance hover**: Hover over stdlib import -> "(typeshed)". Hover over untyped import -> "(no type stubs available)".
-3. **Auto-stub generation**: `basilisk stubs generate requests` produces valid `.pyi` in `.basilisk/stubs/`. Re-check shows BSK-E0010 cleared, BSK-E0152 shows "(best-effort stub)".
-4. **Config**: Set `rules."BSK-E0010" = "warning"` in `pyproject.toml`, confirm severity changes.
+3. **Auto-stub generation**: `basilisk stubs generate requests` produces valid `.pyi` in `.basilisk/stubs/`. Re-check shows imports_unresolved cleared, BSK-E0152 shows "(best-effort stub)".
+4. **Config**: Set `rules."imports_unresolved" = "warning"` in `pyproject.toml`, confirm severity changes.
 5. **uv integration**: In a uv project, confirm hover shows package version and stub status.
-6. **One-click code actions**: BSK-E0010 and BSK-E0152 diagnostics show quick fix code actions. Clicking the quick fix installs the package/stubs automatically. No CLI commands in help text.
+6. **One-click code actions**: imports_unresolved and BSK-E0152 diagnostics show quick fix code actions. Clicking the quick fix installs the package/stubs automatically. No CLI commands in help text.
 7. **Full CI**: `cargo clippy`, `cargo test`, `cargo fmt --check` all pass.
 
 ---
@@ -299,7 +299,7 @@ All stub/provenance config via `[tool.basilisk]` — already partially implement
 
 ### Phase 2: Provenance in Hover & Diagnostics ✅ DONE
 - [x] Add `provenance: Option<TypeProvenance>` to `Diagnostic` struct
-- [x] Tag BSK-E0010 diagnostics with `TypeProvenance::Untyped`
+- [x] Tag imports_unresolved diagnostics with `TypeProvenance::Untyped`
 - [x] Tag BSK-E0152 diagnostics with provenance
 - [x] Tier-based severity adjustment (Tier3 -> Info) in `check_with_config()`
 - [x] Provenance annotations in hover tooltips
@@ -331,13 +331,13 @@ All stub/provenance config via `[tool.basilisk]` — already partially implement
 - [x] All clippy, fmt, tests passing
 
 ### Phase 4b: Diagnostic Help Text Cleanup ✅ DONE
-- [x] Remove "Run `uv add ...`" CLI instructions from BSK-E0010 help text (`e0010.rs`)
-- [x] Remove "Run `uv sync`" CLI instructions from BSK-E0010 help text
+- [x] Remove "Run `uv add ...`" CLI instructions from imports_unresolved help text (`e0010.rs`)
+- [x] Remove "Run `uv sync`" CLI instructions from imports_unresolved help text
 - [x] Remove "`uv add --dev types-...`" CLI instructions from BSK-E0152 help text
 - [x] Remove "Run `uv lock`" CLI instructions from BSK-W0013 help text
 - [x] Remove "run `uv add --dev pytest`" from pytest-not-found messages (init.rs, test_handlers.rs)
 - [x] Replace with problem descriptions — the code action is the fix, not a CLI command
-- [x] All BSK-E0010/E0152/W0013/W0014 scenarios have corresponding code actions in `code_actions/mod.rs`
+- [x] All imports_unresolved/E0152/W0013/W0014 scenarios have corresponding code actions in `code_actions/mod.rs`
 - [x] Update tests to match new help text
 - [x] All tests passing (18 checker, 57 code action)
 

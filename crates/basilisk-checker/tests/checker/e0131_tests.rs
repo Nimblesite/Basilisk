@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0131] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0131: Generator yield/send/return type mismatch.
+//! Tests for [annotations_generators_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for annotations_generators_2: Generator yield/send/return type mismatch.
 
 use super::common::*;
 
@@ -44,7 +44,7 @@ def good() -> Generator[int, None, None]:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0131"),
+        !codes(&diags).contains(&"annotations_generators_2"),
         "compatible yield type should not fire E0131"
     );
     Ok(())
@@ -84,11 +84,11 @@ def _restore_workspace_modules() -> Iterator[None]:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0131"),
+        !codes(&diags).contains(&"annotations_generators_2"),
         "bare yield in an Iterator[None] generator must not fire E0131, got: {:?}",
         diags
             .iter()
-            .filter(|d| d.code.code == "BSK-E0131")
+            .filter(|d| d.code.code == "annotations_generators_2")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
     );

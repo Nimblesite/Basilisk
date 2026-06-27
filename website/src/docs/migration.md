@@ -59,16 +59,16 @@ If you were already using Pyright with `typeCheckingMode = "strict"`, you will s
 
 | Pyright rule | Basilisk equivalent |
 |---|---|
-| `reportMissingTypeArgument` | BSK-E0015 |
+| `reportMissingTypeArgument` | callables_annotation |
 | `reportReturnType` | BSK-E0002 |
-| `reportArgumentType` | BSK-E0012 |
-| `reportAttributeAccessIssue` | BSK-E0050 |
-| `reportUndefinedVariable` | BSK-E0018 |
-| `reportOperatorIssue` | BSK-E0014 |
+| `reportArgumentType` | calls_argument_type |
+| `reportAttributeAccessIssue` | aliases_newtype |
+| `reportUndefinedVariable` | names_undefined |
+| `reportOperatorIssue` | assignment_compatibility |
 
 Basilisk adds errors that Pyright does not flag even in strict mode:
-- **BSK-E0011** — Implicit `Any` in parameter and return position
-- **BSK-E0023** — Non-exhaustive `match` statement (missing cases)
+- **returns_compatibility** — Implicit `Any` in parameter and return position
+- **match_exhaustiveness** — Non-exhaustive `match` statement (missing cases)
 - **BSK-E0025** — Missing `@override` decorator on overriding methods
 
 ### Step 3 — Handle `# type: ignore` comments
@@ -80,7 +80,7 @@ Pyright uses `# type: ignore` for inline suppressions. Basilisk requires a diffe
 x = get_value()  # type: ignore[reportArgumentType]
 
 # Basilisk
-x = get_value()  # basilisk: ignore[BSK-E0012] -- third-party API mismatch, tracked in #456
+x = get_value()  # basilisk: ignore[calls_argument_type] -- third-party API mismatch, tracked in #456
 ```
 
 Basilisk will flag bare `# type: ignore` comments since it doesn't recognise them. The migration tool suggests the correct `# basilisk: ignore[CODE] -- reason` format.
@@ -95,7 +95,7 @@ python-version = "3.12"
 include = ["src/"]
 
 [tool.basilisk.per-path-overrides."legacy/**"]
-rules."BSK-E0011" = "warning"   # demote the noisiest rule to a warning
+rules."returns_compatibility" = "warning"   # demote the noisiest rule to a warning
 ```
 
 You can also drop `# basilisk: relaxed` at the top of an individual file to turn all of its errors into warnings while you work through it.
@@ -132,7 +132,7 @@ exclude = migrations/
 [tool.basilisk]
 python-version = "3.12"
 exclude = ["**/migrations/**"]
-# note: ignore_missing_imports → BSK-E0010 is still active;
+# note: ignore_missing_imports → imports_unresolved is still active;
 # use per-path overrides for specific packages without stubs
 ```
 
@@ -140,8 +140,8 @@ exclude = ["**/migrations/**"]
 
 mypy's `--strict` enables a specific set of flags. Basilisk enforces all of them and more. When migrating from `mypy --strict`, expect:
 
-- **More errors from BSK-E0011** — mypy permits `Any` in some positions that Basilisk does not
-- **More errors from BSK-E0023** — non-exhaustive `match` statements that mypy does not check
+- **More errors from returns_compatibility** — mypy permits `Any` in some positions that Basilisk does not
+- **More errors from match_exhaustiveness** — non-exhaustive `match` statements that mypy does not check
 - **More errors from BSK-E0025** — missing `@override` decorators that mypy does not require
 
 ### Step 3 — mypy plugins
@@ -152,7 +152,7 @@ Workaround while waiting for WASM plugins:
 
 ```toml
 [tool.basilisk.per-path-overrides."models/**"]
-disabled = ["BSK-E0011"]  # Django model fields use Any extensively
+disabled = ["returns_compatibility"]  # Django model fields use Any extensively
 ```
 
 ### Step 4 — Update inline suppressions
@@ -193,7 +193,7 @@ Don't try to type everything at once. Soften the noisiest rules in legacy paths 
 
 ```toml
 [tool.basilisk.per-path-overrides."legacy/**"]
-rules."BSK-E0011" = "warning"
+rules."returns_compatibility" = "warning"
 
 [tool.basilisk.per-path-overrides."new_modules/**"]
 # Full strictness immediately for new code

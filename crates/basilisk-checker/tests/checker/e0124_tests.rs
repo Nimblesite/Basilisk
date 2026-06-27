@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0124] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0124: Protocol tuple element type mismatch.
+//! Tests for [protocols_subtyping] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for protocols_subtyping: Protocol tuple element type mismatch.
 
 use super::common::*;
 
@@ -17,7 +17,7 @@ class Point(RGB):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0124"),
+        !codes(&diags).contains(&"protocols_subtyping"),
         "valid tuple assignment should not fire E0124"
     );
     Ok(())

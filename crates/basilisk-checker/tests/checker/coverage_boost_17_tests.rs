@@ -30,7 +30,7 @@ t: tuple[int, int] = p
     let diagnostics = run(source)?;
     let e0073 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0073")
+        .filter(|d| d.code.code == "namedtuples_type_compat")
         .collect::<Vec<_>>();
     assert!(
         !e0073.is_empty(),
@@ -56,7 +56,7 @@ v: tuple[int, str] = t
     let diagnostics = run(source)?;
     let e0073 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0073")
+        .filter(|d| d.code.code == "namedtuples_type_compat")
         .collect::<Vec<_>>();
     assert!(
         !e0073.is_empty(),
@@ -81,7 +81,7 @@ t: tuple[int, str] = p
     let diagnostics = run(source)?;
     let e0073 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0073")
+        .filter(|d| d.code.code == "namedtuples_type_compat")
         .collect::<Vec<_>>();
     assert!(
         e0073.is_empty(),
@@ -107,7 +107,7 @@ class Point(NamedTuple):
     let diagnostics = run(source)?;
     let e0116 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0116")
+        .filter(|d| d.code.code == "namedtuples_define_class")
         .collect::<Vec<_>>();
     assert!(
         !e0116.is_empty(),
@@ -132,7 +132,7 @@ class Point(NamedTuple, Base):
     let diagnostics = run(source)?;
     let e0116 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0116")
+        .filter(|d| d.code.code == "namedtuples_define_class")
         .collect::<Vec<_>>();
     assert!(
         !e0116.is_empty(),
@@ -198,7 +198,7 @@ v: Transformer[int] = IntToStr()
     let diagnostics = run(source)?;
     let e0137 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0137")
+        .filter(|d| d.code.code == "protocols_generic")
         .collect::<Vec<_>>();
     assert!(
         !e0137.is_empty(),
@@ -227,7 +227,7 @@ v: Handler[int] = StrHandler()
     let diagnostics = run(source)?;
     let e0137 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0137")
+        .filter(|d| d.code.code == "protocols_generic")
         .collect::<Vec<_>>();
     assert!(
         !e0137.is_empty(),
@@ -368,7 +368,7 @@ apply(is_int)
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0112")
+        .filter(|d| d.code.code == "narrowing_typeis")
         .collect::<Vec<_>>();
     assert!(
         !e0112.is_empty(),
@@ -394,7 +394,7 @@ apply(is_str)
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0112")
+        .filter(|d| d.code.code == "narrowing_typeis")
         .collect::<Vec<_>>();
     assert!(
         !e0112.is_empty(),
@@ -426,7 +426,7 @@ c: Drawable = Circle()
     let diagnostics = run(source)?;
     let e0121 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0121")
+        .filter(|d| d.code.code == "protocols_definition_2")
         .collect::<Vec<_>>();
     assert!(
         !e0121.is_empty(),
@@ -458,7 +458,7 @@ x: ConcreteBase = Other()
     let diagnostics = run(source)?;
     let e0121 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0121")
+        .filter(|d| d.code.code == "protocols_definition_2")
         .collect::<Vec<_>>();
     assert!(
         !e0121.is_empty(),
@@ -561,7 +561,7 @@ def gen() -> Generator[int, None, str]:
     let diagnostics = run(source)?;
     let e0131 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0131")
+        .filter(|d| d.code.code == "annotations_generators_2")
         .collect::<Vec<_>>();
     assert!(
         !e0131.is_empty(),
@@ -585,7 +585,7 @@ def gen() -> Generator[int, None, None]:
     let diagnostics = run(source)?;
     let e0131 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0131")
+        .filter(|d| d.code.code == "annotations_generators_2")
         .collect::<Vec<_>>();
     // yield from incompatible may or may not be checked
     let _ = e0131;
@@ -625,7 +625,7 @@ T = TypeVar("T", int, str, default=float)
     // Caught by e0091 (typevar_default_incompat)
     let e0091 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0091")
+        .filter(|d| d.code.code == "generics_defaults_2")
         .collect::<Vec<_>>();
     assert!(
         !e0091.is_empty(),
@@ -720,7 +720,7 @@ def process(x: str) -> int: ...
     let diagnostics = run(source)?;
     let e0020 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0020")
+        .filter(|d| d.code.code == "overloads_definitions")
         .collect::<Vec<_>>();
     assert!(
         !e0020.is_empty(),
@@ -744,7 +744,7 @@ def process(x: int) -> str:
     let diagnostics = run(source)?;
     let e0020 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0020")
+        .filter(|d| d.code.code == "overloads_definitions")
         .collect::<Vec<_>>();
     assert!(
         !e0020.is_empty(),
@@ -772,7 +772,7 @@ isinstance(x, NotRuntime)
     let diagnostics = run(source)?;
     let e0119 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0119")
+        .filter(|d| d.code.code == "protocols_runtime_checkable_2")
         .collect::<Vec<_>>();
     assert!(
         !e0119.is_empty(),
@@ -813,7 +813,7 @@ COUNT += 1
 "#;
     let diagnostics = run(source)?;
     // Augmented assign to Final should be caught by E0054
-    let has_e0054 = diagnostics.iter().any(|d| d.code.code == "BSK-E0054");
+    let has_e0054 = diagnostics.iter().any(|d| d.code.code == "qualifiers_final_annotation_2");
     assert!(
         has_e0054,
         "Should detect Final augmented assign via E0054: {diagnostics:?}",
@@ -884,7 +884,7 @@ x = c.init_debug
     let diagnostics = run(source)?;
     let e0095 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0095")
+        .filter(|d| d.code.code == "dataclasses_postinit")
         .collect::<Vec<_>>();
     assert!(
         !e0095.is_empty(),
@@ -1005,7 +1005,7 @@ hash_obj: Hashable = NoHash()
     let diagnostics = run(source)?;
     let e0121 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0121")
+        .filter(|d| d.code.code == "protocols_definition_2")
         .count();
     assert!(
         e0121 >= 1,
@@ -1051,7 +1051,7 @@ class WithClassVar(NamedTuple):
     let diagnostics = run(source)?;
     let e0116 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0116")
+        .filter(|d| d.code.code == "namedtuples_define_class")
         .count();
     assert!(
         e0116 >= 2,
@@ -1096,7 +1096,7 @@ no_method: Mapper[int, str] = Empty()
     let diagnostics = run(source)?;
     let e0137 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0137")
+        .filter(|d| d.code.code == "protocols_generic")
         .count();
     assert!(
         e0137 >= 1,
@@ -1142,7 +1142,7 @@ takes_bool_fn(is_str_guard)
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0112")
+        .filter(|d| d.code.code == "narrowing_typeis")
         .count();
     assert!(
         e0112 >= 1,
@@ -1183,7 +1183,7 @@ def correct(x):
     let diagnostics = run(source)?;
     let e0020 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0020")
+        .filter(|d| d.code.code == "overloads_definitions")
         .count();
     assert!(
         e0020 >= 2,
@@ -1219,7 +1219,7 @@ t4: tuple[int, str, float] = r
     let diagnostics = run(source)?;
     let e0073 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0073")
+        .filter(|d| d.code.code == "namedtuples_type_compat")
         .count();
     assert!(
         e0073 >= 1,
@@ -1258,7 +1258,7 @@ c.Y = "z"
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0054")
+        .filter(|d| d.code.code == "qualifiers_final_annotation_2")
         .count();
     assert!(
         e0054 >= 3,
@@ -1382,7 +1382,7 @@ def test_all_branches(
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0122")
+        .filter(|d| d.code.code == "callables_protocol")
         .count();
     assert!(
         e0122 >= 5,

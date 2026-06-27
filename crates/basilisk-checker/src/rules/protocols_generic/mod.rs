@@ -1,4 +1,4 @@
-//! BSK-E0137: Generic protocol violations.
+//! protocols_generic: Generic protocol violations.
 //!
 //! Detects violations related to generic protocol usage:
 //!
@@ -44,11 +44,11 @@ use helpers::{
 };
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0137",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0137",
+    code: "protocols_generic",
+    docs_url: "https://www.basilisk-python.dev/errors/protocols_generic",
 };
 
-/// Emits BSK-E0137 for generic protocol violations.
+/// Emits protocols_generic for generic protocol violations.
 pub(crate) struct GenericProtocolViolation;
 
 impl Rule for GenericProtocolViolation {

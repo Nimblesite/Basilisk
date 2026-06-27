@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0083] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
-// Integration tests for BSK-E0083: `TypeVarTuple` unpack required.
+//! Tests for [generics_typevartuple_basic_2] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
+// Integration tests for generics_typevartuple_basic_2: `TypeVarTuple` unpack required.
 
 use super::common::*;
 

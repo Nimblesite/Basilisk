@@ -21,7 +21,7 @@ use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 /// Owned, serialisable form of a [`Diagnostic`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CachedDiagnostic {
-    /// Full code string, e.g. `"BSK-E0011"`.
+    /// Full code string, e.g. `"returns_compatibility"`.
     pub code: String,
     /// Documentation URL for the code.
     pub docs_url: String,

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0117] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0117: Unbound type variable in scope.
+//! Implements [generics_scoping] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_scoping: Unbound type variable in scope.
 //!
 //! A type variable used in a type annotation must be "in scope" — i.e. it must
 //! be bound by a surrounding generic class (`Generic[T]`), PEP 695 type
@@ -33,11 +33,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0117",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0117",
+    code: "generics_scoping",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_scoping",
 };
 
-/// Emits BSK-E0117 when a type variable is used outside its binding scope.
+/// Emits generics_scoping when a type variable is used outside its binding scope.
 pub(crate) struct UnboundTypeVarScope;
 
 impl Rule for UnboundTypeVarScope {

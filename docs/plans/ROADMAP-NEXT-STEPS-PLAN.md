@@ -207,7 +207,7 @@ conformance and false-positive work is larger — sized honestly below against t
   config) reports **265 false positives** to drive down — all from basilisk's strict-by-default house-style rules
   firing on spec-valid code. The only legitimate fix is making the checker smarter so those defaults stop firing on
   inferred-not-an-error code; disabling a rule to hide them is forbidden (history: PRs #184/#185/#191 did exactly
-  that to fake a 100% score, now reverted). **Plus an open showstopper**: `BSK-E0149` line-scans source text and misfires on
+  that to fake a 100% score, now reverted). **Plus an open showstopper**: `generics_syntax_scoping` line-scans source text and misfires on
   docstrings containing `class`/`def` prefixes + bracketed tokens (e.g. our own `[SPEC-ID]` convention).
   Re-ground the rule on the AST. High credibility payoff.
 - **`CHECKER-PEP-CONFORMANCE-PLAN.md`** (active, 46.6% — 68/146, every rule enabled): clear the **78 failing files** toward the
@@ -335,7 +335,7 @@ Rough plan (most of this is human-led — voice, accounts, timing, relationships
 
 ## G. Finish near-complete plans
 
-- [ ] **`[AGENT]`** Fix `BSK-E0149` docstring/line-scanning showstopper — re-ground the rule on the AST (`CHECK-ELIMINATE-FALSE-POSITIVES.md`).
+- [ ] **`[AGENT]`** Fix `generics_syntax_scoping` docstring/line-scanning showstopper — re-ground the rule on the AST (`CHECK-ELIMINATE-FALSE-POSITIVES.md`).
 - [ ] **`[AGENT]`** Clear the remaining 265 false positives (by making the checker smarter — every rule stays enabled; never by disabling a rule).
 - [ ] **`[AGENT]`** Close the 78 failing PEP-conformance files (Protocols, Callables, TypeVarTuple, ParamSpec, TypedDicts).
 - [ ] **`[AGENT]`** Finish `CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md` Phase 4 — wire the no-line-scanning lint into CI.

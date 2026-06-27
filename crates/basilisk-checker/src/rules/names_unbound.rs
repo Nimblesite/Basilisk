@@ -1,5 +1,5 @@
-//! Implements [BSK-E0019] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0019: Unbound variable on some code paths.
+//! Implements [names_unbound] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! names_unbound: Unbound variable on some code paths.
 //!
 //! When a function contains a `return <name>` statement and the name is
 //! assigned in the function body, but only inside conditional branches
@@ -20,11 +20,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0019",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0019",
+    code: "names_unbound",
+    docs_url: "https://www.basilisk-python.dev/errors/names_unbound",
 };
 
-/// Emits BSK-E0019 for return statements that reference conditionally-assigned names.
+/// Emits names_unbound for return statements that reference conditionally-assigned names.
 pub(crate) struct UnboundVariable;
 
 impl Rule for UnboundVariable {

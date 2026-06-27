@@ -1,5 +1,5 @@
-//! Implements [BSK-E0115] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Expression visitors and helpers for BSK-E0115.
+//! Implements [directives_deprecated] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Expression visitors and helpers for directives_deprecated.
 //!
 //! Contains `visit_expr_for_usage` and all expression-level deprecation checks.
 

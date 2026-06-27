@@ -1,5 +1,5 @@
-//! Implements [BSK-E0097] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0097: Protocol method sets self-attributes not declared in the Protocol.
+//! Implements [protocols_definition] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! protocols_definition: Protocol method sets self-attributes not declared in the Protocol.
 //!
 //! When a Protocol class defines a method (including `__init__`/`__new__`) that
 //! assigns to `self.attr` where `attr` is not a declared member of the Protocol,
@@ -31,11 +31,11 @@ use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0097",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0097",
+    code: "protocols_definition",
+    docs_url: "https://www.basilisk-python.dev/errors/protocols_definition",
 };
 
-/// Emits BSK-E0097 when a Protocol `__new__`/`__init__` assigns to undeclared self-attributes.
+/// Emits protocols_definition when a Protocol `__new__`/`__init__` assigns to undeclared self-attributes.
 pub(crate) struct ProtocolNewSelfAttrViolation;
 
 impl Rule for ProtocolNewSelfAttrViolation {

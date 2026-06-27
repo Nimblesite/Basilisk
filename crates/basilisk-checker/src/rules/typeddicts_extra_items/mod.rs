@@ -1,7 +1,7 @@
-//! Implements [BSK-E0156] from [CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS].
+//! Implements [typeddicts_extra_items] from [CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS].
 //! See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS
 //!
-//! BSK-E0156: `TypedDict` `extra_items` / `closed` (PEP 728) violations.
+//! typeddicts_extra_items: `TypedDict` `extra_items` / `closed` (PEP 728) violations.
 //!
 //! Validates class-definition legality, dict-literal construction, assignability
 //! between `TypedDict`s, and constructor calls against the PEP 728 rules.
@@ -28,11 +28,11 @@ use self::model::{collect_models, mk_span, model_map, transitive_fields, TdModel
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0156",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0156",
+    code: "typeddicts_extra_items",
+    docs_url: "https://www.basilisk-python.dev/errors/typeddicts_extra_items",
 };
 
-/// Emits BSK-E0156 for PEP 728 `extra_items` / `closed` violations.
+/// Emits typeddicts_extra_items for PEP 728 `extra_items` / `closed` violations.
 pub(crate) struct TypedDictExtraItemsViolation;
 
 impl Rule for TypedDictExtraItemsViolation {

@@ -64,7 +64,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0005"
   },
   {
-    "code": "BSK-E0010",
+    "code": "imports_unresolved",
     "severity": "error",
     "summary": "Unresolved import",
     "summaryHtml": "Unresolved import",
@@ -75,10 +75,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0010"
+    "docsUrl": "https://www.basilisk-python.dev/errors/imports_unresolved"
   },
   {
-    "code": "BSK-E0011",
+    "code": "returns_compatibility",
     "severity": "error",
     "summary": "Return type mismatch",
     "summaryHtml": "Return type mismatch",
@@ -98,17 +98,17 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0011"
+    "docsUrl": "https://www.basilisk-python.dev/errors/returns_compatibility"
   },
   {
-    "code": "BSK-E0012",
+    "code": "calls_argument_type",
     "severity": "error",
     "summary": "Argument type mismatch at a call site",
     "summaryHtml": "Argument type mismatch at a call site",
     "body": [
       {
         "type": "text",
-        "html": "When a function is called with a literal argument whose type is clearly incompatible with the declared parameter annotation, Basilisk reports the mismatch.  The check mirrors the literal-kind vs annotation comparison used by BSK-E0014."
+        "html": "When a function is called with a literal argument whose type is clearly incompatible with the declared parameter annotation, Basilisk reports the mismatch.  The check mirrors the literal-kind vs annotation comparison used by assignment_compatibility."
       },
       {
         "type": "code",
@@ -117,10 +117,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0012"
+    "docsUrl": "https://www.basilisk-python.dev/errors/calls_argument_type"
   },
   {
-    "code": "BSK-E0013",
+    "code": "returns_compatibility_2",
     "severity": "error",
     "summary": "Return type mismatch \u2014 inferred return type incompatible with annotation",
     "summaryHtml": "Return type mismatch \u2014 inferred return type incompatible with annotation",
@@ -131,10 +131,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0013"
+    "docsUrl": "https://www.basilisk-python.dev/errors/returns_compatibility_2"
   },
   {
-    "code": "BSK-E0014",
+    "code": "assignment_compatibility",
     "severity": "error",
     "summary": "Assignment type incompatibility (literal mismatches)",
     "summaryHtml": "Assignment type incompatibility (literal mismatches)",
@@ -154,10 +154,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0014"
+    "docsUrl": "https://www.basilisk-python.dev/errors/assignment_compatibility"
   },
   {
-    "code": "BSK-E0015",
+    "code": "callables_annotation",
     "severity": "error",
     "summary": "Invalid type argument count or form",
     "summaryHtml": "Invalid type argument count or form",
@@ -176,10 +176,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0015"
+    "docsUrl": "https://www.basilisk-python.dev/errors/callables_annotation"
   },
   {
-    "code": "BSK-E0016",
+    "code": "classes_override",
     "severity": "error",
     "summary": "Incompatible method override",
     "summaryHtml": "Incompatible method override",
@@ -199,10 +199,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0016"
+    "docsUrl": "https://www.basilisk-python.dev/errors/classes_override"
   },
   {
-    "code": "BSK-E0017",
+    "code": "classes_override_2",
     "severity": "error",
     "summary": "Incompatible class attribute override",
     "summaryHtml": "Incompatible class attribute override",
@@ -218,10 +218,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0017"
+    "docsUrl": "https://www.basilisk-python.dev/errors/classes_override_2"
   },
   {
-    "code": "BSK-E0018",
+    "code": "names_undefined",
     "severity": "error",
     "summary": "Undefined variable used in a return statement",
     "summaryHtml": "Undefined variable used in a return statement",
@@ -237,10 +237,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0018"
+    "docsUrl": "https://www.basilisk-python.dev/errors/names_undefined"
   },
   {
-    "code": "BSK-E0019",
+    "code": "names_unbound",
     "severity": "error",
     "summary": "Unbound variable on some code paths",
     "summaryHtml": "Unbound variable on some code paths",
@@ -256,10 +256,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0019"
+    "docsUrl": "https://www.basilisk-python.dev/errors/names_unbound"
   },
   {
-    "code": "BSK-E0020",
+    "code": "overloads_definitions",
     "severity": "error",
     "summary": "Missing `@overload` implementation",
     "summaryHtml": "Missing <code>@overload</code> implementation",
@@ -274,10 +274,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0020"
+    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_definitions"
   },
   {
-    "code": "BSK-E0021",
+    "code": "overloads_consistency",
     "severity": "error",
     "summary": "Overlapping `@overload` signatures",
     "summaryHtml": "Overlapping <code>@overload</code> signatures",
@@ -292,10 +292,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0021"
+    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_consistency"
   },
   {
-    "code": "BSK-E0022",
+    "code": "dict_key_hashable",
     "severity": "error",
     "summary": "Unhashable type used as a dict key",
     "summaryHtml": "Unhashable type used as a dict key",
@@ -311,10 +311,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0022"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dict_key_hashable"
   },
   {
-    "code": "BSK-E0023",
+    "code": "match_exhaustiveness",
     "severity": "error",
     "summary": "Non-exhaustive `match` statement",
     "summaryHtml": "Non-exhaustive <code>match</code> statement",
@@ -329,10 +329,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0023"
+    "docsUrl": "https://www.basilisk-python.dev/errors/match_exhaustiveness"
   },
   {
-    "code": "BSK-E0024",
+    "code": "annotations_typeexpr",
     "severity": "error",
     "summary": "Invalid type form \u2014 numeric literal used as type annotation",
     "summaryHtml": "Invalid type form \u2014 numeric literal used as type annotation",
@@ -348,7 +348,7 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0024"
+    "docsUrl": "https://www.basilisk-python.dev/errors/annotations_typeexpr"
   },
   {
     "code": "BSK-E0025",
@@ -377,7 +377,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0025"
   },
   {
-    "code": "BSK-E0026",
+    "code": "generics_basic",
     "severity": "error",
     "summary": "`TypeVar` declared with exactly one constraint",
     "summaryHtml": "<code>TypeVar</code> declared with exactly one constraint",
@@ -388,10 +388,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0026"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_basic"
   },
   {
-    "code": "BSK-E0027",
+    "code": "generics_base_class",
     "severity": "error",
     "summary": "Duplicate `TypeVar` in a `Generic[...]` base",
     "summaryHtml": "Duplicate <code>TypeVar</code> in a <code>Generic...</code> base",
@@ -402,10 +402,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0027"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_base_class"
   },
   {
-    "code": "BSK-E0029",
+    "code": "typeddicts_class_syntax",
     "severity": "error",
     "summary": "Method defined inside a `TypedDict` class",
     "summaryHtml": "Method defined inside a <code>TypedDict</code> class",
@@ -416,10 +416,10 @@
       }
     ],
     "group": "Type Safety",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0029"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_class_syntax"
   },
   {
-    "code": "BSK-E0030",
+    "code": "generics_defaults",
     "severity": "error",
     "summary": "Non-default `TypeVar` follows a default `TypeVar` in `Generic[...]`",
     "summaryHtml": "Non-default <code>TypeVar</code> follows a default <code>TypeVar</code> in <code>Generic...</code>",
@@ -438,10 +438,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0030"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults"
   },
   {
-    "code": "BSK-E0031",
+    "code": "directives_cast",
     "severity": "error",
     "summary": "Invalid `cast()` call",
     "summaryHtml": "Invalid <code>cast()</code> call",
@@ -456,10 +456,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0031"
+    "docsUrl": "https://www.basilisk-python.dev/errors/directives_cast"
   },
   {
-    "code": "BSK-E0032",
+    "code": "typeddicts_class_syntax_2",
     "severity": "error",
     "summary": "Invalid keyword argument in `TypedDict` class definition",
     "summaryHtml": "Invalid keyword argument in <code>TypedDict</code> class definition",
@@ -474,10 +474,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0032"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_class_syntax_2"
   },
   {
-    "code": "BSK-E0033",
+    "code": "directives_reveal_type",
     "severity": "error",
     "summary": "Invalid `reveal_type()` call",
     "summaryHtml": "Invalid <code>reveal_type()</code> call",
@@ -492,10 +492,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0033"
+    "docsUrl": "https://www.basilisk-python.dev/errors/directives_reveal_type"
   },
   {
-    "code": "BSK-E0034",
+    "code": "qualifiers_final_decorator",
     "severity": "error",
     "summary": "`@final` decorator violations",
     "summaryHtml": "<code>@final</code> decorator violations",
@@ -518,10 +518,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0034"
+    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_final_decorator"
   },
   {
-    "code": "BSK-E0035",
+    "code": "typeddicts_required",
     "severity": "error",
     "summary": "`Required` / `NotRequired` used in an invalid context",
     "summaryHtml": "<code>Required</code> / <code>NotRequired</code> used in an invalid context",
@@ -549,7 +549,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0035"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_required"
   },
   {
     "code": "BSK-E0036",
@@ -591,7 +591,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0036"
   },
   {
-    "code": "BSK-E0037",
+    "code": "typeddicts_alt_syntax",
     "severity": "error",
     "summary": "Invalid `TypedDict(...)` functional-syntax call",
     "summaryHtml": "Invalid <code>TypedDict(...)</code> functional-syntax call",
@@ -606,10 +606,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0037"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_alt_syntax"
   },
   {
-    "code": "BSK-E0038",
+    "code": "typeddicts_inheritance",
     "severity": "error",
     "summary": "Invalid `TypedDict` inheritance",
     "summaryHtml": "Invalid <code>TypedDict</code> inheritance",
@@ -632,10 +632,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0038"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_inheritance"
   },
   {
-    "code": "BSK-E0039",
+    "code": "directives_assert_type",
     "severity": "error",
     "summary": "Invalid `assert_type()` call",
     "summaryHtml": "Invalid <code>assert_type()</code> call",
@@ -650,10 +650,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0039"
+    "docsUrl": "https://www.basilisk-python.dev/errors/directives_assert_type"
   },
   {
-    "code": "BSK-E0040",
+    "code": "enums_behaviors",
     "severity": "error",
     "summary": "Invalid Enum subclassing",
     "summaryHtml": "Invalid Enum subclassing",
@@ -669,10 +669,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0040"
+    "docsUrl": "https://www.basilisk-python.dev/errors/enums_behaviors"
   },
   {
-    "code": "BSK-E0041",
+    "code": "calls_argument_count",
     "severity": "error",
     "summary": "Too few arguments in a function call",
     "summaryHtml": "Too few arguments in a function call",
@@ -692,10 +692,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0041"
+    "docsUrl": "https://www.basilisk-python.dev/errors/calls_argument_count"
   },
   {
-    "code": "BSK-E0042",
+    "code": "generics_syntax_compatibility",
     "severity": "error",
     "summary": "PEP 695 type parameter syntax mixed with traditional `TypeVars`",
     "summaryHtml": "PEP 695 type parameter syntax mixed with traditional <code>TypeVars</code>",
@@ -711,10 +711,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0042"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_syntax_compatibility"
   },
   {
-    "code": "BSK-E0043",
+    "code": "generics_basic_2",
     "severity": "error",
     "summary": "Non-TypeVar argument in `Generic[...]` or `Protocol[...]`",
     "summaryHtml": "Non-TypeVar argument in <code>Generic...</code> or <code>Protocol...</code>",
@@ -730,10 +730,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0043"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_basic_2"
   },
   {
-    "code": "BSK-E0044",
+    "code": "qualifiers_final_annotation",
     "severity": "error",
     "summary": "`Final` used in an invalid position",
     "summaryHtml": "<code>Final</code> used in an invalid position",
@@ -761,10 +761,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0044"
+    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_final_annotation"
   },
   {
-    "code": "BSK-E0045",
+    "code": "qualifiers_annotated",
     "severity": "error",
     "summary": "Invalid first argument to `Annotated[...]`",
     "summaryHtml": "Invalid first argument to <code>Annotated...</code>",
@@ -788,10 +788,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0045"
+    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_annotated"
   },
   {
-    "code": "BSK-E0046",
+    "code": "enums_members",
     "severity": "error",
     "summary": "Enum member annotated with an explicit type",
     "summaryHtml": "Enum member annotated with an explicit type",
@@ -811,10 +811,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0046"
+    "docsUrl": "https://www.basilisk-python.dev/errors/enums_members"
   },
   {
-    "code": "BSK-E0047",
+    "code": "annotations_forward_refs",
     "severity": "error",
     "summary": "Invalid type expression in annotation",
     "summaryHtml": "Invalid type expression in annotation",
@@ -842,10 +842,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0047"
+    "docsUrl": "https://www.basilisk-python.dev/errors/annotations_forward_refs"
   },
   {
-    "code": "BSK-E0048",
+    "code": "aliases_implicit",
     "severity": "error",
     "summary": "Invalid right-hand side for a `TypeAlias` annotation",
     "summaryHtml": "Invalid right-hand side for a <code>TypeAlias</code> annotation",
@@ -865,10 +865,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0048"
+    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_implicit"
   },
   {
-    "code": "BSK-E0049",
+    "code": "tuples_type_form",
     "severity": "error",
     "summary": "Multiple unbounded tuple components in a single tuple type",
     "summaryHtml": "Multiple unbounded tuple components in a single tuple type",
@@ -888,10 +888,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0049"
+    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_type_form"
   },
   {
-    "code": "BSK-E0050",
+    "code": "aliases_newtype",
     "severity": "error",
     "summary": "Invalid `NewType(...)` call",
     "summaryHtml": "Invalid <code>NewType(...)</code> call",
@@ -911,10 +911,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0050"
+    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_newtype"
   },
   {
-    "code": "BSK-E0051",
+    "code": "literals_parameterizations",
     "severity": "error",
     "summary": "Invalid `Literal` parameterization",
     "summaryHtml": "Invalid <code>Literal</code> parameterization",
@@ -929,10 +929,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0051"
+    "docsUrl": "https://www.basilisk-python.dev/errors/literals_parameterizations"
   },
   {
-    "code": "BSK-E0052",
+    "code": "dataclasses_frozen",
     "severity": "error",
     "summary": "Assignment to attribute of a frozen dataclass instance, or invalid frozen/non-frozen dataclass inheritance",
     "summaryHtml": "Assignment to attribute of a frozen dataclass instance, or invalid frozen/non-frozen dataclass inheritance",
@@ -948,10 +948,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0052"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_frozen"
   },
   {
-    "code": "BSK-E0053",
+    "code": "directives_assert_type_2",
     "severity": "error",
     "summary": "`assert_type()` type mismatch",
     "summaryHtml": "<code>assert_type()</code> type mismatch",
@@ -967,10 +967,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0053"
+    "docsUrl": "https://www.basilisk-python.dev/errors/directives_assert_type_2"
   },
   {
-    "code": "BSK-E0054",
+    "code": "qualifiers_final_annotation_2",
     "severity": "error",
     "summary": "`Final` type qualifier annotation violations",
     "summaryHtml": "<code>Final</code> type qualifier annotation violations",
@@ -1017,10 +1017,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0054"
+    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_final_annotation_2"
   },
   {
-    "code": "BSK-E0055",
+    "code": "generics_typevartuple_basic",
     "severity": "error",
     "summary": "Invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword argument combination",
     "summaryHtml": "Invalid <code>TypeVar</code> / <code>TypeVarTuple</code> / <code>ParamSpec</code> keyword argument combination",
@@ -1040,10 +1040,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0055"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_basic"
   },
   {
-    "code": "BSK-E0056",
+    "code": "typeddicts_readonly",
     "severity": "error",
     "summary": "Mutation of `ReadOnly` `TypedDict` fields",
     "summaryHtml": "Mutation of <code>ReadOnly</code> <code>TypedDict</code> fields",
@@ -1059,17 +1059,17 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0056"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_readonly"
   },
   {
-    "code": "BSK-E0057",
+    "code": "aliases_type_statement",
     "severity": "error",
     "summary": "Invalid RHS in a PEP 695 `type X = rhs` statement",
     "summaryHtml": "Invalid RHS in a PEP 695 <code>type X = rhs</code> statement",
     "body": [
       {
         "type": "text",
-        "html": "PEP 695 requires the RHS of a <code>type</code> statement to be a valid type expression. The same restrictions as <code>TypeAlias</code> (BSK-E0048) apply."
+        "html": "PEP 695 requires the RHS of a <code>type</code> statement to be a valid type expression. The same restrictions as <code>TypeAlias</code> (aliases_implicit) apply."
       },
       {
         "type": "code",
@@ -1078,10 +1078,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0057"
+    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_type_statement"
   },
   {
-    "code": "BSK-E0058",
+    "code": "qualifiers_annotated_2",
     "severity": "error",
     "summary": "`Annotated[...]` requires at least two arguments",
     "summaryHtml": "<code>Annotated...</code> requires at least two arguments",
@@ -1097,10 +1097,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0058"
+    "docsUrl": "https://www.basilisk-python.dev/errors/qualifiers_annotated_2"
   },
   {
-    "code": "BSK-E0059",
+    "code": "dataclasses_match_args",
     "severity": "error",
     "summary": "Access to `__match_args__` on a dataclass with `match_args=False`",
     "summaryHtml": "Access to <code>__match_args__</code> on a dataclass with <code>match_args=False</code>",
@@ -1116,10 +1116,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0059"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_match_args"
   },
   {
-    "code": "BSK-E0060",
+    "code": "dataclasses_order",
     "severity": "error",
     "summary": "Invalid ordering comparison of dataclass instances",
     "summaryHtml": "Invalid ordering comparison of dataclass instances",
@@ -1139,10 +1139,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0060"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_order"
   },
   {
-    "code": "BSK-E0061",
+    "code": "enums_expansion",
     "severity": "error",
     "summary": "`assert_type` with `Literal[Enum.MEMBER]` on enum-typed param",
     "summaryHtml": "<code>assert_type</code> with <code>LiteralEnum.MEMBER</code> on enum-typed param",
@@ -1158,10 +1158,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0061"
+    "docsUrl": "https://www.basilisk-python.dev/errors/enums_expansion"
   },
   {
-    "code": "BSK-E0062",
+    "code": "specialtypes_never",
     "severity": "error",
     "summary": "`-> NoReturn` / `-> Never` function can fall through",
     "summaryHtml": "<code>-&gt; NoReturn</code> / <code>-&gt; Never</code> function can fall through",
@@ -1193,10 +1193,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0062"
+    "docsUrl": "https://www.basilisk-python.dev/errors/specialtypes_never"
   },
   {
-    "code": "BSK-E0063",
+    "code": "dataclasses_hash",
     "severity": "error",
     "summary": "Non-hashable dataclass assigned to a `Hashable`-annotated variable",
     "summaryHtml": "Non-hashable dataclass assigned to a <code>Hashable</code>-annotated variable",
@@ -1216,10 +1216,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0063"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_hash"
   },
   {
-    "code": "BSK-E0064",
+    "code": "namedtuples_define_functional",
     "severity": "error",
     "summary": "Invalid argument in a `NamedTuple` constructor call",
     "summaryHtml": "Invalid argument in a <code>NamedTuple</code> constructor call",
@@ -1243,10 +1243,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0064"
+    "docsUrl": "https://www.basilisk-python.dev/errors/namedtuples_define_functional"
   },
   {
-    "code": "BSK-E0065",
+    "code": "specialtypes_promotions",
     "severity": "error",
     "summary": "Access to an `int`-only attribute on a `float`-typed parameter",
     "summaryHtml": "Access to an <code>int</code>-only attribute on a <code>float</code>-typed parameter",
@@ -1266,10 +1266,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0065"
+    "docsUrl": "https://www.basilisk-python.dev/errors/specialtypes_promotions"
   },
   {
-    "code": "BSK-E0066",
+    "code": "enums_member_values",
     "severity": "error",
     "summary": "Enum member value incompatible with `_value_` type annotation",
     "summaryHtml": "Enum member value incompatible with <code>_value_</code> type annotation",
@@ -1285,10 +1285,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0066"
+    "docsUrl": "https://www.basilisk-python.dev/errors/enums_member_values"
   },
   {
-    "code": "BSK-E0067",
+    "code": "enums_members_2",
     "severity": "error",
     "summary": "Non-member referenced in `Literal[EnumClass.X]` annotation",
     "summaryHtml": "Non-member referenced in <code>LiteralEnumClass.X</code> annotation",
@@ -1304,10 +1304,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0067"
+    "docsUrl": "https://www.basilisk-python.dev/errors/enums_members_2"
   },
   {
-    "code": "BSK-E0068",
+    "code": "literals_parameterizations_2",
     "severity": "error",
     "summary": "`Literal[\"EnumClass.MEMBER\"]` (string) used where `Literal[EnumClass.MEMBER]` (enum member reference) is required",
     "summaryHtml": "<code>Literal&quot;EnumClass.MEMBER&quot;</code> (string) used where <code>LiteralEnumClass.MEMBER</code> (enum member reference) is required",
@@ -1323,10 +1323,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0068"
+    "docsUrl": "https://www.basilisk-python.dev/errors/literals_parameterizations_2"
   },
   {
-    "code": "BSK-E0069",
+    "code": "dataclasses_kwonly",
     "severity": "error",
     "summary": "Dataclass constructor argument violations",
     "summaryHtml": "Dataclass constructor argument violations",
@@ -1342,10 +1342,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0069"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_kwonly"
   },
   {
-    "code": "BSK-E0070",
+    "code": "specialtypes_never_2",
     "severity": "error",
     "summary": "`Never` type compatibility violations",
     "summaryHtml": "<code>Never</code> type compatibility violations",
@@ -1365,10 +1365,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0070"
+    "docsUrl": "https://www.basilisk-python.dev/errors/specialtypes_never_2"
   },
   {
-    "code": "BSK-E0071",
+    "code": "historical_positional",
     "severity": "error",
     "summary": "Historical positional-only parameter violations",
     "summaryHtml": "Historical positional-only parameter violations",
@@ -1396,10 +1396,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0071"
+    "docsUrl": "https://www.basilisk-python.dev/errors/historical_positional"
   },
   {
-    "code": "BSK-E0072",
+    "code": "overloads_basic",
     "severity": "error",
     "summary": "No matching overload for subscript indexing",
     "summaryHtml": "No matching overload for subscript indexing",
@@ -1415,10 +1415,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0072"
+    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_basic"
   },
   {
-    "code": "BSK-E0073",
+    "code": "namedtuples_type_compat",
     "severity": "error",
     "summary": "`NamedTuple`-to-tuple type incompatibility",
     "summaryHtml": "<code>NamedTuple</code>-to-tuple type incompatibility",
@@ -1438,10 +1438,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0073"
+    "docsUrl": "https://www.basilisk-python.dev/errors/namedtuples_type_compat"
   },
   {
-    "code": "BSK-E0074",
+    "code": "constructors_call_new",
     "severity": "error",
     "summary": "Constructor call type mismatch with specialized generic class",
     "summaryHtml": "Constructor call type mismatch with specialized generic class",
@@ -1469,10 +1469,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0074"
+    "docsUrl": "https://www.basilisk-python.dev/errors/constructors_call_new"
   },
   {
-    "code": "BSK-E0075",
+    "code": "generics_self_attributes",
     "severity": "error",
     "summary": "Incompatible type for `Self`-typed attribute",
     "summaryHtml": "Incompatible type for <code>Self</code>-typed attribute",
@@ -1492,10 +1492,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0075"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_self_attributes"
   },
   {
-    "code": "BSK-E0076",
+    "code": "overloads_evaluation",
     "severity": "error",
     "summary": "Overload union expansion failure",
     "summaryHtml": "Overload union expansion failure",
@@ -1511,10 +1511,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0076"
+    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_evaluation"
   },
   {
-    "code": "BSK-E0077",
+    "code": "generics_self_protocols",
     "severity": "error",
     "summary": "Protocol `Self`-return conformance violation",
     "summaryHtml": "Protocol <code>Self</code>-return conformance violation",
@@ -1530,10 +1530,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0077"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_self_protocols"
   },
   {
-    "code": "BSK-E0078",
+    "code": "generics_self_basic",
     "severity": "error",
     "summary": "`Self` type violations in generics",
     "summaryHtml": "<code>Self</code> type violations in generics",
@@ -1557,10 +1557,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0078"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_self_basic"
   },
   {
-    "code": "BSK-E0079",
+    "code": "protocols_modules",
     "severity": "error",
     "summary": "Module assigned to incompatible protocol type",
     "summaryHtml": "Module assigned to incompatible protocol type",
@@ -1584,10 +1584,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0079"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_modules"
   },
   {
-    "code": "BSK-E0080",
+    "code": "generics_upper_bound",
     "severity": "error",
     "summary": "`TypeVar` upper bound violation at call site",
     "summaryHtml": "<code>TypeVar</code> upper bound violation at call site",
@@ -1603,10 +1603,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0080"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_upper_bound"
   },
   {
-    "code": "BSK-E0081",
+    "code": "generics_typevartuple_unpack",
     "severity": "error",
     "summary": "`TypeVarTuple` unpack minimum type argument violation",
     "summaryHtml": "<code>TypeVarTuple</code> unpack minimum type argument violation",
@@ -1622,10 +1622,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0081"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_unpack"
   },
   {
-    "code": "BSK-E0082",
+    "code": "generics_typevartuple_callable",
     "severity": "error",
     "summary": "`TypeVarTuple` callable/tuple argument mismatch",
     "summaryHtml": "<code>TypeVarTuple</code> callable/tuple argument mismatch",
@@ -1641,10 +1641,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0082"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_callable"
   },
   {
-    "code": "BSK-E0083",
+    "code": "generics_typevartuple_basic_2",
     "severity": "error",
     "summary": "`TypeVarTuple` must be unpacked with `*` operator",
     "summaryHtml": "<code>TypeVarTuple</code> must be unpacked with <code>*</code> operator",
@@ -1660,10 +1660,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0083"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_basic_2"
   },
   {
-    "code": "BSK-E0084",
+    "code": "generics_typevartuple_basic_3",
     "severity": "error",
     "summary": "`TypeVarTuple` variance/bounds/constraints violation",
     "summaryHtml": "<code>TypeVarTuple</code> variance/bounds/constraints violation",
@@ -1679,10 +1679,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0084"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_basic_3"
   },
   {
-    "code": "BSK-E0085",
+    "code": "generics_typevartuple_args",
     "severity": "error",
     "summary": "`TypeVarTuple` argument count mismatch",
     "summaryHtml": "<code>TypeVarTuple</code> argument count mismatch",
@@ -1698,10 +1698,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0085"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_args"
   },
   {
-    "code": "BSK-E0086",
+    "code": "generics_typevartuple_specialization",
     "severity": "error",
     "summary": "Multiple `TypeVarTuple` unpacks in generic or tuple type",
     "summaryHtml": "Multiple <code>TypeVarTuple</code> unpacks in generic or tuple type",
@@ -1717,7 +1717,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0086"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_specialization"
   },
   {
     "code": "BSK-E0087",
@@ -1727,14 +1727,14 @@
     "body": [
       {
         "type": "text",
-        "html": "PEP 695 type parameter bound and constraint validation is handled by BSK-E0089. This module is reserved for any future distinct PEP 695 violations."
+        "html": "PEP 695 type parameter bound and constraint validation is handled by generics_syntax_declarations. This module is reserved for any future distinct PEP 695 violations."
       }
     ],
     "group": "Type System",
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0087"
   },
   {
-    "code": "BSK-E0088",
+    "code": "typeddicts_usage",
     "severity": "error",
     "summary": "`TypedDict` runtime violation",
     "summaryHtml": "<code>TypedDict</code> runtime violation",
@@ -1754,10 +1754,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0088"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_usage"
   },
   {
-    "code": "BSK-E0089",
+    "code": "generics_syntax_declarations",
     "severity": "error",
     "summary": "Invalid PEP 695 type parameter bound or constraint",
     "summaryHtml": "Invalid PEP 695 type parameter bound or constraint",
@@ -1773,10 +1773,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0089"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_syntax_declarations"
   },
   {
-    "code": "BSK-E0090",
+    "code": "tuples_type_form_2",
     "severity": "error",
     "summary": "Invalid tuple type syntax",
     "summaryHtml": "Invalid tuple type syntax",
@@ -1796,10 +1796,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0090"
+    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_type_form_2"
   },
   {
-    "code": "BSK-E0091",
+    "code": "generics_defaults_2",
     "severity": "error",
     "summary": "Incompatible `TypeVar` bound or constraint with its default",
     "summaryHtml": "Incompatible <code>TypeVar</code> bound or constraint with its default",
@@ -1823,10 +1823,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0091"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults_2"
   },
   {
-    "code": "BSK-E0092",
+    "code": "generics_defaults_specialization",
     "severity": "error",
     "summary": "Wrong number of type arguments to a generic class or type alias",
     "summaryHtml": "Wrong number of type arguments to a generic class or type alias",
@@ -1850,10 +1850,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0092"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults_specialization"
   },
   {
-    "code": "BSK-E0093",
+    "code": "typeddicts_operations",
     "severity": "error",
     "summary": "Invalid key or value type in `TypedDict` assignment",
     "summaryHtml": "Invalid key or value type in <code>TypedDict</code> assignment",
@@ -1873,10 +1873,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0093"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_operations"
   },
   {
-    "code": "BSK-E0094",
+    "code": "generics_self_usage",
     "severity": "error",
     "summary": "`Self` type used in an invalid location",
     "summaryHtml": "<code>Self</code> type used in an invalid location",
@@ -1904,10 +1904,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0094"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_self_usage"
   },
   {
-    "code": "BSK-E0095",
+    "code": "dataclasses_postinit",
     "severity": "error",
     "summary": "`InitVar` field validation in dataclasses",
     "summaryHtml": "<code>InitVar</code> field validation in dataclasses",
@@ -1931,10 +1931,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0095"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_postinit"
   },
   {
-    "code": "BSK-E0096",
+    "code": "dataclasses_usage",
     "severity": "error",
     "summary": "Type mismatch between a dataclass `field(default_factory=\u2026)` and the field's declared type annotation",
     "summaryHtml": "Type mismatch between a dataclass <code>field(default_factory=\u2026)</code> and the field&#x27;s declared type annotation",
@@ -1950,10 +1950,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0096"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_usage"
   },
   {
-    "code": "BSK-E0097",
+    "code": "protocols_definition",
     "severity": "error",
     "summary": "Protocol method sets self-attributes not declared in the Protocol",
     "summaryHtml": "Protocol method sets self-attributes not declared in the Protocol",
@@ -1973,10 +1973,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0097"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_definition"
   },
   {
-    "code": "BSK-E0098",
+    "code": "protocols_merging",
     "severity": "error",
     "summary": "Non-Protocol base class in a Protocol definition",
     "summaryHtml": "Non-Protocol base class in a Protocol definition",
@@ -1992,10 +1992,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0098"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_merging"
   },
   {
-    "code": "BSK-E0099",
+    "code": "protocols_explicit",
     "severity": "error",
     "summary": "Direct instantiation of a Protocol class",
     "summaryHtml": "Direct instantiation of a Protocol class",
@@ -2011,10 +2011,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0099"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_explicit"
   },
   {
-    "code": "BSK-E0100",
+    "code": "literals_semantics",
     "severity": "error",
     "summary": "Augmented assignment widens `Literal` type",
     "summaryHtml": "Augmented assignment widens <code>Literal</code> type",
@@ -2030,10 +2030,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0100"
+    "docsUrl": "https://www.basilisk-python.dev/errors/literals_semantics"
   },
   {
-    "code": "BSK-E0101",
+    "code": "narrowing_typeguard",
     "severity": "error",
     "summary": "`TypeGuard` or `TypeIs` on method with no narrowing parameter",
     "summaryHtml": "<code>TypeGuard</code> or <code>TypeIs</code> on method with no narrowing parameter",
@@ -2044,10 +2044,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0101"
+    "docsUrl": "https://www.basilisk-python.dev/errors/narrowing_typeguard"
   },
   {
-    "code": "BSK-E0102",
+    "code": "generics_defaults_referential",
     "severity": "error",
     "summary": "Invalid `TypeVar` default referencing another `TypeVar`",
     "summaryHtml": "Invalid <code>TypeVar</code> default referencing another <code>TypeVar</code>",
@@ -2067,10 +2067,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0102"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults_referential"
   },
   {
-    "code": "BSK-E0103",
+    "code": "tuples_index",
     "severity": "error",
     "summary": "Tuple index out of bounds",
     "summaryHtml": "Tuple index out of bounds",
@@ -2086,10 +2086,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0103"
+    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_index"
   },
   {
-    "code": "BSK-E0104",
+    "code": "aliases_recursive",
     "severity": "error",
     "summary": "Cyclical type alias reference",
     "summaryHtml": "Cyclical type alias reference",
@@ -2105,10 +2105,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0104"
+    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_recursive"
   },
   {
-    "code": "BSK-E0105",
+    "code": "generics_syntax_declarations_2",
     "severity": "error",
     "summary": "Invalid attribute access on bounded type variable",
     "summaryHtml": "Invalid attribute access on bounded type variable",
@@ -2124,10 +2124,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0105"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_syntax_declarations_2"
   },
   {
-    "code": "BSK-E0106",
+    "code": "protocols_class_objects",
     "severity": "error",
     "summary": "Protocol class used where `type[Proto]` is expected",
     "summaryHtml": "Protocol class used where <code>typeProto</code> is expected",
@@ -2147,10 +2147,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0106"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_class_objects"
   },
   {
-    "code": "BSK-E0107",
+    "code": "generics_variance",
     "severity": "error",
     "summary": "Variance incompatibility in base class parameterisation",
     "summaryHtml": "Variance incompatibility in base class parameterisation",
@@ -2166,10 +2166,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0107"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_variance"
   },
   {
-    "code": "BSK-E0108",
+    "code": "dataclasses_slots",
     "severity": "error",
     "summary": "Dataclass slots violations",
     "summaryHtml": "Dataclass slots violations",
@@ -2185,10 +2185,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0108"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_slots"
   },
   {
-    "code": "BSK-E0109",
+    "code": "generics_upper_bound_2",
     "severity": "error",
     "summary": "`TypeVar` bound violation at call site",
     "summaryHtml": "<code>TypeVar</code> bound violation at call site",
@@ -2204,10 +2204,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0109"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_upper_bound_2"
   },
   {
-    "code": "BSK-E0110",
+    "code": "protocols_variance",
     "severity": "error",
     "summary": "Protocol variance violation",
     "summaryHtml": "Protocol variance violation",
@@ -2226,7 +2226,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0110"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_variance"
   },
   {
     "code": "BSK-E0111",
@@ -2263,7 +2263,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0111"
   },
   {
-    "code": "BSK-E0112",
+    "code": "narrowing_typeis",
     "severity": "error",
     "summary": "TypeGuard/TypeIs return type incompatibility in callable arguments",
     "summaryHtml": "TypeGuard/TypeIs return type incompatibility in callable arguments",
@@ -2279,10 +2279,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0112"
+    "docsUrl": "https://www.basilisk-python.dev/errors/narrowing_typeis"
   },
   {
-    "code": "BSK-E0113",
+    "code": "narrowing_typeis_2",
     "severity": "error",
     "summary": "`TypeIs` narrows to a type inconsistent with the input type",
     "summaryHtml": "<code>TypeIs</code> narrows to a type inconsistent with the input type",
@@ -2293,10 +2293,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0113"
+    "docsUrl": "https://www.basilisk-python.dev/errors/narrowing_typeis_2"
   },
   {
-    "code": "BSK-E0114",
+    "code": "protocols_runtime_checkable",
     "severity": "error",
     "summary": "Protocol `isinstance`/`issubclass` violations",
     "summaryHtml": "Protocol <code>isinstance</code>/<code>issubclass</code> violations",
@@ -2312,10 +2312,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0114"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_runtime_checkable"
   },
   {
-    "code": "BSK-E0115",
+    "code": "directives_deprecated",
     "severity": "error",
     "summary": "Use of deprecated class, function, or method",
     "summaryHtml": "Use of deprecated class, function, or method",
@@ -2327,14 +2327,14 @@
       {
         "type": "code",
         "lang": "python",
-        "code": "from typing_extensions import deprecated\n\n@deprecated(\"Use new_func instead\")\ndef old_func() -> None: ...\n\nold_func()  # BSK-E0115"
+        "code": "from typing_extensions import deprecated\n\n@deprecated(\"Use new_func instead\")\ndef old_func() -> None: ...\n\nold_func()  # directives_deprecated"
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0115"
+    "docsUrl": "https://www.basilisk-python.dev/errors/directives_deprecated"
   },
   {
-    "code": "BSK-E0116",
+    "code": "namedtuples_define_class",
     "severity": "error",
     "summary": "`NamedTuple` class definition errors",
     "summaryHtml": "<code>NamedTuple</code> class definition errors",
@@ -2361,10 +2361,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0116"
+    "docsUrl": "https://www.basilisk-python.dev/errors/namedtuples_define_class"
   },
   {
-    "code": "BSK-E0117",
+    "code": "generics_scoping",
     "severity": "error",
     "summary": "Unbound type variable in scope",
     "summaryHtml": "Unbound type variable in scope",
@@ -2384,10 +2384,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0117"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_scoping"
   },
   {
-    "code": "BSK-E0118",
+    "code": "protocols_explicit_2",
     "severity": "error",
     "summary": "Calling `super().method()` on an abstract method with no default implementation",
     "summaryHtml": "Calling <code>super().method()</code> on an abstract method with no default implementation",
@@ -2403,10 +2403,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0118"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_explicit_2"
   },
   {
-    "code": "BSK-E0119",
+    "code": "protocols_runtime_checkable_2",
     "severity": "error",
     "summary": "Protocol `isinstance`/`issubclass` violations",
     "summaryHtml": "Protocol <code>isinstance</code>/<code>issubclass</code> violations",
@@ -2422,7 +2422,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0119"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_runtime_checkable_2"
   },
   {
     "code": "BSK-E0120",
@@ -2452,7 +2452,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0120"
   },
   {
-    "code": "BSK-E0121",
+    "code": "protocols_definition_2",
     "severity": "error",
     "summary": "Protocol conformance violation in annotated assignment",
     "summaryHtml": "Protocol conformance violation in annotated assignment",
@@ -2480,10 +2480,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0121"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_definition_2"
   },
   {
-    "code": "BSK-E0122",
+    "code": "callables_protocol",
     "severity": "error",
     "summary": "Callable call-site arity and argument validation",
     "summaryHtml": "Callable call-site arity and argument validation",
@@ -2494,10 +2494,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0122"
+    "docsUrl": "https://www.basilisk-python.dev/errors/callables_protocol"
   },
   {
-    "code": "BSK-E0123",
+    "code": "protocols_explicit_3",
     "severity": "error",
     "summary": "`super()` call on abstract protocol method with no default implementation",
     "summaryHtml": "<code>super()</code> call on abstract protocol method with no default implementation",
@@ -2513,10 +2513,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0123"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_explicit_3"
   },
   {
-    "code": "BSK-E0124",
+    "code": "protocols_subtyping",
     "severity": "error",
     "summary": "Protocol attribute tuple element type mismatch",
     "summaryHtml": "Protocol attribute tuple element type mismatch",
@@ -2532,10 +2532,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0124"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_subtyping"
   },
   {
-    "code": "BSK-E0125",
+    "code": "generics_type_erasure",
     "severity": "error",
     "summary": "Access to instance attribute on a class object",
     "summaryHtml": "Access to instance attribute on a class object",
@@ -2551,7 +2551,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0125"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_type_erasure"
   },
   {
     "code": "BSK-E0126",
@@ -2581,7 +2581,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0126"
   },
   {
-    "code": "BSK-E0127",
+    "code": "tuples_index_2",
     "severity": "error",
     "summary": "Tuple index out of range",
     "summaryHtml": "Tuple index out of range",
@@ -2597,10 +2597,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0127"
+    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_index_2"
   },
   {
-    "code": "BSK-E0128",
+    "code": "generics_defaults_referential_2",
     "severity": "error",
     "summary": "```TypeVar``` default referential violations",
     "summaryHtml": "``<code>TypeVar</code>`` default referential violations",
@@ -2620,10 +2620,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0128"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_defaults_referential_2"
   },
   {
-    "code": "BSK-E0129",
+    "code": "literals_semantics_2",
     "severity": "error",
     "summary": "Literal value assignment incompatibility",
     "summaryHtml": "Literal value assignment incompatibility",
@@ -2647,10 +2647,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0129"
+    "docsUrl": "https://www.basilisk-python.dev/errors/literals_semantics_2"
   },
   {
-    "code": "BSK-E0130",
+    "code": "generics_variance_inference",
     "severity": "error",
     "summary": "`TypeVar` scoping violation",
     "summaryHtml": "<code>TypeVar</code> scoping violation",
@@ -2669,10 +2669,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0130"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_variance_inference"
   },
   {
-    "code": "BSK-E0131",
+    "code": "annotations_generators_2",
     "severity": "error",
     "summary": "Generator yield/send/return type mismatch",
     "summaryHtml": "Generator yield/send/return type mismatch",
@@ -2688,10 +2688,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0131"
+    "docsUrl": "https://www.basilisk-python.dev/errors/annotations_generators_2"
   },
   {
-    "code": "BSK-E0132",
+    "code": "generics_base_class_2",
     "severity": "error",
     "summary": "Inconsistent `TypeVar` ordering across base classes",
     "summaryHtml": "Inconsistent <code>TypeVar</code> ordering across base classes",
@@ -2711,10 +2711,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0132"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_base_class_2"
   },
   {
-    "code": "BSK-E0133",
+    "code": "protocols_variance_2",
     "severity": "error",
     "summary": "Protocol `TypeVar` variance mismatch",
     "summaryHtml": "Protocol <code>TypeVar</code> variance mismatch",
@@ -2734,10 +2734,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0133"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_variance_2"
   },
   {
-    "code": "BSK-E0134",
+    "code": "generics_base_class_3",
     "severity": "error",
     "summary": "Invariant generic type mismatch at call site",
     "summaryHtml": "Invariant generic type mismatch at call site",
@@ -2753,10 +2753,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0134"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_base_class_3"
   },
   {
-    "code": "BSK-E0136",
+    "code": "callables_subtyping",
     "severity": "error",
     "summary": "Callable subtyping violations (covariance / contravariance)",
     "summaryHtml": "Callable subtyping violations (covariance / contravariance)",
@@ -2780,10 +2780,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0136"
+    "docsUrl": "https://www.basilisk-python.dev/errors/callables_subtyping"
   },
   {
-    "code": "BSK-E0137",
+    "code": "protocols_generic",
     "severity": "error",
     "summary": "Generic protocol violations",
     "summaryHtml": "Generic protocol violations",
@@ -2815,7 +2815,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0137"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_generic"
   },
   {
     "code": "BSK-E0138",
@@ -2841,7 +2841,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0138"
   },
   {
-    "code": "BSK-E0139",
+    "code": "generics_typevartuple_specialization_2",
     "severity": "error",
     "summary": "Invalid `TypeVarTuple` specialization of generic alias",
     "summaryHtml": "Invalid <code>TypeVarTuple</code> specialization of generic alias",
@@ -2870,10 +2870,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0139"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_typevartuple_specialization_2"
   },
   {
-    "code": "BSK-E0140",
+    "code": "callables_protocol_2",
     "severity": "error",
     "summary": "Callable and Protocol assignment compatibility",
     "summaryHtml": "Callable and Protocol assignment compatibility",
@@ -2884,10 +2884,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0140"
+    "docsUrl": "https://www.basilisk-python.dev/errors/callables_protocol_2"
   },
   {
-    "code": "BSK-E0141",
+    "code": "callables_kwargs",
     "severity": "error",
     "summary": "Unpack[`TypedDict`] kwargs violations",
     "summaryHtml": "UnpackTypedDict kwargs violations",
@@ -2898,7 +2898,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0141"
+    "docsUrl": "https://www.basilisk-python.dev/errors/callables_kwargs"
   },
   {
     "code": "BSK-E0142",
@@ -2924,7 +2924,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0142"
   },
   {
-    "code": "BSK-E0143",
+    "code": "namedtuples_usage",
     "severity": "error",
     "summary": "`NamedTuple` usage violations",
     "summaryHtml": "<code>NamedTuple</code> usage violations",
@@ -2944,7 +2944,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0143"
+    "docsUrl": "https://www.basilisk-python.dev/errors/namedtuples_usage"
   },
   {
     "code": "BSK-E0144",
@@ -2973,7 +2973,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0144"
   },
   {
-    "code": "BSK-E0145",
+    "code": "specialtypes_type",
     "severity": "error",
     "summary": "Invalid `type[X]` usage violations",
     "summaryHtml": "Invalid <code>typeX</code> usage violations",
@@ -3000,10 +3000,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0145"
+    "docsUrl": "https://www.basilisk-python.dev/errors/specialtypes_type"
   },
   {
-    "code": "BSK-E0146",
+    "code": "protocols_class_objects_2",
     "severity": "error",
     "summary": "Protocol class object violations",
     "summaryHtml": "Protocol class object violations",
@@ -3027,10 +3027,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0146"
+    "docsUrl": "https://www.basilisk-python.dev/errors/protocols_class_objects_2"
   },
   {
-    "code": "BSK-E0147",
+    "code": "tuples_type_compat",
     "severity": "error",
     "summary": "Tuple starred-unpack type compatibility violation",
     "summaryHtml": "Tuple starred-unpack type compatibility violation",
@@ -3062,7 +3062,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0147"
+    "docsUrl": "https://www.basilisk-python.dev/errors/tuples_type_compat"
   },
   {
     "code": "BSK-E0148",
@@ -3091,7 +3091,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0148"
   },
   {
-    "code": "BSK-E0149",
+    "code": "generics_syntax_scoping",
     "severity": "error",
     "summary": "PEP 695 generic type parameter scoping violations",
     "summaryHtml": "PEP 695 generic type parameter scoping violations",
@@ -3115,10 +3115,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0149"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_syntax_scoping"
   },
   {
-    "code": "BSK-E0150",
+    "code": "directives_version_platform",
     "severity": "error",
     "summary": "Variable defined only in dead version/platform branch",
     "summaryHtml": "Variable defined only in dead version/platform branch",
@@ -3134,10 +3134,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0150"
+    "docsUrl": "https://www.basilisk-python.dev/errors/directives_version_platform"
   },
   {
-    "code": "BSK-E0151",
+    "code": "aliases_typealiastype",
     "severity": "error",
     "summary": "Invalid `TypeAliasType(...)` call",
     "summaryHtml": "Invalid <code>TypeAliasType(...)</code> call",
@@ -3169,7 +3169,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0151"
+    "docsUrl": "https://www.basilisk-python.dev/errors/aliases_typealiastype"
   },
   {
     "code": "BSK-E0152",
@@ -3191,7 +3191,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0152"
   },
   {
-    "code": "BSK-E0153",
+    "code": "constructors_callable",
     "severity": "error",
     "summary": "Invalid call to a constructor-derived callable",
     "summaryHtml": "Invalid call to a constructor-derived callable",
@@ -3224,10 +3224,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0153"
+    "docsUrl": "https://www.basilisk-python.dev/errors/constructors_callable"
   },
   {
-    "code": "BSK-E0154",
+    "code": "imports_module_attribute",
     "severity": "error",
     "summary": "Access to a module attribute the local stub does not declare",
     "summaryHtml": "Access to a module attribute the local stub does not declare",
@@ -3251,10 +3251,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0154"
+    "docsUrl": "https://www.basilisk-python.dev/errors/imports_module_attribute"
   },
   {
-    "code": "BSK-E0155",
+    "code": "version_target_syntax",
     "severity": "error",
     "summary": "PEP 695 syntax used below the configured target version",
     "summaryHtml": "PEP 695 syntax used below the configured target version",
@@ -3270,10 +3270,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0155"
+    "docsUrl": "https://www.basilisk-python.dev/errors/version_target_syntax"
   },
   {
-    "code": "BSK-E0156",
+    "code": "typeddicts_extra_items",
     "severity": "error",
     "summary": "`TypedDict` `extra_items` / `closed` (PEP 728) violations",
     "summaryHtml": "<code>TypedDict</code> <code>extra_items</code> / <code>closed</code> (PEP 728) violations",
@@ -3284,10 +3284,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0156"
+    "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_extra_items"
   },
   {
-    "code": "BSK-E0157",
+    "code": "dataclasses_inheritance",
     "severity": "error",
     "summary": "Dataclass field without a default after a field with a default",
     "summaryHtml": "Dataclass field without a default after a field with a default",
@@ -3303,10 +3303,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0157"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_inheritance"
   },
   {
-    "code": "BSK-E0158",
+    "code": "overloads_consistency_2",
     "severity": "error",
     "summary": "Inconsistent decorators across an overloaded method",
     "summaryHtml": "Inconsistent decorators across an overloaded method",
@@ -3325,10 +3325,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0158"
+    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_consistency_2"
   },
   {
-    "code": "BSK-E0159",
+    "code": "classes_override_3",
     "severity": "error",
     "summary": "`@override` on a method with no matching ancestor method",
     "summaryHtml": "<code>@override</code> on a method with no matching ancestor method",
@@ -3348,10 +3348,10 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0159"
+    "docsUrl": "https://www.basilisk-python.dev/errors/classes_override_3"
   },
   {
-    "code": "BSK-E0160",
+    "code": "overloads_consistency_3",
     "severity": "error",
     "summary": "Overload implementation is inconsistent with its signatures",
     "summaryHtml": "Overload implementation is inconsistent with its signatures",
@@ -3366,7 +3366,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0160"
+    "docsUrl": "https://www.basilisk-python.dev/errors/overloads_consistency_3"
   },
   {
     "code": "BSK-W0011",
@@ -3439,7 +3439,7 @@
       },
       {
         "type": "text",
-        "html": "This is an opinionated <em>strictness nudge</em>, not a type-system requirement: the typing spec treats <code>Any</code> as a fully valid type. It is therefore a distinct (user-suppressible) code from the genuine return-type-mismatch error (BSK-E0011); the two used to share a code, so a user could not silence the style nudge while keeping the real type check. W0014 itself is never disabled for PEP conformance \u2014 like every rule it runs fully enabled during scoring; there is no &quot;spec-conformance mode&quot; that turns it off. See CHKARCH-CONFORMANCE-MODE."
+        "html": "This is an opinionated <em>strictness nudge</em>, not a type-system requirement: the typing spec treats <code>Any</code> as a fully valid type. It is therefore a distinct (user-suppressible) code from the genuine return-type-mismatch error (returns_compatibility); the two used to share a code, so a user could not silence the style nudge while keeping the real type check. W0014 itself is never disabled for PEP conformance \u2014 like every rule it runs fully enabled during scoring; there is no &quot;spec-conformance mode&quot; that turns it off. See CHKARCH-CONFORMANCE-MODE."
       },
       {
         "type": "code",

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0041] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
-// Integration tests for BSK-E0041: Too few arguments in a function call.
+//! Tests for [calls_argument_count] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+// Integration tests for calls_argument_count: Too few arguments in a function call.
 
 use super::common::*;
 
@@ -15,7 +15,7 @@ func()
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0041");
+    let msgs = messages_for(&diags, "calls_argument_count");
     assert!(
         !msgs.is_empty(),
         "calling func() with 0 args when 2 required should fire E0041"
@@ -33,7 +33,7 @@ func(1, "hello")
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0041");
+    let msgs = messages_for(&diags, "calls_argument_count");
     assert!(
         msgs.is_empty(),
         "calling func() with correct args should not fire E0041"
@@ -51,7 +51,7 @@ func(1)
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0041");
+    let msgs = messages_for(&diags, "calls_argument_count");
     assert!(
         msgs.is_empty(),
         "calling with enough args when rest have defaults should not fire E0041"
@@ -70,7 +70,7 @@ func(1, 2, 3)
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0041");
+    let msgs = messages_for(&diags, "calls_argument_count");
     assert!(
         msgs.is_empty(),
         "calling *args function with any number of args should not fire E0041"
@@ -83,7 +83,7 @@ fn e0041_unknown_callee_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
     let source = "unknown_function()\n";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0041");
+    let msgs = messages_for(&diags, "calls_argument_count");
     assert!(msgs.is_empty(), "unknown callee should not fire E0041");
     Ok(())
 }
@@ -101,7 +101,7 @@ MyClass()
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0041");
+    let msgs = messages_for(&diags, "calls_argument_count");
     assert!(
         !msgs.is_empty(),
         "constructor with too few args should fire E0041, got: {msgs:?}"
@@ -120,7 +120,7 @@ MyClass(1, "hi")
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0041");
+    let msgs = messages_for(&diags, "calls_argument_count");
     assert!(
         msgs.is_empty(),
         "constructor with correct args should not fire E0041"
@@ -139,7 +139,7 @@ MyClass()
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0041");
+    let msgs = messages_for(&diags, "calls_argument_count");
     assert!(
         msgs.is_empty(),
         "constructor with *args should not fire E0041"
@@ -163,7 +163,7 @@ Point()
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0041");
+    let msgs = messages_for(&diags, "calls_argument_count");
     assert!(
         !msgs.is_empty(),
         "dataclass with too few args should fire E0041, got: {msgs:?}"
@@ -185,7 +185,7 @@ Point(1.0, 2.0)
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0041");
+    let msgs = messages_for(&diags, "calls_argument_count");
     assert!(
         msgs.is_empty(),
         "dataclass with correct args should not fire E0041"
@@ -206,7 +206,7 @@ NoInit(1)
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0041");
+    let msgs = messages_for(&diags, "calls_argument_count");
     assert!(
         !msgs.is_empty(),
         "passing args to init=False dataclass should fire E0041, got: {msgs:?}"
@@ -228,7 +228,7 @@ Config("test")
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0041");
+    let msgs = messages_for(&diags, "calls_argument_count");
     assert!(
         msgs.is_empty(),
         "dataclass with default field should not fire E0041 when providing required args"
@@ -251,7 +251,7 @@ Point()
 ";
     let diags = run(source)?;
 
-    let _msgs = messages_for(&diags, "BSK-E0041");
+    let _msgs = messages_for(&diags, "calls_argument_count");
     // NamedTuple class-form may or may not be checked here; functional form is the target.
     // This is a best-effort test.
     Ok(())
@@ -277,7 +277,7 @@ process()
 ";
     let diags = run(source)?;
 
-    let _msgs = messages_for(&diags, "BSK-E0041");
+    let _msgs = messages_for(&diags, "calls_argument_count");
     // Overloaded functions that don't match any signature should fire E0041
     // This is best-effort since the overload detection may vary
     Ok(())

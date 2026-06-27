@@ -26,7 +26,7 @@
 use basilisk_resolver::scope::GeneratorViolationKind;
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
-use super::e0120_helpers::{
+use super::annotations_generators_helpers::{
     base_type_name, check_yield_from, extract_return_type_from_generator, extract_yield_type,
     infer_yield_type, ASYNC_GENERATOR_TYPES, CODE, SYNC_GENERATOR_TYPES,
 };

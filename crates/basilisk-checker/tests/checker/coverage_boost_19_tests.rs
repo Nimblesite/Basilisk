@@ -27,7 +27,7 @@ def caller(val: Union[int, str, float]) -> None:
     let diagnostics = run(source)?;
     let e0076 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0076")
+        .filter(|d| d.code.code == "overloads_evaluation")
         .collect::<Vec<_>>();
     // float member doesn't match any overload
     let _ = e0076;
@@ -99,7 +99,7 @@ x: Getter[int] = IntGetter()
     let diagnostics = run(source)?;
     let e0137 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0137")
+        .filter(|d| d.code.code == "protocols_generic")
         .collect::<Vec<_>>();
     assert!(
         !e0137.is_empty(),
@@ -127,7 +127,7 @@ x: Setter[int] = StrSetter()
     let diagnostics = run(source)?;
     let e0137 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0137")
+        .filter(|d| d.code.code == "protocols_generic")
         .collect::<Vec<_>>();
     assert!(
         !e0137.is_empty(),
@@ -156,7 +156,7 @@ x: Mapper[int, str] = WrongMapper()
     let diagnostics = run(source)?;
     let e0137 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0137")
+        .filter(|d| d.code.code == "protocols_generic")
         .collect::<Vec<_>>();
     assert!(
         !e0137.is_empty(),
@@ -232,7 +232,7 @@ fn: Callable[[int, str], None] = one_arg
     let diagnostics = run(source)?;
     let e0140 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0140")
+        .filter(|d| d.code.code == "callables_protocol_2")
         .collect::<Vec<_>>();
     assert!(
         !e0140.is_empty(),
@@ -257,7 +257,7 @@ h: Handler = wrong_handler
     let diagnostics = run(source)?;
     let e0140 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0140")
+        .filter(|d| d.code.code == "callables_protocol_2")
         .collect::<Vec<_>>();
     // Protocol func compat may detect param type mismatch
     let _ = e0140;
@@ -364,7 +364,7 @@ def gen() -> Generator[int, None, None]:
     let diagnostics = run(source)?;
     let e0131 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0131")
+        .filter(|d| d.code.code == "annotations_generators_2")
         .collect::<Vec<_>>();
     assert!(
         !e0131.is_empty(),
@@ -387,7 +387,7 @@ def gen() -> Generator[int, None, None]:
     let diagnostics = run(source)?;
     let e0131 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0131")
+        .filter(|d| d.code.code == "annotations_generators_2")
         .collect::<Vec<_>>();
     assert!(
         !e0131.is_empty(),
@@ -408,7 +408,7 @@ def gen() -> Generator[int, None, None]:
     let diagnostics = run(source)?;
     let e0131 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0131")
+        .filter(|d| d.code.code == "annotations_generators_2")
         .collect::<Vec<_>>();
     assert!(
         !e0131.is_empty(),
@@ -524,7 +524,7 @@ isinstance(x, Another)
     let diagnostics = run(source)?;
     let e0119 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0119")
+        .filter(|d| d.code.code == "protocols_runtime_checkable_2")
         .count();
     assert!(
         e0119 >= 2,
@@ -600,7 +600,7 @@ def process() -> None:
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0054")
+        .filter(|d| d.code.code == "qualifiers_final_annotation_2")
         .collect::<Vec<_>>();
     // Function-level Final may or may not be checked
     let _ = e0054;
@@ -698,7 +698,7 @@ h2: Handler = wrong_ret
     let diagnostics = run(source)?;
     let e0140 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0140")
+        .filter(|d| d.code.code == "callables_protocol_2")
         .count();
     assert!(
         e0140 >= 1,
@@ -746,7 +746,7 @@ def gen_multiple() -> Generator[int, None, None]:
     let diagnostics = run(source)?;
     let e0131 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0131")
+        .filter(|d| d.code.code == "annotations_generators_2")
         .count();
     assert!(
         e0131 >= 3,
@@ -803,7 +803,7 @@ cr: Reader[int] = CorrectReader()
     let diagnostics = run(source)?;
     let e0137 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0137")
+        .filter(|d| d.code.code == "protocols_generic")
         .count();
     assert!(
         e0137 >= 2,
@@ -876,7 +876,7 @@ isinstance(y, NotRuntime2)
     let diagnostics = run(source)?;
     let e0119 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0119")
+        .filter(|d| d.code.code == "protocols_runtime_checkable_2")
         .count();
     assert!(
         e0119 >= 2,
@@ -965,7 +965,7 @@ c2.A = 30
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0054")
+        .filter(|d| d.code.code == "qualifiers_final_annotation_2")
         .count();
     assert!(
         e0054 >= 4,

@@ -1,4 +1,4 @@
-//! BSK-E0047: Invalid type expression in annotation.
+//! annotations_forward_refs: Invalid type expression in annotation.
 //!
 //! PEP 484 requires that annotations contain valid type expressions.
 //! Only certain expression forms are valid as types:
@@ -55,8 +55,8 @@ use type_checks::{
 use basilisk_resolver::Span;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0047",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0047",
+    code: "annotations_forward_refs",
+    docs_url: "https://www.basilisk-python.dev/errors/annotations_forward_refs",
 };
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
@@ -74,7 +74,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     )
 }
 
-/// Emits BSK-E0047 when an annotation contains an invalid type expression.
+/// Emits annotations_forward_refs when an annotation contains an invalid type expression.
 pub(crate) struct InvalidTypeAnnotation;
 
 impl Rule for InvalidTypeAnnotation {

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0055] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
-// Integration tests for BSK-E0055: Invalid `TypeVar`/`TypeVarTuple`/`ParamSpec` kwargs.
+//! Tests for [generics_typevartuple_basic] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+// Integration tests for generics_typevartuple_basic: Invalid `TypeVar`/`TypeVarTuple`/`ParamSpec` kwargs.
 
 use super::common::*;
 
@@ -11,7 +11,7 @@ T = TypeVar("T", covariant=True, contravariant=True)
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0055");
+    let msgs = messages_for(&diags, "generics_typevartuple_basic");
     assert!(
         msgs.iter()
             .any(|m| m.contains("both covariant and contravariant")),
@@ -28,7 +28,7 @@ T = TypeVar("T", covariant=True, infer_variance=True)
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0055");
+    let msgs = messages_for(&diags, "generics_typevartuple_basic");
     assert!(
         msgs.iter().any(|m| m.contains("infer_variance")),
         "infer_variance + covariant should fire E0055, got: {msgs:?}"
@@ -44,7 +44,7 @@ T = TypeVar("T", str, int, bound=float)
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0055");
+    let msgs = messages_for(&diags, "generics_typevartuple_basic");
     assert!(
         msgs.iter()
             .any(|m| m.contains("constraints") && m.contains("bound")),
@@ -61,7 +61,7 @@ T = TypeVar("T", covariant=True)
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0055");
+    let msgs = messages_for(&diags, "generics_typevartuple_basic");
     assert!(msgs.is_empty(), "valid TypeVar should not fire E0055");
     Ok(())
 }
@@ -74,7 +74,7 @@ Ts = TypeVarTuple("Ts", covariant=True)
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0055");
+    let msgs = messages_for(&diags, "generics_typevartuple_basic");
     assert!(
         !msgs.is_empty(),
         "TypeVarTuple with covariant should fire E0055, got: {msgs:?}"
@@ -90,7 +90,7 @@ Ts = TypeVarTuple("Ts", bound=int)
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0055");
+    let msgs = messages_for(&diags, "generics_typevartuple_basic");
     assert!(
         !msgs.is_empty(),
         "TypeVarTuple with bound should fire E0055, got: {msgs:?}"
@@ -106,7 +106,7 @@ P = ParamSpec("P", covariant=True)
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0055");
+    let msgs = messages_for(&diags, "generics_typevartuple_basic");
     assert!(
         !msgs.is_empty(),
         "ParamSpec with covariant should fire E0055, got: {msgs:?}"
@@ -122,7 +122,7 @@ P = ParamSpec("P", bound=int)
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0055");
+    let msgs = messages_for(&diags, "generics_typevartuple_basic");
     assert!(
         !msgs.is_empty(),
         "ParamSpec with bound should fire E0055, got: {msgs:?}"

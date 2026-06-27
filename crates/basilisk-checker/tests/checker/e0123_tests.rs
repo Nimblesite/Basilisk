@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0123] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0123: Super call on abstract protocol method.
+//! Tests for [protocols_explicit_3] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for protocols_explicit_3: Super call on abstract protocol method.
 
 use super::common::*;
 
@@ -38,7 +38,7 @@ class GoodColor(PColor):
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0123"),
+        !codes(&diags).contains(&"protocols_explicit_3"),
         "super() on protocol with default impl should not fire E0123"
     );
     Ok(())

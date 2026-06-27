@@ -1,5 +1,5 @@
-//! Implements [BSK-E0092] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0092: Wrong number of type arguments to a generic class or type alias.
+//! Implements [generics_defaults_specialization] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_defaults_specialization: Wrong number of type arguments to a generic class or type alias.
 //!
 //! When a user-defined generic class has both required (non-default) and optional
 //! (defaulted) type parameters, the minimum number of type arguments that must be
@@ -47,11 +47,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0092",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0092",
+    code: "generics_defaults_specialization",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_defaults_specialization",
 };
 
-/// Emits BSK-E0092 when a generic subscript provides too few or too many type arguments.
+/// Emits generics_defaults_specialization when a generic subscript provides too few or too many type arguments.
 pub(crate) struct TooFewTypeArguments;
 
 /// Arity bounds for a generic type: optional minimum (for "too few") and

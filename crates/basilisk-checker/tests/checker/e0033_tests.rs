@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0033] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
-// Integration tests for BSK-E0033: Invalid `reveal_type()` call.
+//! Tests for [directives_reveal_type] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+// Integration tests for directives_reveal_type: Invalid `reveal_type()` call.
 
 use super::common::*;
 
@@ -11,7 +11,7 @@ reveal_type(x)
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0033"),
+        !codes(&diags).contains(&"directives_reveal_type"),
         "valid reveal_type call should not fire E0033"
     );
     Ok(())

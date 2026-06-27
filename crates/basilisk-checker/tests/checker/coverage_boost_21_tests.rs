@@ -24,7 +24,7 @@ class Color(Enum):
     // Exercise the rule's code paths regardless of outcome
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0066")
+        .filter(|d| d.code.code == "enums_member_values")
         .count();
     Ok(())
 }
@@ -43,7 +43,7 @@ class Planet(Enum):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0066")
+        .filter(|d| d.code.code == "enums_member_values")
         .count();
     Ok(())
 }
@@ -61,7 +61,7 @@ class Status(Enum):
     let diagnostics = run(source)?;
     let e0066 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0066")
+        .filter(|d| d.code.code == "enums_member_values")
         .count();
     assert_eq!(e0066, 0, "Correct types should not trigger e0066");
     Ok(())
@@ -81,7 +81,7 @@ f1(__x=3)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0071")
+        .filter(|d| d.code.code == "historical_positional")
         .count();
     Ok(())
 }
@@ -94,7 +94,7 @@ def f2(x: int, __y: int) -> None: ...
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0071")
+        .filter(|d| d.code.code == "historical_positional")
         .count();
     Ok(())
 }
@@ -109,7 +109,7 @@ f3(1, 2)
     let diagnostics = run(source)?;
     let e0071 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0071")
+        .filter(|d| d.code.code == "historical_positional")
         .count();
     assert_eq!(e0071, 0, "Valid usage should not trigger e0071");
     Ok(())
@@ -133,7 +133,7 @@ class DC:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0096")
+        .filter(|d| d.code.code == "dataclasses_usage")
         .count();
     Ok(())
 }
@@ -152,7 +152,7 @@ class DC:
     let diagnostics = run(source)?;
     let e0096 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0096")
+        .filter(|d| d.code.code == "dataclasses_usage")
         .count();
     assert_eq!(e0096, 0, "Correct factories should not trigger e0096");
     Ok(())
@@ -172,7 +172,7 @@ GoodName = NewType("BadName", int)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0050")
+        .filter(|d| d.code.code == "aliases_newtype")
         .count();
     Ok(())
 }
@@ -187,7 +187,7 @@ BadNewType = NewType("BadNewType", int, int)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0050")
+        .filter(|d| d.code.code == "aliases_newtype")
         .count();
     Ok(())
 }
@@ -202,7 +202,7 @@ BadNewType = NewType("BadNewType", Any)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0050")
+        .filter(|d| d.code.code == "aliases_newtype")
         .count();
     Ok(())
 }
@@ -217,7 +217,7 @@ BadNewType = NewType("BadNewType", Union[int, str])
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0050")
+        .filter(|d| d.code.code == "aliases_newtype")
         .count();
     Ok(())
 }
@@ -237,7 +237,7 @@ BadNewType = NewType("BadNewType", Container[T])
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0050")
+        .filter(|d| d.code.code == "aliases_newtype")
         .count();
     Ok(())
 }
@@ -253,7 +253,7 @@ UserName = NewType("UserName", str)
     let diagnostics = run(source)?;
     let e0050 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0050")
+        .filter(|d| d.code.code == "aliases_newtype")
         .count();
     assert_eq!(e0050, 0, "Valid NewType should not trigger e0050");
     Ok(())
@@ -296,7 +296,7 @@ def fun(x: T) -> list[T]:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0117")
+        .filter(|d| d.code.code == "generics_scoping")
         .count();
     Ok(())
 }
@@ -315,7 +315,7 @@ class Bar(Generic[T]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0117")
+        .filter(|d| d.code.code == "generics_scoping")
         .count();
     Ok(())
 }
@@ -334,7 +334,7 @@ class Outer(Generic[T]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0117")
+        .filter(|d| d.code.code == "generics_scoping")
         .count();
     Ok(())
 }
@@ -351,7 +351,7 @@ x: T = 42
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0117")
+        .filter(|d| d.code.code == "generics_scoping")
         .count();
     Ok(())
 }
@@ -369,7 +369,7 @@ class Foo(Generic[T]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0117")
+        .filter(|d| d.code.code == "generics_scoping")
         .count();
     Ok(())
 }
@@ -389,7 +389,7 @@ def foo(bar: Self) -> Self:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0094")
+        .filter(|d| d.code.code == "generics_self_usage")
         .count();
     Ok(())
 }
@@ -404,7 +404,7 @@ bar: Self = None
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0094")
+        .filter(|d| d.code.code == "generics_self_usage")
         .count();
     Ok(())
 }
@@ -422,7 +422,7 @@ class Base:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0094")
+        .filter(|d| d.code.code == "generics_self_usage")
         .count();
     Ok(())
 }
@@ -441,7 +441,7 @@ class Bar(Generic[Self]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0094")
+        .filter(|d| d.code.code == "generics_self_usage")
         .count();
     Ok(())
 }
@@ -464,7 +464,7 @@ class MyClass:
     let diagnostics = run(source)?;
     let e0094 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0094")
+        .filter(|d| d.code.code == "generics_self_usage")
         .count();
     // Valid uses should not trigger
     let _ = e0094;
@@ -491,7 +491,7 @@ class Shape:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0078")
+        .filter(|d| d.code.code == "generics_self_basic")
         .count();
     Ok(())
 }
@@ -510,7 +510,7 @@ class Container(Generic[T]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0078")
+        .filter(|d| d.code.code == "generics_self_basic")
         .count();
     Ok(())
 }
@@ -529,7 +529,7 @@ class Shape:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0078")
+        .filter(|d| d.code.code == "generics_self_basic")
         .count();
     Ok(())
 }
@@ -548,7 +548,7 @@ class Shape:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0078")
+        .filter(|d| d.code.code == "generics_self_basic")
         .count();
     Ok(())
 }
@@ -567,7 +567,7 @@ class Shape:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0078")
+        .filter(|d| d.code.code == "generics_self_basic")
         .count();
     Ok(())
 }
@@ -599,7 +599,7 @@ xs = OrdinalLinkedList(value=1, next=LinkedList[int](value=2))
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0075")
+        .filter(|d| d.code.code == "generics_self_attributes")
         .count();
     Ok(())
 }
@@ -624,7 +624,7 @@ n.next = Node(value=2)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0075")
+        .filter(|d| d.code.code == "generics_self_attributes")
         .count();
     Ok(())
 }
@@ -651,7 +651,7 @@ class BadColor(PColor):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0118")
+        .filter(|d| d.code.code == "protocols_explicit_2")
         .count();
     Ok(())
 }
@@ -673,7 +673,7 @@ class Child(Base):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0118")
+        .filter(|d| d.code.code == "protocols_explicit_2")
         .count();
     Ok(())
 }
@@ -697,7 +697,7 @@ class Child(Base):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0118")
+        .filter(|d| d.code.code == "protocols_explicit_2")
         .count();
     Ok(())
 }
@@ -727,7 +727,7 @@ class Child2(Base):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0118")
+        .filter(|d| d.code.code == "protocols_explicit_2")
         .count();
     Ok(())
 }
@@ -857,7 +857,7 @@ p = Point(1, 2, "wrong")
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0041")
+        .filter(|d| d.code.code == "calls_argument_count")
         .count();
     Ok(())
 }
@@ -873,7 +873,7 @@ f(1)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0041")
+        .filter(|d| d.code.code == "calls_argument_count")
         .count();
     Ok(())
 }
@@ -926,7 +926,7 @@ def decorator(func: Callable[P, int]) -> Callable[P, str]:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0047")
+        .filter(|d| d.code.code == "annotations_forward_refs")
         .count();
     Ok(())
 }
@@ -959,7 +959,7 @@ def f(cb: Callable[[int, str], float, bool]) -> None:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .count();
     Ok(())
 }
@@ -975,7 +975,7 @@ def f(cb: Callable[[...], int]) -> None:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .count();
     Ok(())
 }
@@ -991,7 +991,7 @@ def f(cb: Callable[42, int]) -> None:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .count();
     Ok(())
 }
@@ -1016,7 +1016,7 @@ def is_int_container(x: Container[str]) -> TypeIs[Container[int]]:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0113")
+        .filter(|d| d.code.code == "narrowing_typeis_2")
         .count();
     Ok(())
 }
@@ -1035,7 +1035,7 @@ def is_int(x: int | str) -> TypeIs[int]:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0113")
+        .filter(|d| d.code.code == "narrowing_typeis_2")
         .count();
     Ok(())
 }

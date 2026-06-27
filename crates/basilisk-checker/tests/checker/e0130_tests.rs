@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0130] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0130: `TypeVar` scoping violation.
+//! Tests for [generics_variance_inference] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for generics_variance_inference: `TypeVar` scoping violation.
 
 use super::common::*;
 

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0026] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0026: `TypeVar` declared with exactly one constraint.
+//! Implements [generics_basic] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! generics_basic: `TypeVar` declared with exactly one constraint.
 //!
 //! PEP 484 requires a `TypeVar` to have either zero constraints (unconstrained)
 //! or two or more constraints.  A single constraint makes no sense because it
@@ -12,11 +12,11 @@ use crate::diagnostic::{error_diag_help_note, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0026",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0026",
+    code: "generics_basic",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_basic",
 };
 
-/// Emits BSK-E0026 when a `TypeVar` is declared with exactly one constraint,
+/// Emits generics_basic when a `TypeVar` is declared with exactly one constraint,
 /// or when it has both constraints and a `bound=` keyword argument.
 pub(crate) struct TypeVarSingleConstraint;
 

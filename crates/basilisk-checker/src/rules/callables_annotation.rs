@@ -1,5 +1,5 @@
-//! Implements [BSK-E0015] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0015: Invalid type argument count or form.
+//! Implements [callables_annotation] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! callables_annotation: Invalid type argument count or form.
 //!
 //! Certain generic types accept a fixed number of type arguments.  This rule
 //! catches the most common violations detectable from source text alone:
@@ -26,11 +26,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0015",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0015",
+    code: "callables_annotation",
+    docs_url: "https://www.basilisk-python.dev/errors/callables_annotation",
 };
 
-/// Emits BSK-E0015 for function parameters whose generic annotation has the
+/// Emits callables_annotation for function parameters whose generic annotation has the
 /// wrong number of type arguments or invalid Callable form.
 pub(crate) struct InvalidTypeArgCount;
 

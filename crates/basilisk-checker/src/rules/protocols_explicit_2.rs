@@ -1,5 +1,5 @@
-//! Implements [BSK-E0118] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0118: Calling `super().method()` on an abstract method with no default
+//! Implements [protocols_explicit_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! protocols_explicit_2: Calling `super().method()` on an abstract method with no default
 //! implementation.
 //!
 //! When a Protocol (or ABC) declares a method as `@abstractmethod` with only an
@@ -32,11 +32,11 @@ use crate::diagnostic::{error_diag_help_note, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0118",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0118",
+    code: "protocols_explicit_2",
+    docs_url: "https://www.basilisk-python.dev/errors/protocols_explicit_2",
 };
 
-/// Emits BSK-E0118 when a subclass method calls `super().method()` on a method
+/// Emits protocols_explicit_2 when a subclass method calls `super().method()` on a method
 /// that is abstract and has no default implementation (body is `...` or `pass`).
 pub(crate) struct SuperAbstractCall;
 

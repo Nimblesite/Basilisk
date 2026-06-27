@@ -1,5 +1,5 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
-//! AST-derived PEP 695 scoping facts consumed by `BSK-E0149`.
+//! AST-derived PEP 695 scoping facts consumed by `generics_syntax_scoping`.
 //!
 //! These structures are populated purely from `ruff_python_ast` nodes (never
 //! from raw `source.lines()` scanning), so docstring/comment/string content can
@@ -52,7 +52,7 @@ pub struct DecoratorRef {
 }
 
 /// A `class` or `def` that declares a PEP 695 `[...]` type parameter list,
-/// plus the scope facts `BSK-E0149` needs.
+/// plus the scope facts `generics_syntax_scoping` needs.
 #[derive(Debug, Clone)]
 pub struct Pep695Def {
     /// Whether this is a class or a function.
@@ -86,7 +86,7 @@ pub struct Pep695AliasDef {
     /// member of a top-level `X | Y` union — but NOT names nested inside a
     /// subscript/container. A bare reference to another alias is non-terminating
     /// (`type A = B`), whereas one through a container (`type A = list[B]`) is
-    /// legitimate recursion; this powers mutual-cycle detection (BSK-E0149).
+    /// legitimate recursion; this powers mutual-cycle detection (generics_syntax_scoping).
     pub rhs_bare_refs: Vec<String>,
     /// When the RHS contains a self-referential subscript `Name[args]`, the
     /// simple argument names of the first such subscript.

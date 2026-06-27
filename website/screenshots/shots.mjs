@@ -51,7 +51,7 @@ const RULE_SHOTS = [
   },
   {
     name: "e0010",
-    expect: "BSK-E0010",
+    expect: "imports_unresolved",
     code: `from legacy_module import process_data
 `,
   },
@@ -67,7 +67,7 @@ def handle(data: Any) -> bool:
   },
   {
     name: "e0012",
-    expect: "BSK-E0012",
+    expect: "calls_argument_type",
     code: `def greet(name: str) -> str:
     return f"Hello, {name}"
 
@@ -77,26 +77,26 @@ greet(42)
   },
   {
     name: "e0013",
-    expect: "BSK-E0013",
+    expect: "returns_compatibility_2",
     code: `def get_count() -> int:
     return "many"
 `,
   },
   {
     name: "e0014",
-    expect: "BSK-E0014",
+    expect: "assignment_compatibility",
     code: `count: int = "zero"
 `,
   },
   {
     name: "e0015",
-    expect: "BSK-E0015",
+    expect: "callables_annotation",
     code: `x: dict[str] = {}
 `,
   },
   {
     name: "e0016",
-    expect: "BSK-E0016",
+    expect: "classes_override",
     code: `from typing import override
 
 
@@ -113,14 +113,14 @@ class Child(Base):
   },
   {
     name: "e0018",
-    expect: "BSK-E0018",
+    expect: "names_undefined",
     code: `def f() -> int:
     return missing_local
 `,
   },
   {
     name: "e0019",
-    expect: "BSK-E0019",
+    expect: "names_unbound",
     code: `def check(flag: bool) -> str:
     if flag:
         result = "yes"
@@ -142,7 +142,7 @@ class Child(Base):
   },
   {
     name: "e0017",
-    expect: "BSK-E0017",
+    expect: "classes_override_2",
     code: `class Base:
     x: int
 
@@ -153,7 +153,7 @@ class Child(Base):
   },
   {
     name: "e0020",
-    expect: "BSK-E0020",
+    expect: "overloads_definitions",
     code: `from typing import overload
 
 
@@ -165,7 +165,7 @@ def f(x: str) -> str: ...
   },
   {
     name: "e0023",
-    expect: "BSK-E0023",
+    expect: "match_exhaustiveness",
     code: `def classify(x: int | str) -> str:
     match x:
         case int():
@@ -174,7 +174,7 @@ def f(x: str) -> str: ...
   },
   {
     name: "e0026",
-    expect: "BSK-E0026",
+    expect: "generics_basic",
     code: `from typing import TypeVar
 
 T = TypeVar("T", int)
@@ -182,7 +182,7 @@ T = TypeVar("T", int)
   },
   {
     name: "e0027",
-    expect: "BSK-E0027",
+    expect: "generics_base_class",
     code: `from typing import Generic, TypeVar
 
 T = TypeVar("T")
@@ -194,7 +194,7 @@ class Box(Generic[T, T]):
   },
   {
     name: "e0029",
-    expect: "BSK-E0029",
+    expect: "typeddicts_class_syntax",
     code: `from typing import TypedDict
 
 
@@ -207,7 +207,7 @@ class Movie(TypedDict):
   },
   {
     name: "e0031",
-    expect: "BSK-E0031",
+    expect: "directives_cast",
     code: `from typing import cast
 
 x = cast(int)
@@ -215,13 +215,13 @@ x = cast(int)
   },
   {
     name: "e0033",
-    expect: "BSK-E0033",
+    expect: "directives_reveal_type",
     code: `reveal_type()
 `,
   },
   {
     name: "e0040",
-    expect: "BSK-E0040",
+    expect: "enums_behaviors",
     code: `from enum import Enum
 
 
@@ -235,7 +235,7 @@ class Sub(Base):
   },
   {
     name: "e0041",
-    expect: "BSK-E0041",
+    expect: "calls_argument_count",
     code: `def add(x: int, y: int) -> int:
     return x + y
 
@@ -245,7 +245,7 @@ add(1)
   },
   {
     name: "e0099",
-    expect: "BSK-E0099",
+    expect: "protocols_explicit",
     code: `from typing import Protocol
 
 
@@ -258,7 +258,7 @@ P()
   },
   {
     name: "e0115",
-    expect: "BSK-E0115",
+    expect: "directives_deprecated",
     code: `from warnings import deprecated
 
 

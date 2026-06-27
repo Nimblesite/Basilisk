@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0100] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0100: Literal augmented assignment.
+//! Tests for [literals_semantics] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for literals_semantics: Literal augmented assignment.
 
 use super::common::*;
 
@@ -11,7 +11,7 @@ def f(x: int) -> None:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0100"),
+        !codes(&diags).contains(&"literals_semantics"),
         "normal augmented assignment should not fire E0100"
     );
     Ok(())

@@ -29,7 +29,7 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::Diagnostic;
 
-use super::e0126_helpers::{
+use super::literals_literalstring_helpers::{
     emit_container_call_str_error, emit_fstring_literal_string_error,
     emit_invariant_container_mismatch, emit_literal_value_mismatch, extract_fstring_names,
     extract_literal_string_value, function_body_range, is_invariant_container, is_plain_str_type,

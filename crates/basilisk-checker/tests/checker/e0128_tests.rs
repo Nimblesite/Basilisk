@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0128] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0128: `TypeVar` default referential violations.
+//! Tests for [generics_defaults_referential_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for generics_defaults_referential_2: `TypeVar` default referential violations.
 
 use super::common::*;
 
@@ -52,7 +52,7 @@ class Good(Generic[S1, S2]): ...
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0128"),
+        !codes(&diags).contains(&"generics_defaults_referential_2"),
         "valid ordering should not fire E0128"
     );
     Ok(())

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0121] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0121: Protocol conformance violation.
+//! Tests for [protocols_definition_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for protocols_definition_2: Protocol conformance violation.
 
 use super::common::*;
 
@@ -19,7 +19,7 @@ x: P = C()
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0121"),
+        !codes(&diags).contains(&"protocols_definition_2"),
         "conforming class should not fire E0121"
     );
     Ok(())
@@ -60,7 +60,7 @@ x: Tmpl = Bad()
 ";
     let diags = run(source)?;
     assert!(
-        has_code(&diags, "BSK-E0121"),
+        has_code(&diags, "protocols_definition_2"),
         "missing protocol instance variable must fire E0121"
     );
     Ok(())
@@ -83,7 +83,7 @@ x: Tmpl = Good()
 ";
     let diags = run(source)?;
     assert!(
-        !has_code(&diags, "BSK-E0121"),
+        !has_code(&diags, "protocols_definition_2"),
         "a `self`-assigned instance variable satisfies the protocol"
     );
     Ok(())
@@ -107,7 +107,7 @@ x: Tmpl = Bad()
 ";
     let diags = run(source)?;
     assert!(
-        has_code(&diags, "BSK-E0121"),
+        has_code(&diags, "protocols_definition_2"),
         "keyword-only impl params must fire E0121"
     );
     Ok(())
@@ -131,7 +131,7 @@ x: Tmpl = Bad()
 ";
     let diags = run(source)?;
     assert!(
-        has_code(&diags, "BSK-E0121"),
+        has_code(&diags, "protocols_definition_2"),
         "positional-only impl params must fire E0121"
     );
     Ok(())
@@ -154,7 +154,7 @@ x: Tmpl = Good()
 ";
     let diags = run(source)?;
     assert!(
-        !has_code(&diags, "BSK-E0121"),
+        !has_code(&diags, "protocols_definition_2"),
         "matching positional-or-keyword params must not fire E0121"
     );
     Ok(())
@@ -178,7 +178,7 @@ close_all([1])
 ";
     let diags = run(source)?;
     assert!(
-        has_code(&diags, "BSK-E0121"),
+        has_code(&diags, "protocols_definition_2"),
         "`int` element cannot satisfy `Iterable[SupportsClose]`"
     );
     Ok(())
@@ -206,7 +206,7 @@ close_all([r])
 ";
     let diags = run(source)?;
     assert!(
-        !has_code(&diags, "BSK-E0121"),
+        !has_code(&diags, "protocols_definition_2"),
         "a container of conforming objects must not fire E0121"
     );
     Ok(())

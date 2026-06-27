@@ -142,11 +142,11 @@ There is no `--basic`, `--standard`, or `--permissive` flag. Every function para
 ```python
 from typing import Any
 
-# ERROR: Implicit Any -- untyped import [BSK-E0010]
+# ERROR: Implicit Any -- untyped import [imports_unresolved]
 from untyped_lib import do_stuff
 
 # OK: Explicit Any with reason
-result: Any = do_stuff()  # basilisk: allow[BSK-E0010] -- untyped dependency, tracking in #1234
+result: Any = do_stuff()  # basilisk: allow[imports_unresolved] -- untyped dependency, tracking in #1234
 
 # ERROR: Bare Any without justification in strict mode
 def process(data: Any) -> Any:  # BSK-W0011: Explicit Any requires reason comment
@@ -177,14 +177,14 @@ from fastmcp import FastMCP  # type: ignore
 
 **Per-line: Basilisk-specific with error code**
 ```python
-from fastmcp import FastMCP  # type: ignore[BSK-E0010]
+from fastmcp import FastMCP  # type: ignore[imports_unresolved]
 ```
 
 **Per-line: severity override (demote or promote)**
 ```python
-from fastmcp import FastMCP  # type: warning[BSK-E0010]
-from fastmcp import FastMCP  # type: info[BSK-E0010]
-from fastmcp import FastMCP  # type: disabled[BSK-E0010]
+from fastmcp import FastMCP  # type: warning[imports_unresolved]
+from fastmcp import FastMCP  # type: info[imports_unresolved]
+from fastmcp import FastMCP  # type: disabled[imports_unresolved]
 ```
 
 **Per-line: override all rules on this line**
@@ -195,12 +195,12 @@ data = unsafe_cast(value)  # type: disabled
 
 **Per-block: override severity for a range of lines**
 ```python
-# type: disabled[BSK-E0010]
+# type: disabled[imports_unresolved]
 from fastmcp import FastMCP
 from result import Result, Ok, Err
 from errors import AutomatorError, ErrorCode
 from models import Platform, Credentials
-# type: end-disabled[BSK-E0010]
+# type: end-disabled[imports_unresolved]
 ```
 
 Block directives work with all modes: `# type: warning[CODE]` / `# type: end-warning[CODE]`, `# type: info[CODE]` / `# type: end-info[CODE]`, `# type: disabled[CODE]` / `# type: end-disabled[CODE]`. Omitting the code applies to all rules.
@@ -212,12 +212,12 @@ Block directives work with all modes: `# type: warning[CODE]` / `# type: end-war
 ```
 
 ```python
-# basilisk: file-disabled[BSK-E0010]
+# basilisk: file-disabled[imports_unresolved]
 # Disable E0010 for the entire file
 ```
 
 ```python
-# basilisk: file-warning[BSK-E0010, BSK-E0011]
+# basilisk: file-warning[imports_unresolved, returns_compatibility]
 # Demote E0010 and E0011 to warnings for the entire file
 ```
 
@@ -227,10 +227,10 @@ Block directives work with all modes: `# type: warning[CODE]` / `# type: end-war
 strict = true  # default, cannot be set to false globally
 
 [tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["BSK-E0011"]              # disable rules entirely for legacy code
+disabled = ["returns_compatibility"]              # disable rules entirely for legacy code
 
 [tool.basilisk.per-path-overrides."vendor/**"]
-disabled = ["BSK-E0010"]
+disabled = ["imports_unresolved"]
 rules."BSK-E0001" = "warning"
 rules."BSK-E0002" = "warning"
 ```
@@ -247,9 +247,9 @@ ignore-missing-stubs = true
 **Global rule severity override**:
 ```toml
 [tool.basilisk.rules]
-"BSK-E0010" = "warning"    # demote globally
+"imports_unresolved" = "warning"    # demote globally
 "BSK-W0050" = "error"      # promote globally
-"BSK-E0060" = "disabled"   # disable globally
+"dataclasses_order" = "disabled"   # disable globally
 ```
 
 #### Suppression Precedence {#CHKARCH-STRICTNESS-PRECEDENCE}
@@ -271,13 +271,13 @@ Basilisk recognizes these comment formats for maximum interop:
 | Comment | Behavior |
 |---|---|
 | `# type: ignore` | Suppress all diagnostics on this line (PEP 484 / mypy / Pyright compatible) |
-| `# type: ignore[BSK-E0010]` | Suppress specific code (Basilisk extension, mypy-compatible syntax) |
+| `# type: ignore[imports_unresolved]` | Suppress specific code (Basilisk extension, mypy-compatible syntax) |
 | `# type: warning` | Demote all diagnostics to warnings (Basilisk-specific) |
-| `# type: warning[BSK-E0010]` | Demote specific code to warning (Basilisk-specific) |
+| `# type: warning[imports_unresolved]` | Demote specific code to warning (Basilisk-specific) |
 | `# type: info` | Demote all diagnostics to info (Basilisk-specific) |
-| `# type: info[BSK-E0010]` | Demote specific code to info (Basilisk-specific) |
+| `# type: info[imports_unresolved]` | Demote specific code to info (Basilisk-specific) |
 | `# type: disabled` | Disable all diagnostics on this line (Basilisk-specific) |
-| `# type: disabled[BSK-E0010]` | Disable specific code on this line (Basilisk-specific) |
+| `# type: disabled[imports_unresolved]` | Disable specific code on this line (Basilisk-specific) |
 | `# basilisk: relaxed` | Per-file: all errors become warnings |
 | `# basilisk: file-disabled[CODE]` | Per-file: disable specific rules |
 | `# basilisk: file-warning[CODE]` | Per-file: demote specific rules to warnings |
@@ -335,7 +335,7 @@ def process(items: list[str]) -> int:
 **Rules**:
 - **Public APIs** (module-level functions, class methods, module-level variables): explicit annotations required
 - **Local variables**: types inferred from assignments, comprehensions, and control flow
-- **Cross-module inference**: does NOT cross module boundaries for public symbols. Imports from typed modules resolve to declared types. Imports from untyped modules produce `BSK-E0010`.
+- **Cross-module inference**: does NOT cross module boundaries for public symbols. Imports from typed modules resolve to declared types. Imports from untyped modules produce `imports_unresolved`.
 
 ### Type Narrowing and Flow Analysis {#CHKARCH-NARROWING}
 
@@ -380,10 +380,10 @@ hardcoded constant (issue #93).
 
 #### Version/Platform Narrowing {#CHKARCH-VERSION-NARROWING}
 
-- `BSK-E0150` evaluates `sys.version_info` / `sys.platform` guards against
+- `directives_version_platform` evaluates `sys.version_info` / `sys.platform` guards against
   `ctx.target_version`, so dead-branch analysis follows the project's real
   target.
-- `BSK-E0155` rejects PEP 695 syntax (`type X = …`, `class C[T]`, `def f[T]`)
+- `version_target_syntax` rejects PEP 695 syntax (`type X = …`, `class C[T]`, `def f[T]`)
   when `ctx.target_version < (3, 12)` — the target interpreter cannot even
   parse it.
 
@@ -395,7 +395,7 @@ Tests: `crates/basilisk-checker/tests/checker/version_target_tests.rs`.
 
 > **Status: PLANNED (Phase 4 — see [CHKARCH-ROADMAP-P4](#CHKARCH-ROADMAP-P4)). Not yet implemented.**
 > This section is a forward-looking design for the `basilisk-mojo` crate, which is
-> a stub and is **not wired into the analysis pipeline**. The `BSK-E0030`–`BSK-E0062`
+> a stub and is **not wired into the analysis pipeline**. The `generics_defaults`–`specialtypes_never`
 > codes referenced below are **illustrative of the planned design only** — those same
 > numeric codes are currently used by shipping PEP-typing rules (see the
 > [complete diagnostic reference](#CHKARCH-DIAG-REFERENCE) for what each code actually
@@ -417,7 +417,7 @@ def process(
     consumed: Annotated[list[int], Owned],     # ownership transferred
 ) -> list[int]:
     buffer.append(sum(data))  # OK: buffer is InOut
-    data.append(1)            # ERROR: mutation of Borrowed parameter [BSK-E0030]
+    data.append(1)            # ERROR: mutation of Borrowed parameter [generics_defaults]
     return consumed           # OK: owned value returned
 
 items = [1, 2, 3]
@@ -425,14 +425,14 @@ temp = [4, 5]
 buf: list[int] = []
 
 result = process(data=items, buffer=buf, consumed=temp)
-print(temp)  # ERROR: use after ownership transfer [BSK-E0031]
+print(temp)  # ERROR: use after ownership transfer [directives_cast]
 print(buf)   # OK: InOut reference still valid
 ```
 
 **Static analysis rules**:
-- `BSK-E0030`: Mutation of `Borrowed` parameter
-- `BSK-E0031`: Use-after-move (value used after `Owned` transfer)
-- `BSK-E0032`: Implicit copy of large structure (suggest explicit `.copy()`)
+- `generics_defaults`: Mutation of `Borrowed` parameter
+- `directives_cast`: Use-after-move (value used after `Owned` transfer)
+- `typeddicts_class_syntax_2`: Implicit copy of large structure (suggest explicit `.copy()`)
 - `BSK-W0033`: Missing ownership annotation on mutable parameter (suggestion)
 
 ### Immutability by Default {#CHKARCH-MOJO-IMMUTABLE}
@@ -441,8 +441,8 @@ Function parameters are treated as immutable by default. Mutation of a parameter
 
 ```python
 def bad(items: list[int]) -> None:
-    items.append(1)  # ERROR: mutation of parameter [BSK-E0040]
-    items = [1, 2]   # ERROR: reassignment of parameter [BSK-E0041]
+    items.append(1)  # ERROR: mutation of parameter [enums_behaviors]
+    items = [1, 2]   # ERROR: reassignment of parameter [calls_argument_count]
 
 def good(items: Annotated[list[int], InOut]) -> None:
     items.append(1)  # OK: explicitly mutable
@@ -475,25 +475,25 @@ class Config:
         self.port = port
 
 c = Config(host="localhost", port=8080)
-c.timeout = 30  # ERROR: dynamic attribute on typed structure [BSK-E0050]
+c.timeout = 30  # ERROR: dynamic attribute on typed structure [aliases_newtype]
 ```
 
 **Rules**:
-- `BSK-E0050`: Dynamic attribute assignment on typed class
-- `BSK-E0051`: Missing `__init__` on class with type annotations
-- `BSK-E0052`: Missing `__del__` on class managing resources (when detectable)
+- `aliases_newtype`: Dynamic attribute assignment on typed class
+- `literals_parameterizations`: Missing `__init__` on class with type annotations
+- `dataclasses_frozen`: Missing `__del__` on class managing resources (when detectable)
 - `BSK-W0053`: Class should use `__slots__` for performance (suggestion)
 
 ### No Implicit Type Coercion {#CHKARCH-MOJO-COERCION}
 
 ```python
-x: float = 1        # ERROR: implicit int-to-float coercion [BSK-E0060]
+x: float = 1        # ERROR: implicit int-to-float coercion [dataclasses_order]
 x: float = float(1)  # OK: explicit conversion
 
-y: int = True        # ERROR: implicit bool-to-int coercion [BSK-E0061]
+y: int = True        # ERROR: implicit bool-to-int coercion [enums_expansion]
 y: int = int(True)   # OK: explicit conversion
 
-z: str = b"hello"    # ERROR: implicit bytes-to-str [BSK-E0062]
+z: str = b"hello"    # ERROR: implicit bytes-to-str [specialtypes_never]
 ```
 
 ### Mojo Compatibility Matrix {#CHKARCH-MOJO-COMPAT}
@@ -548,29 +548,29 @@ The prefix determines the **default** severity. Every rule can be overridden to 
 | BSK-E0004 | Missing `*args` / `**kwargs` type annotation |
 | BSK-E0005 | Missing class attribute type annotation |
 
-#### Type Safety (BSK-E0010 -- BSK-E0029) {#CHKARCH-DIAG-TYPESAFETY}
+#### Type Safety (imports_unresolved -- typeddicts_class_syntax) {#CHKARCH-DIAG-TYPESAFETY}
 
 | Code | Description |
 |---|---|
-| BSK-E0010 | Unresolved import |
-| BSK-E0011 | Return type mismatch |
-| BSK-E0012 | Argument type mismatch |
-| BSK-E0013 | Return type mismatch |
-| BSK-E0014 | Assignment type incompatibility |
-| BSK-E0015 | Invalid type argument |
-| BSK-E0016 | Incompatible method override |
-| BSK-E0017 | Incompatible variable override |
-| BSK-E0018 | Undefined variable |
-| BSK-E0019 | Unbound variable (some code paths) |
-| BSK-E0020 | Missing overload implementation |
-| BSK-E0021 | Overlapping overloads with incompatible returns |
-| BSK-E0022 | Unhashable type in hash-requiring context |
-| BSK-E0023 | Non-exhaustive pattern match |
-| BSK-E0024 | Invalid type form in annotation |
+| imports_unresolved | Unresolved import |
+| returns_compatibility | Return type mismatch |
+| calls_argument_type | Argument type mismatch |
+| returns_compatibility_2 | Return type mismatch |
+| assignment_compatibility | Assignment type incompatibility |
+| callables_annotation | Invalid type argument |
+| classes_override | Incompatible method override |
+| classes_override_2 | Incompatible variable override |
+| names_undefined | Undefined variable |
+| names_unbound | Unbound variable (some code paths) |
+| overloads_definitions | Missing overload implementation |
+| overloads_consistency | Overlapping overloads with incompatible returns |
+| dict_key_hashable | Unhashable type in hash-requiring context |
+| match_exhaustiveness | Non-exhaustive pattern match |
+| annotations_typeexpr | Invalid type form in annotation |
 | BSK-E0025 | Missing `@override` decorator |
-| BSK-E0026 | `TypeVar` declared with a single constraint |
-| BSK-E0027 | Duplicate `TypeVar` in a `Generic[...]` base |
-| BSK-E0029 | Method defined inside a `TypedDict` class |
+| generics_basic | `TypeVar` declared with a single constraint |
+| generics_base_class | Duplicate `TypeVar` in a `Generic[...]` base |
+| typeddicts_class_syntax | Method defined inside a `TypedDict` class |
 
 #### Complete diagnostic reference {#CHKARCH-DIAG-REFERENCE}
 
@@ -585,165 +585,165 @@ list — keep it in sync after adding or renaming a rule.
 | `BSK-E0003` | Missing variable type annotation |
 | `BSK-E0004` | Missing `*args` / `**kwargs` type annotation |
 | `BSK-E0005` | Missing class attribute type annotation |
-| `BSK-E0010` | Unresolved import |
-| `BSK-E0011` | Return type mismatch (literal return value incompatible with the declared return type) |
-| `BSK-E0012` | Argument type mismatch at a call site |
-| `BSK-E0013` | Return type mismatch — inferred return type incompatible with annotation |
-| `BSK-E0014` | Assignment type incompatibility (literal mismatches) |
-| `BSK-E0015` | Invalid type argument count or form |
-| `BSK-E0016` | Incompatible method override |
-| `BSK-E0017` | Incompatible class attribute override |
-| `BSK-E0018` | Undefined variable used in a return statement |
-| `BSK-E0019` | Unbound variable on some code paths |
-| `BSK-E0020` | Missing `@overload` implementation |
-| `BSK-E0021` | Overlapping `@overload` signatures |
-| `BSK-E0022` | Unhashable type used as a dict key |
-| `BSK-E0023` | Non-exhaustive `match` statement |
-| `BSK-E0024` | Invalid type form — numeric literal used as type annotation |
+| `imports_unresolved` | Unresolved import |
+| `returns_compatibility` | Return type mismatch (literal return value incompatible with the declared return type) |
+| `calls_argument_type` | Argument type mismatch at a call site |
+| `returns_compatibility_2` | Return type mismatch — inferred return type incompatible with annotation |
+| `assignment_compatibility` | Assignment type incompatibility (literal mismatches) |
+| `callables_annotation` | Invalid type argument count or form |
+| `classes_override` | Incompatible method override |
+| `classes_override_2` | Incompatible class attribute override |
+| `names_undefined` | Undefined variable used in a return statement |
+| `names_unbound` | Unbound variable on some code paths |
+| `overloads_definitions` | Missing `@overload` implementation |
+| `overloads_consistency` | Overlapping `@overload` signatures |
+| `dict_key_hashable` | Unhashable type used as a dict key |
+| `match_exhaustiveness` | Non-exhaustive `match` statement |
+| `annotations_typeexpr` | Invalid type form — numeric literal used as type annotation |
 | `BSK-E0025` | Missing `@override` decorator |
-| `BSK-E0026` | `TypeVar` declared with exactly one constraint |
-| `BSK-E0027` | Duplicate `TypeVar` in a `Generic[...]` base |
-| `BSK-E0029` | Method defined inside a `TypedDict` class |
-| `BSK-E0030` | Non-default `TypeVar` follows a default `TypeVar` in `Generic[...]` |
-| `BSK-E0031` | Invalid `cast()` call |
-| `BSK-E0032` | Invalid keyword argument in `TypedDict` class definition |
-| `BSK-E0033` | Invalid `reveal_type()` call |
-| `BSK-E0034` | `@final` decorator violations |
-| `BSK-E0035` | `Required` / `NotRequired` used in an invalid context |
+| `generics_basic` | `TypeVar` declared with exactly one constraint |
+| `generics_base_class` | Duplicate `TypeVar` in a `Generic[...]` base |
+| `typeddicts_class_syntax` | Method defined inside a `TypedDict` class |
+| `generics_defaults` | Non-default `TypeVar` follows a default `TypeVar` in `Generic[...]` |
+| `directives_cast` | Invalid `cast()` call |
+| `typeddicts_class_syntax_2` | Invalid keyword argument in `TypedDict` class definition |
+| `directives_reveal_type` | Invalid `reveal_type()` call |
+| `qualifiers_final_decorator` | `@final` decorator violations |
+| `typeddicts_required` | `Required` / `NotRequired` used in an invalid context |
 | `BSK-E0036` | `ClassVar` used in an invalid context |
-| `BSK-E0037` | Invalid `TypedDict(...)` functional-syntax call |
-| `BSK-E0038` | Invalid `TypedDict` inheritance |
-| `BSK-E0039` | Invalid `assert_type()` call |
-| `BSK-E0040` | Invalid Enum subclassing |
-| `BSK-E0041` | Too few arguments in a function call |
-| `BSK-E0042` | PEP 695 type parameter syntax mixed with traditional `TypeVars` |
-| `BSK-E0043` | Non-TypeVar argument in `Generic[...]` or `Protocol[...]` |
-| `BSK-E0044` | `Final` used in an invalid position |
-| `BSK-E0045` | Invalid first argument to `Annotated[...]` |
-| `BSK-E0046` | Enum member annotated with an explicit type |
-| `BSK-E0047` | Invalid type expression in annotation |
-| `BSK-E0048` | Invalid right-hand side for a `TypeAlias` annotation |
-| `BSK-E0049` | Multiple unbounded tuple components in a single tuple type |
-| `BSK-E0050` | Invalid `NewType(...)` call |
-| `BSK-E0051` | Invalid `Literal` parameterization |
-| `BSK-E0052` | Assignment to attribute of a frozen dataclass instance, or invalid frozen/non-frozen dataclass inheritance |
-| `BSK-E0053` | `assert_type()` type mismatch |
-| `BSK-E0054` | `Final` type qualifier annotation violations |
-| `BSK-E0055` | Invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword argument combination |
-| `BSK-E0056` | Mutation of `ReadOnly` `TypedDict` fields |
-| `BSK-E0057` | Invalid RHS in a PEP 695 `type X = rhs` statement |
-| `BSK-E0058` | `Annotated[...]` requires at least two arguments |
-| `BSK-E0059` | Access to `__match_args__` on a dataclass with `match_args=False` |
-| `BSK-E0060` | Invalid ordering comparison of dataclass instances |
-| `BSK-E0061` | `assert_type` with `Literal[Enum.MEMBER]` on enum-typed param |
-| `BSK-E0062` | `-> NoReturn` / `-> Never` function can fall through |
-| `BSK-E0063` | Non-hashable dataclass assigned to a `Hashable`-annotated variable |
-| `BSK-E0064` | Invalid argument in a `NamedTuple` constructor call |
-| `BSK-E0065` | Access to an `int`-only attribute on a `float`-typed parameter |
-| `BSK-E0066` | Enum member value incompatible with `_value_` type annotation |
-| `BSK-E0067` | Non-member referenced in `Literal[EnumClass.X]` annotation |
-| `BSK-E0068` | `Literal["EnumClass.MEMBER"]` (string) used where `Literal[EnumClass.MEMBER]` (enum member reference) is required |
-| `BSK-E0069` | Dataclass constructor argument violations |
-| `BSK-E0070` | `Never` type compatibility violations |
-| `BSK-E0071` | Historical positional-only parameter violations |
-| `BSK-E0072` | No matching overload for subscript indexing |
-| `BSK-E0073` | `NamedTuple`-to-tuple type incompatibility |
-| `BSK-E0074` | Constructor call type mismatch with specialized generic class |
-| `BSK-E0075` | Incompatible type for `Self`-typed attribute |
-| `BSK-E0076` | Overload union expansion failure |
-| `BSK-E0077` | Protocol `Self`-return conformance violation |
-| `BSK-E0078` | `Self` type violations in generics |
-| `BSK-E0079` | Module assigned to incompatible protocol type |
-| `BSK-E0080` | `TypeVar` upper bound violation at call site |
-| `BSK-E0081` | `TypeVarTuple` unpack minimum type argument violation |
-| `BSK-E0082` | `TypeVarTuple` callable/tuple argument mismatch |
-| `BSK-E0083` | `TypeVarTuple` must be unpacked with `*` operator |
-| `BSK-E0084` | `TypeVarTuple` variance/bounds/constraints violation |
-| `BSK-E0085` | `TypeVarTuple` argument count mismatch |
-| `BSK-E0086` | Multiple `TypeVarTuple` unpacks in generic or tuple type |
+| `typeddicts_alt_syntax` | Invalid `TypedDict(...)` functional-syntax call |
+| `typeddicts_inheritance` | Invalid `TypedDict` inheritance |
+| `directives_assert_type` | Invalid `assert_type()` call |
+| `enums_behaviors` | Invalid Enum subclassing |
+| `calls_argument_count` | Too few arguments in a function call |
+| `generics_syntax_compatibility` | PEP 695 type parameter syntax mixed with traditional `TypeVars` |
+| `generics_basic_2` | Non-TypeVar argument in `Generic[...]` or `Protocol[...]` |
+| `qualifiers_final_annotation` | `Final` used in an invalid position |
+| `qualifiers_annotated` | Invalid first argument to `Annotated[...]` |
+| `enums_members` | Enum member annotated with an explicit type |
+| `annotations_forward_refs` | Invalid type expression in annotation |
+| `aliases_implicit` | Invalid right-hand side for a `TypeAlias` annotation |
+| `tuples_type_form` | Multiple unbounded tuple components in a single tuple type |
+| `aliases_newtype` | Invalid `NewType(...)` call |
+| `literals_parameterizations` | Invalid `Literal` parameterization |
+| `dataclasses_frozen` | Assignment to attribute of a frozen dataclass instance, or invalid frozen/non-frozen dataclass inheritance |
+| `directives_assert_type_2` | `assert_type()` type mismatch |
+| `qualifiers_final_annotation_2` | `Final` type qualifier annotation violations |
+| `generics_typevartuple_basic` | Invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword argument combination |
+| `typeddicts_readonly` | Mutation of `ReadOnly` `TypedDict` fields |
+| `aliases_type_statement` | Invalid RHS in a PEP 695 `type X = rhs` statement |
+| `qualifiers_annotated_2` | `Annotated[...]` requires at least two arguments |
+| `dataclasses_match_args` | Access to `__match_args__` on a dataclass with `match_args=False` |
+| `dataclasses_order` | Invalid ordering comparison of dataclass instances |
+| `enums_expansion` | `assert_type` with `Literal[Enum.MEMBER]` on enum-typed param |
+| `specialtypes_never` | `-> NoReturn` / `-> Never` function can fall through |
+| `dataclasses_hash` | Non-hashable dataclass assigned to a `Hashable`-annotated variable |
+| `namedtuples_define_functional` | Invalid argument in a `NamedTuple` constructor call |
+| `specialtypes_promotions` | Access to an `int`-only attribute on a `float`-typed parameter |
+| `enums_member_values` | Enum member value incompatible with `_value_` type annotation |
+| `enums_members_2` | Non-member referenced in `Literal[EnumClass.X]` annotation |
+| `literals_parameterizations_2` | `Literal["EnumClass.MEMBER"]` (string) used where `Literal[EnumClass.MEMBER]` (enum member reference) is required |
+| `dataclasses_kwonly` | Dataclass constructor argument violations |
+| `specialtypes_never_2` | `Never` type compatibility violations |
+| `historical_positional` | Historical positional-only parameter violations |
+| `overloads_basic` | No matching overload for subscript indexing |
+| `namedtuples_type_compat` | `NamedTuple`-to-tuple type incompatibility |
+| `constructors_call_new` | Constructor call type mismatch with specialized generic class |
+| `generics_self_attributes` | Incompatible type for `Self`-typed attribute |
+| `overloads_evaluation` | Overload union expansion failure |
+| `generics_self_protocols` | Protocol `Self`-return conformance violation |
+| `generics_self_basic` | `Self` type violations in generics |
+| `protocols_modules` | Module assigned to incompatible protocol type |
+| `generics_upper_bound` | `TypeVar` upper bound violation at call site |
+| `generics_typevartuple_unpack` | `TypeVarTuple` unpack minimum type argument violation |
+| `generics_typevartuple_callable` | `TypeVarTuple` callable/tuple argument mismatch |
+| `generics_typevartuple_basic_2` | `TypeVarTuple` must be unpacked with `*` operator |
+| `generics_typevartuple_basic_3` | `TypeVarTuple` variance/bounds/constraints violation |
+| `generics_typevartuple_args` | `TypeVarTuple` argument count mismatch |
+| `generics_typevartuple_specialization` | Multiple `TypeVarTuple` unpacks in generic or tuple type |
 | `BSK-E0087` | Reserved for future PEP 695 type parameter checks |
-| `BSK-E0088` | `TypedDict` runtime violation |
-| `BSK-E0089` | Invalid PEP 695 type parameter bound or constraint |
-| `BSK-E0090` | Invalid tuple type syntax |
-| `BSK-E0091` | Incompatible `TypeVar` bound or constraint with its default |
-| `BSK-E0092` | Wrong number of type arguments to a generic class or type alias |
-| `BSK-E0093` | Invalid key or value type in `TypedDict` assignment |
-| `BSK-E0094` | `Self` type used in an invalid location |
-| `BSK-E0095` | `InitVar` field validation in dataclasses |
-| `BSK-E0096` | Type mismatch between a dataclass `field(default_factory=…)` and the field's declared type annotation |
-| `BSK-E0097` | Protocol method body sets self-attributes not declared in Protocol |
-| `BSK-E0098` | Non-Protocol base class in a Protocol definition |
-| `BSK-E0099` | Direct instantiation of a Protocol class |
-| `BSK-E0100` | Augmented assignment widens `Literal` type |
-| `BSK-E0101` | `TypeGuard` or `TypeIs` on method with no narrowing parameter |
-| `BSK-E0102` | Invalid `TypeVar` default referencing another `TypeVar` |
-| `BSK-E0103` | Tuple index out of bounds |
-| `BSK-E0104` | Cyclical type alias reference |
-| `BSK-E0105` | Invalid attribute access on bounded type variable |
-| `BSK-E0106` | Protocol class used where `type[Proto]` is expected |
-| `BSK-E0107` | Variance incompatibility in base class parameterisation |
-| `BSK-E0108` | Dataclass slots violations |
-| `BSK-E0109` | `TypeVar` bound violation at call site |
-| `BSK-E0110` | Protocol variance violation |
+| `typeddicts_usage` | `TypedDict` runtime violation |
+| `generics_syntax_declarations` | Invalid PEP 695 type parameter bound or constraint |
+| `tuples_type_form_2` | Invalid tuple type syntax |
+| `generics_defaults_2` | Incompatible `TypeVar` bound or constraint with its default |
+| `generics_defaults_specialization` | Wrong number of type arguments to a generic class or type alias |
+| `typeddicts_operations` | Invalid key or value type in `TypedDict` assignment |
+| `generics_self_usage` | `Self` type used in an invalid location |
+| `dataclasses_postinit` | `InitVar` field validation in dataclasses |
+| `dataclasses_usage` | Type mismatch between a dataclass `field(default_factory=…)` and the field's declared type annotation |
+| `protocols_definition` | Protocol method body sets self-attributes not declared in Protocol |
+| `protocols_merging` | Non-Protocol base class in a Protocol definition |
+| `protocols_explicit` | Direct instantiation of a Protocol class |
+| `literals_semantics` | Augmented assignment widens `Literal` type |
+| `narrowing_typeguard` | `TypeGuard` or `TypeIs` on method with no narrowing parameter |
+| `generics_defaults_referential` | Invalid `TypeVar` default referencing another `TypeVar` |
+| `tuples_index` | Tuple index out of bounds |
+| `aliases_recursive` | Cyclical type alias reference |
+| `generics_syntax_declarations_2` | Invalid attribute access on bounded type variable |
+| `protocols_class_objects` | Protocol class used where `type[Proto]` is expected |
+| `generics_variance` | Variance incompatibility in base class parameterisation |
+| `dataclasses_slots` | Dataclass slots violations |
+| `generics_upper_bound_2` | `TypeVar` bound violation at call site |
+| `protocols_variance` | Protocol variance violation |
 | `BSK-E0111` | Constructor call errors via `__init__` method |
-| `BSK-E0112` | TypeGuard/TypeIs return type incompatibility in callable arguments |
-| `BSK-E0113` | `TypeIs` narrows to a type inconsistent with the input type |
-| `BSK-E0114` | Protocol `isinstance`/`issubclass` violations |
-| `BSK-E0115` | Use of deprecated class, function, or method |
-| `BSK-E0116` | `NamedTuple` class definition errors |
-| `BSK-E0117` | Unbound type variable in scope |
-| `BSK-E0118` | Calling `super().method()` on an abstract method with no default implementation |
-| `BSK-E0119` | Protocol `isinstance`/`issubclass` violations |
+| `narrowing_typeis` | TypeGuard/TypeIs return type incompatibility in callable arguments |
+| `narrowing_typeis_2` | `TypeIs` narrows to a type inconsistent with the input type |
+| `protocols_runtime_checkable` | Protocol `isinstance`/`issubclass` violations |
+| `directives_deprecated` | Use of deprecated class, function, or method |
+| `namedtuples_define_class` | `NamedTuple` class definition errors |
+| `generics_scoping` | Unbound type variable in scope |
+| `protocols_explicit_2` | Calling `super().method()` on an abstract method with no default implementation |
+| `protocols_runtime_checkable_2` | Protocol `isinstance`/`issubclass` violations |
 | `BSK-E0120` | Generator return type and yield type violations |
-| `BSK-E0121` | Protocol conformance violation in an annotated assignment or call argument |
-| `BSK-E0122` | Callable call-site arity and argument validation |
-| `BSK-E0123` | `super()` call on abstract protocol method with no default implementation |
-| `BSK-E0124` | Protocol attribute tuple element type mismatch |
-| `BSK-E0125` | Access to instance attribute on a class object |
+| `protocols_definition_2` | Protocol conformance violation in an annotated assignment or call argument |
+| `callables_protocol` | Callable call-site arity and argument validation |
+| `protocols_explicit_3` | `super()` call on abstract protocol method with no default implementation |
+| `protocols_subtyping` | Protocol attribute tuple element type mismatch |
+| `generics_type_erasure` | Access to instance attribute on a class object |
 | `BSK-E0126` | `LiteralString` and `Literal` assignment incompatibilities |
-| `BSK-E0127` | Tuple index out of range |
-| `BSK-E0128` | ```TypeVar``` default referential violations |
-| `BSK-E0129` | Literal value assignment incompatibility |
-| `BSK-E0130` | `TypeVar` scoping violation |
-| `BSK-E0131` | Generator yield/send/return type mismatch |
-| `BSK-E0132` | Inconsistent `TypeVar` ordering across base classes |
-| `BSK-E0133` | Protocol `TypeVar` variance mismatch |
-| `BSK-E0134` | Invariant generic type mismatch at call site |
-| `BSK-E0136` | Callable subtyping violations (covariance / contravariance) |
-| `BSK-E0137` | Generic protocol violations |
+| `tuples_index_2` | Tuple index out of range |
+| `generics_defaults_referential_2` | ```TypeVar``` default referential violations |
+| `literals_semantics_2` | Literal value assignment incompatibility |
+| `generics_variance_inference` | `TypeVar` scoping violation |
+| `annotations_generators_2` | Generator yield/send/return type mismatch |
+| `generics_base_class_2` | Inconsistent `TypeVar` ordering across base classes |
+| `protocols_variance_2` | Protocol `TypeVar` variance mismatch |
+| `generics_base_class_3` | Invariant generic type mismatch at call site |
+| `callables_subtyping` | Callable subtyping violations (covariance / contravariance) |
+| `protocols_generic` | Generic protocol violations |
 | `BSK-E0138` | `dataclass_transform` metaclass violations |
-| `BSK-E0139` | Invalid `TypeVarTuple` specialization of generic alias |
-| `BSK-E0140` | Callable and Protocol assignment compatibility |
-| `BSK-E0141` | Unpack[`TypedDict`] kwargs violations |
+| `generics_typevartuple_specialization_2` | Invalid `TypeVarTuple` specialization of generic alias |
+| `callables_protocol_2` | Callable and Protocol assignment compatibility |
+| `callables_kwargs` | Unpack[`TypedDict`] kwargs violations |
 | `BSK-E0142` | `dataclass_transform` violations when the transform is applied via a base class |
-| `BSK-E0143` | `NamedTuple` usage violations |
+| `namedtuples_usage` | `NamedTuple` usage violations |
 | `BSK-E0144` | Invalid constructor call via `type[T]` parameter |
-| `BSK-E0145` | Invalid `type[X]` usage violations |
-| `BSK-E0146` | Protocol class object violations |
-| `BSK-E0147` | Tuple starred-unpack type compatibility violation |
+| `specialtypes_type` | Invalid `type[X]` usage violations |
+| `protocols_class_objects_2` | Protocol class object violations |
+| `tuples_type_compat` | Tuple starred-unpack type compatibility violation |
 | `BSK-E0148` | Generic type argument violations |
-| `BSK-E0149` | PEP 695 generic type parameter scoping violations |
-| `BSK-E0150` | Variable defined only in dead version/platform branch |
-| `BSK-E0151` | Invalid `TypeAliasType(...)` call |
+| `generics_syntax_scoping` | PEP 695 generic type parameter scoping violations |
+| `directives_version_platform` | Variable defined only in dead version/platform branch |
+| `aliases_typealiastype` | Invalid `TypeAliasType(...)` call |
 | `BSK-E0152` | Missing type stubs for installed package |
-| `BSK-E0153` | Invalid call to a constructor-derived callable ([CHKARCH-DIAG-CTOR-CALLABLE](#CHKARCH-DIAG-CTOR-CALLABLE)) |
-| `BSK-E0154` | Access to a module attribute a local stub does not declare ([CHKARCH-DIAG-STUB-MEMBER](#CHKARCH-DIAG-STUB-MEMBER)) |
-| `BSK-E0155` | PEP 695 syntax used below the configured target version ([CHKARCH-VERSION-TARGET](#CHKARCH-VERSION-TARGET)) |
-| `BSK-E0156` | TypedDict `extra_items` / `closed` (PEP 728) violations ([CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS](#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS)) |
-| `BSK-E0157` | Dataclass field without a default after one with a default ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
-| `BSK-E0158` | Inconsistent decorators across an `@overload` group — `@staticmethod`/`@classmethod` not uniform, or `@final`/`@override` on an overload signature ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
-| `BSK-E0159` | `@override` on a method with no matching ancestor method (PEP 698) ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
-| `BSK-E0160` | Overload implementation inconsistent with its signatures (overload return not assignable to impl return, or impl parameter cannot accept an overload's) ([CHKARCH-DIAG-TYPESAFETY](#chkarch-diag-typesafety)) |
+| `constructors_callable` | Invalid call to a constructor-derived callable ([CHKARCH-DIAG-CTOR-CALLABLE](#CHKARCH-DIAG-CTOR-CALLABLE)) |
+| `imports_module_attribute` | Access to a module attribute a local stub does not declare ([CHKARCH-DIAG-STUB-MEMBER](#CHKARCH-DIAG-STUB-MEMBER)) |
+| `version_target_syntax` | PEP 695 syntax used below the configured target version ([CHKARCH-VERSION-TARGET](#CHKARCH-VERSION-TARGET)) |
+| `typeddicts_extra_items` | TypedDict `extra_items` / `closed` (PEP 728) violations ([CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS](#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS)) |
+| `dataclasses_inheritance` | Dataclass field without a default after one with a default ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
+| `overloads_consistency_2` | Inconsistent decorators across an `@overload` group — `@staticmethod`/`@classmethod` not uniform, or `@final`/`@override` on an overload signature ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
+| `classes_override_3` | `@override` on a method with no matching ancestor method (PEP 698) ([CHKARCH-DIAG-OWNERSHIP](#chkarch-diag-ownership)) |
+| `overloads_consistency_3` | Overload implementation inconsistent with its signatures (overload return not assignable to impl return, or impl parameter cannot accept an overload's) ([CHKARCH-DIAG-TYPESAFETY](#chkarch-diag-typesafety)) |
 | `BSK-W0011` | Undeclared dependency import |
 | `BSK-W0012` | Unused dependency |
 | `BSK-W0013` | Stale uv lock file |
-| `BSK-W0014` | Explicit `Any` annotation — prefer a concrete type (style nudge; split from `BSK-E0011`, see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)) |
+| `BSK-W0014` | Explicit `Any` annotation — prefer a concrete type (style nudge; split from `returns_compatibility`, see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)) |
 | `BSK-W0040` | Lambda function missing type annotations |
 | `BSK-W0050` | Redundant type annotation warning |
 
 #### Constructor-to-callable conversion {#CHKARCH-DIAG-CTOR-CALLABLE}
 
-`BSK-E0153` implements the typing-spec rule
+`constructors_callable` implements the typing-spec rule
 ["Converting a constructor to callable"](https://typing.readthedocs.io/en/latest/spec/constructors.html#converting-a-constructor-to-callable).
 When a class object flows through an identity-over-callable function
 (`def f(cb: Callable[P, R]) -> Callable[P, R]`), the value it returns gains the
@@ -759,7 +759,7 @@ The synthesized signature is derived in priority order:
 3. Otherwise `__init__` (or `__new__` when no `__init__` exists); a class with
    neither synthesizes a zero-argument callable returning the instance.
 
-`BSK-E0153` fires when a call to such a variable supplies too few or too many
+`constructors_callable` fires when a call to such a variable supplies too few or too many
 positional arguments, names a keyword that is not a parameter, or binds a
 function-scoped `TypeVar` inconsistently (e.g. `list[T]` filled by both
 `list[int]` and `list[str]`). The analysis is conservative: starred positional
@@ -769,7 +769,7 @@ positives. Implemented in `crates/basilisk-checker/src/rules/e0153.rs`; tests in
 
 #### Strict local-stub member access {#CHKARCH-DIAG-STUB-MEMBER}
 
-`BSK-E0154` makes a **user/local stub authoritative**: when `import X` resolves
+`imports_module_attribute` makes a **user/local stub authoritative**: when `import X` resolves
 to a `.pyi` under a configured `stub-paths` directory (including the
 auto-discovered `.basilisk/stubs/` that the "Create local type stub" quick fix
 writes — see [STUBRES-CREATE-LOCAL](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CREATE-LOCAL)),
@@ -796,7 +796,7 @@ in `crates/basilisk-checker/src/rules/e0154/`; tests in
 
 #### TypedDict `extra_items` / `closed` (PEP 728) {#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS}
 
-`BSK-E0156` implements [PEP 728](https://peps.python.org/pep-0728/) — the
+`typeddicts_extra_items` implements [PEP 728](https://peps.python.org/pep-0728/) — the
 `extra_items=` and `closed=` class keywords on `TypedDict`. A TypedDict that
 specifies `extra_items=T` defines an infinite set of non-required (or, when `T`
 is `ReadOnly[...]`, read-only) extra items whose value type is `T`; `closed=True`
@@ -845,7 +845,7 @@ E0014 dict-literal false positives across the read-only suite.
 
 The qualifier rules are enforced across four codes:
 
-- **`BSK-E0038`** (`crates/basilisk-checker/src/rules/e0038.rs`) — redeclaration
+- **`typeddicts_inheritance`** (`crates/basilisk-checker/src/rules/e0038.rs`) — redeclaration
   legality. A writable item may not be redeclared `ReadOnly`; a required item
   may not be redeclared not-required; a writable item's value type is invariant
   while a `ReadOnly` item's may be narrowed to a subtype (a different container
@@ -857,11 +857,11 @@ The qualifier rules are enforced across four codes:
   `is_invariant_container`, `bases_conflict`) are pure and mutation-tested
   (`crates/basilisk-checker/tests/mutation_kill_tests.rs`, every viable mutant
   killed).
-- **`BSK-E0056`** — writes to an *inherited* `ReadOnly` field that the subclass
+- **`typeddicts_readonly`** — writes to an *inherited* `ReadOnly` field that the subclass
   did not redeclare as writable.
-- **`BSK-E0093`** — wrong value type / missing required key against the merged
+- **`typeddicts_operations`** — wrong value type / missing required key against the merged
   schema, including plain reassignment of an already-typed variable.
-- **`BSK-E0014`** — skips dict-literal assignments to transitive `TypedDict`
+- **`assignment_compatibility`** — skips dict-literal assignments to transitive `TypedDict`
   subclasses (field-level checking belongs to E0093).
 
 Conformance: flips `typeddicts_readonly_inheritance.py`. Benchmark fixture:
@@ -877,10 +877,10 @@ occupy these numeric ranges implement standard PEP-typing rules, listed in the
 [complete reference](#CHKARCH-DIAG-REFERENCE) above.
 
 - Ownership safety {#CHKARCH-DIAG-OWNERSHIP} — planned: `Borrowed` / `InOut` / `Owned` reference tracking, use-after-move.
-- Immutability {#CHKARCH-DIAG-IMMUTABILITY} — planned: mutation-of-immutable and `Final` enforcement beyond the shipping `Final` checks (BSK-E0044, BSK-E0054).
+- Immutability {#CHKARCH-DIAG-IMMUTABILITY} — planned: mutation-of-immutable and `Final` enforcement beyond the shipping `Final` checks (qualifiers_final_annotation, qualifiers_final_annotation_2).
 - Structural discipline {#CHKARCH-DIAG-STRUCTURAL} — shipping codes in this range cover NewType, `Literal`, frozen-dataclass and related structural rules.
 - Coercion safety {#CHKARCH-DIAG-COERCION} — planned: implicit numeric / `bytes`↔`str` coercion detection.
-- Optional safety {#CHKARCH-DIAG-OPTIONAL} — narrowing and `Never`/`Optional` rules ship today (e.g. BSK-E0070); a dedicated optional-access pass is planned.
+- Optional safety {#CHKARCH-DIAG-OPTIONAL} — narrowing and `Never`/`Optional` rules ship today (e.g. specialtypes_never_2); a dedicated optional-access pass is planned.
 
 ---
 
@@ -1238,8 +1238,8 @@ immutability = true              # Parameters immutable by default (default: tru
 no-implicit-coercion = true      # Flag implicit type coercion (default: true)
 
 [tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["BSK-E0011"]
-rules."BSK-E0010" = "warning"
+disabled = ["returns_compatibility"]
+rules."imports_unresolved" = "warning"
 ```
 
 ### Include Semantics {#CHKARCH-CONFIG-INCLUDE}
@@ -1326,8 +1326,8 @@ Every error has at least one associated code action:
 |---|---|
 | BSK-E0001 (missing param type) | Insert `: <inferred_type>` |
 | BSK-E0002 (missing return type) | Insert `-> <inferred_type>` |
-| BSK-E0040 (mutation of immutable param) | Add `InOut` annotation |
-| BSK-E0060 (implicit coercion) | Wrap in explicit conversion |
+| enums_behaviors (mutation of immutable param) | Add `InOut` annotation |
+| dataclasses_order (implicit coercion) | Wrap in explicit conversion |
 
 ---
 
@@ -1543,7 +1543,7 @@ separate and free — it does not count toward billed storage and is unaffected.
 
 1. Run `basilisk migrate --from mypy`
 2. Fix BSK-E0001/E0002 errors (missing annotations) -- these are the primary diff
-3. Address BSK-E0040+ (Mojo safety) or disable with `mojo-safety = false`
+3. Address enums_behaviors+ (Mojo safety) or disable with `mojo-safety = false`
 
 ### From Pyright {#CHKARCH-MIGRATION-PYRIGHT}
 

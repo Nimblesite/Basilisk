@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0108] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0108: Dataclass slots violations.
+//! Tests for [dataclasses_slots] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for dataclasses_slots: Dataclass slots violations.
 
 use super::common::*;
 
@@ -15,7 +15,7 @@ class DC:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0108"),
+        !codes(&diags).contains(&"dataclasses_slots"),
         "dataclass without slots=True should not fire E0108"
     );
     Ok(())
@@ -33,7 +33,7 @@ class DC:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0108"),
+        !codes(&diags).contains(&"dataclasses_slots"),
         "valid dataclass with slots=True should not fire E0108"
     );
     Ok(())
@@ -77,7 +77,7 @@ fn e0108_slots_true_with_manual_slots_fires() -> Result<(), Box<dyn std::error::
     let source = "from dataclasses import dataclass\n@dataclass(slots=True)\nclass C:\n    x: int\n    __slots__ = ()\n";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0108"),
+        codes(&diags).contains(&"dataclasses_slots"),
         "@dataclass(slots=True) plus a manual __slots__ must fire E0108, got: {:?}",
         codes(&diags)
     );
@@ -90,7 +90,7 @@ fn e0108_slots_true_without_manual_slots_ok() -> Result<(), Box<dyn std::error::
         "from dataclasses import dataclass\n@dataclass(slots=True)\nclass D:\n    x: int\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0108"),
+        !codes(&diags).contains(&"dataclasses_slots"),
         "slots=True alone must not fire the already-defined check"
     );
     Ok(())

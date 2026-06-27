@@ -19,11 +19,11 @@ _cache = {}  # BSK-E0003: type of values unknown
 
 # ── E0014: bool is a subtype of int in Python, but Basilisk still flags
 #    assigning a bool literal to a float field ────────────────────────────────
-ratio: float = True  # BSK-E0014: bool literal, not float
+ratio: float = True  # assignment_compatibility: bool literal, not float
 
 
 # ── E0014: negative int literal assigned to a str field ──────────────────────
-sentinel: str = -1  # BSK-E0014: int, not str
+sentinel: str = -1  # assignment_compatibility: int, not str
 
 
 # ── E0017: attribute type flipped from mutable to immutable in child ─────────
@@ -33,13 +33,13 @@ class Config:
 
 
 class FrozenConfig(Config):
-    values: tuple[str, ...] = ()  # BSK-E0017: tuple overrides list
-    max_size: str = "unlimited"  # BSK-E0017: str overrides int
+    values: tuple[str, ...] = ()  # classes_override_2: tuple overrides list
+    max_size: str = "unlimited"  # classes_override_2: str overrides int
 
 
 # ── E0018: name used before assignment even though it looks like a constant ───
 def describe_algorithm() -> str:
-    return f"Using {ALGO_NAME} with seed {ALGO_SEED}"  # BSK-E0018: ALGO_NAME not yet defined
+    return f"Using {ALGO_NAME} with seed {ALGO_SEED}"  # names_undefined: ALGO_NAME not yet defined
 
 
 ALGO_NAME: str = "DBSCAN"
@@ -53,7 +53,7 @@ def pick_strategy(score: float, mode: str) -> str:
     elif mode == "safe":
         strategy = "conservative"
     # no else — if score <= 0.9 and mode != "safe", strategy is unbound
-    return strategy  # BSK-E0019: strategy may be unbound
+    return strategy  # names_unbound: strategy may be unbound
 
 
 # ── E0019: augmented assignment in a try block ───────────────────────────────
@@ -62,7 +62,7 @@ def sum_with_retry(values: list[int], retries: int) -> int:
         result = 0
         for v in values:
             result += v
-    return result  # BSK-E0019: result may be unbound
+    return result  # names_unbound: result may be unbound
 
 
 # ── E0021: unannotated overload params look identical to the checker ─────────
@@ -72,7 +72,7 @@ def load(path) -> bytes: ...  # BSK-E0001: path untyped
 
 
 @overload
-def load(path) -> str: ...  # BSK-E0001 + BSK-E0021: duplicate
+def load(path) -> str: ...  # BSK-E0001 + overloads_consistency: duplicate
 
 
 def load(path: str) -> bytes | str:
@@ -86,16 +86,16 @@ def wrap(value) -> list[Any]: ...  # BSK-E0001: value untyped
 
 
 @overload
-def wrap(value) -> list[Any]: ...  # BSK-E0001 + BSK-E0021: duplicate
+def wrap(value) -> list[Any]: ...  # BSK-E0001 + overloads_consistency: duplicate
 
 
-def wrap(value: Any) -> list[Any]:  # BSK-E0011: Any without justification
+def wrap(value: Any) -> list[Any]:  # returns_compatibility: Any without justification
     return [value]
 
 
 # ── E0022: list literal as dict key in a local dict ─────────────────────────
 def make_tag_index() -> dict[list[str], float]:
-    return {["tag_a", "tag_b"]: 1.0}  # BSK-E0022: list literal as key
+    return {["tag_a", "tag_b"]: 1.0}  # dict_key_hashable: list literal as key
 
 
 # ── E0023: match on an int with only two arms (0 and 1) ─────────────────────
@@ -105,7 +105,7 @@ def bool_from_db(raw: int) -> str:
             return "false"
         case 1:
             return "true"
-    # BSK-E0023: 2, -1, 99 etc. fall through silently
+    # match_exhaustiveness: 2, -1, 99 etc. fall through silently
 
 
 # ── E0025: override buried inside a mixin chain ──────────────────────────────

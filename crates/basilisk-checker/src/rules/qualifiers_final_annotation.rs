@@ -1,5 +1,5 @@
-//! Implements [BSK-E0044] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! BSK-E0044: `Final` used in an invalid position.
+//! Implements [qualifiers_final_annotation] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! qualifiers_final_annotation: `Final` used in an invalid position.
 //!
 //! PEP 591 restricts `Final[T]` to:
 //!
@@ -31,8 +31,8 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0044",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0044",
+    code: "qualifiers_final_annotation",
+    docs_url: "https://www.basilisk-python.dev/errors/qualifiers_final_annotation",
 };
 
 fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
@@ -115,7 +115,7 @@ fn has_final_multiple_type_args(ann: &str) -> bool {
     top_commas >= 1
 }
 
-/// Emits BSK-E0044 for `Final` used in an invalid position.
+/// Emits qualifiers_final_annotation for `Final` used in an invalid position.
 pub(crate) struct FinalInvalidPosition;
 
 impl Rule for FinalInvalidPosition {

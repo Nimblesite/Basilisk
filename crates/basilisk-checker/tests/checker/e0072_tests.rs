@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0072] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
-// Integration tests for BSK-E0072: No matching overload.
+//! Tests for [overloads_basic] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
+// Integration tests for overloads_basic: No matching overload.
 
 use super::common::*;
 
@@ -39,7 +39,7 @@ process('hello')
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0072"),
+        !codes(&diags).contains(&"overloads_basic"),
         "matching overload should not fire E0072"
     );
     Ok(())

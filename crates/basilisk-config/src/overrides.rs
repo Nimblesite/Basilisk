@@ -36,7 +36,7 @@ impl RuleSeverity {
 /// Keys support wildcard patterns (e.g. `django.*` matches `django.db.models`).
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ModuleOverride {
-    /// When `true`, BSK-E0010 is suppressed for this module.
+    /// When `true`, imports_unresolved is suppressed for this module.
     pub ignore_missing_stubs: bool,
 }
 

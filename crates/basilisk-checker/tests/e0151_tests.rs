@@ -1,4 +1,4 @@
-//! Tests for [BSK-E0151] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [aliases_typealiastype] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 #![allow(
     clippy::expect_used,
     clippy::indexing_slicing,
@@ -32,7 +32,7 @@ x: GenericPair[int] = (1, 2)
 "#;
 
     let diagnostics = run(source)?;
-    let messages = messages_for(&diagnostics, "BSK-E0151");
+    let messages = messages_for(&diagnostics, "aliases_typealiastype");
 
     assert_eq!(messages.len(), 6, "{messages:#?}");
     assert!(messages
@@ -75,7 +75,7 @@ x: Good[int] = 1
 "#;
 
     let diagnostics = run(source)?;
-    let messages = messages_for(&diagnostics, "BSK-E0151");
+    let messages = messages_for(&diagnostics, "aliases_typealiastype");
 
     assert!(messages.is_empty(), "{messages:#?}");
     Ok(())

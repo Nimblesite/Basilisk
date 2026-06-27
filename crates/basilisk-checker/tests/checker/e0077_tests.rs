@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0077] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
-// Integration tests for BSK-E0077: Protocol self return.
+//! Tests for [generics_self_protocols] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
+// Integration tests for generics_self_protocols: Protocol self return.
 
 use super::common::*;
 

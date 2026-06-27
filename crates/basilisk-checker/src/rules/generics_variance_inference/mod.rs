@@ -1,4 +1,4 @@
-//! BSK-E0130: `TypeVar` scoping violation.
+//! generics_variance_inference: `TypeVar` scoping violation.
 //!
 //! Detects uses of `TypeVar` instances outside their valid scope:
 //!
@@ -41,11 +41,11 @@ use utils::{
 use variance::check_variance_assignments;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0130",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0130",
+    code: "generics_variance_inference",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_variance_inference",
 };
 
-/// Emits BSK-E0130 for `TypeVar` scoping violations.
+/// Emits generics_variance_inference for `TypeVar` scoping violations.
 pub(crate) struct TypeVarScopeViolation;
 
 impl Rule for TypeVarScopeViolation {

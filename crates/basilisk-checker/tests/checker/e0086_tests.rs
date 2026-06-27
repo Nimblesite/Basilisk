@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0086] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
-// Integration tests for BSK-E0086: Multiple `TypeVarTuple`.
+//! Tests for [generics_typevartuple_specialization] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
+// Integration tests for generics_typevartuple_specialization: Multiple `TypeVarTuple`.
 
 use super::common::*;
 
@@ -29,7 +29,7 @@ class Good(Generic[*Ts]):
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0086"),
+        !codes(&diags).contains(&"generics_typevartuple_specialization"),
         "single TypeVarTuple should not fire E0086"
     );
     Ok(())

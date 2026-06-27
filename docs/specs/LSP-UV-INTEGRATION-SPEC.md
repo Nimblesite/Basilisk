@@ -163,8 +163,8 @@ for the typed context, the centralized 3.12 default, and the wiring
 
 Implemented impact today:
 
-- `sys.version_info` branch narrowing (`BSK-E0150` dead-branch analysis)
-- PEP 695 syntax gating below 3.12 (`BSK-E0155`)
+- `sys.version_info` branch narrowing (`directives_version_platform` dead-branch analysis)
+- PEP 695 syntax gating below 3.12 (`version_target_syntax`)
 
 Planned (not yet version-gated):
 
@@ -176,11 +176,11 @@ Planned (not yet version-gated):
 
 ## 5. Enhanced Diagnostics {#LSPUV-DIAGNOSTICS}
 
-### 5.1 Actionable "Module Not Found" (BSK-E0010) {#LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND}
+### 5.1 Actionable "Module Not Found" (imports_unresolved) {#LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND}
 
 Current behavior: `"Unresolved import 'requests'"` — useless.
 
-With uv integration, BSK-E0010 becomes context-aware:
+With uv integration, imports_unresolved becomes context-aware:
 
 | Scenario | Diagnostic Message | Code Action |
 |---|---|---|
@@ -285,7 +285,7 @@ When resolving imports in a workspace:
 
 1. Check if the import matches a workspace member name
 2. If yes, resolve to that member's source root (editable install semantics)
-3. Workspace members are always considered "typed" (no BSK-E0010 for cross-member imports)
+3. Workspace members are always considered "typed" (no imports_unresolved for cross-member imports)
 4. The shared `uv.lock` at workspace root governs all third-party resolution
 
 ### 6.4 LSP Multi-Root Mapping {#LSPUV-WORKSPACE-MULTI-ROOT}
@@ -300,7 +300,7 @@ Each workspace member becomes an LSP workspace folder. The LSP server maintains 
 
 | Trigger | Code Action Title | Command |
 |---------|-------------------|---------|
-| BSK-E0010 (unresolved, package available) | "Add dependency: `requests`" | `basilisk.uv.add` |
+| imports_unresolved (unresolved, package available) | "Add dependency: `requests`" | `basilisk.uv.add` |
 | BSK-E0152 (typeshed stub exists) | "Install type stubs for `requests` (uv add --dev)" | `basilisk.uv.addDev` |
 | BSK-E0152 (any — esp. no typeshed stub) | "Create local type stub for `acme_internal`" | `basilisk.stubs.createLocal` |
 | BSK-W0013 (stale lock) | "Sync environment" | `basilisk.uv.sync` |
@@ -308,7 +308,7 @@ Each workspace member becomes an LSP workspace folder. The LSP server maintains 
 The `basilisk.stubs.createLocal` action writes a permissive `.pyi` skeleton (no
 `uv` subprocess) — see [STUBRES-CREATE-LOCAL](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CREATE-LOCAL).
 
-The BSK-E0010 `basilisk.uv.add` quick fix is offered **only** when the unresolved
+The imports_unresolved `basilisk.uv.add` quick fix is offered **only** when the unresolved
 import's top-level name is a valid `PyPI` distribution name — PEP 508/503: ASCII
 alphanumerics plus `.`, `-`, `_`, starting and ending with an alphanumeric.
 Internal or vendored modules such as `_pydevd_bundle` (leading `_`) are not

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0108] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0108: Dataclass slots violations.
+//! Implements [dataclasses_slots] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! dataclasses_slots: Dataclass slots violations.
 //!
 //! Reports errors when:
 //! - `self.attr = value` assigns to an attribute not in `__slots__` inside a
@@ -31,11 +31,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0108",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0108",
+    code: "dataclasses_slots",
+    docs_url: "https://www.basilisk-python.dev/errors/dataclasses_slots",
 };
 
-/// Emits BSK-E0108 for dataclass slots violations.
+/// Emits dataclasses_slots for dataclass slots violations.
 pub(crate) struct DataclassSlotsViolation;
 
 impl Rule for DataclassSlotsViolation {

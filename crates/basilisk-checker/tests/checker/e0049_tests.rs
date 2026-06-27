@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0049] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
-// Integration tests for BSK-E0049: Multiple unbounded tuple components.
+//! Tests for [tuples_type_form] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+// Integration tests for tuples_type_form: Multiple unbounded tuple components.
 
 use super::common::*;
 
@@ -14,7 +14,7 @@ def f(x: tuple[int, *tuple[str, ...], float]) -> None:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0049"),
+        !codes(&diags).contains(&"tuples_type_form"),
         "single unbounded component should not fire E0049"
     );
     Ok(())
@@ -28,7 +28,7 @@ def f(x: tuple[int, str, float]) -> None:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0049"),
+        !codes(&diags).contains(&"tuples_type_form"),
         "no unbounded component should not fire E0049"
     );
     Ok(())

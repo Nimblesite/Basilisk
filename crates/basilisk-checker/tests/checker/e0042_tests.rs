@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0042] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
-// Integration tests for BSK-E0042: PEP 695 mixed with traditional `TypeVar`.
+//! Tests for [generics_syntax_compatibility] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+// Integration tests for generics_syntax_compatibility: PEP 695 mixed with traditional `TypeVar`.
 
 use super::common::*;
 
@@ -15,7 +15,7 @@ class ClassA[V](dict[K, V]):
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0042");
+    let msgs = messages_for(&diags, "generics_syntax_compatibility");
     assert!(
         !msgs.is_empty(),
         "PEP 695 class using traditional TypeVar should fire E0042, got: {msgs:?}"
@@ -31,7 +31,7 @@ class Container[T]:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0042");
+    let msgs = messages_for(&diags, "generics_syntax_compatibility");
     assert!(msgs.is_empty(), "pure PEP 695 class should not fire E0042");
     Ok(())
 }
@@ -48,7 +48,7 @@ class Container(Generic[T]):
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0042");
+    let msgs = messages_for(&diags, "generics_syntax_compatibility");
     assert!(
         msgs.is_empty(),
         "traditional-only generics should not fire E0042"
@@ -69,7 +69,7 @@ def func[U](x: T, y: U) -> None:
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0042");
+    let msgs = messages_for(&diags, "generics_syntax_compatibility");
     assert!(
         !msgs.is_empty(),
         "PEP 695 function using traditional TypeVar should fire E0042, got: {msgs:?}"

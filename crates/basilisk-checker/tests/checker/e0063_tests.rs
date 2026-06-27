@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0063] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
-// Integration tests for BSK-E0063: Non-hashable dataclass.
+//! Tests for [dataclasses_hash] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+// Integration tests for dataclasses_hash: Non-hashable dataclass.
 
 use super::common::*;
 
@@ -34,7 +34,7 @@ s = {Point(1, 2)}
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0063"),
+        !codes(&diags).contains(&"dataclasses_hash"),
         "frozen dataclass should be hashable, no E0063"
     );
     Ok(())

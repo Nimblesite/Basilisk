@@ -1,5 +1,5 @@
-//! Implements [BSK-E0014] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! Recursive type-alias value matching for BSK-E0014.
+//! Implements [assignment_compatibility] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Recursive type-alias value matching for assignment_compatibility.
 //!
 //! Legacy type aliases such as
 //!
@@ -85,7 +85,7 @@ pub(super) fn collect_union_aliases(module: &ResolvedModule) -> HashMap<String, 
 /// Equivalent to filtering `typevars` by `contains_word`, but scans the RHS
 /// tokens once (`O(text)`) instead of testing every module `TypeVar` against the
 /// text (`O(text * typevars)` — quadratic and allocation-heavy on
-/// `TypeVar`-dense modules; see the `BSK-E0026` stress fixture). Appearance
+/// `TypeVar`-dense modules; see the `generics_basic` stress fixture). Appearance
 /// order is deterministic, unlike the previous `HashSet` iteration order.
 fn free_typevars(lowered: &str, typevars: &HashSet<String>) -> Vec<String> {
     let mut params = Vec::new();

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0035] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
-// Integration tests for BSK-E0035: Required/NotRequired in invalid context.
+//! Tests for [typeddicts_required] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+// Integration tests for typeddicts_required: Required/NotRequired in invalid context.
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ class NotTypedDict:
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0035"),
+        codes(&diags).contains(&"typeddicts_required"),
         "Required outside TypedDict should fire E0035, got: {:?}",
         codes(&diags)
     );
@@ -31,7 +31,7 @@ class Movie(TypedDict, total=False):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0035"),
+        !codes(&diags).contains(&"typeddicts_required"),
         "Required inside TypedDict should not fire E0035"
     );
     Ok(())
@@ -47,7 +47,7 @@ def func(x: Required[int]) -> None:
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0035"),
+        codes(&diags).contains(&"typeddicts_required"),
         "Required in function param should fire E0035, got: {:?}",
         codes(&diags)
     );

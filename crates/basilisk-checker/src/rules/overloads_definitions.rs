@@ -1,5 +1,5 @@
-//! Implements [BSK-E0020] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0020: Missing `@overload` implementation.
+//! Implements [overloads_definitions] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! overloads_definitions: Missing `@overload` implementation.
 //!
 //! When a function name is defined multiple times and every definition carries
 //! the `@overload` decorator, there is no concrete implementation body.
@@ -19,11 +19,11 @@ use super::guards::is_protocol_class;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0020",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0020",
+    code: "overloads_definitions",
+    docs_url: "https://www.basilisk-python.dev/errors/overloads_definitions",
 };
 
-/// Emits BSK-E0020 when a set of `@overload` functions has no matching
+/// Emits overloads_definitions when a set of `@overload` functions has no matching
 /// implementation (a same-named function without `@overload`).
 pub(crate) struct MissingOverloadImpl;
 

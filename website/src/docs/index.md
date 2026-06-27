@@ -58,8 +58,8 @@ Opting out is still possible — for legacy directories, you can disable or soft
 
 ```toml
 [tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["BSK-E0011"]        # turn a rule off for legacy code
-rules."BSK-E0010" = "warning"   # or just soften its severity
+disabled = ["returns_compatibility"]        # turn a rule off for legacy code
+rules."imports_unresolved" = "warning"   # or just soften its severity
 ```
 
 This acknowledges that large codebases cannot be fully typed overnight, while keeping the relaxation explicit and scoped to the paths that need it.

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0124] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0124: Protocol attribute tuple element type mismatch.
+//! Implements [protocols_subtyping] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! protocols_subtyping: Protocol attribute tuple element type mismatch.
 //!
 //! When a class explicitly implements a `Protocol` and assigns to a
 //! `self.attr` in `__init__` where `attr` is declared as `tuple[T1, T2, ...]`
@@ -31,11 +31,11 @@ use super::Rule;
 use crate::rules::shared::is_type_compatible;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0124",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0124",
+    code: "protocols_subtyping",
+    docs_url: "https://www.basilisk-python.dev/errors/protocols_subtyping",
 };
 
-/// Emits BSK-E0124 when a tuple assignment to a protocol attribute has
+/// Emits protocols_subtyping when a tuple assignment to a protocol attribute has
 /// element types that don't match the protocol's declaration.
 pub(crate) struct ProtocolTupleElementMismatch;
 

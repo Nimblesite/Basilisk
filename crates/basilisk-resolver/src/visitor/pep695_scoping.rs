@@ -1,5 +1,5 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
-//! AST walk producing [`Pep695Scoping`] facts for `BSK-E0149`.
+//! AST walk producing [`Pep695Scoping`] facts for `generics_syntax_scoping`.
 //!
 //! Every fact is derived from `ruff_python_ast` nodes, so string/comment/
 //! docstring content can never be mistaken for real declarations.

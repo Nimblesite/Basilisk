@@ -222,7 +222,7 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 
 ### uv Integration
 
-- [ ] BSK-E0010: attach `code_action_data` to diagnostic for quick-fix wiring
+- [ ] imports_unresolved: attach `code_action_data` to diagnostic for quick-fix wiring
 - [ ] BSK-W0012: unused dependency (in deps but never imported — whole-module only)
 - [ ] BSK-W0013: stale lock (`pyproject.toml` mtime > `uv.lock` mtime)
 - [ ] Graceful degradation: hide uv commands/actions when `uv` binary not found

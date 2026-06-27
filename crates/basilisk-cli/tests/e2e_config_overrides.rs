@@ -164,7 +164,7 @@ fn per_module_override_suppresses_e0010() -> Result<(), Box<dyn std::error::Erro
     };
 
     let diags = run_with_config("errors/e0010_untyped_import.py", &config)?;
-    let has_e0010 = diags.iter().any(|d| d.code.code == "BSK-E0010");
+    let has_e0010 = diags.iter().any(|d| d.code.code == "imports_unresolved");
     assert!(
         !has_e0010,
         "E0010 should be suppressed for 'requests' via per-module override, got: {diags:#?}"
@@ -192,7 +192,7 @@ fn per_module_wildcard_suppresses_e0010() -> Result<(), Box<dyn std::error::Erro
     // Note: whether `requests.*` matches `requests` depends on the wildcard logic.
     // The important thing is we exercise the full pipeline path.
     // If the wildcard doesn't match bare `requests`, E0010 is still emitted.
-    let _has_e0010 = diags.iter().any(|d| d.code.code == "BSK-E0010");
+    let _has_e0010 = diags.iter().any(|d| d.code.code == "imports_unresolved");
     // Just assert we didn't crash — the exact match behavior is tested in config unit tests.
     Ok(())
 }

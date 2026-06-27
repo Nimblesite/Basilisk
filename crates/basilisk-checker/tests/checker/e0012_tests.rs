@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0012] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0012: Argument type mismatch at call site.
+//! Tests for [calls_argument_type] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for calls_argument_type: Argument type mismatch at call site.
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ result: int = add("hello", "world")
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0012"),
+        codes(&diags).contains(&"calls_argument_type"),
         "str literal for int param should fire E0012, got: {:?}",
         codes(&diags)
     );
@@ -30,7 +30,7 @@ result: int = add(1, 2)
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0012"),
+        !codes(&diags).contains(&"calls_argument_type"),
         "correct arg types should not fire E0012"
     );
     Ok(())
@@ -46,7 +46,7 @@ result: str = greet(42)
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0012"),
+        codes(&diags).contains(&"calls_argument_type"),
         "int literal for str param should fire E0012, got: {:?}",
         codes(&diags)
     );
@@ -63,7 +63,7 @@ result: int = count(3.14)
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0012"),
+        codes(&diags).contains(&"calls_argument_type"),
         "float literal for int param should fire E0012, got: {:?}",
         codes(&diags)
     );
@@ -80,7 +80,7 @@ result: str = process(b"hello")
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0012"),
+        codes(&diags).contains(&"calls_argument_type"),
         "bytes literal for str param should fire E0012, got: {:?}",
         codes(&diags)
     );
@@ -97,7 +97,7 @@ result: bytes = process("hello")
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0012"),
+        codes(&diags).contains(&"calls_argument_type"),
         "str literal for bytes param should fire E0012, got: {:?}",
         codes(&diags)
     );
@@ -114,7 +114,7 @@ register(None)
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0012"),
+        codes(&diags).contains(&"calls_argument_type"),
         "None for type param should fire E0012, got: {:?}",
         codes(&diags)
     );
@@ -139,7 +139,7 @@ result: str = parse("hello")
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0012"),
+        !codes(&diags).contains(&"calls_argument_type"),
         "correct args for overloaded function should not fire E0012, got: {:?}",
         codes(&diags)
     );
@@ -156,7 +156,7 @@ multi(1, 2, 3)
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0012"),
+        codes(&diags).contains(&"calls_argument_type"),
         "int for str param should fire E0012, got: {:?}",
         codes(&diags)
     );

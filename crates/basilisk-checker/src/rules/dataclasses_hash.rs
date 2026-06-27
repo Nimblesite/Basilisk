@@ -1,5 +1,5 @@
-//! Implements [BSK-E0063] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! BSK-E0063: Non-hashable dataclass assigned to a `Hashable`-annotated variable.
+//! Implements [dataclasses_hash] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! dataclasses_hash: Non-hashable dataclass assigned to a `Hashable`-annotated variable.
 //!
 //! A `@dataclass` with `eq=True` (the default) sets `__hash__` to `None` unless
 //! the class is `frozen=True`, uses `unsafe_hash=True`, or explicitly defines
@@ -40,11 +40,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0063",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0063",
+    code: "dataclasses_hash",
+    docs_url: "https://www.basilisk-python.dev/errors/dataclasses_hash",
 };
 
-/// Emits BSK-E0063 when a non-hashable dataclass instance is assigned to a
+/// Emits dataclasses_hash when a non-hashable dataclass instance is assigned to a
 /// `Hashable`-annotated variable.
 pub(crate) struct NonHashableDataclassAssignment;
 

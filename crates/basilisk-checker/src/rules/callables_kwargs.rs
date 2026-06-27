@@ -1,5 +1,5 @@
-//! Implements [BSK-E0141] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0141: Unpack[`TypedDict`] kwargs violations.
+//! Implements [callables_kwargs] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! callables_kwargs: Unpack[`TypedDict`] kwargs violations.
 //!
 //! Detects invalid uses of `**kwargs: Unpack[TypedDict]` in function signatures:
 //! parameter overlap with `TypedDict` keys, `Unpack[TypeVar]` (invalid), and
@@ -18,11 +18,11 @@ use crate::rules::shared::{ann_str, expr_name};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0141",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0141",
+    code: "callables_kwargs",
+    docs_url: "https://www.basilisk-python.dev/errors/callables_kwargs",
 };
 
-/// Emits BSK-E0141 for Unpack[`TypedDict`] kwargs violations.
+/// Emits callables_kwargs for Unpack[`TypedDict`] kwargs violations.
 pub(crate) struct UnpackKwargsViolation;
 
 impl Rule for UnpackKwargsViolation {

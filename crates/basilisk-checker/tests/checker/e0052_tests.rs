@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0052] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
-// Integration tests for BSK-E0052: Frozen dataclass violations.
+//! Tests for [dataclasses_frozen] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+// Integration tests for dataclasses_frozen: Frozen dataclass violations.
 
 use super::common::*;
 
@@ -18,7 +18,7 @@ class Sub(Base):
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0052");
+    let msgs = messages_for(&diags, "dataclasses_frozen");
     assert!(
         msgs.iter()
             .any(|m| m.contains("Frozen") && m.contains("non-frozen")),
@@ -42,7 +42,7 @@ class Sub(Base):
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0052");
+    let msgs = messages_for(&diags, "dataclasses_frozen");
     assert!(
         msgs.iter()
             .any(|m| m.contains("Non-frozen") && m.contains("frozen")),
@@ -66,7 +66,7 @@ class Sub(Base):
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0052");
+    let msgs = messages_for(&diags, "dataclasses_frozen");
     assert!(
         msgs.is_empty(),
         "both frozen should not fire E0052, got: {msgs:?}"
@@ -88,7 +88,7 @@ p.x = 2.0
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0052");
+    let msgs = messages_for(&diags, "dataclasses_frozen");
     assert!(
         msgs.iter().any(|m| m.contains("Cannot assign")),
         "assigning to frozen instance should fire E0052, got: {msgs:?}"
@@ -110,7 +110,7 @@ p.x = 2.0
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0052");
+    let msgs = messages_for(&diags, "dataclasses_frozen");
     assert!(
         msgs.is_empty(),
         "assigning to non-frozen instance should not fire E0052"

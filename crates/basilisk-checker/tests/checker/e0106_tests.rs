@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0106] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0106: Protocol class used where type[Proto] expected.
+//! Tests for [protocols_class_objects] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for protocols_class_objects: Protocol class used where type[Proto] expected.
 
 use super::common::*;
 
@@ -22,7 +22,7 @@ fun(Concrete)
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0106"),
+        !codes(&diags).contains(&"protocols_class_objects"),
         "passing concrete class should not fire E0106"
     );
     Ok(())

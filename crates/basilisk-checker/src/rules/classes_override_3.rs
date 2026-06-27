@@ -1,5 +1,5 @@
-//! Implements [BSK-E0159] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! BSK-E0159: `@override` on a method with no matching ancestor method.
+//! Implements [classes_override_3] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! classes_override_3: `@override` on a method with no matching ancestor method.
 //!
 //! PEP 698 — a method decorated `@override` (or `typing.override`) must actually
 //! override a method declared in a base class. When no ancestor declares a
@@ -31,8 +31,8 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0159",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0159",
+    code: "classes_override_3",
+    docs_url: "https://www.basilisk-python.dev/errors/classes_override_3",
 };
 
 /// Bound on base-class recursion, guarding against malformed inheritance cycles.
@@ -43,7 +43,7 @@ fn is_override(decorator: &str) -> bool {
     decorator == "override" || decorator.ends_with(".override")
 }
 
-/// Emits BSK-E0159 for `@override` methods that override nothing.
+/// Emits classes_override_3 for `@override` methods that override nothing.
 pub(crate) struct OverrideWithoutBaseMethod;
 
 impl Rule for OverrideWithoutBaseMethod {

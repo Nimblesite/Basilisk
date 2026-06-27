@@ -41,10 +41,10 @@ class Foo[T: Sequence[U], U]:
     pass
 "#;
     let diags = run(source)?;
-    let has_e0149 = diags.iter().any(|d| d.code.code == "BSK-E0149");
+    let has_e0149 = diags.iter().any(|d| d.code.code == "generics_syntax_scoping");
     assert!(
         has_e0149,
-        "Expected BSK-E0149 for cross-reference in PEP 695 bounds"
+        "Expected generics_syntax_scoping for cross-reference in PEP 695 bounds"
     );
     Ok(())
 }
@@ -1153,7 +1153,7 @@ class CustomHash:
 v: Hashable = CustomHash(42)
 "#;
     let diags = run(source)?;
-    let has_e0063 = diags.iter().any(|d| d.code.code == "BSK-E0063");
+    let has_e0063 = diags.iter().any(|d| d.code.code == "dataclasses_hash");
     assert!(
         !has_e0063,
         "Dataclass with __hash__ should not trigger E0063"
@@ -1174,7 +1174,7 @@ class UnsafeHash:
 v: Hashable = UnsafeHash(42)
 "#;
     let diags = run(source)?;
-    let has_e0063 = diags.iter().any(|d| d.code.code == "BSK-E0063");
+    let has_e0063 = diags.iter().any(|d| d.code.code == "dataclasses_hash");
     assert!(
         !has_e0063,
         "Dataclass with unsafe_hash should not trigger E0063"
@@ -1195,7 +1195,7 @@ class NoEq:
 v: Hashable = NoEq(42)
 "#;
     let diags = run(source)?;
-    let has_e0063 = diags.iter().any(|d| d.code.code == "BSK-E0063");
+    let has_e0063 = diags.iter().any(|d| d.code.code == "dataclasses_hash");
     assert!(
         !has_e0063,
         "Dataclass with eq=False should not trigger E0063"

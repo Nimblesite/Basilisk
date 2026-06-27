@@ -50,7 +50,7 @@ Basilisk is strict by default. There is no permissive mode. There is no `--stric
 
 This is not about making Python developers' lives harder. It's about making the safe path the default path. When strictness is the default, type coverage naturally increases as teams add new code. There's nothing to remember to turn on.
 
-Adopting Basilisk on an existing codebase does require work — but it's work that surfaces real bugs. Every BSK-E0001 is a function where the type contract was never defined. Every BSK-E0023 is a `match` statement where an unhandled case was silently ignored. The errors Basilisk reports are not false positives — they are places where the type system was not being used.
+Adopting Basilisk on an existing codebase does require work — but it's work that surfaces real bugs. Every BSK-E0001 is a function where the type contract was never defined. Every match_exhaustiveness is a `match` statement where an unhandled case was silently ignored. The errors Basilisk reports are not false positives — they are places where the type system was not being used.
 
 Looking further ahead, [Mojo](https://www.modular.com/mojo)'s ownership semantics and immutability model are an inspiration for a planned future direction in Basilisk — but that is on the roadmap, not in the current release.
 

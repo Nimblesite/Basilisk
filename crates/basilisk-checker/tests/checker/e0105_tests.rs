@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0105] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0105: Bounded type var attribute access.
+//! Tests for [generics_syntax_declarations_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for generics_syntax_declarations_2: Bounded type var attribute access.
 
 use super::common::*;
 
@@ -12,7 +12,7 @@ class C[T: str]:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0105"),
+        !codes(&diags).contains(&"generics_syntax_declarations_2"),
         "accessing valid str method on str-bounded typevar should not fire E0105"
     );
     Ok(())

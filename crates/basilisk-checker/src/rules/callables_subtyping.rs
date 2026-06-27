@@ -1,5 +1,5 @@
-//! Implements [BSK-E0136] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0136: Callable subtyping violations (covariance / contravariance).
+//! Implements [callables_subtyping] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! callables_subtyping: Callable subtyping violations (covariance / contravariance).
 //!
 //! Callable types are covariant with respect to return types and contravariant
 //! with respect to parameter types.  When a `Callable[[T], R]`-annotated
@@ -33,11 +33,11 @@ use crate::rules::shared::{ann_str, expr_name, is_numeric_subtype, split_top_lev
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0136",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0136",
+    code: "callables_subtyping",
+    docs_url: "https://www.basilisk-python.dev/errors/callables_subtyping",
 };
 
-/// Emits BSK-E0136 for callable-to-callable subtyping violations.
+/// Emits callables_subtyping for callable-to-callable subtyping violations.
 pub(crate) struct CallableSubtypingViolation;
 
 impl Rule for CallableSubtypingViolation {

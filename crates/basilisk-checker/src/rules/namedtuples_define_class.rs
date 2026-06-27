@@ -1,5 +1,5 @@
-//! Implements [BSK-E0116] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0116: `NamedTuple` class definition errors.
+//! Implements [namedtuples_define_class] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! namedtuples_define_class: `NamedTuple` class definition errors.
 //!
 //! Detects several categories of `NamedTuple` definition errors:
 //!
@@ -25,11 +25,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0116",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0116",
+    code: "namedtuples_define_class",
+    docs_url: "https://www.basilisk-python.dev/errors/namedtuples_define_class",
 };
 
-/// Emits BSK-E0116 for `NamedTuple` class definition errors.
+/// Emits namedtuples_define_class for `NamedTuple` class definition errors.
 pub(crate) struct NamedTupleDefError;
 
 impl Rule for NamedTupleDefError {

@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0136] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0136: Callable subtyping violations.
+//! Tests for [callables_subtyping] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for callables_subtyping: Callable subtyping violations.
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ def func(cb: Callable[[int], int]) -> None:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0136"),
+        !codes(&diags).contains(&"callables_subtyping"),
         "compatible callable assignment should not fire E0136"
     );
     Ok(())

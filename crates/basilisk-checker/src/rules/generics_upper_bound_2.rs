@@ -1,5 +1,5 @@
-//! Implements [BSK-E0109] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0109: `TypeVar` bound violation at call site.
+//! Implements [generics_upper_bound_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! generics_upper_bound_2: `TypeVar` bound violation at call site.
 //!
 //! When a function has a parameter typed with a `TypeVar` that has a `bound`,
 //! and a call passes an argument whose type is not a subtype of that bound,
@@ -25,11 +25,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0109",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0109",
+    code: "generics_upper_bound_2",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_upper_bound_2",
 };
 
-/// Emits BSK-E0109 when a call-site argument type violates a `TypeVar`'s bound.
+/// Emits generics_upper_bound_2 when a call-site argument type violates a `TypeVar`'s bound.
 pub(crate) struct TypeVarBoundCallViolation;
 
 /// Map of bound type → list of types that are NOT subtypes of that bound.

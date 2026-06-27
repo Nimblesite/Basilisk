@@ -198,7 +198,7 @@ When an annotation is present, the annotation **is** the declared type. The infe
 ```python
 x: int = 42         # declared: int; RHS infers int ✓
 y: float = 42       # declared: float; RHS infers int; int is subtype of float ✓
-z: str = 42         # BSK-E0010: int is not assignable to str
+z: str = 42         # imports_unresolved: int is not assignable to str
 ```
 
 > **Authority**: [PEP 526 §Annotated assignment statements](https://peps.python.org/pep-0526/#annotated-assignment-statements):
@@ -274,7 +274,7 @@ def f(x: int) -> int | str:    # ✓ — annotation matches inference
     return "negative"          # str
 ```
 
-If the annotated return type is **narrower** than the inferred union, Basilisk emits `BSK-E0011` (return type mismatch).
+If the annotated return type is **narrower** than the inferred union, Basilisk emits `returns_compatibility` (return type mismatch).
 
 If the function body has **no reachable `return` statement** and does not raise, the inferred return type is `None`. If the function always raises, the inferred return type is `Never`.
 
@@ -346,7 +346,7 @@ def process(x: int | str) -> int | str:   # implementation
     ...
 ```
 
-A single `@overload` without an implementation is only valid in stub files (`.pyi`) and Protocol/ABC bodies. In regular modules, it fires `BSK-E0020`.
+A single `@overload` without an implementation is only valid in stub files (`.pyi`) and Protocol/ABC bodies. In regular modules, it fires `overloads_definitions`.
 
 ---
 
@@ -450,7 +450,7 @@ def encode(x: AnyStr) -> AnyStr: ...
 
 encode("hello")   # AnyStr = str → str
 encode(b"bytes")  # AnyStr = bytes → bytes
-encode(42)        # BSK-E0012: int does not match any constraint (str, bytes)
+encode(42)        # calls_argument_type: int does not match any constraint (str, bytes)
 ```
 
 When a subtype is passed to a constrained TypeVar, the type is **widened to the matching constraint**, not kept at the subtype:
@@ -963,7 +963,7 @@ from typing import LiteralString
 def query(sql: LiteralString) -> None: ...
 
 query("SELECT * FROM users")       # ✓ — literal
-query("SELECT * FROM " + table)    # BSK-E0015 — not LiteralString
+query("SELECT * FROM " + table)    # callables_annotation — not LiteralString
 ```
 
 > **Authority**: [PEP 675](https://peps.python.org/pep-0675/).

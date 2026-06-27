@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0011] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0011: Return type mismatch. (The explicit-`Any`
+//! Tests for [returns_compatibility] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for returns_compatibility: Return type mismatch. (The explicit-`Any`
 // warning was split out to BSK-W0014 — see w0014_tests.rs.)
 
 use super::common::*;
@@ -9,7 +9,7 @@ fn e0011_return_type_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> 
     let source = "def count() -> str:\n    return 42\n";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0011"),
+        codes(&diags).contains(&"returns_compatibility"),
         "returning int from -> str function should fire E0011, got: {:?}",
         codes(&diags)
     );
@@ -21,7 +21,7 @@ fn e0011_correct_return_type_no_diagnostic() -> Result<(), Box<dyn std::error::E
     let source = "def count() -> int:\n    return 42\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0011"),
+        !codes(&diags).contains(&"returns_compatibility"),
         "correct return type should not fire E0011"
     );
     Ok(())
@@ -32,7 +32,7 @@ fn e0011_str_annotation_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
     let source = "def greet(name: str) -> str:\n    return name\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0011"),
+        !codes(&diags).contains(&"returns_compatibility"),
         "str annotation should not fire E0011"
     );
     Ok(())
@@ -44,7 +44,7 @@ fn e0011_return_mismatch_stub_exempt() -> Result<(), Box<dyn std::error::Error>>
     let source = "def count() -> str:\n    ...\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0011"),
+        !codes(&diags).contains(&"returns_compatibility"),
         "stub body should not fire return type mismatch E0011"
     );
     Ok(())
@@ -58,7 +58,7 @@ fn e0011_literal_target_not_flagged() -> Result<(), Box<dyn std::error::Error>> 
     let source = "from typing import Literal\ndef ok() -> Literal[True]:\n    return True\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0011"),
+        !codes(&diags).contains(&"returns_compatibility"),
         "Literal[True] target must not fire E0011 (value-less inference is unverifiable), got: {:?}",
         codes(&diags)
     );
@@ -73,7 +73,7 @@ fn e0011_quoted_forward_ref_union_not_flagged() -> Result<(), Box<dyn std::error
     let source = "class Meta2: ...\ndef f() -> \"int | Meta2\":\n    return 1\n";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0011"),
+        !codes(&diags).contains(&"returns_compatibility"),
         "quoted forward-ref union target must not fire E0011, got: {:?}",
         codes(&diags)
     );
@@ -86,7 +86,7 @@ fn e0011_concrete_mismatch_still_fires_after_guard() -> Result<(), Box<dyn std::
     let source = "def f() -> None:\n    return 42\n";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0011"),
+        codes(&diags).contains(&"returns_compatibility"),
         "returning a value from -> None must still fire E0011, got: {:?}",
         codes(&diags)
     );

@@ -1,5 +1,5 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
-//! Flow-sensitive narrowing for `assert_type` checking (part of [BSK-E0053]).
+//! Flow-sensitive narrowing for `assert_type` checking (part of [directives_assert_type_2]).
 //!
 //! `assert_type(expr, T)` compares the *static* type of `expr` against `T`. The
 //! static type is heuristic and string-based (see `calls_and_reveal.rs`), keyed

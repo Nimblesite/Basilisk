@@ -1,5 +1,5 @@
-//! Implements [BSK-E0140] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Protocol compatibility checking for BSK-E0140.
+//! Implements [callables_protocol_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Protocol compatibility checking for callables_protocol_2.
 
 use basilisk_resolver::Span;
 
@@ -152,7 +152,7 @@ fn check_protocol_varargs_kwargs(ctx: &mut ProtoCheckCtx<'_>) -> bool {
     // `**kwargs` — either a real `**kwargs` or its own `Unpack[TypedDict]`. A source
     // with only fixed parameters cannot guarantee extra keys are rejected, so the
     // assignment is disallowed (typing spec: destination `**kwargs: Unpack[TD]` with
-    // a source lacking `**kwargs`). [BSK-E0140]
+    // a source lacking `**kwargs`). [callables_protocol_2]
     if target.had_unpack_kwargs && !func.has_kwargs && !func.had_unpack_kwargs {
         ctx.push_err(format!(
             "Function `{}` incompatible with `{}`: missing `**kwargs`",

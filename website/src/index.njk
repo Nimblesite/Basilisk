@@ -416,7 +416,7 @@ benchmarkStrings:
 <span class="tok-kw">def</span> <span class="tok-fn">fetch_user</span>(user_id):          <span class="tok-cmt">  # BSK-E0001, BSK-E0002</span>
     <span class="tok-kw">return</span> database.query(user_id)
 
-<span class="tok-kw">def</span> <span class="tok-fn">save_record</span>(data: Any) <span class="tok-kw">-></span> <span class="tok-type">bool</span>:  <span class="tok-cmt"> # BSK-E0011 (warning)</span>
+<span class="tok-kw">def</span> <span class="tok-fn">save_record</span>(data: Any) <span class="tok-kw">-></span> <span class="tok-type">bool</span>:  <span class="tok-cmt"> # returns_compatibility (warning)</span>
     <span class="tok-kw">return</span> <span class="tok-kw">True</span></pre>
             </div>
           </div>
@@ -432,13 +432,13 @@ benchmarkStrings:
 <span class="diag-bar">  --> </span><span class="diag-path">api.py:3:5</span>
 <span class="diag-bar">   = </span><span class="diag-help">help: Add a return type: `def fetch_user(...) -> &lt;type&gt;:`</span>
 
-<span class="diag-prefix" style="color:var(--color-warning)">warning</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0011</span><span class="diag-bar">]: </span><span class="diag-msg">Parameter `data` is annotated `Any` — prefer a concrete type</span>
+<span class="diag-prefix" style="color:var(--color-warning)">warning</span><span class="diag-bar">[</span><span class="diag-code">returns_compatibility</span><span class="diag-bar">]: </span><span class="diag-msg">Parameter `data` is annotated `Any` — prefer a concrete type</span>
 <span class="diag-bar">  --> </span><span class="diag-path">api.py:6:17</span>
 <span class="diag-bar">   |</span>
 <span class="diag-bar"> 6 | </span><span class="diag-src">def save_record(data: Any) -> bool:</span>
 <span class="diag-bar">   |                 </span><span class="diag-caret">^^^^</span>
 <span class="diag-bar">   = </span><span class="diag-help">help: Replace `Any` on `data` with the actual expected type</span>
-<span class="diag-bar">   = </span><span class="diag-see">see: https://www.basilisk-python.dev/errors/BSK-E0011</span>
+<span class="diag-bar">   = </span><span class="diag-see">see: https://www.basilisk-python.dev/errors/returns_compatibility</span>
           </div>
         </div>
 
@@ -452,23 +452,23 @@ benchmarkStrings:
             </div>
             <div class="code-window__body">
 <pre><span class="tok-kw">def</span> <span class="tok-fn">get_count</span>(rows<span class="tok-type">: list[int]</span>) <span class="tok-kw">-></span> <span class="tok-type">int</span>:
-<span class="code-error-line">    <span class="tok-kw">return</span> <span class="tok-str">"many"</span>  <span class="tok-cmt"># BSK-E0013: str is not int</span>
+<span class="code-error-line">    <span class="tok-kw">return</span> <span class="tok-str">"many"</span>  <span class="tok-cmt"># returns_compatibility_2: str is not int</span>
 </span>
 <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(name<span class="tok-type">: str</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
     <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {name}"</span>
 
-<span class="code-error-line">greet(<span class="tok-num">42</span>)  <span class="tok-cmt"># BSK-E0012: int is not str</span></span></pre>
+<span class="code-error-line">greet(<span class="tok-num">42</span>)  <span class="tok-cmt"># calls_argument_type: int is not str</span></span></pre>
             </div>
           </div>
           <div class="diagnostic-block">
-<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0013</span><span class="diag-bar">]: </span><span class="diag-msg">Return type mismatch</span>
+<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">returns_compatibility_2</span><span class="diag-bar">]: </span><span class="diag-msg">Return type mismatch</span>
 <span class="diag-bar">  --> </span><span class="diag-path">totals.py:2:12</span>
 <span class="diag-bar">   |</span>
 <span class="diag-bar"> 2 | </span><span class="diag-src">    return "many"</span>
 <span class="diag-bar">   |            </span><span class="diag-caret">^^^^^^</span> <span class="diag-note">`str` is not assignable to declared return type `int`</span>
 <span class="diag-bar">   |</span>
 <span class="diag-bar">   = </span><span class="diag-help">help: return an `int`, or change the return annotation to `str`</span>
-<span class="diag-bar">   = </span><span class="diag-see">see: https://www.basilisk-python.dev/docs/rules/type-safety/#BSK-E0013</span>
+<span class="diag-bar">   = </span><span class="diag-see">see: https://www.basilisk-python.dev/docs/rules/type-safety/#returns_compatibility_2</span>
           </div>
         </div>
 

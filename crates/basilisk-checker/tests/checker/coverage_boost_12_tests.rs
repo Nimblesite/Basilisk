@@ -25,8 +25,8 @@ def old_func() -> int:
 result = old_func()
 "#;
     let diags = run(source)?;
-    let has_e0115 = diags.iter().any(|d| d.code.code == "BSK-E0115");
-    assert!(has_e0115, "Expected BSK-E0115 for deprecated function call");
+    let has_e0115 = diags.iter().any(|d| d.code.code == "directives_deprecated");
+    assert!(has_e0115, "Expected directives_deprecated for deprecated function call");
     Ok(())
 }
 
@@ -42,10 +42,10 @@ def old_func() -> int:
 f = old_func
 "#;
     let diags = run(source)?;
-    let has_e0115 = diags.iter().any(|d| d.code.code == "BSK-E0115");
+    let has_e0115 = diags.iter().any(|d| d.code.code == "directives_deprecated");
     assert!(
         has_e0115,
-        "Expected BSK-E0115 for deprecated function reference"
+        "Expected directives_deprecated for deprecated function reference"
     );
     Ok(())
 }
@@ -62,10 +62,10 @@ class OldClass:
 obj = OldClass()
 "#;
     let diags = run(source)?;
-    let has_e0115 = diags.iter().any(|d| d.code.code == "BSK-E0115");
+    let has_e0115 = diags.iter().any(|d| d.code.code == "directives_deprecated");
     assert!(
         has_e0115,
-        "Expected BSK-E0115 for deprecated class instantiation"
+        "Expected directives_deprecated for deprecated class instantiation"
     );
     Ok(())
 }

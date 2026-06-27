@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0101] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0101: `TypeGuard` no narrowing param.
+//! Tests for [narrowing_typeguard] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for narrowing_typeguard: `TypeGuard` no narrowing param.
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ def is_str(x: object) -> TypeGuard[str]:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0101"),
+        !codes(&diags).contains(&"narrowing_typeguard"),
         "valid TypeGuard should not fire E0101"
     );
     Ok(())

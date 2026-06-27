@@ -1,5 +1,5 @@
-//! Implements [BSK-E0150] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0150: Variable defined only in dead version/platform branch.
+//! Implements [directives_version_platform] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! directives_version_platform: Variable defined only in dead version/platform branch.
 //!
 //! When `sys.version_info`, `sys.platform`, or `os.name` is compared against
 //! a constant, one branch may be statically known to be dead for the
@@ -30,11 +30,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0150",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0150",
+    code: "directives_version_platform",
+    docs_url: "https://www.basilisk-python.dev/errors/directives_version_platform",
 };
 
-/// Emits BSK-E0150 for variables defined only in dead version/platform branches.
+/// Emits directives_version_platform for variables defined only in dead version/platform branches.
 pub(crate) struct DeadBranchVariable;
 
 impl Rule for DeadBranchVariable {

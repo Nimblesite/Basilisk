@@ -1,4 +1,4 @@
-//! BSK-E0147: Tuple starred-unpack type compatibility violation.
+//! tuples_type_compat: Tuple starred-unpack type compatibility violation.
 //!
 //! Detects assignments where a tuple literal or a tuple-typed variable is
 //! assigned to a target whose annotation contains a starred unpack expression
@@ -49,11 +49,11 @@ use source::{
 };
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0147",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0147",
+    code: "tuples_type_compat",
+    docs_url: "https://www.basilisk-python.dev/errors/tuples_type_compat",
 };
 
-/// Emits BSK-E0147 for incompatible starred-unpack tuple assignments.
+/// Emits tuples_type_compat for incompatible starred-unpack tuple assignments.
 pub(crate) struct TupleStarredUnpackCompatibility;
 
 impl Rule for TupleStarredUnpackCompatibility {

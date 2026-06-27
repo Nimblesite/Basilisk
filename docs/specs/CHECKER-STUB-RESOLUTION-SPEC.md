@@ -14,7 +14,7 @@ Following [PEP 561](https://peps.python.org/pep-0561/), matching Pyright's behav
 3. **Stub-only packages** — installed `foopkg-stubs` packages (e.g. `types-requests`)
 4. **Inline-typed packages** — installed packages with `py.typed` marker
 5. **Bundled typeshed** — stdlib stubs compiled into the binary from `basilisk-stubs`
-6. **No stubs found** — type resolves to `Unknown`, BSK-E0010 fires
+6. **No stubs found** — type resolves to `Unknown`, imports_unresolved fires
 
 > **uv fast path**: In uv projects, steps 3–4 are accelerated by the `PackageRegistry` parsed from `uv.lock`. The registry knows every installed package and whether a companion stub package exists — no site-packages directory walk needed. See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-LOCK-REGISTRY](LSP-UV-INTEGRATION-SPEC.md#LSPUV-LOCK-REGISTRY).
 
@@ -85,7 +85,7 @@ pub struct TrackedType {
 
 ### Diagnostic Behaviour by Provenance {#STUBRES-PROVENANCE-DIAG}
 
-| Provenance | BSK-E0010 | Downstream type errors | LSP hover | Code Action |
+| Provenance | imports_unresolved | Downstream type errors | LSP hover | Code Action |
 |------------|-----------|----------------------|-----------|-------------|
 | Source | not fired | normal errors | shows inferred type | — |
 | StubTier1 | not fired | normal errors | shows stub type | — |
@@ -95,7 +95,7 @@ pub struct TrackedType {
 
 One diagnostic at the import site is worth more than fifty cascading errors at use sites. When provenance is `Untyped`:
 
-1. BSK-E0010 fires once at the import
+1. imports_unresolved fires once at the import
 2. The imported symbol becomes `Unknown` with `Untyped` provenance
 3. Downstream rules check provenance — if one operand is `Untyped`, the cascade is suppressed
 4. The developer fixes it **with a single click** — the LSP provides code actions (quick fixes) that execute the appropriate `uv` command automatically
@@ -104,13 +104,13 @@ One diagnostic at the import site is worth more than fifty cascading errors at u
 
 **Principle**: Diagnostics MUST NOT tell users to run CLI commands. The LSP provides one-click code actions that do the work. The user should never leave the editor to fix a missing import.
 
-Every BSK-E0010 and BSK-E0152 diagnostic MUST have an associated code action:
+Every imports_unresolved and BSK-E0152 diagnostic MUST have an associated code action:
 
 | Diagnostic | Scenario | Code Action | LSP Command |
 |------------|----------|-------------|-------------|
-| BSK-E0010 | Package not installed | "Add dependency: `{pkg}`" | `basilisk.uv.add` |
-| BSK-E0010 | Package not in deps (transitive only) | "Add dependency: `{pkg}`" | `basilisk.uv.add` |
-| BSK-E0010 | Package declared but not synced | "Sync environment" | `basilisk.uv.sync` |
+| imports_unresolved | Package not installed | "Add dependency: `{pkg}`" | `basilisk.uv.add` |
+| imports_unresolved | Package not in deps (transitive only) | "Add dependency: `{pkg}`" | `basilisk.uv.add` |
+| imports_unresolved | Package declared but not synced | "Sync environment" | `basilisk.uv.sync` |
 | BSK-E0152 | Package installed, typeshed stub exists | "Install type stubs: `types-{pkg}`" | `basilisk.uv.addDev` |
 | BSK-E0152 | Package installed, **no** typeshed stub | "Create local type stub for `{pkg}`" | `basilisk.stubs.createLocal` |
 
@@ -133,7 +133,7 @@ editor — has a concrete, authoritative starting point instead of a dead-end er
 - **Skeleton (strict by default)**: header comments only — it declares *nothing*.
   Creating it clears `BSK-E0152` (a stub now exists), and because the stub is
   authoritative ([§STUBRES-MEMBER via E0154](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STUB-MEMBER)),
-  the developer is then prompted by `BSK-E0154` to declare each name they use.
+  the developer is then prompted by `imports_module_attribute` to declare each name they use.
   The comment documents the opt-out — adding a module-level
   `def __getattr__(name: str) -> Any: ...` makes every attribute `Any` and turns
   strictness off — but the skeleton deliberately does **not** emit it, so the
@@ -153,7 +153,7 @@ appears in the help — the code action does the work.
 #### Add Member {#STUBRES-ADD-MEMBER}
 
 `basilisk.stubs.addMember` (args: stub path, snippet line) is the quick fix for
-`BSK-E0154` ([§CHKARCH-DIAG-STUB-MEMBER](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STUB-MEMBER)):
+`imports_module_attribute` ([§CHKARCH-DIAG-STUB-MEMBER](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STUB-MEMBER)):
 "add the undeclared member to the local stub", closing the loop opened by the
 strict create-local skeleton.
 
@@ -165,7 +165,7 @@ strict create-local skeleton.
   attribute `attr: Any`.
 - **Handler** (`server/stub_handlers.rs::execute_add_stub_member`): appends the
   snippet to the existing `.pyi`, inserting `from typing import Any` once when the
-  snippet needs it, then re-resolves so `BSK-E0154` clears. Safety: only an
+  snippet needs it, then re-resolves so `imports_module_attribute` clears. Safety: only an
   existing `.pyi` inside a workspace root is ever written.
 - The developer then tightens the `Any` placeholders into real signatures — the
   stub grows precise one member at a time.
@@ -189,19 +189,19 @@ Four-mode severity for every rule: `error`, `warning`, `info`, `disabled`. Confi
 
 ```python
 # Per-line suppression:
-from fastmcp import FastMCP  # type: ignore[BSK-E0010]
+from fastmcp import FastMCP  # type: ignore[imports_unresolved]
 
 # Per-line severity demotion:
-from fastmcp import FastMCP  # type: warning[BSK-E0010]
+from fastmcp import FastMCP  # type: warning[imports_unresolved]
 
 # Block suppression:
-# type: disabled[BSK-E0010]
+# type: disabled[imports_unresolved]
 from fastmcp import FastMCP
 from result import Result, Ok, Err
-# type: end-disabled[BSK-E0010]
+# type: end-disabled[imports_unresolved]
 
 # Per-file:
-# basilisk: file-disabled[BSK-E0010]
+# basilisk: file-disabled[imports_unresolved]
 
 # Per-file relaxed mode (all errors become warnings):
 # basilisk: relaxed
@@ -224,7 +224,7 @@ from result import Result, Ok, Err
 stub-paths = ["stubs/"]
 
 [tool.basilisk.rules]
-"BSK-E0010" = "warning"
+"imports_unresolved" = "warning"
 
 [tool.basilisk.per-module-overrides."fastmcp"]
 ignore-missing-stubs = true
@@ -233,7 +233,7 @@ ignore-missing-stubs = true
 ignore-missing-stubs = true
 
 [tool.basilisk.per-path-overrides."vendor/**"]
-disabled = ["BSK-E0010"]
+disabled = ["imports_unresolved"]
 ```
 
 ---

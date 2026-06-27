@@ -1,4 +1,4 @@
-//! Tests for [BSK-E0101]-[BSK-E0125] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [narrowing_typeguard]-[generics_type_erasure] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

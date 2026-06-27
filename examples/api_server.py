@@ -27,17 +27,17 @@ def handle_post(request, body, auth):  # BSK-E0001: three untyped params
     return body  # BSK-E0002: no return type
 
 
-# ── BSK-E0011: naked Any in public API signature ─────────────────────────────
-def serialize(value: Any) -> Any:  # BSK-E0011: Any in/out, no justification
+# ── returns_compatibility: naked Any in public API signature ─────────────────────────────
+def serialize(value: Any) -> Any:  # returns_compatibility: Any in/out, no justification
     return json.dumps(value)
 
 
-# ── BSK-E0014: int field assigned a string at module level ───────────────────
-MAX_RETRIES: int = "three"  # BSK-E0014: "three" is not int
-TIMEOUT_MS: int = 30.5  # BSK-E0014: float assigned to int
+# ── assignment_compatibility: int field assigned a string at module level ───────────────────
+MAX_RETRIES: int = "three"  # assignment_compatibility: "three" is not int
+TIMEOUT_MS: int = 30.5  # assignment_compatibility: float assigned to int
 
 
-# ── BSK-E0017: child route overrides attribute with incompatible type ─────────
+# ── classes_override_2: child route overrides attribute with incompatible type ─────────
 class BaseRoute:
     path: str
     method: str
@@ -45,25 +45,25 @@ class BaseRoute:
 
 
 class AdminRoute(BaseRoute):
-    priority: str = "high"  # BSK-E0017: str overrides int
+    priority: str = "high"  # classes_override_2: str overrides int
 
 
-# ── BSK-E0021: overload signatures identical (both take no-annotation param) ──
+# ── overloads_consistency: overload signatures identical (both take no-annotation param) ──
 @overload
 def parse_id(raw) -> int: ...  # BSK-E0001: raw untyped
 
 
 @overload
-def parse_id(raw) -> int: ...  # BSK-E0001 + BSK-E0021: duplicate overload
+def parse_id(raw) -> int: ...  # BSK-E0001 + overloads_consistency: duplicate overload
 
 
 def parse_id(raw: str) -> int:
     return int(raw)
 
 
-# ── BSK-E0022: unhashable list literal as dict key ────────────────────────────
-def default_routes() -> dict[list[str], str]:  # BSK-E0022 inside return annotation
-    return {["GET", "POST"]: "/"}  # BSK-E0022: list literal as key
+# ── dict_key_hashable: unhashable list literal as dict key ────────────────────────────
+def default_routes() -> dict[list[str], str]:  # dict_key_hashable inside return annotation
+    return {["GET", "POST"]: "/"}  # dict_key_hashable: list literal as key
 
 
 # ── BSK-E0025: override without @override decorator ─────────────────────────
@@ -79,8 +79,8 @@ class PrefixRouter(Router):
         return self.p + path
 
 
-# ── BSK-E0019: variable assigned inside if, returned outside ─────────────────
+# ── names_unbound: variable assigned inside if, returned outside ─────────────────
 def extract_token(headers: dict[str, str]) -> str:
     if "Authorization" in headers:
         token = headers["Authorization"].split(" ")[-1]
-    return token  # BSK-E0019: token may be unbound
+    return token  # names_unbound: token may be unbound

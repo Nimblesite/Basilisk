@@ -1,5 +1,5 @@
-//! Implements [BSK-E0072] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
-//! BSK-E0072: No matching overload for subscript indexing.
+//! Implements [overloads_basic] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! overloads_basic: No matching overload for subscript indexing.
 //!
 //! When a class defines overloaded `__getitem__` methods and a module-level
 //! subscript expression (e.g. `b[""]`) passes an argument whose type is
@@ -29,11 +29,11 @@ use crate::span_util::slice_span;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0072",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0072",
+    code: "overloads_basic",
+    docs_url: "https://www.basilisk-python.dev/errors/overloads_basic",
 };
 
-/// Emits BSK-E0072 for subscript indexing where no overloaded `__getitem__`
+/// Emits overloads_basic for subscript indexing where no overloaded `__getitem__`
 /// signature matches the argument type.
 pub(crate) struct NoMatchingOverload;
 

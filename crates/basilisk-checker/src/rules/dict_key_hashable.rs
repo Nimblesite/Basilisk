@@ -1,5 +1,5 @@
-//! Implements [BSK-E0022] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! BSK-E0022: Unhashable type used as a dict key.
+//! Implements [dict_key_hashable] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! dict_key_hashable: Unhashable type used as a dict key.
 //!
 //! Lists, sets, and plain dicts are not hashable and cannot be used as
 //! dictionary keys at runtime.  Basilisk detects these statically.
@@ -16,11 +16,11 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0022",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0022",
+    code: "dict_key_hashable",
+    docs_url: "https://www.basilisk-python.dev/errors/dict_key_hashable",
 };
 
-/// Emits BSK-E0022 for unhashable types used as dictionary keys.
+/// Emits dict_key_hashable for unhashable types used as dictionary keys.
 pub(crate) struct UnhashableDictKey;
 
 impl Rule for UnhashableDictKey {

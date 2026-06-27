@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0095] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
-// Integration tests for BSK-E0095: `InitVar` field validation.
+//! Tests for [dataclasses_postinit] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+// Integration tests for dataclasses_postinit: `InitVar` field validation.
 
 use super::common::*;
 
@@ -57,7 +57,7 @@ class DC2:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0095"),
+        !codes(&diags).contains(&"dataclasses_postinit"),
         "valid InitVar usage should not fire E0095"
     );
     Ok(())

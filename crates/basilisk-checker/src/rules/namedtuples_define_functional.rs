@@ -1,5 +1,5 @@
-//! Implements [BSK-E0064] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! BSK-E0064: Invalid argument in a `NamedTuple` constructor call.
+//! Implements [namedtuples_define_functional] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! namedtuples_define_functional: Invalid argument in a `NamedTuple` constructor call.
 //!
 //! When a `NamedTuple` is instantiated using keyword arguments, Basilisk
 //! validates each argument against the field names and field types declared
@@ -30,8 +30,8 @@ use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0064",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0064",
+    code: "namedtuples_define_functional",
+    docs_url: "https://www.basilisk-python.dev/errors/namedtuples_define_functional",
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
@@ -65,7 +65,7 @@ fn keyword_rhs_mismatch(annotation: &str, rhs: &RhsKind) -> Option<&'static str>
     }
 }
 
-/// Emits BSK-E0064 for `NamedTuple` call sites with unknown fields or type mismatches.
+/// Emits namedtuples_define_functional for `NamedTuple` call sites with unknown fields or type mismatches.
 pub(crate) struct InvalidNamedTupleCall;
 
 impl Rule for InvalidNamedTupleCall {

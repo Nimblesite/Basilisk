@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0098] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
-// Integration tests for BSK-E0098: Non-protocol base in Protocol.
+//! Tests for [protocols_merging] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+// Integration tests for protocols_merging: Non-protocol base in Protocol.
 
 use super::common::*;
 
@@ -16,7 +16,7 @@ class MyProto(Protocol, Base):
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0098"),
+        codes(&diags).contains(&"protocols_merging"),
         "Protocol with non-Protocol base should fire E0098, got: {:?}",
         codes(&diags)
     );
@@ -33,7 +33,7 @@ class MyProto(Protocol):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0098"),
+        !codes(&diags).contains(&"protocols_merging"),
         "Protocol with only Protocol base should not fire E0098"
     );
     Ok(())

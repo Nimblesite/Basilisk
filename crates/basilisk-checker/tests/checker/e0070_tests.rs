@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0070] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
-// Integration tests for BSK-E0070: Never type compatibility.
+//! Tests for [specialtypes_never_2] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
+// Integration tests for specialtypes_never_2: Never type compatibility.
 
 use super::common::*;
 

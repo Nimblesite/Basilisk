@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0059] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
-// Integration tests for BSK-E0059: dataclass `match_args=False`.
+//! Tests for [dataclasses_match_args] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+// Integration tests for dataclasses_match_args: dataclass `match_args=False`.
 
 use super::common::*;
 
@@ -38,7 +38,7 @@ match Point(1, 2):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0059"),
+        !codes(&diags).contains(&"dataclasses_match_args"),
         "default match_args=True should not fire E0059"
     );
     Ok(())

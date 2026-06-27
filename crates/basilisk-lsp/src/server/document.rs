@@ -273,7 +273,7 @@ pub(super) async fn did_change_watched_files(
 
         // When a new module appeared, its dependents may now resolve imports
         // that were previously unresolved. Re-resolve the whole workspace so
-        // their stale BSK-E0010 clears without an LSP reload (GitHub #53).
+        // their stale imports_unresolved clears without an LSP reload (GitHub #53).
         // Likewise when an edited module's exports changed (GitHub #56).
         let publish_set = if has_created_module || exports_changed {
             // Drop deleted entries first so the recheck cannot resurrect them.

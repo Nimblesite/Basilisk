@@ -16,7 +16,7 @@ T = TypeVar(\"T\", int)
     assert_rule_fires(
         "file:///e0026.py",
         code,
-        "BSK-E0026",
+        "generics_basic",
         &["typevar", "constraint", "single"],
     )
     .await
@@ -28,7 +28,7 @@ async fn test_ws_e0026_typevar_two_constraints_is_clean() -> TestResult<()> {
 from typing import TypeVar
 T = TypeVar(\"T\", int, str)
 ";
-    assert_rule_clean("file:///e0026_clean.py", code, "BSK-E0026").await
+    assert_rule_clean("file:///e0026_clean.py", code, "generics_basic").await
 }
 
 // ── E0027: Duplicate TypeVar in Generic ─────────────────────────────────────
@@ -42,7 +42,7 @@ T = TypeVar(\"T\")
 class Container(Generic[T, T]):
     pass
 ";
-    assert_rule_fires("file:///e0027.py", code, "BSK-E0027", &[]).await
+    assert_rule_fires("file:///e0027.py", code, "generics_base_class", &[]).await
 }
 
 #[tokio::test]
@@ -55,7 +55,7 @@ U = TypeVar(\"U\")
 class Container(Generic[T, U]):
     pass
 ";
-    assert_rule_clean("file:///e0027_clean.py", code, "BSK-E0027").await
+    assert_rule_clean("file:///e0027_clean.py", code, "generics_base_class").await
 }
 
 // ── E0034: @final decorator violations ──────────────────────────────────────
@@ -75,7 +75,7 @@ class Child(Sealed):
     assert_rule_fires(
         "file:///e0034.py",
         code,
-        "BSK-E0034",
+        "qualifiers_final_decorator",
         &["final", "sealed", "inherit"],
     )
     .await
@@ -90,7 +90,7 @@ from typing import final
 def standalone() -> None:
     pass
 ";
-    assert_rule_fires("file:///e0034_func.py", code, "BSK-E0034", &[]).await
+    assert_rule_fires("file:///e0034_func.py", code, "qualifiers_final_decorator", &[]).await
 }
 
 #[tokio::test]
@@ -108,7 +108,7 @@ class Child(Base):
     def locked(self) -> str:
         return \"child\"
 ";
-    assert_rule_fires("file:///e0034_method.py", code, "BSK-E0034", &[]).await
+    assert_rule_fires("file:///e0034_method.py", code, "qualifiers_final_decorator", &[]).await
 }
 
 #[tokio::test]
@@ -125,7 +125,7 @@ class Child(Base):
     def other(self) -> str:
         return \"child\"
 ";
-    assert_rule_clean("file:///e0034_clean.py", code, "BSK-E0034").await
+    assert_rule_clean("file:///e0034_clean.py", code, "qualifiers_final_decorator").await
 }
 
 // ── E0054: Final re-assignment ──────────────────────────────────────────────
@@ -145,7 +145,7 @@ class Config:
     assert_rule_fires(
         "file:///e0054.py",
         code,
-        "BSK-E0054",
+        "qualifiers_final_annotation_2",
         &["final", "rate", "reassign", "modify"],
     )
     .await
@@ -162,7 +162,7 @@ class Config:
     def bad_update(self) -> None:
         self.MAX = 200
 ";
-    assert_rule_fires("file:///e0054_class.py", code, "BSK-E0054", &[]).await
+    assert_rule_fires("file:///e0054_class.py", code, "qualifiers_final_annotation_2", &[]).await
 }
 
 #[tokio::test]
@@ -175,7 +175,7 @@ RATE: Final = 3000
 def read_rate() -> int:
     return RATE
 ";
-    assert_rule_clean("file:///e0054_clean.py", code, "BSK-E0054").await
+    assert_rule_clean("file:///e0054_clean.py", code, "qualifiers_final_annotation_2").await
 }
 
 // ── Full-pipeline: multiple rules in one file ───────────────────────────────
@@ -222,11 +222,11 @@ def classify(x):
         "should fire E0001 for unannotated param: {raw}"
     );
     assert!(
-        extract_diagnostic(&json, "BSK-E0014").is_some(),
+        extract_diagnostic(&json, "assignment_compatibility").is_some(),
         "should fire E0014 for int = \"wrong\": {raw}"
     );
     assert!(
-        extract_diagnostic(&json, "BSK-E0023").is_some(),
+        extract_diagnostic(&json, "match_exhaustiveness").is_some(),
         "should fire E0023 for non-exhaustive match: {raw}"
     );
     Ok(())

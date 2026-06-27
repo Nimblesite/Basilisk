@@ -193,8 +193,8 @@ class Proto(Protocol[T_co], Generic[T_co]):
 ";
     let diags = run(source)?;
     assert!(
-        diags.iter().any(|d| d.code.code == "BSK-E0137"),
-        "Expected BSK-E0137 for Protocol[T]+Generic[T] combination"
+        diags.iter().any(|d| d.code.code == "protocols_generic"),
+        "Expected protocols_generic for Protocol[T]+Generic[T] combination"
     );
     Ok(())
 }

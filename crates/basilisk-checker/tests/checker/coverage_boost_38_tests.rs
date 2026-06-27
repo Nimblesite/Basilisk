@@ -424,7 +424,7 @@ assert_type(Dir.UP, Literal[Dir.UP])
 #[test]
 fn suppression_disable_file() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
-# basilisk: disable-file=BSK-E0014
+# basilisk: disable-file=assignment_compatibility
 x: int = "hello"
 y: str = 42
 z: float = "bad"

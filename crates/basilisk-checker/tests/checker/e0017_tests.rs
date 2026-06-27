@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0017] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for BSK-E0017: Incompatible class attribute override.
+//! Tests for [classes_override_2] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+// Integration tests for classes_override_2: Incompatible class attribute override.
 
 use super::common::*;
 
@@ -14,7 +14,7 @@ class Child(Base):
 "#;
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"BSK-E0017"),
+        codes(&diags).contains(&"classes_override_2"),
         "incompatible attr type should fire E0017, got: {:?}",
         codes(&diags)
     );
@@ -32,7 +32,7 @@ class Child(Base):
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0017"),
+        !codes(&diags).contains(&"classes_override_2"),
         "compatible attr type should not fire E0017"
     );
     Ok(())
@@ -49,7 +49,7 @@ class Child(Base):
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0017"),
+        !codes(&diags).contains(&"classes_override_2"),
         "different attr name should not fire E0017"
     );
     Ok(())

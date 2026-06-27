@@ -1,5 +1,5 @@
-//! Implements [BSK-E0119] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0119: Protocol `isinstance`/`issubclass` violations.
+//! Implements [protocols_runtime_checkable_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! protocols_runtime_checkable_2: Protocol `isinstance`/`issubclass` violations.
 //!
 //! Per PEP 544:
 //! - A protocol can be used as the second argument to `isinstance()` or
@@ -35,11 +35,11 @@ use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0119",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0119",
+    code: "protocols_runtime_checkable_2",
+    docs_url: "https://www.basilisk-python.dev/errors/protocols_runtime_checkable_2",
 };
 
-/// Emits BSK-E0119 for protocol `isinstance`/`issubclass` violations:
+/// Emits protocols_runtime_checkable_2 for protocol `isinstance`/`issubclass` violations:
 /// not-runtime-checkable, data protocol with issubclass, and unsafe overlap.
 pub(crate) struct ProtocolUnsafeOverlap;
 

@@ -1,4 +1,4 @@
-//! Implements [BSK-E0014] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [assignment_compatibility] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! The callable-subtyping algorithm from the typing spec: positional/keyword
 //! matching, `*args`/`**kwargs` contravariance, defaults, and gradual forms.
 

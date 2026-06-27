@@ -1,5 +1,5 @@
-//! Implements [BSK-E0030] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! BSK-E0030: Non-default `TypeVar` follows a default `TypeVar` in `Generic[...]`.
+//! Implements [generics_defaults] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! generics_defaults: Non-default `TypeVar` follows a default `TypeVar` in `Generic[...]`.
 //!
 //! PEP 696 §Ordering defines two ordering rules for type parameters in `Generic[...]`:
 //!
@@ -20,8 +20,8 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0030",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0030",
+    code: "generics_defaults",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_defaults",
 };
 
 /// Per-TypeVar metadata looked up from `typevar_calls`.
@@ -30,7 +30,7 @@ struct TvMeta {
     is_paramspec: bool,
 }
 
-/// Emits BSK-E0030 when a non-default `TypeVar` follows a default `TypeVar` in `Generic[...]`,
+/// Emits generics_defaults when a non-default `TypeVar` follows a default `TypeVar` in `Generic[...]`,
 /// or when a defaulted `TypeVar` (not `ParamSpec`) follows a `TypeVarTuple`.
 pub(crate) struct NonDefaultAfterDefault;
 

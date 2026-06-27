@@ -26,7 +26,7 @@ fn e0010_import_from_untyped_module() -> Result<(), Box<dyn std::error::Error>> 
     let diags = run("errors/e0010_untyped_import.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
-        codes.contains(&"BSK-E0010"),
+        codes.contains(&"imports_unresolved"),
         "should emit E0010 for untyped imports, got: {diags:#?}"
     );
     Ok(())
@@ -76,7 +76,7 @@ fn e0013_none_annotated_returning_value() -> Result<(), Box<dyn std::error::Erro
     let diags = run("errors/e0013_return_mismatch.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
-        codes.contains(&"BSK-E0013"),
+        codes.contains(&"returns_compatibility_2"),
         "should emit E0013 when -> None function returns a value, got: {diags:#?}"
     );
     Ok(())
@@ -91,7 +91,7 @@ fn e0014_literal_assigned_to_incompatible_annotation() -> Result<(), Box<dyn std
     let diags = run("errors/e0014_assignment_incompatible.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
-        codes.contains(&"BSK-E0014"),
+        codes.contains(&"assignment_compatibility"),
         "should emit E0014 for literal type mismatches, got: {diags:#?}"
     );
     Ok(())
@@ -109,9 +109,9 @@ fn e0014_bytes_and_float_mismatches() -> Result<(), Box<dyn std::error::Error>> 
         &src,
         &diags,
         &[
-            Expected::error("BSK-E0014", "`ratio`", 1, 1),
-            Expected::error("BSK-E0014", "`name`", 2, 1),
-            Expected::error("BSK-E0014", "`raw`", 3, 1),
+            Expected::error("assignment_compatibility", "`ratio`", 1, 1),
+            Expected::error("assignment_compatibility", "`name`", 2, 1),
+            Expected::error("assignment_compatibility", "`raw`", 3, 1),
         ],
     );
     Ok(())
@@ -126,7 +126,7 @@ fn e0015_invalid_type_arg_count() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0015_invalid_type_arg.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
-        codes.contains(&"BSK-E0015"),
+        codes.contains(&"callables_annotation"),
         "should emit E0015 for invalid generic arg count, got: {diags:#?}"
     );
     Ok(())
@@ -144,9 +144,9 @@ fn e0015_set_frozenset_and_dict_wrong_arg_count() -> Result<(), Box<dyn std::err
         &src,
         &diags,
         &[
-            Expected::error("BSK-E0015", "`set[", 1, 11),
-            Expected::error("BSK-E0015", "`frozenset[", 5, 17),
-            Expected::error("BSK-E0015", "`data`", 9, 18),
+            Expected::error("callables_annotation", "`set[", 1, 11),
+            Expected::error("callables_annotation", "`frozenset[", 5, 17),
+            Expected::error("callables_annotation", "`data`", 9, 18),
         ],
     );
     Ok(())
@@ -161,7 +161,7 @@ fn e0020_overload_missing_implementation() -> Result<(), Box<dyn std::error::Err
     let diags = run("errors/e0020_missing_overload_impl.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
-        codes.contains(&"BSK-E0020"),
+        codes.contains(&"overloads_definitions"),
         "should emit E0020 when @overload has no implementation, got: {diags:#?}"
     );
     Ok(())
@@ -178,7 +178,7 @@ fn e0020_exact_diagnostic_for_double() -> Result<(), Box<dyn std::error::Error>>
     assert_diagnostics(
         &src,
         &diags,
-        &[Expected::error("BSK-E0020", "`double`", 5, 5)],
+        &[Expected::error("overloads_definitions", "`double`", 5, 5)],
     );
     Ok(())
 }
@@ -192,7 +192,7 @@ fn e0021_overlapping_overload_signatures() -> Result<(), Box<dyn std::error::Err
     let diags = run("errors/e0021_overlapping_overloads.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
-        codes.contains(&"BSK-E0021"),
+        codes.contains(&"overloads_consistency"),
         "should emit E0021 for overlapping overload signatures, got: {diags:#?}"
     );
     Ok(())
@@ -211,9 +211,9 @@ fn e0021_exact_diagnostics_for_overlapping_overloads() -> Result<(), Box<dyn std
         &diags,
         &[
             Expected::error("BSK-E0001", "`x`", 5, 13),
-            Expected::error("BSK-E0021", "`process`", 9, 5),
+            Expected::error("overloads_consistency", "`process`", 9, 5),
             // The second overload returns `str`, not assignable to the impl's `int`.
-            Expected::error("BSK-E0160", "`process`", 9, 5),
+            Expected::error("overloads_consistency_3", "`process`", 9, 5),
             Expected::error("BSK-E0001", "`x`", 9, 13),
         ],
     );
@@ -229,7 +229,7 @@ fn e0023_match_without_wildcard() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0023_nonexhaustive_match.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
-        codes.contains(&"BSK-E0023"),
+        codes.contains(&"match_exhaustiveness"),
         "should emit E0023 for match without wildcard, got: {diags:#?}"
     );
     Ok(())
@@ -244,7 +244,7 @@ fn e0024_numeric_literal_as_type_annotation() -> Result<(), Box<dyn std::error::
     let diags = run("errors/e0024_invalid_type_form.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
-        codes.contains(&"BSK-E0024"),
+        codes.contains(&"annotations_typeexpr"),
         "should emit E0024 for numeric literal used as type, got: {diags:#?}"
     );
     Ok(())
@@ -262,9 +262,9 @@ fn e0024_numeric_literal_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std:
         &src,
         &diags,
         &[
-            Expected::error("BSK-E0024", "return type", 1, 5),
-            Expected::error("BSK-E0024", "`args`", 1, 14),
-            Expected::error("BSK-E0024", "`kwargs`", 1, 26),
+            Expected::error("annotations_typeexpr", "return type", 1, 5),
+            Expected::error("annotations_typeexpr", "`args`", 1, 14),
+            Expected::error("annotations_typeexpr", "`kwargs`", 1, 26),
         ],
     );
     Ok(())
@@ -296,7 +296,7 @@ fn e0025_override_without_decorator() -> Result<(), Box<dyn std::error::Error>> 
 fn e0012_argument_type_mismatch_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0012_wrong_arg_type.py")?;
     assert!(
-        diags.iter().any(|d| d.code.code == "BSK-E0012"),
+        diags.iter().any(|d| d.code.code == "calls_argument_type"),
         "E0012 (argument type mismatch) not yet implemented — Phase 1 limitation"
     );
     Ok(())
@@ -309,7 +309,7 @@ fn e0016_incompatible_method_override_not_yet_implemented() -> Result<(), Box<dy
 {
     let diags = run("errors/e0016_incompatible_override.py")?;
     assert!(
-        diags.iter().any(|d| d.code.code == "BSK-E0016"),
+        diags.iter().any(|d| d.code.code == "classes_override"),
         "E0016 (incompatible override) not yet implemented — Phase 1 limitation"
     );
     Ok(())
@@ -322,7 +322,7 @@ fn e0017_incompatible_variable_override_not_yet_implemented(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0017_variable_override.py")?;
     assert!(
-        diags.iter().any(|d| d.code.code == "BSK-E0017"),
+        diags.iter().any(|d| d.code.code == "classes_override_2"),
         "E0017 (incompatible variable override) not yet implemented — Phase 1 limitation"
     );
     Ok(())
@@ -334,7 +334,7 @@ fn e0017_incompatible_variable_override_not_yet_implemented(
 fn e0018_undefined_variable_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0018_undefined_variable.py")?;
     assert!(
-        diags.iter().any(|d| d.code.code == "BSK-E0018"),
+        diags.iter().any(|d| d.code.code == "names_undefined"),
         "E0018 (undefined variable) not yet implemented — Phase 1 limitation"
     );
     Ok(())
@@ -346,7 +346,7 @@ fn e0018_undefined_variable_not_yet_implemented() -> Result<(), Box<dyn std::err
 fn e0019_unbound_variable_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0019_unbound_variable.py")?;
     assert!(
-        diags.iter().any(|d| d.code.code == "BSK-E0019"),
+        diags.iter().any(|d| d.code.code == "names_unbound"),
         "E0019 (unbound variable) not yet implemented — Phase 1 limitation"
     );
     Ok(())
@@ -358,7 +358,7 @@ fn e0019_unbound_variable_not_yet_implemented() -> Result<(), Box<dyn std::error
 fn e0022_unhashable_type_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0022_unhashable_type.py")?;
     assert!(
-        diags.iter().any(|d| d.code.code == "BSK-E0022"),
+        diags.iter().any(|d| d.code.code == "dict_key_hashable"),
         "E0022 (unhashable type) not yet implemented — Phase 1 limitation"
     );
     Ok(())

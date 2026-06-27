@@ -21,7 +21,7 @@ from typing import Annotated
 from basilisk import Borrowed
 
 def summarise(items: Annotated[list[int], Borrowed]) -> int:
-    items.append(99)  # BSK-E0030: mutation of Borrowed parameter
+    items.append(99)  # generics_defaults: mutation of Borrowed parameter
     return sum(items)
 ```
 

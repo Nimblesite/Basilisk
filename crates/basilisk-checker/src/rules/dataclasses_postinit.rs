@@ -1,5 +1,5 @@
-//! Implements [BSK-E0095] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0095: `InitVar` field validation in dataclasses.
+//! Implements [dataclasses_postinit] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! dataclasses_postinit: `InitVar` field validation in dataclasses.
 //!
 //! Detects two categories of `InitVar` violations:
 //!
@@ -37,8 +37,8 @@ use super::shared::extract_callee_name;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0095",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0095",
+    code: "dataclasses_postinit",
+    docs_url: "https://www.basilisk-python.dev/errors/dataclasses_postinit",
 };
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
@@ -69,7 +69,7 @@ fn extract_initvar_inner(ann: &str) -> Option<&str> {
     rest.strip_suffix(']').map(str::trim)
 }
 
-/// Emits BSK-E0095 for `InitVar` field violations in dataclasses.
+/// Emits dataclasses_postinit for `InitVar` field violations in dataclasses.
 pub(crate) struct InitVarViolation;
 
 impl Rule for InitVarViolation {

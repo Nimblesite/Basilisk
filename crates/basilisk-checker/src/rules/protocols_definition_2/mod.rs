@@ -1,5 +1,5 @@
-//! Implements [BSK-E0121] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0121: Protocol conformance violation in annotated assignment.
+//! Implements [protocols_definition_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! protocols_definition_2: Protocol conformance violation in annotated assignment.
 //!
 //! Detects errors in annotated assignments at module level:
 //!
@@ -49,8 +49,8 @@ use conformance::{
 };
 
 pub(super) const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0121",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0121",
+    code: "protocols_definition_2",
+    docs_url: "https://www.basilisk-python.dev/errors/protocols_definition_2",
 };
 
 /// Well-known stdlib protocol classes and their required dunder methods.
@@ -78,7 +78,7 @@ fn known_protocol_methods(name: &str) -> Option<&'static [&'static str]> {
     }
 }
 
-/// Emits BSK-E0121 for protocol conformance violations in annotated assignments.
+/// Emits protocols_definition_2 for protocol conformance violations in annotated assignments.
 pub(crate) struct ProtocolAssignmentConformance;
 
 impl Rule for ProtocolAssignmentConformance {

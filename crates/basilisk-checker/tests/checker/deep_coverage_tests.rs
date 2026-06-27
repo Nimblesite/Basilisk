@@ -22,7 +22,7 @@ fn e0057_type_alias_bool_literal_exercise() -> Result<(), Box<dyn std::error::Er
     // Exercise the code path - may or may not fire depending on resolver support
     let diags = run(source)?;
 
-    let _msgs = messages_for(&diags, "BSK-E0057");
+    let _msgs = messages_for(&diags, "aliases_type_statement");
     Ok(())
 }
 
@@ -32,7 +32,7 @@ fn e0057_type_alias_int_literal_exercise() -> Result<(), Box<dyn std::error::Err
     // Exercise the code path - may or may not fire depending on resolver support
     let diags = run(source)?;
 
-    let _msgs = messages_for(&diags, "BSK-E0057");
+    let _msgs = messages_for(&diags, "aliases_type_statement");
     Ok(())
 }
 
@@ -41,7 +41,7 @@ fn e0057_type_alias_valid_no_diagnostic() -> Result<(), Box<dyn std::error::Erro
     let source = "type MyList = list[int]\n";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0057");
+    let msgs = messages_for(&diags, "aliases_type_statement");
     assert!(msgs.is_empty(), "valid type alias should not fire E0057");
     Ok(())
 }
@@ -51,7 +51,7 @@ fn e0057_type_alias_str_literal_fires() -> Result<(), Box<dyn std::error::Error>
     let source = "type BadAlias = \"hello\"\n";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0057");
+    let msgs = messages_for(&diags, "aliases_type_statement");
     // String literals may be forward references, so this might not fire
     let _ = msgs;
     Ok(())
