@@ -817,8 +817,8 @@ Bad: My_Alias = [int, str]
 /// Pins `collect_type_alias_names` for a non-aliased `from typing import TypeAlias`:
 /// a bad `TypeAlias` RHS is flagged exactly once. The `!alias.is_empty() && alias
 /// != "TypeAlias"` → `||` mutant here is *equivalent* — the only differing inputs
-/// push a duplicate "TypeAlias"/"" into `names`, which is consumed solely via
-/// `is_type_alias_annotation`'s `.any(|n| ann == n)`, so it can never change a
+/// push a duplicate `TypeAlias`/empty entry into `names`, which is consumed solely
+/// via `is_type_alias_annotation`'s `.any(|n| ann == n)`, so it can never change a
 /// diagnostic — and is excluded in `.cargo/mutants.toml`. This test keeps the
 /// function in mutation scope for its other, killable mutants.
 #[mutation_safe(rule = "aliases_implicit", fns = "collect_type_alias_names")]
@@ -870,7 +870,7 @@ assigned: int = "wrong"
 /// Pins `extract_annotation` for a var on line 2 (rfind gives pos > 0): the `int`
 /// annotation is extracted correctly and surfaced in the diagnostic. The
 /// `pos + 1` → `pos * 1` mutant here is *equivalent* — `name_offset`
-/// (= start - line_start) shifts by the same amount, so every slice taken from
+/// (= `start` - `line_start`) shifts by the same amount, so every slice taken from
 /// `line` is byte-identical to the unmutated extraction — and is excluded in
 /// `.cargo/mutants.toml`. This test keeps the function in mutation scope for its
 /// other, killable mutants.

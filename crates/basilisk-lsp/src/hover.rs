@@ -8,7 +8,7 @@
 
 use std::fmt::Write as _;
 
-use basilisk_resolver::{ImportInfo, ImportResolution, PackageDepKind, ResolvedModule};
+use basilisk_resolver::{ImportInfo, ImportKind, ImportResolution, PackageDepKind, ResolvedModule};
 use tower_lsp::lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 
 use crate::util::{
@@ -75,10 +75,14 @@ pub fn hover_at(
 
     // 2b. Imported symbol with no local definition (e.g. a function/class from a
     // `.pyi` stub or a py.typed package): show its signature/type from
-    // cross-module resolution so stub types surface on hover.
+    // cross-module resolution so stub types surface on hover. When cross-module
+    // resolution has not (yet) populated `imported_symbols`, fall back to the
+    // import declaration itself, which is always available from the same-file
+    // parse — so hovering a usage of an imported name is deterministic and never
+    // races cross-file indexing.
     if hit.is_none() {
         if let Some(name) = identifier_at_offset(source, byte_offset) {
-            if let Some(ext_sym) = resolved.imported_symbols.get(&name) {
+            let stub_md = resolved.imported_symbols.get(&name).map(|ext_sym| {
                 let mut md = if let Some(sig) = &ext_sym.signature {
                     format!("```python\n{sig}\n```")
                 } else if let Some(ty) = &ext_sym.type_annotation {
@@ -95,8 +99,15 @@ pub fn hover_at(
                     }
                     let _ = write!(md, "*{label}*");
                 }
-                if !md.is_empty() {
-                    sections.push(md);
+                md
+            });
+            match stub_md {
+                Some(md) if !md.is_empty() => sections.push(md),
+                _ => {
+                    if let Some(imp) = find_import_by_bound_name(resolved, &name) {
+                        let sig = format_type_signature(&SymbolHit::Import(imp), source);
+                        sections.push(format!("```python\n{sig}\n```"));
+                    }
                 }
             }
         }
@@ -143,6 +154,24 @@ fn find_import_at_offset(resolved: &ResolvedModule, byte_offset: usize) -> Optio
         let start = import.span.start_usize();
         let end = import.span.end_usize();
         byte_offset >= start && byte_offset < end
+    })
+}
+
+/// Find the import that introduces `name` as a locally-bound symbol.
+///
+/// Matches `from m import name` / `from m import x as name` (the bound name lives
+/// in `names`) and `import name` / `import m as name` (the module or its alias).
+/// Star imports bind no specific name, so they never match. Used to render a
+/// deterministic hover for a *usage* of an imported name when cross-module
+/// resolution has not populated `imported_symbols`.
+fn find_import_by_bound_name<'a>(
+    resolved: &'a ResolvedModule,
+    name: &str,
+) -> Option<&'a ImportInfo> {
+    resolved.imports.iter().find(|imp| match imp.kind {
+        ImportKind::Star => false,
+        ImportKind::From => imp.names.iter().any(|n| n == name),
+        ImportKind::Plain => imp.names.iter().any(|n| n == name) || imp.module == name,
     })
 }
 
@@ -288,6 +317,39 @@ mod tests {
         assert!(
             markup.value.contains("def fetch(url: str) -> bytes"),
             "hover should show the stub signature: {}",
+            markup.value
+        );
+    }
+
+    /// Regression for #200 (intermittent hover): hovering a *usage* of an
+    /// imported name must be deterministic. When `imported_symbols` is empty —
+    /// e.g. cross-file resolution has not run or not completed — hover falls back
+    /// to the import declaration instead of racing and returning `None`.
+    #[test]
+    fn test_hover_on_imported_name_usage_falls_back_to_import_decl() {
+        let source = "from nav_helper import helper_fn, HelperClass\n\nhelper_fn()\n";
+        let resolved = parse_and_resolve(source);
+        // No cross-file resolution in this unit test, so imported_symbols is empty.
+        assert!(
+            resolved.imported_symbols.is_empty(),
+            "precondition: no imported_symbols populated"
+        );
+
+        let offset = source.rfind("helper_fn").expect("usage present") + 1;
+        let hover = hover_at(&resolved, source, offset, &[]);
+        let hover = hover.expect("hover should be Some for an imported-name usage");
+        let HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected Markup hover contents");
+        };
+
+        assert!(
+            markup.value.contains("helper_fn"),
+            "hover should name the imported symbol: {}",
+            markup.value
+        );
+        assert!(
+            markup.value.contains("from nav_helper import"),
+            "fallback should show the import declaration: {}",
             markup.value
         );
     }
