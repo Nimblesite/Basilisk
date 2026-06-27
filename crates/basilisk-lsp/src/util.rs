@@ -47,11 +47,11 @@ fn in_span(offset: usize, span: Span) -> bool {
 
 /// Find the symbol whose `name_span` contains the given byte offset.
 ///
-/// Searches functions (and their parameters), classes (and their attributes),
-/// module variables, and imports. Returns the first match.
+/// Searches functions (and their parameters and local variables), classes (and
+/// their attributes), module variables, and imports. Returns the first match.
 #[must_use]
 pub fn find_symbol_at_offset(resolved: &ResolvedModule, offset: usize) -> Option<SymbolHit<'_>> {
-    // Check function names and their parameters.
+    // Check function names, their parameters, and their local variables.
     for func in &resolved.functions {
         if in_span(offset, func.name_span) {
             return Some(SymbolHit::Function(func));
@@ -69,6 +69,12 @@ pub fn find_symbol_at_offset(resolved: &ResolvedModule, offset: usize) -> Option
         if let Some(ref kw) = func.kwarg {
             if in_span(offset, kw.name_span) {
                 return Some(SymbolHit::Parameter { func, param: kw });
+            }
+        }
+        // Function-local bindings: annotated (`x: T = ...`) and plain (`x = ...`).
+        for var in func.local_vars.iter().chain(&func.local_unannotated_vars) {
+            if in_span(offset, var.name_span) {
+                return Some(SymbolHit::Variable(var));
             }
         }
     }
@@ -102,7 +108,8 @@ pub fn find_symbol_at_offset(resolved: &ResolvedModule, offset: usize) -> Option
     None
 }
 
-/// Find a symbol definition by name. Searches functions, classes, variables.
+/// Find a symbol definition by name. Searches functions, classes, module
+/// variables, and function-local variables.
 ///
 /// Returns the definition `SymbolHit` for the first match.
 #[must_use]
@@ -126,6 +133,15 @@ pub fn find_definition_by_name<'a>(
     for var in &resolved.module_vars {
         if var.name == name {
             return Some(SymbolHit::Variable(var));
+        }
+    }
+    // Function-local variables (annotated and plain assignments). Searched last
+    // so module-level symbols keep precedence for a bare name reference.
+    for func in &resolved.functions {
+        for var in func.local_vars.iter().chain(&func.local_unannotated_vars) {
+            if var.name == name {
+                return Some(SymbolHit::Variable(var));
+            }
         }
     }
     None

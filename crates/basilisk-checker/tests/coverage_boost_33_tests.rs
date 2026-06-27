@@ -814,10 +814,13 @@ Bad: My_Alias = [int, str]
     Ok(())
 }
 
-/// Kills mutant: e0048.rs line 88 `!alias.is_empty() && alias != "TypeAlias"` → `||`.
-/// With the mutant, a non-aliased `from typing import TypeAlias` adds a second
-/// "`TypeAlias`" entry. The outer check `alias != "TypeAlias"` guards against this.
-/// We verify that `TypeAlias`-annotated bad RHS is still caught exactly once.
+/// Pins `collect_type_alias_names` for a non-aliased `from typing import TypeAlias`:
+/// a bad `TypeAlias` RHS is flagged exactly once. The `!alias.is_empty() && alias
+/// != "TypeAlias"` → `||` mutant here is *equivalent* — the only differing inputs
+/// push a duplicate "TypeAlias"/"" into `names`, which is consumed solely via
+/// `is_type_alias_annotation`'s `.any(|n| ann == n)`, so it can never change a
+/// diagnostic — and is excluded in `.cargo/mutants.toml`. This test keeps the
+/// function in mutation scope for its other, killable mutants.
 #[mutation_safe(rule = "aliases_implicit", fns = "collect_type_alias_names")]
 #[test]
 fn mutant_typealias_self_alias_not_duplicated() -> Result<(), Box<dyn std::error::Error>> {
@@ -864,11 +867,13 @@ assigned: int = "wrong"
     Ok(())
 }
 
-/// Kills mutant: e0014 line 304 `pos + 1` → `pos * 1` in `extract_annotation`.
-/// With the mutant, `line_start = pos` includes the preceding `\n` char, so
-/// the annotation is extracted from a shifted offset and may be wrong or None.
-/// We use a name on line 2 (rfind gives pos > 0) with a type annotation
-/// and assert the diagnostic message contains the correct type name.
+/// Pins `extract_annotation` for a var on line 2 (rfind gives pos > 0): the `int`
+/// annotation is extracted correctly and surfaced in the diagnostic. The
+/// `pos + 1` → `pos * 1` mutant here is *equivalent* — `name_offset`
+/// (= start - line_start) shifts by the same amount, so every slice taken from
+/// `line` is byte-identical to the unmutated extraction — and is excluded in
+/// `.cargo/mutants.toml`. This test keeps the function in mutation scope for its
+/// other, killable mutants.
 #[mutation_safe(rule = "assignment_compatibility", fns = "extract_annotation")]
 #[test]
 fn mutant_line_start_off_by_one_second_var() -> Result<(), Box<dyn std::error::Error>> {
