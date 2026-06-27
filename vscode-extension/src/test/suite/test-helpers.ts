@@ -358,11 +358,17 @@ export async function getHoverText(
     position: vscode.Position,
     timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS,
 ): Promise<string> {
+    // Poll until the hover has non-empty CONTENT, not merely a non-empty array.
+    // During the analysis window the provider can transiently return a Hover with
+    // empty contents (the intermittent "no content" regression, #200); resolving
+    // on array length alone yields '' and a spurious failure. Gating on extracted
+    // text makes the wait deterministic — it resolves only once real content
+    // materialises, bounded by timeoutMs.
     const hovers = await pollUntilResult({
         fn: async () => vscode.commands.executeCommand<vscode.Hover[]>(
             'vscode.executeHoverProvider', uri, position
         ).then((r) => r ?? [], () => [] as vscode.Hover[]),
-        predicate: (r) => Array.isArray(r) && r.length > 0,
+        predicate: (r) => Array.isArray(r) && extractHoverText(r).trim().length > 0,
         timeoutMs,
     }).catch(() => [] as vscode.Hover[]);
     return extractHoverText(hovers);
