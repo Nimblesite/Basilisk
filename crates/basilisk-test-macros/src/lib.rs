@@ -50,9 +50,8 @@ impl Parse for MutationSafeArgs {
         };
 
         if !input.is_empty() {
-            return Err(input.error(
-                "expected `rule = \"<slug>\"` or `rule = \"<slug>\", fns = \"fn1|fn2\"`",
-            ));
+            return Err(input
+                .error("expected `rule = \"<slug>\"` or `rule = \"<slug>\", fns = \"fn1|fn2\"`"));
         }
 
         Ok(Self { rule, fns })
@@ -175,7 +174,8 @@ const WHOLE_FILE_SLUG: &str = "wholefile";
 /// the generated wrapper-module identifier.
 fn is_rule_slug(value: &str) -> bool {
     let mut bytes = value.bytes();
-    let starts_with_lower_letter = matches!(bytes.next(), Some(first) if first.is_ascii_lowercase());
+    let starts_with_lower_letter =
+        matches!(bytes.next(), Some(first) if first.is_ascii_lowercase());
     starts_with_lower_letter
         && bytes.all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
 }
