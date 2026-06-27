@@ -116,17 +116,45 @@ pub(in crate::server) async fn goto_declaration(
 }
 
 /// Handle `textDocument/typeDefinition`.
+///
+/// Tries single-file type resolution first. If the annotated type is a class
+/// imported from another file, follows it cross-file via `imported_symbols`
+/// (the same mechanism `goto_definition` uses), so `x: ImportedClass` jumps to
+/// the class's real declaration.
 pub(in crate::server) async fn goto_type_definition(
     server: &LspServer,
     params: GotoDefinitionParams,
 ) -> LspResult<Option<GotoDefinitionResponse>> {
     let uri = params.text_document_position_params.text_document.uri;
     let pos = params.text_document_position_params.position;
-    server
-        .at_position(uri, pos, |resolved, text, offset, uri, _| {
-            type_definition::goto_type_definition(resolved, text, offset, uri)
+    Ok(server
+        .with_index(|idx| {
+            let (text, resolved, _) = idx.get_by_uri(&uri)?;
+            let byte_offset = crate::util::position_to_byte_offset(&text, pos);
+
+            // Same-file: annotated type is a class defined in this file.
+            if let Some(resp) =
+                type_definition::goto_type_definition(&resolved, &text, byte_offset, &uri)
+            {
+                return Some(resp);
+            }
+
+            // Cross-file: resolve the annotated type name through imported symbols.
+            let type_name = type_definition::type_name_at(&resolved, &text, byte_offset)?;
+            let ext_sym = resolved.imported_symbols.get(&type_name)?;
+            let (final_path, final_span) =
+                follow_reexport_chain(idx, &ext_sym.source_path, &type_name, ext_sym.source_span);
+
+            let target_entry = idx.files.get(&final_path)?;
+            let range = crate::util::span_to_range(&target_entry.text, final_span);
+            let target_uri = Url::from_file_path(&final_path).ok()?;
+
+            Some(GotoDefinitionResponse::Scalar(Location {
+                uri: target_uri,
+                range,
+            }))
         })
-        .await
+        .await)
 }
 
 /// Handle `textDocument/documentSymbol`.

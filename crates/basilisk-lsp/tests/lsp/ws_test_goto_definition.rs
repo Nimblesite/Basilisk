@@ -226,6 +226,78 @@ async fn test_ws_goto_definition_variable() -> TestResult<()> {
 }
 
 #[tokio::test]
+async fn test_ws_goto_definition_parameter_use() -> TestResult<()> {
+    // Regression for the goto hammer "parameter use resolves to the parameter"
+    // (#200): a use of a function parameter must resolve to the parameter's
+    // declaration. `find_definition_by_name` previously did not search params.
+    let code = "def calculate(operand: int) -> int:\n    return operand * operand\n";
+    let (_fixture, resp) = open_and_request(
+        "file:///ws_goto_param.py",
+        code,
+        960,
+        "textDocument/definition",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///ws_goto_param.py" },
+            // Line 1: "    return operand * operand" — first `operand` at char 11.
+            "position": { "line": 1, "character": 13 }
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "goto-def on a parameter use must resolve: {resp}"
+    );
+    let start = &parsed["result"]["range"]["start"];
+    assert_eq!(
+        start["line"], 0,
+        "parameter definition is on line 0 (the def line): {resp}"
+    );
+    assert_eq!(
+        start["character"], 14,
+        "parameter `operand` begins at char 14 in `def calculate(operand...`: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_definition_attribute_use() -> TestResult<()> {
+    // Goto hammer "attribute use resolves to the attribute def": a `self.attr`
+    // read must resolve to the attribute's declaration in the class body.
+    let code = "\
+class Widget:
+    width: int = 10
+    def resize(self) -> int:
+        return self.width
+";
+    let (_fixture, resp) = open_and_request(
+        "file:///ws_goto_attr.py",
+        code,
+        961,
+        "textDocument/definition",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///ws_goto_attr.py" },
+            // Line 3: "        return self.width" — `width` after `self.` at char 20.
+            "position": { "line": 3, "character": 22 }
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "goto-def on an attribute use must resolve: {resp}"
+    );
+    let start = &parsed["result"]["range"]["start"];
+    assert_eq!(
+        start["line"], 1,
+        "attribute `width` is declared on line 1: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_ws_goto_declaration() -> TestResult<()> {
     let code = "\
 def compute(x: int) -> int:
@@ -546,6 +618,59 @@ async fn test_ws_goto_definition_member_through_dotted_aliased_import() -> TestR
     assert_eq!(
         parsed["result"]["range"]["start"]["line"], 0,
         "goto-def should land on `helper` at line 0 of pkg/sub.py: {resp}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_type_definition_cross_file_class() -> TestResult<()> {
+    // Goto hammer "type-def: variable resolves to cross-file class type": a
+    // variable annotated with an imported class must resolve via typeDefinition
+    // to the class's cross-file declaration.
+    let dir = unique_temp_dir("bsk_typedef_cross");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("models.py"), "class Dog:\n    name: str\n")?;
+    let main_src = "from models import Dog\n\ninstance: Dog = Dog()\n";
+    std::fs::write(dir.join("main.py"), main_src)?;
+    let root_uri = format!("file://{}", dir.display());
+    let main_uri = format!("file://{}", dir.join("main.py").display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+    for _ in 0..20 {
+        let msg = tokio::time::timeout(Duration::from_millis(500), fixture.ws_read.next()).await;
+        if msg.is_err() {
+            break;
+        }
+    }
+    fixture.did_open(&main_uri, main_src).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // main.py line 2: "instance: Dog = Dog()" — `instance` at char 0.
+    let resp = fixture
+        .request(
+            740,
+            "textDocument/typeDefinition",
+            serde_json::json!({
+                "textDocument": { "uri": main_uri },
+                "position": { "line": 2, "character": 2 }
+            }),
+        )
+        .await?
+        .ok_or("no response to cross-file type definition")?;
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "cross-file type-def must resolve to the imported class: {resp}"
+    );
+    assert!(
+        parsed["result"]["uri"]
+            .as_str()
+            .unwrap_or("")
+            .contains("models.py"),
+        "cross-file type-def should jump to models.py: {resp}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);

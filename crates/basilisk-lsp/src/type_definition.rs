@@ -27,6 +27,27 @@ pub fn goto_type_definition(
     byte_offset: usize,
     uri: &Url,
 ) -> Option<GotoDefinitionResponse> {
+    let type_name = type_name_at(resolved, source, byte_offset)?;
+
+    // Find the class definition for this type name in the same file.
+    let class = resolved.classes.iter().find(|c| c.name == type_name)?;
+    let range = span_to_range(source, class.name_span);
+
+    Some(GotoDefinitionResponse::Scalar(Location {
+        uri: uri.clone(),
+        range,
+    }))
+}
+
+/// Resolve the base type name annotating the symbol under the cursor.
+///
+/// Returns the bare class name from a `x: T` / `param: T` / `attr: T`
+/// annotation (unwrapping `Optional[T]`, `list[T]`, `T | None`, …). The caller
+/// resolves that name to a class definition — same-file via `resolved.classes`
+/// or cross-file via `imported_symbols`. Returns `None` when the symbol has no
+/// type annotation to follow.
+#[must_use]
+pub fn type_name_at(resolved: &ResolvedModule, source: &str, byte_offset: usize) -> Option<String> {
     let hit = find_symbol_at_offset(resolved, byte_offset).or_else(|| {
         let name = identifier_at_offset(source, byte_offset)?;
         find_definition_by_name(resolved, &name)
@@ -42,16 +63,7 @@ pub fn goto_type_definition(
 
     let span = annotation_span?;
     let type_text = span.slice_source(source)?;
-    let type_name = extract_base_type(type_text.trim());
-
-    // Find the class definition for this type name.
-    let class = resolved.classes.iter().find(|c| c.name == type_name)?;
-    let range = span_to_range(source, class.name_span);
-
-    Some(GotoDefinitionResponse::Scalar(Location {
-        uri: uri.clone(),
-        range,
-    }))
+    Some(extract_base_type(type_text.trim()).to_owned())
 }
 
 /// Extract the base type name from an annotation string.
