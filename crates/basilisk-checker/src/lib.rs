@@ -31,6 +31,7 @@ pub mod collection_inference;
 pub mod context;
 pub mod diagnostic;
 pub mod inference;
+pub mod rule_tags;
 pub mod rules;
 pub mod span_util;
 pub mod suppression;
@@ -364,6 +365,9 @@ mod tests {
 
         // os is stdlib — no imports_unresolved should fire.
         let e0010_count = count_code(&diagnostics, "imports_unresolved");
-        assert_eq!(e0010_count, 0, "stdlib imports should not fire imports_unresolved");
+        assert_eq!(
+            e0010_count, 0,
+            "stdlib imports should not fire imports_unresolved"
+        );
     }
 }

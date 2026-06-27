@@ -11,7 +11,8 @@ def get_name() -> str:
 ";
     let diags = run(source)?;
     assert!(
-        codes(&diags).contains(&"returns_compatibility_2") || codes(&diags).contains(&"returns_compatibility"),
+        codes(&diags).contains(&"returns_compatibility_2")
+            || codes(&diags).contains(&"returns_compatibility"),
         "returning list for str should fire E0013 or E0011, got: {:?}",
         codes(&diags)
     );

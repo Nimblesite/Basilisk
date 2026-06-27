@@ -709,7 +709,10 @@ from typing import Literal
 x: Literal["hello"] = "hello"
 "#;
     let diags = run(source)?;
-    let e0126_count = diags.iter().filter(|d| d.code.code == "literals_literalstring").count();
+    let e0126_count = diags
+        .iter()
+        .filter(|d| d.code.code == "literals_literalstring")
+        .count();
     assert_eq!(e0126_count, 0);
     Ok(())
 }

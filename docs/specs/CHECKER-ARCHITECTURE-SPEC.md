@@ -538,6 +538,12 @@ The prefix determines the **default** severity. Every rule can be overridden to 
 
 ### Rule Categories {#CHKARCH-DIAG-CATEGORIES}
 
+> **Classification is by tags, not categories.** The authoritative way Basilisk
+> classifies rules is the tagging system — provenance tags (`pep`/`basilisk`),
+> PEP-category tags (PEP rules only), and free-form tags. The code-range groupings
+> below are a coarse legacy convenience for the reference table; the source of
+> truth is [Rule Tagging](CHECKER-RULE-TAGGING-SPEC.md#CHKTAG) ([CHKTAG]).
+
 #### Missing Annotations (BSK-E0001 -- BSK-E0009) {#CHKARCH-DIAG-MISSING}
 
 | Code | Description |

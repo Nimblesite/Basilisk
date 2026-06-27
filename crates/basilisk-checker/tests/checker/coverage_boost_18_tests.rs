@@ -437,7 +437,9 @@ def gen2() -> Generator[str, None, None]:
     let diagnostics = run(source)?;
     let gen_errors = diagnostics
         .iter()
-        .filter(|d| d.code.code == "annotations_generators" || d.code.code == "annotations_generators_2")
+        .filter(|d| {
+            d.code.code == "annotations_generators" || d.code.code == "annotations_generators_2"
+        })
         .count();
     assert!(
         gen_errors >= 1,
@@ -1089,7 +1091,9 @@ def gen_multiple_yields() -> Generator[int, None, None]:
     let diagnostics = run(source)?;
     let gen_errors = diagnostics
         .iter()
-        .filter(|d| d.code.code == "annotations_generators" || d.code.code == "annotations_generators_2")
+        .filter(|d| {
+            d.code.code == "annotations_generators" || d.code.code == "annotations_generators_2"
+        })
         .count();
     assert!(
         gen_errors >= 1,

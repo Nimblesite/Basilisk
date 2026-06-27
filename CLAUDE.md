@@ -3,13 +3,13 @@
 
 This codebase is held to a high standard: code here should comfortably pass review at a top-tier engineering organization. Please keep quality high and address shortcomings as you find them, rather than leaving them for later.
 
-MOST AUTHORITATIVE DOC FROM WHICH ALL OTHER AUTHORITY IS DERIVED:
+⚠️ MOST AUTHORITATIVE DOC FROM WHICH ALL OTHER AUTHORITY IS DERIVED:
 https://github.com/python/typing/tree/main/conformance/tests
-CONFORMANCE IS MEASURED BY HOW ACCURATELY BASILISK PASSES THESE TESTS AND NOTHING ELSE
+CONFORMANCE IS MEASURED BY HOW ACCURATELY BASILISK PASSES THESE TESTS AND NOTHING ELSE ⚠️
+
+⚠️ DISABLING, DELETING, OR UNREGISTERING ANY CONFORMANCE RULE IS ABSOLUTELY ⛔️ ILLEGAL ⚠️ PEP conformance MUST run the `basilisk` binary with **EVERY PEP rule enabled** — no `basilisk.json`, **no deleting rule source files (`crates/basilisk-checker/src/rules/*.rs`), no removing rules from `all_rules()`**, **NO EXCEPTIONS, NO MATTER WHAT**. Equally ⛔️ ILLEGAL: hand-editing `conformance/conformance_status.csv` or loosening the `coverage-thresholds.json` gate (`threshold` / `max_false_positives`) to match a faked run. Gaming the conformance score in ANY of these ways is ⛔️ ILLEGAL. `conformance/score.py` deletes any stale config before scoring; **deleting the rules themselves to dodge that guard is the same crime, not a loophole.** See [CHKARCH-CONFORMANCE]. 
 
 ⚠️ USING GIT IS ⛔️ ILLEGAL ⚠️ SIGNING A GIT COMMIT WITH CLAUDE CODE AS A COAUTHOR IS SUPER ⛔️ ILEGAL ⚠️
-
-⚠️ DISABLING, DELETING, OR UNREGISTERING ANY CONFORMANCE RULE IS ABSOLUTELY ⛔️ ILLEGAL ⚠️ PEP conformance MUST run the `basilisk` binary with **EVERY rule enabled** — no `basilisk.json`, no per-rule override, no "spec-conformance mode", no skipped fixtures, **no deleting rule source files (`crates/basilisk-checker/src/rules/*.rs`), no removing rules from `all_rules()`**, **NO EXCEPTIONS, NO MATTER WHAT**. Equally ⛔️ ILLEGAL: hand-editing `conformance/conformance_status.csv` or loosening the `coverage-thresholds.json` gate (`threshold` / `max_false_positives`) to match a faked run. The score is exactly what a real user gets out of the box. If a strict default fires on valid type-system code, **FIX the checker** — never silence, delete, or unregister the rule to move the number. Gaming the conformance score in ANY of these ways is a punishable offence. `conformance/score.py` deletes any stale config before scoring; **deleting the rules themselves to dodge that guard is the same crime, not a loophole.** See [CHKARCH-CONFORMANCE]. 
 
 CONFORMANCE SCORE INCREASES MONOTONICALLY, BENCHMARKS AND FALSE POSITIVES DECREASE MONOTONICALLY
 
@@ -21,7 +21,7 @@ CONFORMANCE SCORE INCREASES MONOTONICALLY, BENCHMARKS AND FALSE POSITIVES DECREA
 
 ⚠️ DO NOT KILL A VS Code PROCESS (including in the browser) — it disrupts active debugging and test sessions. ⚠️
 
-⚠️ NEVER STORE CI ARTIFACTS — they cost money even on this PUBLIC repo (compute on standard runners is free; **storage is billed**). The ONLY artifacts we keep are the **GitHub Releases** (Release assets are free + unlimited). NO `actions/upload-artifact` for coverage HTML, mutation reports, logs, screenshots, or any diagnostic. The sole permitted upload is a transient in-run cross-job hand-off, and it MUST set `retention-days: 1` (the floor) so it is consumed and deleted within the same run. Default retention is 90 days — never rely on it. See [GITHUB-NO-ARTIFACTS]. ⚠️
+
 
 Key design principles:
 

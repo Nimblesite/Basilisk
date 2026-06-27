@@ -513,18 +513,20 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
    HERO — Split layout: big text left, code right
 ══════════════════════════════════════════════════════════ */
 .hero {
-  min-height: 100vh;
-  min-height: 100dvh;
   display: flex;
   align-items: center;
-  padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12);
+  /* Even gutter on all four sides: --space-12 vertical matches the container's
+     --space-12 horizontal padding (see .hero > .container below). The sticky
+     header already occupies its own --header-height in normal flow, so the top
+     padding must NOT re-add it. */
+  padding: var(--space-12) 0;
   border-bottom: 1px solid var(--color-border);
 }
-/* Hero spans most of the viewport width with an even gutter that matches the
-   vertical breathing room (both ≈ --space-12 on wide screens). */
+/* Hero spans most of the viewport width; the side gutter is the same
+   --space-12 as the vertical padding, so the margin reads even all around. */
 .hero > .container {
   width: 100%;
-  max-width: 2200px;
+  max-width: 2600px;
   padding-inline: clamp(var(--space-6), 3vw, var(--space-12));
 }
 
@@ -594,14 +596,12 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 
 @media (max-width: 900px) {
-  .hero { min-height: 0; }
   .hero__split { grid-template-columns: 1fr; }
   .hero__split > * { min-width: 0; }
   .hero__subheadline { max-width: none; }
   .hero__meta { gap: var(--space-3) var(--space-4); }
 }
 @media (max-width: 640px) {
-  .hero { padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12); }
   .hero__cta-group { flex-direction: column; align-items: flex-start; }
 }
 

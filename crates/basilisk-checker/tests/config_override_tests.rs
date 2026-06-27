@@ -176,7 +176,9 @@ fn per_module_override_suppresses_e0010() {
     // E0010 fires for unresolved third-party imports.
     let source = "import fastmcp\n";
     let default_diags = check_default(source, "test.py");
-    let has_e0010 = default_diags.iter().any(|d| d.code.code == "imports_unresolved");
+    let has_e0010 = default_diags
+        .iter()
+        .any(|d| d.code.code == "imports_unresolved");
     assert!(has_e0010, "E0010 should fire for unresolved import");
 
     let config = BasiliskConfig {

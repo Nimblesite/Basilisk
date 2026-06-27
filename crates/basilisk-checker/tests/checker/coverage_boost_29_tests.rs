@@ -25,7 +25,9 @@ t3: tuple[int, *tuple[int, ...], str] = (1, 2, 3, "end")
 t3 = (1, "wrong", 3, "end")
 "#;
     let diagnostics = run(source)?;
-    let has_e0147 = diagnostics.iter().any(|d| d.code.code == "tuples_type_compat");
+    let has_e0147 = diagnostics
+        .iter()
+        .any(|d| d.code.code == "tuples_type_compat");
     let _ = has_e0147;
     Ok(())
 }

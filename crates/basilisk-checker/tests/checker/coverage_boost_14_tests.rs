@@ -41,7 +41,9 @@ class Foo[T: Sequence[U], U]:
     pass
 "#;
     let diags = run(source)?;
-    let has_e0149 = diags.iter().any(|d| d.code.code == "generics_syntax_scoping");
+    let has_e0149 = diags
+        .iter()
+        .any(|d| d.code.code == "generics_syntax_scoping");
     assert!(
         has_e0149,
         "Expected generics_syntax_scoping for cross-reference in PEP 695 bounds"

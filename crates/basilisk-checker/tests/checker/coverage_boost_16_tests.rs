@@ -1379,7 +1379,9 @@ y: Optional[int, str] = None
 ";
     let diagnostics = run(source)?;
     // Optional[int, str] gets caught by e0015 (type arg count), not e0148
-    let has_type_arg_error = diagnostics.iter().any(|d| d.code.code == "callables_annotation");
+    let has_type_arg_error = diagnostics
+        .iter()
+        .any(|d| d.code.code == "callables_annotation");
     assert!(
         has_type_arg_error,
         "Should detect wrong type arg count: {diagnostics:?}"

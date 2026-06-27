@@ -26,7 +26,10 @@ result = old_func()
 "#;
     let diags = run(source)?;
     let has_e0115 = diags.iter().any(|d| d.code.code == "directives_deprecated");
-    assert!(has_e0115, "Expected directives_deprecated for deprecated function call");
+    assert!(
+        has_e0115,
+        "Expected directives_deprecated for deprecated function call"
+    );
     Ok(())
 }
 

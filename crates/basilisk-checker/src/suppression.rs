@@ -96,8 +96,10 @@ pub fn parse_source_overrides(source: &str) -> SourceOverrides {
             continue;
         }
 
-        // Block start directives: standalone `# type: <mode>[CODE]` on their own line.
-        if trimmed.starts_with("# type: ") && !trimmed.contains("import") {
+        // Block start directives: standalone `# type: <mode>[CODE]` on their own
+        // line. The `# type: ` prefix on the *trimmed* line already guarantees a
+        // standalone comment (a code-bearing line would start with the code).
+        if trimmed.starts_with("# type: ") {
             if let Some(rest) = trimmed.strip_prefix("# type: ") {
                 if rest.starts_with("disabled")
                     || rest.starts_with("warning")
@@ -268,17 +270,68 @@ fn parse_line_directive(directive: &str) -> Option<LineOverride> {
 ///
 /// Per the typing spec, a `# type: ignore` comment silences *all* errors on the
 /// line; any bracketed content is type-checker-specific. Basilisk honours
-/// code-specific suppression only when every bracketed token is a Basilisk code
-/// (`BSK-…`). Any other content — mypy's `# type: ignore[assignment]`, an
-/// arbitrary tag, or no brackets at all — suppresses every error on the line, as
-/// the spec requires. (`Vec::new()` means "all rules" in `override_matches`.)
+/// code-specific suppression only when every bracketed token is a Basilisk code:
+/// a conformance-test code (always `chapter_subtopic`, i.e. contains `_`) or a
+/// `BSK-…` opt-in code. Any other content — mypy's `# type: ignore[assignment]`
+/// or `[arg-type]` (hyphenated / single words, never underscored), an arbitrary
+/// tag, or no brackets at all — suppresses every error on the line, as the spec
+/// requires. (`Vec::new()` means "all rules" in `override_matches`.)
 fn parse_ignore_codes(rest: &str) -> Vec<String> {
     let codes = parse_bracketed_codes(rest);
-    if codes.iter().all(|code| code.starts_with("BSK-")) {
+    if !codes.is_empty() && codes.iter().all(|code| is_basilisk_code(code)) {
         codes
     } else {
         Vec::new()
     }
+}
+
+/// Namespace prefixes of every Basilisk diagnostic code: the 21 python/typing
+/// conformance chapters plus the cross-cutting core-check prefixes. A
+/// conformance code is always `<prefix>_<subtopic>`.
+const CODE_PREFIXES: &[&str] = &[
+    // conformance-test chapters
+    "aliases",
+    "annotations",
+    "callables",
+    "classes",
+    "constructors",
+    "dataclasses",
+    "directives",
+    "enums",
+    "exceptions",
+    "generics",
+    "historical",
+    "literals",
+    "namedtuples",
+    "narrowing",
+    "overloads",
+    "protocols",
+    "qualifiers",
+    "specialtypes",
+    "tuples",
+    "typeddicts",
+    "typeforms",
+    // cross-cutting core checks
+    "imports",
+    "returns",
+    "calls",
+    "assignment",
+    "names",
+    "dict",
+    "match",
+    "version",
+];
+
+/// Whether a bracketed token is a Basilisk diagnostic code (as opposed to a
+/// foreign mypy/pyright code). Basilisk codes are either `BSK-…` opt-in codes or
+/// conformance-test codes of the form `<prefix>_<subtopic>` whose prefix is a
+/// known Basilisk namespace. Foreign codes — mypy's `assignment`, `arg-type` —
+/// are bare words or hyphenated and never match.
+fn is_basilisk_code(code: &str) -> bool {
+    if code.starts_with("BSK-") {
+        return true;
+    }
+    matches!(code.split_once('_'), Some((prefix, _)) if CODE_PREFIXES.contains(&prefix))
 }
 
 /// Parse bracketed codes like `[imports_unresolved, returns_compatibility]` from the start of a string.
@@ -363,7 +416,10 @@ mod tests {
         let overrides = parse_source_overrides(source);
         assert_eq!(overrides.line_overrides.len(), 1);
         assert_eq!(overrides.line_overrides[0].1.mode, RuleMode::Ignore);
-        assert_eq!(overrides.line_overrides[0].1.codes, vec!["imports_unresolved"]);
+        assert_eq!(
+            overrides.line_overrides[0].1.codes,
+            vec!["imports_unresolved"]
+        );
     }
 
     #[test]
@@ -372,7 +428,10 @@ mod tests {
         let overrides = parse_source_overrides(source);
         assert_eq!(overrides.line_overrides.len(), 1);
         assert_eq!(overrides.line_overrides[0].1.mode, RuleMode::Warning);
-        assert_eq!(overrides.line_overrides[0].1.codes, vec!["imports_unresolved"]);
+        assert_eq!(
+            overrides.line_overrides[0].1.codes,
+            vec!["imports_unresolved"]
+        );
     }
 
     #[test]
@@ -449,7 +508,10 @@ mod tests {
     fn test_type_ignore_basilisk_bracket_stays_code_specific() {
         let source = "x = foo()  # type: ignore[imports_unresolved]\n";
         let overrides = parse_source_overrides(source);
-        assert_eq!(overrides.line_overrides[0].1.codes, vec!["imports_unresolved"]);
+        assert_eq!(
+            overrides.line_overrides[0].1.codes,
+            vec!["imports_unresolved"]
+        );
         assert!(!override_matches(
             "assignment_compatibility",
             &overrides.line_overrides[0].1.codes
@@ -506,7 +568,8 @@ mod tests {
 
     #[test]
     fn test_parse_file_warning_multiple_codes() {
-        let source = "# basilisk: file-warning[imports_unresolved, returns_compatibility]\nimport fastmcp\n";
+        let source =
+            "# basilisk: file-warning[imports_unresolved, returns_compatibility]\nimport fastmcp\n";
         let overrides = parse_source_overrides(source);
         match &overrides.file_mode {
             Some(FileOverride::Specific { mode, codes }) => {
@@ -552,8 +615,14 @@ import os
 
     #[test]
     fn test_override_matches_specific_code() {
-        assert!(override_matches("imports_unresolved", &["imports_unresolved".to_owned()]));
-        assert!(!override_matches("returns_compatibility", &["imports_unresolved".to_owned()]));
+        assert!(override_matches(
+            "imports_unresolved",
+            &["imports_unresolved".to_owned()]
+        ));
+        assert!(!override_matches(
+            "returns_compatibility",
+            &["imports_unresolved".to_owned()]
+        ));
     }
 
     #[test]

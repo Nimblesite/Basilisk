@@ -98,7 +98,10 @@ import os
 ";
     let diags = run(source)?;
     // E0010 should be suppressed for numpy and pandas but not os (os is stdlib anyway)
-    let e0010_count = diags.iter().filter(|d| d.code.code == "imports_unresolved").count();
+    let e0010_count = diags
+        .iter()
+        .filter(|d| d.code.code == "imports_unresolved")
+        .count();
     assert_eq!(
         e0010_count, 0,
         "block disabled should suppress E0010 for imports within the block"

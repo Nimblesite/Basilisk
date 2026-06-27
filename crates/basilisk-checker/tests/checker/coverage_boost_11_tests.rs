@@ -329,7 +329,10 @@ class MyClass:
 "#;
     let diags = run(source)?;
     let has_e0036 = diags.iter().any(|d| d.code.code == "classes_classvar");
-    assert!(has_e0036, "Expected classes_classvar for multiple ClassVar args");
+    assert!(
+        has_e0036,
+        "Expected classes_classvar for multiple ClassVar args"
+    );
     Ok(())
 }
 
@@ -1179,7 +1182,10 @@ class MyProtocol(Protocol[T], Generic[T]):
 "#;
     let diags = run(source)?;
     let has_e0137 = diags.iter().any(|d| d.code.code == "protocols_generic");
-    assert!(has_e0137, "Expected protocols_generic for Protocol[T]+Generic[T]");
+    assert!(
+        has_e0137,
+        "Expected protocols_generic for Protocol[T]+Generic[T]"
+    );
     Ok(())
 }
 
@@ -1201,7 +1207,10 @@ v: Hashable = DC(0)
 "#;
     let diags = run(source)?;
     let has_e0063 = diags.iter().any(|d| d.code.code == "dataclasses_hash");
-    assert!(has_e0063, "Expected dataclasses_hash for non-hashable dataclass");
+    assert!(
+        has_e0063,
+        "Expected dataclasses_hash for non-hashable dataclass"
+    );
     Ok(())
 }
 

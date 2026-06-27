@@ -813,7 +813,9 @@ COUNT += 1
 "#;
     let diagnostics = run(source)?;
     // Augmented assign to Final should be caught by E0054
-    let has_e0054 = diagnostics.iter().any(|d| d.code.code == "qualifiers_final_annotation_2");
+    let has_e0054 = diagnostics
+        .iter()
+        .any(|d| d.code.code == "qualifiers_final_annotation_2");
     assert!(
         has_e0054,
         "Should detect Final augmented assign via E0054: {diagnostics:?}",

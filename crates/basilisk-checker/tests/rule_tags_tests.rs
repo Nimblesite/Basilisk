@@ -1,0 +1,204 @@
+//! Implements [CHKTAG-TESTS] from [CHKTAG]. See docs/specs/CHECKER-RULE-TAGGING-SPEC.md#chktag-tests
+//!
+//! Coarse e2e for the rule tagging system: every shipping rule code resolves to
+//! a valid, conflict-free tag set, and the user-facing invariants hold —
+//! exactly one provenance tag per rule, PEP-category tags only on `pep` rules,
+//! and free-form tags never colliding with a reserved PEP-category name.
+
+use std::collections::BTreeSet;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use basilisk_checker::rule_tags::{
+    is_pep_category, is_provenance, is_valid_free_form, tags_for_code, BASILISK, FREE_FORM_TAGS,
+    PEP, PEP_CATEGORIES,
+};
+
+fn rules_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("rules")
+}
+
+/// Every `code: "X"` literal under `src/rules` — the codes the registry emits.
+fn all_rule_codes() -> BTreeSet<String> {
+    let mut codes = BTreeSet::new();
+    collect_codes(&rules_dir(), &mut codes);
+    codes
+}
+
+fn collect_codes(dir: &Path, out: &mut BTreeSet<String>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_codes(&path, out);
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            if let Ok(text) = fs::read_to_string(&path) {
+                for code in extract_codes(&text) {
+                    let _ = out.insert(code);
+                }
+            }
+        }
+    }
+}
+
+/// Pull `code: "..."` occurrences without a regex dependency.
+fn extract_codes(text: &str) -> Vec<String> {
+    const NEEDLE: &str = "code: \"";
+    let mut codes = Vec::new();
+    let mut rest = text;
+    while let Some(pos) = rest.find(NEEDLE) {
+        rest = &rest[pos + NEEDLE.len()..];
+        if let Some(end) = rest.find('"') {
+            codes.push(rest[..end].to_owned());
+            rest = &rest[end + 1..];
+        } else {
+            break;
+        }
+    }
+    codes
+}
+
+#[test]
+fn finds_the_whole_rule_set() {
+    assert!(
+        all_rule_codes().len() >= 100,
+        "expected to scan the full rule registry"
+    );
+}
+
+#[test]
+fn every_rule_has_exactly_one_provenance_tag() {
+    for code in all_rule_codes() {
+        let tags = tags_for_code(&code);
+        let provenance = tags.iter().filter(|tag| is_provenance(tag)).count();
+        assert_eq!(
+            provenance, 1,
+            "rule `{code}` must carry exactly one provenance tag, got {tags:?}"
+        );
+    }
+}
+
+#[test]
+fn pep_category_tags_appear_only_on_pep_rules() {
+    for code in all_rule_codes() {
+        let tags = tags_for_code(&code);
+        if tags.iter().any(|tag| is_pep_category(tag)) {
+            assert!(
+                tags.contains(&PEP),
+                "rule `{code}` carries a PEP-category tag without `pep` provenance: {tags:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn no_emitted_tag_is_an_invalid_free_form() {
+    // The user's core safety rule: a tag that is neither provenance nor a PEP
+    // category is a free-form tag, and free-form tags must never collide with a
+    // reserved PEP-category name.
+    for code in all_rule_codes() {
+        for tag in tags_for_code(&code) {
+            if !is_provenance(tag) && !is_pep_category(tag) {
+                assert!(
+                    is_valid_free_form(tag),
+                    "free-form tag `{tag}` on `{code}` collides with the reserved vocabulary"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn declared_free_form_vocabulary_never_collides() {
+    for tag in FREE_FORM_TAGS {
+        assert!(
+            is_valid_free_form(tag),
+            "declared free-form tag `{tag}` collides with a PEP category or provenance tag"
+        );
+    }
+}
+
+#[test]
+fn pep_categories_are_unique_lowercase_and_distinct_from_provenance() {
+    let unique: BTreeSet<_> = PEP_CATEGORIES.iter().collect();
+    assert_eq!(unique.len(), PEP_CATEGORIES.len());
+    for category in PEP_CATEGORIES {
+        assert!(!category.is_empty());
+        assert_eq!(category, category.to_ascii_lowercase());
+        assert!(!is_provenance(category));
+        assert!(is_pep_category(category));
+    }
+}
+
+#[test]
+fn pep_rules_derive_their_category_from_the_conformance_name_prefix() {
+    assert_eq!(tags_for_code("aliases_newtype"), vec![PEP, "aliases"]);
+    assert_eq!(tags_for_code("narrowing_typeguard"), vec![PEP, "narrowing"]);
+    assert_eq!(
+        tags_for_code("generics_typevartuple_basic_2"),
+        vec![PEP, "generics"]
+    );
+    assert_eq!(
+        tags_for_code("typeddicts_required"),
+        vec![PEP, "typeddicts"]
+    );
+}
+
+#[test]
+fn cross_cutting_core_checks_are_pep_without_a_category() {
+    // Checks with no single home category (return/call/assignment/name checks)
+    // are still `pep`, just uncategorised.
+    assert_eq!(tags_for_code("returns_compatibility"), vec![PEP]);
+    assert_eq!(tags_for_code("calls_argument_type"), vec![PEP]);
+    assert_eq!(tags_for_code("names_undefined"), vec![PEP]);
+}
+
+#[test]
+fn basilisk_rules_are_tagged_basilisk_and_never_carry_a_pep_category() {
+    for code in [
+        "BSK-E0001",
+        "BSK-E0025",
+        "BSK-W0014",
+        "BSK-W0050",
+        "BSK-E0152",
+        "imports_unresolved",
+        "version_target_syntax",
+    ] {
+        let tags = tags_for_code(code);
+        assert!(
+            tags.contains(&BASILISK),
+            "`{code}` should be a Basilisk rule, got {tags:?}"
+        );
+        assert!(!tags.contains(&PEP), "`{code}` must not also be `pep`");
+        for tag in &tags {
+            assert!(
+                !is_pep_category(tag),
+                "Basilisk rule `{code}` must not carry PEP category `{tag}`"
+            );
+        }
+    }
+}
+
+#[test]
+fn redundant_annotation_carries_redundancy_and_style() {
+    let tags = tags_for_code("BSK-W0050");
+    assert!(tags.contains(&"redundancy"));
+    assert!(tags.contains(&"style"));
+}
+
+#[test]
+fn predicates_reject_reserved_names_as_free_form() {
+    assert!(!is_valid_free_form("pep"));
+    assert!(!is_valid_free_form("basilisk"));
+    assert!(!is_valid_free_form("aliases"));
+    assert!(!is_valid_free_form(""));
+    assert!(is_valid_free_form("style"));
+    assert!(is_provenance("pep"));
+    assert!(is_provenance("basilisk"));
+    assert!(!is_provenance("aliases"));
+    assert!(!is_pep_category("style"));
+}
