@@ -9,7 +9,7 @@ fn e0002_missing_return_annotation() -> Result<(), Box<dyn std::error::Error>> {
 def greet(name: str):
     return name
 ";
-    let diags = run_strict(source)?;
+    let diags = run_with_optin_rules(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0002"),
         "function without return annotation should fire E0002, got: {:?}",
@@ -24,7 +24,7 @@ fn e0002_with_return_annotation_no_fire() -> Result<(), Box<dyn std::error::Erro
 def greet(name: str) -> str:
     return name
 ";
-    let diags = run_strict(source)?;
+    let diags = run_with_optin_rules(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0002"),
         "function with return annotation should not fire E0002"
@@ -38,7 +38,7 @@ fn e0002_none_return_annotation_no_fire() -> Result<(), Box<dyn std::error::Erro
 def do_nothing() -> None:
     pass
 ";
-    let diags = run_strict(source)?;
+    let diags = run_with_optin_rules(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0002"),
         "function with -> None should not fire E0002"

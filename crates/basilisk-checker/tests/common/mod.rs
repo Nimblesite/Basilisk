@@ -9,12 +9,17 @@ pub fn run(source: &str) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> 
     Ok(check(&resolved))
 }
 
-/// Run with every Basilisk-only opt-in rule enabled.
+/// Run the checker with the Basilisk-only opt-in rules turned on **in
+/// configuration**.
 ///
-/// The `BSK-`prefixed rules (strict annotations, uv dependency hygiene, stub
-/// suggestions) are off by default so the out-of-the-box experience is pure PEP
-/// conformance. Tests that assert those rules fire must opt in via this helper.
-pub fn run_strict(source: &str) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
+/// Basilisk has **no "strict mode"** — behaviour is driven by configuration
+/// alone. The default configuration enables every PEP rule and nothing else, so
+/// the out-of-the-box experience is pure PEP conformance. The `BSK-`prefixed
+/// house rules (require-annotation, uv dependency hygiene, stub suggestions) are
+/// off by default and a project enables them by setting the corresponding config
+/// keys. This helper applies that opt-in configuration so tests can assert those
+/// rules fire. See [CHKARCH-CONFIGURATION-ONLY].
+pub fn run_with_optin_rules(source: &str) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
     let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
     let config = basilisk_config::BasiliskConfig {

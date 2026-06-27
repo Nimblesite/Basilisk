@@ -9,7 +9,7 @@ fn e0001_missing_param_annotation() -> Result<(), Box<dyn std::error::Error>> {
 def greet(name):
     return name
 ";
-    let diags = run_strict(source)?;
+    let diags = run_with_optin_rules(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0001"),
         "unannotated parameter should fire E0001, got: {:?}",
@@ -24,7 +24,7 @@ fn e0001_annotated_param_no_fire() -> Result<(), Box<dyn std::error::Error>> {
 def greet(name: str) -> str:
     return name
 ";
-    let diags = run_strict(source)?;
+    let diags = run_with_optin_rules(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0001"),
         "annotated parameter should not fire E0001"
@@ -39,7 +39,7 @@ class Foo:
     def method(self) -> None:
         pass
 ";
-    let diags = run_strict(source)?;
+    let diags = run_with_optin_rules(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0001"),
         "self parameter should not fire E0001"
@@ -55,7 +55,7 @@ class Foo:
     def method(cls) -> None:
         pass
 ";
-    let diags = run_strict(source)?;
+    let diags = run_with_optin_rules(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0001"),
         "cls parameter should not fire E0001"
@@ -69,7 +69,7 @@ fn e0001_multiple_unannotated_params() -> Result<(), Box<dyn std::error::Error>>
 def add(a, b):
     return a + b
 ";
-    let diags = run_strict(source)?;
+    let diags = run_with_optin_rules(source)?;
     let e0001_count = codes(&diags).iter().filter(|c| **c == "BSK-E0001").count();
     assert!(
         e0001_count >= 2,

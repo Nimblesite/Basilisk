@@ -22,7 +22,7 @@ fn e0004_unannotated_vararg_fires() -> Result<(), Box<dyn std::error::Error>> {
 def func(*args) -> None:
     pass
 ";
-    let diags = run(source)?;
+    let diags = run_with_optin_rules(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0004"),
         "unannotated *args should fire E0004, got: {:?}",
@@ -37,7 +37,7 @@ fn e0004_annotated_vararg_no_diagnostic() -> Result<(), Box<dyn std::error::Erro
 def func(*args: int) -> None:
     pass
 ";
-    let diags = run(source)?;
+    let diags = run_with_optin_rules(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0004"),
         "annotated *args should not fire E0004"
@@ -51,7 +51,7 @@ fn e0004_unannotated_kwarg_fires() -> Result<(), Box<dyn std::error::Error>> {
 def func(**kwargs) -> None:
     pass
 ";
-    let diags = run(source)?;
+    let diags = run_with_optin_rules(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0004"),
         "unannotated **kwargs should fire E0004, got: {:?}",

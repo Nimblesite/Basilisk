@@ -10,6 +10,7 @@ fn run_with_python_version(source: &str, version: &str) -> Vec<Diagnostic> {
     let resolved = resolve(&parsed).unwrap();
     let config = basilisk_config::BasiliskConfig {
         python_version: Some(version.to_owned()),
+        strict_annotations: true,
         ..Default::default()
     };
     basilisk_checker::check_with_config(&resolved, &config)
@@ -38,7 +39,7 @@ class Child(Base):
     def process(self) -> None:
         pass
 ";
-    let diags = run_strict(source)?;
+    let diags = run_with_optin_rules(source)?;
     assert!(
         codes(&diags).contains(&"BSK-E0025"),
         "overriding method without @override should fire E0025, got: {:?}",
@@ -61,7 +62,7 @@ class Child(Base):
     def process(self) -> None:
         pass
 ";
-    let diags = run_strict(source)?;
+    let diags = run_with_optin_rules(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0025"),
         "method with @override should not fire E0025"
@@ -80,7 +81,7 @@ class Child(Base):
     def other_method(self) -> None:
         pass
 ";
-    let diags = run_strict(source)?;
+    let diags = run_with_optin_rules(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0025"),
         "different method name should not fire E0025"
@@ -135,7 +136,7 @@ class Impl(MyProto):
     def method(self) -> None:
         pass
 ";
-    let diags = run_strict(source)?;
+    let diags = run_with_optin_rules(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0025"),
         "Protocol implementation should be exempt from E0025"

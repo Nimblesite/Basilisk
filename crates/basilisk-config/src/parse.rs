@@ -123,7 +123,7 @@ impl Default for BasiliskConfig {
 }
 
 impl BasiliskConfig {
-    /// Check whether imports_unresolved should be suppressed for a given module.
+    /// Check whether `imports_unresolved` should be suppressed for a given module.
     #[must_use]
     pub fn should_ignore_missing_stubs(&self, module_name: &str) -> bool {
         crate::overrides::find_module_override(module_name, &self.per_module_overrides)
