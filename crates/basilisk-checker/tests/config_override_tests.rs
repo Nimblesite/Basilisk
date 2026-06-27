@@ -30,23 +30,40 @@ fn check_default(source: &str, path: &str) -> Vec<basilisk_checker::Diagnostic> 
     check_with(source, path, &BasiliskConfig::default())
 }
 
+/// Config that opts into the annotation house rules (`strict_annotations = true`).
+///
+/// `BSK-E0001`/`BSK-W0050` and friends are off by default — the default config is
+/// pure PEP conformance. They fire only once a project enables them, which is the
+/// precondition for any severity/path override to have something to act on. These
+/// tests use `..annotations_on()` to layer overrides on top. Basilisk has no
+/// modes; this is just configuration. See [CHKARCH-CONFIGURATION-ONLY].
+fn annotations_on() -> BasiliskConfig {
+    BasiliskConfig {
+        strict_annotations: true,
+        ..Default::default()
+    }
+}
+
 #[test]
 fn global_rule_severity_override_disables_rule() {
     let source = "def foo(x):\n    return x\n";
-    let default_diags = check_default(source, "test.py");
-    let e0001_count = default_diags
+    let enabled_diags = check_with(source, "test.py", &annotations_on());
+    let e0001_count = enabled_diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .count();
-    assert!(e0001_count > 0, "E0001 should fire without config override");
+    assert!(
+        e0001_count > 0,
+        "BSK-E0001 should fire once the house rule is enabled in config"
+    );
 
     let config = BasiliskConfig {
         rules: HashMap::from([("BSK-E0001".to_owned(), RuleSeverity::Disabled)]),
-        ..Default::default()
+        ..annotations_on()
     };
     let diags = check_with(source, "test.py", &config);
     let e0001_after = diags.iter().filter(|d| d.code.code == "BSK-E0001").count();
-    assert_eq!(e0001_after, 0, "E0001 should be suppressed when disabled");
+    assert_eq!(e0001_after, 0, "BSK-E0001 should be suppressed when disabled");
 }
 
 #[test]
@@ -54,19 +71,19 @@ fn global_rule_severity_override_demotes_to_warning() {
     let source = "def foo(x):\n    return x\n";
     let config = BasiliskConfig {
         rules: HashMap::from([("BSK-E0001".to_owned(), RuleSeverity::Warning)]),
-        ..Default::default()
+        ..annotations_on()
     };
     let diags = check_with(source, "test.py", &config);
     let e0001_diags: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
-    assert!(!e0001_diags.is_empty(), "E0001 should still fire");
+    assert!(!e0001_diags.is_empty(), "BSK-E0001 should still fire");
     for diag in &e0001_diags {
         assert_eq!(
             diag.severity,
             basilisk_checker::Severity::Warning,
-            "E0001 should be demoted to warning"
+            "BSK-E0001 should be demoted to warning"
         );
     }
 }
@@ -76,45 +93,48 @@ fn global_rule_severity_override_demotes_to_info() {
     let source = "def foo(x):\n    return x\n";
     let config = BasiliskConfig {
         rules: HashMap::from([("BSK-E0001".to_owned(), RuleSeverity::Info)]),
-        ..Default::default()
+        ..annotations_on()
     };
     let diags = check_with(source, "test.py", &config);
     let e0001_diags: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
-    assert!(!e0001_diags.is_empty(), "E0001 should still fire");
+    assert!(!e0001_diags.is_empty(), "BSK-E0001 should still fire");
     for diag in &e0001_diags {
         assert_eq!(
             diag.severity,
             basilisk_checker::Severity::Info,
-            "E0001 should be demoted to info"
+            "BSK-E0001 should be demoted to info"
         );
     }
 }
 
 #[test]
 fn global_rule_severity_override_promotes_warning_to_error() {
-    // A warning-level rule (BSK-W0050 redundant annotation) must be promotable
-    // to a hard ERROR via `rules."BSK-W0050" = "error"`. This lets a project
-    // dial strictness UP — e.g. make "no type stubs" a red error — not just
-    // down. Today the `Error` override is a silent no-op, so this fails.
+    // BSK-W0050 (redundant annotation) is a house rule a project opts into. Once
+    // enabled it defaults to a warning, and `rules."BSK-W0050" = "error"` must be
+    // able to promote it to a hard ERROR — letting a project dial severity UP, not
+    // just down. See [CHKARCH-CONFIGURATION-ONLY].
     let source = "x: int = 42\n";
-    let default_diags = check_default(source, "test.py");
-    let w0050_default: Vec<_> = default_diags
+    let enabled_diags = check_with(source, "test.py", &annotations_on());
+    let w0050_default: Vec<_> = enabled_diags
         .iter()
         .filter(|d| d.code.code == "BSK-W0050")
         .collect();
-    assert!(!w0050_default.is_empty(), "W0050 should fire by default");
+    assert!(
+        !w0050_default.is_empty(),
+        "BSK-W0050 should fire once the house rule is enabled in config"
+    );
     assert_eq!(
         w0050_default[0].severity,
         basilisk_checker::Severity::Warning,
-        "W0050 defaults to warning"
+        "BSK-W0050 defaults to warning"
     );
 
     let config = BasiliskConfig {
         rules: HashMap::from([("BSK-W0050".to_owned(), RuleSeverity::Error)]),
-        ..Default::default()
+        ..annotations_on()
     };
     let diags = check_with(source, "test.py", &config);
     let promoted: Vec<_> = diags
@@ -123,13 +143,13 @@ fn global_rule_severity_override_promotes_warning_to_error() {
         .collect();
     assert!(
         !promoted.is_empty(),
-        "W0050 should still fire when promoted to error"
+        "BSK-W0050 should still fire when promoted to error"
     );
     for diag in &promoted {
         assert_eq!(
             diag.severity,
             basilisk_checker::Severity::Error,
-            "W0050 should be promoted to a hard error via config"
+            "BSK-W0050 should be promoted to a hard error via config"
         );
     }
 }
@@ -138,12 +158,12 @@ fn global_rule_severity_override_promotes_warning_to_error() {
 fn per_path_override_disables_rule() {
     let source = "def foo(x):\n    return x\n";
 
-    // Without override, E0001 fires.
-    let default_diags = check_default(source, "vendor/lib/foo.py");
-    let has_e0001 = default_diags.iter().any(|d| d.code.code == "BSK-E0001");
-    assert!(has_e0001, "E0001 should fire without path override");
+    // With the house rule enabled but no path override, BSK-E0001 fires.
+    let enabled_diags = check_with(source, "vendor/lib/foo.py", &annotations_on());
+    let has_e0001 = enabled_diags.iter().any(|d| d.code.code == "BSK-E0001");
+    assert!(has_e0001, "BSK-E0001 should fire without path override");
 
-    // With per-path override disabling E0001 for vendor/**.
+    // With per-path override disabling BSK-E0001 for vendor/**.
     let config = BasiliskConfig {
         per_path_overrides: HashMap::from([(
             "vendor/**".to_owned(),
@@ -152,11 +172,11 @@ fn per_path_override_disables_rule() {
                 rule_overrides: HashMap::new(),
             },
         )]),
-        ..Default::default()
+        ..annotations_on()
     };
     let diags = check_with(source, "vendor/lib/foo.py", &config);
     let has_e0001_after = diags.iter().any(|d| d.code.code == "BSK-E0001");
-    assert!(!has_e0001_after, "E0001 should be disabled for vendor/**");
+    assert!(!has_e0001_after, "BSK-E0001 should be disabled for vendor/**");
 }
 
 #[test]

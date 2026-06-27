@@ -14,7 +14,7 @@ mod common;
 use common::run;
 
 // ---------------------------------------------------------------------------
-// E0070 — Never type compatibility violations
+// Never type compatibility violations
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -32,7 +32,7 @@ fn never_type_compat() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0071 — Historical positional-only parameter violations
+// Historical positional-only parameter violations
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -50,7 +50,7 @@ fn historical_positional() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0072 — No matching overload for subscript indexing
+// No matching overload for subscript indexing
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -68,7 +68,7 @@ fn no_matching_overload() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0073 — NamedTuple-to-tuple type incompatibility
+// NamedTuple-to-tuple type incompatibility
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -86,7 +86,7 @@ fn namedtuple_tuple_compat() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0074 — Constructor call type mismatch with specialized generic
+// Constructor call type mismatch with specialized generic
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -104,7 +104,7 @@ fn constructor_new_mismatch() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0075 — Incompatible type for Self-typed attribute
+// Incompatible type for Self-typed attribute
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -122,7 +122,7 @@ fn self_type_attr_incompat() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0076 — Overload union expansion failure
+// Overload union expansion failure
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -140,7 +140,7 @@ fn overload_union_expansion() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0077 — Protocol Self-return conformance violation
+// Protocol Self-return conformance violation
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -158,7 +158,7 @@ fn protocol_self_return() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0078 — Self type violations in generics
+// Self type violations in generics
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -176,7 +176,7 @@ fn self_type_violation() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0079 — Module assigned to incompatible protocol type
+// Module assigned to incompatible protocol type
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -194,7 +194,7 @@ fn module_protocol_incompat() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0080 — TypeVar upper bound violation at call site
+// TypeVar upper bound violation at call site
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -212,7 +212,7 @@ fn typevar_bound_violation() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0081 — TypeVarTuple unpack minimum type argument violation
+// TypeVarTuple unpack minimum type argument violation
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -230,7 +230,7 @@ fn typevartuple_unpack_min() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0082 — TypeVarTuple callable/tuple argument mismatch
+// TypeVarTuple callable/tuple argument mismatch
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -248,7 +248,7 @@ fn typevartuple_callable_mismatch() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0083 — TypeVarTuple must be unpacked with * operator
+// TypeVarTuple must be unpacked with * operator
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -266,7 +266,7 @@ fn typevartuple_unpack_required() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0084 — TypeVarTuple variance/bounds/constraints violation
+// TypeVarTuple variance/bounds/constraints violation
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -284,7 +284,7 @@ fn typevartuple_invalid_params() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0085 — TypeVarTuple argument count mismatch
+// TypeVarTuple argument count mismatch
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -302,7 +302,7 @@ fn typevartuple_arg_count() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0086 — Multiple TypeVarTuple declarations in generic
+// Multiple TypeVarTuple declarations in generic
 // ---------------------------------------------------------------------------
 
 #[test]

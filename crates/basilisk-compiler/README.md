@@ -9,7 +9,7 @@ This crate is the **native compilation backend**. It takes fully-typed Python (a
 ## Key concepts
 
 - **Typed Python only** — requires all code to pass Basilisk's strict type checker before compilation.
-- **Ownership-aware** — leverages `basilisk-mojo` ownership annotations for memory management decisions.
+- **Ownership-aware (optional)** — can use the opt-in, off-by-default ownership annotations from the `basilisk-mojo` rules (inspired by Mojo's ownership/immutability ideas) to inform memory-management decisions when present.
 - **Not a replacement for CPython** — an optional compilation target for performance-critical code paths.
 
 ## Dependencies

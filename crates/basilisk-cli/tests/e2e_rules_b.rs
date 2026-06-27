@@ -7,7 +7,7 @@
     clippy::panic,
     clippy::as_conversions
 )]
-//! E2E tests for error codes E0010 through E0025.
+//! E2E tests for error codes E0010 through BSK-E0025.
 //!
 //! Includes both exact-diagnostic tests and presence-check tests for
 //! rules that are partially implemented.
@@ -18,7 +18,7 @@ use basilisk_test_utils::{assert_diagnostics, Expected};
 use common::{fixture, run};
 
 // ---------------------------------------------------------------------------
-// E0010 — import from untyped module
+// import from untyped module
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -33,7 +33,7 @@ fn import_from_untyped_module() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// W0014 — explicit Any without justification (split from E0011)
+// explicit Any without justification (split from E0011)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -42,13 +42,13 @@ fn explicit_any_in_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
         codes.contains(&"BSK-W0014"),
-        "should emit W0014 for explicit Any annotations, got: {diags:#?}"
+        "should emit BSK-W0014 for explicit Any annotations, got: {diags:#?}"
     );
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// W0014 — Any on vararg, kwarg, and return annotation (split from E0011)
+// Any on vararg, kwarg, and return annotation (split from E0011)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -68,7 +68,7 @@ fn any_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0013 — return type mismatch (-> None returning value)
+// return type mismatch (-> None returning value)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -83,7 +83,7 @@ fn none_annotated_returning_value() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0014 — assignment type incompatibility (literal mismatches)
+// assignment type incompatibility (literal mismatches)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -98,7 +98,7 @@ fn literal_assigned_to_incompatible_annotation() -> Result<(), Box<dyn std::erro
 }
 
 // ---------------------------------------------------------------------------
-// E0014 — bytes literal, float literal, and int-to-bytes mismatches
+// bytes literal, float literal, and int-to-bytes mismatches
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -118,7 +118,7 @@ fn bytes_and_float_mismatches() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0015 — invalid type argument count
+// invalid type argument count
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -133,7 +133,7 @@ fn invalid_type_arg_count() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0015 — set, frozenset, and dict with wrong type argument counts
+// set, frozenset, and dict with wrong type argument counts
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -153,7 +153,7 @@ fn set_frozenset_and_dict_wrong_arg_count() -> Result<(), Box<dyn std::error::Er
 }
 
 // ---------------------------------------------------------------------------
-// E0020 — @overload without implementation
+// @overload without implementation
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -168,7 +168,7 @@ fn overload_missing_implementation() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0020 — exact diagnostic: two @overload variants with no implementation
+// exact diagnostic: two @overload variants with no implementation
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -184,7 +184,7 @@ fn exact_diagnostic_for_double() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0021 — overlapping @overload signatures
+// overlapping @overload signatures
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -199,7 +199,7 @@ fn overlapping_overload_signatures() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0021 — exact diagnostics: overlapping overloads also trigger E0001
+// exact diagnostics: overlapping overloads also trigger BSK-E0001
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -221,7 +221,7 @@ fn exact_diagnostics_for_overlapping_overloads() -> Result<(), Box<dyn std::erro
 }
 
 // ---------------------------------------------------------------------------
-// E0023 — non-exhaustive match (no wildcard case)
+// non-exhaustive match (no wildcard case)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -236,7 +236,7 @@ fn match_without_wildcard() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0024 — invalid type form in annotation
+// invalid type form in annotation
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -251,7 +251,7 @@ fn numeric_literal_as_type_annotation() -> Result<(), Box<dyn std::error::Error>
 }
 
 // ---------------------------------------------------------------------------
-// E0024 — numeric literal on vararg, kwarg, and return annotation
+// numeric literal on vararg, kwarg, and return annotation
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -271,7 +271,7 @@ fn numeric_literal_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error
 }
 
 // ---------------------------------------------------------------------------
-// E0025 — method override without @override decorator
+// method override without @override decorator
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -280,7 +280,7 @@ fn override_without_decorator() -> Result<(), Box<dyn std::error::Error>> {
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
         codes.contains(&"BSK-E0025"),
-        "should emit E0025 for override without @override, got: {diags:#?}"
+        "should emit BSK-E0025 for override without @override, got: {diags:#?}"
     );
     Ok(())
 }
@@ -290,7 +290,7 @@ fn override_without_decorator() -> Result<(), Box<dyn std::error::Error>> {
 // These tests document desired behavior and fail to mark missing functionality.
 // ---------------------------------------------------------------------------
 
-/// E0012: Argument type mismatch.
+/// Argument type mismatch.
 /// Requires a type inference engine — not implemented in Phase 1.
 #[test]
 fn argument_type_mismatch_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
@@ -302,7 +302,7 @@ fn argument_type_mismatch_not_yet_implemented() -> Result<(), Box<dyn std::error
     Ok(())
 }
 
-/// E0016: Incompatible method override (type-level).
+/// Incompatible method override (type-level).
 /// Requires class hierarchy + type inference — not implemented in Phase 1.
 #[test]
 fn incompatible_method_override_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>>
@@ -315,7 +315,7 @@ fn incompatible_method_override_not_yet_implemented() -> Result<(), Box<dyn std:
     Ok(())
 }
 
-/// E0017: Incompatible variable override.
+/// Incompatible variable override.
 /// Requires type inference for variable types — not implemented in Phase 1.
 #[test]
 fn incompatible_variable_override_not_yet_implemented(
@@ -328,7 +328,7 @@ fn incompatible_variable_override_not_yet_implemented(
     Ok(())
 }
 
-/// E0018: Undefined variable.
+/// Undefined variable.
 /// Requires full scope analysis of expressions — not implemented in Phase 1.
 #[test]
 fn undefined_variable_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
@@ -340,7 +340,7 @@ fn undefined_variable_not_yet_implemented() -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-/// E0019: Unbound variable on some code paths.
+/// Unbound variable on some code paths.
 /// Requires full flow analysis — not implemented in Phase 1.
 #[test]
 fn unbound_variable_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
@@ -352,7 +352,7 @@ fn unbound_variable_not_yet_implemented() -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
-/// E0022: Unhashable type in hash-requiring context.
+/// Unhashable type in hash-requiring context.
 /// Requires type inference — not implemented in Phase 1.
 #[test]
 fn unhashable_type_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {

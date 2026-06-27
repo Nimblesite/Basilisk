@@ -15,7 +15,7 @@ use super::common::*;
 // e0122 (Callable arity deeper), e0102 (`TypeVar` default deeper).
 
 // =============================================================================
-// E0140: Protocol/Callable deep checks
+// Protocol/Callable deep checks
 // =============================================================================
 
 #[test]
@@ -246,7 +246,7 @@ f: MyClass = my_func
 }
 
 // =============================================================================
-// E0115: Deprecated - Try/With statements
+// Deprecated - Try/With statements
 // =============================================================================
 
 #[test]
@@ -348,7 +348,7 @@ if svc.status() == "ok":
 }
 
 // =============================================================================
-// E0144: type() constructor - exercise all paths
+// type() constructor - exercise all paths
 // =============================================================================
 
 #[test]
@@ -389,7 +389,7 @@ y = type("Y", (object,), {"c": 3})
 }
 
 // =============================================================================
-// E0149: PEP 695 scoping - all paths
+// PEP 695 scoping - all paths
 // =============================================================================
 
 #[test]
@@ -456,7 +456,7 @@ def concat(a: U, b: U) -> U:
 }
 
 // =============================================================================
-// E0107: Variance - exercise compose_variance and deeper paths
+// Variance - exercise compose_variance and deeper paths
 // =============================================================================
 
 #[test]
@@ -498,7 +498,7 @@ class Process(Func[int, str]):
 }
 
 // =============================================================================
-// E0111: Constructor - exercise deep paths
+// Constructor - exercise deep paths
 // =============================================================================
 
 #[test]
@@ -555,7 +555,7 @@ class D(C):
 }
 
 // =============================================================================
-// E0138: Dataclass transform - exercise deeper paths
+// Dataclass transform - exercise deeper paths
 // =============================================================================
 
 #[test]
@@ -596,7 +596,7 @@ class User:
 }
 
 // =============================================================================
-// E0131: Yield type - exercise deeper scenarios
+// Yield type - exercise deeper scenarios
 // =============================================================================
 
 #[test]
@@ -631,7 +631,7 @@ def echo() -> Generator[str, str, None]:
 }
 
 // =============================================================================
-// E0130: TypeVar scoping - exercise deeper paths
+// TypeVar scoping - exercise deeper paths
 // =============================================================================
 
 #[test]
@@ -670,7 +670,7 @@ class Container(Generic[T]):
 }
 
 // =============================================================================
-// E0120: Generator - exercise yield from and return paths
+// Generator - exercise yield from and return paths
 // =============================================================================
 
 #[test]
@@ -704,7 +704,7 @@ def main() -> Generator[int, None, str]:
 }
 
 // =============================================================================
-// E0036: ClassVar - exercise scan_source_for_classvar_usage
+// ClassVar - exercise scan_source_for_classvar_usage
 // =============================================================================
 
 #[test]
@@ -735,7 +735,7 @@ class MyClass:
 }
 
 // =============================================================================
-// E0095: InitVar - exercise deeper paths
+// InitVar - exercise deeper paths
 // =============================================================================
 
 #[test]
@@ -758,7 +758,7 @@ class Config:
 }
 
 // =============================================================================
-// E0143: NamedTuple - exercise deeper paths
+// NamedTuple - exercise deeper paths
 // =============================================================================
 
 #[test]
@@ -774,7 +774,7 @@ Color = namedtuple("Color", "r g b")
 }
 
 // =============================================================================
-// E0121: Protocol conformance - exercise deeper checks
+// Protocol conformance - exercise deeper checks
 // =============================================================================
 
 #[test]
@@ -799,7 +799,7 @@ class IntBox:
 }
 
 // =============================================================================
-// E0139: TypeVarTuple - exercise deeper paths
+// TypeVarTuple - exercise deeper paths
 // =============================================================================
 
 #[test]
@@ -820,7 +820,7 @@ t = Tuple(1, "hello", 3.14)
 }
 
 // =============================================================================
-// E0126: Literal string - exercise deeper paths
+// Literal string - exercise deeper paths
 // =============================================================================
 
 #[test]
@@ -846,7 +846,7 @@ x: Literal[True] = False
 }
 
 // =============================================================================
-// E0119: Protocol isinstance - exercise deeper paths
+// Protocol isinstance - exercise deeper paths
 // =============================================================================
 
 #[test]
@@ -867,7 +867,7 @@ if isinstance(x, Sized):
 }
 
 // =============================================================================
-// E0116: NamedTuple definition - exercise deeper paths
+// NamedTuple definition - exercise deeper paths
 // =============================================================================
 
 #[test]
@@ -884,7 +884,7 @@ class Config(NamedTuple):
 }
 
 // =============================================================================
-// E0073: NamedTuple tuple compat - exercise deeper paths
+// NamedTuple tuple compat - exercise deeper paths
 // =============================================================================
 
 #[test]
@@ -903,7 +903,7 @@ p: tuple[int, str] = Person("Alice", 30)
 }
 
 // =============================================================================
-// E0102: TypeVar default - exercise deeper paths
+// TypeVar default - exercise deeper paths
 // =============================================================================
 
 #[test]
@@ -920,7 +920,7 @@ V = TypeVar("V", int, str, default=bytes)
 }
 
 // =============================================================================
-// E0122: Callable arity - exercise deeper paths
+// Callable arity - exercise deeper paths
 // =============================================================================
 
 #[test]

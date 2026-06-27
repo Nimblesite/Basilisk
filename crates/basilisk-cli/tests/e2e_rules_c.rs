@@ -14,7 +14,7 @@ mod common;
 use common::run;
 
 // ---------------------------------------------------------------------------
-// E0026 — TypeVar with single constraint
+// TypeVar with single constraint
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -32,7 +32,7 @@ fn typevar_single_constraint() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0027 — Duplicate TypeVar in Generic[...]
+// Duplicate TypeVar in Generic[...]
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -50,7 +50,7 @@ fn duplicate_typevar_generic() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0029 — Method defined inside a TypedDict
+// Method defined inside a TypedDict
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -68,7 +68,7 @@ fn typeddict_method() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0030 — Non-default TypeVar follows default TypeVar in Generic[...]
+// Non-default TypeVar follows default TypeVar in Generic[...]
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -86,7 +86,7 @@ fn non_default_after_default() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0031 — Invalid cast() call
+// Invalid cast() call
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -104,7 +104,7 @@ fn invalid_cast() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0032 — Invalid keyword argument in TypedDict class
+// Invalid keyword argument in TypedDict class
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -122,7 +122,7 @@ fn typeddict_invalid_keyword() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0033 — Invalid reveal_type() call
+// Invalid reveal_type() call
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -140,7 +140,7 @@ fn invalid_reveal_type() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0034 — @final decorator violations
+// @final decorator violations
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -158,7 +158,7 @@ fn final_class_inherit() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0035 — Required/NotRequired used outside TypedDict
+// Required/NotRequired used outside TypedDict
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -176,7 +176,7 @@ fn required_outside_typeddict() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0036 — ClassVar used in invalid context
+// ClassVar used in invalid context
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -194,7 +194,7 @@ fn classvar_invalid() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0037 — Invalid TypedDict functional syntax
+// Invalid TypedDict functional syntax
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -212,7 +212,7 @@ fn typeddict_functional_invalid() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0038 — Invalid TypedDict inheritance
+// Invalid TypedDict inheritance
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -230,7 +230,7 @@ fn typeddict_inheritance_invalid() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0039 — Invalid assert_type() call
+// Invalid assert_type() call
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -248,7 +248,7 @@ fn invalid_assert_type() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0040 — Invalid Enum subclassing
+// Invalid Enum subclassing
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -266,7 +266,7 @@ fn enum_subclass() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0041 — Too few arguments in function call
+// Too few arguments in function call
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -284,7 +284,7 @@ fn too_few_args() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0042 — PEP 695 type parameter mixed with traditional TypeVars
+// PEP 695 type parameter mixed with traditional TypeVars
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -302,7 +302,7 @@ fn pep695_mixed_typevar() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0043 — Non-TypeVar argument in Generic[...]
+// Non-TypeVar argument in Generic[...]
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -320,7 +320,7 @@ fn non_typevar_in_generic() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0044 — Final used in invalid position
+// Final used in invalid position
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -338,7 +338,7 @@ fn final_invalid_position() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0045 — Invalid first argument to Annotated[...]
+// Invalid first argument to Annotated[...]
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -356,7 +356,7 @@ fn annotated_invalid() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0046 — Enum member annotated with explicit type
+// Enum member annotated with explicit type
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -374,7 +374,7 @@ fn enum_member_annotated() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0047 — Invalid type expression in annotation
+// Invalid type expression in annotation
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -392,7 +392,7 @@ fn invalid_type_expr() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0048 — Invalid RHS for TypeAlias
+// Invalid RHS for TypeAlias
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -410,7 +410,7 @@ fn typealias_invalid_rhs() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0049 — Multiple unbounded tuple components
+// Multiple unbounded tuple components
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -428,7 +428,7 @@ fn multiple_unbounded_tuple() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0050 — Invalid NewType call
+// Invalid NewType call
 // ---------------------------------------------------------------------------
 
 #[test]

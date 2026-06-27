@@ -3,7 +3,7 @@ use super::common::*;
 
 // Coverage boost tests batch 34: targeting resolver-dependent uncovered branches.
 
-// ── E0107: Variance — class with base_subscripts ──
+// ── Variance — class with base_subscripts ──
 
 #[test]
 fn covariant_in_invariant_base() -> Result<(), Box<dyn std::error::Error>> {
@@ -75,7 +75,7 @@ class Multi(First[T_co], Second[T_co], Generic[T_co]):
     Ok(())
 }
 
-// ── E0115: Deprecated — in-module usage ──
+// ── Deprecated — in-module usage ──
 
 #[test]
 fn deprecated_in_same_module() -> Result<(), Box<dyn std::error::Error>> {
@@ -162,7 +162,7 @@ x = OldClass()
     Ok(())
 }
 
-// ── E0137: Generic protocol — subscripted assignment ──
+// ── Generic protocol — subscripted assignment ──
 
 #[test]
 fn subscripted_protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
@@ -233,7 +233,7 @@ y: Clonable = Bad()
     Ok(())
 }
 
-// ── E0148: Generic type arg — constrained/subscript/metaclass ──
+// ── Generic type arg — constrained/subscript/metaclass ──
 
 #[test]
 fn constrained_typevar_mixed_call() -> Result<(), Box<dyn std::error::Error>> {
@@ -297,7 +297,7 @@ class MyClass2(metaclass=GenericMeta):
     Ok(())
 }
 
-// ── E0130: TypeVar scope — line-by-line scope tracking ──
+// ── TypeVar scope — line-by-line scope tracking ──
 
 #[test]
 fn nested_class_typevar_scope() -> Result<(), Box<dyn std::error::Error>> {
@@ -368,7 +368,7 @@ c.transform("wrong")
     Ok(())
 }
 
-// ── E0111: Constructor — more patterns ──
+// ── Constructor — more patterns ──
 
 #[test]
 fn specialized_generic_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -441,7 +441,7 @@ p7 = Person("Frank", 1, True, "extra")
     Ok(())
 }
 
-// ── E0097: Protocol __init__ — deeper body walking ──
+// ── Protocol __init__ — deeper body walking ──
 
 #[test]
 fn protocol_init_for_loop_body() -> Result<(), Box<dyn std::error::Error>> {
@@ -468,7 +468,7 @@ class MyProto(Protocol):
     Ok(())
 }
 
-// ── E0102: TypeVar default — more patterns ──
+// ── TypeVar default — more patterns ──
 
 #[test]
 fn typevar_default_bound_compat() -> Result<(), Box<dyn std::error::Error>> {
@@ -497,7 +497,7 @@ D3 = TypeVar("D3", default=D2)
     Ok(())
 }
 
-// ── E0085: TypeVarTuple — more patterns ──
+// ── TypeVarTuple — more patterns ──
 
 #[test]
 fn typevartuple_mixed_params() -> Result<(), Box<dyn std::error::Error>> {
@@ -520,7 +520,7 @@ t3 = Tensor[str, int, int, int]("", 1, 2, 3)
     Ok(())
 }
 
-// ── E0119: Protocol isinstance — more patterns ──
+// ── Protocol isinstance — more patterns ──
 
 #[test]
 fn protocol_isinstance_data_protocol() -> Result<(), Box<dyn std::error::Error>> {
@@ -561,7 +561,7 @@ issubclass(str, MethodProto)
     Ok(())
 }
 
-// ── E0146: Protocol class object — more patterns ──
+// ── Protocol class object — more patterns ──
 
 #[test]
 fn protocol_type_annotation() -> Result<(), Box<dyn std::error::Error>> {
@@ -598,7 +598,7 @@ y: type[Serializable] = JsonSerializer
     Ok(())
 }
 
-// ── E0138: Frozen dataclass — with ordering ──
+// ── Frozen dataclass — with ordering ──
 
 #[test]
 fn frozen_with_order() -> Result<(), Box<dyn std::error::Error>> {
@@ -653,7 +653,7 @@ a.x = 10
     Ok(())
 }
 
-// ── E0140: Callable — more edge cases ──
+// ── Callable — more edge cases ──
 
 #[test]
 fn callable_protocol_form() -> Result<(), Box<dyn std::error::Error>> {
@@ -681,7 +681,7 @@ d: Callable[[int, str, float], bool] = lambda x, y: True
     Ok(())
 }
 
-// ── E0120: Generator — yield from ──
+// ── Generator — yield from ──
 
 #[test]
 fn generator_yield_from() -> Result<(), Box<dyn std::error::Error>> {
@@ -708,7 +708,7 @@ def gen_async_iter():
     Ok(())
 }
 
-// ── E0143: NamedTuple — delete/unpack ──
+// ── NamedTuple — delete/unpack ──
 
 #[test]
 fn namedtuple_delete_and_unpack() -> Result<(), Box<dyn std::error::Error>> {
@@ -739,7 +739,7 @@ val2 = v[-4]
     Ok(())
 }
 
-// ── E0095: InitVar — attribute access ──
+// ── InitVar — attribute access ──
 
 #[test]
 fn initvar_attribute_access() -> Result<(), Box<dyn std::error::Error>> {
@@ -766,7 +766,7 @@ w.verbose
     Ok(())
 }
 
-// ── E0108: Slots — __slots__ access ──
+// ── Slots — __slots__ access ──
 
 #[test]
 fn slots_access_on_non_slots() -> Result<(), Box<dyn std::error::Error>> {

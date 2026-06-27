@@ -6,7 +6,7 @@ use super::common::*;
 // and the long tail of near-complete rule files.
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0115: Deprecated usage — comprehensive coverage
+// Deprecated usage — comprehensive coverage
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Tests that @deprecated functions are detected when called.
@@ -271,7 +271,7 @@ Library.old_func()
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0130: TypeVar scoping — comprehensive coverage
+// TypeVar scoping — comprehensive coverage
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Tests nested class using outer class `TypeVar` in base.
@@ -518,7 +518,7 @@ Pair[int, str](1, \"ok\")
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0148: Generic type argument violations — comprehensive
+// Generic type argument violations — comprehensive
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Tests constrained `TypeVar` mismatch at call site.
@@ -602,7 +602,7 @@ multi(1.0, (1, 2))
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0048: TypeAlias — additional coverage
+// TypeAlias — additional coverage
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Tests `TypeAlias` with `from typing import TypeAlias as TA`.
@@ -755,7 +755,7 @@ z = IntOrStr()
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0150: Dead branch variables — inside function bodies
+// Dead branch variables — inside function bodies
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Tests version guard inside function.
@@ -934,7 +934,7 @@ def check():
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0014: TypeForm — comprehensive
+// TypeForm — comprehensive
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Tests `TypeForm` literal assignments.
@@ -1047,7 +1047,7 @@ expects_typeform(int)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0149: PEP 695 — scoping violations
+// PEP 695 — scoping violations
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -1123,7 +1123,7 @@ class Container[T]:
 // Additional coverage targets for various rules
 // ═══════════════════════════════════════════════════════════════════════
 
-/// E0097: Protocol __init__ with nested body walking.
+/// Protocol __init__ with nested body walking.
 #[test]
 fn protocol_init_nested_body() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -1146,7 +1146,7 @@ class Proto(Protocol):
     Ok(())
 }
 
-/// E0107: Variance with nested generics.
+/// Variance with nested generics.
 #[test]
 fn variance_nested_generics() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -1182,7 +1182,7 @@ class Multi(Base[T_co], Covariant[T_co], Generic[T_co]):
     Ok(())
 }
 
-/// E0137: Generic protocol violations.
+/// Generic protocol violations.
 #[test]
 fn generic_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -1214,7 +1214,7 @@ z: Container[str] = BadContainer()
     Ok(())
 }
 
-/// E0137: Protocol with Generic[T] both bases.
+/// Protocol with Generic[T] both bases.
 #[test]
 fn protocol_generic_both() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -1230,7 +1230,7 @@ class Readable(Protocol[T_co], Generic[T_co]):
     Ok(())
 }
 
-/// E0137: Self-typed protocol method.
+/// Self-typed protocol method.
 #[test]
 fn self_typed_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -1257,7 +1257,7 @@ y: Clonable = Bad()
     Ok(())
 }
 
-/// E0111: Constructor errors — various patterns.
+/// Constructor errors — various patterns.
 #[test]
 fn constructor_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -1295,7 +1295,7 @@ Data(x=1, z=2)
     Ok(())
 }
 
-/// E0111: Generic constructor with self annotation.
+/// Generic constructor with self annotation.
 #[test]
 fn self_annotation_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"

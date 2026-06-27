@@ -74,7 +74,7 @@ impl Rule for UnusedDependency {
         // Implementation approach:
         // 1. Collect all root import modules across the workspace
         // 2. Compare against PackageRegistry direct deps
-        // 3. Emit W0012 for direct deps with no matching import
+        // 3. Emit BSK-W0012 for direct deps with no matching import
     }
 }
 

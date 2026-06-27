@@ -111,7 +111,7 @@ fn test_w0050_tuple_literal_no_warning() {
 }
 
 // Issue #110: the annotation on a Pydantic/dataclass/attrs field is load-bearing —
-// removing it deletes the field. W0050 must never fire there.
+// removing it deletes the field. BSK-W0050 must never fire there.
 
 #[test]
 fn test_w0050_pydantic_basemodel_field_not_flagged() {
@@ -123,7 +123,7 @@ fn test_w0050_pydantic_basemodel_field_not_flagged() {
     .unwrap();
     assert!(
         !diags.iter().any(|d| d.code.code == "BSK-W0050"),
-        "W0050 on a BaseModel field deletes the field when autofixed"
+        "BSK-W0050 on a BaseModel field deletes the field when autofixed"
     );
 }
 
@@ -139,7 +139,7 @@ fn test_w0050_pydantic_basemodel_transitive_subclass_field_not_flagged() {
     .unwrap();
     assert!(
         !diags.iter().any(|d| d.code.code == "BSK-W0050"),
-        "W0050 on a transitive BaseModel subclass field deletes the field when autofixed"
+        "BSK-W0050 on a transitive BaseModel subclass field deletes the field when autofixed"
     );
 }
 
@@ -154,7 +154,7 @@ fn test_w0050_dataclass_field_not_flagged() {
     .unwrap();
     assert!(
         !diags.iter().any(|d| d.code.code == "BSK-W0050"),
-        "W0050 on a dataclass field turns an init param into an inert class attribute"
+        "BSK-W0050 on a dataclass field turns an init param into an inert class attribute"
     );
 }
 
@@ -214,6 +214,6 @@ fn test_w0050_pydantic_dataclasses_dotted_decorator_field_not_flagged() {
     .unwrap();
     assert!(
         !diags.iter().any(|d| d.code.code == "BSK-W0050"),
-        "W0050 must not fire on pydantic dataclass fields (issue #39)"
+        "BSK-W0050 must not fire on pydantic dataclass fields (issue #39)"
     );
 }

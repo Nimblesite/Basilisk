@@ -17,7 +17,7 @@ Basilisk 通过 `pyproject.toml` 进行配置。所有设置都在 `[tool.basili
 python-version = "3.12"
 ```
 
-这就是您所需要的全部。Basilisk 从当前目录查找 Python 文件并应用所有规则。
+这就是您所需要的全部。Basilisk 从当前目录查找 Python 文件并应用其默认规则集——**核心 PEP 符合性规则**。超出规范的额外 Basilisk 规则是可选的；当你想要比规范更严格的检查时再启用它们。
 
 ## 完整配置示例
 
@@ -138,4 +138,4 @@ data = unsafe_cast(value)  # basilisk: ignore -- third-party code, cannot type
 
 Basilisk 从被检查文件的目录开始搜索 `pyproject.toml`，向上遍历到文件系统根目录。使用第一个包含 `[tool.basilisk]` 部分的 `pyproject.toml`。
 
-如果未找到配置文件，Basilisk 使用默认值：所有规则启用，`python-version = "3.12"`，检查当前目录。
+如果未找到配置文件，Basilisk 使用默认值：启用**核心 PEP 符合性规则集**（额外的 Basilisk 规则保持可选），`python-version = "3.12"`，检查当前目录。

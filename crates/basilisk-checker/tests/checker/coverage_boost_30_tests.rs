@@ -6,7 +6,7 @@ use super::common::*;
 // e0036 `ClassVar`, e0075 Self attribute.
 
 // =============================================================================
-// E0107: Variance incompatibility - deeper paths
+// Variance incompatibility - deeper paths
 // =============================================================================
 
 #[test]
@@ -77,7 +77,7 @@ class Wrapper(Generic[T_co]):
 }
 
 // =============================================================================
-// E0137: Generic protocol - deeper paths
+// Generic protocol - deeper paths
 // =============================================================================
 
 #[test]
@@ -127,7 +127,7 @@ class BadContainer:
 }
 
 // =============================================================================
-// E0139: TypeVarTuple specialization - deeper paths
+// TypeVarTuple specialization - deeper paths
 // =============================================================================
 
 #[test]
@@ -167,7 +167,7 @@ x: Plain[*tuple[int, str]]
 }
 
 // =============================================================================
-// E0140: Callable assignment - deeper paths
+// Callable assignment - deeper paths
 // =============================================================================
 
 #[test]
@@ -213,7 +213,7 @@ y: Callable[[int], str] = my_func
 }
 
 // =============================================================================
-// E0047: Invalid type expression - deeper
+// Invalid type expression - deeper
 // =============================================================================
 
 #[test]
@@ -254,7 +254,7 @@ def g(a: {int: str}) -> None:
 }
 
 // =============================================================================
-// E0015: Generic type arg count - deeper Callable validation
+// Generic type arg count - deeper Callable validation
 // =============================================================================
 
 #[test]
@@ -301,7 +301,7 @@ y: Tuple[int, str, ...] = (1, "a")
 }
 
 // =============================================================================
-// E0113: TypeIs inconsistent narrowing - deeper
+// TypeIs inconsistent narrowing - deeper
 // =============================================================================
 
 #[test]
@@ -337,7 +337,7 @@ def is_int(x: Optional[int]) -> TypeIs[str]:
 }
 
 // =============================================================================
-// E0111: Constructor errors - deeper
+// Constructor errors - deeper
 // =============================================================================
 
 #[test]
@@ -395,7 +395,7 @@ obj = MyClass(42)
 }
 
 // =============================================================================
-// E0036: ClassVar deeper - self.attr with ClassVar annotation
+// ClassVar deeper - self.attr with ClassVar annotation
 // =============================================================================
 
 #[test]
@@ -432,7 +432,7 @@ class Foo:
 }
 
 // =============================================================================
-// E0075: Self attr incompatibility - deeper paths
+// Self attr incompatibility - deeper paths
 // =============================================================================
 
 #[test]

@@ -56,7 +56,7 @@ pub struct BasiliskConfig {
     /// Maps to `basilisk.uv.stubSuggestions` in the LSP config.
     pub uv_stub_suggestions: bool,
 
-    /// Whether to emit dependency hygiene diagnostics (BSK-W0011, W0012, W0013).
+    /// Whether to emit dependency hygiene diagnostics (BSK-W0011, BSK-W0012, BSK-W0013).
     ///
     /// When `true`, warns about undeclared transitive dependencies, unused
     /// declared dependencies, and stale lock files. Disabled by default.
@@ -64,7 +64,7 @@ pub struct BasiliskConfig {
     pub uv_dependency_diagnostics: bool,
 
     /// Whether to emit Basilisk's opinionated strict-annotation diagnostics
-    /// (BSK-E0001..E0005, BSK-E0025, BSK-W0014, BSK-W0040, BSK-W0050).
+    /// (BSK-E0001..BSK-E0005, BSK-E0025, BSK-W0014, BSK-W0040, BSK-W0050).
     ///
     /// These `BSK-`prefixed rules enforce stricter-than-PEP discipline (mandatory
     /// parameter/return/variable/attribute annotations, mandatory `@override`,

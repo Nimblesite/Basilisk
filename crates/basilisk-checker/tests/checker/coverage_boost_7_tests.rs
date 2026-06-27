@@ -5,7 +5,7 @@ use super::common::*;
 // Focus: e0149, e0144, e0111, e0120, e0138, e0131, e0119, e0122, e0143,
 //        e0121, e0095, e0139, e0126, e0063, e0073, e0112, e0096
 
-// --- E0149: PEP 695 type param scoping (171 uncovered) ---
+// --- PEP 695 type param scoping (171 uncovered) ---
 
 #[test]
 fn type_param_shadowing() -> Result<(), Box<dyn std::error::Error>> {
@@ -72,7 +72,7 @@ def outer(x: T) -> T:
     Ok(())
 }
 
-// --- E0144: type() call constructor (155 uncovered) ---
+// --- type() call constructor (155 uncovered) ---
 
 #[test]
 fn type_three_arg() -> Result<(), Box<dyn std::error::Error>> {
@@ -122,7 +122,7 @@ Bad = type("Bad", (object,), [1, 2, 3])
     Ok(())
 }
 
-// --- E0111: Constructor call errors (147 uncovered) ---
+// --- Constructor call errors (147 uncovered) ---
 
 #[test]
 fn missing_required_arg() -> Result<(), Box<dyn std::error::Error>> {
@@ -211,7 +211,7 @@ q = Point(x=1, y=2)
     Ok(())
 }
 
-// --- E0120: Generator return type (131 uncovered) ---
+// --- Generator return type (131 uncovered) ---
 
 #[test]
 fn generator_wrong_return_type() -> Result<(), Box<dyn std::error::Error>> {
@@ -285,7 +285,7 @@ def gen() -> Iterable[int]:
     Ok(())
 }
 
-// --- E0138: Dataclass transform (128 uncovered) ---
+// --- Dataclass transform (128 uncovered) ---
 
 #[test]
 fn metaclass_transform() -> Result<(), Box<dyn std::error::Error>> {
@@ -346,7 +346,7 @@ class Config:
     Ok(())
 }
 
-// --- E0131: Generator yield type (121 uncovered) ---
+// --- Generator yield type (121 uncovered) ---
 
 #[test]
 fn yield_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -388,7 +388,7 @@ def gen() -> Generator[int, str, None]:
     Ok(())
 }
 
-// --- E0119: Protocol isinstance overlap (108 uncovered) ---
+// --- Protocol isinstance overlap (108 uncovered) ---
 
 #[test]
 fn protocol_isinstance_check() -> Result<(), Box<dyn std::error::Error>> {
@@ -427,7 +427,7 @@ if isinstance(x, HasLen) and isinstance(x, HasStr):
     Ok(())
 }
 
-// --- E0122: Callable arity (100 uncovered) ---
+// --- Callable arity (100 uncovered) ---
 
 #[test]
 fn too_many_params() -> Result<(), Box<dyn std::error::Error>> {
@@ -497,7 +497,7 @@ takes_nullary(no_args)
     Ok(())
 }
 
-// --- E0143: NamedTuple usage (98 uncovered) ---
+// --- NamedTuple usage (98 uncovered) ---
 
 #[test]
 fn namedtuple_functional_syntax() -> Result<(), Box<dyn std::error::Error>> {
@@ -559,7 +559,7 @@ p = Point("wrong", "types")
     Ok(())
 }
 
-// --- E0121: Protocol conformance (92 uncovered) ---
+// --- Protocol conformance (92 uncovered) ---
 
 #[test]
 fn protocol_wrong_return_type() -> Result<(), Box<dyn std::error::Error>> {
@@ -627,7 +627,7 @@ use_named(GoodImpl())
     Ok(())
 }
 
-// --- E0095: InitVar field (91 uncovered) ---
+// --- InitVar field (91 uncovered) ---
 
 #[test]
 fn initvar_with_type() -> Result<(), Box<dyn std::error::Error>> {
@@ -667,7 +667,7 @@ class Config:
     Ok(())
 }
 
-// --- E0139: TypeVarTuple specialization (90 uncovered) ---
+// --- TypeVarTuple specialization (90 uncovered) ---
 
 #[test]
 fn typevartuple_generic_alias() -> Result<(), Box<dyn std::error::Error>> {
@@ -699,7 +699,7 @@ def func(*args: Unpack[tuple[int, str]]) -> None:
     Ok(())
 }
 
-// --- E0126: Literal string assignment (85 uncovered) ---
+// --- Literal string assignment (85 uncovered) ---
 
 #[test]
 fn literal_string_valid() -> Result<(), Box<dyn std::error::Error>> {
@@ -740,7 +740,7 @@ y: Literal[1] = 2
     Ok(())
 }
 
-// --- E0063: Non-hashable dataclass (84 uncovered) ---
+// --- Non-hashable dataclass (84 uncovered) ---
 
 #[test]
 fn unhashable_eq_no_frozen() -> Result<(), Box<dyn std::error::Error>> {
@@ -790,7 +790,7 @@ class Point:
     Ok(())
 }
 
-// --- E0073: NamedTuple tuple compat (75 uncovered) ---
+// --- NamedTuple tuple compat (75 uncovered) ---
 
 #[test]
 fn namedtuple_as_tuple() -> Result<(), Box<dyn std::error::Error>> {
@@ -830,7 +830,7 @@ takes_int_tuple(p)
     Ok(())
 }
 
-// --- E0112: TypeGuard callable return (75 uncovered) ---
+// --- TypeGuard callable return (75 uncovered) ---
 
 #[test]
 fn typeguard_callable_return() -> Result<(), Box<dyn std::error::Error>> {
@@ -866,7 +866,7 @@ takes_checker(is_str)
     Ok(())
 }
 
-// --- E0096: Dataclass default factory (37 uncovered) ---
+// --- Dataclass default factory (37 uncovered) ---
 
 #[test]
 fn field_with_default_factory() -> Result<(), Box<dyn std::error::Error>> {
@@ -909,7 +909,7 @@ class Bad:
     Ok(())
 }
 
-// --- E0130: TypeVar scoping additional (102 uncovered) ---
+// --- TypeVar scoping additional (102 uncovered) ---
 
 #[test]
 fn typevar_in_nested_class() -> Result<(), Box<dyn std::error::Error>> {
@@ -944,7 +944,7 @@ class Second(Generic[T]):
     Ok(())
 }
 
-// --- E0050: Invalid newtype additional ---
+// --- Invalid newtype additional ---
 
 #[test]
 fn newtype_valid() -> Result<(), Box<dyn std::error::Error>> {
@@ -969,7 +969,7 @@ Bad = NewType('Bad', 42)
     Ok(())
 }
 
-// --- E0145: Invalid type bracket additional ---
+// --- Invalid type bracket additional ---
 
 #[test]
 fn deeply_nested_generics() -> Result<(), Box<dyn std::error::Error>> {
@@ -983,7 +983,7 @@ y: List[Dict[str, List[int]]] = []
     Ok(())
 }
 
-// --- E0146: Protocol class object additional ---
+// --- Protocol class object additional ---
 
 #[test]
 fn protocol_as_type_arg() -> Result<(), Box<dyn std::error::Error>> {
@@ -1002,7 +1002,7 @@ def create(cls: type[Sizeable]) -> Sizeable:
     Ok(())
 }
 
-// --- E0148: Generic type arg additional ---
+// --- Generic type arg additional ---
 
 #[test]
 fn too_many_type_args() -> Result<(), Box<dyn std::error::Error>> {
@@ -1020,7 +1020,7 @@ x: Single[int, str] = Single()
     Ok(())
 }
 
-// --- E0078: Self type violation additional ---
+// --- Self type violation additional ---
 
 #[test]
 fn self_type_in_protocol() -> Result<(), Box<dyn std::error::Error>> {
@@ -1035,7 +1035,7 @@ class Copyable(Protocol):
     Ok(())
 }
 
-// --- E0038: TypedDict inheritance additional ---
+// --- TypedDict inheritance additional ---
 
 #[test]
 fn typeddict_multiple_inheritance() -> Result<(), Box<dyn std::error::Error>> {
@@ -1055,7 +1055,7 @@ class Combined(Base1, Base2):
     Ok(())
 }
 
-// --- E0054: Final reassignment ---
+// --- Final reassignment ---
 
 #[test]
 fn final_module_var() -> Result<(), Box<dyn std::error::Error>> {
@@ -1083,7 +1083,7 @@ Config.VERSION = '2.0'
     Ok(())
 }
 
-// --- E0048: TypeAlias invalid RHS ---
+// --- TypeAlias invalid RHS ---
 
 #[test]
 fn typealias_valid() -> Result<(), Box<dyn std::error::Error>> {
@@ -1108,7 +1108,7 @@ Bad: TypeAlias = [int, str]
     Ok(())
 }
 
-// --- E0015: Assignment type mismatch additional ---
+// --- Assignment type mismatch additional ---
 
 #[test]
 fn complex_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -1122,7 +1122,7 @@ y: Dict[str, int] = {'a': 1}
     Ok(())
 }
 
-// --- E0041: Too few args additional ---
+// --- Too few args additional ---
 
 #[test]
 fn function_too_few() -> Result<(), Box<dyn std::error::Error>> {
@@ -1136,7 +1136,7 @@ f(1)
     Ok(())
 }
 
-// --- E0067: Enum non-member literal additional ---
+// --- Enum non-member literal additional ---
 
 #[test]
 fn enum_with_methods() -> Result<(), Box<dyn std::error::Error>> {
@@ -1155,7 +1155,7 @@ class Color(Enum):
     Ok(())
 }
 
-// --- E0116: NamedTuple definition additional ---
+// --- NamedTuple definition additional ---
 
 #[test]
 fn namedtuple_invalid_field() -> Result<(), Box<dyn std::error::Error>> {
@@ -1186,7 +1186,7 @@ class Point(NamedTuple):
     Ok(())
 }
 
-// --- E0118: super() abstract additional ---
+// --- super() abstract additional ---
 
 #[test]
 fn super_in_non_abstract_subclass() -> Result<(), Box<dyn std::error::Error>> {
@@ -1214,7 +1214,7 @@ class Full(Base):
     Ok(())
 }
 
-// --- E0092: Too few type args additional ---
+// --- Too few type args additional ---
 
 #[test]
 fn generic_no_args() -> Result<(), Box<dyn std::error::Error>> {
@@ -1233,7 +1233,7 @@ x: Pair = Pair()
     Ok(())
 }
 
-// --- E0094: Self type location additional ---
+// --- Self type location additional ---
 
 #[test]
 fn self_in_free_function() -> Result<(), Box<dyn std::error::Error>> {
@@ -1247,7 +1247,7 @@ def bad_func() -> Self:
     Ok(())
 }
 
-// --- E0102: TypeVar default violation additional ---
+// --- TypeVar default violation additional ---
 
 #[test]
 fn typevar_with_bound_and_default() -> Result<(), Box<dyn std::error::Error>> {

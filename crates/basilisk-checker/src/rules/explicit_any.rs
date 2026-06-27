@@ -9,7 +9,7 @@
 //! the typing spec treats `Any` as a fully valid type. It is therefore a
 //! distinct (user-suppressible) code from the genuine return-type-mismatch
 //! error ([returns_compatibility]); the two used to share a code, so a user could not
-//! silence the style nudge while keeping the real type check. W0014 itself is
+//! silence the style nudge while keeping the real type check. BSK-W0014 itself is
 //! never disabled for PEP conformance — like every rule it runs fully enabled
 //! during scoring; there is no "spec-conformance mode" that turns it off. See
 //! [CHKARCH-CONFORMANCE-MODE].
@@ -17,8 +17,8 @@
 //! ```python
 //! from typing import Any
 //!
-//! def greet(name: Any) -> str: ...  # W0014 — parameter `name` is annotated Any
-//! def parse(text: str) -> Any: ...  # W0014 — return annotation is Any
+//! def greet(name: Any) -> str: ...  # BSK-W0014 — parameter `name` is annotated Any
+//! def parse(text: str) -> Any: ...  # BSK-W0014 — return annotation is Any
 //!
 //! def greet(name: str) -> str: ...  # NO warning — concrete types
 //! ```

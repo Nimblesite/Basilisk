@@ -5,7 +5,7 @@
 
 use super::ws_test_common::*;
 
-// ── E0026: TypeVar single constraint ────────────────────────────────────────
+// ── TypeVar single constraint ────────────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0026_typevar_single_constraint_fires() -> TestResult<()> {
@@ -31,7 +31,7 @@ T = TypeVar(\"T\", int, str)
     assert_rule_clean("file:///e0026_clean.py", code, "generics_basic").await
 }
 
-// ── E0027: Duplicate TypeVar in Generic ─────────────────────────────────────
+// ── Duplicate TypeVar in Generic ─────────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0027_duplicate_typevar_fires() -> TestResult<()> {
@@ -58,7 +58,7 @@ class Container(Generic[T, U]):
     assert_rule_clean("file:///e0027_clean.py", code, "generics_base_class").await
 }
 
-// ── E0034: @final decorator violations ──────────────────────────────────────
+// ── @final decorator violations ──────────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0034_inherit_from_final_class_fires() -> TestResult<()> {
@@ -128,7 +128,7 @@ class Child(Base):
     assert_rule_clean("file:///e0034_clean.py", code, "qualifiers_final_decorator").await
 }
 
-// ── E0054: Final re-assignment ──────────────────────────────────────────────
+// ── Final re-assignment ──────────────────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0054_final_reassignment_fires() -> TestResult<()> {
@@ -182,7 +182,7 @@ def read_rate() -> int:
 
 #[tokio::test]
 async fn test_ws_multiple_rules_same_file() -> TestResult<()> {
-    // This file intentionally triggers E0001, E0002, E0014, E0023
+    // This file intentionally triggers BSK-E0001, BSK-E0002, E0014, E0023
     let code = "\
 count: int = \"wrong\"
 
@@ -216,10 +216,10 @@ def classify(x):
         );
     }
 
-    // Must fire at least E0001 (unannotated param) and E0014 (int = "wrong")
+    // Must fire at least BSK-E0001 (unannotated param) and E0014 (int = "wrong")
     assert!(
         extract_diagnostic(&json, "BSK-E0001").is_some(),
-        "should fire E0001 for unannotated param: {raw}"
+        "should fire BSK-E0001 for unannotated param: {raw}"
     );
     assert!(
         extract_diagnostic(&json, "assignment_compatibility").is_some(),

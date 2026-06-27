@@ -3,7 +3,7 @@
 
 use super::common::*;
 
-// --- E0040: Enum with members cannot be subclassed ---
+// --- Enum with members cannot be subclassed ---
 
 #[test]
 fn subclass_enum_with_members_fires() -> Result<(), Box<dyn std::error::Error>> {
@@ -68,7 +68,7 @@ class Child(Base):
     Ok(())
 }
 
-// --- E0046: Enum member annotated ---
+// --- Enum member annotated ---
 
 #[test]
 fn annotated_enum_member_fires() -> Result<(), Box<dyn std::error::Error>> {

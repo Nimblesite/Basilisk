@@ -14,7 +14,7 @@
 //!
 //! Version gate (issue #171): `@override` (PEP 698 / `typing.override`) was
 //! introduced in Python 3.12, so suggesting it on an older configured target is
-//! a false positive — the decorator cannot be imported there. E0025 is silent
+//! a false positive — the decorator cannot be imported there. BSK-E0025 is silent
 //! when the configured `python_version` is below 3.12.
 
 use std::collections::HashMap;
@@ -151,7 +151,7 @@ fn check_class(
         // Overloaded methods: @override belongs on the implementation, not the
         // overload variants.  If any occurrence is decorated with @overload,
         // treat the whole group as present — the checker for override semantics
-        // on overload groups is handled by E0021/E0016, not E0025.
+        // on overload groups is handled by E0021/E0016, not BSK-E0025.
         if method_has_decorator(&child.method_decorators, name, "overload") {
             continue;
         }

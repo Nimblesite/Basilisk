@@ -206,7 +206,7 @@ fn clean_typed_match_is_silent() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0010 — stdlib imports must NOT trigger E0010
+// stdlib imports must NOT trigger E0010
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -224,7 +224,7 @@ fn clean_stdlib_imports_are_silent() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// W0014 — concrete annotations must NOT trigger the explicit-Any warning
+// concrete annotations must NOT trigger the explicit-Any warning
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -236,13 +236,13 @@ fn clean_concrete_annotations_no_any_warning() -> Result<(), Box<dyn std::error:
         .collect();
     assert!(
         any_warnings.is_empty(),
-        "concrete annotations must not produce the W0014 explicit-Any warning, got:\n{any_warnings:#?}"
+        "concrete annotations must not produce the BSK-W0014 explicit-Any warning, got:\n{any_warnings:#?}"
     );
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// E0023 — match with wildcard must NOT trigger E0023
+// match with wildcard must NOT trigger E0023
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -260,7 +260,7 @@ fn clean_match_with_wildcard_is_silent() -> Result<(), Box<dyn std::error::Error
 }
 
 // ---------------------------------------------------------------------------
-// E0025 — override WITH @override must NOT trigger E0025
+// override WITH @override must NOT trigger BSK-E0025
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -272,13 +272,13 @@ fn clean_override_with_decorator_is_silent() -> Result<(), Box<dyn std::error::E
         .collect();
     assert!(
         e0025.is_empty(),
-        "override with @override must not produce E0025, got:\n{e0025:#?}"
+        "override with @override must not produce BSK-E0025, got:\n{e0025:#?}"
     );
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// E0020 — proper @overload with implementation must NOT trigger E0020
+// proper @overload with implementation must NOT trigger E0020
 // ---------------------------------------------------------------------------
 
 #[test]

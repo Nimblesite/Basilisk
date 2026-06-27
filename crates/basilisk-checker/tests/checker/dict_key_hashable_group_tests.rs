@@ -3,7 +3,7 @@
 
 use super::common::*;
 
-// --- E0022: Unhashable dict key ---
+// --- Unhashable dict key ---
 
 #[test]
 fn list_as_dict_key_fires() -> Result<(), Box<dyn std::error::Error>> {
@@ -34,7 +34,7 @@ def good() -> None:
     Ok(())
 }
 
-// --- E0023: Non-exhaustive match ---
+// --- Non-exhaustive match ---
 
 #[test]
 fn match_without_wildcard_fires() -> Result<(), Box<dyn std::error::Error>> {

@@ -3,7 +3,7 @@ use super::common::*;
 
 // Coverage boost tests batch 37: targeting specific uncovered branches in near-complete files.
 
-// ── E0017: ClassVar override mismatch ──
+// ── ClassVar override mismatch ──
 
 #[test]
 fn classvar_override() -> Result<(), Box<dyn std::error::Error>> {
@@ -23,7 +23,7 @@ class Child(Base):
     Ok(())
 }
 
-// ── E0035: Required/NotRequired in function params ──
+// ── Required/NotRequired in function params ──
 
 #[test]
 fn required_in_params() -> Result<(), Box<dyn std::error::Error>> {
@@ -42,7 +42,7 @@ class MyClass:
     Ok(())
 }
 
-// ── E0037: TypedDict non-string keys ──
+// ── TypedDict non-string keys ──
 
 #[test]
 fn typeddict_non_string_keys() -> Result<(), Box<dyn std::error::Error>> {
@@ -57,7 +57,7 @@ Bad2 = TypedDict("Bad2", {True: str})
     Ok(())
 }
 
-// ── E0042: PEP 695 + parameterized Generic ──
+// ── PEP 695 + parameterized Generic ──
 
 #[test]
 fn pep695_plus_generic() -> Result<(), Box<dyn std::error::Error>> {
@@ -77,7 +77,7 @@ class Bad2[S](Generic[S]):
     Ok(())
 }
 
-// ── E0052: Frozen dataclass with class hierarchy ──
+// ── Frozen dataclass with class hierarchy ──
 
 #[test]
 fn frozen_hierarchy() -> Result<(), Box<dyn std::error::Error>> {
@@ -101,7 +101,7 @@ class FrozenChild(FrozenBase):
     Ok(())
 }
 
-// ── E0092: type[T] with wrong arg count ──
+// ── type[T] with wrong arg count ──
 
 #[test]
 fn type_bracket_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
@@ -115,7 +115,7 @@ z: type[int] = int
     Ok(())
 }
 
-// ── E0100: Literal augmented assignment (deeper) ──
+// ── Literal augmented assignment (deeper) ──
 
 #[test]
 fn literal_augmented_in_function() -> Result<(), Box<dyn std::error::Error>> {
@@ -132,7 +132,7 @@ def func(x: Literal[42], *args: Literal[1], **kwargs: Literal[0]) -> None:
     Ok(())
 }
 
-// ── E0078: Self return with concrete in elif ──
+// ── Self return with concrete in elif ──
 
 #[test]
 fn self_return_elif() -> Result<(), Box<dyn std::error::Error>> {
@@ -153,7 +153,7 @@ class Builder:
     Ok(())
 }
 
-// ── E0080: TypeVar bound — call with wrong types ──
+// ── TypeVar bound — call with wrong types ──
 
 #[test]
 fn typevar_bound_method_call() -> Result<(), Box<dyn std::error::Error>> {
@@ -186,7 +186,7 @@ d.set("bad")
     Ok(())
 }
 
-// ── E0045: default value type issues ──
+// ── default value type issues ──
 
 #[test]
 fn default_value_types() -> Result<(), Box<dyn std::error::Error>> {
@@ -211,7 +211,7 @@ def func5(x: bool = 0, y: int = True) -> None:
     Ok(())
 }
 
-// ── E0061: AssertType enum literal ──
+// ── AssertType enum literal ──
 
 #[test]
 fn assert_type_enum() -> Result<(), Box<dyn std::error::Error>> {
@@ -233,7 +233,7 @@ assert_type("hello", Literal["hello"])
     Ok(())
 }
 
-// ── E0104: Cyclical alias deeper ──
+// ── Cyclical alias deeper ──
 
 #[test]
 fn cyclical_alias_chain() -> Result<(), Box<dyn std::error::Error>> {
@@ -252,7 +252,7 @@ E: TypeAlias = dict[str, "E"]
     Ok(())
 }
 
-// ── E0109: TypeVar bound call (more patterns) ──
+// ── TypeVar bound call (more patterns) ──
 
 #[test]
 fn typevar_bound_call_patterns() -> Result<(), Box<dyn std::error::Error>> {
@@ -282,7 +282,7 @@ w.upper()
     Ok(())
 }
 
-// ── E0070: Never in more contexts ──
+// ── Never in more contexts ──
 
 #[test]
 fn never_various() -> Result<(), Box<dyn std::error::Error>> {
@@ -312,7 +312,7 @@ c = 1 + raises()
     Ok(())
 }
 
-// ── E0067: Enum non-member literal (more patterns) ──
+// ── Enum non-member literal (more patterns) ──
 
 #[test]
 fn enum_literal_patterns() -> Result<(), Box<dyn std::error::Error>> {
@@ -344,7 +344,7 @@ func2(Priority.LOW)
     Ok(())
 }
 
-// ── E0096: Field factory (more patterns) ──
+// ── Field factory (more patterns) ──
 
 #[test]
 fn field_factory_patterns() -> Result<(), Box<dyn std::error::Error>> {
@@ -365,7 +365,7 @@ class Config:
     Ok(())
 }
 
-// ── E0057: type statement with nested subscript ──
+// ── type statement with nested subscript ──
 
 #[test]
 fn type_stmt_nested() -> Result<(), Box<dyn std::error::Error>> {

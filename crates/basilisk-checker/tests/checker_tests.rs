@@ -9,14 +9,40 @@
 )]
 //! Integration tests for basilisk-checker.
 
-use basilisk_checker::{check, Severity};
+use basilisk_checker::{check_with_config, Diagnostic, Severity};
+use basilisk_config::BasiliskConfig;
 use basilisk_parser::parse_source;
 use basilisk_resolver::resolve;
 
-fn run(src: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
+// Basilisk has **no modes** — no `basic`/`standard`/`strict`. The checker does
+// exactly what the configuration says: config in, diagnostics out. These three
+// helpers are the only ways to run it. See [CHKARCH-CONFIGURATION-ONLY].
+
+/// Run with the default configuration: every PEP rule, no `BSK-`prefixed house
+/// rules — the pure-PEP-conformance, out-of-the-box experience.
+fn run(src: &str) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
+    run_with_config(src, &BasiliskConfig::default())
+}
+
+/// Run honoring an explicit project configuration — exactly what a project's
+/// `basilisk.toml` would produce, nothing more.
+fn run_with_config(
+    src: &str,
+    config: &BasiliskConfig,
+) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
     let parsed = parse_source(src.to_owned(), "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    Ok(check(&resolved))
+    Ok(check_with_config(&resolved, config))
+}
+
+/// The configuration a project writes to opt into the annotation house rules:
+/// `strict_annotations = true` (BSK-E0001..BSK-E0005, BSK-E0025, BSK-W0014,
+/// BSK-W0040, BSK-W0050). Configuration data, not a checker "mode".
+fn annotation_rules_config() -> BasiliskConfig {
+    BasiliskConfig {
+        strict_annotations: true,
+        ..BasiliskConfig::default()
+    }
 }
 
 #[test]
@@ -31,7 +57,7 @@ fn no_diagnostics_for_fully_annotated_function() -> Result<(), Box<dyn std::erro
 
 #[test]
 fn emits_e0001_for_missing_parameter_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("def process(data) -> None:\n    pass\n")?;
+    let diags = run_with_config("def process(data) -> None:\n    pass\n", &annotation_rules_config())?;
     assert_eq!(diags.len(), 1);
     assert_eq!(diags[0].code.code, "BSK-E0001");
     assert_eq!(diags[0].severity, Severity::Error);
@@ -40,7 +66,7 @@ fn emits_e0001_for_missing_parameter_annotation() -> Result<(), Box<dyn std::err
 
 #[test]
 fn emits_e0002_for_missing_return_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("def process(data: str):\n    pass\n")?;
+    let diags = run_with_config("def process(data: str):\n    pass\n", &annotation_rules_config())?;
     assert_eq!(diags.len(), 1);
     assert_eq!(diags[0].code.code, "BSK-E0002");
     assert_eq!(diags[0].severity, Severity::Error);
@@ -49,8 +75,8 @@ fn emits_e0002_for_missing_return_annotation() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn emits_both_for_unannotated_function() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("def process(data):\n    pass\n")?;
-    assert_eq!(diags.len(), 2, "should emit E0001 and E0002");
+    let diags = run_with_config("def process(data):\n    pass\n", &annotation_rules_config())?;
+    assert_eq!(diags.len(), 2, "should emit BSK-E0001 and BSK-E0002");
 
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(codes.contains(&"BSK-E0001"));
@@ -60,7 +86,7 @@ fn emits_both_for_unannotated_function() -> Result<(), Box<dyn std::error::Error
 
 #[test]
 fn emits_one_e0001_per_unannotated_parameter() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("def multi(a, b, c) -> None:\n    pass\n")?;
+    let diags = run_with_config("def multi(a, b, c) -> None:\n    pass\n", &annotation_rules_config())?;
     let count = diags.iter().filter(|d| d.code.code == "BSK-E0001").count();
     assert_eq!(
         count, 3,
@@ -78,7 +104,7 @@ fn handles_empty_file() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn all_diagnostics_have_nonempty_message() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("def bad(x):\n    pass\n")?;
+    let diags = run_with_config("def bad(x):\n    pass\n", &annotation_rules_config())?;
     for d in &diags {
         assert!(!d.message.is_empty());
     }
@@ -87,7 +113,7 @@ fn all_diagnostics_have_nonempty_message() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn all_diagnostics_have_docs_url() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("def bad(x):\n    pass\n")?;
+    let diags = run_with_config("def bad(x):\n    pass\n", &annotation_rules_config())?;
     for d in &diags {
         assert!(d.code.docs_url.starts_with("https://"));
     }
@@ -110,35 +136,35 @@ fn severity_error_greater_than_warning() {
 }
 
 // ---------------------------------------------------------------------------
-// E0003 — Missing variable type: branch coverage
+// Missing variable type: branch coverage
 // ---------------------------------------------------------------------------
 
 #[test]
 fn annotated_empty_list_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
-    // Annotated variable: E0003 must NOT fire (has_annotation = true)
-    let diags = run("items: list[int] = []\n")?;
+    // Annotated variable: BSK-E0003 must NOT fire (has_annotation = true)
+    let diags = run_with_config("items: list[int] = []\n", &annotation_rules_config())?;
     let e3: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0003")
         .collect();
     assert!(
         e3.is_empty(),
-        "annotated empty-list variable must not trigger E0003"
+        "annotated empty-list variable must not trigger BSK-E0003"
     );
     Ok(())
 }
 
 #[test]
 fn unannotated_str_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
-    // Unannotated str literal — E0003 must NOT fire (type is trivially `str`)
-    let diags = run("name = \"hello\"\n")?;
+    // Unannotated str literal — BSK-E0003 must NOT fire (type is trivially `str`)
+    let diags = run_with_config("name = \"hello\"\n", &annotation_rules_config())?;
     let e3: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0003")
         .collect();
     assert!(
         e3.is_empty(),
-        "str literal should not fire E0003 — type is trivially inferrable, got: {:?}",
+        "str literal should not fire BSK-E0003 — type is trivially inferrable, got: {:?}",
         e3.iter().map(|d| &d.message).collect::<Vec<_>>()
     );
     Ok(())
@@ -147,17 +173,17 @@ fn unannotated_str_literal_suppressed() -> Result<(), Box<dyn std::error::Error>
 #[test]
 fn fires_for_all_three_unresolvable_rhs_kinds() -> Result<(), Box<dyn std::error::Error>> {
     // Covers EmptyList, EmptyDict, and NoneValue branches in make_diagnostic
-    let diags = run("a = []\nb = {}\nc = None\n")?;
+    let diags = run_with_config("a = []\nb = {}\nc = None\n", &annotation_rules_config())?;
     let e3: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0003")
         .collect();
-    assert_eq!(e3.len(), 3, "all three unresolvable kinds must fire E0003");
+    assert_eq!(e3.len(), 3, "all three unresolvable kinds must fire BSK-E0003");
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// E0012 — Argument type mismatch: all match arms
+// Argument type mismatch: all match arms
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -352,7 +378,7 @@ fn unannotated_param_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0014 — Assignment type mismatch: branch coverage
+// Assignment type mismatch: branch coverage
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -423,7 +449,7 @@ fn annotation_without_space_after_colon_does_not_fire(
 }
 
 // ---------------------------------------------------------------------------
-// E0015 — Invalid type arg count: branch coverage
+// Invalid type arg count: branch coverage
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -555,7 +581,7 @@ fn nested_generic_correct_count() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0016 — Incompatible override: branch coverage
+// Incompatible override: branch coverage
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -635,7 +661,7 @@ fn base_not_in_module_does_not_fire() -> Result<(), Box<dyn std::error::Error>> 
 
 #[test]
 fn method_without_override_decorator_not_checked() -> Result<(), Box<dyn std::error::Error>> {
-    // Method overrides base but has no @override — E0016 must NOT fire (that's E0025)
+    // Method overrides base but has no @override — E0016 must NOT fire (that's BSK-E0025)
     let src = concat!(
         "class Base:\n",
         "    def method(self: 'Base', x: int) -> int: pass\n",
@@ -655,7 +681,7 @@ fn method_without_override_decorator_not_checked() -> Result<(), Box<dyn std::er
 }
 
 // ---------------------------------------------------------------------------
-// E0017 — Incompatible variable override: branch coverage
+// Incompatible variable override: branch coverage
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -737,7 +763,7 @@ fn attr_only_in_child_not_in_base_does_not_fire() -> Result<(), Box<dyn std::err
 }
 
 // ---------------------------------------------------------------------------
-// E0020 — Missing overload impl: branch coverage
+// Missing overload impl: branch coverage
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -779,7 +805,7 @@ fn overloads_with_impl_does_not_fire() -> Result<(), Box<dyn std::error::Error>>
 }
 
 // ---------------------------------------------------------------------------
-// E0021 — Overlapping overloads: branch coverage
+// Overlapping overloads: branch coverage
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -855,7 +881,7 @@ fn same_param_count_different_names_does_not_overlap(
 }
 
 // ---------------------------------------------------------------------------
-// E0025 — Missing @override: branch coverage
+// Missing @override: branch coverage
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -868,12 +894,12 @@ fn method_with_override_decorator_does_not_fire() -> Result<(), Box<dyn std::err
         "    @override\n",
         "    def method(self: 'Child') -> None: pass\n",
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e25: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0025")
         .collect();
-    assert!(e25.is_empty(), "method with @override must not fire E0025");
+    assert!(e25.is_empty(), "method with @override must not fire BSK-E0025");
     Ok(())
 }
 
@@ -883,7 +909,7 @@ fn missing_override_base_not_in_module_does_not_fire() -> Result<(), Box<dyn std
         "class Child(ExternalBase):\n",
         "    def method(self: 'Child') -> None: pass\n",
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let missing_override: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0025")
@@ -904,17 +930,17 @@ fn new_method_not_in_base_does_not_fire() -> Result<(), Box<dyn std::error::Erro
         "class Child(Base):\n",
         "    def brand_new(self: 'Child') -> None: pass\n",
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e25: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0025")
         .collect();
-    assert!(e25.is_empty(), "new method not in base must not fire E0025");
+    assert!(e25.is_empty(), "new method not in base must not fire BSK-E0025");
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// E0016: additional branches
+// additional branches
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -975,15 +1001,15 @@ fn override_without_self_param_compatible_does_not_fire(
 /// A diagnostic on a `# type: ignore` line must be suppressed.
 #[test]
 fn type_ignore_suppresses_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    // E0001 on `x` is suppressed by `# type: ignore`
-    let diags = run("def foo(x) -> None:  # type: ignore\n    pass\n")?;
+    // BSK-E0001 on `x` is suppressed by `# type: ignore`
+    let diags = run_with_config("def foo(x) -> None:  # type: ignore\n    pass\n", &annotation_rules_config())?;
     let e1: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
     assert!(
         e1.is_empty(),
-        "type: ignore must suppress E0001, got: {e1:#?}"
+        "type: ignore must suppress BSK-E0001, got: {e1:#?}"
     );
     Ok(())
 }
@@ -992,14 +1018,14 @@ fn type_ignore_suppresses_diagnostic() -> Result<(), Box<dyn std::error::Error>>
 /// Diagnostics on lines WITHOUT `# type: ignore` must NOT be suppressed.
 #[test]
 fn type_ignore_does_not_suppress_other_lines() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("def foo(x) -> None:\n    pass\n")?;
+    let diags = run_with_config("def foo(x) -> None:\n    pass\n", &annotation_rules_config())?;
     let e1: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
     assert!(
         !e1.is_empty(),
-        "E0001 must not be suppressed on lines without type: ignore"
+        "BSK-E0001 must not be suppressed on lines without type: ignore"
     );
     Ok(())
 }
@@ -1013,16 +1039,16 @@ fn type_ignore_suppresses_only_its_line() -> Result<(), Box<dyn std::error::Erro
         "def bar(y) -> None:\n",
         "    pass\n",
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e1: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
-    // foo is suppressed, bar is not → exactly 1 E0001
+    // foo is suppressed, bar is not → exactly 1 BSK-E0001
     assert_eq!(
         e1.len(),
         1,
-        "only non-ignored line must produce E0001, got: {e1:#?}"
+        "only non-ignored line must produce BSK-E0001, got: {e1:#?}"
     );
     Ok(())
 }
@@ -1032,7 +1058,7 @@ fn type_ignore_suppresses_only_its_line() -> Result<(), Box<dyn std::error::Erro
 // ---------------------------------------------------------------------------
 
 /// `is_stub_context` — `FnValue → false` at guards.rs:21.
-/// If the function always returned false, Protocol methods would get E0001/E0002.
+/// If the function always returned false, Protocol methods would get BSK-E0001/BSK-E0002.
 #[test]
 fn guards_protocol_method_no_annotation_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1040,14 +1066,14 @@ fn guards_protocol_method_no_annotation_no_diagnostic() -> Result<(), Box<dyn st
         "class Runnable(Protocol):\n",
         "    def run(self) -> None: ...\n",
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e1: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
     assert!(
         e1.is_empty(),
-        "Protocol method must not fire E0001, got: {e1:#?}"
+        "Protocol method must not fire BSK-E0001, got: {e1:#?}"
     );
     Ok(())
 }
@@ -1065,14 +1091,14 @@ fn guards_abstractmethod_is_stub_context() -> Result<(), Box<dyn std::error::Err
         "    def compute(self) -> int:\n",
         "        pass\n",
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e2: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0002")
         .collect();
     assert!(
         e2.is_empty(),
-        "@abstractmethod must suppress E0002, got: {e2:#?}"
+        "@abstractmethod must suppress BSK-E0002, got: {e2:#?}"
     );
     Ok(())
 }
@@ -1091,27 +1117,27 @@ fn guards_protocol_class_name_match() -> Result<(), Box<dyn std::error::Error>> 
         "class NotProto:\n",
         "    def unannotated(self): pass\n",
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e2: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0002")
         .collect();
-    // NotProto.unannotated has no return annotation → E0002
+    // NotProto.unannotated has no return annotation → BSK-E0002
     assert!(
         !e2.is_empty(),
-        "non-Protocol class must fire E0002, got: {e2:#?}"
+        "non-Protocol class must fire BSK-E0002, got: {e2:#?}"
     );
     // MyProto.required must not fire
     let proto_e2: Vec<_> = e2
         .iter()
         .filter(|d| d.message.contains("required"))
         .collect();
-    assert!(proto_e2.is_empty(), "Protocol method must not fire E0002");
+    assert!(proto_e2.is_empty(), "Protocol method must not fire BSK-E0002");
     Ok(())
 }
 
 /// `is_enum_class` — `FnValue → false` at guards.rs:47.
-/// Enum subclass attributes must NOT fire E0005.
+/// Enum subclass attributes must NOT fire BSK-E0005.
 #[test]
 fn guards_enum_class_no_e0005() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1120,14 +1146,14 @@ fn guards_enum_class_no_e0005() -> Result<(), Box<dyn std::error::Error>> {
         "    RED = 1\n",
         "    GREEN = 2\n",
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e5: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0005")
         .collect();
     assert!(
         e5.is_empty(),
-        "Enum class must not fire E0005, got: {e5:#?}"
+        "Enum class must not fire BSK-E0005, got: {e5:#?}"
     );
     Ok(())
 }
@@ -1162,20 +1188,20 @@ fn guards_protocol_class_is_detected() -> Result<(), Box<dyn std::error::Error>>
 // e0005.rs: BinaryOperator || → && (line 33)
 // ---------------------------------------------------------------------------
 
-/// E0005 — `&&` mutant at line 33: class has no annotation AND is not in enum.
+/// `&&` mutant at line 33: class has no annotation AND is not in enum.
 /// If `||` becomes `&&`, un-annotated non-enum attrs get suppressed.
-/// This test ensures unannotated class attrs with non-inferrable RHS DO fire E0005.
+/// This test ensures unannotated class attrs with non-inferrable RHS DO fire BSK-E0005.
 #[test]
 fn unannotated_attr_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!("class Config:\n", "    debug = some_func()\n",);
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e5: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0005")
         .collect();
     assert!(
         !e5.is_empty(),
-        "unannotated class attr with non-inferrable RHS must fire E0005"
+        "unannotated class attr with non-inferrable RHS must fire BSK-E0005"
     );
     Ok(())
 }
@@ -1184,7 +1210,7 @@ fn unannotated_attr_fires() -> Result<(), Box<dyn std::error::Error>> {
 // e0013.rs: BinaryOperator || → && (line 37)
 // ---------------------------------------------------------------------------
 
-/// E0013 — `&&` mutant at line 37 in `check_function`.
+/// `&&` mutant at line 37 in `check_function`.
 /// E0013 fires for `-> None` functions that return a value.
 /// The `&&` mutant would suppress when `has_value && !value_is_call` is changed.
 /// Test both sides: a valued non-call return fires; a call return does not.
@@ -1203,7 +1229,7 @@ fn none_annotated_with_valued_return_fires() -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
-/// E0013 — `&&` mutant: `!value_is_call` side.
+/// `&&` mutant: `!value_is_call` side.
 /// `return f()` inside `-> None` must NOT fire because we can't prove the callee
 /// returns non-None without full inference.
 #[test]
@@ -1374,7 +1400,7 @@ fn abc_class_overload_exempt() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// E0020 — `&&` → `||` and `!=` mutants at line 40 (`overloaded.len()` < 2).
+/// `&&` → `||` and `!=` mutants at line 40 (`overloaded.len()` < 2).
 /// A lone `@overload` with an implementation present fires E0020 (single overload).
 #[test]
 fn single_overload_with_impl_fires() -> Result<(), Box<dyn std::error::Error>> {
@@ -1398,7 +1424,7 @@ fn single_overload_with_impl_fires() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// E0020 — 2+ @overloads with implementation must NOT fire E0020.
+/// 2+ @overloads with implementation must NOT fire E0020.
 /// Kills `!=` (count >= 2 check) and `&&` mutants.
 #[test]
 fn two_overloads_with_impl_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
@@ -1502,7 +1528,7 @@ fn same_names_unannotated_overlaps() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 /// `is_protocol_transitively` — `FnValue → false` at e0025.rs:77.
-/// A class implementing a transitive Protocol must not fire E0025.
+/// A class implementing a transitive Protocol must not fire BSK-E0025.
 #[test]
 fn transitive_protocol_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1516,20 +1542,20 @@ fn transitive_protocol_exempt() -> Result<(), Box<dyn std::error::Error>> {
         "    def run(self) -> None: pass\n",
         "    def stop(self) -> None: pass\n",
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e25: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0025")
         .collect();
     assert!(
         e25.is_empty(),
-        "Protocol implementation must not fire E0025, got: {e25:#?}"
+        "Protocol implementation must not fire BSK-E0025, got: {e25:#?}"
     );
     Ok(())
 }
 
-/// E0025 `check_class` — `||` → `&&` mutant at line 126.
-/// An unrelated class (no base methods) must NOT fire E0025.
+/// BSK-E0025 `check_class` — `||` → `&&` mutant at line 126.
+/// An unrelated class (no base methods) must NOT fire BSK-E0025.
 #[test]
 fn no_base_methods_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1537,20 +1563,20 @@ fn no_base_methods_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
         "    def compute(self) -> int:\n",
         "        return 42\n",
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e25: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0025")
         .collect();
     assert!(
         e25.is_empty(),
-        "class with no base must not fire E0025, got: {e25:#?}"
+        "class with no base must not fire BSK-E0025, got: {e25:#?}"
     );
     Ok(())
 }
 
 /// `method_has_decorator` — `FnValue → false` at e0025.rs:170.
-/// If always false, methods WITH @override would still fire E0025.
+/// If always false, methods WITH @override would still fire BSK-E0025.
 #[test]
 fn override_decorator_suppresses() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1563,14 +1589,14 @@ fn override_decorator_suppresses() -> Result<(), Box<dyn std::error::Error>> {
         "    def compute(self) -> int:\n",
         "        return 1\n",
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e25: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0025")
         .collect();
     assert!(
         e25.is_empty(),
-        "@override must suppress E0025, got: {e25:#?}"
+        "@override must suppress BSK-E0025, got: {e25:#?}"
     );
     Ok(())
 }
@@ -1589,18 +1615,18 @@ fn override_on_different_method_does_not_suppress_other(
         "class Child(Base):\n",
         "    @override\n",
         "    def a(self) -> int: return 1\n",
-        "    def b(self) -> int: return 1\n", // no @override — should fire E0025
+        "    def b(self) -> int: return 1\n", // no @override — should fire BSK-E0025
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e25: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0025")
         .collect();
-    assert!(!e25.is_empty(), "method without @override must fire E0025");
+    assert!(!e25.is_empty(), "method without @override must fire BSK-E0025");
     let messages: Vec<&str> = e25.iter().map(|d| d.message.as_str()).collect();
     assert!(
         messages.iter().any(|m| m.contains('b')),
-        "E0025 must point to method b, not a"
+        "BSK-E0025 must point to method b, not a"
     );
     Ok(())
 }
@@ -1617,20 +1643,20 @@ fn qualified_override_suppresses() -> Result<(), Box<dyn std::error::Error>> {
         "    @typing.override\n",
         "    def go(self) -> None: pass\n",
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e25: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0025")
         .collect();
     assert!(
         e25.is_empty(),
-        "@typing.override must suppress E0025, got: {e25:#?}"
+        "@typing.override must suppress BSK-E0025, got: {e25:#?}"
     );
     Ok(())
 }
 
 /// `method_has_decorator` — `!=` mutant at e0025.rs:174 (`ends_with` check).
-/// A decorator with a different name must NOT suppress E0025.
+/// A decorator with a different name must NOT suppress BSK-E0025.
 #[test]
 fn unrelated_decorator_does_not_suppress() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1639,14 +1665,14 @@ fn unrelated_decorator_does_not_suppress() -> Result<(), Box<dyn std::error::Err
         "class Child(Base):\n",
         "    def go(self) -> None: pass\n", // no @override at all
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e25: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0025")
         .collect();
     assert!(
         !e25.is_empty(),
-        "method override without @override must fire E0025"
+        "method override without @override must fire BSK-E0025"
     );
     Ok(())
 }
@@ -1655,7 +1681,7 @@ fn unrelated_decorator_does_not_suppress() -> Result<(), Box<dyn std::error::Err
 // e0026.rs: FnValue→() and != mutants (lines 23/24)
 // ---------------------------------------------------------------------------
 
-/// E0026 — `FnValue → ()` at line 23: rule must emit for `constraint_count` == 1.
+/// `FnValue → ()` at line 23: rule must emit for `constraint_count` == 1.
 #[test]
 fn single_constraint_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = "T = TypeVar('T', int)\n";
@@ -1668,7 +1694,7 @@ fn single_constraint_fires() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// E0026 — `!=` mutant at line 24: `constraint_count` == 1 must fire, count == 2 must not.
+/// `!=` mutant at line 24: `constraint_count` == 1 must fire, count == 2 must not.
 #[test]
 fn two_constraints_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = "T = TypeVar('T', int, str)\n";
@@ -1688,7 +1714,7 @@ fn two_constraints_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 // e0027.rs: FnValue→() (line 22)
 // ---------------------------------------------------------------------------
 
-/// E0027 — `FnValue → ()` at line 22: rule must detect duplicate `TypeVar` in Generic.
+/// `FnValue → ()` at line 22: rule must detect duplicate `TypeVar` in Generic.
 #[test]
 fn duplicate_typevar_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1713,7 +1739,7 @@ fn duplicate_typevar_fires() -> Result<(), Box<dyn std::error::Error>> {
 // e0029.rs: FnValue→(), ||→&&, !=  (lines 22, 35)
 // ---------------------------------------------------------------------------
 
-/// E0029 — `FnValue → ()` at line 22: rule must fire for method in `TypedDict`.
+/// `FnValue → ()` at line 22: rule must fire for method in `TypedDict`.
 #[test]
 fn method_in_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1731,7 +1757,7 @@ fn method_in_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// E0029 — `||` → `&&` at line 35 (__`init_subclass`__ / __`class_getitem`__ filter).
+/// `||` → `&&` at line 35 (__`init_subclass`__ / __`class_getitem`__ filter).
 /// These synthesised dunders must NOT fire E0029.
 #[test]
 fn init_subclass_exempt() -> Result<(), Box<dyn std::error::Error>> {
@@ -1752,7 +1778,7 @@ fn init_subclass_exempt() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// E0029 — `!=` mutant at line 35: `method_name` must equal the exempted string exactly.
+/// `!=` mutant at line 35: `method_name` must equal the exempted string exactly.
 /// A method named `custom_method` must fire; `__init_subclass__` must not.
 #[test]
 fn only_exempt_dunders_are_skipped() -> Result<(), Box<dyn std::error::Error>> {
@@ -1778,7 +1804,7 @@ fn only_exempt_dunders_are_skipped() -> Result<(), Box<dyn std::error::Error>> {
 // e0030.rs: FnValue→() (line 25)
 // ---------------------------------------------------------------------------
 
-/// E0030 — `FnValue → ()` at line 25: non-default after default `TypeVar` must fire.
+/// `FnValue → ()` at line 25: non-default after default `TypeVar` must fire.
 #[test]
 fn non_default_after_default_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1804,7 +1830,7 @@ fn non_default_after_default_fires() -> Result<(), Box<dyn std::error::Error>> {
 // e0031.rs: FnValue→(), != (lines 26)
 // ---------------------------------------------------------------------------
 
-/// E0031 — `FnValue → ()` at line 26: wrong arg count must fire.
+/// `FnValue → ()` at line 26: wrong arg count must fire.
 #[test]
 fn wrong_arg_count_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = "x = cast(int)\n";
@@ -1820,7 +1846,7 @@ fn wrong_arg_count_fires() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// E0031 — `!=` mutant at line 26: cast(int, val) with exactly 2 args must NOT fire
+/// `!=` mutant at line 26: cast(int, val) with exactly 2 args must NOT fire
 /// (unless first arg is a literal).
 #[test]
 fn valid_cast_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
@@ -1841,7 +1867,7 @@ fn valid_cast_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 // e0032.rs: FnValue→(), UnaryOperator remove (lines 28, 30)
 // ---------------------------------------------------------------------------
 
-/// E0032 — `FnValue → ()` at line 28: unknown keyword in `TypedDict` must fire.
+/// `FnValue → ()` at line 28: unknown keyword in `TypedDict` must fire.
 #[test]
 fn unknown_keyword_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1861,7 +1887,7 @@ fn unknown_keyword_fires() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// E0032 — `!` to empty (`UnaryOperator` remove) at line 30.
+/// `!` to empty (`UnaryOperator` remove) at line 30.
 /// A known keyword (`total`) must NOT fire.
 #[test]
 fn known_keyword_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
@@ -1887,7 +1913,7 @@ fn known_keyword_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 //           (FnValue→true / FnValue→false), check FnValue→()
 // ---------------------------------------------------------------------------
 
-/// E0035 — `FnValue → ()` at line 93: rule must actually emit diagnostics.
+/// `FnValue → ()` at line 93: rule must actually emit diagnostics.
 /// `Required` outside `TypedDict` must fire E0035.
 #[test]
 fn required_outside_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
@@ -1908,7 +1934,7 @@ fn required_outside_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
-/// E0035 — `NotRequired` outside `TypedDict` must also fire.
+/// `NotRequired` outside `TypedDict` must also fire.
 #[test]
 fn not_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -1928,7 +1954,7 @@ fn not_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
-/// E0035 — `is_in_typed_dict_hierarchy` `FnValue → true` at line 78.
+/// `is_in_typed_dict_hierarchy` `FnValue → true` at line 78.
 /// If always true, the rule would only check for NESTED usage even outside `TypedDict`.
 /// A non-`TypedDict` class with Required must still fire E0035.
 #[test]
@@ -1950,7 +1976,7 @@ fn non_typed_dict_class_not_exempt() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// E0035 — `is_in_typed_dict_hierarchy` `FnValue → false` at line 78.
+/// `is_in_typed_dict_hierarchy` `FnValue → false` at line 78.
 /// If always false, `TypedDict` fields with Required would fire even though they're valid.
 /// Valid `TypedDict` usage with Required must NOT fire.
 #[test]
@@ -1972,7 +1998,7 @@ fn required_inside_typed_dict_no_diagnostic() -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
-/// E0035 — `annotation_text` `FnValue → Some("xyzzy")` at line 51.
+/// `annotation_text` `FnValue → Some("xyzzy")` at line 51.
 /// If `annotation_text` always returned `Some("xyzzy")`, "xyzzy" doesn't contain
 /// "Required[" so no E0035 would fire on ANYTHING.
 /// This test verifies that an attribute with Required IS detected.
@@ -1996,7 +2022,7 @@ fn annotation_text_reads_actual_source() -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
-/// E0035 — transitive `TypedDict` hierarchy: child of `TypedDict` must also be exempt.
+/// transitive `TypedDict` hierarchy: child of `TypedDict` must also be exempt.
 /// Tests `is_in_typed_dict_hierarchy` recursion.
 #[test]
 fn transitive_typed_dict_exempt() -> Result<(), Box<dyn std::error::Error>> {
@@ -2019,7 +2045,7 @@ fn transitive_typed_dict_exempt() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// E0035 — nested Required inside `TypedDict` MUST fire.
+/// nested Required inside `TypedDict` MUST fire.
 /// Exercises the `in_typed_dict` branch: `has_nested_required` check.
 #[test]
 fn nested_required_in_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
@@ -2040,7 +2066,7 @@ fn nested_required_in_typed_dict_fires() -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
-/// E0035 — Required on a function parameter must fire.
+/// Required on a function parameter must fire.
 #[test]
 fn required_on_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
@@ -2152,20 +2178,20 @@ fn debug_all_diags_qualifiers_annotated() -> Result<(), Box<dyn std::error::Erro
 }
 
 // ---------------------------------------------------------------------------
-// §4.4 — Self/Cls Inference: E0001 does NOT fire for self/cls parameters
+// §4.4 — Self/Cls Inference: BSK-E0001 does NOT fire for self/cls parameters
 // ---------------------------------------------------------------------------
 
 #[test]
 fn self_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = "class MyClass:\n    def method(self) -> None:\n        pass\n";
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e1: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
     assert!(
         e1.is_empty(),
-        "self parameter must not trigger E0001, got: {e1:#?}"
+        "self parameter must not trigger BSK-E0001, got: {e1:#?}"
     );
     Ok(())
 }
@@ -2173,14 +2199,14 @@ fn self_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn cls_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = "class MyClass:\n    @classmethod\n    def method(cls) -> None:\n        pass\n";
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e1: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
     assert!(
         e1.is_empty(),
-        "cls parameter must not trigger E0001, got: {e1:#?}"
+        "cls parameter must not trigger BSK-E0001, got: {e1:#?}"
     );
     Ok(())
 }
@@ -2188,24 +2214,24 @@ fn cls_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn regular_params_still_fire() -> Result<(), Box<dyn std::error::Error>> {
     let src = "class MyClass:\n    def method(self, data) -> None:\n        pass\n";
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e1: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
     assert!(
         !e1.is_empty(),
-        "regular unannotated parameters must still fire E0001"
+        "regular unannotated parameters must still fire BSK-E0001"
     );
     // Should only fire for 'data', not 'self'
     let messages: Vec<&str> = e1.iter().map(|d| d.message.as_str()).collect();
     assert!(
         messages.iter().any(|m| m.contains("data")),
-        "E0001 should point to 'data' parameter"
+        "BSK-E0001 should point to 'data' parameter"
     );
     assert!(
         !messages.iter().any(|m| m.contains("self")),
-        "E0001 should NOT point to 'self' parameter"
+        "BSK-E0001 should NOT point to 'self' parameter"
     );
     Ok(())
 }
@@ -2222,42 +2248,42 @@ fn self_and_cls_do_not_fire_e0001() -> Result<(), Box<dyn std::error::Error>> {
         "    def regular_method(self, data) -> None:\n",
         "        pass\n"
     );
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let e1: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
 
     // Should only fire for 'data', not 'self' or 'cls'
-    assert!(!e1.is_empty(), "should have E0001 diagnostics");
+    assert!(!e1.is_empty(), "should have BSK-E0001 diagnostics");
 
     let messages: Vec<&str> = e1.iter().map(|d| d.message.as_str()).collect();
     assert!(
         messages.iter().any(|m| m.contains("data")),
-        "E0001 should point to 'data' parameter"
+        "BSK-E0001 should point to 'data' parameter"
     );
     assert!(
         !messages.iter().any(|m| m.contains("self")),
-        "E0001 should NOT point to 'self' parameter"
+        "BSK-E0001 should NOT point to 'self' parameter"
     );
     assert!(
         !messages.iter().any(|m| m.contains("cls")),
-        "E0001 should NOT point to 'cls' parameter"
+        "BSK-E0001 should NOT point to 'cls' parameter"
     );
 
-    // Should have exactly 1 E0001 (for 'data')
+    // Should have exactly 1 BSK-E0001 (for 'data')
     let data_e1: Vec<_> = e1.iter().filter(|d| d.message.contains("data")).collect();
     assert_eq!(
         data_e1.len(),
         1,
-        "should have exactly 1 E0001 for 'data' parameter"
+        "should have exactly 1 BSK-E0001 for 'data' parameter"
     );
 
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// E0011 — Return type mismatch: branch coverage
+// Return type mismatch: branch coverage
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -2333,25 +2359,25 @@ fn unannotated_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 // ---------------------------------------------------------------------------
-// W0040 — Lambda function missing type annotations
+// Lambda function missing type annotations
 // ---------------------------------------------------------------------------
 
 #[test]
 fn lambda_assigned_to_unannotated_var_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = "f = lambda x: x + 1\n";
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let w40: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-W0040")
         .collect();
     assert!(
         !w40.is_empty(),
-        "lambda assigned to unannotated variable must fire W0040"
+        "lambda assigned to unannotated variable must fire BSK-W0040"
     );
     assert_eq!(
         w40[0].severity,
         Severity::Warning,
-        "W0040 must be a warning, not an error"
+        "BSK-W0040 must be a warning, not an error"
     );
     Ok(())
 }
@@ -2360,14 +2386,14 @@ fn lambda_assigned_to_unannotated_var_fires() -> Result<(), Box<dyn std::error::
 fn lambda_assigned_to_annotated_var_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
 {
     let src = "f: Callable[[int], int] = lambda x: x + 1\n";
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let w40: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-W0040")
         .collect();
     assert!(
         w40.is_empty(),
-        "lambda assigned to annotated variable must not fire W0040"
+        "lambda assigned to annotated variable must not fire BSK-W0040"
     );
     Ok(())
 }
@@ -2375,14 +2401,14 @@ fn lambda_assigned_to_annotated_var_no_diagnostic() -> Result<(), Box<dyn std::e
 #[test]
 fn lambda_class_attribute_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = "class Config:\n    handler = lambda x: x + 1\n";
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let w40: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-W0040")
         .collect();
     assert!(
         !w40.is_empty(),
-        "lambda assigned to unannotated class attribute must fire W0040"
+        "lambda assigned to unannotated class attribute must fire BSK-W0040"
     );
     Ok(())
 }
@@ -2390,14 +2416,14 @@ fn lambda_class_attribute_fires() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn annotated_class_attribute_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = "class Config:\n    handler: Callable[[int], int] = lambda x: x + 1\n";
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let w40: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-W0040")
         .collect();
     assert!(
         w40.is_empty(),
-        "lambda assigned to annotated class attribute must not fire W0040"
+        "lambda assigned to annotated class attribute must not fire BSK-W0040"
     );
     Ok(())
 }

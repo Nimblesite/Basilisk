@@ -12,7 +12,7 @@ def greet(name: str):
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         codes(&diags).contains(&"BSK-E0002"),
-        "function without return annotation should fire E0002, got: {:?}",
+        "function without return annotation should fire BSK-E0002, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -27,7 +27,7 @@ def greet(name: str) -> str:
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0002"),
-        "function with return annotation should not fire E0002"
+        "function with return annotation should not fire BSK-E0002"
     );
     Ok(())
 }
@@ -41,7 +41,7 @@ def do_nothing() -> None:
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0002"),
-        "function with -> None should not fire E0002"
+        "function with -> None should not fire BSK-E0002"
     );
     Ok(())
 }

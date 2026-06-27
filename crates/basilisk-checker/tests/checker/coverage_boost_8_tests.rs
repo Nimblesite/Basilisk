@@ -4,7 +4,7 @@ use super::common::*;
 // Coverage boost tests batch 8: deep code path coverage.
 // Targets uncovered branches in e0115, e0137, e0140, e0107, e0149, e0079, e0144, e0072
 
-// --- E0115: Deeper deprecated usage paths ---
+// --- Deeper deprecated usage paths ---
 
 #[test]
 fn deprecated_in_with() -> Result<(), Box<dyn std::error::Error>> {
@@ -179,7 +179,7 @@ result = old_b(old_a())
     Ok(())
 }
 
-// --- E0137: Generic protocol deep paths ---
+// --- Generic protocol deep paths ---
 
 #[test]
 fn protocol_generic_combined() -> Result<(), Box<dyn std::error::Error>> {
@@ -298,7 +298,7 @@ r: ReadableProto[int] = IntReader()
     Ok(())
 }
 
-// --- E0140: Callable assignment deep paths ---
+// --- Callable assignment deep paths ---
 
 #[test]
 fn callable_annotation_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -461,7 +461,7 @@ callback: Callable[[int], None] = kw_only
     Ok(())
 }
 
-// --- E0107: Variance deeper paths ---
+// --- Variance deeper paths ---
 
 #[test]
 fn alias_single_level() -> Result<(), Box<dyn std::error::Error>> {
@@ -524,7 +524,7 @@ class Invariant(Generic[T]):
     Ok(())
 }
 
-// --- E0149: PEP 695 deeper scoping ---
+// --- PEP 695 deeper scoping ---
 
 #[test]
 fn class_method_typevar_reuse() -> Result<(), Box<dyn std::error::Error>> {
@@ -560,7 +560,7 @@ def const_func(x: T, y: U) -> T: ...
     Ok(())
 }
 
-// --- E0079: Module protocol deeper ---
+// --- Module protocol deeper ---
 
 #[test]
 fn protocol_with_callable() -> Result<(), Box<dyn std::error::Error>> {
@@ -594,7 +594,7 @@ c: Configurable = sys
     Ok(())
 }
 
-// --- E0144: type() call deeper ---
+// --- type() call deeper ---
 
 #[test]
 fn type_with_methods_dict() -> Result<(), Box<dyn std::error::Error>> {
@@ -641,7 +641,7 @@ x = type("A", (object,), {}, extra=True)
     Ok(())
 }
 
-// --- E0072: Overload deeper paths ---
+// --- Overload deeper paths ---
 
 #[test]
 fn multiple_overloads_three() -> Result<(), Box<dyn std::error::Error>> {
@@ -683,7 +683,7 @@ class Container:
     Ok(())
 }
 
-// --- E0036: ClassVar deeper ---
+// --- ClassVar deeper ---
 
 #[test]
 fn classvar_in_method_local() -> Result<(), Box<dyn std::error::Error>> {
@@ -715,7 +715,7 @@ class Container(Generic[T]):
     Ok(())
 }
 
-// --- E0120: Generator deeper ---
+// --- Generator deeper ---
 
 #[test]
 fn generator_with_return_value() -> Result<(), Box<dyn std::error::Error>> {
@@ -744,7 +744,7 @@ async def gen() -> AsyncIterator[int]:
     Ok(())
 }
 
-// --- E0138: Dataclass transform deeper ---
+// --- Dataclass transform deeper ---
 
 #[test]
 fn transform_base_class() -> Result<(), Box<dyn std::error::Error>> {
@@ -782,7 +782,7 @@ class Config:
     Ok(())
 }
 
-// --- E0131: Generator yield deeper ---
+// --- Generator yield deeper ---
 
 #[test]
 fn multiple_yield_types() -> Result<(), Box<dyn std::error::Error>> {
@@ -812,7 +812,7 @@ async def gen() -> AsyncGenerator[int, None]:
     Ok(())
 }
 
-// --- E0119: Protocol isinstance deeper ---
+// --- Protocol isinstance deeper ---
 
 #[test]
 fn non_runtime_protocol() -> Result<(), Box<dyn std::error::Error>> {
@@ -828,7 +828,7 @@ isinstance(42, NonRuntime)
     Ok(())
 }
 
-// --- E0122: Callable arity deeper ---
+// --- Callable arity deeper ---
 
 #[test]
 fn callable_return_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -864,7 +864,7 @@ takes_binary(with_default)
     Ok(())
 }
 
-// --- E0143: NamedTuple deeper ---
+// --- NamedTuple deeper ---
 
 #[test]
 fn namedtuple_inheritance() -> Result<(), Box<dyn std::error::Error>> {
@@ -882,7 +882,7 @@ class Extended(Base):
     Ok(())
 }
 
-// --- E0121: Protocol conformance deeper ---
+// --- Protocol conformance deeper ---
 
 #[test]
 fn protocol_with_generic() -> Result<(), Box<dyn std::error::Error>> {
@@ -910,7 +910,7 @@ use_container(IntContainer())
     Ok(())
 }
 
-// --- E0095: InitVar deeper ---
+// --- InitVar deeper ---
 
 #[test]
 fn initvar_no_post_init() -> Result<(), Box<dyn std::error::Error>> {
@@ -926,7 +926,7 @@ class Config:
     Ok(())
 }
 
-// --- E0050: NewType deeper ---
+// --- NewType deeper ---
 
 #[test]
 fn newtype_of_newtype() -> Result<(), Box<dyn std::error::Error>> {
@@ -951,7 +951,7 @@ UserIds = NewType('UserIds', List[int])
     Ok(())
 }
 
-// --- E0063: Non-hashable deeper ---
+// --- Non-hashable deeper ---
 
 #[test]
 fn dataclass_hash_unsafe() -> Result<(), Box<dyn std::error::Error>> {
@@ -969,7 +969,7 @@ s = {Point(1, 2)}
     Ok(())
 }
 
-// --- E0130: TypeVar scoping deeper ---
+// --- TypeVar scoping deeper ---
 
 #[test]
 fn typevar_constraint_match() -> Result<(), Box<dyn std::error::Error>> {
@@ -985,7 +985,7 @@ def process(x: T) -> T:
     Ok(())
 }
 
-// --- E0126: Literal string deeper ---
+// --- Literal string deeper ---
 
 #[test]
 fn literal_union() -> Result<(), Box<dyn std::error::Error>> {
@@ -999,7 +999,7 @@ bad_mode: Literal["r", "w"] = "x"
     Ok(())
 }
 
-// --- E0102: TypeVar default deeper ---
+// --- TypeVar default deeper ---
 
 #[test]
 fn typevar_default_with_constraints() -> Result<(), Box<dyn std::error::Error>> {
@@ -1017,7 +1017,7 @@ c: Container = Container()
     Ok(())
 }
 
-// --- E0054: Final deeper ---
+// --- Final deeper ---
 
 #[test]
 fn final_in_function() -> Result<(), Box<dyn std::error::Error>> {
@@ -1032,7 +1032,7 @@ def func() -> None:
     Ok(())
 }
 
-// --- E0048: TypeAlias deeper ---
+// --- TypeAlias deeper ---
 
 #[test]
 fn typealias_union_valid() -> Result<(), Box<dyn std::error::Error>> {
@@ -1046,7 +1046,7 @@ OptInt: TypeAlias = int | None
     Ok(())
 }
 
-// --- E0041: Too few args deeper ---
+// --- Too few args deeper ---
 
 #[test]
 fn missing_multiple_args() -> Result<(), Box<dyn std::error::Error>> {
@@ -1061,7 +1061,7 @@ func(1, 'a')
     Ok(())
 }
 
-// --- E0092: Too few type args deeper ---
+// --- Too few type args deeper ---
 
 #[test]
 fn generic_with_three_params() -> Result<(), Box<dyn std::error::Error>> {
@@ -1082,7 +1082,7 @@ y: Triple[int, str] = Triple()
     Ok(())
 }
 
-// --- E0094: Self type deeper ---
+// --- Self type deeper ---
 
 #[test]
 fn self_in_nested_function() -> Result<(), Box<dyn std::error::Error>> {
@@ -1098,7 +1098,7 @@ class MyClass:
     Ok(())
 }
 
-// --- E0145: Invalid type bracket deeper ---
+// --- Invalid type bracket deeper ---
 
 #[test]
 fn callable_subscript() -> Result<(), Box<dyn std::error::Error>> {
@@ -1111,7 +1111,7 @@ x: Callable[[List[int], Dict[str, float]], bool] = lambda a, b: True
     Ok(())
 }
 
-// --- E0146: Protocol class object deeper ---
+// --- Protocol class object deeper ---
 
 #[test]
 fn protocol_with_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
@@ -1129,7 +1129,7 @@ def process(cls: type[Serializable]) -> None:
     Ok(())
 }
 
-// --- E0139: TypeVarTuple deeper ---
+// --- TypeVarTuple deeper ---
 
 #[test]
 fn typevartuple_with_regular() -> Result<(), Box<dyn std::error::Error>> {

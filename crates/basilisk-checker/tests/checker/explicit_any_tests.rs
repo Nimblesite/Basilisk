@@ -9,7 +9,7 @@ fn explicit_any_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         codes(&diags).contains(&"BSK-W0014"),
-        "explicit Any param annotation should fire W0014, got: {:?}",
+        "explicit Any param annotation should fire BSK-W0014, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -21,7 +21,7 @@ fn explicit_any_return_fires() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         codes(&diags).contains(&"BSK-W0014"),
-        "explicit Any return annotation should fire W0014, got: {:?}",
+        "explicit Any return annotation should fire BSK-W0014, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -34,7 +34,7 @@ fn explicit_any_fires_even_on_stub() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         codes(&diags).contains(&"BSK-W0014"),
-        "explicit Any should fire W0014 even on stub body, got: {:?}",
+        "explicit Any should fire BSK-W0014 even on stub body, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -60,7 +60,7 @@ fn concrete_types_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-W0014"),
-        "concrete annotations should not fire W0014, got: {:?}",
+        "concrete annotations should not fire BSK-W0014, got: {:?}",
         codes(&diags)
     );
     Ok(())

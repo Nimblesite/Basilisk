@@ -7,7 +7,7 @@ use super::common::*;
 //         e0083, e0086, e0088, e0090, e0091, e0092, e0094, e0096, e0100,
 //         e0101, e0103, e0104, e0105, e0106, e0108, e0109, e0115, e0116, e0117, e0118
 
-// --- E0146: Protocol class object ---
+// --- Protocol class object ---
 
 #[test]
 fn protocol_class_object_pass() -> Result<(), Box<dyn std::error::Error>> {
@@ -46,7 +46,7 @@ m: Maker[int] = IntMaker()
     Ok(())
 }
 
-// --- E0147: Tuple starred unpack ---
+// --- Tuple starred unpack ---
 
 #[test]
 fn starred_tuple_valid() -> Result<(), Box<dyn std::error::Error>> {
@@ -95,7 +95,7 @@ def f(t1: tuple[int], t2: tuple[int, *tuple[int, ...]], t3: tuple[int, ...]) -> 
     Ok(())
 }
 
-// --- E0148: Generic type arg ---
+// --- Generic type arg ---
 
 #[test]
 fn generic_type_arg_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -133,7 +133,7 @@ x: Container[int] = Container(42)
     Ok(())
 }
 
-// --- E0149: PEP 695 type param scoping ---
+// --- PEP 695 type param scoping ---
 
 #[test]
 fn pep695_type_param_scoping() -> Result<(), Box<dyn std::error::Error>> {
@@ -150,7 +150,7 @@ class Outer(Generic[T]):
     Ok(())
 }
 
-// --- E0047: Invalid type expression ---
+// --- Invalid type expression ---
 
 #[test]
 fn complex_invalid_type_expr() -> Result<(), Box<dyn std::error::Error>> {
@@ -168,7 +168,7 @@ def f() -> None:
     Ok(())
 }
 
-// --- E0063: Non-hashable dataclass ---
+// --- Non-hashable dataclass ---
 
 #[test]
 fn enum_value_type_violation() -> Result<(), Box<dyn std::error::Error>> {
@@ -185,7 +185,7 @@ class Color(Enum):
     Ok(())
 }
 
-// --- E0067: Enum non-member literal ---
+// --- Enum non-member literal ---
 
 #[test]
 fn non_member_with_value() -> Result<(), Box<dyn std::error::Error>> {
@@ -202,7 +202,7 @@ class Animal(Enum):
     Ok(())
 }
 
-// --- E0069: Dataclass kw_only ---
+// --- Dataclass kw_only ---
 
 #[test]
 fn dataclass_kwonly() -> Result<(), Box<dyn std::error::Error>> {
@@ -219,7 +219,7 @@ class Config:
     Ok(())
 }
 
-// --- E0073: NamedTuple tuple compat ---
+// --- NamedTuple tuple compat ---
 
 #[test]
 fn protocol_self_return() -> Result<(), Box<dyn std::error::Error>> {
@@ -243,7 +243,7 @@ do_clone(Sheep())
     Ok(())
 }
 
-// --- E0078: Self type violation ---
+// --- Self type violation ---
 
 #[test]
 fn self_type_violation() -> Result<(), Box<dyn std::error::Error>> {
@@ -263,7 +263,7 @@ class Child(Base):
     Ok(())
 }
 
-// --- E0083: TypeVarTuple unpack required ---
+// --- TypeVarTuple unpack required ---
 
 #[test]
 fn unpack_required() -> Result<(), Box<dyn std::error::Error>> {
@@ -280,7 +280,7 @@ class Array(Generic[*Ts]):
     Ok(())
 }
 
-// --- E0086: Multiple TypeVarTuple ---
+// --- Multiple TypeVarTuple ---
 
 #[test]
 fn multiple_typevartuple() -> Result<(), Box<dyn std::error::Error>> {
@@ -297,7 +297,7 @@ class Bad(Generic[*Ts1, *Ts2]): ...
     Ok(())
 }
 
-// --- E0088: TypedDict isinstance ---
+// --- TypedDict isinstance ---
 
 #[test]
 fn typeddict_isinstance() -> Result<(), Box<dyn std::error::Error>> {
@@ -316,7 +316,7 @@ isinstance(x, Movie)
     Ok(())
 }
 
-// --- E0090: Invalid tuple syntax ---
+// --- Invalid tuple syntax ---
 
 #[test]
 fn tuple_syntax_various() -> Result<(), Box<dyn std::error::Error>> {
@@ -330,7 +330,7 @@ z: tuple[int, ...] = (1, 2, 3)
     Ok(())
 }
 
-// --- E0091: TypeVar default incompat ---
+// --- TypeVar default incompat ---
 
 #[test]
 fn typevar_default_incompat() -> Result<(), Box<dyn std::error::Error>> {
@@ -356,7 +356,7 @@ T = TypeVar("T", bound=int, default=int)
     Ok(())
 }
 
-// --- E0092: Too few type args ---
+// --- Too few type args ---
 
 #[test]
 fn too_few_type_args() -> Result<(), Box<dyn std::error::Error>> {
@@ -376,7 +376,7 @@ x: Pair[int]
     Ok(())
 }
 
-// --- E0094: Self type in invalid location ---
+// --- Self type in invalid location ---
 
 #[test]
 fn self_type_module_level() -> Result<(), Box<dyn std::error::Error>> {
@@ -417,7 +417,7 @@ class MyClass:
     Ok(())
 }
 
-// --- E0096: Dataclass default factory ---
+// --- Dataclass default factory ---
 
 #[test]
 fn dataclass_default_factory() -> Result<(), Box<dyn std::error::Error>> {
@@ -448,7 +448,7 @@ class Bad:
     Ok(())
 }
 
-// --- E0100: Literal augmented assign ---
+// --- Literal augmented assign ---
 
 #[test]
 fn literal_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
@@ -463,7 +463,7 @@ x += 1
     Ok(())
 }
 
-// --- E0101: TypeGuard no narrowing param ---
+// --- TypeGuard no narrowing param ---
 
 #[test]
 fn typeguard_no_param() -> Result<(), Box<dyn std::error::Error>> {
@@ -491,7 +491,7 @@ def is_int(x: object) -> TypeGuard[int]:
     Ok(())
 }
 
-// --- E0103: Tuple index out of bounds ---
+// --- Tuple index out of bounds ---
 
 #[test]
 fn tuple_index_literal() -> Result<(), Box<dyn std::error::Error>> {
@@ -506,7 +506,7 @@ z = t[5]
     Ok(())
 }
 
-// --- E0104: Cyclical type alias ---
+// --- Cyclical type alias ---
 
 #[test]
 fn cyclical_alias() -> Result<(), Box<dyn std::error::Error>> {
@@ -534,7 +534,7 @@ Matrix: TypeAlias = list[Vector]
     Ok(())
 }
 
-// --- E0105: Bounded TypeVar attribute access ---
+// --- Bounded TypeVar attribute access ---
 
 #[test]
 fn bounded_typevar_attr() -> Result<(), Box<dyn std::error::Error>> {
@@ -551,7 +551,7 @@ def f(x: T) -> T:
     Ok(())
 }
 
-// --- E0106: Protocol as type ---
+// --- Protocol as type ---
 
 #[test]
 fn protocol_as_type() -> Result<(), Box<dyn std::error::Error>> {
@@ -568,7 +568,7 @@ x: type[Drawable]
     Ok(())
 }
 
-// --- E0108: Dataclass slots ---
+// --- Dataclass slots ---
 
 #[test]
 fn dataclass_slots() -> Result<(), Box<dyn std::error::Error>> {
@@ -603,7 +603,7 @@ class Child(Base):
     Ok(())
 }
 
-// --- E0109: TypeVar bound violation ---
+// --- TypeVar bound violation ---
 
 #[test]
 fn typevar_bound_violation_in_call() -> Result<(), Box<dyn std::error::Error>> {
@@ -639,7 +639,7 @@ result = double(42)
     Ok(())
 }
 
-// --- E0115: Deprecated usage ---
+// --- Deprecated usage ---
 
 #[test]
 fn deprecated_function() -> Result<(), Box<dyn std::error::Error>> {
@@ -729,7 +729,7 @@ normal_func()
     Ok(())
 }
 
-// --- E0116: NamedTuple definition ---
+// --- NamedTuple definition ---
 
 #[test]
 fn namedtuple_definition_functional() -> Result<(), Box<dyn std::error::Error>> {
@@ -759,7 +759,7 @@ class Point(NamedTuple):
     Ok(())
 }
 
-// --- E0117: Unbound TypeVar ---
+// --- Unbound TypeVar ---
 
 #[test]
 fn unbound_typevar() -> Result<(), Box<dyn std::error::Error>> {
@@ -794,7 +794,7 @@ class MyClass(Generic[T]):
     Ok(())
 }
 
-// --- E0118: super() abstract no impl ---
+// --- super() abstract no impl ---
 
 #[test]
 fn super_abstract_no_impl() -> Result<(), Box<dyn std::error::Error>> {

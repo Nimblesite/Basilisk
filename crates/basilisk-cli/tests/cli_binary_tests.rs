@@ -252,7 +252,7 @@ fn output_contains_diagnostic_summary() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn output_shows_correct_error_count() -> Result<(), Box<dyn std::error::Error>> {
-    // missing_both.py has 3 x E0001 + 2 x E0002 = 5 errors
+    // missing_both.py has 3 x BSK-E0001 + 2 x BSK-E0002 = 5 errors
     let out = run_check(&[&fixture("missing_both.py")])?;
     assert!(
         stdout(&out).contains("5 error"),
@@ -271,8 +271,8 @@ fn checks_multiple_files_in_one_invocation() -> Result<(), Box<dyn std::error::E
         &fixture("errors/e0002_single_func.py"),
     ])?;
     let text = stdout(&out);
-    assert!(text.contains("BSK-E0001"), "must flag E0001");
-    assert!(text.contains("BSK-E0002"), "must flag E0002");
+    assert!(text.contains("BSK-E0001"), "must flag BSK-E0001");
+    assert!(text.contains("BSK-E0002"), "must flag BSK-E0002");
     assert_eq!(out.status.code(), Some(1));
     Ok(())
 }

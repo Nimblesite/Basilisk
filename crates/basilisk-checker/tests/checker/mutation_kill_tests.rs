@@ -247,7 +247,7 @@ f: Union[int, str, float] = [1, 2]
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0097: Protocol undeclared self attrs — kill all mutants
+// Protocol undeclared self attrs — kill all mutants
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -290,7 +290,7 @@ class MyProto(Protocol):
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0150: Dead branch — kill mutants in version/platform detection
+// Dead branch — kill mutants in version/platform detection
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -404,7 +404,7 @@ def check():
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0014: Various literal type mismatches — each type path
+// Various literal type mismatches — each type path
 // ═══════════════════════════════════════════════════════════════════════
 
 #[mutation_safe(rule = "e0014")]
@@ -444,7 +444,7 @@ n: bytes = b"data"
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0014: Negative literal and float literal
+// Negative literal and float literal
 // ═══════════════════════════════════════════════════════════════════════
 
 #[mutation_safe(rule = "e0014")]

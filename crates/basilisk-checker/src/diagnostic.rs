@@ -19,7 +19,8 @@ pub enum Severity {
     Warning,
     /// A type error that must be resolved.
     Error,
-    /// Critical Mojo safety violation (ownership/move semantics).
+    /// Critical safety violation reported by the opt-in, off-by-default
+    /// ownership/move-semantics rules inspired by Mojo.
     SafetyViolation,
 }
 

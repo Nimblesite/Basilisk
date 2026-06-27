@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "Quick Start — Type-Check Your First File in 5 Minutes"
-description: "Get started with Basilisk in 5 minutes. Install the VS Code extension, run your first type check, and see strict-by-default Python diagnostics in action."
+description: "Get started with Basilisk in 5 minutes. Install the VS Code extension, run your first type check, and see PEP-conformant Python diagnostics in action."
 keywords: basilisk, quick start, python language server, type checking, tutorial, vs code
 date: 2026-02-28
 dateModified: 2026-03-31

@@ -5,7 +5,7 @@ use super::common::*;
 // Covers: e0125, e0126, e0127, e0128, e0129, e0130, e0131, e0132, e0133, e0134,
 //         e0136, e0137, e0138, e0139, e0140, e0141, e0142, e0143, e0144, e0145
 
-// --- E0125: Instance attribute on class ---
+// --- Instance attribute on class ---
 
 #[test]
 fn class_attr_access() -> Result<(), Box<dyn std::error::Error>> {
@@ -73,7 +73,7 @@ MyClass.count
     Ok(())
 }
 
-// --- E0126: Literal string assignment ---
+// --- Literal string assignment ---
 
 #[test]
 fn literal_str_assignment() -> Result<(), Box<dyn std::error::Error>> {
@@ -127,7 +127,7 @@ y: Literal["a", "b", "c"] = "d"
     Ok(())
 }
 
-// --- E0127: Tuple index out of range ---
+// --- Tuple index out of range ---
 
 #[test]
 fn tuple_index_oob() -> Result<(), Box<dyn std::error::Error>> {
@@ -164,7 +164,7 @@ w = x[-10]
     Ok(())
 }
 
-// --- E0128: TypeVar default referential ---
+// --- TypeVar default referential ---
 
 #[test]
 fn typevar_default_ordering_violation() -> Result<(), Box<dyn std::error::Error>> {
@@ -212,7 +212,7 @@ class MyClass(Generic[T1, T2]): ...
     Ok(())
 }
 
-// --- E0129: Literal value assignment ---
+// --- Literal value assignment ---
 
 #[test]
 fn literal_value_assignment() -> Result<(), Box<dyn std::error::Error>> {
@@ -241,7 +241,7 @@ x: Literal[None] = None
     Ok(())
 }
 
-// --- E0130: TypeVar scoping ---
+// --- TypeVar scoping ---
 
 #[test]
 fn typevar_nested_class_reuse() -> Result<(), Box<dyn std::error::Error>> {
@@ -307,7 +307,7 @@ x.method("hello")
     Ok(())
 }
 
-// --- E0131: Generator yield type mismatch ---
+// --- Generator yield type mismatch ---
 
 #[test]
 fn generator_yield_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -369,7 +369,7 @@ def int_gen() -> Generator[int, None, None]:
     Ok(())
 }
 
-// --- E0132: Inconsistent TypeVar ordering ---
+// --- Inconsistent TypeVar ordering ---
 
 #[test]
 fn inconsistent_typevar_ordering() -> Result<(), Box<dyn std::error::Error>> {
@@ -387,7 +387,7 @@ class Child(Base[U, T]): ...
     Ok(())
 }
 
-// --- E0133: Protocol TypeVar variance ---
+// --- Protocol TypeVar variance ---
 
 #[test]
 fn protocol_typevar_variance() -> Result<(), Box<dyn std::error::Error>> {
@@ -404,7 +404,7 @@ class Readable(Protocol[T_co]):
     Ok(())
 }
 
-// --- E0134: Invariant generic mismatch ---
+// --- Invariant generic mismatch ---
 
 #[test]
 fn invariant_generic_subclass() -> Result<(), Box<dyn std::error::Error>> {
@@ -423,7 +423,7 @@ def test(s: SymbolTable) -> None:
     Ok(())
 }
 
-// --- E0136: Callable subtyping ---
+// --- Callable subtyping ---
 
 #[test]
 fn callable_param_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -461,7 +461,7 @@ takes_int_returning(returns_str)
     Ok(())
 }
 
-// --- E0137: Generic protocol violations ---
+// --- Generic protocol violations ---
 
 #[test]
 fn protocol_with_generic_base() -> Result<(), Box<dyn std::error::Error>> {
@@ -534,7 +534,7 @@ converter: Transformer[int] = StrReturner()
     Ok(())
 }
 
-// --- E0138: Dataclass transform metaclass ---
+// --- Dataclass transform metaclass ---
 
 #[test]
 fn dataclass_transform() -> Result<(), Box<dyn std::error::Error>> {
@@ -557,7 +557,7 @@ u = User(name="Alice", age=30)
     Ok(())
 }
 
-// --- E0139: TypeVarTuple specialization ---
+// --- TypeVarTuple specialization ---
 
 #[test]
 fn typevartuple_specialization() -> Result<(), Box<dyn std::error::Error>> {
@@ -577,7 +577,7 @@ y: Array[int] = Array()
     Ok(())
 }
 
-// --- E0140: Callable assignment ---
+// --- Callable assignment ---
 
 #[test]
 fn callable_annotation_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -645,7 +645,7 @@ cb: Callback = wrong_func
     Ok(())
 }
 
-// --- E0141: Unpack kwargs ---
+// --- Unpack kwargs ---
 
 #[test]
 fn unpack_kwargs() -> Result<(), Box<dyn std::error::Error>> {
@@ -666,7 +666,7 @@ func(name="test", value=42)
     Ok(())
 }
 
-// --- E0142: Dataclass transform base ---
+// --- Dataclass transform base ---
 
 #[test]
 fn dataclass_transform_base() -> Result<(), Box<dyn std::error::Error>> {
@@ -691,7 +691,7 @@ a = Admin(name="Alice", age=30, role="admin")
     Ok(())
 }
 
-// --- E0143: NamedTuple usage ---
+// --- NamedTuple usage ---
 
 #[test]
 fn namedtuple_class_usage() -> Result<(), Box<dyn std::error::Error>> {
@@ -741,7 +741,7 @@ class Point(NamedTuple):
     Ok(())
 }
 
-// --- E0144: type() call constructor ---
+// --- type() call constructor ---
 
 #[test]
 fn type_call_three_args() -> Result<(), Box<dyn std::error::Error>> {
@@ -763,7 +763,7 @@ t = type(42)
     Ok(())
 }
 
-// --- E0145: Invalid type bracket ---
+// --- Invalid type bracket ---
 
 #[test]
 fn invalid_subscript() -> Result<(), Box<dyn std::error::Error>> {

@@ -12,7 +12,7 @@ def greet(name):
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         codes(&diags).contains(&"BSK-E0001"),
-        "unannotated parameter should fire E0001, got: {:?}",
+        "unannotated parameter should fire BSK-E0001, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -27,7 +27,7 @@ def greet(name: str) -> str:
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0001"),
-        "annotated parameter should not fire E0001"
+        "annotated parameter should not fire BSK-E0001"
     );
     Ok(())
 }
@@ -42,7 +42,7 @@ class Foo:
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0001"),
-        "self parameter should not fire E0001"
+        "self parameter should not fire BSK-E0001"
     );
     Ok(())
 }
@@ -58,7 +58,7 @@ class Foo:
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0001"),
-        "cls parameter should not fire E0001"
+        "cls parameter should not fire BSK-E0001"
     );
     Ok(())
 }
@@ -73,7 +73,7 @@ def add(a, b):
     let e0001_count = codes(&diags).iter().filter(|c| **c == "BSK-E0001").count();
     assert!(
         e0001_count >= 2,
-        "two unannotated params should fire E0001 at least twice, got {e0001_count}"
+        "two unannotated params should fire BSK-E0001 at least twice, got {e0001_count}"
     );
     Ok(())
 }

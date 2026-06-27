@@ -3,7 +3,7 @@ use super::common::*;
 
 // Coverage boost tests batch 35: targeting the long tail of uncovered rules.
 
-// ── E0072: Overload call mismatch ──
+// ── Overload call mismatch ──
 
 #[test]
 fn overload_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -28,7 +28,7 @@ result5 = process(None)
     Ok(())
 }
 
-// ── E0054: Final annotation violations ──
+// ── Final annotation violations ──
 
 #[test]
 fn final_annotation() -> Result<(), Box<dyn std::error::Error>> {
@@ -57,7 +57,7 @@ def func(x: Final[int]) -> None:
     Ok(())
 }
 
-// ── E0126: Literal string assignment ──
+// ── Literal string assignment ──
 
 #[test]
 fn literal_string() -> Result<(), Box<dyn std::error::Error>> {
@@ -81,7 +81,7 @@ func("c")
     Ok(())
 }
 
-// ── E0129: Literal value incompatible ──
+// ── Literal value incompatible ──
 
 #[test]
 fn literal_value_compat() -> Result<(), Box<dyn std::error::Error>> {
@@ -107,7 +107,7 @@ def func4(a: Literal["hello"]):
     Ok(())
 }
 
-// ── E0139: TypeVarTuple specialization ──
+// ── TypeVarTuple specialization ──
 
 #[test]
 fn typevartuple_specialization() -> Result<(), Box<dyn std::error::Error>> {
@@ -136,7 +136,7 @@ w: Shape[int, str, float] = Shape()
     Ok(())
 }
 
-// ── E0074: __new__ constructor mismatch ──
+// ── __new__ constructor mismatch ──
 
 #[test]
 fn new_constructor_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -157,7 +157,7 @@ s3 = Singleton()
     Ok(())
 }
 
-// ── E0075: Self type attribute incompatible ──
+// ── Self type attribute incompatible ──
 
 #[test]
 fn self_type_attr() -> Result<(), Box<dyn std::error::Error>> {
@@ -183,7 +183,7 @@ class SubBuilder(Builder):
     Ok(())
 }
 
-// ── E0076: Overload union expansion failure ──
+// ── Overload union expansion failure ──
 
 #[test]
 fn overload_union_expansion() -> Result<(), Box<dyn std::error::Error>> {
@@ -207,7 +207,7 @@ result = convert(val)
     Ok(())
 }
 
-// ── E0077: Protocol Self violation ──
+// ── Protocol Self violation ──
 
 #[test]
 fn protocol_self_violation() -> Result<(), Box<dyn std::error::Error>> {
@@ -233,7 +233,7 @@ y: Clonable = Bad()
     Ok(())
 }
 
-// ── E0063: Non-hashable dataclass ──
+// ── Non-hashable dataclass ──
 
 #[test]
 fn non_hashable_dataclass() -> Result<(), Box<dyn std::error::Error>> {
@@ -266,7 +266,7 @@ s2 = {i}
     Ok(())
 }
 
-// ── E0064: Invalid NamedTuple call ──
+// ── Invalid NamedTuple call ──
 
 #[test]
 fn invalid_namedtuple_call() -> Result<(), Box<dyn std::error::Error>> {
@@ -282,7 +282,7 @@ Bad2 = NamedTuple("Bad2", x=int, y=str)
     Ok(())
 }
 
-// ── E0050: NewType violations ──
+// ── NewType violations ──
 
 #[test]
 fn newtype_violations() -> Result<(), Box<dyn std::error::Error>> {
@@ -306,7 +306,7 @@ bad2: Email = "test@test.com"
     Ok(())
 }
 
-// ── E0051: NewType base type ──
+// ── NewType base type ──
 
 #[test]
 fn newtype_base() -> Result<(), Box<dyn std::error::Error>> {
@@ -327,7 +327,7 @@ Bad2 = NewType("Bad2", None)
     Ok(())
 }
 
-// ── E0041: Type annotation assignment mismatch ──
+// ── Type annotation assignment mismatch ──
 
 #[test]
 fn type_annotation_assignment() -> Result<(), Box<dyn std::error::Error>> {
@@ -349,7 +349,7 @@ class MyClass:
     Ok(())
 }
 
-// ── E0059: match_args=False access ──
+// ── match_args=False access ──
 
 #[test]
 fn match_args_false() -> Result<(), Box<dyn std::error::Error>> {
@@ -374,7 +374,7 @@ WithMatch.__match_args__
     Ok(())
 }
 
-// ── E0060: Cross-type dataclass ordering ──
+// ── Cross-type dataclass ordering ──
 
 #[test]
 fn cross_type_comparison() -> Result<(), Box<dyn std::error::Error>> {
@@ -403,7 +403,7 @@ result2 = a > b
     Ok(())
 }
 
-// ── E0065: Float param int attr access ──
+// ── Float param int attr access ──
 
 #[test]
 fn float_param_int_attr() -> Result<(), Box<dyn std::error::Error>> {
@@ -419,7 +419,7 @@ def func(x: float) -> None:
     Ok(())
 }
 
-// ── E0068: Literal string enum mismatch ──
+// ── Literal string enum mismatch ──
 
 #[test]
 fn literal_string_enum() -> Result<(), Box<dyn std::error::Error>> {
@@ -441,7 +441,7 @@ z: Literal["red"] = "red"
     Ok(())
 }
 
-// ── E0069: Dataclass kw_only violation ──
+// ── Dataclass kw_only violation ──
 
 #[test]
 fn kw_only() -> Result<(), Box<dyn std::error::Error>> {
@@ -463,7 +463,7 @@ c3 = Config("test", value=42)
     Ok(())
 }
 
-// ── E0083: TypeVarTuple unpack required ──
+// ── TypeVarTuple unpack required ──
 
 #[test]
 fn typevartuple_unpack() -> Result<(), Box<dyn std::error::Error>> {
@@ -484,7 +484,7 @@ class BadArray(Generic[Ts]):
     Ok(())
 }
 
-// ── E0082: TypeVarTuple callable mismatch ──
+// ── TypeVarTuple callable mismatch ──
 
 #[test]
 fn typevartuple_callable() -> Result<(), Box<dyn std::error::Error>> {
@@ -506,7 +506,7 @@ result = apply(add, 1, 2)
     Ok(())
 }
 
-// ── E0081: TypeVarTuple unpack violation ──
+// ── TypeVarTuple unpack violation ──
 
 #[test]
 fn typevartuple_unpack_violation() -> Result<(), Box<dyn std::error::Error>> {
@@ -527,7 +527,7 @@ class Bad1(Generic[T, *Ts]):
     Ok(())
 }
 
-// ── E0086: Multiple TypeVarTuples ──
+// ── Multiple TypeVarTuples ──
 
 #[test]
 fn multiple_typevartuple() -> Result<(), Box<dyn std::error::Error>> {
@@ -545,7 +545,7 @@ class Bad(Generic[*Ts1, *Ts2]):
     Ok(())
 }
 
-// ── E0094: Self invalid location ──
+// ── Self invalid location ──
 
 #[test]
 fn self_invalid_location() -> Result<(), Box<dyn std::error::Error>> {
@@ -568,7 +568,7 @@ class MyClass:
     Ok(())
 }
 
-// ── E0100: Literal augmented assign ──
+// ── Literal augmented assign ──
 
 #[test]
 fn literal_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
@@ -588,7 +588,7 @@ def func2(x: Literal["hello"]) -> None:
     Ok(())
 }
 
-// ── E0103: Tuple index out of bounds ──
+// ── Tuple index out of bounds ──
 
 #[test]
 fn tuple_index() -> Result<(), Box<dyn std::error::Error>> {
@@ -608,7 +608,7 @@ def func(t: tuple[int, str, float]) -> None:
     Ok(())
 }
 
-// ── E0104: Cyclical type alias ──
+// ── Cyclical type alias ──
 
 #[test]
 fn cyclical_type_alias() -> Result<(), Box<dyn std::error::Error>> {
@@ -625,7 +625,7 @@ C: TypeAlias = list["C"]
     Ok(())
 }
 
-// ── E0106: Protocol class object ──
+// ── Protocol class object ──
 
 #[test]
 fn protocol_class_object() -> Result<(), Box<dyn std::error::Error>> {
@@ -645,7 +645,7 @@ func(P)
     Ok(())
 }
 
-// ── E0110: Protocol variance violation ──
+// ── Protocol variance violation ──
 
 #[test]
 fn protocol_variance() -> Result<(), Box<dyn std::error::Error>> {
@@ -667,7 +667,7 @@ class WriteOnly(Protocol[T_contra]):
     Ok(())
 }
 
-// ── E0112: TypeGuard callable return mismatch ──
+// ── TypeGuard callable return mismatch ──
 
 #[test]
 fn typeguard_return() -> Result<(), Box<dyn std::error::Error>> {
@@ -685,7 +685,7 @@ def bad_guard(x: object) -> TypeGuard[str]:
     Ok(())
 }
 
-// ── E0113: TypeIs inconsistent narrowing ──
+// ── TypeIs inconsistent narrowing ──
 
 #[test]
 fn typeis_narrowing() -> Result<(), Box<dyn std::error::Error>> {
@@ -703,7 +703,7 @@ def bad_typeis(x: str) -> TypeIs[int]:
     Ok(())
 }
 
-// ── E0118: Super on abstract ──
+// ── Super on abstract ──
 
 #[test]
 fn super_abstract() -> Result<(), Box<dyn std::error::Error>> {
@@ -732,7 +732,7 @@ class ProtoChild(ProtoBase):
     Ok(())
 }
 
-// ── E0121: Protocol assignment conformance ──
+// ── Protocol assignment conformance ──
 
 #[test]
 fn protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
@@ -760,7 +760,7 @@ z: HasLen = object()
     Ok(())
 }
 
-// ── E0122: Callable call-site violation ──
+// ── Callable call-site violation ──
 
 #[test]
 fn callable_callsite() -> Result<(), Box<dyn std::error::Error>> {
@@ -781,7 +781,7 @@ result2 = apply(my_func, "wrong")
     Ok(())
 }
 
-// ── E0015: Too many type args ──
+// ── Too many type args ──
 
 #[test]
 fn too_many_type_args() -> Result<(), Box<dyn std::error::Error>> {
@@ -797,7 +797,7 @@ z: Dict[int, str, float] = {}
     Ok(())
 }
 
-// ── E0026: Type annotation error ──
+// ── Type annotation error ──
 
 #[test]
 fn type_annotation() -> Result<(), Box<dyn std::error::Error>> {
@@ -813,7 +813,7 @@ z: Annotated = 42
     Ok(())
 }
 
-// ── E0038: Augmented assignment type ──
+// ── Augmented assignment type ──
 
 #[test]
 fn augmented_assignment() -> Result<(), Box<dyn std::error::Error>> {
@@ -837,7 +837,7 @@ z += "wrong"
     Ok(())
 }
 
-// ── E0134: Invariant generic arg mismatch ──
+// ── Invariant generic arg mismatch ──
 
 #[test]
 fn invariant_generic() -> Result<(), Box<dyn std::error::Error>> {
@@ -862,7 +862,7 @@ b: list[str] = a
     Ok(())
 }
 
-// ── E0136: Callable subtyping violation ──
+// ── Callable subtyping violation ──
 
 #[test]
 fn callable_subtyping() -> Result<(), Box<dyn std::error::Error>> {
@@ -884,7 +884,7 @@ f2: Callable[[int], str] = takes_object
     Ok(())
 }
 
-// ── E0090: Invalid tuple type syntax ──
+// ── Invalid tuple type syntax ──
 
 #[test]
 fn tuple_type_syntax() -> Result<(), Box<dyn std::error::Error>> {
@@ -903,7 +903,7 @@ w: tuple[()] = ()
     Ok(())
 }
 
-// ── E0073: NamedTuple tuple compat ──
+// ── NamedTuple tuple compat ──
 
 #[test]
 fn namedtuple_tuple_compat() -> Result<(), Box<dyn std::error::Error>> {
@@ -924,7 +924,7 @@ t3: tuple[int, int, int] = p
     Ok(())
 }
 
-// ── E0131: Generator type mismatch ──
+// ── Generator type mismatch ──
 
 #[test]
 fn generator_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -948,7 +948,7 @@ async def agen1() -> AsyncGenerator[int, None]:
     Ok(())
 }
 
-// ── E0133: Protocol variance mismatch ──
+// ── Protocol variance mismatch ──
 
 #[test]
 fn protocol_variance_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -973,7 +973,7 @@ q: Producer[int] = IntProducer()
     Ok(())
 }
 
-// ── E0141: Unpack kwargs violation ──
+// ── Unpack kwargs violation ──
 
 #[test]
 fn unpack_kwargs() -> Result<(), Box<dyn std::error::Error>> {
@@ -997,7 +997,7 @@ func(unknown="bad")
     Ok(())
 }
 
-// ── E0043: Binary operation type ──
+// ── Binary operation type ──
 
 #[test]
 fn binary_operation() -> Result<(), Box<dyn std::error::Error>> {
@@ -1015,7 +1015,7 @@ b: int = "a" + "b"
     Ok(())
 }
 
-// ── E0044: Comparison type ──
+// ── Comparison type ──
 
 #[test]
 fn comparison() -> Result<(), Box<dyn std::error::Error>> {
@@ -1030,7 +1030,7 @@ w = [1, 2] < [3, 4]
     Ok(())
 }
 
-// ── E0012: Unused variable ──
+// ── Unused variable ──
 
 #[test]
 fn unused_var() -> Result<(), Box<dyn std::error::Error>> {
@@ -1051,7 +1051,7 @@ class MyClass:
     Ok(())
 }
 
-// ── E0125: Instance attr on class ──
+// ── Instance attr on class ──
 
 #[test]
 fn instance_attr_on_class() -> Result<(), Box<dyn std::error::Error>> {
@@ -1071,7 +1071,7 @@ MyClass.instance_var
     Ok(())
 }
 
-// ── E0055: TypeVar invalid kwargs ──
+// ── TypeVar invalid kwargs ──
 
 #[test]
 fn typevar_invalid_kwargs() -> Result<(), Box<dyn std::error::Error>> {
@@ -1086,7 +1086,7 @@ U = TypeVar("U", int, str, bound=int)
     Ok(())
 }
 
-// ── E0128: TypeVar default referential (additional) ──
+// ── TypeVar default referential (additional) ──
 
 #[test]
 fn typevar_default_referential() -> Result<(), Box<dyn std::error::Error>> {
@@ -1103,7 +1103,7 @@ W = TypeVar("W", default=int)
     Ok(())
 }
 
-// ── E0067: Enum non-member in Literal ──
+// ── Enum non-member in Literal ──
 
 #[test]
 fn enum_non_member() -> Result<(), Box<dyn std::error::Error>> {

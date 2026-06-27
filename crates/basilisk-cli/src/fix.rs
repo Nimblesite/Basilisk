@@ -309,7 +309,7 @@ mod tests {
         assert_eq!(code, 0);
         assert_eq!(
             fixed, "x = 42\n",
-            "W0050 fix should be applied when specified"
+            "BSK-W0050 fix should be applied when specified"
         );
     }
 
@@ -337,7 +337,7 @@ mod tests {
         let (py, path) = write_temp("basilisk_test_fix_default_safe.py", "x: int = 42\n");
         let (code, fixed) = fix_and_read(&path, &py, false, &[]);
         assert_eq!(code, 0);
-        assert_eq!(fixed, "x = 42\n", "default (safe) rules should fix W0050");
+        assert_eq!(fixed, "x = 42\n", "default (safe) rules should fix BSK-W0050");
     }
 
     #[test]
@@ -376,7 +376,7 @@ mod tests {
     fn run_fix_applies_e0001_missing_param_annotation() {
         let (py, path) = write_temp("basilisk_test_fix_e0001.py", "def foo(x):\n    pass\n");
         let (code, fixed) = fix_and_read(&path, &py, false, &["BSK-E0001".to_owned()]);
-        assert_eq!(code, 0, "E0001 fix must return 0");
+        assert_eq!(code, 0, "BSK-E0001 fix must return 0");
         assert!(fixed.contains("def foo(x: Any)"), "got: {fixed}");
     }
 
@@ -384,7 +384,7 @@ mod tests {
     fn run_fix_applies_e0002_missing_return_annotation() {
         let (py, path) = write_temp("basilisk_test_fix_e0002.py", "def foo(x: int):\n    pass\n");
         let (code, fixed) = fix_and_read(&path, &py, false, &["BSK-E0002".to_owned()]);
-        assert_eq!(code, 0, "E0002 fix must return 0");
+        assert_eq!(code, 0, "BSK-E0002 fix must return 0");
         assert_eq!(fixed, "def foo(x: int) -> None:\n    pass\n");
     }
 
@@ -392,7 +392,7 @@ mod tests {
     fn run_fix_applies_e0005_missing_attribute_annotation() {
         let (py, path) = write_temp("basilisk_test_fix_e0005.py", "class Foo:\n    bar = []\n");
         let (code, fixed) = fix_and_read(&path, &py, false, &["BSK-E0005".to_owned()]);
-        assert_eq!(code, 0, "E0005 fix must return 0");
+        assert_eq!(code, 0, "BSK-E0005 fix must return 0");
         assert!(fixed.contains("bar: Any = []"), "got: {fixed}");
     }
 
@@ -404,9 +404,9 @@ mod tests {
         );
         let (code, fixed) = fix_and_read(&path, &py, false, &[]);
         assert_eq!(code, 0);
-        assert!(fixed.contains("x: Any"), "E0001 not applied, got: {fixed}");
-        assert!(fixed.contains("-> None"), "E0002 not applied, got: {fixed}");
-        assert!(fixed.contains("y = 42"), "W0050 not applied, got: {fixed}");
+        assert!(fixed.contains("x: Any"), "BSK-E0001 not applied, got: {fixed}");
+        assert!(fixed.contains("-> None"), "BSK-E0002 not applied, got: {fixed}");
+        assert!(fixed.contains("y = 42"), "BSK-W0050 not applied, got: {fixed}");
     }
 
     #[test]
@@ -426,10 +426,10 @@ mod tests {
         let fixed_b = std::fs::read_to_string(&file_b).expect("read b");
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(code, 0);
-        assert_eq!(fixed_a, "x = 42\n", "W0050 not applied to first file");
+        assert_eq!(fixed_a, "x = 42\n", "BSK-W0050 not applied to first file");
         assert_eq!(
             fixed_b, "y = \"hello\"\n",
-            "W0050 not applied to second file"
+            "BSK-W0050 not applied to second file"
         );
     }
 
@@ -453,7 +453,7 @@ mod tests {
         let (py, path) = write_temp("basilisk_test_fix_unsafe.py", "x: int = 42\n");
         let (code, fixed) = fix_and_read(&path, &py, true, &[]);
         assert_eq!(code, 0);
-        assert_eq!(fixed, "x = 42\n", "include_unsafe=true should apply W0050");
+        assert_eq!(fixed, "x = 42\n", "include_unsafe=true should apply BSK-W0050");
     }
 
     #[test]
@@ -474,7 +474,7 @@ mod tests {
             fixed.contains("def greet(name: str) -> str:"),
             "clean fn changed"
         );
-        assert!(fixed.contains("x = 42"), "W0050 fix not applied");
+        assert!(fixed.contains("x = 42"), "BSK-W0050 fix not applied");
     }
 
     #[test]

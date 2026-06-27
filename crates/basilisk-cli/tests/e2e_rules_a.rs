@@ -7,13 +7,13 @@
     clippy::panic,
     clippy::as_conversions
 )]
-//! E2E tests for error codes E0001 through E0005.
+//! E2E tests for error codes BSK-E0001 through BSK-E0005.
 //!
-//! E0001 — Missing parameter type annotation
-//! E0002 — Missing return type annotation
-//! E0003 — Unannotated module-level variable
-//! E0004 — Unannotated *args/**kwargs
-//! E0005 — Unannotated class attribute
+//! Missing parameter type annotation
+//! Missing return type annotation
+//! Unannotated module-level variable
+//! Unannotated *args/**kwargs
+//! Unannotated class attribute
 
 mod common;
 
@@ -21,7 +21,7 @@ use basilisk_test_utils::{assert_diagnostics, Expected};
 use common::{fixture, run};
 
 // ---------------------------------------------------------------------------
-// E0001 — Missing parameter type annotation
+// Missing parameter type annotation
 // ---------------------------------------------------------------------------
 
 /// ```python
@@ -61,7 +61,7 @@ fn three_unannotated_params() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// ```python
-/// def log(*messages, level: str) -> None:   # *messages unannotated → E0004, col 10
+/// def log(*messages, level: str) -> None:   # *messages unannotated → BSK-E0004, col 10
 ///     pass
 /// ```
 #[test]
@@ -77,7 +77,7 @@ fn unannotated_vararg() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// ```python
-/// def configure(**options) -> None:   # **options unannotated → E0004, col 17
+/// def configure(**options) -> None:   # **options unannotated → BSK-E0004, col 17
 ///     pass
 /// ```
 #[test]
@@ -108,7 +108,7 @@ fn unannotated_param_in_nested_function() -> Result<(), Box<dyn std::error::Erro
 }
 
 // ---------------------------------------------------------------------------
-// E0002 — Missing return type annotation
+// Missing return type annotation
 // ---------------------------------------------------------------------------
 
 /// ```python
@@ -156,7 +156,7 @@ fn three_functions_all_missing_return() -> Result<(), Box<dyn std::error::Error>
 }
 
 // ---------------------------------------------------------------------------
-// E0001 + E0002 — Mixed, class methods
+// BSK-E0001 + BSK-E0002 — Mixed, class methods
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -177,7 +177,7 @@ fn and_e0002_class_methods() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0002 — dunder methods without return annotations
+// dunder methods without return annotations
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -198,7 +198,7 @@ fn dunder_methods_all_missing_return() -> Result<(), Box<dyn std::error::Error>>
 }
 
 // ---------------------------------------------------------------------------
-// E0001 — mixed: some params annotated, some not
+// mixed: some params annotated, some not
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -218,7 +218,7 @@ fn only_unannotated_params_flagged_in_mixed_signature(
 }
 
 // ---------------------------------------------------------------------------
-// E0001 — positional-only parameters without annotations
+// positional-only parameters without annotations
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -237,7 +237,7 @@ fn positional_only_params_flagged() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0002 — missing return on innermost nested function only
+// missing return on innermost nested function only
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -253,7 +253,7 @@ fn only_innermost_nested_function_missing_return() -> Result<(), Box<dyn std::er
 }
 
 // ---------------------------------------------------------------------------
-// E0001 — keyword-only params without annotations
+// keyword-only params without annotations
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -272,7 +272,7 @@ fn unannotated_keyword_only_params_flagged() -> Result<(), Box<dyn std::error::E
 }
 
 // ---------------------------------------------------------------------------
-// E0001 + E0002 — four module-level functions, all completely untyped
+// BSK-E0001 + BSK-E0002 — four module-level functions, all completely untyped
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -297,7 +297,7 @@ fn and_e0002_four_completely_untyped_functions() -> Result<(), Box<dyn std::erro
 }
 
 // ---------------------------------------------------------------------------
-// E0002 — function inside else branch of version guard
+// function inside else branch of version guard
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -313,7 +313,7 @@ fn function_in_else_branch_of_version_guard() -> Result<(), Box<dyn std::error::
 }
 
 // ---------------------------------------------------------------------------
-// E0001 + E0002 — subclass overrides with missing annotations
+// BSK-E0001 + BSK-E0002 — subclass overrides with missing annotations
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -336,7 +336,7 @@ fn and_e0002_subclass_override_missing_annotations() -> Result<(), Box<dyn std::
 }
 
 // ---------------------------------------------------------------------------
-// E0001 + E0002 — untyped functions inside try/except blocks
+// BSK-E0001 + BSK-E0002 — untyped functions inside try/except blocks
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -358,7 +358,7 @@ fn and_e0002_functions_inside_try_except() -> Result<(), Box<dyn std::error::Err
 }
 
 // ---------------------------------------------------------------------------
-// E0001 + E0002 — untyped functions inside while/for blocks
+// BSK-E0001 + BSK-E0002 — untyped functions inside while/for blocks
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -380,7 +380,7 @@ fn and_e0002_functions_inside_while_for() -> Result<(), Box<dyn std::error::Erro
 }
 
 // ---------------------------------------------------------------------------
-// E0002 — zero-param functions without return annotation
+// zero-param functions without return annotation
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -400,7 +400,7 @@ fn zero_param_functions_all_missing_return() -> Result<(), Box<dyn std::error::E
 }
 
 // ---------------------------------------------------------------------------
-// E0001 — unannotated params in doubly-nested class methods
+// unannotated params in doubly-nested class methods
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -420,7 +420,7 @@ fn params_in_doubly_nested_class_methods() -> Result<(), Box<dyn std::error::Err
 }
 
 // ---------------------------------------------------------------------------
-// E0001 + E0004 — every parameter kind in one signature
+// BSK-E0001 + BSK-E0004 — every parameter kind in one signature
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -442,7 +442,7 @@ fn and_e0004_all_parameter_kinds_flagged() -> Result<(), Box<dyn std::error::Err
 }
 
 // ---------------------------------------------------------------------------
-// E0003 — module-level variables with unresolvable inference
+// module-level variables with unresolvable inference
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -462,7 +462,7 @@ fn unannotated_module_vars() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0005 — class attributes without type annotations
+// class attributes without type annotations
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -471,7 +471,7 @@ fn unannotated_class_attributes() -> Result<(), Box<dyn std::error::Error>> {
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
         codes.contains(&"BSK-E0005"),
-        "should emit E0005 for unannotated class attributes, got: {diags:#?}"
+        "should emit BSK-E0005 for unannotated class attributes, got: {diags:#?}"
     );
     Ok(())
 }

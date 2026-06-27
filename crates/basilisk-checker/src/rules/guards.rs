@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
 /// Returns `true` when a function is in a "stub context" — a context where
-/// annotation enforcement (E0001, E0002, E0004) should be skipped.
+/// annotation enforcement (BSK-E0001, BSK-E0002, BSK-E0004) should be skipped.
 ///
 /// A stub context is any of:
 /// - A non-`@overload` function whose body is a pure stub (only `...`, `pass`,
@@ -54,7 +54,7 @@ pub(crate) fn is_no_type_check(func: &FunctionInfo) -> bool {
 /// Returns `true` when a class is an Enum subclass.
 ///
 /// Enum members are unannotated by design — their type is `Literal[EnumClass.member]`,
-/// synthesised by the Enum metaclass.  Firing E0005 on them is a false positive.
+/// synthesised by the Enum metaclass.  Firing BSK-E0005 on them is a false positive.
 pub(crate) fn is_enum_class(class: &ClassInfo) -> bool {
     class.bases.iter().any(|b| {
         matches!(

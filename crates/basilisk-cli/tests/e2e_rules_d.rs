@@ -14,7 +14,7 @@ mod common;
 use common::run;
 
 // ---------------------------------------------------------------------------
-// E0051 — Invalid Literal parameterization
+// Invalid Literal parameterization
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -32,7 +32,7 @@ fn invalid_literal() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0052 — Frozen dataclass attribute assignment
+// Frozen dataclass attribute assignment
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -50,7 +50,7 @@ fn frozen_dataclass() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0053 — assert_type() type mismatch (may be disabled)
+// assert_type() type mismatch (may be disabled)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -62,7 +62,7 @@ fn assert_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0054 — Final reassignment
+// Final reassignment
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -80,7 +80,7 @@ fn final_reassignment() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0055 — Invalid TypeVar keyword argument combination
+// Invalid TypeVar keyword argument combination
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -98,7 +98,7 @@ fn typevar_invalid_kwargs() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0056 — Mutation of ReadOnly TypedDict fields
+// Mutation of ReadOnly TypedDict fields
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -116,7 +116,7 @@ fn readonly_typeddict() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0057 — Invalid RHS in PEP 695 type alias
+// Invalid RHS in PEP 695 type alias
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -128,7 +128,7 @@ fn pep695_type_alias_invalid() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0058 — Annotated requires at least two arguments
+// Annotated requires at least two arguments
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -146,7 +146,7 @@ fn annotated_too_few_args() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0059 — Access to __match_args__ on dataclass with match_args=False
+// Access to __match_args__ on dataclass with match_args=False
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -164,7 +164,7 @@ fn dataclass_match_args_false() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0060 — Invalid ordering comparison of dataclass instances
+// Invalid ordering comparison of dataclass instances
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -182,7 +182,7 @@ fn dataclass_ordering_invalid() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0061 — assert_type with Literal[Enum.MEMBER] on enum-typed param
+// assert_type with Literal[Enum.MEMBER] on enum-typed param
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -200,7 +200,7 @@ fn assert_type_enum_literal() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0062 — NoReturn/Never function can fall through
+// NoReturn/Never function can fall through
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -218,7 +218,7 @@ fn noreturn_fallthrough() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0063 — Non-hashable dataclass assigned to Hashable
+// Non-hashable dataclass assigned to Hashable
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -236,7 +236,7 @@ fn non_hashable_dataclass() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0064 — Invalid argument in NamedTuple constructor
+// Invalid argument in NamedTuple constructor
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -254,7 +254,7 @@ fn namedtuple_invalid_arg() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0065 — Access to int-only attribute on float-typed parameter
+// Access to int-only attribute on float-typed parameter
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -272,7 +272,7 @@ fn float_param_int_attr() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0066 — Enum member value incompatible with _value_ type
+// Enum member value incompatible with _value_ type
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -290,7 +290,7 @@ fn enum_value_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0067 — Non-member referenced in Literal[EnumClass.X]
+// Non-member referenced in Literal[EnumClass.X]
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -308,7 +308,7 @@ fn enum_non_member_literal() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0068 — Literal string used where enum member reference required
+// Literal string used where enum member reference required
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -326,7 +326,7 @@ fn literal_string_enum() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0069 — Dataclass keyword-only field violations
+// Dataclass keyword-only field violations
 // ---------------------------------------------------------------------------
 
 #[test]

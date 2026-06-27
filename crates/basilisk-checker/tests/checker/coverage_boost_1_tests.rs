@@ -5,7 +5,7 @@ use super::common::*;
 // Covers: e0070, e0072, e0074, e0075, e0076, e0079, e0081, e0082, e0095, e0102,
 //         e0107, e0110, e0111, e0112, e0113, e0114, e0119, e0120, e0121, e0122
 
-// --- E0070: Never type compatibility ---
+// --- Never type compatibility ---
 
 #[test]
 fn never_return_assignment() -> Result<(), Box<dyn std::error::Error>> {
@@ -53,7 +53,7 @@ def f(x: Never) -> None:
     Ok(())
 }
 
-// --- E0072: No matching overload ---
+// --- No matching overload ---
 
 #[test]
 fn overload_with_incompatible_call() -> Result<(), Box<dyn std::error::Error>> {
@@ -118,7 +118,7 @@ result = make()
     Ok(())
 }
 
-// --- E0074: Constructor __new__ mismatch ---
+// --- Constructor __new__ mismatch ---
 
 #[test]
 fn generic_new_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -174,7 +174,7 @@ x = MyClass[str]()
     Ok(())
 }
 
-// --- E0075: Self type attribute incompatibility ---
+// --- Self type attribute incompatibility ---
 
 #[test]
 fn self_attr_parent_instance() -> Result<(), Box<dyn std::error::Error>> {
@@ -218,7 +218,7 @@ n = Node(child=Node())
     Ok(())
 }
 
-// --- E0076: Overload union expansion ---
+// --- Overload union expansion ---
 
 #[test]
 fn overload_union_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -262,7 +262,7 @@ def caller2(val: Union[int, float]) -> None:
     Ok(())
 }
 
-// --- E0079: Module protocol incompatibility ---
+// --- Module protocol incompatibility ---
 
 #[test]
 fn module_protocol_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -281,7 +281,7 @@ x: HasTimeout = os
     Ok(())
 }
 
-// --- E0081: TypeVarTuple unpack minimum ---
+// --- TypeVarTuple unpack minimum ---
 
 #[test]
 fn typevartuple_unpack_min() -> Result<(), Box<dyn std::error::Error>> {
@@ -302,7 +302,7 @@ def func(z: "Array[int]") -> None:
     Ok(())
 }
 
-// --- E0082: TypeVarTuple callable mismatch ---
+// --- TypeVarTuple callable mismatch ---
 
 #[test]
 fn typevartuple_callable_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -319,7 +319,7 @@ def apply(f: Callable[[*Ts], None], *args: *Ts) -> None:
     Ok(())
 }
 
-// --- E0095: InitVar dataclass field ---
+// --- InitVar dataclass field ---
 
 #[test]
 fn initvar_field_access() -> Result<(), Box<dyn std::error::Error>> {
@@ -374,7 +374,7 @@ class Server:
     Ok(())
 }
 
-// --- E0102: TypeVar default violation ---
+// --- TypeVar default violation ---
 
 #[test]
 fn typevar_default_ordering() -> Result<(), Box<dyn std::error::Error>> {
@@ -432,7 +432,7 @@ class ValidClass(Generic[T1, T2]): ...
     Ok(())
 }
 
-// --- E0107: Variance incompatibility ---
+// --- Variance incompatibility ---
 
 #[test]
 fn covariant_in_param_position() -> Result<(), Box<dyn std::error::Error>> {
@@ -485,7 +485,7 @@ class Consumer(Generic[T_contra]):
     Ok(())
 }
 
-// --- E0110: Protocol variance violation ---
+// --- Protocol variance violation ---
 
 #[test]
 fn protocol_covariant_in_param() -> Result<(), Box<dyn std::error::Error>> {
@@ -548,7 +548,7 @@ class Container(Protocol[T]):
     Ok(())
 }
 
-// --- E0111: Constructor call errors ---
+// --- Constructor call errors ---
 
 #[test]
 fn no_custom_init_with_args() -> Result<(), Box<dyn std::error::Error>> {
@@ -631,7 +631,7 @@ s = Simple()
     Ok(())
 }
 
-// --- E0112: TypeGuard callable return ---
+// --- TypeGuard callable return ---
 
 #[test]
 fn typeguard_in_callable_str() -> Result<(), Box<dyn std::error::Error>> {
@@ -687,7 +687,7 @@ takes_int_callable(is_str)
     Ok(())
 }
 
-// --- E0113: TypeIs inconsistent narrowing ---
+// --- TypeIs inconsistent narrowing ---
 
 #[test]
 fn typeis_inconsistent() -> Result<(), Box<dyn std::error::Error>> {
@@ -702,7 +702,7 @@ def is_int(val: str) -> TypeIs[int]:
     Ok(())
 }
 
-// --- E0114: Protocol isinstance ---
+// --- Protocol isinstance ---
 
 #[test]
 fn protocol_isinstance() -> Result<(), Box<dyn std::error::Error>> {
@@ -735,7 +735,7 @@ isinstance(42, Drawable)
     Ok(())
 }
 
-// --- E0119: Protocol isinstance overlap ---
+// --- Protocol isinstance overlap ---
 
 #[test]
 fn protocol_isinstance_overlap() -> Result<(), Box<dyn std::error::Error>> {
@@ -757,7 +757,7 @@ x: Sizeable = MyList()
     Ok(())
 }
 
-// --- E0120: Generator return type ---
+// --- Generator return type ---
 
 #[test]
 fn generator_with_non_generator_return() -> Result<(), Box<dyn std::error::Error>> {
@@ -824,7 +824,7 @@ def outer() -> Generator[int, None, None]:
     Ok(())
 }
 
-// --- E0121: Protocol conformance ---
+// --- Protocol conformance ---
 
 #[test]
 fn protocol_conformance_missing_method() -> Result<(), Box<dyn std::error::Error>> {
@@ -869,7 +869,7 @@ render(Circle())
     Ok(())
 }
 
-// --- E0122: Callable arity ---
+// --- Callable arity ---
 
 #[test]
 fn callable_arity_mismatch() -> Result<(), Box<dyn std::error::Error>> {

@@ -6,8 +6,8 @@
 //! from other type checkers.
 //!
 //! ```python
-//! x: int = 42        # W0050 — annotation is redundant
-//! y: str = "hello"   # W0050 — annotation is redundant
+//! x: int = 42        # BSK-W0050 — annotation is redundant
+//! y: str = "hello"   # BSK-W0050 — annotation is redundant
 //! z: float = 42      # NO warning — annotation adds information (widening)
 //! ```
 
@@ -164,12 +164,12 @@ fn extract_annotation(source: &str, name_span: basilisk_resolver::Span) -> Optio
     }
 }
 
-/// Check if types match for W0050 purposes (base type comparison)
+/// Check if types match for BSK-W0050 purposes (base type comparison)
 fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bool {
     use InferredType::{Bool, Bytes, Float, Int, None_, Str};
 
-    // Only fire W0050 for simple scalar types that are exactly equal
-    // Collection types and other complex types should not trigger W0050
+    // Only fire BSK-W0050 for simple scalar types that are exactly equal
+    // Collection types and other complex types should not trigger BSK-W0050
     // because annotations provide useful documentation even when "redundant"
     match (inferred, declared) {
         // Basic scalar types (exact match)
@@ -187,7 +187,7 @@ fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bo
 /// Infer a type from the assignment's source text when resolver inference fails.
 ///
 /// Annotated class attributes carry `RhsKind::Other` (the resolver does not
-/// classify the RHS of an `AnnAssign`), so W0050 recovers the literal type from
+/// classify the RHS of an `AnnAssign`), so BSK-W0050 recovers the literal type from
 /// the source line.  When the RHS is *not* a recognisable literal — a name
 /// reference, call, or arbitrary expression — Basilisk genuinely cannot infer
 /// its type, so we return `Unknown`.  Claiming the annotation is redundant in
@@ -230,7 +230,7 @@ fn infer_type_from_source(source: &str, name_span: basilisk_resolver::Span) -> I
     } else {
         // RHS is not a recognisable literal (name reference, call, expression):
         // Basilisk cannot infer its type, so the annotation is informative — not
-        // redundant.  Returning Unknown suppresses a false-positive W0050 (#83).
+        // redundant.  Returning Unknown suppresses a false-positive BSK-W0050 (#83).
         InferredType::Unknown
     }
 }
@@ -262,7 +262,7 @@ fn make_diagnostic_for_var(
 /// For `pydantic.BaseModel` subclasses, `@dataclass` classes (including
 /// `dataclass_transform` factories), and attrs-style classes, the annotation is
 /// what makes the assignment a field — removing it silently deletes the field
-/// from validation/serialization or the generated `__init__`. W0050 must never
+/// from validation/serialization or the generated `__init__`. BSK-W0050 must never
 /// call such an annotation redundant.
 fn annotation_defines_field(
     class: &basilisk_resolver::ClassInfo,

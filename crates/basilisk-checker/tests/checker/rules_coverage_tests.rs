@@ -13,7 +13,7 @@ fn messages_for(diags: &[basilisk_checker::Diagnostic], code: &str) -> Vec<Strin
 }
 
 // ============================================================================
-// E0004: Missing *args/**kwargs annotation
+// Missing *args/**kwargs annotation
 // ============================================================================
 
 #[test]
@@ -25,7 +25,7 @@ def func(*args) -> None:
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         codes(&diags).contains(&"BSK-E0004"),
-        "unannotated *args should fire E0004, got: {:?}",
+        "unannotated *args should fire BSK-E0004, got: {:?}",
         codes(&diags)
     );
     Ok(())
@@ -40,7 +40,7 @@ def func(*args: int) -> None:
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0004"),
-        "annotated *args should not fire E0004"
+        "annotated *args should not fire BSK-E0004"
     );
     Ok(())
 }
@@ -54,14 +54,14 @@ def func(**kwargs) -> None:
     let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         codes(&diags).contains(&"BSK-E0004"),
-        "unannotated **kwargs should fire E0004, got: {:?}",
+        "unannotated **kwargs should fire BSK-E0004, got: {:?}",
         codes(&diags)
     );
     Ok(())
 }
 
 // ============================================================================
-// E0018: Undefined variable
+// Undefined variable
 // ============================================================================
 
 #[test]
@@ -76,7 +76,7 @@ def func() -> None:
 }
 
 // ============================================================================
-// E0019: Unbound variable
+// Unbound variable
 // ============================================================================
 
 #[test]
@@ -92,7 +92,7 @@ def func() -> None:
 }
 
 // ============================================================================
-// E0024: Invalid type form
+// Invalid type form
 // ============================================================================
 
 #[test]
@@ -106,7 +106,7 @@ x: Union = 1
 }
 
 // ============================================================================
-// E0030: Non-default after default parameter
+// Non-default after default parameter
 // ============================================================================
 
 #[test]
@@ -123,7 +123,7 @@ def func(a: int = 0, b: int = 1) -> None:
 }
 
 // ============================================================================
-// E0043: Non-TypeVar in Generic base
+// Non-TypeVar in Generic base
 // ============================================================================
 
 #[test]
@@ -145,7 +145,7 @@ class Bad(Generic[int]):
 }
 
 // ============================================================================
-// E0048: TypeAlias invalid RHS
+// TypeAlias invalid RHS
 // ============================================================================
 
 #[test]
@@ -165,7 +165,7 @@ MyType: TypeAlias = list[int]
 }
 
 // ============================================================================
-// E0049: Multiple unbounded tuple
+// Multiple unbounded tuple
 // ============================================================================
 
 #[test]
@@ -182,7 +182,7 @@ x: tuple[str, int]
 }
 
 // ============================================================================
-// E0056: ReadOnly TypedDict field mutation
+// ReadOnly TypedDict field mutation
 // ============================================================================
 
 #[test]
@@ -198,7 +198,7 @@ class Movie(TypedDict):
 }
 
 // ============================================================================
-// E0057: PEP 695 type statement invalid RHS (TypeAliasType)
+// PEP 695 type statement invalid RHS (TypeAliasType)
 // ============================================================================
 
 #[test]
@@ -212,7 +212,7 @@ MyType = TypeAliasType("MyType", int)
 }
 
 // ============================================================================
-// E0058: Annotated too few arguments
+// Annotated too few arguments
 // ============================================================================
 
 #[test]
@@ -226,7 +226,7 @@ x: Annotated[int]
 }
 
 // ============================================================================
-// E0062: NoReturn function fallthrough
+// NoReturn function fallthrough
 // ============================================================================
 
 #[test]
@@ -242,7 +242,7 @@ def my_func() -> NoReturn:
 }
 
 // ============================================================================
-// E0064: Invalid NamedTuple call
+// Invalid NamedTuple call
 // ============================================================================
 
 #[test]
@@ -259,7 +259,7 @@ class Point(NamedTuple):
 }
 
 // ============================================================================
-// E0065: Float parameter int attribute access
+// Float parameter int attribute access
 // ============================================================================
 
 #[test]
@@ -273,7 +273,7 @@ def func(x: float) -> None:
 }
 
 // ============================================================================
-// E0066-E0068: Enum value type issues
+// Enum value type issues
 // ============================================================================
 
 #[test]
@@ -305,7 +305,7 @@ class Status(Enum):
 }
 
 // ============================================================================
-// E0069: Dataclass kw_only violations
+// Dataclass kw_only violations
 // ============================================================================
 
 #[test]
@@ -323,7 +323,7 @@ class Config:
 }
 
 // ============================================================================
-// E0070-E0078: Various advanced type rules
+// Various advanced type rules
 // ============================================================================
 
 #[test]
@@ -364,7 +364,7 @@ def process(x: int | str) -> int | str:
 }
 
 // ============================================================================
-// E0087-E0090: TypedDict isinstance, PEP 695 bound, tuple syntax
+// TypedDict isinstance, PEP 695 bound, tuple syntax
 // ============================================================================
 
 #[test]
@@ -389,7 +389,7 @@ x: tuple[int, str, float] = (1, "a", 2.0)
 }
 
 // ============================================================================
-// E0091-E0099: Various advanced rules
+// Various advanced rules
 // ============================================================================
 
 #[test]
@@ -455,7 +455,7 @@ class Drawable(Protocol):
 }
 
 // ============================================================================
-// E0100-E0110: Advanced type checks
+// Advanced type checks
 // ============================================================================
 
 #[test]
@@ -506,7 +506,7 @@ class Point:
 }
 
 // ============================================================================
-// E0111-E0120: Constructor, protocol, generator rules
+// Constructor, protocol, generator rules
 // ============================================================================
 
 #[test]
@@ -548,7 +548,7 @@ def gen() -> Generator[int, None, None]:
 }
 
 // ============================================================================
-// E0121-E0134: Protocol conformance, callable, variance
+// Protocol conformance, callable, variance
 // ============================================================================
 
 #[test]
@@ -582,7 +582,7 @@ def apply(f: Callable[[int], str], x: int) -> str:
 }
 
 // ============================================================================
-// E0136-E0149: Callable subtyping, generic protocol, dataclass_transform, etc.
+// Callable subtyping, generic protocol, dataclass_transform, etc.
 // ============================================================================
 
 #[test]
@@ -750,7 +750,7 @@ class Container[T]:
 }
 
 // ============================================================================
-// W0050: Redundant annotation warning
+// Redundant annotation warning
 // ============================================================================
 
 #[test]
@@ -774,7 +774,7 @@ fn type_ignore_with_code_suppresses() -> Result<(), Box<dyn std::error::Error>> 
     let e0001_count = diags.iter().filter(|d| d.code.code == "BSK-E0001").count();
     assert_eq!(
         e0001_count, 0,
-        "type: ignore[BSK-E0001] should suppress E0001"
+        "type: ignore[BSK-E0001] should suppress BSK-E0001"
     );
     Ok(())
 }

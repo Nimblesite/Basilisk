@@ -3,7 +3,7 @@
 
 use super::common::*;
 
-// --- E0033: Invalid reveal_type ---
+// --- Invalid reveal_type ---
 
 #[test]
 fn reveal_type_zero_args_fires() -> Result<(), Box<dyn std::error::Error>> {
@@ -40,7 +40,7 @@ fn reveal_type_one_arg_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
-// --- E0039: Invalid assert_type ---
+// --- Invalid assert_type ---
 
 #[test]
 fn assert_type_zero_args_fires() -> Result<(), Box<dyn std::error::Error>> {

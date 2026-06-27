@@ -635,7 +635,7 @@ fn process_file(
 
     // Resolve imports against venv/site-packages and uv registry using the same
     // routine the LSP uses, so the CLI and editor agree on what resolves and on
-    // package-dependency metadata (W0011 transitive-import warnings, etc.).
+    // package-dependency metadata (BSK-W0011 transitive-import warnings, etc.).
     basilisk_lsp::import_resolver::resolve_module_imports(&mut resolved, search_paths);
 
     // Apply the project's `[tool.basilisk.rules]` / per-path overrides so the
@@ -937,7 +937,7 @@ mod tests {
             w0050
                 .iter()
                 .all(|d| d.severity == basilisk_checker::Severity::Error),
-            "project config `BSK-W0050 = \"error\"` must promote W0050 to error \
+            "project config `BSK-W0050 = \"error\"` must promote BSK-W0050 to error \
              through the CLI; got {:?}",
             w0050.iter().map(|d| d.severity).collect::<Vec<_>>()
         );

@@ -3,7 +3,7 @@
 
 use super::ws_test_common::*;
 
-// ── E0003: Missing variable type annotation ─────────────────────────────────
+// ── Missing variable type annotation ─────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0003_missing_variable_type_fires() -> TestResult<()> {
@@ -20,7 +20,7 @@ async fn test_ws_e0003_annotated_empty_list_is_clean() -> TestResult<()> {
     .await
 }
 
-// ── E0011: Return type mismatch ─────────────────────────────────────────────
+// ── Return type mismatch ─────────────────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0011_return_type_mismatch_fires() -> TestResult<()> {
@@ -43,7 +43,7 @@ async fn test_ws_e0011_matching_return_type_is_clean() -> TestResult<()> {
     .await
 }
 
-// ── E0012: Argument type mismatch ───────────────────────────────────────────
+// ── Argument type mismatch ───────────────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0012_argument_type_mismatch_fires() -> TestResult<()> {
@@ -73,7 +73,7 @@ result: int = add(1, 2)
     assert_rule_clean("file:///e0012_clean.py", code, "calls_argument_type").await
 }
 
-// ── E0013: Return type mismatch (inferred) ──────────────────────────────────
+// ── Return type mismatch (inferred) ──────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0013_return_mismatch_fires() -> TestResult<()> {
@@ -90,7 +90,7 @@ async fn test_ws_e0013_return_mismatch_fires() -> TestResult<()> {
     Ok(())
 }
 
-// ── E0014: Assignment type incompatibility ──────────────────────────────────
+// ── Assignment type incompatibility ──────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0014_assignment_type_mismatch_fires() -> TestResult<()> {
@@ -139,7 +139,7 @@ ratio: float = 1.5
     assert_rule_clean("file:///e0014_clean.py", code, "assignment_compatibility").await
 }
 
-// ── E0015: Invalid type argument count ──────────────────────────────────────
+// ── Invalid type argument count ──────────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0015_list_wrong_arg_count_fires() -> TestResult<()> {
@@ -172,7 +172,7 @@ def f(x: list[int], y: dict[str, int], z: set[str]) -> None:
     assert_rule_clean("file:///e0015_clean.py", code, "callables_annotation").await
 }
 
-// ── E0016: Incompatible method override ─────────────────────────────────────
+// ── Incompatible method override ─────────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0016_incompatible_override_fires() -> TestResult<()> {
@@ -214,7 +214,7 @@ class Child(Base):
     assert_rule_clean("file:///e0016_clean.py", code, "classes_override").await
 }
 
-// ── E0017: Incompatible class attribute override ────────────────────────────
+// ── Incompatible class attribute override ────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0017_attribute_override_fires() -> TestResult<()> {
@@ -246,7 +246,7 @@ class Child(Base):
     assert_rule_clean("file:///e0017_clean.py", code, "classes_override_2").await
 }
 
-// ── E0018: Undefined variable in return ─────────────────────────────────────
+// ── Undefined variable in return ─────────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0018_undefined_variable_fires() -> TestResult<()> {
@@ -269,7 +269,7 @@ async fn test_ws_e0018_defined_variable_is_clean() -> TestResult<()> {
     .await
 }
 
-// ── E0019: Unbound variable on some paths ───────────────────────────────────
+// ── Unbound variable on some paths ───────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0019_unbound_on_some_paths_fires() -> TestResult<()> {
@@ -301,7 +301,7 @@ def always_assign(flag: bool) -> int:
     assert_rule_clean("file:///e0019_clean.py", code, "names_unbound").await
 }
 
-// ── E0020: Missing @overload implementation ─────────────────────────────────
+// ── Missing @overload implementation ─────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0020_missing_overload_impl_fires() -> TestResult<()> {
@@ -340,7 +340,7 @@ def process(x: int | str) -> int | str:
     assert_rule_clean("file:///e0020_clean.py", code, "overloads_definitions").await
 }
 
-// ── E0021: Overlapping @overload signatures ─────────────────────────────────
+// ── Overlapping @overload signatures ─────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0021_overlapping_overloads_fires() -> TestResult<()> {
@@ -359,7 +359,7 @@ def process(x: int) -> int | str:
     assert_rule_fires("file:///e0021.py", code, "overloads_consistency", &[]).await
 }
 
-// ── E0022: Unhashable dict key ──────────────────────────────────────────────
+// ── Unhashable dict key ──────────────────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0022_list_as_dict_key_fires() -> TestResult<()> {
@@ -394,7 +394,7 @@ def good_keys() -> None:
     assert_rule_clean("file:///e0022_clean.py", code, "dict_key_hashable").await
 }
 
-// ── E0023: Non-exhaustive match ─────────────────────────────────────────────
+// ── Non-exhaustive match ─────────────────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0023_non_exhaustive_match_fires() -> TestResult<()> {
@@ -431,7 +431,7 @@ def classify(x: int) -> str:
     assert_rule_clean("file:///e0023_clean.py", code, "match_exhaustiveness").await
 }
 
-// ── E0024: Numeric literal as type annotation ───────────────────────────────
+// ── Numeric literal as type annotation ───────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0024_literal_as_annotation_fires() -> TestResult<()> {
@@ -454,7 +454,7 @@ async fn test_ws_e0024_real_type_annotation_is_clean() -> TestResult<()> {
     .await
 }
 
-// ── E0025: Missing @override decorator ──────────────────────────────────────
+// ── Missing @override decorator ──────────────────────────────────────
 
 #[tokio::test]
 async fn test_ws_e0025_missing_override_decorator_fires() -> TestResult<()> {

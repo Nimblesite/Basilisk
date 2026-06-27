@@ -12,7 +12,7 @@ use super::common::*;
 // e0130 scoping, e0111 constructor, e0140 callable compat.
 
 // =============================================================================
-// E0107: Variance with nested generics (TypeArg::Subscript)
+// Variance with nested generics (TypeArg::Subscript)
 // =============================================================================
 
 #[test]
@@ -149,7 +149,7 @@ class InvC(InvariantOuter[T_co]):
 }
 
 // =============================================================================
-// E0144: type() constructor - more edge cases
+// type() constructor - more edge cases
 // =============================================================================
 
 #[test]
@@ -184,7 +184,7 @@ WithBase = type("WithBase", (object,), {})
 }
 
 // =============================================================================
-// E0138: Dataclass transform - remaining uncovered paths
+// Dataclass transform - remaining uncovered paths
 // =============================================================================
 
 #[test]
@@ -233,7 +233,7 @@ class Order(BaseModel):
 }
 
 // =============================================================================
-// E0143: NamedTuple - remaining uncovered paths
+// NamedTuple - remaining uncovered paths
 // =============================================================================
 
 #[test]
@@ -279,7 +279,7 @@ class HTTPResponse(NamedTuple):
 }
 
 // =============================================================================
-// E0095: InitVar - remaining uncovered paths
+// InitVar - remaining uncovered paths
 // =============================================================================
 
 #[test]
@@ -316,7 +316,7 @@ class Config:
 }
 
 // =============================================================================
-// E0122: Callable arity - remaining uncovered
+// Callable arity - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -350,7 +350,7 @@ f3: Callable[..., None] = complex
 }
 
 // =============================================================================
-// E0073: NamedTuple tuple compat - remaining uncovered
+// NamedTuple tuple compat - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -369,7 +369,7 @@ p: tuple[int, int, int, int] = Point(1, 2)
 }
 
 // =============================================================================
-// E0116: NamedTuple definition - remaining uncovered
+// NamedTuple definition - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -399,7 +399,7 @@ class Bad(NamedTuple):
 }
 
 // =============================================================================
-// E0102: TypeVar default - remaining uncovered
+// TypeVar default - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -415,7 +415,7 @@ U = TypeVar("U", default=T)
 }
 
 // =============================================================================
-// E0112: TypeGuard - remaining uncovered
+// TypeGuard - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -445,7 +445,7 @@ class Validator:
 }
 
 // =============================================================================
-// E0145: type bracket - remaining uncovered
+// type bracket - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -469,7 +469,7 @@ def baz(x: type[int | str]) -> None:
 }
 
 // =============================================================================
-// E0147: Tuple starred unpack - remaining uncovered
+// Tuple starred unpack - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -493,7 +493,7 @@ def flexible(*args: Unpack[tuple[int, ...]]) -> None:
 }
 
 // =============================================================================
-// E0148: Generic type arg - remaining uncovered
+// Generic type arg - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -520,7 +520,7 @@ x: Optional[int, str] = None
 }
 
 // =============================================================================
-// E0131: Yield type - remaining uncovered
+// Yield type - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -556,7 +556,7 @@ def countdown(n: int) -> Generator[int, None, str]:
 }
 
 // =============================================================================
-// E0126: Literal - remaining uncovered
+// Literal - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -583,7 +583,7 @@ x: Literal[b"hello"] = b"world"
 }
 
 // =============================================================================
-// E0054: Final - remaining uncovered
+// Final - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -616,7 +616,7 @@ C = 30
 }
 
 // =============================================================================
-// E0076: Overload - remaining uncovered
+// Overload - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -641,7 +641,7 @@ def parse(data: Union[str, bytes, int]) -> Union[dict, str]:
 }
 
 // =============================================================================
-// E0121: Protocol conformance - remaining uncovered
+// Protocol conformance - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -663,7 +663,7 @@ class MyClass:
 }
 
 // =============================================================================
-// E0119: Protocol isinstance - remaining uncovered
+// Protocol isinstance - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -689,7 +689,7 @@ result = isinstance(p, HasName)
 }
 
 // =============================================================================
-// E0139: TypeVarTuple - remaining uncovered
+// TypeVarTuple - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -706,7 +706,7 @@ TupleType: TypeAlias = tuple[Unpack[Ts]]
 }
 
 // =============================================================================
-// E0146: Protocol class - remaining uncovered
+// Protocol class - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -726,7 +726,7 @@ class MyClass:
 }
 
 // =============================================================================
-// E0130: TypeVar scoping - remaining uncovered
+// TypeVar scoping - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -754,7 +754,7 @@ def process_bounded(x: U) -> U:
 }
 
 // =============================================================================
-// E0111: Constructor - remaining uncovered
+// Constructor - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -776,7 +776,7 @@ c3 = Complex(1, 2, 3.14)
 }
 
 // =============================================================================
-// E0140: Callable compat - remaining uncovered
+// Callable compat - remaining uncovered
 // =============================================================================
 
 #[test]
@@ -862,7 +862,7 @@ z: tuple[()] = ()
 }
 
 // =============================================================================
-// E0047: Invalid type - exercise all annotation check branches
+// Invalid type - exercise all annotation check branches
 // =============================================================================
 
 #[test]
@@ -886,7 +886,7 @@ class Foo:
 }
 
 // =============================================================================
-// E0036: ClassVar - exercise scan branches
+// ClassVar - exercise scan branches
 // =============================================================================
 
 #[test]
@@ -903,7 +903,7 @@ class Config:
 }
 
 // =============================================================================
-// E0014: Literal parsing - remaining uncovered paths
+// Literal parsing - remaining uncovered paths
 // =============================================================================
 
 #[test]

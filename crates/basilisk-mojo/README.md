@@ -12,7 +12,6 @@ This crate implements **static ownership semantics** as type annotations over st
 - **`InOut`** — a mutable reference. Must be explicitly declared.
 - **`Owned`** — ownership is transferred. Use after transfer is a type error.
 - **Standard Python syntax** — uses `typing.Annotated`, no compiler or runtime required.
-- **Mojo compatibility** — code that passes these checks is structurally compatible with Mojo's type expectations.
 
 ## Example
 

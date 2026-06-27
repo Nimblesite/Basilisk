@@ -14,7 +14,7 @@ mod common;
 use common::run;
 
 // ---------------------------------------------------------------------------
-// E0088 — TypedDict runtime violation (isinstance)
+// TypedDict runtime violation (isinstance)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -32,7 +32,7 @@ fn typeddict_isinstance() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0089 — Invalid PEP 695 type parameter bound or constraint
+// Invalid PEP 695 type parameter bound or constraint
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -50,7 +50,7 @@ fn pep695_invalid_bound() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0090 — Invalid tuple type syntax
+// Invalid tuple type syntax
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -68,7 +68,7 @@ fn invalid_tuple_syntax() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0091 — Incompatible TypeVar bound/constraint with default
+// Incompatible TypeVar bound/constraint with default
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -86,7 +86,7 @@ fn typevar_default_incompat() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0092 — Too few type arguments to generic class
+// Too few type arguments to generic class
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -104,7 +104,7 @@ fn too_few_type_args() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0093 — Invalid key or value type in TypedDict assignment
+// Invalid key or value type in TypedDict assignment
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -122,7 +122,7 @@ fn typeddict_key_validation() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0094 — Self type used in an invalid location
+// Self type used in an invalid location
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -140,7 +140,7 @@ fn self_type_invalid_location() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0095 — InitVar field validation in dataclasses
+// InitVar field validation in dataclasses
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -158,7 +158,7 @@ fn initvar_field() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0096 — Dataclass field default_factory type mismatch
+// Dataclass field default_factory type mismatch
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -176,7 +176,7 @@ fn dataclass_default_factory() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0097 — Protocol __new__/__init__ sets undeclared self-attributes
+// Protocol __new__/__init__ sets undeclared self-attributes
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -194,7 +194,7 @@ fn protocol_self_attr() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0098 — Non-Protocol base class in Protocol definition
+// Non-Protocol base class in Protocol definition
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -212,7 +212,7 @@ fn non_protocol_base() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0099 — Direct instantiation of a Protocol class
+// Direct instantiation of a Protocol class
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -230,7 +230,7 @@ fn protocol_instantiation() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0100 — Augmented assignment widens Literal type
+// Augmented assignment widens Literal type
 // ---------------------------------------------------------------------------
 
 #[test]

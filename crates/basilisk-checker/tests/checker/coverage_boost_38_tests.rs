@@ -3,7 +3,7 @@ use super::common::*;
 
 // Coverage boost tests batch 38: final push for 89% threshold.
 
-// ── E0045: Default value — negative literal, tuple default ──
+// ── Default value — negative literal, tuple default ──
 
 #[test]
 fn negative_default() -> Result<(), Box<dyn std::error::Error>> {
@@ -28,7 +28,7 @@ def func5(x: int = 3.14, y: float = "bad", z: bytes = 42) -> None:
     Ok(())
 }
 
-// ── E0036: ClassVar in various positions ──
+// ── ClassVar in various positions ──
 
 #[test]
 fn classvar_complex() -> Result<(), Box<dyn std::error::Error>> {
@@ -57,7 +57,7 @@ class Sub(MyClass):
     Ok(())
 }
 
-// ── E0047: Scope — nested class TypeVar access ──
+// ── Scope — nested class TypeVar access ──
 
 #[test]
 fn nested_scope() -> Result<(), Box<dyn std::error::Error>> {
@@ -85,7 +85,7 @@ class Outer(Generic[T]):
     Ok(())
 }
 
-// ── E0078: Self return — deeper nesting ──
+// ── Self return — deeper nesting ──
 
 #[test]
 fn self_return_deep() -> Result<(), Box<dyn std::error::Error>> {
@@ -113,7 +113,7 @@ class Builder:
     Ok(())
 }
 
-// ── E0092: type[] too many args ──
+// ── type[] too many args ──
 
 #[test]
 fn type_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
@@ -131,7 +131,7 @@ def func(cls: type[int, str]) -> None:
     Ok(())
 }
 
-// ── E0052: Frozen dataclass — assignment in init ──
+// ── Frozen dataclass — assignment in init ──
 
 #[test]
 fn frozen_init_assignment() -> Result<(), Box<dyn std::error::Error>> {
@@ -154,7 +154,7 @@ del f.x
     Ok(())
 }
 
-// ── E0070: Never in union positions ──
+// ── Never in union positions ──
 
 #[test]
 fn never_union_positions() -> Result<(), Box<dyn std::error::Error>> {
@@ -182,7 +182,7 @@ def func(x: Never) -> int:
     Ok(())
 }
 
-// ── E0080: TypeVar bound — method resolution ──
+// ── TypeVar bound — method resolution ──
 
 #[test]
 fn typevar_bound_methods() -> Result<(), Box<dyn std::error::Error>> {
@@ -217,7 +217,7 @@ b3: MathBox[str] = MathBox("bad")
     Ok(())
 }
 
-// ── E0100: Literal augmented — vararg/kwarg ──
+// ── Literal augmented — vararg/kwarg ──
 
 #[test]
 fn literal_augmented_vararg() -> Result<(), Box<dyn std::error::Error>> {
@@ -235,7 +235,7 @@ def func(*args: Literal[1], **kwargs: Literal[0]) -> None:
     Ok(())
 }
 
-// ── E0104: Cyclical alias — transitive ──
+// ── Cyclical alias — transitive ──
 
 #[test]
 fn cyclical_transitive() -> Result<(), Box<dyn std::error::Error>> {
@@ -256,7 +256,7 @@ Self3: TypeAlias = "Self3"
     Ok(())
 }
 
-// ── E0109: TypeVar bound — annotation resolution ──
+// ── TypeVar bound — annotation resolution ──
 
 #[test]
 fn typevar_bound_annotation() -> Result<(), Box<dyn std::error::Error>> {
@@ -286,7 +286,7 @@ n.add("bad")
     Ok(())
 }
 
-// ── E0037: TypedDict with various key patterns ──
+// ── TypedDict with various key patterns ──
 
 #[test]
 fn typeddict_keys() -> Result<(), Box<dyn std::error::Error>> {
@@ -305,7 +305,7 @@ Bad2 = TypedDict("Bad2", {None: int})
     Ok(())
 }
 
-// ── E0042: PEP 695 with explicit Generic base ──
+// ── PEP 695 with explicit Generic base ──
 
 #[test]
 fn pep695_explicit_generic() -> Result<(), Box<dyn std::error::Error>> {
@@ -327,7 +327,7 @@ class Multi[T, S](Generic[T, S]):
     Ok(())
 }
 
-// ── E0057: type statement — invalid forms ──
+// ── type statement — invalid forms ──
 
 #[test]
 fn type_stmt_invalid() -> Result<(), Box<dyn std::error::Error>> {
@@ -346,7 +346,7 @@ type Good3 = dict[str, int]
     Ok(())
 }
 
-// ── E0035: Required/NotRequired on function params ──
+// ── Required/NotRequired on function params ──
 
 #[test]
 fn required_notreq_params() -> Result<(), Box<dyn std::error::Error>> {
@@ -369,7 +369,7 @@ class BadClass:
     Ok(())
 }
 
-// ── E0017: ClassVar override between parent/child ──
+// ── ClassVar override between parent/child ──
 
 #[test]
 fn classvar_override_deep() -> Result<(), Box<dyn std::error::Error>> {
@@ -393,7 +393,7 @@ class Child(Parent):
     Ok(())
 }
 
-// ── E0061: assert_type patterns ──
+// ── assert_type patterns ──
 
 #[test]
 fn assert_type_complex() -> Result<(), Box<dyn std::error::Error>> {

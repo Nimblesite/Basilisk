@@ -4,7 +4,7 @@ use super::common::*;
 // Coverage boost tests batch 10: targeting medium-coverage rules for maximum improvement.
 // Focuses on rules 50-90% coverage where more complex test inputs can push coverage higher.
 
-// --- E0036: ClassVar deep paths ---
+// --- ClassVar deep paths ---
 
 #[test]
 fn classvar_typing_extensions() -> Result<(), Box<dyn std::error::Error>> {
@@ -56,7 +56,7 @@ class HasClassVar(Protocol):
     Ok(())
 }
 
-// --- E0149: PEP 695 deeper ---
+// --- PEP 695 deeper ---
 
 #[test]
 fn generic_protocol_typevar_scope() -> Result<(), Box<dyn std::error::Error>> {
@@ -92,7 +92,7 @@ class Cached(Generic[T]):
     Ok(())
 }
 
-// --- E0144: type() deeper ---
+// --- type() deeper ---
 
 #[test]
 fn type_with_annotation() -> Result<(), Box<dyn std::error::Error>> {
@@ -105,7 +105,7 @@ z = type("Z", (), {"value": 42, "name": "test"})
     Ok(())
 }
 
-// --- E0079: Module protocol deeper ---
+// --- Module protocol deeper ---
 
 #[test]
 fn protocol_with_property_method() -> Result<(), Box<dyn std::error::Error>> {
@@ -124,7 +124,7 @@ v: HasVersion = os
     Ok(())
 }
 
-// --- E0120: Generator deeper ---
+// --- Generator deeper ---
 
 #[test]
 fn generator_multiple_yields() -> Result<(), Box<dyn std::error::Error>> {
@@ -147,7 +147,7 @@ def countdown(n: int) -> Generator[int, None, str]:
     Ok(())
 }
 
-// --- E0138: Dataclass transform deeper ---
+// --- Dataclass transform deeper ---
 
 #[test]
 fn transform_with_init_and_repr() -> Result<(), Box<dyn std::error::Error>> {
@@ -168,7 +168,7 @@ class FullConfig:
     Ok(())
 }
 
-// --- E0130: TypeVar scoping deeper ---
+// --- TypeVar scoping deeper ---
 
 #[test]
 fn typevar_bound() -> Result<(), Box<dyn std::error::Error>> {
@@ -197,7 +197,7 @@ MyList: TypeAlias = List[T]
     Ok(())
 }
 
-// --- E0047: Invalid type expression deeper ---
+// --- Invalid type expression deeper ---
 
 #[test]
 fn string_literal_valid() -> Result<(), Box<dyn std::error::Error>> {
@@ -228,7 +228,7 @@ x: Callable[..., int]
     Ok(())
 }
 
-// --- E0143: NamedTuple deeper ---
+// --- NamedTuple deeper ---
 
 #[test]
 fn namedtuple_with_methods() -> Result<(), Box<dyn std::error::Error>> {
@@ -253,7 +253,7 @@ p2 = p.translate(1.0, 1.0)
     Ok(())
 }
 
-// --- E0122: Callable deeper ---
+// --- Callable deeper ---
 
 #[test]
 fn callable_with_varargs_kwonly() -> Result<(), Box<dyn std::error::Error>> {
@@ -276,7 +276,7 @@ takes_binary(with_kwargs)
     Ok(())
 }
 
-// --- E0095: InitVar deeper ---
+// --- InitVar deeper ---
 
 #[test]
 fn initvar_with_default_factory() -> Result<(), Box<dyn std::error::Error>> {
@@ -298,7 +298,7 @@ class Model:
     Ok(())
 }
 
-// --- E0121: Protocol deeper ---
+// --- Protocol deeper ---
 
 #[test]
 fn protocol_wrong_param_types() -> Result<(), Box<dyn std::error::Error>> {
@@ -324,7 +324,7 @@ use_processor(BadProcessor())
     Ok(())
 }
 
-// --- E0139: TypeVarTuple deeper ---
+// --- TypeVarTuple deeper ---
 
 #[test]
 fn typevartuple_in_function() -> Result<(), Box<dyn std::error::Error>> {
@@ -346,7 +346,7 @@ def ones() -> Array[int, int]:
     Ok(())
 }
 
-// --- E0126: Literal deeper ---
+// --- Literal deeper ---
 
 #[test]
 fn literal_none() -> Result<(), Box<dyn std::error::Error>> {
@@ -359,7 +359,7 @@ x: Literal[None] = None
     Ok(())
 }
 
-// --- E0063: Non-hashable deeper ---
+// --- Non-hashable deeper ---
 
 #[test]
 fn dataclass_eq_false() -> Result<(), Box<dyn std::error::Error>> {
@@ -377,7 +377,7 @@ s = {Point(1, 2)}
     Ok(())
 }
 
-// --- E0073: NamedTuple tuple compat deeper ---
+// --- NamedTuple tuple compat deeper ---
 
 #[test]
 fn namedtuple_length_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -399,7 +399,7 @@ takes_pair(t)
     Ok(())
 }
 
-// --- E0145: Type bracket deeper ---
+// --- Type bracket deeper ---
 
 #[test]
 fn union_subscript() -> Result<(), Box<dyn std::error::Error>> {
@@ -416,7 +416,7 @@ e: FrozenSet[int] = frozenset([1, 2])
     Ok(())
 }
 
-// --- E0112: TypeGuard callable deeper ---
+// --- TypeGuard callable deeper ---
 
 #[test]
 fn typeguard_nested() -> Result<(), Box<dyn std::error::Error>> {
@@ -437,7 +437,7 @@ def check_list(items: list) -> None:
     Ok(())
 }
 
-// --- E0102: TypeVar default deeper ---
+// --- TypeVar default deeper ---
 
 #[test]
 fn typevar_multiple_defaults() -> Result<(), Box<dyn std::error::Error>> {
@@ -459,7 +459,7 @@ c: Triple[bool, bytes] = Triple()
     Ok(())
 }
 
-// --- E0054: Final deeper ---
+// --- Final deeper ---
 
 #[test]
 fn final_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
@@ -490,7 +490,7 @@ def func() -> None:
     Ok(())
 }
 
-// --- E0050: NewType deeper ---
+// --- NewType deeper ---
 
 #[test]
 fn newtype_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
@@ -509,7 +509,7 @@ name: Username = Username('alice')
     Ok(())
 }
 
-// --- E0076: Overload union expansion deeper ---
+// --- Overload union expansion deeper ---
 
 #[test]
 fn overload_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
@@ -530,7 +530,7 @@ def process(x: Union[int, str, float]) -> Union[int, str, float]:
     Ok(())
 }
 
-// --- E0015: Assignment compatibility deeper ---
+// --- Assignment compatibility deeper ---
 
 #[test]
 fn complex_assignments() -> Result<(), Box<dyn std::error::Error>> {
@@ -547,7 +547,7 @@ e: Optional[str] = 'hello'
     Ok(())
 }
 
-// --- E0041: Too few args deeper ---
+// --- Too few args deeper ---
 
 #[test]
 fn various_arg_patterns() -> Result<(), Box<dyn std::error::Error>> {
@@ -583,7 +583,7 @@ kw_only(1)
     Ok(())
 }
 
-// --- E0116: NamedTuple definition deeper ---
+// --- NamedTuple definition deeper ---
 
 #[test]
 fn namedtuple_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
@@ -609,7 +609,7 @@ class WithUnderscoreField(NamedTuple):
     Ok(())
 }
 
-// --- E0118: Super abstract deeper ---
+// --- Super abstract deeper ---
 
 #[test]
 fn abstract_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
@@ -642,7 +642,7 @@ class Rect(Shape):
     Ok(())
 }
 
-// --- E0092: Too few type args deeper ---
+// --- Too few type args deeper ---
 
 #[test]
 fn complex_generics() -> Result<(), Box<dyn std::error::Error>> {
@@ -674,7 +674,7 @@ e: Pair = Pair()
     Ok(())
 }
 
-// --- E0094: Self type deeper ---
+// --- Self type deeper ---
 
 #[test]
 fn self_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
@@ -700,7 +700,7 @@ def free_func() -> Self:
     Ok(())
 }
 
-// --- E0038: TypedDict deeper ---
+// --- TypedDict deeper ---
 
 #[test]
 fn typeddict_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
@@ -726,7 +726,7 @@ class Partial(TypedDict, total=False):
     Ok(())
 }
 
-// --- E0108: Dataclass slots deeper ---
+// --- Dataclass slots deeper ---
 
 #[test]
 fn slots_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
@@ -748,7 +748,7 @@ class RegularPoint:
     Ok(())
 }
 
-// --- E0110: Protocol variance deeper ---
+// --- Protocol variance deeper ---
 
 #[test]
 fn protocol_variance_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
@@ -773,7 +773,7 @@ class ReadWriter(Protocol[T]):
     Ok(())
 }
 
-// --- E0117: Unbound TypeVar deeper ---
+// --- Unbound TypeVar deeper ---
 
 #[test]
 fn unbound_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
@@ -797,7 +797,7 @@ def multi(x: T, y: U) -> None:
     Ok(())
 }
 
-// --- E0051: Invalid literal deeper ---
+// --- Invalid literal deeper ---
 
 #[test]
 fn literal_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
@@ -824,7 +824,7 @@ f: Literal[Color.RED] = Color.RED
     Ok(())
 }
 
-// --- E0064: NamedTuple functional invalid ---
+// --- NamedTuple functional invalid ---
 
 #[test]
 fn namedtuple_functional_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
@@ -845,7 +845,7 @@ Bad = NamedTuple('Wrong', [('x', int)])
     Ok(())
 }
 
-// --- E0091: TypeVar default incompat ---
+// --- TypeVar default incompat ---
 
 #[test]
 fn typevar_default_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
@@ -867,7 +867,7 @@ c3: Container[float, bytes] = Container()
     Ok(())
 }
 
-// --- E0069: Dataclass kw-only ---
+// --- Dataclass kw-only ---
 
 #[test]
 fn kwonly_comprehensive() -> Result<(), Box<dyn std::error::Error>> {

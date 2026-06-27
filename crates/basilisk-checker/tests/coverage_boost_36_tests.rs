@@ -11,7 +11,7 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
     Ok(check(&resolved))
 }
 
-// ── E0036: ClassVar in function params ──
+// ── ClassVar in function params ──
 
 #[test]
 fn classvar_in_params() -> Result<(), Box<dyn std::error::Error>> {
@@ -32,7 +32,7 @@ def func(a: ClassVar[int]) -> None:
     Ok(())
 }
 
-// ── E0036: instance checks ──
+// ── instance checks ──
 
 #[test]
 fn classvar_instance() -> Result<(), Box<dyn std::error::Error>> {
@@ -58,7 +58,7 @@ c.count = 5
     Ok(())
 }
 
-// ── E0047: Scope checks ──
+// ── Scope checks ──
 
 #[test]
 fn scope_checks() -> Result<(), Box<dyn std::error::Error>> {
@@ -80,7 +80,7 @@ class Outer(Generic[T]):
     Ok(())
 }
 
-// ── E0014: Tuple check and dataclass check ──
+// ── Tuple check and dataclass check ──
 
 #[test]
 fn tuple_assignment() -> Result<(), Box<dyn std::error::Error>> {
@@ -126,7 +126,7 @@ bad_l = Line(1, 2)
     Ok(())
 }
 
-// ── E0127: Tuple index out of range ──
+// ── Tuple index out of range ──
 
 #[test]
 fn tuple_index_range() -> Result<(), Box<dyn std::error::Error>> {
@@ -146,7 +146,7 @@ def func(t: tuple[int, str, float]) -> None:
     Ok(())
 }
 
-// ── E0142: dataclass_transform class violation ──
+// ── dataclass_transform class violation ──
 
 #[test]
 fn dataclass_transform_class() -> Result<(), Box<dyn std::error::Error>> {
@@ -171,7 +171,7 @@ u.unknown = "bad"
     Ok(())
 }
 
-// ── E0144: type() call constructor ──
+// ── type() call constructor ──
 
 #[test]
 fn type_call_constructor() -> Result<(), Box<dyn std::error::Error>> {
@@ -186,7 +186,7 @@ w = type("cls", (int, str), {})
     Ok(())
 }
 
-// ── E0145: type[] bracket violation ──
+// ── type[] bracket violation ──
 
 #[test]
 fn type_bracket() -> Result<(), Box<dyn std::error::Error>> {
@@ -205,7 +205,7 @@ b: Type[str] = int
     Ok(())
 }
 
-// ── E0147: Tuple starred unpack ──
+// ── Tuple starred unpack ──
 
 #[test]
 fn tuple_starred_unpack() -> Result<(), Box<dyn std::error::Error>> {
@@ -226,7 +226,7 @@ func2(1, "a")
     Ok(())
 }
 
-// ── E0056: ReadOnly TypedDict mutation ──
+// ── ReadOnly TypedDict mutation ──
 
 #[test]
 fn readonly_typeddict() -> Result<(), Box<dyn std::error::Error>> {
@@ -247,7 +247,7 @@ c["mutable"] = 99
     Ok(())
 }
 
-// ── E0088: TypedDict runtime violation ──
+// ── TypedDict runtime violation ──
 
 #[test]
 fn typeddict_runtime() -> Result<(), Box<dyn std::error::Error>> {
@@ -269,7 +269,7 @@ isinstance(p, Person)
     Ok(())
 }
 
-// ── E0093: TypedDict key validation ──
+// ── TypedDict key validation ──
 
 #[test]
 fn typeddict_key() -> Result<(), Box<dyn std::error::Error>> {
@@ -289,7 +289,7 @@ y = opts["unknown"]
     Ok(())
 }
 
-// ── E0066: Enum value type mismatch ──
+// ── Enum value type mismatch ──
 
 #[test]
 fn enum_value_type() -> Result<(), Box<dyn std::error::Error>> {
@@ -312,7 +312,7 @@ class Status(Enum):
     Ok(())
 }
 
-// ── E0096: Dataclass field default factory ──
+// ── Dataclass field default factory ──
 
 #[test]
 fn field_default_factory() -> Result<(), Box<dyn std::error::Error>> {
@@ -332,7 +332,7 @@ class DC:
     Ok(())
 }
 
-// ── E0098: Non-protocol base in protocol ──
+// ── Non-protocol base in protocol ──
 
 #[test]
 fn non_protocol_base() -> Result<(), Box<dyn std::error::Error>> {
@@ -350,7 +350,7 @@ class MyProto(Protocol, Regular):
     Ok(())
 }
 
-// ── E0099: Protocol instantiation ──
+// ── Protocol instantiation ──
 
 #[test]
 fn protocol_instantiation() -> Result<(), Box<dyn std::error::Error>> {
@@ -367,7 +367,7 @@ x = Drawable()
     Ok(())
 }
 
-// ── E0101: TypeGuard no narrowing param ──
+// ── TypeGuard no narrowing param ──
 
 #[test]
 fn typeguard_no_param() -> Result<(), Box<dyn std::error::Error>> {
@@ -382,7 +382,7 @@ def bad_guard() -> TypeGuard[str]:
     Ok(())
 }
 
-// ── E0105: Bounded TypeVar attr access ──
+// ── Bounded TypeVar attr access ──
 
 #[test]
 fn bounded_typevar_attr() -> Result<(), Box<dyn std::error::Error>> {
@@ -409,7 +409,7 @@ class Container(Generic[T]):
     Ok(())
 }
 
-// ── E0109: TypeVar bound call violation ──
+// ── TypeVar bound call violation ──
 
 #[test]
 fn typevar_bound_call() -> Result<(), Box<dyn std::error::Error>> {
@@ -428,7 +428,7 @@ def func(x: T) -> T:
     Ok(())
 }
 
-// ── E0114: Protocol runtime_checkable violation ──
+// ── Protocol runtime_checkable violation ──
 
 #[test]
 fn protocol_runtime_checkable() -> Result<(), Box<dyn std::error::Error>> {
@@ -453,7 +453,7 @@ isinstance(Thing(), Named)
     Ok(())
 }
 
-// ── E0116: NamedTuple def error ──
+// ── NamedTuple def error ──
 
 #[test]
 fn namedtuple_def_error() -> Result<(), Box<dyn std::error::Error>> {
@@ -478,7 +478,7 @@ class Good(NamedTuple):
     Ok(())
 }
 
-// ── E0117: Unbound TypeVar scope ──
+// ── Unbound TypeVar scope ──
 
 #[test]
 fn unbound_typevar() -> Result<(), Box<dyn std::error::Error>> {
@@ -497,7 +497,7 @@ def func(x: T) -> list[T]:
     Ok(())
 }
 
-// ── E0124: Protocol tuple element mismatch ──
+// ── Protocol tuple element mismatch ──
 
 #[test]
 fn protocol_tuple_element() -> Result<(), Box<dyn std::error::Error>> {
@@ -516,7 +516,7 @@ t2: Pair = (1, "bad")
     Ok(())
 }
 
-// ── E0132: Inconsistent TypeVar order ──
+// ── Inconsistent TypeVar order ──
 
 #[test]
 fn inconsistent_typevar_order() -> Result<(), Box<dyn std::error::Error>> {
@@ -538,7 +538,7 @@ class Container(Generic[T, S]):
     Ok(())
 }
 
-// ── W0040: Lambda missing annotations ──
+// ── Lambda missing annotations ──
 
 #[test]
 fn lambda_annotations() -> Result<(), Box<dyn std::error::Error>> {
@@ -554,7 +554,7 @@ h: Callable[[int, int], int] = lambda a, b: a + b
     Ok(())
 }
 
-// ── W0050: Redundant annotation ──
+// ── Redundant annotation ──
 
 #[test]
 fn redundant_annotation() -> Result<(), Box<dyn std::error::Error>> {
@@ -571,7 +571,7 @@ b: dict = {"a": 1}
     Ok(())
 }
 
-// ── E0058: Annotated too few arguments ──
+// ── Annotated too few arguments ──
 
 #[test]
 fn annotated_too_few() -> Result<(), Box<dyn std::error::Error>> {
@@ -587,7 +587,7 @@ z: Annotated[int, "metadata"] = 42
     Ok(())
 }
 
-// ── E0070: Never type compatibility ──
+// ── Never type compatibility ──
 
 #[test]
 fn never_type() -> Result<(), Box<dyn std::error::Error>> {
@@ -630,7 +630,7 @@ class MyClass:
     Ok(())
 }
 
-// ── E0080: TypeVar bound violation ──
+// ── TypeVar bound violation ──
 
 #[test]
 fn typevar_bound_violation() -> Result<(), Box<dyn std::error::Error>> {
@@ -653,7 +653,7 @@ w3 = IntWrapper(True)
     Ok(())
 }
 
-// ── E0091: TypeVar default incompatible ──
+// ── TypeVar default incompatible ──
 
 #[test]
 fn typevar_default() -> Result<(), Box<dyn std::error::Error>> {
@@ -670,7 +670,7 @@ W = TypeVar("W", int, str, default=int)
     Ok(())
 }
 
-// ── E0084: TypeVarTuple invalid params ──
+// ── TypeVarTuple invalid params ──
 
 #[test]
 fn typevartuple_invalid() -> Result<(), Box<dyn std::error::Error>> {
@@ -685,7 +685,7 @@ Bad = TypeVarTuple("Wrong")
     Ok(())
 }
 
-// ── E0057: type statement invalid RHS ──
+// ── type statement invalid RHS ──
 
 #[test]
 fn type_statement_rhs() -> Result<(), Box<dyn std::error::Error>> {

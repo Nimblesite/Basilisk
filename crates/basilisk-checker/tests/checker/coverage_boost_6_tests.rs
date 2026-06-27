@@ -4,7 +4,7 @@ use super::common::*;
 // Coverage boost tests batch 6: targeting highest-uncovered rules.
 // Focus: e0115, e0072, e0107, e0070, e0079, e0047, e0014, e0036
 
-// --- E0115: Deprecated usage ---
+// --- Deprecated usage ---
 
 #[test]
 fn deprecated_function_call() -> Result<(), Box<dyn std::error::Error>> {
@@ -236,7 +236,7 @@ x += old_func()
     Ok(())
 }
 
-// --- E0072: No matching overload ---
+// --- No matching overload ---
 
 #[test]
 fn getitem_str_mismatch() -> Result<(), Box<dyn std::error::Error>> {
@@ -465,7 +465,7 @@ c[True]
     Ok(())
 }
 
-// --- E0107: Variance incompatibility ---
+// --- Variance incompatibility ---
 
 #[test]
 fn co_in_invariant() -> Result<(), Box<dyn std::error::Error>> {
@@ -588,7 +588,7 @@ class Bad(Sink[T_co]):
     Ok(())
 }
 
-// --- E0070: Never type compat ---
+// --- Never type compat ---
 
 #[test]
 fn local_assign() -> Result<(), Box<dyn std::error::Error>> {
@@ -692,7 +692,7 @@ def func(c: dict[str, Never]) -> None:
     Ok(())
 }
 
-// --- E0079: Module protocol ---
+// --- Module protocol ---
 
 #[test]
 fn module_protocol() -> Result<(), Box<dyn std::error::Error>> {
@@ -743,7 +743,7 @@ c: Connectable = os
     Ok(())
 }
 
-// --- E0047: Invalid type expression ---
+// --- Invalid type expression ---
 
 #[test]
 fn list_literal() -> Result<(), Box<dyn std::error::Error>> {
@@ -836,7 +836,7 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// --- E0036: ClassVar ---
+// --- ClassVar ---
 
 #[test]
 fn outside_class() -> Result<(), Box<dyn std::error::Error>> {

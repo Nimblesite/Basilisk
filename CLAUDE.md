@@ -1,19 +1,26 @@
 <!-- agent-pmo:f87d349 -->
 # CLAUDE.md
 
-This codebase is held to a high standard: code here should comfortably pass review at a top-tier engineering organization. Keep quality high and fix shortcomings as you find them rather than leaving them for later.
+Code here must comfortably pass review at a top-tier engineering org. Keep quality high and fix shortcomings as you find them.
 
 ⚠️ The conformance test suite is the **single source of all authority**: https://github.com/python/typing/tree/main/conformance/tests. Conformance is measured ONLY by how accurately Basilisk passes these tests — nothing else. ⚠️
 
-⚠️ Disabling, deleting, or unregistering ANY conformance rule is ILLEGAL. PEP conformance MUST run the `basilisk` binary with EVERY PEP rule enabled — no `basilisk.json`, no deleting rule source (`crates/basilisk-checker/src/rules/*.rs`), no removing rules from `all_rules()`, NO EXCEPTIONS. Equally illegal: hand-editing `conformance/conformance_status.csv` or loosening the `coverage-thresholds.json` gate (`threshold` / `max_false_positives`) to match a faked run. `conformance/score.py` deletes stale config before scoring — deleting the rules to dodge that guard is the same crime, not a loophole. See [CHKARCH-CONFORMANCE]. ⚠️
+⚠️ Disabling, deleting, or unregistering ANY conformance rule is FORBIDDEN. Move the number by FIXING the checker, NEVER by touching the scoreboard: no `basilisk.json`, no deleting rule source (`crates/basilisk-checker/src/rules/*.rs`), no removing rules from `all_rules()`, no hand-editing `conformance/conformance_status.csv`, no loosening `coverage-thresholds.json` (`threshold` / `max_false_positives`). `score.py` purges stale config before scoring — deleting a rule to dodge that purge is the SAME crime by another route. See [CHKARCH-CONFORMANCE], [CHKARCH-CONFORMANCE-MODE]. ⚠️
 
-Three ratchets hold at ALL times: conformance score only goes **up**; false positives and benchmark times only go **down**.
+## Conformance Is the Prime Directive
+
+Target: **100% PEP conformance**, canonical Python **3.12**. Read the [PEP conformance README](https://github.com/python/typing/blob/main/conformance/README.md) carefully. This discipline outranks every other concern in this file.
+
+- **One reproducible scorer.** `python3 conformance/score.py` runs the real, sha-pinned `python/typing` calculator over the unmodified binary in its default config — every PEP rule on, nothing configured ([CHKARCH-CONFORMANCE], [CHKARCH-CONFIGURATION-ONLY]). The score is exactly what a user gets out of the box; never quote a number produced any other way.
+- **Precision is the whole game.** A file passes iff the upstream `errors_diff` is empty: emit an error on EVERY `# E` line, satisfy EVERY `# E[tag]` group, and emit NOTHING on a line the suite does not mark. Follow each PEP exactly — no missed required error, no stray diagnostic.
+- **Every failure is a false positive, not a miss.** The checker already catches every required error; files fail because a strict house-rule fires on spec-valid code. Close the gap by making the checker PRECISE — teach it to recognise the valid construct — never by missing a required error or silencing a rule ([CHKARCH-CONFORMANCE-MODE]).
+- **Ratchets, always.** Pass-% only goes UP and the false-positive ceiling only goes DOWN (`coverage-thresholds.json`: `conformance.threshold`, `conformance.max_false_positives`); benchmark times only go DOWN ([CHKARCH-TESTING-BENCH-RATCHET]). A change that moves any ratchet the wrong way is not done.
 
 ## Design Principles
 
-We are building a better Python developer experience: one IDE extension that delivers a complete, seamless, fast Python workflow. The LSP drives all functionality — IDE extensions only react to signals the LSP emits (commands, state changes) and NEVER register commands the LSP doesn't advertise.
+We are building a better Python developer experience: one IDE extension for a complete, fast workflow. The LSP drives all functionality — IDE extensions only react to LSP signals (commands, state changes) and NEVER register a command the LSP doesn't advertise.
 
-Target: 100% PEP conformance. Read the PEP conformance readme carefully. The project is a strict-by-default Python type checker and comprehensive LSP (test explorer, debugging, profiling, autofixes) built in Rust.
+Basilisk has **no modes** — behaviour is per-rule configuration ([CHKARCH-CONFIGURATION-ONLY]). The default enables every PEP typing-spec rule and nothing else; opinionated house-style rules (require-annotation `BSK-E0001/E0002/E0004`, require-`@override` `BSK-E0025`, redundant-annotation `BSK-W0050`, explicit-`Any` nudge `BSK-W0014`) are opt-in. Every diagnostic must teach — explain why, not just what.
 
 # Documentation Structure
 
@@ -30,12 +37,11 @@ The spec-ID web is the fabric of this repository and is non-negotiable:
 
 `docs/specs/LSP-ARCHITECTURE-SPEC.md` is the **single source of truth** for all shared LSP/DAP/config/commands. Editor-specific specs point back to it.
 
-# Critical Docs
+# Reference
 
 - [Python type system spec](https://typing.python.org/en/latest/spec/index.html)
-- [PEP Conformance](https://github.com/python/typing/blob/main/conformance/README.md)
-- [Pyrefly](https://pyrefly.org/en/docs/) | [Pyright](https://microsoft.github.io/pyright/#/) (reference implementations)
-- [Python Type System Conformance Test Results](https://github.com/python/typing/blob/main/conformance/results/results.html) (our goal is to be listed here; background: https://sinon.github.io/future-python-type-checkers/#zuban-from-david-halter)
+- [Pyrefly](https://pyrefly.org/en/docs/) | [Pyright](https://microsoft.github.io/pyright/#/) — reference implementations to compare against; NEVER copy from their code.
+- [Conformance results](https://github.com/python/typing/blob/main/conformance/results/results.html) — being listed here is the goal ([background](https://sinon.github.io/future-python-type-checkers/#zuban-from-david-halter)).
 
 # Build Commands
 
@@ -70,13 +76,10 @@ There are exactly **7 standard targets — don't add others.** `make test` runs 
 
 ## Documentation Honesty — No Unsubstantiated Claims
 
-Trust is the product. Fabricated, guessed, or contradictory figures destroy it (e.g. citing a competitor's conformance as "~85%" in one doc and "~58%" in another — both invented).
+Trust is the product; a fabricated or contradictory figure destroys it. This applies **everywhere** — specs, plans, README, website, marketing, and code comments.
 
-- **Every empirical or comparative claim about the outside world** — developer/industry statistics, adoption rates, competitor capability/performance/conformance numbers, market facts, attributed quotes — MUST carry an inline link to the authoritative source that actually makes that claim.
-- Link the authoritative URL or delete the claim — there is no third option. NEVER invent a URL, a number, or an approximation to fill a gap.
+- **Every empirical or comparative claim about the outside world** (stats, adoption, competitor capability/performance/conformance numbers, market facts, attributed quotes) MUST carry an inline link to the authoritative source that actually makes that claim. Link the URL or delete the claim — NEVER invent or approximate one. A value that drifts (a competitor's pinned conformance %, a download size) links to its live source, never a frozen figure.
 - **Self-measured, reproducible metrics are exempt** (e.g. our own conformance score from the unmodified `python/typing` scorer in CI) — but state how they're measured and don't compare them against numbers from a different methodology.
-- A value that drifts (a competitor's version-pinned conformance %, a third-party download size) is linked to its live source, NEVER frozen as a bare figure that silently rots.
-- This applies **everywhere in the repo** — specs, plans, README, website, marketing copy, and code comments.
 
 ## Git & Branch Discipline
 
@@ -208,7 +211,7 @@ Strict-by-default Python type checker and comprehensive LSP built in **Rust**. O
 - **Parallelism**: Rayon (work-stealing, file-level)
 - **No Pyright/mypy/Node.js** — zero TypeScript or Python runtime
 
-Diagnostic codes: `BSK-E####` / `BSK-W####`. Pyright is the reference implementation to compare against — NEVER copy from the Pyright codebase. See `docs/specs/CHECKER-ARCHITECTURE-SPEC.md` for full architecture, diagnostic ranges, and testing strategy.
+Diagnostic codes: `BSK-E####` / `BSK-W####`. See `docs/specs/CHECKER-ARCHITECTURE-SPEC.md` ([CHKARCH]) for full architecture, diagnostic ranges, and conformance scoring.
 
 ## Migration to `lspkit`
 

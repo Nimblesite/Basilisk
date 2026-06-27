@@ -347,7 +347,7 @@ class MyProto(Protocol):
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0130: Module-level generic instance method calls (assertion-heavy)
+// Module-level generic instance method calls (assertion-heavy)
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -455,7 +455,7 @@ w += 1
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0115: deprecated in function body with param type inference
+// deprecated in function body with param type inference
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -481,7 +481,7 @@ def other(items: list) -> None:
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0115: deprecated in control flow
+// deprecated in control flow
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -513,7 +513,7 @@ def func():
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0115: deprecated attribute access via assignment
+// deprecated attribute access via assignment
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]

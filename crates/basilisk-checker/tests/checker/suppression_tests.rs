@@ -7,10 +7,10 @@ use super::common::*;
 fn type_ignore_suppresses_all() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def process(data) -> None:  # type: ignore\n    pass\n";
     let diags = run(source)?;
-    // E0001 should be suppressed by type: ignore
+    // BSK-E0001 should be suppressed by type: ignore
     assert!(
         !codes(&diags).contains(&"BSK-E0001"),
-        "type: ignore should suppress E0001"
+        "type: ignore should suppress BSK-E0001"
     );
     Ok(())
 }
@@ -21,7 +21,7 @@ fn type_ignore_with_code_suppresses_specific() -> Result<(), Box<dyn std::error:
     let diags = run(source)?;
     assert!(
         !codes(&diags).contains(&"BSK-E0001"),
-        "type: ignore[BSK-E0001] should suppress E0001"
+        "type: ignore[BSK-E0001] should suppress BSK-E0001"
     );
     Ok(())
 }

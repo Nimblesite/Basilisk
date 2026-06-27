@@ -2015,7 +2015,7 @@ mod tests {
         );
     }
 
-    // ── W0050 severity override: promote warning to error ───────────────────
+    // ── BSK-W0050 severity override: promote warning to error ───────────────────
 
     #[test]
     fn config_override_promotes_w0050_to_error_in_lsp() {
@@ -2033,7 +2033,7 @@ mod tests {
         );
     }
 
-    // ── W0050 disabled via config ───────────────────────────────────────────
+    // ── BSK-W0050 disabled via config ───────────────────────────────────────────
 
     #[test]
     fn config_override_disables_w0050() {
@@ -2117,7 +2117,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             !codes.contains(&"BSK-E0001".to_owned()),
-            "set_open must apply checker_config — disabled E0001 should be absent"
+            "set_open must apply checker_config — disabled BSK-E0001 should be absent"
         );
     }
 
@@ -2153,7 +2153,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             !codes.contains(&"BSK-E0001".to_owned()),
-            "reload_from_disk must apply checker_config — disabled E0001 should be absent"
+            "reload_from_disk must apply checker_config — disabled BSK-E0001 should be absent"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -2236,7 +2236,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             !codes.contains(&"BSK-E0001".to_owned()),
-            "set_closed must apply checker_config — disabled E0001 should be absent"
+            "set_closed must apply checker_config — disabled BSK-E0001 should be absent"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -2346,7 +2346,7 @@ mod tests {
             let codes = lsp_codes(lsp_diags);
             assert!(
                 !codes.contains(&"BSK-E0001".to_owned()),
-                "scan must apply checker_config — disabled E0001 should be absent, got {codes:?}"
+                "scan must apply checker_config — disabled BSK-E0001 should be absent, got {codes:?}"
             );
         }
 
@@ -2362,7 +2362,7 @@ mod tests {
         std::fs::create_dir_all(&root_a).unwrap();
         std::fs::create_dir_all(&root_b).unwrap();
 
-        // Root A: disable E0001 via pyproject.toml
+        // Root A: disable BSK-E0001 via pyproject.toml
         std::fs::write(
             root_a.join("pyproject.toml"),
             "[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
@@ -2379,20 +2379,20 @@ mod tests {
             BasiliskConfig::default(),
         );
 
-        // Check that root A's config disables E0001
+        // Check that root A's config disables BSK-E0001
         let cfg_a = idx.config_for_file(&root_a.join("a.py"));
         assert_eq!(
             cfg_a.rule_severity("BSK-E0001"),
             Some(basilisk_config::RuleSeverity::Disabled),
-            "root A should have E0001 disabled"
+            "root A should have BSK-E0001 disabled"
         );
 
-        // Check that root B uses default config (E0001 not overridden)
+        // Check that root B uses default config (BSK-E0001 not overridden)
         let cfg_b = idx.config_for_file(&root_b.join("b.py"));
         assert_eq!(
             cfg_b.rule_severity("BSK-E0001"),
             None,
-            "root B should have default config (no E0001 override)"
+            "root B should have default config (no BSK-E0001 override)"
         );
 
         let _ = std::fs::remove_dir_all(&root_a);
@@ -2439,19 +2439,19 @@ mod tests {
         };
         let idx = make_index_with_config(config);
 
-        // File with both E0001 and W0050 triggers.
+        // File with both BSK-E0001 and BSK-W0050 triggers.
         let uri = make_uri("/tmp/cfg_multi.py");
         let src = "x: int = 42\n\ndef greet(name):\n    return name\n";
         let lsp_diags = idx.set_open(&uri, src, 1);
         let codes = lsp_codes(&lsp_diags);
 
-        // W0050 should be gone (disabled).
+        // BSK-W0050 should be gone (disabled).
         assert!(
             !codes.contains(&"BSK-W0050".to_owned()),
             "disabled BSK-W0050 must not appear, got {codes:?}"
         );
 
-        // E0001 should be present but demoted to Warning.
+        // BSK-E0001 should be present but demoted to Warning.
         assert!(
             codes.contains(&"BSK-E0001".to_owned()),
             "demoted BSK-E0001 should still appear, got {codes:?}"
@@ -2463,7 +2463,7 @@ mod tests {
                     assert_eq!(
                         d.severity,
                         Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-                        "demoted E0001 must be WARNING in combined config"
+                        "demoted BSK-E0001 must be WARNING in combined config"
                     );
                 }
             }
@@ -2472,7 +2472,7 @@ mod tests {
         // Also verify the raw checker diagnostics match.
         let diags = get_diagnostics(&idx, &uri);
         let w0050_count = count_code(&diags, "BSK-W0050");
-        assert_eq!(w0050_count, 0, "W0050 disabled in checker too");
+        assert_eq!(w0050_count, 0, "BSK-W0050 disabled in checker too");
         for d in diags.iter().filter(|d| d.code.code == "BSK-E0001") {
             assert_eq!(d.severity, basilisk_checker::Severity::Warning);
         }
@@ -2545,14 +2545,14 @@ mod tests {
         let dir = unique_tmp("bsk_cfg_pyproject");
         std::fs::create_dir_all(&dir).unwrap();
 
-        // Write a pyproject.toml that disables E0001.
+        // Write a pyproject.toml that disables BSK-E0001.
         std::fs::write(
             dir.join("pyproject.toml"),
             "[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
         )
         .unwrap();
 
-        // Write a Python file that triggers E0001.
+        // Write a Python file that triggers BSK-E0001.
         std::fs::write(dir.join("check_me.py"), SRC_MISSING_ANNOTATION).unwrap();
 
         // Load config the same way the LSP init does.
@@ -2573,7 +2573,7 @@ mod tests {
             let codes = lsp_codes(lsp_diags);
             assert!(
                 !codes.contains(&"BSK-E0001".to_owned()),
-                "pyproject.toml disabled E0001 must not appear in scan results"
+                "pyproject.toml disabled BSK-E0001 must not appear in scan results"
             );
         }
 
@@ -2583,7 +2583,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             !codes.contains(&"BSK-E0001".to_owned()),
-            "pyproject.toml disabled E0001 must not appear via set_open either"
+            "pyproject.toml disabled BSK-E0001 must not appear via set_open either"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -2610,7 +2610,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             codes.contains(&"BSK-E0001".to_owned()),
-            "demoted E0001 should still appear"
+            "demoted BSK-E0001 should still appear"
         );
 
         for d in &lsp_diags {
@@ -2619,7 +2619,7 @@ mod tests {
                     assert_eq!(
                         d.severity,
                         Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-                        "pyproject.toml demoted E0001 must be WARNING in LSP"
+                        "pyproject.toml demoted BSK-E0001 must be WARNING in LSP"
                     );
                 }
             }
@@ -2631,7 +2631,7 @@ mod tests {
             assert_eq!(
                 d.severity,
                 basilisk_checker::Severity::Warning,
-                "pyproject.toml demoted E0001 must be Warning in checker"
+                "pyproject.toml demoted BSK-E0001 must be Warning in checker"
             );
         }
 
@@ -2645,7 +2645,7 @@ mod tests {
         // Prove the fix: same source, different configs, different severities.
         let uri_path = "/tmp/cfg_diff.py";
 
-        // Default config: E0001 is Error.
+        // Default config: BSK-E0001 is Error.
         let default_idx = make_index();
         let default_uri = make_uri(uri_path);
         let default_diags = default_idx.set_open(&default_uri, SRC_MISSING_ANNOTATION, 1);
@@ -2657,7 +2657,7 @@ mod tests {
             .filter_map(|d| d.severity)
             .collect();
 
-        // Custom config: E0001 demoted to Warning.
+        // Custom config: BSK-E0001 demoted to Warning.
         let custom_idx =
             make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
         let custom_uri = make_uri(uri_path);
@@ -2670,28 +2670,28 @@ mod tests {
             .filter_map(|d| d.severity)
             .collect();
 
-        // Both should have E0001 diagnostics.
-        assert!(!default_severities.is_empty(), "default must have E0001");
-        assert!(!custom_severities.is_empty(), "custom must have E0001");
+        // Both should have BSK-E0001 diagnostics.
+        assert!(!default_severities.is_empty(), "default must have BSK-E0001");
+        assert!(!custom_severities.is_empty(), "custom must have BSK-E0001");
 
         // Default = ERROR, Custom = WARNING.
         assert!(
             default_severities
                 .iter()
                 .all(|s| *s == tower_lsp::lsp_types::DiagnosticSeverity::ERROR),
-            "default config E0001 must be ERROR"
+            "default config BSK-E0001 must be ERROR"
         );
         assert!(
             custom_severities
                 .iter()
                 .all(|s| *s == tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-            "custom config E0001 must be WARNING"
+            "custom config BSK-E0001 must be WARNING"
         );
 
         // They must differ — this is the core assertion proving the fix.
         assert_ne!(
             default_severities, custom_severities,
-            "default and custom configs MUST produce different LSP severities for E0001"
+            "default and custom configs MUST produce different LSP severities for BSK-E0001"
         );
     }
 }

@@ -52,7 +52,7 @@ fn run_with_config(
 
 #[test]
 fn global_severity_off_suppresses_e0001() -> Result<(), Box<dyn std::error::Error>> {
-    // missing_param_annotation.py triggers E0001 — should be suppressed
+    // missing_param_annotation.py triggers BSK-E0001 — should be suppressed
     let mut rules = HashMap::new();
     rules.insert("BSK-E0001".to_owned(), RuleSeverity::Disabled);
     let config = BasiliskConfig {
@@ -64,7 +64,7 @@ fn global_severity_off_suppresses_e0001() -> Result<(), Box<dyn std::error::Erro
     let has_e0001 = diags.iter().any(|d| d.code.code == "BSK-E0001");
     assert!(
         !has_e0001,
-        "E0001 should be suppressed by global rule override, got: {diags:#?}"
+        "BSK-E0001 should be suppressed by global rule override, got: {diags:#?}"
     );
     Ok(())
 }
@@ -85,13 +85,13 @@ fn global_severity_warning_demotes_e0001() -> Result<(), Box<dyn std::error::Err
         .collect();
     assert!(
         !e0001_diags.is_empty(),
-        "should still emit E0001, just demoted"
+        "should still emit BSK-E0001, just demoted"
     );
     for diag in &e0001_diags {
         assert_eq!(
             diag.severity,
             Severity::Warning,
-            "E0001 should be demoted to warning, got: {diag:?}"
+            "BSK-E0001 should be demoted to warning, got: {diag:?}"
         );
     }
     Ok(())
@@ -113,13 +113,13 @@ fn global_severity_info_demotes_e0001() -> Result<(), Box<dyn std::error::Error>
         .collect();
     assert!(
         !e0001_diags.is_empty(),
-        "should still emit E0001, just demoted to info"
+        "should still emit BSK-E0001, just demoted to info"
     );
     for diag in &e0001_diags {
         assert_eq!(
             diag.severity,
             Severity::Info,
-            "E0001 should be demoted to info, got: {diag:?}"
+            "BSK-E0001 should be demoted to info, got: {diag:?}"
         );
     }
     Ok(())
@@ -227,7 +227,7 @@ fn per_path_disabled_suppresses_all_diagnostics() -> Result<(), Box<dyn std::err
         .collect();
     assert!(
         e0001_e0002.is_empty(),
-        "E0001 and E0002 should be suppressed by per-path override, got: {e0001_e0002:#?}"
+        "BSK-E0001 and BSK-E0002 should be suppressed by per-path override, got: {e0001_e0002:#?}"
     );
     Ok(())
 }
@@ -256,13 +256,13 @@ fn per_path_warning_demotes_severity() -> Result<(), Box<dyn std::error::Error>>
         .collect();
     assert!(
         !e0001_diags.is_empty(),
-        "E0001 should still be emitted as warning"
+        "BSK-E0001 should still be emitted as warning"
     );
     for diag in &e0001_diags {
         assert_eq!(
             diag.severity,
             Severity::Warning,
-            "E0001 should be demoted to warning via per-path override"
+            "BSK-E0001 should be demoted to warning via per-path override"
         );
     }
     Ok(())
@@ -299,7 +299,7 @@ fn per_path_overrides_global_severity() -> Result<(), Box<dyn std::error::Error>
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
-    assert!(!e0001_diags.is_empty(), "E0001 should still be emitted");
+    assert!(!e0001_diags.is_empty(), "BSK-E0001 should still be emitted");
     for diag in &e0001_diags {
         assert_eq!(
             diag.severity,

@@ -53,13 +53,13 @@ fn missing_param_annotation_produces_only_e0001() -> Result<(), Box<dyn std::err
     assert!(!diags.is_empty(), "should have diagnostics");
     assert!(
         diags.iter().all(|d| d.code.code == "BSK-E0001"),
-        "all diagnostics should be E0001, got: {diags:#?}"
+        "all diagnostics should be BSK-E0001, got: {diags:#?}"
     );
     // `process` has 1 unannotated param, `transform` has 1 unannotated param
     assert_eq!(
         diags.len(),
         2,
-        "expected 2 E0001 diagnostics, got {}",
+        "expected 2 BSK-E0001 diagnostics, got {}",
         diags.len()
     );
     Ok(())
@@ -71,7 +71,7 @@ fn missing_return_annotation_produces_only_e0002() -> Result<(), Box<dyn std::er
     assert!(!diags.is_empty(), "should have diagnostics");
     assert!(
         diags.iter().all(|d| d.code.code == "BSK-E0002"),
-        "all diagnostics should be E0002, got: {diags:#?}"
+        "all diagnostics should be BSK-E0002, got: {diags:#?}"
     );
     assert_eq!(diags.len(), 2, "two functions without return annotations");
     Ok(())
@@ -81,8 +81,8 @@ fn missing_return_annotation_produces_only_e0002() -> Result<(), Box<dyn std::er
 fn missing_both_produces_e0001_and_e0002() -> Result<(), Box<dyn std::error::Error>> {
     let diags = check_fixture("missing_both.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
-    assert!(codes.contains(&"BSK-E0001"), "should contain E0001");
-    assert!(codes.contains(&"BSK-E0002"), "should contain E0002");
+    assert!(codes.contains(&"BSK-E0001"), "should contain BSK-E0001");
+    assert!(codes.contains(&"BSK-E0002"), "should contain BSK-E0002");
     assert!(
         diags.iter().all(|d| d.severity == Severity::Error),
         "all diagnostics should be errors"
@@ -117,9 +117,9 @@ fn all_diagnostics_reference_correct_file_path() -> Result<(), Box<dyn std::erro
 
 #[test]
 fn missing_both_broken_has_two_params_flagged() -> Result<(), Box<dyn std::error::Error>> {
-    // `broken(x, y)` has 2 unannotated params -> 2 x E0001
-    // `also_broken(name)` has 1 unannotated param -> 1 x E0001
-    // Both functions lack return annotation -> 2 x E0002
+    // `broken(x, y)` has 2 unannotated params -> 2 x BSK-E0001
+    // `also_broken(name)` has 1 unannotated param -> 1 x BSK-E0001
+    // Both functions lack return annotation -> 2 x BSK-E0002
     let diags = check_fixture("missing_both.py")?;
     let e0001_count = diags.iter().filter(|d| d.code.code == "BSK-E0001").count();
     let e0002_count = diags.iter().filter(|d| d.code.code == "BSK-E0002").count();

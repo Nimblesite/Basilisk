@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 快速开始
-description: 5 分钟内开始使用 Basilisk。安装扩展，运行第一次类型检查，体验默认严格模式的 Python 诊断。
+description: 5 分钟内开始使用 Basilisk。安装扩展，运行第一次类型检查，体验默认符合 PEP 规范的 Python 诊断。
 keywords: basilisk, 快速开始, python语言服务器, 类型检查, 教程, vs code, cursor, windsurf, zed, neovim
 lang: zh
 ---

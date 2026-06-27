@@ -14,7 +14,7 @@ use super::common::*;
 // e0102 typevar default violation, e0116 namedtuple field validation.
 
 // =============================================================================
-// E0138: dataclass_transform frozen attribute assignment
+// dataclass_transform frozen attribute assignment
 // =============================================================================
 
 #[test]
@@ -140,7 +140,7 @@ class Item(metaclass=ModelMeta):
 }
 
 // =============================================================================
-// E0144: type() constructor deep paths
+// type() constructor deep paths
 // =============================================================================
 
 #[test]
@@ -370,7 +370,7 @@ def make(cls: type[Flexible]) -> Flexible:
 }
 
 // =============================================================================
-// E0111: Constructor call errors - deep paths
+// Constructor call errors - deep paths
 // =============================================================================
 
 #[test]
@@ -485,7 +485,7 @@ x = Leaf(1, "hello")
 }
 
 // =============================================================================
-// E0143: NamedTuple usage - delete/unpack/index
+// NamedTuple usage - delete/unpack/index
 // =============================================================================
 
 #[test]
@@ -670,7 +670,7 @@ a, b, c, d = p
 }
 
 // =============================================================================
-// E0095: InitVar attribute access
+// InitVar attribute access
 // =============================================================================
 
 #[test]
@@ -783,7 +783,7 @@ if True:
 }
 
 // =============================================================================
-// E0122: Callable arity in various statement branches
+// Callable arity in various statement branches
 // =============================================================================
 
 #[test]
@@ -976,7 +976,7 @@ def process(fn: Callable[[int], int], gn: Callable[[str], str]) -> None:
 }
 
 // =============================================================================
-// E0126: LiteralString invariant generic
+// LiteralString invariant generic
 // =============================================================================
 
 #[test]
@@ -1012,7 +1012,7 @@ def process(s: str) -> None:
 }
 
 // =============================================================================
-// E0054: Final reassignment - deep paths
+// Final reassignment - deep paths
 // =============================================================================
 
 #[test]
@@ -1104,7 +1104,7 @@ s.DEBUG = True
 }
 
 // =============================================================================
-// E0112: TypeGuard callable return type
+// TypeGuard callable return type
 // =============================================================================
 
 #[test]
@@ -1139,7 +1139,7 @@ def use_checker(c: Checker) -> None:
 }
 
 // =============================================================================
-// E0107: Alias variance expansion
+// Alias variance expansion
 // =============================================================================
 
 #[test]
@@ -1196,7 +1196,7 @@ class Bad(Container[T_contra]):
 }
 
 // =============================================================================
-// E0139: TypeVarTuple alias specialization - deep paths
+// TypeVarTuple alias specialization - deep paths
 // =============================================================================
 
 #[test]
@@ -1258,7 +1258,7 @@ v1: TA7[int] = Multi()
 }
 
 // =============================================================================
-// E0130: TypeVar constraint checking - deep branches
+// TypeVar constraint checking - deep branches
 // =============================================================================
 
 #[test]
@@ -1277,7 +1277,7 @@ class Outer(Generic[T]):
 }
 
 // =============================================================================
-// E0076: Overload complex patterns
+// Overload complex patterns
 // =============================================================================
 
 #[test]
@@ -1304,7 +1304,7 @@ def process(x: Union[int, str, float]) -> Union[str, int, bool]:
 }
 
 // =============================================================================
-// E0146: Protocol class with __init__ and deep paths
+// Protocol class with __init__ and deep paths
 // =============================================================================
 
 #[test]
@@ -1322,7 +1322,7 @@ class Factory(Protocol):
 }
 
 // =============================================================================
-// E0116: NamedTuple definition - various field patterns
+// NamedTuple definition - various field patterns
 // =============================================================================
 
 #[test]
@@ -1349,7 +1349,7 @@ class Empty(NamedTuple):
 }
 
 // =============================================================================
-// E0147: Tuple starred unpack
+// Tuple starred unpack
 // =============================================================================
 
 #[test]
@@ -1366,7 +1366,7 @@ def process(t: Tuple[int, str, float]) -> None:
 }
 
 // =============================================================================
-// E0148: Generic type args
+// Generic type args
 // =============================================================================
 
 #[test]
@@ -1390,7 +1390,7 @@ y: Optional[int, str] = None
 }
 
 // =============================================================================
-// E0131: Generator yield type complex
+// Generator yield type complex
 // =============================================================================
 
 #[test]
@@ -1406,7 +1406,7 @@ async def gen() -> AsyncGenerator[int, None]:
 }
 
 // =============================================================================
-// E0102: TypeVar default violation - deep
+// TypeVar default violation - deep
 // =============================================================================
 
 #[test]
@@ -1430,7 +1430,7 @@ T = TypeVar("T", bound=int, default=str)
 }
 
 // =============================================================================
-// E0073: NamedTuple tuple compatibility - deep
+// NamedTuple tuple compatibility - deep
 // =============================================================================
 
 #[test]
@@ -1452,7 +1452,7 @@ q = p._replace(z=3)
 }
 
 // =============================================================================
-// E0121: Protocol conformance deep paths
+// Protocol conformance deep paths
 // =============================================================================
 
 #[test]
@@ -1477,7 +1477,7 @@ def use_it(obj: HasStatic) -> None:
 }
 
 // =============================================================================
-// E0119: Protocol isinstance - deep paths
+// Protocol isinstance - deep paths
 // =============================================================================
 
 #[test]
@@ -1502,7 +1502,7 @@ if isinstance(x, HasLen):
 }
 
 // =============================================================================
-// E0145: type bracket in various positions
+// type bracket in various positions
 // =============================================================================
 
 #[test]

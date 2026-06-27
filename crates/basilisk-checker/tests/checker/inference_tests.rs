@@ -76,7 +76,7 @@ fn test_self_no_e0001() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
-    assert!(e0001.is_empty(), "self parameter should not fire E0001");
+    assert!(e0001.is_empty(), "self parameter should not fire BSK-E0001");
     Ok(())
 }
 
@@ -87,7 +87,7 @@ fn test_cls_no_e0001() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
-    assert!(e0001.is_empty(), "cls parameter should not fire E0001");
+    assert!(e0001.is_empty(), "cls parameter should not fire BSK-E0001");
     Ok(())
 }
 
@@ -98,7 +98,7 @@ fn test_unannotated_param_fires_e0001() -> Result<(), Box<dyn std::error::Error>
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
-    assert!(!e0001.is_empty(), "unannotated parameter should fire E0001");
+    assert!(!e0001.is_empty(), "unannotated parameter should fire BSK-E0001");
     Ok(())
 }
 
@@ -111,7 +111,7 @@ fn test_missing_return_fires_e0002() -> Result<(), Box<dyn std::error::Error>> {
         .collect();
     assert!(
         !e0002.is_empty(),
-        "missing return annotation should fire E0002"
+        "missing return annotation should fire BSK-E0002"
     );
     Ok(())
 }
@@ -242,14 +242,14 @@ STATUS = "active"
 reveal_type(STATUS)  # should be Literal["active"]
 "#;
     let diags = run(src)?;
-    // E0003 fires for unannotated module vars (strict mode) — exclude it here.
+    // BSK-E0003 fires for unannotated module vars (strict mode) — exclude it here.
     let non_e0003: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code != "BSK-E0003")
         .collect();
     assert!(
         non_e0003.is_empty(),
-        "module-level literal inference should be clean (excluding E0003), got: {:?}",
+        "module-level literal inference should be clean (excluding BSK-E0003), got: {:?}",
         non_e0003.iter().map(|d| &d.message).collect::<Vec<_>>()
     );
     Ok(())
@@ -277,7 +277,7 @@ fn test_annotated_var_redundant() -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .filter(|d| d.code.code == "BSK-W0050")
         .collect();
-    assert!(!w0050.is_empty(), "redundant annotation should fire W0050");
+    assert!(!w0050.is_empty(), "redundant annotation should fire BSK-W0050");
     Ok(())
 }
 
@@ -311,7 +311,7 @@ w: bytes = b"data"
     assert_eq!(
         w0050.len(),
         4,
-        "all redundant annotations should fire W0050"
+        "all redundant annotations should fire BSK-W0050"
     );
     Ok(())
 }
@@ -330,7 +330,7 @@ z: tuple[float, float] = (0, 0)
         .collect();
     assert!(
         w0050.is_empty(),
-        "widening annotations should not fire W0050"
+        "widening annotations should not fire BSK-W0050"
     );
     Ok(())
 }
@@ -366,7 +366,7 @@ z: float = 3.14
         .collect();
 
     // This test should pass - there should be no E0014 errors
-    // W0050 warnings are expected and should not cause test failure
+    // BSK-W0050 warnings are expected and should not cause test failure
     assert!(e0014.is_empty(), "compatible types should not fire E0014");
     Ok(())
 }
@@ -384,10 +384,10 @@ z: set[int] = {1, 2, 3}
         .filter(|d| d.code.code == "BSK-W0050")
         .collect();
     // Collection inference is working but types don't match exactly due to internal type differences
-    // This is expected behavior - W0050 only fires for exact type matches
+    // This is expected behavior - BSK-W0050 only fires for exact type matches
     assert!(
         w0050.is_empty(),
-        "collection types with internal differences should not fire W0050"
+        "collection types with internal differences should not fire BSK-W0050"
     );
     Ok(())
 }
@@ -406,7 +406,7 @@ z: set[int | bool] = {1, True}
         .collect();
     assert!(
         w0050.is_empty(),
-        "heterogeneous collections should not fire W0050"
+        "heterogeneous collections should not fire BSK-W0050"
     );
     Ok(())
 }
@@ -424,7 +424,7 @@ def f(x: int) -> None:
         .collect();
     assert!(
         w0050.is_empty(),
-        "function parameters should be exempt from W0050"
+        "function parameters should be exempt from BSK-W0050"
     );
     Ok(())
 }
@@ -440,6 +440,6 @@ def f() -> int:
         .iter()
         .filter(|d| d.code.code == "BSK-W0050")
         .collect();
-    assert!(w0050.is_empty(), "return types should be exempt from W0050");
+    assert!(w0050.is_empty(), "return types should be exempt from BSK-W0050");
     Ok(())
 }

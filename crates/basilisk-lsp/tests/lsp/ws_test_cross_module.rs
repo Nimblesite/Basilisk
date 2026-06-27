@@ -248,7 +248,7 @@ async fn cross_module_circular_import_no_crash() -> TestResult<()> {
     let diags = collect_all_diagnostics(&mut fixture).await;
 
     // Both files should produce some diagnostics (at minimum E0010 for unresolved imports
-    // or E0001 for missing annotations). The important thing is we got results.
+    // or BSK-E0001 for missing annotations). The important thing is we got results.
     assert!(
         !diags.is_empty(),
         "should receive diagnostics even with circular imports"

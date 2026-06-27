@@ -5,7 +5,7 @@ use super::common::*;
 // Also targets remaining uncovered branches in many other rules with highly specific patterns.
 
 // =============================================================================
-// E0149: PEP 695 type parameter scoping - DEEP coverage
+// PEP 695 type parameter scoping - DEEP coverage
 // =============================================================================
 
 #[test]
@@ -180,7 +180,7 @@ x: T = 42
 }
 
 // =============================================================================
-// E0107: Variance - deeply exercise compose_variance and all paths
+// Variance - deeply exercise compose_variance and all paths
 // =============================================================================
 
 #[test]
@@ -253,7 +253,7 @@ class D(A[int], B[str], C[float]):
 }
 
 // =============================================================================
-// E0144: type() constructor - exercise all detection paths
+// type() constructor - exercise all detection paths
 // =============================================================================
 
 #[test]
@@ -324,7 +324,7 @@ Point = type("Point", (), {"__init__": init, "__repr__": repr})
 }
 
 // =============================================================================
-// E0115: Deprecated - exercise remaining uncovered visitors
+// Deprecated - exercise remaining uncovered visitors
 // =============================================================================
 
 #[test]
@@ -423,7 +423,7 @@ num *= 2
 }
 
 // =============================================================================
-// E0138: Dataclass transform - deeper metaclass/base paths
+// Dataclass transform - deeper metaclass/base paths
 // =============================================================================
 
 #[test]
@@ -463,7 +463,7 @@ class Config(KWBase):
 }
 
 // =============================================================================
-// E0122: Callable arity - deeper return type and varargs checks
+// Callable arity - deeper return type and varargs checks
 // =============================================================================
 
 #[test]
@@ -495,7 +495,7 @@ f: Callable[[int, str], bool] = mixed
 }
 
 // =============================================================================
-// E0143: NamedTuple - deeper functional and class paths
+// NamedTuple - deeper functional and class paths
 // =============================================================================
 
 #[test]
@@ -536,7 +536,7 @@ class Vector(NamedTuple):
 }
 
 // =============================================================================
-// E0095: InitVar - exercise deeper paths including complex defaults
+// InitVar - exercise deeper paths including complex defaults
 // =============================================================================
 
 #[test]
@@ -562,7 +562,7 @@ class Database:
 }
 
 // =============================================================================
-// E0121: Protocol conformance - deeper attribute checks
+// Protocol conformance - deeper attribute checks
 // =============================================================================
 
 #[test]
@@ -602,7 +602,7 @@ class Partial:
 }
 
 // =============================================================================
-// E0139: TypeVarTuple - deeper paths
+// TypeVarTuple - deeper paths
 // =============================================================================
 
 #[test]
@@ -638,7 +638,7 @@ def apply(func: Callable[[Unpack[Ts]], int], *args: Unpack[Ts]) -> int:
 }
 
 // =============================================================================
-// E0126: Literal - deeper value comparison paths
+// Literal - deeper value comparison paths
 // =============================================================================
 
 #[test]
@@ -665,7 +665,7 @@ y: Literal[42] = None
 }
 
 // =============================================================================
-// E0119: Protocol isinstance - deeper paths
+// Protocol isinstance - deeper paths
 // =============================================================================
 
 #[test]
@@ -704,7 +704,7 @@ result2 = issubclass(MyList, Sized)
 }
 
 // =============================================================================
-// E0116: NamedTuple definition - deeper paths
+// NamedTuple definition - deeper paths
 // =============================================================================
 
 #[test]
@@ -732,7 +732,7 @@ class Config(NamedTuple):
 }
 
 // =============================================================================
-// E0073: NamedTuple tuple compat - deeper paths
+// NamedTuple tuple compat - deeper paths
 // =============================================================================
 
 #[test]
@@ -752,7 +752,7 @@ p: tuple[int, int] = Point3D(1, 2, 3)
 }
 
 // =============================================================================
-// E0102: TypeVar default - exercise deeper paths
+// TypeVar default - exercise deeper paths
 // =============================================================================
 
 #[test]
@@ -767,7 +767,7 @@ T = TypeVar("T", int, str, default=list)
 }
 
 // =============================================================================
-// E0131: Yield type - exercise deeper paths
+// Yield type - exercise deeper paths
 // =============================================================================
 
 #[test]
@@ -804,7 +804,7 @@ def safe_gen() -> Generator[int, None, None]:
 }
 
 // =============================================================================
-// E0130: TypeVar scoping - deeper nested class paths
+// TypeVar scoping - deeper nested class paths
 // =============================================================================
 
 #[test]
@@ -824,7 +824,7 @@ class A(Generic[T]):
 }
 
 // =============================================================================
-// E0054: Final reassignment - deeper paths
+// Final reassignment - deeper paths
 // =============================================================================
 
 #[test]
@@ -855,7 +855,7 @@ X = 100
 }
 
 // =============================================================================
-// E0112: TypeGuard - deeper callable return paths
+// TypeGuard - deeper callable return paths
 // =============================================================================
 
 #[test]
@@ -885,7 +885,7 @@ class Checker:
 }
 
 // =============================================================================
-// E0145: Invalid type bracket - deeper paths
+// Invalid type bracket - deeper paths
 // =============================================================================
 
 #[test]
@@ -903,7 +903,7 @@ def foo(x: type[Generic[T]]) -> None:
 }
 
 // =============================================================================
-// E0147: Tuple starred unpack - deeper paths
+// Tuple starred unpack - deeper paths
 // =============================================================================
 
 #[test]
@@ -921,7 +921,7 @@ def foo(*args: Unpack[tuple[int, str, float]]) -> None:
 }
 
 // =============================================================================
-// E0148: Generic type arg - deeper paths
+// Generic type arg - deeper paths
 // =============================================================================
 
 #[test]
@@ -949,7 +949,7 @@ y: FrozenSet[int, str] = frozenset()
 }
 
 // =============================================================================
-// E0146: Protocol class object - deeper paths
+// Protocol class object - deeper paths
 // =============================================================================
 
 #[test]
@@ -971,7 +971,7 @@ class App:
 }
 
 // =============================================================================
-// E0079: Module protocol - exercise the code paths we can reach
+// Module protocol - exercise the code paths we can reach
 // =============================================================================
 
 #[test]
@@ -990,7 +990,7 @@ x: JsonLike = json
 }
 
 // =============================================================================
-// E0057: PEP 695 type alias validation
+// PEP 695 type alias validation
 // =============================================================================
 
 #[test]
@@ -1015,7 +1015,7 @@ type Triple[T] = tuple[T, T, T]
 }
 
 // =============================================================================
-// E0047: Invalid type expression - exercise remaining branches
+// Invalid type expression - exercise remaining branches
 // =============================================================================
 
 #[test]
@@ -1043,7 +1043,7 @@ y: Mapping[str, int] = {}
 }
 
 // =============================================================================
-// E0014: Dataclass attr assignment - exercise classify_literal
+// Dataclass attr assignment - exercise classify_literal
 // =============================================================================
 
 #[test]
@@ -1136,7 +1136,7 @@ c.value = -42
 }
 
 // =============================================================================
-// E0063: Non-hashable dataclass - exercise deeper code paths
+// Non-hashable dataclass - exercise deeper code paths
 // =============================================================================
 
 #[test]

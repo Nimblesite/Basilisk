@@ -9,7 +9,7 @@
 //! breaking imports that relied on their implicit availability.
 //!
 //! ```python
-//! import urllib3  # W0011: 'urllib3' is a transitive dependency (via requests)
+//! import urllib3  # BSK-W0011: 'urllib3' is a transitive dependency (via requests)
 //! ```
 
 use basilisk_resolver::{ImportResolution, PackageDepKind, ResolvedModule};

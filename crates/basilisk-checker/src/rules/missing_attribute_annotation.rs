@@ -34,7 +34,7 @@ impl Rule for MissingAttributeAnnotation {
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         // Collect all TypeVar names (module-level and class-body) so we can
-        // exempt unannotated TypeVar assignments like `T = TypeVar("T")` from E0005.
+        // exempt unannotated TypeVar assignments like `T = TypeVar("T")` from BSK-E0005.
         let typevar_names: std::collections::HashSet<&str> = module
             .typevar_calls
             .iter()

@@ -6,7 +6,7 @@ use super::common::*;
 // and edge cases that trigger specific code paths.
 
 // =============================================================================
-// E0036: check_classvar_type_mismatch - ClassVar with runtime variable, numeric
+// check_classvar_type_mismatch - ClassVar with runtime variable, numeric
 // =============================================================================
 
 #[test]
@@ -41,7 +41,7 @@ class Container:
 }
 
 // =============================================================================
-// E0015: Callable form validation - ellipsis in brackets, first arg
+// Callable form validation - ellipsis in brackets, first arg
 // =============================================================================
 
 #[test]
@@ -68,7 +68,7 @@ def multi(a: Callable[[int], str], b: Callable[[str], int]) -> Callable[[], None
 }
 
 // =============================================================================
-// E0047: Deeper bracket/paren parsing
+// Deeper bracket/paren parsing
 // =============================================================================
 
 #[test]
@@ -110,7 +110,7 @@ def decorator2(func: Callable[Concatenate[int, P], str]) -> Callable[P, str]:
 }
 
 // =============================================================================
-// E0050: NewType deeper - subscript uses, isinstance
+// NewType deeper - subscript uses, isinstance
 // =============================================================================
 
 #[test]
@@ -171,7 +171,7 @@ BadType = NewType("BadType", int | str)
 }
 
 // =============================================================================
-// E0054: Final make_diagnostic paths - many different contexts
+// Final make_diagnostic paths - many different contexts
 // =============================================================================
 
 #[test]
@@ -240,7 +240,7 @@ Config.X = 40
 }
 
 // =============================================================================
-// E0063: Non-hashable dataclass - hash call diagnostic
+// Non-hashable dataclass - hash call diagnostic
 // =============================================================================
 
 #[test]
@@ -280,7 +280,7 @@ d = {NonHash(1): "a"}
 }
 
 // =============================================================================
-// E0095: InitVar deeper - check_stmt_for_initvar_access, extract_initvar_inner
+// InitVar deeper - check_stmt_for_initvar_access, extract_initvar_inner
 // =============================================================================
 
 #[test]
@@ -326,7 +326,7 @@ class Complex:
 }
 
 // =============================================================================
-// E0111: is_type_compatible, classify_literal_type, is_subclass
+// is_type_compatible, classify_literal_type, is_subclass
 // =============================================================================
 
 #[test]
@@ -380,7 +380,7 @@ c = MyClass(-1, "world", True)
 }
 
 // =============================================================================
-// E0116: check_subclass_field_conflict, is_transitive_namedtuple
+// check_subclass_field_conflict, is_transitive_namedtuple
 // =============================================================================
 
 #[test]
@@ -418,7 +418,7 @@ class WithClassVar(NamedTuple):
 }
 
 // =============================================================================
-// E0119: check_single_protocol deeper paths
+// check_single_protocol deeper paths
 // =============================================================================
 
 #[test]
@@ -483,7 +483,7 @@ isinstance(Anon(), HasName)
 }
 
 // =============================================================================
-// E0126: check_invariant_generic_literal_string
+// check_invariant_generic_literal_string
 // =============================================================================
 
 #[test]
@@ -506,7 +506,7 @@ b: Dict[str, LiteralString] = {"key": "value"}
 }
 
 // =============================================================================
-// E0128: is_numeric_subtype, split_top_level_args
+// is_numeric_subtype, split_top_level_args
 // =============================================================================
 
 #[test]
@@ -541,7 +541,7 @@ class Chain(Generic[A, B, C]): ...
 }
 
 // =============================================================================
-// E0131: yield from, skip_string, infer_list_element_type
+// yield from, skip_string, infer_list_element_type
 // =============================================================================
 
 #[test]
@@ -595,7 +595,7 @@ def gen() -> Generator[int, None, None]:
 }
 
 // =============================================================================
-// E0138: frozen inheritance, order comparisons
+// frozen inheritance, order comparisons
 // =============================================================================
 
 #[test]
@@ -649,7 +649,7 @@ class BadOrder:
 }
 
 // =============================================================================
-// E0142: collect_transform_subclasses, kw_only positional
+// collect_transform_subclasses, kw_only positional
 // =============================================================================
 
 #[test]
@@ -676,7 +676,7 @@ class Admin(User):
 }
 
 // =============================================================================
-// E0143: parse_literal_int, check_delete_target, check_assignment_target
+// parse_literal_int, check_delete_target, check_assignment_target
 // =============================================================================
 
 #[test]
@@ -734,7 +734,7 @@ c = p[-1]
 }
 
 // =============================================================================
-// E0145: check_module_expr - special forms as type args
+// check_module_expr - special forms as type args
 // =============================================================================
 
 #[test]
@@ -769,7 +769,7 @@ class MyClass:
 }
 
 // =============================================================================
-// E0146: check_ann_assign, class_satisfies_protocol_as_object
+// check_ann_assign, class_satisfies_protocol_as_object
 // =============================================================================
 
 #[test]
@@ -801,7 +801,7 @@ x: type[HasInfo] = Impl
 }
 
 // =============================================================================
-// E0148: check_subscript - many generic type arg patterns
+// check_subscript - many generic type arg patterns
 // =============================================================================
 
 #[test]
@@ -850,7 +850,7 @@ z: Box[Literal[True]] = Box()
 }
 
 // =============================================================================
-// E0120: generator return/yield deeper paths
+// generator return/yield deeper paths
 // =============================================================================
 
 #[test]
@@ -887,7 +887,7 @@ def counter() -> Generator[int, int, str]:
 }
 
 // =============================================================================
-// E0130: infer_literal_type, generic instance method calls
+// infer_literal_type, generic instance method calls
 // =============================================================================
 
 #[test]

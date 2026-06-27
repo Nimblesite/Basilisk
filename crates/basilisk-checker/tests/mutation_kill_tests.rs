@@ -255,7 +255,7 @@ f: Union[int, str, float] = [1, 2]
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0097: Protocol undeclared self attrs — kill all mutants
+// Protocol undeclared self attrs — kill all mutants
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -298,7 +298,7 @@ class MyProto(Protocol):
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0150: Dead branch — kill mutants in version/platform detection
+// Dead branch — kill mutants in version/platform detection
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -412,7 +412,7 @@ def check():
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0014: Various literal type mismatches — each type path
+// Various literal type mismatches — each type path
 // ═══════════════════════════════════════════════════════════════════════
 
 #[mutation_safe(rule = "e0014", fns = "check_vars")]
@@ -452,7 +452,7 @@ n: bytes = b"data"
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0014: Negative literal and float literal
+// Negative literal and float literal
 // ═══════════════════════════════════════════════════════════════════════
 
 #[mutation_safe(rule = "e0014", fns = "check_vars")]
@@ -607,11 +607,11 @@ fn missing_parameter_annotation_count(diagnostics: &[basilisk_checker::Diagnosti
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0001 check_function: !p.has_annotation guard
+// BSK-E0001 check_function: !p.has_annotation guard
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Kills mutant: e0001.rs:33 `delete ! in check_function` and `replace != with ==`
-/// on the name guards. Asserts BOTH that an unannotated regular param fires E0001
+/// on the name guards. Asserts BOTH that an unannotated regular param fires BSK-E0001
 /// AND that an annotated regular param does NOT — so flipping the polarity of the
 /// annotation check or the name guards produces an observable diagnostic count.
 #[mutation_safe(rule = "e0001", fns = "check_function")]
@@ -631,7 +631,7 @@ def missing(unannotated, annotated: int) -> int:
         .collect();
     let [only] = e0001.as_slice() else {
         return Err(format!(
-            "exactly one E0001 expected for `unannotated` only, got {}: {e0001:?}",
+            "exactly one BSK-E0001 expected for `unannotated` only, got {}: {e0001:?}",
             e0001.len()
         )
         .into());
@@ -645,12 +645,12 @@ def missing(unannotated, annotated: int) -> int:
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0001 check_function: self/cls guards (&& vs ||)
+// BSK-E0001 check_function: self/cls guards (&& vs ||)
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Kills mutants: e0001.rs:33 `replace && with ||` (both occurrences).
 /// With `||` instead of `&&`, every parameter satisfies at least one branch,
-/// so unannotated `self`/`cls` would fire E0001 (false positive). This test
+/// so unannotated `self`/`cls` would fire BSK-E0001 (false positive). This test
 /// asserts that unannotated `self` and `cls` do NOT fire while a sibling
 /// unannotated regular param DOES — exactly distinguishing && from ||.
 #[mutation_safe(rule = "e0001", fns = "check_function")]
@@ -679,23 +679,23 @@ class Foo:
     let names: Vec<&str> = e0001.iter().map(|d| d.message.as_str()).collect();
     assert!(
         names.iter().any(|m| m.contains("`x`")),
-        "E0001 must fire for `x`, got: {names:?}"
+        "BSK-E0001 must fire for `x`, got: {names:?}"
     );
     assert!(
         names.iter().any(|m| m.contains("`y`")),
-        "E0001 must fire for `y`, got: {names:?}"
+        "BSK-E0001 must fire for `y`, got: {names:?}"
     );
     assert!(
         !names
             .iter()
             .any(|m| m.contains("`self`") || m.contains("`cls`")),
-        "E0001 must NOT fire for `self` or `cls`, got: {names:?}"
+        "BSK-E0001 must NOT fire for `self` or `cls`, got: {names:?}"
     );
     Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0001 check (impl): is_stub_context filter (delete !)
+// BSK-E0001 check (impl): is_stub_context filter (delete !)
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Kills mutant: e0001.rs:25 `delete ! in check`. Without the negation,
@@ -721,7 +721,7 @@ def regular(unannotated):
         .collect();
     let [only] = e0001.as_slice() else {
         return Err(format!(
-            "exactly one E0001 expected (for `unannotated` in regular fn), \
+            "exactly one BSK-E0001 expected (for `unannotated` in regular fn), \
              got {}: {e0001:?}",
             e0001.len()
         )
@@ -736,7 +736,7 @@ def regular(unannotated):
 }
 
 /// Kills mutant: e0001.rs:22 `replace check with ()`. With the empty body,
-/// no E0001 ever fires. A simple presence-of-diagnostic assertion kills it.
+/// no BSK-E0001 ever fires. A simple presence-of-diagnostic assertion kills it.
 #[mutation_safe(rule = "e0001", fns = "check")]
 #[test]
 fn mutant_e0001_check_body_present() -> Result<(), Box<dyn std::error::Error>> {
@@ -748,7 +748,7 @@ def f(unannotated):
     let count = missing_parameter_annotation_count(&diagnostics);
     assert_eq!(
         count, 1,
-        "E0001 must fire exactly once for unannotated param, got {count}"
+        "BSK-E0001 must fire exactly once for unannotated param, got {count}"
     );
     Ok(())
 }
@@ -770,7 +770,7 @@ def f(specific_name):
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
     let [only] = e0001.as_slice() else {
-        return Err(format!("exactly one E0001 expected: {e0001:?}").into());
+        return Err(format!("exactly one BSK-E0001 expected: {e0001:?}").into());
     };
     assert_eq!(only.code.code, "BSK-E0001");
     assert!(
@@ -802,7 +802,7 @@ def no_return_annotation(x: int):
     let diagnostics = run(source)?;
     assert!(
         count_code(&diagnostics, "BSK-E0002") >= 1,
-        "E0002 must fire for missing return annotation: {diagnostics:?}"
+        "BSK-E0002 must fire for missing return annotation: {diagnostics:?}"
     );
     Ok(())
 }
@@ -818,7 +818,7 @@ nothing = None
     let diagnostics = run(source)?;
     assert!(
         count_code(&diagnostics, "BSK-E0003") >= 1,
-        "E0003 must fire for unannotated empty-collection vars: {diagnostics:?}"
+        "BSK-E0003 must fire for unannotated empty-collection vars: {diagnostics:?}"
     );
     Ok(())
 }
@@ -993,7 +993,7 @@ class C[T: str]:
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0038: TypedDict ReadOnly/Required redeclaration legality (PEP 705).
+// TypedDict ReadOnly/Required redeclaration legality (PEP 705).
 // Implements [CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE]. See
 // docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE
 //
@@ -1277,7 +1277,7 @@ fn mutant_e0038_single_base_no_conflict() -> Result<(), Box<dyn std::error::Erro
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0014: Generic callback-protocol substitution (specialize_sig)
+// Generic callback-protocol substitution (specialize_sig)
 // ═══════════════════════════════════════════════════════════════════════
 
 /// `specialize_sig` must substitute parameter types when a generic callback

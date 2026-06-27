@@ -5,7 +5,7 @@ use super::common::*;
 // incompatibility.
 
 // =============================================================================
-// E0129: Literal value assignment incompatibility
+// Literal value assignment incompatibility
 // =============================================================================
 
 #[test]
@@ -143,7 +143,7 @@ def func(a: Literal[Literal[1, 2], 3]):
 }
 
 // =============================================================================
-// E0014: Assignment type incompatibility - deeper paths
+// Assignment type incompatibility - deeper paths
 // =============================================================================
 
 #[test]
