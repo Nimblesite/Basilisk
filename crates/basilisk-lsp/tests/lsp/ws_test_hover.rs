@@ -253,7 +253,8 @@ async fn test_ws_hover_local_variable_at_usage() -> TestResult<()> {
 #[tokio::test]
 async fn test_ws_hover_local_annotated_variable() -> TestResult<()> {
     let uri = "file:///hover_local_ann.py";
-    let code = "def calculate(operand: int) -> int:\n    total: int = operand + 1\n    return total\n";
+    let code =
+        "def calculate(operand: int) -> int:\n    total: int = operand + 1\n    return total\n";
     // Cursor on the annotated local `total` at its definition (line 1, col 4).
     let resp = hover_at(uri, code, 1, 4, 314).await?;
 
