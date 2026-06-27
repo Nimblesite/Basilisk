@@ -6,7 +6,7 @@ use super::common::*;
 // --- E0040: Enum with members cannot be subclassed ---
 
 #[test]
-fn e0040_subclass_enum_with_members_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn subclass_enum_with_members_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import Enum
 
@@ -29,7 +29,7 @@ class ExtendedColor(Color):
 }
 
 #[test]
-fn e0040_subclass_memberless_enum_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn subclass_memberless_enum_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import Enum
 
@@ -50,7 +50,7 @@ class Child(BaseEnum):
 }
 
 #[test]
-fn e0040_non_enum_class_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn non_enum_class_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Base:
     x = 1
@@ -71,7 +71,7 @@ class Child(Base):
 // --- E0046: Enum member annotated ---
 
 #[test]
-fn e0046_annotated_enum_member_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_enum_member_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import Enum
 
@@ -90,7 +90,7 @@ class Pet(Enum):
 }
 
 #[test]
-fn e0046_unannotated_enum_member_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_enum_member_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 
@@ -108,7 +108,7 @@ class Pet(Enum):
 }
 
 #[test]
-fn e0046_annotation_only_non_member_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn annotation_only_non_member_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import Enum
 
@@ -126,7 +126,7 @@ class Pet(Enum):
 }
 
 #[test]
-fn e0046_non_enum_class_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_attr_non_enum_class_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Regular:
     x: int = 5
@@ -136,7 +136,7 @@ class Regular:
     let msgs = messages_for(&diags, "enums_members");
     assert!(
         msgs.is_empty(),
-        "annotated attribute in non-enum class should not fire E0046"
+        "annotated attribute in non-enum class should not fire enums_members"
     );
     Ok(())
 }

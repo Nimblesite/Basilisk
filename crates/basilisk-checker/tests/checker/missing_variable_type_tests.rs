@@ -5,7 +5,7 @@ use super::common::*;
 
 #[test]
 fn empty_list_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_optin_rules("items = []\n")?;
+    let diags = run_with_config("items = []\n", &annotation_rules_config())?;
     assert!(
         codes(&diags).contains(&"BSK-E0003"),
         "unannotated empty list should fire E0003, got: {:?}",
@@ -16,7 +16,7 @@ fn empty_list_fires() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn empty_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_optin_rules("mapping = {}\n")?;
+    let diags = run_with_config("mapping = {}\n", &annotation_rules_config())?;
     assert!(
         codes(&diags).contains(&"BSK-E0003"),
         "unannotated empty dict should fire E0003, got: {:?}",
@@ -27,7 +27,7 @@ fn empty_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn none_value_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_optin_rules("result = None\n")?;
+    let diags = run_with_config("result = None\n", &annotation_rules_config())?;
     assert!(
         codes(&diags).contains(&"BSK-E0003"),
         "unannotated None should fire E0003, got: {:?}",
@@ -38,7 +38,7 @@ fn none_value_fires() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn annotated_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_optin_rules("items: list[int] = []\n")?;
+    let diags = run_with_config("items: list[int] = []\n", &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "annotated empty list should not fire E0003"
@@ -48,7 +48,7 @@ fn annotated_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn annotated_none_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_optin_rules("result: int | None = None\n")?;
+    let diags = run_with_config("result: int | None = None\n", &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "annotated None should not fire E0003"
@@ -58,7 +58,7 @@ fn annotated_none_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn non_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_optin_rules("items = [1, 2, 3]\n")?;
+    let diags = run_with_config("items = [1, 2, 3]\n", &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "non-empty list with inferrable element types should not fire E0003"
@@ -68,7 +68,7 @@ fn non_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn string_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_optin_rules("name = \"hello\"\n")?;
+    let diags = run_with_config("name = \"hello\"\n", &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "string literal should not fire E0003 — type is trivially str"
@@ -78,7 +78,7 @@ fn string_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn int_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_optin_rules("count = 42\n")?;
+    let diags = run_with_config("count = 42\n", &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "int literal should not fire E0003 — type is trivially int"
@@ -88,7 +88,7 @@ fn int_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn bool_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_optin_rules("flag = True\n")?;
+    let diags = run_with_config("flag = True\n", &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "bool literal should not fire E0003 — type is trivially bool"
@@ -98,7 +98,7 @@ fn bool_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn call_expr_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_optin_rules("result = some_function()\n")?;
+    let diags = run_with_config("result = some_function()\n", &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "call expression should not fire E0003 — type resolution is deferred"
@@ -108,7 +108,7 @@ fn call_expr_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_optin_rules("items = []\n")?;
+    let diags = run_with_config("items = []\n", &annotation_rules_config())?;
     let e0003 = diags.iter().find(|d| d.code.code == "BSK-E0003");
     assert!(e0003.is_some(), "should fire E0003");
     let Some(diag) = e0003 else {
@@ -135,7 +135,7 @@ fn regression_each_scalar_type_no_false_positive() -> Result<(), Box<dyn std::er
         ("bytes", "data = b\"raw\"\n"),
     ];
     for (type_name, source) in cases {
-        let diags = run_with_optin_rules(source)?;
+        let diags = run_with_config(source, &annotation_rules_config())?;
         let e0003_diags: Vec<_> = diags
             .iter()
             .filter(|d| d.code.code == "BSK-E0003")
@@ -160,7 +160,7 @@ debug = True
 version = 1.0
 magic = b\"\\x00\"
 ";
-    let diags = run_with_optin_rules(source)?;
+    let diags = run_with_config(source, &annotation_rules_config())?;
     let e0003_diags: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0003")
@@ -176,7 +176,7 @@ magic = b\"\\x00\"
 /// Lambda assignments at module level — not unresolvable, no E0003.
 #[test]
 fn regression_lambda_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_optin_rules("fn = lambda x: x * 2\n")?;
+    let diags = run_with_config("fn = lambda x: x * 2\n", &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
         "lambda assignment should not fire E0003 (regression)"
@@ -191,7 +191,7 @@ fn regression_example_file_pattern() -> Result<(), Box<dyn std::error::Error>> {
 double = 2
 fn = lambda x: x * 2
 ";
-    let diags = run_with_optin_rules(source)?;
+    let diags = run_with_config(source, &annotation_rules_config())?;
     let e0003_diags: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0003")
@@ -213,7 +213,7 @@ fn regression_unresolvable_types_still_fire() -> Result<(), Box<dyn std::error::
         ("None", "result = None\n"),
     ];
     for (desc, source) in cases {
-        let diags = run_with_optin_rules(source)?;
+        let diags = run_with_config(source, &annotation_rules_config())?;
         assert!(
             codes(&diags).contains(&"BSK-E0003"),
             "{desc} must still fire E0003 — type is genuinely unresolvable, got: {:?}",

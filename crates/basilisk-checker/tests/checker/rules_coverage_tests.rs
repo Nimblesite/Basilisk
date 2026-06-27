@@ -17,12 +17,12 @@ fn messages_for(diags: &[basilisk_checker::Diagnostic], code: &str) -> Vec<Strin
 // ============================================================================
 
 #[test]
-fn e0004_unannotated_vararg_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_vararg_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(*args) -> None:
     pass
 ";
-    let diags = run_with_optin_rules(source)?;
+    let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         codes(&diags).contains(&"BSK-E0004"),
         "unannotated *args should fire E0004, got: {:?}",
@@ -32,12 +32,12 @@ def func(*args) -> None:
 }
 
 #[test]
-fn e0004_annotated_vararg_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_vararg_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(*args: int) -> None:
     pass
 ";
-    let diags = run_with_optin_rules(source)?;
+    let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0004"),
         "annotated *args should not fire E0004"
@@ -46,12 +46,12 @@ def func(*args: int) -> None:
 }
 
 #[test]
-fn e0004_unannotated_kwarg_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_kwarg_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(**kwargs) -> None:
     pass
 ";
-    let diags = run_with_optin_rules(source)?;
+    let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         codes(&diags).contains(&"BSK-E0004"),
         "unannotated **kwargs should fire E0004, got: {:?}",
@@ -65,7 +65,7 @@ def func(**kwargs) -> None:
 // ============================================================================
 
 #[test]
-fn e0018_undefined_var_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn undefined_var_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func() -> None:
     x = undefined_name
@@ -80,7 +80,7 @@ def func() -> None:
 // ============================================================================
 
 #[test]
-fn e0019_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn unbound_variable_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func() -> None:
     if False:
@@ -96,7 +96,7 @@ def func() -> None:
 // ============================================================================
 
 #[test]
-fn e0024_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_type_form_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Union
 x: Union = 1
@@ -110,7 +110,7 @@ x: Union = 1
 // ============================================================================
 
 #[test]
-fn e0030_all_defaults_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn all_defaults_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(a: int = 0, b: int = 1) -> None:
     pass
@@ -127,7 +127,7 @@ def func(a: int = 0, b: int = 1) -> None:
 // ============================================================================
 
 #[test]
-fn e0043_non_typevar_in_generic_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn non_typevar_in_generic_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Generic
 
@@ -149,7 +149,7 @@ class Bad(Generic[int]):
 // ============================================================================
 
 #[test]
-fn e0048_valid_type_alias_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_type_alias_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 MyType: TypeAlias = list[int]
@@ -169,7 +169,7 @@ MyType: TypeAlias = list[int]
 // ============================================================================
 
 #[test]
-fn e0049_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_unbounded_tuple_exercise() -> Result<(), Box<dyn std::error::Error>> {
     // This is hard to trigger through the resolver but exercises the code path
     let source = r"
 from typing import Unpack
@@ -186,7 +186,7 @@ x: tuple[str, int]
 // ============================================================================
 
 #[test]
-fn e0056_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn readonly_typeddict_field_mutation_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypedDict
 class Movie(TypedDict):
@@ -202,7 +202,7 @@ class Movie(TypedDict):
 // ============================================================================
 
 #[test]
-fn e0057_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn pep_695_type_statement_invalid_rhs_typealiastype_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAliasType
 MyType = TypeAliasType("MyType", int)
@@ -216,7 +216,7 @@ MyType = TypeAliasType("MyType", int)
 // ============================================================================
 
 #[test]
-fn e0058_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_too_few_arguments_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Annotated
 x: Annotated[int]
@@ -230,7 +230,7 @@ x: Annotated[int]
 // ============================================================================
 
 #[test]
-fn e0062_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn noreturn_function_fallthrough_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NoReturn
 
@@ -246,7 +246,7 @@ def my_func() -> NoReturn:
 // ============================================================================
 
 #[test]
-fn e0064_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_namedtuple_call_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -263,7 +263,7 @@ class Point(NamedTuple):
 // ============================================================================
 
 #[test]
-fn e0065_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn float_parameter_int_attribute_access_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(x: float) -> None:
     y = x.numerator
@@ -277,7 +277,7 @@ def func(x: float) -> None:
 // ============================================================================
 
 #[test]
-fn e0066_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_int_member_values_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import Enum
 
@@ -291,7 +291,7 @@ class Color(Enum):
 }
 
 #[test]
-fn e0068_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_str_member_values_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 from typing import Literal
@@ -309,7 +309,7 @@ class Status(Enum):
 // ============================================================================
 
 #[test]
-fn e0069_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_kw_only_violations_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -327,7 +327,7 @@ class Config:
 // ============================================================================
 
 #[test]
-fn e0070_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn never_return_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Never
 def func() -> Never:
@@ -338,7 +338,7 @@ def func() -> Never:
 }
 
 #[test]
-fn e0071_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn positional_only_params_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(x: int, /, y: str) -> None:
     pass
@@ -348,7 +348,7 @@ def func(x: int, /, y: str) -> None:
 }
 
 #[test]
-fn e0072_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_definitions_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -368,7 +368,7 @@ def process(x: int | str) -> int | str:
 // ============================================================================
 
 #[test]
-fn e0088_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_class_definition_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypedDict
 
@@ -380,7 +380,7 @@ class Movie(TypedDict):
 }
 
 #[test]
-fn e0090_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_type_annotation_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: tuple[int, str, float] = (1, "a", 2.0)
 "#;
@@ -393,7 +393,7 @@ x: tuple[int, str, float] = (1, "a", 2.0)
 // ============================================================================
 
 #[test]
-fn e0091_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T", default=int)
@@ -403,7 +403,7 @@ T = TypeVar("T", default=int)
 }
 
 #[test]
-fn e0094_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn self_return_type_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 
@@ -416,7 +416,7 @@ class MyClass:
 }
 
 #[test]
-fn e0095_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_initvar_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, field, InitVar
 
@@ -430,7 +430,7 @@ class Config:
 }
 
 #[test]
-fn e0098_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_definition_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -442,7 +442,7 @@ class MyProtocol(Protocol):
 }
 
 #[test]
-fn e0099_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn runtime_checkable_protocol_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, runtime_checkable
 
@@ -459,7 +459,7 @@ class Drawable(Protocol):
 // ============================================================================
 
 #[test]
-fn e0100_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_augmented_assignment_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 x: Literal[1] = 1
@@ -470,7 +470,7 @@ x += 1
 }
 
 #[test]
-fn e0101_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeGuard
 
@@ -482,7 +482,7 @@ def is_str(x: object) -> TypeGuard[str]:
 }
 
 #[test]
-fn e0104_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 MyType: TypeAlias = int
@@ -492,7 +492,7 @@ MyType: TypeAlias = int
 }
 
 #[test]
-fn e0108_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_slots_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -510,7 +510,7 @@ class Point:
 // ============================================================================
 
 #[test]
-fn e0111_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn class_init_instantiation_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class MyClass:
     def __init__(self, x: int) -> None:
@@ -523,7 +523,7 @@ obj = MyClass(42)
 }
 
 #[test]
-fn e0115_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_function_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -536,7 +536,7 @@ def old_func() -> None:
 }
 
 #[test]
-fn e0120_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_return_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Generator
 
@@ -552,7 +552,7 @@ def gen() -> Generator[int, None, None]:
 // ============================================================================
 
 #[test]
-fn e0121_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_structural_conformance_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -570,7 +570,7 @@ c: Drawable = Circle()
 }
 
 #[test]
-fn e0122_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_parameter_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -586,7 +586,7 @@ def apply(f: Callable[[int], str], x: int) -> str:
 // ============================================================================
 
 #[test]
-fn e0136_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_callback_argument_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -603,7 +603,7 @@ take_callback(my_func)
 }
 
 #[test]
-fn e0138_dataclass_transform_metaclass() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_transform_metaclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import dataclass_transform
 
@@ -621,7 +621,7 @@ class Customer(ModelBase):
 }
 
 #[test]
-fn e0140_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_assignment_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -633,7 +633,7 @@ def func() -> None:
 }
 
 #[test]
-fn e0141_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn unpack_typeddict_kwargs_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypedDict, Unpack
 
@@ -649,7 +649,7 @@ def func(**kwargs: Unpack[Options]) -> None:
 }
 
 #[test]
-fn e0142_dataclass_transform_base() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_transform_base() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import dataclass_transform
 
@@ -665,7 +665,7 @@ class Customer(ModelBase):
 }
 
 #[test]
-fn e0143_namedtuple_usage_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_usage_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -680,7 +680,7 @@ p = Point(1, 2)
 }
 
 #[test]
-fn e0144_type_constructor_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn type_constructor_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Animal:
     def __init__(self, name: str) -> None:
@@ -694,7 +694,7 @@ def make(cls: type[Animal]) -> Animal:
 }
 
 #[test]
-fn e0145_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_assignments_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: int = 1
 y: str = "hello"
@@ -705,7 +705,7 @@ z: list[int] = [1, 2, 3]
 }
 
 #[test]
-fn e0146_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_dunder_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -717,7 +717,7 @@ class Sized(Protocol):
 }
 
 #[test]
-fn e0147_tuple_starred_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_starred_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: tuple[int, str] = (1, "hello")
 "#;
@@ -726,7 +726,7 @@ x: tuple[int, str] = (1, "hello")
 }
 
 #[test]
-fn e0148_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_class_definition_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -740,7 +740,7 @@ class Box(Generic[T]):
 }
 
 #[test]
-fn e0149_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_generic_class_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Container[T]:
     value: T
@@ -754,7 +754,7 @@ class Container[T]:
 // ============================================================================
 
 #[test]
-fn w0050_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn redundant_annotation_warning_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: int = 42
 y: str = "hello"

@@ -39,7 +39,7 @@ class Child(Base):
     def process(self) -> None:
         pass
 ";
-    let diags = run_with_optin_rules(source)?;
+    let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         codes(&diags).contains(&"BSK-E0025"),
         "overriding method without @override should fire E0025, got: {:?}",
@@ -62,7 +62,7 @@ class Child(Base):
     def process(self) -> None:
         pass
 ";
-    let diags = run_with_optin_rules(source)?;
+    let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0025"),
         "method with @override should not fire E0025"
@@ -81,7 +81,7 @@ class Child(Base):
     def other_method(self) -> None:
         pass
 ";
-    let diags = run_with_optin_rules(source)?;
+    let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0025"),
         "different method name should not fire E0025"
@@ -136,7 +136,7 @@ class Impl(MyProto):
     def method(self) -> None:
         pass
 ";
-    let diags = run_with_optin_rules(source)?;
+    let diags = run_with_config(source, &annotation_rules_config())?;
     assert!(
         !codes(&diags).contains(&"BSK-E0025"),
         "Protocol implementation should be exempt from E0025"

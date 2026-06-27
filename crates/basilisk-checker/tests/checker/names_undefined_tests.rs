@@ -161,7 +161,7 @@ fn builtin_call_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0018_function_local_import_in_nested_class_method_no_false_positive(
+fn function_local_import_in_nested_class_method_no_false_positive(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Issue #172: a function-local import is in scope for the body of a method
     // defined on a class nested in that SAME function. Python resolves the free
@@ -195,7 +195,7 @@ def make_store() -> object:
 }
 
 #[test]
-fn e0018_function_local_import_returned_bare_no_false_positive(
+fn function_local_import_returned_bare_no_false_positive(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Issue #172 (direct shape): a function-local import bound and returned in the
     // same function is a local binding. It must fire neither E0018 ("not defined")
@@ -215,7 +215,7 @@ fn e0018_function_local_import_returned_bare_no_false_positive(
 }
 
 #[test]
-fn e0018_function_local_dotted_and_aliased_imports_no_false_positive(
+fn function_local_dotted_and_aliased_imports_no_false_positive(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Issue #172, remaining import shapes: a dotted `import a.b` binds the
     // top-level package `a`; an `import a.b as d` and `from m import X as z` bind
@@ -249,7 +249,7 @@ def make() -> object:
 }
 
 #[test]
-fn e0018_nested_class_returned_from_enclosing_function_no_false_positive(
+fn nested_class_returned_from_enclosing_function_no_false_positive(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Issue #172 corollary: a class defined inside a function binds its name in
     // the enclosing scope, so `return _Stub()` from that function is valid.
@@ -268,7 +268,7 @@ fn e0018_nested_class_returned_from_enclosing_function_no_false_positive(
 }
 
 #[test]
-fn e0018_module_level_plain_aliased_import_in_return_no_false_positive(
+fn module_level_plain_aliased_import_in_return_no_false_positive(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Issue #180: a module-level plain `import X as Y` binds `Y` (not `X`) at
     // module scope. Referencing `Y` in a function's return expression is valid —
@@ -306,7 +306,7 @@ def _join() -> str:
 }
 
 #[test]
-fn e0018_function_local_import_attribute_call_in_return_no_false_positive(
+fn function_local_import_attribute_call_in_return_no_false_positive(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Issue #175 (headline repro): a plain function-local `import math` binds
     // `math` for the rest of the body, including a `return math.ceil(x)` where
@@ -328,7 +328,7 @@ fn e0018_function_local_import_attribute_call_in_return_no_false_positive(
 }
 
 #[test]
-fn e0018_function_local_from_import_callee_in_return_no_false_positive(
+fn function_local_from_import_callee_in_return_no_false_positive(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Issue #175 (`from ... import` callee shape): a function-local
     // `from os import getpid` binds `getpid`, which is then the callee of the
@@ -349,7 +349,7 @@ fn e0018_function_local_from_import_callee_in_return_no_false_positive(
 }
 
 #[test]
-fn e0018_function_local_aliased_import_attribute_in_return_no_false_positive(
+fn function_local_aliased_import_attribute_in_return_no_false_positive(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Issue #175 (aliased plain-import shape): an aliased function-local
     // `import datetime as _dt` binds `_dt`, used as the attribute base of the

@@ -112,7 +112,7 @@ async def lifespan() -> AsyncIterator[None]:
 }
 
 #[test]
-fn e0120_asynccontextmanager_async_generator_annotation_not_flagged(
+fn asynccontextmanager_async_generator_annotation_not_flagged(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Issue #36: the AsyncGenerator[T, None] spelling is equally valid.
     let source = r"

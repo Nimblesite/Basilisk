@@ -13,13 +13,16 @@
 //! the checker, which identifies a Basilisk rule solely by its [`BASILISK`] tag
 //! via [`tags_for_code`], never by inspecting the prefix.
 
-/// Provenance tag: the rule enforces the Python typing specification and is
-/// exercised by the `python/typing` conformance suite. [CHKTAG-PROVENANCE]
+/// Provenance tag: a core rule selected by the **default** configuration — the
+/// `python/typing` conformance rules plus the core checks that run by default.
+/// The default config is exactly this "core PEP" set and nothing else.
+/// [CHKTAG-PROVENANCE]
 pub const PEP: &str = "pep";
 
-/// Provenance tag: a Basilisk-original house rule that goes beyond the typing
-/// specification. Off by default; enabled only via configuration. There is no
-/// "strict mode" — default behaviour is the PEP rules alone. [CHKTAG-PROVENANCE]
+/// Provenance tag: a Basilisk-original rule that is **off by default** and turns
+/// on only via opt-in configuration. There is no "strict mode"
+/// ([CHKARCH-CONFIGURATION-ONLY]); rule selection is config-only, and the default
+/// config selects no `basilisk` rule. [CHKTAG-PROVENANCE]
 pub const BASILISK: &str = "basilisk";
 
 /// The canonical PEP *categories* — the only category axis Basilisk keeps, and

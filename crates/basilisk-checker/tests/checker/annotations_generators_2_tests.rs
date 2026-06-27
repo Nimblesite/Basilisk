@@ -67,7 +67,7 @@ def outer() -> Generator[int, None, None]:
 }
 
 #[test]
-fn e0131_bare_yield_in_iterator_none_generator_not_flagged(
+fn bare_yield_in_iterator_none_generator_not_flagged(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Issue #108: a bare `yield` yields `None`, which is compatible with
     // `Iterator[None]`. The checker must not associate the value of the

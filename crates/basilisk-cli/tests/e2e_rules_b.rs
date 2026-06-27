@@ -318,7 +318,7 @@ fn incompatible_method_override_not_yet_implemented() -> Result<(), Box<dyn std:
 /// E0017: Incompatible variable override.
 /// Requires type inference for variable types — not implemented in Phase 1.
 #[test]
-fn e0017_incompatible_variable_override_not_yet_implemented(
+fn incompatible_variable_override_not_yet_implemented(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0017_variable_override.py")?;
     assert!(

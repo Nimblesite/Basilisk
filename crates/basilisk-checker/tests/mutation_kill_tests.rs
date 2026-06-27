@@ -14,7 +14,7 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
     Ok(check(&resolved))
 }
 
-fn e0014_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
+fn assignment_compatibility_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
     diagnostics
         .iter()
         .filter(|d| d.code.code == "assignment_compatibility")
@@ -43,7 +43,7 @@ c: Optional[int] = "wrong"
 d: int = None
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 2,
         "at least 2 mismatches expected (c and d), got {e0014}: {:?}",
@@ -78,7 +78,7 @@ c: Union[int, str] = 3.14
 d: Union[int, str] = [1, 2]
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 union mismatch expected, got {e0014}"
@@ -106,7 +106,7 @@ c: set[int] = {1, 2, 3}
 d: set[int] = {"a", "b"}
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 list/set type element mismatch expected, got {e0014}"
@@ -131,7 +131,7 @@ b: dict[str, int] = {"x": "wrong"}
 c: dict[str, int] = {1: 2}
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 dict type mismatch expected, got {e0014}"
@@ -156,7 +156,7 @@ b: tuple[int, str] = ("wrong", 42)
 c: tuple[int, str] = (1,)
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 tuple mismatch expected, got {e0014}"
@@ -213,7 +213,7 @@ g: float = "bad"
 h: bytes = 42
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 3,
         "at least 3 named type mismatches, got {e0014}: {:?}",
@@ -246,7 +246,7 @@ e: Union[int, str, float] = 3.14
 f: Union[int, str, float] = [1, 2]
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 union mismatch expected, got {e0014}"
@@ -438,7 +438,7 @@ m: bool = True
 n: bytes = b"data"
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 6,
         "at least 6 type mismatches expected, got {e0014}: {:?}",
@@ -472,7 +472,7 @@ c: int = 3.14
 d: float = 3.14
 ";
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 mismatch (b: str = -42 or c: int = 3.14), got {e0014}"
@@ -500,7 +500,7 @@ b: 'int' = 'hello'
 c: int = "hello"
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert_eq!(
         e0014,
         1,
@@ -546,7 +546,7 @@ b: Bar = "hello"
 c: int = "hello"
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert_eq!(
         e0014,
         1,
@@ -584,7 +584,7 @@ ok: Json = [1, {"a": 1}]
 bad: Json = {"a": 3j}
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert_eq!(
         e0014,
         1,
@@ -599,7 +599,7 @@ bad: Json = {"a": 3j}
     Ok(())
 }
 
-fn e0001_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
+fn missing_parameter_annotation_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
     diagnostics
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
@@ -745,7 +745,7 @@ def f(unannotated):
     return unannotated
 ";
     let diagnostics = run(source)?;
-    let count = e0001_count(&diagnostics);
+    let count = missing_parameter_annotation_count(&diagnostics);
     assert_eq!(
         count, 1,
         "E0001 must fire exactly once for unannotated param, got {count}"
@@ -1003,7 +1003,7 @@ class C[T: str]:
 // boolean, comparison, or match arm in those functions is observable.
 // ═══════════════════════════════════════════════════════════════════════
 
-fn e0038_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
+fn typeddicts_inheritance_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
     count_code(diagnostics, "typeddicts_inheritance")
 }
 
@@ -1022,7 +1022,7 @@ fn mutant_e0038_parse_readonly() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: ReadOnly[int]\n"
     );
     assert!(
-        e0038_count(&run(&illegal)?) >= 1,
+        typeddicts_inheritance_count(&run(&illegal)?) >= 1,
         "writable item redeclared ReadOnly must fire E0038"
     );
 
@@ -1031,7 +1031,7 @@ fn mutant_e0038_parse_readonly() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    name: str\n"
     );
     assert_eq!(
-        e0038_count(&run(&legal)?),
+        typeddicts_inheritance_count(&run(&legal)?),
         0,
         "ReadOnly item redeclared writable is allowed — no E0038"
     );
@@ -1050,7 +1050,7 @@ fn mutant_e0038_required_relaxing() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: NotRequired[int]\n"
     );
     assert!(
-        e0038_count(&run(&illegal)?) >= 1,
+        typeddicts_inheritance_count(&run(&illegal)?) >= 1,
         "required item redeclared not-required must fire E0038"
     );
 
@@ -1061,7 +1061,7 @@ fn mutant_e0038_required_relaxing() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: NotRequired[int]\n"
     );
     assert!(
-        e0038_count(&run(&illegal_total)?) >= 1,
+        typeddicts_inheritance_count(&run(&illegal_total)?) >= 1,
         "total-required item redeclared not-required must fire E0038"
     );
 
@@ -1071,7 +1071,7 @@ fn mutant_e0038_required_relaxing() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: Required[int]\n"
     );
     assert_eq!(
-        e0038_count(&run(&legal)?),
+        typeddicts_inheritance_count(&run(&legal)?),
         0,
         "not-required item redeclared required is allowed — no E0038"
     );
@@ -1088,7 +1088,7 @@ fn mutant_e0038_writable_invariant() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: str\n"
     );
     assert!(
-        e0038_count(&run(&illegal)?) >= 1,
+        typeddicts_inheritance_count(&run(&illegal)?) >= 1,
         "writable item with changed value type must fire E0038"
     );
 
@@ -1097,7 +1097,7 @@ fn mutant_e0038_writable_invariant() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: int\n"
     );
     assert_eq!(
-        e0038_count(&run(&legal)?),
+        typeddicts_inheritance_count(&run(&legal)?),
         0,
         "identical redeclaration is allowed — no E0038"
     );
@@ -1116,7 +1116,7 @@ fn mutant_e0038_invariant_container() -> Result<(), Box<dyn std::error::Error>> 
              class Child(Base):\n    a: ReadOnly[{container}[int]]\n"
         );
         assert!(
-            e0038_count(&run(&illegal)?) >= 1,
+            typeddicts_inheritance_count(&run(&illegal)?) >= 1,
             "narrowing ReadOnly[{container}[...]] arg must fire E0038"
         );
     }
@@ -1125,7 +1125,7 @@ fn mutant_e0038_invariant_container() -> Result<(), Box<dyn std::error::Error>> 
          class Child(Base):\n    a: ReadOnly[dict[str, int]]\n"
     );
     assert!(
-        e0038_count(&run(&illegal_dict)?) >= 1,
+        typeddicts_inheritance_count(&run(&illegal_dict)?) >= 1,
         "narrowing ReadOnly[dict[...]] arg must fire E0038"
     );
 
@@ -1136,7 +1136,7 @@ fn mutant_e0038_invariant_container() -> Result<(), Box<dyn std::error::Error>> 
          class Child(Base):\n    a: ReadOnly[Sequence[int]]\n"
     );
     assert_eq!(
-        e0038_count(&run(&legal)?),
+        typeddicts_inheritance_count(&run(&legal)?),
         0,
         "narrowing a covariant ReadOnly[Sequence[...]] is allowed — no E0038"
     );
@@ -1156,7 +1156,7 @@ fn mutant_e0038_type_head() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: ReadOnly[list[int]]\n"
     );
     assert_eq!(
-        e0038_count(&run(&legal)?),
+        typeddicts_inheritance_count(&run(&legal)?),
         0,
         "narrowing ReadOnly[Collection[int]] to ReadOnly[list[int]] is allowed"
     );
@@ -1166,7 +1166,7 @@ fn mutant_e0038_type_head() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: ReadOnly[list[bool]]\n"
     );
     assert!(
-        e0038_count(&run(&illegal)?) >= 1,
+        typeddicts_inheritance_count(&run(&illegal)?) >= 1,
         "same invariant container with different args must fire E0038"
     );
     Ok(())
@@ -1182,7 +1182,7 @@ fn mutant_e0038_field_override() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: ReadOnly[NotRequired[int]]\n"
     );
     assert!(
-        e0038_count(&run(&illegal)?) >= 1,
+        typeddicts_inheritance_count(&run(&illegal)?) >= 1,
         "ReadOnly required -> ReadOnly not-required must fire E0038"
     );
 
@@ -1191,7 +1191,7 @@ fn mutant_e0038_field_override() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: ReadOnly[Required[int]]\n    b: int\n"
     );
     assert_eq!(
-        e0038_count(&run(&legal)?),
+        typeddicts_inheritance_count(&run(&legal)?),
         0,
         "ReadOnly not-required -> ReadOnly required (plus a new field) is allowed"
     );
@@ -1210,7 +1210,7 @@ fn mutant_e0038_bases_conflict() -> Result<(), Box<dyn std::error::Error>> {
          class C(A, B):\n    pass\n"
     );
     assert!(
-        e0038_count(&run(&core)?) >= 1,
+        typeddicts_inheritance_count(&run(&core)?) >= 1,
         "conflicting core types across bases must fire E0038"
     );
 
@@ -1221,7 +1221,7 @@ fn mutant_e0038_bases_conflict() -> Result<(), Box<dyn std::error::Error>> {
          class C(A, B):\n    pass\n"
     );
     assert!(
-        e0038_count(&run(&req)?) >= 1,
+        typeddicts_inheritance_count(&run(&req)?) >= 1,
         "conflicting required-ness across bases must fire E0038"
     );
 
@@ -1231,7 +1231,7 @@ fn mutant_e0038_bases_conflict() -> Result<(), Box<dyn std::error::Error>> {
          class C(A, B):\n    pass\n"
     );
     assert!(
-        e0038_count(&run(&ro)?) >= 1,
+        typeddicts_inheritance_count(&run(&ro)?) >= 1,
         "conflicting read-only-ness across bases must fire E0038"
     );
 
@@ -1241,7 +1241,7 @@ fn mutant_e0038_bases_conflict() -> Result<(), Box<dyn std::error::Error>> {
          class C(A, B):\n    pass\n"
     );
     assert_eq!(
-        e0038_count(&run(&legal)?),
+        typeddicts_inheritance_count(&run(&legal)?),
         0,
         "identical field declarations across bases must not conflict"
     );
@@ -1253,7 +1253,7 @@ fn mutant_e0038_bases_conflict() -> Result<(), Box<dyn std::error::Error>> {
          class D(TypedDict):\n    z: int\nclass C(A, B, D):\n    pass\n"
     );
     assert!(
-        e0038_count(&run(&three)?) >= 1,
+        typeddicts_inheritance_count(&run(&three)?) >= 1,
         "a conflict among three bases must still fire E0038"
     );
     Ok(())
@@ -1269,7 +1269,7 @@ fn mutant_e0038_single_base_no_conflict() -> Result<(), Box<dyn std::error::Erro
          class C(A):\n    y: int\n"
     );
     assert_eq!(
-        e0038_count(&run(&single)?),
+        typeddicts_inheritance_count(&run(&single)?),
         0,
         "a single base with a new field must not raise a conflict"
     );

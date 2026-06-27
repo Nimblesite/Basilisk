@@ -9,26 +9,40 @@ pub fn run(source: &str) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> 
     Ok(check(&resolved))
 }
 
-/// Run the checker with the Basilisk-only opt-in rules turned on **in
-/// configuration**.
+/// Run the checker honoring an explicit project configuration.
 ///
-/// Basilisk has **no "strict mode"** — behaviour is driven by configuration
-/// alone. The default configuration enables every PEP rule and nothing else, so
-/// the out-of-the-box experience is pure PEP conformance. The `BSK-`prefixed
-/// house rules (require-annotation, uv dependency hygiene, stub suggestions) are
-/// off by default and a project enables them by setting the corresponding config
-/// keys. This helper applies that opt-in configuration so tests can assert those
-/// rules fire. See [CHKARCH-CONFIGURATION-ONLY].
-pub fn run_with_optin_rules(source: &str) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
+/// Basilisk has **no modes** — there is no `basic`/`standard`/`strict`, no
+/// "opt-in rules" bundle. The checker does exactly what the configuration says
+/// and nothing more. [`run`] uses the default configuration (every PEP rule, no
+/// `BSK-`prefixed house rules) so the out-of-the-box experience is pure PEP
+/// conformance; pass a config here to exercise rules a project has opted into.
+/// This mirrors production, whose only entry point is
+/// [`basilisk_checker::check_with_config`] — config in, diagnostics out. See
+/// [CHKARCH-CONFIGURATION-ONLY].
+pub fn run_with_config(
+    source: &str,
+    config: &basilisk_config::BasiliskConfig,
+) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
     let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    let config = basilisk_config::BasiliskConfig {
+    Ok(basilisk_checker::check_with_config(&resolved, config))
+}
+
+/// The project configuration that opts into Basilisk's annotation house rules:
+/// `strict_annotations = true` (BSK-E0001..E0005, BSK-E0025, BSK-W0014,
+/// BSK-W0040, BSK-W0050).
+///
+/// This is configuration **data** — the exact thing a project writes in
+/// `basilisk.toml` to enable these off-by-default rules — not a checker "mode".
+/// Suites covering those opt-in rules pass it to [`run_with_config`] so the
+/// rules under test fire exactly as they would for a user who set that key, and
+/// nothing else turns on. See [CHKARCH-CONFIGURATION-ONLY].
+#[must_use]
+pub fn annotation_rules_config() -> basilisk_config::BasiliskConfig {
+    basilisk_config::BasiliskConfig {
         strict_annotations: true,
-        uv_stub_suggestions: true,
-        uv_dependency_diagnostics: true,
         ..basilisk_config::BasiliskConfig::default()
-    };
-    Ok(basilisk_checker::check_with_config(&resolved, &config))
+    }
 }
 
 pub fn codes(diags: &[Diagnostic]) -> Vec<&str> {

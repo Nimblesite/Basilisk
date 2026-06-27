@@ -202,7 +202,7 @@ fn dunder_methods_all_missing_return() -> Result<(), Box<dyn std::error::Error>>
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0001_only_unannotated_params_flagged_in_mixed_signature(
+fn only_unannotated_params_flagged_in_mixed_signature(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_mixed_annotated.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_mixed_annotated.py"))?;

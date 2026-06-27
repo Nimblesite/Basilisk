@@ -21,7 +21,7 @@ use common::{has_code, run};
 
 const E0014: &str = "assignment_compatibility";
 
-fn e0014_count(diags: &[common::Diagnostic]) -> usize {
+fn assignment_compatibility_count(diags: &[common::Diagnostic]) -> usize {
     diags.iter().filter(|d| d.code.code == E0014).count()
 }
 
@@ -44,12 +44,12 @@ bad2: Json = [2, 3j]
     let diags = run(source)?;
     // Valid recursive-alias assignments must NOT be flagged.
     assert!(
-        !has_code(&diags, E0014) || e0014_count(&diags) == 2,
+        !has_code(&diags, E0014) || assignment_compatibility_count(&diags) == 2,
         "expected exactly the two invalid Json assignments to be flagged, got {} E0014",
-        e0014_count(&diags)
+        assignment_compatibility_count(&diags)
     );
     assert_eq!(
-        e0014_count(&diags),
+        assignment_compatibility_count(&diags),
         2,
         "the two complex-number assignments (3j) must still fire E0014"
     );
@@ -74,10 +74,10 @@ m_bad: RecursiveMapping = {"1": [1]}
 "#;
     let diags = run(source)?;
     assert_eq!(
-        e0014_count(&diags),
+        assignment_compatibility_count(&diags),
         2,
         "only the two list-bearing assignments must fire E0014, got {}",
-        e0014_count(&diags)
+        assignment_compatibility_count(&diags)
     );
     Ok(())
 }
@@ -97,10 +97,10 @@ def f(a: tuple[str, str]):
 "#;
     let diags = run(source)?;
     assert_eq!(
-        e0014_count(&diags),
+        assignment_compatibility_count(&diags),
         1,
         "only the too-short `bad1` assignment must fire E0014, got {}",
-        e0014_count(&diags)
+        assignment_compatibility_count(&diags)
     );
     Ok(())
 }
@@ -116,10 +116,10 @@ def f(any_tuple: tuple[Any, ...], int_tuple: tuple[int, ...]):
 "#;
     let diags = run(source)?;
     assert_eq!(
-        e0014_count(&diags),
+        assignment_compatibility_count(&diags),
         1,
         "`tuple[Any, ...]` is gradual (OK); `tuple[int, ...]`→fixed must fire, got {}",
-        e0014_count(&diags)
+        assignment_compatibility_count(&diags)
     );
     Ok(())
 }
@@ -139,10 +139,10 @@ def f(val1: Callable, v: type):
 "#;
     let diags = run(source)?;
     assert_eq!(
-        e0014_count(&diags),
+        assignment_compatibility_count(&diags),
         0,
         "bare Callable/type assignments must not be flagged, got {}",
-        e0014_count(&diags)
+        assignment_compatibility_count(&diags)
     );
     Ok(())
 }
@@ -157,10 +157,10 @@ none2: Iterable = None
 "#;
     let diags = run(source)?;
     assert_eq!(
-        e0014_count(&diags),
+        assignment_compatibility_count(&diags),
         1,
         "None→Hashable is OK; None→Iterable must fire, got {}",
-        e0014_count(&diags)
+        assignment_compatibility_count(&diags)
     );
     Ok(())
 }
@@ -189,10 +189,10 @@ def f(c: Literal[0b10100]):
 "#;
     let diags = run(source)?;
     assert_eq!(
-        e0014_count(&diags),
+        assignment_compatibility_count(&diags),
         1,
         "0x14 == 0b10100 (both 20) is OK; Literal[3]=4 must fire, got {}",
-        e0014_count(&diags)
+        assignment_compatibility_count(&diags)
     );
     Ok(())
 }

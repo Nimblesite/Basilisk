@@ -114,7 +114,7 @@ fn severity_error_greater_than_warning() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0003_annotated_empty_list_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_empty_list_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     // Annotated variable: E0003 must NOT fire (has_annotation = true)
     let diags = run("items: list[int] = []\n")?;
     let e3: Vec<_> = diags
@@ -129,7 +129,7 @@ fn e0003_annotated_empty_list_does_not_fire() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn e0003_unannotated_str_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_str_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     // Unannotated str literal — E0003 must NOT fire (type is trivially `str`)
     let diags = run("name = \"hello\"\n")?;
     let e3: Vec<_> = diags
@@ -145,7 +145,7 @@ fn e0003_unannotated_str_literal_suppressed() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn e0003_fires_for_all_three_unresolvable_rhs_kinds() -> Result<(), Box<dyn std::error::Error>> {
+fn fires_for_all_three_unresolvable_rhs_kinds() -> Result<(), Box<dyn std::error::Error>> {
     // Covers EmptyList, EmptyDict, and NoneValue branches in make_diagnostic
     let diags = run("a = []\nb = {}\nc = None\n")?;
     let e3: Vec<_> = diags
@@ -161,7 +161,7 @@ fn e0003_fires_for_all_three_unresolvable_rhs_kinds() -> Result<(), Box<dyn std:
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0012_bool_param_receives_str_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn bool_param_receives_str_literal() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: bool) -> None: pass\nfoo(\"hello\")\n";
     let diags = run(src)?;
     let e12: Vec<_> = diags
@@ -173,7 +173,7 @@ fn e0012_bool_param_receives_str_literal() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
-fn e0012_float_param_receives_str_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn float_param_receives_str_literal() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: float) -> None: pass\nfoo(\"hello\")\n";
     let diags = run(src)?;
     let e12: Vec<_> = diags
@@ -185,7 +185,7 @@ fn e0012_float_param_receives_str_literal() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn e0012_bytes_param_receives_str_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn bytes_param_receives_str_literal() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: bytes) -> None: pass\nfoo(\"hello\")\n";
     let diags = run(src)?;
     let e12: Vec<_> = diags
@@ -197,7 +197,7 @@ fn e0012_bytes_param_receives_str_literal() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn e0012_int_param_receives_bytes_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn int_param_receives_bytes_literal() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: int) -> None: pass\nfoo(b\"raw\")\n";
     let diags = run(src)?;
     let e12: Vec<_> = diags
@@ -209,7 +209,7 @@ fn e0012_int_param_receives_bytes_literal() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn e0012_str_param_receives_bytes_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn str_param_receives_bytes_literal() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: str) -> None: pass\nfoo(b\"raw\")\n";
     let diags = run(src)?;
     let e12: Vec<_> = diags
@@ -221,7 +221,7 @@ fn e0012_str_param_receives_bytes_literal() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn e0012_float_param_receives_bytes_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn float_param_receives_bytes_literal() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: float) -> None: pass\nfoo(b\"raw\")\n";
     let diags = run(src)?;
     let e12: Vec<_> = diags
@@ -233,7 +233,7 @@ fn e0012_float_param_receives_bytes_literal() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn e0012_int_param_receives_float_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn int_param_receives_float_literal() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: int) -> None: pass\nfoo(3.14)\n";
     let diags = run(src)?;
     let e12: Vec<_> = diags
@@ -245,7 +245,7 @@ fn e0012_int_param_receives_float_literal() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn e0012_str_param_receives_float_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn str_param_receives_float_literal() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: str) -> None: pass\nfoo(3.14)\n";
     let diags = run(src)?;
     let e12: Vec<_> = diags
@@ -257,7 +257,7 @@ fn e0012_str_param_receives_float_literal() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn e0012_bool_param_receives_float_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn bool_param_receives_float_literal() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: bool) -> None: pass\nfoo(3.14)\n";
     let diags = run(src)?;
     let e12: Vec<_> = diags
@@ -269,7 +269,7 @@ fn e0012_bool_param_receives_float_literal() -> Result<(), Box<dyn std::error::E
 }
 
 #[test]
-fn e0012_str_param_receives_int_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn str_param_receives_int_literal() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: str) -> None: pass\nfoo(42)\n";
     let diags = run(src)?;
     let e12: Vec<_> = diags
@@ -281,7 +281,7 @@ fn e0012_str_param_receives_int_literal() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn e0012_bytes_param_receives_int_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn bytes_param_receives_int_literal() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: bytes) -> None: pass\nfoo(42)\n";
     let diags = run(src)?;
     let e12: Vec<_> = diags
@@ -293,7 +293,7 @@ fn e0012_bytes_param_receives_int_literal() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn e0012_compatible_int_arg_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn compatible_int_arg_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     // int param + int literal: compatible → no E0012
     let src = "def foo(x: int) -> None: pass\nfoo(42)\n";
     let diags = run(src)?;
@@ -306,7 +306,7 @@ fn e0012_compatible_int_arg_does_not_fire() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn e0012_unknown_callee_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn unknown_callee_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     // Callee not defined in same module — no diagnostic
     let src = "unknown_func(42, \"hello\")\n";
     let diags = run(src)?;
@@ -322,7 +322,7 @@ fn e0012_unknown_callee_does_not_fire() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-fn e0012_extra_args_beyond_params_does_not_crash() -> Result<(), Box<dyn std::error::Error>> {
+fn extra_args_beyond_params_does_not_crash() -> Result<(), Box<dyn std::error::Error>> {
     // More positional args than declared params: checker must handle gracefully (break path)
     let src = "def foo(x: int) -> None: pass\nfoo(1, \"extra\", b\"more\")\n";
     let diags = run(src)?;
@@ -339,7 +339,7 @@ fn e0012_extra_args_beyond_params_does_not_crash() -> Result<(), Box<dyn std::er
 }
 
 #[test]
-fn e0012_unannotated_param_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_param_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     // Param has no annotation: E0012 must NOT fire
     let src = "def foo(x) -> None: pass\nfoo(\"hello\")\n";
     let diags = run(src)?;
@@ -356,7 +356,7 @@ fn e0012_unannotated_param_does_not_fire() -> Result<(), Box<dyn std::error::Err
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0014_bool_annotation_with_str_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn bool_annotation_with_str_literal() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("flag: bool = \"yes\"\n")?;
     let e14: Vec<_> = diags
         .iter()
@@ -367,7 +367,7 @@ fn e0014_bool_annotation_with_str_literal() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn e0014_float_annotation_with_str_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn float_annotation_with_str_literal() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("ratio: float = \"1.5\"\n")?;
     let e14: Vec<_> = diags
         .iter()
@@ -378,7 +378,7 @@ fn e0014_float_annotation_with_str_literal() -> Result<(), Box<dyn std::error::E
 }
 
 #[test]
-fn e0014_compatible_annotation_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn compatible_annotation_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     // int annotation with int literal — compatible
     let diags = run("count: int = 42\n")?;
     let e14: Vec<_> = diags
@@ -390,7 +390,7 @@ fn e0014_compatible_annotation_does_not_fire() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
-fn e0014_annotation_at_end_of_file_no_newline() -> Result<(), Box<dyn std::error::Error>> {
+fn annotation_at_end_of_file_no_newline() -> Result<(), Box<dyn std::error::Error>> {
     // Line without trailing newline — extract_annotation uses source.len() as line_end
     let diags = run("x: int = \"str\"")?;
     let e14: Vec<_> = diags
@@ -406,7 +406,7 @@ fn e0014_annotation_at_end_of_file_no_newline() -> Result<(), Box<dyn std::error
 }
 
 #[test]
-fn e0014_annotation_without_space_after_colon_does_not_fire(
+fn annotation_without_space_after_colon_does_not_fire(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // `x:str = 42` — colon with no space means `find(": ")` returns None → no E0014
     // This exercises the `?` early-return path in extract_annotation.
@@ -427,7 +427,7 @@ fn e0014_annotation_without_space_after_colon_does_not_fire(
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0015_frozenset_with_two_args() -> Result<(), Box<dyn std::error::Error>> {
+fn frozenset_with_two_args() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: frozenset[int, str]) -> None: pass\n";
     let diags = run(src)?;
     let e15: Vec<_> = diags
@@ -439,7 +439,7 @@ fn e0015_frozenset_with_two_args() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0015_set_with_two_args() -> Result<(), Box<dyn std::error::Error>> {
+fn set_with_two_args() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: set[int, str]) -> None: pass\n";
     let diags = run(src)?;
     let e15: Vec<_> = diags
@@ -451,7 +451,7 @@ fn e0015_set_with_two_args() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0015_dict_with_one_arg() -> Result<(), Box<dyn std::error::Error>> {
+fn dict_with_one_arg() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: dict[str]) -> None: pass\n";
     let diags = run(src)?;
     let e15: Vec<_> = diags
@@ -463,7 +463,7 @@ fn e0015_dict_with_one_arg() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0015_list_empty_brackets() {
+fn list_empty_brackets() {
     // `list[]` is invalid Python syntax — the ruff parser rejects it before
     // E0015 can run.  Basilisk correctly reports a parse error for this input.
     let src = "def foo(x: list[]) -> None: pass\n";
@@ -488,7 +488,7 @@ fn deeply_nested_source_rejected_not_crashed() {
 }
 
 #[test]
-fn e0015_correct_list_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn correct_list_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(x: list[int]) -> None: pass\n";
     let diags = run(src)?;
     let e15: Vec<_> = diags
@@ -500,7 +500,7 @@ fn e0015_correct_list_does_not_fire() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-fn e0015_param_annotation_without_space_after_colon_does_not_fire(
+fn param_annotation_without_space_after_colon_does_not_fire(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // `x:list[int, str]` — no space after colon means `find(": ")` returns None
     // → extract_param_annotation returns None → no E0015 emitted.
@@ -518,7 +518,7 @@ fn e0015_param_annotation_without_space_after_colon_does_not_fire(
 }
 
 #[test]
-fn e0015_vararg_with_invalid_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn vararg_with_invalid_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(*args: list[int, str]) -> None: pass\n";
     let diags = run(src)?;
     let e15: Vec<_> = diags
@@ -530,7 +530,7 @@ fn e0015_vararg_with_invalid_annotation() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn e0015_kwarg_with_invalid_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn kwarg_with_invalid_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo(**kwargs: dict[str]) -> None: pass\n";
     let diags = run(src)?;
     let e15: Vec<_> = diags
@@ -542,7 +542,7 @@ fn e0015_kwarg_with_invalid_annotation() -> Result<(), Box<dyn std::error::Error
 }
 
 #[test]
-fn e0015_nested_generic_correct_count() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_generic_correct_count() -> Result<(), Box<dyn std::error::Error>> {
     // dict[list[int], str] has 2 top-level args — must NOT fire
     let src = "def foo(x: dict[list[int], str]) -> None: pass\n";
     let diags = run(src)?;
@@ -559,7 +559,7 @@ fn e0015_nested_generic_correct_count() -> Result<(), Box<dyn std::error::Error>
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0016_different_param_count_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn different_param_count_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import override\n",
         "class Base:\n",
@@ -578,7 +578,7 @@ fn e0016_different_param_count_fires() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
-fn e0016_only_return_type_differs_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn only_return_type_differs_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import override\n",
         "class Base:\n",
@@ -597,7 +597,7 @@ fn e0016_only_return_type_differs_fires() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn e0016_compatible_override_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn compatible_override_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import override\n",
         "class Base:\n",
@@ -616,7 +616,7 @@ fn e0016_compatible_override_does_not_fire() -> Result<(), Box<dyn std::error::E
 }
 
 #[test]
-fn e0016_base_not_in_module_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn base_not_in_module_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     // Base class defined externally — cannot check, must not fire
     let src = concat!(
         "from typing import override\n",
@@ -634,7 +634,7 @@ fn e0016_base_not_in_module_does_not_fire() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn e0016_method_without_override_decorator_not_checked() -> Result<(), Box<dyn std::error::Error>> {
+fn method_without_override_decorator_not_checked() -> Result<(), Box<dyn std::error::Error>> {
     // Method overrides base but has no @override — E0016 must NOT fire (that's E0025)
     let src = concat!(
         "class Base:\n",
@@ -659,7 +659,7 @@ fn e0016_method_without_override_decorator_not_checked() -> Result<(), Box<dyn s
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0017_unannotated_child_attr_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_child_attr_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "class Base:\n",
         "    count: int = 0\n",
@@ -679,7 +679,7 @@ fn e0017_unannotated_child_attr_does_not_fire() -> Result<(), Box<dyn std::error
 }
 
 #[test]
-fn e0017_base_attr_not_annotated_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn base_attr_not_annotated_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "class Base:\n",
         "    count = 0\n",
@@ -699,7 +699,7 @@ fn e0017_base_attr_not_annotated_does_not_fire() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
-fn e0017_same_annotation_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn same_annotation_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "class Base:\n",
         "    count: int = 0\n",
@@ -716,7 +716,7 @@ fn e0017_same_annotation_does_not_fire() -> Result<(), Box<dyn std::error::Error
 }
 
 #[test]
-fn e0017_attr_only_in_child_not_in_base_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn attr_only_in_child_not_in_base_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     // Attribute declared in child but NOT in base — not an override, must not fire
     let src = concat!(
         "class Base:\n",
@@ -741,7 +741,7 @@ fn e0017_attr_only_in_child_not_in_base_does_not_fire() -> Result<(), Box<dyn st
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0020_single_overload_function_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn single_overload_function_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     // Only one @overload definition (len < 2) — must not fire
     let src = "from typing import overload\n@overload\ndef foo(x: int) -> int: ...\n";
     let diags = run(src)?;
@@ -757,7 +757,7 @@ fn e0020_single_overload_function_does_not_fire() -> Result<(), Box<dyn std::err
 }
 
 #[test]
-fn e0020_overloads_with_impl_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn overloads_with_impl_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import overload\n",
         "@overload\n",
@@ -783,7 +783,7 @@ fn e0020_overloads_with_impl_does_not_fire() -> Result<(), Box<dyn std::error::E
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0021_three_overlapping_overloads_emits_one_per_later() -> Result<(), Box<dyn std::error::Error>>
+fn three_overlapping_overloads_emits_one_per_later() -> Result<(), Box<dyn std::error::Error>>
 {
     // When there are 3 overlapping overloads, only emit one diagnostic per later overload.
     // The `break` in check_group ensures at most one diag per later overload even if it
@@ -812,7 +812,7 @@ fn e0021_three_overlapping_overloads_emits_one_per_later() -> Result<(), Box<dyn
 }
 
 #[test]
-fn e0021_different_param_count_does_not_overlap() -> Result<(), Box<dyn std::error::Error>> {
+fn different_param_count_does_not_overlap() -> Result<(), Box<dyn std::error::Error>> {
     // Overloads with different param count cannot overlap
     let src = concat!(
         "from typing import overload\n",
@@ -831,7 +831,7 @@ fn e0021_different_param_count_does_not_overlap() -> Result<(), Box<dyn std::err
 }
 
 #[test]
-fn e0021_same_param_count_different_names_does_not_overlap(
+fn same_param_count_different_names_does_not_overlap(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Overloads with same param count but DIFFERENT param names are not similar —
     // exercises the `if !names_match { return false; }` branch.
@@ -859,7 +859,7 @@ fn e0021_same_param_count_different_names_does_not_overlap(
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0025_method_with_override_decorator_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn method_with_override_decorator_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import override\n",
         "class Base:\n",
@@ -878,22 +878,25 @@ fn e0025_method_with_override_decorator_does_not_fire() -> Result<(), Box<dyn st
 }
 
 #[test]
-fn e0025_base_not_in_module_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn missing_override_base_not_in_module_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "class Child(ExternalBase):\n",
         "    def method(self: 'Child') -> None: pass\n",
     );
     let diags = run(src)?;
-    let e25: Vec<_> = diags
+    let missing_override: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0025")
         .collect();
-    assert!(e25.is_empty(), "external base class must not fire E0025");
+    assert!(
+        missing_override.is_empty(),
+        "external base class must not fire BSK-E0025"
+    );
     Ok(())
 }
 
 #[test]
-fn e0025_new_method_not_in_base_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn new_method_not_in_base_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     // Child adds a NEW method not present in base — not an override
     let src = concat!(
         "class Base:\n",
@@ -915,7 +918,7 @@ fn e0025_new_method_not_in_base_does_not_fire() -> Result<(), Box<dyn std::error
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0016_override_when_base_has_no_methods_does_not_fire() -> Result<(), Box<dyn std::error::Error>>
+fn override_when_base_has_no_methods_does_not_fire() -> Result<(), Box<dyn std::error::Error>>
 {
     // Base class has no methods — base_func lookup returns None → the override
     // is not checked and no E0016 is emitted.  This exercises the
@@ -940,7 +943,7 @@ fn e0016_override_when_base_has_no_methods_does_not_fire() -> Result<(), Box<dyn
 }
 
 #[test]
-fn e0016_override_without_self_param_compatible_does_not_fire(
+fn override_without_self_param_compatible_does_not_fire(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Both base and child method have no `self` parameter — exercises the
     // `_ => params` arm of `skip_self_param` (first param name is neither
@@ -1163,7 +1166,7 @@ fn guards_protocol_class_is_detected() -> Result<(), Box<dyn std::error::Error>>
 /// If `||` becomes `&&`, un-annotated non-enum attrs get suppressed.
 /// This test ensures unannotated class attrs with non-inferrable RHS DO fire E0005.
 #[test]
-fn e0005_unannotated_attr_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_attr_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!("class Config:\n", "    debug = some_func()\n",);
     let diags = run(src)?;
     let e5: Vec<_> = diags
@@ -1186,7 +1189,7 @@ fn e0005_unannotated_attr_fires() -> Result<(), Box<dyn std::error::Error>> {
 /// The `&&` mutant would suppress when `has_value && !value_is_call` is changed.
 /// Test both sides: a valued non-call return fires; a call return does not.
 #[test]
-fn e0013_none_annotated_with_valued_return_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn none_annotated_with_valued_return_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "def get_zero() -> None:\n",
         "    return 0\n", // has_value=true, value_is_call=false → should fire
@@ -1204,7 +1207,7 @@ fn e0013_none_annotated_with_valued_return_fires() -> Result<(), Box<dyn std::er
 /// `return f()` inside `-> None` must NOT fire because we can't prove the callee
 /// returns non-None without full inference.
 #[test]
-fn e0013_none_annotated_with_call_return_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn none_annotated_with_call_return_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "def helper() -> None: pass\n",
         "def wrapper() -> None:\n",
@@ -1229,7 +1232,7 @@ fn e0013_none_annotated_with_call_return_does_not_fire() -> Result<(), Box<dyn s
 /// `is_typed_dict_hierarchy` — `FnValue → false` at e0017.rs:29.
 /// `TypedDict` subclasses must NOT fire E0017.
 #[test]
-fn e0017_typed_dict_hierarchy_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn typed_dict_hierarchy_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import TypedDict\n",
         "class Base(TypedDict):\n",
@@ -1253,7 +1256,7 @@ fn e0017_typed_dict_hierarchy_exempt() -> Result<(), Box<dyn std::error::Error>>
 /// The rule fires only when child and base BOTH have annotations AND they differ.
 /// When annotations match, no diagnostic.
 #[test]
-fn e0017_matching_annotations_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn matching_annotations_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "class Base:\n",
         "    count: int = 0\n",
@@ -1275,7 +1278,7 @@ fn e0017_matching_annotations_no_diagnostic() -> Result<(), Box<dyn std::error::
 /// E0017 `check_class` — `&&` → `||` mutant at line 126.
 /// When only the child has an annotation but the base does not, no E0017.
 #[test]
-fn e0017_base_unannotated_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn base_unannotated_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "class Base:\n",
         "    count = 0\n", // no annotation
@@ -1297,7 +1300,7 @@ fn e0017_base_unannotated_no_diagnostic() -> Result<(), Box<dyn std::error::Erro
 /// `uses_typed_dict_qualifier` — `FnValue → false` at e0017.rs:151.
 /// An attr annotated with `ReadOnly[int]` must not fire E0017.
 #[test]
-fn e0017_readonly_qualifier_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn readonly_qualifier_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import ReadOnly\n",
         "class Base:\n",
@@ -1320,7 +1323,7 @@ fn e0017_readonly_qualifier_exempt() -> Result<(), Box<dyn std::error::Error>> {
 /// `uses_typed_dict_qualifier` — `&&` → `||` mutants at lines 153/154.
 /// `Required` in annotation also exempts.
 #[test]
-fn e0017_required_qualifier_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn required_qualifier_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import Required\n",
         "class Base:\n",
@@ -1347,7 +1350,7 @@ fn e0017_required_qualifier_exempt() -> Result<(), Box<dyn std::error::Error>> {
 /// E0020 `check` — `&&` → `||` mutant at line 37 (`exempt_classes` filter).
 /// ABC class methods with @overload + no impl must NOT fire E0020.
 #[test]
-fn e0020_abc_class_overload_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn abc_class_overload_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from abc import ABC, abstractmethod\n",
         "from typing import overload\n",
@@ -1374,7 +1377,7 @@ fn e0020_abc_class_overload_exempt() -> Result<(), Box<dyn std::error::Error>> {
 /// E0020 — `&&` → `||` and `!=` mutants at line 40 (`overloaded.len()` < 2).
 /// A lone `@overload` with an implementation present fires E0020 (single overload).
 #[test]
-fn e0020_single_overload_with_impl_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn single_overload_with_impl_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import overload\n",
         "class Calc:\n",
@@ -1398,7 +1401,7 @@ fn e0020_single_overload_with_impl_fires() -> Result<(), Box<dyn std::error::Err
 /// E0020 — 2+ @overloads with implementation must NOT fire E0020.
 /// Kills `!=` (count >= 2 check) and `&&` mutants.
 #[test]
-fn e0020_two_overloads_with_impl_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn two_overloads_with_impl_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import overload\n",
         "class Calc:\n",
@@ -1428,7 +1431,7 @@ fn e0020_two_overloads_with_impl_no_diagnostic() -> Result<(), Box<dyn std::erro
 /// `signatures_overlap` — `&&` → `||` mutant at line 90.
 /// Two overloads with DIFFERENT parameter counts must NOT overlap.
 #[test]
-fn e0021_different_param_count_no_overlap() -> Result<(), Box<dyn std::error::Error>> {
+fn different_param_count_no_overlap() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import overload\n",
         "@overload\n",
@@ -1452,7 +1455,7 @@ fn e0021_different_param_count_no_overlap() -> Result<(), Box<dyn std::error::Er
 /// `signatures_overlap` — `!` to empty (`UnaryOperator` remove) mutants at lines 93/94.
 /// When all non-self/cls params ARE annotated on both sides, they DON'T overlap.
 #[test]
-fn e0021_both_fully_annotated_no_overlap() -> Result<(), Box<dyn std::error::Error>> {
+fn both_fully_annotated_no_overlap() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import overload\n",
         "@overload\n",
@@ -1476,7 +1479,7 @@ fn e0021_both_fully_annotated_no_overlap() -> Result<(), Box<dyn std::error::Err
 /// `signatures_overlap` — `&&` → `||` mutant at line 98.
 /// Two overloads with same name, count, AND unannotated params DO overlap.
 #[test]
-fn e0021_same_names_unannotated_overlaps() -> Result<(), Box<dyn std::error::Error>> {
+fn same_names_unannotated_overlaps() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import overload\n",
         "@overload\n",
@@ -1501,7 +1504,7 @@ fn e0021_same_names_unannotated_overlaps() -> Result<(), Box<dyn std::error::Err
 /// `is_protocol_transitively` — `FnValue → false` at e0025.rs:77.
 /// A class implementing a transitive Protocol must not fire E0025.
 #[test]
-fn e0025_transitive_protocol_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn transitive_protocol_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import Protocol\n",
         "class Base(Protocol):\n",
@@ -1528,7 +1531,7 @@ fn e0025_transitive_protocol_exempt() -> Result<(), Box<dyn std::error::Error>> 
 /// E0025 `check_class` — `||` → `&&` mutant at line 126.
 /// An unrelated class (no base methods) must NOT fire E0025.
 #[test]
-fn e0025_no_base_methods_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn no_base_methods_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "class Standalone:\n",
         "    def compute(self) -> int:\n",
@@ -1549,7 +1552,7 @@ fn e0025_no_base_methods_no_diagnostic() -> Result<(), Box<dyn std::error::Error
 /// `method_has_decorator` — `FnValue → false` at e0025.rs:170.
 /// If always false, methods WITH @override would still fire E0025.
 #[test]
-fn e0025_override_decorator_suppresses() -> Result<(), Box<dyn std::error::Error>> {
+fn override_decorator_suppresses() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import override\n",
         "class Base:\n",
@@ -1576,7 +1579,7 @@ fn e0025_override_decorator_suppresses() -> Result<(), Box<dyn std::error::Error
 /// The `name == method_name` filter: if `==` becomes `!=`, the wrong method's
 /// decorators are checked. Verify correct method name matching.
 #[test]
-fn e0025_override_on_different_method_does_not_suppress_other(
+fn override_on_different_method_does_not_suppress_other(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import override\n",
@@ -1605,7 +1608,7 @@ fn e0025_override_on_different_method_does_not_suppress_other(
 /// `method_has_decorator` — `&&` → `||` mutant at e0025.rs:174.
 /// `d == decorator || d.ends_with(".decorator")` — the qualified form must also match.
 #[test]
-fn e0025_qualified_override_suppresses() -> Result<(), Box<dyn std::error::Error>> {
+fn qualified_override_suppresses() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "import typing\n",
         "class Base:\n",
@@ -1629,7 +1632,7 @@ fn e0025_qualified_override_suppresses() -> Result<(), Box<dyn std::error::Error
 /// `method_has_decorator` — `!=` mutant at e0025.rs:174 (`ends_with` check).
 /// A decorator with a different name must NOT suppress E0025.
 #[test]
-fn e0025_unrelated_decorator_does_not_suppress() -> Result<(), Box<dyn std::error::Error>> {
+fn unrelated_decorator_does_not_suppress() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "class Base:\n",
         "    def go(self) -> None: pass\n",
@@ -1654,7 +1657,7 @@ fn e0025_unrelated_decorator_does_not_suppress() -> Result<(), Box<dyn std::erro
 
 /// E0026 — `FnValue → ()` at line 23: rule must emit for `constraint_count` == 1.
 #[test]
-fn e0026_single_constraint_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn single_constraint_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = "T = TypeVar('T', int)\n";
     let diags = run(src)?;
     let e26: Vec<_> = diags
@@ -1667,7 +1670,7 @@ fn e0026_single_constraint_fires() -> Result<(), Box<dyn std::error::Error>> {
 
 /// E0026 — `!=` mutant at line 24: `constraint_count` == 1 must fire, count == 2 must not.
 #[test]
-fn e0026_two_constraints_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn two_constraints_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = "T = TypeVar('T', int, str)\n";
     let diags = run(src)?;
     let e26: Vec<_> = diags
@@ -1687,7 +1690,7 @@ fn e0026_two_constraints_no_diagnostic() -> Result<(), Box<dyn std::error::Error
 
 /// E0027 — `FnValue → ()` at line 22: rule must detect duplicate `TypeVar` in Generic.
 #[test]
-fn e0027_duplicate_typevar_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn duplicate_typevar_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import TypeVar, Generic\n",
         "T = TypeVar('T')\n",
@@ -1712,7 +1715,7 @@ fn e0027_duplicate_typevar_fires() -> Result<(), Box<dyn std::error::Error>> {
 
 /// E0029 — `FnValue → ()` at line 22: rule must fire for method in `TypedDict`.
 #[test]
-fn e0029_method_in_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn method_in_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import TypedDict\n",
         "class Config(TypedDict):\n",
@@ -1731,7 +1734,7 @@ fn e0029_method_in_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> 
 /// E0029 — `||` → `&&` at line 35 (__`init_subclass`__ / __`class_getitem`__ filter).
 /// These synthesised dunders must NOT fire E0029.
 #[test]
-fn e0029_init_subclass_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn init_subclass_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import TypedDict\n",
         "class Config(TypedDict):\n",
@@ -1752,7 +1755,7 @@ fn e0029_init_subclass_exempt() -> Result<(), Box<dyn std::error::Error>> {
 /// E0029 — `!=` mutant at line 35: `method_name` must equal the exempted string exactly.
 /// A method named `custom_method` must fire; `__init_subclass__` must not.
 #[test]
-fn e0029_only_exempt_dunders_are_skipped() -> Result<(), Box<dyn std::error::Error>> {
+fn only_exempt_dunders_are_skipped() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import TypedDict\n",
         "class Config(TypedDict):\n",
@@ -1777,7 +1780,7 @@ fn e0029_only_exempt_dunders_are_skipped() -> Result<(), Box<dyn std::error::Err
 
 /// E0030 — `FnValue → ()` at line 25: non-default after default `TypeVar` must fire.
 #[test]
-fn e0030_non_default_after_default_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn non_default_after_default_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import TypeVar, Generic\n",
         "T = TypeVar('T', default=int)\n",
@@ -1803,7 +1806,7 @@ fn e0030_non_default_after_default_fires() -> Result<(), Box<dyn std::error::Err
 
 /// E0031 — `FnValue → ()` at line 26: wrong arg count must fire.
 #[test]
-fn e0031_wrong_arg_count_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn wrong_arg_count_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = "x = cast(int)\n";
     let diags = run(src)?;
     let e31: Vec<_> = diags
@@ -1820,7 +1823,7 @@ fn e0031_wrong_arg_count_fires() -> Result<(), Box<dyn std::error::Error>> {
 /// E0031 — `!=` mutant at line 26: cast(int, val) with exactly 2 args must NOT fire
 /// (unless first arg is a literal).
 #[test]
-fn e0031_valid_cast_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_cast_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = "x = 42\ny = cast(int, x)\n";
     let diags = run(src)?;
     let e31: Vec<_> = diags
@@ -1840,7 +1843,7 @@ fn e0031_valid_cast_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 
 /// E0032 — `FnValue → ()` at line 28: unknown keyword in `TypedDict` must fire.
 #[test]
-fn e0032_unknown_keyword_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn unknown_keyword_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import TypedDict\n",
         "class Config(TypedDict, metaclass=type):\n",
@@ -1861,7 +1864,7 @@ fn e0032_unknown_keyword_fires() -> Result<(), Box<dyn std::error::Error>> {
 /// E0032 — `!` to empty (`UnaryOperator` remove) at line 30.
 /// A known keyword (`total`) must NOT fire.
 #[test]
-fn e0032_known_keyword_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn known_keyword_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import TypedDict\n",
         "class Config(TypedDict, total=False):\n",
@@ -1887,7 +1890,7 @@ fn e0032_known_keyword_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
 /// E0035 — `FnValue → ()` at line 93: rule must actually emit diagnostics.
 /// `Required` outside `TypedDict` must fire E0035.
 #[test]
-fn e0035_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn required_outside_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import Required\n",
         "class NotADict:\n",
@@ -1907,7 +1910,7 @@ fn e0035_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::error::E
 
 /// E0035 — `NotRequired` outside `TypedDict` must also fire.
 #[test]
-fn e0035_not_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn not_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import NotRequired\n",
         "class Regular:\n",
@@ -1929,7 +1932,7 @@ fn e0035_not_required_outside_typed_dict_fires() -> Result<(), Box<dyn std::erro
 /// If always true, the rule would only check for NESTED usage even outside `TypedDict`.
 /// A non-`TypedDict` class with Required must still fire E0035.
 #[test]
-fn e0035_non_typed_dict_class_not_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn non_typed_dict_class_not_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import Required\n",
         "class Config:\n",
@@ -1951,7 +1954,7 @@ fn e0035_non_typed_dict_class_not_exempt() -> Result<(), Box<dyn std::error::Err
 /// If always false, `TypedDict` fields with Required would fire even though they're valid.
 /// Valid `TypedDict` usage with Required must NOT fire.
 #[test]
-fn e0035_required_inside_typed_dict_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn required_inside_typed_dict_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import TypedDict, Required\n",
         "class Config(TypedDict):\n",
@@ -1974,7 +1977,7 @@ fn e0035_required_inside_typed_dict_no_diagnostic() -> Result<(), Box<dyn std::e
 /// "Required[" so no E0035 would fire on ANYTHING.
 /// This test verifies that an attribute with Required IS detected.
 #[test]
-fn e0035_annotation_text_reads_actual_source() -> Result<(), Box<dyn std::error::Error>> {
+fn annotation_text_reads_actual_source() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import Required\n",
         "class Bad:\n",
@@ -1996,7 +1999,7 @@ fn e0035_annotation_text_reads_actual_source() -> Result<(), Box<dyn std::error:
 /// E0035 — transitive `TypedDict` hierarchy: child of `TypedDict` must also be exempt.
 /// Tests `is_in_typed_dict_hierarchy` recursion.
 #[test]
-fn e0035_transitive_typed_dict_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn transitive_typed_dict_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import TypedDict, Required, NotRequired\n",
         "class Base(TypedDict):\n",
@@ -2019,7 +2022,7 @@ fn e0035_transitive_typed_dict_exempt() -> Result<(), Box<dyn std::error::Error>
 /// E0035 — nested Required inside `TypedDict` MUST fire.
 /// Exercises the `in_typed_dict` branch: `has_nested_required` check.
 #[test]
-fn e0035_nested_required_in_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_required_in_typed_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import TypedDict, Required\n",
         "class Config(TypedDict):\n",
@@ -2039,7 +2042,7 @@ fn e0035_nested_required_in_typed_dict_fires() -> Result<(), Box<dyn std::error:
 
 /// E0035 — Required on a function parameter must fire.
 #[test]
-fn e0035_required_on_param_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn required_on_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import Required\n",
         "def func(x: Required[int]) -> None: pass\n",
@@ -2153,7 +2156,7 @@ fn debug_all_diags_qualifiers_annotated() -> Result<(), Box<dyn std::error::Erro
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0001_self_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn self_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = "class MyClass:\n    def method(self) -> None:\n        pass\n";
     let diags = run(src)?;
     let e1: Vec<_> = diags
@@ -2168,7 +2171,7 @@ fn e0001_self_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0001_cls_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn cls_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = "class MyClass:\n    @classmethod\n    def method(cls) -> None:\n        pass\n";
     let diags = run(src)?;
     let e1: Vec<_> = diags
@@ -2183,7 +2186,7 @@ fn e0001_cls_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0001_regular_params_still_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn regular_params_still_fire() -> Result<(), Box<dyn std::error::Error>> {
     let src = "class MyClass:\n    def method(self, data) -> None:\n        pass\n";
     let diags = run(src)?;
     let e1: Vec<_> = diags
@@ -2258,7 +2261,7 @@ fn self_and_cls_do_not_fire_e0001() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0011_int_return_for_str_annotation_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn int_return_for_str_annotation_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo() -> str:\n    return 42\n";
     let diags = run(src)?;
     let e11: Vec<_> = diags
@@ -2273,7 +2276,7 @@ fn e0011_int_return_for_str_annotation_fires() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
-fn e0011_str_return_for_int_annotation_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn str_return_for_int_annotation_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo() -> int:\n    return \"hello\"\n";
     let diags = run(src)?;
     let e11: Vec<_> = diags
@@ -2288,7 +2291,7 @@ fn e0011_str_return_for_int_annotation_fires() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
-fn e0011_compatible_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn compatible_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo() -> int:\n    return 42\n";
     let diags = run(src)?;
     let e11: Vec<_> = diags
@@ -2303,7 +2306,7 @@ fn e0011_compatible_return_no_diagnostic() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
-fn e0011_call_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn call_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def helper() -> int: return 42\ndef foo() -> str:\n    return helper()\n";
     let diags = run(src)?;
     let e11: Vec<_> = diags
@@ -2318,7 +2321,7 @@ fn e0011_call_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0011_unannotated_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_return_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = "def foo():\n    return 42\n";
     let diags = run(src)?;
     let e11: Vec<_> = diags
@@ -2334,7 +2337,7 @@ fn e0011_unannotated_return_no_diagnostic() -> Result<(), Box<dyn std::error::Er
 // ---------------------------------------------------------------------------
 
 #[test]
-fn w0040_lambda_assigned_to_unannotated_var_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn lambda_assigned_to_unannotated_var_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = "f = lambda x: x + 1\n";
     let diags = run(src)?;
     let w40: Vec<_> = diags
@@ -2354,7 +2357,7 @@ fn w0040_lambda_assigned_to_unannotated_var_fires() -> Result<(), Box<dyn std::e
 }
 
 #[test]
-fn w0040_lambda_assigned_to_annotated_var_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
+fn lambda_assigned_to_annotated_var_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
 {
     let src = "f: Callable[[int], int] = lambda x: x + 1\n";
     let diags = run(src)?;
@@ -2370,7 +2373,7 @@ fn w0040_lambda_assigned_to_annotated_var_no_diagnostic() -> Result<(), Box<dyn 
 }
 
 #[test]
-fn w0040_lambda_class_attribute_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn lambda_class_attribute_fires() -> Result<(), Box<dyn std::error::Error>> {
     let src = "class Config:\n    handler = lambda x: x + 1\n";
     let diags = run(src)?;
     let w40: Vec<_> = diags
@@ -2385,7 +2388,7 @@ fn w0040_lambda_class_attribute_fires() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-fn w0040_annotated_class_attribute_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_class_attribute_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = "class Config:\n    handler: Callable[[int], int] = lambda x: x + 1\n";
     let diags = run(src)?;
     let w40: Vec<_> = diags

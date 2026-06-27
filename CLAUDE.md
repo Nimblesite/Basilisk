@@ -13,8 +13,6 @@ CONFORMANCE IS MEASURED BY HOW ACCURATELY BASILISK PASSES THESE TESTS AND NOTHIN
 
 CONFORMANCE SCORE INCREASES MONOTONICALLY, BENCHMARKS AND FALSE POSITIVES DECREASE MONOTONICALLY
 
-⚠️
-
 ⚠️ AVOID DUPLICATION OF ALL KINDS AND PRACTICE TOKEN ECONOMICS ⚠️
 
 ⚠️ DO NOT STOP TO ASK QUESTIONS. USE YOUR JUDGMENT WITHOUT ASKING THE USER ⚠️
@@ -97,6 +95,16 @@ make setup   # post-create dev environment setup
 - Avoid regex. Use the proper parsing mechanism — usually ruff.
 - Keep files under 500 LOC. Break up larger files.
 - Move files rather than copying them.
+
+## Documentation Honesty — No Unsubstantiated Claims
+
+Trust is the product. Fabricated, guessed, or mutually contradictory figures destroy it (e.g. citing a competitor's conformance as "~85%" in one doc and "~58%" in another — both invented).
+
+- **Every empirical or comparative claim about the outside world** — developer/industry statistics, adoption rates, competitor capability/performance/conformance numbers, market facts, attributed quotes — **must carry an inline link to the authoritative source that actually makes that claim.**
+- **Link the authoritative URL that actually makes the claim, or delete it if no such URL exists.** There is no third option. Never invent a URL, and never invent or approximate a number to fill the gap.
+- **Self-measured, reproducible metrics are exempt** (e.g. our own conformance score from the unmodified `python/typing` scorer run in CI) — but state how they are measured, and don't compare them against numbers produced by a different methodology.
+- A value that drifts (a competitor's version-pinned conformance %, a third-party download size) is **linked to its live source**, never frozen as a bare figure that silently rots.
+- This applies **everywhere in the repo** — specs, plans, README, the website, marketing copy, and code comments.
 
 ## Git & Branch Discipline
 

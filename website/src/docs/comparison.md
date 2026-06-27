@@ -13,25 +13,25 @@ eleventyNavigation:
 
 # Comparing Type Checkers
 
-The Python type checker landscape has changed significantly. Three new Rust-based tools launched in 2025. Every one of them defaults to gradual typing.
+The Python type checker landscape has changed significantly. Three new Rust-based tools launched in 2025. They differ less in raw speed than in how faithfully they implement the typing spec — and in whether they're a complete language server or only a checker.
 
 ## The fundamental question
 
-Before comparing features and performance, there is one question that determines whether a type checker can actually enforce type safety across a team:
+Before comparing features and performance, there is one question that decides whether you can trust a checker's verdict at all:
 
-**Does the tool flag untyped code by default?**
+**How much of the official typing specification does it actually implement?**
 
-| Tool | Flags untyped code by default? |
+| Tool | PEP conformance (official suite¹) |
 |---|---|
-| Basilisk | Yes |
-| Pyright | No — must pass `--strict` or configure `typeCheckingMode = "strict"` |
-| mypy | No — must pass `--strict` |
-| ty | No |
-| Pyrefly | No |
+| Basilisk | {{ conformance.scorePct }}% ({{ conformance.pass }}/{{ conformance.total }}) |
+| Pyright | ~99% |
+| Pyrefly | ~86% |
+| mypy | ~58% full-pass |
+| ty | early alpha |
 
-Every tool except Basilisk allows untyped code to pass silently in their default configuration. When strictness is opt-in, it tends not to happen. Teams under deadline pressure skip the flag. New projects never add it. CI scripts omit it.
+A checker that doesn't implement a spec feature can't judge code that uses it — it either misses real errors or invents false ones. Basilisk's **default** rule set *is* the typing spec: it runs the core PEP conformance rules and nothing else, and passes every file in the suite at our pinned commit. Rule selection is entirely config-driven, so the default is exactly the core PEP set — never more.
 
-Basilisk removes the choice. There is no permissive mode to fall back to.
+Want checking stricter than the spec? Switch on the **opt-in Basilisk rules** in config. They're off by default and, by design, flag things the spec does *not* call errors (an unannotated parameter, say) — so turning them on will actually *break* strict spec conformance. That's the point: they're yours to enable when your team wants more than the spec, not something forced on every project.
 
 ---
 
@@ -39,7 +39,8 @@ Basilisk removes the choice. There is no permissive mode to fall back to.
 
 | Feature | Basilisk | Pyright | mypy | ty | Pyrefly |
 |---|---|---|---|---|---|
-| Strict by default | ✅ | ❌ opt-in | ❌ opt-in | ❌ opt-in | ❌ opt-in |
+| Enrichment fixes (auto-add types) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Opt-in rules beyond the spec | ✅ config | `--strict` | `--strict` | ❌ | ❌ |
 | PEP conformance¹ | {{ conformance.scorePct }}% current (→100% target) | ~99% | ~58% | early alpha | ~86% |
 | Implementation | Rust | TypeScript | Python/C | Rust | Rust |
 | Runtime required | None | Node.js | Python | None | None |
@@ -72,7 +73,7 @@ Pyright is the most conformant Python type checker available today. It correctly
 - Good inference for complex generics and protocols
 
 **What Pyright doesn't do:**
-- Strict by default — four modes: `off`, `basic`, `standard`, `strict`
+- No integrated debugger or profiler — it checks types, but isn't a full dev environment
 - Requires Node.js to run — adds a dependency to Python-only CI environments
 - Pylance (the VS Code extension) is proprietary — its richest features don't leave VS Code
 - No plugins — no way to add framework-specific type intelligence
@@ -96,7 +97,7 @@ mypy defined what Python type checking looks like. Its `--strict` flag was the r
 **What mypy doesn't do:**
 - Significantly slower than Rust-based tools on large codebases
 - Daemon mode (`dmypy`) is fragile under certain conditions
-- Not strict by default
+- Not a language server — no completions, hover, or go-to-definition
 - Requires a Python runtime
 - Plugin API is Python-only — no WASM portability
 
@@ -138,7 +139,7 @@ Pyrefly was built by Meta to handle their Python codebase — one of the largest
 - Good documentation
 
 **What Pyrefly doesn't do:**
-- Strict by default — not available
+- No integrated debugger or profiler
 - No plugin system
 - Meta-driven roadmap — external contributions have less influence
 
@@ -151,15 +152,15 @@ Pyrefly was built by Meta to handle their Python codebase — one of the largest
 Basilisk is not a faster version of an existing tool. It occupies a different position:
 
 **Unique to Basilisk:**
-1. Strict by default — the only tool where you cannot accidentally run in permissive mode, yet you can dial rules down per-file or per-path from the editor UI or config
+1. 100% PEP conformance out of the box (at our pinned suite commit), with **opt-in Basilisk rules** you switch on in config for checking stricter than the spec — they never run, and never touch the conformance score, unless you ask
 2. Enrichment fixes — one-click code actions that add the missing types *for* you, instead of just reporting that they're missing
 3. A complete, open-source LSP in every editor — completions, hover, go-to-definition, refactoring, debugging, and profiling, the same in VS Code, plus native Zed and Neovim extensions (Open VSX for Cursor, Windsurf, and others coming very soon; JetBrains planned) — not just inside one proprietary VS Code extension
 4. Integrated debugger and profiler brokered through the language server
 5. WASM plugin system (planned) — extensible without forking, secure by design
 
 **Where Basilisk is not yet the best choice:**
-- PEP conformance: Basilisk currently passes {{ conformance.scorePct }}% of the official conformance suite ({{ conformance.pass }}/{{ conformance.total }}, counting errors+warnings — the strictest grading), with {{ conformance.missed }} missed required errors (the checker catches every required error) and {{ conformance.fp }} false positives still being driven down. Every failing fixture fails on false positives from Basilisk's strict-by-default house rules firing on spec-valid code, not on missed errors. The only legitimate path to 100% is fixing those rules with every rule still enabled — never by disabling a rule. Pyright covers far more edge cases today. Basilisk's target is 100%; it's not there yet. See [how we measure conformance](/docs/conformance/).
+- Maturity and edge-case breadth: Basilisk passes {{ conformance.scorePct }}% of the official suite ({{ conformance.pass }}/{{ conformance.total }}) at our [pinned commit](/docs/conformance/), counting errors *and* warnings — the strictest grading — with {{ conformance.fp }} false positives and {{ conformance.missed }} missed required errors. That measures spec conformance, not years of hardening: Pyright still handles more real-world edge cases beyond the suite, and Pylance is feature-complete today. Basilisk is in alpha.
 - Plugin ecosystem: mypy's Django and SQLAlchemy plugins are mature. Basilisk's WASM plugins are planned.
 - Maturity: Pylance is feature-complete today (though proprietary and VS Code only). Basilisk is in alpha.
 
-The honest recommendation: teams starting a new Python project should use Basilisk and benefit from strict enforcement from day one — especially if they work across more than one editor. Teams migrating from Pyright on an existing well-typed codebase should evaluate as conformance approaches parity.
+The honest recommendation: teams starting a new Python project get full PEP-conformant checking from Basilisk on day one — with the option to switch on stricter-than-spec rules whenever they're ready — especially if they work across more than one editor. Teams migrating from Pyright on a large, well-typed codebase should still weigh Pyright's maturity and Pylance's feature completeness.

@@ -6,7 +6,7 @@
 use super::common::*;
 use basilisk_test_macros::mutation_safe;
 
-fn e0014_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
+fn assignment_compatibility_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
     diagnostics
         .iter()
         .filter(|d| d.code.code == "assignment_compatibility")
@@ -35,7 +35,7 @@ c: Optional[int] = "wrong"
 d: int = None
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 2,
         "at least 2 mismatches expected (c and d), got {e0014}: {:?}",
@@ -70,7 +70,7 @@ c: Union[int, str] = 3.14
 d: Union[int, str] = [1, 2]
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 union mismatch expected, got {e0014}"
@@ -98,7 +98,7 @@ c: set[int] = {1, 2, 3}
 d: set[int] = {"a", "b"}
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 list/set type element mismatch expected, got {e0014}"
@@ -123,7 +123,7 @@ b: dict[str, int] = {"x": "wrong"}
 c: dict[str, int] = {1: 2}
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 dict type mismatch expected, got {e0014}"
@@ -148,7 +148,7 @@ b: tuple[int, str] = ("wrong", 42)
 c: tuple[int, str] = (1,)
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 tuple mismatch expected, got {e0014}"
@@ -205,7 +205,7 @@ g: float = "bad"
 h: bytes = 42
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 3,
         "at least 3 named type mismatches, got {e0014}: {:?}",
@@ -238,7 +238,7 @@ e: Union[int, str, float] = 3.14
 f: Union[int, str, float] = [1, 2]
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 union mismatch expected, got {e0014}"
@@ -430,7 +430,7 @@ m: bool = True
 n: bytes = b"data"
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 6,
         "at least 6 type mismatches expected, got {e0014}: {:?}",
@@ -464,7 +464,7 @@ c: int = 3.14
 d: float = 3.14
 ";
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 mismatch (b: str = -42 or c: int = 3.14), got {e0014}"
