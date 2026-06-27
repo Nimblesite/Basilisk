@@ -1,7 +1,7 @@
 ---
 layout: layouts/base.njk
-title: "Basilisk — Open-Source Python Language Server, Strict by Default"
-description: "Open-source Python language server in Rust — strict-by-default checking, autocomplete, refactoring, debugging & profiling in VS Code, Cursor, Zed & Neovim."
+title: "Basilisk — Open-Source, PEP-Conformant Python Language Server"
+description: "Open-source Python language server in Rust — PEP-conformant type checking, autocomplete, refactoring, debugging & profiling in VS Code, Cursor, Zed & Neovim."
 permalink: /
 # Translatable prose for the shared benchmark macro (_includes/benchmark-section.njk).
 # The numbers come from _data/benchmarks.js (the git-tracked CSV); only the words live here.
@@ -42,7 +42,7 @@ benchmarkStrings:
           Autocomplete, go-to-definition, hover info, refactoring,
           diagnostics, integrated debugging &mdash; everything you rely on,
           without the proprietary lock-in. In VS Code, Cursor, Zed, and Neovim
-          &mdash; wherever you write Python. Strict by default. Built in Rust.
+          &mdash; wherever you write Python. Conformant to the typing spec, strict to taste. Built in Rust.
         </p>
 
         <div class="hero__cta-group">
@@ -101,7 +101,7 @@ benchmarkStrings:
         </li>
         <li>
           <span class="problem__num">03</span>
-          <span><strong>Every type checker defaults to permissive.</strong> You get type checking only where you add <code>--strict</code>. Basilisk is strict by default &mdash; no opt-in required.</span>
+          <span><strong>Every type checker defaults to permissive.</strong> You get real checking only where you add <code>--strict</code>. Basilisk checks to the Python typing spec out of the box &mdash; and lets you turn strictness up from there.</span>
         </li>
         <li>
           <span class="problem__num">04</span>
@@ -120,18 +120,22 @@ benchmarkStrings:
 
   <div class="feature-row">
     <div class="feature-row__text">
-      <p class="feature-row__num">01 &mdash; Strict by default</p>
-      <h2 class="feature-row__title">Strict from line one.<br>Yours to dial down.</h2>
+      <p class="feature-row__num">01 &mdash; Conformance first</p>
+      <h2 class="feature-row__title">Conformant by default.<br>Strict to taste.</h2>
       <p class="feature-row__body">
-        Basilisk treats every untyped function as an error &mdash; because that&rsquo;s what it is.
-        But you stay in control: relax rules per-file or per-path from the editor UI or your
-        config. And one-click enrichment fixes add the missing types <em>for</em> you.
+        Basilisk checks to the Python typing spec out of the box &mdash; the same rules the
+        official conformance suite grades. The strictness on top is Basilisk&rsquo;s own:
+        require an annotation on every parameter and return, flag redundant annotations, nudge
+        for <code>@override</code>. The spec treats unannotated code as <em>inferred</em>, not an
+        error &mdash; so that strictness is a choice, turned up or down per-file or per-path from
+        the editor UI or your config. And one-click enrichment fixes add the missing types
+        <em>for</em> you.
       </p>
     </div>
     <div class="feature-row__visual">
       <div class="stat-block">
         <span class="stat-block__number">{{ ruleStats.total }}</span>
-        <span class="stat-block__label">rules enabled, zero config</span>
+        <span class="stat-block__label">rules, every one configurable</span>
       </div>
     </div>
   </div>
@@ -554,7 +558,7 @@ Install from <span class="tok-str">Extensions</span>
 <section class="cta-section">
   <div class="container">
     <div class="cta-inner">
-      <h2>Open source.<br>Strict by default.</h2>
+      <h2>Open source.<br>Conformant by default.</h2>
       <div>
         <p>
           Basilisk is in alpha. The type checker, LSP server, and editor

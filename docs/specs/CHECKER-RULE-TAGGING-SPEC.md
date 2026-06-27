@@ -63,12 +63,18 @@ exclusive.
 | Tag | Meaning |
 |---|---|
 | `pep` | The rule enforces the Python typing specification and is exercised by the `python/typing` conformance suite. |
-| `basilisk` | A Basilisk-original, strict-by-default house rule that goes beyond the specification. |
+| `basilisk` | A Basilisk-original house rule that goes beyond the specification. Off by default; enabled only via configuration ([CHKARCH-CONFIGURATION-ONLY]). |
 
 Provenance is the curated source of truth in `rule_tags.rs`: the
 `BASILISK_RULES` table lists every Basilisk-original rule; **everything else is a
 PEP rule.** Provenance is never derived from a code prefix — see
 [CHKTAG-BSK-PREFIX].
+
+Provenance mirrors default activation: there is **no "strict mode"**
+([CHKARCH-CONFIGURATION-ONLY]). Default behaviour is the `pep` rules alone;
+`basilisk` rules are off by default and enabled only via configuration. The
+provenance tag is therefore the queryable answer to "is this rule on by
+default?" — not a behaviour mode.
 
 ## PEP Category Tags {#CHKTAG-PEP-CATEGORIES}
 
@@ -107,7 +113,7 @@ Any rule may carry additional descriptive tags. The current vocabulary
 
 | Tag | Meaning |
 |---|---|
-| `strictness` | Strict-by-default requirement beyond the spec (e.g. require annotations). |
+| `strictness` | Enforces a stricter-than-spec requirement (e.g. requiring annotations). Describes a rule's intent — **not** a "strict mode"; like all `basilisk` rules these are off by default and opt-in via config. |
 | `style` | A stylistic nudge (e.g. prefer a concrete type over `Any`). |
 | `redundancy` | Detects redundant code (e.g. a redundant annotation). |
 | `dependencies` | Dependency / lock-file hygiene. |

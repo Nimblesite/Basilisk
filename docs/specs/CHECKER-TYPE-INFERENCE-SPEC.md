@@ -14,7 +14,7 @@ Basilisk's type inference towers above the other systems like Pyrefly and PyRigh
 
 ## Design Philosophy {#TYPEINF-PHILOSOPHY}
 
-Basilisk's type inference is **strict by default and bidirectional throughout**. Where Pyright makes inference optional or limits it to avoid false positives, Basilisk demands more from both the programmer and itself. Where Pyright falls back to `Unknown` or `Any`, Basilisk either produces a precise type or emits a diagnostic.
+Basilisk's type inference is **precise and bidirectional throughout**. Where Pyright makes inference optional or limits it to avoid false positives, Basilisk demands more from both the programmer and itself. Where Pyright falls back to `Unknown` or `Any`, Basilisk either produces a precise type or emits a diagnostic.
 
 Key design decisions that make Basilisk **more advanced than Pyright**:
 
@@ -853,7 +853,7 @@ y: Sequence[Animal] = [Dog()]  # OK — Sequence is covariant
 - `Optional[T]` = `T | None`
 - `Any` is bidirectionally compatible with all types (not a real subtype, an escape hatch)
 - `Never` <: everything (bottom type, assignable to all types)
-- `object` >: everything except `None` in strict mode
+- `object` >: everything except `None` under strict subtyping
 
 ### Callable Subtyping {#TYPEINF-SUBTYPING-CALLABLE}
 

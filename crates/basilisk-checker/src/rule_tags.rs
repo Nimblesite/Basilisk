@@ -17,8 +17,9 @@
 /// exercised by the `python/typing` conformance suite. [CHKTAG-PROVENANCE]
 pub const PEP: &str = "pep";
 
-/// Provenance tag: a Basilisk-original, strict-by-default house rule that goes
-/// beyond the typing specification. [CHKTAG-PROVENANCE]
+/// Provenance tag: a Basilisk-original house rule that goes beyond the typing
+/// specification. Off by default; enabled only via configuration. There is no
+/// "strict mode" — default behaviour is the PEP rules alone. [CHKTAG-PROVENANCE]
 pub const BASILISK: &str = "basilisk";
 
 /// The canonical PEP *categories* — the only category axis Basilisk keeps, and
@@ -70,7 +71,7 @@ pub const FREE_FORM_TAGS: [&str; 7] = [
 /// the cosmetic `BSK-` code prefix. Every other rule is a [`PEP`] rule.
 /// [CHKTAG-PROVENANCE]
 const BASILISK_RULES: &[(&str, &[&str])] = &[
-    // Strict-by-default annotation requirements (the spec never mandates these).
+    // Annotation requirements beyond the spec (the spec never mandates these).
     ("BSK-E0001", &["strictness"]), // missing parameter annotation
     ("BSK-E0002", &["strictness"]), // missing return annotation
     ("BSK-E0003", &["strictness"]), // missing variable type
@@ -87,8 +88,8 @@ const BASILISK_RULES: &[(&str, &[&str])] = &[
     ("BSK-W0013", &["dependencies"]),            // stale lock file
     // Stub hygiene.
     ("BSK-E0152", &["stubs"]), // missing type stubs
-    ("imports_module_attribute", &["stubs", "imports"]), // strict local-stub member access
-    ("imports_unresolved", &["strictness", "imports"]), // strict "no implicit Any from imports"
+    ("imports_module_attribute", &["stubs", "imports"]), // local-stub member access
+    ("imports_unresolved", &["strictness", "imports"]), // "no implicit Any from imports"
     // Version targeting (a Basilisk feature, not a spec requirement).
     ("version_target_syntax", &["version"]),
 ];
