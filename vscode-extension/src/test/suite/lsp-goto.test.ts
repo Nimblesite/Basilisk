@@ -18,7 +18,7 @@
  */
 
 import * as assert from 'assert';
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import {
     SUITE_SETUP_TIMEOUT_MS,
     DIAGNOSTIC_TIMEOUT_MS,
@@ -34,12 +34,17 @@ import { HELPER_FILENAME, HELPER_SOURCE, SUBJECT_SOURCE } from './nav-fixtures';
 /** Per-test timeout: the poll budget plus headroom for a cold index. */
 const GOTO_TEST_TIMEOUT_MS = DIAGNOSTIC_TIMEOUT_MS + 5_000;
 
+/** The exact file + line a definition is expected to land on. */
+interface ExpectedTarget {
+    readonly uri: vscode.Uri;
+    readonly line: number;
+}
+
 /** Assert exactly one resolved location landing on the expected file + line. */
 function assertLands(
     label: string,
     locations: readonly vscode.Location[],
-    expectedUri: vscode.Uri,
-    expectedLine: number,
+    expected: ExpectedTarget,
 ): void {
     assert.ok(
         locations.length > 0,
@@ -48,17 +53,16 @@ function assertLands(
     const target = locations[0];
     assert.strictEqual(
         target.uri.toString(),
-        expectedUri.toString(),
-        `Definition for ${label} should resolve in ${expectedUri.fsPath}, got ${target.uri.fsPath}`
+        expected.uri.toString(),
+        `Definition for ${label} should resolve in ${expected.uri.fsPath}, got ${target.uri.fsPath}`
     );
     assert.strictEqual(
         target.range.start.line,
-        expectedLine,
-        `Definition for ${label} should land on line ${expectedLine}, got ${target.range.start.line}`
+        expected.line,
+        `Definition for ${label} should land on line ${expected.line}, got ${target.range.start.line}`
     );
 }
 
-// eslint-disable-next-line max-lines-per-function
 suite('LSP Goto Hammer', () => {
     let tmpDir: string;
     let uri: vscode.Uri;
@@ -85,7 +89,7 @@ suite('LSP Goto Hammer', () => {
         const locations = await getNavLocations(
             'vscode.executeDefinitionProvider', uri, locate(SUBJECT_SOURCE, 'calculate', 1)
         );
-        assertLands('function call calculate', locations, uri, locate(SUBJECT_SOURCE, 'calculate', 0).line);
+        assertLands('function call calculate', locations, { uri, line: locate(SUBJECT_SOURCE, 'calculate', 0).line });
     });
 
     test('goto-def: class annotation resolves to its class def', async function () {
@@ -93,7 +97,7 @@ suite('LSP Goto Hammer', () => {
         const locations = await getNavLocations(
             'vscode.executeDefinitionProvider', uri, locate(SUBJECT_SOURCE, 'Widget', 1)
         );
-        assertLands('class annotation Widget', locations, uri, locate(SUBJECT_SOURCE, 'Widget', 0).line);
+        assertLands('class annotation Widget', locations, { uri, line: locate(SUBJECT_SOURCE, 'Widget', 0).line });
     });
 
     test('goto-def: class constructor resolves to its class def', async function () {
@@ -101,7 +105,7 @@ suite('LSP Goto Hammer', () => {
         const locations = await getNavLocations(
             'vscode.executeDefinitionProvider', uri, locate(SUBJECT_SOURCE, 'Widget', 2)
         );
-        assertLands('class constructor Widget', locations, uri, locate(SUBJECT_SOURCE, 'Widget', 0).line);
+        assertLands('class constructor Widget', locations, { uri, line: locate(SUBJECT_SOURCE, 'Widget', 0).line });
     });
 
     test('goto-def: local variable use resolves to its assignment', async function () {
@@ -109,7 +113,7 @@ suite('LSP Goto Hammer', () => {
         const locations = await getNavLocations(
             'vscode.executeDefinitionProvider', uri, locate(SUBJECT_SOURCE, 'squared', 1)
         );
-        assertLands('local variable squared', locations, uri, locate(SUBJECT_SOURCE, 'squared', 0).line);
+        assertLands('local variable squared', locations, { uri, line: locate(SUBJECT_SOURCE, 'squared', 0).line });
     });
 
     test('goto-def: parameter use resolves to the parameter', async function () {
@@ -118,7 +122,7 @@ suite('LSP Goto Hammer', () => {
         const locations = await getNavLocations(
             'vscode.executeDefinitionProvider', uri, locate(SUBJECT_SOURCE, 'operand', 2)
         );
-        assertLands('parameter operand', locations, uri, locate(SUBJECT_SOURCE, 'operand', 0).line);
+        assertLands('parameter operand', locations, { uri, line: locate(SUBJECT_SOURCE, 'operand', 0).line });
     });
 
     test('goto-def: attribute use resolves to the attribute def', async function () {
@@ -126,7 +130,7 @@ suite('LSP Goto Hammer', () => {
         const locations = await getNavLocations(
             'vscode.executeDefinitionProvider', uri, locate(SUBJECT_SOURCE, 'width', 1)
         );
-        assertLands('attribute width', locations, uri, locate(SUBJECT_SOURCE, 'width', 0).line);
+        assertLands('attribute width', locations, { uri, line: locate(SUBJECT_SOURCE, 'width', 0).line });
     });
 
     // ── Cross-file definitions ───────────────────────────────────────
@@ -136,7 +140,7 @@ suite('LSP Goto Hammer', () => {
         const locations = await getNavLocations(
             'vscode.executeDefinitionProvider', uri, locate(SUBJECT_SOURCE, 'helper_fn', 1)
         );
-        assertLands('imported helper_fn', locations, helperUri, locate(HELPER_SOURCE, 'helper_fn', 0).line);
+        assertLands('imported helper_fn', locations, { uri: helperUri, line: locate(HELPER_SOURCE, 'helper_fn', 0).line });
     });
 
     test('goto-def: imported class usage resolves cross-file', async function () {
@@ -144,7 +148,7 @@ suite('LSP Goto Hammer', () => {
         const locations = await getNavLocations(
             'vscode.executeDefinitionProvider', uri, locate(SUBJECT_SOURCE, 'HelperClass', 1)
         );
-        assertLands('imported HelperClass', locations, helperUri, locate(HELPER_SOURCE, 'HelperClass', 0).line);
+        assertLands('imported HelperClass', locations, { uri: helperUri, line: locate(HELPER_SOURCE, 'HelperClass', 0).line });
     });
 
     // ── Declaration provider ─────────────────────────────────────────
@@ -154,7 +158,7 @@ suite('LSP Goto Hammer', () => {
         const locations = await getNavLocations(
             'vscode.executeDeclarationProvider', uri, locate(SUBJECT_SOURCE, 'calculate', 1)
         );
-        assertLands('declaration of calculate', locations, uri, locate(SUBJECT_SOURCE, 'calculate', 0).line);
+        assertLands('declaration of calculate', locations, { uri, line: locate(SUBJECT_SOURCE, 'calculate', 0).line });
     });
 
     // ── Type-definition provider ─────────────────────────────────────
@@ -164,7 +168,7 @@ suite('LSP Goto Hammer', () => {
         const locations = await getNavLocations(
             'vscode.executeTypeDefinitionProvider', uri, locate(SUBJECT_SOURCE, 'gadget', 0)
         );
-        assertLands('type of gadget', locations, uri, locate(SUBJECT_SOURCE, 'Widget', 0).line);
+        assertLands('type of gadget', locations, { uri, line: locate(SUBJECT_SOURCE, 'Widget', 0).line });
     });
 
     test('goto-type-def: variable resolves to cross-file class type', async function () {
@@ -172,6 +176,6 @@ suite('LSP Goto Hammer', () => {
         const locations = await getNavLocations(
             'vscode.executeTypeDefinitionProvider', uri, locate(SUBJECT_SOURCE, 'instance', 0)
         );
-        assertLands('type of instance', locations, helperUri, locate(HELPER_SOURCE, 'HelperClass', 0).line);
+        assertLands('type of instance', locations, { uri: helperUri, line: locate(HELPER_SOURCE, 'HelperClass', 0).line });
     });
 });

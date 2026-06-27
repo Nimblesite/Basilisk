@@ -392,14 +392,13 @@ export async function getNavLocations(
     command: NavProvider,
     uri: vscode.Uri,
     position: vscode.Position,
-    timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS,
 ): Promise<vscode.Location[]> {
     const raw = await pollUntilResult({
         fn: async () => vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(
             command, uri, position
         ).then((r) => r ?? [], () => [] as vscode.Location[]),
         predicate: (r) => Array.isArray(r) && r.length > 0,
-        timeoutMs,
+        timeoutMs: DIAGNOSTIC_TIMEOUT_MS,
     }).catch(() => [] as (vscode.Location | vscode.LocationLink)[]);
     return normalizeLocations(raw);
 }

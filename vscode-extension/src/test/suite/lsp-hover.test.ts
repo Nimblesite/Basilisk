@@ -16,7 +16,7 @@
  */
 
 import * as assert from 'assert';
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import {
     SUITE_SETUP_TIMEOUT_MS,
     DIAGNOSTIC_TIMEOUT_MS,
@@ -46,7 +46,6 @@ function assertHover(label: string, text: string, fragments: readonly string[]):
     }
 }
 
-// eslint-disable-next-line max-lines-per-function
 suite('LSP Hover Hammer', () => {
     let tmpDir: string;
     let uri: vscode.Uri;
