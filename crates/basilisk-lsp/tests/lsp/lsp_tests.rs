@@ -3,13 +3,18 @@
 
 #[test]
 fn lsp_returns_diagnostics_for_unannotated_function() {
-    // Phase 2: the LSP must report diagnostics for code with type errors.
-    // Currently returns an empty list (placeholder).
+    // The require-annotation house rules (BSK-E0001/E0002) are off by default —
+    // the default config is pure PEP conformance — so opt in via config, exactly
+    // as a project would. See [CHKARCH-CONFIGURATION-ONLY].
     let source = "def foo(x):\n    pass\n";
-    let diags = basilisk_lsp::check_source(source);
+    let config = basilisk_config::BasiliskConfig {
+        strict_annotations: true,
+        ..Default::default()
+    };
+    let diags = basilisk_lsp::check_source_with_config(source, &config);
     assert!(
         !diags.is_empty(),
-        "LSP must return diagnostics for unannotated function — Phase 2 not yet implemented"
+        "LSP must return diagnostics for unannotated function once house rules are enabled"
     );
 }
 

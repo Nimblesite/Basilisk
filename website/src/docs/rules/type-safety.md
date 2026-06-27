@@ -1,8 +1,8 @@
 ---
 layout: layouts/docs.njk
 title: Type Safety — E0010–E0029
-description: "Basilisk type-safety rules BSK-E0010 to E0029 — argument mismatches, return type errors, incompatible overrides, unhashable keys, and non-exhaustive matches."
-keywords: basilisk, type safety, type mismatch, BSK-E0012, BSK-E0013, BSK-E0016
+description: "Basilisk type-safety rules imports_unresolved to E0029 — argument mismatches, return type errors, incompatible overrides, unhashable keys, and non-exhaustive matches."
+keywords: basilisk, type safety, type mismatch, calls_argument_type, returns_compatibility_2, classes_override
 date: 2026-02-28
 dateModified: 2026-03-31
 author: The Basilisk Project
@@ -20,7 +20,7 @@ Rules that catch type mismatches, incorrect annotations, and unsound type usage.
 
 ---
 
-### BSK-E0010 — Unresolved import
+### imports_unresolved — Unresolved import
 
 An `import` refers to a module that cannot be resolved on the configured search paths.
 
@@ -34,11 +34,11 @@ from legacy_module import process_data
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0010 for an unresolved import](/assets/images/e0010.png)
+![basilisk check output reporting imports_unresolved for an unresolved import](/assets/images/e0010.png)
 
 ---
 
-### BSK-E0011 — Explicit `Any` / return type mismatch
+### returns_compatibility — Explicit `Any` / return type mismatch
 
 Two checks share this code. An explicit `Any` annotation silences type checking and must be justified; and a returned value that is clearly incompatible with the declared return type is reported.
 
@@ -52,11 +52,11 @@ def handle(data: Any) -> bool:
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0011 for an explicit Any annotation](/assets/images/e0011.png)
+![basilisk check output reporting returns_compatibility for an explicit Any annotation](/assets/images/e0011.png)
 
 ---
 
-### BSK-E0012 — Argument type mismatch
+### calls_argument_type — Argument type mismatch
 
 A function is called with an argument of the wrong type.
 
@@ -69,11 +69,11 @@ greet(42)  # Error — int is not str
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0012 for an argument type mismatch](/assets/images/e0012.png)
+![basilisk check output reporting calls_argument_type for an argument type mismatch](/assets/images/e0012.png)
 
 ---
 
-### BSK-E0013 — Return type mismatch
+### returns_compatibility_2 — Return type mismatch
 
 The type of a returned value does not match the declared return type.
 
@@ -84,11 +84,11 @@ def get_count() -> int:
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0013 for a return type mismatch](/assets/images/e0013.png)
+![basilisk check output reporting returns_compatibility_2 for a return type mismatch](/assets/images/e0013.png)
 
 ---
 
-### BSK-E0014 — Assignment incompatibility
+### assignment_compatibility — Assignment incompatibility
 
 A value of the wrong type is assigned to an annotated variable.
 
@@ -98,11 +98,11 @@ count: int = "zero"  # Error — str is not int
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0014 for an assignment incompatibility](/assets/images/e0014.png)
+![basilisk check output reporting assignment_compatibility for an assignment incompatibility](/assets/images/e0014.png)
 
 ---
 
-### BSK-E0015 — Invalid type argument count
+### callables_annotation — Invalid type argument count
 
 A generic type is used with the wrong number of type arguments.
 
@@ -112,11 +112,11 @@ x: dict[str] = {}   # Error — dict requires 2 type args
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0015 for an invalid type argument count](/assets/images/e0015.png)
+![basilisk check output reporting callables_annotation for an invalid type argument count](/assets/images/e0015.png)
 
 ---
 
-### BSK-E0016 — Incompatible method override
+### classes_override — Incompatible method override
 
 An overridden method in a subclass has an incompatible signature.
 
@@ -135,17 +135,17 @@ class Child(Base):
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0016 for an incompatible method override](/assets/images/e0016.png)
+![basilisk check output reporting classes_override for an incompatible method override](/assets/images/e0016.png)
 
 ---
 
-### BSK-E0017 — Incompatible variable override
+### classes_override_2 — Incompatible variable override
 
 A class variable is overridden with an incompatible type in a subclass.
 
 ---
 
-### BSK-E0018 — Undefined variable
+### names_undefined — Undefined variable
 
 A name is used that has not been defined in the current scope.
 
@@ -156,11 +156,11 @@ def f() -> int:
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0018 for an undefined variable](/assets/images/e0018.png)
+![basilisk check output reporting names_undefined for an undefined variable](/assets/images/e0018.png)
 
 ---
 
-### BSK-E0019 — Unbound variable
+### names_unbound — Unbound variable
 
 A variable is used before it has been assigned a value in all code paths.
 
@@ -173,23 +173,23 @@ def check(flag: bool) -> str:
 
 Real `basilisk check` output:
 
-![basilisk check output reporting BSK-E0019 for an unbound variable](/assets/images/e0019.png)
+![basilisk check output reporting names_unbound for an unbound variable](/assets/images/e0019.png)
 
 ---
 
-### BSK-E0020 — Missing overload implementation
+### overloads_definitions — Missing overload implementation
 
 An `@overload` group has no concrete implementation function.
 
 ---
 
-### BSK-E0021 — Overlapping overloads
+### overloads_consistency — Overlapping overloads
 
 Two `@overload` signatures are indistinguishable from the caller's perspective.
 
 ---
 
-### BSK-E0022 — Unhashable type in hash context
+### dict_key_hashable — Unhashable type in hash context
 
 A mutable type (like `list`) is used as a dictionary key or set element.
 
@@ -199,7 +199,7 @@ d: dict[list[int], str] = {}  # Error — list is not hashable
 
 ---
 
-### BSK-E0023 — Non-exhaustive pattern match
+### match_exhaustiveness — Non-exhaustive pattern match
 
 A `match` statement does not cover all possible cases for the matched type.
 
@@ -213,7 +213,7 @@ def classify(x: int | str) -> str:
 
 ---
 
-### BSK-E0024 — Invalid type form
+### annotations_typeexpr — Invalid type form
 
 A value that is not a valid type is used in a type position — for example a numeric literal as an annotation.
 
@@ -244,7 +244,7 @@ Real `basilisk check` output:
 
 ---
 
-### BSK-E0026 — `TypeVar` with a single constraint
+### generics_basic — `TypeVar` with a single constraint
 
 A `TypeVar` declared with exactly one constraint is meaningless — constraints require two or more.
 
@@ -257,7 +257,7 @@ U = TypeVar("U", int, str)   # Correct — two or more
 
 ---
 
-### BSK-E0027 — Duplicate `TypeVar` in a `Generic[...]` base
+### generics_base_class — Duplicate `TypeVar` in a `Generic[...]` base
 
 The same `TypeVar` appears more than once in a `Generic[...]` (or `Protocol[...]`) base.
 
@@ -271,7 +271,7 @@ class Box(Generic[T, T]):  # Error — `T` listed twice
 
 ---
 
-### BSK-E0029 — Method defined inside a `TypedDict`
+### typeddicts_class_syntax — Method defined inside a `TypedDict`
 
 `TypedDict` classes describe data shape only; they may not define methods.
 

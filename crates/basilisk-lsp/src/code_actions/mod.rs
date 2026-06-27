@@ -114,7 +114,7 @@ pub fn code_actions(
         };
 
         // uv-based quick fixes for unresolved imports and missing stubs.
-        if code == "BSK-E0010" {
+        if code == "imports_unresolved" {
             if let Some(module) = extract_module_from_diagnostic(&diag.message) {
                 // Only offer `uv add` when the name is a plausible PyPI
                 // distribution. Internal/vendored modules like `_pydevd_bundle`
@@ -142,7 +142,7 @@ pub fn code_actions(
                 ));
             }
         }
-        if code == "BSK-E0154" {
+        if code == "imports_module_attribute" {
             // "Create method/attribute" quick fix — add the undeclared member
             // to the local stub. [STUBRES-ADD-MEMBER]
             if let Some(action) = stubs::make_add_member_action(diag, source) {
@@ -561,7 +561,7 @@ mod tests {
     fn test_bsk_e0010_code_action_includes_uv_add() {
         let diag = make_diagnostic(
             DiagnosticSeverity::ERROR,
-            "BSK-E0010",
+            "imports_unresolved",
             "Cannot resolve import 'requests'",
             range_at((0, 0), (0, 8)),
         );
@@ -578,7 +578,7 @@ mod tests {
         );
     }
 
-    /// Regression for issue #84: the BSK-E0010 "add dependency" quick-fix must
+    /// Regression for issue #84: the `imports_unresolved` "add dependency" quick-fix must
     /// NOT offer `uv add` for a module name that is not a valid `PyPI`
     /// distribution. `_pydevd_bundle` is a debugpy-internal submodule whose
     /// name starts with `_`; `uv` rejects it ("Expected package name starting
@@ -588,7 +588,7 @@ mod tests {
     fn test_bsk_e0010_no_uv_add_for_non_pypi_module() {
         let diag = make_diagnostic(
             DiagnosticSeverity::ERROR,
-            "BSK-E0010",
+            "imports_unresolved",
             "Cannot resolve import `_pydevd_bundle`",
             range_at((0, 0), (0, 20)),
         );
@@ -674,13 +674,13 @@ mod tests {
         assert_create_local_stub_action(&actions, "requests", false);
     }
 
-    /// BSK-E0154 offers a one-click "add member to stub" fix that dispatches the
+    /// `imports_module_attribute` offers a one-click "add member to stub" fix that dispatches the
     /// `STUBS_ADD_MEMBER` command with the stub path and the inferred snippet.
     #[test]
     fn test_bsk_e0154_offers_add_member_action() {
         let diag = make_diagnostic(
             DiagnosticSeverity::ERROR,
-            "BSK-E0154",
+            "imports_module_attribute",
             "Module `cowsay` has no attribute `get_output_string`\n\nhelp: declare \
              `get_output_string` in the local stub `/w/.basilisk/stubs/cowsay.pyi`, or fix the typo.",
             range_at((1, 4), (1, 28)),

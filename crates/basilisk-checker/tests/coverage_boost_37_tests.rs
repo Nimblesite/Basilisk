@@ -11,10 +11,10 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
     Ok(check(&resolved))
 }
 
-// ── E0017: ClassVar override mismatch ──
+// ── ClassVar override mismatch ──
 
 #[test]
-fn e0017_classvar_override() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_override() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar
 
@@ -31,10 +31,10 @@ class Child(Base):
     Ok(())
 }
 
-// ── E0035: Required/NotRequired in function params ──
+// ── Required/NotRequired in function params ──
 
 #[test]
-fn e0035_required_in_params() -> Result<(), Box<dyn std::error::Error>> {
+fn required_in_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Required, NotRequired
 
@@ -50,10 +50,10 @@ class MyClass:
     Ok(())
 }
 
-// ── E0037: TypedDict non-string keys ──
+// ── TypedDict non-string keys ──
 
 #[test]
-fn e0037_typeddict_non_string_keys() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_non_string_keys() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -65,10 +65,10 @@ Bad2 = TypedDict("Bad2", {True: str})
     Ok(())
 }
 
-// ── E0042: PEP 695 + parameterized Generic ──
+// ── PEP 695 + parameterized Generic ──
 
 #[test]
-fn e0042_pep695_plus_generic() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_plus_generic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -85,10 +85,10 @@ class Bad2[S](Generic[S]):
     Ok(())
 }
 
-// ── E0052: Frozen dataclass with class hierarchy ──
+// ── Frozen dataclass with class hierarchy ──
 
 #[test]
-fn e0052_frozen_hierarchy() -> Result<(), Box<dyn std::error::Error>> {
+fn frozen_hierarchy() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -109,10 +109,10 @@ class FrozenChild(FrozenBase):
     Ok(())
 }
 
-// ── E0092: type[T] with wrong arg count ──
+// ── type[T] with wrong arg count ──
 
 #[test]
-fn e0092_type_bracket_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
+fn type_bracket_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 x: type[int, str] = int
 y: type[int, str, float] = int
@@ -123,10 +123,10 @@ z: type[int] = int
     Ok(())
 }
 
-// ── E0100: Literal augmented assignment (deeper) ──
+// ── Literal augmented assignment (deeper) ──
 
 #[test]
-fn e0100_literal_augmented_in_function() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_augmented_in_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 
@@ -140,10 +140,10 @@ def func(x: Literal[42], *args: Literal[1], **kwargs: Literal[0]) -> None:
     Ok(())
 }
 
-// ── E0078: Self return with concrete in elif ──
+// ── Self return with concrete in elif ──
 
 #[test]
-fn e0078_self_return_elif() -> Result<(), Box<dyn std::error::Error>> {
+fn self_return_elif() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 
@@ -161,10 +161,10 @@ class Builder:
     Ok(())
 }
 
-// ── E0080: TypeVar bound — call with wrong types ──
+// ── TypeVar bound — call with wrong types ──
 
 #[test]
-fn e0080_typevar_bound_method_call() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_bound_method_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -194,10 +194,10 @@ d.set("bad")
     Ok(())
 }
 
-// ── E0045: default value type issues ──
+// ── default value type issues ──
 
 #[test]
-fn e0045_default_value_types() -> Result<(), Box<dyn std::error::Error>> {
+fn default_value_types() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def func1(x: int = "wrong") -> None:
     pass
@@ -219,10 +219,10 @@ def func5(x: bool = 0, y: int = True) -> None:
     Ok(())
 }
 
-// ── E0061: AssertType enum literal ──
+// ── AssertType enum literal ──
 
 #[test]
-fn e0061_assert_type_enum() -> Result<(), Box<dyn std::error::Error>> {
+fn assert_type_enum() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import assert_type, Literal
 from enum import Enum
@@ -241,10 +241,10 @@ assert_type("hello", Literal["hello"])
     Ok(())
 }
 
-// ── E0104: Cyclical alias deeper ──
+// ── Cyclical alias deeper ──
 
 #[test]
-fn e0104_cyclical_alias_chain() -> Result<(), Box<dyn std::error::Error>> {
+fn cyclical_alias_chain() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -260,10 +260,10 @@ E: TypeAlias = dict[str, "E"]
     Ok(())
 }
 
-// ── E0109: TypeVar bound call (more patterns) ──
+// ── TypeVar bound call (more patterns) ──
 
 #[test]
-fn e0109_typevar_bound_call_patterns() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_bound_call_patterns() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -290,10 +290,10 @@ w.upper()
     Ok(())
 }
 
-// ── E0070: Never in more contexts ──
+// ── Never in more contexts ──
 
 #[test]
-fn e0070_never_various() -> Result<(), Box<dyn std::error::Error>> {
+fn never_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Never, NoReturn, Union, Optional
 
@@ -320,10 +320,10 @@ c = 1 + raises()
     Ok(())
 }
 
-// ── E0067: Enum non-member literal (more patterns) ──
+// ── Enum non-member literal (more patterns) ──
 
 #[test]
-fn e0067_enum_literal_patterns() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_literal_patterns() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 from typing import Literal
@@ -352,10 +352,10 @@ func2(Priority.LOW)
     Ok(())
 }
 
-// ── E0096: Field factory (more patterns) ──
+// ── Field factory (more patterns) ──
 
 #[test]
-fn e0096_field_factory_patterns() -> Result<(), Box<dyn std::error::Error>> {
+fn field_factory_patterns() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass, field
 
@@ -373,10 +373,10 @@ class Config:
     Ok(())
 }
 
-// ── E0057: type statement with nested subscript ──
+// ── type statement with nested subscript ──
 
 #[test]
-fn e0057_type_stmt_nested() -> Result<(), Box<dyn std::error::Error>> {
+fn type_stmt_nested() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type Simple = int
 type Union = int | str
@@ -396,10 +396,10 @@ fn suppression_ignore_patterns() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: int = "hello"  # type: ignore[assignment]
 y: int = "world"  # type: ignore
-z: int = "test"  # basilisk: ignore[BSK-E0014]
-w: int = "test"  # basilisk: disable=BSK-E0014
-v: int = "test"  # basilisk: warning=BSK-E0014
-u: int = "test"  # basilisk: info=BSK-E0014
+z: int = "test"  # basilisk: ignore[assignment_compatibility]
+w: int = "test"  # basilisk: disable=assignment_compatibility
+v: int = "test"  # basilisk: warning=assignment_compatibility
+u: int = "test"  # basilisk: info=assignment_compatibility
 "#;
     let diagnostics = run(source)?;
     let _ = diagnostics;

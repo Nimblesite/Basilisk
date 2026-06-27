@@ -82,7 +82,7 @@
 
 ### Constructors
 
-- [x] `constructors_callable.py` — constructor-to-callable conversion (BSK-E0153) — DONE
+- [x] `constructors_callable.py` — constructor-to-callable conversion (constructors_callable) — DONE
 
 ### Dataclasses (1 file)
 

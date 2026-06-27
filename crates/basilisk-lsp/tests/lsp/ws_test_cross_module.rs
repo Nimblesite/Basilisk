@@ -73,7 +73,7 @@ async fn cross_module_imported_symbol_suppresses_e0018() -> TestResult<()> {
             .as_array()
             .unwrap_or(&empty);
         let e0018_for_helper = diagnostics.iter().any(|d| {
-            d["code"].as_str() == Some("BSK-E0018")
+            d["code"].as_str() == Some("names_undefined")
                 && d["message"].as_str().unwrap_or("").contains("helper")
         });
         assert!(
@@ -110,7 +110,7 @@ async fn cross_module_undefined_variable_still_fires() -> TestResult<()> {
             .unwrap_or(&empty);
         let has_e0018 = diagnostics
             .iter()
-            .any(|d| d["code"].as_str() == Some("BSK-E0018"));
+            .any(|d| d["code"].as_str() == Some("names_undefined"));
         assert!(
             has_e0018,
             "E0018 should fire for truly undefined `nonexistent_thing`, got: {diagnostics:#?}"
@@ -152,7 +152,7 @@ async fn cross_module_import_graph_built() -> TestResult<()> {
             .as_array()
             .unwrap_or(&empty);
         let e0018_for_double = diagnostics.iter().any(|d| {
-            d["code"].as_str() == Some("BSK-E0018")
+            d["code"].as_str() == Some("names_undefined")
                 && d["message"].as_str().unwrap_or("").contains("double")
         });
         assert!(
@@ -167,7 +167,7 @@ async fn cross_module_import_graph_built() -> TestResult<()> {
             .as_array()
             .unwrap_or(&empty);
         let e0018_for_base = diagnostics.iter().any(|d| {
-            d["code"].as_str() == Some("BSK-E0018")
+            d["code"].as_str() == Some("names_undefined")
                 && d["message"].as_str().unwrap_or("").contains("BASE_VALUE")
         });
         assert!(
@@ -210,7 +210,7 @@ async fn cross_module_class_import() -> TestResult<()> {
             .as_array()
             .unwrap_or(&empty);
         let e0018_for_user = diagnostics.iter().any(|d| {
-            d["code"].as_str() == Some("BSK-E0018")
+            d["code"].as_str() == Some("names_undefined")
                 && d["message"].as_str().unwrap_or("").contains("User")
         });
         assert!(
@@ -248,7 +248,7 @@ async fn cross_module_circular_import_no_crash() -> TestResult<()> {
     let diags = collect_all_diagnostics(&mut fixture).await;
 
     // Both files should produce some diagnostics (at minimum E0010 for unresolved imports
-    // or E0001 for missing annotations). The important thing is we got results.
+    // or BSK-E0001 for missing annotations). The important thing is we got results.
     assert!(
         !diags.is_empty(),
         "should receive diagnostics even with circular imports"
@@ -290,7 +290,7 @@ async fn cross_module_multiple_imports_from_same_module() -> TestResult<()> {
         // None of the imported symbols should trigger E0018
         for symbol in &["add", "sub", "PI"] {
             let e0018_for_sym = diagnostics.iter().any(|d| {
-                d["code"].as_str() == Some("BSK-E0018")
+                d["code"].as_str() == Some("names_undefined")
                     && d["message"].as_str().unwrap_or("").contains(symbol)
             });
             assert!(
@@ -335,7 +335,7 @@ async fn cross_module_package_import() -> TestResult<()> {
             .as_array()
             .unwrap_or(&empty);
         let e0018_for_process = diagnostics.iter().any(|d| {
-            d["code"].as_str() == Some("BSK-E0018")
+            d["code"].as_str() == Some("names_undefined")
                 && d["message"].as_str().unwrap_or("").contains("process")
         });
         assert!(
@@ -599,7 +599,7 @@ async fn cross_module_find_references() -> TestResult<()> {
 }
 
 // ---------------------------------------------------------------------------
-// Regression: BSK-E0014 false positive on first-party import in a NEWLY
+// Regression: assignment_compatibility false positive on first-party import in a NEWLY
 // CREATED file within a known package (GitHub #53).
 //
 // A pre-existing sibling (`dispatcher.py`) imports `from nap.agent_workspace.host
@@ -650,7 +650,7 @@ async fn new_file_resolves_first_party_sibling_import() -> TestResult<()> {
 
     let unresolved_import = diagnostics.iter().any(|d| {
         let code = d["code"].as_str().unwrap_or("");
-        (code == "BSK-E0010" || code == "BSK-E0014")
+        (code == "imports_unresolved" || code == "assignment_compatibility")
             && d["message"]
                 .as_str()
                 .unwrap_or("")
@@ -668,7 +668,7 @@ async fn new_file_resolves_first_party_sibling_import() -> TestResult<()> {
 
 // ---------------------------------------------------------------------------
 // Regression: creating a NEW module must update the package index so that
-// pre-existing files importing it stop reporting BSK-E0010 — WITHOUT a server
+// pre-existing files importing it stop reporting imports_unresolved — WITHOUT a server
 // reload (GitHub #53). The file-watcher CREATED event must re-resolve the
 // importers of the new module, not just the new module's own imports.
 // Implements [ANALYSIS-INCR-IMPORTS].
@@ -691,7 +691,7 @@ async fn created_module_clears_unresolved_import_in_dependents() -> TestResult<(
     let mut fixture = WsTestFixture::new().await?;
     let _ = initialize_with_root(&mut fixture, &root_uri, "wholeModule").await?;
 
-    // Startup scan: consumer.py SHOULD report BSK-E0010 — log_persist is absent.
+    // Startup scan: consumer.py SHOULD report imports_unresolved — log_persist is absent.
     let startup = collect_all_diagnostics(&mut fixture).await;
     let consumer_uri = format!("{root_uri}/src/nap/agent_workspace/consumer.py");
     let startup_has_e0010 = startup.get(&consumer_uri).is_some_and(|d| {
@@ -744,7 +744,7 @@ async fn created_module_clears_unresolved_import_in_dependents() -> TestResult<(
 /// True iff the diagnostic is an unresolved-import error for `log_persist`.
 fn is_log_persist_unresolved(d: &serde_json::Value) -> bool {
     let code = d["code"].as_str().unwrap_or("");
-    (code == "BSK-E0010" || code == "BSK-E0014")
+    (code == "imports_unresolved" || code == "assignment_compatibility")
         && d["message"].as_str().unwrap_or("").contains("log_persist")
 }
 
@@ -780,7 +780,7 @@ async fn cross_module_wildcard_import() -> TestResult<()> {
         // Document the expected behavior: wildcard imports should resolve
         let e0018_count = diagnostics
             .iter()
-            .filter(|d| d["code"].as_str() == Some("BSK-E0018"))
+            .filter(|d| d["code"].as_str() == Some("names_undefined"))
             .count();
         // This test documents current behavior — wildcard import resolution
         // may or may not suppress E0018 depending on implementation status

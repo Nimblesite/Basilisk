@@ -318,7 +318,7 @@ pub struct AnnotatedTooFewArgs {
 ///     x1: Literal["Color.RED"] = a  # E — string ≠ enum member
 /// ```
 ///
-/// Used by `BSK-E0066`.
+/// Used by `enums_member_values`.
 #[derive(Debug, Clone)]
 pub struct LiteralStringEnumMismatch {
     /// The variable name being assigned (e.g. `"x1"`).
@@ -337,7 +337,7 @@ pub struct LiteralStringEnumMismatch {
 /// that `isinstance`-guarded branches (where `f` has been narrowed to `int`) are
 /// excluded.
 ///
-/// Used by `BSK-E0065`.
+/// Used by `specialtypes_promotions`.
 #[derive(Debug, Clone)]
 pub struct FloatParamIntAttrAccess {
     /// The name of the parameter (e.g. `"f"`).
@@ -352,7 +352,7 @@ pub struct FloatParamIntAttrAccess {
 ///
 /// Represents `MyAlias: TypeAlias = SomeGeneric[int, T]` at module level.
 /// The `rhs_names` field contains all simple names referenced in the RHS expression.
-/// Used by `BSK-E0092` to check that subscript sites respect the alias arity.
+/// Used by `generics_defaults_specialization` to check that subscript sites respect the alias arity.
 #[derive(Debug, Clone)]
 pub struct TypeAliasDefInfo {
     /// The alias name (e.g. `"MyAlias"`).

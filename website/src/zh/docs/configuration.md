@@ -17,7 +17,7 @@ Basilisk 通过 `pyproject.toml` 进行配置。所有设置都在 `[tool.basili
 python-version = "3.12"
 ```
 
-这就是您所需要的全部。Basilisk 从当前目录查找 Python 文件并应用所有规则。
+这就是您所需要的全部。Basilisk 从当前目录查找 Python 文件并应用其默认规则集——**核心 PEP 符合性规则**。超出规范的额外 Basilisk 规则是可选的；当你想要比规范更严格的检查时再启用它们。
 
 ## 完整配置示例
 
@@ -30,8 +30,8 @@ include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
 
 [tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["BSK-E0011"]
-rules."BSK-E0010" = "warning"
+disabled = ["returns_compatibility"]
+rules."imports_unresolved" = "warning"
 ```
 
 ---
@@ -86,17 +86,17 @@ rules."BSK-E0010" = "warning"
 ```toml
 [tool.basilisk.per-path-overrides."legacy/**"]
 # 为匹配的文件完全禁用规则
-disabled = ["BSK-E0011"]
+disabled = ["returns_compatibility"]
 
 [tool.basilisk.per-path-overrides."tests/**"]
 # 或降低规则的严重性而不是完全禁用
-rules."BSK-E0011" = "warning"
+rules."returns_compatibility" = "warning"
 ```
 
 ### `disabled`
 
 **类型：** `string[]`
-**示例：** `["BSK-E0011", "BSK-E0001"]`
+**示例：** `["returns_compatibility", "BSK-E0001"]`
 
 为匹配此 glob 的文件完全禁用的规则代码。
 
@@ -104,7 +104,7 @@ rules."BSK-E0011" = "warning"
 
 **类型：** 规则代码 → 严重性的表
 **严重性：** `"error"`、`"warning"`、`"info"`、`"disabled"`
-**示例：** `rules."BSK-E0011" = "warning"`
+**示例：** `rules."returns_compatibility" = "warning"`
 
 为匹配的文件覆盖特定规则的严重性。尽可能选择降低或禁用单个规则，而不是放宽大范围的检查。
 
@@ -115,7 +115,7 @@ rules."BSK-E0011" = "warning"
 要在特定行上抑制诊断，请添加带有规则代码和强制原因的注释：
 
 ```python
-result: Any = get_legacy_value()  # basilisk: ignore[BSK-E0011] -- no stub available, tracked in #123
+result: Any = get_legacy_value()  # basilisk: ignore[returns_compatibility] -- no stub available, tracked in #123
 ```
 
 要抑制一行上的所有诊断：
@@ -138,4 +138,4 @@ data = unsafe_cast(value)  # basilisk: ignore -- third-party code, cannot type
 
 Basilisk 从被检查文件的目录开始搜索 `pyproject.toml`，向上遍历到文件系统根目录。使用第一个包含 `[tool.basilisk]` 部分的 `pyproject.toml`。
 
-如果未找到配置文件，Basilisk 使用默认值：所有规则启用，`python-version = "3.12"`，检查当前目录。
+如果未找到配置文件，Basilisk 使用默认值：启用**核心 PEP 符合性规则集**（额外的 Basilisk 规则保持可选），`python-version = "3.12"`，检查当前目录。

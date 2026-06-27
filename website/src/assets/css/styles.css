@@ -513,14 +513,25 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
    HERO — Split layout: big text left, code right
 ══════════════════════════════════════════════════════════ */
 .hero {
-  padding: calc(var(--header-height) + var(--space-16)) 0 var(--space-16);
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12);
   border-bottom: 1px solid var(--color-border);
+}
+/* Hero spans most of the viewport width with a generous side gutter; content is
+   vertically centred so the hero fills the viewport height. */
+.hero > .container {
+  width: 100%;
+  max-width: 2200px;
+  padding-inline: clamp(var(--space-6), 3vw, var(--space-12));
 }
 
 .hero__split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-16);
+  grid-template-columns: 1fr 1.1fr;
+  gap: var(--space-12);
   align-items: center;
 }
 
@@ -561,31 +572,33 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 .hero__meta {
   display: flex;
-  gap: var(--space-6);
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
   font-size: 0.8125rem;
   color: var(--color-text-muted);
 }
-.hero__meta span { display: flex; align-items: center; gap: var(--space-1); }
+.hero__meta span { display: flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 .hero__meta strong { color: var(--color-text-secondary); font-weight: 500; }
 
 /* Code side of hero */
 .hero__code { position: relative; }
 
-/* Demo tabs inside hero */
-.hero__demo .demo-tabs { display: flex; gap: 0; background: var(--color-bg-elevated); border: 1px solid var(--color-border-bright); border-bottom: none; border-radius: var(--radius-md) var(--radius-md) 0 0; }
-.hero__demo .demo-tab { padding: var(--space-2) var(--space-5); font-size: 0.8125rem; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; transition: all var(--ease-fast); border-right: 1px solid var(--color-border); background: none; }
-.hero__demo .demo-tab:last-child { border-right: none; }
-.hero__demo .demo-tab:hover { color: var(--color-text-primary); }
-.hero__demo .demo-tab.active { color: var(--color-text-primary); background: var(--color-bg-tertiary); }
-.hero__demo .demo-panel { display: none; }
-.hero__demo .demo-panel.active { display: block; }
-.hero__demo .demo-wrapper { border: 1px solid var(--color-border-bright); border-radius: 0 0 var(--radius-lg) var(--radius-lg); overflow: hidden; }
+/* Product screenshot in hero — shown whole at its natural aspect, NEVER cropped */
+.hero__shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border-bright);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 30px 70px -25px rgba(0, 0, 0, 0.65);
+}
 
 @media (max-width: 900px) {
+  .hero { min-height: 0; }
   .hero__split { grid-template-columns: 1fr; }
   .hero__split > * { min-width: 0; }
   .hero__subheadline { max-width: none; }
-  .hero__meta { flex-wrap: wrap; gap: var(--space-4); }
+  .hero__meta { gap: var(--space-3) var(--space-4); }
 }
 @media (max-width: 640px) {
   .hero { padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12); }

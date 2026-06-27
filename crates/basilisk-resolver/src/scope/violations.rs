@@ -49,7 +49,7 @@ pub enum FinalViolationKind {
 
 /// Information about an enum `_value_` type mismatch detected during resolution.
 ///
-/// Populated by the resolver visitor; used by `BSK-E0063` to emit diagnostics
+/// Populated by the resolver visitor; used by `dataclasses_hash` to emit diagnostics
 /// without re-walking the AST.
 #[derive(Debug, Clone)]
 pub struct EnumValueTypeViolationInfo {
@@ -86,7 +86,7 @@ pub enum EnumValueTypeViolationKind {
 /// - `x: ClassVar[str] = ""` — local variable annotation
 /// - `self.xx: ClassVar[str] = ""` — attribute annotation on `self` in a method
 ///
-/// Used by `BSK-E0036`.
+/// Used by `classes_classvar`.
 #[derive(Debug, Clone)]
 pub struct LocalClassVarViolation {
     /// The variable or attribute name being annotated.
@@ -187,7 +187,7 @@ pub struct InvalidStringAnnotation {
 /// accepts(BadReturn())  # E — BadReturn does not conform
 /// ```
 ///
-/// Used by `BSK-E0073`.
+/// Used by `namedtuples_type_compat`.
 #[derive(Debug, Clone)]
 pub struct ProtocolSelfViolation {
     /// The name of the class that was passed as argument.
@@ -224,7 +224,7 @@ pub struct ProtocolInstantiationViolation {
 /// that are not decorated with `@runtime_checkable` or are data protocols used
 /// with `issubclass`.
 ///
-/// Used by `BSK-E0114`.
+/// Used by `protocols_runtime_checkable`.
 #[derive(Debug, Clone)]
 pub struct ProtocolRtcViolation {
     /// The span of the offending call expression.
@@ -257,7 +257,7 @@ pub enum ProtocolRtcViolationKind {
 /// - Yield type mismatch (`yield 3` in `Generator[str, ...]`)
 /// - Yield-from type mismatch (`yield from iter_a` in `Iterator[B]` where A != B)
 ///
-/// Used by `BSK-E0115`.
+/// Used by `directives_deprecated`.
 #[derive(Debug, Clone)]
 pub struct GeneratorViolation {
     /// The span of the offending expression.

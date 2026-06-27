@@ -15,11 +15,11 @@ async fn test_ws_code_action_missing_param_annotation() -> TestResult<()> {
 
     assert!(
         resp.contains(": Any"),
-        "E0001 action should insert ': Any': {resp}"
+        "BSK-E0001 action should insert ': Any': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "E0001 action should be quickfix: {resp}"
+        "BSK-E0001 action should be quickfix: {resp}"
     );
 
     // Hardened: parse and verify code action structure
@@ -90,11 +90,11 @@ async fn test_ws_code_action_missing_return_annotation() -> TestResult<()> {
 
     assert!(
         resp.contains("-> None"),
-        "E0002 action should insert '-> None': {resp}"
+        "BSK-E0002 action should insert '-> None': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "E0002 action should be quickfix: {resp}"
+        "BSK-E0002 action should be quickfix: {resp}"
     );
     Ok(())
 }
@@ -111,11 +111,11 @@ async fn test_ws_code_action_missing_variable_annotation_empty_list() -> TestRes
 
     assert!(
         resp.contains("list[Any]"),
-        "E0003 (empty list) action should insert 'list[Any]': {resp}"
+        "BSK-E0003 (empty list) action should insert 'list[Any]': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "E0003 action should be quickfix: {resp}"
+        "BSK-E0003 action should be quickfix: {resp}"
     );
     Ok(())
 }
@@ -132,11 +132,11 @@ async fn test_ws_code_action_missing_variable_annotation_empty_dict() -> TestRes
 
     assert!(
         resp.contains("dict[str, Any]"),
-        "E0003 (empty dict) action should insert 'dict[str, Any]': {resp}"
+        "BSK-E0003 (empty dict) action should insert 'dict[str, Any]': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "E0003 action should be quickfix: {resp}"
+        "BSK-E0003 action should be quickfix: {resp}"
     );
     Ok(())
 }
@@ -153,11 +153,11 @@ async fn test_ws_code_action_missing_variable_annotation_none() -> TestResult<()
 
     assert!(
         resp.contains(": Any"),
-        "E0003 (None) action should insert ': Any': {resp}"
+        "BSK-E0003 (None) action should insert ': Any': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "E0003 action should be quickfix: {resp}"
+        "BSK-E0003 action should be quickfix: {resp}"
     );
     Ok(())
 }
@@ -324,7 +324,7 @@ async fn test_ws_code_action_e0003_all_variants() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
     let _ = fixture.initialize().await?;
 
-    // All three E0003 variants in one file: empty list, empty dict, None
+    // All three BSK-E0003 variants in one file: empty list, empty dict, None
     let code = "items = []\nmapping = {}\nvalue = None\n";
     fixture
         .did_open("file:///ws_edge_ca_e0003.py", code)
@@ -337,18 +337,18 @@ async fn test_ws_code_action_e0003_all_variants() -> TestResult<()> {
         .as_array()
         .ok_or("expected diagnostics array")?;
 
-    // Verify all three E0003 diagnostics are present.
+    // Verify all three BSK-E0003 diagnostics are present.
     let e0003_diags: Vec<&serde_json::Value> = diagnostics
         .iter()
         .filter(|d| d["code"].as_str() == Some("BSK-E0003"))
         .collect();
     assert!(
         e0003_diags.len() >= 3,
-        "should have at least 3 E0003 diagnostics (list, dict, None), got {}: {diag_msg}",
+        "should have at least 3 BSK-E0003 diagnostics (list, dict, None), got {}: {diag_msg}",
         e0003_diags.len()
     );
 
-    // Request code actions for each E0003 diagnostic.
+    // Request code actions for each BSK-E0003 diagnostic.
     for (idx, target_diag) in e0003_diags.iter().enumerate() {
         let action_id = 410 + idx as u64;
         let resp = fixture
@@ -362,11 +362,13 @@ async fn test_ws_code_action_e0003_all_variants() -> TestResult<()> {
                 }),
             )
             .await?
-            .ok_or(format!("no code action response for E0003 variant {idx}"))?;
+            .ok_or(format!(
+                "no code action response for BSK-E0003 variant {idx}"
+            ))?;
 
         assert!(
             resp.contains("quickfix"),
-            "E0003 code action variant {idx} should be quickfix: {resp}"
+            "BSK-E0003 code action variant {idx} should be quickfix: {resp}"
         );
     }
     Ok(())

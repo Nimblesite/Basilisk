@@ -26,7 +26,7 @@ fn run_file(path: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0115_deprecated_import_from_sibling_module() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_import_from_sibling_module() -> Result<(), Box<dyn std::error::Error>> {
     let dir = tempfile::tempdir()?;
 
     // Create the "library" module with deprecated definitions
@@ -77,7 +77,7 @@ good = mylib.good_func()
 }
 
 #[test]
-fn e0115_deprecated_from_import_sibling() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_from_import_sibling() -> Result<(), Box<dyn std::error::Error>> {
     let dir = tempfile::tempdir()?;
 
     // Create sibling module with deprecated function
@@ -119,7 +119,7 @@ x = OldTool()
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0048_typealias_invalid_rhs_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn typealias_invalid_rhs_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -142,7 +142,7 @@ GoodSubscript: TypeAlias = list[int]
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
 
     // Each invalid form must be individually caught
@@ -184,7 +184,7 @@ GoodSubscript: TypeAlias = list[int]
 }
 
 #[test]
-fn e0048_typealias_alias_name() -> Result<(), Box<dyn std::error::Error>> {
+fn typealias_alias_name() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias as TA
 
@@ -194,7 +194,7 @@ Good: TA = int | str
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert!(
         e0048.iter().any(|d| d.message.contains("Bad")),
@@ -204,7 +204,7 @@ Good: TA = int | str
 }
 
 #[test]
-fn e0048_non_generic_alias_cannot_be_parameterized() -> Result<(), Box<dyn std::error::Error>> {
+fn non_generic_alias_cannot_be_parameterized() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 
@@ -214,7 +214,7 @@ x: Simple[int] = 42
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert!(
         e0048.iter().any(|d| d.message.contains("not generic")),
@@ -229,7 +229,7 @@ x: Simple[int] = 42
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0150_version_guard_assertion() -> Result<(), Box<dyn std::error::Error>> {
+fn version_guard_assertion() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import sys
 
@@ -245,7 +245,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         !e0150.is_empty(),
@@ -263,7 +263,7 @@ def check():
 }
 
 #[test]
-fn e0150_platform_guard_assertion() -> Result<(), Box<dyn std::error::Error>> {
+fn platform_guard_assertion() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import sys
 
@@ -278,7 +278,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         !e0150.is_empty(),
@@ -296,7 +296,7 @@ def check():
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0014_basic_mismatch_assertions() -> Result<(), Box<dyn std::error::Error>> {
+fn basic_mismatch_assertions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: int = "hello"
 y: str = 42
@@ -307,7 +307,7 @@ ok: int = 42
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(
         e0014.len() >= 3,
@@ -323,7 +323,7 @@ ok: int = 42
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0097_protocol_undeclared_attrs_assertion() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_undeclared_attrs_assertion() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -340,7 +340,7 @@ class MyProto(Protocol):
     let diagnostics = run(source)?;
     let e0097: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0097")
+        .filter(|d| d.code.code == "protocols_definition")
         .collect();
     assert!(
         !e0097.is_empty(),
@@ -354,11 +354,11 @@ class MyProto(Protocol):
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0130: Module-level generic instance method calls (assertion-heavy)
+// Module-level generic instance method calls (assertion-heavy)
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0130_generic_method_call_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_method_call_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import TypeVar, Generic
 
 T = TypeVar(\"T\")
@@ -383,7 +383,7 @@ b.set(42)
     let diagnostics = run(source)?;
     let e0130: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0130")
+        .filter(|d| d.code.code == "generics_variance_inference")
         .collect();
     assert!(
         e0130.len() >= 2,
@@ -399,7 +399,7 @@ b.set(42)
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0115_deprecated_local_assertion() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_local_assertion() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -418,7 +418,7 @@ ref = old_func
     let diagnostics = run(source)?;
     let e0115: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0115")
+        .filter(|d| d.code.code == "directives_deprecated")
         .collect();
     assert!(
         e0115.len() >= 2,
@@ -434,7 +434,7 @@ ref = old_func
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0115_deprecated_method_via_var_type() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_method_via_var_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -462,11 +462,11 @@ w += 1
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0115: deprecated in function body with param type inference
+// deprecated in function body with param type inference
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0115_deprecated_in_function_param_type() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_in_function_param_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -488,11 +488,11 @@ def other(items: list) -> None:
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0115: deprecated in control flow
+// deprecated in control flow
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0115_deprecated_control_flow() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_control_flow() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -520,11 +520,11 @@ def func():
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0115: deprecated attribute access via assignment
+// deprecated attribute access via assignment
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0115_deprecated_property_setter() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_property_setter() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -556,9 +556,9 @@ cfg.setting = 42
 /// When the `&&` is flipped to `||`, unannotated variables leak through and
 /// would cause downstream panics or false diagnostics. We assert that
 /// EXACTLY the annotated-with-RHS mismatches are flagged and nothing else.
-#[mutation_safe(rule = "e0014", fns = "check_vars")]
+#[mutation_safe(rule = "assignment_compatibility", fns = "check_vars")]
 #[test]
-fn e0014_mutant_annotation_and_rhs_required() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_annotation_and_rhs_required() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 # Has annotation, has RHS → should fire
 bad: int = "hello"
@@ -575,7 +575,7 @@ good: int = 42
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
 
     // EXACTLY one e0014 diagnostic: `bad: int = "hello"`
@@ -591,9 +591,9 @@ good: int = 42
 
 /// Kills mutant: line 126 `.ends_with(".typealias")` → `&&`.
 /// `typing.TypeAlias` annotation must be skipped by e0014 (handled by e0048).
-#[mutation_safe(rule = "e0014", fns = "check_vars")]
+#[mutation_safe(rule = "assignment_compatibility", fns = "check_vars")]
 #[test]
-fn e0014_mutant_typing_dot_typealias_skipped() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_typing_dot_typealias_skipped() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import typing
 
@@ -606,7 +606,7 @@ x: int = "hello"
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     // x should be flagged
     assert!(
@@ -626,9 +626,9 @@ x: int = "hello"
 
 /// Kills mutant: line 127 `InferredType::Named` check for "ta".
 /// `TypeAlias as TA` must be skipped by e0014.
-#[mutation_safe(rule = "e0014", fns = "check_vars")]
+#[mutation_safe(rule = "assignment_compatibility", fns = "check_vars")]
 #[test]
-fn e0014_mutant_ta_alias_skipped() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_ta_alias_skipped() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias as TA
 
@@ -641,7 +641,7 @@ x: int = "hello"
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(
         !e0014.iter().any(|d| d.message.contains("MyAlias")),
@@ -653,9 +653,9 @@ x: int = "hello"
 
 /// Kills mutant: line 220 `!param.has_annotation` → removing `!`.
 /// Annotated params must be included in `param_type_map` for local var checks.
-#[mutation_safe(rule = "e0014", fns = "build_param_type_map")]
+#[mutation_safe(rule = "assignment_compatibility", fns = "build_param_type_map")]
 #[test]
-fn e0014_mutant_annotated_param_type_used() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_annotated_param_type_used() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(x: int, y: str) -> None:
     # Local var assigned from param — type should propagate
@@ -665,7 +665,7 @@ def func(x: int, y: str) -> None:
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(
         !e0014.is_empty(),
@@ -680,9 +680,9 @@ def func(x: int, y: str) -> None:
 
 /// Kills mutants in `has_top_level_token` depth tracking.
 /// Nested brackets must NOT trigger `if`/`or`/`and` detection inside them.
-#[mutation_safe(rule = "e0048", fns = "has_top_level_token")]
+#[mutation_safe(rule = "aliases_implicit", fns = "has_top_level_token")]
 #[test]
-fn e0048_mutant_nested_brackets_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_nested_brackets_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -704,7 +704,7 @@ BadTernary: TypeAlias = int if True else str
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
 
     let flagged_names: Vec<&str> = e0048
@@ -739,9 +739,9 @@ BadTernary: TypeAlias = int if True else str
 /// but `0*1=0` (wrong: includes the newline char). We test with a variable
 /// on the second line where the annotation text would be corrupted by the
 /// off-by-one and assert the diagnostic message contains the correct type.
-#[mutation_safe(rule = "e0014", fns = "extract_annotation")]
+#[mutation_safe(rule = "assignment_compatibility", fns = "extract_annotation")]
 #[test]
-fn e0014_mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::error::Error>> {
     // The `\n` at position 0 means rfind returns Some(0).
     // Correct: line_start = 0 + 1 = 1 (skip newline)
     // Mutant:  line_start = 0 * 1 = 0 (include newline → corrupts annotation)
@@ -749,7 +749,7 @@ fn e0014_mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::err
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(
         e0014.len() >= 2,
@@ -771,9 +771,9 @@ fn e0014_mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::err
 /// Kills mutant: e0048.rs line 69 `import.kind != ImportKind::From` → `==`.
 /// With the mutant, `From` imports are skipped, so `TypeAlias as TA` is never
 /// registered and `BadAlias: TA = [int, str]` would not be detected as E0048.
-#[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
+#[mutation_safe(rule = "aliases_implicit", fns = "collect_type_alias_names")]
 #[test]
-fn e0048_mutant_from_import_kind_guard() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_from_import_kind_guard() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias as TA
 
@@ -782,11 +782,11 @@ BadAlias: TA = [int, str]
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert!(
         !e0048.is_empty(),
-        "BSK-E0048 must fire for `TA = [int, str]` where TA is aliased from TypeAlias: {diagnostics:?}"
+        "aliases_implicit must fire for `TA = [int, str]` where TA is aliased from TypeAlias: {diagnostics:?}"
     );
     Ok(())
 }
@@ -794,9 +794,9 @@ BadAlias: TA = [int, str]
 /// Kills mutant: e0048.rs line 86 `|| *c == '_'` → `&&`.
 /// With the mutant, underscore chars break alias extraction, so `My_Alias`
 /// would be truncated to `My` and `Bad: My_Alias = [int]` would not fire E0048.
-#[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
+#[mutation_safe(rule = "aliases_implicit", fns = "collect_type_alias_names")]
 #[test]
-fn e0048_mutant_alias_underscore_accepted() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_alias_underscore_accepted() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias as My_Alias
 
@@ -805,22 +805,25 @@ Bad: My_Alias = [int, str]
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert!(
         !e0048.is_empty(),
-        "BSK-E0048 must fire when TypeAlias alias contains underscore: {diagnostics:?}"
+        "aliases_implicit must fire when TypeAlias alias contains underscore: {diagnostics:?}"
     );
     Ok(())
 }
 
-/// Kills mutant: e0048.rs line 88 `!alias.is_empty() && alias != "TypeAlias"` → `||`.
-/// With the mutant, a non-aliased `from typing import TypeAlias` adds a second
-/// "`TypeAlias`" entry. The outer check `alias != "TypeAlias"` guards against this.
-/// We verify that `TypeAlias`-annotated bad RHS is still caught exactly once.
-#[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
+/// Pins `collect_type_alias_names` for a non-aliased `from typing import TypeAlias`:
+/// a bad `TypeAlias` RHS is flagged exactly once. The `!alias.is_empty() && alias
+/// != "TypeAlias"` → `||` mutant here is *equivalent* — the only differing inputs
+/// push a duplicate `TypeAlias`/empty entry into `names`, which is consumed solely
+/// via `is_type_alias_annotation`'s `.any(|n| ann == n)`, so it can never change a
+/// diagnostic — and is excluded in `.cargo/mutants.toml`. This test keeps the
+/// function in mutation scope for its other, killable mutants.
+#[mutation_safe(rule = "aliases_implicit", fns = "collect_type_alias_names")]
 #[test]
-fn e0048_mutant_typealias_self_alias_not_duplicated() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_typealias_self_alias_not_duplicated() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 
@@ -830,7 +833,7 @@ Good: TypeAlias = int | str
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert_eq!(
         e0048.len(),
@@ -844,9 +847,9 @@ Good: TypeAlias = int | str
 /// Kills mutant: e0014 line 129 `&& var.rhs_span.is_some()` → `||`.
 /// With `||`, unannotated vars or vars without RHS would be incorrectly checked.
 /// A var with annotation but no RHS (bare declaration) must NOT fire E0014.
-#[mutation_safe(rule = "e0014", fns = "check_vars")]
+#[mutation_safe(rule = "assignment_compatibility", fns = "check_vars")]
 #[test]
-fn e0014_mutant_bare_declaration_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_bare_declaration_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 declared: int
 assigned: int = "wrong"
@@ -854,7 +857,7 @@ assigned: int = "wrong"
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert_eq!(
         e0014.len(),
@@ -864,19 +867,21 @@ assigned: int = "wrong"
     Ok(())
 }
 
-/// Kills mutant: e0014 line 304 `pos + 1` → `pos * 1` in `extract_annotation`.
-/// With the mutant, `line_start = pos` includes the preceding `\n` char, so
-/// the annotation is extracted from a shifted offset and may be wrong or None.
-/// We use a name on line 2 (rfind gives pos > 0) with a type annotation
-/// and assert the diagnostic message contains the correct type name.
-#[mutation_safe(rule = "e0014", fns = "extract_annotation")]
+/// Pins `extract_annotation` for a var on line 2 (rfind gives pos > 0): the `int`
+/// annotation is extracted correctly and surfaced in the diagnostic. The
+/// `pos + 1` → `pos * 1` mutant here is *equivalent* — `name_offset`
+/// (= `start` - `line_start`) shifts by the same amount, so every slice taken from
+/// `line` is byte-identical to the unmutated extraction — and is excluded in
+/// `.cargo/mutants.toml`. This test keeps the function in mutation scope for its
+/// other, killable mutants.
+#[mutation_safe(rule = "assignment_compatibility", fns = "extract_annotation")]
 #[test]
-fn e0014_mutant_line_start_off_by_one_second_var() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_line_start_off_by_one_second_var() -> Result<(), Box<dyn std::error::Error>> {
     let source = "first: str = 42\nsecond: int = \"hello\"\n";
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert!(
         e0014.iter().any(|d| d.message.contains("int")),
@@ -888,9 +893,9 @@ fn e0014_mutant_line_start_off_by_one_second_var() -> Result<(), Box<dyn std::er
 /// Kills mutant: e0048 line 72 second `!=` → `==` (`import.module != "typing_extensions"`).
 /// With the mutant, only `typing_extensions` is processed; plain `typing` is skipped.
 /// An aliased import from `typing` must still be detected.
-#[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
+#[mutation_safe(rule = "aliases_implicit", fns = "collect_type_alias_names")]
 #[test]
-fn e0048_mutant_typing_module_guard() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_typing_module_guard() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias as Alias
 
@@ -899,7 +904,7 @@ Bad: Alias = [int, str]
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert!(
         !e0048.is_empty(),
@@ -914,9 +919,9 @@ Bad: Alias = [int, str]
 /// `+= with -=` or `*=` on depth means brackets increase instead of tracking.
 /// All these mutants break the nested-bracket guard, causing false positives
 /// on type expressions that contain `or`/`if` inside subscript brackets.
-#[mutation_safe(rule = "e0048", fns = "has_top_level_token")]
+#[mutation_safe(rule = "aliases_implicit", fns = "has_top_level_token")]
 #[test]
-fn e0048_mutant_depth_tracking_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_depth_tracking_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 
@@ -927,7 +932,7 @@ GoodDeep: TypeAlias = dict[str, tuple[int, list[str]]]
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert!(
         e0048.is_empty(),
@@ -939,9 +944,9 @@ GoodDeep: TypeAlias = dict[str, tuple[int, list[str]]]
 /// Kills mutants in `has_top_level_token` where closing bracket arm is deleted
 /// (lines 181) — without it, depth goes up but never comes down, so tokens
 /// after the first bracket pair are never visible at depth 0, hiding real errors.
-#[mutation_safe(rule = "e0048", fns = "has_top_level_token")]
+#[mutation_safe(rule = "aliases_implicit", fns = "has_top_level_token")]
 #[test]
-fn e0048_mutant_depth_decrement_catches_after_bracket() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_depth_decrement_catches_after_bracket() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 
@@ -950,7 +955,7 @@ BadAfterBracket: TypeAlias = tuple[int] or list[str]
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert!(
         !e0048.is_empty(),
@@ -963,9 +968,9 @@ BadAfterBracket: TypeAlias = tuple[int] or list[str]
 /// Mutant: `module != "typing" && module == "typing_extensions"` → skips
 /// `typing_extensions` imports. `from typing_extensions import TypeAlias as TEA`
 /// would not register TEA, so `Bad: TEA = [int]` fires no E0048.
-#[mutation_safe(rule = "e0048", fns = "collect_type_alias_names")]
+#[mutation_safe(rule = "aliases_implicit", fns = "collect_type_alias_names")]
 #[test]
-fn e0048_mutant_typing_extensions_module_guard() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_typing_extensions_module_guard() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing_extensions import TypeAlias as TEA
 
@@ -974,7 +979,7 @@ Bad: TEA = [int, str]
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert!(
         !e0048.is_empty(),

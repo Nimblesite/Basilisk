@@ -96,8 +96,10 @@ pub fn parse_source_overrides(source: &str) -> SourceOverrides {
             continue;
         }
 
-        // Block start directives: standalone `# type: <mode>[CODE]` on their own line.
-        if trimmed.starts_with("# type: ") && !trimmed.contains("import") {
+        // Block start directives: standalone `# type: <mode>[CODE]` on their own
+        // line. The `# type: ` prefix on the *trimmed* line already guarantees a
+        // standalone comment (a code-bearing line would start with the code).
+        if trimmed.starts_with("# type: ") {
             if let Some(rest) = trimmed.strip_prefix("# type: ") {
                 if rest.starts_with("disabled")
                     || rest.starts_with("warning")
@@ -268,20 +270,71 @@ fn parse_line_directive(directive: &str) -> Option<LineOverride> {
 ///
 /// Per the typing spec, a `# type: ignore` comment silences *all* errors on the
 /// line; any bracketed content is type-checker-specific. Basilisk honours
-/// code-specific suppression only when every bracketed token is a Basilisk code
-/// (`BSK-…`). Any other content — mypy's `# type: ignore[assignment]`, an
-/// arbitrary tag, or no brackets at all — suppresses every error on the line, as
-/// the spec requires. (`Vec::new()` means "all rules" in `override_matches`.)
+/// code-specific suppression only when every bracketed token is a Basilisk code:
+/// a conformance-test code (always `chapter_subtopic`, i.e. contains `_`) or a
+/// `BSK-…` opt-in code. Any other content — mypy's `# type: ignore[assignment]`
+/// or `[arg-type]` (hyphenated / single words, never underscored), an arbitrary
+/// tag, or no brackets at all — suppresses every error on the line, as the spec
+/// requires. (`Vec::new()` means "all rules" in `override_matches`.)
 fn parse_ignore_codes(rest: &str) -> Vec<String> {
     let codes = parse_bracketed_codes(rest);
-    if codes.iter().all(|code| code.starts_with("BSK-")) {
+    if !codes.is_empty() && codes.iter().all(|code| is_basilisk_code(code)) {
         codes
     } else {
         Vec::new()
     }
 }
 
-/// Parse bracketed codes like `[BSK-E0010, BSK-E0011]` from the start of a string.
+/// Namespace prefixes of every Basilisk diagnostic code: the 21 python/typing
+/// conformance chapters plus the cross-cutting core-check prefixes. A
+/// conformance code is always `<prefix>_<subtopic>`.
+const CODE_PREFIXES: &[&str] = &[
+    // conformance-test chapters
+    "aliases",
+    "annotations",
+    "callables",
+    "classes",
+    "constructors",
+    "dataclasses",
+    "directives",
+    "enums",
+    "exceptions",
+    "generics",
+    "historical",
+    "literals",
+    "namedtuples",
+    "narrowing",
+    "overloads",
+    "protocols",
+    "qualifiers",
+    "specialtypes",
+    "tuples",
+    "typeddicts",
+    "typeforms",
+    // cross-cutting core checks
+    "imports",
+    "returns",
+    "calls",
+    "assignment",
+    "names",
+    "dict",
+    "match",
+    "version",
+];
+
+/// Whether a bracketed token is a Basilisk diagnostic code (as opposed to a
+/// foreign mypy/pyright code). Basilisk codes are either `BSK-…` opt-in codes or
+/// conformance-test codes of the form `<prefix>_<subtopic>` whose prefix is a
+/// known Basilisk namespace. Foreign codes — mypy's `assignment`, `arg-type` —
+/// are bare words or hyphenated and never match.
+fn is_basilisk_code(code: &str) -> bool {
+    if code.starts_with("BSK-") {
+        return true;
+    }
+    matches!(code.split_once('_'), Some((prefix, _)) if CODE_PREFIXES.contains(&prefix))
+}
+
+/// Parse bracketed codes like `[imports_unresolved, returns_compatibility]` from the start of a string.
 fn parse_bracketed_codes(rest: &str) -> Vec<String> {
     let rest = rest.trim();
     if !rest.starts_with('[') {
@@ -359,25 +412,31 @@ mod tests {
 
     #[test]
     fn test_parse_type_ignore_with_code() {
-        let source = "from fastmcp import FastMCP  # type: ignore[BSK-E0010]\n";
+        let source = "from fastmcp import FastMCP  # type: ignore[imports_unresolved]\n";
         let overrides = parse_source_overrides(source);
         assert_eq!(overrides.line_overrides.len(), 1);
         assert_eq!(overrides.line_overrides[0].1.mode, RuleMode::Ignore);
-        assert_eq!(overrides.line_overrides[0].1.codes, vec!["BSK-E0010"]);
+        assert_eq!(
+            overrides.line_overrides[0].1.codes,
+            vec!["imports_unresolved"]
+        );
     }
 
     #[test]
     fn test_parse_type_warning() {
-        let source = "from fastmcp import FastMCP  # type: warning[BSK-E0010]\n";
+        let source = "from fastmcp import FastMCP  # type: warning[imports_unresolved]\n";
         let overrides = parse_source_overrides(source);
         assert_eq!(overrides.line_overrides.len(), 1);
         assert_eq!(overrides.line_overrides[0].1.mode, RuleMode::Warning);
-        assert_eq!(overrides.line_overrides[0].1.codes, vec!["BSK-E0010"]);
+        assert_eq!(
+            overrides.line_overrides[0].1.codes,
+            vec!["imports_unresolved"]
+        );
     }
 
     #[test]
     fn test_parse_type_disabled() {
-        let source = "from fastmcp import FastMCP  # type: disabled[BSK-E0010]\n";
+        let source = "from fastmcp import FastMCP  # type: disabled[imports_unresolved]\n";
         let overrides = parse_source_overrides(source);
         assert_eq!(overrides.line_overrides.len(), 1);
         assert_eq!(overrides.line_overrides[0].1.mode, RuleMode::Disabled);
@@ -399,7 +458,7 @@ mod tests {
     /// rather than positions.
     #[test]
     fn test_two_type_directives_on_one_line_both_parsed() {
-        let source = "x: int = \"hi\"  # type: ignore[BSK-E9999]  # type: warning[BSK-E0014]\n";
+        let source = "x: int = \"hi\"  # type: ignore[BSK-E9999]  # type: warning[assignment_compatibility]\n";
         let overrides = parse_source_overrides(source);
         let line0: Vec<&LineOverride> = overrides
             .line_overrides
@@ -421,8 +480,8 @@ mod tests {
         assert!(
             line0
                 .iter()
-                .any(|ov| ov.mode == RuleMode::Warning && ov.codes == ["BSK-E0014"]),
-            "missing the `warning[BSK-E0014]` directive (silently dropped): {line0:?}"
+                .any(|ov| ov.mode == RuleMode::Warning && ov.codes == ["assignment_compatibility"]),
+            "missing the `warning[assignment_compatibility]` directive (silently dropped): {line0:?}"
         );
     }
 
@@ -440,18 +499,21 @@ mod tests {
         );
         // And it actually suppresses an arbitrary diagnostic code.
         assert!(override_matches(
-            "BSK-E0014",
+            "assignment_compatibility",
             &overrides.line_overrides[0].1.codes
         ));
     }
 
     #[test]
     fn test_type_ignore_basilisk_bracket_stays_code_specific() {
-        let source = "x = foo()  # type: ignore[BSK-E0010]\n";
+        let source = "x = foo()  # type: ignore[imports_unresolved]\n";
         let overrides = parse_source_overrides(source);
-        assert_eq!(overrides.line_overrides[0].1.codes, vec!["BSK-E0010"]);
+        assert_eq!(
+            overrides.line_overrides[0].1.codes,
+            vec!["imports_unresolved"]
+        );
         assert!(!override_matches(
-            "BSK-E0014",
+            "assignment_compatibility",
             &overrides.line_overrides[0].1.codes
         ));
     }
@@ -493,12 +555,12 @@ mod tests {
 
     #[test]
     fn test_parse_file_disabled() {
-        let source = "# basilisk: file-disabled[BSK-E0010]\nimport fastmcp\n";
+        let source = "# basilisk: file-disabled[imports_unresolved]\nimport fastmcp\n";
         let overrides = parse_source_overrides(source);
         match &overrides.file_mode {
             Some(FileOverride::Specific { mode, codes }) => {
                 assert_eq!(*mode, RuleMode::Disabled);
-                assert_eq!(codes, &["BSK-E0010"]);
+                assert_eq!(codes, &["imports_unresolved"]);
             }
             other => panic!("Expected Specific, got {other:?}"),
         }
@@ -506,12 +568,13 @@ mod tests {
 
     #[test]
     fn test_parse_file_warning_multiple_codes() {
-        let source = "# basilisk: file-warning[BSK-E0010, BSK-E0011]\nimport fastmcp\n";
+        let source =
+            "# basilisk: file-warning[imports_unresolved, returns_compatibility]\nimport fastmcp\n";
         let overrides = parse_source_overrides(source);
         match &overrides.file_mode {
             Some(FileOverride::Specific { mode, codes }) => {
                 assert_eq!(*mode, RuleMode::Warning);
-                assert_eq!(codes, &["BSK-E0010", "BSK-E0011"]);
+                assert_eq!(codes, &["imports_unresolved", "returns_compatibility"]);
             }
             other => panic!("Expected Specific, got {other:?}"),
         }
@@ -520,10 +583,10 @@ mod tests {
     #[test]
     fn test_parse_block_directive() {
         let source = "\
-# type: disabled[BSK-E0010]
+# type: disabled[imports_unresolved]
 from fastmcp import FastMCP
 from result import Result
-# type: end-disabled[BSK-E0010]
+# type: end-disabled[imports_unresolved]
 import os
 ";
         let overrides = parse_source_overrides(source);
@@ -532,28 +595,34 @@ import os
         assert_eq!(start, 0);
         assert_eq!(end, 3);
         assert_eq!(block.mode, RuleMode::Disabled);
-        assert_eq!(block.codes, vec!["BSK-E0010"]);
+        assert_eq!(block.codes, vec!["imports_unresolved"]);
     }
 
     #[test]
     fn test_parse_multiple_codes() {
-        let source = "x = foo()  # type: ignore[BSK-E0010, BSK-E0012]\n";
+        let source = "x = foo()  # type: ignore[imports_unresolved, calls_argument_type]\n";
         let overrides = parse_source_overrides(source);
         assert_eq!(
             overrides.line_overrides[0].1.codes,
-            vec!["BSK-E0010", "BSK-E0012"]
+            vec!["imports_unresolved", "calls_argument_type"]
         );
     }
 
     #[test]
     fn test_override_matches_empty_codes() {
-        assert!(override_matches("BSK-E0010", &[]));
+        assert!(override_matches("imports_unresolved", &[]));
     }
 
     #[test]
     fn test_override_matches_specific_code() {
-        assert!(override_matches("BSK-E0010", &["BSK-E0010".to_owned()]));
-        assert!(!override_matches("BSK-E0011", &["BSK-E0010".to_owned()]));
+        assert!(override_matches(
+            "imports_unresolved",
+            &["imports_unresolved".to_owned()]
+        ));
+        assert!(!override_matches(
+            "returns_compatibility",
+            &["imports_unresolved".to_owned()]
+        ));
     }
 
     #[test]

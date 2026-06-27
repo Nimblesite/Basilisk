@@ -42,7 +42,7 @@ pub enum PackageDepKind {
 
 /// Why an import could not be resolved.
 ///
-/// Used by BSK-E0010 to produce context-aware diagnostic messages when uv
+/// Used by `imports_unresolved` to produce context-aware diagnostic messages when uv
 /// package registry information is available.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnresolvedReason {
@@ -109,7 +109,7 @@ pub struct ImportInfo {
 /// controls and wants to be authoritative — so mere presence in
 /// [`super::ResolvedModule::imported_modules`] is the gate, and third-party
 /// typeshed / `py.typed` packages are deliberately not captured here yet.
-/// Consumed by `BSK-E0154`.
+/// Consumed by `imports_module_attribute`.
 #[derive(Debug, Clone)]
 pub struct ImportedModuleApi {
     /// Top-level names the stub declares (functions, classes, variables).

@@ -211,7 +211,7 @@ name = "my-app"
 
     /// Regression for issue #25: dev/optional dependencies declared in
     /// `[project.optional-dependencies]` (PEP 621) must also be returned, or
-    /// `pytest`/`Pillow`/`GitPython` etc. wrongly trigger BSK-E0010.
+    /// `pytest`/`Pillow`/`GitPython` etc. wrongly trigger `imports_unresolved`.
     #[test]
     fn includes_pep621_optional_dependencies() {
         let (_dir, deps) = deps_from_pyproject(

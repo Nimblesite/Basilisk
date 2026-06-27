@@ -30,7 +30,7 @@ pub fn check_ownership(source: &str) -> Vec<String> {
                 let pattern = format!("{param}.{method}(");
                 if trimmed.contains(&pattern) {
                     violations.push(format!(
-                        "BSK-E0031: mutation of Borrowed parameter `{param}` \
+                        "directives_cast: mutation of Borrowed parameter `{param}` \
                          via `.{method}()` is not allowed"
                     ));
                 }

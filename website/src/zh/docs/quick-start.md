@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 快速开始
-description: 5 分钟内开始使用 Basilisk。安装扩展，运行第一次类型检查，体验默认严格模式的 Python 诊断。
+description: 5 分钟内开始使用 Basilisk。安装扩展，运行第一次类型检查，体验默认符合 PEP 规范的 Python 诊断。
 keywords: basilisk, 快速开始, python语言服务器, 类型检查, 教程, vs code, cursor, windsurf, zed, neovim
 lang: zh
 ---
@@ -149,7 +149,7 @@ error[BSK-E0001]: Missing parameter type annotation for `data`
 
 ```python
 # 此抑制需要原因注释
-result: Any = legacy_sdk_call()  # basilisk: ignore[BSK-E0011] -- tracked in #847
+result: Any = legacy_sdk_call()  # basilisk: ignore[returns_compatibility] -- tracked in #847
 ```
 
 没有原因的抑制本身会被标记。这是故意的：如果您需要抑制诊断，您应该能够解释原因。

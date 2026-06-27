@@ -19,7 +19,8 @@ pub enum Severity {
     Warning,
     /// A type error that must be resolved.
     Error,
-    /// Critical Mojo safety violation (ownership/move semantics).
+    /// Critical safety violation reported by the opt-in, off-by-default
+    /// ownership/move-semantics rules inspired by Mojo.
     SafetyViolation,
 }
 
@@ -64,10 +65,10 @@ pub struct InlineOverride {
     pub is_block_end: bool,
 }
 
-/// A BSK diagnostic code such as `BSK-E0001`.
+/// A BSK diagnostic code such as `returns_compatibility`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErrorCode {
-    /// The full code string, e.g. `"BSK-E0001"`.
+    /// The full code string, e.g. `"returns_compatibility"`.
     pub code: &'static str,
     /// URL to the documentation for this diagnostic.
     pub docs_url: &'static str,

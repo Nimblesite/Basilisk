@@ -181,7 +181,7 @@ Triggered when BSK-E0001-E0005 fires and deterministic fix is unavailable. The m
 
 ### Feature 2: AI Type Error Fixes {#LSPAI-FEATURE-TYPEERROR}
 
-Triggered on BSK-E0010-E0025 with no deterministic fix. Model chooses between changing the annotation, adding a conversion, or widening the parameter type based on context.
+Triggered on imports_unresolved-E0025 with no deterministic fix. Model chooses between changing the annotation, adding a conversion, or widening the parameter type based on context.
 
 ### Feature 3: AI-Enhanced Mass Autofix {#LSPAI-FEATURE-MASSAUTOFIX}
 

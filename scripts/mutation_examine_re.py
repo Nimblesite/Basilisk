@@ -1,11 +1,14 @@
 """Build cargo-mutants arguments from the mutation-safe test --list output.
 
-Each #[mutation_safe(rule = "eNNNN", fns = "fn_a|fn_b")] annotation emits a
-wrapper module named `mutation_safe_eNNNN_fns__fn_a__fn_b__<test_fn>`. This
-script extracts (rule, function) pairs and test binary names, then prints two
-lines for the Makefile to consume:
+Each #[mutation_safe(rule = "<slug>", fns = "fn_a|fn_b")] annotation emits a
+wrapper module named `mutation_safe_<slug>_fns__fn_a__fn_b__<test_fn>`, where
+`<slug>` is the rule's path stem under `crates/basilisk-checker/src/rules/` (a
+file like `aliases_implicit` or a directory like `assignment_compatibility`). A
+whole-file test (no `fns`) uses the `WHOLE_FILE_SLUG` sentinel in place of the
+function list. This script extracts (rule, function) pairs and test binary names,
+then prints two lines for the Makefile to consume:
 
-  Line 1: --re pattern, e.g. rules/e0048[./].*\\bhas_top_level_token\\b|...
+  Line 1: --re pattern, e.g. rules/aliases_implicit[./].*\\bhas_top_level_token\\b|...
   Line 2: --test args,  e.g. --test coverage_boost_33_tests --test mutation_kill_tests
 
 Usage: python3 scripts/mutation_examine_re.py <test-list-file> [examine_re|test_args]
@@ -16,6 +19,10 @@ Usage: python3 scripts/mutation_examine_re.py <test-list-file> [examine_re|test_
 import pathlib
 import re
 import sys
+
+# Keep in sync with `WHOLE_FILE_SLUG` in crates/basilisk-test-macros/src/lib.rs:
+# the sentinel a whole-file (no `fns`) test uses for its wrapper-module slug.
+WHOLE_FILE_SLUG = "wholefile"
 
 
 def _parse(list_file: str) -> tuple[dict[str, set[str]], list[str], list[str]]:
@@ -35,21 +42,22 @@ def _parse(list_file: str) -> tuple[dict[str, set[str]], list[str], list[str]]:
         if idx < 0:
             continue
         rest = line[idx + len(prefix) :]
-        m = re.match(r"(e\d{4})_fns__(.+?)__\w+::", rest)
-        if m:
-            rule, slug = m.group(1), m.group(2)
-            for fn_name in slug.split("__"):
-                if fn_name:
-                    rule_fns.setdefault(rule, set()).add(fn_name)
-        else:
-            code = rest[:5]
-            if (
-                len(code) == 5
-                and code[0] == "e"
-                and code[1:].isdigit()
-                and code not in rules_only
-            ):
-                rules_only.append(code)
+        # Wrapper modules are uniformly `{rule}_fns__{slug}__{test_fn}::…`.
+        # `{rule}` is a descriptive path slug (it may contain underscores); the
+        # `_fns__` delimiter unambiguously terminates it. `{slug}` is either the
+        # WHOLE_FILE_SLUG sentinel (the whole rule file) or function names rejoined
+        # with `__`.
+        m = re.match(r"(.+?)_fns__(.+)__\w+::", rest)
+        if not m:
+            continue
+        rule, slug = m.group(1), m.group(2)
+        if slug == WHOLE_FILE_SLUG:
+            if rule not in rules_only:
+                rules_only.append(rule)
+            continue
+        for fn_name in slug.split("__"):
+            if fn_name:
+                rule_fns.setdefault(rule, set()).add(fn_name)
 
     return rule_fns, rules_only, test_binaries
 

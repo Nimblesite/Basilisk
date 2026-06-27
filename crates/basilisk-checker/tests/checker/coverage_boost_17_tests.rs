@@ -12,11 +12,11 @@ use super::common::*;
 // e0111 constructor hierarchy, e0095 `InitVar` deep, e0148 generic args deep.
 
 // =============================================================================
-// E0073: NamedTuple-to-tuple compatibility deep
+// NamedTuple-to-tuple compatibility deep
 // =============================================================================
 
 #[test]
-fn e0073_namedtuple_tuple_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_tuple_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -30,7 +30,7 @@ t: tuple[int, int] = p
     let diagnostics = run(source)?;
     let e0073 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0073")
+        .filter(|d| d.code.code == "namedtuples_type_compat")
         .collect::<Vec<_>>();
     assert!(
         !e0073.is_empty(),
@@ -41,7 +41,7 @@ t: tuple[int, int] = p
 }
 
 #[test]
-fn e0073_namedtuple_tuple_count_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_tuple_count_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -56,7 +56,7 @@ v: tuple[int, str] = t
     let diagnostics = run(source)?;
     let e0073 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0073")
+        .filter(|d| d.code.code == "namedtuples_type_compat")
         .collect::<Vec<_>>();
     assert!(
         !e0073.is_empty(),
@@ -67,7 +67,7 @@ v: tuple[int, str] = t
 }
 
 #[test]
-fn e0073_namedtuple_tuple_exact_match() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_tuple_exact_match() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -81,7 +81,7 @@ t: tuple[int, str] = p
     let diagnostics = run(source)?;
     let e0073 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0073")
+        .filter(|d| d.code.code == "namedtuples_type_compat")
         .collect::<Vec<_>>();
     assert!(
         e0073.is_empty(),
@@ -92,11 +92,11 @@ t: tuple[int, str] = p
 }
 
 // =============================================================================
-// E0116: NamedTuple definition deep
+// NamedTuple definition deep
 // =============================================================================
 
 #[test]
-fn e0116_namedtuple_default_ordering() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_default_ordering() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -107,7 +107,7 @@ class Point(NamedTuple):
     let diagnostics = run(source)?;
     let e0116 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0116")
+        .filter(|d| d.code.code == "namedtuples_define_class")
         .collect::<Vec<_>>();
     assert!(
         !e0116.is_empty(),
@@ -118,7 +118,7 @@ class Point(NamedTuple):
 }
 
 #[test]
-fn e0116_namedtuple_multiple_inheritance() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_multiple_inheritance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -132,7 +132,7 @@ class Point(NamedTuple, Base):
     let diagnostics = run(source)?;
     let e0116 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0116")
+        .filter(|d| d.code.code == "namedtuples_define_class")
         .collect::<Vec<_>>();
     assert!(
         !e0116.is_empty(),
@@ -143,7 +143,7 @@ class Point(NamedTuple, Base):
 }
 
 #[test]
-fn e0116_namedtuple_subclass_field_conflict() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_subclass_field_conflict() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -162,7 +162,7 @@ class Point3D(Point):
 }
 
 #[test]
-fn e0116_namedtuple_classvar_skip() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_classvar_skip() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple, ClassVar
 
@@ -176,11 +176,11 @@ class Point(NamedTuple):
 }
 
 // =============================================================================
-// E0137: Generic protocol method mismatches
+// Generic protocol method mismatches
 // =============================================================================
 
 #[test]
-fn e0137_generic_protocol_return_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_protocol_return_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -198,7 +198,7 @@ v: Transformer[int] = IntToStr()
     let diagnostics = run(source)?;
     let e0137 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0137")
+        .filter(|d| d.code.code == "protocols_generic")
         .collect::<Vec<_>>();
     assert!(
         !e0137.is_empty(),
@@ -209,7 +209,7 @@ v: Transformer[int] = IntToStr()
 }
 
 #[test]
-fn e0137_generic_protocol_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_protocol_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -227,7 +227,7 @@ v: Handler[int] = StrHandler()
     let diagnostics = run(source)?;
     let e0137 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0137")
+        .filter(|d| d.code.code == "protocols_generic")
         .collect::<Vec<_>>();
     assert!(
         !e0137.is_empty(),
@@ -238,7 +238,7 @@ v: Handler[int] = StrHandler()
 }
 
 #[test]
-fn e0137_generic_protocol_missing_method() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_protocol_missing_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -261,11 +261,11 @@ v: Comparable[int] = OnlyCompare()
 }
 
 // =============================================================================
-// E0140: Callable/Protocol deep paths
+// Callable/Protocol deep paths
 // =============================================================================
 
 #[test]
-fn e0140_callable_ellipsis() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_ellipsis() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -282,7 +282,7 @@ takes_any(my_func)
 }
 
 #[test]
-fn e0140_protocol_non_protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_non_protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class NotAProtocol:
     def process(self) -> None:
@@ -300,7 +300,7 @@ x: NotAProtocol = my_func
 }
 
 #[test]
-fn e0140_callable_concatenate_prefix() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_concatenate_prefix() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable, Concatenate, ParamSpec
 
@@ -314,7 +314,7 @@ def with_first(fn: Callable[Concatenate[int, P], str]) -> None:
 }
 
 #[test]
-fn e0140_protocol_call_method() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_call_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -331,11 +331,11 @@ p: Processor = my_func
 }
 
 // =============================================================================
-// E0112: TypeGuard return type compatibility
+// TypeGuard return type compatibility
 // =============================================================================
 
 #[test]
-fn e0112_typeguard_vs_typeis_incompatible() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_vs_typeis_incompatible() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeGuard, TypeIs
 
@@ -353,7 +353,7 @@ def takes_guard(fn: TypeGuard[str]) -> None:
 }
 
 #[test]
-fn e0112_typeguard_func_passed_as_arg() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_func_passed_as_arg() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeGuard, Callable
 
@@ -368,7 +368,7 @@ apply(is_int)
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0112")
+        .filter(|d| d.code.code == "narrowing_typeis")
         .collect::<Vec<_>>();
     assert!(
         !e0112.is_empty(),
@@ -379,7 +379,7 @@ apply(is_int)
 }
 
 #[test]
-fn e0112_typeis_func_passed_as_typeguard() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_func_passed_as_typeguard() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeGuard, TypeIs, Callable
 
@@ -394,7 +394,7 @@ apply(is_str)
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0112")
+        .filter(|d| d.code.code == "narrowing_typeis")
         .collect::<Vec<_>>();
     assert!(
         !e0112.is_empty(),
@@ -405,11 +405,11 @@ apply(is_str)
 }
 
 // =============================================================================
-// E0121: Protocol conformance deep
+// Protocol conformance deep
 // =============================================================================
 
 #[test]
-fn e0121_protocol_missing_method() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_missing_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -426,7 +426,7 @@ c: Drawable = Circle()
     let diagnostics = run(source)?;
     let e0121 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0121")
+        .filter(|d| d.code.code == "protocols_definition_2")
         .collect::<Vec<_>>();
     assert!(
         !e0121.is_empty(),
@@ -437,7 +437,7 @@ c: Drawable = Circle()
 }
 
 #[test]
-fn e0121_non_protocol_structural_assign() -> Result<(), Box<dyn std::error::Error>> {
+fn non_protocol_structural_assign() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -458,7 +458,7 @@ x: ConcreteBase = Other()
     let diagnostics = run(source)?;
     let e0121 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0121")
+        .filter(|d| d.code.code == "protocols_definition_2")
         .collect::<Vec<_>>();
     assert!(
         !e0121.is_empty(),
@@ -469,7 +469,7 @@ x: ConcreteBase = Other()
 }
 
 #[test]
-fn e0121_known_protocol_conformance() -> Result<(), Box<dyn std::error::Error>> {
+fn known_protocol_conformance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Sized
 
@@ -485,7 +485,7 @@ x: Sized = NoLen()
 }
 
 #[test]
-fn e0121_protocol_nominal_subclass() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_nominal_subclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -508,11 +508,11 @@ x: HasName = SubNamed()
 }
 
 // =============================================================================
-// E0130: TypeVar scoping deep
+// TypeVar scoping deep
 // =============================================================================
 
 #[test]
-fn e0130_typevar_scope_in_function() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_scope_in_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -530,7 +530,7 @@ class Container(Generic[T]):
 }
 
 #[test]
-fn e0130_typevar_multiple_constraints() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_multiple_constraints() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -544,11 +544,11 @@ def process(x: T) -> T:
 }
 
 // =============================================================================
-// E0131: Generator complex
+// Generator complex
 // =============================================================================
 
 #[test]
-fn e0131_generator_multiple_yields() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_multiple_yields() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -561,7 +561,7 @@ def gen() -> Generator[int, None, str]:
     let diagnostics = run(source)?;
     let e0131 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0131")
+        .filter(|d| d.code.code == "annotations_generators_2")
         .collect::<Vec<_>>();
     assert!(
         !e0131.is_empty(),
@@ -572,7 +572,7 @@ def gen() -> Generator[int, None, str]:
 }
 
 #[test]
-fn e0131_generator_yield_from() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_yield_from() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator, Iterator
 
@@ -585,7 +585,7 @@ def gen() -> Generator[int, None, None]:
     let diagnostics = run(source)?;
     let e0131 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0131")
+        .filter(|d| d.code.code == "annotations_generators_2")
         .collect::<Vec<_>>();
     // yield from incompatible may or may not be checked
     let _ = e0131;
@@ -593,11 +593,11 @@ def gen() -> Generator[int, None, None]:
 }
 
 // =============================================================================
-// E0147: Tuple operations
+// Tuple operations
 // =============================================================================
 
 #[test]
-fn e0147_tuple_unpack_starred() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_unpack_starred() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Tuple
 
@@ -611,11 +611,11 @@ def process() -> None:
 }
 
 // =============================================================================
-// E0102: TypeVar default deep
+// TypeVar default deep
 // =============================================================================
 
 #[test]
-fn e0102_typevar_default_with_constraints() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_with_constraints() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -625,7 +625,7 @@ T = TypeVar("T", int, str, default=float)
     // Caught by e0091 (typevar_default_incompat)
     let e0091 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0091")
+        .filter(|d| d.code.code == "generics_defaults_2")
         .collect::<Vec<_>>();
     assert!(
         !e0091.is_empty(),
@@ -636,11 +636,11 @@ T = TypeVar("T", int, str, default=float)
 }
 
 // =============================================================================
-// E0149: PEP 695 deep
+// PEP 695 deep
 // =============================================================================
 
 #[test]
-fn e0149_pep695_nested_function_params() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_nested_function_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Outer[T]:
     def method[U](self, x: T, y: U) -> None:
@@ -652,7 +652,7 @@ class Outer[T]:
 }
 
 #[test]
-fn e0149_pep695_complex_bounds() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_complex_bounds() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Sequence
 
@@ -667,11 +667,11 @@ def process[T: Sequence[int]](x: T) -> T:
 }
 
 // =============================================================================
-// E0145: Type bracket deep
+// Type bracket deep
 // =============================================================================
 
 #[test]
-fn e0145_type_bracket_in_function_params() -> Result<(), Box<dyn std::error::Error>> {
+fn type_bracket_in_function_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -694,7 +694,7 @@ def check(x: type[int]) -> bool:
 }
 
 #[test]
-fn e0145_type_bracket_in_return() -> Result<(), Box<dyn std::error::Error>> {
+fn type_bracket_in_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def get_type() -> type[int]:
     return int
@@ -704,11 +704,11 @@ def get_type() -> type[int]:
 }
 
 // =============================================================================
-// E0076: Overload patterns
+// Overload patterns
 // =============================================================================
 
 #[test]
-fn e0076_overload_no_implementation() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_no_implementation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -720,7 +720,7 @@ def process(x: str) -> int: ...
     let diagnostics = run(source)?;
     let e0020 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0020")
+        .filter(|d| d.code.code == "overloads_definitions")
         .collect::<Vec<_>>();
     assert!(
         !e0020.is_empty(),
@@ -731,7 +731,7 @@ def process(x: str) -> int: ...
 }
 
 #[test]
-fn e0076_overload_single_overload() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_single_overload() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -744,7 +744,7 @@ def process(x: int) -> str:
     let diagnostics = run(source)?;
     let e0020 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0020")
+        .filter(|d| d.code.code == "overloads_definitions")
         .collect::<Vec<_>>();
     assert!(
         !e0020.is_empty(),
@@ -755,11 +755,11 @@ def process(x: int) -> str:
 }
 
 // =============================================================================
-// E0119: Protocol isinstance deep
+// Protocol isinstance deep
 // =============================================================================
 
 #[test]
-fn e0119_protocol_isinstance_without_runtime() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_isinstance_without_runtime() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -772,7 +772,7 @@ isinstance(x, NotRuntime)
     let diagnostics = run(source)?;
     let e0119 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0119")
+        .filter(|d| d.code.code == "protocols_runtime_checkable_2")
         .collect::<Vec<_>>();
     assert!(
         !e0119.is_empty(),
@@ -783,11 +783,11 @@ isinstance(x, NotRuntime)
 }
 
 // =============================================================================
-// E0120: Generator return type
+// Generator return type
 // =============================================================================
 
 #[test]
-fn e0120_generator_no_yield() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_no_yield() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -800,11 +800,11 @@ def not_a_gen() -> Generator[int, None, None]:
 }
 
 // =============================================================================
-// E0054: Final - class-level augmented assign
+// Final - class-level augmented assign
 // =============================================================================
 
 #[test]
-fn e0054_final_augmented_assign_module() -> Result<(), Box<dyn std::error::Error>> {
+fn final_augmented_assign_module() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -813,7 +813,9 @@ COUNT += 1
 "#;
     let diagnostics = run(source)?;
     // Augmented assign to Final should be caught by E0054
-    let has_e0054 = diagnostics.iter().any(|d| d.code.code == "BSK-E0054");
+    let has_e0054 = diagnostics
+        .iter()
+        .any(|d| d.code.code == "qualifiers_final_annotation_2");
     assert!(
         has_e0054,
         "Should detect Final augmented assign via E0054: {diagnostics:?}",
@@ -822,11 +824,11 @@ COUNT += 1
 }
 
 // =============================================================================
-// E0111: Constructor hierarchy
+// Constructor hierarchy
 // =============================================================================
 
 #[test]
-fn e0111_namedtuple_constructor() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_constructor() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -842,7 +844,7 @@ p = Point(1, "ok")
 }
 
 #[test]
-fn e0111_class_with_base_init() -> Result<(), Box<dyn std::error::Error>> {
+fn class_with_base_init() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Base:
     def __init__(self, x: int) -> None:
@@ -862,11 +864,11 @@ g = GrandChild(42)
 }
 
 // =============================================================================
-// E0095: InitVar deep - stmt walking
+// InitVar deep - stmt walking
 // =============================================================================
 
 #[test]
-fn e0095_initvar_access_in_assign() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_access_in_assign() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, InitVar
 
@@ -884,7 +886,7 @@ x = c.init_debug
     let diagnostics = run(source)?;
     let e0095 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0095")
+        .filter(|d| d.code.code == "dataclasses_postinit")
         .collect::<Vec<_>>();
     assert!(
         !e0095.is_empty(),
@@ -895,11 +897,11 @@ x = c.init_debug
 }
 
 // =============================================================================
-// E0148: Generic type args deep
+// Generic type args deep
 // =============================================================================
 
 #[test]
-fn e0148_dict_wrong_arg_count() -> Result<(), Box<dyn std::error::Error>> {
+fn dict_wrong_arg_count() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Dict
 
@@ -911,7 +913,7 @@ x: Dict[int] = {}
 }
 
 #[test]
-fn e0148_list_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
+fn list_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import List
 
@@ -923,11 +925,11 @@ x: List[int, str] = []
 }
 
 // =============================================================================
-// E0139: TypeVarTuple alias deep
+// TypeVarTuple alias deep
 // =============================================================================
 
 #[test]
-fn e0139_alias_class_body_specialization() -> Result<(), Box<dyn std::error::Error>> {
+fn alias_class_body_specialization() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, TypeVarTuple, Generic, Unpack
 
@@ -947,7 +949,7 @@ class MyClass:
 }
 
 #[test]
-fn e0139_alias_in_function_body() -> Result<(), Box<dyn std::error::Error>> {
+fn alias_in_function_body() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, TypeVarTuple, Generic, Unpack
 
@@ -1005,7 +1007,7 @@ hash_obj: Hashable = NoHash()
     let diagnostics = run(source)?;
     let e0121 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0121")
+        .filter(|d| d.code.code == "protocols_definition_2")
         .count();
     assert!(
         e0121 >= 1,
@@ -1051,7 +1053,7 @@ class WithClassVar(NamedTuple):
     let diagnostics = run(source)?;
     let e0116 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0116")
+        .filter(|d| d.code.code == "namedtuples_define_class")
         .count();
     assert!(
         e0116 >= 2,
@@ -1096,7 +1098,7 @@ no_method: Mapper[int, str] = Empty()
     let diagnostics = run(source)?;
     let e0137 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0137")
+        .filter(|d| d.code.code == "protocols_generic")
         .count();
     assert!(
         e0137 >= 1,
@@ -1142,7 +1144,7 @@ takes_bool_fn(is_str_guard)
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0112")
+        .filter(|d| d.code.code == "narrowing_typeis")
         .count();
     assert!(
         e0112 >= 1,
@@ -1183,7 +1185,7 @@ def correct(x):
     let diagnostics = run(source)?;
     let e0020 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0020")
+        .filter(|d| d.code.code == "overloads_definitions")
         .count();
     assert!(
         e0020 >= 2,
@@ -1219,7 +1221,7 @@ t4: tuple[int, str, float] = r
     let diagnostics = run(source)?;
     let e0073 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0073")
+        .filter(|d| d.code.code == "namedtuples_type_compat")
         .count();
     assert!(
         e0073 >= 1,
@@ -1258,7 +1260,7 @@ c.Y = "z"
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0054")
+        .filter(|d| d.code.code == "qualifiers_final_annotation_2")
         .count();
     assert!(
         e0054 >= 3,
@@ -1309,11 +1311,11 @@ def make_unbound(cls: type[T]) -> T:
     let diagnostics = run(source)?;
     let e0111_count = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0111")
+        .filter(|d| d.code.code == "constructors_call_init")
         .count();
     let e0144_count = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0144")
+        .filter(|d| d.code.code == "constructors_call_type")
         .count();
     assert!(
         e0111_count + e0144_count >= 2,
@@ -1382,7 +1384,7 @@ def test_all_branches(
     let diagnostics = run(source)?;
     let e0122 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0122")
+        .filter(|d| d.code.code == "callables_protocol")
         .count();
     assert!(
         e0122 >= 5,

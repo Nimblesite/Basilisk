@@ -11,7 +11,7 @@ and the critical "do not drop a `# E`" constraint.
 
 ---
 
-## 1. literals_semantics.py:39 — BSK-E0014 (EASIEST, 1 FP)
+## 1. literals_semantics.py:39 — assignment_compatibility (EASIEST, 1 FP)
 
 Line 39: `x1: Literal[3, b"bar", True, "foo", None] = a` inside
 `def func4(a: L[None, 3] | L[3, "foo", b"bar", True])` where `from typing import Literal as L`.
@@ -30,7 +30,7 @@ none of its `L[...]` uses are `# E` for E0014. Line 33's `# E` is owned by E0129
 
 ---
 
-## 2. typeddicts_readonly_update.py:34 — BSK-E0093 (ONE-LINER, 1 FP)
+## 2. typeddicts_readonly_update.py:34 — typeddicts_operations (ONE-LINER, 1 FP)
 
 Line 34: `a.update(b)  # OK` — `a: A`(`x: ReadOnly[int]`,`y:int`), `b: B`(`x: NotRequired[Never]`,`y: ReadOnly[int]`). Valid per PEP 705 (source `x` is `Never`).
 
@@ -47,7 +47,7 @@ typeddicts_operations.py:47,62 untouched.)
 
 ---
 
-## 3. typeddicts_readonly_consistency.py:34,35,41,78,79 — BSK-E0014 (CAREFUL, 5 FPs)
+## 3. typeddicts_readonly_consistency.py:34,35,41,78,79 — assignment_compatibility (CAREFUL, 5 FPs)
 
 Var-to-var TypedDict assignments (e.g. L34 `v1: A1 = b` where `b: B1`). All valid by
 PEP 705 width / read-only subtyping.
@@ -72,7 +72,7 @@ catch in the suite is extra_items.py:352 (RHS not a TD var) — unaffected.
 
 ---
 
-## 4. aliases_recursive.py:61,62,67,68 — BSK-E0014 (HARDEST, 4 FPs)
+## 4. aliases_recursive.py:61,62,67,68 — assignment_compatibility (HARDEST, 4 FPs)
 
 Recursive **generic** aliases:
 `GenericTypeAlias1 = list["GenericTypeAlias1[T1]" | T1]` etc., used as

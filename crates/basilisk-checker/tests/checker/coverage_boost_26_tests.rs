@@ -7,11 +7,11 @@ use super::common::*;
 // e0082, e0051, e0090, e0069, e0042, e0055, e0060.
 
 // =============================================================================
-// E0103: Tuple index out of bounds
+// Tuple index out of bounds
 // =============================================================================
 
 #[test]
-fn e0103_tuple_index_oob() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_index_oob() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 v: tuple[int, str, list[bool]] = (3, "hi", [True])
 a = v[4]
@@ -22,17 +22,17 @@ d = v[2]
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0103")
+        .filter(|d| d.code.code == "tuples_index")
         .count();
     Ok(())
 }
 
 // =============================================================================
-// E0077: Protocol Self return conformance
+// Protocol Self return conformance
 // =============================================================================
 
 #[test]
-fn e0077_protocol_self_return() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_self_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, Self
 
@@ -46,17 +46,17 @@ class Circle:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0077")
+        .filter(|d| d.code.code == "generics_self_protocols")
         .count();
     Ok(())
 }
 
 // =============================================================================
-// E0068: Literal string enum mismatch
+// Literal string enum mismatch
 // =============================================================================
 
 #[test]
-fn e0068_literal_string_vs_member() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_string_vs_member() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 from typing import Literal
@@ -74,17 +74,17 @@ def bad(c: Literal["Color.RED"]) -> None:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0068")
+        .filter(|d| d.code.code == "literals_parameterizations_2")
         .count();
     Ok(())
 }
 
 // =============================================================================
-// E0065: Float param int attr access
+// Float param int attr access
 // =============================================================================
 
 #[test]
-fn e0065_float_numerator() -> Result<(), Box<dyn std::error::Error>> {
+fn float_numerator() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def f(x: float) -> int:
     return x.numerator
@@ -95,17 +95,17 @@ def g(y: float) -> int:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0065")
+        .filter(|d| d.code.code == "specialtypes_promotions")
         .count();
     Ok(())
 }
 
 // =============================================================================
-// E0106: Protocol used where type[Proto] expected
+// Protocol used where type[Proto] expected
 // =============================================================================
 
 #[test]
-fn e0106_protocol_as_type() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_as_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, Type
 
@@ -120,17 +120,17 @@ takes_type(Proto)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0106")
+        .filter(|d| d.code.code == "protocols_class_objects")
         .count();
     Ok(())
 }
 
 // =============================================================================
-// E0100: Literal augmented assignment
+// Literal augmented assignment
 // =============================================================================
 
 #[test]
-fn e0100_literal_augmented() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_augmented() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -140,17 +140,17 @@ x += 1
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0100")
+        .filter(|d| d.code.code == "literals_semantics")
         .count();
     Ok(())
 }
 
 // =============================================================================
-// E0083: TypeVarTuple unpack required
+// TypeVarTuple unpack required
 // =============================================================================
 
 #[test]
-fn e0083_tvt_no_unpack() -> Result<(), Box<dyn std::error::Error>> {
+fn tvt_no_unpack() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVarTuple
 
@@ -162,13 +162,13 @@ class Bad(Generic[Ts]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0083")
+        .filter(|d| d.code.code == "generics_typevartuple_basic_2")
         .count();
     Ok(())
 }
 
 #[test]
-fn e0083_tvt_correct_unpack() -> Result<(), Box<dyn std::error::Error>> {
+fn tvt_correct_unpack() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVarTuple, Unpack
 
@@ -180,7 +180,7 @@ class Good(Generic[*Ts]):
     let diagnostics = run(source)?;
     let e0083 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0083")
+        .filter(|d| d.code.code == "generics_typevartuple_basic_2")
         .count();
     // Correct usage should not trigger
     let _ = e0083;
@@ -188,11 +188,11 @@ class Good(Generic[*Ts]):
 }
 
 // =============================================================================
-// E0059: Dataclass match_args=False
+// Dataclass match_args=False
 // =============================================================================
 
 #[test]
-fn e0059_match_args_false() -> Result<(), Box<dyn std::error::Error>> {
+fn match_args_false() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -206,17 +206,17 @@ args = NoMatch.__match_args__
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0059")
+        .filter(|d| d.code.code == "dataclasses_match_args")
         .count();
     Ok(())
 }
 
 // =============================================================================
-// E0037: Invalid TypedDict functional syntax
+// Invalid TypedDict functional syntax
 // =============================================================================
 
 #[test]
-fn e0037_typeddict_name_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_name_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -225,13 +225,13 @@ Wrong = TypedDict("Right", {"x": int, "y": str})
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0037")
+        .filter(|d| d.code.code == "typeddicts_alt_syntax")
         .count();
     Ok(())
 }
 
 #[test]
-fn e0037_typeddict_bad_kwarg() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_bad_kwarg() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -240,13 +240,13 @@ TD = TypedDict("TD", {"x": int}, badarg=True)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0037")
+        .filter(|d| d.code.code == "typeddicts_alt_syntax")
         .count();
     Ok(())
 }
 
 #[test]
-fn e0037_typeddict_non_dict_arg() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_non_dict_arg() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -258,7 +258,7 @@ TD = TypedDict("TD", [("x", int)])
 }
 
 #[test]
-fn e0037_typeddict_valid() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_valid() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -271,11 +271,11 @@ Also = TypedDict("Also", {"a": float}, total=False)
 }
 
 // =============================================================================
-// E0026: TypeVar single constraint
+// TypeVar single constraint
 // =============================================================================
 
 #[test]
-fn e0026_single_constraint() -> Result<(), Box<dyn std::error::Error>> {
+fn single_constraint() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -284,13 +284,13 @@ T = TypeVar("T", int)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0026")
+        .filter(|d| d.code.code == "generics_basic")
         .count();
     Ok(())
 }
 
 #[test]
-fn e0026_valid_constraints() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_constraints() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -301,18 +301,18 @@ T3 = TypeVar("T3", int, str, float)
     let diagnostics = run(source)?;
     let e0026 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0026")
+        .filter(|d| d.code.code == "generics_basic")
         .count();
     assert_eq!(e0026, 0, "Valid constraints should not trigger");
     Ok(())
 }
 
 // =============================================================================
-// E0030: Non-default TypeVar after default
+// Non-default TypeVar after default
 // =============================================================================
 
 #[test]
-fn e0030_non_default_after_default() -> Result<(), Box<dyn std::error::Error>> {
+fn non_default_after_default() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -324,13 +324,13 @@ class Bad(Generic[T1, T2]): ...
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0030")
+        .filter(|d| d.code.code == "generics_defaults")
         .count();
     Ok(())
 }
 
 #[test]
-fn e0030_valid_ordering() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_ordering() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -343,18 +343,18 @@ class Good(Generic[T1, T2, T3]): ...
     let diagnostics = run(source)?;
     let e0030 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0030")
+        .filter(|d| d.code.code == "generics_defaults")
         .count();
     let _ = e0030;
     Ok(())
 }
 
 // =============================================================================
-// E0092: Too few type args
+// Too few type args
 // =============================================================================
 
 #[test]
-fn e0092_too_few_type_args() -> Result<(), Box<dyn std::error::Error>> {
+fn too_few_type_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Dict, Tuple
 
@@ -364,17 +364,17 @@ y: Tuple[int] = (1,)
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0092")
+        .filter(|d| d.code.code == "generics_defaults_specialization")
         .count();
     Ok(())
 }
 
 // =============================================================================
-// E0108: Dataclass __slots__
+// Dataclass __slots__
 // =============================================================================
 
 #[test]
-fn e0108_slots_conflict() -> Result<(), Box<dyn std::error::Error>> {
+fn slots_conflict() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -393,17 +393,17 @@ class Child(Base):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0108")
+        .filter(|d| d.code.code == "dataclasses_slots")
         .count();
     Ok(())
 }
 
 // =============================================================================
-// E0136: Callable subtyping
+// Callable subtyping
 // =============================================================================
 
 #[test]
-fn e0136_callable_subtyping() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_subtyping() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -421,11 +421,11 @@ takes_int_to_str(my_func)
 }
 
 // =============================================================================
-// E0125: Instance attribute on class
+// Instance attribute on class
 // =============================================================================
 
 #[test]
-fn e0125_instance_attr_on_class() -> Result<(), Box<dyn std::error::Error>> {
+fn instance_attr_on_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class MyClass:
     class_var: int = 0
@@ -441,11 +441,11 @@ x = MyClass.instance_var
 }
 
 // =============================================================================
-// E0064: NamedTuple invalid arg
+// NamedTuple invalid arg
 // =============================================================================
 
 #[test]
-fn e0064_namedtuple_invalid() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_invalid() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -462,11 +462,11 @@ class Bad(NamedTuple):
 }
 
 // =============================================================================
-// E0038: TypedDict inheritance invalid
+// TypedDict inheritance invalid
 // =============================================================================
 
 #[test]
-fn e0038_typeddict_inherit_non_typeddict() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_inherit_non_typeddict() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -482,11 +482,11 @@ class Bad(TypedDict, Base):
 }
 
 // =============================================================================
-// E0082: TypeVarTuple callable mismatch
+// TypeVarTuple callable mismatch
 // =============================================================================
 
 #[test]
-fn e0082_tvt_callable() -> Result<(), Box<dyn std::error::Error>> {
+fn tvt_callable() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic, Callable, Unpack
 
@@ -501,11 +501,11 @@ def apply(func: Callable[[*Ts], int], *args: *Ts) -> int:
 }
 
 // =============================================================================
-// E0051: Invalid Literal
+// Invalid Literal
 // =============================================================================
 
 #[test]
-fn e0051_invalid_literal_value() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_literal_value() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal
 
@@ -519,11 +519,11 @@ z: Literal[{1: 2}] = {1: 2}
 }
 
 // =============================================================================
-// E0090: Invalid tuple syntax
+// Invalid tuple syntax
 // =============================================================================
 
 #[test]
-fn e0090_invalid_tuple() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_tuple() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Tuple
 
@@ -535,11 +535,11 @@ x: Tuple[int, ..., str] = (1, 2, "a")
 }
 
 // =============================================================================
-// E0069: Dataclass kw_only
+// Dataclass kw_only
 // =============================================================================
 
 #[test]
-fn e0069_kwonly_field() -> Result<(), Box<dyn std::error::Error>> {
+fn kwonly_field() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, field
 
@@ -557,11 +557,11 @@ c = Config(1, y="hello")
 }
 
 // =============================================================================
-// E0042: PEP 695 mixed TypeVar
+// PEP 695 mixed TypeVar
 // =============================================================================
 
 #[test]
-fn e0042_mixed_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn mixed_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -576,11 +576,11 @@ class Mixed[S](list[T]):
 }
 
 // =============================================================================
-// E0055: TypeVar invalid kwargs
+// TypeVar invalid kwargs
 // =============================================================================
 
 #[test]
-fn e0055_typevar_bad_kwargs() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_bad_kwargs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -593,11 +593,11 @@ S = TypeVar("S", bound=int, covariant=True)
 }
 
 // =============================================================================
-// E0060: Dataclass ordering invalid
+// Dataclass ordering invalid
 // =============================================================================
 
 #[test]
-fn e0060_dataclass_ordering() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_ordering() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 

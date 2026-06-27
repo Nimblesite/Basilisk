@@ -74,7 +74,7 @@ pub struct WorkspaceIndex {
     ///
     /// Reused by the incremental single-file analysis path (`didOpen` /
     /// `didChange` / disk reload) so third-party import resolution matches the
-    /// full scan and the editor does not resurrect false `BSK-E0010`.
+    /// full scan and the editor does not resurrect false `imports_unresolved`.
     /// Implements [ANALYSIS-INCR-IMPORTS]. See
     /// docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-INCR-IMPORTS
     pub search_paths: std::sync::RwLock<Option<Arc<crate::import_resolver::ImportSearchPaths>>>,
@@ -179,7 +179,7 @@ impl WorkspaceIndex {
     /// populated the search paths, incremental edits resolve third-party and
     /// workspace imports exactly like the full scan — without this, every
     /// `didOpen` / `didChange` re-marks imports `Unresolved`, resurrecting
-    /// false `BSK-E0010` in the editor for packages the CLI resolves fine.
+    /// false `imports_unresolved` in the editor for packages the CLI resolves fine.
     /// Implements [ANALYSIS-INCR-IMPORTS].
     fn analyse_and_resolve(
         &self,
@@ -516,7 +516,7 @@ impl WorkspaceIndex {
     /// then re-check all files.
     ///
     /// Called when the package layout changes (e.g. a new module is created) so
-    /// that files importing the new module stop reporting `BSK-E0010` without an
+    /// that files importing the new module stop reporting `imports_unresolved` without an
     /// LSP reload. When no search paths are cached yet this degrades to a plain
     /// recheck. Implements [ANALYSIS-INCR-IMPORTS].
     #[must_use]
@@ -893,9 +893,10 @@ mod tests {
 
     #[test]
     fn test_set_open_produces_diagnostics_for_type_error() {
-        let idx = make_index();
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/err.py");
-        // Missing return type annotation — should trigger BSK-E0001.
+        // Missing return type annotation (BSK-E0002) — a house rule, off by
+        // default, so the index opts in. See [CHKARCH-CONFIGURATION-ONLY].
         let src = "def foo(x: int):\n    return x\n";
         let diags = idx.set_open(&uri, src, 1);
         assert!(
@@ -912,11 +913,14 @@ mod tests {
     #[test]
     fn test_set_open_excluded_file_publishes_no_diagnostics() {
         let root = unique_tmp("bsk_excluded_open");
-        // Default config => DEFAULT_EXCLUDES (includes `bundled` / `_vendored`).
+        // House rules enabled (so the vendored file WOULD fire if not excluded),
+        // keeping DEFAULT_EXCLUDES (`bundled` / `_vendored`). This proves the
+        // exclusion — not an off-by-default rule — is what suppresses diagnostics.
+        // See [CHKARCH-CONFIGURATION-ONLY].
         let idx = WorkspaceIndex::new(
             vec![root.clone()],
             AnalysisMode::WholeModule,
-            BasiliskConfig::default(),
+            annotations_on(),
         );
         // A vendored file with blatant type errors that WOULD normally fire.
         let vendored = root.join("bundled").join("debugpy").join("vendored.py");
@@ -933,10 +937,12 @@ mod tests {
     #[test]
     fn test_set_open_non_excluded_file_under_root_still_publishes() {
         let root = unique_tmp("bsk_included_open");
+        // House rules enabled so a non-excluded file has something to publish.
+        // See [CHKARCH-CONFIGURATION-ONLY].
         let idx = WorkspaceIndex::new(
             vec![root.clone()],
             AnalysisMode::WholeModule,
-            BasiliskConfig::default(),
+            annotations_on(),
         );
         let src_file = root.join("src").join("app.py");
         let uri = Url::from_file_path(&src_file).unwrap();
@@ -1319,8 +1325,8 @@ mod tests {
         recheck_all(&idx);
         let diags_before = get_diagnostics(&idx, &uri);
         assert!(
-            has_diag(&diags_before, "BSK-E0010", "flask"),
-            "expected BSK-E0010 for unresolved flask import, got: {diags_before:?}"
+            has_diag(&diags_before, "imports_unresolved", "flask"),
+            "expected imports_unresolved for unresolved flask import, got: {diags_before:?}"
         );
 
         // Now add flask to the lock file and rebuild.
@@ -1337,7 +1343,7 @@ mod tests {
         // NotInstalled. The diagnostic message changes accordingly.
         let diags_after = get_diagnostics(&idx, &uri);
         assert!(
-            !has_diag(&diags_after, "BSK-E0010", "not a dependency"),
+            !has_diag(&diags_after, "imports_unresolved", "not a dependency"),
             "flask should no longer show 'not a dependency' after being added to lock: {diags_after:?}"
         );
 
@@ -1375,8 +1381,8 @@ mod tests {
 
         let diags = get_diagnostics(&idx, &uri);
         assert!(
-            has_diag(&diags, "BSK-E0010", "flask"),
-            "expected BSK-E0010 for flask after removal from lock, got: {diags:?}"
+            has_diag(&diags, "imports_unresolved", "flask"),
+            "expected imports_unresolved for flask after removal from lock, got: {diags:?}"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -1387,7 +1393,7 @@ mod tests {
     // `import configure_agent_backend` from `scripts/configure_agent_backend_test.py`
     // must resolve to the sibling `scripts/configure_agent_backend.py` even when
     // the workspace root is the project root (not `scripts/`). This mirrors
-    // Python's `sys.path[0]` behaviour and prevents BSK-E0010 false positives
+    // Python's `sys.path[0]` behaviour and prevents imports_unresolved false positives
     // for the common scripts-with-tests pattern.
     #[test]
     fn test_sibling_import_in_scripts_dir_does_not_emit_e0010() {
@@ -1425,9 +1431,9 @@ mod tests {
 
         let diags = get_diagnostics(&idx, &uri);
         assert!(
-            !has_diag(&diags, "BSK-E0010", "configure_agent_backend"),
+            !has_diag(&diags, "imports_unresolved", "configure_agent_backend"),
             "sibling-module import in a script directory must resolve via sys.path[0] \
-             fallback; got BSK-E0010: {diags:?}"
+             fallback; got imports_unresolved: {diags:?}"
         );
 
         let _ = std::fs::remove_dir_all(&project_root);
@@ -1516,28 +1522,28 @@ mod tests {
         // tests/helpers.py — imports agent_backend.db.models (via src/).
         let helpers_diags = get_diagnostics(&idx, &helpers_uri);
         assert!(
-            !has_diag(&helpers_diags, "BSK-E0010", "agent_backend"),
-            "BSK-E0010 false positive: src-layout production import from a test \
+            !has_diag(&helpers_diags, "imports_unresolved", "agent_backend"),
+            "imports_unresolved false positive: src-layout production import from a test \
              helper must resolve via src/ on the search path; got: {helpers_diags:?}"
         );
 
         // tests/test_foo.py — imports tests.helpers (via workspace root).
         let test_diags = get_diagnostics(&idx, &test_uri);
         assert!(
-            !has_diag(&test_diags, "BSK-E0010", "tests.helpers"),
-            "BSK-E0010 false positive: `tests.helpers` import must resolve when the \
+            !has_diag(&test_diags, "imports_unresolved", "tests.helpers"),
+            "imports_unresolved false positive: `tests.helpers` import must resolve when the \
              workspace root is on the search path; got: {test_diags:?}"
         );
 
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    // ── Editor edits must resolve third-party imports (no false BSK-E0010) ───
+    // ── Editor edits must resolve third-party imports (no false imports_unresolved) ───
     //
     // Regression: the full workspace scan resolves `import requests` against the
-    // venv site-packages (no BSK-E0010), but opening/editing a file ran parse →
+    // venv site-packages (no imports_unresolved), but opening/editing a file ran parse →
     // syntactic-resolve → check WITHOUT the import search paths, so every
-    // third-party import was re-marked `Unresolved` and BSK-E0010 fired in the
+    // third-party import was re-marked `Unresolved` and imports_unresolved fired in the
     // editor for packages the CLI resolves fine. The diagnostics that
     // `set_open` *publishes* must already reflect import resolution.
     // Implements [ANALYSIS-INCR-IMPORTS].
@@ -1574,20 +1580,22 @@ mod tests {
         });
 
         // Simulate the editor opening the file. The diagnostics it PUBLISHES
-        // (the return value) must not contain BSK-E0010 for `requests`.
+        // (the return value) must not contain imports_unresolved for `requests`.
         let uri = Url::from_file_path(&main_path).unwrap();
         let published = idx.set_open(&uri, "import requests\n", 1);
         assert!(
-            !lsp_codes(&published).iter().any(|c| c == "BSK-E0010"),
+            !lsp_codes(&published)
+                .iter()
+                .any(|c| c == "imports_unresolved"),
             "editor-opened file must resolve `requests` via the cached search \
-             paths; got BSK-E0010 in published diagnostics: {published:?}"
+             paths; got imports_unresolved in published diagnostics: {published:?}"
         );
 
         // The cached checker diagnostics must agree (used by other features).
         let stored = get_diagnostics(&idx, &uri);
         assert!(
-            !has_diag(&stored, "BSK-E0010", "requests"),
-            "stored diagnostics must not carry BSK-E0010 for resolved `requests`: {stored:?}"
+            !has_diag(&stored, "imports_unresolved", "requests"),
+            "stored diagnostics must not carry imports_unresolved for resolved `requests`: {stored:?}"
         );
 
         let _ = std::fs::remove_dir_all(&root);
@@ -1792,14 +1800,29 @@ mod tests {
         WorkspaceIndex::new(vec![], AnalysisMode::WholeModule, config)
     }
 
-    /// Helper: build a `WorkspaceIndex` whose config overrides exactly one rule's severity.
+    /// Config that opts into the annotation house rules (`strict_annotations =
+    /// true`). `BSK-E0001`/`BSK-W0050` are off by default — the default config is
+    /// pure PEP conformance — so tests that exercise those rules (or override
+    /// their severity) enable them here, exactly as a project would. No modes;
+    /// this is configuration. See [CHKARCH-CONFIGURATION-ONLY].
+    fn annotations_on() -> BasiliskConfig {
+        BasiliskConfig {
+            strict_annotations: true,
+            ..Default::default()
+        }
+    }
+
+    /// Helper: build a `WorkspaceIndex` whose config opts into the annotation
+    /// house rules and overrides exactly one rule's severity. A severity override
+    /// only re-grades a rule that is already enabled, so the house rules are
+    /// turned on first. See [CHKARCH-CONFIGURATION-ONLY].
     fn make_index_with_rule_override(
         code: &str,
         severity: basilisk_config::RuleSeverity,
     ) -> WorkspaceIndex {
         let config = BasiliskConfig {
             rules: std::collections::HashMap::from([(code.to_owned(), severity)]),
-            ..Default::default()
+            ..annotations_on()
         };
         make_index_with_config(config)
     }
@@ -1896,19 +1919,22 @@ mod tests {
         }
     }
 
-    // ── Default config: W-codes are warnings, E-codes are errors ────────────
+    // ── House rules enabled: W-codes are warnings, E-codes are errors ───────
+    // These rules are off by default (the default config is pure PEP
+    // conformance); the index opts in so their default severities are
+    // observable. See [CHKARCH-CONFIGURATION-ONLY].
 
     #[test]
-    fn default_config_w0050_is_warning_in_checker_diagnostics() {
-        let idx = make_index();
+    fn house_rules_w0050_is_warning_in_checker_diagnostics() {
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/cfg_w0050_default.py");
         let _ = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
         assert_checker_severity(&idx, &uri, "BSK-W0050", basilisk_checker::Severity::Warning);
     }
 
     #[test]
-    fn default_config_w0050_lsp_severity_is_warning() {
-        let idx = make_index();
+    fn house_rules_w0050_lsp_severity_is_warning() {
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/cfg_w0050_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
         assert_lsp_severity(
@@ -1919,16 +1945,16 @@ mod tests {
     }
 
     #[test]
-    fn default_config_e0001_is_error_in_checker_diagnostics() {
-        let idx = make_index();
+    fn house_rules_e0001_is_error_in_checker_diagnostics() {
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/cfg_e0001_default.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
         assert_checker_severity(&idx, &uri, "BSK-E0001", basilisk_checker::Severity::Error);
     }
 
     #[test]
-    fn default_config_e0001_lsp_severity_is_error() {
-        let idx = make_index();
+    fn house_rules_e0001_lsp_severity_is_error() {
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/cfg_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
         assert_lsp_severity(
@@ -2015,7 +2041,7 @@ mod tests {
         );
     }
 
-    // ── W0050 severity override: promote warning to error ───────────────────
+    // ── BSK-W0050 severity override: promote warning to error ───────────────────
 
     #[test]
     fn config_override_promotes_w0050_to_error_in_lsp() {
@@ -2033,7 +2059,7 @@ mod tests {
         );
     }
 
-    // ── W0050 disabled via config ───────────────────────────────────────────
+    // ── BSK-W0050 disabled via config ───────────────────────────────────────────
 
     #[test]
     fn config_override_disables_w0050() {
@@ -2117,7 +2143,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             !codes.contains(&"BSK-E0001".to_owned()),
-            "set_open must apply checker_config — disabled E0001 should be absent"
+            "set_open must apply checker_config — disabled BSK-E0001 should be absent"
         );
     }
 
@@ -2153,7 +2179,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             !codes.contains(&"BSK-E0001".to_owned()),
-            "reload_from_disk must apply checker_config — disabled E0001 should be absent"
+            "reload_from_disk must apply checker_config — disabled BSK-E0001 should be absent"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -2162,7 +2188,7 @@ mod tests {
     #[test]
     fn reload_root_configs_applies_changed_python_version() {
         // [CHKARCH-VERSION-TARGET] Editing `[tool.basilisk] python-version` must
-        // make version-aware rules (the BSK-E0155 PEP 695 gate) update without an
+        // make version-aware rules (the version_target_syntax PEP 695 gate) update without an
         // LSP restart: reload_root_configs re-reads the target, and the next
         // recheck reflects it.
         let dir = unique_tmp("bsk_cfg_pyver");
@@ -2189,14 +2215,14 @@ mod tests {
             idx.recheck_all_files()
                 .into_iter()
                 .find(|(u, _)| *u == uri)
-                .is_some_and(|(_, d)| lsp_codes(&d).contains(&"BSK-E0155".to_owned()))
+                .is_some_and(|(_, d)| lsp_codes(&d).contains(&"version_target_syntax".to_owned()))
         };
 
         // 3.11 target: PEP 695 `type` syntax is gated.
         let initial = idx.set_open(&uri, src, 1);
         assert!(
-            lsp_codes(&initial).contains(&"BSK-E0155".to_owned()),
-            "PEP 695 on a 3.11 target must fire BSK-E0155"
+            lsp_codes(&initial).contains(&"version_target_syntax".to_owned()),
+            "PEP 695 on a 3.11 target must fire version_target_syntax"
         );
 
         // Switch the configured target to 3.12 on disk.
@@ -2236,7 +2262,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             !codes.contains(&"BSK-E0001".to_owned()),
-            "set_closed must apply checker_config — disabled E0001 should be absent"
+            "set_closed must apply checker_config — disabled BSK-E0001 should be absent"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -2346,7 +2372,7 @@ mod tests {
             let codes = lsp_codes(lsp_diags);
             assert!(
                 !codes.contains(&"BSK-E0001".to_owned()),
-                "scan must apply checker_config — disabled E0001 should be absent, got {codes:?}"
+                "scan must apply checker_config — disabled BSK-E0001 should be absent, got {codes:?}"
             );
         }
 
@@ -2362,7 +2388,7 @@ mod tests {
         std::fs::create_dir_all(&root_a).unwrap();
         std::fs::create_dir_all(&root_b).unwrap();
 
-        // Root A: disable E0001 via pyproject.toml
+        // Root A: disable BSK-E0001 via pyproject.toml
         std::fs::write(
             root_a.join("pyproject.toml"),
             "[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
@@ -2379,20 +2405,20 @@ mod tests {
             BasiliskConfig::default(),
         );
 
-        // Check that root A's config disables E0001
+        // Check that root A's config disables BSK-E0001
         let cfg_a = idx.config_for_file(&root_a.join("a.py"));
         assert_eq!(
             cfg_a.rule_severity("BSK-E0001"),
             Some(basilisk_config::RuleSeverity::Disabled),
-            "root A should have E0001 disabled"
+            "root A should have BSK-E0001 disabled"
         );
 
-        // Check that root B uses default config (E0001 not overridden)
+        // Check that root B uses default config (BSK-E0001 not overridden)
         let cfg_b = idx.config_for_file(&root_b.join("b.py"));
         assert_eq!(
             cfg_b.rule_severity("BSK-E0001"),
             None,
-            "root B should have default config (no E0001 override)"
+            "root B should have default config (no BSK-E0001 override)"
         );
 
         let _ = std::fs::remove_dir_all(&root_a);
@@ -2435,23 +2461,23 @@ mod tests {
                     basilisk_config::RuleSeverity::Disabled,
                 ),
             ]),
-            ..Default::default()
+            ..annotations_on()
         };
         let idx = make_index_with_config(config);
 
-        // File with both E0001 and W0050 triggers.
+        // File with both BSK-E0001 and BSK-W0050 triggers.
         let uri = make_uri("/tmp/cfg_multi.py");
         let src = "x: int = 42\n\ndef greet(name):\n    return name\n";
         let lsp_diags = idx.set_open(&uri, src, 1);
         let codes = lsp_codes(&lsp_diags);
 
-        // W0050 should be gone (disabled).
+        // BSK-W0050 should be gone (disabled).
         assert!(
             !codes.contains(&"BSK-W0050".to_owned()),
             "disabled BSK-W0050 must not appear, got {codes:?}"
         );
 
-        // E0001 should be present but demoted to Warning.
+        // BSK-E0001 should be present but demoted to Warning.
         assert!(
             codes.contains(&"BSK-E0001".to_owned()),
             "demoted BSK-E0001 should still appear, got {codes:?}"
@@ -2463,7 +2489,7 @@ mod tests {
                     assert_eq!(
                         d.severity,
                         Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-                        "demoted E0001 must be WARNING in combined config"
+                        "demoted BSK-E0001 must be WARNING in combined config"
                     );
                 }
             }
@@ -2472,7 +2498,7 @@ mod tests {
         // Also verify the raw checker diagnostics match.
         let diags = get_diagnostics(&idx, &uri);
         let w0050_count = count_code(&diags, "BSK-W0050");
-        assert_eq!(w0050_count, 0, "W0050 disabled in checker too");
+        assert_eq!(w0050_count, 0, "BSK-W0050 disabled in checker too");
         for d in diags.iter().filter(|d| d.code.code == "BSK-E0001") {
             assert_eq!(d.severity, basilisk_checker::Severity::Warning);
         }
@@ -2545,14 +2571,14 @@ mod tests {
         let dir = unique_tmp("bsk_cfg_pyproject");
         std::fs::create_dir_all(&dir).unwrap();
 
-        // Write a pyproject.toml that disables E0001.
+        // Write a pyproject.toml that disables BSK-E0001.
         std::fs::write(
             dir.join("pyproject.toml"),
             "[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
         )
         .unwrap();
 
-        // Write a Python file that triggers E0001.
+        // Write a Python file that triggers BSK-E0001.
         std::fs::write(dir.join("check_me.py"), SRC_MISSING_ANNOTATION).unwrap();
 
         // Load config the same way the LSP init does.
@@ -2573,7 +2599,7 @@ mod tests {
             let codes = lsp_codes(lsp_diags);
             assert!(
                 !codes.contains(&"BSK-E0001".to_owned()),
-                "pyproject.toml disabled E0001 must not appear in scan results"
+                "pyproject.toml disabled BSK-E0001 must not appear in scan results"
             );
         }
 
@@ -2583,7 +2609,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             !codes.contains(&"BSK-E0001".to_owned()),
-            "pyproject.toml disabled E0001 must not appear via set_open either"
+            "pyproject.toml disabled BSK-E0001 must not appear via set_open either"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -2594,9 +2620,12 @@ mod tests {
         let dir = unique_tmp("bsk_cfg_pyproject_demote");
         std::fs::create_dir_all(&dir).unwrap();
 
+        // A severity override only re-grades an already-enabled rule; BSK-E0001
+        // is off by default, so the project opts in AND demotes it.
+        // See [CHKARCH-CONFIGURATION-ONLY].
         std::fs::write(
             dir.join("pyproject.toml"),
-            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"warning\"\n",
+            "[tool.basilisk]\nstrict-annotations = true\n\n[tool.basilisk.rules]\n\"BSK-E0001\" = \"warning\"\n",
         )
         .unwrap();
         std::fs::write(dir.join("demote_me.py"), SRC_MISSING_ANNOTATION).unwrap();
@@ -2610,7 +2639,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             codes.contains(&"BSK-E0001".to_owned()),
-            "demoted E0001 should still appear"
+            "demoted BSK-E0001 should still appear"
         );
 
         for d in &lsp_diags {
@@ -2619,7 +2648,7 @@ mod tests {
                     assert_eq!(
                         d.severity,
                         Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-                        "pyproject.toml demoted E0001 must be WARNING in LSP"
+                        "pyproject.toml demoted BSK-E0001 must be WARNING in LSP"
                     );
                 }
             }
@@ -2631,22 +2660,23 @@ mod tests {
             assert_eq!(
                 d.severity,
                 basilisk_checker::Severity::Warning,
-                "pyproject.toml demoted E0001 must be Warning in checker"
+                "pyproject.toml demoted BSK-E0001 must be Warning in checker"
             );
         }
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    // ── Default config vs custom config produce different results ────────────
+    // ── Default severity vs override produce different results ───────────────
 
     #[test]
-    fn default_and_custom_configs_produce_different_severity() {
-        // Prove the fix: same source, different configs, different severities.
+    fn default_severity_and_override_produce_different_severity() {
+        // Prove the fix: same source, two configs that both enable the house
+        // rule, different severities. See [CHKARCH-CONFIGURATION-ONLY].
         let uri_path = "/tmp/cfg_diff.py";
 
-        // Default config: E0001 is Error.
-        let default_idx = make_index();
+        // House rules enabled, BSK-E0001 at its default severity: Error.
+        let default_idx = make_index_with_config(annotations_on());
         let default_uri = make_uri(uri_path);
         let default_diags = default_idx.set_open(&default_uri, SRC_MISSING_ANNOTATION, 1);
         let default_severities: Vec<_> = default_diags
@@ -2657,7 +2687,7 @@ mod tests {
             .filter_map(|d| d.severity)
             .collect();
 
-        // Custom config: E0001 demoted to Warning.
+        // Custom config: BSK-E0001 demoted to Warning.
         let custom_idx =
             make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
         let custom_uri = make_uri(uri_path);
@@ -2670,28 +2700,31 @@ mod tests {
             .filter_map(|d| d.severity)
             .collect();
 
-        // Both should have E0001 diagnostics.
-        assert!(!default_severities.is_empty(), "default must have E0001");
-        assert!(!custom_severities.is_empty(), "custom must have E0001");
+        // Both should have BSK-E0001 diagnostics.
+        assert!(
+            !default_severities.is_empty(),
+            "default must have BSK-E0001"
+        );
+        assert!(!custom_severities.is_empty(), "custom must have BSK-E0001");
 
         // Default = ERROR, Custom = WARNING.
         assert!(
             default_severities
                 .iter()
                 .all(|s| *s == tower_lsp::lsp_types::DiagnosticSeverity::ERROR),
-            "default config E0001 must be ERROR"
+            "default config BSK-E0001 must be ERROR"
         );
         assert!(
             custom_severities
                 .iter()
                 .all(|s| *s == tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-            "custom config E0001 must be WARNING"
+            "custom config BSK-E0001 must be WARNING"
         );
 
         // They must differ — this is the core assertion proving the fix.
         assert_ne!(
             default_severities, custom_severities,
-            "default and custom configs MUST produce different LSP severities for E0001"
+            "default and custom configs MUST produce different LSP severities for BSK-E0001"
         );
     }
 }

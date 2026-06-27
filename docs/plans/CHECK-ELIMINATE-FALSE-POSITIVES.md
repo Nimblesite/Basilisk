@@ -371,7 +371,7 @@ After each step:
 
 ---
 
-## SHOWSTOPPER: BSK-E0149 treats docstring text as `class` / `def` definitions
+## SHOWSTOPPER: generics_syntax_scoping treats docstring text as `class` / `def` definitions
 
 **Reported**: 2026-05-23 — found in the wild on `StoryTowns/scripts/provision_nimblesite_agent.py`.
 **Severity**: SHOWSTOPPER. Hard errors on perfectly valid Python text in module docstrings. Any docstring containing a bracketed token after a line that happens to begin with the word `class` (e.g. our own `[SPEC-ID]` cross-references — see CLAUDE.md "ALL CODE **MUST** REFER TO A SPEC-ID") will misfire.

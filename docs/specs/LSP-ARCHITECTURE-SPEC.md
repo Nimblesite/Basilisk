@@ -438,7 +438,7 @@ Validates symbol is renameable, returns `WorkspaceEdit` with `TextEdit` for each
 | (any) | Suppress with `# type: ignore` | Append comment to line |
 | (source) | Organize imports | Delegate to `ruff check --select I --fix` |
 
-| BSK-E0010 (uv) | Add dependency | `uv add <package>` via `basilisk.uv.add` command |
+| imports_unresolved (uv) | Add dependency | `uv add <package>` via `basilisk.uv.add` command |
 | BSK-E0152 (uv) | Install type stubs | `uv add --dev types-<package>` via `basilisk.uv.addDev` command |
 | BSK-W0011 (uv) | Add dependency | `uv add <package>` — transitive dep used directly |
 | BSK-W0013 (uv) | Sync environment | `uv sync` via `basilisk.uv.sync` command |

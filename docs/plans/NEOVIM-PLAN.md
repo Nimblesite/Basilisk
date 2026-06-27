@@ -222,8 +222,8 @@ Phases 1–11 mostly COMPLETE. 189 tests (80 unit + 103 real LSP e2e + 6 screens
       (see `docs/plans/NEOVIM-RELEASE-PLAN.md`; `[HUMAN]` gap: grant the existing `BREW_SCOOP_PAT`
       write access to the `Nimblesite/basilisk.nvim` mirror)
 - [ ] Submit `lsp/basilisk.lua` PR to nvim-lspconfig for basic LSP support
-- [ ] Version check — warn user if basilisk binary is outdated
-- [ ] Binary auto-download fallback (GitHub releases)
+
+> Version check (warn on outdated binary) and binary auto-download are tracked once, under Phase 11 "Missing Features".
 
 ### Phase 10: Automated UI Testing
 

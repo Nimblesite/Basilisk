@@ -7,7 +7,7 @@ use super::common::*;
 // --- Complex e0115 scenarios to hit visit_stmt_for_usage branches ---
 
 #[test]
-fn e0115_deprecated_all_stmt_types() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_all_stmt_types() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -93,7 +93,7 @@ fn = lambda: old_func()
 }
 
 #[test]
-fn e0115_deprecated_class_attribute_access() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_class_attribute_access() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -115,7 +115,7 @@ x = lib.old_compute()
 }
 
 #[test]
-fn e0115_deprecated_operator_usage() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_operator_usage() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -143,7 +143,7 @@ e = a * b
 }
 
 #[test]
-fn e0115_deprecated_import_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_import_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -169,7 +169,7 @@ class Config:
 // --- Complex e0137 scenarios ---
 
 #[test]
-fn e0137_generic_protocol_full_check() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_protocol_full_check() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, TypeVar, Generic
 
@@ -195,7 +195,7 @@ t2: Transformer[str, int] = StrToInt()
 }
 
 #[test]
-fn e0137_protocol_with_multiple_methods_and_attrs() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_multiple_methods_and_attrs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, TypeVar
 
@@ -222,7 +222,7 @@ repo: Repository[str] = UserRepo()
 // --- Complex e0140 scenarios ---
 
 #[test]
-fn e0140_callable_complex_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_complex_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable, Protocol
 
@@ -251,7 +251,7 @@ p2: Callable[[str, int, float], bool] = three_arg
 }
 
 #[test]
-fn e0140_protocol_with_class_attrs() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_class_attrs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -270,7 +270,7 @@ c: Configurable = simple_func
 }
 
 #[test]
-fn e0140_callable_annotated_in_class() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_annotated_in_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -295,7 +295,7 @@ es.on_key = key_handler
 // --- Complex e0107 scenarios ---
 
 #[test]
-fn e0107_variance_with_type_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn variance_with_type_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic, TypeAlias
 
@@ -317,7 +317,7 @@ CoAlias: TypeAlias = Container[T_co]
 }
 
 #[test]
-fn e0107_multiple_base_classes() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_base_classes() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic
 
@@ -341,7 +341,7 @@ class Combined(First[T_co], Second[T_co]):
 // --- Complex e0036 scenarios ---
 
 #[test]
-fn e0036_classvar_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar, Optional, List, Dict
 
@@ -368,7 +368,7 @@ class Derived(MyClass):
 }
 
 #[test]
-fn e0036_classvar_invalid_locations() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_invalid_locations() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar
 
@@ -400,7 +400,7 @@ class Container:
 // --- Complex e0149 scenarios ---
 
 #[test]
-fn e0149_complex_nesting() -> Result<(), Box<dyn std::error::Error>> {
+fn complex_nesting() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic, Callable
 
@@ -429,7 +429,7 @@ def compose(f: Callable[[T], U], g: Callable[[U], V]) -> Callable[[T], V]:
 // --- Complex e0079 scenarios ---
 
 #[test]
-fn e0079_protocol_with_complex_types() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_complex_types() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, Callable, List, Dict
 
@@ -451,7 +451,7 @@ src: DataSource = os
 // --- Complex e0144 scenarios ---
 
 #[test]
-fn e0144_type_call_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn type_call_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 # Various type() call patterns
 x = type(42)
@@ -481,7 +481,7 @@ Multi = type("Multi", (Base, Mixin), {})
 // --- Complex e0120 scenarios ---
 
 #[test]
-fn e0120_generator_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator, Iterator, Iterable, AsyncGenerator, AsyncIterator
 
@@ -529,7 +529,7 @@ def no_ann_gen():
 // --- Complex e0138 scenarios ---
 
 #[test]
-fn e0138_comprehensive_transform() -> Result<(), Box<dyn std::error::Error>> {
+fn comprehensive_transform() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import dataclass_transform
 
@@ -568,7 +568,7 @@ class DerivedModel(BaseModel):
 // --- Complex e0131 scenarios ---
 
 #[test]
-fn e0131_generator_yield_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_yield_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator, Iterator, AsyncGenerator
 
@@ -602,7 +602,7 @@ def gen_with_send() -> Generator[int, str, bool]:
 // --- Complex e0014 scenarios ---
 
 #[test]
-fn e0014_comprehensive_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn comprehensive_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal, Optional
 
@@ -636,7 +636,7 @@ o: Literal[True] = False
 }
 
 #[test]
-fn e0014_local_var_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn local_var_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(param_int: int, param_str: str, param_float: float) -> None:
     x: str = param_int
@@ -653,7 +653,7 @@ def func2(data: list) -> None:
 // --- Complex e0130 scenarios ---
 
 #[test]
-fn e0130_typevar_scoping_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_scoping_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic, Callable
 
@@ -684,7 +684,7 @@ def curry(f: Callable[[T, U], V]) -> Callable[[T], Callable[[U], V]]: ...
 // --- Complex e0111 scenarios ---
 
 #[test]
-fn e0111_constructor_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn constructor_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Simple:
     def __init__(self, x: int) -> None:
@@ -730,7 +730,7 @@ p1 = WithPosOnly(1, "hello")
 // --- Complex e0047 scenarios ---
 
 #[test]
-fn e0047_comprehensive_invalid_annotations() -> Result<(), Box<dyn std::error::Error>> {
+fn comprehensive_invalid_annotations() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import types
 
@@ -767,7 +767,7 @@ def bad4(x: var1) -> None:
 // --- Complex e0122 scenarios ---
 
 #[test]
-fn e0122_callable_arity_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_arity_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -800,7 +800,7 @@ takes_nullary(one_arg)  # extra param
 // --- Complex e0121 scenarios ---
 
 #[test]
-fn e0121_protocol_conformance_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_conformance_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -844,7 +844,7 @@ process_sizeable([1, 2, 3])
 // --- Complex e0095 scenarios ---
 
 #[test]
-fn e0095_initvar_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass, InitVar, field
 
@@ -877,7 +877,7 @@ d = DatabaseConnection('localhost', 5432, 'secret', True)
 // --- Complex e0143 scenarios ---
 
 #[test]
-fn e0143_namedtuple_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -914,7 +914,7 @@ c4 = Config(42)
 // --- Complex e0126 scenarios ---
 
 #[test]
-fn e0126_literal_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal
 
@@ -944,7 +944,7 @@ status: Literal[0, 1, -1] = 0
 // --- Complex e0139 scenarios ---
 
 #[test]
-fn e0139_typevartuple_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, TypeVarTuple, Generic, Unpack
 

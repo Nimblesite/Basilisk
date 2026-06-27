@@ -736,7 +736,7 @@ Full native support via TreeView API. This is the reference implementation.
 
 ### Zed {#EXTACT-EDITORS-ZED}
 
-Zed does **not** currently support custom sidebar panels (open issue #21208). Until it does, the same data is surfaced through available Zed mechanisms:
+Zed does **not** currently support custom sidebar panels ([zed-industries/zed#21208](https://github.com/zed-industries/zed/issues/21208)). Until it does, the same data is surfaced through available Zed mechanisms:
 
 **Module Explorer alternative — slash commands**:
 

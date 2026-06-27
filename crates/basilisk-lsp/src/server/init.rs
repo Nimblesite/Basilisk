@@ -498,11 +498,11 @@ fn scan_resolve_and_check_with_roots(
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
     // Cache the search paths so incremental single-file re-checks (didOpen /
     // didChange) resolve third-party imports identically to this scan, instead
-    // of resurrecting false BSK-E0010. Implements [ANALYSIS-INCR-IMPORTS].
+    // of resurrecting false imports_unresolved. Implements [ANALYSIS-INCR-IMPORTS].
     index.set_search_paths(search_paths);
 
     // Re-check all files now that imports are resolved. The initial scan()
-    // generates diagnostics before workspace members are known, so BSK-E0010
+    // generates diagnostics before workspace members are known, so imports_unresolved
     // fires for imports that are actually resolvable via workspace members.
     let diagnostics = if matches!(index.mode, AnalysisMode::CrossModule) {
         crate::cross_module::populate_cross_module_symbols(index);

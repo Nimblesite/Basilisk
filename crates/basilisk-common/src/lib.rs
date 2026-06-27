@@ -53,7 +53,7 @@ pub mod commands {
     /// published typeshed stub exists. Implements [STUBRES-CREATE-LOCAL].
     pub const STUBS_CREATE_LOCAL: &str = "basilisk.stubs.createLocal";
     /// Append a missing member (method or attribute) to a local stub
-    /// (args: stub path, snippet line). Quick fix for BSK-E0154. Implements
+    /// (args: stub path, snippet line). Quick fix for `imports_module_attribute`. Implements
     /// [STUBRES-ADD-MEMBER].
     pub const STUBS_ADD_MEMBER: &str = "basilisk.stubs.addMember";
     /// Discover tests in the workspace or a specific file.

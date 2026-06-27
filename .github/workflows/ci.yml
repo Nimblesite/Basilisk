@@ -1,4 +1,10 @@
 # agent-pmo:0b21609
+
+# ⚠️ NEVER STORE CI ARTIFACTS — they cost money even on this PUBLIC repo (compute on standard runners is free; **storage is billed**). 
+# The ONLY artifacts we keep are the **GitHub Releases** (Release assets are free + unlimited). NO `actions/upload-artifact` for coverage HTML, mutation reports, logs, screenshots, or any diagnostic. 
+# The sole permitted upload is a transient in-run cross-job hand-off, and it MUST set `retention-days: 1` (the floor) so it is consumed and deleted within the same run. 
+# Set retention to 1 day wherever you see a deviation. See [GITHUB-NO-ARTIFACTS]. ⚠️
+
 name: CI
 
 on:

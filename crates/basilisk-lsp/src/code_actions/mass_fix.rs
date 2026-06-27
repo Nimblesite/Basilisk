@@ -27,7 +27,7 @@ pub const ALL_FIXABLE_RULES: &[&str] = &[
 ///
 /// BSK-E0003 is intentionally excluded: its fix (adding `: Any`) conflicts
 /// with BSK-W0050's fix (removing redundant annotations), producing a
-/// non-idempotent cycle. Users who want E0003 auto-fixed must pass it
+/// non-idempotent cycle. Users who want BSK-E0003 auto-fixed must pass it
 /// explicitly via `--rules BSK-E0003` or use `--unsafe`.
 pub const SAFE_FIXABLE_RULES: &[&str] = &["BSK-E0001", "BSK-E0002", "BSK-E0005", "BSK-W0050"];
 
@@ -328,7 +328,7 @@ mod tests {
         );
         assert!(action.title.contains("2 fixes"), "title: {}", action.title);
         assert_eq!(action.kind, Some(CodeActionKind::QUICKFIX));
-        // Verify only W0050 diagnostics are attached.
+        // Verify only BSK-W0050 diagnostics are attached.
         let attached = action.diagnostics.unwrap();
         assert!(attached.iter().all(|d| matches!(
             &d.code,
@@ -388,11 +388,11 @@ mod tests {
             make_diag("BSK-W0050", 1, 0, 1),
             make_diag("BSK-E0001", 1, 5, 10), // different rule
         ];
-        // Only allow W0050 — E0001 should be excluded.
+        // Only allow BSK-W0050 — BSK-E0001 should be excluded.
         let action = fix_filtered_in_file(&uri, &diags, source, &["BSK-W0050"]);
-        assert!(action.is_some(), "should produce a fix for W0050");
+        assert!(action.is_some(), "should produce a fix for BSK-W0050");
         let action = action.unwrap();
-        // All attached diagnostics must be W0050.
+        // All attached diagnostics must be BSK-W0050.
         let attached = action.diagnostics.unwrap();
         assert!(attached.iter().all(|d| matches!(
             &d.code,
@@ -405,7 +405,7 @@ mod tests {
         let uri = Url::parse("file:///test.py").unwrap();
         let source = "x: int = 42\n";
         let diags = vec![make_diag("BSK-W0050", 0, 0, 1)];
-        // Only allow E0001 — W0050 should be filtered out.
+        // Only allow BSK-E0001 — BSK-W0050 should be filtered out.
         let action = fix_filtered_in_file(&uri, &diags, source, &["BSK-E0001"]);
         assert!(
             action.is_none(),

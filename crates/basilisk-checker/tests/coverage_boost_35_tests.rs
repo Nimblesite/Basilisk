@@ -11,10 +11,10 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
     Ok(check(&resolved))
 }
 
-// ── E0072: Overload call mismatch ──
+// ── Overload call mismatch ──
 
 #[test]
-fn e0072_overload_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -36,10 +36,10 @@ result5 = process(None)
     Ok(())
 }
 
-// ── E0054: Final annotation violations ──
+// ── Final annotation violations ──
 
 #[test]
-fn e0054_final_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn final_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -65,10 +65,10 @@ def func(x: Final[int]) -> None:
     Ok(())
 }
 
-// ── E0126: Literal string assignment ──
+// ── Literal string assignment ──
 
 #[test]
-fn e0126_literal_string() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_string() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal
 
@@ -89,10 +89,10 @@ func("c")
     Ok(())
 }
 
-// ── E0129: Literal value incompatible ──
+// ── Literal value incompatible ──
 
 #[test]
-fn e0129_literal_value_compat() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_value_compat() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal
 
@@ -115,10 +115,10 @@ def func4(a: Literal["hello"]):
     Ok(())
 }
 
-// ── E0139: TypeVarTuple specialization ──
+// ── TypeVarTuple specialization ──
 
 #[test]
-fn e0139_typevartuple_specialization() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_specialization() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic, TypeVar, Unpack
 
@@ -144,10 +144,10 @@ w: Shape[int, str, float] = Shape()
     Ok(())
 }
 
-// ── E0074: __new__ constructor mismatch ──
+// ── __new__ constructor mismatch ──
 
 #[test]
-fn e0074_new_constructor_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn new_constructor_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Singleton:
     _instance = None
@@ -165,10 +165,10 @@ s3 = Singleton()
     Ok(())
 }
 
-// ── E0075: Self type attribute incompatible ──
+// ── Self type attribute incompatible ──
 
 #[test]
-fn e0075_self_type_attr() -> Result<(), Box<dyn std::error::Error>> {
+fn self_type_attr() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Self
 
@@ -191,10 +191,10 @@ class SubBuilder(Builder):
     Ok(())
 }
 
-// ── E0076: Overload union expansion failure ──
+// ── Overload union expansion failure ──
 
 #[test]
-fn e0076_overload_union_expansion() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_union_expansion() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload, Union
 
@@ -215,10 +215,10 @@ result = convert(val)
     Ok(())
 }
 
-// ── E0077: Protocol Self violation ──
+// ── Protocol Self violation ──
 
 #[test]
-fn e0077_protocol_self_violation() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_self_violation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, Self
 
@@ -241,10 +241,10 @@ y: Clonable = Bad()
     Ok(())
 }
 
-// ── E0063: Non-hashable dataclass ──
+// ── Non-hashable dataclass ──
 
 #[test]
-fn e0063_non_hashable_dataclass() -> Result<(), Box<dyn std::error::Error>> {
+fn non_hashable_dataclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -274,10 +274,10 @@ s2 = {i}
     Ok(())
 }
 
-// ── E0064: Invalid NamedTuple call ──
+// ── Invalid NamedTuple call ──
 
 #[test]
-fn e0064_invalid_namedtuple_call() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_namedtuple_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -290,10 +290,10 @@ Bad2 = NamedTuple("Bad2", x=int, y=str)
     Ok(())
 }
 
-// ── E0050: NewType violations ──
+// ── NewType violations ──
 
 #[test]
-fn e0050_newtype_violations() -> Result<(), Box<dyn std::error::Error>> {
+fn newtype_violations() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NewType
 
@@ -314,10 +314,10 @@ bad2: Email = "test@test.com"
     Ok(())
 }
 
-// ── E0051: NewType base type ──
+// ── NewType base type ──
 
 #[test]
-fn e0051_newtype_base() -> Result<(), Box<dyn std::error::Error>> {
+fn newtype_base() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NewType
 
@@ -335,10 +335,10 @@ Bad2 = NewType("Bad2", None)
     Ok(())
 }
 
-// ── E0041: Type annotation assignment mismatch ──
+// ── Type annotation assignment mismatch ──
 
 #[test]
-fn e0041_type_annotation_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn type_annotation_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Optional, Union, ClassVar
 
@@ -357,10 +357,10 @@ class MyClass:
     Ok(())
 }
 
-// ── E0059: match_args=False access ──
+// ── match_args=False access ──
 
 #[test]
-fn e0059_match_args_false() -> Result<(), Box<dyn std::error::Error>> {
+fn match_args_false() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -382,10 +382,10 @@ WithMatch.__match_args__
     Ok(())
 }
 
-// ── E0060: Cross-type dataclass ordering ──
+// ── Cross-type dataclass ordering ──
 
 #[test]
-fn e0060_cross_type_comparison() -> Result<(), Box<dyn std::error::Error>> {
+fn cross_type_comparison() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -411,10 +411,10 @@ result2 = a > b
     Ok(())
 }
 
-// ── E0065: Float param int attr access ──
+// ── Float param int attr access ──
 
 #[test]
-fn e0065_float_param_int_attr() -> Result<(), Box<dyn std::error::Error>> {
+fn float_param_int_attr() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(x: float) -> None:
     y = x.numerator
@@ -427,10 +427,10 @@ def func(x: float) -> None:
     Ok(())
 }
 
-// ── E0068: Literal string enum mismatch ──
+// ── Literal string enum mismatch ──
 
 #[test]
-fn e0068_literal_string_enum() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_string_enum() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 from typing import Literal
@@ -449,10 +449,10 @@ z: Literal["red"] = "red"
     Ok(())
 }
 
-// ── E0069: Dataclass kw_only violation ──
+// ── Dataclass kw_only violation ──
 
 #[test]
-fn e0069_kw_only() -> Result<(), Box<dyn std::error::Error>> {
+fn kw_only() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -471,10 +471,10 @@ c3 = Config("test", value=42)
     Ok(())
 }
 
-// ── E0083: TypeVarTuple unpack required ──
+// ── TypeVarTuple unpack required ──
 
 #[test]
-fn e0083_typevartuple_unpack() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_unpack() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic, Unpack
 
@@ -492,10 +492,10 @@ class BadArray(Generic[Ts]):
     Ok(())
 }
 
-// ── E0082: TypeVarTuple callable mismatch ──
+// ── TypeVarTuple callable mismatch ──
 
 #[test]
-fn e0082_typevartuple_callable() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_callable() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Callable, Unpack
 
@@ -514,10 +514,10 @@ result = apply(add, 1, 2)
     Ok(())
 }
 
-// ── E0081: TypeVarTuple unpack violation ──
+// ── TypeVarTuple unpack violation ──
 
 #[test]
-fn e0081_typevartuple_unpack_violation() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_unpack_violation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic, Unpack, TypeVar
 
@@ -535,10 +535,10 @@ class Bad1(Generic[T, *Ts]):
     Ok(())
 }
 
-// ── E0086: Multiple TypeVarTuples ──
+// ── Multiple TypeVarTuples ──
 
 #[test]
-fn e0086_multiple_typevartuple() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_typevartuple() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic
 
@@ -553,10 +553,10 @@ class Bad(Generic[*Ts1, *Ts2]):
     Ok(())
 }
 
-// ── E0094: Self invalid location ──
+// ── Self invalid location ──
 
 #[test]
-fn e0094_self_invalid_location() -> Result<(), Box<dyn std::error::Error>> {
+fn self_invalid_location() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 
@@ -576,10 +576,10 @@ class MyClass:
     Ok(())
 }
 
-// ── E0100: Literal augmented assign ──
+// ── Literal augmented assign ──
 
 #[test]
-fn e0100_literal_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal
 
@@ -596,10 +596,10 @@ def func2(x: Literal["hello"]) -> None:
     Ok(())
 }
 
-// ── E0103: Tuple index out of bounds ──
+// ── Tuple index out of bounds ──
 
 #[test]
-fn e0103_tuple_index() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_index() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Tuple
 
@@ -616,10 +616,10 @@ def func(t: tuple[int, str, float]) -> None:
     Ok(())
 }
 
-// ── E0104: Cyclical type alias ──
+// ── Cyclical type alias ──
 
 #[test]
-fn e0104_cyclical_type_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn cyclical_type_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -633,10 +633,10 @@ C: TypeAlias = list["C"]
     Ok(())
 }
 
-// ── E0106: Protocol class object ──
+// ── Protocol class object ──
 
 #[test]
-fn e0106_protocol_class_object() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_class_object() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -653,10 +653,10 @@ func(P)
     Ok(())
 }
 
-// ── E0110: Protocol variance violation ──
+// ── Protocol variance violation ──
 
 #[test]
-fn e0110_protocol_variance() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_variance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -675,10 +675,10 @@ class WriteOnly(Protocol[T_contra]):
     Ok(())
 }
 
-// ── E0112: TypeGuard callable return mismatch ──
+// ── TypeGuard callable return mismatch ──
 
 #[test]
-fn e0112_typeguard_return() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeGuard
 
@@ -693,10 +693,10 @@ def bad_guard(x: object) -> TypeGuard[str]:
     Ok(())
 }
 
-// ── E0113: TypeIs inconsistent narrowing ──
+// ── TypeIs inconsistent narrowing ──
 
 #[test]
-fn e0113_typeis_narrowing() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_narrowing() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeIs
 
@@ -711,10 +711,10 @@ def bad_typeis(x: str) -> TypeIs[int]:
     Ok(())
 }
 
-// ── E0118: Super on abstract ──
+// ── Super on abstract ──
 
 #[test]
-fn e0118_super_abstract() -> Result<(), Box<dyn std::error::Error>> {
+fn super_abstract() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 from abc import abstractmethod, ABC
@@ -740,10 +740,10 @@ class ProtoChild(ProtoBase):
     Ok(())
 }
 
-// ── E0121: Protocol assignment conformance ──
+// ── Protocol assignment conformance ──
 
 #[test]
-fn e0121_protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -768,10 +768,10 @@ z: HasLen = object()
     Ok(())
 }
 
-// ── E0122: Callable call-site violation ──
+// ── Callable call-site violation ──
 
 #[test]
-fn e0122_callable_callsite() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_callsite() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -789,10 +789,10 @@ result2 = apply(my_func, "wrong")
     Ok(())
 }
 
-// ── E0015: Too many type args ──
+// ── Too many type args ──
 
 #[test]
-fn e0015_too_many_type_args() -> Result<(), Box<dyn std::error::Error>> {
+fn too_many_type_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Optional, List, Dict, Tuple
 
@@ -805,10 +805,10 @@ z: Dict[int, str, float] = {}
     Ok(())
 }
 
-// ── E0026: Type annotation error ──
+// ── Type annotation error ──
 
 #[test]
-fn e0026_type_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn type_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Annotated
 
@@ -821,10 +821,10 @@ z: Annotated = 42
     Ok(())
 }
 
-// ── E0038: Augmented assignment type ──
+// ── Augmented assignment type ──
 
 #[test]
-fn e0038_augmented_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn augmented_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: int = 42
 x += 1
@@ -845,10 +845,10 @@ z += "wrong"
     Ok(())
 }
 
-// ── E0134: Invariant generic arg mismatch ──
+// ── Invariant generic arg mismatch ──
 
 #[test]
-fn e0134_invariant_generic() -> Result<(), Box<dyn std::error::Error>> {
+fn invariant_generic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -870,10 +870,10 @@ b: list[str] = a
     Ok(())
 }
 
-// ── E0136: Callable subtyping violation ──
+// ── Callable subtyping violation ──
 
 #[test]
-fn e0136_callable_subtyping() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_subtyping() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -892,10 +892,10 @@ f2: Callable[[int], str] = takes_object
     Ok(())
 }
 
-// ── E0090: Invalid tuple type syntax ──
+// ── Invalid tuple type syntax ──
 
 #[test]
-fn e0090_tuple_type_syntax() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_type_syntax() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Tuple
 
@@ -911,10 +911,10 @@ w: tuple[()] = ()
     Ok(())
 }
 
-// ── E0073: NamedTuple tuple compat ──
+// ── NamedTuple tuple compat ──
 
 #[test]
-fn e0073_namedtuple_tuple_compat() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_tuple_compat() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -932,10 +932,10 @@ t3: tuple[int, int, int] = p
     Ok(())
 }
 
-// ── E0131: Generator type mismatch ──
+// ── Generator type mismatch ──
 
 #[test]
-fn e0131_generator_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Generator, Iterator, AsyncGenerator
 
@@ -956,10 +956,10 @@ async def agen1() -> AsyncGenerator[int, None]:
     Ok(())
 }
 
-// ── E0133: Protocol variance mismatch ──
+// ── Protocol variance mismatch ──
 
 #[test]
-fn e0133_protocol_variance_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_variance_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -981,10 +981,10 @@ q: Producer[int] = IntProducer()
     Ok(())
 }
 
-// ── E0141: Unpack kwargs violation ──
+// ── Unpack kwargs violation ──
 
 #[test]
-fn e0141_unpack_kwargs() -> Result<(), Box<dyn std::error::Error>> {
+fn unpack_kwargs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict, Unpack
 
@@ -1005,10 +1005,10 @@ func(unknown="bad")
     Ok(())
 }
 
-// ── E0043: Binary operation type ──
+// ── Binary operation type ──
 
 #[test]
-fn e0043_binary_operation() -> Result<(), Box<dyn std::error::Error>> {
+fn binary_operation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: int = 1 + 2
 y: str = "a" + "b"
@@ -1023,10 +1023,10 @@ b: int = "a" + "b"
     Ok(())
 }
 
-// ── E0044: Comparison type ──
+// ── Comparison type ──
 
 #[test]
-fn e0044_comparison() -> Result<(), Box<dyn std::error::Error>> {
+fn comparison() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x = 1 < 2
 y = "a" < "b"
@@ -1038,10 +1038,10 @@ w = [1, 2] < [3, 4]
     Ok(())
 }
 
-// ── E0012: Unused variable ──
+// ── Unused variable ──
 
 #[test]
-fn e0012_unused_var() -> Result<(), Box<dyn std::error::Error>> {
+fn unused_var() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def func():
     used = 42
@@ -1059,10 +1059,10 @@ class MyClass:
     Ok(())
 }
 
-// ── E0125: Instance attr on class ──
+// ── Instance attr on class ──
 
 #[test]
-fn e0125_instance_attr_on_class() -> Result<(), Box<dyn std::error::Error>> {
+fn instance_attr_on_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class MyClass:
     class_var: int = 42
@@ -1079,10 +1079,10 @@ MyClass.instance_var
     Ok(())
 }
 
-// ── E0055: TypeVar invalid kwargs ──
+// ── TypeVar invalid kwargs ──
 
 #[test]
-fn e0055_typevar_invalid_kwargs() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_invalid_kwargs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -1094,10 +1094,10 @@ U = TypeVar("U", int, str, bound=int)
     Ok(())
 }
 
-// ── E0128: TypeVar default referential (additional) ──
+// ── TypeVar default referential (additional) ──
 
 #[test]
-fn e0128_typevar_default_referential() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_referential() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -1111,10 +1111,10 @@ W = TypeVar("W", default=int)
     Ok(())
 }
 
-// ── E0067: Enum non-member in Literal ──
+// ── Enum non-member in Literal ──
 
 #[test]
-fn e0067_enum_non_member() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_non_member() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import Enum
 from typing import Literal

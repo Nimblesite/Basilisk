@@ -54,18 +54,18 @@ basilisk check src/
 
 | Pyright 规则 | Basilisk 等效 |
 |---|---|
-| `reportMissingTypeArgument` | BSK-E0015 |
+| `reportMissingTypeArgument` | callables_annotation |
 | `reportReturnType` | BSK-E0002 |
-| `reportArgumentType` | BSK-E0012 |
-| `reportAttributeAccessIssue` | BSK-E0050 |
-| `reportUndefinedVariable` | BSK-E0018 |
-| `reportOperatorIssue` | BSK-E0014 |
+| `reportArgumentType` | calls_argument_type |
+| `reportAttributeAccessIssue` | aliases_newtype |
+| `reportUndefinedVariable` | names_undefined |
+| `reportOperatorIssue` | assignment_compatibility |
 
 Basilisk 添加了即使在严格模式下 Pyright 也不标记的错误：
 - **BSK-E0001** — 缺少参数类型注解（严格强制执行）
 - **BSK-E0002** — 缺少返回类型注解（严格强制执行）
-- **BSK-E0011** — 参数和返回位置中的显式 `Any`——需要说明理由
-- **BSK-E0023** — 非穷举 `match` 语句（缺少情况）
+- **returns_compatibility** — 参数和返回位置中的显式 `Any`——需要说明理由
+- **match_exhaustiveness** — 非穷举 `match` 语句（缺少情况）
 - **BSK-E0025** — 覆盖方法缺少 `@override` 装饰器
 
 ### 第 3 步——处理 `# type: ignore` 注释
@@ -77,7 +77,7 @@ Pyright 使用 `# type: ignore` 进行内联抑制。Basilisk 需要不同的格
 x = get_value()  # type: ignore[reportArgumentType]
 
 # Basilisk
-x = get_value()  # basilisk: ignore[BSK-E0012] -- third-party API mismatch, tracked in #456
+x = get_value()  # basilisk: ignore[calls_argument_type] -- third-party API mismatch, tracked in #456
 ```
 
 Basilisk 将标记裸 `# type: ignore` 注释，因为它不识别它们。迁移工具建议正确的 `# basilisk: ignore[CODE] -- reason` 格式。
@@ -92,7 +92,7 @@ python-version = "3.12"
 include = ["src/"]
 
 [tool.basilisk.per-path-overrides."legacy/**"]
-rules."BSK-E0011" = "warning"   # 将最嘈杂的规则降级为警告
+rules."returns_compatibility" = "warning"   # 将最嘈杂的规则降级为警告
 ```
 
 您也可以在单个文件顶部添加 `# basilisk: relaxed`，在处理该文件期间将其所有错误变为警告。
@@ -129,7 +129,7 @@ exclude = migrations/
 [tool.basilisk]
 python-version = "3.12"
 exclude = ["**/migrations/**"]
-# 注意：ignore_missing_imports → BSK-E0010 仍然激活；
+# 注意：ignore_missing_imports → imports_unresolved 仍然激活；
 # 对没有存根的特定包使用每路径覆盖
 ```
 
@@ -137,8 +137,8 @@ exclude = ["**/migrations/**"]
 
 mypy 的 `--strict` 启用一组特定的标志。Basilisk 强制执行所有这些标志以及更多。从 `mypy --strict` 迁移时，预期：
 
-- **来自 BSK-E0011 的更多错误** — mypy 在某些 Basilisk 不允许的位置允许 `Any`
-- **来自 BSK-E0023 的更多错误** — mypy 不检查的非穷举 `match` 语句
+- **来自 returns_compatibility 的更多错误** — mypy 在某些 Basilisk 不允许的位置允许 `Any`
+- **来自 match_exhaustiveness 的更多错误** — mypy 不检查的非穷举 `match` 语句
 - **来自 BSK-E0025 的更多错误** — mypy 不要求的缺失 `@override` 装饰器
 
 ### 第 3 步——mypy 插件
@@ -149,7 +149,7 @@ mypy 插件（Django、SQLAlchemy、Pydantic）不能与 Basilisk 一起使用�
 
 ```toml
 [tool.basilisk.per-path-overrides."models/**"]
-disabled = ["BSK-E0011"]  # Django 模型字段广泛使用 Any
+disabled = ["returns_compatibility"]  # Django 模型字段广泛使用 Any
 ```
 
 ### 第 4 步——更新内联抑制
@@ -190,7 +190,7 @@ basilisk check --only E0001,E0002 src/
 
 ```toml
 [tool.basilisk.per-path-overrides."legacy/**"]
-rules."BSK-E0011" = "warning"
+rules."returns_compatibility" = "warning"
 
 [tool.basilisk.per-path-overrides."new_modules/**"]
 # 新代码立即完全严格

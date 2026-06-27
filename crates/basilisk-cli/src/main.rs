@@ -635,7 +635,7 @@ fn process_file(
 
     // Resolve imports against venv/site-packages and uv registry using the same
     // routine the LSP uses, so the CLI and editor agree on what resolves and on
-    // package-dependency metadata (W0011 transitive-import warnings, etc.).
+    // package-dependency metadata (BSK-W0011 transitive-import warnings, etc.).
     basilisk_lsp::import_resolver::resolve_module_imports(&mut resolved, search_paths);
 
     // Apply the project's `[tool.basilisk.rules]` / per-path overrides so the
@@ -882,12 +882,21 @@ mod tests {
     #[test]
     fn collect_and_check_returns_diagnostics_for_bad_code() -> Result<(), Box<dyn std::error::Error>>
     {
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_bad_code.py");
+        // `def foo(x)` violates the annotation house rules (BSK-E0001/E0002),
+        // which are OFF by default — the default config is pure PEP conformance.
+        // Run inside an isolated project that opts in, exactly as a user would.
+        // See [CHKARCH-CONFIGURATION-ONLY].
+        let dir = unique_project_dir("basilisk_test_bad_code");
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(
+            dir.join("basilisk.json"),
+            b"{\"strictAnnotations\": true}\n",
+        )?;
+        let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x):\n    pass\n")?;
         let path = py.to_string_lossy().into_owned();
         let (diags, _) = collect_and_check_uncached(&[path])?;
-        let _ = std::fs::remove_file(&py);
+        let _ = std::fs::remove_dir_all(&dir);
         assert!(
             !diags.is_empty(),
             "unannotated function must produce diagnostics"
@@ -916,9 +925,14 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let dir = unique_project_dir("basilisk_cli_cfg_promote");
         std::fs::create_dir_all(&dir)?;
+        // A severity override only re-grades a rule that is ALREADY enabled;
+        // BSK-W0050 is an off-by-default house rule, so the project must opt in
+        // (`strict-annotations = true`) AND escalate it. See
+        // [CHKARCH-CONFIGURATION-ONLY].
         std::fs::write(
             dir.join("pyproject.toml"),
             b"[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n\
+              [tool.basilisk]\nstrict-annotations = true\n\n\
               [tool.basilisk.rules]\n\"BSK-W0050\" = \"error\"\n",
         )?;
         let py = dir.join("m.py");
@@ -937,7 +951,7 @@ mod tests {
             w0050
                 .iter()
                 .all(|d| d.severity == basilisk_checker::Severity::Error),
-            "project config `BSK-W0050 = \"error\"` must promote W0050 to error \
+            "project config `BSK-W0050 = \"error\"` must promote BSK-W0050 to error \
              through the CLI; got {:?}",
             w0050.iter().map(|d| d.severity).collect::<Vec<_>>()
         );
@@ -979,12 +993,18 @@ mod tests {
     /// and `== / < / >=` at line 65 (which would change the return value).
     #[test]
     fn run_check_json_bad_code_returns_one() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_rc_json_bad.py");
+        // BSK-E0001 (unannotated `x`) is off by default; opt in via project config.
+        let dir = unique_project_dir("basilisk_test_rc_json_bad");
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(
+            dir.join("basilisk.json"),
+            b"{\"strictAnnotations\": true}\n",
+        )?;
+        let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
         let path = py.to_string_lossy().into_owned();
         let code = run_check(&[path], OutputFormat::Json, &no_cache());
-        let _ = std::fs::remove_file(&py);
+        let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(code, 1, "bad code must make run_check return 1 (Json)");
         Ok(())
     }
@@ -1007,12 +1027,18 @@ mod tests {
     /// Kills `>=` mutant at line 81 (which always returns 1 since usize >= 0).
     #[test]
     fn run_check_text_bad_code_returns_one() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_rc_text_bad.py");
+        // BSK-E0001 (unannotated `x`) is off by default; opt in via project config.
+        let dir = unique_project_dir("basilisk_test_rc_text_bad");
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(
+            dir.join("basilisk.json"),
+            b"{\"strictAnnotations\": true}\n",
+        )?;
+        let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
         let path = py.to_string_lossy().into_owned();
         let code = run_check(&[path], OutputFormat::Text, &no_cache());
-        let _ = std::fs::remove_file(&py);
+        let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(code, 1, "bad code must make run_check return 1 (Text)");
         Ok(())
     }

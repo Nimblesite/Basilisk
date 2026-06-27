@@ -27,11 +27,11 @@ The spec ([CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-OVERVIEW](../specs/CHECKER-T
 
 ### What This Unblocks
 
-**BSK-E0014 (~98 FP)**: Assignment checks compare annotation text to RHS literal kind. When the RHS is a function call, parameter reference, class instantiation, or any non-literal expression, the checker cannot determine the RHS type. Named-to-Named subtyping (e.g., `x: Animal = Dog()`) requires resolving class hierarchies and protocol structural conformance.
+**assignment_compatibility (~98 FP)**: Assignment checks compare annotation text to RHS literal kind. When the RHS is a function call, parameter reference, class instantiation, or any non-literal expression, the checker cannot determine the RHS type. Named-to-Named subtyping (e.g., `x: Animal = Dog()`) requires resolving class hierarchies and protocol structural conformance.
 
-**BSK-E0053 (~12 FP)**: `assert_type()` validation is deliberately disabled (comment in source: "requires full type inference to avoid false positives"). Re-enabling requires knowing the inferred type at every expression site, including after narrowing guards.
+**directives_assert_type_2 (~12 FP)**: `assert_type()` validation is deliberately disabled (comment in source: "requires full type inference to avoid false positives"). Re-enabling requires knowing the inferred type at every expression site, including after narrowing guards.
 
-**BSK-E0013 (~15 FP)**: Return type checking skips function call RHS entirely. Protocol property return types, narrowing function return types, and context manager `__exit__` return types all require resolving call targets.
+**returns_compatibility_2 (~15 FP)**: Return type checking skips function call RHS entirely. Protocol property return types, narrowing function return types, and context manager `__exit__` return types all require resolving call targets.
 
 ---
 
@@ -405,18 +405,18 @@ Phases 1 and 2 are independent and can be parallelized. Phase 3 depends on Phase
   - [ ] 3d. Constrained TypeVar matching ([§TYPEINF-GENERICS-CONSTRAINED](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-CONSTRAINED)) — `solve_constrained()` with widening
   - [ ] 3e. Bound TypeVar upper-bound check ([§TYPEINF-GENERICS-BOUND](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-BOUND)) — validates `is_assignable_to(bound)`
   - [ ] 3f. TypeVar defaults (PEP 696, [§TYPEINF-GENERICS-DEFAULTS](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-GENERICS-DEFAULTS)) — `set_default()` + fallback in `solve()`
-- [x] **Phase 4: Class Hierarchy and Structural Subtyping** (~50 FPs) — DONE — `crates/basilisk-checker/src/subtyping.rs`
-  - [x] 4a. `SubtypeContext` data structure with MRO cache, protocol member tables — `SubtypeContext::from_module()`
-  - [x] 4b. Nominal subtyping via C3 MRO resolution ([§TYPEINF-SUBTYPING-NOMINAL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-NOMINAL)) + builtin MRO hardcoding — `compute_mro()` + `builtin_mro()`
-  - [x] 4c. Protocol structural subtyping: member collection, method/attribute/property matching ([§TYPEINF-SUBTYPING-PROTOCOL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-PROTOCOL)) — `is_protocol_subtype()` + `source_has_member()`
-  - [x] 4d. Generic subtyping with variance-aware TypeVar position checking ([§TYPEINF-SUBTYPING-GENERIC](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-GENERIC)) — `is_subtype_with_context()` Callable contravariance
-  - [x] 4e. TypedDict structural subtyping: Required/NotRequired/ReadOnly/extra_items ([§TYPEINF-SUBTYPING-TYPEDDICT](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-TYPEDDICT)) — `is_typeddict_subtype()` + `parse_typeddict_field_flags()`
-  - [x] 4f. Callable subtyping: contravariant params, covariant return, ellipsis ([§TYPEINF-SUBTYPING-CALLABLE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-CALLABLE)) — `is_subtype_with_context()` Callable arm
-  - [x] 4g. Wire `is_subtype_of()` to replace Named-to-Named string comparison — `is_subtype_with_context()` dispatches Named→SubtypeContext
-  - [x] 4h. Conformance verification — 57 FPs (under 71 target), 0 regressions
-- [x] **Phase 5: Wire Into Rules** (~10 FPs) — DONE
-  - [x] 5a. E0014 — `VarCheckContext` with `SubtypeContext`, uses `is_subtype_with_context()` for assignability
-  - [x] 5b. E0013 — `SubtypeContext` passed to `check_function()`, removed `contains_named` early exit for Named types
-  - [x] 5c. E0053 — `is_likely_narrowed()` heuristic suppresses narrowing-dependent FPs; Union normalization in `types_match()`
+- [ ] **Phase 4: Class Hierarchy and Structural Subtyping** (~50 FPs) — `crates/basilisk-checker/src/subtyping.rs`
+  - [ ] 4a. `SubtypeContext` data structure with MRO cache, protocol member tables — `SubtypeContext::from_module()`
+  - [ ] 4b. Nominal subtyping via C3 MRO resolution ([§TYPEINF-SUBTYPING-NOMINAL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-NOMINAL)) + builtin MRO hardcoding — `compute_mro()` + `builtin_mro()`
+  - [ ] 4c. Protocol structural subtyping: member collection, method/attribute/property matching ([§TYPEINF-SUBTYPING-PROTOCOL](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-PROTOCOL)) — `is_protocol_subtype()` + `source_has_member()`
+  - [ ] 4d. Generic subtyping with variance-aware TypeVar position checking ([§TYPEINF-SUBTYPING-GENERIC](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-GENERIC)) — `is_subtype_with_context()` Callable contravariance
+  - [ ] 4e. TypedDict structural subtyping: Required/NotRequired/ReadOnly/extra_items ([§TYPEINF-SUBTYPING-TYPEDDICT](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-TYPEDDICT)) — `is_typeddict_subtype()` + `parse_typeddict_field_flags()`
+  - [ ] 4f. Callable subtyping: contravariant params, covariant return, ellipsis ([§TYPEINF-SUBTYPING-CALLABLE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-CALLABLE)) — `is_subtype_with_context()` Callable arm
+  - [ ] 4g. Wire `is_subtype_of()` to replace Named-to-Named string comparison — `is_subtype_with_context()` dispatches Named→SubtypeContext
+  - [ ] 4h. Conformance verification — 57 FPs (under 71 target), 0 regressions
+- [ ] **Phase 5: Wire Into Rules** (~10 FPs)
+  - [ ] 5a. E0014 — `VarCheckContext` with `SubtypeContext`, uses `is_subtype_with_context()` for assignability
+  - [ ] 5b. E0013 — `SubtypeContext` passed to `check_function()`, removed `contains_named` early exit for Named types
+  - [ ] 5c. E0053 — `is_likely_narrowed()` heuristic suppresses narrowing-dependent FPs; Union normalization in `types_match()`
   - [x] 5d. Full conformance suite verification — the official, UNMODIFIED `python/typing` scorer (pinned `268d0c4e`) reports **68 of 146 fixtures passing (46.6%)** with the `basilisk` binary run with **EVERY rule enabled** — no config, no `basilisk.json`, no "spec-conformance mode", no exceptions. That score reflects **265 false positives and 0 missed required errors**: the checker catches every required error, and every failing fixture is false positives from strict-by-default house-style rules (require-annotation E0001/E0002/E0004, missing-@override E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code that the spec treats as inferred rather than an error. HISTORY: the last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#185/#191 inflated the reported number to a fake 100% by writing a `basilisk.json` that DISABLED those 6 house rules at score time — the checker was never made smarter, the FPs were merely hidden. That disabling has been removed, and disabling any conformance rule for scoring is now forbidden (a punishable offence). Genuine progress over that span was real but modest: 40.4% → 46.6%. The only legitimate path to 100% is fixing the checker so its strict defaults stop firing on spec-valid code, with every rule still enabled — never by disabling a rule. Driving FPs down remains active work.
-  - [x] Checker-side modules: `narrowing.rs` (NarrowingContext), `expr_inference.rs` (ExpressionInferrer), `constraint_solver.rs` (ConstraintSolver)
+  - [ ] Checker-side modules: `narrowing.rs` (NarrowingContext), `expr_inference.rs` (ExpressionInferrer), `constraint_solver.rs` (ConstraintSolver)

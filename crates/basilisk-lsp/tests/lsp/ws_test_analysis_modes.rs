@@ -12,6 +12,9 @@ async fn test_ws_whole_module_startup_scan_publishes_diagnostics() -> TestResult
     // Create a temp workspace with a Python file that has type errors.
     let dir = unique_temp_dir("bsk_ws_startup_scan");
     std::fs::create_dir_all(&dir)?;
+    // Opt into the annotation house rules (off by default) so the scanned file's
+    // missing-annotation diagnostics fire. See [CHKARCH-CONFIGURATION-ONLY].
+    std::fs::write(dir.join("basilisk.json"), "{\"strictAnnotations\": true}\n")?;
     std::fs::write(
         dir.join("check_me.py"),
         "def greet(name):\n    return f\"Hello, {name}!\"\n",
@@ -214,6 +217,9 @@ async fn test_ws_whole_module_did_close_disk_file_keeps_diagnostics() -> TestRes
     // (the server re-analyses from disk). This contrasts with openFilesOnly behaviour.
     let dir = unique_temp_dir("bsk_ws_wm_close_disk");
     std::fs::create_dir_all(&dir)?;
+    // Opt into the annotation house rules (off by default) so the disk file's
+    // missing-annotation diagnostics fire. See [CHKARCH-CONFIGURATION-ONLY].
+    std::fs::write(dir.join("basilisk.json"), "{\"strictAnnotations\": true}\n")?;
     let file_path = dir.join("wm_close_disk.py");
     std::fs::write(
         &file_path,

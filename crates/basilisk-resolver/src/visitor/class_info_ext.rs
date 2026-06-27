@@ -360,7 +360,7 @@ pub(super) fn import_infos_from(node: &StmtImport) -> Vec<ImportInfo> {
         .map(|alias| ImportInfo {
             module: alias.name.to_string(),
             // `import X as Y` binds `Y`, not the module name — capture the alias so
-            // scope-resolution rules (e.g. BSK-E0018) see the real binding. Plain
+            // scope-resolution rules (e.g. names_undefined) see the real binding. Plain
             // `import X` / `import X.Y` keeps `names` empty; its bound name is the
             // top-level module, derived from `module`.
             names: alias
@@ -462,7 +462,7 @@ pub(super) fn is_wildcard_pattern(pattern: &Pattern) -> bool {
 /// `true` if the match performs structural decomposition (sequence/mapping
 /// patterns). Such matches narrow open-ended shapes (e.g. tuple unions of mixed
 /// arity) where a catch-all is not required for correctness, so exhaustiveness
-/// (BSK-E0023) does not apply — matching the reference checkers, which do not
+/// (`match_exhaustiveness`) does not apply — matching the reference checkers, which do not
 /// flag these.
 fn case_has_structural_pattern(case: &MatchCase) -> bool {
     fn is_structural(pattern: &Pattern) -> bool {

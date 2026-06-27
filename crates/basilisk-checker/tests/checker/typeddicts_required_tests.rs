@@ -1,0 +1,55 @@
+//! Tests for [`typeddicts_required`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+// Integration tests for typeddicts_required: Required/NotRequired in invalid context.
+
+use super::common::*;
+
+#[test]
+fn required_outside_typeddict_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Required
+
+class NotTypedDict:
+    x: Required[int] = 0
+";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"typeddicts_required"),
+        "Required outside TypedDict should fire E0035, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn required_in_typeddict_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypedDict, Required
+
+class Movie(TypedDict, total=False):
+    name: Required[str]
+    year: int
+";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"typeddicts_required"),
+        "Required inside TypedDict should not fire E0035"
+    );
+    Ok(())
+}
+
+#[test]
+fn required_in_function_param_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Required
+
+def func(x: Required[int]) -> None:
+    pass
+";
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"typeddicts_required"),
+        "Required in function param should fire E0035, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}

@@ -12,11 +12,11 @@ use super::common::*;
 // e0130 scoping, e0111 constructor, e0140 callable compat.
 
 // =============================================================================
-// E0107: Variance with nested generics (TypeArg::Subscript)
+// Variance with nested generics (TypeArg::Subscript)
 // =============================================================================
 
 #[test]
-fn e0107_nested_generic_in_base() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_generic_in_base() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -42,7 +42,7 @@ class Derived(Wrapper[Container[T_co]]):
 }
 
 #[test]
-fn e0107_nested_generic_variance_violation() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_generic_variance_violation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -64,7 +64,7 @@ class Bad(Sink[Source[T_co]]):
 }
 
 #[test]
-fn e0107_deeply_nested_generics() -> Result<(), Box<dyn std::error::Error>> {
+fn deeply_nested_generics() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -85,7 +85,7 @@ class Deep(Layer1[Layer2[T_co]]):
 }
 
 #[test]
-fn e0107_type_alias_expansion() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_expansion() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, TypeAlias
 
@@ -107,7 +107,7 @@ class WithAlias(Container[T_co]):
 }
 
 #[test]
-fn e0107_compose_variance_all_combos() -> Result<(), Box<dyn std::error::Error>> {
+fn compose_variance_all_combos() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -149,11 +149,11 @@ class InvC(InvariantOuter[T_co]):
 }
 
 // =============================================================================
-// E0144: type() constructor - more edge cases
+// type() constructor - more edge cases
 // =============================================================================
 
 #[test]
-fn e0144_type_with_keyword_args() -> Result<(), Box<dyn std::error::Error>> {
+fn type_with_keyword_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 MyMeta = type("MyMeta", (type,), {"__module__": "test"})
 "#;
@@ -162,7 +162,7 @@ MyMeta = type("MyMeta", (type,), {"__module__": "test"})
 }
 
 #[test]
-fn e0144_type_bases_not_all_names() -> Result<(), Box<dyn std::error::Error>> {
+fn type_bases_not_all_names() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Base:
     pass
@@ -174,7 +174,7 @@ Created = type("Created", (Base,), {"x": 1})
 }
 
 #[test]
-fn e0144_type_empty_bases_empty_dict() -> Result<(), Box<dyn std::error::Error>> {
+fn type_empty_bases_empty_dict() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 Plain = type("Plain", (), {})
 WithBase = type("WithBase", (object,), {})
@@ -184,11 +184,11 @@ WithBase = type("WithBase", (object,), {})
 }
 
 // =============================================================================
-// E0138: Dataclass transform - remaining uncovered paths
+// Dataclass transform - remaining uncovered paths
 // =============================================================================
 
 #[test]
-fn e0138_transform_with_init_false() -> Result<(), Box<dyn std::error::Error>> {
+fn transform_with_init_false() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import dataclass_transform
 
@@ -206,7 +206,7 @@ class NoInitModel(NoInitBase, init=False):
 }
 
 #[test]
-fn e0138_transform_multiple_subclasses() -> Result<(), Box<dyn std::error::Error>> {
+fn transform_multiple_subclasses() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import dataclass_transform
 
@@ -233,11 +233,11 @@ class Order(BaseModel):
 }
 
 // =============================================================================
-// E0143: NamedTuple - remaining uncovered paths
+// NamedTuple - remaining uncovered paths
 // =============================================================================
 
 #[test]
-fn e0143_namedtuple_functional_keyword_style() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_functional_keyword_style() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -248,7 +248,7 @@ Config = NamedTuple("Config", name=str, value=int, debug=bool)
 }
 
 #[test]
-fn e0143_namedtuple_with_classvar() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_with_classvar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple, ClassVar
 
@@ -262,7 +262,7 @@ class Point(NamedTuple):
 }
 
 #[test]
-fn e0143_namedtuple_with_many_fields() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_with_many_fields() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -279,11 +279,11 @@ class HTTPResponse(NamedTuple):
 }
 
 // =============================================================================
-// E0095: InitVar - remaining uncovered paths
+// InitVar - remaining uncovered paths
 // =============================================================================
 
 #[test]
-fn e0095_initvar_without_post_init() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_without_post_init() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass, InitVar
 
@@ -297,7 +297,7 @@ class Config:
 }
 
 #[test]
-fn e0095_initvar_mixed_with_field() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_mixed_with_field() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, InitVar, field
 
@@ -316,11 +316,11 @@ class Config:
 }
 
 // =============================================================================
-// E0122: Callable arity - remaining uncovered
+// Callable arity - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0122_callable_positional_only_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_positional_only_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -334,7 +334,7 @@ f: Callable[[int], bool] = pos_only
 }
 
 #[test]
-fn e0122_callable_complex_signature() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_complex_signature() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -350,11 +350,11 @@ f3: Callable[..., None] = complex
 }
 
 // =============================================================================
-// E0073: NamedTuple tuple compat - remaining uncovered
+// NamedTuple tuple compat - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0073_namedtuple_tuple_fewer_fields() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_tuple_fewer_fields() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -369,11 +369,11 @@ p: tuple[int, int, int, int] = Point(1, 2)
 }
 
 // =============================================================================
-// E0116: NamedTuple definition - remaining uncovered
+// NamedTuple definition - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0116_namedtuple_functional_various() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_functional_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -386,7 +386,7 @@ C = NamedTuple("C", [("a", int), ("b", str), ("c", float)])
 }
 
 #[test]
-fn e0116_namedtuple_invalid_field_names() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_invalid_field_names() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -399,11 +399,11 @@ class Bad(NamedTuple):
 }
 
 // =============================================================================
-// E0102: TypeVar default - remaining uncovered
+// TypeVar default - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0102_typevar_default_referential() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_referential() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -415,11 +415,11 @@ U = TypeVar("U", default=T)
 }
 
 // =============================================================================
-// E0112: TypeGuard - remaining uncovered
+// TypeGuard - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0112_typeguard_method_no_narrow_param() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_method_no_narrow_param() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeGuard
 
@@ -432,7 +432,7 @@ class Checker:
 }
 
 #[test]
-fn e0112_typeis_method() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeIs
 
@@ -445,11 +445,11 @@ class Validator:
 }
 
 // =============================================================================
-// E0145: type bracket - remaining uncovered
+// type bracket - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0145_type_bracket_various() -> Result<(), Box<dyn std::error::Error>> {
+fn type_bracket_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -469,11 +469,11 @@ def baz(x: type[int | str]) -> None:
 }
 
 // =============================================================================
-// E0147: Tuple starred unpack - remaining uncovered
+// Tuple starred unpack - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0147_tuple_unpack_various() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_unpack_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Unpack, TypeVarTuple, Generic
 
@@ -493,11 +493,11 @@ def flexible(*args: Unpack[tuple[int, ...]]) -> None:
 }
 
 // =============================================================================
-// E0148: Generic type arg - remaining uncovered
+// Generic type arg - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0148_tuple_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Tuple
 
@@ -509,7 +509,7 @@ y: Tuple[()] = ()
 }
 
 #[test]
-fn e0148_optional_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
+fn optional_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Optional
 
@@ -520,11 +520,11 @@ x: Optional[int, str] = None
 }
 
 // =============================================================================
-// E0131: Yield type - remaining uncovered
+// Yield type - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0131_yield_from_incompatible() -> Result<(), Box<dyn std::error::Error>> {
+fn yield_from_incompatible() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator, Iterator
 
@@ -541,7 +541,7 @@ def int_gen() -> Generator[int, None, None]:
 }
 
 #[test]
-fn e0131_generator_with_return_type() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_with_return_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -556,11 +556,11 @@ def countdown(n: int) -> Generator[int, None, str]:
 }
 
 // =============================================================================
-// E0126: Literal - remaining uncovered
+// Literal - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0126_literal_multiple_values() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_multiple_values() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal
 
@@ -572,7 +572,7 @@ y: Literal["a", "b", "c"] = "d"
 }
 
 #[test]
-fn e0126_literal_bytes_value() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_bytes_value() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal
 
@@ -583,11 +583,11 @@ x: Literal[b"hello"] = b"world"
 }
 
 // =============================================================================
-// E0054: Final - remaining uncovered
+// Final - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0054_final_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
+fn final_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 
@@ -599,7 +599,7 @@ X += 1
 }
 
 #[test]
-fn e0054_final_multiple_reassignments() -> Result<(), Box<dyn std::error::Error>> {
+fn final_multiple_reassignments() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 
@@ -616,11 +616,11 @@ C = 30
 }
 
 // =============================================================================
-// E0076: Overload - remaining uncovered
+// Overload - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0076_overload_complex() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_complex() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload, Union
 
@@ -641,11 +641,11 @@ def parse(data: Union[str, bytes, int]) -> Union[dict, str]:
 }
 
 // =============================================================================
-// E0121: Protocol conformance - remaining uncovered
+// Protocol conformance - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0121_protocol_with_static_method() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_static_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -663,11 +663,11 @@ class MyClass:
 }
 
 // =============================================================================
-// E0119: Protocol isinstance - remaining uncovered
+// Protocol isinstance - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0119_protocol_with_property() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_property() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, runtime_checkable
 
@@ -689,11 +689,11 @@ result = isinstance(p, HasName)
 }
 
 // =============================================================================
-// E0139: TypeVarTuple - remaining uncovered
+// TypeVarTuple - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0139_typevartuple_in_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_in_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Unpack, TypeAlias
 
@@ -706,11 +706,11 @@ TupleType: TypeAlias = tuple[Unpack[Ts]]
 }
 
 // =============================================================================
-// E0146: Protocol class - remaining uncovered
+// Protocol class - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0146_protocol_with_init() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_init() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -726,11 +726,11 @@ class MyClass:
 }
 
 // =============================================================================
-// E0130: TypeVar scoping - remaining uncovered
+// TypeVar scoping - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0130_typevar_constraint_checking() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_constraint_checking() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -754,11 +754,11 @@ def process_bounded(x: U) -> U:
 }
 
 // =============================================================================
-// E0111: Constructor - remaining uncovered
+// Constructor - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0111_constructor_with_many_args() -> Result<(), Box<dyn std::error::Error>> {
+fn constructor_with_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Complex:
     def __init__(self, a: int, b: str, c: float, d: bool = True) -> None:
@@ -776,11 +776,11 @@ c3 = Complex(1, 2, 3.14)
 }
 
 // =============================================================================
-// E0140: Callable compat - remaining uncovered
+// Callable compat - remaining uncovered
 // =============================================================================
 
 #[test]
-fn e0140_protocol_with_varargs_in_call() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_varargs_in_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -797,7 +797,7 @@ f: VarArgsProto = my_func
 }
 
 #[test]
-fn e0140_callable_with_concatenate_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_with_concatenate_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable, Concatenate, ParamSpec
 
@@ -862,11 +862,11 @@ z: tuple[()] = ()
 }
 
 // =============================================================================
-// E0047: Invalid type - exercise all annotation check branches
+// Invalid type - exercise all annotation check branches
 // =============================================================================
 
 #[test]
-fn e0047_class_attr_walrus_op() -> Result<(), Box<dyn std::error::Error>> {
+fn class_attr_walrus_op() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def foo() -> None:
     x: (y := int) = 42
@@ -876,7 +876,7 @@ def foo() -> None:
 }
 
 #[test]
-fn e0047_class_attr_comparison() -> Result<(), Box<dyn std::error::Error>> {
+fn class_attr_comparison() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Foo:
     x: int > str = 42
@@ -886,11 +886,11 @@ class Foo:
 }
 
 // =============================================================================
-// E0036: ClassVar - exercise scan branches
+// ClassVar - exercise scan branches
 // =============================================================================
 
 #[test]
-fn e0036_classvar_with_nested_brackets() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_with_nested_brackets() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar, Dict, List
 
@@ -903,11 +903,11 @@ class Config:
 }
 
 // =============================================================================
-// E0014: Literal parsing - remaining uncovered paths
+// Literal parsing - remaining uncovered paths
 // =============================================================================
 
 #[test]
-fn e0014_literal_underscore_int() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_underscore_int() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 
@@ -918,7 +918,7 @@ x: Literal[1_000_000] = 1_000_000
 }
 
 #[test]
-fn e0014_tuple_with_any_type() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_with_any_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Any
 
@@ -930,7 +930,7 @@ t = (True, None)
 }
 
 #[test]
-fn e0014_tuple_with_object_type() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_with_object_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 t: tuple[object, object] = (1, "hello")
 t = (3.14, b"bytes")

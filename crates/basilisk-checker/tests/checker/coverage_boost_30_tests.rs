@@ -6,11 +6,11 @@ use super::common::*;
 // e0036 `ClassVar`, e0075 Self attribute.
 
 // =============================================================================
-// E0107: Variance incompatibility - deeper paths
+// Variance incompatibility - deeper paths
 // =============================================================================
 
 #[test]
-fn e0107_contravariant_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn contravariant_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -29,13 +29,13 @@ class BadContainer(Generic[T_co]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0107")
+        .filter(|d| d.code.code == "generics_variance")
         .count();
     Ok(())
 }
 
 #[test]
-fn e0107_alias_expansion() -> Result<(), Box<dyn std::error::Error>> {
+fn alias_expansion() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, TypeAlias
 
@@ -53,13 +53,13 @@ class BadWrapper(Generic[T_co]):
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0107")
+        .filter(|d| d.code.code == "generics_variance")
         .count();
     Ok(())
 }
 
 #[test]
-fn e0107_nested_generic_deep() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_generic_deep() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -77,11 +77,11 @@ class Wrapper(Generic[T_co]):
 }
 
 // =============================================================================
-// E0137: Generic protocol - deeper paths
+// Generic protocol - deeper paths
 // =============================================================================
 
 #[test]
-fn e0137_protocol_multi_method_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_multi_method_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, runtime_checkable
 
@@ -105,7 +105,7 @@ class MyNum:
 }
 
 #[test]
-fn e0137_protocol_with_type_params() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_type_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar, Generic
 
@@ -127,11 +127,11 @@ class BadContainer:
 }
 
 // =============================================================================
-// E0139: TypeVarTuple specialization - deeper paths
+// TypeVarTuple specialization - deeper paths
 // =============================================================================
 
 #[test]
-fn e0139_typevartuple_alias_too_few() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_alias_too_few() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic, Unpack
 
@@ -149,7 +149,7 @@ y: Variadic[int, str, float]
 }
 
 #[test]
-fn e0139_starred_tuple_in_plain() -> Result<(), Box<dyn std::error::Error>> {
+fn starred_tuple_in_plain() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic, Unpack, TypeVar
 
@@ -167,11 +167,11 @@ x: Plain[*tuple[int, str]]
 }
 
 // =============================================================================
-// E0140: Callable assignment - deeper paths
+// Callable assignment - deeper paths
 // =============================================================================
 
 #[test]
-fn e0140_callable_with_concatenate() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_with_concatenate() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable, Concatenate, ParamSpec
 
@@ -185,7 +185,7 @@ x: Callable[Concatenate[int, P], str] = lambda n, *args, **kwargs: str(n)
 }
 
 #[test]
-fn e0140_callable_ellipsis_param() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_ellipsis_param() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -198,7 +198,7 @@ y: Callable[..., str] = lambda x: str(x)
 }
 
 #[test]
-fn e0140_non_callable_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn non_callable_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -213,11 +213,11 @@ y: Callable[[int], str] = my_func
 }
 
 // =============================================================================
-// E0047: Invalid type expression - deeper
+// Invalid type expression - deeper
 // =============================================================================
 
 #[test]
-fn e0047_runtime_expression_as_type() -> Result<(), Box<dyn std::error::Error>> {
+fn runtime_expression_as_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x = int
 
@@ -236,7 +236,7 @@ def h(a: "invalid" + "type") -> None:
 }
 
 #[test]
-fn e0047_complex_invalid_annotations() -> Result<(), Box<dyn std::error::Error>> {
+fn complex_invalid_annotations() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -254,11 +254,11 @@ def g(a: {int: str}) -> None:
 }
 
 // =============================================================================
-// E0015: Generic type arg count - deeper Callable validation
+// Generic type arg count - deeper Callable validation
 // =============================================================================
 
 #[test]
-fn e0015_optional_multiple_args() -> Result<(), Box<dyn std::error::Error>> {
+fn optional_multiple_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Optional
 
@@ -267,13 +267,13 @@ x: Optional[int, str] = None
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .count();
     Ok(())
 }
 
 #[test]
-fn e0015_dict_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
+fn dict_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Dict
 
@@ -282,13 +282,13 @@ x: Dict[str, int, float] = {}
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .count();
     Ok(())
 }
 
 #[test]
-fn e0015_tuple_with_ellipsis() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_with_ellipsis() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Tuple
 
@@ -301,11 +301,11 @@ y: Tuple[int, str, ...] = (1, "a")
 }
 
 // =============================================================================
-// E0113: TypeIs inconsistent narrowing - deeper
+// TypeIs inconsistent narrowing - deeper
 // =============================================================================
 
 #[test]
-fn e0113_typeis_completely_unrelated() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_completely_unrelated() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeIs
 
@@ -315,13 +315,13 @@ def is_int(x: str) -> TypeIs[int]:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0113")
+        .filter(|d| d.code.code == "narrowing_typeis_2")
         .count();
     Ok(())
 }
 
 #[test]
-fn e0113_typeis_with_optional() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_with_optional() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeIs, Optional
 
@@ -337,11 +337,11 @@ def is_int(x: Optional[int]) -> TypeIs[str]:
 }
 
 // =============================================================================
-// E0111: Constructor errors - deeper
+// Constructor errors - deeper
 // =============================================================================
 
 #[test]
-fn e0111_init_with_defaults() -> Result<(), Box<dyn std::error::Error>> {
+fn init_with_defaults() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class MyClass:
     def __init__(self, a: int, b: str = "default", c: float = 0.0) -> None:
@@ -359,7 +359,7 @@ z = MyClass(1, "hello", 3.14)
 }
 
 #[test]
-fn e0111_new_method() -> Result<(), Box<dyn std::error::Error>> {
+fn new_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Singleton:
     _instance = None
@@ -377,7 +377,7 @@ s = Singleton(42)
 }
 
 #[test]
-fn e0111_metaclass_call() -> Result<(), Box<dyn std::error::Error>> {
+fn metaclass_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Meta(type):
     def __call__(cls, *args, **kwargs):
@@ -395,11 +395,11 @@ obj = MyClass(42)
 }
 
 // =============================================================================
-// E0036: ClassVar deeper - self.attr with ClassVar annotation
+// ClassVar deeper - self.attr with ClassVar annotation
 // =============================================================================
 
 #[test]
-fn e0036_classvar_in_local_var() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_in_local_var() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ClassVar
 
@@ -411,13 +411,13 @@ class Foo:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0036")
+        .filter(|d| d.code.code == "classes_classvar")
         .count();
     Ok(())
 }
 
 #[test]
-fn e0036_classvar_with_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_with_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ClassVar, TypeVar
 
@@ -432,11 +432,11 @@ class Foo:
 }
 
 // =============================================================================
-// E0075: Self attr incompatibility - deeper paths
+// Self attr incompatibility - deeper paths
 // =============================================================================
 
 #[test]
-fn e0075_self_optional_attr() -> Result<(), Box<dyn std::error::Error>> {
+fn self_optional_attr() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self, Optional
 from dataclasses import dataclass
@@ -458,7 +458,7 @@ t = SpecialTree(value=1, left=Tree(value=2))
 }
 
 #[test]
-fn e0075_self_in_if_branch() -> Result<(), Box<dyn std::error::Error>> {
+fn self_in_if_branch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 from dataclasses import dataclass
