@@ -275,7 +275,8 @@ export async function waitForLspReady(): Promise<void> {
  * to be ready, then close all editors. Returns tmpDir and binary path.
  */
 export async function setupLspTestSuite(
-    tmpDirPrefix: string
+    tmpDirPrefix: string,
+    opts: { strictAnnotations?: boolean } = {}
 ): Promise<{ tmpDir: string; basiliskBinary: string }> {
     const binary = findBasiliskBinary();
     if (binary === undefined) {
@@ -285,6 +286,18 @@ export async function setupLspTestSuite(
     }
 
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), tmpDirPrefix));
+
+    // The annotation house rules (require-annotation etc.) are opt-in — off by
+    // default in the config-only model. Suites that assert on those diagnostics
+    // opt in via a workspace basilisk.json, mirroring the Rust LSP harness
+    // (ws_test_common.rs) and the Neovim specs.
+    if (opts.strictAnnotations === true) {
+        fs.writeFileSync(
+            path.join(tmpDir, 'basilisk.json'),
+            '{"strictAnnotations": true}\n',
+            'utf8'
+        );
+    }
 
     await waitForLspReady();
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');

@@ -44,7 +44,9 @@ suite('LSP Signature Help & Code Action Tests', () => {
 
     suiteSetup(async function () {
         this.timeout(SUITE_SETUP_TIMEOUT_MS);
-        const setup = await setupLspTestSuite('basilisk-nav-test-');
+        // This suite's code-action test relies on an annotation diagnostic
+        // (untyped param), which is an opt-in house rule — enable it here.
+        const setup = await setupLspTestSuite('basilisk-nav-test-', { strictAnnotations: true });
         tmpDir = setup.tmpDir;
     });
 
