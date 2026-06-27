@@ -1578,7 +1578,9 @@ mod tests {
         let uri = Url::from_file_path(&main_path).unwrap();
         let published = idx.set_open(&uri, "import requests\n", 1);
         assert!(
-            !lsp_codes(&published).iter().any(|c| c == "imports_unresolved"),
+            !lsp_codes(&published)
+                .iter()
+                .any(|c| c == "imports_unresolved"),
             "editor-opened file must resolve `requests` via the cached search \
              paths; got imports_unresolved in published diagnostics: {published:?}"
         );
@@ -2671,7 +2673,10 @@ mod tests {
             .collect();
 
         // Both should have BSK-E0001 diagnostics.
-        assert!(!default_severities.is_empty(), "default must have BSK-E0001");
+        assert!(
+            !default_severities.is_empty(),
+            "default must have BSK-E0001"
+        );
         assert!(!custom_severities.is_empty(), "custom must have BSK-E0001");
 
         // Default = ERROR, Custom = WARNING.

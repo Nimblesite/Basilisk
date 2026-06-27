@@ -57,8 +57,7 @@ class Container(Generic[T]):
 }
 
 #[test]
-fn pep695_function_with_traditional_typevar_fires() -> Result<(), Box<dyn std::error::Error>>
-{
+fn pep695_function_with_traditional_typevar_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 

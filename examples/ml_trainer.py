@@ -79,7 +79,9 @@ def decode_predictions(raw) -> list[int]: ...  # BSK-E0001: raw untyped
 
 
 @overload
-def decode_predictions(raw) -> list[int]: ...  # BSK-E0001 + overloads_consistency: duplicate
+def decode_predictions(
+    raw,
+) -> list[int]: ...  # BSK-E0001 + overloads_consistency: duplicate
 
 
 def decode_predictions(raw: list[float]) -> list[int]:

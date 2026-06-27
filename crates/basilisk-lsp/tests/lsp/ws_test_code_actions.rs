@@ -362,7 +362,9 @@ async fn test_ws_code_action_e0003_all_variants() -> TestResult<()> {
                 }),
             )
             .await?
-            .ok_or(format!("no code action response for BSK-E0003 variant {idx}"))?;
+            .ok_or(format!(
+                "no code action response for BSK-E0003 variant {idx}"
+            ))?;
 
         assert!(
             resp.contains("quickfix"),

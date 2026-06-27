@@ -305,8 +305,7 @@ fn argument_type_mismatch_not_yet_implemented() -> Result<(), Box<dyn std::error
 /// Incompatible method override (type-level).
 /// Requires class hierarchy + type inference — not implemented in Phase 1.
 #[test]
-fn incompatible_method_override_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>>
-{
+fn incompatible_method_override_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0016_incompatible_override.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "classes_override"),
@@ -318,8 +317,7 @@ fn incompatible_method_override_not_yet_implemented() -> Result<(), Box<dyn std:
 /// Incompatible variable override.
 /// Requires type inference for variable types — not implemented in Phase 1.
 #[test]
-fn incompatible_variable_override_not_yet_implemented(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn incompatible_variable_override_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0017_variable_override.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "classes_override_2"),

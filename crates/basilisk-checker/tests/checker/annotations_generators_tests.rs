@@ -86,8 +86,7 @@ def gen() -> Iterable[str]:
 }
 
 #[test]
-fn asynccontextmanager_async_iterator_not_flagged() -> Result<(), Box<dyn std::error::Error>>
-{
+fn asynccontextmanager_async_iterator_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     // Issue #36: async generators decorated with @asynccontextmanager are the
     // canonical async-context-manager pattern and must be accepted.
     let source = r"

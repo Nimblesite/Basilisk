@@ -151,8 +151,7 @@ fn regression_each_scalar_type_no_false_positive() -> Result<(), Box<dyn std::er
 
 /// Multiple module-level scalar literals — zero BSK-E0003.
 #[test]
-fn regression_multiple_scalars_no_false_positives() -> Result<(), Box<dyn std::error::Error>>
-{
+fn regression_multiple_scalars_no_false_positives() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 host = \"localhost\"
 port = 5432

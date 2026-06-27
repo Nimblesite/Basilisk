@@ -162,7 +162,13 @@ fn cross_cutting_core_checks_are_pep_without_a_category() {
 
 #[test]
 fn basilisk_rules_are_tagged_basilisk_and_never_carry_a_pep_category() {
-    for code in ["BSK-E0001", "BSK-E0025", "BSK-W0014", "BSK-W0050", "BSK-E0152"] {
+    for code in [
+        "BSK-E0001",
+        "BSK-E0025",
+        "BSK-W0014",
+        "BSK-W0050",
+        "BSK-E0152",
+    ] {
         let tags = tags_for_code(code);
         assert!(
             tags.contains(&BASILISK),

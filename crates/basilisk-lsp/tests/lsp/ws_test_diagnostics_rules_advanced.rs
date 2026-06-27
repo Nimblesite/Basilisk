@@ -90,7 +90,13 @@ from typing import final
 def standalone() -> None:
     pass
 ";
-    assert_rule_fires("file:///e0034_func.py", code, "qualifiers_final_decorator", &[]).await
+    assert_rule_fires(
+        "file:///e0034_func.py",
+        code,
+        "qualifiers_final_decorator",
+        &[],
+    )
+    .await
 }
 
 #[tokio::test]
@@ -108,7 +114,13 @@ class Child(Base):
     def locked(self) -> str:
         return \"child\"
 ";
-    assert_rule_fires("file:///e0034_method.py", code, "qualifiers_final_decorator", &[]).await
+    assert_rule_fires(
+        "file:///e0034_method.py",
+        code,
+        "qualifiers_final_decorator",
+        &[],
+    )
+    .await
 }
 
 #[tokio::test]
@@ -162,7 +174,13 @@ class Config:
     def bad_update(self) -> None:
         self.MAX = 200
 ";
-    assert_rule_fires("file:///e0054_class.py", code, "qualifiers_final_annotation_2", &[]).await
+    assert_rule_fires(
+        "file:///e0054_class.py",
+        code,
+        "qualifiers_final_annotation_2",
+        &[],
+    )
+    .await
 }
 
 #[tokio::test]
@@ -175,7 +193,12 @@ RATE: Final = 3000
 def read_rate() -> int:
     return RATE
 ";
-    assert_rule_clean("file:///e0054_clean.py", code, "qualifiers_final_annotation_2").await
+    assert_rule_clean(
+        "file:///e0054_clean.py",
+        code,
+        "qualifiers_final_annotation_2",
+    )
+    .await
 }
 
 // ── Full-pipeline: multiple rules in one file ───────────────────────────────

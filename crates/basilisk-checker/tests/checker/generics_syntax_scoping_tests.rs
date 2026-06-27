@@ -69,8 +69,7 @@ r2_4: RecursiveTypeAlias2[int, str, [int, str]] = []
 }
 
 #[test]
-fn no_false_positive_in_module_docstring_spec_ids() -> Result<(), Box<dyn std::error::Error>>
-{
+fn no_false_positive_in_module_docstring_spec_ids() -> Result<(), Box<dyn std::error::Error>> {
     // Regression for https://github.com/Nimblesite/Basilisk/issues/43:
     // generics_syntax_scoping must not treat module-docstring prose as code. A docstring
     // line that happens to begin with `class ` and contains `[SPEC-ID]`

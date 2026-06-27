@@ -24,8 +24,7 @@ class Child(Base):
 }
 
 #[test]
-fn typeddict_compatible_inheritance_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
-{
+fn typeddict_compatible_inheritance_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypedDict
 

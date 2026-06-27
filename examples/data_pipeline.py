@@ -78,7 +78,9 @@ def read_source(path) -> list[dict[str, str]]: ...  # BSK-E0001: path untyped
 
 
 @overload
-def read_source(path) -> list[dict[str, str]]: ...  # BSK-E0001 + overloads_consistency: duplicate
+def read_source(
+    path,
+) -> list[dict[str, str]]: ...  # BSK-E0001 + overloads_consistency: duplicate
 
 
 def read_source(path: str) -> list[dict[str, str]]:

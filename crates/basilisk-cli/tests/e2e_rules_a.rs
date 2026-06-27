@@ -202,8 +202,7 @@ fn dunder_methods_all_missing_return() -> Result<(), Box<dyn std::error::Error>>
 // ---------------------------------------------------------------------------
 
 #[test]
-fn only_unannotated_params_flagged_in_mixed_signature(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn only_unannotated_params_flagged_in_mixed_signature() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_mixed_annotated.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_mixed_annotated.py"))?;
     assert_diagnostics(
@@ -317,8 +316,7 @@ fn function_in_else_branch_of_version_guard() -> Result<(), Box<dyn std::error::
 // ---------------------------------------------------------------------------
 
 #[test]
-fn and_e0002_subclass_override_missing_annotations() -> Result<(), Box<dyn std::error::Error>>
-{
+fn and_e0002_subclass_override_missing_annotations() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_and_e0002_inheritance.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_and_e0002_inheritance.py"))?;
     assert_diagnostics(

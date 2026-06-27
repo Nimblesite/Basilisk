@@ -62,7 +62,9 @@ def parse_id(raw: str) -> int:
 
 
 # ── dict_key_hashable: unhashable list literal as dict key ────────────────────────────
-def default_routes() -> dict[list[str], str]:  # dict_key_hashable inside return annotation
+def default_routes() -> dict[
+    list[str], str
+]:  # dict_key_hashable inside return annotation
     return {["GET", "POST"]: "/"}  # dict_key_hashable: list literal as key
 
 

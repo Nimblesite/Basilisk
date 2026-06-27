@@ -40,7 +40,9 @@ def format_error(code, message, context):  # BSK-E0001: three untyped params
 
 
 # ── returns_compatibility: Any in public-facing output function ──────────────────────────
-def print_result(value: Any) -> None:  # returns_compatibility: Any param, no justification
+def print_result(
+    value: Any,
+) -> None:  # returns_compatibility: Any param, no justification
     print(value)
 
 

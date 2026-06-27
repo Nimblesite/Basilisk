@@ -91,7 +91,9 @@ def round_to_tick(price, tick) -> float: ...  # BSK-E0001: price, tick untyped
 
 
 @overload
-def round_to_tick(price, tick) -> float: ...  # BSK-E0001 + overloads_consistency: duplicate
+def round_to_tick(
+    price, tick
+) -> float: ...  # BSK-E0001 + overloads_consistency: duplicate
 
 
 def round_to_tick(price: float, tick: int) -> float:

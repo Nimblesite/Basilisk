@@ -3,15 +3,35 @@
 //! mutants identified by cargo-mutants. Each test asserts BOTH that violations
 //! ARE caught and that correct code is NOT flagged.
 
-use basilisk_checker::check;
+use basilisk_checker::check_with_config;
+use basilisk_config::BasiliskConfig;
 use basilisk_parser::parse_source;
 use basilisk_resolver::resolve;
 use basilisk_test_macros::mutation_safe;
 
+// Basilisk has no modes — config in, diagnostics out. `run` uses the default
+// config (every PEP rule, no house rules); `run_with_config` honors an explicit
+// config; `annotation_rules_config` is the config a project writes to opt into
+// the annotation house rules (E0001..E0005, E0025, W0014, W0040, W0050). See
+// [CHKARCH-CONFIGURATION-ONLY].
 fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
+    run_with_config(source, &BasiliskConfig::default())
+}
+
+fn run_with_config(
+    source: &str,
+    config: &BasiliskConfig,
+) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
     let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
     let resolved = resolve(&parsed)?;
-    Ok(check(&resolved))
+    Ok(check_with_config(&resolved, config))
+}
+
+fn annotation_rules_config() -> BasiliskConfig {
+    BasiliskConfig {
+        strict_annotations: true,
+        ..BasiliskConfig::default()
+    }
 }
 
 fn assignment_compatibility_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
@@ -624,7 +644,7 @@ def has_annotated_only(annotated: int) -> int:
 def missing(unannotated, annotated: int) -> int:
     return annotated
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let e0001: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
@@ -665,7 +685,7 @@ class Foo:
     def klass(cls, y):
         return y
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let e0001: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
@@ -714,7 +734,7 @@ class Iface(Protocol):
 def regular(unannotated):
     return unannotated
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let e0001: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
@@ -744,7 +764,7 @@ fn mutant_e0001_check_body_present() -> Result<(), Box<dyn std::error::Error>> {
 def f(unannotated):
     return unannotated
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let count = missing_parameter_annotation_count(&diagnostics);
     assert_eq!(
         count, 1,
@@ -764,7 +784,7 @@ fn mutant_e0001_diagnostic_payload() -> Result<(), Box<dyn std::error::Error>> {
 def f(specific_name):
     return specific_name
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let e0001: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
@@ -799,7 +819,7 @@ fn mutant_e0002_smoke() -> Result<(), Box<dyn std::error::Error>> {
 def no_return_annotation(x: int):
     return x
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     assert!(
         count_code(&diagnostics, "BSK-E0002") >= 1,
         "BSK-E0002 must fire for missing return annotation: {diagnostics:?}"
@@ -815,7 +835,7 @@ empty_list = []
 empty_dict = {}
 nothing = None
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     assert!(
         count_code(&diagnostics, "BSK-E0003") >= 1,
         "BSK-E0003 must fire for unannotated empty-collection vars: {diagnostics:?}"
@@ -1389,7 +1409,7 @@ def fully_annotated(x: int) -> int:
 def returns_nothing() -> None:
     pass
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
         count_code(&diagnostics, "BSK-E0002"),
         0,
@@ -1408,7 +1428,7 @@ annotated_none: int | None = None
 resolvable_int = 5
 resolvable_str = 'text'
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
         count_code(&diagnostics, "BSK-E0003"),
         0,
@@ -1425,7 +1445,7 @@ empty_list = []
 empty_dict = {}
 nothing = None
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let messages: Vec<&str> = diagnostics
         .iter()
         .filter(|d| d.code.code == "BSK-E0003")

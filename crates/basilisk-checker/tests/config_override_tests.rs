@@ -63,7 +63,10 @@ fn global_rule_severity_override_disables_rule() {
     };
     let diags = check_with(source, "test.py", &config);
     let e0001_after = diags.iter().filter(|d| d.code.code == "BSK-E0001").count();
-    assert_eq!(e0001_after, 0, "BSK-E0001 should be suppressed when disabled");
+    assert_eq!(
+        e0001_after, 0,
+        "BSK-E0001 should be suppressed when disabled"
+    );
 }
 
 #[test]
@@ -176,7 +179,10 @@ fn per_path_override_disables_rule() {
     };
     let diags = check_with(source, "vendor/lib/foo.py", &config);
     let has_e0001_after = diags.iter().any(|d| d.code.code == "BSK-E0001");
-    assert!(!has_e0001_after, "BSK-E0001 should be disabled for vendor/**");
+    assert!(
+        !has_e0001_after,
+        "BSK-E0001 should be disabled for vendor/**"
+    );
 }
 
 #[test]

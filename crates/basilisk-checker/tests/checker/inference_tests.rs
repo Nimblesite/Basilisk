@@ -71,7 +71,7 @@ def process(flag: bool):
 
 #[test]
 fn test_self_no_e0001() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("def method(self): pass\n")?;
+    let diags = run_with_config("def method(self): pass\n", &annotation_rules_config())?;
     let e0001: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
@@ -82,7 +82,7 @@ fn test_self_no_e0001() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_cls_no_e0001() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("def method(cls): pass\n")?;
+    let diags = run_with_config("def method(cls): pass\n", &annotation_rules_config())?;
     let e0001: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
@@ -93,18 +93,21 @@ fn test_cls_no_e0001() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_unannotated_param_fires_e0001() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("def process(data): pass\n")?;
+    let diags = run_with_config("def process(data): pass\n", &annotation_rules_config())?;
     let e0001: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
-    assert!(!e0001.is_empty(), "unannotated parameter should fire BSK-E0001");
+    assert!(
+        !e0001.is_empty(),
+        "unannotated parameter should fire BSK-E0001"
+    );
     Ok(())
 }
 
 #[test]
 fn test_missing_return_fires_e0002() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("def process(data: str): pass\n")?;
+    let diags = run_with_config("def process(data: str): pass\n", &annotation_rules_config())?;
     let e0002: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0002")
@@ -241,8 +244,9 @@ fn test_literal_inference_module_scope() -> Result<(), Box<dyn std::error::Error
 STATUS = "active"
 reveal_type(STATUS)  # should be Literal["active"]
 "#;
-    let diags = run(src)?;
-    // BSK-E0003 fires for unannotated module vars (strict mode) — exclude it here.
+    let diags = run_with_config(src, &annotation_rules_config())?;
+    // BSK-E0003 fires for unannotated module vars once the annotation house rules
+    // are enabled in config — exclude it here; this test is about literal inference.
     let non_e0003: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code != "BSK-E0003")
@@ -272,12 +276,15 @@ def f() -> None:
 
 #[test]
 fn test_annotated_var_redundant() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("x: int = 42\n")?;
+    let diags = run_with_config("x: int = 42\n", &annotation_rules_config())?;
     let w0050: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-W0050")
         .collect();
-    assert!(!w0050.is_empty(), "redundant annotation should fire BSK-W0050");
+    assert!(
+        !w0050.is_empty(),
+        "redundant annotation should fire BSK-W0050"
+    );
     Ok(())
 }
 
@@ -303,7 +310,7 @@ y: str = "hello"
 z: bool = True
 w: bytes = b"data"
 "#;
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let w0050: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-W0050")
@@ -323,7 +330,7 @@ x: float = 42
 y: list[int | str] = [1]
 z: tuple[float, float] = (0, 0)
 ";
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let w0050: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-W0050")
@@ -358,7 +365,7 @@ x: float = 42
 y: bool = True
 z: float = 3.14
 ";
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
 
     let e0014: Vec<_> = diags
         .iter()
@@ -378,7 +385,7 @@ x: list[int] = [1, 2, 3]
 y: dict[str, int] = {"a": 1, "b": 2}
 z: set[int] = {1, 2, 3}
 "#;
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let w0050: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-W0050")
@@ -399,7 +406,7 @@ x: list[int | str] = [1, "hello"]
 y: dict[str, int | float] = {"a": 1, "b": 3.14}
 z: set[int | bool] = {1, True}
 "#;
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let w0050: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-W0050")
@@ -417,7 +424,7 @@ fn test_function_parameter_exemption() -> Result<(), Box<dyn std::error::Error>>
 def f(x: int) -> None:
     pass
 ";
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let w0050: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-W0050")
@@ -435,11 +442,14 @@ fn test_return_type_exemption() -> Result<(), Box<dyn std::error::Error>> {
 def f() -> int:
     return 42
 ";
-    let diags = run(src)?;
+    let diags = run_with_config(src, &annotation_rules_config())?;
     let w0050: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-W0050")
         .collect();
-    assert!(w0050.is_empty(), "return types should be exempt from BSK-W0050");
+    assert!(
+        w0050.is_empty(),
+        "return types should be exempt from BSK-W0050"
+    );
     Ok(())
 }

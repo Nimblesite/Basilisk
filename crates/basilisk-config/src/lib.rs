@@ -367,7 +367,10 @@ disabled = ["BSK-E0001"]
                     "disabled rules should be parsed"
                 );
                 assert_eq!(
-                    tests_override.rule_overrides.get("imports_unresolved").copied(),
+                    tests_override
+                        .rule_overrides
+                        .get("imports_unresolved")
+                        .copied(),
                     Some(RuleSeverity::Warning),
                     "rule overrides should contain imports_unresolved as warning"
                 );
@@ -392,7 +395,10 @@ disabled = ["BSK-E0001"]
             ..Default::default()
         };
 
-        assert_eq!(cfg.rule_severity("imports_unresolved"), Some(RuleSeverity::Warning));
+        assert_eq!(
+            cfg.rule_severity("imports_unresolved"),
+            Some(RuleSeverity::Warning)
+        );
         assert_eq!(cfg.rule_severity("BSK-E0001"), Some(RuleSeverity::Disabled));
         assert_eq!(
             cfg.rule_severity("BSK-E9999"),
@@ -417,7 +423,10 @@ disabled = ["BSK-E0001"]
         };
 
         assert!(
-            cfg.is_rule_disabled_for_path("imports_unresolved", std::path::Path::new("vendor/lib/foo.py")),
+            cfg.is_rule_disabled_for_path(
+                "imports_unresolved",
+                std::path::Path::new("vendor/lib/foo.py")
+            ),
             "imports_unresolved should be disabled for vendor paths"
         );
         assert!(
@@ -425,7 +434,10 @@ disabled = ["BSK-E0001"]
             "BSK-E0001 should be disabled for vendor paths"
         );
         assert!(
-            !cfg.is_rule_disabled_for_path("imports_unresolved", std::path::Path::new("src/app.py")),
+            !cfg.is_rule_disabled_for_path(
+                "imports_unresolved",
+                std::path::Path::new("src/app.py")
+            ),
             "imports_unresolved should NOT be disabled for non-vendor paths"
         );
         assert!(

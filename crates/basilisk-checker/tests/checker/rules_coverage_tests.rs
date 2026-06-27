@@ -202,7 +202,8 @@ class Movie(TypedDict):
 // ============================================================================
 
 #[test]
-fn pep_695_type_statement_invalid_rhs_typealiastype_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn pep_695_type_statement_invalid_rhs_typealiastype_exercise(
+) -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAliasType
 MyType = TypeAliasType("MyType", int)

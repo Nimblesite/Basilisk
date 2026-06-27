@@ -57,7 +57,10 @@ fn no_diagnostics_for_fully_annotated_function() -> Result<(), Box<dyn std::erro
 
 #[test]
 fn emits_e0001_for_missing_parameter_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_config("def process(data) -> None:\n    pass\n", &annotation_rules_config())?;
+    let diags = run_with_config(
+        "def process(data) -> None:\n    pass\n",
+        &annotation_rules_config(),
+    )?;
     assert_eq!(diags.len(), 1);
     assert_eq!(diags[0].code.code, "BSK-E0001");
     assert_eq!(diags[0].severity, Severity::Error);
@@ -66,7 +69,10 @@ fn emits_e0001_for_missing_parameter_annotation() -> Result<(), Box<dyn std::err
 
 #[test]
 fn emits_e0002_for_missing_return_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_config("def process(data: str):\n    pass\n", &annotation_rules_config())?;
+    let diags = run_with_config(
+        "def process(data: str):\n    pass\n",
+        &annotation_rules_config(),
+    )?;
     assert_eq!(diags.len(), 1);
     assert_eq!(diags[0].code.code, "BSK-E0002");
     assert_eq!(diags[0].severity, Severity::Error);
@@ -86,7 +92,10 @@ fn emits_both_for_unannotated_function() -> Result<(), Box<dyn std::error::Error
 
 #[test]
 fn emits_one_e0001_per_unannotated_parameter() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_config("def multi(a, b, c) -> None:\n    pass\n", &annotation_rules_config())?;
+    let diags = run_with_config(
+        "def multi(a, b, c) -> None:\n    pass\n",
+        &annotation_rules_config(),
+    )?;
     let count = diags.iter().filter(|d| d.code.code == "BSK-E0001").count();
     assert_eq!(
         count, 3,
@@ -178,7 +187,11 @@ fn fires_for_all_three_unresolvable_rhs_kinds() -> Result<(), Box<dyn std::error
         .iter()
         .filter(|d| d.code.code == "BSK-E0003")
         .collect();
-    assert_eq!(e3.len(), 3, "all three unresolvable kinds must fire BSK-E0003");
+    assert_eq!(
+        e3.len(),
+        3,
+        "all three unresolvable kinds must fire BSK-E0003"
+    );
     Ok(())
 }
 
@@ -432,8 +445,7 @@ fn annotation_at_end_of_file_no_newline() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn annotation_without_space_after_colon_does_not_fire(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn annotation_without_space_after_colon_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     // `x:str = 42` — colon with no space means `find(": ")` returns None → no E0014
     // This exercises the `?` early-return path in extract_annotation.
     let diags = run("x:str = 42\n")?;
@@ -809,8 +821,7 @@ fn overloads_with_impl_does_not_fire() -> Result<(), Box<dyn std::error::Error>>
 // ---------------------------------------------------------------------------
 
 #[test]
-fn three_overlapping_overloads_emits_one_per_later() -> Result<(), Box<dyn std::error::Error>>
-{
+fn three_overlapping_overloads_emits_one_per_later() -> Result<(), Box<dyn std::error::Error>> {
     // When there are 3 overlapping overloads, only emit one diagnostic per later overload.
     // The `break` in check_group ensures at most one diag per later overload even if it
     // overlaps multiple earlier ones.
@@ -857,8 +868,7 @@ fn different_param_count_does_not_overlap() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn same_param_count_different_names_does_not_overlap(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn same_param_count_different_names_does_not_overlap() -> Result<(), Box<dyn std::error::Error>> {
     // Overloads with same param count but DIFFERENT param names are not similar —
     // exercises the `if !names_match { return false; }` branch.
     let src = concat!(
@@ -899,7 +909,10 @@ fn method_with_override_decorator_does_not_fire() -> Result<(), Box<dyn std::err
         .iter()
         .filter(|d| d.code.code == "BSK-E0025")
         .collect();
-    assert!(e25.is_empty(), "method with @override must not fire BSK-E0025");
+    assert!(
+        e25.is_empty(),
+        "method with @override must not fire BSK-E0025"
+    );
     Ok(())
 }
 
@@ -935,7 +948,10 @@ fn new_method_not_in_base_does_not_fire() -> Result<(), Box<dyn std::error::Erro
         .iter()
         .filter(|d| d.code.code == "BSK-E0025")
         .collect();
-    assert!(e25.is_empty(), "new method not in base must not fire BSK-E0025");
+    assert!(
+        e25.is_empty(),
+        "new method not in base must not fire BSK-E0025"
+    );
     Ok(())
 }
 
@@ -944,8 +960,7 @@ fn new_method_not_in_base_does_not_fire() -> Result<(), Box<dyn std::error::Erro
 // ---------------------------------------------------------------------------
 
 #[test]
-fn override_when_base_has_no_methods_does_not_fire() -> Result<(), Box<dyn std::error::Error>>
-{
+fn override_when_base_has_no_methods_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     // Base class has no methods — base_func lookup returns None → the override
     // is not checked and no E0016 is emitted.  This exercises the
     // `else { continue }` branch when `base_func` is missing.
@@ -969,8 +984,8 @@ fn override_when_base_has_no_methods_does_not_fire() -> Result<(), Box<dyn std::
 }
 
 #[test]
-fn override_without_self_param_compatible_does_not_fire(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn override_without_self_param_compatible_does_not_fire() -> Result<(), Box<dyn std::error::Error>>
+{
     // Both base and child method have no `self` parameter — exercises the
     // `_ => params` arm of `skip_self_param` (first param name is neither
     // "self" nor "cls").
@@ -1002,7 +1017,10 @@ fn override_without_self_param_compatible_does_not_fire(
 #[test]
 fn type_ignore_suppresses_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     // BSK-E0001 on `x` is suppressed by `# type: ignore`
-    let diags = run_with_config("def foo(x) -> None:  # type: ignore\n    pass\n", &annotation_rules_config())?;
+    let diags = run_with_config(
+        "def foo(x) -> None:  # type: ignore\n    pass\n",
+        &annotation_rules_config(),
+    )?;
     let e1: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
@@ -1018,7 +1036,10 @@ fn type_ignore_suppresses_diagnostic() -> Result<(), Box<dyn std::error::Error>>
 /// Diagnostics on lines WITHOUT `# type: ignore` must NOT be suppressed.
 #[test]
 fn type_ignore_does_not_suppress_other_lines() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run_with_config("def foo(x) -> None:\n    pass\n", &annotation_rules_config())?;
+    let diags = run_with_config(
+        "def foo(x) -> None:\n    pass\n",
+        &annotation_rules_config(),
+    )?;
     let e1: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
@@ -1132,7 +1153,10 @@ fn guards_protocol_class_name_match() -> Result<(), Box<dyn std::error::Error>> 
         .iter()
         .filter(|d| d.message.contains("required"))
         .collect();
-    assert!(proto_e2.is_empty(), "Protocol method must not fire BSK-E0002");
+    assert!(
+        proto_e2.is_empty(),
+        "Protocol method must not fire BSK-E0002"
+    );
     Ok(())
 }
 
@@ -1605,8 +1629,8 @@ fn override_decorator_suppresses() -> Result<(), Box<dyn std::error::Error>> {
 /// The `name == method_name` filter: if `==` becomes `!=`, the wrong method's
 /// decorators are checked. Verify correct method name matching.
 #[test]
-fn override_on_different_method_does_not_suppress_other(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn override_on_different_method_does_not_suppress_other() -> Result<(), Box<dyn std::error::Error>>
+{
     let src = concat!(
         "from typing import override\n",
         "class Base:\n",
@@ -1622,7 +1646,10 @@ fn override_on_different_method_does_not_suppress_other(
         .iter()
         .filter(|d| d.code.code == "BSK-E0025")
         .collect();
-    assert!(!e25.is_empty(), "method without @override must fire BSK-E0025");
+    assert!(
+        !e25.is_empty(),
+        "method without @override must fire BSK-E0025"
+    );
     let messages: Vec<&str> = e25.iter().map(|d| d.message.as_str()).collect();
     assert!(
         messages.iter().any(|m| m.contains('b')),
@@ -2383,8 +2410,7 @@ fn lambda_assigned_to_unannotated_var_fires() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn lambda_assigned_to_annotated_var_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
-{
+fn lambda_assigned_to_annotated_var_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let src = "f: Callable[[int], int] = lambda x: x + 1\n";
     let diags = run_with_config(src, &annotation_rules_config())?;
     let w40: Vec<_> = diags

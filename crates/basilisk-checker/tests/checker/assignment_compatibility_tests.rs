@@ -192,8 +192,7 @@ fn final_with_type_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn no_false_positive_on_pep695_type_alias_annotation(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn no_false_positive_on_pep695_type_alias_annotation() -> Result<(), Box<dyn std::error::Error>> {
     // PEP 695 type alias used as annotation: E0014 should NOT fire because
     // the type alias might expand to a union that includes int.
     let source = r#"
@@ -212,8 +211,8 @@ r1_2: RecursiveTypeAlias1[int] = [1, [1, 2, 3]]
 }
 
 #[test]
-fn no_false_positive_on_homogeneous_tuple_str_annotation(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn no_false_positive_on_homogeneous_tuple_str_annotation() -> Result<(), Box<dyn std::error::Error>>
+{
     // Regression for issue #45: `tuple[str, ...]` is PEP 484's homogeneous
     // variable-length tuple. A literal tuple of all-string elements widens to
     // it and must NOT fire E0014.
@@ -231,8 +230,7 @@ _MODEL_SETTING_KEYS: tuple[str, ...] = ("max_tokens", "temperature", "top_p", "t
 }
 
 #[test]
-fn no_false_positive_on_dict_with_tuple_key_annotation(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn no_false_positive_on_dict_with_tuple_key_annotation() -> Result<(), Box<dyn std::error::Error>> {
     // Regression for issue #51: `dict[tuple[str, str], str]` has a tuple KEY
     // type whose inner comma must not be split by the dict arg parser. A dict
     // literal matching the annotation exactly must NOT fire E0014.
@@ -287,8 +285,7 @@ _DIRECT_TENANT_TABLES: tuple[tuple[str, str], ...] = (
 }
 
 #[test]
-fn variadic_tuple_of_tuples_element_mismatch_fires() -> Result<(), Box<dyn std::error::Error>>
-{
+fn variadic_tuple_of_tuples_element_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
     // The true-positive pair for issue #26: an element violating the variadic
     // element type must still be flagged.
     let source = r#"

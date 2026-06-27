@@ -195,8 +195,8 @@ def make_store() -> object:
 }
 
 #[test]
-fn function_local_import_returned_bare_no_false_positive(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn function_local_import_returned_bare_no_false_positive() -> Result<(), Box<dyn std::error::Error>>
+{
     // Issue #172 (direct shape): a function-local import bound and returned in the
     // same function is a local binding. It must fire neither E0018 ("not defined")
     // nor E0019 ("may be unbound") — the import unconditionally binds the name.

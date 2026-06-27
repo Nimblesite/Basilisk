@@ -60,8 +60,7 @@ fn namedtuple_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn subclass_overriding_annotated_parent_attr_exempt() -> Result<(), Box<dyn std::error::Error>>
-{
+fn subclass_overriding_annotated_parent_attr_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 class BaseRoute:
     priority: int = 10
@@ -191,8 +190,7 @@ class Foo:
 /// an inheritance hierarchy where parent and children use scalar literals.
 /// NONE of these should fire BSK-E0005.
 #[test]
-fn regression_animal_hierarchy_no_false_positives() -> Result<(), Box<dyn std::error::Error>>
-{
+fn regression_animal_hierarchy_no_false_positives() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 class Animal:
     sound = \"...\"

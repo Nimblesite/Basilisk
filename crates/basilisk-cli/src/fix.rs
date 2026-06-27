@@ -337,7 +337,10 @@ mod tests {
         let (py, path) = write_temp("basilisk_test_fix_default_safe.py", "x: int = 42\n");
         let (code, fixed) = fix_and_read(&path, &py, false, &[]);
         assert_eq!(code, 0);
-        assert_eq!(fixed, "x = 42\n", "default (safe) rules should fix BSK-W0050");
+        assert_eq!(
+            fixed, "x = 42\n",
+            "default (safe) rules should fix BSK-W0050"
+        );
     }
 
     #[test]
@@ -404,9 +407,18 @@ mod tests {
         );
         let (code, fixed) = fix_and_read(&path, &py, false, &[]);
         assert_eq!(code, 0);
-        assert!(fixed.contains("x: Any"), "BSK-E0001 not applied, got: {fixed}");
-        assert!(fixed.contains("-> None"), "BSK-E0002 not applied, got: {fixed}");
-        assert!(fixed.contains("y = 42"), "BSK-W0050 not applied, got: {fixed}");
+        assert!(
+            fixed.contains("x: Any"),
+            "BSK-E0001 not applied, got: {fixed}"
+        );
+        assert!(
+            fixed.contains("-> None"),
+            "BSK-E0002 not applied, got: {fixed}"
+        );
+        assert!(
+            fixed.contains("y = 42"),
+            "BSK-W0050 not applied, got: {fixed}"
+        );
     }
 
     #[test]
@@ -453,7 +465,10 @@ mod tests {
         let (py, path) = write_temp("basilisk_test_fix_unsafe.py", "x: int = 42\n");
         let (code, fixed) = fix_and_read(&path, &py, true, &[]);
         assert_eq!(code, 0);
-        assert_eq!(fixed, "x = 42\n", "include_unsafe=true should apply BSK-W0050");
+        assert_eq!(
+            fixed, "x = 42\n",
+            "include_unsafe=true should apply BSK-W0050"
+        );
     }
 
     #[test]
