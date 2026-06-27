@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0140_callable_param_count_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_param_count_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 def two_args(x: int, y: int) -> int:
@@ -18,7 +18,7 @@ cb: Callable[[int], int] = two_args
 }
 
 #[test]
-fn e0140_callable_param_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_param_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 def str_func(x: str) -> str:
@@ -32,7 +32,7 @@ cb: Callable[[int], str] = str_func
 }
 
 #[test]
-fn e0140_valid_callable_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_callable_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 def add(x: int) -> int:
@@ -49,7 +49,7 @@ cb: Callable[[int], int] = add
 }
 
 #[test]
-fn e0140_callable_with_varargs() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_with_varargs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 def varargs_func(*args: int) -> int:
@@ -63,7 +63,7 @@ cb: Callable[[int, int], int] = varargs_func
 }
 
 #[test]
-fn e0140_callable_with_kwargs() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_with_kwargs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 def kwargs_func(**kwargs: int) -> int:
@@ -77,7 +77,7 @@ cb: Callable[[int], int] = kwargs_func
 }
 
 #[test]
-fn e0140_protocol_callback_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_callback_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 

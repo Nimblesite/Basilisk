@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0096_valid_default_factory() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_default_factory() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass, field
 

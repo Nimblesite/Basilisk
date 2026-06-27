@@ -282,7 +282,7 @@ y: int = 2.71
 // =============================================================================
 
 #[test]
-fn e0107_resolve_and_check_class_attrs() -> Result<(), Box<dyn std::error::Error>> {
+fn resolve_and_check_class_attrs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -308,7 +308,7 @@ class MultiNested(Generic[T_co]):
 }
 
 #[test]
-fn e0137_protocol_generic_substitution() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_generic_substitution() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar, Generic, runtime_checkable
 
@@ -338,7 +338,7 @@ class BadTransformer:
 }
 
 #[test]
-fn e0139_typevartuple_with_regular_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_with_regular_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, TypeVar, Generic, Unpack
 
@@ -357,7 +357,7 @@ y: Heterogeneous[int] = Heterogeneous()
 }
 
 #[test]
-fn e0140_callable_protocol_assign() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_protocol_assign() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable, Protocol
 
@@ -380,7 +380,7 @@ f3: Callable[..., None] = lambda: None
 }
 
 #[test]
-fn e0149_pep695_type_param_various() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_type_param_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Box[T]:
     value: T
@@ -408,7 +408,7 @@ async def async_gen[T](x: T) -> T:
 }
 
 #[test]
-fn e0102_typevar_default_constraint_combos() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_constraint_combos() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -428,7 +428,7 @@ class D(Generic[T4]): ...
 }
 
 #[test]
-fn e0147_tuple_starred_various() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_starred_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Tuple
 
@@ -451,7 +451,7 @@ first, *rest = (1, 2, 3, 4)
 }
 
 #[test]
-fn e0131_yield_from_various() -> Result<(), Box<dyn std::error::Error>> {
+fn yield_from_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator, Iterator
 
@@ -478,7 +478,7 @@ def gen4() -> Generator[str, None, None]:
 }
 
 #[test]
-fn e0054_final_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
+fn final_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -498,7 +498,7 @@ class State:
 }
 
 #[test]
-fn e0148_generic_type_param_various() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_type_param_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, Dict, List, Set, Tuple
 
@@ -524,7 +524,7 @@ w: Triple[int, str] = Triple()
 }
 
 #[test]
-fn e0120_generator_multiple_returns() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_multiple_returns() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -545,7 +545,7 @@ def gen2() -> Generator[int, str, None]:
 }
 
 #[test]
-fn e0138_kw_only_and_frozen() -> Result<(), Box<dyn std::error::Error>> {
+fn kw_only_and_frozen() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -571,7 +571,7 @@ k = KWOnly(name="test", value=1)
 }
 
 #[test]
-fn e0119_isinstance_protocol_various() -> Result<(), Box<dyn std::error::Error>> {
+fn isinstance_protocol_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, runtime_checkable
 
@@ -606,7 +606,7 @@ isinstance(MyList(), Iterable)
 }
 
 #[test]
-fn e0146_protocol_classvar_and_property() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_classvar_and_property() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, ClassVar
 
@@ -638,7 +638,7 @@ class GoodMeta:
 }
 
 #[test]
-fn e0143_namedtuple_tuple_ops() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_tuple_ops() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -660,7 +660,7 @@ sub = p[:2]
 }
 
 #[test]
-fn e0126_literal_string_various() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_string_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import LiteralString
 
@@ -679,7 +679,7 @@ z: LiteralString = x
 }
 
 #[test]
-fn e0095_initvar_multiple_fields() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_multiple_fields() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, InitVar
 
@@ -703,7 +703,7 @@ m = MultiInit("test", True, 5, "data")
 }
 
 #[test]
-fn e0130_constrained_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn constrained_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -721,7 +721,7 @@ y = concat(b"hello", b"world")
 }
 
 #[test]
-fn e0142_dataclass_transform_multiple() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_transform_multiple() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import dataclass_transform
 
@@ -746,7 +746,7 @@ class Product:
 }
 
 #[test]
-fn e0116_namedtuple_default_ordering() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_default_ordering() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0064_valid_namedtuple_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_namedtuple_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -21,7 +21,7 @@ class Point(NamedTuple):
 }
 
 #[test]
-fn e0064_namedtuple_functional_form() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_functional_form() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 Point = NamedTuple("Point", [("x", int), ("y", int)])
@@ -33,7 +33,7 @@ Point = NamedTuple("Point", [("x", int), ("y", int)])
 }
 
 #[test]
-fn e0064_unknown_keyword_field_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn unknown_keyword_field_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 Point = NamedTuple("Point", [("x", int), ("y", int)])
@@ -49,7 +49,7 @@ p = Point(x=1, z=3)
 }
 
 #[test]
-fn e0064_keyword_type_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn keyword_type_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 Point = NamedTuple("Point", [("x", int), ("y", int)])
@@ -65,7 +65,7 @@ p = Point(x="hello", y="world")
 }
 
 #[test]
-fn e0064_positional_type_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn positional_type_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 Point = NamedTuple("Point", [("x", int), ("y", int)])
@@ -81,7 +81,7 @@ p = Point("hello", "world")
 }
 
 #[test]
-fn e0064_valid_keyword_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_keyword_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 Point = NamedTuple("Point", [("x", int), ("y", int)])
@@ -97,7 +97,7 @@ p = Point(x=1, y=2)
 }
 
 #[test]
-fn e0064_bytes_for_int_field_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn bytes_for_int_field_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 Record = NamedTuple("Record", [("count", int), ("label", str)])
@@ -113,7 +113,7 @@ r = Record(count=b"data", label="ok")
 }
 
 #[test]
-fn e0064_float_for_int_field_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn float_for_int_field_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 Record = NamedTuple("Record", [("count", int), ("label", str)])

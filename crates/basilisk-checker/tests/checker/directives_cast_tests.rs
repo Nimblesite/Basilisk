@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0031_cast_literal_first_arg_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn cast_literal_first_arg_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import cast
 x: int = 1
@@ -20,7 +20,7 @@ y = cast(1, x)
 }
 
 #[test]
-fn e0031_cast_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn cast_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import cast
 y = cast()
@@ -35,7 +35,7 @@ y = cast()
 }
 
 #[test]
-fn e0031_cast_valid_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn cast_valid_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import cast
 x: int = 1

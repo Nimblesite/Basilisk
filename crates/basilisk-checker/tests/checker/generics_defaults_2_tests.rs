@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0091_typevar_default_incompat_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_incompat_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T", bound=int, default=str)
@@ -15,7 +15,7 @@ T = TypeVar("T", bound=int, default=str)
 }
 
 #[test]
-fn e0091_valid_default() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_default() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T", bound=int, default=int)

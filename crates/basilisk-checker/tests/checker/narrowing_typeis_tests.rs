@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0112_typeguard_passed_where_str_expected() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_passed_where_str_expected() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeGuard, Callable
 def takes_callable_str(f: Callable[[object], str]) -> None: ...
@@ -17,7 +17,7 @@ takes_callable_str(simple_typeguard)
 }
 
 #[test]
-fn e0112_typeguard_passed_where_bool_expected_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_passed_where_bool_expected_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeGuard, Callable
 def takes_callable_bool(f: Callable[[object], bool]) -> None: ...
@@ -33,7 +33,7 @@ takes_callable_bool(simple_typeguard)
 }
 
 #[test]
-fn e0112_typeis_passed_where_str_expected() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_passed_where_str_expected() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeIs, Callable
 def takes_callable_str(f: Callable[[object], str]) -> None: ...
@@ -46,7 +46,7 @@ takes_callable_str(check_int)
 }
 
 #[test]
-fn e0112_protocol_callback_typeguard() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_callback_typeguard() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeGuard, Protocol
 class Checker(Protocol):

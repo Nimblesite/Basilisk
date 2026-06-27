@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0106_concrete_class_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn concrete_class_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -29,7 +29,7 @@ fun(Concrete)
 }
 
 #[test]
-fn e0106_protocol_class_itself() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_class_itself() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -47,7 +47,7 @@ fun(Proto)
 }
 
 #[test]
-fn e0106_protocol_assigned_to_type_variable() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_assigned_to_type_variable() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -67,7 +67,7 @@ widget_type = Drawable
 }
 
 #[test]
-fn e0106_multiple_protocol_violations() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_protocol_violations() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 

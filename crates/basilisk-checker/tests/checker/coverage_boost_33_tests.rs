@@ -19,7 +19,7 @@ fn run_file(path: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0115_deprecated_import_from_sibling_module() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_import_from_sibling_module() -> Result<(), Box<dyn std::error::Error>> {
     let dir = tempfile::tempdir()?;
 
     // Create the "library" module with deprecated definitions
@@ -70,7 +70,7 @@ good = mylib.good_func()
 }
 
 #[test]
-fn e0115_deprecated_from_import_sibling() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_from_import_sibling() -> Result<(), Box<dyn std::error::Error>> {
     let dir = tempfile::tempdir()?;
 
     // Create sibling module with deprecated function
@@ -112,7 +112,7 @@ x = OldTool()
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0048_typealias_invalid_rhs_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn typealias_invalid_rhs_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -177,7 +177,7 @@ GoodSubscript: TypeAlias = list[int]
 }
 
 #[test]
-fn e0048_typealias_alias_name() -> Result<(), Box<dyn std::error::Error>> {
+fn typealias_alias_name() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias as TA
 
@@ -197,7 +197,7 @@ Good: TA = int | str
 }
 
 #[test]
-fn e0048_non_generic_alias_cannot_be_parameterized() -> Result<(), Box<dyn std::error::Error>> {
+fn non_generic_alias_cannot_be_parameterized() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 
@@ -222,7 +222,7 @@ x: Simple[int] = 42
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0150_version_guard_assertion() -> Result<(), Box<dyn std::error::Error>> {
+fn version_guard_assertion() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import sys
 
@@ -256,7 +256,7 @@ def check():
 }
 
 #[test]
-fn e0150_platform_guard_assertion() -> Result<(), Box<dyn std::error::Error>> {
+fn platform_guard_assertion() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import sys
 
@@ -289,7 +289,7 @@ def check():
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0014_basic_mismatch_assertions() -> Result<(), Box<dyn std::error::Error>> {
+fn basic_mismatch_assertions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: int = "hello"
 y: str = 42
@@ -316,7 +316,7 @@ ok: int = 42
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0097_protocol_undeclared_attrs_assertion() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_undeclared_attrs_assertion() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -351,7 +351,7 @@ class MyProto(Protocol):
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0130_generic_method_call_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_method_call_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import TypeVar, Generic
 
 T = TypeVar(\"T\")
@@ -392,7 +392,7 @@ b.set(42)
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0115_deprecated_local_assertion() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_local_assertion() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -427,7 +427,7 @@ ref = old_func
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0115_deprecated_method_via_var_type() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_method_via_var_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -459,7 +459,7 @@ w += 1
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0115_deprecated_in_function_param_type() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_in_function_param_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -485,7 +485,7 @@ def other(items: list) -> None:
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0115_deprecated_control_flow() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_control_flow() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -517,7 +517,7 @@ def func():
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0115_deprecated_property_setter() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_property_setter() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -551,7 +551,7 @@ cfg.setting = 42
 /// EXACTLY the annotated-with-RHS mismatches are flagged and nothing else.
 #[mutation_safe(rule = "e0014")]
 #[test]
-fn e0014_mutant_annotation_and_rhs_required() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_annotation_and_rhs_required() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 # Has annotation, has RHS → should fire
 bad: int = "hello"
@@ -586,7 +586,7 @@ good: int = 42
 /// `typing.TypeAlias` annotation must be skipped by e0014 (handled by e0048).
 #[mutation_safe(rule = "e0014")]
 #[test]
-fn e0014_mutant_typing_dot_typealias_skipped() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_typing_dot_typealias_skipped() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import typing
 
@@ -621,7 +621,7 @@ x: int = "hello"
 /// `TypeAlias as TA` must be skipped by e0014.
 #[mutation_safe(rule = "e0014")]
 #[test]
-fn e0014_mutant_ta_alias_skipped() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_ta_alias_skipped() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias as TA
 
@@ -648,7 +648,7 @@ x: int = "hello"
 /// Annotated params must be included in `param_type_map` for local var checks.
 #[mutation_safe(rule = "e0014")]
 #[test]
-fn e0014_mutant_annotated_param_type_used() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_annotated_param_type_used() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(x: int, y: str) -> None:
     # Local var assigned from param — type should propagate
@@ -675,7 +675,7 @@ def func(x: int, y: str) -> None:
 /// Nested brackets must NOT trigger `if`/`or`/`and` detection inside them.
 #[mutation_safe(rule = "e0048")]
 #[test]
-fn e0048_mutant_nested_brackets_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_nested_brackets_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -734,7 +734,7 @@ BadTernary: TypeAlias = int if True else str
 /// off-by-one and assert the diagnostic message contains the correct type.
 #[mutation_safe(rule = "e0014")]
 #[test]
-fn e0014_mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::error::Error>> {
     // The `\n` at position 0 means rfind returns Some(0).
     // Correct: line_start = 0 + 1 = 1 (skip newline)
     // Mutant:  line_start = 0 * 1 = 0 (include newline → corrupts annotation)

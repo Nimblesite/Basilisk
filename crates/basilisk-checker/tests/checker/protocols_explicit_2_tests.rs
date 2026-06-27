@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0118_super_on_abstract_stub() -> Result<(), Box<dyn std::error::Error>> {
+fn super_on_abstract_stub() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 from abc import abstractmethod
@@ -24,7 +24,7 @@ class BadColor(PColor):
 }
 
 #[test]
-fn e0118_super_on_concrete_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn super_on_concrete_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Base:
     def method(self) -> str:

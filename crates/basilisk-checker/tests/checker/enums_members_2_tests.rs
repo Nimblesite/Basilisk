@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0067_enum_non_member_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_non_member_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import Enum, nonmember
 class Color(Enum):
@@ -17,7 +17,7 @@ class Color(Enum):
 }
 
 #[test]
-fn e0067_valid_enum_members() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_enum_members() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import Enum
 class Color(Enum):

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0035_required_outside_typeddict_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn required_outside_typeddict_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Required
 
@@ -21,7 +21,7 @@ class NotTypedDict:
 }
 
 #[test]
-fn e0035_required_in_typeddict_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn required_in_typeddict_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypedDict, Required
 
@@ -38,7 +38,7 @@ class Movie(TypedDict, total=False):
 }
 
 #[test]
-fn e0035_required_in_function_param_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn required_in_function_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Required
 

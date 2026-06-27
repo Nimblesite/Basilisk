@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0129_literal_0_vs_false() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_0_vs_false() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 def func(a: Literal[0], b: Literal[False]) -> None:
@@ -17,7 +17,7 @@ def func(a: Literal[0], b: Literal[False]) -> None:
 }
 
 #[test]
-fn e0129_augmented_assignment_widens() -> Result<(), Box<dyn std::error::Error>> {
+fn augmented_assignment_widens() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 def func2(a: Literal[3, 4, 5]) -> None:
@@ -29,7 +29,7 @@ def func2(a: Literal[3, 4, 5]) -> None:
 }
 
 #[test]
-fn e0129_valid_literal_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_literal_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 def func(a: Literal[1]) -> None:

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0037_valid_typeddict_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_typeddict_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 Movie = TypedDict("Movie", {"title": str, "year": int})
@@ -20,7 +20,7 @@ Movie = TypedDict("Movie", {"title": str, "year": int})
 }
 
 #[test]
-fn e0037_name_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn name_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 Movie = TypedDict("Film", {"title": str})
@@ -36,7 +36,7 @@ Movie = TypedDict("Film", {"title": str})
 }
 
 #[test]
-fn e0037_keyword_only_form_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn keyword_only_form_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 Movie = TypedDict("Movie", title=str, year=int)

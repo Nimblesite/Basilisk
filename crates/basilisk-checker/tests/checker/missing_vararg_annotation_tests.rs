@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0004_unannotated_args_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_args_fires() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("def foo(*args) -> None:\n    pass\n")?;
     assert!(
         codes(&diags).contains(&"BSK-E0004"),
@@ -15,7 +15,7 @@ fn e0004_unannotated_args_fires() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0004_unannotated_kwargs_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_kwargs_fires() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("def foo(**kwargs) -> None:\n    pass\n")?;
     assert!(
         codes(&diags).contains(&"BSK-E0004"),
@@ -26,7 +26,7 @@ fn e0004_unannotated_kwargs_fires() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0004_annotated_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("def foo(*args: int) -> None:\n    pass\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0004"),
@@ -36,7 +36,7 @@ fn e0004_annotated_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-fn e0004_annotated_kwargs_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_kwargs_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("def foo(**kwargs: str) -> None:\n    pass\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0004"),
@@ -46,7 +46,7 @@ fn e0004_annotated_kwargs_no_diagnostic() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn e0004_both_unannotated_fires_twice() -> Result<(), Box<dyn std::error::Error>> {
+fn both_unannotated_fires_twice() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("def foo(*args, **kwargs) -> None:\n    pass\n")?;
     let count = diags.iter().filter(|d| d.code.code == "BSK-E0004").count();
     assert_eq!(
@@ -57,7 +57,7 @@ fn e0004_both_unannotated_fires_twice() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-fn e0004_stub_body_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn stub_body_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("def foo(*args) -> None:\n    ...\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0004"),

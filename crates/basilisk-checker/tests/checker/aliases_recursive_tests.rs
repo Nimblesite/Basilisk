@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0104_non_cyclical_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn non_cyclical_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 

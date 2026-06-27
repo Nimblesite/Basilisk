@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0042_pep695_with_traditional_typevar_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_with_traditional_typevar_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -24,7 +24,7 @@ class ClassA[V](dict[K, V]):
 }
 
 #[test]
-fn e0042_pep695_only_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_only_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Container[T]:
     value: T
@@ -37,7 +37,7 @@ class Container[T]:
 }
 
 #[test]
-fn e0042_traditional_only_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn traditional_only_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -57,7 +57,7 @@ class Container(Generic[T]):
 }
 
 #[test]
-fn e0042_pep695_function_with_traditional_typevar_fires() -> Result<(), Box<dyn std::error::Error>>
+fn pep695_function_with_traditional_typevar_fires() -> Result<(), Box<dyn std::error::Error>>
 {
     let source = r#"
 from typing import TypeVar

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0063_mutable_dataclass_in_set() -> Result<(), Box<dyn std::error::Error>> {
+fn mutable_dataclass_in_set() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -21,7 +21,7 @@ s = {Point(1, 2)}
 }
 
 #[test]
-fn e0063_frozen_dataclass_hashable() -> Result<(), Box<dyn std::error::Error>> {
+fn frozen_dataclass_hashable() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -41,7 +41,7 @@ s = {Point(1, 2)}
 }
 
 #[test]
-fn e0063_mutable_dataclass_as_dict_key() -> Result<(), Box<dyn std::error::Error>> {
+fn mutable_dataclass_as_dict_key() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 

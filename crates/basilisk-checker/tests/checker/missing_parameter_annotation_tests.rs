@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0001_missing_param_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn missing_param_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def greet(name):
     return name
@@ -19,7 +19,7 @@ def greet(name):
 }
 
 #[test]
-fn e0001_annotated_param_no_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_param_no_fire() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def greet(name: str) -> str:
     return name
@@ -33,7 +33,7 @@ def greet(name: str) -> str:
 }
 
 #[test]
-fn e0001_self_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn self_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Foo:
     def method(self) -> None:
@@ -48,7 +48,7 @@ class Foo:
 }
 
 #[test]
-fn e0001_cls_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn cls_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Foo:
     @classmethod
@@ -64,7 +64,7 @@ class Foo:
 }
 
 #[test]
-fn e0001_multiple_unannotated_params() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_unannotated_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def add(a, b):
     return a + b

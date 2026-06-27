@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0077_protocol_self_return_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_self_return_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, Self
 

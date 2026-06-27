@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0074_specialized_generic_arg_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn specialized_generic_arg_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, Self
 T = TypeVar("T")
@@ -20,7 +20,7 @@ Class1[int](1.0)
 }
 
 #[test]
-fn e0074_valid_specialized_call() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_specialized_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, Self
 T = TypeVar("T")
@@ -39,7 +39,7 @@ Class1[int](42)
 }
 
 #[test]
-fn e0074_cls_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn cls_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, Self
 T = TypeVar("T")

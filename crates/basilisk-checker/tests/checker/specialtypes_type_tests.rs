@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0145_valid_type_usage() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_type_usage() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -26,7 +26,7 @@ func(A)
 }
 
 #[test]
-fn e0145_callable_as_type() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_as_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable, TypeVar
 
@@ -43,7 +43,7 @@ func5(Callable)
 }
 
 #[test]
-fn e0145_unknown_attr_on_type_object() -> Result<(), Box<dyn std::error::Error>> {
+fn unknown_attr_on_type_object() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func8(a: type[object]) -> None:
     a.unknown

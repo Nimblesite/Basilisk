@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0132_consistent_ordering() -> Result<(), Box<dyn std::error::Error>> {
+fn consistent_ordering() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -24,7 +24,7 @@ class GoodChild(Parent[T1, T2], Grandparent[T1, T2]): ...
 }
 
 #[test]
-fn e0132_inconsistent_ordering() -> Result<(), Box<dyn std::error::Error>> {
+fn inconsistent_ordering() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 

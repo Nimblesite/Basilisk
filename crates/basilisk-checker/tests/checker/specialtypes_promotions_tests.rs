@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0065_float_int_attr_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn float_int_attr_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(x: float) -> int:
     return x.numerator
@@ -15,7 +15,7 @@ def func(x: float) -> int:
 }
 
 #[test]
-fn e0065_int_attr_valid() -> Result<(), Box<dyn std::error::Error>> {
+fn int_attr_valid() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(x: int) -> int:
     return x.numerator

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0121_conforming_class() -> Result<(), Box<dyn std::error::Error>> {
+fn conforming_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -26,7 +26,7 @@ x: P = C()
 }
 
 #[test]
-fn e0121_non_conforming_class() -> Result<(), Box<dyn std::error::Error>> {
+fn non_conforming_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -44,7 +44,7 @@ x: P = C()
 }
 
 #[test]
-fn e0121_missing_instance_var() -> Result<(), Box<dyn std::error::Error>> {
+fn missing_instance_var() -> Result<(), Box<dyn std::error::Error>> {
     // A protocol writable instance variable that the implementation provides in
     // no form (attribute, `self.<attr>`, or property) is missing.
     let source = r"
@@ -67,7 +67,7 @@ x: Tmpl = Bad()
 }
 
 #[test]
-fn e0121_instance_var_provided_via_self_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn instance_var_provided_via_self_ok() -> Result<(), Box<dyn std::error::Error>> {
     // The instance variable is provided through `self.val1 = ...` in __init__.
     let source = r"
 from typing import Protocol, Sequence
@@ -90,7 +90,7 @@ x: Tmpl = Good()
 }
 
 #[test]
-fn e0121_keyword_only_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn keyword_only_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     // A keyword-only implementation parameter cannot satisfy a protocol
     // positional-or-keyword parameter (it can't be passed positionally).
     let source = r"
@@ -114,7 +114,7 @@ x: Tmpl = Bad()
 }
 
 #[test]
-fn e0121_positional_only_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn positional_only_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     // A positional-only implementation parameter cannot satisfy a protocol
     // positional-or-keyword parameter (it can't be passed by keyword).
     let source = r"
@@ -138,7 +138,7 @@ x: Tmpl = Bad()
 }
 
 #[test]
-fn e0121_matching_param_kinds_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn matching_param_kinds_ok() -> Result<(), Box<dyn std::error::Error>> {
     // Matching positional-or-keyword parameters (widened types) conform.
     let source = r"
 from typing import Protocol
@@ -161,7 +161,7 @@ x: Tmpl = Good()
 }
 
 #[test]
-fn e0121_call_arg_protocol_element_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn call_arg_protocol_element_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     // Passing a list of `int` literals where `Iterable[SupportsClose]` is
     // expected: `int` has no `close` method.
     let source = r"
@@ -185,7 +185,7 @@ close_all([1])
 }
 
 #[test]
-fn e0121_call_arg_non_literal_elements_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn call_arg_non_literal_elements_ok() -> Result<(), Box<dyn std::error::Error>> {
     // A container of conforming objects (non-literals) must not be flagged.
     let source = r"
 from typing import Protocol, Iterable

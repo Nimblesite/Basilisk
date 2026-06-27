@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0052_frozen_inherits_nonfrozen_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn frozen_inherits_nonfrozen_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -28,7 +28,7 @@ class Sub(Base):
 }
 
 #[test]
-fn e0052_nonfrozen_inherits_frozen_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn nonfrozen_inherits_frozen_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -52,7 +52,7 @@ class Sub(Base):
 }
 
 #[test]
-fn e0052_both_frozen_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn both_frozen_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -75,7 +75,7 @@ class Sub(Base):
 }
 
 #[test]
-fn e0052_assign_frozen_instance_attr_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn assign_frozen_instance_attr_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -97,7 +97,7 @@ p.x = 2.0
 }
 
 #[test]
-fn e0052_non_frozen_instance_assign_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn non_frozen_instance_assign_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0085_arg_count_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn arg_count_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic
 Ts = TypeVarTuple("Ts")
@@ -24,7 +24,7 @@ takes_3d(x)
 }
 
 #[test]
-fn e0085_shared_typevartuple_vararg_length_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn shared_typevartuple_vararg_length_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     // `*args: tuple[*Ts]` binds one TypeVarTuple across every argument, so all
     // tuple-literal arguments must share a length.
     let source = r#"
@@ -45,7 +45,7 @@ func4((0,), (1, 2))
 }
 
 #[test]
-fn e0085_shared_typevartuple_vararg_equal_lengths_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn shared_typevartuple_vararg_equal_lengths_ok() -> Result<(), Box<dyn std::error::Error>> {
     // Equal lengths conform — element types are joined, never conflicting.
     let source = r#"
 from typing import TypeVarTuple
@@ -66,7 +66,7 @@ func4((0,), ("1",))
 }
 
 #[test]
-fn e0085_typevartuple_element_order_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_element_order_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
     // Right arity, but the constructor reorders the declared dimensions.
     let source = r#"
 from typing import Generic, NewType, TypeVarTuple
@@ -91,7 +91,7 @@ v: Array[Height, Width] = Array((Width(1), Height(2)))
 }
 
 #[test]
-fn e0085_typevartuple_element_order_correct_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_element_order_correct_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, NewType, TypeVarTuple
 Shape = TypeVarTuple("Shape")

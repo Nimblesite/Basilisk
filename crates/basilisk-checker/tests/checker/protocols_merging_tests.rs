@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0098_non_protocol_base_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn non_protocol_base_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -24,7 +24,7 @@ class MyProto(Protocol, Base):
 }
 
 #[test]
-fn e0098_protocol_only_bases_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_only_bases_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0116_valid_namedtuple() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_namedtuple() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -21,7 +21,7 @@ class Point(NamedTuple):
 }
 
 #[test]
-fn e0116_underscore_field() -> Result<(), Box<dyn std::error::Error>> {
+fn underscore_field() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -35,7 +35,7 @@ class Bad(NamedTuple):
 }
 
 #[test]
-fn e0116_default_ordering() -> Result<(), Box<dyn std::error::Error>> {
+fn default_ordering() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -49,7 +49,7 @@ class Bad(NamedTuple):
 }
 
 #[test]
-fn e0116_valid_default_ordering() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_default_ordering() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 

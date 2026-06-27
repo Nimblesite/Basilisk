@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn w0014_explicit_any_param_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn explicit_any_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import Any\n\ndef greet(name: Any) -> str:\n    return name\n";
     let diags = run_with_optin_rules(source)?;
     assert!(
@@ -16,7 +16,7 @@ fn w0014_explicit_any_param_fires() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn w0014_explicit_any_return_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn explicit_any_return_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import Any\n\ndef greet(name: str) -> Any:\n    return name\n";
     let diags = run_with_optin_rules(source)?;
     assert!(
@@ -28,7 +28,7 @@ fn w0014_explicit_any_return_fires() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn w0014_explicit_any_fires_even_on_stub() -> Result<(), Box<dyn std::error::Error>> {
+fn explicit_any_fires_even_on_stub() -> Result<(), Box<dyn std::error::Error>> {
     // Explicit Any check fires even on stub bodies (it is not a body-dependent check).
     let source = "from typing import Any\n\ndef greet(name: Any) -> str:\n    ...\n";
     let diags = run_with_optin_rules(source)?;
@@ -41,7 +41,7 @@ fn w0014_explicit_any_fires_even_on_stub() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
-fn w0014_explicit_any_is_a_warning_not_e0011() -> Result<(), Box<dyn std::error::Error>> {
+fn explicit_any_is_a_warning_not_e0011() -> Result<(), Box<dyn std::error::Error>> {
     // The split's whole point: the Any nudge no longer rides the E0011 error code,
     // so it can be silenced independently of the genuine return-mismatch error.
     let source = "from typing import Any\n\ndef greet(name: Any) -> str:\n    return name\n";
@@ -55,7 +55,7 @@ fn w0014_explicit_any_is_a_warning_not_e0011() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
-fn w0014_concrete_types_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn concrete_types_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def greet(name: str) -> str:\n    return name\n";
     let diags = run_with_optin_rules(source)?;
     assert!(

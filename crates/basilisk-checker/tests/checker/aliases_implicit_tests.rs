@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0048_valid_type_alias_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_type_alias_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 MyType: TypeAlias = list[int]
@@ -18,7 +18,7 @@ MyType: TypeAlias = list[int]
 }
 
 #[test]
-fn e0048_type_alias_with_union() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_with_union() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 NumOrStr: TypeAlias = int | str
@@ -32,7 +32,7 @@ NumOrStr: TypeAlias = int | str
 }
 
 #[test]
-fn e0048_type_alias_bool_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_bool_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 Bad: TypeAlias = True
@@ -43,7 +43,7 @@ Bad: TypeAlias = True
 }
 
 #[test]
-fn e0048_type_alias_int_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_int_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 Bad: TypeAlias = 42
@@ -54,7 +54,7 @@ Bad: TypeAlias = 42
 }
 
 #[test]
-fn e0048_type_alias_list_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_list_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 Bad: TypeAlias = [int, str]
@@ -65,7 +65,7 @@ Bad: TypeAlias = [int, str]
 }
 
 #[test]
-fn e0048_type_alias_fstring() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_fstring() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 Bad: TypeAlias = f"hello"
@@ -76,7 +76,7 @@ Bad: TypeAlias = f"hello"
 }
 
 #[test]
-fn e0048_type_alias_conditional() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_conditional() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 Bad: TypeAlias = int if True else str
@@ -87,7 +87,7 @@ Bad: TypeAlias = int if True else str
 }
 
 #[test]
-fn e0048_type_alias_dict() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_dict() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 Bad: TypeAlias = {"a": int}
@@ -98,7 +98,7 @@ Bad: TypeAlias = {"a": int}
 }
 
 #[test]
-fn e0048_type_alias_lambda() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_lambda() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 Bad: TypeAlias = lambda: int
@@ -109,7 +109,7 @@ Bad: TypeAlias = lambda: int
 }
 
 #[test]
-fn e0048_type_alias_nested() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_nested() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 Inner: TypeAlias = list[int]

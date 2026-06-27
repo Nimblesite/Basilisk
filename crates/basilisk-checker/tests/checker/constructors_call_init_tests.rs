@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0111_specialized_generic_arg_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn specialized_generic_arg_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 T = TypeVar("T")
@@ -20,7 +20,7 @@ Box[int](1.0)
 }
 
 #[test]
-fn e0111_no_custom_init_with_args() -> Result<(), Box<dyn std::error::Error>> {
+fn no_custom_init_with_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Empty:
     pass
@@ -33,7 +33,7 @@ Empty(1, 2, 3)
 }
 
 #[test]
-fn e0111_valid_constructor_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_constructor_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class MyClass:
     def __init__(self, x: int) -> None:
@@ -50,7 +50,7 @@ MyClass(42)
 }
 
 #[test]
-fn e0111_self_type_incompatibility() -> Result<(), Box<dyn std::error::Error>> {
+fn self_type_incompatibility() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 T = TypeVar("T")
@@ -69,7 +69,7 @@ SubContainer("not an int")
 }
 
 #[test]
-fn e0111_explicit_self_annotation_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn explicit_self_annotation_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 T = TypeVar("T")
@@ -85,7 +85,7 @@ Class4[str]()
 }
 
 #[test]
-fn e0111_multiple_init_params() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_init_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 T = TypeVar("T")
@@ -102,7 +102,7 @@ Multi[str]("a", "b", 3)
 }
 
 #[test]
-fn e0111_class_with_new_and_init() -> Result<(), Box<dyn std::error::Error>> {
+fn class_with_new_and_init() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 class WithNew:
@@ -119,7 +119,7 @@ WithNew(42)
 }
 
 #[test]
-fn e0111_inherited_init() -> Result<(), Box<dyn std::error::Error>> {
+fn inherited_init() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Base:
     def __init__(self, x: int) -> None:
@@ -142,7 +142,7 @@ Child(42)
 /// not emit constructors_call_init — otherwise every keyword construction of a Pydantic
 /// model is a false positive.
 #[test]
-fn e0111_no_false_positive_on_external_base() -> Result<(), Box<dyn std::error::Error>> {
+fn no_false_positive_on_external_base() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from pydantic import BaseModel
 

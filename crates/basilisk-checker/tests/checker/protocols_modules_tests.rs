@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0079_module_var_protocol_incompat() -> Result<(), Box<dyn std::error::Error>> {
+fn module_var_protocol_incompat() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -26,7 +26,7 @@ x: Drawable = Square()
 }
 
 #[test]
-fn e0079_valid_protocol_conformance() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_protocol_conformance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -48,7 +48,7 @@ x: Drawable = Circle()
 }
 
 #[test]
-fn e0079_missing_method() -> Result<(), Box<dyn std::error::Error>> {
+fn missing_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0073_namedtuple_tuple_compat_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_tuple_compat_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -20,7 +20,7 @@ t: tuple[str, str] = Point(1, 2)
 }
 
 #[test]
-fn e0073_valid_tuple_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_tuple_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 

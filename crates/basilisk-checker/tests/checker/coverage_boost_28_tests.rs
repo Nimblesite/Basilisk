@@ -10,7 +10,7 @@ use super::common::*;
 // =============================================================================
 
 #[test]
-fn e0107_covariant_in_invariant_position() -> Result<(), Box<dyn std::error::Error>> {
+fn covariant_in_invariant_position() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -29,7 +29,7 @@ class Bad(Base[T_co]):
 }
 
 #[test]
-fn e0107_contravariant_in_invariant() -> Result<(), Box<dyn std::error::Error>> {
+fn contravariant_in_invariant() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -48,7 +48,7 @@ class Bad(Base[T_contra]):
 }
 
 #[test]
-fn e0107_covariant_in_contravariant() -> Result<(), Box<dyn std::error::Error>> {
+fn covariant_in_contravariant() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -67,7 +67,7 @@ class Bad(Sink[T_co]):
 }
 
 #[test]
-fn e0107_contravariant_in_covariant() -> Result<(), Box<dyn std::error::Error>> {
+fn contravariant_in_covariant() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -86,7 +86,7 @@ class Bad(Source[T_contra]):
 }
 
 #[test]
-fn e0107_multiple_violations() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_violations() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -107,7 +107,7 @@ class Bad(Pair[T_co, T_contra]):
 }
 
 #[test]
-fn e0107_through_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn through_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, TypeAlias
 
@@ -128,7 +128,7 @@ class Bad(MyAlias):
 }
 
 #[test]
-fn e0107_nested_generics() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_generics() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, List
 
@@ -151,7 +151,7 @@ class Outer(Generic[T_co]):
 // =============================================================================
 
 #[test]
-fn e0054_final_in_while() -> Result<(), Box<dyn std::error::Error>> {
+fn final_in_while() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -167,7 +167,7 @@ while True:
 }
 
 #[test]
-fn e0054_final_in_try() -> Result<(), Box<dyn std::error::Error>> {
+fn final_in_try() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -184,7 +184,7 @@ except:
 }
 
 #[test]
-fn e0054_final_in_with() -> Result<(), Box<dyn std::error::Error>> {
+fn final_in_with() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -203,7 +203,7 @@ with CM():
 }
 
 #[test]
-fn e0054_final_multiple_classes() -> Result<(), Box<dyn std::error::Error>> {
+fn final_multiple_classes() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -233,7 +233,7 @@ b.X = 5
 // =============================================================================
 
 #[test]
-fn e0092_generic_class_too_few() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_class_too_few() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -257,7 +257,7 @@ y: Triple[int, str] = Triple()
 // =============================================================================
 
 #[test]
-fn e0108_slots_with_weakref() -> Result<(), Box<dyn std::error::Error>> {
+fn slots_with_weakref() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -276,7 +276,7 @@ class WithWeakref:
 // =============================================================================
 
 #[test]
-fn e0125_various_attr_patterns() -> Result<(), Box<dyn std::error::Error>> {
+fn various_attr_patterns() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Base:
     class_attr: int = 0
@@ -308,7 +308,7 @@ w = Child.child_inst
 // =============================================================================
 
 #[test]
-fn e0134_list_variance() -> Result<(), Box<dyn std::error::Error>> {
+fn list_variance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import List
 
@@ -328,7 +328,7 @@ b: List[int] = a
 // =============================================================================
 
 #[test]
-fn e0136_callable_return_subtype() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_return_subtype() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -350,7 +350,7 @@ takes_fn(my_fn)
 // =============================================================================
 
 #[test]
-fn e0042_mixed_old_new_typevars() -> Result<(), Box<dyn std::error::Error>> {
+fn mixed_old_new_typevars() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -369,7 +369,7 @@ class MyClass[NewT](Generic[OldT]):
 // =============================================================================
 
 #[test]
-fn e0029_typeddict_method() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -386,7 +386,7 @@ class TD(TypedDict):
 }
 
 #[test]
-fn e0031_invalid_cast() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_cast() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import cast
 
@@ -399,7 +399,7 @@ y = cast(str, 42)
 }
 
 #[test]
-fn e0032_typeddict_invalid_keyword() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_invalid_keyword() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -412,7 +412,7 @@ class TD(TypedDict, total=True, extra=False):
 }
 
 #[test]
-fn e0033_invalid_reveal_type() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_reveal_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import reveal_type
 
@@ -425,7 +425,7 @@ reveal_type(x)
 }
 
 #[test]
-fn e0034_final_class_inherit() -> Result<(), Box<dyn std::error::Error>> {
+fn final_class_inherit() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import final
 
@@ -442,7 +442,7 @@ class Child(FinalClass):
 }
 
 #[test]
-fn e0035_required_outside_typeddict() -> Result<(), Box<dyn std::error::Error>> {
+fn required_outside_typeddict() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Required
 
@@ -455,7 +455,7 @@ class NotTD:
 }
 
 #[test]
-fn e0039_invalid_assert_type() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_assert_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import assert_type
 
@@ -468,7 +468,7 @@ assert_type(x, str)
 }
 
 #[test]
-fn e0040_enum_subclass() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_subclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 
@@ -485,7 +485,7 @@ class Extended(Color):
 }
 
 #[test]
-fn e0043_non_typevar_in_generic() -> Result<(), Box<dyn std::error::Error>> {
+fn non_typevar_in_generic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic
 
@@ -498,7 +498,7 @@ class Bad(Generic[int]):
 }
 
 #[test]
-fn e0046_enum_member_annotated() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_member_annotated() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 
@@ -512,7 +512,7 @@ class Color(Enum):
 }
 
 #[test]
-fn e0049_multiple_unbounded_tuple() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_unbounded_tuple() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Tuple
 
@@ -524,7 +524,7 @@ x: Tuple[int, ..., str, ...] = (1, 2, "a", "b")
 }
 
 #[test]
-fn e0053_assert_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn assert_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import assert_type
 
@@ -538,7 +538,7 @@ assert_type(x, str)
 }
 
 #[test]
-fn e0056_readonly_typeddict() -> Result<(), Box<dyn std::error::Error>> {
+fn readonly_typeddict() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict, ReadOnly
 
@@ -552,7 +552,7 @@ class Config(TypedDict):
 }
 
 #[test]
-fn e0058_annotated_too_few_args() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_too_few_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Annotated
 
@@ -564,7 +564,7 @@ x: Annotated[int] = 42
 }
 
 #[test]
-fn e0061_assert_type_enum_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn assert_type_enum_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import assert_type, Literal
 from enum import Enum
@@ -580,7 +580,7 @@ assert_type(Color.RED, Literal[Color.RED])
 }
 
 #[test]
-fn e0062_noreturn_fallthrough() -> Result<(), Box<dyn std::error::Error>> {
+fn noreturn_fallthrough() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NoReturn
 

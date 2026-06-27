@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0088_isinstance_typeddict_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn isinstance_typeddict_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypedDict
 

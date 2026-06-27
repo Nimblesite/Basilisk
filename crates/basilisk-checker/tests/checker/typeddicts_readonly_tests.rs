@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0056_no_readonly_fields_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn no_readonly_fields_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypedDict
 
@@ -21,7 +21,7 @@ class Config(TypedDict):
 }
 
 #[test]
-fn e0056_readonly_mutation() -> Result<(), Box<dyn std::error::Error>> {
+fn readonly_mutation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 from typing_extensions import ReadOnly

@@ -18,7 +18,7 @@ use common::run;
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0051_invalid_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_literal() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0051_invalid_literal.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -36,7 +36,7 @@ fn e0051_invalid_literal() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0052_frozen_dataclass() -> Result<(), Box<dyn std::error::Error>> {
+fn frozen_dataclass() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0052_frozen_dataclass.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -54,7 +54,7 @@ fn e0052_frozen_dataclass() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0053_assert_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn assert_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     // E0053 may be disabled pending full type inference; just verify the
     // fixture parses and runs through the pipeline without crashing.
     let _diags = run("errors/e0053_assert_type_mismatch.py")?;
@@ -66,7 +66,7 @@ fn e0053_assert_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0054_final_reassignment() -> Result<(), Box<dyn std::error::Error>> {
+fn final_reassignment() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0054_final_reassignment.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -84,7 +84,7 @@ fn e0054_final_reassignment() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0055_typevar_invalid_kwargs() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_invalid_kwargs() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0055_typevar_invalid_kwargs.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -102,7 +102,7 @@ fn e0055_typevar_invalid_kwargs() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0056_readonly_typeddict() -> Result<(), Box<dyn std::error::Error>> {
+fn readonly_typeddict() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0056_readonly_typeddict.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -120,7 +120,7 @@ fn e0056_readonly_typeddict() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0057_pep695_type_alias_invalid() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_type_alias_invalid() -> Result<(), Box<dyn std::error::Error>> {
     // E0057 depends on type_statements being populated by the resolver,
     // which is not yet implemented. Verify the fixture runs without crashing.
     let _diags = run("errors/e0057_pep695_type_alias_invalid.py")?;
@@ -132,7 +132,7 @@ fn e0057_pep695_type_alias_invalid() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0058_annotated_too_few_args() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_too_few_args() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0058_annotated_too_few_args.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -150,7 +150,7 @@ fn e0058_annotated_too_few_args() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0059_dataclass_match_args_false() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_match_args_false() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0059_dataclass_match_args_false.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -168,7 +168,7 @@ fn e0059_dataclass_match_args_false() -> Result<(), Box<dyn std::error::Error>> 
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0060_dataclass_ordering_invalid() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_ordering_invalid() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0060_dataclass_ordering_invalid.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -186,7 +186,7 @@ fn e0060_dataclass_ordering_invalid() -> Result<(), Box<dyn std::error::Error>> 
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0061_assert_type_enum_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn assert_type_enum_literal() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0061_assert_type_enum_literal.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -204,7 +204,7 @@ fn e0061_assert_type_enum_literal() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0062_noreturn_fallthrough() -> Result<(), Box<dyn std::error::Error>> {
+fn noreturn_fallthrough() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0062_noreturn_fallthrough.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -222,7 +222,7 @@ fn e0062_noreturn_fallthrough() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0063_non_hashable_dataclass() -> Result<(), Box<dyn std::error::Error>> {
+fn non_hashable_dataclass() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0063_non_hashable_dataclass.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -240,7 +240,7 @@ fn e0063_non_hashable_dataclass() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0064_namedtuple_invalid_arg() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_invalid_arg() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0064_namedtuple_invalid_arg.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -258,7 +258,7 @@ fn e0064_namedtuple_invalid_arg() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0065_float_param_int_attr() -> Result<(), Box<dyn std::error::Error>> {
+fn float_param_int_attr() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0065_float_param_int_attr.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -276,7 +276,7 @@ fn e0065_float_param_int_attr() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0066_enum_value_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_value_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0066_enum_value_type_mismatch.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -294,7 +294,7 @@ fn e0066_enum_value_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0067_enum_non_member_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_non_member_literal() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0067_enum_non_member_literal.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -312,7 +312,7 @@ fn e0067_enum_non_member_literal() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0068_literal_string_enum() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_string_enum() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0068_literal_string_enum.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -330,7 +330,7 @@ fn e0068_literal_string_enum() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0069_dataclass_kwonly() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_kwonly() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0069_dataclass_kwonly.py")?;
     let filtered: Vec<_> = diags
         .iter()

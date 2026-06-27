@@ -22,7 +22,7 @@ use common::{fixture, run};
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0010_import_from_untyped_module() -> Result<(), Box<dyn std::error::Error>> {
+fn import_from_untyped_module() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0010_untyped_import.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
@@ -37,7 +37,7 @@ fn e0010_import_from_untyped_module() -> Result<(), Box<dyn std::error::Error>> 
 // ---------------------------------------------------------------------------
 
 #[test]
-fn w0014_explicit_any_in_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn explicit_any_in_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0011_explicit_any.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
@@ -52,7 +52,7 @@ fn w0014_explicit_any_in_annotation() -> Result<(), Box<dyn std::error::Error>> 
 // ---------------------------------------------------------------------------
 
 #[test]
-fn w0014_any_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error::Error>> {
+fn any_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0011_vararg_kwarg_any.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0011_vararg_kwarg_any.py"))?;
     assert_diagnostics(
@@ -72,7 +72,7 @@ fn w0014_any_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error::Erro
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0013_none_annotated_returning_value() -> Result<(), Box<dyn std::error::Error>> {
+fn none_annotated_returning_value() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0013_return_mismatch.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
@@ -87,7 +87,7 @@ fn e0013_none_annotated_returning_value() -> Result<(), Box<dyn std::error::Erro
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0014_literal_assigned_to_incompatible_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_assigned_to_incompatible_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0014_assignment_incompatible.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
@@ -102,7 +102,7 @@ fn e0014_literal_assigned_to_incompatible_annotation() -> Result<(), Box<dyn std
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0014_bytes_and_float_mismatches() -> Result<(), Box<dyn std::error::Error>> {
+fn bytes_and_float_mismatches() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0014_bytes_float_mismatches.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0014_bytes_float_mismatches.py"))?;
     assert_diagnostics(
@@ -122,7 +122,7 @@ fn e0014_bytes_and_float_mismatches() -> Result<(), Box<dyn std::error::Error>> 
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0015_invalid_type_arg_count() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_type_arg_count() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0015_invalid_type_arg.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
@@ -137,7 +137,7 @@ fn e0015_invalid_type_arg_count() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0015_set_frozenset_and_dict_wrong_arg_count() -> Result<(), Box<dyn std::error::Error>> {
+fn set_frozenset_and_dict_wrong_arg_count() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0015_more_generics.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0015_more_generics.py"))?;
     assert_diagnostics(
@@ -157,7 +157,7 @@ fn e0015_set_frozenset_and_dict_wrong_arg_count() -> Result<(), Box<dyn std::err
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0020_overload_missing_implementation() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_missing_implementation() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0020_missing_overload_impl.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
@@ -172,7 +172,7 @@ fn e0020_overload_missing_implementation() -> Result<(), Box<dyn std::error::Err
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0020_exact_diagnostic_for_double() -> Result<(), Box<dyn std::error::Error>> {
+fn exact_diagnostic_for_double() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0020_missing_overload_impl.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0020_missing_overload_impl.py"))?;
     assert_diagnostics(
@@ -188,7 +188,7 @@ fn e0020_exact_diagnostic_for_double() -> Result<(), Box<dyn std::error::Error>>
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0021_overlapping_overload_signatures() -> Result<(), Box<dyn std::error::Error>> {
+fn overlapping_overload_signatures() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0021_overlapping_overloads.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
@@ -203,7 +203,7 @@ fn e0021_overlapping_overload_signatures() -> Result<(), Box<dyn std::error::Err
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0021_exact_diagnostics_for_overlapping_overloads() -> Result<(), Box<dyn std::error::Error>> {
+fn exact_diagnostics_for_overlapping_overloads() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0021_overlapping_overloads.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0021_overlapping_overloads.py"))?;
     assert_diagnostics(
@@ -225,7 +225,7 @@ fn e0021_exact_diagnostics_for_overlapping_overloads() -> Result<(), Box<dyn std
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0023_match_without_wildcard() -> Result<(), Box<dyn std::error::Error>> {
+fn match_without_wildcard() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0023_nonexhaustive_match.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
@@ -240,7 +240,7 @@ fn e0023_match_without_wildcard() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0024_numeric_literal_as_type_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn numeric_literal_as_type_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0024_invalid_type_form.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
@@ -255,7 +255,7 @@ fn e0024_numeric_literal_as_type_annotation() -> Result<(), Box<dyn std::error::
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0024_numeric_literal_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error::Error>> {
+fn numeric_literal_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0024_vararg_kwarg_return_literal.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0024_vararg_kwarg_return_literal.py"))?;
     assert_diagnostics(
@@ -275,7 +275,7 @@ fn e0024_numeric_literal_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std:
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0025_override_without_decorator() -> Result<(), Box<dyn std::error::Error>> {
+fn override_without_decorator() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0025_missing_override.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
@@ -293,7 +293,7 @@ fn e0025_override_without_decorator() -> Result<(), Box<dyn std::error::Error>> 
 /// E0012: Argument type mismatch.
 /// Requires a type inference engine — not implemented in Phase 1.
 #[test]
-fn e0012_argument_type_mismatch_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn argument_type_mismatch_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0012_wrong_arg_type.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "calls_argument_type"),
@@ -305,7 +305,7 @@ fn e0012_argument_type_mismatch_not_yet_implemented() -> Result<(), Box<dyn std:
 /// E0016: Incompatible method override (type-level).
 /// Requires class hierarchy + type inference — not implemented in Phase 1.
 #[test]
-fn e0016_incompatible_method_override_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>>
+fn incompatible_method_override_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>>
 {
     let diags = run("errors/e0016_incompatible_override.py")?;
     assert!(
@@ -331,7 +331,7 @@ fn e0017_incompatible_variable_override_not_yet_implemented(
 /// E0018: Undefined variable.
 /// Requires full scope analysis of expressions — not implemented in Phase 1.
 #[test]
-fn e0018_undefined_variable_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn undefined_variable_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0018_undefined_variable.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "names_undefined"),
@@ -343,7 +343,7 @@ fn e0018_undefined_variable_not_yet_implemented() -> Result<(), Box<dyn std::err
 /// E0019: Unbound variable on some code paths.
 /// Requires full flow analysis — not implemented in Phase 1.
 #[test]
-fn e0019_unbound_variable_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn unbound_variable_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0019_unbound_variable.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "names_unbound"),
@@ -355,7 +355,7 @@ fn e0019_unbound_variable_not_yet_implemented() -> Result<(), Box<dyn std::error
 /// E0022: Unhashable type in hash-requiring context.
 /// Requires type inference — not implemented in Phase 1.
 #[test]
-fn e0022_unhashable_type_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
+fn unhashable_type_not_yet_implemented() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0022_unhashable_type.py")?;
     assert!(
         diags.iter().any(|d| d.code.code == "dict_key_hashable"),

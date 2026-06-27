@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0002_missing_return_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn missing_return_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def greet(name: str):
     return name
@@ -19,7 +19,7 @@ def greet(name: str):
 }
 
 #[test]
-fn e0002_with_return_annotation_no_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn with_return_annotation_no_fire() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def greet(name: str) -> str:
     return name
@@ -33,7 +33,7 @@ def greet(name: str) -> str:
 }
 
 #[test]
-fn e0002_none_return_annotation_no_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn none_return_annotation_no_fire() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def do_nothing() -> None:
     pass

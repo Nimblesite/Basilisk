@@ -11,7 +11,7 @@ use super::common::*;
 // =============================================================================
 
 #[test]
-fn e0067_enum_non_member_method() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_non_member_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 from typing import Literal
@@ -39,7 +39,7 @@ x: Literal[Color.display]
 }
 
 #[test]
-fn e0067_enum_valid_member_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_valid_member_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 from typing import Literal
@@ -59,7 +59,7 @@ x: Literal[Color.RED] = Color.RED
 // =============================================================================
 
 #[test]
-fn e0072_overload_getitem_no_match() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_getitem_no_match() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -90,7 +90,7 @@ x = b["invalid"]
 // =============================================================================
 
 #[test]
-fn e0113_typeis_inconsistent() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_inconsistent() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeIs
 
@@ -111,7 +111,7 @@ def is_str(x: int) -> TypeIs[str]:
 }
 
 #[test]
-fn e0113_typeis_consistent() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_consistent() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeIs
 
@@ -136,7 +136,7 @@ def is_str(x: object) -> TypeIs[str]:
 // =============================================================================
 
 #[test]
-fn e0041_too_few_plain_call() -> Result<(), Box<dyn std::error::Error>> {
+fn too_few_plain_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def greet(name: str, greeting: str) -> str:
     return f"{greeting}, {name}"
@@ -157,7 +157,7 @@ greet("Alice")
 }
 
 #[test]
-fn e0041_constructor_too_few() -> Result<(), Box<dyn std::error::Error>> {
+fn constructor_too_few() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Point:
     def __init__(self, x: int, y: int, z: int) -> None:
@@ -179,7 +179,7 @@ p = Point(1)
 }
 
 #[test]
-fn e0041_namedtuple_too_few() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_too_few() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -201,7 +201,7 @@ p = Point(1)
 }
 
 #[test]
-fn e0041_no_args_call() -> Result<(), Box<dyn std::error::Error>> {
+fn no_args_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def greet(name: str, greeting: str) -> str:
     return f"{greeting}, {name}"
@@ -226,7 +226,7 @@ greet()
 // =============================================================================
 
 #[test]
-fn e0047_invalid_annotation_deep() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_annotation_deep() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def process(x: 42) -> None:
     pass
@@ -244,7 +244,7 @@ def compute(y: "invalid annotation") -> None:
 // =============================================================================
 
 #[test]
-fn e0015_generic_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Optional, List, Dict, Set
 
@@ -272,7 +272,7 @@ w: Set[int, str, float] = set()
 // =============================================================================
 
 #[test]
-fn e0126_literal_string_assignment_deep() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_string_assignment_deep() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import LiteralString
 
@@ -294,7 +294,7 @@ def process(s: str) -> None:
 // =============================================================================
 
 #[test]
-fn e0142_dataclass_transform_base_class() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_transform_base_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import dataclass_transform
 
@@ -315,7 +315,7 @@ class User(ModelBase):
 // =============================================================================
 
 #[test]
-fn e0120_generator_yield_all_types() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_yield_all_types() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -341,7 +341,7 @@ def gen3() -> Generator[float, None, str]:
 // =============================================================================
 
 #[test]
-fn e0102_typevar_default_various() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -361,7 +361,7 @@ class Container(Generic[T1, T2, T3]):
 // =============================================================================
 
 #[test]
-fn e0130_typevar_in_many_functions() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_in_many_functions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -391,7 +391,7 @@ def multi(x: T, y: U) -> T:
 // =============================================================================
 
 #[test]
-fn e0076_overload_class_method() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_class_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -413,7 +413,7 @@ class Parser:
 // =============================================================================
 
 #[test]
-fn e0146_protocol_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -436,7 +436,7 @@ class JSONSerializer:
 // =============================================================================
 
 #[test]
-fn e0116_namedtuple_with_generic() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_with_generic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple, Generic, TypeVar
 
@@ -455,7 +455,7 @@ class Pair(NamedTuple, Generic[T]):
 // =============================================================================
 
 #[test]
-fn e0143_namedtuple_assign_subscript_oob() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_assign_subscript_oob() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 

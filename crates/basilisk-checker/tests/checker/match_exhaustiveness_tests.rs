@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0023_match_without_wildcard_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn match_without_wildcard_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def check_val(x: int) -> str:
     match x:
@@ -24,7 +24,7 @@ def check_val(x: int) -> str:
 }
 
 #[test]
-fn e0023_match_with_wildcard_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn match_with_wildcard_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def check_val(x: int) -> str:
     match x:
@@ -42,7 +42,7 @@ def check_val(x: int) -> str:
 }
 
 #[test]
-fn e0023_bare_capture_is_irrefutable_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn bare_capture_is_irrefutable_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     // `case other:` is a bare capture — irrefutable, like `case _:` — so the
     // match is exhaustive and E0023 must not fire (conformance
     // tuples_type_compat.py func7).
@@ -64,7 +64,7 @@ def check_val(x: int) -> str:
 }
 
 #[test]
-fn e0023_guarded_capture_still_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn guarded_capture_still_fires() -> Result<(), Box<dyn std::error::Error>> {
     // A capture *with a guard* is refutable (the guard can fail), so the match
     // is not exhaustive and E0023 must still fire.
     let source = r#"
@@ -86,7 +86,7 @@ def check_val(x: int) -> str:
 }
 
 #[test]
-fn e0023_structural_sequence_match_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn structural_sequence_match_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     // Structural decomposition of an open-ended tuple union: a catch-all is not
     // required for correctness, so E0023 must not fire (conformance
     // tuples_type_compat.py func6).

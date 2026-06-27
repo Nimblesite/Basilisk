@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0130_nested_class_reuses_outer_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_class_reuses_outer_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 T = TypeVar("T")
@@ -18,7 +18,7 @@ class Outer(Generic[T]):
 }
 
 #[test]
-fn e0130_nested_class_in_generic_function() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_class_in_generic_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 T = TypeVar("T")
@@ -33,7 +33,7 @@ def func(x: T) -> T:
 }
 
 #[test]
-fn e0130_module_level_typevar_subscript() -> Result<(), Box<dyn std::error::Error>> {
+fn module_level_typevar_subscript() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T")
@@ -45,7 +45,7 @@ x = list[T]()
 }
 
 #[test]
-fn e0130_method_call_typevar_substitution() -> Result<(), Box<dyn std::error::Error>> {
+fn method_call_typevar_substitution() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 T = TypeVar("T")

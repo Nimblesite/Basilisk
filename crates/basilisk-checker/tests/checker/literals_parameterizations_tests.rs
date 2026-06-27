@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0051_valid_int_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_int_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 x: Literal[1] = 1
@@ -17,7 +17,7 @@ x: Literal[1] = 1
 }
 
 #[test]
-fn e0051_valid_str_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_str_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal
 x: Literal["hello"] = "hello"
@@ -33,7 +33,7 @@ x: Literal["hello"] = "hello"
 }
 
 #[test]
-fn e0051_valid_bool_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_bool_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 x: Literal[True] = True
@@ -46,7 +46,7 @@ x: Literal[True] = True
 }
 
 #[test]
-fn e0051_valid_none_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_none_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 x: Literal[None] = None
@@ -59,7 +59,7 @@ x: Literal[None] = None
 }
 
 #[test]
-fn e0051_float_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn float_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 x: Literal[3.14] = 3.14
@@ -75,7 +75,7 @@ x: Literal[3.14] = 3.14
 }
 
 #[test]
-fn e0051_bare_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn bare_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 x: Literal
@@ -91,7 +91,7 @@ x: Literal
 }
 
 #[test]
-fn e0051_type_object_in_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn type_object_in_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 x: Literal[int]
@@ -107,7 +107,7 @@ x: Literal[int]
 }
 
 #[test]
-fn e0051_ellipsis_in_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn ellipsis_in_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 x: Literal[...]
@@ -123,7 +123,7 @@ x: Literal[...]
 }
 
 #[test]
-fn e0051_valid_negative_int_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_negative_int_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 x: Literal[-1] = -1
@@ -136,7 +136,7 @@ x: Literal[-1] = -1
 }
 
 #[test]
-fn e0051_valid_enum_member_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_enum_member_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 from enum import Enum

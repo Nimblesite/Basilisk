@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0012_str_literal_for_int_param_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn str_literal_for_int_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def add(x: int, y: int) -> int:
     return x + y
@@ -21,7 +21,7 @@ result: int = add("hello", "world")
 }
 
 #[test]
-fn e0012_correct_arg_types_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn correct_arg_types_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def add(x: int, y: int) -> int:
     return x + y
@@ -37,7 +37,7 @@ result: int = add(1, 2)
 }
 
 #[test]
-fn e0012_int_literal_for_str_param_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn int_literal_for_str_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def greet(name: str) -> str:
     return name
@@ -54,7 +54,7 @@ result: str = greet(42)
 }
 
 #[test]
-fn e0012_float_literal_for_int_param_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn float_literal_for_int_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def count(n: int) -> int:
     return n
@@ -71,7 +71,7 @@ result: int = count(3.14)
 }
 
 #[test]
-fn e0012_bytes_literal_for_str_param_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn bytes_literal_for_str_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def process(data: str) -> str:
     return data
@@ -88,7 +88,7 @@ result: str = process(b"hello")
 }
 
 #[test]
-fn e0012_str_for_bytes_param_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn str_for_bytes_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def process(data: bytes) -> bytes:
     return data
@@ -105,7 +105,7 @@ result: bytes = process("hello")
 }
 
 #[test]
-fn e0012_none_for_type_param_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn none_for_type_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def register(cls: type) -> None:
     pass
@@ -122,7 +122,7 @@ register(None)
 }
 
 #[test]
-fn e0012_overloaded_function_correct_args() -> Result<(), Box<dyn std::error::Error>> {
+fn overloaded_function_correct_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -147,7 +147,7 @@ result: str = parse("hello")
 }
 
 #[test]
-fn e0012_multiple_params_mixed_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_params_mixed_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def multi(a: int, b: str, c: float) -> None:
     pass

@@ -7,7 +7,7 @@ use super::common::*;
 // Many small targeted tests to exercise specific code paths
 
 #[test]
-fn e0026_typevar_name_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_name_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("Wrong")
@@ -18,7 +18,7 @@ T = TypeVar("Wrong")
 }
 
 #[test]
-fn e0030_tvt_before_default() -> Result<(), Box<dyn std::error::Error>> {
+fn tvt_before_default() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, TypeVarTuple, Generic
 
@@ -33,7 +33,7 @@ class Bad(Generic[*Ts, T]): ...
 }
 
 #[test]
-fn e0036_classvar_bare() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_bare() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ClassVar
 
@@ -47,7 +47,7 @@ class A:
 }
 
 #[test]
-fn e0036_annotated_classvar() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_classvar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ClassVar, Annotated
 
@@ -60,7 +60,7 @@ class A:
 }
 
 #[test]
-fn e0038_typeddict_multiple_bases() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_multiple_bases() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -79,7 +79,7 @@ class Combined(Base1, Base2):
 }
 
 #[test]
-fn e0041_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
+fn too_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def f(a: int) -> None:
     pass
@@ -92,7 +92,7 @@ f(1, 2, 3)
 }
 
 #[test]
-fn e0042_pep695_class_and_func() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_class_and_func() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -111,7 +111,7 @@ def func[V](x: V) -> V:
 }
 
 #[test]
-fn e0044_final_invalid_position() -> Result<(), Box<dyn std::error::Error>> {
+fn final_invalid_position() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -124,7 +124,7 @@ def f(x: Final[int]) -> None:
 }
 
 #[test]
-fn e0045_annotated_various() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Annotated
 
@@ -140,7 +140,7 @@ def f(a: Annotated[int, "x"]) -> Annotated[str, "y"]:
 }
 
 #[test]
-fn e0048_typealias_tuple_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn typealias_tuple_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -153,7 +153,7 @@ Bad2: TypeAlias = (lambda: int)()
 }
 
 #[test]
-fn e0050_newtype_callable_base() -> Result<(), Box<dyn std::error::Error>> {
+fn newtype_callable_base() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NewType, Callable
 
@@ -166,7 +166,7 @@ CallbackType = NewType("CallbackType", Callable[[int], str])
 }
 
 #[test]
-fn e0051_literal_none() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_none() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal
 
@@ -180,7 +180,7 @@ z: Literal["a", "b", "c"] = "a"
 }
 
 #[test]
-fn e0052_frozen_dataclass_mutation() -> Result<(), Box<dyn std::error::Error>> {
+fn frozen_dataclass_mutation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -197,7 +197,7 @@ obj = Immutable(1, "hello")
 }
 
 #[test]
-fn e0055_typevar_both_variance() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_both_variance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -211,7 +211,7 @@ Good = TypeVar("Good", covariant=True)
 }
 
 #[test]
-fn e0060_order_comparison() -> Result<(), Box<dyn std::error::Error>> {
+fn order_comparison() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -229,7 +229,7 @@ result = a < b
 }
 
 #[test]
-fn e0064_namedtuple_arg_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_arg_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -245,7 +245,7 @@ p = Point("wrong", 42)
 }
 
 #[test]
-fn e0069_kwonly_no_init() -> Result<(), Box<dyn std::error::Error>> {
+fn kwonly_no_init() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, field
 
@@ -263,7 +263,7 @@ c = Config(1, z=3.14)
 }
 
 #[test]
-fn e0073_namedtuple_replace() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_replace() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -280,7 +280,7 @@ q = p._replace(x=2)
 }
 
 #[test]
-fn e0074_constructor_new_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn constructor_new_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class MyClass:
     def __new__(cls, x: int) -> "MyClass":
@@ -295,7 +295,7 @@ class MyClass:
 }
 
 #[test]
-fn e0080_typevar_bound_violation() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_bound_violation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -312,7 +312,7 @@ result = f("hello")
 }
 
 #[test]
-fn e0081_typevartuple_unpack_min() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_unpack_min() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic, Unpack
 
@@ -329,7 +329,7 @@ x: Container[()] = Container()
 }
 
 #[test]
-fn e0082_tvt_callable_params() -> Result<(), Box<dyn std::error::Error>> {
+fn tvt_callable_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Callable, Unpack
 
@@ -344,7 +344,7 @@ def apply(func: Callable[[Unpack[Ts]], int], *args: Unpack[Ts]) -> int:
 }
 
 #[test]
-fn e0084_tvt_invalid_params() -> Result<(), Box<dyn std::error::Error>> {
+fn tvt_invalid_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple
 
@@ -356,7 +356,7 @@ Ts = TypeVarTuple("Ts", default=int)
 }
 
 #[test]
-fn e0085_tvt_arg_count() -> Result<(), Box<dyn std::error::Error>> {
+fn tvt_arg_count() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic, Unpack
 
@@ -371,7 +371,7 @@ class Fixed(Generic[*Ts]):
 }
 
 #[test]
-fn e0086_multiple_tvt() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_tvt() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic
 
@@ -387,7 +387,7 @@ class Bad(Generic[*Ts1, *Ts2]):
 }
 
 #[test]
-fn e0088_typeddict_isinstance() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_isinstance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -402,7 +402,7 @@ isinstance({}, TD)
 }
 
 #[test]
-fn e0089_pep695_invalid_bound() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_invalid_bound() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class A[T: 42]:
     pass
@@ -416,7 +416,7 @@ class B[T: "int"]:
 }
 
 #[test]
-fn e0091_typevar_default_incompat() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_incompat() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -429,7 +429,7 @@ S = TypeVar("S", bound=int, default=str)
 }
 
 #[test]
-fn e0092_too_few_type_args_generic() -> Result<(), Box<dyn std::error::Error>> {
+fn too_few_type_args_generic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -447,7 +447,7 @@ x: Pair[int] = Pair()
 }
 
 #[test]
-fn e0093_typeddict_key_validation() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_key_validation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -463,7 +463,7 @@ u: User = {"name": "Alice", "age": 30, "extra": True}
 }
 
 #[test]
-fn e0097_protocol_self_attr() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_self_attr() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, Self
 
@@ -481,7 +481,7 @@ class GoodChain:
 }
 
 #[test]
-fn e0098_non_protocol_base() -> Result<(), Box<dyn std::error::Error>> {
+fn non_protocol_base() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -497,7 +497,7 @@ class BadProto(Protocol, MyClass):
 }
 
 #[test]
-fn e0099_protocol_instantiation() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_instantiation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -512,7 +512,7 @@ x = MyProto()
 }
 
 #[test]
-fn e0101_typeguard_no_narrowing() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_no_narrowing() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeGuard
 
@@ -525,7 +525,7 @@ def is_str(x: object) -> TypeGuard[str]:
 }
 
 #[test]
-fn e0104_cyclical_type_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn cyclical_type_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias, Union
 
@@ -537,7 +537,7 @@ MyType: TypeAlias = Union[int, "MyType"]
 }
 
 #[test]
-fn e0105_bounded_typevar_attr() -> Result<(), Box<dyn std::error::Error>> {
+fn bounded_typevar_attr() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -555,7 +555,7 @@ def get_name(x: T) -> str:
 }
 
 #[test]
-fn e0108_dataclass_slots_inheritance() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_slots_inheritance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -578,7 +578,7 @@ class C:
 }
 
 #[test]
-fn e0109_typevar_bound_violation_call() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_bound_violation_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -595,7 +595,7 @@ result = add(1, 2)
 }
 
 #[test]
-fn e0110_protocol_variance() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_variance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -610,7 +610,7 @@ class Producer(Protocol[T_co]):
 }
 
 #[test]
-fn e0114_protocol_isinstance_check() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_isinstance_check() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -625,7 +625,7 @@ isinstance(object(), MyProto)
 }
 
 #[test]
-fn e0124_protocol_tuple_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_tuple_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, Tuple
 
@@ -642,7 +642,7 @@ class MyDict:
 }
 
 #[test]
-fn e0125_instance_attr_access_various() -> Result<(), Box<dyn std::error::Error>> {
+fn instance_attr_access_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class MyClass:
     class_var: int = 0
@@ -662,7 +662,7 @@ z = MyClass.class_var
 }
 
 #[test]
-fn e0127_tuple_index_out_of_range() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_index_out_of_range() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Tuple
 
@@ -677,7 +677,7 @@ def f(x: Tuple[int, str, float]) -> None:
 }
 
 #[test]
-fn e0132_inconsistent_typevar_ordering() -> Result<(), Box<dyn std::error::Error>> {
+fn inconsistent_typevar_ordering() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -696,7 +696,7 @@ class B(A[S, T]):
 }
 
 #[test]
-fn e0133_protocol_typevar_variance() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_typevar_variance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -715,7 +715,7 @@ class Writable(Protocol[T]):
 }
 
 #[test]
-fn e0134_invariant_generic_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn invariant_generic_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, List
 
@@ -733,7 +733,7 @@ y: Container[object] = x
 }
 
 #[test]
-fn e0136_callable_param_types() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_param_types() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -751,7 +751,7 @@ takes_int_to_str(wrong_func)
 }
 
 #[test]
-fn e0141_unpack_kwargs_various() -> Result<(), Box<dyn std::error::Error>> {
+fn unpack_kwargs_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict, Unpack
 

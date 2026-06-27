@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0148_constrained_typevar_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn constrained_typevar_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 AnyStr = TypeVar("AnyStr", str, bytes)
@@ -21,7 +21,7 @@ def bad(s: str, b: bytes) -> None:
 }
 
 #[test]
-fn e0148_valid_constrained_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_constrained_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 AnyStr = TypeVar("AnyStr", str, bytes)
@@ -42,7 +42,7 @@ def good() -> None:
 }
 
 #[test]
-fn e0148_mapping_subscript_key_type() -> Result<(), Box<dyn std::error::Error>> {
+fn mapping_subscript_key_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 T = TypeVar("T")

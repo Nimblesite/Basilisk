@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0049_single_unbounded_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn single_unbounded_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Unpack
 Ts = TypeVarTuple("Ts")
@@ -21,7 +21,7 @@ def f(x: tuple[int, *tuple[str, ...], float]) -> None:
 }
 
 #[test]
-fn e0049_no_unbounded_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn no_unbounded_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def f(x: tuple[int, str, float]) -> None:
     pass

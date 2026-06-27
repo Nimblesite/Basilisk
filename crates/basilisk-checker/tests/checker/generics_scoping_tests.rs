@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0117_bound_typevar_in_function() -> Result<(), Box<dyn std::error::Error>> {
+fn bound_typevar_in_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -22,7 +22,7 @@ def fun(x: T) -> list[T]:
 }
 
 #[test]
-fn e0117_unbound_typevar_in_function_body() -> Result<(), Box<dyn std::error::Error>> {
+fn unbound_typevar_in_function_body() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -39,7 +39,7 @@ def fun(x: T) -> list[T]:
 }
 
 #[test]
-fn e0117_bound_typevar_in_class() -> Result<(), Box<dyn std::error::Error>> {
+fn bound_typevar_in_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -57,7 +57,7 @@ class Container(Generic[T]):
 }
 
 #[test]
-fn e0117_unbound_typevar_in_class() -> Result<(), Box<dyn std::error::Error>> {
+fn unbound_typevar_in_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 

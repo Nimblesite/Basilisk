@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0075_parent_assigned_to_self_attr() -> Result<(), Box<dyn std::error::Error>> {
+fn parent_assigned_to_self_attr() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, Self
 from dataclasses import dataclass
@@ -28,7 +28,7 @@ xs = OrdinalLinkedList(value=1, next=LinkedList[int](value=2))
 }
 
 #[test]
-fn e0075_reassignment_parent_to_self() -> Result<(), Box<dyn std::error::Error>> {
+fn reassignment_parent_to_self() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, Self
 from dataclasses import dataclass
@@ -52,7 +52,7 @@ xs.next = LinkedList[int](value=3, next=None)
 }
 
 #[test]
-fn e0075_valid_self_attr_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_self_attr_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, Self
 from dataclasses import dataclass

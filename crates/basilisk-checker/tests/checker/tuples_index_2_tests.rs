@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0127_valid_tuple_index() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_tuple_index() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def f(v: tuple[int, str, float]) -> None:
     x = v[0]
@@ -20,7 +20,7 @@ def f(v: tuple[int, str, float]) -> None:
 }
 
 #[test]
-fn e0127_out_of_range_index() -> Result<(), Box<dyn std::error::Error>> {
+fn out_of_range_index() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def f(v: tuple[int, str, float]) -> None:
     x = v[4]
@@ -31,7 +31,7 @@ def f(v: tuple[int, str, float]) -> None:
 }
 
 #[test]
-fn e0127_negative_out_of_range() -> Result<(), Box<dyn std::error::Error>> {
+fn negative_out_of_range() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def f(v: tuple[int, str, float]) -> None:
     x = v[-4]

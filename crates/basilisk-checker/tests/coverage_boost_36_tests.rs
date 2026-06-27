@@ -14,7 +14,7 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
 // ── E0036: ClassVar in function params ──
 
 #[test]
-fn e0036_classvar_in_params() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_in_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ClassVar
 
@@ -35,7 +35,7 @@ def func(a: ClassVar[int]) -> None:
 // ── E0036: instance checks ──
 
 #[test]
-fn e0036_classvar_instance() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_instance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ClassVar
 
@@ -61,7 +61,7 @@ c.count = 5
 // ── E0047: Scope checks ──
 
 #[test]
-fn e0047_scope_checks() -> Result<(), Box<dyn std::error::Error>> {
+fn scope_checks() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -83,7 +83,7 @@ class Outer(Generic[T]):
 // ── E0014: Tuple check and dataclass check ──
 
 #[test]
-fn e0014_tuple_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Tuple
 
@@ -102,7 +102,7 @@ b: tuple[int, str] = (1, "a", 3.14)
 }
 
 #[test]
-fn e0014_dataclass_field_types() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_field_types() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -129,7 +129,7 @@ bad_l = Line(1, 2)
 // ── E0127: Tuple index out of range ──
 
 #[test]
-fn e0127_tuple_index_range() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_index_range() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(t: tuple[int, str, float]) -> None:
     a = t[0]
@@ -149,7 +149,7 @@ def func(t: tuple[int, str, float]) -> None:
 // ── E0142: dataclass_transform class violation ──
 
 #[test]
-fn e0142_dataclass_transform_class() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_transform_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import dataclass_transform
 
@@ -174,7 +174,7 @@ u.unknown = "bad"
 // ── E0144: type() call constructor ──
 
 #[test]
-fn e0144_type_call_constructor() -> Result<(), Box<dyn std::error::Error>> {
+fn type_call_constructor() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x = type("MyClass", (object,), {})
 y = type("BadClass", (), {"x": 42})
@@ -189,7 +189,7 @@ w = type("cls", (int, str), {})
 // ── E0145: type[] bracket violation ──
 
 #[test]
-fn e0145_type_bracket() -> Result<(), Box<dyn std::error::Error>> {
+fn type_bracket() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Type
 
@@ -208,7 +208,7 @@ b: Type[str] = int
 // ── E0147: Tuple starred unpack ──
 
 #[test]
-fn e0147_tuple_starred_unpack() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_starred_unpack() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Unpack
 
@@ -229,7 +229,7 @@ func2(1, "a")
 // ── E0056: ReadOnly TypedDict mutation ──
 
 #[test]
-fn e0056_readonly_typeddict() -> Result<(), Box<dyn std::error::Error>> {
+fn readonly_typeddict() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 from typing_extensions import ReadOnly
@@ -250,7 +250,7 @@ c["mutable"] = 99
 // ── E0088: TypedDict runtime violation ──
 
 #[test]
-fn e0088_typeddict_runtime() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_runtime() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -272,7 +272,7 @@ isinstance(p, Person)
 // ── E0093: TypedDict key validation ──
 
 #[test]
-fn e0093_typeddict_key() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_key() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -292,7 +292,7 @@ y = opts["unknown"]
 // ── E0066: Enum value type mismatch ──
 
 #[test]
-fn e0066_enum_value_type() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_value_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 
@@ -315,7 +315,7 @@ class Status(Enum):
 // ── E0096: Dataclass field default factory ──
 
 #[test]
-fn e0096_field_default_factory() -> Result<(), Box<dyn std::error::Error>> {
+fn field_default_factory() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass, field
 
@@ -335,7 +335,7 @@ class DC:
 // ── E0098: Non-protocol base in protocol ──
 
 #[test]
-fn e0098_non_protocol_base() -> Result<(), Box<dyn std::error::Error>> {
+fn non_protocol_base() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -353,7 +353,7 @@ class MyProto(Protocol, Regular):
 // ── E0099: Protocol instantiation ──
 
 #[test]
-fn e0099_protocol_instantiation() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_instantiation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -370,7 +370,7 @@ x = Drawable()
 // ── E0101: TypeGuard no narrowing param ──
 
 #[test]
-fn e0101_typeguard_no_param() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_no_param() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeGuard
 
@@ -385,7 +385,7 @@ def bad_guard() -> TypeGuard[str]:
 // ── E0105: Bounded TypeVar attr access ──
 
 #[test]
-fn e0105_bounded_typevar_attr() -> Result<(), Box<dyn std::error::Error>> {
+fn bounded_typevar_attr() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -412,7 +412,7 @@ class Container(Generic[T]):
 // ── E0109: TypeVar bound call violation ──
 
 #[test]
-fn e0109_typevar_bound_call() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_bound_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -431,7 +431,7 @@ def func(x: T) -> T:
 // ── E0114: Protocol runtime_checkable violation ──
 
 #[test]
-fn e0114_protocol_runtime_checkable() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_runtime_checkable() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, runtime_checkable
 
@@ -456,7 +456,7 @@ isinstance(Thing(), Named)
 // ── E0116: NamedTuple def error ──
 
 #[test]
-fn e0116_namedtuple_def_error() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_def_error() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -481,7 +481,7 @@ class Good(NamedTuple):
 // ── E0117: Unbound TypeVar scope ──
 
 #[test]
-fn e0117_unbound_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn unbound_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -500,7 +500,7 @@ def func(x: T) -> list[T]:
 // ── E0124: Protocol tuple element mismatch ──
 
 #[test]
-fn e0124_protocol_tuple_element() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_tuple_element() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -519,7 +519,7 @@ t2: Pair = (1, "bad")
 // ── E0132: Inconsistent TypeVar order ──
 
 #[test]
-fn e0132_inconsistent_typevar_order() -> Result<(), Box<dyn std::error::Error>> {
+fn inconsistent_typevar_order() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -541,7 +541,7 @@ class Container(Generic[T, S]):
 // ── W0040: Lambda missing annotations ──
 
 #[test]
-fn w0040_lambda_annotations() -> Result<(), Box<dyn std::error::Error>> {
+fn lambda_annotations() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -557,7 +557,7 @@ h: Callable[[int, int], int] = lambda a, b: a + b
 // ── W0050: Redundant annotation ──
 
 #[test]
-fn w0050_redundant_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn redundant_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: int = 42
 y: str = "hello"
@@ -574,7 +574,7 @@ b: dict = {"a": 1}
 // ── E0058: Annotated too few arguments ──
 
 #[test]
-fn e0058_annotated_too_few() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_too_few() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Annotated
 
@@ -590,7 +590,7 @@ z: Annotated[int, "metadata"] = 42
 // ── E0070: Never type compatibility ──
 
 #[test]
-fn e0070_never_type() -> Result<(), Box<dyn std::error::Error>> {
+fn never_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Never, NoReturn
 
@@ -633,7 +633,7 @@ class MyClass:
 // ── E0080: TypeVar bound violation ──
 
 #[test]
-fn e0080_typevar_bound_violation() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_bound_violation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -656,7 +656,7 @@ w3 = IntWrapper(True)
 // ── E0091: TypeVar default incompatible ──
 
 #[test]
-fn e0091_typevar_default() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -673,7 +673,7 @@ W = TypeVar("W", int, str, default=int)
 // ── E0084: TypeVarTuple invalid params ──
 
 #[test]
-fn e0084_typevartuple_invalid() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_invalid() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple
 
@@ -688,7 +688,7 @@ Bad = TypeVarTuple("Wrong")
 // ── E0057: type statement invalid RHS ──
 
 #[test]
-fn e0057_type_statement_rhs() -> Result<(), Box<dyn std::error::Error>> {
+fn type_statement_rhs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type Good = int | str
 type Good2 = list[int]

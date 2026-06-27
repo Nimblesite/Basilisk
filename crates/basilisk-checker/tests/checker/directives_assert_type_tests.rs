@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0039_valid_assert_type() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_assert_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import assert_type
 
@@ -20,7 +20,7 @@ assert_type(x, int)
 }
 
 #[test]
-fn e0039_assert_type_no_args() -> Result<(), Box<dyn std::error::Error>> {
+fn assert_type_no_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import assert_type
 assert_type()
@@ -31,7 +31,7 @@ assert_type()
 }
 
 #[test]
-fn e0039_assert_type_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
+fn assert_type_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import assert_type
 x: int = 42

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0030_non_default_after_default_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn non_default_after_default_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 T = TypeVar("T", default=int)
@@ -22,7 +22,7 @@ class Foo(Generic[T, U]):
 }
 
 #[test]
-fn e0030_all_defaults_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn all_defaults_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 T = TypeVar("T", default=int)

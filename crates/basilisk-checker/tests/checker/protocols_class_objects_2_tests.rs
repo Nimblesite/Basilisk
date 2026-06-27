@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0146_concrete_subtype_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn concrete_subtype_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -29,7 +29,7 @@ fun(Concrete)
 }
 
 #[test]
-fn e0146_protocol_class_passed() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_class_passed() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -47,7 +47,7 @@ fun(Proto)
 }
 
 #[test]
-fn e0146_protocol_class_assigned() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_class_assigned() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0141_valid_unpack_kwargs() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_unpack_kwargs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypedDict, Unpack
 
@@ -24,7 +24,7 @@ def func(**kwargs: Unpack[Config]) -> None:
 }
 
 #[test]
-fn e0141_overlap_with_positional() -> Result<(), Box<dyn std::error::Error>> {
+fn overlap_with_positional() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypedDict, Unpack
 

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0094_self_in_method_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn self_in_method_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 
@@ -21,7 +21,7 @@ class Foo:
 }
 
 #[test]
-fn e0094_self_outside_class() -> Result<(), Box<dyn std::error::Error>> {
+fn self_outside_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 

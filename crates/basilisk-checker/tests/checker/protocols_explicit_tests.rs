@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0099_direct_protocol_instantiation_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn direct_protocol_instantiation_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -23,7 +23,7 @@ obj = MyProto()
 }
 
 #[test]
-fn e0099_non_protocol_class_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn non_protocol_class_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class MyClass:
     def method(self) -> int:

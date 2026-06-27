@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0016_incompatible_param_type_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn incompatible_param_type_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import override
 
@@ -27,7 +27,7 @@ class Child(Base):
 }
 
 #[test]
-fn e0016_incompatible_return_type_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn incompatible_return_type_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import override
 
@@ -50,7 +50,7 @@ class Child(Base):
 }
 
 #[test]
-fn e0016_compatible_override_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn compatible_override_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import override
 

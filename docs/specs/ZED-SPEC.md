@@ -29,7 +29,7 @@ Zed extensions are Rust compiled to WASM. The API surface is deliberately narrow
 | DAP debugging | Yes | `get_dap_binary()` on Extension trait |
 | Slash commands | Yes | `run_slash_command()` on Extension trait |
 | Themes | Yes | `themes/` directory |
-| Custom UI / webviews | **No** | Not supported (open issue #21208) |
+| Custom UI / webviews | **No** | Not supported ([zed-industries/zed#21208](https://github.com/zed-industries/zed/issues/21208)) |
 | Inline decorations | **No** | Not available via extension API |
 | Gutter decorations | **No** | Not available via extension API |
 | Custom commands | **No** | Only slash commands in AI context |
@@ -302,7 +302,7 @@ Note: Zed already has built-in Python support via tree-sitter-python. The Basili
 
 `extension.toml` deliberately omits a `[grammars.python]` block. `languages/python/config.toml` declares `grammar = "python"`, which Zed resolves to its **built-in** tree-sitter-python grammar; the query files above (`highlights.scm`, `outline.scm`, `runnables.scm`, …) augment that built-in grammar.
 
-Bundling `[grammars.python]` would force Zed to compile the grammar from source on install, which requires downloading and extracting the ~400 MB `wasi-sdk` toolchain. On a constrained disk that extraction can fail mid-way (`No space left on device`), leaving a corrupt cache that then surfaces as the misleading `failed to compile grammar 'python'`. Reusing the built-in grammar removes the compile step entirely — installs are instant and need no toolchain. Implemented in `basilisk-zed/extension.toml` (absence of `[grammars.*]`).
+Bundling `[grammars.python]` would force Zed to compile the grammar from source on install, which requires downloading and extracting the multi-hundred-megabyte [`wasi-sdk`](https://github.com/WebAssembly/wasi-sdk/releases) toolchain. On a constrained disk that extraction can fail mid-way (`No space left on device`), leaving a corrupt cache that then surfaces as the misleading `failed to compile grammar 'python'`. Reusing the built-in grammar removes the compile step entirely — installs are instant and need no toolchain. Implemented in `basilisk-zed/extension.toml` (absence of `[grammars.*]`).
 
 ## Binary Distribution {#ZED-DIST}
 

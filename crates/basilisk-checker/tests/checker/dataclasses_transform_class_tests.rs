@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0142_frozen_attr_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn frozen_attr_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import dataclass_transform
 @dataclass_transform(kw_only_default=True)
@@ -22,7 +22,7 @@ c.id = 4
 }
 
 #[test]
-fn e0142_kw_only_positional_arg() -> Result<(), Box<dyn std::error::Error>> {
+fn kw_only_positional_arg() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import dataclass_transform
 @dataclass_transform(kw_only_default=True)
@@ -39,7 +39,7 @@ c = Customer(3)
 }
 
 #[test]
-fn e0142_non_frozen_inherits_frozen() -> Result<(), Box<dyn std::error::Error>> {
+fn non_frozen_inherits_frozen() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import dataclass_transform
 @dataclass_transform()
@@ -57,7 +57,7 @@ class NonFrozen(Frozen):
 }
 
 #[test]
-fn e0142_comparison_without_order() -> Result<(), Box<dyn std::error::Error>> {
+fn comparison_without_order() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import dataclass_transform
 @dataclass_transform()

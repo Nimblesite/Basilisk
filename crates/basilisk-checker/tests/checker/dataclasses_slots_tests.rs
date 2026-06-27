@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0108_no_slots_no_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn no_slots_no_fire() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -22,7 +22,7 @@ class DC:
 }
 
 #[test]
-fn e0108_slots_valid_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn slots_valid_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -40,7 +40,7 @@ class DC:
 }
 
 #[test]
-fn e0108_slots_invalid_attr() -> Result<(), Box<dyn std::error::Error>> {
+fn slots_invalid_attr() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -57,7 +57,7 @@ class DC:
 }
 
 #[test]
-fn e0108_slots_access_on_non_slots() -> Result<(), Box<dyn std::error::Error>> {
+fn slots_access_on_non_slots() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -73,7 +73,7 @@ DC2.__slots__
 }
 
 #[test]
-fn e0108_slots_true_with_manual_slots_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn slots_true_with_manual_slots_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from dataclasses import dataclass\n@dataclass(slots=True)\nclass C:\n    x: int\n    __slots__ = ()\n";
     let diags = run(source)?;
     assert!(
@@ -85,7 +85,7 @@ fn e0108_slots_true_with_manual_slots_fires() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn e0108_slots_true_without_manual_slots_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn slots_true_without_manual_slots_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source =
         "from dataclasses import dataclass\n@dataclass(slots=True)\nclass D:\n    x: int\n";
     let diags = run(source)?;

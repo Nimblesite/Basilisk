@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0143_out_of_bounds_index() -> Result<(), Box<dyn std::error::Error>> {
+fn out_of_bounds_index() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -22,7 +22,7 @@ print(p[3])
 }
 
 #[test]
-fn e0143_attribute_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn attribute_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -39,7 +39,7 @@ p.x = 3
 }
 
 #[test]
-fn e0143_subscript_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn subscript_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -56,7 +56,7 @@ p[0] = 3
 }
 
 #[test]
-fn e0143_attribute_deletion() -> Result<(), Box<dyn std::error::Error>> {
+fn attribute_deletion() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -73,7 +73,7 @@ del p.x
 }
 
 #[test]
-fn e0143_valid_access_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_access_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 

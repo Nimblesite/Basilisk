@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0053_valid_assert_type() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_assert_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import assert_type
 
@@ -17,7 +17,7 @@ def f(a: int) -> None:
 }
 
 #[test]
-fn e0053_assert_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn assert_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import assert_type
 
@@ -30,7 +30,7 @@ def f(a: int | str) -> None:
 }
 
 #[test]
-fn e0053_generic_call_return_inferred() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_call_return_inferred() -> Result<(), Box<dyn std::error::Error>> {
     // `ident(1)` returns `int`; asserting `Literal[1]` is a mismatch.
     let source = r#"
 from typing import TypeVar, assert_type, Literal
@@ -50,7 +50,7 @@ assert_type(ident(1), Literal[1])
 }
 
 #[test]
-fn e0053_enum_lookup_inferred() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_lookup_inferred() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 from typing import assert_type, Literal
@@ -73,7 +73,7 @@ assert_type(Color(1), Color)
 }
 
 #[test]
-fn e0053_typevar_default_inferred() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_inferred() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, assert_type, Any
 T4 = TypeVar("T4", default=int)
@@ -92,7 +92,7 @@ assert_type(func1(0), Any)
 }
 
 #[test]
-fn e0053_constrained_typevar_not_inferred() -> Result<(), Box<dyn std::error::Error>> {
+fn constrained_typevar_not_inferred() -> Result<(), Box<dyn std::error::Error>> {
     // A constrained TypeVar widens in ways text-binding cannot judge — no
     // inference, so no false positive.
     let source = r#"
@@ -114,7 +114,7 @@ def f(m: MyStr) -> None:
 }
 
 #[test]
-fn e0053_constructor_call_not_inferred() -> Result<(), Box<dyn std::error::Error>> {
+fn constructor_call_not_inferred() -> Result<(), Box<dyn std::error::Error>> {
     // A class call is a constructor, typed by the class, not analysed here.
     let source = r#"
 from typing import assert_type

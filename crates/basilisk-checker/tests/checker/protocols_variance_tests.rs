@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0110_covariant_in_input_position() -> Result<(), Box<dyn std::error::Error>> {
+fn covariant_in_input_position() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Protocol
 T_co = TypeVar("T_co", covariant=True)
@@ -17,7 +17,7 @@ class BadProto(Protocol[T_co]):
 }
 
 #[test]
-fn e0110_contravariant_in_output_position() -> Result<(), Box<dyn std::error::Error>> {
+fn contravariant_in_output_position() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Protocol
 T_contra = TypeVar("T_contra", contravariant=True)
@@ -30,7 +30,7 @@ class BadProto2(Protocol[T_contra]):
 }
 
 #[test]
-fn e0110_valid_covariant_output() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_covariant_output() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Protocol
 T_co = TypeVar("T_co", covariant=True)
@@ -46,7 +46,7 @@ class GoodProto(Protocol[T_co]):
 }
 
 #[test]
-fn e0110_valid_contravariant_input() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_contravariant_input() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Protocol
 T_contra = TypeVar("T_contra", contravariant=True)
@@ -62,7 +62,7 @@ class GoodProto2(Protocol[T_contra]):
 }
 
 #[test]
-fn e0110_init_exempt_from_variance() -> Result<(), Box<dyn std::error::Error>> {
+fn init_exempt_from_variance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Protocol
 T_co = TypeVar("T_co", covariant=True)

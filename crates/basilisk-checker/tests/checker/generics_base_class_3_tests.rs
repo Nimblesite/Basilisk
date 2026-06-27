@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0134_subclass_invariant_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn subclass_invariant_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Node: ...
 
@@ -21,7 +21,7 @@ def test(s: SymbolTable) -> None:
 }
 
 #[test]
-fn e0134_valid_invariant_match() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_invariant_match() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class SymbolTable(dict[str, list[int]]): ...
 

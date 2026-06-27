@@ -23,6 +23,8 @@ py-spy is a **Rust crate on crates.io**. Basilisk is Rust. This is the only Pyth
 | Overhead | **~2%** | ~5-30% | High | ~2% |
 | CPU / Memory profiling | **Yes** / No | Yes / Yes | No / Yes | Yes / No |
 
+> Comparison drawn from each project's own documentation — [py-spy](https://github.com/benfred/py-spy), [Scalene](https://github.com/plasma-umass/scalene), [Memray](https://github.com/bloomberg/memray), [Austin](https://github.com/P403n1x87/austin); overhead figures are approximate and workload-dependent.
+
 py-spy reads the target process's memory directly via OS calls (`vm_read` on macOS, `process_vm_readv` on Linux, `ReadProcessMemory` on Windows). It resolves the CPython interpreter state and walks `PyFrameObject` chains to build stack traces. Zero injection, zero instrumentation, zero overhead on the target.
 
 ## Architecture {#PROFILE-ARCH}

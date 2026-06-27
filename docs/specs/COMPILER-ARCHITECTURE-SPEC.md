@@ -211,7 +211,7 @@ Every `InferredType` from the checker maps to a concrete compiled representation
 
 ### Integer Semantics {#COMPILER-TYPES-INT}
 
-By default, Basilisk integers are 64-bit signed (`i64`). This diverges from Python's arbitrary-precision integers but matches what most code actually needs.
+By default, Basilisk integers are 64-bit signed (`i64`), diverging from Python's arbitrary-precision integers.
 
 - Arithmetic overflow traps in debug mode (like Rust), wraps in release mode
 - The `--big-int` flag enables arbitrary-precision integers backed by GMP, matching Python's semantics exactly

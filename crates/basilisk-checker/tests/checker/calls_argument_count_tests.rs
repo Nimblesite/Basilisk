@@ -6,7 +6,7 @@ use super::common::*;
 // --- Plain function calls ---
 
 #[test]
-fn e0041_call_with_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn call_with_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(a: int, b: str) -> None:
     pass
@@ -24,7 +24,7 @@ func()
 }
 
 #[test]
-fn e0041_call_with_enough_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn call_with_enough_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def func(a: int, b: str) -> None:
     pass
@@ -42,7 +42,7 @@ func(1, "hello")
 }
 
 #[test]
-fn e0041_call_with_defaults_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn call_with_defaults_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def func(a: int, b: str = "default") -> None:
     pass
@@ -60,7 +60,7 @@ func(1)
 }
 
 #[test]
-fn e0041_call_vararg_function_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn call_vararg_function_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(*args: int) -> None:
     pass
@@ -79,7 +79,7 @@ func(1, 2, 3)
 }
 
 #[test]
-fn e0041_unknown_callee_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn unknown_callee_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "unknown_function()\n";
     let diags = run(source)?;
 
@@ -91,7 +91,7 @@ fn e0041_unknown_callee_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
 // --- Constructor calls ---
 
 #[test]
-fn e0041_constructor_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn constructor_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class MyClass:
     def __init__(self, x: int, y: str) -> None:
@@ -110,7 +110,7 @@ MyClass()
 }
 
 #[test]
-fn e0041_constructor_enough_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn constructor_enough_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class MyClass:
     def __init__(self, x: int, y: str) -> None:
@@ -129,7 +129,7 @@ MyClass(1, "hi")
 }
 
 #[test]
-fn e0041_constructor_vararg_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn constructor_vararg_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class MyClass:
     def __init__(self, *args: int) -> None:
@@ -150,7 +150,7 @@ MyClass()
 // --- Dataclass constructor calls ---
 
 #[test]
-fn e0041_dataclass_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -172,7 +172,7 @@ Point()
 }
 
 #[test]
-fn e0041_dataclass_enough_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_enough_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -194,7 +194,7 @@ Point(1.0, 2.0)
 }
 
 #[test]
-fn e0041_dataclass_init_false_with_args_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_init_false_with_args_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -215,7 +215,7 @@ NoInit(1)
 }
 
 #[test]
-fn e0041_dataclass_with_default_field_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_with_default_field_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -239,7 +239,7 @@ Config("test")
 // --- NamedTuple calls ---
 
 #[test]
-fn e0041_namedtuple_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_too_few_args_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -260,7 +260,7 @@ Point()
 // --- Overloaded functions ---
 
 #[test]
-fn e0041_overloaded_no_matching_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn overloaded_no_matching_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 

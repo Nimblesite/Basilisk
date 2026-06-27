@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0101_valid_typeguard() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_typeguard() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeGuard
 
@@ -20,7 +20,7 @@ def is_str(x: object) -> TypeGuard[str]:
 }
 
 #[test]
-fn e0101_typeguard_no_param() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_no_param() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeGuard
 

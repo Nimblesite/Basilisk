@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0022_hashable_key_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn hashable_key_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def good_key() -> None:
     mapping: dict[str, int] = {"key": 1}
@@ -18,7 +18,7 @@ def good_key() -> None:
 }
 
 #[test]
-fn e0022_list_as_key() -> Result<(), Box<dyn std::error::Error>> {
+fn list_as_key() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def bad_key() -> None:
     mapping = {[1, 2]: "value"}

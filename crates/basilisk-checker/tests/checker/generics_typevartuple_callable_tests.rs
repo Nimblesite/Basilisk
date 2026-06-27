@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0082_tuple_arg_order_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_arg_order_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Callable
 Ts = TypeVarTuple("Ts")
@@ -22,7 +22,7 @@ Process(target=func1, args=("", 0))
 }
 
 #[test]
-fn e0082_valid_tuple_args() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_tuple_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Callable
 Ts = TypeVarTuple("Ts")

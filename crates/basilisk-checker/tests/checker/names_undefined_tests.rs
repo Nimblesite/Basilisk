@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0018_undefined_name_in_return_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn undefined_name_in_return_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def compute() -> int:\n    return undefined_name\n";
     let diags = run(source)?;
     assert!(
@@ -16,7 +16,7 @@ fn e0018_undefined_name_in_return_fires() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn e0018_defined_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn defined_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def compute(x: int) -> int:\n    return x\n";
     let diags = run(source)?;
     assert!(
@@ -27,7 +27,7 @@ fn e0018_defined_param_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
-fn e0018_locally_assigned_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn locally_assigned_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def compute() -> int:\n    result = 42\n    return result\n";
     let diags = run(source)?;
     assert!(
@@ -38,7 +38,7 @@ fn e0018_locally_assigned_no_diagnostic() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn e0018_module_level_variable_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+fn module_level_variable_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 _EMPTY_TEXT_MSG = \"text is required\"
 
@@ -57,7 +57,7 @@ def validate(text: str) -> str:
 }
 
 #[test]
-fn e0018_diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
+fn diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def compute() -> int:\n    return missing\n";
     let diags = run(source)?;
     let e0018 = diags.iter().find(|d| d.code.code == "names_undefined");
@@ -70,7 +70,7 @@ fn e0018_diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0018_aliased_module_import_in_return_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+fn aliased_module_import_in_return_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     // Issues #107/#64: `from <pkg> import <mod> as <alias>` binds `<alias>` at
     // module scope; using it in a nested function's return expression is valid.
     let source = r#"
@@ -94,7 +94,7 @@ def _patch_jwt(claims: dict[str, object]) -> object:
 }
 
 #[test]
-fn e0018_undefined_callee_in_return_call_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn undefined_callee_in_return_call_fires() -> Result<(), Box<dyn std::error::Error>> {
     // The callee of a call in a return must be checked, not just bare names:
     // `return undefined_fn()` references `undefined_fn`.
     let source = "def f() -> object:\n    return undefined_fn()\n";
@@ -108,7 +108,7 @@ fn e0018_undefined_callee_in_return_call_fires() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
-fn e0018_sibling_function_call_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+fn sibling_function_call_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
     // Calling a sibling module-level function must not fire — it is in scope.
     let source = "def helper() -> int:\n    return 1\n\n\ndef use() -> int:\n    return helper()\n";
     let diags = run(source)?;
@@ -121,7 +121,7 @@ fn e0018_sibling_function_call_no_false_positive() -> Result<(), Box<dyn std::er
 }
 
 #[test]
-fn e0018_bare_sibling_function_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+fn bare_sibling_function_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
     // Returning a sibling module-level function by name is valid (it IS defined).
     let source =
         "def helper() -> int:\n    return 1\n\n\ndef use() -> object:\n    return helper\n";
@@ -135,7 +135,7 @@ fn e0018_bare_sibling_function_no_false_positive() -> Result<(), Box<dyn std::er
 }
 
 #[test]
-fn e0018_class_instantiation_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+fn class_instantiation_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
     // Instantiating a module-level class must not fire.
     let source = "class Foo:\n    pass\n\n\ndef make() -> Foo:\n    return Foo()\n";
     let diags = run(source)?;
@@ -148,7 +148,7 @@ fn e0018_class_instantiation_no_false_positive() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
-fn e0018_builtin_call_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+fn builtin_call_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
     // A builtin callee must not fire.
     let source = "def f() -> int:\n    return len([1, 2])\n";
     let diags = run(source)?;

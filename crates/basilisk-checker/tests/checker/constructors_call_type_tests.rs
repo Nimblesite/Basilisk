@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0144_type_t_called_with_args_no_constructor() -> Result<(), Box<dyn std::error::Error>> {
+fn type_t_called_with_args_no_constructor() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Simple:
     pass
@@ -18,7 +18,7 @@ def factory(cls: type[Simple]) -> Simple:
 }
 
 #[test]
-fn e0144_type_t_missing_required_args() -> Result<(), Box<dyn std::error::Error>> {
+fn type_t_missing_required_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class NeedsArgs:
     def __init__(self, x: int, y: int) -> None:
@@ -33,7 +33,7 @@ def factory(cls: type[NeedsArgs]) -> NeedsArgs:
 }
 
 #[test]
-fn e0144_valid_type_t_call() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_type_t_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class MyClass:
     def __init__(self, x: int) -> None:
@@ -51,7 +51,7 @@ def factory(cls: type[MyClass]) -> MyClass:
 }
 
 #[test]
-fn e0144_unbound_typevar_with_args() -> Result<(), Box<dyn std::error::Error>> {
+fn unbound_typevar_with_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T")

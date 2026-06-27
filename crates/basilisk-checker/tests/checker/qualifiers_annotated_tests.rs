@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0045_valid_annotated_usage() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_annotated_usage() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Annotated
 
@@ -19,7 +19,7 @@ x: Annotated[int, "metadata"] = 42
 }
 
 #[test]
-fn e0045_annotated_with_list_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_with_list_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Annotated
 
@@ -31,7 +31,7 @@ x: Annotated[[int, str], ""] = 42
 }
 
 #[test]
-fn e0045_annotated_with_bool_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_with_bool_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Annotated
 
@@ -43,7 +43,7 @@ x: Annotated[True, ""] = True
 }
 
 #[test]
-fn e0045_annotated_with_int_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_with_int_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Annotated
 
@@ -55,7 +55,7 @@ x: Annotated[1, ""] = 1
 }
 
 #[test]
-fn e0045_annotated_too_few_args() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_too_few_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Annotated
 
@@ -67,7 +67,7 @@ x: Annotated[int] = 42
 }
 
 #[test]
-fn e0045_annotated_callable_no_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_callable_no_fire() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Annotated, Callable
 

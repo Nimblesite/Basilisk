@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0019_conditionally_assigned_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn conditionally_assigned_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def maybe_assign(flag: bool) -> int:
     if flag:
@@ -21,7 +21,7 @@ def maybe_assign(flag: bool) -> int:
 }
 
 #[test]
-fn e0019_unconditionally_assigned_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn unconditionally_assigned_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def always_assign() -> int:
     result = 42
@@ -36,7 +36,7 @@ def always_assign() -> int:
 }
 
 #[test]
-fn e0019_parameter_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn parameter_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def identity(x: int) -> int:\n    return x\n";
     let diags = run(source)?;
     assert!(

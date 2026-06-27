@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0005_scalar_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
+fn scalar_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     let source = "class Foo:\n    value = 42\n";
     let diags = run_with_optin_rules(source)?;
     assert!(
@@ -15,7 +15,7 @@ fn e0005_scalar_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0005_annotated_class_attr_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_class_attr_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "class Foo:\n    value: int = 42\n";
     let diags = run_with_optin_rules(source)?;
     assert!(
@@ -26,7 +26,7 @@ fn e0005_annotated_class_attr_no_diagnostic() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn e0005_enum_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from enum import Enum\n\nclass Color(Enum):\n    RED = 1\n    GREEN = 2\n";
     let diags = run_with_optin_rules(source)?;
     assert!(
@@ -37,7 +37,7 @@ fn e0005_enum_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0005_protocol_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let source =
         "from typing import Protocol\n\nclass MyProto(Protocol):\n    name = \"default\"\n";
     let diags = run_with_optin_rules(source)?;
@@ -49,7 +49,7 @@ fn e0005_protocol_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0005_namedtuple_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import NamedTuple\n\nclass Point(NamedTuple):\n    x = 0\n";
     let diags = run_with_optin_rules(source)?;
     assert!(
@@ -60,7 +60,7 @@ fn e0005_namedtuple_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0005_subclass_overriding_annotated_parent_attr_exempt() -> Result<(), Box<dyn std::error::Error>>
+fn subclass_overriding_annotated_parent_attr_exempt() -> Result<(), Box<dyn std::error::Error>>
 {
     let source = "\
 class BaseRoute:
@@ -83,7 +83,7 @@ class AdminRoute(BaseRoute):
 }
 
 #[test]
-fn e0005_all_scalar_literal_types_suppressed() -> Result<(), Box<dyn std::error::Error>> {
+fn all_scalar_literal_types_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 class Config:
     retries = 3
@@ -107,7 +107,7 @@ class Config:
 }
 
 #[test]
-fn e0005_scalar_string_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
+fn scalar_string_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     let source = "class Foo:\n    label = \"hello\"\n";
     let diags = run_with_optin_rules(source)?;
     assert!(
@@ -118,7 +118,7 @@ fn e0005_scalar_string_literal_suppressed() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn e0005_scalar_bool_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
+fn scalar_bool_literal_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     let source = "class Foo:\n    flag = True\n";
     let diags = run_with_optin_rules(source)?;
     assert!(
@@ -129,7 +129,7 @@ fn e0005_scalar_bool_literal_suppressed() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn e0005_multiple_scalar_attrs_suppressed() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_scalar_attrs_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     let source = "class Foo:\n    a = 1\n    b = 2\n    c = 3\n";
     let diags = run_with_optin_rules(source)?;
     let count = diags.iter().filter(|d| d.code.code == "BSK-E0005").count();
@@ -141,7 +141,7 @@ fn e0005_multiple_scalar_attrs_suppressed() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn e0005_subclass_new_scalar_attr_suppressed() -> Result<(), Box<dyn std::error::Error>> {
+fn subclass_new_scalar_attr_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 class BaseRoute:
     priority: int = 10
@@ -164,7 +164,7 @@ class AdminRoute(BaseRoute):
 }
 
 #[test]
-fn e0005_non_inferrable_rhs_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn non_inferrable_rhs_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 class Foo:
     result = some_function()
@@ -191,7 +191,7 @@ class Foo:
 /// an inheritance hierarchy where parent and children use scalar literals.
 /// NONE of these should fire E0005.
 #[test]
-fn e0005_regression_animal_hierarchy_no_false_positives() -> Result<(), Box<dyn std::error::Error>>
+fn regression_animal_hierarchy_no_false_positives() -> Result<(), Box<dyn std::error::Error>>
 {
     let source = "\
 class Animal:
@@ -224,7 +224,7 @@ class Snake(Animal):
 /// The config override pattern: base config with scalar defaults, subclasses
 /// override with new scalar values. No E0005 anywhere.
 #[test]
-fn e0005_regression_config_override_pattern() -> Result<(), Box<dyn std::error::Error>> {
+fn regression_config_override_pattern() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 class DatabaseConfig:
     host = \"localhost\"
@@ -257,7 +257,7 @@ class StagingDB(DatabaseConfig):
 
 /// Standalone classes with scalar literals — type is trivially inferrable.
 #[test]
-fn e0005_regression_standalone_scalar_classes() -> Result<(), Box<dyn std::error::Error>> {
+fn regression_standalone_scalar_classes() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 class Standalone:
     value = 42
@@ -286,7 +286,7 @@ class UnrelatedToBaseRoute:
 
 /// Each scalar literal type individually — exhaustive per-type regression guard.
 #[test]
-fn e0005_regression_each_scalar_type_individually() -> Result<(), Box<dyn std::error::Error>> {
+fn regression_each_scalar_type_individually() -> Result<(), Box<dyn std::error::Error>> {
     let cases = [
         ("int", "class A:\n    x = 42\n"),
         ("float", "class B:\n    x = 3.14\n"),
@@ -313,7 +313,7 @@ fn e0005_regression_each_scalar_type_individually() -> Result<(), Box<dyn std::e
 /// Mixed class: some attrs are scalar (suppressed), some are not (should fire).
 /// Ensures the filter is precise — only scalars suppressed, non-inferrable still fires.
 #[test]
-fn e0005_regression_mixed_scalar_and_non_inferrable() -> Result<(), Box<dyn std::error::Error>> {
+fn regression_mixed_scalar_and_non_inferrable() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 class Mixed:
     name = \"default\"
@@ -341,7 +341,7 @@ class Mixed:
 }
 
 #[test]
-fn e0005_type_alias_type_in_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_type_in_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
     // A class-body `X = TypeAliasType("X", ...)` is a type-alias definition, not
     // a data attribute, so it must not require an annotation
     // (conformance aliases_typealiastype.py).
@@ -356,7 +356,7 @@ fn e0005_type_alias_type_in_class_exempt() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
-fn e0005_tuple_literal_match_args_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_literal_match_args_exempt() -> Result<(), Box<dyn std::error::Error>> {
     // A tuple literal of inferrable elements is fully inferrable; `__match_args__`
     // must not require an annotation (conformance dataclasses_match_args.py).
     let source = "class DC:\n    __match_args__ = (\"a\", \"b\")\n    empty = ()\n";
@@ -370,7 +370,7 @@ fn e0005_tuple_literal_match_args_exempt() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
-fn e0005_pep695_type_param_attr_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_type_param_attr_exempt() -> Result<(), Box<dyn std::error::Error>> {
     // An attribute whose name matches one of the class's PEP 695 type parameters
     // is the type variable in scope, not a data attribute
     // (conformance generics_syntax_scoping.py).
@@ -385,7 +385,7 @@ fn e0005_pep695_type_param_attr_exempt() -> Result<(), Box<dyn std::error::Error
 }
 
 #[test]
-fn e0005_empty_collection_still_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn empty_collection_still_fires() -> Result<(), Box<dyn std::error::Error>> {
     // The tuple exemption must NOT leak to empty list/dict (element types unknown).
     let source = "class Foo:\n    data = []\n";
     let diags = run_with_optin_rules(source)?;

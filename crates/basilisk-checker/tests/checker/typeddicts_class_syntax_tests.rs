@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0029_method_in_typeddict_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn method_in_typeddict_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -25,7 +25,7 @@ class Movie(TypedDict):
 }
 
 #[test]
-fn e0029_typeddict_fields_only_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_fields_only_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypedDict
 

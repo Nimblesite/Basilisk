@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0070_never_type_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn never_type_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Never
 
@@ -19,7 +19,7 @@ x: int = never_returns()
 }
 
 #[test]
-fn e0070_never_as_param() -> Result<(), Box<dyn std::error::Error>> {
+fn never_as_param() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Never
 

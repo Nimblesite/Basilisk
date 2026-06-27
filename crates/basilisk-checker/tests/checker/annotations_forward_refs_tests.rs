@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0047_invalid_type_expr_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_type_expr_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 x: 1 + 2
 ";
@@ -14,7 +14,7 @@ x: 1 + 2
 }
 
 #[test]
-fn e0047_valid_type_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_type_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 x: int = 42
 y: list[str] = []
@@ -28,7 +28,7 @@ y: list[str] = []
 }
 
 #[test]
-fn e0047_string_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn string_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: "int" = 42
 "#;
@@ -38,7 +38,7 @@ x: "int" = 42
 }
 
 #[test]
-fn e0047_union_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn union_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 x: int | str = 42
 ";
@@ -48,7 +48,7 @@ x: int | str = 42
 }
 
 #[test]
-fn e0047_nested_generic_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_generic_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 x: dict[str, list[int]] = {}
 ";
@@ -58,7 +58,7 @@ x: dict[str, list[int]] = {}
 }
 
 #[test]
-fn e0047_callable_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 x: Callable[[int, str], bool] = lambda a, b: True
@@ -69,7 +69,7 @@ x: Callable[[int, str], bool] = lambda a, b: True
 }
 
 #[test]
-fn e0047_optional_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn optional_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Optional
 x: Optional[int] = None
@@ -80,7 +80,7 @@ x: Optional[int] = None
 }
 
 #[test]
-fn e0047_function_param_annotations() -> Result<(), Box<dyn std::error::Error>> {
+fn function_param_annotations() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def func(x: int, y: str, z: list[float]) -> dict[str, int]:
     return {}
@@ -91,7 +91,7 @@ def func(x: int, y: str, z: list[float]) -> dict[str, int]:
 }
 
 #[test]
-fn e0047_class_attribute_annotations() -> Result<(), Box<dyn std::error::Error>> {
+fn class_attribute_annotations() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar, Final
 class MyClass:
@@ -105,7 +105,7 @@ class MyClass:
 }
 
 #[test]
-fn e0047_tuple_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 x: tuple[int, str, float] = (1, 'a', 1.0)
 y: tuple[int, ...] = (1, 2, 3)
@@ -116,7 +116,7 @@ y: tuple[int, ...] = (1, 2, 3)
 }
 
 #[test]
-fn e0047_type_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 MyType: TypeAlias = list[int]
@@ -127,7 +127,7 @@ MyType: TypeAlias = list[int]
 }
 
 #[test]
-fn e0047_annotated_type() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Annotated
 x: Annotated[int, "metadata"] = 42
@@ -138,7 +138,7 @@ x: Annotated[int, "metadata"] = 42
 }
 
 #[test]
-fn e0047_literal_type() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal
 x: Literal["a", "b", "c"] = "a"
@@ -149,7 +149,7 @@ x: Literal["a", "b", "c"] = "a"
 }
 
 #[test]
-fn e0047_pep695_type_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_type_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type Vector = list[float]
 ";

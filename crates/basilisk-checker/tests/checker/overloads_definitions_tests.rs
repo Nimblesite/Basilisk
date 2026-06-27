@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0020_all_overloads_no_impl_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn all_overloads_no_impl_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -24,7 +24,7 @@ def process(x: str) -> str: ...
 }
 
 #[test]
-fn e0020_overloads_with_impl_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn overloads_with_impl_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -46,7 +46,7 @@ def process(x: int | str) -> int | str:
 }
 
 #[test]
-fn e0020_single_function_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn single_function_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def process(x: int) -> int:\n    return x\n";
     let diags = run(source)?;
     assert!(

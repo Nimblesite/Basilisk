@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0054_module_final_reassignment_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn module_final_reassignment_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 RATE: Final = 3000
@@ -21,7 +21,7 @@ RATE = 300
 }
 
 #[test]
-fn e0054_module_final_no_reassignment_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn module_final_no_reassignment_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 RATE: Final = 3000
@@ -37,7 +37,7 @@ RATE: Final = 3000
 }
 
 #[test]
-fn e0054_class_final_attr_reassigned_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn class_final_attr_reassigned_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 
@@ -57,7 +57,7 @@ Config.DEFAULT_ID = 42
 }
 
 #[test]
-fn e0054_subclass_final_override_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn subclass_final_override_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 
@@ -78,7 +78,7 @@ class Child(Base):
 }
 
 #[test]
-fn e0054_local_final_modification_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn local_final_modification_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 
@@ -97,7 +97,7 @@ def func() -> None:
 }
 
 #[test]
-fn e0054_instance_final_outside_init_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn instance_final_outside_init_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 
@@ -116,7 +116,7 @@ class MyClass:
 }
 
 #[test]
-fn e0054_instance_final_in_init_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn instance_final_in_init_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 

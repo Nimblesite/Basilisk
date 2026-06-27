@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0102_valid_typevar_default() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_typevar_default() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 

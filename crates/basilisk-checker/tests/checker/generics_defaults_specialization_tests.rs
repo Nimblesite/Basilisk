@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0092_valid_type_args() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_type_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -24,7 +24,7 @@ x: Pair[int, str] = Pair()
 }
 
 #[test]
-fn e0092_too_few_type_args() -> Result<(), Box<dyn std::error::Error>> {
+fn too_few_type_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 

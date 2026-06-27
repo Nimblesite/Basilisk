@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0046_annotated_enum_member_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_enum_member_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import Enum
 
@@ -22,7 +22,7 @@ class Color(Enum):
 }
 
 #[test]
-fn e0046_unannotated_enum_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_enum_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import Enum
 

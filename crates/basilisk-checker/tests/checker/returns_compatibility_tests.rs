@@ -5,7 +5,7 @@
 use super::common::*;
 
 #[test]
-fn e0011_return_type_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn return_type_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def count() -> str:\n    return 42\n";
     let diags = run(source)?;
     assert!(
@@ -17,7 +17,7 @@ fn e0011_return_type_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-fn e0011_correct_return_type_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn correct_return_type_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def count() -> int:\n    return 42\n";
     let diags = run(source)?;
     assert!(
@@ -28,7 +28,7 @@ fn e0011_correct_return_type_no_diagnostic() -> Result<(), Box<dyn std::error::E
 }
 
 #[test]
-fn e0011_str_annotation_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn str_annotation_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def greet(name: str) -> str:\n    return name\n";
     let diags = run(source)?;
     assert!(
@@ -39,7 +39,7 @@ fn e0011_str_annotation_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-fn e0011_return_mismatch_stub_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn return_mismatch_stub_exempt() -> Result<(), Box<dyn std::error::Error>> {
     // Return type mismatch check is skipped for stub bodies
     let source = "def count() -> str:\n    ...\n";
     let diags = run(source)?;
@@ -51,7 +51,7 @@ fn e0011_return_mismatch_stub_exempt() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
-fn e0011_literal_target_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_target_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     // `return True` infers `Bool`, not `Literal[True]`; the kind-only return
     // inference cannot verify a `Literal[...]` target, so E0011 must NOT fire
     // (matches __exit__ -> Literal[True] in conformance exceptions_context_managers.py).
@@ -66,7 +66,7 @@ fn e0011_literal_target_not_flagged() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-fn e0011_quoted_forward_ref_union_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+fn quoted_forward_ref_union_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     // A quoted forward-ref union annotation parses into `Named` fragments with no
     // concrete member; E0011 must skip it rather than flag a valid `return 1`
     // (conformance constructors_call_metaclass.py).
@@ -81,7 +81,7 @@ fn e0011_quoted_forward_ref_union_not_flagged() -> Result<(), Box<dyn std::error
 }
 
 #[test]
-fn e0011_concrete_mismatch_still_fires_after_guard() -> Result<(), Box<dyn std::error::Error>> {
+fn concrete_mismatch_still_fires_after_guard() -> Result<(), Box<dyn std::error::Error>> {
     // The unverifiability guard must NOT suppress genuine, concrete mismatches.
     let source = "def f() -> None:\n    return 42\n";
     let diags = run(source)?;

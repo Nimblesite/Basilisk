@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0120_generator_with_int_return_type() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_with_int_return_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def bad() -> int:
     yield 1
@@ -15,7 +15,7 @@ def bad() -> int:
 }
 
 #[test]
-fn e0120_generator_with_iterator_return_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_with_iterator_return_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Iterator
 def good() -> Iterator[int]:
@@ -30,7 +30,7 @@ def good() -> Iterator[int]:
 }
 
 #[test]
-fn e0120_generator_with_generator_return_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_with_generator_return_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Generator
 def good() -> Generator[int, None, None]:
@@ -45,7 +45,7 @@ def good() -> Generator[int, None, None]:
 }
 
 #[test]
-fn e0120_async_generator_bad_return() -> Result<(), Box<dyn std::error::Error>> {
+fn async_generator_bad_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 async def bad_async() -> int:
     yield 1
@@ -56,7 +56,7 @@ async def bad_async() -> int:
 }
 
 #[test]
-fn e0120_async_generator_valid_return() -> Result<(), Box<dyn std::error::Error>> {
+fn async_generator_valid_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import AsyncIterator
 async def good_async() -> AsyncIterator[int]:
@@ -71,7 +71,7 @@ async def good_async() -> AsyncIterator[int]:
 }
 
 #[test]
-fn e0120_iterable_return_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn iterable_return_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Iterable
 def gen() -> Iterable[str]:
@@ -86,7 +86,7 @@ def gen() -> Iterable[str]:
 }
 
 #[test]
-fn e0120_asynccontextmanager_async_iterator_not_flagged() -> Result<(), Box<dyn std::error::Error>>
+fn asynccontextmanager_async_iterator_not_flagged() -> Result<(), Box<dyn std::error::Error>>
 {
     // Issue #36: async generators decorated with @asynccontextmanager are the
     // canonical async-context-manager pattern and must be accepted.
@@ -137,7 +137,7 @@ async def session() -> AsyncGenerator[int, None]:
 }
 
 #[test]
-fn e0120_dotted_async_iterator_annotation_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+fn dotted_async_iterator_annotation_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     // Issue #36: a dotted generator annotation (`typing.AsyncIterator[None]`)
     // is the same valid type as the unqualified spelling.
     let source = r"
@@ -162,7 +162,7 @@ async def lifespan() -> typing.AsyncIterator[None]:
 }
 
 #[test]
-fn e0120_collections_abc_dotted_annotation_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+fn collections_abc_dotted_annotation_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     // Issue #36: `collections.abc.AsyncIterator[None]`, no decorator — the
     // false positive is independent of @asynccontextmanager.
     let source = r"
@@ -185,7 +185,7 @@ async def agen() -> collections.abc.AsyncIterator[None]:
 }
 
 #[test]
-fn e0120_string_annotation_async_iterator_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+fn string_annotation_async_iterator_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     // Issue #36: a string (forward-reference) generator annotation is valid.
     let source = r#"
 from collections.abc import AsyncIterator
@@ -207,7 +207,7 @@ async def agen() -> "AsyncIterator[None]":
 }
 
 #[test]
-fn e0120_dotted_sync_iterator_annotation_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+fn dotted_sync_iterator_annotation_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     // Issue #36: same defect for sync generators with `typing.Iterator[int]`.
     let source = r"
 import typing

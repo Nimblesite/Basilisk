@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0095_post_init_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn post_init_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import InitVar, dataclass
 
@@ -22,7 +22,7 @@ class DC1:
 }
 
 #[test]
-fn e0095_initvar_attr_access() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_attr_access() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import InitVar, dataclass
 
@@ -43,7 +43,7 @@ dc1.x
 }
 
 #[test]
-fn e0095_valid_initvar_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_initvar_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import InitVar, dataclass
 

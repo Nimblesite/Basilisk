@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0100_normal_augmented_assignment_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn normal_augmented_assignment_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def f(x: int) -> None:
     x += 1

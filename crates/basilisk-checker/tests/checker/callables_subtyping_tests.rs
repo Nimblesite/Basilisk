@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0136_compatible_callable_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn compatible_callable_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -20,7 +20,7 @@ def func(cb: Callable[[int], int]) -> None:
 }
 
 #[test]
-fn e0136_incompatible_param_type() -> Result<(), Box<dyn std::error::Error>> {
+fn incompatible_param_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 

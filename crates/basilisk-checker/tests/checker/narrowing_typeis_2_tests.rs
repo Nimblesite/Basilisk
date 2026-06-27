@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0113_valid_typeis() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_typeis() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeIs
 
@@ -20,7 +20,7 @@ def is_str(x: object) -> TypeIs[str]:
 }
 
 #[test]
-fn e0113_inconsistent_narrowing() -> Result<(), Box<dyn std::error::Error>> {
+fn inconsistent_narrowing() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeIs
 

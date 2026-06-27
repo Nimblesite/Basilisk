@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0159_override_no_ancestor_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn override_no_ancestor_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import override\nclass P:\n    def m1(self) -> int: return 1\nclass C(P):\n    @override\n    def m3(self) -> int: return 1\n";
     let diags = run(source)?;
     assert!(
@@ -16,7 +16,7 @@ fn e0159_override_no_ancestor_fires() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-fn e0159_valid_override_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_override_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import override\nclass P:\n    def m1(self) -> int: return 1\nclass C(P):\n    @override\n    def m1(self) -> int: return 2\n";
     let diags = run(source)?;
     assert!(
@@ -27,7 +27,7 @@ fn e0159_valid_override_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-fn e0159_parent_derives_from_any_suppressed() -> Result<(), Box<dyn std::error::Error>> {
+fn parent_derives_from_any_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import Any, override\nclass PB(Any):\n    pass\nclass CB(PB):\n    @override\n    def m1(self) -> None:\n        pass\n";
     let diags = run(source)?;
     assert!(
@@ -38,7 +38,7 @@ fn e0159_parent_derives_from_any_suppressed() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn e0159_imported_base_suppressed() -> Result<(), Box<dyn std::error::Error>> {
+fn imported_base_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import override\nfrom somewhere import Base\nclass C(Base):\n    @override\n    def m(self) -> int: return 1\n";
     let diags = run(source)?;
     assert!(
@@ -49,7 +49,7 @@ fn e0159_imported_base_suppressed() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0159_staticmethod_no_ancestor_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn staticmethod_no_ancestor_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import override\nclass P:\n    def m1(self) -> int: return 1\nclass C(P):\n    @staticmethod\n    @override\n    def s() -> int: return 1\n";
     let diags = run(source)?;
     assert!(

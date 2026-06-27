@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0017_incompatible_attr_type_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn incompatible_attr_type_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Base:
     count: int = 0
@@ -22,7 +22,7 @@ class Child(Base):
 }
 
 #[test]
-fn e0017_compatible_attr_type_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn compatible_attr_type_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Base:
     count: int = 0
@@ -39,7 +39,7 @@ class Child(Base):
 }
 
 #[test]
-fn e0017_different_attr_name_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn different_attr_name_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Base:
     count: int = 0

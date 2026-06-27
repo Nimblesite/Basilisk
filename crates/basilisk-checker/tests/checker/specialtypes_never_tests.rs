@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0062_noreturn_with_fallthrough_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn noreturn_with_fallthrough_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NoReturn
 
@@ -22,7 +22,7 @@ def bad(x: int) -> NoReturn:
 }
 
 #[test]
-fn e0062_noreturn_always_raises_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn noreturn_always_raises_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NoReturn
 
@@ -38,7 +38,7 @@ def stop() -> NoReturn:
 }
 
 #[test]
-fn e0062_normal_return_type_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn normal_return_type_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def normal() -> int:\n    return 42\n";
     let diags = run(source)?;
     assert!(

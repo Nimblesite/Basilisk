@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0027_duplicate_typevar_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn duplicate_typevar_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 T = TypeVar("T")
@@ -21,7 +21,7 @@ class Foo(Generic[T, T]):
 }
 
 #[test]
-fn e0027_unique_typevars_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn unique_typevars_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 T = TypeVar("T")

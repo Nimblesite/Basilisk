@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0158_static_inconsistent_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn static_inconsistent_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import overload\nclass C:\n    @overload\n    @staticmethod\n    def f(x: int) -> int: ...\n    @overload\n    @staticmethod\n    def f(x: str) -> str: ...\n    def f(x): return x\n";
     let diags = run(source)?;
     assert!(
@@ -16,7 +16,7 @@ fn e0158_static_inconsistent_fires() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0158_consistent_static_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn consistent_static_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import overload\nclass C:\n    @overload\n    @staticmethod\n    def f(x: int) -> int: ...\n    @overload\n    @staticmethod\n    def f(x: str) -> str: ...\n    @staticmethod\n    def f(x): return x\n";
     let diags = run(source)?;
     assert!(
@@ -28,7 +28,7 @@ fn e0158_consistent_static_no_diagnostic() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
-fn e0158_final_on_overload_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn final_on_overload_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import overload, final\nclass C:\n    @overload\n    @final\n    def f(self, x: int) -> int: ...\n    @overload\n    def f(self, x: str) -> str: ...\n    def f(self, x): return x\n";
     let diags = run(source)?;
     assert!(
@@ -40,7 +40,7 @@ fn e0158_final_on_overload_fires() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0158_final_on_impl_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn final_on_impl_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import overload, final\nclass C:\n    @overload\n    def f(self, x: int) -> int: ...\n    @overload\n    def f(self, x: str) -> str: ...\n    @final\n    def f(self, x): return x\n";
     let diags = run(source)?;
     assert!(
@@ -51,7 +51,7 @@ fn e0158_final_on_impl_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
-fn e0158_override_on_overload_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn override_on_overload_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import overload, override\nclass B:\n    def f(self, x): ...\nclass C(B):\n    @overload\n    @override\n    def f(self, x: int) -> int: ...\n    @overload\n    def f(self, x: str) -> str: ...\n    def f(self, x): return x\n";
     let diags = run(source)?;
     assert!(

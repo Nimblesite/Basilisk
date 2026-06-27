@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0013_return_list_for_str_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn return_list_for_str_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def get_name() -> str:
     return [1, 2, 3]
@@ -20,7 +20,7 @@ def get_name() -> str:
 }
 
 #[test]
-fn e0013_correct_return_type_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn correct_return_type_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def get_name() -> str:
     return "hello"
@@ -34,7 +34,7 @@ def get_name() -> str:
 }
 
 #[test]
-fn e0013_return_none_for_int() -> Result<(), Box<dyn std::error::Error>> {
+fn return_none_for_int() -> Result<(), Box<dyn std::error::Error>> {
     // None return for int may or may not fire depending on inference depth
     let source = r"
 def get_count() -> int:

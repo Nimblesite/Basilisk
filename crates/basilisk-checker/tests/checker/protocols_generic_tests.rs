@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0137_protocol_with_generic_combined_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_generic_combined_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, Protocol
 T_co = TypeVar("T_co", covariant=True)
@@ -21,7 +21,7 @@ class Proto(Protocol[T_co], Generic[T_co]):
 }
 
 #[test]
-fn e0137_protocol_subscript_only_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_subscript_only_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Protocol
 T = TypeVar("T")
@@ -37,7 +37,7 @@ class Proto(Protocol[T]):
 }
 
 #[test]
-fn e0137_generic_protocol_assignment_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_protocol_assignment_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Protocol
 T = TypeVar("T")
@@ -57,7 +57,7 @@ p: Processor[str] = IntProcessor()
 }
 
 #[test]
-fn e0137_self_typed_protocol_incompatibility() -> Result<(), Box<dyn std::error::Error>> {
+fn self_typed_protocol_incompatibility() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Protocol
 T = TypeVar("T")
@@ -76,7 +76,7 @@ x: Copyable = MyClass()
 }
 
 #[test]
-fn e0137_generic_protocol_compatible_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_protocol_compatible_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Protocol
 T = TypeVar("T")
@@ -95,7 +95,7 @@ p: Processor[int] = IntProcessor()
 }
 
 #[test]
-fn e0137_generic_protocol_two_type_args() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_protocol_two_type_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Protocol
 T = TypeVar("T")
@@ -115,7 +115,7 @@ p: BiProcessor[int, str] = IntToStr()
 }
 
 #[test]
-fn e0137_generic_protocol_covariant_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_protocol_covariant_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Protocol
 T_co = TypeVar("T_co", covariant=True)
@@ -134,7 +134,7 @@ r: Reader[int] = IntReader()
 }
 
 #[test]
-fn e0137_self_typed_protocol_with_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn self_typed_protocol_with_methods() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, Self
 class Chainable(Protocol):
@@ -155,7 +155,7 @@ x: Chainable = MyChain()
 }
 
 #[test]
-fn e0137_self_typed_protocol_missing_method() -> Result<(), Box<dyn std::error::Error>> {
+fn self_typed_protocol_missing_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, Self
 class Builder(Protocol):

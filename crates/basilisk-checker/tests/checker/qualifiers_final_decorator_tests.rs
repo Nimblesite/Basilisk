@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0034_inherit_from_final_class_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn inherit_from_final_class_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import final
 
@@ -26,7 +26,7 @@ class Child(Base):
 }
 
 #[test]
-fn e0034_final_on_module_function_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn final_on_module_function_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import final
 
@@ -44,7 +44,7 @@ def my_func() -> None:
 }
 
 #[test]
-fn e0034_override_final_method_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn override_final_method_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import final
 
@@ -68,7 +68,7 @@ class Child(Base):
 }
 
 #[test]
-fn e0034_final_method_not_overridden_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn final_method_not_overridden_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import final
 
@@ -91,7 +91,7 @@ class Child(Base):
 }
 
 #[test]
-fn e0034_non_final_class_can_be_subclassed() -> Result<(), Box<dyn std::error::Error>> {
+fn non_final_class_can_be_subclassed() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Base:
     pass

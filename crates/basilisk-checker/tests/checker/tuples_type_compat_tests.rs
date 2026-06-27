@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0147_starred_unpack_too_many_elements() -> Result<(), Box<dyn std::error::Error>> {
+fn starred_unpack_too_many_elements() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 t1: tuple[int, *tuple[str]] = (1, "a")
 t1 = (1, "a", "b")
@@ -15,7 +15,7 @@ t1 = (1, "a", "b")
 }
 
 #[test]
-fn e0147_starred_unpack_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn starred_unpack_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 t2: tuple[int, *tuple[str, ...]] = (1, "a")
 t2 = (1, 2, "a")
@@ -26,7 +26,7 @@ t2 = (1, 2, "a")
 }
 
 #[test]
-fn e0147_valid_starred_unpack() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_starred_unpack() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 t1: tuple[int, *tuple[str, ...]] = (1, "a", "b", "c")
 "#;
@@ -39,7 +39,7 @@ t1: tuple[int, *tuple[str, ...]] = (1, "a", "b", "c")
 }
 
 #[test]
-fn e0147_function_body_starred_unpack() -> Result<(), Box<dyn std::error::Error>> {
+fn function_body_starred_unpack() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def f(t1: tuple[int], t2: tuple[int, *tuple[int, ...]], t3: tuple[int, ...]) -> None:
     v2: tuple[int, *tuple[int, ...]]

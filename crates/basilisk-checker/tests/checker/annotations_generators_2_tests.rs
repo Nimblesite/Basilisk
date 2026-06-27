@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0131_incompatible_yield_type() -> Result<(), Box<dyn std::error::Error>> {
+fn incompatible_yield_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Generator
 
@@ -20,7 +20,7 @@ def bad() -> Generator[A, None, None]:
 }
 
 #[test]
-fn e0131_iterator_yield_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn iterator_yield_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Iterator
 
@@ -36,7 +36,7 @@ def bad2() -> Iterator[A]:
 }
 
 #[test]
-fn e0131_valid_yield_type() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_yield_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Generator
 def good() -> Generator[int, None, None]:
@@ -51,7 +51,7 @@ def good() -> Generator[int, None, None]:
 }
 
 #[test]
-fn e0131_yield_from_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn yield_from_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Generator, Iterator
 

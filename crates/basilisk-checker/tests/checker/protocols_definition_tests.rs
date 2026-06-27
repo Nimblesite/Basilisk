@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0097_valid_protocol() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -20,7 +20,7 @@ class Proto(Protocol):
 }
 
 #[test]
-fn e0097_undeclared_self_attr_in_method_body() -> Result<(), Box<dyn std::error::Error>> {
+fn undeclared_self_attr_in_method_body() -> Result<(), Box<dyn std::error::Error>> {
     // PEP 544: attributes set via `self` in ANY method (not just __init__) must
     // be declared. `name` is declared and must not fire; `temp` must.
     let source = r"
@@ -46,7 +46,7 @@ class Proto(Protocol):
 }
 
 #[test]
-fn e0097_staticmethod_param_is_not_a_receiver() -> Result<(), Box<dyn std::error::Error>> {
+fn staticmethod_param_is_not_a_receiver() -> Result<(), Box<dyn std::error::Error>> {
     // A `@staticmethod`'s first parameter is not `self`, so assigning to its
     // attribute is not an undeclared-self-attribute violation.
     let source = r"

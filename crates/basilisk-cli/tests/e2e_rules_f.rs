@@ -18,7 +18,7 @@ use common::run;
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0088_typeddict_isinstance() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_isinstance() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0088_typeddict_isinstance.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -36,7 +36,7 @@ fn e0088_typeddict_isinstance() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0089_pep695_invalid_bound() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_invalid_bound() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0089_pep695_invalid_bound.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -54,7 +54,7 @@ fn e0089_pep695_invalid_bound() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0090_invalid_tuple_syntax() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_tuple_syntax() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0090_invalid_tuple_syntax.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -72,7 +72,7 @@ fn e0090_invalid_tuple_syntax() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0091_typevar_default_incompat() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_incompat() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0091_typevar_default_incompat.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -90,7 +90,7 @@ fn e0091_typevar_default_incompat() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0092_too_few_type_args() -> Result<(), Box<dyn std::error::Error>> {
+fn too_few_type_args() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0092_too_few_type_args.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -108,7 +108,7 @@ fn e0092_too_few_type_args() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0093_typeddict_key_validation() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_key_validation() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0093_typeddict_key_validation.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -126,7 +126,7 @@ fn e0093_typeddict_key_validation() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0094_self_type_invalid_location() -> Result<(), Box<dyn std::error::Error>> {
+fn self_type_invalid_location() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0094_self_type_invalid_location.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -144,7 +144,7 @@ fn e0094_self_type_invalid_location() -> Result<(), Box<dyn std::error::Error>> 
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0095_initvar_field() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_field() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0095_initvar_field.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -162,7 +162,7 @@ fn e0095_initvar_field() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0096_dataclass_default_factory() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_default_factory() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0096_dataclass_default_factory.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -180,7 +180,7 @@ fn e0096_dataclass_default_factory() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0097_protocol_self_attr() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_self_attr() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0097_protocol_self_attr.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -198,7 +198,7 @@ fn e0097_protocol_self_attr() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0098_non_protocol_base() -> Result<(), Box<dyn std::error::Error>> {
+fn non_protocol_base() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0098_non_protocol_base.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -216,7 +216,7 @@ fn e0098_non_protocol_base() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0099_protocol_instantiation() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_instantiation() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0099_protocol_instantiation.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -234,7 +234,7 @@ fn e0099_protocol_instantiation() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0100_literal_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0100_literal_augmented_assign.py")?;
     let filtered: Vec<_> = diags
         .iter()

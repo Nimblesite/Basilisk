@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0115_deprecated_function_call() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_function_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -19,7 +19,7 @@ old_func()
 }
 
 #[test]
-fn e0115_deprecated_class_instantiation() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_class_instantiation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -35,7 +35,7 @@ x = OldClass()
 }
 
 #[test]
-fn e0115_non_deprecated_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn non_deprecated_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def normal_func() -> None:
     pass
@@ -51,7 +51,7 @@ normal_func()
 }
 
 #[test]
-fn e0115_deprecated_method_call() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_method_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -70,7 +70,7 @@ obj.old_method()
 }
 
 #[test]
-fn e0115_deprecated_class_attribute_access() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_class_attribute_access() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -85,7 +85,7 @@ x = old_func
 }
 
 #[test]
-fn e0115_deprecated_in_class_body() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_in_class_body() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -102,7 +102,7 @@ class Child(OldBase):
 }
 
 #[test]
-fn e0115_deprecated_overload() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_overload() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated, overload
 
@@ -124,7 +124,7 @@ obj.method("hello")
 }
 
 #[test]
-fn e0115_deprecated_class_in_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_class_in_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -141,7 +141,7 @@ def func(x: OldType) -> None:
 }
 
 #[test]
-fn e0115_deprecated_module_import() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_module_import() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 

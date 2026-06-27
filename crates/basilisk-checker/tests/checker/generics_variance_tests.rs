@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0107_compatible_invariant() -> Result<(), Box<dyn std::error::Error>> {
+fn compatible_invariant() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -22,7 +22,7 @@ class Good(Base[T]): ...
 }
 
 #[test]
-fn e0107_covariant_for_invariant() -> Result<(), Box<dyn std::error::Error>> {
+fn covariant_for_invariant() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -38,7 +38,7 @@ class Bad(Base[T_co]): ...
 }
 
 #[test]
-fn e0107_contravariant_for_invariant() -> Result<(), Box<dyn std::error::Error>> {
+fn contravariant_for_invariant() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 

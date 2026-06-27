@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0024_numeric_literal_param_annotation_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn numeric_literal_param_annotation_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def f(x: 42) -> None:\n    pass\n";
     let diags = run(source)?;
     assert!(
@@ -16,7 +16,7 @@ fn e0024_numeric_literal_param_annotation_fires() -> Result<(), Box<dyn std::err
 }
 
 #[test]
-fn e0024_numeric_literal_return_annotation_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn numeric_literal_return_annotation_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def f(x: int) -> 0:\n    pass\n";
     let diags = run(source)?;
     assert!(
@@ -28,7 +28,7 @@ fn e0024_numeric_literal_return_annotation_fires() -> Result<(), Box<dyn std::er
 }
 
 #[test]
-fn e0024_normal_type_annotation_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn normal_type_annotation_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def f(x: int) -> str:\n    return str(x)\n";
     let diags = run(source)?;
     assert!(

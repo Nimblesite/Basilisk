@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0044_valid_module_final_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_module_final_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 X: Final[int] = 42
@@ -20,7 +20,7 @@ X: Final[int] = 42
 }
 
 #[test]
-fn e0044_final_in_param_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn final_in_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 def f(x: Final[int]) -> None:
@@ -37,7 +37,7 @@ def f(x: Final[int]) -> None:
 }
 
 #[test]
-fn e0044_final_nested_in_list_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn final_nested_in_list_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 x: list[Final[int]] = []
@@ -53,7 +53,7 @@ x: list[Final[int]] = []
 }
 
 #[test]
-fn e0044_classvar_with_final_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_with_final_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar, Final
 
@@ -71,7 +71,7 @@ class MyClass:
 }
 
 #[test]
-fn e0044_bare_final_no_assignment_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn bare_final_no_assignment_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 BAD: Final
@@ -87,7 +87,7 @@ BAD: Final
 }
 
 #[test]
-fn e0044_final_too_many_type_args_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn final_too_many_type_args_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 BAD: Final[str, int] = ""
@@ -103,7 +103,7 @@ BAD: Final[str, int] = ""
 }
 
 #[test]
-fn e0044_final_in_class_body_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn final_in_class_body_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 

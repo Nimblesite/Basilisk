@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0060_comparison_without_order() -> Result<(), Box<dyn std::error::Error>> {
+fn comparison_without_order() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -23,7 +23,7 @@ result = p1 < p2
 }
 
 #[test]
-fn e0060_comparison_with_order_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn comparison_with_order_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -45,7 +45,7 @@ result = p1 < p2
 }
 
 #[test]
-fn e0060_eq_comparison_always_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn eq_comparison_always_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 

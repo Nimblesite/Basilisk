@@ -9,7 +9,7 @@ use super::common::*;
 // =============================================================================
 
 #[test]
-fn e0076_overload_union_arg_no_match() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_union_arg_no_match() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload, Union
 
@@ -35,7 +35,7 @@ def caller(val: Union[int, str, float]) -> None:
 }
 
 #[test]
-fn e0076_overload_pipe_union() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_pipe_union() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -55,7 +55,7 @@ def caller(val: int | str | bytes) -> None:
 }
 
 #[test]
-fn e0076_overload_union_type_syntax() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_union_type_syntax() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload, Union
 
@@ -81,7 +81,7 @@ def test(val: Union[int, str]) -> None:
 // =============================================================================
 
 #[test]
-fn e0137_protocol_return_type_substitution() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_return_type_substitution() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -109,7 +109,7 @@ x: Getter[int] = IntGetter()
 }
 
 #[test]
-fn e0137_protocol_param_type_substitution() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_param_type_substitution() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -137,7 +137,7 @@ x: Setter[int] = StrSetter()
 }
 
 #[test]
-fn e0137_protocol_multiple_type_params() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_multiple_type_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -170,7 +170,7 @@ x: Mapper[int, str] = WrongMapper()
 // =============================================================================
 
 #[test]
-fn e0140_concatenate_too_few_positional() -> Result<(), Box<dyn std::error::Error>> {
+fn concatenate_too_few_positional() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable, Concatenate, ParamSpec
 
@@ -188,7 +188,7 @@ fn: Callable[Concatenate[int, str, P], None] = too_few
 }
 
 #[test]
-fn e0140_callable_param_type_check() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_param_type_check() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -204,7 +204,7 @@ fn: Callable[[int, str], None] = wrong_types
 }
 
 #[test]
-fn e0140_callable_return_type_check() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_return_type_check() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -220,7 +220,7 @@ fn: Callable[[int], str] = returns_int
 }
 
 #[test]
-fn e0140_callable_arity_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_arity_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -242,7 +242,7 @@ fn: Callable[[int, str], None] = one_arg
 }
 
 #[test]
-fn e0140_protocol_func_compat() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_func_compat() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -269,7 +269,7 @@ h: Handler = wrong_handler
 // =============================================================================
 
 #[test]
-fn e0139_tvt_alias_too_few_plain_args() -> Result<(), Box<dyn std::error::Error>> {
+fn tvt_alias_too_few_plain_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, TypeVarTuple, Generic, Unpack
 
@@ -290,7 +290,7 @@ x: MA[int]
 }
 
 #[test]
-fn e0139_tvt_starred_tuple_in_plain() -> Result<(), Box<dyn std::error::Error>> {
+fn tvt_starred_tuple_in_plain() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, TypeVarTuple, Generic
 
@@ -313,7 +313,7 @@ x: PA[*tuple[int, ...]]
 // =============================================================================
 
 #[test]
-fn e0130_typevar_in_class_method() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_in_class_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -333,7 +333,7 @@ class Container(Generic[T]):
 }
 
 #[test]
-fn e0130_typevar_constrained_in_protocol() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_constrained_in_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Protocol
 
@@ -351,7 +351,7 @@ class Processor(Protocol):
 // =============================================================================
 
 #[test]
-fn e0131_generator_yield_in_if() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_yield_in_if() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -374,7 +374,7 @@ def gen() -> Generator[int, None, None]:
 }
 
 #[test]
-fn e0131_generator_yield_in_try() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_yield_in_try() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -397,7 +397,7 @@ def gen() -> Generator[int, None, None]:
 }
 
 #[test]
-fn e0131_generator_yield_in_with() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_yield_in_with() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -422,7 +422,7 @@ def gen() -> Generator[int, None, None]:
 // =============================================================================
 
 #[test]
-fn e0102_typevar_default_multiple_constraints() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_multiple_constraints() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -440,7 +440,7 @@ T2 = TypeVar("T2", int, str, default=int)
 // =============================================================================
 
 #[test]
-fn e0149_pep695_type_alias_stmt() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_type_alias_stmt() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type Alias[T] = list[T]
 type SimpleAlias = int
@@ -450,7 +450,7 @@ type SimpleAlias = int
 }
 
 #[test]
-fn e0149_pep695_async_def() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_async_def() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 async def fetch[T](url: str) -> T:
     pass
@@ -468,7 +468,7 @@ class Repo[T]:
 // =============================================================================
 
 #[test]
-fn e0120_generator_multiple_functions() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_multiple_functions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator, Iterator
 
@@ -491,7 +491,7 @@ def gen3() -> Generator[float, None, str]:
 // =============================================================================
 
 #[test]
-fn e0119_runtime_protocol_isinstance_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn runtime_protocol_isinstance_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, runtime_checkable
 
@@ -507,7 +507,7 @@ isinstance(x, Comparable)
 }
 
 #[test]
-fn e0119_non_runtime_protocol_isinstance() -> Result<(), Box<dyn std::error::Error>> {
+fn non_runtime_protocol_isinstance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -538,7 +538,7 @@ isinstance(x, Another)
 // =============================================================================
 
 #[test]
-fn e0146_protocol_class_object_checks() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_class_object_checks() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -563,7 +563,7 @@ x: type[Serializable] = JsonSerializer
 // =============================================================================
 
 #[test]
-fn e0148_callable_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -574,7 +574,7 @@ x: Callable[int] = lambda: None
 }
 
 #[test]
-fn e0148_type_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
+fn type_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Type
 
@@ -589,7 +589,7 @@ x: Type[int, str] = int
 // =============================================================================
 
 #[test]
-fn e0054_final_in_function_body() -> Result<(), Box<dyn std::error::Error>> {
+fn final_in_function_body() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Final
 
@@ -612,7 +612,7 @@ def process() -> None:
 // =============================================================================
 
 #[test]
-fn e0095_initvar_no_post_init() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_no_post_init() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass, InitVar
 

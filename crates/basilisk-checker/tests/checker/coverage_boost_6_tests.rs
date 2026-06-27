@@ -7,7 +7,7 @@ use super::common::*;
 // --- E0115: Deprecated usage ---
 
 #[test]
-fn e0115_deprecated_function_call() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_function_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -23,7 +23,7 @@ old_func()
 }
 
 #[test]
-fn e0115_deprecated_class() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -39,7 +39,7 @@ x = OldClass()
 }
 
 #[test]
-fn e0115_deprecated_method() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -59,7 +59,7 @@ obj.old_method()
 }
 
 #[test]
-fn e0115_deprecated_overload() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_overload() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated, overload
 
@@ -79,7 +79,7 @@ process(42)
 }
 
 #[test]
-fn e0115_deprecated_property() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_property() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -96,7 +96,7 @@ c = Config()
 }
 
 #[test]
-fn e0115_deprecated_no_message() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_no_message() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import deprecated
 
@@ -111,7 +111,7 @@ bare_deprecated()
 }
 
 #[test]
-fn e0115_typing_extensions_qualified() -> Result<(), Box<dyn std::error::Error>> {
+fn typing_extensions_qualified() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import typing_extensions
 
@@ -126,7 +126,7 @@ old_func()
 }
 
 #[test]
-fn e0115_deprecated_subclass() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_subclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -142,7 +142,7 @@ class Child(OldBase):
 }
 
 #[test]
-fn e0115_deprecated_in_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_in_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -158,7 +158,7 @@ y: int = old_func()
 }
 
 #[test]
-fn e0115_deprecated_in_if() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_in_if() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -174,7 +174,7 @@ if old_check():
 }
 
 #[test]
-fn e0115_deprecated_in_for() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_in_for() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -190,7 +190,7 @@ for x in old_range():
 }
 
 #[test]
-fn e0115_deprecated_in_return() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_in_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -206,7 +206,7 @@ def wrapper() -> int:
 }
 
 #[test]
-fn e0115_deprecated_module_access() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_module_access() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -221,7 +221,7 @@ result = OldVal
 }
 
 #[test]
-fn e0115_deprecated_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_augmented_assign() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -239,7 +239,7 @@ x += old_func()
 // --- E0072: No matching overload ---
 
 #[test]
-fn e0072_getitem_str_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn getitem_str_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -260,7 +260,7 @@ b[""]
 }
 
 #[test]
-fn e0072_getitem_valid_int() -> Result<(), Box<dyn std::error::Error>> {
+fn getitem_valid_int() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -285,7 +285,7 @@ b[0]
 }
 
 #[test]
-fn e0072_getitem_float_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn getitem_float_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -306,7 +306,7 @@ c[3.14]
 }
 
 #[test]
-fn e0072_getitem_slice() -> Result<(), Box<dyn std::error::Error>> {
+fn getitem_slice() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -326,7 +326,7 @@ s[1:3]
 }
 
 #[test]
-fn e0072_getitem_tuple() -> Result<(), Box<dyn std::error::Error>> {
+fn getitem_tuple() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -346,7 +346,7 @@ g[(1, 2)]
 }
 
 #[test]
-fn e0072_getitem_none() -> Result<(), Box<dyn std::error::Error>> {
+fn getitem_none() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -366,7 +366,7 @@ s[None]
 }
 
 #[test]
-fn e0072_getitem_bytes() -> Result<(), Box<dyn std::error::Error>> {
+fn getitem_bytes() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -386,7 +386,7 @@ d[b"hello"]
 }
 
 #[test]
-fn e0072_getitem_list() -> Result<(), Box<dyn std::error::Error>> {
+fn getitem_list() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -406,7 +406,7 @@ m[[1, 2]]
 }
 
 #[test]
-fn e0072_getitem_dict() -> Result<(), Box<dyn std::error::Error>> {
+fn getitem_dict() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -426,7 +426,7 @@ l[{}]
 }
 
 #[test]
-fn e0072_getitem_set() -> Result<(), Box<dyn std::error::Error>> {
+fn getitem_set() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -446,7 +446,7 @@ s[{1, 2}]
 }
 
 #[test]
-fn e0072_getitem_bool() -> Result<(), Box<dyn std::error::Error>> {
+fn getitem_bool() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -468,7 +468,7 @@ c[True]
 // --- E0107: Variance incompatibility ---
 
 #[test]
-fn e0107_co_in_invariant() -> Result<(), Box<dyn std::error::Error>> {
+fn co_in_invariant() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic
 
@@ -487,7 +487,7 @@ class Bad(Base[T_co]):
 }
 
 #[test]
-fn e0107_contra_in_invariant() -> Result<(), Box<dyn std::error::Error>> {
+fn contra_in_invariant() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic
 
@@ -506,7 +506,7 @@ class Bad(Base[T_contra]):
 }
 
 #[test]
-fn e0107_co_correct() -> Result<(), Box<dyn std::error::Error>> {
+fn co_correct() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic
 
@@ -528,7 +528,7 @@ class Sub(ReadOnly[T_co]):
 }
 
 #[test]
-fn e0107_multi_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn multi_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic
 
@@ -548,7 +548,7 @@ class BadPair(Pair[T_co, T_co]):
 }
 
 #[test]
-fn e0107_contra_correct() -> Result<(), Box<dyn std::error::Error>> {
+fn contra_correct() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic
 
@@ -570,7 +570,7 @@ class Sub(Sink[T_contra]):
 }
 
 #[test]
-fn e0107_co_in_contra() -> Result<(), Box<dyn std::error::Error>> {
+fn co_in_contra() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic
 
@@ -591,7 +591,7 @@ class Bad(Sink[T_co]):
 // --- E0070: Never type compat ---
 
 #[test]
-fn e0070_local_assign() -> Result<(), Box<dyn std::error::Error>> {
+fn local_assign() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Never, Generic, TypeVar
 
@@ -606,7 +606,7 @@ def func(c: list[Never]) -> None:
 }
 
 #[test]
-fn e0070_return_invariant() -> Result<(), Box<dyn std::error::Error>> {
+fn return_invariant() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Never, Generic, TypeVar
 
@@ -625,7 +625,7 @@ def func(x: U) -> ClassC[U]:
 }
 
 #[test]
-fn e0070_covariant_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn covariant_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Never, Generic, TypeVar
 
@@ -647,7 +647,7 @@ def func() -> ReadOnly[int]:
 }
 
 #[test]
-fn e0070_any_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn any_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Never, Any
 
@@ -664,7 +664,7 @@ def func(c: list[Never]) -> None:
 }
 
 #[test]
-fn e0070_never_to_never() -> Result<(), Box<dyn std::error::Error>> {
+fn never_to_never() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Never
 
@@ -681,7 +681,7 @@ def func(c: list[Never]) -> None:
 }
 
 #[test]
-fn e0070_dict_invariant() -> Result<(), Box<dyn std::error::Error>> {
+fn dict_invariant() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Never
 
@@ -695,7 +695,7 @@ def func(c: dict[str, Never]) -> None:
 // --- E0079: Module protocol ---
 
 #[test]
-fn e0079_module_protocol() -> Result<(), Box<dyn std::error::Error>> {
+fn module_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -711,7 +711,7 @@ x: HasTimeout = socket
 }
 
 #[test]
-fn e0079_no_import_no_error() -> Result<(), Box<dyn std::error::Error>> {
+fn no_import_no_error() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -728,7 +728,7 @@ class HasAttr(Protocol):
 }
 
 #[test]
-fn e0079_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -746,7 +746,7 @@ c: Connectable = os
 // --- E0047: Invalid type expression ---
 
 #[test]
-fn e0047_list_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn list_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def f(x: [int, str]) -> None:\n    pass\n";
     let diags = run(source)?;
     assert!(diags
@@ -756,7 +756,7 @@ fn e0047_list_literal() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0047_dict_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn dict_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = "y: {} = {}\n";
     let diags = run(source)?;
     assert!(diags
@@ -766,7 +766,7 @@ fn e0047_dict_literal() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0047_conditional() -> Result<(), Box<dyn std::error::Error>> {
+fn conditional() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def g(x: int if True else str) -> None:\n    pass\n";
     let diags = run(source)?;
     assert!(diags
@@ -776,49 +776,49 @@ fn e0047_conditional() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0047_fstring() -> Result<(), Box<dyn std::error::Error>> {
+fn fstring() -> Result<(), Box<dyn std::error::Error>> {
     let source = "z: f\"int\" = 1\n";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
-fn e0047_lambda() -> Result<(), Box<dyn std::error::Error>> {
+fn lambda() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def f(x: lambda: int) -> None:\n    pass\n";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
-fn e0047_boolean_op() -> Result<(), Box<dyn std::error::Error>> {
+fn boolean_op() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def f(x: int or str) -> None:\n    pass\n";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
-fn e0047_negative() -> Result<(), Box<dyn std::error::Error>> {
+fn negative() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def f(x: -1) -> None:\n    pass\n";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
-fn e0047_module_name() -> Result<(), Box<dyn std::error::Error>> {
+fn module_name() -> Result<(), Box<dyn std::error::Error>> {
     let source = "import types\ndef f(x: types) -> None:\n    pass\n";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
-fn e0047_unannotated_var() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_var() -> Result<(), Box<dyn std::error::Error>> {
     let source = "var1 = 3\ndef f(x: var1) -> None:\n    pass\n";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
-fn e0047_valid() -> Result<(), Box<dyn std::error::Error>> {
+fn valid() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import Optional, Union\ndef f(x: int, y: Optional[int], z: Union[int, str]) -> None:\n    pass\n";
     let diags = run(source)?;
     let cnt = diags
@@ -830,7 +830,7 @@ fn e0047_valid() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0047_eval() -> Result<(), Box<dyn std::error::Error>> {
+fn eval() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def f(x: eval(\"int\")) -> None:\n    pass\n";
     let _ = run(source)?;
     Ok(())
@@ -839,7 +839,7 @@ fn e0047_eval() -> Result<(), Box<dyn std::error::Error>> {
 // --- E0036: ClassVar ---
 
 #[test]
-fn e0036_outside_class() -> Result<(), Box<dyn std::error::Error>> {
+fn outside_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import ClassVar\nx: ClassVar[int] = 42\n";
     let diags = run(source)?;
     assert!(diags.iter().any(|d| d.code.code == "classes_classvar"));
@@ -847,7 +847,7 @@ fn e0036_outside_class() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0036_in_function() -> Result<(), Box<dyn std::error::Error>> {
+fn in_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import ClassVar\ndef f() -> None:\n    x: ClassVar[int] = 42\n";
     let diags = run(source)?;
     assert!(diags.iter().any(|d| d.code.code == "classes_classvar"));
@@ -855,7 +855,7 @@ fn e0036_in_function() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0036_class_body_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn class_body_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import ClassVar\n\nclass MyClass:\n    count: ClassVar[int] = 0\n";
     let diags = run(source)?;
     let cnt = diags
@@ -867,7 +867,7 @@ fn e0036_class_body_ok() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0036_in_param() -> Result<(), Box<dyn std::error::Error>> {
+fn in_param() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import ClassVar\ndef f(x: ClassVar[int]) -> None:\n    pass\n";
     let diags = run(source)?;
     assert!(diags.iter().any(|d| d.code.code == "classes_classvar"));
@@ -875,7 +875,7 @@ fn e0036_in_param() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0036_return_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn return_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import ClassVar\ndef f() -> ClassVar[int]:\n    return 1\n";
     let diags = run(source)?;
     assert!(diags.iter().any(|d| d.code.code == "classes_classvar"));

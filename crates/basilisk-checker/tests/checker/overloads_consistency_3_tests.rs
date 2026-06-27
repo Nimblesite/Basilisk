@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0160_return_not_assignable_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn return_not_assignable_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import overload\n@overload\ndef f(x: int) -> int: ...\n@overload\ndef f(x: str) -> str: ...\ndef f(x: int | str) -> int:\n    return 1\n";
     let diags = run(source)?;
     assert!(
@@ -16,7 +16,7 @@ fn e0160_return_not_assignable_fires() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
-fn e0160_param_not_acceptable_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn param_not_acceptable_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import overload\n@overload\ndef f(x: int) -> int: ...\n@overload\ndef f(x: str) -> str: ...\ndef f(x: int) -> int | str:\n    return 1\n";
     let diags = run(source)?;
     assert!(
@@ -28,7 +28,7 @@ fn e0160_param_not_acceptable_fires() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-fn e0160_consistent_overloads_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn consistent_overloads_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import overload\n@overload\ndef f(x: int) -> int: ...\n@overload\ndef f(x: str) -> str: ...\ndef f(x: int | str) -> int | str:\n    return x\n";
     let diags = run(source)?;
     assert!(
@@ -40,7 +40,7 @@ fn e0160_consistent_overloads_no_diagnostic() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn e0160_non_primitive_types_skipped() -> Result<(), Box<dyn std::error::Error>> {
+fn non_primitive_types_skipped() -> Result<(), Box<dyn std::error::Error>> {
     // TypeVar returns cannot be compared textually; the rule must stay silent.
     let source = "from typing import overload, TypeVar\nT = TypeVar('T')\n@overload\ndef f(x: int) -> list[int]: ...\n@overload\ndef f(x: str) -> T: ...\ndef f(x):\n    return x\n";
     let diags = run(source)?;

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0126_literal_value_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_value_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal
 def func(b: Literal["two"]) -> None:
@@ -16,7 +16,7 @@ def func(b: Literal["two"]) -> None:
 }
 
 #[test]
-fn e0126_fstring_non_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn fstring_non_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import LiteralString
 def func(non_literal: str) -> None:
@@ -28,7 +28,7 @@ def func(non_literal: str) -> None:
 }
 
 #[test]
-fn e0126_invariant_generic_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn invariant_generic_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import LiteralString
 def func(s: str) -> None:
@@ -40,7 +40,7 @@ def func(s: str) -> None:
 }
 
 #[test]
-fn e0126_valid_literal_string_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_literal_string_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import LiteralString
 def func() -> None:

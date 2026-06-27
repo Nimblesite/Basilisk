@@ -7,7 +7,7 @@
 
 ## PEP 561 Resolution Order {#STUBRES-PEP561}
 
-Following [PEP 561](https://peps.python.org/pep-0561/), matching Pyright's behaviour:
+Following [PEP 561](https://peps.python.org/pep-0561/), the resolution order is:
 
 1. **User stubs** — `.pyi` files in `stub-paths` config directories
 2. **User source** — `.py` files in the project
@@ -262,6 +262,6 @@ Generated stubs go into `.basilisk/stubs/`, tagged as Tier 3. The provenance sys
 
 | Risk | Mitigation |
 |------|------------|
-| typeshed ~40MB bloats binary | Compress with `include_bytes!`, bundle stdlib only initially |
+| Bundled typeshed stubs add binary size | Compress with `include_bytes!`, bundle stdlib only initially |
 | PEP 561 discovery needs `sys.path` | Require `python-path` or `venv-path` in config; fall back to `python3 -c "import sys; print(sys.path)"`. In uv projects, `uv.lock` + `.python-version` eliminate the subprocess |
 | Auto-generated stubs may be wrong | Tier system + provenance = auto-stubs produce warnings, never silent false positives |

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0058_annotated_single_arg_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_single_arg_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Annotated
 x: Annotated[int]
@@ -19,7 +19,7 @@ x: Annotated[int]
 }
 
 #[test]
-fn e0058_annotated_two_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_two_args_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Annotated
 x: Annotated[int, "metadata"]

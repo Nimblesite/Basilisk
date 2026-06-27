@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0026_single_constraint_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn single_constraint_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T", int)
@@ -19,7 +19,7 @@ T = TypeVar("T", int)
 }
 
 #[test]
-fn e0026_two_constraints_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn two_constraints_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T", int, str)
@@ -33,7 +33,7 @@ T = TypeVar("T", int, str)
 }
 
 #[test]
-fn e0026_unconstrained_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn unconstrained_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T")
@@ -47,7 +47,7 @@ T = TypeVar("T")
 }
 
 #[test]
-fn e0026_name_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn name_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 MyT = TypeVar("T")
@@ -62,7 +62,7 @@ MyT = TypeVar("T")
 }
 
 #[test]
-fn e0026_constraints_and_bound_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn constraints_and_bound_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T", int, str, bound=object)
@@ -77,7 +77,7 @@ T = TypeVar("T", int, str, bound=object)
 }
 
 #[test]
-fn e0026_parameterized_constraint_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn parameterized_constraint_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T")
@@ -93,7 +93,7 @@ U = TypeVar("U", list[T], dict[str, T])
 }
 
 #[test]
-fn e0026_parameterized_bound_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn parameterized_bound_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T")
@@ -109,7 +109,7 @@ U = TypeVar("U", bound=list[T])
 }
 
 #[test]
-fn e0026_typevartuple_name_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_name_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple
 WrongName = TypeVarTuple("Ts")
@@ -124,7 +124,7 @@ WrongName = TypeVarTuple("Ts")
 }
 
 #[test]
-fn e0026_paramspec_name_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn paramspec_name_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ParamSpec
 WrongName = ParamSpec("P")

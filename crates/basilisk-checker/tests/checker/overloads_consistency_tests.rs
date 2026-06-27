@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0021_identical_unannotated_overloads_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn identical_unannotated_overloads_fires() -> Result<(), Box<dyn std::error::Error>> {
     // Overlap detection requires at least one side to have unannotated params
     let source = r"
 from typing import overload
@@ -28,7 +28,7 @@ def process(x: int) -> int:
 }
 
 #[test]
-fn e0021_distinct_overloads_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn distinct_overloads_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 

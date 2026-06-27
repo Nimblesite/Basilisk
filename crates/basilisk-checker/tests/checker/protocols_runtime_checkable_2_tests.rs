@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0119_isinstance_non_runtime_checkable() -> Result<(), Box<dyn std::error::Error>> {
+fn isinstance_non_runtime_checkable() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -20,7 +20,7 @@ isinstance(x, Proto1)
 }
 
 #[test]
-fn e0119_issubclass_data_protocol() -> Result<(), Box<dyn std::error::Error>> {
+fn issubclass_data_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, runtime_checkable
 
@@ -38,7 +38,7 @@ issubclass(X, Proto2)
 }
 
 #[test]
-fn e0119_isinstance_runtime_checkable_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn isinstance_runtime_checkable_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, runtime_checkable
 

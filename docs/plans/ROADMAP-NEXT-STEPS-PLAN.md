@@ -45,8 +45,7 @@ Every TODO item is tagged so we know who picks it up:
 3. **Get listed on the official Python typing conformance results** *(TODO H + G)* — **Effort: medium.
    Reward: very high.** We're at 46.6% (68/146, per the unmodified python/typing scorer, every rule
    enabled — no config, no "spec-conformance mode"); even at this
-   score, submitting results earns a spot on the scoreboard the whole target audience watches (mypy sits
-   at ~58%), and every failing file we close lifts our standing. Correctness + credibility + organic discovery in one (the
+   score, submitting results earns a spot on the [official python/typing scoreboard](https://github.com/python/typing/tree/main/conformance/results) the whole target audience watches, and every failing file we close lifts our standing. Correctness + credibility + organic discovery in one (the
    Zuban/David Halter precedent proves it draws eyes).
 
 4. **Ship Neovim + Zed for real** *(TODO A/B)* — **Effort: low-medium. Reward: high.** Both are ~95%

@@ -6,7 +6,7 @@ use super::common::*;
 // --- E0022: Unhashable dict key ---
 
 #[test]
-fn e0022_list_as_dict_key_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn list_as_dict_key_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def bad() -> None:
     d = {[1, 2]: "value"}
@@ -21,7 +21,7 @@ def bad() -> None:
 }
 
 #[test]
-fn e0022_string_key_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn string_key_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def good() -> None:
     d = {"key": "value"}
@@ -37,7 +37,7 @@ def good() -> None:
 // --- E0023: Non-exhaustive match ---
 
 #[test]
-fn e0023_match_without_wildcard_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn match_without_wildcard_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def check_val(x: int) -> None:
     match x:
@@ -56,7 +56,7 @@ def check_val(x: int) -> None:
 }
 
 #[test]
-fn e0023_match_with_wildcard_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn match_with_wildcard_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def check_val(x: int) -> None:
     match x:

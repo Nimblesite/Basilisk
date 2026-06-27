@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0139_valid_specialization() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_specialization() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -22,7 +22,7 @@ x: IntTupleGeneric[str] = (1, "hello")
 }
 
 #[test]
-fn e0139_unpack_on_non_typevar_tuple() -> Result<(), Box<dyn std::error::Error>> {
+fn unpack_on_non_typevar_tuple() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, TypeVarTuple
 

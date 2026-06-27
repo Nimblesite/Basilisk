@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0069_positional_to_kw_only() -> Result<(), Box<dyn std::error::Error>> {
+fn positional_to_kw_only() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -21,7 +21,7 @@ p = Point(1, 2)
 }
 
 #[test]
-fn e0069_kw_only_with_kwargs_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn kw_only_with_kwargs_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 

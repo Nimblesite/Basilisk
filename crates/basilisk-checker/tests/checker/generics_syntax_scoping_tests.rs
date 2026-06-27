@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0149_type_param_scoping_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn type_param_scoping_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Outer[T]:
     class Inner[T]:
@@ -16,7 +16,7 @@ class Outer[T]:
 }
 
 #[test]
-fn e0149_type_alias_bound_violation_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_bound_violation_fires() -> Result<(), Box<dyn std::error::Error>> {
     // When a PEP 695 type alias with bounded type params is used in an
     // annotation, the type arguments must satisfy the bounds.
     let source = r"
@@ -47,7 +47,7 @@ r2_3: RecursiveTypeAlias2[int, int, ...] = []
 }
 
 #[test]
-fn e0149_type_alias_bound_valid_no_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_bound_valid_no_fire() -> Result<(), Box<dyn std::error::Error>> {
     // Valid type arguments that satisfy bounds should NOT fire.
     let source = r"
 from typing import Callable
@@ -69,7 +69,7 @@ r2_4: RecursiveTypeAlias2[int, str, [int, str]] = []
 }
 
 #[test]
-fn e0149_no_false_positive_in_module_docstring_spec_ids() -> Result<(), Box<dyn std::error::Error>>
+fn no_false_positive_in_module_docstring_spec_ids() -> Result<(), Box<dyn std::error::Error>>
 {
     // Regression for https://github.com/Nimblesite/Basilisk/issues/43:
     // generics_syntax_scoping must not treat module-docstring prose as code. A docstring
@@ -94,7 +94,7 @@ foo bar [AI-API-AUTH].
 }
 
 #[test]
-fn e0149_valid_distinct_params() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_distinct_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Outer[T]:
     class Inner[U]:
@@ -109,7 +109,7 @@ class Outer[T]:
 }
 
 #[test]
-fn e0149_mutual_alias_cycle_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn mutual_alias_cycle_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "type A = B\ntype B = A\n";
     let diags = run(source)?;
     assert!(
@@ -121,7 +121,7 @@ fn e0149_mutual_alias_cycle_fires() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0149_recursion_through_container_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn recursion_through_container_ok() -> Result<(), Box<dyn std::error::Error>> {
     // Recursion through a container terminates and is legitimate.
     let source = "type A = list[B]\ntype B = list[A]\n";
     let diags = run(source)?;
@@ -134,7 +134,7 @@ fn e0149_recursion_through_container_ok() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn e0149_self_recursion_through_list_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn self_recursion_through_list_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = "type Tree[T] = T | list[Tree[T]]\n";
     let diags = run(source)?;
     assert!(

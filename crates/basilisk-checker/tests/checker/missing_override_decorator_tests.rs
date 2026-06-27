@@ -29,7 +29,7 @@ class Test2(Test):
 "#;
 
 #[test]
-fn e0025_missing_override_decorator_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn missing_override_decorator_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Base:
     def process(self) -> None:
@@ -49,7 +49,7 @@ class Child(Base):
 }
 
 #[test]
-fn e0025_with_override_decorator_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn with_override_decorator_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import override
 
@@ -71,7 +71,7 @@ class Child(Base):
 }
 
 #[test]
-fn e0025_different_method_name_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn different_method_name_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Base:
     def process(self) -> None:
@@ -95,7 +95,7 @@ class Child(Base):
 // below 3.12.
 
 #[test]
-fn e0025_silent_on_3_11_target() {
+fn silent_on_3_11_target() {
     let diags = run_with_python_version(ISSUE_171_SOURCE, "3.11");
     assert!(
         !codes(&diags).contains(&"BSK-E0025"),
@@ -105,7 +105,7 @@ fn e0025_silent_on_3_11_target() {
 }
 
 #[test]
-fn e0025_silent_on_3_10_target() {
+fn silent_on_3_10_target() {
     let diags = run_with_python_version(ISSUE_171_SOURCE, "3.10");
     assert!(
         !codes(&diags).contains(&"BSK-E0025"),
@@ -115,7 +115,7 @@ fn e0025_silent_on_3_10_target() {
 }
 
 #[test]
-fn e0025_fires_on_3_12_target() {
+fn fires_on_3_12_target() {
     let diags = run_with_python_version(ISSUE_171_SOURCE, "3.12");
     assert!(
         codes(&diags).contains(&"BSK-E0025"),
@@ -125,7 +125,7 @@ fn e0025_fires_on_3_12_target() {
 }
 
 #[test]
-fn e0025_protocol_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 

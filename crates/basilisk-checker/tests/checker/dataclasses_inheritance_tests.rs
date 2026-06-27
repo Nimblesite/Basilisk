@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0157_no_default_after_default_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn no_default_after_default_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source =
         "from dataclasses import dataclass\n@dataclass\nclass C:\n    a: int = 0\n    b: int\n";
     let diags = run(source)?;
@@ -17,7 +17,7 @@ fn e0157_no_default_after_default_fires() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn e0157_field_default_call_counts_as_default() -> Result<(), Box<dyn std::error::Error>> {
+fn field_default_call_counts_as_default() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from dataclasses import dataclass, field\n@dataclass\nclass C:\n    a: int = field(default=1)\n    b: int\n";
     let diags = run(source)?;
     assert!(
@@ -29,7 +29,7 @@ fn e0157_field_default_call_counts_as_default() -> Result<(), Box<dyn std::error
 }
 
 #[test]
-fn e0157_initvar_with_default_counts() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_with_default_counts() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from dataclasses import dataclass, InitVar\n@dataclass\nclass C:\n    a: InitVar[int] = 0\n    b: int\n";
     let diags = run(source)?;
     assert!(
@@ -41,7 +41,7 @@ fn e0157_initvar_with_default_counts() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
-fn e0157_correct_order_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn correct_order_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source =
         "from dataclasses import dataclass\n@dataclass\nclass C:\n    a: int\n    b: int = 0\n";
     let diags = run(source)?;
@@ -53,7 +53,7 @@ fn e0157_correct_order_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
-fn e0157_init_false_excluded() -> Result<(), Box<dyn std::error::Error>> {
+fn init_false_excluded() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from dataclasses import dataclass, field\n@dataclass\nclass C:\n    a: int = field(init=False)\n    b: int\n";
     let diags = run(source)?;
     assert!(
@@ -64,7 +64,7 @@ fn e0157_init_false_excluded() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0157_classvar_excluded() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_excluded() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from dataclasses import dataclass\nfrom typing import ClassVar\n@dataclass\nclass C:\n    a: ClassVar[int] = 0\n    b: int\n";
     let diags = run(source)?;
     assert!(
@@ -75,7 +75,7 @@ fn e0157_classvar_excluded() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0157_kw_only_excluded() -> Result<(), Box<dyn std::error::Error>> {
+fn kw_only_excluded() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from dataclasses import dataclass, field\n@dataclass\nclass C:\n    a: int = field(kw_only=True, default=3)\n    b: int\n";
     let diags = run(source)?;
     assert!(

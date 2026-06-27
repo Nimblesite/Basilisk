@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0083_unpack_required_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn unpack_required_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple
 Ts = TypeVarTuple("Ts")

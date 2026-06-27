@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0086_multiple_typevartuple_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_typevartuple_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic
 Ts1 = TypeVarTuple("Ts1")
@@ -19,7 +19,7 @@ class Bad(Generic[*Ts1, *Ts2]):
 }
 
 #[test]
-fn e0086_single_typevartuple_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn single_typevartuple_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic
 Ts = TypeVarTuple("Ts")

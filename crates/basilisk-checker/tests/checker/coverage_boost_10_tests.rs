@@ -7,14 +7,14 @@ use super::common::*;
 // --- E0036: ClassVar deep paths ---
 
 #[test]
-fn e0036_classvar_typing_extensions() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_typing_extensions() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing_extensions import ClassVar\nx: ClassVar[int] = 42\n";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
-fn e0036_classvar_in_dataclass() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_in_dataclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ClassVar
 from dataclasses import dataclass
@@ -29,7 +29,7 @@ class Model:
 }
 
 #[test]
-fn e0036_classvar_assignment_to_self() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_assignment_to_self() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ClassVar
 
@@ -45,7 +45,7 @@ class MyClass:
 }
 
 #[test]
-fn e0036_classvar_protocol() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ClassVar, Protocol
 
@@ -59,7 +59,7 @@ class HasClassVar(Protocol):
 // --- E0149: PEP 695 deeper ---
 
 #[test]
-fn e0149_generic_protocol_typevar_scope() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_protocol_typevar_scope() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, Protocol
 
@@ -78,7 +78,7 @@ class Impl(Generic[U]):
 }
 
 #[test]
-fn e0149_typevar_in_decorator() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_in_decorator() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, Callable
 
@@ -95,7 +95,7 @@ class Cached(Generic[T]):
 // --- E0144: type() deeper ---
 
 #[test]
-fn e0144_type_with_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn type_with_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: type = type("Dynamic", (object,), {})
 y: type[int] = int
@@ -108,7 +108,7 @@ z = type("Z", (), {"value": 42, "name": "test"})
 // --- E0079: Module protocol deeper ---
 
 #[test]
-fn e0079_protocol_with_property_method() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_property_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -127,7 +127,7 @@ v: HasVersion = os
 // --- E0120: Generator deeper ---
 
 #[test]
-fn e0120_generator_multiple_yields() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_multiple_yields() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -150,7 +150,7 @@ def countdown(n: int) -> Generator[int, None, str]:
 // --- E0138: Dataclass transform deeper ---
 
 #[test]
-fn e0138_transform_with_init_and_repr() -> Result<(), Box<dyn std::error::Error>> {
+fn transform_with_init_and_repr() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import dataclass_transform
 
@@ -171,7 +171,7 @@ class FullConfig:
 // --- E0130: TypeVar scoping deeper ---
 
 #[test]
-fn e0130_typevar_bound() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_bound() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -185,7 +185,7 @@ class NumberContainer(Generic[T]):
 }
 
 #[test]
-fn e0130_typevar_in_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_in_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, TypeAlias, List
 
@@ -200,7 +200,7 @@ MyList: TypeAlias = List[T]
 // --- E0047: Invalid type expression deeper ---
 
 #[test]
-fn e0047_string_literal_valid() -> Result<(), Box<dyn std::error::Error>> {
+fn string_literal_valid() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class MyClass:
     def method(self) -> "MyClass":
@@ -211,14 +211,14 @@ class MyClass:
 }
 
 #[test]
-fn e0047_none_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn none_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = "def f() -> None:\n    pass\n";
     let _ = run(source)?;
     Ok(())
 }
 
 #[test]
-fn e0047_ellipsis_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn ellipsis_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -231,7 +231,7 @@ x: Callable[..., int]
 // --- E0143: NamedTuple deeper ---
 
 #[test]
-fn e0143_namedtuple_with_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_with_methods() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -256,7 +256,7 @@ p2 = p.translate(1.0, 1.0)
 // --- E0122: Callable deeper ---
 
 #[test]
-fn e0122_callable_with_varargs_kwonly() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_with_varargs_kwonly() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -279,7 +279,7 @@ takes_binary(with_kwargs)
 // --- E0095: InitVar deeper ---
 
 #[test]
-fn e0095_initvar_with_default_factory() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_with_default_factory() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, InitVar, field
 
@@ -301,7 +301,7 @@ class Model:
 // --- E0121: Protocol deeper ---
 
 #[test]
-fn e0121_protocol_wrong_param_types() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_wrong_param_types() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -327,7 +327,7 @@ use_processor(BadProcessor())
 // --- E0139: TypeVarTuple deeper ---
 
 #[test]
-fn e0139_typevartuple_in_function() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_in_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic, Unpack
 
@@ -349,7 +349,7 @@ def ones() -> Array[int, int]:
 // --- E0126: Literal deeper ---
 
 #[test]
-fn e0126_literal_none() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_none() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal
 
@@ -362,7 +362,7 @@ x: Literal[None] = None
 // --- E0063: Non-hashable deeper ---
 
 #[test]
-fn e0063_dataclass_eq_false() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_eq_false() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -380,7 +380,7 @@ s = {Point(1, 2)}
 // --- E0073: NamedTuple tuple compat deeper ---
 
 #[test]
-fn e0073_namedtuple_length_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_length_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple, Tuple
 
@@ -402,7 +402,7 @@ takes_pair(t)
 // --- E0145: Type bracket deeper ---
 
 #[test]
-fn e0145_union_subscript() -> Result<(), Box<dyn std::error::Error>> {
+fn union_subscript() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Union, Optional, Tuple, Set, FrozenSet, Deque
 
@@ -419,7 +419,7 @@ e: FrozenSet[int] = frozenset([1, 2])
 // --- E0112: TypeGuard callable deeper ---
 
 #[test]
-fn e0112_typeguard_nested() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_nested() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeGuard, TypeIs
 
@@ -440,7 +440,7 @@ def check_list(items: list) -> None:
 // --- E0102: TypeVar default deeper ---
 
 #[test]
-fn e0102_typevar_multiple_defaults() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_multiple_defaults() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -462,7 +462,7 @@ c: Triple[bool, bytes] = Triple()
 // --- E0054: Final deeper ---
 
 #[test]
-fn e0054_final_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn final_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -493,7 +493,7 @@ def func() -> None:
 // --- E0050: NewType deeper ---
 
 #[test]
-fn e0050_newtype_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn newtype_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NewType, List, Dict
 
@@ -512,7 +512,7 @@ name: Username = Username('alice')
 // --- E0076: Overload union expansion deeper ---
 
 #[test]
-fn e0076_overload_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload, Union
 
@@ -533,7 +533,7 @@ def process(x: Union[int, str, float]) -> Union[int, str, float]:
 // --- E0015: Assignment compatibility deeper ---
 
 #[test]
-fn e0015_complex_assignments() -> Result<(), Box<dyn std::error::Error>> {
+fn complex_assignments() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import List, Dict, Optional, Tuple
 
@@ -550,7 +550,7 @@ e: Optional[str] = 'hello'
 // --- E0041: Too few args deeper ---
 
 #[test]
-fn e0041_various_arg_patterns() -> Result<(), Box<dyn std::error::Error>> {
+fn various_arg_patterns() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def required_three(a: int, b: str, c: float) -> None:
     pass
@@ -586,7 +586,7 @@ kw_only(1)
 // --- E0116: NamedTuple definition deeper ---
 
 #[test]
-fn e0116_namedtuple_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -612,7 +612,7 @@ class WithUnderscoreField(NamedTuple):
 // --- E0118: Super abstract deeper ---
 
 #[test]
-fn e0118_abstract_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn abstract_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from abc import ABC, abstractmethod
 
@@ -645,7 +645,7 @@ class Rect(Shape):
 // --- E0092: Too few type args deeper ---
 
 #[test]
-fn e0092_complex_generics() -> Result<(), Box<dyn std::error::Error>> {
+fn complex_generics() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -677,7 +677,7 @@ e: Pair = Pair()
 // --- E0094: Self type deeper ---
 
 #[test]
-fn e0094_self_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn self_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Self
 
@@ -703,7 +703,7 @@ def free_func() -> Self:
 // --- E0038: TypedDict deeper ---
 
 #[test]
-fn e0038_typeddict_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict, Required, NotRequired
 
@@ -729,7 +729,7 @@ class Partial(TypedDict, total=False):
 // --- E0108: Dataclass slots deeper ---
 
 #[test]
-fn e0108_slots_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn slots_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -751,7 +751,7 @@ class RegularPoint:
 // --- E0110: Protocol variance deeper ---
 
 #[test]
-fn e0110_protocol_variance_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_variance_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Protocol
 
@@ -776,7 +776,7 @@ class ReadWriter(Protocol[T]):
 // --- E0117: Unbound TypeVar deeper ---
 
 #[test]
-fn e0117_unbound_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn unbound_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -800,7 +800,7 @@ def multi(x: T, y: U) -> None:
 // --- E0051: Invalid literal deeper ---
 
 #[test]
-fn e0051_literal_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal
 
@@ -827,7 +827,7 @@ f: Literal[Color.RED] = Color.RED
 // --- E0064: NamedTuple functional invalid ---
 
 #[test]
-fn e0064_namedtuple_functional_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_functional_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 from collections import namedtuple
@@ -848,7 +848,7 @@ Bad = NamedTuple('Wrong', [('x', int)])
 // --- E0091: TypeVar default incompat ---
 
 #[test]
-fn e0091_typevar_default_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -870,7 +870,7 @@ c3: Container[float, bytes] = Container()
 // --- E0069: Dataclass kw-only ---
 
 #[test]
-fn e0069_kwonly_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
+fn kwonly_comprehensive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, field
 

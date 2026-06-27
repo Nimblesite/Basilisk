@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0133_covariant_protocol_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn covariant_protocol_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -22,7 +22,7 @@ class MyProto(Protocol[T_co]):
 }
 
 #[test]
-fn e0133_invariant_should_be_covariant() -> Result<(), Box<dyn std::error::Error>> {
+fn invariant_should_be_covariant() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 

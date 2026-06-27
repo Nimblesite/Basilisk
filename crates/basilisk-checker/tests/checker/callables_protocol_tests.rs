@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0122_correct_callable_arity() -> Result<(), Box<dyn std::error::Error>> {
+fn correct_callable_arity() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -20,7 +20,7 @@ def invoke(cb: Callable[[int, str], bool]) -> bool:
 }
 
 #[test]
-fn e0122_wrong_callable_arity() -> Result<(), Box<dyn std::error::Error>> {
+fn wrong_callable_arity() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -33,7 +33,7 @@ def invoke(cb: Callable[[int, str], bool]) -> bool:
 }
 
 #[test]
-fn e0122_keyword_arg_on_callable() -> Result<(), Box<dyn std::error::Error>> {
+fn keyword_arg_on_callable() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 

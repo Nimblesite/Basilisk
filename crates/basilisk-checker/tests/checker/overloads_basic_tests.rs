@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0072_no_matching_overload_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn no_matching_overload_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -23,7 +23,7 @@ process(1.0)
 }
 
 #[test]
-fn e0072_matching_overload_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn matching_overload_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 

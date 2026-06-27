@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0109_valid_bound_usage() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_bound_usage() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, LiteralString
 
@@ -22,7 +22,7 @@ def literal_identity(s: TLiteral) -> TLiteral:
 }
 
 #[test]
-fn e0109_bound_violation() -> Result<(), Box<dyn std::error::Error>> {
+fn bound_violation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, LiteralString
 

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0066_enum_value_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_value_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import IntEnum
 class Color(IntEnum):
@@ -16,7 +16,7 @@ class Color(IntEnum):
 }
 
 #[test]
-fn e0066_valid_int_enum() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_int_enum() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import IntEnum
 class Color(IntEnum):

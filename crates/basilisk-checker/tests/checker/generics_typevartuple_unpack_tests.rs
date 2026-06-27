@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0081_too_few_args_for_unpack() -> Result<(), Box<dyn std::error::Error>> {
+fn too_few_args_for_unpack() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Unpack, Generic
 Ts = TypeVarTuple("Ts")
@@ -23,7 +23,7 @@ process(Tensor())
 }
 
 #[test]
-fn e0081_valid_unpack() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_unpack() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic
 Ts = TypeVarTuple("Ts")

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0124_valid_tuple_protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_tuple_protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -24,7 +24,7 @@ class Point(RGB):
 }
 
 #[test]
-fn e0124_mismatched_tuple_protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn mismatched_tuple_protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 

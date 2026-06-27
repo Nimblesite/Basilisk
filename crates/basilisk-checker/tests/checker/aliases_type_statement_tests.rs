@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0057_pep695_type_alias_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_type_alias_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type Vector = list[float]
 type Matrix = list[Vector]
@@ -15,7 +15,7 @@ type Matrix = list[Vector]
 }
 
 #[test]
-fn e0057_type_alias_with_params() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_with_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type Pair[T] = tuple[T, T]
 ";
@@ -25,7 +25,7 @@ type Pair[T] = tuple[T, T]
 }
 
 #[test]
-fn e0057_type_alias_bool_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_bool_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type Bad = True
 ";
@@ -35,7 +35,7 @@ type Bad = True
 }
 
 #[test]
-fn e0057_type_alias_int_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_int_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type Bad = 42
 ";
@@ -45,7 +45,7 @@ type Bad = 42
 }
 
 #[test]
-fn e0057_type_alias_list_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_list_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type Bad = [int, str]
 ";
@@ -55,7 +55,7 @@ type Bad = [int, str]
 }
 
 #[test]
-fn e0057_type_alias_dict_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_dict_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 type Bad = {"a": int}
 "#;
@@ -65,7 +65,7 @@ type Bad = {"a": int}
 }
 
 #[test]
-fn e0057_type_alias_fstring() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_fstring() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 type Bad = f"hello"
 "#;
@@ -75,7 +75,7 @@ type Bad = f"hello"
 }
 
 #[test]
-fn e0057_type_alias_conditional() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_conditional() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type Bad = int if True else str
 ";
@@ -85,7 +85,7 @@ type Bad = int if True else str
 }
 
 #[test]
-fn e0057_type_alias_boolean_op() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_boolean_op() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type Bad = int or str
 ";
@@ -95,7 +95,7 @@ type Bad = int or str
 }
 
 #[test]
-fn e0057_type_alias_lambda() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_lambda() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type Bad = lambda: int
 ";
@@ -105,7 +105,7 @@ type Bad = lambda: int
 }
 
 #[test]
-fn e0057_type_alias_eval() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_eval() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 type Bad = eval("int")
 "#;
@@ -115,7 +115,7 @@ type Bad = eval("int")
 }
 
 #[test]
-fn e0057_type_alias_negative_number() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_negative_number() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type Bad = -1
 ";
@@ -125,7 +125,7 @@ type Bad = -1
 }
 
 #[test]
-fn e0057_type_alias_tuple_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_tuple_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type Bad = (int, str)
 ";
@@ -135,7 +135,7 @@ type Bad = (int, str)
 }
 
 #[test]
-fn e0057_type_alias_non_type_name() -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_non_type_name() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 x = 42
 type Bad = x

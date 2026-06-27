@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0076_overload_union_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_union_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload, Union
 

@@ -16,7 +16,7 @@ use super::common::*;
 // =============================================================================
 
 #[test]
-fn e0073_namedtuple_tuple_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_tuple_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -41,7 +41,7 @@ t: tuple[int, int] = p
 }
 
 #[test]
-fn e0073_namedtuple_tuple_count_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_tuple_count_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -67,7 +67,7 @@ v: tuple[int, str] = t
 }
 
 #[test]
-fn e0073_namedtuple_tuple_exact_match() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_tuple_exact_match() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -96,7 +96,7 @@ t: tuple[int, str] = p
 // =============================================================================
 
 #[test]
-fn e0116_namedtuple_default_ordering() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_default_ordering() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -118,7 +118,7 @@ class Point(NamedTuple):
 }
 
 #[test]
-fn e0116_namedtuple_multiple_inheritance() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_multiple_inheritance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -143,7 +143,7 @@ class Point(NamedTuple, Base):
 }
 
 #[test]
-fn e0116_namedtuple_subclass_field_conflict() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_subclass_field_conflict() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -162,7 +162,7 @@ class Point3D(Point):
 }
 
 #[test]
-fn e0116_namedtuple_classvar_skip() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_classvar_skip() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple, ClassVar
 
@@ -180,7 +180,7 @@ class Point(NamedTuple):
 // =============================================================================
 
 #[test]
-fn e0137_generic_protocol_return_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_protocol_return_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -209,7 +209,7 @@ v: Transformer[int] = IntToStr()
 }
 
 #[test]
-fn e0137_generic_protocol_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_protocol_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -238,7 +238,7 @@ v: Handler[int] = StrHandler()
 }
 
 #[test]
-fn e0137_generic_protocol_missing_method() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_protocol_missing_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -265,7 +265,7 @@ v: Comparable[int] = OnlyCompare()
 // =============================================================================
 
 #[test]
-fn e0140_callable_ellipsis() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_ellipsis() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -282,7 +282,7 @@ takes_any(my_func)
 }
 
 #[test]
-fn e0140_protocol_non_protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_non_protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class NotAProtocol:
     def process(self) -> None:
@@ -300,7 +300,7 @@ x: NotAProtocol = my_func
 }
 
 #[test]
-fn e0140_callable_concatenate_prefix() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_concatenate_prefix() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable, Concatenate, ParamSpec
 
@@ -314,7 +314,7 @@ def with_first(fn: Callable[Concatenate[int, P], str]) -> None:
 }
 
 #[test]
-fn e0140_protocol_call_method() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_call_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -335,7 +335,7 @@ p: Processor = my_func
 // =============================================================================
 
 #[test]
-fn e0112_typeguard_vs_typeis_incompatible() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_vs_typeis_incompatible() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeGuard, TypeIs
 
@@ -353,7 +353,7 @@ def takes_guard(fn: TypeGuard[str]) -> None:
 }
 
 #[test]
-fn e0112_typeguard_func_passed_as_arg() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_func_passed_as_arg() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeGuard, Callable
 
@@ -379,7 +379,7 @@ apply(is_int)
 }
 
 #[test]
-fn e0112_typeis_func_passed_as_typeguard() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_func_passed_as_typeguard() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeGuard, TypeIs, Callable
 
@@ -409,7 +409,7 @@ apply(is_str)
 // =============================================================================
 
 #[test]
-fn e0121_protocol_missing_method() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_missing_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -437,7 +437,7 @@ c: Drawable = Circle()
 }
 
 #[test]
-fn e0121_non_protocol_structural_assign() -> Result<(), Box<dyn std::error::Error>> {
+fn non_protocol_structural_assign() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -469,7 +469,7 @@ x: ConcreteBase = Other()
 }
 
 #[test]
-fn e0121_known_protocol_conformance() -> Result<(), Box<dyn std::error::Error>> {
+fn known_protocol_conformance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Sized
 
@@ -485,7 +485,7 @@ x: Sized = NoLen()
 }
 
 #[test]
-fn e0121_protocol_nominal_subclass() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_nominal_subclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -512,7 +512,7 @@ x: HasName = SubNamed()
 // =============================================================================
 
 #[test]
-fn e0130_typevar_scope_in_function() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_scope_in_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -530,7 +530,7 @@ class Container(Generic[T]):
 }
 
 #[test]
-fn e0130_typevar_multiple_constraints() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_multiple_constraints() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -548,7 +548,7 @@ def process(x: T) -> T:
 // =============================================================================
 
 #[test]
-fn e0131_generator_multiple_yields() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_multiple_yields() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -572,7 +572,7 @@ def gen() -> Generator[int, None, str]:
 }
 
 #[test]
-fn e0131_generator_yield_from() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_yield_from() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator, Iterator
 
@@ -597,7 +597,7 @@ def gen() -> Generator[int, None, None]:
 // =============================================================================
 
 #[test]
-fn e0147_tuple_unpack_starred() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_unpack_starred() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Tuple
 
@@ -615,7 +615,7 @@ def process() -> None:
 // =============================================================================
 
 #[test]
-fn e0102_typevar_default_with_constraints() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_with_constraints() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -640,7 +640,7 @@ T = TypeVar("T", int, str, default=float)
 // =============================================================================
 
 #[test]
-fn e0149_pep695_nested_function_params() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_nested_function_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Outer[T]:
     def method[U](self, x: T, y: U) -> None:
@@ -652,7 +652,7 @@ class Outer[T]:
 }
 
 #[test]
-fn e0149_pep695_complex_bounds() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_complex_bounds() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Sequence
 
@@ -671,7 +671,7 @@ def process[T: Sequence[int]](x: T) -> T:
 // =============================================================================
 
 #[test]
-fn e0145_type_bracket_in_function_params() -> Result<(), Box<dyn std::error::Error>> {
+fn type_bracket_in_function_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -694,7 +694,7 @@ def check(x: type[int]) -> bool:
 }
 
 #[test]
-fn e0145_type_bracket_in_return() -> Result<(), Box<dyn std::error::Error>> {
+fn type_bracket_in_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def get_type() -> type[int]:
     return int
@@ -708,7 +708,7 @@ def get_type() -> type[int]:
 // =============================================================================
 
 #[test]
-fn e0076_overload_no_implementation() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_no_implementation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -731,7 +731,7 @@ def process(x: str) -> int: ...
 }
 
 #[test]
-fn e0076_overload_single_overload() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_single_overload() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -759,7 +759,7 @@ def process(x: int) -> str:
 // =============================================================================
 
 #[test]
-fn e0119_protocol_isinstance_without_runtime() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_isinstance_without_runtime() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -787,7 +787,7 @@ isinstance(x, NotRuntime)
 // =============================================================================
 
 #[test]
-fn e0120_generator_no_yield() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_no_yield() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -804,7 +804,7 @@ def not_a_gen() -> Generator[int, None, None]:
 // =============================================================================
 
 #[test]
-fn e0054_final_augmented_assign_module() -> Result<(), Box<dyn std::error::Error>> {
+fn final_augmented_assign_module() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -828,7 +828,7 @@ COUNT += 1
 // =============================================================================
 
 #[test]
-fn e0111_namedtuple_constructor() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_constructor() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -844,7 +844,7 @@ p = Point(1, "ok")
 }
 
 #[test]
-fn e0111_class_with_base_init() -> Result<(), Box<dyn std::error::Error>> {
+fn class_with_base_init() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Base:
     def __init__(self, x: int) -> None:
@@ -868,7 +868,7 @@ g = GrandChild(42)
 // =============================================================================
 
 #[test]
-fn e0095_initvar_access_in_assign() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_access_in_assign() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, InitVar
 
@@ -901,7 +901,7 @@ x = c.init_debug
 // =============================================================================
 
 #[test]
-fn e0148_dict_wrong_arg_count() -> Result<(), Box<dyn std::error::Error>> {
+fn dict_wrong_arg_count() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Dict
 
@@ -913,7 +913,7 @@ x: Dict[int] = {}
 }
 
 #[test]
-fn e0148_list_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
+fn list_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import List
 
@@ -929,7 +929,7 @@ x: List[int, str] = []
 // =============================================================================
 
 #[test]
-fn e0139_alias_class_body_specialization() -> Result<(), Box<dyn std::error::Error>> {
+fn alias_class_body_specialization() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, TypeVarTuple, Generic, Unpack
 
@@ -949,7 +949,7 @@ class MyClass:
 }
 
 #[test]
-fn e0139_alias_in_function_body() -> Result<(), Box<dyn std::error::Error>> {
+fn alias_in_function_body() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, TypeVarTuple, Generic, Unpack
 

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0033_valid_reveal_type() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_reveal_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 x: int = 42
 reveal_type(x)
@@ -18,7 +18,7 @@ reveal_type(x)
 }
 
 #[test]
-fn e0033_reveal_type_no_args() -> Result<(), Box<dyn std::error::Error>> {
+fn reveal_type_no_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 reveal_type()
 ";
@@ -28,7 +28,7 @@ reveal_type()
 }
 
 #[test]
-fn e0033_reveal_type_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
+fn reveal_type_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x: int = 42
 y: str = "hi"

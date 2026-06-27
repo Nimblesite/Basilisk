@@ -14,7 +14,7 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
 // ── E0045: Default value — negative literal, tuple default ──
 
 #[test]
-fn e0045_negative_default() -> Result<(), Box<dyn std::error::Error>> {
+fn negative_default() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def func1(x: int = -42, y: float = -3.14, z: str = -1) -> None:
     pass
@@ -39,7 +39,7 @@ def func5(x: int = 3.14, y: float = "bad", z: bytes = 42) -> None:
 // ── E0036: ClassVar in various positions ──
 
 #[test]
-fn e0036_classvar_complex() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_complex() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ClassVar, Optional
 
@@ -68,7 +68,7 @@ class Sub(MyClass):
 // ── E0047: Scope — nested class TypeVar access ──
 
 #[test]
-fn e0047_nested_scope() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_scope() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -96,7 +96,7 @@ class Outer(Generic[T]):
 // ── E0078: Self return — deeper nesting ──
 
 #[test]
-fn e0078_self_return_deep() -> Result<(), Box<dyn std::error::Error>> {
+fn self_return_deep() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 
@@ -124,7 +124,7 @@ class Builder:
 // ── E0092: type[] too many args ──
 
 #[test]
-fn e0092_type_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
+fn type_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Type
 
@@ -142,7 +142,7 @@ def func(cls: type[int, str]) -> None:
 // ── E0052: Frozen dataclass — assignment in init ──
 
 #[test]
-fn e0052_frozen_init_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn frozen_init_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -165,7 +165,7 @@ del f.x
 // ── E0070: Never in union positions ──
 
 #[test]
-fn e0070_never_union_positions() -> Result<(), Box<dyn std::error::Error>> {
+fn never_union_positions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Never, NoReturn, Union, Optional
 
@@ -193,7 +193,7 @@ def func(x: Never) -> int:
 // ── E0080: TypeVar bound — method resolution ──
 
 #[test]
-fn e0080_typevar_bound_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_bound_methods() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -228,7 +228,7 @@ b3: MathBox[str] = MathBox("bad")
 // ── E0100: Literal augmented — vararg/kwarg ──
 
 #[test]
-fn e0100_literal_augmented_vararg() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_augmented_vararg() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 
@@ -246,7 +246,7 @@ def func(*args: Literal[1], **kwargs: Literal[0]) -> None:
 // ── E0104: Cyclical alias — transitive ──
 
 #[test]
-fn e0104_cyclical_transitive() -> Result<(), Box<dyn std::error::Error>> {
+fn cyclical_transitive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -267,7 +267,7 @@ Self3: TypeAlias = "Self3"
 // ── E0109: TypeVar bound — annotation resolution ──
 
 #[test]
-fn e0109_typevar_bound_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_bound_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -297,7 +297,7 @@ n.add("bad")
 // ── E0037: TypedDict with various key patterns ──
 
 #[test]
-fn e0037_typeddict_keys() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_keys() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypedDict
 
@@ -316,7 +316,7 @@ Bad2 = TypedDict("Bad2", {None: int})
 // ── E0042: PEP 695 with explicit Generic base ──
 
 #[test]
-fn e0042_pep695_explicit_generic() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_explicit_generic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -338,7 +338,7 @@ class Multi[T, S](Generic[T, S]):
 // ── E0057: type statement — invalid forms ──
 
 #[test]
-fn e0057_type_stmt_invalid() -> Result<(), Box<dyn std::error::Error>> {
+fn type_stmt_invalid() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 type Bad1 = 42
 type Bad2 = [int, str]
@@ -357,7 +357,7 @@ type Good3 = dict[str, int]
 // ── E0035: Required/NotRequired on function params ──
 
 #[test]
-fn e0035_required_notreq_params() -> Result<(), Box<dyn std::error::Error>> {
+fn required_notreq_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Required, NotRequired, TypedDict
 
@@ -380,7 +380,7 @@ class BadClass:
 // ── E0017: ClassVar override between parent/child ──
 
 #[test]
-fn e0017_classvar_override_deep() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_override_deep() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ClassVar
 
@@ -404,7 +404,7 @@ class Child(Parent):
 // ── E0061: assert_type patterns ──
 
 #[test]
-fn e0061_assert_type_complex() -> Result<(), Box<dyn std::error::Error>> {
+fn assert_type_complex() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import assert_type, Literal
 from enum import Enum

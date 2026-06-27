@@ -199,13 +199,13 @@ benchmarkStrings:
     </div>
     <div class="feature-row__text">
       <p class="feature-row__num">04 &mdash; PEP conformance</p>
-      <h2 class="feature-row__title">{{ conformance.pass }} of {{ conformance.total }} tests passing ({{ conformance.scorePct }}%).<br>Target: 100%.</h2>
+      <h2 class="feature-row__title">{{ conformance.pass }} of {{ conformance.total }} tests passing ({{ conformance.scorePct }}%).<br>Every conformance rule enabled.</h2>
       <p class="feature-row__body">
         Scored by the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">official Python typing conformance suite</a> &mdash;
         the same harness used to measure Pyright (~99%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>),
         mypy (~58%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>),
         and Pyrefly (~86%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>).
-        Today {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories pass at 100%; the suite reports {{ conformance.fp }} false-positive diagnostics and {{ conformance.missed }} missed required errors, and we are driving both to zero. 100% is the target, not a present-day claim. <a href="/docs/conformance/">How we measure this &rarr;</a>
+        We run it on the real binary with every conformance rule enabled and nothing disabled: {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories pass at 100%, with {{ conformance.fp }} false positives and {{ conformance.missed }} missed required errors. Basilisk&rsquo;s extra house rules are opt-in, so they never pad the number. <a href="/docs/conformance/">How we measure this &rarr;</a>
       </p>
     </div>
   </div>
@@ -313,7 +313,7 @@ benchmarkStrings:
           </tr>
           <tr>
             <td>PEP conformance <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a></td>
-            <td class="col-basilisk">{{ conformance.scorePct }}% <em style="font-size:0.75rem;color:var(--color-text-muted)">({{ conformance.pass }}/{{ conformance.total }}, target 100%)</em></td>
+            <td class="col-basilisk">{{ conformance.scorePct }}% <em style="font-size:0.75rem;color:var(--color-text-muted)">({{ conformance.pass }}/{{ conformance.total }})</em></td>
             <td>~99%</td>
             <td>~58% full-pass</td>
             <td>alpha</td>

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0105_valid_attr_on_bound() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_attr_on_bound() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class C[T: str]:
     def method(self, x: T) -> str:
@@ -19,7 +19,7 @@ class C[T: str]:
 }
 
 #[test]
-fn e0105_invalid_attr_on_bound() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_attr_on_bound() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class C[T: str]:
     def method(self, x: T) -> None:

@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0055_covariant_and_contravariant_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn covariant_and_contravariant_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T", covariant=True, contravariant=True)
@@ -21,7 +21,7 @@ T = TypeVar("T", covariant=True, contravariant=True)
 }
 
 #[test]
-fn e0055_infer_variance_with_covariant_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn infer_variance_with_covariant_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T", covariant=True, infer_variance=True)
@@ -37,7 +37,7 @@ T = TypeVar("T", covariant=True, infer_variance=True)
 }
 
 #[test]
-fn e0055_constraints_with_bound_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn constraints_with_bound_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T", str, int, bound=float)
@@ -54,7 +54,7 @@ T = TypeVar("T", str, int, bound=float)
 }
 
 #[test]
-fn e0055_valid_typevar_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_typevar_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 T = TypeVar("T", covariant=True)
@@ -67,7 +67,7 @@ T = TypeVar("T", covariant=True)
 }
 
 #[test]
-fn e0055_typevartuple_with_covariant_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_with_covariant_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple
 Ts = TypeVarTuple("Ts", covariant=True)
@@ -83,7 +83,7 @@ Ts = TypeVarTuple("Ts", covariant=True)
 }
 
 #[test]
-fn e0055_typevartuple_with_bound_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_with_bound_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple
 Ts = TypeVarTuple("Ts", bound=int)
@@ -99,7 +99,7 @@ Ts = TypeVarTuple("Ts", bound=int)
 }
 
 #[test]
-fn e0055_paramspec_with_covariant_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn paramspec_with_covariant_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ParamSpec
 P = ParamSpec("P", covariant=True)
@@ -115,7 +115,7 @@ P = ParamSpec("P", covariant=True)
 }
 
 #[test]
-fn e0055_paramspec_with_bound_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn paramspec_with_bound_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ParamSpec
 P = ParamSpec("P", bound=int)

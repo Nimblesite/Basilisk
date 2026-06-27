@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0125_instance_attr_access_on_instance_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn instance_attr_access_on_instance_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -25,7 +25,7 @@ x = n1.label
 }
 
 #[test]
-fn e0125_instance_attr_on_class() -> Result<(), Box<dyn std::error::Error>> {
+fn instance_attr_on_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 

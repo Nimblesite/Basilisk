@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0038_typeddict_conflicting_field_type_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_conflicting_field_type_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypedDict
 
@@ -24,7 +24,7 @@ class Child(Base):
 }
 
 #[test]
-fn e0038_typeddict_compatible_inheritance_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
+fn typeddict_compatible_inheritance_no_diagnostic() -> Result<(), Box<dyn std::error::Error>>
 {
     let source = r"
 from typing import TypedDict

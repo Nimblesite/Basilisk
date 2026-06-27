@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0138_transform_metaclass_frozen() -> Result<(), Box<dyn std::error::Error>> {
+fn transform_metaclass_frozen() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import dataclass_transform
 
@@ -26,7 +26,7 @@ fm.id = 2
 }
 
 #[test]
-fn e0138_transform_metaclass_kw_only() -> Result<(), Box<dyn std::error::Error>> {
+fn transform_metaclass_kw_only() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import dataclass_transform
 
@@ -45,7 +45,7 @@ m = Model(1, "x")
 }
 
 #[test]
-fn e0138_valid_transform_metaclass() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_transform_metaclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import dataclass_transform
 

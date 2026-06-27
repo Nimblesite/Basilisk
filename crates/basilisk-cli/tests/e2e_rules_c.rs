@@ -18,7 +18,7 @@ use common::run;
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0026_typevar_single_constraint() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_single_constraint() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0026_typevar_single_constraint.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -36,7 +36,7 @@ fn e0026_typevar_single_constraint() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0027_duplicate_typevar_generic() -> Result<(), Box<dyn std::error::Error>> {
+fn duplicate_typevar_generic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0027_duplicate_typevar_generic.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -54,7 +54,7 @@ fn e0027_duplicate_typevar_generic() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0029_typeddict_method() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_method() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0029_typeddict_method.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -72,7 +72,7 @@ fn e0029_typeddict_method() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0030_non_default_after_default() -> Result<(), Box<dyn std::error::Error>> {
+fn non_default_after_default() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0030_non_default_after_default.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -90,7 +90,7 @@ fn e0030_non_default_after_default() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0031_invalid_cast() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_cast() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0031_invalid_cast.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -108,7 +108,7 @@ fn e0031_invalid_cast() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0032_typeddict_invalid_keyword() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_invalid_keyword() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0032_typeddict_invalid_keyword.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -126,7 +126,7 @@ fn e0032_typeddict_invalid_keyword() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0033_invalid_reveal_type() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_reveal_type() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0033_invalid_reveal_type.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -144,7 +144,7 @@ fn e0033_invalid_reveal_type() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0034_final_class_inherit() -> Result<(), Box<dyn std::error::Error>> {
+fn final_class_inherit() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0034_final_class_inherit.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -162,7 +162,7 @@ fn e0034_final_class_inherit() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0035_required_outside_typeddict() -> Result<(), Box<dyn std::error::Error>> {
+fn required_outside_typeddict() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0035_required_outside_typeddict.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -180,7 +180,7 @@ fn e0035_required_outside_typeddict() -> Result<(), Box<dyn std::error::Error>> 
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0036_classvar_invalid() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_invalid() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0036_classvar_invalid.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -198,7 +198,7 @@ fn e0036_classvar_invalid() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0037_typeddict_functional_invalid() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_functional_invalid() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0037_typeddict_functional_invalid.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -216,7 +216,7 @@ fn e0037_typeddict_functional_invalid() -> Result<(), Box<dyn std::error::Error>
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0038_typeddict_inheritance_invalid() -> Result<(), Box<dyn std::error::Error>> {
+fn typeddict_inheritance_invalid() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0038_typeddict_inheritance_invalid.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -234,7 +234,7 @@ fn e0038_typeddict_inheritance_invalid() -> Result<(), Box<dyn std::error::Error
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0039_invalid_assert_type() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_assert_type() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0039_invalid_assert_type.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -252,7 +252,7 @@ fn e0039_invalid_assert_type() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0040_enum_subclass() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_subclass() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0040_enum_subclass.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -270,7 +270,7 @@ fn e0040_enum_subclass() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0041_too_few_args() -> Result<(), Box<dyn std::error::Error>> {
+fn too_few_args() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0041_too_few_args.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -288,7 +288,7 @@ fn e0041_too_few_args() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0042_pep695_mixed_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_mixed_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0042_pep695_mixed_typevar.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -306,7 +306,7 @@ fn e0042_pep695_mixed_typevar() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0043_non_typevar_in_generic() -> Result<(), Box<dyn std::error::Error>> {
+fn non_typevar_in_generic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0043_non_typevar_in_generic.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -324,7 +324,7 @@ fn e0043_non_typevar_in_generic() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0044_final_invalid_position() -> Result<(), Box<dyn std::error::Error>> {
+fn final_invalid_position() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0044_final_invalid_position.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -342,7 +342,7 @@ fn e0044_final_invalid_position() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0045_annotated_invalid() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_invalid() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0045_annotated_invalid.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -360,7 +360,7 @@ fn e0045_annotated_invalid() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0046_enum_member_annotated() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_member_annotated() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0046_enum_member_annotated.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -378,7 +378,7 @@ fn e0046_enum_member_annotated() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0047_invalid_type_expr() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_type_expr() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0047_invalid_type_expr.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -396,7 +396,7 @@ fn e0047_invalid_type_expr() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0048_typealias_invalid_rhs() -> Result<(), Box<dyn std::error::Error>> {
+fn typealias_invalid_rhs() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0048_typealias_invalid_rhs.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -414,7 +414,7 @@ fn e0048_typealias_invalid_rhs() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0049_multiple_unbounded_tuple() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_unbounded_tuple() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0049_multiple_unbounded_tuple.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -432,7 +432,7 @@ fn e0049_multiple_unbounded_tuple() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0050_invalid_newtype() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_newtype() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0050_invalid_newtype.py")?;
     let filtered: Vec<_> = diags
         .iter()

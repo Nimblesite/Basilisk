@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0040_valid_enum() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_enum() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import Enum
 
@@ -22,7 +22,7 @@ class Color(Enum):
 }
 
 #[test]
-fn e0040_enum_with_members_subclassed() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_with_members_subclassed() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import Enum
 
@@ -39,7 +39,7 @@ class ExtendedColor(Color):
 }
 
 #[test]
-fn e0040_memberless_enum_base_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn memberless_enum_base_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import Enum
 

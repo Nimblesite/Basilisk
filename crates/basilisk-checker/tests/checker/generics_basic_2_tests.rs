@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0043_concrete_type_in_generic_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn concrete_type_in_generic_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Generic
 class Bad(Generic[int]):
@@ -20,7 +20,7 @@ class Bad(Generic[int]):
 }
 
 #[test]
-fn e0043_typevar_in_generic_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_in_generic_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 T = TypeVar("T")
@@ -36,7 +36,7 @@ class Good(Generic[T]):
 }
 
 #[test]
-fn e0043_concrete_type_in_protocol_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn concrete_type_in_protocol_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 class Bad(Protocol[int]):
@@ -52,7 +52,7 @@ class Bad(Protocol[int]):
 }
 
 #[test]
-fn e0043_undeclared_typevar_in_base_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn undeclared_typevar_in_base_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, Iterable
 T = TypeVar("T")
@@ -70,7 +70,7 @@ class Bad(Iterable[T], Generic[S]):
 }
 
 #[test]
-fn e0043_multiple_typevars_in_generic_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_typevars_in_generic_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 T = TypeVar("T")
@@ -88,7 +88,7 @@ class Good(Generic[T, U]):
 }
 
 #[test]
-fn e0043_typevar_in_protocol_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_in_protocol_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Protocol
 T = TypeVar("T")

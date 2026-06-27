@@ -11,7 +11,7 @@ use super::common::*;
 // =============================================================================
 
 #[test]
-fn e0066_member_value_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn member_value_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 
@@ -30,7 +30,7 @@ class Color(Enum):
 }
 
 #[test]
-fn e0066_init_value_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn init_value_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from enum import Enum
 
@@ -49,7 +49,7 @@ class Planet(Enum):
 }
 
 #[test]
-fn e0066_enum_correct_types() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_correct_types() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 
@@ -72,7 +72,7 @@ class Status(Enum):
 // =============================================================================
 
 #[test]
-fn e0071_keyword_passed_to_positional_only() -> Result<(), Box<dyn std::error::Error>> {
+fn keyword_passed_to_positional_only() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def f1(__x: int) -> None: ...
 
@@ -87,7 +87,7 @@ f1(__x=3)
 }
 
 #[test]
-fn e0071_positional_after_keyword() -> Result<(), Box<dyn std::error::Error>> {
+fn positional_after_keyword() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def f2(x: int, __y: int) -> None: ...
 ";
@@ -100,7 +100,7 @@ def f2(x: int, __y: int) -> None: ...
 }
 
 #[test]
-fn e0071_valid_positional_only() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_positional_only() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def f3(__x: int, __y: int) -> None: ...
 
@@ -120,7 +120,7 @@ f3(1, 2)
 // =============================================================================
 
 #[test]
-fn e0096_factory_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn factory_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass, field
 
@@ -139,7 +139,7 @@ class DC:
 }
 
 #[test]
-fn e0096_factory_correct() -> Result<(), Box<dyn std::error::Error>> {
+fn factory_correct() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass, field
 
@@ -163,7 +163,7 @@ class DC:
 // =============================================================================
 
 #[test]
-fn e0050_name_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn name_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NewType
 
@@ -178,7 +178,7 @@ GoodName = NewType("BadName", int)
 }
 
 #[test]
-fn e0050_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
+fn too_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NewType
 
@@ -193,7 +193,7 @@ BadNewType = NewType("BadNewType", int, int)
 }
 
 #[test]
-fn e0050_any_base() -> Result<(), Box<dyn std::error::Error>> {
+fn any_base() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NewType, Any
 
@@ -208,7 +208,7 @@ BadNewType = NewType("BadNewType", Any)
 }
 
 #[test]
-fn e0050_union_base() -> Result<(), Box<dyn std::error::Error>> {
+fn union_base() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NewType, Union
 
@@ -223,7 +223,7 @@ BadNewType = NewType("BadNewType", Union[int, str])
 }
 
 #[test]
-fn e0050_generic_base() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_base() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NewType, TypeVar, Generic
 
@@ -243,7 +243,7 @@ BadNewType = NewType("BadNewType", Container[T])
 }
 
 #[test]
-fn e0050_valid_newtype() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_newtype() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NewType
 
@@ -260,7 +260,7 @@ UserName = NewType("UserName", str)
 }
 
 #[test]
-fn e0050_newtype_in_function_param() -> Result<(), Box<dyn std::error::Error>> {
+fn newtype_in_function_param() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NewType
 
@@ -282,7 +282,7 @@ class MyClass:
 // =============================================================================
 
 #[test]
-fn e0117_unbound_in_function() -> Result<(), Box<dyn std::error::Error>> {
+fn unbound_in_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -302,7 +302,7 @@ def fun(x: T) -> list[T]:
 }
 
 #[test]
-fn e0117_unbound_in_class() -> Result<(), Box<dyn std::error::Error>> {
+fn unbound_in_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -321,7 +321,7 @@ class Bar(Generic[T]):
 }
 
 #[test]
-fn e0117_inner_class_reuse() -> Result<(), Box<dyn std::error::Error>> {
+fn inner_class_reuse() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -340,7 +340,7 @@ class Outer(Generic[T]):
 }
 
 #[test]
-fn e0117_module_level_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn module_level_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -357,7 +357,7 @@ x: T = 42
 }
 
 #[test]
-fn e0117_class_type_alias_with_class_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn class_type_alias_with_class_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, TypeAlias
 
@@ -379,7 +379,7 @@ class Foo(Generic[T]):
 // =============================================================================
 
 #[test]
-fn e0094_self_in_module_function() -> Result<(), Box<dyn std::error::Error>> {
+fn self_in_module_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 
@@ -395,7 +395,7 @@ def foo(bar: Self) -> Self:
 }
 
 #[test]
-fn e0094_self_in_module_var() -> Result<(), Box<dyn std::error::Error>> {
+fn self_in_module_var() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 
@@ -410,7 +410,7 @@ bar: Self = None
 }
 
 #[test]
-fn e0094_self_in_staticmethod() -> Result<(), Box<dyn std::error::Error>> {
+fn self_in_staticmethod() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 
@@ -428,7 +428,7 @@ class Base:
 }
 
 #[test]
-fn e0094_self_in_base_class() -> Result<(), Box<dyn std::error::Error>> {
+fn self_in_base_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self, Generic
 
@@ -447,7 +447,7 @@ class Bar(Generic[Self]):
 }
 
 #[test]
-fn e0094_valid_self_usage() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_self_usage() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 
@@ -476,7 +476,7 @@ class MyClass:
 // =============================================================================
 
 #[test]
-fn e0078_return_concrete_instead_of_self() -> Result<(), Box<dyn std::error::Error>> {
+fn return_concrete_instead_of_self() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 
@@ -497,7 +497,7 @@ class Shape:
 }
 
 #[test]
-fn e0078_self_subscript() -> Result<(), Box<dyn std::error::Error>> {
+fn self_subscript() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Self, Generic, TypeVar
 
@@ -516,7 +516,7 @@ class Container(Generic[T]):
 }
 
 #[test]
-fn e0078_return_in_if() -> Result<(), Box<dyn std::error::Error>> {
+fn return_in_if() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 
@@ -535,7 +535,7 @@ class Shape:
 }
 
 #[test]
-fn e0078_return_in_for() -> Result<(), Box<dyn std::error::Error>> {
+fn return_in_for() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 
@@ -554,7 +554,7 @@ class Shape:
 }
 
 #[test]
-fn e0078_return_in_while() -> Result<(), Box<dyn std::error::Error>> {
+fn return_in_while() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 
@@ -577,7 +577,7 @@ class Shape:
 // =============================================================================
 
 #[test]
-fn e0075_self_attr_parent_class_assign() -> Result<(), Box<dyn std::error::Error>> {
+fn self_attr_parent_class_assign() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Self, TypeVar, Generic
 from dataclasses import dataclass
@@ -605,7 +605,7 @@ xs = OrdinalLinkedList(value=1, next=LinkedList[int](value=2))
 }
 
 #[test]
-fn e0075_self_attr_reassignment() -> Result<(), Box<dyn std::error::Error>> {
+fn self_attr_reassignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 from dataclasses import dataclass
@@ -634,7 +634,7 @@ n.next = Node(value=2)
 // =============================================================================
 
 #[test]
-fn e0118_super_abstract_no_impl() -> Result<(), Box<dyn std::error::Error>> {
+fn super_abstract_no_impl() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 from abc import abstractmethod
@@ -657,7 +657,7 @@ class BadColor(PColor):
 }
 
 #[test]
-fn e0118_super_abstract_with_body() -> Result<(), Box<dyn std::error::Error>> {
+fn super_abstract_with_body() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from abc import ABC, abstractmethod
 
@@ -679,7 +679,7 @@ class Child(Base):
 }
 
 #[test]
-fn e0118_super_in_if() -> Result<(), Box<dyn std::error::Error>> {
+fn super_in_if() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 from abc import abstractmethod
@@ -703,7 +703,7 @@ class Child(Base):
 }
 
 #[test]
-fn e0118_super_in_for_and_while() -> Result<(), Box<dyn std::error::Error>> {
+fn super_in_for_and_while() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 from abc import abstractmethod
@@ -737,7 +737,7 @@ class Child2(Base):
 // =============================================================================
 
 #[test]
-fn e0036_classvar_in_function_param() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_in_function_param() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ClassVar
 
@@ -754,7 +754,7 @@ class MyClass:
 }
 
 #[test]
-fn e0036_classvar_in_return_type() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_in_return_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar
 
@@ -771,7 +771,7 @@ class MyClass:
 }
 
 #[test]
-fn e0036_classvar_nested() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_nested() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar, Final
 
@@ -788,7 +788,7 @@ class MyClass:
 }
 
 #[test]
-fn e0036_classvar_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar
 
@@ -804,7 +804,7 @@ class MyClass:
 }
 
 #[test]
-fn e0036_classvar_instance_assign() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_instance_assign() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar
 
@@ -823,7 +823,7 @@ obj.count = 5
 }
 
 #[test]
-fn e0036_classvar_module_level() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_module_level() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar
 
@@ -842,7 +842,7 @@ x: ClassVar[int] = 1
 // =============================================================================
 
 #[test]
-fn e0041_class_constructor_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn class_constructor_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -863,7 +863,7 @@ p = Point(1, 2, "wrong")
 }
 
 #[test]
-fn e0041_args_kwargs() -> Result<(), Box<dyn std::error::Error>> {
+fn args_kwargs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def f(a: int, b: str, *args: float) -> None:
     pass
@@ -883,7 +883,7 @@ f(1)
 // =============================================================================
 
 #[test]
-fn e0072_overload_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload
 
@@ -912,7 +912,7 @@ class MyList:
 // =============================================================================
 
 #[test]
-fn e0047_paramspec_in_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn paramspec_in_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ParamSpec, Callable
 
@@ -932,7 +932,7 @@ def decorator(func: Callable[P, int]) -> Callable[P, str]:
 }
 
 #[test]
-fn e0047_nested_brackets_depth() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_brackets_depth() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Dict, List, Optional, Tuple
 
@@ -949,7 +949,7 @@ def deep(x: Dict[str, List[Tuple[int, Optional[str]]]]) -> None:
 // =============================================================================
 
 #[test]
-fn e0015_callable_return_type_invalid() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_return_type_invalid() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -965,7 +965,7 @@ def f(cb: Callable[[int, str], float, bool]) -> None:
 }
 
 #[test]
-fn e0015_callable_ellipsis_in_brackets() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_ellipsis_in_brackets() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -981,7 +981,7 @@ def f(cb: Callable[[...], int]) -> None:
 }
 
 #[test]
-fn e0015_callable_first_arg_invalid() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_first_arg_invalid() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -1001,7 +1001,7 @@ def f(cb: Callable[42, int]) -> None:
 // =============================================================================
 
 #[test]
-fn e0113_typeis_with_generics() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_with_generics() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeIs, TypeVar, Generic
 
@@ -1022,7 +1022,7 @@ def is_int_container(x: Container[str]) -> TypeIs[Container[int]]:
 }
 
 #[test]
-fn e0113_typeis_union_narrowing() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_union_narrowing() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeIs, Union
 
@@ -1045,7 +1045,7 @@ def is_int(x: int | str) -> TypeIs[int]:
 // =============================================================================
 
 #[test]
-fn e0111_abstract_instantiation() -> Result<(), Box<dyn std::error::Error>> {
+fn abstract_instantiation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from abc import ABC, abstractmethod
 
@@ -1064,7 +1064,7 @@ a = Animal()
 }
 
 #[test]
-fn e0111_multiple_init_params() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_init_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class MyClass:
     def __init__(self, a: int, b: str, c: float) -> None:
@@ -1081,7 +1081,7 @@ y = MyClass(1, "hello")
 }
 
 #[test]
-fn e0111_generic_constructor() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_constructor() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 

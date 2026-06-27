@@ -18,7 +18,7 @@ use common::run;
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0070_never_type_compat() -> Result<(), Box<dyn std::error::Error>> {
+fn never_type_compat() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0070_never_type_compat.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -36,7 +36,7 @@ fn e0070_never_type_compat() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0071_historical_positional() -> Result<(), Box<dyn std::error::Error>> {
+fn historical_positional() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0071_historical_positional.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -54,7 +54,7 @@ fn e0071_historical_positional() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0072_no_matching_overload() -> Result<(), Box<dyn std::error::Error>> {
+fn no_matching_overload() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0072_no_matching_overload.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -72,7 +72,7 @@ fn e0072_no_matching_overload() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0073_namedtuple_tuple_compat() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_tuple_compat() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0073_namedtuple_tuple_compat.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -90,7 +90,7 @@ fn e0073_namedtuple_tuple_compat() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0074_constructor_new_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn constructor_new_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0074_constructor_new_mismatch.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -108,7 +108,7 @@ fn e0074_constructor_new_mismatch() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0075_self_type_attr_incompat() -> Result<(), Box<dyn std::error::Error>> {
+fn self_type_attr_incompat() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0075_self_type_attr_incompat.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -126,7 +126,7 @@ fn e0075_self_type_attr_incompat() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0076_overload_union_expansion() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_union_expansion() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0076_overload_union_expansion.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -144,7 +144,7 @@ fn e0076_overload_union_expansion() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0077_protocol_self_return() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_self_return() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0077_protocol_self_return.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -162,7 +162,7 @@ fn e0077_protocol_self_return() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0078_self_type_violation() -> Result<(), Box<dyn std::error::Error>> {
+fn self_type_violation() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0078_self_type_violation.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -180,7 +180,7 @@ fn e0078_self_type_violation() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0079_module_protocol_incompat() -> Result<(), Box<dyn std::error::Error>> {
+fn module_protocol_incompat() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0079_module_protocol_incompat.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -198,7 +198,7 @@ fn e0079_module_protocol_incompat() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0080_typevar_bound_violation() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_bound_violation() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0080_typevar_bound_violation.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -216,7 +216,7 @@ fn e0080_typevar_bound_violation() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0081_typevartuple_unpack_min() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_unpack_min() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0081_typevartuple_unpack_min.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -234,7 +234,7 @@ fn e0081_typevartuple_unpack_min() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0082_typevartuple_callable_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_callable_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0082_typevartuple_callable_mismatch.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -252,7 +252,7 @@ fn e0082_typevartuple_callable_mismatch() -> Result<(), Box<dyn std::error::Erro
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0083_typevartuple_unpack_required() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_unpack_required() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0083_typevartuple_unpack_required.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -270,7 +270,7 @@ fn e0083_typevartuple_unpack_required() -> Result<(), Box<dyn std::error::Error>
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0084_typevartuple_invalid_params() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_invalid_params() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0084_typevartuple_invalid_params.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -288,7 +288,7 @@ fn e0084_typevartuple_invalid_params() -> Result<(), Box<dyn std::error::Error>>
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0085_typevartuple_arg_count() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_arg_count() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0085_typevartuple_arg_count.py")?;
     let filtered: Vec<_> = diags
         .iter()
@@ -306,7 +306,7 @@ fn e0085_typevartuple_arg_count() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0086_multiple_typevartuple() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_typevartuple() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0086_multiple_typevartuple.py")?;
     let filtered: Vec<_> = diags
         .iter()

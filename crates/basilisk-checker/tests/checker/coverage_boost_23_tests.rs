@@ -10,7 +10,7 @@ use super::common::*;
 // =============================================================================
 
 #[test]
-fn e0128_bad_ordering() -> Result<(), Box<dyn std::error::Error>> {
+fn bad_ordering() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -28,7 +28,7 @@ class slice2(Generic[Start2T, Stop2T]): ...
 }
 
 #[test]
-fn e0128_outer_scope() -> Result<(), Box<dyn std::error::Error>> {
+fn outer_scope() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -47,7 +47,7 @@ class Foo3(Generic[S1]):
 }
 
 #[test]
-fn e0128_bound_constraint_compat() -> Result<(), Box<dyn std::error::Error>> {
+fn bound_constraint_compat() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -63,7 +63,7 @@ Invalid2 = TypeVar("Invalid2", float, str, default=Y1)
 }
 
 #[test]
-fn e0128_valid_default() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_default() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -82,7 +82,7 @@ class Good(Generic[T1, T2]): ...
 // =============================================================================
 
 #[test]
-fn e0063_non_hashable_dataclass() -> Result<(), Box<dyn std::error::Error>> {
+fn non_hashable_dataclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 from typing import Hashable
@@ -102,7 +102,7 @@ v: Hashable = DC1(0)
 }
 
 #[test]
-fn e0063_frozen_dataclass_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn frozen_dataclass_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 from typing import Hashable
@@ -124,7 +124,7 @@ v2: Hashable = DC2(0)
 }
 
 #[test]
-fn e0063_unsafe_hash() -> Result<(), Box<dyn std::error::Error>> {
+fn unsafe_hash() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 from typing import Hashable
@@ -141,7 +141,7 @@ v3: Hashable = DC3(0)
 }
 
 #[test]
-fn e0063_explicit_hash() -> Result<(), Box<dyn std::error::Error>> {
+fn explicit_hash() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 from typing import Hashable
@@ -165,7 +165,7 @@ v4: Hashable = DC4(0)
 // =============================================================================
 
 #[test]
-fn e0048_list_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn list_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -180,7 +180,7 @@ BadAlias1: TypeAlias = [int, str]
 }
 
 #[test]
-fn e0048_bool_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn bool_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -195,7 +195,7 @@ BadAlias2: TypeAlias = True
 }
 
 #[test]
-fn e0048_int_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn int_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -210,7 +210,7 @@ BadAlias3: TypeAlias = 1
 }
 
 #[test]
-fn e0048_dict_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn dict_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -225,7 +225,7 @@ BadAlias4: TypeAlias = {"a": "b"}
 }
 
 #[test]
-fn e0048_conditional() -> Result<(), Box<dyn std::error::Error>> {
+fn conditional() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -241,7 +241,7 @@ BadAlias5: TypeAlias = int if cond else str
 }
 
 #[test]
-fn e0048_lambda_call() -> Result<(), Box<dyn std::error::Error>> {
+fn lambda_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -253,7 +253,7 @@ BadAlias6: TypeAlias = (lambda: int)()
 }
 
 #[test]
-fn e0048_fstring() -> Result<(), Box<dyn std::error::Error>> {
+fn fstring() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -265,7 +265,7 @@ BadAlias7: TypeAlias = f"int"
 }
 
 #[test]
-fn e0048_valid_type_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn valid_type_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias, Union, Optional
 
@@ -285,7 +285,7 @@ Good5: TypeAlias = dict[str, int]
 }
 
 #[test]
-fn e0048_boolean_op() -> Result<(), Box<dyn std::error::Error>> {
+fn boolean_op() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -297,7 +297,7 @@ BadAlias8: TypeAlias = list or set
 }
 
 #[test]
-fn e0048_list_comprehension() -> Result<(), Box<dyn std::error::Error>> {
+fn list_comprehension() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -313,7 +313,7 @@ BadAlias9: TypeAlias = [int for i in range(1)]
 // =============================================================================
 
 #[test]
-fn e0102_typevar_with_multiple_defaults() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_with_multiple_defaults() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -329,7 +329,7 @@ class A(Generic[T, S]):
 }
 
 #[test]
-fn e0131_generator_async_yield() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_async_yield() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import AsyncGenerator
 
@@ -344,7 +344,7 @@ async def gen() -> AsyncGenerator[int, None]:
 }
 
 #[test]
-fn e0131_generator_nested_yield() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_nested_yield() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -361,7 +361,7 @@ def gen() -> Generator[int, None, None]:
 }
 
 #[test]
-fn e0054_final_in_class() -> Result<(), Box<dyn std::error::Error>> {
+fn final_in_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -383,7 +383,7 @@ Config.NAME = "changed"
 }
 
 #[test]
-fn e0054_final_module_level() -> Result<(), Box<dyn std::error::Error>> {
+fn final_module_level() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -396,7 +396,7 @@ MAX_SIZE = 200
 }
 
 #[test]
-fn e0148_generic_type_arg_optional() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_type_arg_optional() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, Optional
 
@@ -415,7 +415,7 @@ z: Box[list[int]] = Box()
 }
 
 #[test]
-fn e0120_generator_return_no_yield() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_return_no_yield() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -428,7 +428,7 @@ def bad_gen() -> Generator[int, None, str]:
 }
 
 #[test]
-fn e0138_dataclass_transform_frozen() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_transform_frozen() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -446,7 +446,7 @@ p.x = 3
 }
 
 #[test]
-fn e0138_dataclass_order() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_order() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -465,7 +465,7 @@ result = p1 < p2
 }
 
 #[test]
-fn e0119_protocol_runtime_checkable() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_runtime_checkable() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, runtime_checkable
 
@@ -489,7 +489,7 @@ isinstance(Square(), Drawable)
 }
 
 #[test]
-fn e0119_protocol_not_runtime_checkable() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_not_runtime_checkable() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -504,7 +504,7 @@ isinstance(object(), Drawable)
 }
 
 #[test]
-fn e0146_protocol_class_object_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_class_object_methods() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, ClassVar
 
@@ -529,7 +529,7 @@ class Good:
 }
 
 #[test]
-fn e0143_namedtuple_operations() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_operations() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -548,7 +548,7 @@ y = p[1]
 }
 
 #[test]
-fn e0126_literal_string_concat() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_string_concat() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import LiteralString
 
@@ -564,7 +564,7 @@ safe("literal")
 }
 
 #[test]
-fn e0095_initvar_usage() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_usage() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, field, InitVar
 
@@ -586,7 +586,7 @@ c = Config("test", True, 2)
 }
 
 #[test]
-fn e0130_typevar_with_bound() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_with_bound() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -605,7 +605,7 @@ def process(x: S) -> S:
 }
 
 #[test]
-fn e0142_transform_decorator() -> Result<(), Box<dyn std::error::Error>> {
+fn transform_decorator() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import dataclass_transform
 
@@ -629,7 +629,7 @@ class Admin(ModelBase):
 }
 
 #[test]
-fn e0116_namedtuple_inheritance() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_inheritance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -646,7 +646,7 @@ class Child(Base):
 }
 
 #[test]
-fn e0072_overload_no_match_type() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_no_match_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 

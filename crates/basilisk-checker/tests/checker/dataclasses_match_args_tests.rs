@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0059_match_args_false_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn match_args_false_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -23,7 +23,7 @@ match Point(1, 2):
 }
 
 #[test]
-fn e0059_match_args_true_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn match_args_true_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 

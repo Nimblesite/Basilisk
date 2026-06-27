@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0003_empty_list_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn empty_list_fires() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("items = []\n")?;
     assert!(
         codes(&diags).contains(&"BSK-E0003"),
@@ -15,7 +15,7 @@ fn e0003_empty_list_fires() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0003_empty_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn empty_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("mapping = {}\n")?;
     assert!(
         codes(&diags).contains(&"BSK-E0003"),
@@ -26,7 +26,7 @@ fn e0003_empty_dict_fires() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0003_none_value_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn none_value_fires() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("result = None\n")?;
     assert!(
         codes(&diags).contains(&"BSK-E0003"),
@@ -37,7 +37,7 @@ fn e0003_none_value_fires() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0003_annotated_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("items: list[int] = []\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
@@ -47,7 +47,7 @@ fn e0003_annotated_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn e0003_annotated_none_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn annotated_none_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("result: int | None = None\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
@@ -57,7 +57,7 @@ fn e0003_annotated_none_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-fn e0003_non_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn non_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("items = [1, 2, 3]\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
@@ -67,7 +67,7 @@ fn e0003_non_empty_list_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-fn e0003_string_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn string_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("name = \"hello\"\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
@@ -77,7 +77,7 @@ fn e0003_string_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-fn e0003_int_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn int_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("count = 42\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
@@ -87,7 +87,7 @@ fn e0003_int_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0003_bool_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn bool_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("flag = True\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
@@ -97,7 +97,7 @@ fn e0003_bool_literal_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-fn e0003_call_expr_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn call_expr_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("result = some_function()\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
@@ -107,7 +107,7 @@ fn e0003_call_expr_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn e0003_diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
+fn diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("items = []\n")?;
     let e0003 = diags.iter().find(|d| d.code.code == "BSK-E0003");
     assert!(e0003.is_some(), "should fire E0003");
@@ -126,7 +126,7 @@ fn e0003_diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Each scalar literal type individually — exhaustive per-type regression guard.
 #[test]
-fn e0003_regression_each_scalar_type_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+fn regression_each_scalar_type_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
     let cases = [
         ("int", "count = 42\n"),
         ("float", "rate = 3.14\n"),
@@ -151,7 +151,7 @@ fn e0003_regression_each_scalar_type_no_false_positive() -> Result<(), Box<dyn s
 
 /// Multiple module-level scalar literals — zero E0003.
 #[test]
-fn e0003_regression_multiple_scalars_no_false_positives() -> Result<(), Box<dyn std::error::Error>>
+fn regression_multiple_scalars_no_false_positives() -> Result<(), Box<dyn std::error::Error>>
 {
     let source = "\
 host = \"localhost\"
@@ -175,7 +175,7 @@ magic = b\"\\x00\"
 
 /// Lambda assignments at module level — not unresolvable, no E0003.
 #[test]
-fn e0003_regression_lambda_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
+fn regression_lambda_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_optin_rules("fn = lambda x: x * 2\n")?;
     assert!(
         !codes(&diags).contains(&"BSK-E0003"),
@@ -186,7 +186,7 @@ fn e0003_regression_lambda_no_false_positive() -> Result<(), Box<dyn std::error:
 
 /// The exact pattern from the example file: `double = 2` near lambdas.
 #[test]
-fn e0003_regression_example_file_pattern() -> Result<(), Box<dyn std::error::Error>> {
+fn regression_example_file_pattern() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\
 double = 2
 fn = lambda x: x * 2
@@ -206,7 +206,7 @@ fn = lambda x: x * 2
 
 /// Unresolvable types MUST still fire — ensure suppression is not over-broad.
 #[test]
-fn e0003_regression_unresolvable_types_still_fire() -> Result<(), Box<dyn std::error::Error>> {
+fn regression_unresolvable_types_still_fire() -> Result<(), Box<dyn std::error::Error>> {
     let cases = [
         ("empty list", "items = []\n"),
         ("empty dict", "mapping = {}\n"),

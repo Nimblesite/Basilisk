@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0078_self_type_violation_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn self_type_violation_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Self
 

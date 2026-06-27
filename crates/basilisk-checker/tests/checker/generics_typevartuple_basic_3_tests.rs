@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0084_invalid_params_exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_params_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic
 Ts = TypeVarTuple("Ts")

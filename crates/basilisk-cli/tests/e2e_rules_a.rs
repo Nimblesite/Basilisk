@@ -29,7 +29,7 @@ use common::{fixture, run};
 ///     pass
 /// ```
 #[test]
-fn e0001_single_unannotated_param() -> Result<(), Box<dyn std::error::Error>> {
+fn single_unannotated_param() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_single_param.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_single_param.py"))?;
     assert_diagnostics(
@@ -45,7 +45,7 @@ fn e0001_single_unannotated_param() -> Result<(), Box<dyn std::error::Error>> {
 ///     return 0
 /// ```
 #[test]
-fn e0001_three_unannotated_params() -> Result<(), Box<dyn std::error::Error>> {
+fn three_unannotated_params() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_multi_param.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_multi_param.py"))?;
     assert_diagnostics(
@@ -65,7 +65,7 @@ fn e0001_three_unannotated_params() -> Result<(), Box<dyn std::error::Error>> {
 ///     pass
 /// ```
 #[test]
-fn e0004_unannotated_vararg() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_vararg() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_varargs.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_varargs.py"))?;
     assert_diagnostics(
@@ -81,7 +81,7 @@ fn e0004_unannotated_vararg() -> Result<(), Box<dyn std::error::Error>> {
 ///     pass
 /// ```
 #[test]
-fn e0004_unannotated_kwarg() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_kwarg() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_kwargs.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_kwargs.py"))?;
     assert_diagnostics(
@@ -100,7 +100,7 @@ fn e0004_unannotated_kwarg() -> Result<(), Box<dyn std::error::Error>> {
 ///     return inner(1)
 /// ```
 #[test]
-fn e0001_unannotated_param_in_nested_function() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_param_in_nested_function() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_nested.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_nested.py"))?;
     assert_diagnostics(&src, &diags, &[Expected::error("BSK-E0001", "`y`", 2, 15)]);
@@ -116,7 +116,7 @@ fn e0001_unannotated_param_in_nested_function() -> Result<(), Box<dyn std::error
 ///     pass
 /// ```
 #[test]
-fn e0002_single_function_missing_return() -> Result<(), Box<dyn std::error::Error>> {
+fn single_function_missing_return() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0002_single_func.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0002_single_func.py"))?;
     assert_diagnostics(
@@ -140,7 +140,7 @@ fn e0002_single_function_missing_return() -> Result<(), Box<dyn std::error::Erro
 ///     pass
 /// ```
 #[test]
-fn e0002_three_functions_all_missing_return() -> Result<(), Box<dyn std::error::Error>> {
+fn three_functions_all_missing_return() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0002_multiple_funcs.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0002_multiple_funcs.py"))?;
     assert_diagnostics(
@@ -160,7 +160,7 @@ fn e0002_three_functions_all_missing_return() -> Result<(), Box<dyn std::error::
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0001_and_e0002_class_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn and_e0002_class_methods() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_and_e0002_class_methods.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_and_e0002_class_methods.py"))?;
     assert_diagnostics(
@@ -181,7 +181,7 @@ fn e0001_and_e0002_class_methods() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0002_dunder_methods_all_missing_return() -> Result<(), Box<dyn std::error::Error>> {
+fn dunder_methods_all_missing_return() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0002_dunder_methods.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0002_dunder_methods.py"))?;
     assert_diagnostics(
@@ -222,7 +222,7 @@ fn e0001_only_unannotated_params_flagged_in_mixed_signature(
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0001_positional_only_params_flagged() -> Result<(), Box<dyn std::error::Error>> {
+fn positional_only_params_flagged() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_posonly_params.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_posonly_params.py"))?;
     assert_diagnostics(
@@ -241,7 +241,7 @@ fn e0001_positional_only_params_flagged() -> Result<(), Box<dyn std::error::Erro
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0002_only_innermost_nested_function_missing_return() -> Result<(), Box<dyn std::error::Error>> {
+fn only_innermost_nested_function_missing_return() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0002_deeply_nested.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0002_deeply_nested.py"))?;
     assert_diagnostics(
@@ -257,7 +257,7 @@ fn e0002_only_innermost_nested_function_missing_return() -> Result<(), Box<dyn s
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0001_unannotated_keyword_only_params_flagged() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_keyword_only_params_flagged() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_kwonly_params.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_kwonly_params.py"))?;
     assert_diagnostics(
@@ -276,7 +276,7 @@ fn e0001_unannotated_keyword_only_params_flagged() -> Result<(), Box<dyn std::er
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0001_and_e0002_four_completely_untyped_functions() -> Result<(), Box<dyn std::error::Error>> {
+fn and_e0002_four_completely_untyped_functions() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_and_e0002_module_level.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_and_e0002_module_level.py"))?;
     assert_diagnostics(
@@ -301,7 +301,7 @@ fn e0001_and_e0002_four_completely_untyped_functions() -> Result<(), Box<dyn std
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0002_function_in_else_branch_of_version_guard() -> Result<(), Box<dyn std::error::Error>> {
+fn function_in_else_branch_of_version_guard() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0002_in_if_block.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0002_in_if_block.py"))?;
     assert_diagnostics(
@@ -317,7 +317,7 @@ fn e0002_function_in_else_branch_of_version_guard() -> Result<(), Box<dyn std::e
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0001_and_e0002_subclass_override_missing_annotations() -> Result<(), Box<dyn std::error::Error>>
+fn and_e0002_subclass_override_missing_annotations() -> Result<(), Box<dyn std::error::Error>>
 {
     let diags = run("errors/e0001_and_e0002_inheritance.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_and_e0002_inheritance.py"))?;
@@ -340,7 +340,7 @@ fn e0001_and_e0002_subclass_override_missing_annotations() -> Result<(), Box<dyn
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0001_and_e0002_functions_inside_try_except() -> Result<(), Box<dyn std::error::Error>> {
+fn and_e0002_functions_inside_try_except() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_and_e0002_try_except.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_and_e0002_try_except.py"))?;
     assert_diagnostics(
@@ -362,7 +362,7 @@ fn e0001_and_e0002_functions_inside_try_except() -> Result<(), Box<dyn std::erro
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0001_and_e0002_functions_inside_while_for() -> Result<(), Box<dyn std::error::Error>> {
+fn and_e0002_functions_inside_while_for() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_and_e0002_while_for.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_and_e0002_while_for.py"))?;
     assert_diagnostics(
@@ -384,7 +384,7 @@ fn e0001_and_e0002_functions_inside_while_for() -> Result<(), Box<dyn std::error
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0002_zero_param_functions_all_missing_return() -> Result<(), Box<dyn std::error::Error>> {
+fn zero_param_functions_all_missing_return() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0002_no_params.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0002_no_params.py"))?;
     assert_diagnostics(
@@ -404,7 +404,7 @@ fn e0002_zero_param_functions_all_missing_return() -> Result<(), Box<dyn std::er
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0001_params_in_doubly_nested_class_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn params_in_doubly_nested_class_methods() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_deeply_nested_class.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_deeply_nested_class.py"))?;
     assert_diagnostics(
@@ -424,7 +424,7 @@ fn e0001_params_in_doubly_nested_class_methods() -> Result<(), Box<dyn std::erro
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0001_and_e0004_all_parameter_kinds_flagged() -> Result<(), Box<dyn std::error::Error>> {
+fn and_e0004_all_parameter_kinds_flagged() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0001_all_param_kinds.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0001_all_param_kinds.py"))?;
     assert_diagnostics(
@@ -446,7 +446,7 @@ fn e0001_and_e0004_all_parameter_kinds_flagged() -> Result<(), Box<dyn std::erro
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0003_unannotated_module_vars() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_module_vars() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0003_module_vars.py")?;
     let src = std::fs::read_to_string(fixture("errors/e0003_module_vars.py"))?;
     assert_diagnostics(
@@ -466,7 +466,7 @@ fn e0003_unannotated_module_vars() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn e0005_unannotated_class_attributes() -> Result<(), Box<dyn std::error::Error>> {
+fn unannotated_class_attributes() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0005_class_attrs.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(

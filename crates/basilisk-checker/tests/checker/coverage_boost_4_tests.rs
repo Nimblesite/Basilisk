@@ -7,7 +7,7 @@ use super::common::*;
 // --- Deep E0111: Constructor call errors ---
 
 #[test]
-fn e0111_multiple_init_params() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_init_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -27,7 +27,7 @@ q = Pair[int, str](1.0, "hello")
 }
 
 #[test]
-fn e0111_inherited_init() -> Result<(), Box<dyn std::error::Error>> {
+fn inherited_init() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Base:
     def __init__(self, x: int) -> None:
@@ -44,7 +44,7 @@ d = Child()
 }
 
 #[test]
-fn e0111_init_with_defaults() -> Result<(), Box<dyn std::error::Error>> {
+fn init_with_defaults() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class MyClass:
     def __init__(self, name: str = "default", value: int = 0) -> None:
@@ -61,7 +61,7 @@ m3 = MyClass("test", 42)
 // --- Deep E0115: Deprecated usage ---
 
 #[test]
-fn e0115_deprecated_class_inheritance() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_class_inheritance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -77,7 +77,7 @@ class Child(OldBase):
 }
 
 #[test]
-fn e0115_deprecated_with_message_format() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_with_message_format() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -100,7 +100,7 @@ s.process()
 }
 
 #[test]
-fn e0115_deprecated_property() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_property() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -120,7 +120,7 @@ class Config:
 // --- Deep E0140: Callable assignment ---
 
 #[test]
-fn e0140_callable_with_defaults() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_with_defaults() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -134,7 +134,7 @@ f: Callable[[str], str] = greet
 }
 
 #[test]
-fn e0140_lambda_to_callable() -> Result<(), Box<dyn std::error::Error>> {
+fn lambda_to_callable() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -145,7 +145,7 @@ f: Callable[[int], int] = lambda x: x * 2
 }
 
 #[test]
-fn e0140_protocol_with_extra_attrs() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_extra_attrs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -165,7 +165,7 @@ h: Handler = ConcreteHandler()
 }
 
 #[test]
-fn e0140_callable_ellipsis_params() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_ellipsis_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -179,7 +179,7 @@ f: Callable[..., int] = any_func
 }
 
 #[test]
-fn e0140_callable_kw_only() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_kw_only() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -195,7 +195,7 @@ f: Callable[[int], None] = my_func
 // --- Deep E0130: TypeVar scoping ---
 
 #[test]
-fn e0130_typevar_correct_nested() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_correct_nested() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic
 
@@ -212,7 +212,7 @@ class Outer(Generic[T]):
 }
 
 #[test]
-fn e0130_method_call_correct_type() -> Result<(), Box<dyn std::error::Error>> {
+fn method_call_correct_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic
 
@@ -233,7 +233,7 @@ x.append(42)
 // --- Deep E0147: Tuple starred unpack ---
 
 #[test]
-fn e0147_complex_starred_tuple() -> Result<(), Box<dyn std::error::Error>> {
+fn complex_starred_tuple() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x1: tuple[int, *tuple[str, ...]] = (1, "a", "b", "c")
 x2: tuple[int, *tuple[str, ...], float] = (1, "a", "b", 3.14)
@@ -244,7 +244,7 @@ x3: tuple[str, *tuple[int, ...]] = ("hello", 1, 2, 3)
 }
 
 #[test]
-fn e0147_starred_tuple_reassign_valid() -> Result<(), Box<dyn std::error::Error>> {
+fn starred_tuple_reassign_valid() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 t: tuple[int, *tuple[str, ...]] = (1,)
 t = (1, "a")
@@ -257,7 +257,7 @@ t = (1, "a", "b")
 // --- Deep E0125: Instance attr on class ---
 
 #[test]
-fn e0125_instance_attr_with_default() -> Result<(), Box<dyn std::error::Error>> {
+fn instance_attr_with_default() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class MyClass:
     x: int = 10
@@ -271,7 +271,7 @@ MyClass.y
 }
 
 #[test]
-fn e0125_type_call_attr_access() -> Result<(), Box<dyn std::error::Error>> {
+fn type_call_attr_access() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Generic, TypeVar
 
@@ -290,7 +290,7 @@ type(n1).label
 // --- Deep E0126/E0129: Literal assignments ---
 
 #[test]
-fn e0129_literal_multi_value() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_multi_value() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal
 
@@ -304,7 +304,7 @@ w: Literal["a", "b"] = "c"
 }
 
 #[test]
-fn e0129_literal_negative_int() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_negative_int() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Literal
 
@@ -318,7 +318,7 @@ y: Literal[-1] = 1
 // --- Deep E0128: TypeVar default referential ---
 
 #[test]
-fn e0128_complex_default_chain() -> Result<(), Box<dyn std::error::Error>> {
+fn complex_default_chain() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic
 
@@ -333,7 +333,7 @@ class Triple(Generic[A, B, C]): ...
 }
 
 #[test]
-fn e0128_default_with_constraints() -> Result<(), Box<dyn std::error::Error>> {
+fn default_with_constraints() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic
 
@@ -347,7 +347,7 @@ class Pair(Generic[X, Y]): ...
 }
 
 #[test]
-fn e0128_default_with_bound() -> Result<(), Box<dyn std::error::Error>> {
+fn default_with_bound() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar, Generic
 
@@ -363,7 +363,7 @@ class Numeric(Generic[P, Q]): ...
 // --- Deep E0131: Generator types ---
 
 #[test]
-fn e0131_generator_with_send_type() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_with_send_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Generator
 
@@ -378,7 +378,7 @@ def accumulator() -> Generator[int, int, str]:
 }
 
 #[test]
-fn e0131_iterable_yield() -> Result<(), Box<dyn std::error::Error>> {
+fn iterable_yield() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Iterable
 
@@ -394,7 +394,7 @@ def items() -> Iterable[int]:
 // --- Deep E0134: Invariant generic ---
 
 #[test]
-fn e0134_dict_subclass() -> Result<(), Box<dyn std::error::Error>> {
+fn dict_subclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class IntDict(dict[str, int]): ...
 
@@ -408,7 +408,7 @@ def test(d: IntDict) -> None:
 }
 
 #[test]
-fn e0134_list_subclass() -> Result<(), Box<dyn std::error::Error>> {
+fn list_subclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class IntList(list[int]): ...
 
@@ -424,7 +424,7 @@ def test(il: IntList) -> None:
 // --- Deep E0137: Generic protocol ---
 
 #[test]
-fn e0137_multi_typevar_protocol() -> Result<(), Box<dyn std::error::Error>> {
+fn multi_typevar_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, TypeVar
 
@@ -447,7 +447,7 @@ f: BiFunc[int, str] = IntToStr()
 // --- Deep E0120: Generator return type ---
 
 #[test]
-fn e0120_generator_no_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_no_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def gen():
     yield 1
@@ -457,7 +457,7 @@ def gen():
 }
 
 #[test]
-fn e0120_async_generator_correct() -> Result<(), Box<dyn std::error::Error>> {
+fn async_generator_correct() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import AsyncIterator
 
@@ -472,7 +472,7 @@ async def agen() -> AsyncIterator[int]:
 // --- Deep E0142: Dataclass transform base ---
 
 #[test]
-fn e0142_metaclass_transform() -> Result<(), Box<dyn std::error::Error>> {
+fn metaclass_transform() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import dataclass_transform
 
@@ -494,7 +494,7 @@ class User(Model):
 // --- Deep E0143: NamedTuple complex ---
 
 #[test]
-fn e0143_namedtuple_with_defaults() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_with_defaults() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -512,7 +512,7 @@ c3 = Config('localhost', 9090, True)
 }
 
 #[test]
-fn e0143_namedtuple_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -529,7 +529,7 @@ p = Point("not_a_float", 2.0)
 // --- Deep E0144: type() constructor ---
 
 #[test]
-fn e0144_type_with_bases_and_dict() -> Result<(), Box<dyn std::error::Error>> {
+fn type_with_bases_and_dict() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Base:
     pass
@@ -541,7 +541,7 @@ MyClass = type("MyClass", (Base,), {"x": 1, "method": lambda self: None})
 }
 
 #[test]
-fn e0144_type_wrong_arg_count() -> Result<(), Box<dyn std::error::Error>> {
+fn type_wrong_arg_count() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 x = type("Foo", (object,))
 "#;
@@ -552,7 +552,7 @@ x = type("Foo", (object,))
 // --- Deep E0074: Constructor __new__ ---
 
 #[test]
-fn e0074_new_with_multiple_typevars() -> Result<(), Box<dyn std::error::Error>> {
+fn new_with_multiple_typevars() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar, Self
 
@@ -573,7 +573,7 @@ p2 = Pair[int, str](1.0, "hello")
 // --- Deep E0110: Protocol variance ---
 
 #[test]
-fn e0110_protocol_init_exempt() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_init_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, TypeVar
 
@@ -588,7 +588,7 @@ class Factory(Protocol[T]):
 }
 
 #[test]
-fn e0110_protocol_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, TypeVar
 
@@ -606,7 +606,7 @@ class MultiRead(Protocol[T_co]):
 // --- Deep E0119: Protocol isinstance overlap ---
 
 #[test]
-fn e0119_protocol_structural_subtyping() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_structural_subtyping() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, runtime_checkable
 
@@ -634,7 +634,7 @@ y: HasIter = MyList()
 // --- Deep E0095: InitVar ---
 
 #[test]
-fn e0095_initvar_with_default_factory() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_with_default_factory() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass, InitVar, field
 
@@ -655,7 +655,7 @@ class Builder:
 // --- Deep E0036: ClassVar ---
 
 #[test]
-fn e0036_classvar_in_local_function() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_in_local_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar
 
@@ -667,7 +667,7 @@ def f() -> None:
 }
 
 #[test]
-fn e0036_classvar_in_self_attr() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_in_self_attr() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar
 
@@ -682,7 +682,7 @@ class MyClass:
 // --- Deep E0108: Dataclass slots ---
 
 #[test]
-fn e0108_slots_with_manual_slots() -> Result<(), Box<dyn std::error::Error>> {
+fn slots_with_manual_slots() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from dataclasses import dataclass
 
@@ -699,7 +699,7 @@ class HasManualSlots:
 // --- Deep E0109: TypeVar bound violation at call site ---
 
 #[test]
-fn e0109_bound_with_numeric_hierarchy() -> Result<(), Box<dyn std::error::Error>> {
+fn bound_with_numeric_hierarchy() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar
 
@@ -720,7 +720,7 @@ d = process('invalid')
 // --- Deep E0102: TypeVar default violation ---
 
 #[test]
-fn e0102_complex_constraint_check() -> Result<(), Box<dyn std::error::Error>> {
+fn complex_constraint_check() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar
 
@@ -732,7 +732,7 @@ T2 = TypeVar('T2', int, str, default=T1)
 }
 
 #[test]
-fn e0102_default_with_numeric_bound() -> Result<(), Box<dyn std::error::Error>> {
+fn default_with_numeric_bound() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeVar
 

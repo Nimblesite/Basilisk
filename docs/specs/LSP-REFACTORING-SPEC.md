@@ -288,7 +288,7 @@ For reaching feature parity with Pylance, implement in this order:
 
 1. **Rename Symbol** enhancements (scope-aware, validation) — highest impact, builds on existing code.
 2. **Rename Module** (`workspace/willRenameFiles`) — critical for file reorganization.
-3. **Extract Function** — second most requested refactoring universally.
+3. **Extract Function** — high impact, builds on the extract-variable infrastructure.
 4. **Extract Variable** — frequently used, simpler than extract function.
 5. **Move Symbol** — enables large-scale refactoring.
 6. **Implement Abstract Methods** — high quality-of-life, moderate complexity.

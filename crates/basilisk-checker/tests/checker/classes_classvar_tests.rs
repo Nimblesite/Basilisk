@@ -4,7 +4,7 @@
 use super::common::*;
 
 #[test]
-fn e0036_classvar_in_class_body_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_in_class_body_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar
 
@@ -22,7 +22,7 @@ class MyClass:
 }
 
 #[test]
-fn e0036_classvar_in_module_var_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_in_module_var_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar
 bad: ClassVar[int] = 3
@@ -38,7 +38,7 @@ bad: ClassVar[int] = 3
 }
 
 #[test]
-fn e0036_classvar_in_function_param_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_in_function_param_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar
 
@@ -57,7 +57,7 @@ class MyClass:
 }
 
 #[test]
-fn e0036_classvar_in_return_type_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_in_return_type_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar
 
@@ -76,7 +76,7 @@ class MyClass:
 }
 
 #[test]
-fn e0036_classvar_in_local_var_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_in_local_var_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import ClassVar
 
@@ -95,7 +95,7 @@ class MyClass:
 }
 
 #[test]
-fn e0036_nested_classvar_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_classvar_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar, Final
 
@@ -113,7 +113,7 @@ class MyClass:
 }
 
 #[test]
-fn e0036_classvar_in_list_fires() -> Result<(), Box<dyn std::error::Error>> {
+fn classvar_in_list_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import ClassVar
 
