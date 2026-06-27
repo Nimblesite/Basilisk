@@ -1,4 +1,4 @@
-//! Implements [typeddicts_extra_items] from [CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS].
+//! Implements [`typeddicts_extra_items`] from [CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS].
 //! See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS
 //!
 //! The `TypedDict` model used by the PEP 728 `extra_items` / `closed` checks.

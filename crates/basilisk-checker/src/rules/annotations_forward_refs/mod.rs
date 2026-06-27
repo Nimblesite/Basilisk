@@ -1,4 +1,4 @@
-//! annotations_forward_refs: Invalid type expression in annotation.
+//! `annotations_forward_refs`: Invalid type expression in annotation.
 //!
 //! PEP 484 requires that annotations contain valid type expressions.
 //! Only certain expression forms are valid as types:
@@ -74,7 +74,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     )
 }
 
-/// Emits annotations_forward_refs when an annotation contains an invalid type expression.
+/// Emits `annotations_forward_refs` when an annotation contains an invalid type expression.
 pub(crate) struct InvalidTypeAnnotation;
 
 impl Rule for InvalidTypeAnnotation {

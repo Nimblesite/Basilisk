@@ -1,5 +1,5 @@
-//! Implements [literals_literalstring] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! literals_literalstring: `LiteralString` and `Literal` assignment incompatibilities.
+//! Implements [`literals_literalstring`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `literals_literalstring`: `LiteralString` and `Literal` assignment incompatibilities.
 //!
 //! Detects annotated local variables inside function bodies where the declared
 //! type is incompatible with the assigned value, specifically for `LiteralString`
@@ -38,7 +38,7 @@ use super::literals_literalstring_helpers::{
 };
 use super::Rule;
 
-/// Emits literals_literalstring for `LiteralString` / `Literal[...]` assignment
+/// Emits `literals_literalstring` for `LiteralString` / `Literal[...]` assignment
 /// incompatibilities found inside function bodies.
 pub(crate) struct LiteralStringAssignment;
 

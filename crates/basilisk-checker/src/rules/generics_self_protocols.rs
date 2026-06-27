@@ -1,5 +1,5 @@
-//! Implements [generics_self_protocols] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
-//! generics_self_protocols: Protocol `Self`-return conformance violation.
+//! Implements [`generics_self_protocols`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! `generics_self_protocols`: Protocol `Self`-return conformance violation.
 //!
 //! When a `Protocol` declares a method returning `Self`, any class passed where
 //! that protocol is expected must have the corresponding method return `Self` or
@@ -31,7 +31,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_self_protocols",
 };
 
-/// Emits generics_self_protocols for classes passed where a `Protocol` with `Self`-returning
+/// Emits `generics_self_protocols` for classes passed where a `Protocol` with `Self`-returning
 /// methods is expected, but the class's corresponding method returns a different type.
 pub(crate) struct ProtocolSelfViolation;
 

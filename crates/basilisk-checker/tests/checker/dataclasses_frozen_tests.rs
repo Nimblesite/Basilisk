@@ -1,4 +1,4 @@
-//! Tests for [dataclasses_frozen] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+//! Tests for [`dataclasses_frozen`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // Integration tests for dataclasses_frozen: Frozen dataclass violations.
 
 use super::common::*;

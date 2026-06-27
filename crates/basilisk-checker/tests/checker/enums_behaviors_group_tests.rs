@@ -1,4 +1,4 @@
-//! Tests for [enums_behaviors]-[enums_members] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+//! Tests for [`enums_behaviors`]-[`enums_members`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for enums_behaviors (enum subclassing) and enums_members (enum member annotated).
 
 use super::common::*;

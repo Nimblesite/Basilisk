@@ -1,5 +1,5 @@
-//! Implements [protocols_merging] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! protocols_merging: Non-Protocol base class in a Protocol definition.
+//! Implements [`protocols_merging`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `protocols_merging`: Non-Protocol base class in a Protocol definition.
 //!
 //! Per PEP 544, a Protocol class may only inherit from other Protocol classes
 //! (with the exception of `object`). Inheriting from a non-Protocol concrete
@@ -63,7 +63,7 @@ const KNOWN_PROTOCOLS: &[&str] = &[
     "runtime_checkable",
 ];
 
-/// Emits protocols_merging when a Protocol class inherits from a non-Protocol base.
+/// Emits `protocols_merging` when a Protocol class inherits from a non-Protocol base.
 pub(crate) struct NonProtocolBaseInProtocol;
 
 /// Check if a class name refers to a Protocol class (has `Protocol` in its bases).

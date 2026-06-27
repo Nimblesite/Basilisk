@@ -1,5 +1,5 @@
-//! Implements [constructors_call_type] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Helper types and functions for constructors_call_type.
+//! Implements [`constructors_call_type`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Helper types and functions for `constructors_call_type`.
 //!
 //! Contains constructor signature resolution, argument type checking,
 //! and shared AST utilities used by the main rule.

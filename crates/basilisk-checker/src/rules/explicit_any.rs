@@ -8,7 +8,7 @@
 //! This is an opinionated *strictness nudge*, not a type-system requirement:
 //! the typing spec treats `Any` as a fully valid type. It is therefore a
 //! distinct (user-suppressible) code from the genuine return-type-mismatch
-//! error ([returns_compatibility]); the two used to share a code, so a user could not
+//! error ([`returns_compatibility`]); the two used to share a code, so a user could not
 //! silence the style nudge while keeping the real type check. BSK-W0014 itself is
 //! never disabled for PEP conformance — like every rule it runs fully enabled
 //! during scoring; there is no "spec-conformance mode" that turns it off. See
@@ -38,6 +38,13 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct ExplicitAny;
 
 impl Rule for ExplicitAny {
+    fn opt_in_spec(&self) -> Option<crate::rule_tags::OptInSpec> {
+        Some(crate::rule_tags::OptInSpec {
+            code: CODE.code,
+            tags: &["style", "strictness"],
+        })
+    }
+
     fn check(
         &self,
         module: &ResolvedModule,

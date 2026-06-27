@@ -229,10 +229,16 @@ mod tests {
     }
 
     fn make_index_with_roots(roots: Vec<PathBuf>) -> WorkspaceIndex {
+        // Enable the annotation house rules (off by default — the default config
+        // is pure PEP conformance) so type-health surfaces their errors/warnings.
+        // See [CHKARCH-CONFIGURATION-ONLY].
         WorkspaceIndex::new(
             roots,
             AnalysisMode::WholeModule,
-            basilisk_config::BasiliskConfig::default(),
+            basilisk_config::BasiliskConfig {
+                strict_annotations: true,
+                ..Default::default()
+            },
         )
     }
 

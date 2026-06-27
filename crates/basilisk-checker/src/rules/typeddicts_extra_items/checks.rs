@@ -1,4 +1,4 @@
-//! Implements [typeddicts_extra_items] from [CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS].
+//! Implements [`typeddicts_extra_items`] from [CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS].
 //! See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS
 //!
 //! Pure decision logic for the PEP 728 checks. Each function takes already

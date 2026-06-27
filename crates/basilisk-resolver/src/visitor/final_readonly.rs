@@ -385,7 +385,7 @@ fn collect_file_final_methods(
 /// Map each imported class to its `@final` method names, read from a sibling
 /// module (`.pyi` preferred, then `.py`). Mirrors [`collect_imported_final_names`]
 /// but records per-class method sets so cross-module `@final`-override checks
-/// (qualifiers_final_decorator) can see base methods declared `@final` in an imported stub.
+/// (`qualifiers_final_decorator`) can see base methods declared `@final` in an imported stub.
 pub(super) fn collect_imported_final_methods(
     stmts: &[Stmt],
     module_path: &str,

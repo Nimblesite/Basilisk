@@ -1,4 +1,4 @@
-//! Tests for [typeddicts_readonly] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+//! Tests for [`typeddicts_readonly`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // Integration tests for typeddicts_readonly: `ReadOnly` `TypedDict` mutation.
 
 use super::common::*;

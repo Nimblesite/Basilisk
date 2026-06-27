@@ -1,4 +1,4 @@
-//! Tests for [dict_key_hashable] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+//! Tests for [`dict_key_hashable`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for dict_key_hashable: Unhashable dict key.
 
 use super::common::*;

@@ -1,5 +1,5 @@
-//! Implements [directives_deprecated] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Decorator detection helpers for directives_deprecated.
+//! Implements [`directives_deprecated`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Decorator detection helpers for `directives_deprecated`.
 
 use ruff_python_ast::Expr;
 

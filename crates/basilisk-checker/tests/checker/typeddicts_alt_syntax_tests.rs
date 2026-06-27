@@ -1,4 +1,4 @@
-//! Tests for [typeddicts_alt_syntax] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+//! Tests for [`typeddicts_alt_syntax`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 // Integration tests for typeddicts_alt_syntax: Invalid `TypedDict` functional-syntax call.
 
 use super::common::*;

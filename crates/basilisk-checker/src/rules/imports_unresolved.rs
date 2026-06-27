@@ -1,5 +1,5 @@
-//! Implements [imports_unresolved] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! imports_unresolved: Unresolved import.
+//! Implements [`imports_unresolved`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! `imports_unresolved`: Unresolved import.
 //!
 //! Fires when an import cannot be resolved and the module is not part of the
 //! Python standard library.  When uv package-registry context is available the
@@ -19,7 +19,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/imports_unresolved",
 };
 
-/// Emits imports_unresolved for imports from modules outside the known stdlib/typing
+/// Emits `imports_unresolved` for imports from modules outside the known stdlib/typing
 /// ecosystem.
 ///
 /// Uses the compiled typeshed index from `basilisk-stubs` for O(1) module

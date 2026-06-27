@@ -384,7 +384,7 @@ pub(super) fn types_match(actual: &str, expected: &str) -> bool {
 /// the disallowed set is always rejected except `update`, which is an error only when
 /// the target declares a `ReadOnly` item whose key the argument `TypedDict` declares
 /// with a non-`Never` value type. A `Never`-typed source key cannot supply a value,
-/// so that update is sound (PEP 705). [typeddicts_operations]
+/// so that update is sound (PEP 705). `typeddicts_operations`
 fn disallowed_mutator_flagged(
     method: &str,
     call: &ruff_python_ast::ExprCall,

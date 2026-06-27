@@ -1,5 +1,5 @@
-//! Implements [generics_base_class_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! generics_base_class_2: Inconsistent `TypeVar` ordering across base classes.
+//! Implements [`generics_base_class_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `generics_base_class_2`: Inconsistent `TypeVar` ordering across base classes.
 //!
 //! When a class inherits from multiple generic bases that share a common
 //! generic ancestor, the `TypeVar` argument orderings must be consistent.
@@ -28,7 +28,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_base_class_2",
 };
 
-/// Emits generics_base_class_2 when base classes impose inconsistent `TypeVar` orderings.
+/// Emits `generics_base_class_2` when base classes impose inconsistent `TypeVar` orderings.
 pub(crate) struct InconsistentTypeVarOrder;
 
 impl Rule for InconsistentTypeVarOrder {

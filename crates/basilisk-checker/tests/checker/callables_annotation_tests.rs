@@ -1,4 +1,4 @@
-//! Tests for [callables_annotation] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+//! Tests for [`callables_annotation`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Tests for callables_annotation: Invalid type argument count for generic type.
 //
 // This rule detects when a generic type is subscripted with the wrong number

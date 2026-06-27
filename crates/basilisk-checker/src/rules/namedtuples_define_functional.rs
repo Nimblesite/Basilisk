@@ -1,5 +1,5 @@
-//! Implements [namedtuples_define_functional] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! namedtuples_define_functional: Invalid argument in a `NamedTuple` constructor call.
+//! Implements [`namedtuples_define_functional`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! `namedtuples_define_functional`: Invalid argument in a `NamedTuple` constructor call.
 //!
 //! When a `NamedTuple` is instantiated using keyword arguments, Basilisk
 //! validates each argument against the field names and field types declared
@@ -65,7 +65,7 @@ fn keyword_rhs_mismatch(annotation: &str, rhs: &RhsKind) -> Option<&'static str>
     }
 }
 
-/// Emits namedtuples_define_functional for `NamedTuple` call sites with unknown fields or type mismatches.
+/// Emits `namedtuples_define_functional` for `NamedTuple` call sites with unknown fields or type mismatches.
 pub(crate) struct InvalidNamedTupleCall;
 
 impl Rule for InvalidNamedTupleCall {

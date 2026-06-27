@@ -1,5 +1,5 @@
-//! Implements [aliases_newtype] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! aliases_newtype: Invalid `NewType(...)` call.
+//! Implements [`aliases_newtype`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! `aliases_newtype`: Invalid `NewType(...)` call.
 //!
 //! PEP 484 places restrictions on `NewType`:
 //!
@@ -225,7 +225,7 @@ fn check_newtype_call(
     }
 }
 
-/// Emits aliases_newtype for invalid `NewType(...)` calls.
+/// Emits `aliases_newtype` for invalid `NewType(...)` calls.
 pub(crate) struct InvalidNewType;
 
 impl Rule for InvalidNewType {

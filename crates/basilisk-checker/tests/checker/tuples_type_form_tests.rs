@@ -1,4 +1,4 @@
-//! Tests for [tuples_type_form] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+//! Tests for [`tuples_type_form`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for tuples_type_form: Multiple unbounded tuple components.
 
 use super::common::*;

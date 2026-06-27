@@ -1,5 +1,5 @@
-//! Implements [enums_members] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! enums_members: Enum member annotated with an explicit type.
+//! Implements [`enums_members`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! `enums_members`: Enum member annotated with an explicit type.
 //!
 //! In an Enum class, members should NOT carry explicit type annotations.
 //! If an attribute inside an Enum class body has both a type annotation and
@@ -30,7 +30,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/enums_members",
 };
 
-/// Emits enums_members when an Enum member carries an explicit type annotation.
+/// Emits `enums_members` when an Enum member carries an explicit type annotation.
 pub(crate) struct EnumMemberAnnotated;
 
 impl Rule for EnumMemberAnnotated {

@@ -12,7 +12,7 @@
 
 Python has a type system. Nobody uses it properly.
 
-73% of Python developers write type hints. Only 41% enforce them in CI. Every existing type checker defaults to gradual typing -- untyped code passes silently. The result: type annotations are documentation, not contracts. They rot. They lie. They give false confidence.
+Type hints are widespread, but most projects never enforce them. Every mainstream type checker defaults to gradual typing -- untyped code passes silently. The result: type annotations are documentation, not contracts. They rot. They lie. They give false confidence.
 
 The Python ecosystem has no equivalent of TypeScript. No tool exists that says: **"This code is not typed. It does not compile."**
 
@@ -43,10 +43,6 @@ Two consequences follow, and both are load-bearing:
 
 Basilisk's *opinion* is still that you should type everything — the house rules encode that recommendation — but acting on it is a **configuration a project chooses**, not a baked-in mode and never a precondition of the conformance score. "Strict" is a property of a chosen configuration, not a switch in the product. The anti-gaming rule is unchanged: no PEP rule may be disabled, deleted, or unregistered to move the conformance number ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 
-### Mojo: The North Star {#CHKARCH-MOJO}
-
-Mojo demonstrated that Python-family syntax can support ownership semantics, immutability by default, and zero implicit coercion. Basilisk adapts these concepts as static analysis rules over standard Python -- no Mojo dependency required.
-
 ### Project Principles {#CHKARCH-PRINCIPLES}
 
 1. **Configuration over modes** -- behaviour is per-rule configuration, never a mode; the default is pure PEP conformance, strictness is opt-in, escape hatches by choice ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY))
@@ -54,8 +50,7 @@ Mojo demonstrated that Python-family syntax can support ownership semantics, imm
 3. **Don't reinvent wheels** -- Depend on quality open-source tools (Ruff, ty, typeshed) for everything we can
 4. **Performance is a feature** -- Sub-10ms incremental checks or it's broken
 5. **Open source means open governance** -- No proprietary layers, no vendor lock-in
-6. **Mojo-compatible, not Mojo-dependent** -- Honor the concepts, own the implementation
-7. **First-class developer experience** -- VS Code extensions, LSP, CLI -- everything works out of the box
+6. **First-class developer experience** -- VS Code extensions, LSP, CLI -- everything works out of the box
 
 ---
 
@@ -70,7 +65,7 @@ See the project README for competitive analysis.
 | Implementation | TypeScript | Python/C | Rust | Rust | Rust | Rust | **Rust** |
 | License | MIT | MIT | MIT | MIT | AGPL | MIT | **MIT** |
 | Default strictness | Gradual | Gradual | Gradual | Gradual | Gradual | N/A | **PEP by default; strict opt-in** |
-| PEP conformance (current) | ~95% | ~85% | ~15% | ~58% | ~69% | N/A | **46.6%** |
+| PEP conformance (current) | [live results][cf] | [cf] | [cf] | [cf] | [cf] | N/A | **46.6%** (self-measured) |
 | PEP conformance target | — | — | — | — | — | N/A | **100%** |
 | LSP server | Yes | No | Yes | Yes | Yes | No | **Yes** |
 | Incremental computation | Lazy eval | Daemon | Salsa | Module-level | No | N/A | **Salsa** |
@@ -86,6 +81,10 @@ See the project README for competitive analysis.
 | Migration tooling | N/A | N/A | No | No | No | N/A | **mypy + Pyright import** |
 | VS Code extension | Pylance (proprietary) | No | Yes | Yes | Yes | Yes | **Yes (open source)** |
 | No Microsoft dependency | No (Node.js) | Yes | Yes | Yes | Yes | Yes | **Yes** |
+
+> Rival conformance figures move as those tools evolve, so rather than freeze (and inevitably misstate) them here, the rival cells link to the official, continuously-updated scoreboard. Basilisk's **46.6%** is self-measured by that same suite's calculator run over the unmodified binary in its default config ([CHKARCH-CONFORMANCE](#CHKARCH-CONFORMANCE)); it is not directly comparable to numbers produced under a different methodology or grading.
+
+[cf]: https://github.com/python/typing/blob/main/conformance/results/results.html
 
 ---
 
@@ -415,7 +414,7 @@ Tests: `crates/basilisk-checker/tests/checker/version_target_tests.rs`.
 > [complete diagnostic reference](#CHKARCH-DIAG-REFERENCE) for what each code actually
 > does today). Do not treat the examples in this section as current behaviour.
 
-Basilisk plans to adapt Mojo's ownership, immutability, and coercion concepts as static analysis rules over standard Python using `typing.Annotated`, decorators, and `dataclass(frozen=True)`. No Mojo code or runtime would be required.
+When implemented, these are **opt-in** rules in the `basilisk-mojo` crate — off by default like every non-PEP house rule, and enabled only when a project turns them on in configuration ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)). They adapt Mojo's ownership, immutability, and coercion concepts as static analysis over standard Python using `typing.Annotated`, decorators, and `dataclass(frozen=True)`; no Mojo code or runtime is required.
 
 ### Ownership and Lifetime Tracking {#CHKARCH-MOJO-OWNERSHIP}
 
@@ -510,7 +509,7 @@ y: int = int(True)   # OK: explicit conversion
 z: str = b"hello"    # ERROR: implicit bytes-to-str [specialtypes_never]
 ```
 
-### Mojo Compatibility Matrix {#CHKARCH-MOJO-COMPAT}
+### Mojo-Inspired Rule Mapping {#CHKARCH-MOJO-COMPAT}
 
 | Mojo Concept | Basilisk Equivalent | Syntax | Enforceable via Static Analysis? |
 |---|---|---|---|

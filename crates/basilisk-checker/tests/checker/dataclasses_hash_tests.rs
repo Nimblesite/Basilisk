@@ -1,4 +1,4 @@
-//! Tests for [dataclasses_hash] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+//! Tests for [`dataclasses_hash`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 // Integration tests for dataclasses_hash: Non-hashable dataclass.
 
 use super::common::*;

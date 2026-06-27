@@ -96,7 +96,7 @@ pub struct ResolvedModule {
     /// Populated lazily by the resolver when the imported module can be found.
     pub imported_final_names: std::collections::HashSet<String>,
     /// For each base class imported from a sibling module, the set of its method
-    /// names declared `@final`. Lets qualifiers_final_decorator detect overriding a `@final`
+    /// names declared `@final`. Lets `qualifiers_final_decorator` detect overriding a `@final`
     /// method whose definition lives in an imported (e.g. `.pyi`) base.
     pub imported_final_methods:
         std::collections::HashMap<String, std::collections::HashSet<String>>,

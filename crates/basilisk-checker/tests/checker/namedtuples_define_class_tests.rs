@@ -1,4 +1,4 @@
-//! Tests for [namedtuples_define_class] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`namedtuples_define_class`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for namedtuples_define_class: `NamedTuple` class definition errors.
 
 use super::common::*;

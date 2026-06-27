@@ -1,12 +1,11 @@
-//! Implements [imports_module_attribute] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! imports_module_attribute: Access to a module attribute the local stub does not declare.
+//! Implements [`imports_module_attribute`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `imports_module_attribute`: Access to a module attribute the local stub does not declare.
 //!
 //! When `import X` resolves to a **user/local stub** (a `.pyi` under a
 //! configured `stub-paths` dir, including the auto-discovered `.basilisk/stubs`),
 //! that stub is authoritative: Basilisk only knows the names it declares. So
-//! `X.attr` where `attr` is not declared is a hard error — the strict-by-default
-//! counterpart that makes a hand-written or quick-fix-generated stub *mean
-//! something*.
+//! `X.attr` where `attr` is not declared is a hard error — the counterpart that
+//! makes a hand-written or quick-fix-generated stub *mean something*.
 //!
 //! The escape hatch is the module-level `def __getattr__(name: str) -> Any: ...`
 //! that the "Create local type stub" quick fix ships by default: keep it and
@@ -61,7 +60,7 @@ const MODULE_DUNDERS: &[&str] = &[
     "__all__",
 ];
 
-/// Emits imports_module_attribute for `module.attr` where a user stub does not declare `attr`.
+/// Emits `imports_module_attribute` for `module.attr` where a user stub does not declare `attr`.
 pub(crate) struct ModuleAttributeUndefined;
 
 impl Rule for ModuleAttributeUndefined {
@@ -123,7 +122,7 @@ impl<'a> Visitor<'a> for AttrVisitor {
     }
 }
 
-/// Emit imports_module_attribute if `access` targets an undeclared attribute of a user stub.
+/// Emit `imports_module_attribute` if `access` targets an undeclared attribute of a user stub.
 fn check_access(access: &AttrAccess, module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
     let Some(api) = module.imported_modules.get(&access.base) else {
         return; // not a user-stub-backed module binding
@@ -140,7 +139,7 @@ fn check_access(access: &AttrAccess, module: &ResolvedModule, diagnostics: &mut 
     diagnostics.push(make_diagnostic(access, api, &module.path));
 }
 
-/// Build the imports_module_attribute diagnostic.
+/// Build the `imports_module_attribute` diagnostic.
 fn make_diagnostic(access: &AttrAccess, api: &ImportedModuleApi, path: &str) -> Diagnostic {
     error_diagnostic_owned(
         CODE,

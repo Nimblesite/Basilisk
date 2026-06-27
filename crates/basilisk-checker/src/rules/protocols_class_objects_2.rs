@@ -1,5 +1,5 @@
-//! Implements [protocols_class_objects_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! protocols_class_objects_2: Protocol class object violations.
+//! Implements [`protocols_class_objects_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `protocols_class_objects_2`: Protocol class object violations.
 //!
 //! Detects two related violations involving Protocol classes and class objects:
 //!
@@ -47,7 +47,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/protocols_class_objects_2",
 };
 
-/// Emits protocols_class_objects_2 for Protocol class object violations.
+/// Emits `protocols_class_objects_2` for Protocol class object violations.
 pub(crate) struct ProtocolClassObjectViolation;
 
 impl Rule for ProtocolClassObjectViolation {

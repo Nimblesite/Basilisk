@@ -1,5 +1,5 @@
-//! Implements [enums_behaviors] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! enums_behaviors: Invalid Enum subclassing.
+//! Implements [`enums_behaviors`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! `enums_behaviors`: Invalid Enum subclassing.
 //!
 //! An Enum class with one or more defined members is implicitly final and
 //! cannot be subclassed. Only Enum subclasses with no members can be used
@@ -49,7 +49,7 @@ fn has_enum_members(cls: &ClassInfo) -> bool {
     !cls.attributes.is_empty()
 }
 
-/// Emits enums_behaviors when a class inherits from an Enum that has members.
+/// Emits `enums_behaviors` when a class inherits from an Enum that has members.
 pub(crate) struct EnumWithMembersFinal;
 
 impl Rule for EnumWithMembersFinal {

@@ -1,4 +1,4 @@
-//! Tests for [generics_basic]-[aliases_newtype] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+//! Tests for [`generics_basic`]-[`aliases_newtype`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

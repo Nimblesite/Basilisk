@@ -1,5 +1,5 @@
-//! Implements [classes_classvar] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! Shared helper utilities for classes_classvar: text-based `ClassVar` detection,
+//! Implements [`classes_classvar`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Shared helper utilities for `classes_classvar`: text-based `ClassVar` detection,
 //! diagnostic construction, and the `TypeParamKind` classification enum.
 
 use basilisk_resolver::Span;
@@ -47,7 +47,7 @@ pub(super) fn has_nested_classvar(ann: &str) -> bool {
     ann.contains("[ClassVar[") && !ann.starts_with("Annotated[")
 }
 
-/// Construct a classes_classvar diagnostic with standard help and note text.
+/// Construct a `classes_classvar` diagnostic with standard help and note text.
 pub(super) fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     error_diagnostic_owned(
         CODE.clone(),

@@ -1,4 +1,4 @@
-//! Tests for [generics_typevartuple_unpack] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
+//! Tests for [`generics_typevartuple_unpack`] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
 // Integration tests for generics_typevartuple_unpack: `TypeVarTuple` unpack minimum args.
 
 use super::common::*;

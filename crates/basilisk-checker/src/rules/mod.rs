@@ -187,6 +187,17 @@ pub(crate) trait Rule {
     /// `ctx` carries the configured target version/platform
     /// ([CHKARCH-VERSION-TARGET]) so rules never hardcode a Python version.
     fn check(&self, module: &ResolvedModule, ctx: &CheckContext, diagnostics: &mut Vec<Diagnostic>);
+
+    /// This rule's opt-in tag declaration, or `None` for a core PEP rule.
+    ///
+    /// Returning `Some(..)` marks the rule as Basilisk-original: off by default,
+    /// selected only when the configuration opts into one of its tags. This is
+    /// the single source of rule provenance — there is no central rule list, and
+    /// the `BSK-` code prefix is cosmetic. See [`crate::rule_tags::OptInSpec`].
+    /// [CHKTAG-PROVENANCE]
+    fn opt_in_spec(&self) -> Option<crate::rule_tags::OptInSpec> {
+        None
+    }
 }
 
 /// All registered Phase 1 rules.
@@ -365,4 +376,14 @@ pub fn run_all(module: &ResolvedModule, ctx: &CheckContext) -> Vec<Diagnostic> {
         rule.check(module, ctx, &mut acc);
         acc
     })
+}
+
+/// Each Basilisk-original rule's self-declared [`crate::rule_tags::OptInSpec`],
+/// gathered from the live registry so rule provenance can never drift from a
+/// hand-maintained list. Consumed by the tagging layer. [CHKTAG-PROVENANCE]
+pub(crate) fn opt_in_specs() -> Vec<crate::rule_tags::OptInSpec> {
+    all_rules()
+        .iter()
+        .filter_map(|rule| rule.opt_in_spec())
+        .collect()
 }

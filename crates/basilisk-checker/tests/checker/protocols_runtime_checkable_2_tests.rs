@@ -1,4 +1,4 @@
-//! Tests for [protocols_runtime_checkable_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`protocols_runtime_checkable_2`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for protocols_runtime_checkable_2: Protocol isinstance/issubclass violations.
 
 use super::common::*;

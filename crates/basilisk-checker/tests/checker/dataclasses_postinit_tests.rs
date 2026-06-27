@@ -1,4 +1,4 @@
-//! Tests for [dataclasses_postinit] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+//! Tests for [`dataclasses_postinit`] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
 // Integration tests for dataclasses_postinit: `InitVar` field validation.
 
 use super::common::*;

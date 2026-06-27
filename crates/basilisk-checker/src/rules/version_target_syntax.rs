@@ -1,5 +1,5 @@
-//! Implements [version_target_syntax] from [CHKARCH-VERSION-TARGET]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET
-//! version_target_syntax: PEP 695 syntax used below the configured target version.
+//! Implements [`version_target_syntax`] from [CHKARCH-VERSION-TARGET]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET
+//! `version_target_syntax`: PEP 695 syntax used below the configured target version.
 //!
 //! `type X = ...` aliases and `class Foo[T]` / `def f[T]()` type-parameter
 //! lists are Python 3.12+ syntax (PEP 695). When the configured
@@ -27,7 +27,7 @@ const CODE: ErrorCode = ErrorCode {
 /// The first Python version with native PEP 695 syntax.
 const PEP695_MIN_VERSION: (u32, u32) = (3, 12);
 
-/// Emits version_target_syntax for PEP 695 syntax on sub-3.12 targets.
+/// Emits `version_target_syntax` for PEP 695 syntax on sub-3.12 targets.
 pub(crate) struct Pep695BelowTargetViolation;
 
 impl Rule for Pep695BelowTargetViolation {

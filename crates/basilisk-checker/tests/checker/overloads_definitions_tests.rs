@@ -1,4 +1,4 @@
-//! Tests for [overloads_definitions] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+//! Tests for [`overloads_definitions`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for overloads_definitions: Missing @overload implementation.
 
 use super::common::*;

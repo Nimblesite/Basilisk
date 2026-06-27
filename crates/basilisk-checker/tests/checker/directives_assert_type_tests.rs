@@ -1,4 +1,4 @@
-//! Tests for [directives_assert_type] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+//! Tests for [`directives_assert_type`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 // Integration tests for directives_assert_type: Invalid `assert_type()` call.
 
 use super::common::*;

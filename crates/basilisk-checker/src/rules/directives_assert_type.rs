@@ -1,5 +1,5 @@
-//! Implements [directives_assert_type] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! directives_assert_type: Invalid `assert_type()` call.
+//! Implements [`directives_assert_type`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! `directives_assert_type`: Invalid `assert_type()` call.
 //!
 //! `assert_type(expr, Type)` must be called with exactly 2 positional arguments.
 //!
@@ -18,7 +18,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/directives_assert_type",
 };
 
-/// Emits directives_assert_type for invalid `assert_type()` calls.
+/// Emits `directives_assert_type` for invalid `assert_type()` calls.
 pub(crate) struct InvalidAssertTypeCall;
 
 impl Rule for InvalidAssertTypeCall {

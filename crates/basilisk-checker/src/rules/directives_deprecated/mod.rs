@@ -1,4 +1,4 @@
-//! directives_deprecated: Use of deprecated class, function, or method.
+//! `directives_deprecated`: Use of deprecated class, function, or method.
 //!
 //! PEP 702 introduces `@deprecated` from `typing` / `typing_extensions`.
 //! Using a deprecated entity (calling, importing, accessing) should produce
@@ -39,7 +39,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/directives_deprecated",
 };
 
-/// Emits directives_deprecated for usage of `@deprecated` decorated entities.
+/// Emits `directives_deprecated` for usage of `@deprecated` decorated entities.
 pub(crate) struct DeprecatedUsage;
 
 impl Rule for DeprecatedUsage {

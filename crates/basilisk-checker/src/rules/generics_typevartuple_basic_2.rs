@@ -1,5 +1,5 @@
-//! Implements [generics_typevartuple_basic_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! generics_typevartuple_basic_2: `TypeVarTuple` must be unpacked with `*` operator.
+//! Implements [`generics_typevartuple_basic_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `generics_typevartuple_basic_2`: `TypeVarTuple` must be unpacked with `*` operator.
 //!
 //! When a `TypeVarTuple` is used in a generic class base list or as a direct
 //! type annotation, it must be unpacked using the `*` operator.  Using a
@@ -107,7 +107,7 @@ fn find_matching_bracket(content: &str) -> Option<usize> {
     None
 }
 
-/// Emits generics_typevartuple_basic_2 when a `TypeVarTuple` is used without unpacking.
+/// Emits `generics_typevartuple_basic_2` when a `TypeVarTuple` is used without unpacking.
 pub(crate) struct TypeVarTupleUnpackRequired;
 
 impl Rule for TypeVarTupleUnpackRequired {

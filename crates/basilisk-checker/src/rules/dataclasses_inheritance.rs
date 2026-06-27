@@ -1,5 +1,5 @@
-//! Implements [dataclasses_inheritance] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! dataclasses_inheritance: Dataclass field without a default after a field with a default.
+//! Implements [`dataclasses_inheritance`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! `dataclasses_inheritance`: Dataclass field without a default after a field with a default.
 //!
 //! A dataclass synthesizes an `__init__` whose parameters follow field
 //! declaration order. A field *without* a default that follows a field *with* a
@@ -28,7 +28,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/dataclasses_inheritance",
 };
 
-/// Emits dataclasses_inheritance for a non-default dataclass field that follows a defaulted one.
+/// Emits `dataclasses_inheritance` for a non-default dataclass field that follows a defaulted one.
 pub(crate) struct DataclassFieldOrder;
 
 impl Rule for DataclassFieldOrder {

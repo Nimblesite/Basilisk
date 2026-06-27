@@ -1,4 +1,4 @@
-//! Tests for [enums_members_2] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+//! Tests for [`enums_members_2`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 // Integration tests for enums_members_2: Enum non-member literal.
 
 use super::common::*;

@@ -1,10 +1,10 @@
-//! Implements [calls_argument_type] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! calls_argument_type: Argument type mismatch at a call site.
+//! Implements [`calls_argument_type`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! `calls_argument_type`: Argument type mismatch at a call site.
 //!
 //! When a function is called with a literal argument whose type is clearly
 //! incompatible with the declared parameter annotation, Basilisk reports the
 //! mismatch.  The check mirrors the literal-kind vs annotation comparison
-//! used by assignment_compatibility.
+//! used by `assignment_compatibility`.
 //!
 //! ```python
 //! def add(x: int, y: int) -> int:
@@ -27,7 +27,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/calls_argument_type",
 };
 
-/// Emits calls_argument_type for call sites where a literal argument is incompatible
+/// Emits `calls_argument_type` for call sites where a literal argument is incompatible
 /// with the declared parameter type.
 pub(crate) struct ArgumentTypeMismatch;
 

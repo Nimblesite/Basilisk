@@ -86,7 +86,7 @@ pub struct Pep695AliasDef {
     /// member of a top-level `X | Y` union — but NOT names nested inside a
     /// subscript/container. A bare reference to another alias is non-terminating
     /// (`type A = B`), whereas one through a container (`type A = list[B]`) is
-    /// legitimate recursion; this powers mutual-cycle detection (generics_syntax_scoping).
+    /// legitimate recursion; this powers mutual-cycle detection (`generics_syntax_scoping`).
     pub rhs_bare_refs: Vec<String>,
     /// When the RHS contains a self-referential subscript `Name[args]`, the
     /// simple argument names of the first such subscript.

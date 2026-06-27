@@ -1,4 +1,4 @@
-//! Tests for [literals_parameterizations] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+//! Tests for [`literals_parameterizations`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // Integration tests for literals_parameterizations: Invalid Literal parameterization.
 
 use super::common::*;

@@ -1,4 +1,4 @@
-//! Tests for [generics_basic_2] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+//! Tests for [`generics_basic_2`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for generics_basic_2: Non-`TypeVar` in Generic[...].
 
 use super::common::*;

@@ -1,4 +1,4 @@
-//! Tests for [generics_defaults_specialization] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+//! Tests for [`generics_defaults_specialization`] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
 // Integration tests for generics_defaults_specialization: Too few type arguments.
 
 use super::common::*;

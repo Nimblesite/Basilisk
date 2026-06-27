@@ -1,4 +1,4 @@
-//! Tests for [historical_positional] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
+//! Tests for [`historical_positional`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 // Integration tests for historical_positional: Historical positional-only syntax.
 
 use super::common::*;

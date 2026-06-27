@@ -1,5 +1,5 @@
-//! Implements [specialtypes_never] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! specialtypes_never: `-> NoReturn` / `-> Never` function can fall through.
+//! Implements [`specialtypes_never`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! `specialtypes_never`: `-> NoReturn` / `-> Never` function can fall through.
 //!
 //! A function declared with a return type of `NoReturn` or `Never` must
 //! unconditionally raise an exception or call another `NoReturn` function on
@@ -44,7 +44,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/specialtypes_never",
 };
 
-/// Emits specialtypes_never when a `-> NoReturn` or `-> Never` function can fall through.
+/// Emits `specialtypes_never` when a `-> NoReturn` or `-> Never` function can fall through.
 pub(crate) struct NoReturnFallThrough;
 
 impl Rule for NoReturnFallThrough {

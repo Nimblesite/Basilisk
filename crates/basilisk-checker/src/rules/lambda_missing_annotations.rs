@@ -28,6 +28,13 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct LambdaMissingAnnotations;
 
 impl Rule for LambdaMissingAnnotations {
+    fn opt_in_spec(&self) -> Option<crate::rule_tags::OptInSpec> {
+        Some(crate::rule_tags::OptInSpec {
+            code: CODE.code,
+            tags: &["strictness"],
+        })
+    }
+
     fn check(
         &self,
         module: &ResolvedModule,

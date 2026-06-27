@@ -1,5 +1,5 @@
-//! Implements [aliases_typealiastype] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! aliases_typealiastype: Invalid `TypeAliasType(...)` call.
+//! Implements [`aliases_typealiastype`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `aliases_typealiastype`: Invalid `TypeAliasType(...)` call.
 //!
 //! Detects violations in `TypeAliasType(...)` calls:
 //!
@@ -38,7 +38,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/aliases_typealiastype",
 };
 
-/// Emits aliases_typealiastype for invalid `TypeAliasType(...)` calls.
+/// Emits `aliases_typealiastype` for invalid `TypeAliasType(...)` calls.
 pub(crate) struct TypeAliasTypeViolation;
 
 impl Rule for TypeAliasTypeViolation {

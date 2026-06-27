@@ -1,5 +1,5 @@
-//! Implements [callables_kwargs] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! callables_kwargs: Unpack[`TypedDict`] kwargs violations.
+//! Implements [`callables_kwargs`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `callables_kwargs`: Unpack[`TypedDict`] kwargs violations.
 //!
 //! Detects invalid uses of `**kwargs: Unpack[TypedDict]` in function signatures:
 //! parameter overlap with `TypedDict` keys, `Unpack[TypeVar]` (invalid), and
@@ -22,7 +22,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/callables_kwargs",
 };
 
-/// Emits callables_kwargs for Unpack[`TypedDict`] kwargs violations.
+/// Emits `callables_kwargs` for Unpack[`TypedDict`] kwargs violations.
 pub(crate) struct UnpackKwargsViolation;
 
 impl Rule for UnpackKwargsViolation {

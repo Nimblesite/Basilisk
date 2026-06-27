@@ -1,5 +1,5 @@
-//! Implements [assignment_compatibility] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! Dataclass attribute assignment checking for assignment_compatibility.
+//! Implements [`assignment_compatibility`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Dataclass attribute assignment checking for `assignment_compatibility`.
 //!
 //! Validates module-level attribute assignments (`instance.field = value`)
 //! against the declared field types of `dataclass`/`dataclass_transform`

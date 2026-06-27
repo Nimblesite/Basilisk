@@ -1,5 +1,5 @@
-//! Implements [protocols_class_objects] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! protocols_class_objects: Protocol class used where `type[Proto]` is expected.
+//! Implements [`protocols_class_objects`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `protocols_class_objects`: Protocol class used where `type[Proto]` is expected.
 //!
 //! The typing spec states: "Variables and parameters annotated with
 //! `Type[Proto]` accept only concrete (non-protocol) subtypes of Proto."
@@ -35,7 +35,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/protocols_class_objects",
 };
 
-/// Emits protocols_class_objects when a Protocol class is used where `type[Proto]` is expected.
+/// Emits `protocols_class_objects` when a Protocol class is used where `type[Proto]` is expected.
 pub(crate) struct ProtocolClassObject;
 
 impl Rule for ProtocolClassObject {

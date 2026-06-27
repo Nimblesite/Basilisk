@@ -1,5 +1,5 @@
-//! Implements [qualifiers_annotated] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! Helper functions for qualifiers_annotated: Invalid first argument to `Annotated[...]`.
+//! Implements [`qualifiers_annotated`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! Helper functions for `qualifiers_annotated`: Invalid first argument to `Annotated[...]`.
 //!
 //! Contains annotation parsing utilities, type expression validity checks,
 //! and name collection helpers used by the main rule implementation.

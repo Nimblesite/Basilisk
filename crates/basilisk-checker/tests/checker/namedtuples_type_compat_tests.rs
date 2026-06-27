@@ -1,4 +1,4 @@
-//! Tests for [namedtuples_type_compat] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
+//! Tests for [`namedtuples_type_compat`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 // Integration tests for namedtuples_type_compat: `NamedTuple` tuple compatibility.
 
 use super::common::*;

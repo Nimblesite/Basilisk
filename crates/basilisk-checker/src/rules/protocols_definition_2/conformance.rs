@@ -1,5 +1,5 @@
-//! Implements [protocols_definition_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Protocol member-kind conformance checks for protocols_definition_2.
+//! Implements [`protocols_definition_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Protocol member-kind conformance checks for `protocols_definition_2`.
 //!
 //! Beyond simple member-name presence, these checks verify that an
 //! implementation provides each protocol member in a compatible *form*:

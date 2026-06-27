@@ -1,5 +1,5 @@
-//! Implements [overloads_consistency_3] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! overloads_consistency_3: Overload implementation is inconsistent with its signatures.
+//! Implements [`overloads_consistency_3`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! `overloads_consistency_3`: Overload implementation is inconsistent with its signatures.
 //!
 //! When an overload implementation is present the spec requires:
 //!   * the return type of every overload is assignable to the implementation's
@@ -86,7 +86,7 @@ fn non_self_params(params: &[ParameterInfo]) -> &[ParameterInfo] {
     }
 }
 
-/// Emits overloads_consistency_3 for overload/implementation signature inconsistencies.
+/// Emits `overloads_consistency_3` for overload/implementation signature inconsistencies.
 pub(crate) struct OverloadImplConsistency;
 
 impl Rule for OverloadImplConsistency {

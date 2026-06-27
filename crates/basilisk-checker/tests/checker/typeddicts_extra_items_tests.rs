@@ -1,4 +1,4 @@
-//! Tests for [typeddicts_extra_items] from [CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS
+//! Tests for [`typeddicts_extra_items`] from [CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS
 // Integration tests for PEP 728 closed / extra_items subclass checks.
 
 use super::common::*;

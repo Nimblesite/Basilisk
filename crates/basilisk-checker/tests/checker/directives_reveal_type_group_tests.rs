@@ -1,4 +1,4 @@
-//! Tests for [directives_reveal_type]-[directives_assert_type] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+//! Tests for [`directives_reveal_type`]-[`directives_assert_type`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 // Integration tests for directives_reveal_type (invalid `reveal_type`) and directives_assert_type (invalid `assert_type`).
 
 use super::common::*;

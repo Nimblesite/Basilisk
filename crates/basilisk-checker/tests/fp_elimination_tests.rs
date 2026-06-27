@@ -1,5 +1,5 @@
 //! Tests for [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! Coarse e2e tests locking in the assignment_compatibility false-positive eliminations from
+//! Coarse e2e tests locking in the `assignment_compatibility` false-positive eliminations from
 //! `docs/plans/CHECK-ELIMINATE-FALSE-POSITIVES.md`.
 //!
 //! Each test asserts BOTH directions: the valid (`# OK`) forms are NOT flagged

@@ -1,5 +1,5 @@
-//! Implements [generics_defaults_referential] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! generics_defaults_referential: Invalid `TypeVar` default referencing another `TypeVar`.
+//! Implements [`generics_defaults_referential`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `generics_defaults_referential`: Invalid `TypeVar` default referencing another `TypeVar`.
 //!
 //! PEP 696 specifies constraints on `TypeVar` defaults that reference other `TypeVars`:
 //!
@@ -56,7 +56,7 @@ fn is_constraint_subset(c1: &[String], c2: &[String]) -> bool {
     c1.iter().all(|constraint| c2.contains(constraint))
 }
 
-/// Emits generics_defaults_referential for `TypeVar` default referential violations.
+/// Emits `generics_defaults_referential` for `TypeVar` default referential violations.
 pub(crate) struct TypeVarDefaultReferential;
 
 /// Format a list of constraint names as backtick-quoted, comma-separated string.

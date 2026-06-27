@@ -1,4 +1,4 @@
-//! Tests for [qualifiers_final_annotation] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+//! Tests for [`qualifiers_final_annotation`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for qualifiers_final_annotation: Final used in invalid position.
 
 use super::common::*;

@@ -61,6 +61,13 @@ impl UnusedDependency {
 }
 
 impl Rule for UnusedDependency {
+    fn opt_in_spec(&self) -> Option<crate::rule_tags::OptInSpec> {
+        Some(crate::rule_tags::OptInSpec {
+            code: Self::CODE.code,
+            tags: &["dependencies"],
+        })
+    }
+
     fn check(
         &self,
         _module: &ResolvedModule,

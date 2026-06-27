@@ -538,8 +538,8 @@ stub-paths = ["fallback-stubs/"]
             &[("basilisk.json", r#"{ "stubPaths": [] }"#)],
             |cfg| {
                 assert!(
-                    cfg.uv_stub_suggestions,
-                    "uv_stub_suggestions should default to true"
+                    !cfg.uv_stub_suggestions,
+                    "uv_stub_suggestions defaults to false so BSK-E0152 stays off by default (default config = the PEP set only)"
                 );
                 assert!(
                     !cfg.uv_dependency_diagnostics,

@@ -1,5 +1,5 @@
-//! Implements [returns_compatibility] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! returns_compatibility: Return type mismatch.
+//! Implements [`returns_compatibility`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! `returns_compatibility`: Return type mismatch.
 //!
 //! Emitted as an `Error` when the literal value returned by a function is
 //! clearly incompatible with the declared return type annotation (e.g.
@@ -32,7 +32,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/returns_compatibility",
 };
 
-/// Emits returns_compatibility for detectable return type mismatches.
+/// Emits `returns_compatibility` for detectable return type mismatches.
 pub(crate) struct ReturnTypeMismatch;
 
 impl Rule for ReturnTypeMismatch {

@@ -1,5 +1,5 @@
-//! Implements [classes_classvar] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! Instance-level `ClassVar` violation checks for classes_classvar.
+//! Implements [`classes_classvar`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Instance-level `ClassVar` violation checks for `classes_classvar`.
 //!
 //! Handles two cases:
 //! 1. `self.x: ClassVar[T]` annotations inside methods (invalid context).
@@ -219,7 +219,7 @@ fn build_instance_class_map(module: &ResolvedModule, source: &str) -> Vec<(Strin
     map
 }
 
-/// Emit classes_classvar for every `self.<name>: ClassVar` annotation found inside a method body.
+/// Emit `classes_classvar` for every `self.<name>: ClassVar` annotation found inside a method body.
 ///
 /// These are not captured in `local_vars` because the assignment target is an `Attribute`
 /// node rather than a `Name` node.

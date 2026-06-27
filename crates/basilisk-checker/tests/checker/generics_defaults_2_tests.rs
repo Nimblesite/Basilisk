@@ -1,4 +1,4 @@
-//! Tests for [generics_defaults_2] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+//! Tests for [`generics_defaults_2`] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
 // Integration tests for generics_defaults_2: `TypeVar` default incompatible.
 
 use super::common::*;

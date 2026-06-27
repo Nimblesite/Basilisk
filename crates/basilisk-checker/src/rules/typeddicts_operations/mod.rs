@@ -1,4 +1,4 @@
-//! typeddicts_operations: Invalid key or value type in `TypedDict` assignment.
+//! `typeddicts_operations`: Invalid key or value type in `TypedDict` assignment.
 //!
 //! PEP 589 defines `TypedDict` as a typed dict with a fixed set of keys and associated types.
 //! This rule detects:
@@ -34,7 +34,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/typeddicts_operations",
 };
 
-/// Emits typeddicts_operations for invalid key or value-type violations on `TypedDict` instances.
+/// Emits `typeddicts_operations` for invalid key or value-type violations on `TypedDict` instances.
 pub(crate) struct TypedDictKeyValidation;
 
 impl Rule for TypedDictKeyValidation {

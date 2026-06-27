@@ -1,4 +1,4 @@
-//! Tests for [annotations_typeexpr] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+//! Tests for [`annotations_typeexpr`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for annotations_typeexpr: Invalid type form (numeric literal as annotation).
 
 use super::common::*;

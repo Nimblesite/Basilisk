@@ -1,4 +1,4 @@
-//! classes_classvar: `ClassVar` used in an invalid context.
+//! `classes_classvar`: `ClassVar` used in an invalid context.
 //!
 //! PEP 526 and the typing spec restrict `ClassVar[T]` to:
 //!
@@ -53,7 +53,7 @@ use helpers::{
 use instance::{check_instance_classvar_assignments, check_self_classvar_annotations};
 use protocol::check_protocol_classvar_conformance;
 
-/// Emits classes_classvar for `ClassVar` used in an invalid context.
+/// Emits `classes_classvar` for `ClassVar` used in an invalid context.
 pub(crate) struct ClassVarInvalidContext;
 
 impl Rule for ClassVarInvalidContext {

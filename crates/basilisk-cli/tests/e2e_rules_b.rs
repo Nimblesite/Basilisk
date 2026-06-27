@@ -15,7 +15,7 @@
 mod common;
 
 use basilisk_test_utils::{assert_diagnostics, Expected};
-use common::{fixture, run};
+use common::{annotation_rules_config, fixture, run, run_with_config};
 
 // ---------------------------------------------------------------------------
 // import from untyped module
@@ -38,7 +38,7 @@ fn import_from_untyped_module() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn explicit_any_in_annotation() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("errors/e0011_explicit_any.py")?;
+    let diags = run_with_config("errors/e0011_explicit_any.py", &annotation_rules_config())?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
         codes.contains(&"BSK-W0014"),
@@ -53,7 +53,10 @@ fn explicit_any_in_annotation() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn any_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("errors/e0011_vararg_kwarg_any.py")?;
+    let diags = run_with_config(
+        "errors/e0011_vararg_kwarg_any.py",
+        &annotation_rules_config(),
+    )?;
     let src = std::fs::read_to_string(fixture("errors/e0011_vararg_kwarg_any.py"))?;
     assert_diagnostics(
         &src,
@@ -204,7 +207,10 @@ fn overlapping_overload_signatures() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn exact_diagnostics_for_overlapping_overloads() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("errors/e0021_overlapping_overloads.py")?;
+    let diags = run_with_config(
+        "errors/e0021_overlapping_overloads.py",
+        &annotation_rules_config(),
+    )?;
     let src = std::fs::read_to_string(fixture("errors/e0021_overlapping_overloads.py"))?;
     assert_diagnostics(
         &src,
@@ -276,7 +282,10 @@ fn numeric_literal_on_vararg_kwarg_and_return() -> Result<(), Box<dyn std::error
 
 #[test]
 fn override_without_decorator() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = run("errors/e0025_missing_override.py")?;
+    let diags = run_with_config(
+        "errors/e0025_missing_override.py",
+        &annotation_rules_config(),
+    )?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(
         codes.contains(&"BSK-E0025"),

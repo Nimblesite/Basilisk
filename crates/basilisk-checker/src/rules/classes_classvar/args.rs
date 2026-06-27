@@ -1,5 +1,5 @@
-//! Implements [classes_classvar] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! Argument validation helpers for classes_classvar: `ClassVar` argument correctness
+//! Implements [`classes_classvar`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Argument validation helpers for `classes_classvar`: `ClassVar` argument correctness
 //! checks and type-mismatch detection between the `ClassVar` inner type and the RHS.
 
 use basilisk_resolver::Span;

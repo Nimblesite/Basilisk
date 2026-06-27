@@ -1,5 +1,5 @@
-//! Implements [qualifiers_final_annotation] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! qualifiers_final_annotation: `Final` used in an invalid position.
+//! Implements [`qualifiers_final_annotation`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! `qualifiers_final_annotation`: `Final` used in an invalid position.
 //!
 //! PEP 591 restricts `Final[T]` to:
 //!
@@ -115,7 +115,7 @@ fn has_final_multiple_type_args(ann: &str) -> bool {
     top_commas >= 1
 }
 
-/// Emits qualifiers_final_annotation for `Final` used in an invalid position.
+/// Emits `qualifiers_final_annotation` for `Final` used in an invalid position.
 pub(crate) struct FinalInvalidPosition;
 
 impl Rule for FinalInvalidPosition {

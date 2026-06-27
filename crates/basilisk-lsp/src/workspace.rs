@@ -893,9 +893,10 @@ mod tests {
 
     #[test]
     fn test_set_open_produces_diagnostics_for_type_error() {
-        let idx = make_index();
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/err.py");
-        // Missing return type annotation — should trigger BSK-E0001.
+        // Missing return type annotation (BSK-E0002) — a house rule, off by
+        // default, so the index opts in. See [CHKARCH-CONFIGURATION-ONLY].
         let src = "def foo(x: int):\n    return x\n";
         let diags = idx.set_open(&uri, src, 1);
         assert!(
@@ -912,11 +913,14 @@ mod tests {
     #[test]
     fn test_set_open_excluded_file_publishes_no_diagnostics() {
         let root = unique_tmp("bsk_excluded_open");
-        // Default config => DEFAULT_EXCLUDES (includes `bundled` / `_vendored`).
+        // House rules enabled (so the vendored file WOULD fire if not excluded),
+        // keeping DEFAULT_EXCLUDES (`bundled` / `_vendored`). This proves the
+        // exclusion — not an off-by-default rule — is what suppresses diagnostics.
+        // See [CHKARCH-CONFIGURATION-ONLY].
         let idx = WorkspaceIndex::new(
             vec![root.clone()],
             AnalysisMode::WholeModule,
-            BasiliskConfig::default(),
+            annotations_on(),
         );
         // A vendored file with blatant type errors that WOULD normally fire.
         let vendored = root.join("bundled").join("debugpy").join("vendored.py");
@@ -933,10 +937,12 @@ mod tests {
     #[test]
     fn test_set_open_non_excluded_file_under_root_still_publishes() {
         let root = unique_tmp("bsk_included_open");
+        // House rules enabled so a non-excluded file has something to publish.
+        // See [CHKARCH-CONFIGURATION-ONLY].
         let idx = WorkspaceIndex::new(
             vec![root.clone()],
             AnalysisMode::WholeModule,
-            BasiliskConfig::default(),
+            annotations_on(),
         );
         let src_file = root.join("src").join("app.py");
         let uri = Url::from_file_path(&src_file).unwrap();
@@ -1794,14 +1800,29 @@ mod tests {
         WorkspaceIndex::new(vec![], AnalysisMode::WholeModule, config)
     }
 
-    /// Helper: build a `WorkspaceIndex` whose config overrides exactly one rule's severity.
+    /// Config that opts into the annotation house rules (`strict_annotations =
+    /// true`). `BSK-E0001`/`BSK-W0050` are off by default — the default config is
+    /// pure PEP conformance — so tests that exercise those rules (or override
+    /// their severity) enable them here, exactly as a project would. No modes;
+    /// this is configuration. See [CHKARCH-CONFIGURATION-ONLY].
+    fn annotations_on() -> BasiliskConfig {
+        BasiliskConfig {
+            strict_annotations: true,
+            ..Default::default()
+        }
+    }
+
+    /// Helper: build a `WorkspaceIndex` whose config opts into the annotation
+    /// house rules and overrides exactly one rule's severity. A severity override
+    /// only re-grades a rule that is already enabled, so the house rules are
+    /// turned on first. See [CHKARCH-CONFIGURATION-ONLY].
     fn make_index_with_rule_override(
         code: &str,
         severity: basilisk_config::RuleSeverity,
     ) -> WorkspaceIndex {
         let config = BasiliskConfig {
             rules: std::collections::HashMap::from([(code.to_owned(), severity)]),
-            ..Default::default()
+            ..annotations_on()
         };
         make_index_with_config(config)
     }
@@ -1898,19 +1919,22 @@ mod tests {
         }
     }
 
-    // ── Default config: W-codes are warnings, E-codes are errors ────────────
+    // ── House rules enabled: W-codes are warnings, E-codes are errors ───────
+    // These rules are off by default (the default config is pure PEP
+    // conformance); the index opts in so their default severities are
+    // observable. See [CHKARCH-CONFIGURATION-ONLY].
 
     #[test]
-    fn default_config_w0050_is_warning_in_checker_diagnostics() {
-        let idx = make_index();
+    fn house_rules_w0050_is_warning_in_checker_diagnostics() {
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/cfg_w0050_default.py");
         let _ = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
         assert_checker_severity(&idx, &uri, "BSK-W0050", basilisk_checker::Severity::Warning);
     }
 
     #[test]
-    fn default_config_w0050_lsp_severity_is_warning() {
-        let idx = make_index();
+    fn house_rules_w0050_lsp_severity_is_warning() {
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/cfg_w0050_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
         assert_lsp_severity(
@@ -1921,16 +1945,16 @@ mod tests {
     }
 
     #[test]
-    fn default_config_e0001_is_error_in_checker_diagnostics() {
-        let idx = make_index();
+    fn house_rules_e0001_is_error_in_checker_diagnostics() {
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/cfg_e0001_default.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
         assert_checker_severity(&idx, &uri, "BSK-E0001", basilisk_checker::Severity::Error);
     }
 
     #[test]
-    fn default_config_e0001_lsp_severity_is_error() {
-        let idx = make_index();
+    fn house_rules_e0001_lsp_severity_is_error() {
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/cfg_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
         assert_lsp_severity(
@@ -2437,7 +2461,7 @@ mod tests {
                     basilisk_config::RuleSeverity::Disabled,
                 ),
             ]),
-            ..Default::default()
+            ..annotations_on()
         };
         let idx = make_index_with_config(config);
 
@@ -2596,9 +2620,12 @@ mod tests {
         let dir = unique_tmp("bsk_cfg_pyproject_demote");
         std::fs::create_dir_all(&dir).unwrap();
 
+        // A severity override only re-grades an already-enabled rule; BSK-E0001
+        // is off by default, so the project opts in AND demotes it.
+        // See [CHKARCH-CONFIGURATION-ONLY].
         std::fs::write(
             dir.join("pyproject.toml"),
-            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"warning\"\n",
+            "[tool.basilisk]\nstrict-annotations = true\n\n[tool.basilisk.rules]\n\"BSK-E0001\" = \"warning\"\n",
         )
         .unwrap();
         std::fs::write(dir.join("demote_me.py"), SRC_MISSING_ANNOTATION).unwrap();
@@ -2640,15 +2667,16 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    // ── Default config vs custom config produce different results ────────────
+    // ── Default severity vs override produce different results ───────────────
 
     #[test]
-    fn default_and_custom_configs_produce_different_severity() {
-        // Prove the fix: same source, different configs, different severities.
+    fn default_severity_and_override_produce_different_severity() {
+        // Prove the fix: same source, two configs that both enable the house
+        // rule, different severities. See [CHKARCH-CONFIGURATION-ONLY].
         let uri_path = "/tmp/cfg_diff.py";
 
-        // Default config: BSK-E0001 is Error.
-        let default_idx = make_index();
+        // House rules enabled, BSK-E0001 at its default severity: Error.
+        let default_idx = make_index_with_config(annotations_on());
         let default_uri = make_uri(uri_path);
         let default_diags = default_idx.set_open(&default_uri, SRC_MISSING_ANNOTATION, 1);
         let default_severities: Vec<_> = default_diags

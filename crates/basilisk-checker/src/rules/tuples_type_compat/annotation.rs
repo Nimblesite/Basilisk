@@ -1,5 +1,5 @@
-//! Implements [tuples_type_compat] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Tuple annotation parsing and compatibility helpers for tuples_type_compat.
+//! Implements [`tuples_type_compat`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Tuple annotation parsing and compatibility helpers for `tuples_type_compat`.
 
 use crate::rules::shared::split_top_level_commas;
 

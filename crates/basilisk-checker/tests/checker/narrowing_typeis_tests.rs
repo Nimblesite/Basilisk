@@ -1,4 +1,4 @@
-//! Tests for [narrowing_typeis] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`narrowing_typeis`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for narrowing_typeis: `TypeGuard` callable return type mismatch.
 
 use super::common::*;

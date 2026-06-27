@@ -58,9 +58,9 @@ fn fires_for_site_packages_source_py() {
     assert_eq!(diagnostics[0].code.code, "BSK-E0152");
 }
 
-/// Strict-by-default: an untyped third-party import is a hard ERROR, not a
-/// warning. Users opt down (`"BSK-E0152" = "warning"`) to import at their
-/// own risk; this asserts the default severity stays an error.
+/// When this opt-in rule fires, an untyped third-party import is a hard ERROR,
+/// not a warning. A project can soften it (`"BSK-E0152" = "warning"`) to import
+/// at its own risk; this asserts the rule's default severity is an error.
 #[test]
 fn defaults_to_error_severity() {
     let import = make_import(

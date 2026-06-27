@@ -1,4 +1,4 @@
-//! Tests for [protocols_explicit_3] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`protocols_explicit_3`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for protocols_explicit_3: Super call on abstract protocol method.
 
 use super::common::*;

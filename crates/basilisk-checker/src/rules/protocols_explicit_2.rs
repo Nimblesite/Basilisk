@@ -1,5 +1,5 @@
-//! Implements [protocols_explicit_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! protocols_explicit_2: Calling `super().method()` on an abstract method with no default
+//! Implements [`protocols_explicit_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `protocols_explicit_2`: Calling `super().method()` on an abstract method with no default
 //! implementation.
 //!
 //! When a Protocol (or ABC) declares a method as `@abstractmethod` with only an
@@ -36,7 +36,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/protocols_explicit_2",
 };
 
-/// Emits protocols_explicit_2 when a subclass method calls `super().method()` on a method
+/// Emits `protocols_explicit_2` when a subclass method calls `super().method()` on a method
 /// that is abstract and has no default implementation (body is `...` or `pass`).
 pub(crate) struct SuperAbstractCall;
 

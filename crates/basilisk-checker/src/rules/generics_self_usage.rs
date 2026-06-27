@@ -1,5 +1,5 @@
-//! Implements [generics_self_usage] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! generics_self_usage: `Self` type used in an invalid location.
+//! Implements [`generics_self_usage`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `generics_self_usage`: `Self` type used in an invalid location.
 //!
 //! PEP 673 defines `Self` as a special type that refers to the current class.
 //! It is only valid in specific locations:
@@ -141,7 +141,7 @@ fn check_func_annotations_for_self(
     }
 }
 
-/// Emits generics_self_usage when `Self` is used in a location where it has no valid binding.
+/// Emits `generics_self_usage` when `Self` is used in a location where it has no valid binding.
 pub(crate) struct SelfInvalidLocation;
 
 impl Rule for SelfInvalidLocation {

@@ -1,5 +1,5 @@
-//! Implements [literals_semantics] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! literals_semantics: Augmented assignment widens `Literal` type.
+//! Implements [`literals_semantics`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `literals_semantics`: Augmented assignment widens `Literal` type.
 //!
 //! When a function parameter is annotated with `Literal[...]`, augmented
 //! assignment (`+=`, `-=`, etc.) effectively reassigns the variable to a
@@ -25,7 +25,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/literals_semantics",
 };
 
-/// Emits literals_semantics for augmented assignment on `Literal`-typed parameters.
+/// Emits `literals_semantics` for augmented assignment on `Literal`-typed parameters.
 pub(crate) struct LiteralAugmentedAssign;
 
 impl Rule for LiteralAugmentedAssign {

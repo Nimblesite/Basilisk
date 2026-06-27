@@ -1,4 +1,4 @@
-//! generics_variance_inference: `TypeVar` scoping violation.
+//! `generics_variance_inference`: `TypeVar` scoping violation.
 //!
 //! Detects uses of `TypeVar` instances outside their valid scope:
 //!
@@ -45,7 +45,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_variance_inference",
 };
 
-/// Emits generics_variance_inference for `TypeVar` scoping violations.
+/// Emits `generics_variance_inference` for `TypeVar` scoping violations.
 pub(crate) struct TypeVarScopeViolation;
 
 impl Rule for TypeVarScopeViolation {

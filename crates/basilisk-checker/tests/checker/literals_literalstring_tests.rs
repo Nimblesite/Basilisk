@@ -1,4 +1,4 @@
-//! Tests for [literals_literalstring] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`literals_literalstring`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for literals_literalstring: `LiteralString` assignment incompatibilities.
 
 use super::common::*;

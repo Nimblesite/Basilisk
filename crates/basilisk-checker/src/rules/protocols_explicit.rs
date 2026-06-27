@@ -1,5 +1,5 @@
-//! Implements [protocols_explicit] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! protocols_explicit: Direct instantiation of a Protocol class.
+//! Implements [`protocols_explicit`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `protocols_explicit`: Direct instantiation of a Protocol class.
 //!
 //! Protocol classes define structural interfaces and cannot be instantiated
 //! directly. Only concrete classes that satisfy the protocol may be
@@ -24,7 +24,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/protocols_explicit",
 };
 
-/// Emits protocols_explicit for direct instantiation of Protocol classes.
+/// Emits `protocols_explicit` for direct instantiation of Protocol classes.
 pub(crate) struct ProtocolInstantiation;
 
 impl Rule for ProtocolInstantiation {

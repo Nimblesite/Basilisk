@@ -209,16 +209,37 @@ fn default_on_core_checks_are_pep_not_basilisk() {
 
 #[test]
 fn no_basilisk_rule_key_is_stale() {
-    // The opt-in table is keyed by current diagnostic code. A rename elsewhere
-    // (the conformance-name migration) that leaves a key here stale would
-    // silently demote that rule to on-by-default `pep` — catch it here.
+    // Provenance is self-declared by each rule's `opt_in_spec()`. If a rule's
+    // diagnostic code is renamed but its `opt_in_spec().code` is not (or vice
+    // versa), the declared code no longer matches any emitted code — catch it
+    // here, since that rule would silently fall through to on-by-default `pep`.
     let live = all_rule_codes();
     for code in basilisk_rule_codes() {
         assert!(
             live.contains(code),
-            "BASILISK_RULES key `{code}` is not a live rule code — provenance drifted (a rename?)"
+            "opt_in_spec() code `{code}` is not a live rule code — provenance drifted (a rename?)"
         );
     }
+}
+
+#[test]
+fn basilisk_provenance_matches_the_bsk_naming_convention() {
+    // The `BSK-` prefix is cosmetic — provenance is decided by each rule's
+    // self-declared `opt_in_spec()`, never the prefix. But the convention must
+    // hold both ways, which catches the two drift bugs the deleted hand-lists
+    // used to hide: a new `BSK-` rule that forgot to tag itself (would silently
+    // become on-by-default `pep`), and a non-`BSK-` rule wrongly tagged opt-in
+    // (would silently vanish from the default PEP set).
+    let declared_basilisk: BTreeSet<String> =
+        basilisk_rule_codes().into_iter().map(str::to_owned).collect();
+    let bsk_prefixed: BTreeSet<String> = all_rule_codes()
+        .into_iter()
+        .filter(|code| code.starts_with("BSK-"))
+        .collect();
+    assert_eq!(
+        declared_basilisk, bsk_prefixed,
+        "every BSK-prefixed rule must self-declare opt_in_spec(), and only those"
+    );
 }
 
 #[test]
@@ -236,7 +257,14 @@ fn pep_categories_match_conformance_test_prefixes() {
         .flatten()
         .flatten()
         .filter_map(|entry| entry.file_name().into_string().ok())
-        .filter(|name| name.ends_with(".py") || name.ends_with(".pyi"))
+        .filter(|name| {
+            Path::new(name)
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| {
+                    ext.eq_ignore_ascii_case("py") || ext.eq_ignore_ascii_case("pyi")
+                })
+        })
         .filter_map(|name| {
             name.trim_start_matches('_')
                 .split('_')

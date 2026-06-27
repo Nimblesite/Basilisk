@@ -1,4 +1,4 @@
-//! Tests for [specialtypes_promotions] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+//! Tests for [`specialtypes_promotions`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 // Integration tests for specialtypes_promotions: Float param int attr access.
 
 use super::common::*;

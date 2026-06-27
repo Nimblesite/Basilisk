@@ -1,4 +1,4 @@
-//! Tests for [generics_syntax_declarations] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
+//! Tests for [`generics_syntax_declarations`] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
 // Tests for generics_syntax_declarations: Invalid PEP 695 type parameter bound.
 //
 // PEP 695 introduced a compact syntax for declaring generic classes:

@@ -1,5 +1,5 @@
-//! Implements [literals_parameterizations_2] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! literals_parameterizations_2: `Literal["EnumClass.MEMBER"]` (string) used where
+//! Implements [`literals_parameterizations_2`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! `literals_parameterizations_2`: `Literal["EnumClass.MEMBER"]` (string) used where
 //! `Literal[EnumClass.MEMBER]` (enum member reference) is required.
 //!
 //! A quoted string like `"Color.RED"` is a `str` literal — it is NOT the same
@@ -29,7 +29,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/literals_parameterizations_2",
 };
 
-/// Emits literals_parameterizations_2 when a `Literal["Class.Member"]` string annotation is used
+/// Emits `literals_parameterizations_2` when a `Literal["Class.Member"]` string annotation is used
 /// where `Literal[Class.Member]` is required.
 pub(crate) struct LiteralStringEnumMismatch;
 

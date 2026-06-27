@@ -1,5 +1,5 @@
-//! Implements [assignment_compatibility] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! `TypeForm` validation for assignment_compatibility.
+//! Implements [`assignment_compatibility`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! `TypeForm` validation for `assignment_compatibility`.
 //!
 //! When the declared type is `TypeForm[T]`, the RHS must be a valid type
 //! expression whose represented type is assignable to `T`.  This module

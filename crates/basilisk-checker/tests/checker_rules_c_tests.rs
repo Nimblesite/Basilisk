@@ -1,4 +1,4 @@
-//! Tests for [literals_parameterizations]-[generics_self_attributes] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+//! Tests for [`literals_parameterizations`]-[`generics_self_attributes`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

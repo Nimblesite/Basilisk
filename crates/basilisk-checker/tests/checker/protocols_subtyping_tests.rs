@@ -1,4 +1,4 @@
-//! Tests for [protocols_subtyping] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`protocols_subtyping`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for protocols_subtyping: Protocol tuple element type mismatch.
 
 use super::common::*;

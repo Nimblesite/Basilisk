@@ -1,5 +1,5 @@
-//! Implements [annotations_forward_refs] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! Module scope and circular annotation helpers for annotations_forward_refs.
+//! Implements [`annotations_forward_refs`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! Module scope and circular annotation helpers for `annotations_forward_refs`.
 //!
 //! Contains helpers for building module scope name sets, detecting circular
 //! string annotations, and the canonical list of Python built-in type names.

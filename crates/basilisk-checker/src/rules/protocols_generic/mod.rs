@@ -1,4 +1,4 @@
-//! protocols_generic: Generic protocol violations.
+//! `protocols_generic`: Generic protocol violations.
 //!
 //! Detects violations related to generic protocol usage:
 //!
@@ -48,7 +48,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/protocols_generic",
 };
 
-/// Emits protocols_generic for generic protocol violations.
+/// Emits `protocols_generic` for generic protocol violations.
 pub(crate) struct GenericProtocolViolation;
 
 impl Rule for GenericProtocolViolation {

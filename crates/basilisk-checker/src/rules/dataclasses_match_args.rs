@@ -1,5 +1,5 @@
-//! Implements [dataclasses_match_args] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! dataclasses_match_args: Access to `__match_args__` on a dataclass with `match_args=False`.
+//! Implements [`dataclasses_match_args`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! `dataclasses_match_args`: Access to `__match_args__` on a dataclass with `match_args=False`.
 //!
 //! When `@dataclass(match_args=False)` is specified, Python does **not** generate
 //! the `__match_args__` class variable.  Accessing `ClassName.__match_args__` on
@@ -28,7 +28,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/dataclasses_match_args",
 };
 
-/// Emits dataclasses_match_args when `__match_args__` is accessed on a dataclass with `match_args=False`.
+/// Emits `dataclasses_match_args` when `__match_args__` is accessed on a dataclass with `match_args=False`.
 pub(crate) struct MatchArgsFalseAccess;
 
 impl Rule for MatchArgsFalseAccess {

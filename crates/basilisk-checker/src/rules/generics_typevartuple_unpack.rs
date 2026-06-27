@@ -1,5 +1,5 @@
-//! Implements [generics_typevartuple_unpack] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! generics_typevartuple_unpack: `TypeVarTuple` unpack minimum type argument violation.
+//! Implements [`generics_typevartuple_unpack`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `generics_typevartuple_unpack`: `TypeVarTuple` unpack minimum type argument violation.
 //!
 //! When a function parameter has a type annotation containing a `TypeVarTuple`
 //! unpack pattern like `Array[Batch, *tuple[Any, ...], Channels]`, the type has
@@ -32,7 +32,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_typevartuple_unpack",
 };
 
-/// Emits generics_typevartuple_unpack when a function-body call passes a value whose generic type
+/// Emits `generics_typevartuple_unpack` when a function-body call passes a value whose generic type
 /// does not have enough type arguments to satisfy a `TypeVarTuple` unpack pattern.
 pub(crate) struct TypeVarTupleUnpackViolation;
 

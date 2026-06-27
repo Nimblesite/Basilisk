@@ -1,4 +1,4 @@
-//! Tests for [typeddicts_extra_items]-[overloads_consistency_3] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`typeddicts_extra_items`]-[`overloads_consistency_3`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

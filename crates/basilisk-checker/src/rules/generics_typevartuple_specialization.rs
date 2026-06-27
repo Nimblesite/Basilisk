@@ -1,5 +1,5 @@
-//! Implements [generics_typevartuple_specialization] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! generics_typevartuple_specialization: Multiple `TypeVarTuple` unpacks in generic or tuple type.
+//! Implements [`generics_typevartuple_specialization`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `generics_typevartuple_specialization`: Multiple `TypeVarTuple` unpacks in generic or tuple type.
 //!
 //! Only a single `TypeVarTuple` unpack (`*Ts`) may appear in a type parameter
 //! list or in a `tuple[...]` type expression.
@@ -90,7 +90,7 @@ fn find_matching_bracket(content: &str) -> Option<usize> {
     None
 }
 
-/// Emits generics_typevartuple_specialization when multiple `TypeVarTuples` are used in a generic or
+/// Emits `generics_typevartuple_specialization` when multiple `TypeVarTuples` are used in a generic or
 /// multiple unpacks appear in a `tuple[...]` type expression.
 pub(crate) struct MultipleTypeVarTuplesInGeneric;
 

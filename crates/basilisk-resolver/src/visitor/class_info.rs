@@ -20,7 +20,7 @@ use super::function_info::function_info_from;
 
 /// Flag the closures collected from a method body (those with no `class_name`)
 /// as lexically nested inside the class, starting at index `from`.  This keeps
-/// their `Self` usage valid for [generics_self_usage] instead of being treated as
+/// their `Self` usage valid for `generics_self_usage` instead of being treated as
 /// module-level.
 fn mark_nested_in_class(functions: &mut [FunctionInfo], from: usize) {
     if let Some(nested) = functions.get_mut(from..) {
@@ -119,7 +119,7 @@ pub(super) fn collect_class_body(
                 functions.push(func_info);
                 // Any function collected from this method body is a closure
                 // lexically nested inside the class; mark the non-method ones so
-                // [generics_self_usage] does not treat their `Self` as module-level usage.
+                // `generics_self_usage` does not treat their `Self` as module-level usage.
                 let nested_start = functions.len();
                 collect_from_body(
                     &func.body,

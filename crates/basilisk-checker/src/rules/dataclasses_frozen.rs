@@ -1,5 +1,5 @@
-//! Implements [dataclasses_frozen] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! dataclasses_frozen: Assignment to attribute of a frozen dataclass instance, or invalid
+//! Implements [`dataclasses_frozen`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! `dataclasses_frozen`: Assignment to attribute of a frozen dataclass instance, or invalid
 //! frozen/non-frozen dataclass inheritance.
 //!
 //! `@dataclass(frozen=True)` instances are immutable — their attributes cannot
@@ -33,7 +33,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/dataclasses_frozen",
 };
 
-/// Emits dataclasses_frozen for:
+/// Emits `dataclasses_frozen` for:
 /// - Attribute assignments on frozen dataclass instances at module level.
 /// - Dataclass inheritance where frozen/non-frozen status is mixed.
 pub(crate) struct FrozenDataclassAssignment;

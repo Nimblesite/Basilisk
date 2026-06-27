@@ -1,4 +1,4 @@
-//! Tests for [literals_parameterizations_2] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+//! Tests for [`literals_parameterizations_2`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 // Integration tests for literals_parameterizations_2: Literal string enum.
 
 use super::common::*;

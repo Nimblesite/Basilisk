@@ -1,4 +1,4 @@
-//! Tests for [enums_members] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+//! Tests for [`enums_members`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for enums_members: Enum member annotated (covered also in `e0040_e0046`).
 
 use super::common::*;

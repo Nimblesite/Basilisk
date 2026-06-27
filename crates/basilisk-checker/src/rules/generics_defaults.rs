@@ -1,5 +1,5 @@
-//! Implements [generics_defaults] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! generics_defaults: Non-default `TypeVar` follows a default `TypeVar` in `Generic[...]`.
+//! Implements [`generics_defaults`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! `generics_defaults`: Non-default `TypeVar` follows a default `TypeVar` in `Generic[...]`.
 //!
 //! PEP 696 §Ordering defines two ordering rules for type parameters in `Generic[...]`:
 //!
@@ -30,7 +30,7 @@ struct TvMeta {
     is_paramspec: bool,
 }
 
-/// Emits generics_defaults when a non-default `TypeVar` follows a default `TypeVar` in `Generic[...]`,
+/// Emits `generics_defaults` when a non-default `TypeVar` follows a default `TypeVar` in `Generic[...]`,
 /// or when a defaulted `TypeVar` (not `ParamSpec`) follows a `TypeVarTuple`.
 pub(crate) struct NonDefaultAfterDefault;
 

@@ -3,10 +3,12 @@
 //!
 //! Fires when a package is imported and resolves to a `.py` source file (not
 //! `.pyi`) without a `py.typed` marker. This means the package is installed
-//! but lacks type information, reducing type safety. Strict-by-default: an
-//! untyped third-party import is a hard error. Projects can opt out per import
+//! but lacks type information, reducing type safety. This rule is off by
+//! default — the default configuration is pure PEP conformance — and a project
+//! opts in via configuration (`uv.stubSuggestions`). Once enabled, an untyped
+//! third-party import is a hard error; a project can soften it per import
 //! (`# type: warning[BSK-E0152]`) or globally (`"BSK-E0152" = "warning"`) to
-//! import non-type-safe libraries at their own risk.
+//! use non-type-safe libraries at its own risk.
 //!
 //! ```python
 //! import flask  # E0152: Package 'flask' is installed but has no type stubs
@@ -36,6 +38,13 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct MissingTypeStubs;
 
 impl Rule for MissingTypeStubs {
+    fn opt_in_spec(&self) -> Option<crate::rule_tags::OptInSpec> {
+        Some(crate::rule_tags::OptInSpec {
+            code: CODE.code,
+            tags: &["stubs"],
+        })
+    }
+
     fn check(
         &self,
         module: &ResolvedModule,

@@ -1,4 +1,4 @@
-//! Tests for [tuples_type_compat] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`tuples_type_compat`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for tuples_type_compat: Tuple starred-unpack compatibility.
 
 use super::common::*;

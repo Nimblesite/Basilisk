@@ -1,7 +1,7 @@
-//! Implements [typeddicts_extra_items] from [CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS].
+//! Implements [`typeddicts_extra_items`] from [CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS].
 //! See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPEDDICT-EXTRA-ITEMS
 //!
-//! typeddicts_extra_items: `TypedDict` `extra_items` / `closed` (PEP 728) violations.
+//! `typeddicts_extra_items`: `TypedDict` `extra_items` / `closed` (PEP 728) violations.
 //!
 //! Validates class-definition legality, dict-literal construction, assignability
 //! between `TypedDict`s, and constructor calls against the PEP 728 rules.
@@ -32,7 +32,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/typeddicts_extra_items",
 };
 
-/// Emits typeddicts_extra_items for PEP 728 `extra_items` / `closed` violations.
+/// Emits `typeddicts_extra_items` for PEP 728 `extra_items` / `closed` violations.
 pub(crate) struct TypedDictExtraItemsViolation;
 
 impl Rule for TypedDictExtraItemsViolation {

@@ -1,5 +1,5 @@
-//! Implements [generics_defaults_referential_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Helper types and functions for generics_defaults_referential_2.
+//! Implements [`generics_defaults_referential_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Helper types and functions for `generics_defaults_referential_2`.
 //!
 //! Provides source-level parsing of `TypeVar` definitions, argument splitting,
 //! numeric subtype checks, bracket matching, generic param resolution, and

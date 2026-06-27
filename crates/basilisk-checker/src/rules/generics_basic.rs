@@ -1,5 +1,5 @@
-//! Implements [generics_basic] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! generics_basic: `TypeVar` declared with exactly one constraint.
+//! Implements [`generics_basic`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! `generics_basic`: `TypeVar` declared with exactly one constraint.
 //!
 //! PEP 484 requires a `TypeVar` to have either zero constraints (unconstrained)
 //! or two or more constraints.  A single constraint makes no sense because it
@@ -16,7 +16,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_basic",
 };
 
-/// Emits generics_basic when a `TypeVar` is declared with exactly one constraint,
+/// Emits `generics_basic` when a `TypeVar` is declared with exactly one constraint,
 /// or when it has both constraints and a `bound=` keyword argument.
 pub(crate) struct TypeVarSingleConstraint;
 

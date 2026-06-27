@@ -15,7 +15,8 @@
 
 use std::path::Path;
 
-use basilisk_checker::{check, Severity};
+use basilisk_checker::{check, check_with_config, Severity};
+use basilisk_config::BasiliskConfig;
 use basilisk_parser::parse_file;
 use basilisk_resolver::resolve;
 
@@ -37,6 +38,25 @@ fn check_fixture(
     Ok(check(&resolved))
 }
 
+/// Check a fixture with the annotation house rules enabled in configuration —
+/// the off-by-default rules (`BSK-E0001`/`BSK-E0002`) these tests exercise. The
+/// default config is pure PEP conformance; a project opts these in. No modes;
+/// this is configuration. See [CHKARCH-CONFIGURATION-ONLY].
+fn check_fixture_strict(
+    name: &str,
+) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
+    let path = fixture(name);
+    let parsed = parse_file(&path)?;
+    let resolved = resolve(&parsed)?;
+    Ok(check_with_config(
+        &resolved,
+        &BasiliskConfig {
+            strict_annotations: true,
+            ..BasiliskConfig::default()
+        },
+    ))
+}
+
 #[test]
 fn all_annotated_produces_no_diagnostics() -> Result<(), Box<dyn std::error::Error>> {
     let diags = check_fixture("all_annotated.py")?;
@@ -49,7 +69,7 @@ fn all_annotated_produces_no_diagnostics() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn missing_param_annotation_produces_only_e0001() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = check_fixture("missing_param_annotation.py")?;
+    let diags = check_fixture_strict("missing_param_annotation.py")?;
     assert!(!diags.is_empty(), "should have diagnostics");
     assert!(
         diags.iter().all(|d| d.code.code == "BSK-E0001"),
@@ -67,7 +87,7 @@ fn missing_param_annotation_produces_only_e0001() -> Result<(), Box<dyn std::err
 
 #[test]
 fn missing_return_annotation_produces_only_e0002() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = check_fixture("missing_return_annotation.py")?;
+    let diags = check_fixture_strict("missing_return_annotation.py")?;
     assert!(!diags.is_empty(), "should have diagnostics");
     assert!(
         diags.iter().all(|d| d.code.code == "BSK-E0002"),
@@ -79,7 +99,7 @@ fn missing_return_annotation_produces_only_e0002() -> Result<(), Box<dyn std::er
 
 #[test]
 fn missing_both_produces_e0001_and_e0002() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = check_fixture("missing_both.py")?;
+    let diags = check_fixture_strict("missing_both.py")?;
     let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
     assert!(codes.contains(&"BSK-E0001"), "should contain BSK-E0001");
     assert!(codes.contains(&"BSK-E0002"), "should contain BSK-E0002");
@@ -92,7 +112,7 @@ fn missing_both_produces_e0001_and_e0002() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn all_diagnostics_have_valid_spans() -> Result<(), Box<dyn std::error::Error>> {
-    let diags = check_fixture("missing_both.py")?;
+    let diags = check_fixture_strict("missing_both.py")?;
     assert!(!diags.is_empty(), "fixture should produce diagnostics");
     for diag in &diags {
         assert!(
@@ -108,7 +128,7 @@ fn all_diagnostics_have_valid_spans() -> Result<(), Box<dyn std::error::Error>> 
 #[test]
 fn all_diagnostics_reference_correct_file_path() -> Result<(), Box<dyn std::error::Error>> {
     let path = fixture("missing_both.py");
-    let diags = check_fixture("missing_both.py")?;
+    let diags = check_fixture_strict("missing_both.py")?;
     for diag in &diags {
         assert_eq!(diag.path, path, "diagnostic path should match fixture path");
     }
@@ -120,7 +140,7 @@ fn missing_both_broken_has_two_params_flagged() -> Result<(), Box<dyn std::error
     // `broken(x, y)` has 2 unannotated params -> 2 x BSK-E0001
     // `also_broken(name)` has 1 unannotated param -> 1 x BSK-E0001
     // Both functions lack return annotation -> 2 x BSK-E0002
-    let diags = check_fixture("missing_both.py")?;
+    let diags = check_fixture_strict("missing_both.py")?;
     let e0001_count = diags.iter().filter(|d| d.code.code == "BSK-E0001").count();
     let e0002_count = diags.iter().filter(|d| d.code.code == "BSK-E0002").count();
     assert_eq!(e0001_count, 3, "expected 3 E0001s (x, y, name)");

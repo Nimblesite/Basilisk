@@ -1,4 +1,4 @@
-//! Tests for [qualifiers_final_annotation_2] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+//! Tests for [`qualifiers_final_annotation_2`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // Integration tests for qualifiers_final_annotation_2: Final type qualifier violations.
 
 use super::common::*;

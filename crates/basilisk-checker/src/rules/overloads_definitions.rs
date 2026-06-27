@@ -1,5 +1,5 @@
-//! Implements [overloads_definitions] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! overloads_definitions: Missing `@overload` implementation.
+//! Implements [`overloads_definitions`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! `overloads_definitions`: Missing `@overload` implementation.
 //!
 //! When a function name is defined multiple times and every definition carries
 //! the `@overload` decorator, there is no concrete implementation body.
@@ -23,7 +23,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/overloads_definitions",
 };
 
-/// Emits overloads_definitions when a set of `@overload` functions has no matching
+/// Emits `overloads_definitions` when a set of `@overload` functions has no matching
 /// implementation (a same-named function without `@overload`).
 pub(crate) struct MissingOverloadImpl;
 

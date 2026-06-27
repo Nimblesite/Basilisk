@@ -1,5 +1,5 @@
-//! Implements [dataclasses_postinit] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! dataclasses_postinit: `InitVar` field validation in dataclasses.
+//! Implements [`dataclasses_postinit`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `dataclasses_postinit`: `InitVar` field validation in dataclasses.
 //!
 //! Detects two categories of `InitVar` violations:
 //!
@@ -69,7 +69,7 @@ fn extract_initvar_inner(ann: &str) -> Option<&str> {
     rest.strip_suffix(']').map(str::trim)
 }
 
-/// Emits dataclasses_postinit for `InitVar` field violations in dataclasses.
+/// Emits `dataclasses_postinit` for `InitVar` field violations in dataclasses.
 pub(crate) struct InitVarViolation;
 
 impl Rule for InitVarViolation {

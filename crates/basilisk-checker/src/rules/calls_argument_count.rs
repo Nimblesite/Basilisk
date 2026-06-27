@@ -1,5 +1,5 @@
-//! Implements [calls_argument_count] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! calls_argument_count: Too few arguments in a function call.
+//! Implements [`calls_argument_count`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! `calls_argument_count`: Too few arguments in a function call.
 //!
 //! When a function is called with fewer positional arguments than it has
 //! required parameters (parameters without default values), Basilisk reports
@@ -35,7 +35,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/calls_argument_count",
 };
 
-/// Emits calls_argument_count for call sites with too few positional arguments.
+/// Emits `calls_argument_count` for call sites with too few positional arguments.
 pub(crate) struct TooFewArguments;
 
 impl Rule for TooFewArguments {

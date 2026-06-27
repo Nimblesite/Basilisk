@@ -38,6 +38,13 @@ const OVERRIDE_MIN_VERSION: (u32, u32) = (3, 12);
 pub(crate) struct MissingOverrideDecorator;
 
 impl Rule for MissingOverrideDecorator {
+    fn opt_in_spec(&self) -> Option<crate::rule_tags::OptInSpec> {
+        Some(crate::rule_tags::OptInSpec {
+            code: CODE.code,
+            tags: &["strictness"],
+        })
+    }
+
     fn check(
         &self,
         module: &ResolvedModule,

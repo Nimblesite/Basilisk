@@ -223,7 +223,7 @@ fn unpacked_tuple_inner(arg: &str) -> Option<&str> {
 ///   intact, matching the typing-spec rule that an unbounded tuple is preserved.
 ///
 /// Order is preserved (no member sorting), so genuinely different types such as
-/// `int` vs `int | str` stay distinct. Implements part of [directives_assert_type_2].
+/// `int` vs `int | str` stay distinct. Implements part of `directives_assert_type_2`.
 pub(super) fn canonicalize_type_str(ann: &str) -> String {
     let text = normalize_type_str(ann);
     let trimmed = text.trim();

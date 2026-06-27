@@ -1,5 +1,5 @@
-//! Implements [generics_variance_inference] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Method-call and constructor-call type checking for generics_variance_inference.
+//! Implements [`generics_variance_inference`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Method-call and constructor-call type checking for `generics_variance_inference`.
 
 use std::collections::{HashMap, HashSet};
 

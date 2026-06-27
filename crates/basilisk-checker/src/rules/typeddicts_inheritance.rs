@@ -1,7 +1,7 @@
-//! Implements [typeddicts_inheritance] from [CHKARCH-DIAG-OWNERSHIP] and
+//! Implements [`typeddicts_inheritance`] from [CHKARCH-DIAG-OWNERSHIP] and
 //! [CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE]. See
 //! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE
-//! typeddicts_inheritance: Invalid `TypedDict` inheritance.
+//! `typeddicts_inheritance`: Invalid `TypedDict` inheritance.
 //!
 //! PEP 589 and the typing spec place constraints on `TypedDict` inheritance:
 //!
@@ -259,7 +259,7 @@ fn check_conflicting_bases(
     }
 }
 
-/// Emits typeddicts_inheritance for invalid `TypedDict` inheritance.
+/// Emits `typeddicts_inheritance` for invalid `TypedDict` inheritance.
 pub(crate) struct InvalidTypedDictInheritance;
 
 impl Rule for InvalidTypedDictInheritance {

@@ -176,6 +176,15 @@ fn py_typed_packages_not_flagged_untyped_ones_still_fire() {
     .expect("write orm");
     std::fs::write(site.join("untypedpkg_fake/__init__.py"), "").expect("write untyped");
     std::fs::create_dir_all(dir.join("src")).expect("mkdir src");
+    // The untyped-package stub suggestion (BSK-E0152) is off by default — the
+    // default config is pure PEP conformance. Opt in via project config beside
+    // the checked sources, exactly as a user would. No modes; this is
+    // configuration. See [CHKARCH-CONFIGURATION-ONLY].
+    std::fs::write(
+        dir.join("src/basilisk.json"),
+        "{\"uv\": {\"stubSuggestions\": true}}\n",
+    )
+    .expect("write config");
     std::fs::write(
         dir.join("src/app.py"),
         "import typedpkg_fake\nfrom typedpkg_fake.orm import Session\nimport untypedpkg_fake\n",

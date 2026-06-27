@@ -1,5 +1,5 @@
-//! Implements [overloads_evaluation] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
-//! overloads_evaluation: Overload union expansion failure.
+//! Implements [`overloads_evaluation`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! `overloads_evaluation`: Overload union expansion failure.
 //!
 //! When a function-body call passes a union-typed argument to an overloaded
 //! function and, after expanding the union, at least one member fails to
@@ -31,7 +31,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/overloads_evaluation",
 };
 
-/// Emits overloads_evaluation when union expansion of arguments to an overloaded function
+/// Emits `overloads_evaluation` when union expansion of arguments to an overloaded function
 /// fails for some union member across all overloads.
 pub(crate) struct OverloadUnionExpansionFailure;
 

@@ -1,4 +1,4 @@
-//! dataclasses_transform_meta: `dataclass_transform` metaclass violations.
+//! `dataclasses_transform_meta`: `dataclass_transform` metaclass violations.
 //!
 //! Detects type errors in classes whose metaclass is decorated with
 //! `@dataclass_transform(...)`. Four violation kinds are covered:
@@ -44,7 +44,7 @@ use helpers::{
     collect_transform_classes, collect_transform_metaclasses, TransformClassDesc, CODE,
 };
 
-/// Emits dataclasses_transform_meta for violations related to `@dataclass_transform` metaclasses.
+/// Emits `dataclasses_transform_meta` for violations related to `@dataclass_transform` metaclasses.
 pub(crate) struct DataclassTransformMetaViolation;
 
 impl Rule for DataclassTransformMetaViolation {

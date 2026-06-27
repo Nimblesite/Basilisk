@@ -1,5 +1,5 @@
-//! Implements [dataclasses_kwonly] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! dataclasses_kwonly: Dataclass constructor argument violations.
+//! Implements [`dataclasses_kwonly`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! `dataclasses_kwonly`: Dataclass constructor argument violations.
 //!
 //! Reports errors when:
 //! - A positional argument is passed to a keyword-only dataclass field
@@ -31,7 +31,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/dataclasses_kwonly",
 };
 
-/// Emits dataclasses_kwonly for dataclass constructor argument violations:
+/// Emits `dataclasses_kwonly` for dataclass constructor argument violations:
 /// positional args to `kw_only` fields, and keyword args to `init=False` fields.
 pub(crate) struct DataclassKwOnlyViolation;
 

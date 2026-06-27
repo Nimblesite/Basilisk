@@ -578,7 +578,7 @@ mod tests {
         );
     }
 
-    /// Regression for issue #84: the imports_unresolved "add dependency" quick-fix must
+    /// Regression for issue #84: the `imports_unresolved` "add dependency" quick-fix must
     /// NOT offer `uv add` for a module name that is not a valid `PyPI`
     /// distribution. `_pydevd_bundle` is a debugpy-internal submodule whose
     /// name starts with `_`; `uv` rejects it ("Expected package name starting
@@ -674,7 +674,7 @@ mod tests {
         assert_create_local_stub_action(&actions, "requests", false);
     }
 
-    /// imports_module_attribute offers a one-click "add member to stub" fix that dispatches the
+    /// `imports_module_attribute` offers a one-click "add member to stub" fix that dispatches the
     /// `STUBS_ADD_MEMBER` command with the stub path and the inferred snippet.
     #[test]
     fn test_bsk_e0154_offers_add_member_action() {

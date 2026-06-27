@@ -1,4 +1,4 @@
-//! Tests for [namedtuples_usage] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`namedtuples_usage`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for namedtuples_usage: `NamedTuple` usage violations.
 
 use super::common::*;

@@ -1,4 +1,4 @@
-//! Tests for [dataclasses_inheritance] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Tests for [`dataclasses_inheritance`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 // Integration tests for dataclasses_inheritance: dataclass field without a default after one with a default.
 
 use super::common::*;

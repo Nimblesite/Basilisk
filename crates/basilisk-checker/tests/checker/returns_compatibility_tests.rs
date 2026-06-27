@@ -1,4 +1,4 @@
-//! Tests for [returns_compatibility] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+//! Tests for [`returns_compatibility`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for returns_compatibility: Return type mismatch. (The explicit-`Any`
 // warning was split out to BSK-W0014 — see w0014_tests.rs.)
 

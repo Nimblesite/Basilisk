@@ -1,5 +1,5 @@
-//! Implements [generics_typevartuple_basic] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! generics_typevartuple_basic: Invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword argument combination.
+//! Implements [`generics_typevartuple_basic`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! `generics_typevartuple_basic`: Invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword argument combination.
 //!
 //! PEP 484 / PEP 695 forbid certain combinations of keyword arguments in
 //! `TypeVar(...)` calls, and PEP 646 / PEP 612 restrict what kwargs
@@ -53,7 +53,7 @@ fn make_diag(msg: &str, span: basilisk_resolver::Span, path: &str) -> Diagnostic
     )
 }
 
-/// Emits generics_typevartuple_basic for invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword combinations.
+/// Emits `generics_typevartuple_basic` for invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword combinations.
 pub(crate) struct TypeVarInvalidKwargs;
 
 impl Rule for TypeVarInvalidKwargs {

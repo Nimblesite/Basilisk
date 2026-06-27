@@ -1,5 +1,5 @@
-//! Implements [classes_override] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! classes_override: Incompatible method override.
+//! Implements [`classes_override`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! `classes_override`: Incompatible method override.
 //!
 //! When a class method marked with `@override` has a different parameter
 //! signature or return type than the corresponding method in a same-module
@@ -32,7 +32,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/classes_override",
 };
 
-/// Emits classes_override for `@override` methods with incompatible signatures.
+/// Emits `classes_override` for `@override` methods with incompatible signatures.
 pub(crate) struct IncompatibleOverride;
 
 impl Rule for IncompatibleOverride {

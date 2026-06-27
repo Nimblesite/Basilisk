@@ -1,5 +1,5 @@
-//! Implements [generics_syntax_declarations_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! generics_syntax_declarations_2: Invalid attribute access on bounded type variable.
+//! Implements [`generics_syntax_declarations_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `generics_syntax_declarations_2`: Invalid attribute access on bounded type variable.
 //!
 //! When a PEP 695 type parameter has a bound (e.g., `T: str`), attribute
 //! accesses on parameters typed as `T` must be valid for the bound type.
@@ -22,7 +22,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_syntax_declarations_2",
 };
 
-/// Emits generics_syntax_declarations_2 for invalid attribute accesses on bounded type variables.
+/// Emits `generics_syntax_declarations_2` for invalid attribute accesses on bounded type variables.
 pub(crate) struct BoundedTypeVarAttrAccess;
 
 impl Rule for BoundedTypeVarAttrAccess {

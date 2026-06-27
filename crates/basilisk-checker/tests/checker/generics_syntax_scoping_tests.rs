@@ -1,4 +1,4 @@
-//! Tests for [generics_syntax_scoping] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`generics_syntax_scoping`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for generics_syntax_scoping: PEP 695 type parameter scoping.
 
 use super::common::*;

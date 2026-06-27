@@ -1,5 +1,5 @@
-//! Implements [generics_typevartuple_callable] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! generics_typevartuple_callable: `TypeVarTuple` callable/tuple argument mismatch.
+//! Implements [`generics_typevartuple_callable`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `generics_typevartuple_callable`: `TypeVarTuple` callable/tuple argument mismatch.
 //!
 //! When a constructor (or function) links two parameters via a `TypeVarTuple`
 //! -- one as `Callable[[*Ts], R]` and the other as `tuple[*Ts]` -- passing a
@@ -34,7 +34,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_typevartuple_callable",
 };
 
-/// Emits generics_typevartuple_callable when a tuple literal argument has elements whose types do
+/// Emits `generics_typevartuple_callable` when a tuple literal argument has elements whose types do
 /// not match the order inferred from a `TypeVarTuple`-linked `Callable` argument.
 pub(crate) struct TypeVarTupleCallableMismatch;
 

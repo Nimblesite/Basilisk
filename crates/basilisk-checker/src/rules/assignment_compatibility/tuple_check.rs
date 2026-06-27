@@ -1,5 +1,5 @@
-//! Implements [assignment_compatibility] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! Tuple assignment checking for assignment_compatibility.
+//! Implements [`assignment_compatibility`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Tuple assignment checking for `assignment_compatibility`.
 //!
 //! Validates that re-assignments to tuple-annotated module variables are
 //! compatible with the declared tuple type, checking element count and

@@ -1,5 +1,5 @@
-//! Implements [dataclasses_slots] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! dataclasses_slots: Dataclass slots violations.
+//! Implements [`dataclasses_slots`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `dataclasses_slots`: Dataclass slots violations.
 //!
 //! Reports errors when:
 //! - `self.attr = value` assigns to an attribute not in `__slots__` inside a
@@ -35,7 +35,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/dataclasses_slots",
 };
 
-/// Emits dataclasses_slots for dataclass slots violations.
+/// Emits `dataclasses_slots` for dataclass slots violations.
 pub(crate) struct DataclassSlotsViolation;
 
 impl Rule for DataclassSlotsViolation {

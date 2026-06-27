@@ -1,5 +1,5 @@
-//! Implements [generics_typevartuple_args] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! generics_typevartuple_args: `TypeVarTuple` argument count mismatch.
+//! Implements [`generics_typevartuple_args`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `generics_typevartuple_args`: `TypeVarTuple` argument count mismatch.
 //!
 //! When a constructor with `TypeVarTuple` parameters is called, the number of
 //! arguments must match the expected count inferred from the `TypeVarTuple`.
@@ -31,7 +31,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_typevartuple_args",
 };
 
-/// Emits generics_typevartuple_args when a constructor call has incorrect argument count for `TypeVarTuple`.
+/// Emits `generics_typevartuple_args` when a constructor call has incorrect argument count for `TypeVarTuple`.
 pub(crate) struct TypeVarTupleArgCountMismatch;
 
 impl Rule for TypeVarTupleArgCountMismatch {

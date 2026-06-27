@@ -1,5 +1,5 @@
-//! Implements [enums_member_values] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! enums_member_values: Enum member value incompatible with `_value_` type annotation.
+//! Implements [`enums_member_values`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! `enums_member_values`: Enum member value incompatible with `_value_` type annotation.
 //!
 //! When an enum class declares `_value_: T` (annotation-only, no value), all
 //! member values assigned in the class body must be compatible with `T`.
@@ -32,7 +32,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/enums_member_values",
 };
 
-/// Emits enums_member_values when an enum member value is incompatible with `_value_: T`.
+/// Emits `enums_member_values` when an enum member value is incompatible with `_value_: T`.
 pub(crate) struct EnumValueTypeMismatch;
 
 impl Rule for EnumValueTypeMismatch {

@@ -1,4 +1,4 @@
-//! Tests for [generics_self_attributes] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
+//! Tests for [`generics_self_attributes`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 // Integration tests for generics_self_attributes: Self-typed attribute incompatibility.
 
 use super::common::*;

@@ -1,8 +1,8 @@
 //! Tests for [CHKARCH-VERSION-TARGET] / [CHKARCH-VERSION-NARROWING].
 //! See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET
 //!
-//! Issue #93: the configured `python_version` must reach every rule. directives_version_platform
-//! dead-branch analysis and the version_target_syntax PEP 695 syntax gate must follow the
+//! Issue #93: the configured `python_version` must reach every rule. `directives_version_platform`
+//! dead-branch analysis and the `version_target_syntax` PEP 695 syntax gate must follow the
 //! *configured* target, not a hardcoded 3.12.
 
 use super::common::*;

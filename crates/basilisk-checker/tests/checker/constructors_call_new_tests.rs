@@ -1,4 +1,4 @@
-//! Tests for [constructors_call_new] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
+//! Tests for [`constructors_call_new`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 // Integration tests for constructors_call_new: `Constructor __new__ mismatch`.
 
 use super::common::*;

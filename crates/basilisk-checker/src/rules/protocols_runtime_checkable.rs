@@ -1,5 +1,5 @@
-//! Implements [protocols_runtime_checkable] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! protocols_runtime_checkable: Protocol `isinstance`/`issubclass` violations.
+//! Implements [`protocols_runtime_checkable`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `protocols_runtime_checkable`: Protocol `isinstance`/`issubclass` violations.
 //!
 //! Per PEP 544:
 //! - A protocol can be used as the second argument to `isinstance()` or
@@ -34,7 +34,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/protocols_runtime_checkable",
 };
 
-/// Emits protocols_runtime_checkable for `isinstance`/`issubclass` calls violating protocol
+/// Emits `protocols_runtime_checkable` for `isinstance`/`issubclass` calls violating protocol
 /// runtime-checkable constraints.
 pub(crate) struct ProtocolRuntimeCheckableViolation;
 

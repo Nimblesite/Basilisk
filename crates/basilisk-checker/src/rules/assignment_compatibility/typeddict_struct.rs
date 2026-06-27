@@ -1,4 +1,4 @@
-//! Implements [assignment_compatibility] from [CHKARCH-DIAG]. See
+//! Implements [`assignment_compatibility`] from [CHKARCH-DIAG]. See
 //! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //!
 //! PEP 705-aware structural assignability for `TypedDict`-to-`TypedDict`

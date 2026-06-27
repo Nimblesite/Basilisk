@@ -1,4 +1,4 @@
-//! Tests for [enums_expansion] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+//! Tests for [`enums_expansion`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 // Tests for enums_expansion: `assert_type` with `Literal[Enum.MEMBER]` on enum-typed param.
 //
 // This rule detects when `assert_type()` is used with a `Literal[Enum.MEMBER]` type

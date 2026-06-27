@@ -42,7 +42,7 @@ pub enum PackageDepKind {
 
 /// Why an import could not be resolved.
 ///
-/// Used by imports_unresolved to produce context-aware diagnostic messages when uv
+/// Used by `imports_unresolved` to produce context-aware diagnostic messages when uv
 /// package registry information is available.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnresolvedReason {

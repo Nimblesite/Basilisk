@@ -1,5 +1,5 @@
-//! Implements [generics_variance_inference] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Variance assignment checking for generics_variance_inference.
+//! Implements [`generics_variance_inference`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Variance assignment checking for `generics_variance_inference`.
 //!
 //! Checks module-level and function-body assignments for variance
 //! compatibility with inferred type parameter variances.

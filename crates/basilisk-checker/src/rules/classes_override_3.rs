@@ -1,5 +1,5 @@
-//! Implements [classes_override_3] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! classes_override_3: `@override` on a method with no matching ancestor method.
+//! Implements [`classes_override_3`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! `classes_override_3`: `@override` on a method with no matching ancestor method.
 //!
 //! PEP 698 — a method decorated `@override` (or `typing.override`) must actually
 //! override a method declared in a base class. When no ancestor declares a
@@ -43,7 +43,7 @@ fn is_override(decorator: &str) -> bool {
     decorator == "override" || decorator.ends_with(".override")
 }
 
-/// Emits classes_override_3 for `@override` methods that override nothing.
+/// Emits `classes_override_3` for `@override` methods that override nothing.
 pub(crate) struct OverrideWithoutBaseMethod;
 
 impl Rule for OverrideWithoutBaseMethod {

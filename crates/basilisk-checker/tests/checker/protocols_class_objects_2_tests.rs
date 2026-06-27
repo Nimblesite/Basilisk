@@ -1,4 +1,4 @@
-//! Tests for [protocols_class_objects_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`protocols_class_objects_2`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for protocols_class_objects_2: Protocol class object violations.
 
 use super::common::*;

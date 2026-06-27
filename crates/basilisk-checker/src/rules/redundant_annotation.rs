@@ -28,6 +28,13 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct RedundantAnnotationWarning;
 
 impl Rule for RedundantAnnotationWarning {
+    fn opt_in_spec(&self) -> Option<crate::rule_tags::OptInSpec> {
+        Some(crate::rule_tags::OptInSpec {
+            code: CODE.code,
+            tags: &["redundancy", "style"],
+        })
+    }
+
     fn check(
         &self,
         module: &ResolvedModule,

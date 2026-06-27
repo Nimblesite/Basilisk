@@ -1,5 +1,5 @@
-//! Implements [generics_base_class_3] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! generics_base_class_3: Invariant generic type mismatch at call site.
+//! Implements [`generics_base_class_3`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `generics_base_class_3`: Invariant generic type mismatch at call site.
 //!
 //! When a function parameter expects a parameterised generic like
 //! `dict[str, list[object]]` and a subclass whose base parameterisation
@@ -29,7 +29,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_base_class_3",
 };
 
-/// Emits generics_base_class_3 for calls where a subclass argument is incompatible
+/// Emits `generics_base_class_3` for calls where a subclass argument is incompatible
 /// with a parameterised generic parameter due to invariance.
 pub(crate) struct InvariantGenericArgMismatch;
 

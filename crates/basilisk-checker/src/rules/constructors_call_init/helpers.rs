@@ -1,5 +1,5 @@
-//! Implements [constructors_call_init] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Helper functions for constructors_call_init: Constructor call errors.
+//! Implements [`constructors_call_init`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Helper functions for `constructors_call_init`: Constructor call errors.
 
 use std::collections::HashMap;
 
@@ -12,7 +12,7 @@ use crate::span_util::slice_span;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-/// Error code for constructors_call_init diagnostics.
+/// Error code for `constructors_call_init` diagnostics.
 pub(super) const CODE: ErrorCode = ErrorCode {
     code: "constructors_call_init",
     docs_url: "https://www.basilisk-python.dev/errors/constructors_call_init",

@@ -1,4 +1,4 @@
-//! annotations_generators_2: Generator yield/send/return type mismatch.
+//! `annotations_generators_2`: Generator yield/send/return type mismatch.
 //!
 //! When a function is annotated with `Generator[Y, S, R]`, `Iterator[Y]`,
 //! or `Iterable[Y]`, the yield expressions must produce values compatible
@@ -40,7 +40,7 @@ pub(crate) const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/annotations_generators_2",
 };
 
-/// Emits annotations_generators_2 for generator yield/send/return type mismatches.
+/// Emits `annotations_generators_2` for generator yield/send/return type mismatches.
 pub(crate) struct GeneratorTypeMismatch;
 
 impl Rule for GeneratorTypeMismatch {

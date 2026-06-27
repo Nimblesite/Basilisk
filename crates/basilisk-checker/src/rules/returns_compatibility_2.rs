@@ -1,5 +1,5 @@
-//! Implements [returns_compatibility_2] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! returns_compatibility_2: Return type mismatch — inferred return type incompatible with annotation.
+//! Implements [`returns_compatibility_2`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! `returns_compatibility_2`: Return type mismatch — inferred return type incompatible with annotation.
 //!
 //! When a function has a return type annotation, the inferred return type must be
 //! assignable to the declared type. This extends the original `-> None` check to
@@ -19,7 +19,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/returns_compatibility_2",
 };
 
-/// Emits returns_compatibility_2 for return type mismatches using inference system.
+/// Emits `returns_compatibility_2` for return type mismatches using inference system.
 pub(crate) struct ReturnTypeMismatch;
 
 impl Rule for ReturnTypeMismatch {

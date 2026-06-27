@@ -1,5 +1,5 @@
-//! Implements [namedtuples_usage] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! namedtuples_usage: `NamedTuple` usage violations.
+//! Implements [`namedtuples_usage`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `namedtuples_usage`: `NamedTuple` usage violations.
 //!
 //! Detects invalid usage of `NamedTuple` instances:
 //!
@@ -42,7 +42,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/namedtuples_usage",
 };
 
-/// Emits namedtuples_usage for invalid `NamedTuple` usage.
+/// Emits `namedtuples_usage` for invalid `NamedTuple` usage.
 pub(crate) struct NamedTupleUsageViolation;
 
 impl Rule for NamedTupleUsageViolation {

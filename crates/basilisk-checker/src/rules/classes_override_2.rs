@@ -1,5 +1,5 @@
-//! Implements [classes_override_2] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! classes_override_2: Incompatible class attribute override.
+//! Implements [`classes_override_2`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! `classes_override_2`: Incompatible class attribute override.
 //!
 //! When a child class declares an attribute that also exists in a same-module
 //! base class but with a different type annotation, Basilisk reports an
@@ -43,7 +43,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/classes_override_2",
 };
 
-/// Emits classes_override_2 for class attributes that override a base-class attribute
+/// Emits `classes_override_2` for class attributes that override a base-class attribute
 /// with a different type annotation.
 pub(crate) struct IncompatibleVariableOverride;
 

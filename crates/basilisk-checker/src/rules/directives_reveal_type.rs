@@ -1,5 +1,5 @@
-//! Implements [directives_reveal_type] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! directives_reveal_type: Invalid `reveal_type()` call.
+//! Implements [`directives_reveal_type`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! `directives_reveal_type`: Invalid `reveal_type()` call.
 //!
 //! `reveal_type(expr)` must be called with exactly one positional argument.
 //!
@@ -17,7 +17,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/directives_reveal_type",
 };
 
-/// Emits directives_reveal_type for invalid `reveal_type()` calls.
+/// Emits `directives_reveal_type` for invalid `reveal_type()` calls.
 pub(crate) struct InvalidRevealTypeCall;
 
 impl Rule for InvalidRevealTypeCall {

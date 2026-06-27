@@ -1,5 +1,5 @@
-//! Implements [protocols_subtyping] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! protocols_subtyping: Protocol attribute tuple element type mismatch.
+//! Implements [`protocols_subtyping`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `protocols_subtyping`: Protocol attribute tuple element type mismatch.
 //!
 //! When a class explicitly implements a `Protocol` and assigns to a
 //! `self.attr` in `__init__` where `attr` is declared as `tuple[T1, T2, ...]`
@@ -35,7 +35,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/protocols_subtyping",
 };
 
-/// Emits protocols_subtyping when a tuple assignment to a protocol attribute has
+/// Emits `protocols_subtyping` when a tuple assignment to a protocol attribute has
 /// element types that don't match the protocol's declaration.
 pub(crate) struct ProtocolTupleElementMismatch;
 

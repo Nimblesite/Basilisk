@@ -1,4 +1,4 @@
-//! Tests for [generics_syntax_compatibility] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
+//! Tests for [`generics_syntax_compatibility`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-IMMUTABILITY
 // Integration tests for generics_syntax_compatibility: PEP 695 mixed with traditional `TypeVar`.
 
 use super::common::*;

@@ -1,5 +1,5 @@
-//! Implements [generics_upper_bound_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! generics_upper_bound_2: `TypeVar` bound violation at call site.
+//! Implements [`generics_upper_bound_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `generics_upper_bound_2`: `TypeVar` bound violation at call site.
 //!
 //! When a function has a parameter typed with a `TypeVar` that has a `bound`,
 //! and a call passes an argument whose type is not a subtype of that bound,
@@ -29,7 +29,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_upper_bound_2",
 };
 
-/// Emits generics_upper_bound_2 when a call-site argument type violates a `TypeVar`'s bound.
+/// Emits `generics_upper_bound_2` when a call-site argument type violates a `TypeVar`'s bound.
 pub(crate) struct TypeVarBoundCallViolation;
 
 /// Map of bound type → list of types that are NOT subtypes of that bound.

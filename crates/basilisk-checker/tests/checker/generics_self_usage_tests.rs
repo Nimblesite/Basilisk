@@ -1,4 +1,4 @@
-//! Tests for [generics_self_usage] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+//! Tests for [`generics_self_usage`] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
 // Integration tests for generics_self_usage: Self type in invalid location.
 
 use super::common::*;

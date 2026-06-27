@@ -1,5 +1,5 @@
-//! Implements [literals_semantics_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! literals_semantics_2: Literal value assignment incompatibility.
+//! Implements [`literals_semantics_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `literals_semantics_2`: Literal value assignment incompatibility.
 //!
 //! Detects two classes of Literal-related assignment errors inside function bodies:
 //!
@@ -34,7 +34,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/literals_semantics_2",
 };
 
-/// Emits literals_semantics_2 for Literal value assignment incompatibilities.
+/// Emits `literals_semantics_2` for Literal value assignment incompatibilities.
 pub(crate) struct LiteralValueIncompatible;
 
 impl Rule for LiteralValueIncompatible {

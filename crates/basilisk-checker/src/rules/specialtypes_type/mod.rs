@@ -1,4 +1,4 @@
-//! specialtypes_type: Invalid `type[X]` usage violations.
+//! `specialtypes_type`: Invalid `type[X]` usage violations.
 //!
 //! Detects several categories of invalid use of `type[X]` (or `Type[X]`):
 //!
@@ -41,7 +41,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/specialtypes_type",
 };
 
-/// Emits specialtypes_type for invalid `type[X]` usages.
+/// Emits `specialtypes_type` for invalid `type[X]` usages.
 pub(crate) struct TypeBracketViolation;
 
 impl Rule for TypeBracketViolation {

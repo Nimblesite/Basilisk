@@ -1,5 +1,5 @@
-//! Implements [protocols_variance] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! protocols_variance: Protocol variance violation.
+//! Implements [`protocols_variance`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `protocols_variance`: Protocol variance violation.
 //!
 //! Detects when a Protocol class declares `TypeVar`s with incorrect variance
 //! based on how they are used in method signatures:
@@ -53,7 +53,7 @@ enum Variance {
     Contravariant,
 }
 
-/// protocols_variance: Protocol variance violation.
+/// `protocols_variance`: Protocol variance violation.
 pub(crate) struct ProtocolVarianceViolation;
 
 /// Check whether `text` contains `name` as a whole word (not as a substring

@@ -1,5 +1,5 @@
-//! Implements [dataclasses_hash] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! dataclasses_hash: Non-hashable dataclass assigned to a `Hashable`-annotated variable.
+//! Implements [`dataclasses_hash`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! `dataclasses_hash`: Non-hashable dataclass assigned to a `Hashable`-annotated variable.
 //!
 //! A `@dataclass` with `eq=True` (the default) sets `__hash__` to `None` unless
 //! the class is `frozen=True`, uses `unsafe_hash=True`, or explicitly defines
@@ -44,7 +44,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/dataclasses_hash",
 };
 
-/// Emits dataclasses_hash when a non-hashable dataclass instance is assigned to a
+/// Emits `dataclasses_hash` when a non-hashable dataclass instance is assigned to a
 /// `Hashable`-annotated variable.
 pub(crate) struct NonHashableDataclassAssignment;
 

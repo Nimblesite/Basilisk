@@ -1,5 +1,5 @@
-//! Implements [directives_cast] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! directives_cast: Invalid `cast()` call.
+//! Implements [`directives_cast`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! `directives_cast`: Invalid `cast()` call.
 //!
 //! `typing.cast(typ, val)` must be called with exactly two positional arguments,
 //! and the first argument must be a type expression, not a value literal.
@@ -19,7 +19,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/directives_cast",
 };
 
-/// Emits directives_cast for invalid `cast()` calls.
+/// Emits `directives_cast` for invalid `cast()` calls.
 pub(crate) struct InvalidCastCall;
 
 impl Rule for InvalidCastCall {

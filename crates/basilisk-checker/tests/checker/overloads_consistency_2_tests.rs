@@ -1,4 +1,4 @@
-//! Tests for [overloads_consistency_2] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Tests for [`overloads_consistency_2`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
 // Integration tests for overloads_consistency_2: inconsistent decorators across an overload group.
 
 use super::common::*;

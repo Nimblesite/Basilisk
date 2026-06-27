@@ -1,4 +1,4 @@
-//! Tests for [generics_defaults_referential] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`generics_defaults_referential`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for generics_defaults_referential: `TypeVar` default referential violation.
 
 use super::common::*;

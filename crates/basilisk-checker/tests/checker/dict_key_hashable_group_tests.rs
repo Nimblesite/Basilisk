@@ -1,4 +1,4 @@
-//! Tests for [dict_key_hashable]-[match_exhaustiveness] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+//! Tests for [`dict_key_hashable`]-[`match_exhaustiveness`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for dict_key_hashable (unhashable dict key) and match_exhaustiveness (non-exhaustive match).
 
 use super::common::*;

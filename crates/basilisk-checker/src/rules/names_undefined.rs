@@ -1,5 +1,5 @@
-//! Implements [names_undefined] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! names_undefined: Undefined variable used in a return statement.
+//! Implements [`names_undefined`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! `names_undefined`: Undefined variable used in a return statement.
 //!
 //! Flags any name referenced in a `return` expression — bare (`return x`), the
 //! base of an attribute/subscript chain (`return x.y`), a call argument, or the
@@ -25,7 +25,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/names_undefined",
 };
 
-/// Emits names_undefined for return statements that reference undefined names.
+/// Emits `names_undefined` for return statements that reference undefined names.
 pub(crate) struct UndefinedVariable;
 
 impl Rule for UndefinedVariable {

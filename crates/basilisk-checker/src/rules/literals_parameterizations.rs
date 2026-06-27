@@ -1,5 +1,5 @@
-//! Implements [literals_parameterizations] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! literals_parameterizations: Invalid `Literal` parameterization.
+//! Implements [`literals_parameterizations`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! `literals_parameterizations`: Invalid `Literal` parameterization.
 //!
 //! PEP 586 restricts what values may appear inside `Literal[...]`.
 //! Only these are legal:
@@ -181,7 +181,7 @@ fn is_complete_string_literal(arg: &str) -> bool {
 // Rule
 // ---------------------------------------------------------------------------
 
-/// Emits literals_parameterizations for invalid `Literal[...]` parameterizations.
+/// Emits `literals_parameterizations` for invalid `Literal[...]` parameterizations.
 pub(crate) struct InvalidLiteralParam;
 
 impl Rule for InvalidLiteralParam {

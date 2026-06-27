@@ -8,7 +8,7 @@
     clippy::as_conversions
 )]
 //! Integration tests for advanced checker rules with low coverage.
-//! Exercises aliases_type_statement through generics_syntax_scoping and complex type scenarios.
+//! Exercises `aliases_type_statement` through `generics_syntax_scoping` and complex type scenarios.
 #![allow(missing_docs)]
 
 use basilisk_checker::check;

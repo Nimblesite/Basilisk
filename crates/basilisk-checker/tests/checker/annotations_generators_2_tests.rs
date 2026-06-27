@@ -1,4 +1,4 @@
-//! Tests for [annotations_generators_2] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`annotations_generators_2`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for annotations_generators_2: Generator yield/send/return type mismatch.
 
 use super::common::*;

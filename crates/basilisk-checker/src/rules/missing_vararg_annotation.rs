@@ -1,8 +1,10 @@
 //! Implements [BSK-E0004] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
 //! BSK-E0004: Missing `*args` / `**kwargs` type annotation.
 //!
-//! Every variadic positional parameter (`*args`) and variadic keyword parameter
-//! (`**kwargs`) must carry an explicit type annotation in strict Basilisk code.
+//! This house rule is off by default — the default configuration is pure PEP
+//! conformance. When a project enables it, every variadic positional parameter
+//! (`*args`) and variadic keyword parameter (`**kwargs`) must carry an explicit
+//! type annotation.
 
 use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule};
 
@@ -21,6 +23,13 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct MissingVarArgAnnotation;
 
 impl Rule for MissingVarArgAnnotation {
+    fn opt_in_spec(&self) -> Option<crate::rule_tags::OptInSpec> {
+        Some(crate::rule_tags::OptInSpec {
+            code: CODE.code,
+            tags: &["strictness"],
+        })
+    }
+
     fn check(
         &self,
         module: &ResolvedModule,

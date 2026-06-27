@@ -1,5 +1,5 @@
-//! Implements [assignment_compatibility] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! Recursive type-alias value matching for assignment_compatibility.
+//! Implements [`assignment_compatibility`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! Recursive type-alias value matching for `assignment_compatibility`.
 //!
 //! Legacy type aliases such as
 //!

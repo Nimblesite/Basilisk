@@ -170,7 +170,7 @@ pub(super) fn expr_to_type_arg(expr: &Expr) -> TypeArg {
 /// narrowing so post-guard assertions compare against the narrowed type.
 ///
 /// Delegates to [`super::assert_narrow`]; see that module for the narrowing
-/// rules ([directives_assert_type_2]).
+/// rules (`directives_assert_type_2`).
 pub(crate) fn collect_assert_type_calls_from_stmts(
     stmts: &[Stmt],
     source: &str,

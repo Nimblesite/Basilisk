@@ -1086,7 +1086,7 @@ mod tests {
 
     /// Regression for issue #25: when the user activates a venv outside the
     /// workspace (e.g. CI installs to `/tmp/nap-ci-prep-py312`), Basilisk
-    /// could not locate site-packages and reported imports_unresolved `NeedsSync` for
+    /// could not locate site-packages and reported `imports_unresolved` `NeedsSync` for
     /// every installed dep. Honour the `VIRTUAL_ENV` environment variable —
     /// the standard Python convention set by `source .venv/bin/activate`.
     #[test]

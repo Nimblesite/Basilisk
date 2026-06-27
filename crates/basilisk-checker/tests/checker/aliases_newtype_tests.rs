@@ -1,4 +1,4 @@
-//! Tests for [aliases_newtype] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+//! Tests for [`aliases_newtype`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // E2E tests for aliases_newtype: Invalid `NewType(...)` call.
 
 use super::common::*;

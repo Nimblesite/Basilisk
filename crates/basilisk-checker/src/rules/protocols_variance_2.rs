@@ -1,5 +1,5 @@
-//! Implements [protocols_variance_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! protocols_variance_2: Protocol `TypeVar` variance mismatch.
+//! Implements [`protocols_variance_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `protocols_variance_2`: Protocol `TypeVar` variance mismatch.
 //!
 //! When a generic protocol class declares a `TypeVar` as invariant but the
 //! inferred variance (from method parameter and return positions) is strictly
@@ -132,7 +132,7 @@ enum InferredVariance {
     Unused,
 }
 
-/// Emits protocols_variance_2 for protocol `TypeVar` variance mismatches.
+/// Emits `protocols_variance_2` for protocol `TypeVar` variance mismatches.
 pub(crate) struct ProtocolVarianceMismatch;
 
 impl Rule for ProtocolVarianceMismatch {

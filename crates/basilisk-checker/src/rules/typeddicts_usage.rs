@@ -1,5 +1,5 @@
-//! Implements [typeddicts_usage] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! typeddicts_usage: `TypedDict` runtime violation.
+//! Implements [`typeddicts_usage`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `typeddicts_usage`: `TypedDict` runtime violation.
 //!
 //! PEP 589 defines constraints on what you can do with `TypedDict` type objects at runtime:
 //!
@@ -29,7 +29,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/typeddicts_usage",
 };
 
-/// Emits typeddicts_usage for `TypedDict` runtime violations.
+/// Emits `typeddicts_usage` for `TypedDict` runtime violations.
 pub(crate) struct TypedDictRuntimeViolation;
 
 impl Rule for TypedDictRuntimeViolation {

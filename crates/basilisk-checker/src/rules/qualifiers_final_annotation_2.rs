@@ -1,5 +1,5 @@
-//! Implements [qualifiers_final_annotation_2] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! qualifiers_final_annotation_2: `Final` type qualifier annotation violations.
+//! Implements [`qualifiers_final_annotation_2`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! `qualifiers_final_annotation_2`: `Final` type qualifier annotation violations.
 //!
 //! Detects violations of PEP 591's rules for the `Final` qualifier, beyond the
 //! positional errors handled by E0044. Specifically:
@@ -103,7 +103,7 @@ fn collect_class_final_attr_map(module: &ResolvedModule) -> HashMap<String, Hash
         .collect()
 }
 
-/// Emits qualifiers_final_annotation_2 for `Final` annotation violations collected during resolution.
+/// Emits `qualifiers_final_annotation_2` for `Final` annotation violations collected during resolution.
 pub(crate) struct FinalAnnotationViolation;
 
 impl Rule for FinalAnnotationViolation {

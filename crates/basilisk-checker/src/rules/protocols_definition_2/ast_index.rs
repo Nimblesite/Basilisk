@@ -1,5 +1,5 @@
-//! Implements [protocols_definition_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! AST index for protocols_definition_2 protocol conformance.
+//! Implements [`protocols_definition_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! AST index for `protocols_definition_2` protocol conformance.
 //!
 //! E0121's structural checks need information the resolver's flattened
 //! [`FunctionInfo`](basilisk_resolver::FunctionInfo) does not preserve:

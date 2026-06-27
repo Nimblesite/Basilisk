@@ -462,7 +462,7 @@ pub(super) fn is_wildcard_pattern(pattern: &Pattern) -> bool {
 /// `true` if the match performs structural decomposition (sequence/mapping
 /// patterns). Such matches narrow open-ended shapes (e.g. tuple unions of mixed
 /// arity) where a catch-all is not required for correctness, so exhaustiveness
-/// (match_exhaustiveness) does not apply — matching the reference checkers, which do not
+/// (`match_exhaustiveness`) does not apply — matching the reference checkers, which do not
 /// flag these.
 fn case_has_structural_pattern(case: &MatchCase) -> bool {
     fn is_structural(pattern: &Pattern) -> bool {

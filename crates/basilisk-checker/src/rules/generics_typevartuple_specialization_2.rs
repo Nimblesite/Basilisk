@@ -1,5 +1,5 @@
-//! Implements [generics_typevartuple_specialization_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! generics_typevartuple_specialization_2: Invalid `TypeVarTuple` specialization of generic alias.
+//! Implements [`generics_typevartuple_specialization_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `generics_typevartuple_specialization_2`: Invalid `TypeVarTuple` specialization of generic alias.
 //!
 //! Two related violations are detected:
 //!
@@ -45,7 +45,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_typevartuple_specialization_2",
 };
 
-/// Emits generics_typevartuple_specialization_2 for invalid `TypeVarTuple` specializations of generic aliases.
+/// Emits `generics_typevartuple_specialization_2` for invalid `TypeVarTuple` specializations of generic aliases.
 pub(crate) struct TypeVarTupleSpecializationViolation;
 
 impl Rule for TypeVarTupleSpecializationViolation {

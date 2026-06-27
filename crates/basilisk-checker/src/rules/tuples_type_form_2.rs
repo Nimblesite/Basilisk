@@ -1,5 +1,5 @@
-//! Implements [tuples_type_form_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! tuples_type_form_2: Invalid tuple type syntax.
+//! Implements [`tuples_type_form_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `tuples_type_form_2`: Invalid tuple type syntax.
 //!
 //! Validates tuple type annotations according to PEP 646 rules:
 //!
@@ -31,7 +31,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/tuples_type_form_2",
 };
 
-/// Emits tuples_type_form_2 for invalid tuple type syntax.
+/// Emits `tuples_type_form_2` for invalid tuple type syntax.
 pub(crate) struct InvalidTupleTypeSyntax;
 
 impl Rule for InvalidTupleTypeSyntax {

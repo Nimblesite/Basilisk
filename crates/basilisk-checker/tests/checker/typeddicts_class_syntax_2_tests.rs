@@ -1,4 +1,4 @@
-//! Tests for [typeddicts_class_syntax_2] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+//! Tests for [`typeddicts_class_syntax_2`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 // Integration tests for typeddicts_class_syntax_2: Invalid `TypedDict` keyword.
 
 use super::common::*;

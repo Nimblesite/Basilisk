@@ -1,5 +1,5 @@
-//! Implements [directives_assert_type_2] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
-//! directives_assert_type_2: `assert_type()` type mismatch.
+//! Implements [`directives_assert_type_2`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-structural
+//! `directives_assert_type_2`: `assert_type()` type mismatch.
 //!
 //! `assert_type(expr, Type)` is a static-analysis directive that verifies the
 //! inferred type of `expr` equals `Type`.  When the resolver can determine both
@@ -23,7 +23,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/directives_assert_type_2",
 };
 
-/// Emits directives_assert_type_2 when `assert_type(expr, T)` has a detectable type mismatch.
+/// Emits `directives_assert_type_2` when `assert_type(expr, T)` has a detectable type mismatch.
 ///
 /// Currently disabled — requires full type inference to avoid false positives.
 /// Re-enable in `mod.rs` `run_all()` once the type engine is in place.

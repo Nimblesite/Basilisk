@@ -1,6 +1,6 @@
-//! Tests for [constructors_callable] from [CHKARCH-DIAG-CTOR-CALLABLE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CTOR-CALLABLE
+//! Tests for [`constructors_callable`] from [CHKARCH-DIAG-CTOR-CALLABLE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CTOR-CALLABLE
 //!
-//! constructors_callable validates calls to a variable bound to a class's
+//! `constructors_callable` validates calls to a variable bound to a class's
 //! constructor-to-callable conversion (the typing-spec rule "Converting a
 //! constructor to callable").
 #![allow(

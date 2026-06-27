@@ -1,6 +1,6 @@
-//! Implements [generics_syntax_scoping] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`generics_syntax_scoping`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! PEP 695 type-alias misuse (violation 7) and type-argument bound checks
-//! (violation 8) for generics_syntax_scoping.
+//! (violation 8) for `generics_syntax_scoping`.
 //!
 //! Attribute accesses and alias type-parameter bounds are sourced from
 //! `ruff_python_ast` nodes (via [`basilisk_resolver::Pep695Scoping`]), never

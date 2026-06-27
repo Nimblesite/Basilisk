@@ -1,4 +1,4 @@
-//! Tests for [dataclasses_slots] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`dataclasses_slots`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for dataclasses_slots: Dataclass slots violations.
 
 use super::common::*;

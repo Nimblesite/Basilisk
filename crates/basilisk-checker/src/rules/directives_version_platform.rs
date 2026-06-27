@@ -1,5 +1,5 @@
-//! Implements [directives_version_platform] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! directives_version_platform: Variable defined only in dead version/platform branch.
+//! Implements [`directives_version_platform`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `directives_version_platform`: Variable defined only in dead version/platform branch.
 //!
 //! When `sys.version_info`, `sys.platform`, or `os.name` is compared against
 //! a constant, one branch may be statically known to be dead for the
@@ -34,7 +34,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/directives_version_platform",
 };
 
-/// Emits directives_version_platform for variables defined only in dead version/platform branches.
+/// Emits `directives_version_platform` for variables defined only in dead version/platform branches.
 pub(crate) struct DeadBranchVariable;
 
 impl Rule for DeadBranchVariable {

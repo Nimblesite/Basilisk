@@ -1,5 +1,5 @@
-//! Implements [protocols_explicit_3] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! protocols_explicit_3: `super()` call on abstract protocol method with no default implementation.
+//! Implements [`protocols_explicit_3`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `protocols_explicit_3`: `super()` call on abstract protocol method with no default implementation.
 //!
 //! When a class explicitly implements a `Protocol` and one of its methods
 //! calls `super().method_name()`, the parent protocol method must provide a
@@ -35,7 +35,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/protocols_explicit_3",
 };
 
-/// Emits protocols_explicit_3 when a method calls `super().method()` on an abstract
+/// Emits `protocols_explicit_3` when a method calls `super().method()` on an abstract
 /// protocol method that has no default implementation.
 pub(crate) struct SuperCallOnAbstractProtocolMethod;
 

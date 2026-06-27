@@ -1,5 +1,5 @@
-//! Implements [callables_protocol_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Module context, function signatures, and protocol info for callables_protocol_2.
+//! Implements [`callables_protocol_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Module context, function signatures, and protocol info for `callables_protocol_2`.
 
 use ruff_python_ast::{self as ast, Expr, Stmt};
 
@@ -47,7 +47,7 @@ pub(super) struct FuncSig {
     /// callable that genuinely accepts the `TypedDict`'s keys via `**kwargs` from
     /// one with only fixed parameters: per the typing spec a destination
     /// `**kwargs: Unpack[TD]` requires the source to also provide `**kwargs`.
-    /// [callables_protocol_2]
+    /// [`callables_protocol_2`]
     pub(super) had_unpack_kwargs: bool,
 }
 
@@ -374,7 +374,7 @@ fn extract_typeddict(cls: &ast::StmtClassDef, known: &[TypedDictDef]) -> TypedDi
 /// Unwrap `Required` / `NotRequired` / `ReadOnly` qualifiers, returning the inner
 /// type text and whether the field is required. `ReadOnly` (PEP 705) has no effect
 /// on a `**kwargs: Unpack[TD]` signature, so it is stripped transparently. Total
-/// `TypedDicts` default to required. [callables_protocol_2]
+/// `TypedDicts` default to required. [`callables_protocol_2`]
 fn unwrap_required_annotation(expr: &Expr) -> (String, bool) {
     if let Expr::Subscript(sub) = expr {
         if let Expr::Name(n) = sub.value.as_ref() {
@@ -399,7 +399,7 @@ fn expand_unpack_kwargs(functions: &mut [FuncSig], typeddicts: &[TypedDictDef]) 
 
 /// Expand `**kwargs: Unpack[TD]` in protocol `__call__` and overload signatures,
 /// mirroring [`expand_unpack_kwargs`] so a protocol target compares structurally
-/// against a function whose kwargs were already expanded. [callables_protocol_2]
+/// against a function whose kwargs were already expanded. [`callables_protocol_2`]
 fn expand_unpack_kwargs_in_protocols(protocols: &mut [ProtocolInfo], typeddicts: &[TypedDictDef]) {
     for proto in protocols.iter_mut() {
         if let Some(call_sig) = proto.call_sig.as_mut() {
@@ -413,7 +413,7 @@ fn expand_unpack_kwargs_in_protocols(protocols: &mut [ProtocolInfo], typeddicts:
 
 /// Expand a single signature's `**kwargs: Unpack[TD]` into kw-only params and record
 /// [`FuncSig::had_unpack_kwargs`]. No-op when the signature has no `**kwargs` or the
-/// annotation is not `Unpack[TypedDict]`. [callables_protocol_2]
+/// annotation is not `Unpack[TypedDict]`. [`callables_protocol_2`]
 fn expand_unpack_in_sig(sig: &mut FuncSig, typeddicts: &[TypedDictDef]) {
     if !sig.has_kwargs {
         return;

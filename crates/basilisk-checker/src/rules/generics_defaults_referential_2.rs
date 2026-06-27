@@ -1,5 +1,5 @@
-//! Implements [generics_defaults_referential_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! generics_defaults_referential_2: ```TypeVar``` default referential violations.
+//! Implements [`generics_defaults_referential_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `generics_defaults_referential_2`: ```TypeVar``` default referential violations.
 //!
 //! PEP 696 defines rules for when a `TypeVar` default references another
 //! `TypeVar`:
@@ -49,7 +49,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_defaults_referential_2",
 };
 
-/// Emits generics_defaults_referential_2 for `TypeVar` default referential violations.
+/// Emits `generics_defaults_referential_2` for `TypeVar` default referential violations.
 pub(crate) struct TypeVarDefaultReferential;
 
 impl Rule for TypeVarDefaultReferential {

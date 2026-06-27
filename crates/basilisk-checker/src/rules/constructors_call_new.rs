@@ -1,5 +1,5 @@
-//! Implements [constructors_call_new] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
-//! constructors_call_new: Constructor call type mismatch with specialized generic class.
+//! Implements [`constructors_call_new`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! `constructors_call_new`: Constructor call type mismatch with specialized generic class.
 //!
 //! When a generic class is called with explicit type arguments (e.g.
 //! `Class1[int](1.0)`), Basilisk substitutes the type parameters into the
@@ -41,7 +41,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/constructors_call_new",
 };
 
-/// Emits constructors_call_new for constructor calls on specialized generic classes where
+/// Emits `constructors_call_new` for constructor calls on specialized generic classes where
 /// the provided arguments are incompatible with the substituted parameter types.
 pub(crate) struct ConstructorCallNewMismatch;
 

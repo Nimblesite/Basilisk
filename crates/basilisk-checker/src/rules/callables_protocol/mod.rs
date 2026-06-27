@@ -1,5 +1,5 @@
-//! Implements [callables_protocol] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! callables_protocol: Callable call-site arity and argument validation.
+//! Implements [`callables_protocol`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `callables_protocol`: Callable call-site arity and argument validation.
 //!
 //! When a parameter is annotated as `Callable[[int, str], T]`, calls to that
 //! parameter must match the expected argument count. Additionally, `Callable`
@@ -24,7 +24,7 @@ const CODE: ErrorCode = ErrorCode {
 mod hof_paramspec;
 mod paramspec_components;
 
-/// Emits callables_protocol for invalid call-site usage of `Callable`-typed parameters.
+/// Emits `callables_protocol` for invalid call-site usage of `Callable`-typed parameters.
 pub(crate) struct CallableCallSiteViolation;
 
 impl Rule for CallableCallSiteViolation {

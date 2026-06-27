@@ -1,5 +1,5 @@
-//! Implements [namedtuples_define_class] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! namedtuples_define_class: `NamedTuple` class definition errors.
+//! Implements [`namedtuples_define_class`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `namedtuples_define_class`: `NamedTuple` class definition errors.
 //!
 //! Detects several categories of `NamedTuple` definition errors:
 //!
@@ -29,7 +29,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/namedtuples_define_class",
 };
 
-/// Emits namedtuples_define_class for `NamedTuple` class definition errors.
+/// Emits `namedtuples_define_class` for `NamedTuple` class definition errors.
 pub(crate) struct NamedTupleDefError;
 
 impl Rule for NamedTupleDefError {

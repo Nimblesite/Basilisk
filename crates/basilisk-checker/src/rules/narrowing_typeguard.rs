@@ -1,5 +1,5 @@
-//! Implements [narrowing_typeguard] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! narrowing_typeguard: `TypeGuard` or `TypeIs` on method with no narrowing parameter.
+//! Implements [`narrowing_typeguard`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `narrowing_typeguard`: `TypeGuard` or `TypeIs` on method with no narrowing parameter.
 //!
 //! The typing spec requires that a `TypeGuard` or `TypeIs` function must have
 //! at least one user-facing parameter to narrow. When a method returns
@@ -17,7 +17,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/narrowing_typeguard",
 };
 
-/// Emits narrowing_typeguard when a method uses `TypeGuard` or `TypeIs` as its return
+/// Emits `narrowing_typeguard` when a method uses `TypeGuard` or `TypeIs` as its return
 /// type but has no user-facing parameter (only `self` or `cls`).
 pub(crate) struct TypeGuardNoNarrowingParam;
 

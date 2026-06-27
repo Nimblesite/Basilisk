@@ -10,7 +10,7 @@
     dead_code
 )]
 //! E2E: overriding a `@final` method whose definition lives in an imported
-//! sibling `.pyi` stub must be flagged (qualifiers_final_decorator cross-module final override).
+//! sibling `.pyi` stub must be flagged (`qualifiers_final_decorator` cross-module final override).
 
 use std::fs;
 use std::path::{Path, PathBuf};

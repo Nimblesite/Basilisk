@@ -1,5 +1,5 @@
-//! Implements [tuples_index] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! tuples_index: Tuple index out of bounds.
+//! Implements [`tuples_index`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `tuples_index`: Tuple index out of bounds.
 //!
 //! When a fixed-length `tuple[T1, T2, ...]` variable is indexed with a literal
 //! integer or a `Literal[N]`-typed variable that is outside the valid range
@@ -21,7 +21,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/tuples_index",
 };
 
-/// Emits tuples_index for out-of-bounds tuple indexing with literal integers.
+/// Emits `tuples_index` for out-of-bounds tuple indexing with literal integers.
 pub(crate) struct TupleIndexOutOfBounds;
 
 impl Rule for TupleIndexOutOfBounds {

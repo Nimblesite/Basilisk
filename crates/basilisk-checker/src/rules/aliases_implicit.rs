@@ -1,5 +1,5 @@
-//! Implements [aliases_implicit] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! aliases_implicit: Invalid right-hand side for a `TypeAlias` annotation.
+//! Implements [`aliases_implicit`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! `aliases_implicit`: Invalid right-hand side for a `TypeAlias` annotation.
 //!
 //! PEP 613 requires that the RHS of an explicit `TypeAlias` annotation must be
 //! a valid type expression. The following are errors:
@@ -190,7 +190,7 @@ fn paren_has_top_level_comma(s: &str) -> bool {
     crate::rules::shared::contains_top_level_comma(&s[1..s.len() - 1])
 }
 
-/// Emits aliases_implicit when a `TypeAlias`-annotated variable has an invalid RHS type expression.
+/// Emits `aliases_implicit` when a `TypeAlias`-annotated variable has an invalid RHS type expression.
 pub(crate) struct TypeAliasInvalidRhs;
 
 impl Rule for TypeAliasInvalidRhs {

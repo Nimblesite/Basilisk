@@ -1,5 +1,5 @@
-//! Implements [tuples_type_form] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! tuples_type_form: Multiple unbounded tuple components in a single tuple type.
+//! Implements [`tuples_type_form`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! `tuples_type_form`: Multiple unbounded tuple components in a single tuple type.
 //!
 //! A `tuple[...]` type annotation may contain at most one unbounded component.
 //! An unbounded component is:
@@ -27,7 +27,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/tuples_type_form",
 };
 
-/// Emits tuples_type_form when a tuple type annotation has more than one unbounded component.
+/// Emits `tuples_type_form` when a tuple type annotation has more than one unbounded component.
 pub(crate) struct MultipleUnboundedTupleTypes;
 
 impl Rule for MultipleUnboundedTupleTypes {

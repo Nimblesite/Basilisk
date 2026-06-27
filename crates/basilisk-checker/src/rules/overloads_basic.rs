@@ -1,5 +1,5 @@
-//! Implements [overloads_basic] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
-//! overloads_basic: No matching overload for subscript indexing.
+//! Implements [`overloads_basic`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! `overloads_basic`: No matching overload for subscript indexing.
 //!
 //! When a class defines overloaded `__getitem__` methods and a module-level
 //! subscript expression (e.g. `b[""]`) passes an argument whose type is
@@ -33,7 +33,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/overloads_basic",
 };
 
-/// Emits overloads_basic for subscript indexing where no overloaded `__getitem__`
+/// Emits `overloads_basic` for subscript indexing where no overloaded `__getitem__`
 /// signature matches the argument type.
 pub(crate) struct NoMatchingOverload;
 

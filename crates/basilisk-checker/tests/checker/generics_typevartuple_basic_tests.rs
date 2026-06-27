@@ -1,4 +1,4 @@
-//! Tests for [generics_typevartuple_basic] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+//! Tests for [`generics_typevartuple_basic`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // Integration tests for generics_typevartuple_basic: Invalid `TypeVar`/`TypeVarTuple`/`ParamSpec` kwargs.
 
 use super::common::*;

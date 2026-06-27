@@ -1,4 +1,4 @@
-//! Implements [assignment_compatibility] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [`assignment_compatibility`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! Structural callable subtyping for callback protocols and `Callable` forms.
 //!
 //! E0014's name-based comparison cannot evaluate structural compatibility

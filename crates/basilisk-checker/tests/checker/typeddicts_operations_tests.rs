@@ -1,4 +1,4 @@
-//! Tests for [typeddicts_operations] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+//! Tests for [`typeddicts_operations`] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
 // Tests for typeddicts_operations: Invalid key or value type in `TypedDict` assignment.
 
 use super::common::*;

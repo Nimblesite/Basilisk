@@ -1,5 +1,5 @@
-//! Implements [protocols_definition_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! protocols_definition_2: Protocol conformance violation in annotated assignment.
+//! Implements [`protocols_definition_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `protocols_definition_2`: Protocol conformance violation in annotated assignment.
 //!
 //! Detects errors in annotated assignments at module level:
 //!
@@ -78,7 +78,7 @@ fn known_protocol_methods(name: &str) -> Option<&'static [&'static str]> {
     }
 }
 
-/// Emits protocols_definition_2 for protocol conformance violations in annotated assignments.
+/// Emits `protocols_definition_2` for protocol conformance violations in annotated assignments.
 pub(crate) struct ProtocolAssignmentConformance;
 
 impl Rule for ProtocolAssignmentConformance {
@@ -540,7 +540,7 @@ fn check_missing_instance_vars(
 }
 
 /// Names of a protocol's writable instance variables: class-body attributes
-/// whose annotation is **not** `ClassVar` (those are covered by classes_classvar).
+/// whose annotation is **not** `ClassVar` (those are covered by `classes_classvar`).
 fn protocol_instance_var_names<'a>(
     protocol_class: &'a basilisk_resolver::ClassInfo,
     source: &str,

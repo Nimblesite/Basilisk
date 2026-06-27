@@ -1,5 +1,5 @@
-//! Implements [generics_upper_bound] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! generics_upper_bound: `TypeVar` upper bound violation at call site.
+//! Implements [`generics_upper_bound`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `generics_upper_bound`: `TypeVar` upper bound violation at call site.
 //!
 //! When a function parameter is annotated with a `TypeVar` that has an upper
 //! bound (e.g. `bound=Sized`), and the call site passes a literal value whose
@@ -32,7 +32,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_upper_bound",
 };
 
-/// Emits generics_upper_bound when a call site passes a value whose type does not satisfy
+/// Emits `generics_upper_bound` when a call site passes a value whose type does not satisfy
 /// the `TypeVar` upper bound declared on the corresponding parameter.
 pub(crate) struct TypeVarBoundViolation;
 

@@ -1,4 +1,4 @@
-//! Tests for [protocols_merging] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+//! Tests for [`protocols_merging`] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
 // Integration tests for protocols_merging: Non-protocol base in Protocol.
 
 use super::common::*;

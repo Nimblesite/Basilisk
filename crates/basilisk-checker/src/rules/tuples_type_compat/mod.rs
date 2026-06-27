@@ -1,4 +1,4 @@
-//! tuples_type_compat: Tuple starred-unpack type compatibility violation.
+//! `tuples_type_compat`: Tuple starred-unpack type compatibility violation.
 //!
 //! Detects assignments where a tuple literal or a tuple-typed variable is
 //! assigned to a target whose annotation contains a starred unpack expression
@@ -53,7 +53,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/tuples_type_compat",
 };
 
-/// Emits tuples_type_compat for incompatible starred-unpack tuple assignments.
+/// Emits `tuples_type_compat` for incompatible starred-unpack tuple assignments.
 pub(crate) struct TupleStarredUnpackCompatibility;
 
 impl Rule for TupleStarredUnpackCompatibility {

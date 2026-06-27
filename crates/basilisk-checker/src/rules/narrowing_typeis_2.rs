@@ -1,5 +1,5 @@
-//! Implements [narrowing_typeis_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! narrowing_typeis_2: `TypeIs` narrows to a type inconsistent with the input type.
+//! Implements [`narrowing_typeis_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `narrowing_typeis_2`: `TypeIs` narrows to a type inconsistent with the input type.
 //!
 //! Per the typing spec: "It is an error to narrow to a type that is not
 //! consistent with the input type." For `TypeIs`, the narrowed type must
@@ -16,7 +16,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/narrowing_typeis_2",
 };
 
-/// Emits narrowing_typeis_2 when a function returns `TypeIs[X]` but `X` is not
+/// Emits `narrowing_typeis_2` when a function returns `TypeIs[X]` but `X` is not
 /// consistent with the first parameter type.
 pub(crate) struct TypeIsInconsistentNarrowing;
 

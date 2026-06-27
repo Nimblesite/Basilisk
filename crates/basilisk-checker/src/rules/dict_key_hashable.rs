@@ -1,5 +1,5 @@
-//! Implements [dict_key_hashable] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! dict_key_hashable: Unhashable type used as a dict key.
+//! Implements [`dict_key_hashable`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! `dict_key_hashable`: Unhashable type used as a dict key.
 //!
 //! Lists, sets, and plain dicts are not hashable and cannot be used as
 //! dictionary keys at runtime.  Basilisk detects these statically.
@@ -20,7 +20,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/dict_key_hashable",
 };
 
-/// Emits dict_key_hashable for unhashable types used as dictionary keys.
+/// Emits `dict_key_hashable` for unhashable types used as dictionary keys.
 pub(crate) struct UnhashableDictKey;
 
 impl Rule for UnhashableDictKey {

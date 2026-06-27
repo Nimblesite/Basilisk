@@ -1,5 +1,5 @@
-//! Implements [typeddicts_required] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! typeddicts_required: `Required` / `NotRequired` used in an invalid context.
+//! Implements [`typeddicts_required`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! `typeddicts_required`: `Required` / `NotRequired` used in an invalid context.
 //!
 //! PEP 655 and the typing spec restrict `Required[T]` and `NotRequired[T]` to:
 //!
@@ -79,7 +79,7 @@ fn is_in_typed_dict_hierarchy(cls: &ClassInfo, class_map: &HashMap<&str, &ClassI
     })
 }
 
-/// Emits typeddicts_required for `Required`/`NotRequired` used outside `TypedDict` or nested.
+/// Emits `typeddicts_required` for `Required`/`NotRequired` used outside `TypedDict` or nested.
 pub(crate) struct RequiredNotRequiredContext;
 
 impl Rule for RequiredNotRequiredContext {

@@ -1,5 +1,5 @@
-//! Implements [directives_deprecated] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Collection helpers for directives_deprecated.
+//! Implements [`directives_deprecated`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Collection helpers for `directives_deprecated`.
 //!
 //! Functions that scan an AST or source text to build maps of deprecated
 //! definitions and variable types.

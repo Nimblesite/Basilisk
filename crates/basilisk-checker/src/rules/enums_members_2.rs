@@ -1,5 +1,5 @@
-//! Implements [enums_members_2] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! enums_members_2: Non-member referenced in `Literal[EnumClass.X]` annotation.
+//! Implements [`enums_members_2`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! `enums_members_2`: Non-member referenced in `Literal[EnumClass.X]` annotation.
 //!
 //! The `Literal[EnumClass.X]` type is only valid when `X` is an actual enum
 //! member. Using it with a non-member (a method, property, lambda, nested
@@ -33,7 +33,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/enums_members_2",
 };
 
-/// Emits enums_members_2 when a non-member is referenced in `Literal[EnumClass.X]`.
+/// Emits `enums_members_2` when a non-member is referenced in `Literal[EnumClass.X]`.
 pub(crate) struct EnumNonMemberInLiteral;
 
 impl Rule for EnumNonMemberInLiteral {

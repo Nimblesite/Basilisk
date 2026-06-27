@@ -1,5 +1,5 @@
-//! Implements [protocols_generic] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Helper functions for protocols_generic: Generic protocol violations.
+//! Implements [`protocols_generic`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Helper functions for `protocols_generic`: Generic protocol violations.
 
 use std::collections::HashMap;
 

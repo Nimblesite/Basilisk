@@ -1,5 +1,5 @@
-//! Implements [generics_basic_2] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
-//! generics_basic_2: Non-TypeVar argument in `Generic[...]` or `Protocol[...]`.
+//! Implements [`generics_basic_2`] from [CHKARCH-DIAG-IMMUTABILITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-immutability
+//! `generics_basic_2`: Non-TypeVar argument in `Generic[...]` or `Protocol[...]`.
 //!
 //! PEP 484 requires that all arguments to `Generic[...]` and `Protocol[...]`
 //! be type variable names (`TypeVar`, `TypeVarTuple`, or `ParamSpec`).
@@ -38,7 +38,7 @@ fn make_diagnostic(message: String, span: basilisk_resolver::Span, path: &str) -
     )
 }
 
-/// Emits generics_basic_2 when a non-TypeVar appears in `Generic[...]` or `Protocol[...]`.
+/// Emits `generics_basic_2` when a non-TypeVar appears in `Generic[...]` or `Protocol[...]`.
 pub(crate) struct NonTypeVarInGeneric;
 
 impl Rule for NonTypeVarInGeneric {

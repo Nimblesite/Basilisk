@@ -1,4 +1,4 @@
-//! callables_protocol_2: Callable and Protocol assignment compatibility.
+//! `callables_protocol_2`: Callable and Protocol assignment compatibility.
 //!
 //! Checks that when a function is assigned to a variable annotated with a
 //! `Callable` type or a callback `Protocol`, the signatures are compatible.
@@ -21,7 +21,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/callables_protocol_2",
 };
 
-/// Emits callables_protocol_2 for incompatible callable/protocol assignments.
+/// Emits `callables_protocol_2` for incompatible callable/protocol assignments.
 pub(crate) struct CallableAssignmentViolation;
 
 impl Rule for CallableAssignmentViolation {

@@ -18,7 +18,17 @@
 mod common;
 
 use basilisk_test_utils::{assert_diagnostics, Expected};
-use common::{fixture, run};
+use common::{annotation_rules_config, fixture, run_with_config};
+
+// Every test in this file exercises the annotation house rules
+// (`BSK-E0001`..`BSK-E0005`), which are OFF by default — the default config is
+// pure PEP conformance. Route every fixture through a config that opts those
+// rules in, so the suite asserts exactly what a user who enabled them sees.
+// Basilisk has no modes; this is configuration, not a switch.
+// See [CHKARCH-CONFIGURATION-ONLY].
+fn run(rel: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
+    run_with_config(rel, &annotation_rules_config())
+}
 
 // ---------------------------------------------------------------------------
 // Missing parameter type annotation

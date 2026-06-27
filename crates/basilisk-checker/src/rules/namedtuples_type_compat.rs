@@ -1,5 +1,5 @@
-//! Implements [namedtuples_type_compat] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
-//! namedtuples_type_compat: `NamedTuple`-to-tuple type incompatibility.
+//! Implements [`namedtuples_type_compat`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! `namedtuples_type_compat`: `NamedTuple`-to-tuple type incompatibility.
 //!
 //! When a `NamedTuple` instance is assigned to a variable annotated with a
 //! fixed-length `tuple[...]` type, Basilisk verifies:
@@ -36,7 +36,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/namedtuples_type_compat",
 };
 
-/// Emits namedtuples_type_compat when a `NamedTuple` instance is assigned to an incompatible
+/// Emits `namedtuples_type_compat` when a `NamedTuple` instance is assigned to an incompatible
 /// fixed-length `tuple[...]` annotation.
 pub(crate) struct NamedTupleTupleCompat;
 

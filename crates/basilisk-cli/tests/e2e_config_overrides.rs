@@ -46,6 +46,19 @@ fn run_with_config(
     Ok(check_with_config(&resolved, config))
 }
 
+/// Config that opts into the annotation house rules (`strict_annotations =
+/// true`). `BSK-E0001`/`BSK-E0002` are off by default — the default config is
+/// pure PEP conformance — so a project must enable them before any
+/// severity/path override has something to act on. These tests layer overrides
+/// on top via `..annotations_on()`. No modes; this is configuration. See
+/// [CHKARCH-CONFIGURATION-ONLY].
+fn annotations_on() -> BasiliskConfig {
+    BasiliskConfig {
+        strict_annotations: true,
+        ..Default::default()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Global rule severity overrides
 // ---------------------------------------------------------------------------
@@ -57,7 +70,7 @@ fn global_severity_off_suppresses_e0001() -> Result<(), Box<dyn std::error::Erro
     rules.insert("BSK-E0001".to_owned(), RuleSeverity::Disabled);
     let config = BasiliskConfig {
         rules,
-        ..Default::default()
+        ..annotations_on()
     };
 
     let diags = run_with_config("missing_param_annotation.py", &config)?;
@@ -75,7 +88,7 @@ fn global_severity_warning_demotes_e0001() -> Result<(), Box<dyn std::error::Err
     rules.insert("BSK-E0001".to_owned(), RuleSeverity::Warning);
     let config = BasiliskConfig {
         rules,
-        ..Default::default()
+        ..annotations_on()
     };
 
     let diags = run_with_config("missing_param_annotation.py", &config)?;
@@ -103,7 +116,7 @@ fn global_severity_info_demotes_e0001() -> Result<(), Box<dyn std::error::Error>
     rules.insert("BSK-E0001".to_owned(), RuleSeverity::Info);
     let config = BasiliskConfig {
         rules,
-        ..Default::default()
+        ..annotations_on()
     };
 
     let diags = run_with_config("missing_param_annotation.py", &config)?;
@@ -217,7 +230,7 @@ fn per_path_disabled_suppresses_all_diagnostics() -> Result<(), Box<dyn std::err
     );
     let config = BasiliskConfig {
         per_path_overrides: path_overrides,
-        ..Default::default()
+        ..annotations_on()
     };
 
     let diags = run_with_config("missing_both.py", &config)?;
@@ -246,7 +259,7 @@ fn per_path_warning_demotes_severity() -> Result<(), Box<dyn std::error::Error>>
     );
     let config = BasiliskConfig {
         per_path_overrides: path_overrides,
-        ..Default::default()
+        ..annotations_on()
     };
 
     let diags = run_with_config("missing_param_annotation.py", &config)?;
@@ -291,7 +304,7 @@ fn per_path_overrides_global_severity() -> Result<(), Box<dyn std::error::Error>
     let config = BasiliskConfig {
         rules,
         per_path_overrides: path_overrides,
-        ..Default::default()
+        ..annotations_on()
     };
 
     let diags = run_with_config("missing_param_annotation.py", &config)?;

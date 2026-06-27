@@ -1,5 +1,5 @@
-//! Implements [typeddicts_alt_syntax] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! typeddicts_alt_syntax: Invalid `TypedDict(...)` functional-syntax call.
+//! Implements [`typeddicts_alt_syntax`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! `typeddicts_alt_syntax`: Invalid `TypedDict(...)` functional-syntax call.
 //!
 //! The `TypedDict(name, {...})` functional syntax has several constraints:
 //!
@@ -32,7 +32,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     )
 }
 
-/// Emits typeddicts_alt_syntax for invalid `TypedDict(...)` functional-syntax calls.
+/// Emits `typeddicts_alt_syntax` for invalid `TypedDict(...)` functional-syntax calls.
 pub(crate) struct InvalidTypedDictCall;
 
 /// Keyword arguments allowed in the `TypedDict(...)` functional syntax.

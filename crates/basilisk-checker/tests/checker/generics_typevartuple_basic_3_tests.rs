@@ -1,4 +1,4 @@
-//! Tests for [generics_typevartuple_basic_3] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
+//! Tests for [`generics_typevartuple_basic_3`] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
 // Integration tests for generics_typevartuple_basic_3: `TypeVarTuple` invalid params.
 
 use super::common::*;

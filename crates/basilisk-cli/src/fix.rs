@@ -93,7 +93,7 @@ fn collect_and_fix(paths: &[String], allowed_rules: &[&str]) -> Result<FixSummar
     let mut had_unfixable_errors = false;
 
     for path in python_files {
-        match fix_single_file(&path, allowed_rules) {
+        match fix_single_file(&path, allowed_rules, &config) {
             Ok(count) => {
                 fixed_count += count;
                 if count > 0 {
@@ -117,7 +117,11 @@ fn collect_and_fix(paths: &[String], allowed_rules: &[&str]) -> Result<FixSummar
 /// Analyse a single file and apply fixes matching the allowed rules.
 ///
 /// Returns the number of fixes applied.
-fn fix_single_file(path: &str, allowed_rules: &[&str]) -> Result<usize, String> {
+fn fix_single_file(
+    path: &str,
+    allowed_rules: &[&str],
+    config: &basilisk_config::BasiliskConfig,
+) -> Result<usize, String> {
     let source = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
     let uri = Url::from_file_path(
         std::path::Path::new(path)
@@ -129,7 +133,7 @@ fn fix_single_file(path: &str, allowed_rules: &[&str]) -> Result<usize, String> 
     let parsed = basilisk_parser::parse_source(source.clone(), path.to_owned())
         .map_err(|e| e.to_string())?;
     let resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
-    let checker_diags = basilisk_checker::check(&resolved);
+    let checker_diags = basilisk_checker::check_with_config(&resolved, config);
 
     let lsp_diags: Vec<_> = checker_diags
         .iter()
@@ -199,12 +203,29 @@ mod tests {
     use super::*;
     use tower_lsp::lsp_types::{Position, Range};
 
-    /// Write `source` to a uniquely-named temp `.py` file, returning its path.
+    /// Write `source` to a uniquely-named temp `.py` file inside an isolated
+    /// project dir that ships a `basilisk.json` opting into the annotation house
+    /// rules. `fix` targets those rules (`BSK-E0001`/`BSK-E0002`/`BSK-E0005`/
+    /// `BSK-W0050`), which are OFF by default — a real user enables them in
+    /// configuration, so the test project does too. The command loads that
+    /// config from disk exactly as it would in production. No modes; this is
+    /// configuration. See [CHKARCH-CONFIGURATION-ONLY].
     fn write_temp(name: &str, source: &str) -> (std::path::PathBuf, String) {
-        let py = std::env::temp_dir().join(name);
+        let dir = std::env::temp_dir().join(format!("{name}.proj"));
+        std::fs::create_dir_all(&dir).expect("create temp project dir");
+        std::fs::write(dir.join("basilisk.json"), "{\"strictAnnotations\": true}\n")
+            .expect("write basilisk.json");
+        let py = dir.join(name);
         std::fs::write(&py, source).expect("write temp file");
         let path = py.to_string_lossy().into_owned();
         (py, path)
+    }
+
+    /// Remove the isolated project dir created by [`write_temp`].
+    fn cleanup(py: &std::path::Path) {
+        if let Some(dir) = py.parent() {
+            let _ = std::fs::remove_dir_all(dir);
+        }
     }
 
     /// Run fix, read back the file, clean up, and return `(exit_code, content)`.
@@ -216,7 +237,7 @@ mod tests {
     ) -> (u8, String) {
         let code = run_fix(&[path_str.to_owned()], include_unsafe, rules);
         let content = std::fs::read_to_string(py).expect("read back");
-        let _ = std::fs::remove_file(py);
+        cleanup(py);
         (code, content)
     }
 
@@ -290,7 +311,7 @@ mod tests {
             "def greet(name: str) -> str:\n    return name\n",
         );
         let code = run_fix(&[path], false, &[]);
-        let _ = std::fs::remove_file(&py);
+        cleanup(&py);
         assert_eq!(code, 0, "clean code must return 0");
     }
 
@@ -425,6 +446,8 @@ mod tests {
     fn run_fix_directory_traversal() {
         let dir = std::env::temp_dir().join("basilisk_test_fix_dir_traversal");
         let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(dir.join("basilisk.json"), "{\"strictAnnotations\": true}\n")
+            .expect("write basilisk.json");
         let file_a = dir.join("a_fix.py");
         let file_b = dir.join("b_fix.py");
         std::fs::write(&file_a, "x: int = 42\n").expect("write a");
@@ -455,7 +478,7 @@ mod tests {
 
         let second = run_fix(&[path], false, &[]);
         let after_second = std::fs::read_to_string(&py).expect("read after second");
-        let _ = std::fs::remove_file(&py);
+        cleanup(&py);
         assert_eq!(second, 0);
         assert_eq!(after_second, "x = 42\n", "second pass should be a no-op");
     }

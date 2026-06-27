@@ -1,5 +1,5 @@
-//! Implements [constructors_callable] from [CHKARCH-DIAG-CTOR-CALLABLE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ctor-callable
-//! constructors_callable: Invalid call to a constructor-derived callable.
+//! Implements [`constructors_callable`] from [CHKARCH-DIAG-CTOR-CALLABLE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ctor-callable
+//! `constructors_callable`: Invalid call to a constructor-derived callable.
 //!
 //! Implements the typing spec rule "Converting a constructor to callable"
 //! (<https://typing.readthedocs.io/en/latest/spec/constructors.html#converting-a-constructor-to-callable>).
@@ -43,7 +43,7 @@ const CODE: ErrorCode = ErrorCode {
 /// Method-map key: `(class_name, method_name)` → method definitions.
 type MethodMap<'a> = HashMap<(&'a str, &'a str), Vec<&'a FunctionInfo>>;
 
-/// Emits constructors_callable for invalid calls to constructor-derived callables.
+/// Emits `constructors_callable` for invalid calls to constructor-derived callables.
 pub(crate) struct ConstructorCallableMisuse;
 
 impl Rule for ConstructorCallableMisuse {

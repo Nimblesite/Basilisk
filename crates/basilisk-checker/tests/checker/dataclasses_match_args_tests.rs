@@ -1,4 +1,4 @@
-//! Tests for [dataclasses_match_args] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+//! Tests for [`dataclasses_match_args`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // Integration tests for dataclasses_match_args: dataclass `match_args=False`.
 
 use super::common::*;

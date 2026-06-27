@@ -1,5 +1,5 @@
-//! Implements [directives_deprecated] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Shared data types for directives_deprecated.
+//! Implements [`directives_deprecated`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Shared data types for `directives_deprecated`.
 
 use std::collections::{HashMap, HashSet};
 

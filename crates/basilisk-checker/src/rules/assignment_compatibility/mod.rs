@@ -1,4 +1,4 @@
-//! assignment_compatibility: Assignment type incompatibility (literal mismatches).
+//! `assignment_compatibility`: Assignment type incompatibility (literal mismatches).
 //!
 //! Detects annotated module-level variables where the declared type and the
 //! literal kind of the right-hand side are clearly incompatible, for example:
@@ -42,7 +42,7 @@ pub(crate) const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/assignment_compatibility",
 };
 
-/// Emits assignment_compatibility for annotated module variables whose annotation and literal
+/// Emits `assignment_compatibility` for annotated module variables whose annotation and literal
 /// RHS are obviously incompatible.
 pub(crate) struct AssignmentTypeMismatch;
 
@@ -126,7 +126,7 @@ fn drop_unchecked_block_diagnostics(module: &ResolvedModule, diagnostics: &mut V
 
 /// Collect names of `TypedDict` classes defined in this module.
 ///
-/// assignment_compatibility cannot do structural field-level type checking on `TypedDict`
+/// `assignment_compatibility` cannot do structural field-level type checking on `TypedDict`
 /// subclasses, so dict literal assignments to `TypedDict` annotations are
 /// skipped to avoid false positives.
 fn collect_typeddict_names(module: &ResolvedModule) -> std::collections::HashSet<String> {

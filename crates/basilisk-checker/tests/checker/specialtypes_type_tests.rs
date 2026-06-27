@@ -1,4 +1,4 @@
-//! Tests for [specialtypes_type] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`specialtypes_type`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for specialtypes_type: Invalid type[X] usage violations.
 
 use super::common::*;

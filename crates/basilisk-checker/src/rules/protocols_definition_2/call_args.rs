@@ -1,5 +1,5 @@
-//! Implements [protocols_definition_2] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Protocol conformance for function-call arguments (protocols_definition_2).
+//! Implements [`protocols_definition_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Protocol conformance for function-call arguments (`protocols_definition_2`).
 //!
 //! When a module-level function declares a parameter typed as an iterable of a
 //! `Protocol` (e.g. `things: Iterable[SupportsClose]`), passing a container

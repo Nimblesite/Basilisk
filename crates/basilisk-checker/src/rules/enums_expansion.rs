@@ -1,5 +1,5 @@
-//! Implements [enums_expansion] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
-//! enums_expansion: `assert_type` with `Literal[Enum.MEMBER]` on enum-typed param.
+//! Implements [`enums_expansion`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-coercion
+//! `enums_expansion`: `assert_type` with `Literal[Enum.MEMBER]` on enum-typed param.
 //!
 //! This rule detects when `assert_type()` is used with a `Literal[Enum.MEMBER]` type
 //! on a parameter that is already typed as the enum itself. This is redundant and
@@ -29,7 +29,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/enums_expansion",
 };
 
-/// Emits enums_expansion for `assert_type` with `Literal[Enum.MEMBER]` on enum-typed param.
+/// Emits `enums_expansion` for `assert_type` with `Literal[Enum.MEMBER]` on enum-typed param.
 pub(crate) struct AssertTypeEnumLiteralMismatch;
 
 impl Rule for AssertTypeEnumLiteralMismatch {

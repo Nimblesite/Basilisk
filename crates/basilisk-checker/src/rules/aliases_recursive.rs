@@ -1,5 +1,5 @@
-//! Implements [aliases_recursive] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! aliases_recursive: Cyclical type alias reference.
+//! Implements [`aliases_recursive`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `aliases_recursive`: Cyclical type alias reference.
 //!
 //! A `TypeAlias`-annotated assignment whose RHS contains a forward-reference
 //! string that resolves back to the alias itself (directly or through a chain
@@ -30,7 +30,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/aliases_recursive",
 };
 
-/// Emits aliases_recursive when a `TypeAlias`-annotated assignment's RHS contains a
+/// Emits `aliases_recursive` when a `TypeAlias`-annotated assignment's RHS contains a
 /// cyclical forward reference (self-referential or mutually referential).
 pub(crate) struct CyclicalTypeAliasReference;
 

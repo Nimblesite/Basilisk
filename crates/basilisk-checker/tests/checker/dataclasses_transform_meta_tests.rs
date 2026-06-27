@@ -1,4 +1,4 @@
-//! Tests for [dataclasses_transform_meta] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`dataclasses_transform_meta`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for dataclasses_transform_meta: `dataclass_transform` metaclass violations.
 
 use super::common::*;

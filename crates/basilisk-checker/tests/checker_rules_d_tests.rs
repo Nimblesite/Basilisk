@@ -1,4 +1,4 @@
-//! Tests for [overloads_evaluation]-[literals_semantics] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
+//! Tests for [`overloads_evaluation`]-[`literals_semantics`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

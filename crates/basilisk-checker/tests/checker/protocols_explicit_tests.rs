@@ -1,4 +1,4 @@
-//! Tests for [protocols_explicit] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+//! Tests for [`protocols_explicit`] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
 // Integration tests for protocols_explicit: Protocol instantiation.
 
 use super::common::*;

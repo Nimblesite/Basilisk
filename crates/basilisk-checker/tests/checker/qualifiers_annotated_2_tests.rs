@@ -1,4 +1,4 @@
-//! Tests for [qualifiers_annotated_2] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+//! Tests for [`qualifiers_annotated_2`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
 // Integration tests for qualifiers_annotated_2: Annotated too few arguments.
 
 use super::common::*;

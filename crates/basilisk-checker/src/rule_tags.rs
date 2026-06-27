@@ -67,46 +67,53 @@ pub const FREE_FORM_TAGS: [&str; 6] = [
     "stubs",
 ];
 
-/// The Basilisk-original rules, keyed by current diagnostic code, with the
-/// free-form tags each carries. Membership here is what makes a rule
-/// [`BASILISK`] — the curated source of truth for provenance, independent of
-/// the cosmetic `BSK-` code prefix. Every other rule is a [`PEP`] rule.
+/// The opt-in tag declaration a Basilisk-original rule attaches to itself.
 ///
-/// This list **mirrors the opt-in set** gated in `check_with_config`: rule
-/// selection is config-only and the default config selects no rule listed here.
-/// A rule that runs under the default config is core PEP, not `basilisk` — even
-/// if it is a Basilisk-authored check (e.g. unresolved-import and
-/// version-target syntax checks run by default, so they are `pep`).
+/// A rule returns `Some(OptInSpec { .. })` from [`crate::rules::Rule::opt_in_spec`]
+/// to declare that it is a [`BASILISK`] rule (off by default, opt-in only) and to
+/// list the free-form tags its diagnostic carries. Core [`PEP`] rules return
+/// `None` and are always selected by the default configuration.
+///
+/// This is the **single source of rule provenance**: there is no central rule
+/// list. A rule's provenance and tags live on the rule itself, and both the
+/// selection in `check_with_config` and the classification in [`tags_for_code`]
+/// read them from here. To add a Basilisk rule, tag the rule — nothing else.
 /// [CHKTAG-PROVENANCE]
-const BASILISK_RULES: &[(&str, &[&str])] = &[
-    // Annotation requirements beyond the spec (the spec never mandates these).
-    ("BSK-E0001", &["strictness"]), // missing parameter annotation
-    ("BSK-E0002", &["strictness"]), // missing return annotation
-    ("BSK-E0003", &["strictness"]), // missing variable type
-    ("BSK-E0004", &["strictness"]), // missing *args/**kwargs annotation
-    ("BSK-E0005", &["strictness"]), // missing attribute annotation
-    ("BSK-E0025", &["strictness"]), // missing @override decorator (PEP 698 keeps it optional)
-    ("BSK-W0040", &["strictness"]), // lambda missing annotations
-    // Style / redundancy nudges.
-    ("BSK-W0014", &["style", "strictness"]), // explicit `Any`
-    ("BSK-W0050", &["redundancy", "style"]), // redundant annotation (the headline differentiator)
-    // Dependency & lock-file hygiene.
-    ("BSK-W0011", &["dependencies", "imports"]), // undeclared dependency import
-    ("BSK-W0012", &["dependencies"]),            // unused dependency
-    ("BSK-W0013", &["dependencies"]),            // stale lock file
-    // Stub hygiene.
-    ("BSK-E0152", &["stubs"]), // missing type stubs
-];
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OptInSpec {
+    /// The diagnostic code this opt-in rule emits (e.g. `"BSK-W0050"`).
+    pub code: &'static str,
+    /// The free-form tags the rule carries, beyond its [`BASILISK`] provenance.
+    pub tags: &'static [&'static str],
+}
+
+/// Every Basilisk-original rule's self-declared [`OptInSpec`], gathered once from
+/// the live rule registry — never a hand-maintained list. [CHKTAG-PROVENANCE]
+fn opt_in_specs() -> &'static [OptInSpec] {
+    static CACHE: std::sync::OnceLock<Vec<OptInSpec>> = std::sync::OnceLock::new();
+    CACHE.get_or_init(crate::rules::opt_in_specs).as_slice()
+}
+
+/// The [`OptInSpec`] a diagnostic `code` was declared with, if it is a Basilisk
+/// (opt-in) rule. Returns `None` for core [`PEP`] rules — the answer a caller
+/// uses to gate selection without ever consulting a code list. [CHKTAG-PROVENANCE]
+#[must_use]
+pub fn opt_in_spec_for_code(code: &str) -> Option<OptInSpec> {
+    opt_in_specs()
+        .iter()
+        .copied()
+        .find(|spec| spec.code == code)
+}
 
 /// The full tag set for a diagnostic `code`: exactly one provenance tag followed
 /// by its PEP category and/or free-form tags. Never panics and never returns an
 /// empty set — an unknown code resolves to a bare [`PEP`] rule. [CHKTAG-MODEL]
 #[must_use]
 pub fn tags_for_code(code: &str) -> Vec<&'static str> {
-    if let Some((_, extra)) = BASILISK_RULES.iter().find(|(known, _)| *known == code) {
-        let mut tags = Vec::with_capacity(1 + extra.len());
+    if let Some(spec) = opt_in_spec_for_code(code) {
+        let mut tags = Vec::with_capacity(1 + spec.tags.len());
         tags.push(BASILISK);
-        tags.extend_from_slice(extra);
+        tags.extend_from_slice(spec.tags);
         return tags;
     }
     match pep_category_of(code) {
@@ -116,12 +123,13 @@ pub fn tags_for_code(code: &str) -> Vec<&'static str> {
 }
 
 /// The diagnostic codes currently classified as Basilisk-original (the opt-in
-/// set). Exposed so tests can assert this table never drifts from the live rule
-/// registry — a renamed code here would otherwise silently fall through to a
-/// `pep` classification. [CHKTAG-PROVENANCE]
+/// set), gathered from the rules' own [`OptInSpec`] declarations. Exposed so
+/// tests can assert provenance never drifts from the live rule registry — a
+/// declared code that no live rule emits is a rename that escaped its tag.
+/// [CHKTAG-PROVENANCE]
 #[must_use]
 pub fn basilisk_rule_codes() -> Vec<&'static str> {
-    BASILISK_RULES.iter().map(|(code, _)| *code).collect()
+    opt_in_specs().iter().map(|spec| spec.code).collect()
 }
 
 /// The PEP category a conformance-named rule belongs to, derived from the

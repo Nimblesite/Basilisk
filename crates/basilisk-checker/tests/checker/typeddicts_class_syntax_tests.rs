@@ -1,4 +1,4 @@
-//! Tests for [typeddicts_class_syntax] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+//! Tests for [`typeddicts_class_syntax`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for typeddicts_class_syntax: Method defined in `TypedDict`.
 
 use super::common::*;

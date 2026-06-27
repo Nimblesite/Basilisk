@@ -1,5 +1,5 @@
-//! Implements [generics_base_class] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! generics_base_class: Duplicate `TypeVar` in a `Generic[...]` base.
+//! Implements [`generics_base_class`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! `generics_base_class`: Duplicate `TypeVar` in a `Generic[...]` base.
 //!
 //! Each type parameter in `Generic[T1, T2, ...]` must be unique.
 //! `Generic[T, T]` is an error per PEP 484.
@@ -15,7 +15,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_base_class",
 };
 
-/// Emits generics_base_class when the same `TypeVar` appears more than once in `Generic[...]`.
+/// Emits `generics_base_class` when the same `TypeVar` appears more than once in `Generic[...]`.
 pub(crate) struct DuplicateTypeVarInGeneric;
 
 impl Rule for DuplicateTypeVarInGeneric {

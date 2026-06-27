@@ -1,4 +1,4 @@
-//! Tests for [typeddicts_inheritance] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+//! Tests for [`typeddicts_inheritance`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 // Integration tests for typeddicts_inheritance: Invalid `TypedDict` inheritance.
 
 use super::common::*;

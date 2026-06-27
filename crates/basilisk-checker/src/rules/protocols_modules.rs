@@ -1,5 +1,5 @@
-//! Implements [protocols_modules] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
-//! protocols_modules: Module assigned to incompatible protocol type.
+//! Implements [`protocols_modules`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! `protocols_modules`: Module assigned to incompatible protocol type.
 //!
 //! When a module object is assigned to a variable typed as a `Protocol`, the
 //! module's public interface must be compatible with the protocol.  This rule
@@ -36,7 +36,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/protocols_modules",
 };
 
-/// Emits protocols_modules when a module is assigned to a protocol-typed variable
+/// Emits `protocols_modules` when a module is assigned to a protocol-typed variable
 /// but the module does not satisfy the protocol.
 pub(crate) struct ModuleProtocolIncompatible;
 

@@ -1,5 +1,5 @@
-//! Implements [qualifiers_final_decorator] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! qualifiers_final_decorator: `@final` decorator violations.
+//! Implements [`qualifiers_final_decorator`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! `qualifiers_final_decorator`: `@final` decorator violations.
 //!
 //! Three violations are detected:
 //!
@@ -30,7 +30,7 @@ fn is_final_decorator(d: &str) -> bool {
     d == "final" || d.rsplit('.').next() == Some("final")
 }
 
-/// Emits qualifiers_final_decorator for `@final` decorator violations.
+/// Emits `qualifiers_final_decorator` for `@final` decorator violations.
 pub(crate) struct FinalViolation;
 
 impl Rule for FinalViolation {

@@ -1,5 +1,5 @@
-//! Implements [generics_self_basic] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
-//! generics_self_basic: `Self` type violations in generics.
+//! Implements [`generics_self_basic`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-optional
+//! `generics_self_basic`: `Self` type violations in generics.
 //!
 //! This rule detects two kinds of `Self` type violations:
 //!
@@ -40,7 +40,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/generics_self_basic",
 };
 
-/// Emits generics_self_basic for `Self` return type mismatches and `Self` subscript usage.
+/// Emits `generics_self_basic` for `Self` return type mismatches and `Self` subscript usage.
 pub(crate) struct SelfTypeViolation;
 
 impl Rule for SelfTypeViolation {

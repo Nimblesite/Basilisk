@@ -1,6 +1,6 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Static return-type inference for *calls* used by `assert_type` checking
-//! (part of [directives_assert_type_2]).
+//! (part of `directives_assert_type_2`).
 //!
 //! The string-based resolver in `calls_and_reveal.rs` only types names and
 //! literals. This module adds conservative inference for:

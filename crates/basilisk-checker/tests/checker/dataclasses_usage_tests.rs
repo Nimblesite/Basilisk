@@ -1,4 +1,4 @@
-//! Tests for [dataclasses_usage] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+//! Tests for [`dataclasses_usage`] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
 // Integration tests for dataclasses_usage: Dataclass field default factory mismatch.
 
 use super::common::*;

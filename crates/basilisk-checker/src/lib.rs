@@ -87,31 +87,15 @@ pub fn check_with_config(
         .filter_map(|mut diag| {
             let code = diag.code.code;
 
-            // 0. Config gating for Basilisk-only opt-in rules (all BSK-prefixed,
-            //    all off by default — the default config targets PEP conformance).
-            if code == "BSK-E0152" && !config.uv_stub_suggestions {
-                return None;
-            }
-            if matches!(code, "BSK-W0011" | "BSK-W0012" | "BSK-W0013")
-                && !config.uv_dependency_diagnostics
-            {
-                return None;
-            }
-            // Strict-annotation rules: stricter-than-PEP discipline, opt-in only.
-            if matches!(
-                code,
-                "BSK-E0001"
-                    | "BSK-E0002"
-                    | "BSK-E0003"
-                    | "BSK-E0004"
-                    | "BSK-E0005"
-                    | "BSK-E0025"
-                    | "BSK-W0014"
-                    | "BSK-W0040"
-                    | "BSK-W0050"
-            ) && !config.strict_annotations
-            {
-                return None;
+            // 0. Opt-in gating. Basilisk-original rules (provenance `basilisk`)
+            //    are off by default; each turns on only when the configuration
+            //    opts into one of its tags. PEP rules always run. Provenance and
+            //    tags come from the rule itself via the tagging layer — there is
+            //    no hand-maintained code list here. [CHKTAG-PROVENANCE]
+            if let Some(spec) = rule_tags::opt_in_spec_for_code(code) {
+                if !spec.tags.iter().any(|tag| opt_in_tag_enabled(tag, config)) {
+                    return None;
+                }
             }
 
             // 1. Per-path: check if rule is completely disabled for this file path.
@@ -170,6 +154,21 @@ pub fn check_with_config(
         .collect()
 }
 
+/// Whether a Basilisk rule's free-form `tag` is opted into by `config`.
+///
+/// This is the single bridge from the configuration's opt-in switches to rule
+/// tags. Selection is by tag, so adding a Basilisk rule needs only a tag on the
+/// rule itself — never an entry in a code list here or in the tagging layer.
+/// [CHKARCH-CONFIGURATION-ONLY]
+fn opt_in_tag_enabled(tag: &str, config: &basilisk_config::BasiliskConfig) -> bool {
+    match tag {
+        "strictness" | "style" | "redundancy" => config.strict_annotations,
+        "dependencies" | "imports" => config.uv_dependency_diagnostics,
+        "stubs" => config.uv_stub_suggestions,
+        _ => false,
+    }
+}
+
 /// Returns `true` if this diagnostic code can be cascade-suppressed.
 ///
 /// Only type-checking rules whose results depend on knowing the resolved type
@@ -195,7 +194,7 @@ fn is_cascade_suppressible(code: &str) -> bool {
 /// Extracts the source text covered by the diagnostic's span and checks if
 /// any of the `untyped_names` appear as whole identifiers within it. This
 /// avoids cascading errors from untyped imports — the root cause is already
-/// reported by imports_unresolved.
+/// reported by `imports_unresolved`.
 fn should_suppress_cascade(
     diag: &Diagnostic,
     untyped_names: &std::collections::HashSet<String>,
@@ -260,7 +259,7 @@ const fn is_identifier_char(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
-/// Check whether imports_unresolved should be suppressed based on per-module overrides.
+/// Check whether `imports_unresolved` should be suppressed based on per-module overrides.
 ///
 /// Iterates the module's imports to find which module triggered E0010,
 /// then checks if that module has `ignore-missing-stubs = true`.

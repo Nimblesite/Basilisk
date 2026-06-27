@@ -1,5 +1,5 @@
-//! Implements [literals_literalstring] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Helper functions for literals_literalstring: `LiteralString` and `Literal` assignment
+//! Implements [`literals_literalstring`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Helper functions for `literals_literalstring`: `LiteralString` and `Literal` assignment
 //! incompatibilities.
 //!
 //! This module contains text-level parsing utilities used by the rule to
@@ -12,7 +12,7 @@ use basilisk_resolver::{FunctionInfo, Span};
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
-/// literals_literalstring error code shared between this module and the rule.
+/// `literals_literalstring` error code shared between this module and the rule.
 pub(super) const CODE: ErrorCode = ErrorCode {
     code: "literals_literalstring",
     docs_url: "https://www.basilisk-python.dev/errors/literals_literalstring",
@@ -335,7 +335,7 @@ pub(super) fn parse_simple_call(expr: &str) -> Option<(&str, Vec<String>)> {
     Some((callee, args))
 }
 
-/// Emit a literals_literalstring diagnostic for a literal value mismatch.
+/// Emit a `literals_literalstring` diagnostic for a literal value mismatch.
 pub(super) fn emit_literal_value_mismatch(
     assign: &LocalAssign<'_>,
     target_value: &str,
@@ -364,7 +364,7 @@ pub(super) fn emit_literal_value_mismatch(
     ));
 }
 
-/// Emit a literals_literalstring diagnostic for an f-string `LiteralString` violation.
+/// Emit a `literals_literalstring` diagnostic for an f-string `LiteralString` violation.
 pub(super) fn emit_fstring_literal_string_error(
     assign: &LocalAssign<'_>,
     name: &str,
@@ -394,7 +394,7 @@ pub(super) fn emit_fstring_literal_string_error(
     ));
 }
 
-/// Emit a literals_literalstring diagnostic for an invariant container generic mismatch.
+/// Emit a `literals_literalstring` diagnostic for an invariant container generic mismatch.
 pub(super) fn emit_invariant_container_mismatch(
     assign: &LocalAssign<'_>,
     param_ann: &str,
@@ -426,7 +426,7 @@ pub(super) fn emit_invariant_container_mismatch(
     ));
 }
 
-/// Emit a literals_literalstring diagnostic for a container constructor call with str argument.
+/// Emit a `literals_literalstring` diagnostic for a container constructor call with str argument.
 pub(super) fn emit_container_call_str_error(
     assign: &LocalAssign<'_>,
     rhs: &str,

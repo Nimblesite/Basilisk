@@ -1,4 +1,4 @@
-//! Tests for [generics_typevartuple_callable] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
+//! Tests for [`generics_typevartuple_callable`] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
 // Integration tests for generics_typevartuple_callable: `TypeVarTuple` callable/tuple mismatch.
 
 use super::common::*;

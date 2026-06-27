@@ -1,5 +1,5 @@
-//! Implements [narrowing_typeis] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! narrowing_typeis: TypeGuard/TypeIs return type incompatibility in callable arguments.
+//! Implements [`narrowing_typeis`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! `narrowing_typeis`: TypeGuard/TypeIs return type incompatibility in callable arguments.
 //!
 //! When a function returning `TypeGuard[X]` or `TypeIs[X]` is passed as an
 //! argument where the expected callable return type is NOT `bool`, this rule
@@ -30,7 +30,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/narrowing_typeis",
 };
 
-/// Emits narrowing_typeis when a TypeGuard/TypeIs function is passed to a callable
+/// Emits `narrowing_typeis` when a TypeGuard/TypeIs function is passed to a callable
 /// parameter whose return type is not `bool`.
 pub(crate) struct TypeGuardCallableReturnMismatch;
 

@@ -123,7 +123,7 @@ pub struct FunctionInfo {
     pub class_name: Option<String>,
     /// `true` when this function is lexically nested inside a class body — e.g.
     /// a closure defined inside a method — even though it is not itself a method
-    /// (`class_name` is `None`).  Used by [generics_self_usage] to know that `Self` still
+    /// (`class_name` is `None`).  Used by `generics_self_usage` to know that `Self` still
     /// has a valid enclosing-class binding and must not be flagged as
     /// module-level `Self` usage.
     pub nested_in_class: bool,

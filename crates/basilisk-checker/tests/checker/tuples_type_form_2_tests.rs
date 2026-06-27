@@ -1,4 +1,4 @@
-//! Tests for [tuples_type_form_2] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
+//! Tests for [`tuples_type_form_2`] from [CHKARCH-DIAG-QUALITY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-QUALITY
 // Integration tests for tuples_type_form_2: Invalid tuple syntax.
 
 use super::common::*;

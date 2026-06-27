@@ -1,4 +1,4 @@
-//! Tests for [enums_member_values] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+//! Tests for [`enums_member_values`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 // Integration tests for enums_member_values: Enum value type mismatch.
 
 use super::common::*;

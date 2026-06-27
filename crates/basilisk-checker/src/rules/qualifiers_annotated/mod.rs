@@ -1,4 +1,4 @@
-//! qualifiers_annotated: Invalid first argument to `Annotated[...]`.
+//! `qualifiers_annotated`: Invalid first argument to `Annotated[...]`.
 //!
 //! PEP 593 requires that the first argument to `Annotated[...]` be a valid type
 //! expression. The following are errors:
@@ -59,7 +59,7 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     )
 }
 
-/// Emits qualifiers_annotated when `Annotated[...]` has an invalid first argument, too few args,
+/// Emits `qualifiers_annotated` when `Annotated[...]` has an invalid first argument, too few args,
 /// or when `Annotated` (or a `TypeAlias`) is called directly as a function.
 pub(crate) struct AnnotatedInvalidFirstArg;
 

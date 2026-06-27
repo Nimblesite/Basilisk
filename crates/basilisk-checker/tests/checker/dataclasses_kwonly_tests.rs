@@ -1,4 +1,4 @@
-//! Tests for [dataclasses_kwonly] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
+//! Tests for [`dataclasses_kwonly`] from [CHKARCH-DIAG-COERCION]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-COERCION
 // Integration tests for dataclasses_kwonly: dataclass `kw_only`.
 
 use super::common::*;

@@ -1,10 +1,10 @@
-//! Implements [match_exhaustiveness] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
-//! match_exhaustiveness: Non-exhaustive `match` statement.
+//! Implements [`match_exhaustiveness`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-typesafety
+//! `match_exhaustiveness`: Non-exhaustive `match` statement.
 //!
 //! A value-dispatch `match` statement that has no irrefutable branch may fail
 //! to handle certain runtime values, leading to a silent fall-through (Python
-//! does not raise an error for unmatched `match` subjects).  Basilisk treats
-//! this as an error in strict mode.
+//! does not raise an error for unmatched `match` subjects).  Basilisk reports
+//! this as an error.
 //!
 //! Two cases are *not* flagged, matching the reference checkers:
 //!   * a bare capture `case name:` (no guard) is irrefutable — like `case _:`,
@@ -24,7 +24,7 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/match_exhaustiveness",
 };
 
-/// Emits match_exhaustiveness for every `match` statement that lacks a wildcard branch.
+/// Emits `match_exhaustiveness` for every `match` statement that lacks a wildcard branch.
 pub(crate) struct NonExhaustiveMatch;
 
 impl Rule for NonExhaustiveMatch {

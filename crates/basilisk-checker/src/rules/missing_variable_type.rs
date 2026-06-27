@@ -1,9 +1,11 @@
 //! Implements [BSK-E0003] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-missing
 //! BSK-E0003: Missing variable type annotation.
 //!
-//! Fires when a module-level variable has no type annotation.  In strict mode
-//! every module-level binding must carry an explicit annotation so that
-//! Basilisk can verify downstream usage and generate accurate stubs.
+//! Fires when a module-level variable has no type annotation.  This house rule
+//! is off by default — the default configuration is pure PEP conformance — and
+//! a project opts in via configuration. When enabled, every module-level
+//! binding must carry an explicit annotation so that Basilisk can verify
+//! downstream usage and generate accurate stubs.
 
 use basilisk_resolver::{ResolvedModule, RhsKind, VariableInfo};
 
@@ -20,6 +22,13 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct MissingVariableType;
 
 impl Rule for MissingVariableType {
+    fn opt_in_spec(&self) -> Option<crate::rule_tags::OptInSpec> {
+        Some(crate::rule_tags::OptInSpec {
+            code: CODE.code,
+            tags: &["strictness"],
+        })
+    }
+
     fn check(
         &self,
         module: &ResolvedModule,
