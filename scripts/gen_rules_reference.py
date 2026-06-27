@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Generate the canonical diagnostic-code reference from the checker source.
 
-Single source of truth: the `//! BSK-E####: <description>` (and `BSK-W####`)
-header — and the doc-comment body beneath it — on each rule module under
-crates/basilisk-checker/src/rules/.
+Single source of truth: the diagnostic-code header — and the doc-comment body
+beneath it — on each rule module under crates/basilisk-checker/src/rules/. A
+header is either an opt-in `//! BSK-E####: <description>` (or `BSK-W####`) code
+or a PEP-conformance `//! `code_name`: <description>` code (the conformance
+rules are named after their python/typing conformance test, e.g.
+``//! `protocols_explicit`: ...``). Both styles are extracted so every code the
+CLI can emit gets a page.
 
 Usage:
     python3 scripts/gen_rules_reference.py             # print a Markdown table
@@ -35,7 +39,7 @@ RULES_DIR = ROOT / "crates" / "basilisk-checker" / "src" / "rules"
 DEFAULT_DATA_OUT = ROOT / "website" / "src" / "_data" / "rules.json"
 ERRORS_BASE_URL = "https://www.basilisk-python.dev/errors"
 
-HEADER = re.compile(r"//!\s*(BSK-[EW]\d{4}):\s*(.*)")
+HEADER = re.compile(r"//!\s*(BSK-[EW]\d{4}|`[a-z0-9_]+`):\s*(.*)")
 DOC = re.compile(r"//!\s?(.*)")
 DOCS_URL = re.compile(r'docs_url:\s*"([^"]+)"')
 SPEC_REF = re.compile(r"^Implements ")
@@ -54,12 +58,30 @@ def clean(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip().rstrip(".").strip())
 
 
-def sort_key(code: str) -> tuple[int, int]:
-    # E before W, then numeric.
-    return (0 if code[4] == "E" else 1, int(code[5:]))
+def is_bsk(code: str) -> bool:
+    return code.startswith("BSK-")
+
+
+def severity_for(code: str) -> str:
+    # BSK opt-in codes carry severity in the letter; named PEP-conformance
+    # codes are all type errors (spec violations).
+    if is_bsk(code):
+        return "error" if code[4] == "E" else "warning"
+    return "error"
+
+
+def sort_key(code: str) -> tuple[int, int, int, str]:
+    # BSK opt-in codes first (E before W, then numeric), then named
+    # conformance codes alphabetically.
+    if is_bsk(code):
+        return (0, 0 if code[4] == "E" else 1, int(code[5:]), "")
+    return (1, 0, 0, code)
 
 
 def group_for(code: str) -> str:
+    if not is_bsk(code):
+        # Named conformance rules span the broad type-system surface.
+        return "Type System"
     kind, num = code[4], int(code[5:])
     for gk, lo, hi, label in GROUPS:
         if gk == kind and lo <= num <= hi:
@@ -137,7 +159,7 @@ def extract() -> list[dict]:
             m = HEADER.match(line.strip())
             if not m:
                 continue
-            code, summary = m.group(1), m.group(2)
+            code, summary = m.group(1).strip("`"), m.group(2)
             if code in records:
                 continue
             # The contiguous //! doc lines following the header line.
@@ -157,7 +179,7 @@ def extract() -> list[dict]:
                 summary = f"{summary} {body_lines.pop(0)}"
             records[code] = {
                 "code": code,
-                "severity": "error" if code[4] == "E" else "warning",
+                "severity": severity_for(code),
                 "summary": clean(summary),
                 "summaryHtml": inline_html(clean(summary)),
                 "body": parse_body(body_lines),

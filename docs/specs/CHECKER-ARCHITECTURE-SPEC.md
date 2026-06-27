@@ -1497,10 +1497,13 @@ it is how conformance, false-positive, and rule semantics are kept from
 silently degrading over time. The scope only ever **grows** toward all Rust
 code:
 
-- **Scope is test-driven.** `#[mutation_safe(rule = "eNNNN", fns = "fn_a|fn_b")]`
+- **Scope is test-driven.** `#[mutation_safe(rule = "<rule-slug>", fns = "fn_a|fn_b")]`
   attributes on e2e tests drive the `cargo mutants` examine regex
-  (`scripts/mutation_examine_re.py`). Adding such tests is the one and only way
-  to widen scope — every new checker rule or extracted helper ships with them.
+  (`scripts/mutation_examine_re.py`). `<rule-slug>` is the rule's path stem under
+  `crates/basilisk-checker/src/rules/` (a file like `aliases_implicit` or a
+  directory like `assignment_compatibility`); omitting `fns` scopes the whole rule
+  file. Adding such tests is the one and only way to widen scope — every new
+  checker rule or extracted helper ships with them.
 - **Baseline is ratcheted.** `mutation_testing/mutation_scores.json` is the
   committed baseline; `mutation_testing/mutants_report.py` fails the build when
   the **viable mutant pool shrinks**, `caught` drops, `missed` or `timeout`

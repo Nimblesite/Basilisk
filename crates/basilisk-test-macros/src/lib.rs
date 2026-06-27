@@ -25,10 +25,11 @@ impl Parse for MutationSafeArgs {
         let rule = input.parse::<LitStr>()?;
 
         let rule_value = rule.value();
-        if !is_rule_code(&rule_value) {
+        if !is_rule_slug(&rule_value) {
             return Err(syn::Error::new_spanned(
                 rule,
-                "rule must match the Basilisk rule form `eNNNN`",
+                "rule must be a rule path slug: lowercase ASCII starting with a \
+                 letter, e.g. `assignment_compatibility` or `aliases_implicit`",
             ));
         }
 
@@ -49,9 +50,9 @@ impl Parse for MutationSafeArgs {
         };
 
         if !input.is_empty() {
-            return Err(
-                input.error("expected `rule = \"eNNNN\"` or `rule = \"eNNNN\", fns = \"fn1|fn2\"`")
-            );
+            return Err(input.error(
+                "expected `rule = \"<slug>\"` or `rule = \"<slug>\", fns = \"fn1|fn2\"`",
+            ));
         }
 
         Ok(Self { rule, fns })
@@ -60,9 +61,13 @@ impl Parse for MutationSafeArgs {
 
 /// Marks a Rust test as safe for the mutation-test Make target.
 ///
-/// Required: `rule = "eNNNN"` — the rule file this test mutates.
+/// Required: `rule = "<slug>"` — the rule's path stem under
+/// `crates/basilisk-checker/src/rules/` (a file like `aliases_implicit` or a
+/// directory like `assignment_compatibility`). This is what scopes mutant
+/// selection to that rule's source.
 /// Optional: `fns = "fn_a|fn_b"` — pipe-separated function names to scope the
 /// mutant regex to specific functions, dramatically reducing the mutant count.
+/// Omitting `fns` scopes the whole rule file (encoded via `WHOLE_FILE_SLUG`).
 ///
 /// The original test remains unchanged. When compiled with `--cfg mutation_testing`,
 /// this macro also emits a wrapper test whose module path encodes the rule and
@@ -87,17 +92,18 @@ fn expand_mutation_safe(
     let function_name = &function.sig.ident;
     let output = &function.sig.output;
 
-    // Encode targeted functions into the module name so the Makefile can extract them.
-    // Module name: `mutation_safe_{rule}_{fns_slug}_{test_fn}` when fns is given,
-    //              `mutation_safe_{rule}_{test_fn}` otherwise.
+    // Encode the rule slug and targeted functions into the wrapper module name so
+    // `scripts/mutation_examine_re.py` can recover both from `cargo test --list`.
+    // Both forms share the `_fns__{slug}__` delimiter — a whole-file test uses the
+    // `WHOLE_FILE_SLUG` sentinel for `{slug}` — so the parser has a single,
+    // unambiguous format regardless of how many underscores the descriptive rule
+    // slug contains (`mutation_safe_{rule}_fns__{slug}__{test_fn}`).
     // fns_slug: pipe chars replaced with `__` for a valid Rust identifier.
-    let wrapper_module = match &args.fns {
-        Some(fns_lit) => {
-            let slug = fns_lit.value().replace('|', "__");
-            format_ident!("mutation_safe_{rule}_fns__{slug}__{function_name}")
-        }
-        None => format_ident!("mutation_safe_{rule}_{function_name}"),
+    let fns_slug = match &args.fns {
+        Some(fns_lit) => fns_lit.value().replace('|', "__"),
+        None => WHOLE_FILE_SLUG.to_owned(),
     };
+    let wrapper_module = format_ident!("mutation_safe_{rule}_fns__{fns_slug}__{function_name}");
 
     Ok(quote! {
         #function
@@ -155,13 +161,21 @@ fn validate_test_function(function: &ItemFn) -> Result<(), syn::Error> {
     Ok(())
 }
 
-fn is_rule_code(value: &str) -> bool {
-    matches!(
-        value.as_bytes(),
-        [b'e', first, second, third, fourth]
-            if first.is_ascii_digit()
-                && second.is_ascii_digit()
-                && third.is_ascii_digit()
-                && fourth.is_ascii_digit()
-    )
+/// Sentinel `{slug}` value used in the wrapper-module name when a test is scoped to
+/// a whole rule file (no `fns`). `scripts/mutation_examine_re.py` recognises this
+/// exact string and emits a whole-file mutant pattern instead of per-function ones.
+/// Keep the two in sync. It is a single lowercase token so the generated module name
+/// stays `snake_case` and cannot collide with a real rule slug or function name.
+const WHOLE_FILE_SLUG: &str = "wholefile";
+
+/// A rule slug is the path stem of a rule under `crates/basilisk-checker/src/rules/`
+/// (a file like `aliases_implicit` or a directory like `assignment_compatibility`).
+/// It must be a valid Rust identifier fragment — a lowercase ASCII letter first,
+/// then lowercase ASCII letters, digits, or underscores — so it can be embedded in
+/// the generated wrapper-module identifier.
+fn is_rule_slug(value: &str) -> bool {
+    let mut bytes = value.bytes();
+    let starts_with_lower_letter = matches!(bytes.next(), Some(first) if first.is_ascii_lowercase());
+    starts_with_lower_letter
+        && bytes.all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
 }

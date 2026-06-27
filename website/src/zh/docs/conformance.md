@@ -29,7 +29,7 @@ Basilisk 由**官方 `python/typing` 符合性套件**评分——也就是类�
 
 - 每个规范章节对应一个或多个**测试文件**——普通的 Python 模块，用 `# E` 注释标出每一行符合规范的类型检查器**必须**报告错误的位置（以及用 `# E[tag]` 组标出多个相关错误中报告其一即可的位置）。
 - 一个小型**评分工具**对这些文件运行某个类型检查器，并将其输出与注释做差异比对。文件只有在差异为空时才*通过*：每个必需错误都被报告，且没有任何诊断落在套件未标记的行上。
-- 维护者用它为每个检查器打分，并发布[结果表](https://github.com/python/typing/blob/main/conformance/results/results.html)——pyright 约 99%、pyrefly 约 86% 等数字便是这样得出的。
+- 维护者用它为每个检查器打分，并发布[结果表](https://github.com/python/typing/blob/main/conformance/results/results.html)——这是 pyright、mypy、pyrefly、ty 等工具当前得分的实时权威来源。
 
 我们使用这套套件，固定在提交 [`{{ conformance.pinnedRef }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance)。同样的工具与文件为所有人打分，因此这个数字在各检查器之间可比，也不是我们能朝有利方向调整的。
 

@@ -34,7 +34,7 @@ It works like this:
 
 - Each spec chapter has one or more **test files** — ordinary Python modules that exercise a feature and mark, with `# E` comments, every line where a conforming type checker **must** report an error (and, with `# E[tag]` groups, where one of several related errors is acceptable).
 - A small **scoring tool** runs a type checker over those files and diffs its output against the annotations. A file *passes* only if the diff is empty: every required error is reported, and nothing is reported on a line the suite does not mark.
-- The maintainers run every checker through it and publish the [results table](https://github.com/python/typing/blob/main/conformance/results/results.html), which is how figures like pyright's ~99% or pyrefly's ~86% are produced.
+- The maintainers run every checker through it and publish the [results table](https://github.com/python/typing/blob/main/conformance/results/results.html) — the live, authoritative source for how pyright, mypy, pyrefly, ty, and the others currently score.
 
 We use that suite at the pinned commit [`{{ conformance.pinnedRef }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance). The same tool and files grade everyone, so the number is comparable across checkers and not something we can tune in our favour.
 

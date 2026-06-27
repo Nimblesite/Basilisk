@@ -211,9 +211,7 @@ benchmarkStrings:
       <h2 class="feature-row__title">{{ conformance.total }} 个测试中 {{ conformance.pass }} 个通过（{{ conformance.scorePct }}%）。<br>每条符合性规则均已启用。</h2>
       <p class="feature-row__body">
         由<a href="https://github.com/python/typing/blob/main/conformance/results/results.html">官方 Python 类型符合性套件</a>评分——
-        与衡量 Pyright（约 99%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）、
-        mypy（约 58%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）
-        和 Pyrefly（约 86%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）的套件相同。
+        同一套公开的评分工具也为 Pyright、mypy 和 Pyrefly 打分，它们的当前得分见该结果表。
         我们在真实二进制文件上运行它，启用每一条符合性规则、不禁用任何规则：{{ conformance.categoriesTotal }} 个类别中有 {{ conformance.categoriesPass100 }} 个达到 100%，误报 {{ conformance.fp }} 处、遗漏的必需错误 {{ conformance.missed }} 处。Basilisk 的可选规则在符合性评分中从不运行，因此无法虚增得分。<a href="/zh/docs/conformance/">我们如何衡量 &rarr;</a>
       </p>
     </div>
@@ -322,10 +320,10 @@ benchmarkStrings:
           <tr>
             <td>PEP 符合性 <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a></td>
             <td class="col-basilisk">{{ conformance.scorePct }}% <em style="font-size:0.75rem;color:var(--color-text-muted)">({{ conformance.pass }}/{{ conformance.total }})</em></td>
-            <td>~99%</td>
-            <td>~58% 完全通过</td>
+            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html">已公开</a></td>
+            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html">已公开</a></td>
             <td>alpha</td>
-            <td>~86%</td>
+            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html">已公开</a></td>
           </tr>
           <tr>
             <td>实现语言</td>
@@ -591,7 +589,7 @@ benchmarkStrings:
   <div class="container">
     <h3 class="citations-heading">来源</h3>
     <ol class="citations-list">
-      <li>完全通过的符合性得分来自<a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">官方 python/typing 符合性套件</a>（pyright 1.1.408、mypy 1.19.1、pyrefly 0.54.0）。mypy 的部分+通过得分为 96.4%。</li>
+      <li>竞品的 PEP 符合性得分发布于<a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">官方 python/typing 符合性结果</a>，其中列出每个工具的当前得分与版本。我们链接实时表格而非复述某个数字，因为这些得分会随工具改进而变化。</li>
       <li>Pyrefly 吞吐量（1.85M LOC/秒）来自 <a href="https://pyrefly.org/" target="_blank" rel="noopener">pyrefly.org</a>（在 Meta 166 核基础设施上测量）。</li>
       <li>性能基准测试表：每款工具 CLI 针对大型单规则测试文件的平均挂钟时间，基于 {{ benchmarks.meta.runsCount }} 次 hyperfine 运行，测量于 {{ benchmarks.meta.cpu }}（{{ benchmarks.meta.os }}，{{ benchmarks.meta.arch }}，{{ benchmarks.meta.cores }} 核心），生成于 {{ benchmarks.meta.generated }}。工具版本：{% for t in benchmarks.meta.toolVersions %}{{ t.tool }} {{ t.version }}{% if not loop.last %}、{% endif %}{% endfor %}。来源 <code>benchmarks/status/{{ benchmarks.primary }}.csv</code>；可用 <code>make bench</code> 复现。这些是冷启动的全文件运行，并不反映热增量（LSP）性能。</li>
     </ol>

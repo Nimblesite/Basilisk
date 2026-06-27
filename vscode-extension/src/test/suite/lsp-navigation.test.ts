@@ -44,9 +44,7 @@ suite('LSP Signature Help & Code Action Tests', () => {
 
     suiteSetup(async function () {
         this.timeout(SUITE_SETUP_TIMEOUT_MS);
-        // This suite's code-action test relies on an annotation diagnostic
-        // (untyped param), which is an opt-in house rule — enable it here.
-        const setup = await setupLspTestSuite('basilisk-nav-test-', { strictAnnotations: true });
+        const setup = await setupLspTestSuite('basilisk-nav-test-');
         tmpDir = setup.tmpDir;
     });
 
@@ -115,18 +113,21 @@ suite('LSP Signature Help & Code Action Tests', () => {
     test('code actions provided for diagnostics', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + LARGE_TIMEOUT_BUFFER_MS);
 
+        // A core type-mismatch (always on) — independent of any opt-in house
+        // rule, so this suite needs no config. Every coded diagnostic offers at
+        // least the suppress/disable quick fixes, which is what we assert below.
         const { uri } = await openPythonFile(
             tmpDir,
             'test_code_actions.py',
-            'def broken(x):\n    return x\n'
+            'x: int = "hello"\n'
         );
 
-        // Wait for diagnostics to appear (missing type annotation).
+        // Wait for diagnostics to appear (the assignment type mismatch).
         const diagnostics = await waitForDiagnostics(uri, DIAGNOSTIC_TIMEOUT_MS);
 
         assert.ok(
             diagnostics.length > 0,
-            'Expected at least one diagnostic for the untyped parameter'
+            'Expected at least one diagnostic for the type mismatch'
         );
 
         // Use the range of the first diagnostic to request code actions.

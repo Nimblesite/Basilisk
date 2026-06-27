@@ -271,50 +271,5 @@ foo()
   },
 ];
 
-// Homepage before/after demo. `bad.py` must report exactly six errors and
-// `good.py` must be clean — these mirror the source shown in website/src/index.njk.
-const HOME_SHOTS = [
-  {
-    name: "cli-demo",
-    file: "bad.py",
-    expect: "Found 6 diagnostics",
-    code: `def process(data):
-    return data.upper()
-
-class User:
-    def __init__(self, name, age):
-        self.name = name
-        self.age  = age
-
-    def greet(self):
-        return f"Hello, {self.name}"
-`,
-  },
-  {
-    name: "cli-clean",
-    file: "good.py",
-    expect: "No issues found",
-    code: `def process(data: str) -> str:
-    return data.upper()
-
-
-class User:
-    name: str
-    age: int
-
-    def __init__(self, name: str, age: int) -> None:
-        self.name = name
-        self.age  = age
-
-    def greet(self) -> str:
-        return f"Hello, {self.name}"
-`,
-  },
-];
-
-// A rule shot's source file is named after the image stem (e0001 → e0001.py); a
-// home shot carries its own filename so the prompt reads `basilisk check bad.py`.
-export const SHOTS = [
-  ...RULE_SHOTS.map((shot) => ({ ...shot, file: `${shot.name}.py` })),
-  ...HOME_SHOTS,
-];
+// A rule shot's source file is named after the image stem (e0001 → e0001.py).
+export const SHOTS = RULE_SHOTS.map((shot) => ({ ...shot, file: `${shot.name}.py` }));

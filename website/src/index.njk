@@ -202,9 +202,8 @@ benchmarkStrings:
       <h2 class="feature-row__title">{{ conformance.pass }} of {{ conformance.total }} tests passing ({{ conformance.scorePct }}%).<br>Every conformance rule enabled.</h2>
       <p class="feature-row__body">
         Scored by the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">official Python typing conformance suite</a> &mdash;
-        the same harness used to measure Pyright (~99%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>),
-        mypy (~58%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>),
-        and Pyrefly (~86%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>).
+        the same published harness that grades Pyright, mypy, and Pyrefly, whose
+        current scores live in that results table.
         We run it on the real binary with every conformance rule enabled and nothing disabled: {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories pass at 100%, with {{ conformance.fp }} false positives and {{ conformance.missed }} missed required errors. Basilisk&rsquo;s opt-in rules never run during conformance, so they can&rsquo;t pad the number. <a href="/docs/conformance/">How we measure this &rarr;</a>
       </p>
     </div>
@@ -314,10 +313,10 @@ benchmarkStrings:
           <tr>
             <td>PEP conformance <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a></td>
             <td class="col-basilisk">{{ conformance.scorePct }}% <em style="font-size:0.75rem;color:var(--color-text-muted)">({{ conformance.pass }}/{{ conformance.total }})</em></td>
-            <td>~99%</td>
-            <td>~58% full-pass</td>
+            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html">published</a></td>
+            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html">published</a></td>
             <td>alpha</td>
-            <td>~86%</td>
+            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html">published</a></td>
           </tr>
           <tr>
             <td>Implementation</td>
@@ -583,7 +582,7 @@ Install from <span class="tok-str">Extensions</span>
   <div class="container">
     <h3 class="citations-heading">Sources</h3>
     <ol class="citations-list">
-      <li>Full-pass conformance scores from the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">official python/typing conformance suite</a> (pyright 1.1.408, mypy 1.19.1, pyrefly 0.54.0). mypy&rsquo;s partial+pass score is 96.4%.</li>
+      <li>Competitor PEP-conformance scores are published in the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">official python/typing conformance results</a>, which lists each tool&rsquo;s current score and version. We link the live table rather than restate a figure, because those scores change as the tools improve.</li>
       <li>Pyrefly throughput (1.85M LOC/sec) from <a href="https://pyrefly.org/" target="_blank" rel="noopener">pyrefly.org</a> (measured on 166-core Meta infrastructure).</li>
       <li>Performance-benchmark table: mean wall-clock over {{ benchmarks.meta.runsCount }} hyperfine runs of each tool&rsquo;s CLI against large single-rule fixtures, measured on {{ benchmarks.meta.cpu }} ({{ benchmarks.meta.os }}, {{ benchmarks.meta.arch }}, {{ benchmarks.meta.cores }} cores) on {{ benchmarks.meta.generated }}. Tool versions: {% for t in benchmarks.meta.toolVersions %}{{ t.tool }} {{ t.version }}{% if not loop.last %}, {% endif %}{% endfor %}. Source <code>benchmarks/status/{{ benchmarks.primary }}.csv</code>; reproduce with <code>make bench</code>. These are cold full-file runs and do not reflect warm incremental (LSP) performance.</li>
     </ol>
