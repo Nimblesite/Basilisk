@@ -8,6 +8,11 @@
     clippy::as_conversions
 )]
 //! Tests for project-level configuration overrides via `check_with_config`.
+//!
+//! Exercises the config-realized severity model [CHKARCH-STRICTNESS-SEVERITY]
+//! (disable / demote-to-warning / demote-to-info / promote-to-error), the
+//! per-path and per-module rungs of [CHKARCH-STRICTNESS-PRECEDENCE], and the
+//! opt-in house-rule discipline of [CHKARCH-CONFIGURATION-ONLY].
 
 use std::collections::HashMap;
 

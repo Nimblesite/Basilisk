@@ -11,6 +11,10 @@ use std::collections::HashMap;
 use serde::Serialize;
 
 /// Accumulated profiling data for a single session.
+///
+/// Implements [PROFILE-AGGREGATION-STRUCTS] — the `line_hits` / `function_stats`
+/// maps, total/per-thread counts, and the deduplicated frame list + per-thread
+/// stacks/weights that back the speedscope export.
 #[derive(Debug, Clone, Default)]
 pub struct ProfileData {
     /// `file path -> line number -> sample count`.
@@ -63,7 +67,7 @@ pub struct SpeedscopeFrame {
     pub line: i32,
 }
 
-/// Per-function profiling statistics.
+/// Per-function profiling statistics ([PROFILE-AGGREGATION-STRUCTS]).
 #[derive(Debug, Clone, Serialize)]
 pub struct FunctionStats {
     /// Function name.
@@ -90,6 +94,8 @@ pub struct HotspotConfig {
 }
 
 impl Default for HotspotConfig {
+    // Implements [PROFILE-AGGREGATION-THRESHOLD] — line 1% / function 2% of total
+    // samples, capped at 20 diagnostics per file (the spec defaults).
     fn default() -> Self {
         Self {
             line_threshold_pct: 1.0,
@@ -103,6 +109,12 @@ impl ProfileData {
     /// Ingest a set of stack traces from a single `get_stack_traces()` call.
     ///
     /// `sample_weight` is `1.0 / sample_rate` (seconds per sample).
+    ///
+    /// Implements [PROFILE-AGGREGATION-LOGIC] — per trace: skip idle threads
+    /// unless `include_idle`; increment `line_hits` + `total_samples` for every
+    /// frame, `self_samples` for the leaf (py-spy index 0); record the stack as
+    /// frame indices (reversed to root-first for speedscope); then bump
+    /// `total_samples` once per `get_stack_traces()` call.
     pub fn ingest_traces(
         &mut self,
         traces: &[py_spy::StackTrace],
@@ -194,6 +206,10 @@ impl ProfileData {
     }
 
     /// Return hot lines above the configured threshold, sorted by sample count.
+    ///
+    /// Implements [PROFILE-AGGREGATION-THRESHOLD] (line side): only lines at or
+    /// above `line_threshold_pct` of total line samples survive, and each file is
+    /// truncated to `max_diagnostics_per_file`.
     #[must_use]
     pub fn hot_lines(&self, config: &HotspotConfig) -> Vec<HotLine> {
         if self.total_samples == 0 {
@@ -234,6 +250,9 @@ impl ProfileData {
     }
 
     /// Return hot functions above the configured threshold, sorted by total samples.
+    ///
+    /// Implements [PROFILE-AGGREGATION-THRESHOLD] (function side): only functions
+    /// at or above `function_threshold_pct` of total self-samples survive.
     #[must_use]
     pub fn hot_functions(&self, config: &HotspotConfig) -> Vec<HotFunction> {
         if self.total_samples == 0 {
@@ -354,6 +373,8 @@ mod tests {
         }
     }
 
+    // [PROFILE-AGGREGATION-LOGIC] Leaf gets self_samples, every frame gets
+    // total_samples and a line hit.
     #[test]
     fn ingest_single_trace_counts_correctly() {
         let mut data = ProfileData::default();
@@ -400,6 +421,7 @@ mod tests {
         }
     }
 
+    // [PROFILE-AGGREGATION-LOGIC] Idle threads are skipped unless include_idle.
     #[test]
     fn idle_traces_skipped_when_not_included() {
         let mut data = ProfileData::default();
@@ -410,6 +432,8 @@ mod tests {
         assert!(data.line_hits.is_empty());
     }
 
+    // [PROFILE-AGGREGATION-THRESHOLD] Lines below the configured percentage are
+    // dropped from the hot-line set.
     #[test]
     fn hot_lines_filters_by_threshold() {
         let mut data = ProfileData::default();

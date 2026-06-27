@@ -1,4 +1,4 @@
-# Checker Result Cache — Specification
+# Checker Result Cache — Specification {#CHKCACHE}
 
 **Spec group:** `CHKCACHE`
 **Status:** v1 (opt-in)
@@ -15,7 +15,7 @@ on.
 
 ---
 
-## `CHKCACHE-CONTRACT` — The correctness contract (non-negotiable)
+## `CHKCACHE-CONTRACT` — The correctness contract (non-negotiable) {#CHKCACHE-CONTRACT}
 
 > **A cache hit is permitted only when every input that can affect the
 > diagnostics is provably byte-identical to when the entry was written. Any
@@ -43,7 +43,7 @@ determined (a recorded dependency is now missing/unreadable, the entry cannot be
 parsed, the config cannot be fingerprinted), the result is a MISS and the check
 runs in full.
 
-### `CHKCACHE-SOUNDNESS` — Why this never misses an error
+### `CHKCACHE-SOUNDNESS` — Why this never misses an error {#CHKCACHE-SOUNDNESS}
 
 The check is a pure function of inputs (1)–(5): identical inputs ⟹ identical
 diagnostics, *and* identical inputs ⟹ the check reads the identical set of files.
@@ -57,7 +57,7 @@ The dependency set is captured by **recording the actual file reads** during the
 miss path (see `CHKCACHE-READSET`), not by inferring it from the import list — so
 a transitively-read stub that influenced the result is always fingerprinted.
 
-### `CHKCACHE-LIMITS` — Documented v1 boundary
+### `CHKCACHE-LIMITS` — Documented v1 boundary {#CHKCACHE-LIMITS}
 
 The environment fingerprint (`CHKCACHE-INPUT-ENV`) hashes the search-path
 configuration and `uv.lock`. Installing or removing packages **directly into a
@@ -67,7 +67,7 @@ after mutating the environment outside the lockfile. Source, config, lockfile,
 and version changes are always detected. This boundary is the reason v1 ships
 behind a flag rather than on by default.
 
-### `CHKCACHE-POSITIONING` — When this cache helps, and the Salsa endgame
+### `CHKCACHE-POSITIONING` — When this cache helps, and the Salsa endgame {#CHKCACHE-POSITIONING}
 
 This v1 cache is **correct everywhere but only *useful* in narrow conditions**,
 and the documentation must say so plainly.
@@ -108,7 +108,7 @@ and the documentation must say so plainly.
 
 ---
 
-## `CHKCACHE-READSET` — Capturing the exact read-set
+## `CHKCACHE-READSET` — Capturing the exact read-set {#CHKCACHE-READSET}
 
 All checker file reads go through two functions:
 
@@ -123,7 +123,7 @@ and for non-cached CLI runs), active only for the duration of a cached check.
 
 ---
 
-## `CHKCACHE-FINGERPRINT` — The fingerprint
+## `CHKCACHE-FINGERPRINT` — The fingerprint {#CHKCACHE-FINGERPRINT}
 
 `fingerprint = hash(version ‖ config_hash ‖ env_hash ‖ sorted[(path, content_hash)…])`
 
@@ -134,7 +134,7 @@ file individually rather than trusting a single rolled-up number.
 
 ---
 
-## `CHKCACHE-ENTRY` — On-disk entry
+## `CHKCACHE-ENTRY` — On-disk entry {#CHKCACHE-ENTRY}
 
 One JSON file per target, named by the hash of the target's canonical path,
 under the cache directory (`CHKCACHE-DIR`, default `.basilisk/cache/check`).
@@ -153,7 +153,7 @@ re-hashes every `deps` path against its stored hash. All match ⟹ HIT.
 
 ---
 
-## `CHKCACHE-CLI` — CLI surface
+## `CHKCACHE-CLI` — CLI surface {#CHKCACHE-CLI}
 
 - `--cache` — enable the cache (off by default). (`CHKCACHE-CLI-ENABLE`)
 - `--cache-dir <DIR>` — override the cache location. (`CHKCACHE-CLI-DIR`)
@@ -165,7 +165,7 @@ Disabled (default) ⟹ behaviour is byte-for-byte identical to today.
 
 ---
 
-## `CHKCACHE-TEST` — Test obligations (coarse e2e)
+## `CHKCACHE-TEST` — Test obligations (coarse e2e) {#CHKCACHE-TEST}
 
 1. `CHKCACHE-TEST-HIT` — second cached run yields identical diagnostics.
 2. `CHKCACHE-TEST-TARGET` — editing the target between runs yields fresh

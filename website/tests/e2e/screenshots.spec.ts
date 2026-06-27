@@ -55,8 +55,12 @@ test.describe("CLI screenshots render", () => {
     }
   });
 
-  // Real VS Code editor screenshots ([VSIX-EDITOR-SCREENSHOTS]) embedded on the
-  // feature docs — assert each decodes so a missing/zero-byte capture fails CI.
+  // Implements [VSIX-EDITOR-SCREENSHOTS-VERIFY]: real VS Code editor screenshots
+  // embedded on the feature docs — assert each is present on its embedding page and
+  // decodes to non-zero pixels, so a missing/zero-byte capture fails CI (capture
+  // itself never runs in CI, per [GITHUB-NO-ARTIFACTS]).
+  // Mirrors the [VSIX-EDITOR-SCREENSHOTS-SET] table (Image -> Embedded on): each
+  // captured PNG must surface on the docs page that documents the feature.
   const EDITOR_SHOTS: Array<{ path: string; image: string }> = [
     { path: "/docs/install-vscode/", image: "vscode-diagnostics.png" },
     { path: "/docs/refactoring/", image: "vscode-quickfix.png" },

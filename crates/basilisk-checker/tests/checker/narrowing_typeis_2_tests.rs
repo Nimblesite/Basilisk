@@ -3,6 +3,8 @@
 
 use super::common::*;
 
+// Exercises [TYPEINF-NARROWING-TYPEIS] — PEP 742 consistency precondition:
+// the narrowed type must be a subtype of the input parameter type.
 #[test]
 fn valid_typeis() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"

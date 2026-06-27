@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use super::{TestItem, TestItemKind};
 
+// Implements [LSPTEST-TEST-DISCOVERY] — scans workspace for `test_*.py` / `*_test.py` files.
 /// Discover all test files in a directory tree.
 #[must_use]
 pub fn discover_test_files(root: &Path) -> Vec<PathBuf> {
@@ -14,6 +15,10 @@ pub fn discover_test_files(root: &Path) -> Vec<PathBuf> {
     files
 }
 
+// Implements [LSPTEST-TEST-DISCOVERY] — parses with `basilisk-parser` to extract test items
+// without importing. Also realises [LSPTEST-SUPPORTED-FRAMEWORKS]: pytest `def test_*` functions
+// and unittest `TestCase` subclasses. NOTE: framework selection is unconditional (both pytest and
+// unittest heuristics always run); the `testExplorer.framework` setting is not consulted here.
 /// Discover test items from a single Python source file.
 #[must_use]
 pub fn discover_tests_in_file(path: &Path, source: &str) -> Vec<TestItem> {
@@ -83,6 +88,8 @@ pub fn discover_tests_in_file(path: &Path, source: &str) -> Vec<TestItem> {
     items
 }
 
+// Implements [LSPTEST-TEST-ITEM-DATA-MODEL-HIERARCHY] — builds the File > (Function | Class > Method)
+// tree by wrapping each file's items under a `TestItemKind::File` node.
 /// Discover all tests across a workspace.
 #[must_use]
 pub fn discover_workspace_tests(root: &Path) -> Vec<TestItem> {
@@ -114,6 +121,7 @@ pub fn discover_workspace_tests(root: &Path) -> Vec<TestItem> {
     all_items
 }
 
+// Implements [LSPTEST-SUPPORTED-FRAMEWORKS] — unittest detection via `unittest.TestCase` inheritance.
 /// Check if a class inherits from `unittest.TestCase`.
 fn is_unittest_class(class: &basilisk_resolver::scope::ClassInfo) -> bool {
     class
@@ -130,6 +138,7 @@ fn byte_offset_to_line(source: &str, offset: usize) -> usize {
         .map_or(0, |s| s.chars().filter(|&c| c == '\n').count())
 }
 
+// Implements [LSPTEST-TEST-DISCOVERY] — recursive scan for the `test_*.py` / `*_test.py` patterns.
 /// Recursively collect test files (test_*.py, *_test.py).
 fn collect_test_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -167,6 +176,7 @@ fn collect_test_files(dir: &Path, out: &mut Vec<PathBuf>) {
 mod tests {
     use super::*;
 
+    // Exercises [LSPTEST-TEST-DISCOVERY] + [LSPTEST-SUPPORTED-FRAMEWORKS] (pytest functions/classes).
     #[test]
     fn test_discover_tests_in_source() {
         let source = r"
@@ -213,6 +223,7 @@ class TestUserEndpoints:
         assert_eq!(class.children.len(), 2);
     }
 
+    // Exercises [LSPTEST-SUPPORTED-FRAMEWORKS] — unittest.TestCase detection.
     #[test]
     fn test_unittest_class_detection() {
         let source = r"
@@ -281,6 +292,7 @@ def setup() -> None:
         assert!(names.contains(&"test_beta"));
     }
 
+    // Exercises [LSPTEST-TEST-ITEM-DATA-MODEL] — id format `<file>::<name>`.
     #[test]
     fn test_item_ids_use_file_relative_path() {
         let source = r"
@@ -293,6 +305,7 @@ def test_example() -> None:
         assert_eq!(items[0].id, "tests/test_example.py::test_example");
     }
 
+    // Exercises [LSPTEST-TEST-ITEM-DATA-MODEL-HIERARCHY] — method id `<file>::<Class>::<method>`.
     #[test]
     fn test_class_method_ids_include_class_name() {
         let source = r"
@@ -353,6 +366,7 @@ class MyTests(TestCase):
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    // Exercises [LSPTEST-TEST-DISCOVERY] — both `test_*.py` and `*_test.py` patterns.
     #[test]
     fn test_discover_test_files_finds_both_patterns() {
         let unique = format!(
@@ -378,6 +392,7 @@ class MyTests(TestCase):
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    // Exercises [LSPTEST-TEST-ITEM-DATA-MODEL-HIERARCHY] — File node wraps function children.
     #[test]
     fn test_workspace_discovery_creates_file_items() {
         let dir = std::env::temp_dir().join("basilisk_workspace_disc");

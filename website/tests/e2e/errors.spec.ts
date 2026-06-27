@@ -32,6 +32,8 @@ const expectRendered = async (page: Page, src: string): Promise<void> => {
 };
 
 test.describe("error reference pages", () => {
+  // Closes [WEBSITE-ERROR-PAGES-PAGES]: error.njk must generate a page for EVERY
+  // code in rules.json (≥ 155 — every CLI-linked code), not just a sample.
   test("every diagnostic code has a built /errors/ page", () => {
     const missing = RULES.map((r) => r.code).filter(
       (code) => !existsSync(join(process.cwd(), "_site", "errors", code, "index.html")),

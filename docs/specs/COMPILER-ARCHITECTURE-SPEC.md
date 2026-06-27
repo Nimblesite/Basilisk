@@ -4,6 +4,16 @@
 **Status**: Specification Draft
 **License**: MIT
 
+> ⚠️ **Implementation status: EXPERIMENTAL / mostly ROADMAP.** The `basilisk-compiler`
+> crate (~1.8k LOC) currently implements a **parse → resolve → check (gate) →
+> tree-walking interpreter** pipeline over a small Python subset. There is **no
+> HIR, no LLVM/Cranelift, no native code generation, no AOT/JIT, no memory-layout
+> model, no interop, no runtime crate, no stdlib, and no `run`/`build` CLI** (the
+> compiler crate is not even a dependency of `basilisk-cli`). The four "new"
+> crates named in [`COMPILER-CRATES`](#COMPILER-CRATES) do not exist. Sections
+> below describe the *target* design, not what ships today; see
+> [`CONFAUDIT-ROADMAP`](../plans/SPEC-CONFORMANCE-AUDIT-PLAN.md#CONFAUDIT-ROADMAP).
+
 ---
 
 ## Vision {#COMPILER-VISION}

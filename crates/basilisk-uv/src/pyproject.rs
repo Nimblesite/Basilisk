@@ -18,6 +18,10 @@ use tracing::debug;
 ///
 /// All names are normalised (lowercased, hyphens replaced with underscores).
 /// Returns an empty vec if the file is missing, malformed, or declares no deps.
+//
+// Implements [LSPUV-LOCK-REGISTRY] — supplies the `direct_deps` set that
+// `PackageRegistry::from_lock_file` uses to classify Direct vs Transitive
+// (the spec's "Direct dependencies … listed in pyproject.toml" field).
 #[must_use]
 pub fn extract_pyproject_deps(root: &Path) -> Vec<String> {
     let path = root.join("pyproject.toml");

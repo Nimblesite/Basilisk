@@ -54,6 +54,15 @@ pub struct PerTestResult {
     pub message: String,
 }
 
+// Implements [LSPTEST-TEST-EXECUTION] + [LSPTEST-TEST-EXECUTION-UV-AWARE] (uv `uv run pytest`) +
+// [LSPTEST-UV-INTEGRATION-PYTEST-RESOLUTION].
+//
+// Implements [LSPTEST-TEST-EXECUTION-UV-AWARE-PYTEST-RESOLUTION-CASCADE] PARTIALLY: this realises
+// priority 2 (`uv run pytest`) and a combined priority 3/4 (bare `pytest_path` + venv env). It does
+// NOT honour priority 1 — an explicitly configured `pytest_path` does not pre-empt `uv run`, because
+// the uv branch is taken whenever `use_uv_run` is set regardless of `pytest_path`. The spec's
+// reference `build_test_command` helper (which checks `pytest_path != "pytest"` first) is not
+// implemented; see the spec audit for this deviation.
 /// Run tests via pytest subprocess and return results.
 ///
 /// When `use_uv_run` is true and a uv project is detected (via
@@ -82,7 +91,9 @@ pub fn run_tests(config: &TestRunConfig<'_>) -> Result<TestRunResult, String> {
     let _ = cmd.current_dir(config.root);
     let _ = cmd.args(["--tb=short", "-q"]);
 
-    // Append coverage args when coverage is enabled.
+    // Implements [LSPTEST-UV-INTEGRATION-COVERAGE] — `--cov` + deterministic
+    // `--cov-report=xml:<workspace>/.basilisk/coverage.xml` so the watcher can detect it.
+    // DEVIATION: spec writes `--cov=<src_root>`; this emits a bare `--cov` (auto-detect package).
     if config.enable_coverage {
         let _ = cmd.arg("--cov");
         let cov_xml = config.root.join(".basilisk").join("coverage.xml");
@@ -138,6 +149,9 @@ pub fn run_tests(config: &TestRunConfig<'_>) -> Result<TestRunResult, String> {
     })
 }
 
+// Implements [LSPTEST-TEST-EXECUTION-UV-AWARE-ENVIRONMENT-VARIABLES] — sets `VIRTUAL_ENV` and
+// prepends `{venv}/bin` to `PATH` when NOT using `uv run`. DEVIATION: the spec also requires
+// `PYTHONDONTWRITEBYTECODE=1`, which is never set here or in `run_tests`.
 /// Set `VIRTUAL_ENV` and prepend venv `bin/` to `PATH` on the command.
 ///
 /// Looks for `.venv` or `venv` directories in the workspace root.
@@ -164,6 +178,7 @@ pub(super) fn set_venv_env(root: &Path, cmd: &mut std::process::Command) {
     }
 }
 
+// Implements [LSPTEST-TEST-EXECUTION] — parses pytest output into per-test pass/fail/skip/error status.
 /// Parse pytest `-q --tb=short` output into per-test results.
 ///
 /// Handles lines like:
@@ -300,6 +315,7 @@ mod tests {
         assert!(json.contains("\"perTest\""));
     }
 
+    // Exercises [LSPTEST-TEST-EXECUTION-UV-AWARE-ENVIRONMENT-VARIABLES] — no-venv path is a no-op.
     #[test]
     fn test_set_venv_env_no_venv() {
         let dir = std::env::temp_dir().join("basilisk_no_venv");
@@ -313,6 +329,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    // Exercises [LSPTEST-TEST-EXECUTION] — parse pass status from pytest output.
     #[test]
     fn test_parse_pytest_output_passed() {
         let stdout = "tests/test_api.py::test_login PASSED\ntests/test_api.py::test_signup PASSED\n1 passed\n";
@@ -384,6 +401,7 @@ mod tests {
         assert!(json.contains("\"failed\""));
     }
 
+    // Exercises [LSPTEST-TEST-EXECUTION] — run_tests surfaces a spawn failure as Err.
     #[test]
     fn test_run_tests_with_nonexistent_pytest() {
         let dir = std::env::temp_dir().join("basilisk_nonexistent_pytest");
@@ -404,6 +422,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    // Exercises [LSPTEST-UV-INTEGRATION-COVERAGE] — coverage args do not panic even on spawn failure.
     #[test]
     fn test_run_tests_coverage_flag_nonexistent_pytest() {
         let dir = std::env::temp_dir().join("basilisk_coverage_flag_test");
@@ -460,6 +479,8 @@ mod tests {
     /// `;` on Windows) rather than `std::path::MAIN_SEPARATOR` (which is `/`
     /// on Unix). The wrong separator merges the venv bin dir with the first
     /// existing PATH entry, making pytest unfindable.
+    ///
+    /// Exercises [LSPTEST-TEST-EXECUTION-UV-AWARE-ENVIRONMENT-VARIABLES] — `PATH` prepend.
     #[test]
     fn test_set_venv_env_uses_correct_path_separator() {
         let unique = format!(

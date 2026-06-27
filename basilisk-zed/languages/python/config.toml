@@ -1,3 +1,5 @@
+# Reuses Zed's built-in tree-sitter-python grammar by name (no compile from
+# source). Implements [ZED-GRAMMAR]; query files augment it ([ZED-TREESITTER]).
 name = "Python"
 grammar = "python"
 path_suffixes = ["py", "pyi", "pyw"]

@@ -103,6 +103,10 @@ export interface DebugTrackerCallbacks {
   readonly onStopped?: (sessionId: string, body: unknown) => void;
 }
 
+// Implements [VSIX-PYTHON-DEBUGGER-DAP-TRACKER] — single observability point for
+// debugpy → VS Code traffic. Captures the `process` event (systemProcessId, used
+// by the CPU profiler) and `output` events (__BASILISK_MEM*__ payloads for the
+// memory round-trip).
 /**
  * Factory that creates per-session DAP message trackers.
  *
@@ -221,6 +225,10 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
 
 // ── Debug adapter factory ─────────────────────────────────────────────────
 
+// Implements [VSIX-PYTHON-DEBUGGER-DAP-PROXY] Quirk 3 — single-connection slot
+// protection: a bind-based liveness probe (EADDRINUSE = alive) is non-destructive
+// (it does not consume debugpy's one TCP slot). handleAttachMode respawns debugpy
+// via the LSP when the port is dead.
 /**
  * Non-destructive port check — attempts to bind to the port.
  * If binding fails with EADDRINUSE, something is listening.
@@ -240,6 +248,10 @@ async function isPortAlive(_host: string, port: number): Promise<boolean> {
 /** Callback that receives the debuggee OS PID once debugpy emits its `process` event. */
 export type DebuggeeProcessIdCallback = (sessionId: string, pid: number) => void;
 
+// Implements [VSIX-PYTHON-DEBUGGER-DAP-FEATURES] (Attach) + [VSIX-PYTHON-DEBUGGER-
+// DAP-LAUNCH-CONFIGURATIONS] (request:"attach", connect:{host,port}) — connects to
+// the user-specified debugpy host:port via the proxy, respawning debugpy through
+// the LSP if the slot is dead (Quirk 3).
 /** Handle attach mode: connect to user-specified host:port, respawning if needed. */
 async function handleAttachMode(
   config: vscode.DebugConfiguration,
@@ -325,6 +337,9 @@ function showDebugError(msg: string): void {
   }
 }
 
+// Implements [VSIX-PYTHON-DEBUGGER-DAP-ARCHITECTURE] — the LSP spawns
+// `debugpy.adapter --port <free>` via basilisk.startDebugSession; the proxy then
+// connects to that port and is returned to VS Code as a DebugAdapterServer.
 /** Handle launch mode: ask LSP to spawn debugpy. */
 async function handleLaunchMode(
   config: vscode.DebugConfiguration,
@@ -422,6 +437,9 @@ function withProgramDefaults(
   return config;
 }
 
+// Implements [VSIX-PYTHON-DEBUGGER-START] — pure config defaulting for the
+// factory-based `basilisk-debug` debugger: fills an empty/partial config so F5 /
+// "Run and Debug" launch the active Python file with no launch.json.
 /**
  * Resolve a runnable `basilisk-debug` config, defaulting `program` and marking
  * profiling runs.
@@ -457,6 +475,9 @@ export function applyDebugConfigDefaults(
   return resolved;
 }
 
+// Implements [VSIX-PYTHON-DEBUGGER-START] — the DebugConfigurationProvider for
+// `basilisk-debug` (registered Dynamic + default in extension.ts), offering a
+// "Python: Current File (Basilisk)" entry and resolving empty/partial configs.
 /**
  * Provider that lets `basilisk-debug` start with no `launch.json`: it offers a
  * default configuration in the Run-and-Debug picker and resolves empty/partial

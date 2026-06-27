@@ -144,6 +144,13 @@ fn spawn_error(label: &str, err: &std::io::Error) -> tower_lsp::jsonrpc::Error {
 /// Failures are classified per [LSPUV-COMMAND-FAILURE-UX] (issue #94): the
 /// toast carries a plain-language headline + remediation, while the full uv
 /// stderr stays in the Output channel via `log_message`.
+//
+// Implements [LSPUV-ACTIONS-EXECUTION] — on success it streams output to the
+// client (`log_message`) and triggers a lock-file re-parse + import
+// re-resolution (`rebuild_registry_and_resolve`). The success info is logged
+// to the Output channel server-side; the success toast is the client's job
+// (issue #84) — on failure only the classified error toast is shown, never a
+// success toast for the same op.
 async fn run_uv_and_refresh<F, Fut>(
     server: &LspServer,
     label: &str,
@@ -250,6 +257,8 @@ async fn no_uv_project_response(
 }
 
 /// Handle `basilisk.uv.sync`.
+//
+// Implements [LSPUV-COMMANDS] — dispatch for the `basilisk.uv.sync` command.
 pub(super) async fn execute_uv_sync(
     server: &LspServer,
     _args: &[serde_json::Value],
@@ -265,6 +274,9 @@ pub(super) async fn execute_uv_sync(
 }
 
 /// Handle `basilisk.uv.add`.
+//
+// Implements [LSPUV-COMMANDS] / [LSPUV-ACTIONS-QUICK-FIXES] — dispatch for the
+// `basilisk.uv.add` command (the imports_unresolved "Add dependency" quick fix).
 pub(super) async fn execute_uv_add(
     server: &LspServer,
     args: &[serde_json::Value],
@@ -284,6 +296,9 @@ pub(super) async fn execute_uv_add(
 }
 
 /// Handle `basilisk.uv.addDev`.
+//
+// Implements [LSPUV-COMMANDS] / [LSPUV-ACTIONS-QUICK-FIXES] — dispatch for the
+// `basilisk.uv.addDev` command (the BSK-E0152 "Install type stubs" quick fix).
 pub(super) async fn execute_uv_add_dev(
     server: &LspServer,
     args: &[serde_json::Value],
@@ -306,6 +321,8 @@ pub(super) async fn execute_uv_add_dev(
 }
 
 /// Handle `basilisk.uv.remove`.
+//
+// Implements [LSPUV-COMMANDS] — dispatch for the `basilisk.uv.remove` command.
 pub(super) async fn execute_uv_remove(
     server: &LspServer,
     args: &[serde_json::Value],
@@ -328,6 +345,8 @@ pub(super) async fn execute_uv_remove(
 }
 
 /// Handle `basilisk.uv.lock`.
+//
+// Implements [LSPUV-COMMANDS] — dispatch for the `basilisk.uv.lock` command.
 pub(super) async fn execute_uv_lock(
     server: &LspServer,
     _args: &[serde_json::Value],
@@ -346,6 +365,9 @@ pub(super) async fn execute_uv_lock(
 ///
 /// `uv venv` does not require a `pyproject.toml`, so this falls back to the
 /// first workspace root when no project is detected.
+//
+// Implements [LSPUV-COMMANDS] — dispatch for the `basilisk.uv.createEnv`
+// command (optional `pythonVersion` → `uv venv --python <ver>`).
 pub(super) async fn execute_uv_create_env(
     server: &LspServer,
     args: &[serde_json::Value],

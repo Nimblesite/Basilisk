@@ -20,6 +20,9 @@ use crate::workspace_scan::{collect_python_files, deduplicate_by_stem, path_to_u
 // ── FileEntry ────────────────────────────────────────────────────────────────
 
 /// Per-file analysis state cached in the workspace index.
+// Implements [ANALYSIS-INDEX-STRUCT] — the spec's FileEntry shape (source_hash,
+// resolved, diagnostics, version, is_open); `text` is carried so reload/recheck
+// need not re-read the buffer.
 #[derive(Debug)]
 pub struct FileEntry {
     /// FNV-1a hash of the source text at last analysis; used for invalidation.
@@ -43,6 +46,8 @@ pub struct FileEntry {
 ///
 /// Owned by `LspServer`. All handlers access file state through this type
 /// rather than the old `DashMap<Url, DocumentState>`.
+// Implements [ANALYSIS-INDEX-STRUCT] — the spec's WorkspaceIndex shape (roots,
+// files, config, optional import_graph populated in crossModule).
 pub struct WorkspaceIndex {
     /// Workspace root directories.
     pub roots: Vec<PathBuf>,
@@ -329,6 +334,8 @@ impl WorkspaceIndex {
     ///
     /// Marks the file as open and updates the index. Returns the LSP
     /// diagnostics ready for publishing.
+    // Implements [ANALYSIS-OPEN] (per-open-file analysis) and [ANALYSIS-INCR-CHANGE]
+    // (in-memory text is authoritative; parse → resolve → check runs on the edit).
     #[must_use]
     pub fn set_open(
         &self,
@@ -414,6 +421,10 @@ impl WorkspaceIndex {
     /// If the file is currently open, this is a no-op (editor text is
     /// authoritative). Returns `None` if the file could not be read or the
     /// hash is unchanged.
+    // Implements [ANALYSIS-INDEX-OPEN] (open files are authoritative — watcher
+    // events for an open path are ignored) and [ANALYSIS-INCR-WATCH] /
+    // [ANALYSIS-INDEX-INVAL] (skip when `source_hash` unchanged; otherwise
+    // re-run the pipeline). The 150 ms debounce is upstream in server/document.rs.
     #[must_use]
     pub fn reload_from_disk(
         &self,
@@ -565,6 +576,9 @@ impl WorkspaceIndex {
     ///
     /// Returns a list of `(Uri, diagnostics)` pairs ready for publishing.
     /// Files already open in the editor are skipped.
+    // Implements [ANALYSIS-STARTUP-WHOLE] — collects all `.py`/`.pyi` under the
+    // roots (respecting include/exclude), analyses them, and returns diagnostics
+    // for every file. The crossModule extra pass is wired in server/init.rs.
     #[must_use]
     pub fn scan(
         &self,
@@ -634,6 +648,8 @@ impl WorkspaceIndex {
     /// Build (or rebuild) the import graph from the current index state.
     ///
     /// Called after workspace scan or when the analysis mode is `CrossModule`.
+    // Implements [ANALYSIS-GRAPH-BUILD] (rebuilds the graph from the index) and
+    // the import-graph step of [ANALYSIS-STARTUP-CROSS].
     pub fn build_import_graph(&self) {
         let Ok(mut graph) = self.import_graph.lock() else {
             return;
@@ -647,6 +663,8 @@ impl WorkspaceIndex {
     /// Returns `(uri, diagnostics)` pairs for all files that were re-analysed
     /// due to the change. The changed file itself is NOT included (it should
     /// already have been re-analysed by the caller).
+    // Implements [ANALYSIS-INDEX-INVAL] for the crossModule cascade — re-checks
+    // every transitive importer (via [ANALYSIS-GRAPH-TRANS]) of the changed file.
     #[must_use]
     pub fn invalidate_dependents(
         &self,
@@ -891,6 +909,8 @@ mod tests {
         assert_eq!(entry.version, 1);
     }
 
+    // Exercises [ANALYSIS-OPEN] / [ANALYSIS-INCR-CHANGE]: per-open-file analysis
+    // runs the pipeline on in-memory text and publishes its diagnostics.
     #[test]
     fn test_set_open_produces_diagnostics_for_type_error() {
         let idx = make_index_with_config(annotations_on());
@@ -1032,6 +1052,8 @@ mod tests {
 
     // ── reload_from_disk ─────────────────────────────────────────────────────
 
+    // Exercises [ANALYSIS-INDEX-OPEN]: open files are authoritative; watcher
+    // reloads are ignored while open.
     #[test]
     fn test_reload_from_disk_skips_open_files() {
         let idx = make_index();
@@ -1042,6 +1064,8 @@ mod tests {
         assert!(result.is_none(), "should skip open files");
     }
 
+    // Exercises [ANALYSIS-INCR-WATCH] / [ANALYSIS-INDEX-INVAL]: unchanged
+    // source_hash leaves the entry as-is (no re-analysis).
     #[test]
     fn test_reload_from_disk_skips_unchanged_hash() {
         let dir = unique_tmp("bsk_reload");

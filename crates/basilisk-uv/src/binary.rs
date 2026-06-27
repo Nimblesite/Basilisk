@@ -17,6 +17,13 @@ const WELL_KNOWN_PATHS: &[&str] = &["~/.cargo/bin/uv", "~/.local/bin/uv"];
 ///
 /// `config_path` is the user-configured explicit path, if any (from
 /// `basilisk.uv.executablePath`). Returns `None` if `uv` cannot be found.
+//
+// Implements [LSPUV-CONFIG-BINARY-RESOLUTION] — the exact 5-priority cascade
+// from the spec: (1) `basilisk.uv.executablePath`, (2) `UV_PATH`,
+// (3) `~/.cargo/bin/uv`, (4) `~/.local/bin/uv`, (5) OS PATH search.
+// CONFORMANCE NOTE: this function has NO caller — the LSP command path
+// (`basilisk_lsp::uv_commands::run_uv`) spawns a bare `uv` and resolves only
+// via OS PATH, ignoring priorities 1–4. See conformance audit (DEVIATION).
 #[must_use]
 pub fn find_uv_binary(config_path: Option<&str>) -> Option<PathBuf> {
     // 1. Explicit config path.
@@ -94,6 +101,8 @@ fn which_uv() -> Option<PathBuf> {
     }
 }
 
+// Tests for [LSPUV-CONFIG-BINARY-RESOLUTION]: the cascade falls through cleanly
+// for a nonexistent/empty/None config path and never panics.
 #[cfg(test)]
 mod tests {
     use super::*;

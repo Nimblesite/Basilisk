@@ -87,6 +87,9 @@ async fn wait_for_file_diagnostics(
 
 // ── Tests ────────────────────────────────────────────────────────────────
 
+// [LSPUV-COMMANDS] + [LSPUV-ACTIONS-EXECUTION]: each `basilisk.uv.*` command
+// dispatches via workspace/executeCommand, runs the uv subprocess in the
+// project root, and returns `{success, stdout, stderr}`.
 #[tokio::test]
 async fn test_uv_add_dispatches_and_returns_success() -> TestResult<()> {
     if !uv_available() {
@@ -222,6 +225,10 @@ async fn test_uv_sync_dispatches_and_returns_success() -> TestResult<()> {
     Ok(())
 }
 
+// [LSPUV-LOCK-HOT-RELOAD] + [LSPUV-ACTIONS-EXECUTION]: a successful uv command
+// re-parses the lock file, rebuilds the registry, re-resolves imports, and
+// republishes diagnostics with no LSP restart — the imports_unresolved error
+// clears automatically.
 #[tokio::test]
 async fn test_uv_add_triggers_registry_rebuild_and_clears_diagnostics() -> TestResult<()> {
     if !uv_available() {
@@ -550,6 +557,8 @@ async fn execute_and_wait_for_diags(
     Ok((command_succeeded, final_diag))
 }
 
+// [LSPUV-ACTIONS-QUICK-FIXES]: imports_unresolved offers the `basilisk.uv.add`
+// quick fix; executing it adds the package and clears the diagnostic.
 #[tokio::test]
 async fn test_e0010_code_action_to_execute_command_full_flow() -> TestResult<()> {
     if !uv_available() {

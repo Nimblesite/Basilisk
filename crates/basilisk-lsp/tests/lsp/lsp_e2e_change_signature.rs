@@ -158,6 +158,7 @@ fn test_refactor_change_signature_remove_param_edit_correctness() -> TestResult<
 
 // ── Implement Abstract Methods Edit Correctness ─────────────────────────────
 
+// Exercises [REFACTOR-ABSTRACT-ALGO] — verifies the generated stub edit.
 #[test]
 fn test_refactor_implement_abstract_methods_edit_correctness() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;

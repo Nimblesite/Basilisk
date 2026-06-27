@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 
+// Exercises [ANALYSIS-STARTUP-WHOLE] / [ANALYSIS-PUBLISH] (wholeModule row).
 #[tokio::test]
 async fn test_ws_whole_module_startup_scan_publishes_diagnostics() -> TestResult<()> {
     // Create a temp workspace with a Python file that has type errors.
@@ -53,6 +54,7 @@ async fn test_ws_whole_module_startup_scan_publishes_diagnostics() -> TestResult
     Ok(())
 }
 
+// Exercises [ANALYSIS-STARTUP-OPEN] (openFilesOnly does no startup scan).
 #[tokio::test]
 async fn test_ws_open_files_only_mode_no_startup_scan() -> TestResult<()> {
     // In openFilesOnly mode, no startup scan should occur.
@@ -92,6 +94,7 @@ async fn test_ws_open_files_only_mode_no_startup_scan() -> TestResult<()> {
     Ok(())
 }
 
+// Exercises [ANALYSIS-INDEX-OPEN] (didClose re-reads disk) / [ANALYSIS-PUBLISH].
 #[tokio::test]
 async fn test_ws_whole_module_did_close_keeps_diagnostics() -> TestResult<()> {
     // In wholeModule mode, closing a file should keep diagnostics (re-analyse from disk).
@@ -133,6 +136,7 @@ async fn test_ws_whole_module_did_close_keeps_diagnostics() -> TestResult<()> {
     Ok(())
 }
 
+// Exercises [ANALYSIS-PUBLISH] (deleted/non-disk file → empty diagnostics).
 #[tokio::test]
 async fn test_ws_whole_module_did_close_non_disk_file_returns_empty_diagnostics() -> TestResult<()>
 {
@@ -161,6 +165,7 @@ async fn test_ws_whole_module_did_close_non_disk_file_returns_empty_diagnostics(
     Ok(())
 }
 
+// Exercises [ANALYSIS-PUBLISH] (openFilesOnly row — closed file diagnostics cleared).
 #[tokio::test]
 async fn test_ws_open_files_only_did_close_clears_diagnostics() -> TestResult<()> {
     // In openFilesOnly mode, closing a file that EXISTS on disk should still clear
@@ -211,6 +216,7 @@ async fn test_ws_open_files_only_did_close_clears_diagnostics() -> TestResult<()
     Ok(())
 }
 
+// Exercises [ANALYSIS-INDEX-OPEN] (wholeModule re-reads disk on close) / [ANALYSIS-PUBLISH].
 #[tokio::test]
 async fn test_ws_whole_module_did_close_disk_file_keeps_diagnostics() -> TestResult<()> {
     // In wholeModule mode, closing a file that EXISTS on disk should keep diagnostics
@@ -260,6 +266,7 @@ async fn test_ws_whole_module_did_close_disk_file_keeps_diagnostics() -> TestRes
     Ok(())
 }
 
+// Exercises [ANALYSIS-INCR-WATCH] (openFilesOnly: watcher events ignored).
 #[tokio::test]
 async fn test_ws_file_watcher_events_ignored_in_open_files_only() -> TestResult<()> {
     // In openFilesOnly mode, did_change_watched_files events must be ignored entirely.
@@ -318,6 +325,7 @@ async fn test_ws_file_watcher_events_ignored_in_open_files_only() -> TestResult<
     Ok(())
 }
 
+// Exercises [ANALYSIS-INCR-WATCH] (wholeModule: watcher event re-analyses a closed file).
 #[tokio::test]
 async fn test_ws_file_watcher_triggers_reanalysis_in_whole_module() -> TestResult<()> {
     // In wholeModule mode, a file-watcher event for a closed file triggers re-analysis.

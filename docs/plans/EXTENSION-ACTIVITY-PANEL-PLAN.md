@@ -1,8 +1,8 @@
-# Extension Activity Panel — Implementation Plan
+# Extension Activity Panel — Implementation Plan {#EXTACT-PLAN}
 
 > Spec: [EXTENSION-ACTIVITY-PANEL-SPEC.md](../specs/EXTENSION-ACTIVITY-PANEL-SPEC.md)
 
-## Phase 1: LSP Backend (Rust)
+## Phase 1: LSP Backend (Rust) {#EXTACT-PLAN-LSP-BACKEND}
 
 Implement the three custom LSP commands in `basilisk-lsp`. This unblocks all editors simultaneously.
 
@@ -25,7 +25,7 @@ Implement the three custom LSP commands in `basilisk-lsp`. This unblocks all edi
 - Read adoption state per file
 - Return `TypeHealthResponse`
 
-## Phase 2: VS Code Panels (TypeScript)
+## Phase 2: VS Code Panels (TypeScript) {#EXTACT-PLAN-VSCODE-PANELS}
 
 Reference implementation. All three panels.
 
@@ -48,7 +48,7 @@ Reference implementation. All three panels.
 7. Add walkthrough contribution to `package.json`
 8. Create `basilisk-icon.svg` for activity bar
 
-## Phase 3: Zed Slash Commands (Rust/WASM)
+## Phase 3: Zed Slash Commands (Rust/WASM) {#EXTACT-PLAN-ZED-SLASH}
 
 Surface the same data through Zed's available extension points.
 
@@ -57,7 +57,7 @@ Surface the same data through Zed's available extension points.
 3. Format responses as clean markdown tables/trees
 4. Add argument completion (module names for `/modules` and `/symbols`)
 
-## Phase 4: Neovim Panels (Lua)
+## Phase 4: Neovim Panels (Lua) {#EXTACT-PLAN-NEOVIM-PANELS}
 
 Lua-rendered buffers using the nvim LSP client.
 
@@ -68,7 +68,7 @@ Lua-rendered buffers using the nvim LSP client.
 5. Default keymaps: `<leader>bm`, `<leader>bh`, `<leader>bi`
 6. Handle `basilisk/moduleChanged` via `vim.lsp.handlers`
 
-## Phase 5: Polish
+## Phase 5: Polish {#EXTACT-PLAN-POLISH}
 
 1. End-to-end tests: open workspace, verify module tree matches actual modules, verify health stats
 2. Performance testing: large workspace (1000+ files), measure LSP response time for `basilisk/workspaceModules`
@@ -77,9 +77,9 @@ Lua-rendered buffers using the nvim LSP client.
 
 ---
 
-## TODOs
+## TODOs {#EXTACT-PLAN-TODOS}
 
-### LSP Backend
+### LSP Backend {#EXTACT-PLAN-TODOS-LSP-BACKEND}
 - [x] Implement `basilisk/workspaceModules` handler in `basilisk-lsp`
 - [x] Implement `ModuleNode` / `SymbolNode` construction from `ResolvedModule`
 - [x] Implement `scope` parameter filtering for `basilisk/workspaceModules`
@@ -94,7 +94,7 @@ Lua-rendered buffers using the nvim LSP client.
 - [x] Unit tests: `basilisk/typeHealth` returns correct coverage percentages
 - [x] Unit tests: `basilisk/moduleChanged` fires after file change, not before
 
-### VS Code Extension
+### VS Code Extension {#EXTACT-PLAN-TODOS-VSCODE}
 - [x] Create `basilisk-icon.svg` (monochrome, 24x24, light + dark theme compatible)
 - [x] Add `viewsContainers` and `views` to `package.json`
 - [x] Add `viewsWelcome` entries to `package.json`
@@ -127,7 +127,7 @@ Lua-rendered buffers using the nvim LSP client.
 - [x] E2E test: copy import path produces correct `from x import y` string
 - [x] E2E test: feature toggle click changes setting and updates tree item
 
-### Zed Extension
+### Zed Extension {#EXTACT-PLAN-TODOS-ZED}
 - [x] Register `/modules` slash command
 - [x] Register `/symbols` slash command
 - [x] Register `/health` slash command
@@ -139,7 +139,7 @@ Lua-rendered buffers using the nvim LSP client.
 - [x] Test: `/health` output matches `basilisk/typeHealth` data
 - [ ] When Zed adds panel API: implement native panels using same LSP commands
 
-### Neovim Plugin
+### Neovim Plugin {#EXTACT-PLAN-TODOS-NEOVIM}
 - [x] Implement `basilisk.modules` Lua module (split buffer, foldable tree)
 - [x] Implement tree rendering with `nvim_buf_set_lines` + virtual text for types
 - [x] Implement keybindings: `<CR>` open, `o` toggle, `r` refresh, `y` copy import, `q` close
@@ -152,7 +152,7 @@ Lua-rendered buffers using the nvim LSP client.
 - [ ] Test: `:BasiliskModules` renders correct tree for test workspace
 - [ ] Test: `:BasiliskHealth` renders correct coverage stats
 
-### Polish
+### Polish {#EXTACT-PLAN-TODOS-POLISH}
 - [ ] Performance test: `basilisk/workspaceModules` < 100ms for 1000-file workspace
 - [ ] Performance test: `basilisk/typeHealth` < 50ms for 1000-file workspace
 - [ ] Performance test: `basilisk/moduleChanged` notification < 20ms per file change

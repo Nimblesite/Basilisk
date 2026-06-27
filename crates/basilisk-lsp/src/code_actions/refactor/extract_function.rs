@@ -24,6 +24,10 @@ use super::helpers::{leading_indent_of_line, selected_text};
 /// function is `async`, the extracted function is also `async` and called
 /// with `await`.  If the selection is inside a method (first param is
 /// `self`/`cls`), the extraction produces a method with `self`/`cls`.
+// Implements [REFACTOR-EXTRACT-FUNC-ALGO] — snap to complete lines (step 1),
+// data-flow analysis for params/returns (step 2), async/method context (step 3),
+// generate function + return (step 4), replace selection with call (step 5),
+// and place before enclosing def/class (step 6).
 #[must_use]
 pub(in crate::code_actions) fn extract_function(
     uri: &Url,
@@ -63,8 +67,8 @@ pub(in crate::code_actions) fn extract_function(
         return None;
     }
 
-    // Reject selections containing yield, break, or continue — these cannot
-    // be extracted into a separate function without changing semantics.
+    // Implements [REFACTOR-EXTRACT-FUNC-EDGE] — reject selections containing
+    // yield/break/continue, which cannot be extracted without changing semantics.
     if contains_unextractable_keyword(&selected_lines) {
         return None;
     }
@@ -195,6 +199,8 @@ struct DataFlowResult {
 
 /// Analyze which names flow in (parameters) and out (return values) of the
 /// selected statements.
+// Implements [REFACTOR-EXTRACT-FUNC-ALGO] step 2 — reads defined outside
+// become parameters; writes read after the selection become return values.
 fn analyze_data_flow(
     selected: &[&str],
     all_lines: &[&str],
@@ -387,6 +393,8 @@ struct EnclosingContext {
 }
 
 /// Detect whether the selection is inside an async function or a method.
+// Implements [REFACTOR-EXTRACT-FUNC-ALGO] step 3 — method (self/cls) vs
+// module-level, and async-enclosing detection.
 fn detect_enclosing_context(source: &str, line: usize) -> EnclosingContext {
     let lines: Vec<&str> = source.lines().collect();
     for idx in (0..line.min(lines.len())).rev() {
@@ -539,6 +547,8 @@ fn compute_enclosing_indent(source: &str, line: usize) -> String {
 ///
 /// Walks backwards from `line` to find the start of the enclosing function
 /// or class, then inserts immediately before it (with a blank line).
+// Implements [REFACTOR-EXTRACT-FUNC-ALGO] step 6 — place the function
+// immediately before the enclosing function/class.
 fn find_insertion_point(source: &str, line: usize) -> usize {
     let lines: Vec<&str> = source.lines().collect();
     for idx in (0..line.min(lines.len())).rev() {

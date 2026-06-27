@@ -73,6 +73,7 @@ fn finds_the_whole_rule_set() {
     );
 }
 
+/// [CHKTAG-INVARIANTS] #1 / [CHKTAG-PROVENANCE]: exactly one provenance tag.
 #[test]
 fn every_rule_has_exactly_one_provenance_tag() {
     for code in all_rule_codes() {
@@ -85,6 +86,7 @@ fn every_rule_has_exactly_one_provenance_tag() {
     }
 }
 
+/// [CHKTAG-INVARIANTS] #2 / [CHKTAG-PEP-CATEGORIES]: category only on `pep` rules.
 #[test]
 fn pep_category_tags_appear_only_on_pep_rules() {
     for code in all_rule_codes() {
@@ -98,6 +100,7 @@ fn pep_category_tags_appear_only_on_pep_rules() {
     }
 }
 
+/// [CHKTAG-INVARIANTS] #3 / [CHKTAG-FREEFORM]: emitted non-reserved tags are valid.
 #[test]
 fn no_emitted_tag_is_an_invalid_free_form() {
     // The user's core safety rule: a tag that is neither provenance nor a PEP
@@ -115,6 +118,7 @@ fn no_emitted_tag_is_an_invalid_free_form() {
     }
 }
 
+/// [CHKTAG-INVARIANTS] #6 / [CHKTAG-FREEFORM]: every declared `FREE_FORM_TAGS` valid.
 #[test]
 fn declared_free_form_vocabulary_never_collides() {
     for tag in FREE_FORM_TAGS {
@@ -125,6 +129,7 @@ fn declared_free_form_vocabulary_never_collides() {
     }
 }
 
+/// [CHKTAG-INVARIANTS] #5 / [CHKTAG-PEP-CATEGORIES]: unique, lowercase, non-provenance.
 #[test]
 fn pep_categories_are_unique_lowercase_and_distinct_from_provenance() {
     let unique: BTreeSet<_> = PEP_CATEGORIES.iter().collect();
@@ -137,6 +142,7 @@ fn pep_categories_are_unique_lowercase_and_distinct_from_provenance() {
     }
 }
 
+/// [CHKTAG-MODEL] / [CHKTAG-PEP-CATEGORIES]: category derived from the code prefix.
 #[test]
 fn pep_rules_derive_their_category_from_the_conformance_name_prefix() {
     assert_eq!(tags_for_code("aliases_newtype"), vec![PEP, "aliases"]);
@@ -151,6 +157,7 @@ fn pep_rules_derive_their_category_from_the_conformance_name_prefix() {
     );
 }
 
+/// [CHKTAG-MODEL] / [CHKTAG-PEP-CATEGORIES]: cross-cutting core checks are bare `pep`.
 #[test]
 fn cross_cutting_core_checks_are_pep_without_a_category() {
     // Checks with no single home category (return/call/assignment/name checks)
@@ -160,6 +167,7 @@ fn cross_cutting_core_checks_are_pep_without_a_category() {
     assert_eq!(tags_for_code("names_undefined"), vec![PEP]);
 }
 
+/// [CHKTAG-INVARIANTS] #4 / [CHKTAG-PROVENANCE]: `basilisk` rules carry no category.
 #[test]
 fn basilisk_rules_are_tagged_basilisk_and_never_carry_a_pep_category() {
     for code in [
@@ -184,6 +192,7 @@ fn basilisk_rules_are_tagged_basilisk_and_never_carry_a_pep_category() {
     }
 }
 
+/// [CHKTAG-INVARIANTS] #9 / [CHKTAG-PROVENANCE]: default-on Basilisk-authored = `pep`.
 #[test]
 fn default_on_core_checks_are_pep_not_basilisk() {
     // Per the config-only model: rule selection is via `check_with_config`, and
@@ -207,6 +216,7 @@ fn default_on_core_checks_are_pep_not_basilisk() {
     }
 }
 
+/// [CHKTAG-INVARIANTS] #7 / [CHKTAG-IMPL]: every `opt_in_spec()` code is a live code.
 #[test]
 fn no_basilisk_rule_key_is_stale() {
     // Provenance is self-declared by each rule's `opt_in_spec()`. If a rule's
@@ -222,6 +232,7 @@ fn no_basilisk_rule_key_is_stale() {
     }
 }
 
+/// [CHKTAG-INVARIANTS] #10 / [CHKTAG-BSK-PREFIX]: opt-in set == `BSK-`-prefixed set.
 #[test]
 fn basilisk_provenance_matches_the_bsk_naming_convention() {
     // The `BSK-` prefix is cosmetic — provenance is decided by each rule's
@@ -244,6 +255,7 @@ fn basilisk_provenance_matches_the_bsk_naming_convention() {
     );
 }
 
+/// [CHKTAG-INVARIANTS] #8 / [CHKTAG-PEP-CATEGORIES]: categories are real test prefixes.
 #[test]
 fn pep_categories_match_conformance_test_prefixes() {
     // [CHKTAG-PEP-CATEGORIES]: the category vocabulary is taken verbatim from the
@@ -286,6 +298,7 @@ fn pep_categories_match_conformance_test_prefixes() {
     }
 }
 
+/// [CHKTAG-MODEL] / [CHKTAG-FREEFORM]: worked example `BSK-W0050 -> redundancy + style`.
 #[test]
 fn redundant_annotation_carries_redundancy_and_style() {
     let tags = tags_for_code("BSK-W0050");
@@ -293,6 +306,7 @@ fn redundant_annotation_carries_redundancy_and_style() {
     assert!(tags.contains(&"style"));
 }
 
+/// [CHKTAG-FREEFORM] / [CHKTAG-PROVENANCE] / [CHKTAG-PEP-CATEGORIES]: vocab predicates.
 #[test]
 fn predicates_reject_reserved_names_as_free_form() {
     assert!(!is_valid_free_form("pep"));

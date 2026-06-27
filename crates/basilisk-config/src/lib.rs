@@ -47,11 +47,13 @@ pub const DEFAULT_EXCLUDES: &[&str] = &[
 
 /// Load a `BasiliskConfig` from the first config file found in `root`.
 ///
-/// Search order (highest priority wins):
+/// Implements [CHKARCH-CONFIG-FILE]. Search order (highest priority wins):
 /// 1. `basilisk.json`
 /// 2. `pyproject.toml` `[tool.basilisk]`
 ///
-/// Returns `BasiliskConfig::default()` if no config file is found.
+/// Returns `BasiliskConfig::default()` if no config file is found (and likewise
+/// on a malformed file — no configuration-error exit is raised; see report).
+/// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-FILE
 #[must_use]
 pub fn load_basilisk_config(root: &Path) -> BasiliskConfig {
     // 1. basilisk.json

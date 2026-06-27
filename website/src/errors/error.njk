@@ -1,7 +1,9 @@
 ---
-# Implements [WEBSITE-ERROR-PAGES]: one landing page per diagnostic code, built
-# from the checker source (_data/rules.json). Every page resolves the URL the
-# CLI prints — `see: https://www.basilisk-python.dev/errors/BSK-XXXX`.
+# Implements [WEBSITE-ERROR-PAGES-PAGES]: one landing page per diagnostic code,
+# built from the checker source (_data/rules.json) by paginating `rules` (size 1)
+# to emit /errors/{{ code }}/ for every record. Every page resolves the URL the
+# CLI prints — `see: https://www.basilisk-python.dev/errors/BSK-XXXX`. The worked
+# `basilisk check` screenshot is wired in via [WEBSITE-ERROR-PAGES-EXAMPLES].
 # See docs/specs/WEBSITE-ERROR-PAGES-SPEC.md.
 layout: layouts/docs.njk
 pagination:

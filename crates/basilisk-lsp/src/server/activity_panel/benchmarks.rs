@@ -2,6 +2,10 @@
 //!
 //! Performance benchmarks for the activity panel LSP commands.
 //!
+//! Tests [EXTACT-PERFORMANCE]: the activity-panel handlers are computed
+//! server-side from existing resolver/diagnostic data (no extra file I/O), and
+//! these benches guard that they stay fast on large workspaces.
+//!
 //! Validates that key operations meet latency targets for 1000-file workspaces:
 //! - `basilisk/workspaceModules`: <100ms
 //! - `basilisk/typeHealth`: <50ms

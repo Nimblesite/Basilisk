@@ -9,6 +9,9 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 /// Default cache directory relative to the project root.
+// Implements [STUBRES-AUTOGEN] — generated Tier-3 stubs land here; this is also
+// the `.basilisk/stubs/` target the LSP create-local action writes to
+// ([STUBRES-CREATE-LOCAL]) and the resolver auto-includes on its search path.
 pub const DEFAULT_CACHE_DIR: &str = ".basilisk/stubs";
 
 /// Compute the cache path for a module's generated stub.

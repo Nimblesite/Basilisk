@@ -45,6 +45,10 @@ impl Rule for MissingTypeStubs {
         })
     }
 
+    // Implements [STUBRES-PEP561] step 6 (no stubs found) — fires the BSK-E0152
+    // import-site diagnostic only for a site-packages `.py` import that is not
+    // stdlib and carries no PEP 561 `py.typed` marker (i.e. resolution exhausted
+    // steps 1-5 without type information).
     fn check(
         &self,
         module: &ResolvedModule,
@@ -93,6 +97,9 @@ fn has_py_typed_marker(import: &ImportInfo) -> bool {
 }
 
 /// Build the diagnostic for a missing type stubs error.
+// Implements [STUBRES-PROVENANCE-DIAG] — the `Untyped` provenance row: a single
+// import-site diagnostic carrying `TypeProvenance::Untyped` so the checker can
+// suppress the downstream cascade (cascade logic lives elsewhere; see report).
 fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
     let root_module = import.module.split('.').next().unwrap_or(&import.module);
 

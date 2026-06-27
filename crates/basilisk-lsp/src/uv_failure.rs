@@ -48,6 +48,14 @@ pub struct UvFailure {
 ///
 /// `label` is the human-readable command (e.g. `"uv add six"`); `package` is
 /// the package argument when the command has one.
+//
+// Implements [LSPUV-COMMAND-FAILURE-UX] — maps stderr to the spec's failure
+// categories: `package_not_found` (`No solution found` + a not-found marker),
+// `resolution_conflict` (`No solution found` alone), `network_error`, and
+// `generic`. The toast is the plain-language headline + remediation; the full
+// stderr stays in the Output channel (handled by the caller). NOTE: an extra
+// not-found marker (`not found in the provided package locations`) beyond the
+// two in the spec table is matched here — additive precision, no deviation.
 #[must_use]
 pub fn classify_uv_failure(label: &str, package: Option<&str>, stderr: &str) -> UvFailure {
     // uv hard-wraps its resolver prose, so a phrase like "was not found in the
@@ -106,6 +114,10 @@ pub fn classify_uv_failure(label: &str, package: Option<&str>, stderr: &str) -> 
 }
 
 /// Classification for a uv process that could not even be spawned.
+//
+// Implements [LSPUV-COMMAND-FAILURE-UX] — the `uv_not_found` category
+// (`ErrorKind::NotFound` → "`uv` isn't installed or isn't on PATH" + install
+// link), falling back to `generic` for any other spawn error.
 #[must_use]
 pub fn classify_uv_spawn_failure(err: &std::io::Error) -> UvFailure {
     if err.kind() == std::io::ErrorKind::NotFound {

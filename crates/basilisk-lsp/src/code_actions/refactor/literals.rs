@@ -10,6 +10,7 @@ use super::helpers::{build_single_line_action, split_top_level_commas};
 ///
 /// Returns zero, one, or two actions depending on what patterns appear on the
 /// line containing the cursor.
+// Implements [REFACTOR-CONVERT] — the "dict() ↔ {}" and "list() ↔ []" rows.
 #[must_use]
 pub(in crate::code_actions) fn convert_literals(
     uri: &Url,

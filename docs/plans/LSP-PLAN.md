@@ -1,16 +1,16 @@
-# LSP Implementation Plan
+# LSP Implementation Plan {#LSPPLAN}
 
 > **Spec**: [LSP-ARCHITECTURE-SPEC.md §LSPARCH-ARCH](../specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH) — read before touching any code.
 
 ---
 
-## Status
+## Status {#LSPPLAN-STATUS}
 
 Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols all operational. Phase 3.5 (PEP conformance push) is ACTIVE — the official `python/typing` scorer (run unmodified, pinned commit 268d0c4e) currently reports **68/146 files passing (46.6%, errors+warnings strictest)**, with the basilisk binary run with EVERY rule enabled (NO config, NO `basilisk.json`, NO "spec-conformance mode" — see CHKARCH-CONFORMANCE-MODE, which documents that no such mode exists). The checker catches EVERY required error: 0 missed required errors, and the 265 remaining false positives all come from strict-by-default house-style rules (require-annotation E0001/E0002/E0004, missing-@override E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code where the spec treats unannotated as inferred rather than an error. HISTORY (stated plainly): the last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#185/#191 then inflated the reported number to a FAKE 100% by writing a `basilisk.json` that DISABLED those 6 house rules at score time (the so-called "spec-conformance mode") — the checker was not made smarter, the false positives were merely hidden. That disabling has been REMOVED and is now FORBIDDEN; genuine progress over that span was real but modest (40.4% → 46.6%). The ONLY legitimate path to 100% is fixing the checker so its strict defaults stop firing on spec-valid code, with every rule still enabled — never by disabling a rule.
 
 ---
 
-## Phase 7 — Cross-Module Foundation (MOSTLY COMPLETE)
+## Phase 7 — Cross-Module Foundation (MOSTLY COMPLETE) {#LSPPLAN-CROSS-MODULE-FOUNDATION}
 
 > **The big unlock.** Workspace module resolver, import graph, cross-file symbol sharing
 > are all operational. Remaining: re-exports, rename, auto-import, multi-root.
@@ -25,12 +25,12 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 | 7.6 | Third-party type stubs — typeshed bundling, `py.typed` marker detection (PEP 561) | Medium | DONE — `phf` stdlib module set, `py.typed` detection, stub package discovery |
 | 7.7 | Config file reading — `pyproject.toml`, `basilisk.json` | Medium | DONE — `basilisk-config` crate with per-module/per-path overrides |
 
-## Phase 7.5 — PEP Conformance Push (ACTIVE — 46.6% → 100%)
+## Phase 7.5 — PEP Conformance Push (ACTIVE — 46.6% → 100%) {#LSPPLAN-PEP-CONFORMANCE-PUSH}
 
 > **BLOCKING for Phase 9.** The type system needs these capabilities to stop producing
 > false positives and to catch real typing errors conformance expects.
 
-### Tier 1 — Medium complexity, highest ROI
+### Tier 1 — Medium complexity, highest ROI {#LSPPLAN-PEP-CONFORMANCE-PUSH-TIER-MEDIUM-ROI}
 
 | Task | Conformance files it flips | Complexity | Status |
 |------|---------------------------|------------|--------|
@@ -39,7 +39,7 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 | Class inheritance in TypeVar constraints | generics_basic.py | Medium | TODO |
 | Protocol structural subtyping (attrs satisfy properties) | protocols_definition.py | High | TODO |
 
-### Tier 2 — High complexity, massive impact
+### Tier 2 — High complexity, massive impact {#LSPPLAN-PEP-CONFORMANCE-PUSH-TIER-HIGH-IMPACT}
 
 | Task | Conformance files it flips | Complexity | Status |
 |------|---------------------------|------------|--------|
@@ -48,14 +48,14 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 | Variance (covariant/contravariant) | protocols_generic.py + others | High | TODO |
 | Dead branch elimination (`sys.version_info`) | directives_version_platform.py | High | TODO |
 
-### Completed this sprint
+### Completed this sprint {#LSPPLAN-PEP-CONFORMANCE-PUSH-COMPLETED-SPRINT}
 - [x] E0130: Module-level type alias TypeVar, Protocol[T] binding, multi-line sigs
 - [x] E0111: Skip dataclass/TypedDict synthesized constructors
 - [x] E0092: TypeVarTuple via Expr::Starred in name collection
 - [x] E0111: NamedTuple constructor arg count validation
 - [x] FP reduction: 435 → 294 unexpected diagnostics
 
-## Phase 8 — Cross-Module Features (requires Phase 7)
+## Phase 8 — Cross-Module Features (requires Phase 7) {#LSPPLAN-CROSS-MODULE-FEATURES}
 
 | Task | Description | Difficulty | Status |
 |------|-------------|------------|--------|
@@ -67,7 +67,7 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 | 8.6 | Module-level auto-import index with depth control | Hard | TODO |
 | 8.7 | Multi-root workspace support | Medium | TODO |
 
-## Phase 9 — Advanced Type Inference (requires Phase 7.5)
+## Phase 9 — Advanced Type Inference (requires Phase 7.5) {#LSPPLAN-ADVANCED-TYPE-INFERENCE}
 
 > Full type inference engine. This is the core of Pyright/Pylance parity.
 
@@ -86,7 +86,7 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 
 ---
 
-## Rules
+## Rules {#LSPPLAN-RULES}
 
 - Build must stay GREEN at all times
 - No `.unwrap()` in server code
@@ -97,7 +97,7 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 
 ---
 
-## Detailed TODO — Pylance Parity
+## Detailed TODO — Pylance Parity {#LSPPLAN-PYLANCE-PARITY}
 
 > Every feature Pylance advertises. Every gap must be closed.
 > Reference: [Pylance marketplace](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance), [Pyright docs](https://microsoft.github.io/pyright/#/)
@@ -203,24 +203,24 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 
 ---
 
-## Remaining Items (from completed plans)
+## Remaining Items (from completed plans) {#LSPPLAN-REMAINING-ITEMS}
 
 > Migrated from deleted plans: LSP-PROFILING-PLAN, EXTENSION-ACTIVITY-PANEL-PLAN, NEOVIM-PLAN, ZED-PLAN, LSP-UV-INTEGRATION-PLAN.
 
-### Zed Extension
+### Zed Extension {#LSPPLAN-REMAINING-ITEMS-ZED-EXTENSION}
 
 - [ ] Verify: highlighting, outline panel, bracket matching, auto-indent (manual — requires Zed with extension installed)
 - [ ] Test: breakpoints, stepping, variables, debug console, attach mode (manual — no Zed test framework)
 - [ ] Publish to Zed extension registry (PR to `zed-industries/extensions`)
 - [ ] When Zed adds panel API: implement native activity panels using same LSP commands
 
-### Neovim Extension
+### Neovim Extension {#LSPPLAN-REMAINING-ITEMS-NEOVIM-EXTENSION}
 
 - [ ] Verify all 21 core LSP features work (requires running basilisk binary against a real Python project)
 - [ ] DapTcpProxy integration tests with live TCP
 - [ ] Submit `lsp/basilisk.lua` PR to nvim-lspconfig
 
-### uv Integration
+### uv Integration {#LSPPLAN-REMAINING-ITEMS-UV-INTEGRATION}
 
 - [ ] imports_unresolved: attach `code_action_data` to diagnostic for quick-fix wiring
 - [ ] BSK-W0012: unused dependency (in deps but never imported — whole-module only)

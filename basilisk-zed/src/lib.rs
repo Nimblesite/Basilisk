@@ -182,6 +182,8 @@ impl BasiliskExtension {
 
 // ── Extension trait ──────────────────────────────────────────────────────────
 
+// The `zed::Extension` impl + `register_extension!` below is the extension
+// entry point. Implements [ZED-LIBRS].
 impl zed::Extension for BasiliskExtension {
     fn new() -> Self
     where
@@ -193,6 +195,8 @@ impl zed::Extension for BasiliskExtension {
         }
     }
 
+    // Launch `basilisk lsp` and pass workspace root + mapped settings — all 21
+    // LSP features then flow through Zed's built-in client. Implements [ZED-LSP].
     fn language_server_command(
         &mut self,
         _language_server_id: &zed::LanguageServerId,
@@ -230,6 +234,7 @@ impl zed::Extension for BasiliskExtension {
         Ok(Some(logic::wrap_config(&config)))
     }
 
+    // Profiling / memory / activity-panel slash commands. Implements [ZED-PROFILE].
     fn run_slash_command(
         &self,
         command: zed::SlashCommand,
@@ -257,6 +262,8 @@ impl zed::Extension for BasiliskExtension {
             .collect())
     }
 
+    // DAP integration: resolve the basilisk binary and hand Zed a
+    // launch/attach config for `basilisk debug-adapter`. Implements [ZED-DAP].
     fn get_dap_binary(
         &mut self,
         _adapter_name: String,

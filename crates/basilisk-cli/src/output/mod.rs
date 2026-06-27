@@ -38,6 +38,11 @@ pub use json::render_diagnostics_json;
 pub use text::render_diagnostics;
 
 /// Output format for the `check` subcommand.
+///
+/// Implements [CHKARCH-CLI-OUTPUT]: only the `text` (default) and `json`
+/// variants exist. The spec also lists `sarif` and `junit`; those are not yet
+/// implemented (see report).
+/// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-OUTPUT
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum OutputFormat {
     /// Human-readable rustc-style text (default).

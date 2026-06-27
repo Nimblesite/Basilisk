@@ -74,6 +74,9 @@ end
 
 
 --- Register all :Basilisk* commands.
+--- Implements [NVIM-USER-COMMANDS] — surfaces the profiling/memory/test/uv LSP
+--- commands plus the client-side commands (:BasiliskRestart, :BasiliskInfo,
+--- :BasiliskTestToggle) as Neovim user commands.
 ---@param config BasiliskConfig
 function M.register(config)
   local lsp_mod = require("basilisk.lsp")

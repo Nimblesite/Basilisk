@@ -12,6 +12,10 @@ use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 /// Returns `true` when a function is in a "stub context" — a context where
 /// annotation enforcement (BSK-E0001, BSK-E0002, BSK-E0004) should be skipped.
 ///
+/// Implements the exemption side of [TYPEINF-FUNC-PARAMS] / [TYPEINF-FUNC-OVERLOADS]:
+/// Protocol/abstract/stub bodies legitimately omit annotations, but `@overload`
+/// variants are explicitly NOT exempt (their signatures drive resolution).
+///
 /// A stub context is any of:
 /// - A non-`@overload` function whose body is a pure stub (only `...`, `pass`,
 ///   or a docstring): Protocol method stubs, abstract placeholders, `.pyi`-style
@@ -68,6 +72,10 @@ pub(crate) fn is_enum_class(class: &ClassInfo) -> bool {
 ///
 /// Protocol attributes are interface specifications, not concrete class variables.
 /// Unannotated names in a Protocol body are structural members, not bugs.
+///
+/// Implements the gating predicate for [TYPEINF-SUBTYPING-PROTOCOL] — identifies
+/// the structural-subtyping target class. The member-by-member conformance check
+/// itself lives in the out-of-scope `protocols_subtyping` rule (see the map).
 pub(crate) fn is_protocol_class(class: &ClassInfo) -> bool {
     class.bases.iter().any(|b| b == "Protocol")
 }

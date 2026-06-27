@@ -161,3 +161,50 @@ fn stub_distribution_is_none_for_inline_typed_package() {
         None
     );
 }
+
+// ── Auto-stub generation: mode dispatch + hybrid fallback ───────────────────
+// Tests for [STUBRES-AUTOGEN]/[STUBRES-AUTOGEN-MODES]. Exercises the
+// `generate_stubs` mode dispatcher and the hybrid runtime→AST fallback without
+// requiring a Python interpreter (a bogus `python_path` forces runtime failure).
+// See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-AUTOGEN-MODES
+
+#[test]
+fn generate_stubs_ast_mode_dispatches_to_ast_backend() {
+    use basilisk_stubs::generate::{generate_stubs, StubGenMode};
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let src = dir.path().join("acme.py");
+    std::fs::write(&src, "def greet(name: str) -> str: ...\n").expect("write src");
+
+    // AST mode never spawns a subprocess, so the python path is irrelevant.
+    let stub = generate_stubs(
+        "acme",
+        &src,
+        std::path::Path::new("python3"),
+        StubGenMode::Ast,
+    )
+    .expect("AST generation should succeed");
+    assert_eq!(stub.mode, StubGenMode::Ast);
+    assert!(stub
+        .pyi_content
+        .contains("def greet(name: str) -> str: ..."));
+    // Tier-3 marker so the provenance system reports warnings, not confidence.
+    assert!(stub.pyi_content.contains("Tier 3"));
+}
+
+#[test]
+fn generate_stubs_hybrid_falls_back_to_ast_when_runtime_unavailable() {
+    use basilisk_stubs::generate::{generate_stubs, StubGenMode};
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let src = dir.path().join("acme.py");
+    std::fs::write(&src, "def ping() -> bool: ...\n").expect("write src");
+
+    // A python binary that cannot be spawned forces the runtime path to fail,
+    // so hybrid mode must fall back to AST inference over the source file.
+    let bogus_python = dir.path().join("definitely-not-python");
+    let stub = generate_stubs("acme", &src, &bogus_python, StubGenMode::Hybrid)
+        .expect("hybrid must succeed via AST fallback when runtime is unavailable");
+    assert_eq!(stub.mode, StubGenMode::Hybrid);
+    assert!(stub.pyi_content.contains("def ping() -> bool: ..."));
+}

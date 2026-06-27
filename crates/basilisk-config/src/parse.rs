@@ -276,6 +276,12 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
 }
 
 /// Load configuration from `pyproject.toml` `[tool.basilisk]` section.
+///
+/// Implements [CHKARCH-CONFIG-FILE]: parses the `[tool.basilisk]` table —
+/// `python-version`/`python-platform`, `stub-paths`, `include`/`exclude`,
+/// `rules`, `per-module-overrides`, and `per-path-overrides`. (The spec's
+/// `[tool.basilisk.mojo-safety]` keys are not parsed — those rules are unshipped;
+/// see report.) See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-FILE
 pub fn load_from_pyproject(path: &Path) -> Option<BasiliskConfig> {
     let content = std::fs::read_to_string(path).ok()?;
     let table: toml::Table = content.parse().ok()?;

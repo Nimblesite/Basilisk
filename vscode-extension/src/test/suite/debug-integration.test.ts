@@ -616,6 +616,10 @@ async function launchAndWaitForBreakpoint(
 }
 
 // ── Test Suite ──────────────────────────────────────────────────────────────
+// Exercises [VSIX-PYTHON-DEBUGGER-DAP-FEATURES] end-to-end against real debugpy:
+// launch/attach, breakpoints, step in/over/out, variable inspection, watch
+// expressions, call stack, hover/REPL evaluation, and clean termination. The PID-
+// capture test covers [VSIX-PYTHON-DEBUGGER-DAP-TRACKER].
 
 // eslint-disable-next-line max-lines-per-function
 suite('Debug Integration E2E Tests', () => {
@@ -680,6 +684,8 @@ suite('Debug Integration E2E Tests', () => {
     // 1. Package.json contributes basilisk-debug
     // ────────────────────────────────────────────────────────────────────────
 
+    // [LSPDEBUG-WIRE], [VSIX-PYTHON-DEBUGGER-DAP-ARCHITECTURE]: both commands are
+    // advertised by the extension contribution.
     test('LSP advertises startDebugSession and stopDebugSession commands', function () {
         this.timeout(SUBPROCESS_TIMEOUT_MS);
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
@@ -693,6 +699,8 @@ suite('Debug Integration E2E Tests', () => {
         );
     });
 
+    // [VSIX-PYTHON-DEBUGGER-DAP-LAUNCH-CONFIGURATIONS]: the contributed launch/
+    // attach config attribute schema for the basilisk-debug debugger.
     // eslint-disable-next-line complexity
     test('basilisk-debug type has correct configuration attributes', function () {
         this.timeout(SUBPROCESS_TIMEOUT_MS);
@@ -737,6 +745,8 @@ suite('Debug Integration E2E Tests', () => {
     // 2. LSP-level: start/stop debug session via raw LSP commands
     // ────────────────────────────────────────────────────────────────────────
 
+    // [LSPDEBUG-START]: response shape (host=localhost, port>0, sessionId dbg-…)
+    // and debugpy actually listening on the returned port.
     test('startDebugSession spawns debugpy on a TCP port', async function () {
         this.timeout(DEBUG_SESSION_TIMEOUT_MS);
 
@@ -755,6 +765,7 @@ suite('Debug Integration E2E Tests', () => {
         await stopDebugSession(result.sessionId);
     });
 
+    // [LSPDEBUG-STOP]: stop returns { stopped: true } and the port stops listening.
     test('stopDebugSession kills the debugpy process', async function () {
         this.timeout(DEBUG_SESSION_TIMEOUT_MS);
 
@@ -769,6 +780,7 @@ suite('Debug Integration E2E Tests', () => {
         assert.strictEqual(stillListening, false, `Port ${result.port} should stop listening`);
     });
 
+    // [LSPDEBUG-STOP]: an unknown sessionId resolves to { stopped: false }.
     test('stopDebugSession with invalid sessionId returns stopped: false', async function () {
         this.timeout(SUBPROCESS_TIMEOUT_MS);
         const result = await stopDebugSession('nonexistent-session-id');
@@ -793,6 +805,8 @@ suite('Debug Integration E2E Tests', () => {
         await stopDebugSession(session2.sessionId);
     });
 
+    // [LSPDEBUG-ERRORS] / [LSPDEBUG-PYRES]: a bad interpreter yields a structured
+    // error (debugpy/python not found) rather than a crash.
     test('startDebugSession with bad Python path returns error', async function () {
         this.timeout(DEBUG_SESSION_TIMEOUT_MS);
         try {
@@ -1555,6 +1569,8 @@ suite('Debug Integration E2E Tests', () => {
 
     // ────────────────────────────────────────────────────────────────────────
     // 20. Debug session terminates cleanly
+    // [VSIX-PYTHON-DEBUGGER-DAP-PROXY] Quirk 4: exited-before-terminated ordering
+    // so activeDebugSession clears when the session ends.
     // ────────────────────────────────────────────────────────────────────────
 
     test('debug session terminates cleanly after continue past end', async function () {
@@ -1589,6 +1605,10 @@ suite('Debug Integration E2E Tests', () => {
     // 21. Attach mode test
     // ────────────────────────────────────────────────────────────────────────
 
+    // [LSPDEBUG-ATTACH], [VSIX-PYTHON-DEBUGGER-DAP-PROXY] Quirk 3 (non-destructive
+    // single-connection slot check): attach connects the editor's DAP client
+    // directly to a running debugpy server (the LSP is not involved in attach
+    // traffic).
     test('attach to manually spawned debugpy server', async function () {
         this.timeout(DEBUG_TEST_TIMEOUT_MS);
 
@@ -1642,7 +1662,8 @@ suite('Debug Integration E2E Tests', () => {
 
     // ────────────────────────────────────────────────────────────────────────
     // 23. Profiler "same process": the debuggee PID is captured from the DAP
-    //     `process` event so CPU profiling can target the same process. [LSPPROF]
+    //     `process` event so CPU profiling can target the same process. [LSPPROF],
+    //     [VSIX-PYTHON-DEBUGGER-DAP-TRACKER]
     // ────────────────────────────────────────────────────────────────────────
 
     test('captures debuggee PID from the debug session for same-process profiling', async function () {
@@ -1729,7 +1750,7 @@ suite('Debug Integration E2E Tests', () => {
     });
 });
 
-// ── Zero-config debug start [VSIX-PYTHON-DEBUGGER-DAP] ──────────────────────
+// ── Zero-config debug start [VSIX-PYTHON-DEBUGGER-START] ─────────────────────
 // Pure tests for the DebugConfigurationProvider's defaulting logic that lets
 // "Run and Debug" / F5 start without a launch.json.
 suite('Basilisk Debug Config Provider', () => {

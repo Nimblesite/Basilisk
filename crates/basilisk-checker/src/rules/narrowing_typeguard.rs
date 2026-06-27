@@ -19,6 +19,12 @@ const CODE: ErrorCode = ErrorCode {
 
 /// Emits `narrowing_typeguard` when a method uses `TypeGuard` or `TypeIs` as its return
 /// type but has no user-facing parameter (only `self` or `cls`).
+///
+/// Implements [TYPEINF-NARROWING-TYPEGUARD] and [TYPEINF-NARROWING-TYPEIS] —
+/// validity precondition of a user-defined narrowing function: it must have a
+/// parameter to narrow. The narrowing *effect* (positive-only for `TypeGuard`,
+/// bidirectional for `TypeIs`) is applied in the out-of-scope resolver narrowing
+/// visitor (see the consolidated map).
 pub(crate) struct TypeGuardNoNarrowingParam;
 
 /// Returns `true` if the annotation text references `TypeGuard` or `TypeIs`.

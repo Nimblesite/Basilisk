@@ -12,6 +12,10 @@ use super::helpers::{byte_offset_to_line, leading_indent_of_line};
 ///
 /// Scans the resolved module for the class at the cursor position, finds
 /// abstract methods in its bases, and generates stub implementations.
+// Implements [REFACTOR-ABSTRACT-ALGO] — resolve base classes and their
+// `@abstractmethod` methods (step 1), filter out already-implemented ones
+// (step 2), generate `raise NotImplementedError` stubs copying the signature
+// (step 3), and insert at the end of the class body (step 4).
 #[must_use]
 pub(in crate::code_actions) fn implement_abstract_methods(
     uri: &Url,

@@ -2,9 +2,12 @@
 //!
 //! LSP command handlers for `basilisk.memory.*` memory profiling commands.
 //!
-//! Memory profiling requires an active debug session (debugpy). These handlers
-//! extract arguments, delegate to the memory profiling engine, and return
-//! structured JSON responses.
+//! Implements [PROFILE-MEMORY-COMMANDS] (the leg-1 `start`/`snapshot`/`diff`/
+//! `references`/`objectsByType`/`gcCollect` commands that return `{ script }`)
+//! and [PROFILE-MEMORY-INGEST] (leg 2 — the editor posts the script output
+//! back). Memory profiling requires an active debug session (debugpy). These
+//! handlers extract arguments, delegate to the memory profiling engine, and
+//! return structured JSON responses.
 
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::MessageType;
@@ -19,7 +22,9 @@ use crate::profiler::memory::session::IngestOutcome;
 /// the dashboard only needs the top sites.
 const MAX_SNAPSHOT_STATS: usize = 100;
 
-/// Construct a memory-domain LSP error (`-32010`).
+/// Construct a memory-domain LSP error (`-32010`). Implements
+/// [PROFILE-MEMORY-INGEST]: an unknown session or a marker-less payload is
+/// rejected with `-32010`.
 fn memory_error(message: impl Into<String>) -> tower_lsp::jsonrpc::Error {
     tower_lsp::jsonrpc::Error {
         code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32010),
@@ -353,6 +358,9 @@ async fn publish_memory_diagnostics(server: &LspServer, diagnostics: &Diagnostic
 
 /// Serialize an ingest outcome into the editor wire format (camelCase, tagged
 /// by `kind` so the editor can dispatch).
+///
+/// Implements [PROFILE-MEMORY-INGEST] — the `kind`-tagged result shapes
+/// (`snapshot`/`diff`/`gc`/`refs`/`objects`/`ack`) the editor renders.
 fn ingest_outcome_to_json(session_id: &str, outcome: &IngestOutcome) -> serde_json::Value {
     match outcome {
         IngestOutcome::Snapshot(snapshot) => serde_json::json!({

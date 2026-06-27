@@ -52,6 +52,8 @@ vim.api.nvim_create_autocmd("LspAttach", {
     end
 
     -- Standard LSP keymaps.
+    -- Implements [NVIM-DEFAULT-KEYMAPS] / [NVIM-DEFAULT-KEYMAPS-STANDARD-LSP] —
+    -- set via the LspAttach autocmd; gd/gD/gy/gr/K/<C-k>/<leader>rn/<leader>ca.
     map("n", "gd", vim.lsp.buf.definition, "Go to definition")
     map("n", "gD", vim.lsp.buf.declaration, "Go to declaration")
     map("n", "gy", vim.lsp.buf.type_definition, "Go to type definition")
@@ -62,6 +64,8 @@ vim.api.nvim_create_autocmd("LspAttach", {
     map("n", "<leader>ca", vim.lsp.buf.code_action, "Code action")
 
     -- Basilisk-specific keymaps with configurable prefix.
+    -- Implements [NVIM-DEFAULT-KEYMAPS-BASILISK-SPECIFIC] — <leader>b prefix
+    -- (configurable via keymaps.prefix) for restart/organize/profile/memory/test.
     local prefix = config.keymaps.prefix
     map("n", prefix .. "r", "<cmd>BasiliskRestart<CR>", "Restart server")
     map("n", prefix .. "o", "<cmd>BasiliskOrganizeImports<CR>", "Organize imports")

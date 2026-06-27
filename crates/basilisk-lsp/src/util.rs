@@ -49,6 +49,7 @@ fn in_span(offset: usize, span: Span) -> bool {
 ///
 /// Searches functions (and their parameters and local variables), classes (and
 /// their attributes), module variables, and imports. Returns the first match.
+// Implements [LSPARCH-FEATURES-FINDSYM] — central symbol lookup reused by hover, goto-def, references, rename.
 #[must_use]
 pub fn find_symbol_at_offset(resolved: &ResolvedModule, offset: usize) -> Option<SymbolHit<'_>> {
     // Check function names, their parameters, and their local variables.
@@ -231,6 +232,7 @@ fn is_ident_char(b: u8) -> bool {
 // ── Type signature formatting ────────────────────────────────────────────────
 
 /// Format a hover markdown string for a symbol hit.
+// Implements [LSPARCH-FEATURES-FINDSYM] — `format_type_signature` builds hover markdown for any symbol kind.
 #[must_use]
 pub fn format_type_signature(hit: &SymbolHit<'_>, source: &str) -> String {
     match hit {

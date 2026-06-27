@@ -19,10 +19,11 @@ Usage:
     python3 scripts/gen_rules_reference.py --check FILE  # verify FILE contains
                                                         # every current code
 
-The `--data` output drives both the complete reference table and the per-code
-/errors/BSK-XXXX/ pages on the website, so the pages the CLI deep-links to
-(`see: https://www.basilisk-python.dev/errors/BSK-EXXXX`) can never drift from
-the checker. Run it after adding or renaming a rule. See
+The `--data` output ([WEBSITE-ERROR-PAGES-DATA]) drives both the complete
+reference table and the per-code /errors/BSK-XXXX/ pages on the website, so the
+pages the CLI deep-links to (`see: https://www.basilisk-python.dev/errors/BSK-EXXXX`)
+can never drift from the checker. The `--check` mode backs the CI drift guard
+([WEBSITE-ERROR-PAGES-DRIFT]). Run it after adding or renaming a rule. See
 docs/specs/WEBSITE-ERROR-PAGES-SPEC.md [WEBSITE-ERROR-PAGES].
 """
 
@@ -204,6 +205,8 @@ def main() -> int:
         print(json.dumps({r["code"]: r["summary"] for r in records}, indent=2))
         return 0
     if "--data" in sys.argv:
+        # [WEBSITE-ERROR-PAGES-DATA]: write website/src/_data/rules.json — one
+        # record per code (summary, body blocks, severity, group, docsUrl).
         idx = sys.argv.index("--data")
         out = Path(sys.argv[idx + 1]) if idx + 1 < len(sys.argv) else DEFAULT_DATA_OUT
         out.write_text(json.dumps(records, indent=2) + "\n", encoding="utf-8")
@@ -214,6 +217,8 @@ def main() -> int:
         )
         return 0
     if "--check" in sys.argv:
+        # [WEBSITE-ERROR-PAGES-DRIFT]: assert FILE contains every current code so
+        # CI fails when a rule is added/renamed without regenerating rules.json.
         target = Path(sys.argv[sys.argv.index("--check") + 1]).read_text(
             encoding="utf-8"
         )

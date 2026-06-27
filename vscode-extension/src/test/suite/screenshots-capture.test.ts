@@ -1,6 +1,8 @@
-// Implements [VSIX-EDITOR-SCREENSHOTS]: captures the real VS Code editor for the
-// website. Each test drives a Basilisk feature until it is visible, then asks the
-// CDP sidecar (scripts/screenshot-watcher.mjs) to grab the window.
+// Implements [VSIX-EDITOR-SCREENSHOTS-SET]: the captured set — one test per
+// committed vscode-*.png (diagnostics, hover, quick fix, module explorer). Each
+// drives a Basilisk feature until it is visible, then asks the CDP sidecar
+// (scripts/screenshot-watcher.mjs, [VSIX-EDITOR-SCREENSHOTS-PIPELINE]) to grab
+// the window.
 //
 // The whole suite is a NO-OP unless BASILISK_SCREENSHOTS=1 (it skips in
 // suiteSetup), so normal `npm test` runs are unaffected and nothing is written

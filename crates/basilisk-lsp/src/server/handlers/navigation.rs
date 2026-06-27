@@ -28,6 +28,8 @@ use crate::server::{none_if_empty, LspServer};
 /// Tries single-file definition first. If no local definition is found,
 /// falls back to cross-file lookup via `imported_symbols` populated by
 /// cross-module analysis.
+// Implements [ANALYSIS-CROSSLSP-GOTODEF] — follows the import's resolved_path to
+// the symbol's name_span in the target module, following re-export chains.
 pub(in crate::server) async fn goto_definition(
     server: &LspServer,
     params: GotoDefinitionParams,
@@ -75,6 +77,8 @@ pub(in crate::server) async fn goto_definition(
 /// If the symbol at `source_path` is itself an import from another file,
 /// follows the chain until a non-imported definition is found. Prevents
 /// infinite loops with a depth limit.
+// Implements [ANALYSIS-CROSSLSP-GOTODEF] — "Re-exports are followed across the
+// import chain."
 fn follow_reexport_chain(
     idx: &crate::workspace::WorkspaceIndex,
     source_path: &std::path::Path,
@@ -228,6 +232,8 @@ pub(in crate::server) async fn symbol(
 /// Finds single-file references first, then searches cross-file via the
 /// import graph — checking all importers of the current file for usage of
 /// the symbol, and the source file if the symbol is imported.
+// Implements [ANALYSIS-CROSSLSP-REFS] — uses import-graph reverse edges
+// (`importers_of`) to search every importer of the defining file for the symbol.
 pub(in crate::server) async fn references(
     server: &LspServer,
     params: ReferenceParams,
@@ -369,6 +375,8 @@ pub(in crate::server) async fn prepare_rename(
 ///
 /// Renames the symbol at the cursor across all files: definition site,
 /// import sites, and usage sites in importers.
+// Implements [ANALYSIS-CROSSLSP-RENAME] — produces a multi-file WorkspaceEdit
+// (definition site + import/usage sites in importers via the import graph).
 pub(in crate::server) async fn rename(
     server: &LspServer,
     params: RenameParams,

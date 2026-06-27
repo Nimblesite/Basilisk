@@ -20,6 +20,9 @@ use crate::workspace::WorkspaceIndex;
 ///
 /// Returns all public functions, classes, and variables as `ExternalSymbol`
 /// entries keyed by their name.
+// Implements [ANALYSIS-SYMBOLS-EXT] — produces the `ExternalSymbol` entries
+// (kind/name/type_annotation/source_path/source_span/signature) and the export
+// extraction pass of [ANALYSIS-SYMBOLS-POP].
 fn extract_exports(
     resolved: &basilisk_resolver::ResolvedModule,
     source_path: &std::path::Path,
@@ -205,6 +208,8 @@ fn build_stub_signature(func: &StubFunction) -> String {
 }
 
 /// Build a function signature string for hover display.
+// Implements [ANALYSIS-SYMBOLS-POP] — `build_function_signature()` used by the
+// export extraction pass.
 fn build_function_signature(func: &basilisk_resolver::scope::FunctionInfo, source: &str) -> String {
     let mut sig = format!("def {}(", func.name);
     for (idx, param) in func.parameters.iter().enumerate() {
@@ -234,6 +239,9 @@ fn build_function_signature(func: &basilisk_resolver::scope::FunctionInfo, sourc
 /// For each file, walks its `imports`, looks up the `resolved_path` in the
 /// index, and extracts the target module's exported symbols. Only imports
 /// that resolved to files present in the index are populated.
+// Implements [ANALYSIS-SYMBOLS-POP] — the two-pass population: pass 1 extracts
+// every file's exports, pass 2 resolves each importer's `imports` against those
+// exports (plus on-demand `.pyi`/py.typed externals) into `imported_symbols`.
 pub fn populate_cross_module_symbols(index: &WorkspaceIndex) {
     // First pass: collect all exports keyed by path.
     let mut all_exports: std::collections::HashMap<PathBuf, Vec<(String, ExternalSymbol)>> =
@@ -335,6 +343,8 @@ mod tests {
         tower_lsp::lsp_types::Url::parse(&format!("file://{path}")).unwrap()
     }
 
+    // Exercises [ANALYSIS-SYMBOLS-POP] / [ANALYSIS-SYMBOLS-EXT]: two-pass
+    // population of imported_symbols from a workspace module's exports.
     #[test]
     fn cross_module_symbol_population() {
         let index = WorkspaceIndex::new(

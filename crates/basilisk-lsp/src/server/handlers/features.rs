@@ -22,6 +22,7 @@ use crate::{
 use crate::server::{none_if_empty, LspServer};
 
 /// Handle `textDocument/hover`.
+// Implements [LSPARCH-FEATURES-HOVER] — type signatures for any symbol, diagnostics secondary.
 pub(in crate::server) async fn hover(
     server: &LspServer,
     params: HoverParams,
@@ -36,6 +37,7 @@ pub(in crate::server) async fn hover(
 }
 
 /// Handle `textDocument/signatureHelp`.
+// Implements [LSPARCH-FEATURES-SIGHELP] — parameter hints with active-parameter tracking.
 pub(in crate::server) async fn signature_help(
     server: &LspServer,
     params: SignatureHelpParams,
@@ -50,6 +52,7 @@ pub(in crate::server) async fn signature_help(
 }
 
 /// Handle `textDocument/inlayHint`.
+// Implements [LSPARCH-FEATURES-INLAYHINTS] — variable type, parameter name, and return type hints.
 pub(in crate::server) async fn inlay_hint(
     server: &LspServer,
     params: InlayHintParams,
@@ -62,6 +65,7 @@ pub(in crate::server) async fn inlay_hint(
 }
 
 /// Handle `textDocument/semanticTokens/full`.
+// Implements [LSPARCH-FEATURES-SEMTOKENS] — token classification across the legend.
 pub(in crate::server) async fn semantic_tokens_full(
     server: &LspServer,
     params: SemanticTokensParams,
@@ -78,6 +82,7 @@ pub(in crate::server) async fn semantic_tokens_full(
 }
 
 /// Handle `textDocument/codeAction`.
+// Implements [LSPARCH-FEATURES-CODEACTIONS] — quick fixes, suppress, organize imports, fix-all.
 pub(in crate::server) async fn code_action(
     server: &LspServer,
     params: CodeActionParams,
@@ -164,6 +169,7 @@ pub(in crate::server) async fn code_action(
 }
 
 /// Handle `textDocument/completion`.
+// Implements [LSPARCH-FEATURES-COMPLETION] — symbol, dot, import, builtin, kwarg completions (+ auto-import).
 pub(in crate::server) async fn completion(
     server: &LspServer,
     params: CompletionParams,
@@ -312,6 +318,7 @@ pub(in crate::server) async fn completion_resolve(
 }
 
 /// Handle `textDocument/formatting`.
+// Implements [LSPARCH-FEATURES-FORMAT] — delegate to `ruff format`, return whole-document TextEdit.
 pub(in crate::server) async fn formatting(
     server: &LspServer,
     params: DocumentFormattingParams,
@@ -326,6 +333,7 @@ pub(in crate::server) async fn formatting(
 }
 
 /// Handle `textDocument/foldingRange`.
+// Implements [LSPARCH-FEATURES-FOLDING] — function/class def_span and import-block folds.
 pub(in crate::server) async fn folding_range(
     server: &LspServer,
     params: FoldingRangeParams,
@@ -338,6 +346,7 @@ pub(in crate::server) async fn folding_range(
 }
 
 /// Handle `textDocument/selectionRange`.
+// Implements [LSPARCH-FEATURES-SELECTION] — Smart Select nested range tree from ResolvedModule spans.
 pub(in crate::server) async fn selection_range(
     server: &LspServer,
     params: SelectionRangeParams,
@@ -354,6 +363,7 @@ pub(in crate::server) async fn selection_range(
 }
 
 /// Handle `textDocument/codeLens`.
+// Implements [LSPARCH-FEATURES-CODELENS] — "N references" lens above each function/class.
 pub(in crate::server) async fn code_lens(
     server: &LspServer,
     params: CodeLensParams,

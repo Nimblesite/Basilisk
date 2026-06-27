@@ -591,8 +591,9 @@ fn module_arg(cmd: &[OsString]) -> Option<String> {
 
 /// Resolve a Python version string for `exe`, caching per executable path.
 ///
-/// Prefers an exact version from `<exe> --version` (e.g. `3.12.13`) within the
-/// resolution `budget`, falling back to the `pythonX.Y` path pattern.
+/// Implements [PROFILE-PROCESSES-MODEL] (version resolution): an exact version
+/// from `<exe> --version` (cached per interpreter, bounded by `budget` per
+/// enumeration), falling back to the `pythonX.Y` path pattern, then `null`.
 fn resolve_python_version(
     exe: &str,
     cache: &mut HashMap<String, Option<String>>,

@@ -168,22 +168,23 @@ Enforced by the toolbar contract tests in `vscode-extension/src/test/suite/activ
 | Command | Arguments | Response | Description |
 |---------|-----------|----------|-------------|
 | `basilisk.organizeImports` | `{uri}` | `TextEdit[]` | Run Ruff import organization |
-| `basilisk/startDebugSession` | `{uri, pythonPath?}` | `{host, port, sessionId}` | Spawn debugpy, return connection info |
-| `basilisk/stopDebugSession` | `{sessionId}` | `{}` | Terminate debug session |
-| `basilisk/profiler/start` | `{pid?}` | `{sessionId}` | Start profiling (active process or PID) |
-| `basilisk/profiler/stop` | `{sessionId}` | `{results}` | Stop profiling, return results |
-| `basilisk/profiler/snapshot` | `{sessionId}` | `{results}` | Snapshot without stopping |
-| `basilisk/memory/start` | `{}` | `{sessionId}` | Start memory leak tracking |
-| `basilisk/memory/stop` | `{sessionId}` | `{leakReport}` | Stop tracking, return leak report |
-| `basilisk/memory/refs` | `{typeName}` | `{retentionPaths}` | Query retention paths for a type |
+| `basilisk.startDebugSession` | `{uri, pythonPath?}` | `{host, port, sessionId}` | Spawn debugpy, return connection info |
+| `basilisk.stopDebugSession` | `{sessionId}` | `{}` | Terminate debug session |
+| `basilisk.profiler.start` | `{pid?}` | `{sessionId}` | Start profiling (active process or PID) |
+| `basilisk.profiler.stop` | `{sessionId}` | `{results}` | Stop profiling, return results |
+| `basilisk.profiler.snapshot` | `{sessionId}` | `{results}` | Snapshot without stopping |
+| `basilisk.memory.start` | `{}` | `{sessionId}` | Start memory tracking |
+| `basilisk.memory.snapshot` | `{sessionId}` | `{snapshot}` | Take a heap snapshot |
+| `basilisk.memory.diff` | `{sessionId}` | `{leakReport}` | Diff snapshots → leak report |
+| `basilisk.memory.references` | `{typeName}` | `{retentionPaths}` | Query retention paths for a type |
 | `basilisk.uv.sync` | `{}` | `{}` | Run `uv sync` in project root (see `LSP-UV-INTEGRATION-SPEC.md`) |
 | `basilisk.uv.add` | `{package}` | `{}` | Run `uv add <package>` |
 | `basilisk.uv.addDev` | `{package}` | `{}` | Run `uv add --dev <package>` |
 | `basilisk.uv.remove` | `{package}` | `{}` | Run `uv remove <package>` |
 | `basilisk.uv.lock` | `{}` | `{}` | Run `uv lock` (resolve without installing) |
 | `basilisk.uv.createEnv` | `{pythonVersion?}` | `{}` | Run `uv venv` (optionally `--python X.Y`) |
-| `basilisk/workspaceModules` | `{scope?: string}` | `WorkspaceModulesResponse` | Return the workspace module tree (optionally scoped to a package/subpackage) |
-| `basilisk/typeHealth` | `{module?: string}` | `TypeHealthResponse` | Return type health statistics for the workspace or a specific module. The same per-file rollup is folded into `basilisk/workspaceModules`; unified-panel editors read the folded data and this command serves editors without one (Zed `/health`, Neovim `:BasiliskHealth`). |
+| `basilisk.workspaceModules` | `{scope?: string}` | `WorkspaceModulesResponse` | Return the workspace module tree (optionally scoped to a package/subpackage) |
+| `basilisk.typeHealth` | `{module?: string}` | `TypeHealthResponse` | Return type health statistics for the workspace or a specific module. The same per-file rollup is folded into `basilisk.workspaceModules`; unified-panel editors read the folded data and this command serves editors without one (Zed `/health`, Neovim `:BasiliskHealth`). |
 
 ### Custom LSP Notifications {#LSPARCH-NOTIFS}
 
@@ -213,10 +214,10 @@ interface SymbolNode {
 }
 
 /**
- * Response from `basilisk/workspaceModules`. Each ModuleNode carries its folded
+ * Response from `basilisk.workspaceModules`. Each ModuleNode carries its folded
  * type-health rollup (coveragePercent, errors, warnings, adopted) and the
  * response carries a workspace-wide summary, so a merged Modules panel needs no
- * separate `basilisk/typeHealth` round-trip (issue #103).
+ * separate `basilisk.typeHealth` round-trip (issue #103).
  */
 interface WorkspaceModulesResponse {
     modules: ModuleNode[];
@@ -238,7 +239,7 @@ interface ModuleHealth {
     stats: HealthStats;
 }
 
-/** Response from `basilisk/typeHealth`. */
+/** Response from `basilisk.typeHealth`. */
 interface TypeHealthResponse {
     workspace: HealthStats;    // Rolled-up stats for the entire workspace
     modules: ModuleHealth[];   // Per-module breakdown (all modules, or single module when filtered)
@@ -250,7 +251,7 @@ interface TypeHealthResponse {
 All editors MUST implement a TCP proxy between the DAP client and debugpy to fix known stepping quirks:
 
 1. Listen on a random local port
-2. Connect to debugpy on the `{host, port}` returned by `basilisk/startDebugSession`
+2. Connect to debugpy on the `{host, port}` returned by `basilisk.startDebugSession`
 3. Frame DAP messages with `Content-Length` headers
 4. **Intercept `stepOut`** — inject auto-`next` for structural lines (`try:`, `with:`, `if:`)
 5. **Attach mode timeout** — 3s timeout with synthetic success response

@@ -24,6 +24,9 @@ use tokio::time::{Duration, Instant};
 const ADAPTER_BIND_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Errors that can occur during debug session management.
+// Implements [LSPDEBUG-ERRORS] — error variants and their user-facing messages
+// ("debugpy not found. Install it…", "No Python interpreter found. Checked…").
+// The JSON-RPC error codes (-32001 / -32002) are mapped in server/commands.rs.
 #[derive(Debug)]
 pub enum DebugError {
     /// Failed to allocate a free TCP port.
@@ -71,6 +74,9 @@ impl fmt::Display for DebugError {
 impl std::error::Error for DebugError {}
 
 /// Tracks active debug sessions spawned by the LSP.
+// Implements [LSPDEBUG-RUST] — `DebugSessionManager` owns session lifecycle:
+// spawning debugpy on a free TCP port, polling until ready, tracking sessions,
+// and killing child processes on stop or shutdown.
 pub struct DebugSessionManager {
     /// Map from session ID to the spawned debugpy child process.
     sessions: Mutex<HashMap<String, Child>>,
@@ -107,6 +113,8 @@ impl DebugSessionManager {
     ///
     /// Returns `DebugError` if port allocation, process spawning, or the
     /// readiness check fails.
+    // Implements [LSPDEBUG-START] — spawns debugpy on a free TCP port and waits
+    // until it accepts connections before returning (host, port, sessionId).
     pub async fn start_session(
         &self,
         python_path: &str,
@@ -145,6 +153,8 @@ impl DebugSessionManager {
     }
 
     /// Kill a debug session and clean up.
+    // Implements [LSPDEBUG-STOP] — removes the session by id and kills its
+    // child process; returns whether a matching session existed.
     pub async fn stop_session(&self, session_id: &str) -> bool {
         let mut sessions = self.sessions.lock().await;
         if let Some(mut child) = sessions.remove(session_id) {
@@ -157,6 +167,8 @@ impl DebugSessionManager {
     }
 
     /// Kill all active debug sessions. Called on LSP shutdown.
+    // Implements [LSPDEBUG-RUST] — shutdown cleanup: kills every tracked child
+    // process (invoked from server/init.rs shutdown).
     pub async fn stop_all(&self) {
         let mut sessions = self.sessions.lock().await;
         let count = sessions.len();
@@ -250,6 +262,8 @@ fn generate_session_id() -> String {
 /// 1. `BASILISK_PYTHON` environment variable
 /// 2. Workspace virtualenv (`.venv/bin/python`, `venv/bin/python`)
 /// 3. System `python3` (or `python` on Windows)
+// Implements [LSPDEBUG-PYRES] — the three-step interpreter cascade
+// (BASILISK_PYTHON → workspace venv → system python).
 #[must_use]
 pub fn resolve_python(workspace_root: &Path) -> String {
     // 1. Explicit override via env var.
@@ -324,6 +338,8 @@ fn bundled_debugpy_pythonpath() -> Option<std::ffi::OsString> {
 ///
 /// Returns `DebugError::SpawnFailed` if the Python process cannot be started,
 /// or `DebugError::DebugpyNotFound` if the import fails.
+// Implements [LSPDEBUG-PYRES] — `check_debugpy` verifies the interpreter can
+// import debugpy before spawning, returning `DebugError::DebugpyNotFound` if not.
 pub async fn check_debugpy(python: &str) -> Result<(), DebugError> {
     debug!(python, "checking if debugpy is installed");
     let mut command = tokio::process::Command::new(python);
@@ -371,6 +387,7 @@ mod tests {
         assert!(id.len() > 4, "id must have content after prefix");
     }
 
+    // Tests [LSPDEBUG-PYRES]: BASILISK_PYTHON overrides the cascade.
     #[test]
     fn resolve_python_uses_env_var() {
         let _guard = ENV_LOCK.lock().expect("env lock poisoned");
@@ -450,6 +467,7 @@ mod tests {
         }
     }
 
+    // Tests [LSPDEBUG-PYRES]: system python3/python fallback when no venv exists.
     #[test]
     fn resolve_python_falls_back_to_system() {
         let _guard = ENV_LOCK.lock().expect("env lock poisoned");
@@ -467,6 +485,7 @@ mod tests {
         }
     }
 
+    // Tests [LSPDEBUG-PYRES]: check_debugpy fails when the interpreter is absent.
     #[tokio::test]
     async fn check_debugpy_with_nonexistent_python_returns_err() {
         let result = check_debugpy("/nonexistent/python").await;
@@ -475,6 +494,7 @@ mod tests {
 
     /// The user-facing timeout message must name the REAL budget — a stale
     /// "5 seconds" with a different constant misleads bug reports.
+    // Tests [LSPDEBUG-ERRORS]: DebugError::Timeout message content.
     #[test]
     fn timeout_error_names_the_actual_budget() {
         let message = DebugError::Timeout(1234).to_string();
@@ -487,6 +507,7 @@ mod tests {
 
     /// A crashed adapter must fail fast with its exit status — not burn the
     /// whole bind budget and then misreport the crash as a timeout.
+    // Tests [LSPDEBUG-START]: readiness polling fails fast on a dead adapter.
     #[tokio::test]
     async fn dead_adapter_fails_fast_without_burning_the_timeout() {
         let port = find_free_port().expect("should allocate a port");
@@ -527,6 +548,8 @@ mod tests {
     ///   3. The real client (VS Code) tries to connect → ECONNREFUSED
     ///
     /// The test MUST FAIL with a buggy `wait_for_port` that makes TCP probes.
+    // Tests [LSPDEBUG-START]: the LSP waits for debugpy without consuming its
+    // single connection slot, so the editor's DAP client can connect.
     #[tokio::test]
     async fn wait_for_port_does_not_consume_the_connection() {
         use std::io::Read as _;

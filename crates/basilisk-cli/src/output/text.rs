@@ -44,6 +44,11 @@ fn color_severity(severity: Severity, text: &str) -> String {
 }
 
 /// Format a single diagnostic as a rustc-style string with ANSI colours.
+///
+/// Implements [CHKARCH-DIAGEXP-QUALITY]: emits the rustc-standard layout —
+/// `severity[CODE]: message`, `--> path:line:col`, source snippet with caret
+/// underline, then `= help:` / `= note:` / `= see:` annotation lines.
+/// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAGEXP-QUALITY
 pub(super) fn format_one(diag: &Diagnostic, source: Option<&str>) -> String {
     let mut out = String::new();
 

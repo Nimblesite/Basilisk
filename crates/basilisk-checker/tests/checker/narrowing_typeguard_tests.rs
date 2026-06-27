@@ -3,6 +3,8 @@
 
 use super::common::*;
 
+// Exercises [TYPEINF-NARROWING-TYPEGUARD] / [TYPEINF-NARROWING-TYPEIS] —
+// a narrowing function with a real parameter to narrow is valid.
 #[test]
 fn valid_typeguard() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"

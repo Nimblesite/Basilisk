@@ -9,6 +9,13 @@ use crate::workspace::WorkspaceIndex;
 use super::helpers::{coverage_percent, module_name_from_path};
 
 /// Build the full type health response.
+///
+/// Implements the server side of [EXTACT-HEALTH-TREE-STRUCTURE] and
+/// [EXTACT-HEALTH-ITEM-PROPERTIES]: the workspace `HealthStats` plus the
+/// per-module `ModuleHealth` list (path, coverage %, errors/warnings, adopted,
+/// unannotated names), sorted worst-first (ascending coverage) per
+/// [EXTACT-HEALTH-TOOLBAR]'s default. This is the shared surface for editors
+/// without a unified panel (Zed `/health`, Neovim `:BasiliskHealth`).
 pub(crate) fn build_type_health(
     idx: &WorkspaceIndex,
     project_root: Option<&Path>,
@@ -194,6 +201,11 @@ fn count_annotations(resolved: &basilisk_resolver::ResolvedModule) -> (usize, us
 }
 
 /// Empty health stats for when the workspace index is unavailable.
+///
+/// Implements the server side of the [EXTACT-MODULES-HEADER] /
+/// [EXTACT-HEALTH-HEADER] empty-workspace guarantee: `totalFiles == 0`, so the
+/// client branches to "No Python files found" rather than rendering the
+/// vacuous `coveragePercent: 100` as a green "perfectly typed" state (#57).
 pub(crate) fn empty_health_stats() -> serde_json::Value {
     serde_json::json!({
         "totalSymbols": 0,

@@ -100,6 +100,9 @@ function M.snapshot()
 end
 
 --- Display profiling results in a floating window and quickfix list.
+--- Implements [NVIM-USER-COMMANDS-PROFILING-UI] — hot-function list in a float +
+--- quickfix list, with heat-map extmarks (apply_heat_map) and speedscope export
+--- (export_flamegraph) for the flamegraph view.
 ---@param result? table Profiling results from the LSP server.
 function M.display_results(result)
   if not result then

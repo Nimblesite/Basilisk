@@ -47,7 +47,7 @@ flowchart LR
 
     subgraph Basilisk["basilisk binary (Rust)"]
         LSP["basilisk lsp<br/>(JSON-RPC)<br/><br/>See LSP-ARCHITECTURE-SPEC.md<br/>for all features"]
-        DBG["debugpy<br/>(spawned by<br/>basilisk/startDebug)"]
+        DBG["debugpy<br/>(spawned by<br/>basilisk.startDebugSession)"]
     end
 
     VL <-->|"stdio<br/>JSON-RPC"| LSP
@@ -177,7 +177,7 @@ Detects `nvim-dap` at runtime via `pcall(require, 'dap')`. Degrades gracefully i
 
 ```lua
 dap.adapters.basilisk = function(callback, config)
-  -- 1. Send basilisk/startDebugSession to running LSP
+  -- 1. Send basilisk.startDebugSession to running LSP
   -- 2. Receive {host, port, sessionId}
   -- 3. Start DapTcpProxy on random local port (vim.uv.new_tcp)
   -- 4. Return server adapter pointing to proxy port
@@ -231,17 +231,17 @@ All profiling/memory/test LSP commands (defined in LSP-ARCHITECTURE-SPEC.md) sur
 | `:BasiliskRestart` | — (client-side) | Restart LSP server |
 | `:BasiliskInfo` | — (client-side) | Show server status |
 | `:BasiliskOrganizeImports` | `basilisk.organizeImports` | — |
-| `:BasiliskProfile [pid]` | `basilisk/profiler/start` | — |
-| `:BasiliskProfileStop` | `basilisk/profiler/stop` | Floating window + quickfix |
-| `:BasiliskProfileSnapshot` | `basilisk/profiler/snapshot` | — |
-| `:BasiliskMemLeak` | `basilisk/memory/start` | — |
-| `:BasiliskMemStop` | `basilisk/memory/stop` | Floating window |
-| `:BasiliskMemRefs <Type>` | `basilisk/memory/refs` | Floating window (with completion) |
+| `:BasiliskProfile [pid]` | `basilisk.profiler.start` | — |
+| `:BasiliskProfileStop` | `basilisk.profiler.stop` | Floating window + quickfix |
+| `:BasiliskProfileSnapshot` | `basilisk.profiler.snapshot` | — |
+| `:BasiliskMemLeak` | `basilisk.memory.start` | — |
+| `:BasiliskMemStop` | `basilisk.memory.diff` | Floating window |
+| `:BasiliskMemRefs <Type>` | `basilisk.memory.references` | Floating window (with completion) |
 | `:BasiliskTestDiscover` | — (runs pytest) | Refresh test tree |
 | `:BasiliskTestRun [id]` | — (runs pytest) | Run test(s) |
 | `:BasiliskTestDebug [id]` | — (triggers DAP) | Debug test |
 | `:BasiliskTestToggle` | — (client-side) | Toggle test explorer panel |
-| `:BasiliskDebugFile` | `basilisk/startDebugSession` | Start debugging current file |
+| `:BasiliskDebugFile` | `basilisk.startDebugSession` | Start debugging current file |
 
 ### Profiling UI {#NVIM-USER-COMMANDS-PROFILING-UI}
 

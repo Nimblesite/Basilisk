@@ -1,3 +1,5 @@
+; Language injections (SQL in strings, regex patterns). Implements [ZED-TREESITTER].
+
 ; SQL in string literals (heuristic: strings starting with SELECT, INSERT, etc.)
 ((string
   (string_content) @injection.content)

@@ -1,5 +1,5 @@
-// Implements [VSIX-EDITOR-SCREENSHOTS]: one command to regenerate the website's
-// VS Code editor screenshots. Stages the built binary into the dev extension,
+// Implements [VSIX-EDITOR-SCREENSHOTS-PIPELINE]: one command to regenerate the
+// website's VS Code editor screenshots. Stages the built binary into the dev ext,
 // copies the shipwright manifest, launches the CDP screenshot sidecar, and runs
 // the (otherwise-skipped) "Editor screenshots" suite headed with
 // BASILISK_SCREENSHOTS=1 so the sidecar captures each feature.

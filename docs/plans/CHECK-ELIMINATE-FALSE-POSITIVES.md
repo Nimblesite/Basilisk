@@ -1,4 +1,4 @@
-# Plan: Eliminate False Positives in PEP Conformance Suite
+# Plan: Eliminate False Positives in PEP Conformance Suite {#FPPLAN}
 
 > ⚠️ **SUPERSEDED.** The numbers in this doc ("136/146 PASS / 93.15%", "170
 > false positives", "FP-ceiling … Set to 161", `diag_line_rules`,
@@ -33,7 +33,7 @@
 > still-valid part of this plan is the *strategy* — driving specific rules'
 > false positives down; the *counts* below are stale.
 
-## Context
+## Context {#FPPLAN-CONTEXT}
 
 False positives are diagnostics Basilisk reports on lines that have NO `# E`
 annotation — the typing spec says the line is **valid code** but Basilisk flags
@@ -44,7 +44,7 @@ prints per-FP verbose output (`FP <file>: count=N lines=[(line, rule)…]`, see
 `diag_line_rules`). Run `cargo test --test conformance_tests --release -- --nocapture`
 and `grep '  FP    '` to get the exact rule→line mapping.
 
-### CURRENT STATE (measured 2026-06-03, on `main` after PR #73)
+### CURRENT STATE (measured 2026-06-03, on `main` after PR #73) {#FPPLAN-CONTEXT-CURRENT-STATE}
 
 - **136/146 PASS (93.15%)**, threshold pinned at 93 in `coverage-thresholds.json`.
 - **170 false positives** across 50 files. (The earlier "18 FPs" claim in this
@@ -57,7 +57,7 @@ and `grep '  FP    '` to get the exact rule→line mapping.
 > harness and diff `conformance_status.csv` against baseline — no file may regress
 > PASS→FAIL and total `missed` must not increase.
 
-### FP distribution by rule (the real target list)
+### FP distribution by rule (the real target list) {#FPPLAN-CONTEXT-FP-DISTRIBUTION}
 
 | Rule | FPs | What it is | Dominant pattern |
 |------|-----|------------|------------------|
@@ -72,7 +72,7 @@ and `grep '  FP    '` to get the exact rule→line mapping.
 
 ---
 
-## Strategy (this PR)
+## Strategy (this PR) {#FPPLAN-STRATEGY}
 
 Fix the rules in descending FP order, **verifying empirically after each** against
 the saved baseline (`/tmp/conf_baseline.csv`). Group the E0014 mass into surgical,
@@ -93,7 +93,7 @@ TP-safe guards rather than rewriting the (text-based) rule wholesale.
 - **FIX D — E0053** (15 FPs), **FIX E — E0013** (7 FPs), **FIX F — E0111** (9 FPs):
   independent rules; root-cause + TP-safe patch per cluster.
 
-### Enforcement upgrade
+### Enforcement upgrade {#FPPLAN-STRATEGY-ENFORCEMENT}
 
 Add `conformance.max_false_positives` to `coverage-thresholds.json` and assert it
 in the harness (ratchet DOWN only), making FP a true quality gate alongside the
@@ -101,7 +101,7 @@ PASS-percentage gate — "quality metrics only increase per PR".
 
 ---
 
-## Step 0: Add FP Verbose Reporting to Conformance Harness
+## Step 0: Add FP Verbose Reporting to Conformance Harness {#FPPLAN-FP-VERBOSE-REPORTING}
 
 **File**: `crates/basilisk-cli/tests/conformance_tests.rs`
 
@@ -125,7 +125,7 @@ This requires threading the rule code through with the line number (currently `d
 
 ---
 
-## Step 1: E0104 — Recursive Type Aliases (est. ~20 FP eliminated)
+## Step 1: E0104 — Recursive Type Aliases (est. ~20 FP eliminated) {#FPPLAN-E0104-RECURSIVE-ALIASES}
 
 **File**: `crates/basilisk-checker/src/rules/e0104.rs`
 **Conformance file**: `aliases_recursive.py` (20 FP)
@@ -141,7 +141,7 @@ The test file shows exactly which should error: only lines 72 and 75 (`Recursive
 
 ---
 
-## Step 2: E0136 — Callable Subtyping (est. ~25 FP eliminated)
+## Step 2: E0136 — Callable Subtyping (est. ~25 FP eliminated) {#FPPLAN-E0136-CALLABLE-SUBTYPING}
 
 **File**: `crates/basilisk-checker/src/rules/e0136.rs`
 **Conformance file**: `callables_subtyping.py` (25 FP)
@@ -157,7 +157,7 @@ The test file shows exactly which should error: only lines 72 and 75 (`Recursive
 
 ---
 
-## Step 3: E0014 — Assignment Type Mismatch (est. ~30 FP eliminated)
+## Step 3: E0014 — Assignment Type Mismatch (est. ~30 FP eliminated) {#FPPLAN-E0014-ASSIGNMENT-MISMATCH}
 
 **Files**: `crates/basilisk-checker/src/rules/e0014/mod.rs`, `literal_parse.rs`, `tuple_check.rs`
 **Top conformance files**: `callables_annotation.py` (17 FP), `tuples_type_compat.py` (17 FP), `specialtypes_any.py` (7 FP), `typeddicts_readonly_consistency.py` (5 FP)
@@ -177,7 +177,7 @@ The test file shows exactly which should error: only lines 72 and 75 (`Recursive
 
 ---
 
-## Step 4: E0093 + TypedDict Rules (est. ~15 FP eliminated)
+## Step 4: E0093 + TypedDict Rules (est. ~15 FP eliminated) {#FPPLAN-E0093-TYPEDDICT}
 
 **Files**: `crates/basilisk-checker/src/rules/e0093/mod.rs`, `type_consistency.rs`
 **Conformance files**: `typeddicts_extra_items.py` (13 FP), `typeddicts_readonly.py` (2 FP), `typeddicts_required.py` (3 FP), `typeddicts_readonly_consistency.py` (5 FP), `typeddicts_readonly_update.py` (3 FP)
@@ -195,7 +195,7 @@ The test file shows exactly which should error: only lines 72 and 75 (`Recursive
 
 ---
 
-## Step 5: Protocol Rules — E0121, E0110, E0133 (est. ~25 FP eliminated)
+## Step 5: Protocol Rules — E0121, E0110, E0133 (est. ~25 FP eliminated) {#FPPLAN-PROTOCOL-RULES}
 
 **Files**: `crates/basilisk-checker/src/rules/e0121.rs`, `e0110.rs`, `e0133.rs`
 **Conformance files**: `protocols_definition.py` (13 FP), `protocols_subtyping.py` (7 FP), `protocols_merging.py` (2 FP), `protocols_recursive.py` (2 FP), `callables_protocol.py` (1 FP)
@@ -211,7 +211,7 @@ The test file shows exactly which should error: only lines 72 and 75 (`Recursive
 
 ---
 
-## Step 6: Remaining Scatter (est. ~20 FP eliminated)
+## Step 6: Remaining Scatter (est. ~20 FP eliminated) {#FPPLAN-REMAINING-SCATTER}
 
 **Rules**: E0013, E0036, E0053, E0061, E0045, E0147, and other low-count rules
 **Files**: `exceptions_context_managers.py` (6 FP), `enums_members.py` (7 FP), `narrowing_typeguard.py` (5 FP), `narrowing_typeis.py` (4 FP), `literals_interactions.py` (4 FP), many files with 1-3 FP
@@ -224,7 +224,7 @@ These require per-rule investigation after Step 0 gives us exact FP-to-rule mapp
 
 ---
 
-## Step 7: Type Narrowing and Full Inference Engine (est. ~125 FP eliminated)
+## Step 7: Type Narrowing and Full Inference Engine (est. ~125 FP eliminated) {#FPPLAN-NARROWING-ENGINE}
 
 > **Full plan**: [CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md)
 > **Spec**: [CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-NARROWING](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING)
@@ -233,9 +233,9 @@ The remaining ~125 FPs cannot be fixed without fundamental engine work. The chec
 
 ---
 
-## Execution log
+## Execution log {#FPPLAN-EXECUTION-LOG}
 
-### 2026-06-03 (session 2) — FP reduction 161 → 136 and counting (zero conformance regression)
+### 2026-06-03 (session 2) — FP reduction 161 → 136 and counting (zero conformance regression) {#FPPLAN-LOG-SESSION-TWO}
 
 Verification harness: [`scripts/fp_verify.sh`](../../scripts/fp_verify.sh) rebuilds, runs
 the conformance suite, and diffs `conformance_status.csv` against a saved baseline,
@@ -276,7 +276,7 @@ fixtures' incompatible assignments (`3j`, stray `list`s) keep firing. Restricted
 
 ---
 
-### 2026-06-03 (session 1) — clean FP reduction: 170 → 161 (zero conformance regression)
+### 2026-06-03 (session 1) — clean FP reduction: 170 → 161 (zero conformance regression) {#FPPLAN-LOG-SESSION-ONE}
 
 Measured against `main`. Every change verified empirically: re-ran the harness and
 diffed `conformance_status.csv` for PASS→FAIL flips AND `caught`/`missed` deltas.
@@ -312,7 +312,7 @@ diffed `conformance_status.csv` for PASS→FAIL flips AND `caught`/`missed` delt
 - **E0014 mass (~96 remaining)** — callables/protocols/recursive-aliases/tuples all
   require real subtyping or value-level recursive-alias checking.
 
-### Historical notes (pre-2026-06-03, partially superseded)
+### Historical notes (pre-2026-06-03, partially superseded) {#FPPLAN-LOG-HISTORICAL-NOTES}
 
 The status table below predates the measured baseline above; several "DONE (N FPs)"
 claims describe branches that did not land on `main` (the real baseline was 170 FPs,
@@ -327,7 +327,7 @@ not the 18 this doc once claimed). Kept for the root-cause analysis it contains.
 
 ---
 
-## Verification
+## Verification {#FPPLAN-VERIFICATION}
 
 After each step:
 1. Run `cargo test --test conformance_tests -- --nocapture`
@@ -337,14 +337,14 @@ After each step:
 
 ---
 
-## TODO — live checklist (ratchets DOWN; tick as eliminated)
+## TODO — live checklist (ratchets DOWN; tick as eliminated) {#FPPLAN-TODO-CHECKLIST}
 
 > **Total: 126 FPs** (this session: 161 → 126, −35, ZERO conformance regression).
 > Gate: `coverage-thresholds.json` `max_false_positives = 126` (ratchet DOWN only).
 > Each item verified via [`scripts/fp_verify.sh`](../../scripts/fp_verify.sh): no PASS→FAIL,
 > `caught`≥858, `missed`≤95.
 
-### Done this session (−35)
+### Done this session (−35) {#FPPLAN-TODO-DONE}
 
 - [x] Bare `Callable` → `Callable[..., Any]`, bare `type` → Any (`types_parsing.rs`)
 - [x] `tuple[()]` → empty tuple type (`types_parsing.rs`)
@@ -358,7 +358,7 @@ After each step:
 - [x] Shared `parse_key_value_args` helper (dedup `dict[]`/`Mapping[]` parsing)
 - [x] Mutation-hardening e2e tests (`tests/fp_elimination_tests.rs`) + FP-ceiling ratchet → 126
 
-### Remaining — deferred engine work (need narrowing / structural subtyping / resolver expansion)
+### Remaining — deferred engine work (need narrowing / structural subtyping / resolver expansion) {#FPPLAN-TODO-REMAINING}
 
 - [ ] **Callable/protocol structural subtyping** (~49): callables_subtyping (24), callables_annotation (16), protocols_subtyping (7), protocols_merging (2). Blocked on resolver capturing parameter **kind** (positional-only `/`, keyword-only `*`) in `ParameterInfo`, then full PEP 484 callable subtyping. Load-bearing — suppression drops ~40 TPs.
 - [ ] **TypedDict structural assignability** (~17): E0014 readonly_consistency (5)/readonly_inheritance (2)/inheritance (1); E0093 extra_items/ReadOnly/final/update (7+); PEP 728/705.
@@ -371,7 +371,7 @@ After each step:
 
 ---
 
-## SHOWSTOPPER: generics_syntax_scoping treats docstring text as `class` / `def` definitions
+## SHOWSTOPPER: generics_syntax_scoping treats docstring text as `class` / `def` definitions {#FPPLAN-SHOWSTOPPER-DOCSTRING-SCANNING}
 
 **Reported**: 2026-05-23 — found in the wild on `StoryTowns/scripts/provision_nimblesite_agent.py`.
 **Severity**: SHOWSTOPPER. Hard errors on perfectly valid Python text in module docstrings. Any docstring containing a bracketed token after a line that happens to begin with the word `class` (e.g. our own `[SPEC-ID]` cross-references — see CLAUDE.md "ALL CODE **MUST** REFER TO A SPEC-ID") will misfire.

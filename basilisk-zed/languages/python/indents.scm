@@ -1,3 +1,5 @@
+; Python indentation rules. Implements [ZED-TREESITTER].
+
 ; Blocks that increase indentation
 [
   (if_statement)

@@ -36,6 +36,11 @@ pub struct LockFile {
 ///
 /// Tolerates unknown fields (`sdist`, `wheels`, `metadata`, etc.) that are
 /// present in real `uv.lock` files but not needed for type checking.
+//
+// Implements [LSPUV-LOCK-EXTRACT] — extracts name, version, source, and
+// dependencies (the rows of the spec's extraction table). Note: the spec also
+// lists `resolution-markers` (Platform markers); those are not deserialised
+// here — they fall into `extra`. See conformance audit (DEVIATION).
 #[derive(Debug, Clone, Deserialize)]
 pub struct LockPackage {
     /// Normalised package name.
@@ -109,6 +114,9 @@ pub struct LockDependency {
 /// Returns [`UvError::Io`] if the file cannot be read, or
 /// [`UvError::TomlParse`] if it is not valid TOML matching the expected
 /// schema.
+//
+// Implements [LSPUV-LOCK-EXTRACT] — pure in-Rust TOML deserialisation of the
+// lock file (zero subprocess), the foundation of [LSPUV-WHY] / [LSPUV-LOCK].
 pub fn parse_lock_file(path: &Path) -> Result<LockFile, UvError> {
     let display = path.display().to_string();
 
@@ -178,6 +186,8 @@ version = "0.2.0"
 source = { editable = "../my-editable" }
 "#;
 
+    // [LSPUV-LOCK-EXTRACT]: a realistic uv.lock parses with the right package
+    // count, requires-python, names/versions, sources, and (dev-)dependencies.
     #[test]
     fn parses_realistic_lock_file() {
         let dir = tempfile::tempdir().unwrap();

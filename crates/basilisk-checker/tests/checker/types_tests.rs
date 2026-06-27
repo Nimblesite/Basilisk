@@ -25,6 +25,7 @@ def func() -> None:
     Ok(())
 }
 
+// Exercises [TYPEINF-COLLECTIONS-TUPLES] — fixed-length tuple annotation/RHS.
 #[test]
 fn infers_tuple_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -46,6 +47,7 @@ def func() -> None:
     Ok(())
 }
 
+// Exercises [TYPEINF-SUBTYPING-UNION] — `int | str` union annotation/assignment.
 #[test]
 fn infers_union_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -78,6 +80,7 @@ def func() -> None:
     Ok(())
 }
 
+// Exercises [TYPEINF-SPECIAL-LITERALSTRING].
 #[test]
 fn infers_literal_string() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -89,6 +92,7 @@ def func(x: LiteralString) -> None:
     Ok(())
 }
 
+// Exercises [TYPEINF-SPECIAL-NEVER] — always-raises body inferred as `Never`.
 #[test]
 fn infers_never() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -100,6 +104,7 @@ def func() -> Never:
     Ok(())
 }
 
+// Exercises [TYPEINF-SPECIAL-ANY] — explicit `Any` parameter/return.
 #[test]
 fn infers_any() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -218,7 +223,8 @@ def func() -> None:
     Ok(())
 }
 
-// Test int to float widening path
+// Test int to float widening path.
+// Exercises [TYPEINF-SUBTYPING-NOMINAL] — the builtin numeric tower (int <: float).
 #[test]
 fn int_float_widening() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -231,7 +237,8 @@ func(42)
     Ok(())
 }
 
-// Exercise the return type mismatch via Callable
+// Exercise the return type mismatch via Callable.
+// Exercises [TYPEINF-SUBTYPING-CALLABLE] — callable param/return variance.
 #[test]
 fn callable_return_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"

@@ -1,3 +1,9 @@
+//! Tests for [STUBRES-PEP561] step 6 (no stubs found → BSK-E0152) and the
+//! [STUBRES-PROVENANCE-DIAG]/[STUBRES-CODEACTIONS] help-text contract for the
+//! `Untyped` provenance row. Exercises `MissingTypeStubs::check`,
+//! `make_diagnostic`, and `stub_help_text` in `super`.
+//! See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561
+
 use super::*;
 use basilisk_resolver::scope::ImportKind;
 use basilisk_resolver::Span;

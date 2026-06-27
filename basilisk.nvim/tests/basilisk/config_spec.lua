@@ -1,4 +1,7 @@
 --- Tests for basilisk.config module.
+---
+--- Tests [NVIM-NEOVIM-ONLY-CONFIGURATION] and the keymap defaults from
+--- [NVIM-DEFAULT-KEYMAPS-BASILISK-SPECIFIC] (prefix "<leader>b").
 
 describe("basilisk.config", function()
   local config = require("basilisk.config")
