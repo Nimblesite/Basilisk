@@ -63,7 +63,7 @@ p = Derived(1, 2, 3)
     let diagnostics = run(source)?;
     let e0138 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0138")
+        .filter(|d| d.code.code == "dataclasses_transform_meta")
         .collect::<Vec<_>>();
     assert!(!e0138.is_empty(), "Should detect kw_only positional call");
     Ok(())
@@ -91,7 +91,7 @@ result = a < b
     let diagnostics = run(source)?;
     let e0138 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0138")
+        .filter(|d| d.code.code == "dataclasses_transform_meta")
         .collect::<Vec<_>>();
     assert!(
         !e0138.is_empty(),
@@ -162,7 +162,7 @@ def create(cls: type[Animal]) -> Animal:
     let diagnostics = run(source)?;
     let e0144 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0144")
+        .filter(|d| d.code.code == "constructors_call_type")
         .collect::<Vec<_>>();
     assert!(
         e0144.iter().any(|d| d.message.contains("at least")),
@@ -261,7 +261,7 @@ def create(cls: type[T]) -> T:
     let diagnostics = run(source)?;
     let e0144 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0144")
+        .filter(|d| d.code.code == "constructors_call_type")
         .collect::<Vec<_>>();
     assert!(
         !e0144.is_empty(),
@@ -313,7 +313,7 @@ def make(cls: type[Empty]) -> Empty:
     let diagnostics = run(source)?;
     let e0144 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0144")
+        .filter(|d| d.code.code == "constructors_call_type")
         .collect::<Vec<_>>();
     assert!(!e0144.is_empty(), "Should detect no-init class with args");
     Ok(())
@@ -332,7 +332,7 @@ def make(cls: type[Simple]) -> Simple:
     let diagnostics = run(source)?;
     let e0144 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0144")
+        .filter(|d| d.code.code == "constructors_call_type")
         .collect::<Vec<_>>();
     assert!(!e0144.is_empty(), "Should detect too many args");
     Ok(())
@@ -384,7 +384,7 @@ x = Empty(1, 2)
     let diagnostics = run(source)?;
     let e0111 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0111")
+        .filter(|d| d.code.code == "constructors_call_init")
         .collect::<Vec<_>>();
     assert!(
         !e0111.is_empty(),
@@ -410,7 +410,7 @@ x = Sub(Base())
     let diagnostics = run(source)?;
     let e0111 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0111")
+        .filter(|d| d.code.code == "constructors_call_init")
         .collect::<Vec<_>>();
     // May or may not trigger depending on implementation depth
     let _ = e0111;
@@ -433,7 +433,7 @@ x: Box[int] = Box[int]("string")
     let diagnostics = run(source)?;
     let e0111 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0111")
+        .filter(|d| d.code.code == "constructors_call_init")
         .collect::<Vec<_>>();
     assert!(
         !e0111.is_empty(),
@@ -459,7 +459,7 @@ x = Pair[int, str](1, "hi")
     let diagnostics = run(source)?;
     let e0111 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0111")
+        .filter(|d| d.code.code == "constructors_call_init")
         .collect::<Vec<_>>();
     assert!(!e0111.is_empty(), "Should detect init ordering issue");
     Ok(())
@@ -1623,7 +1623,7 @@ def test_too_many(cls: type[WithInit]) -> WithInit:
     let diagnostics = run(source)?;
     let e0144 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0144")
+        .filter(|d| d.code.code == "constructors_call_type")
         .count();
     assert!(
         e0144 >= 2,
@@ -1789,7 +1789,7 @@ result = a < b
     let diagnostics = run(source)?;
     let e0138 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0138")
+        .filter(|d| d.code.code == "dataclasses_transform_meta")
         .count();
     assert!(
         e0138 >= 1,

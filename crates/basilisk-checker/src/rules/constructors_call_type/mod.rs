@@ -1,4 +1,4 @@
-//! BSK-E0144: Invalid constructor call via `type[T]` parameter.
+//! constructors_call_type: Invalid constructor call via `type[T]` parameter.
 //!
 //! When a parameter is typed as `type[T]` (where `T` is a concrete class or a
 //! type variable), calling it as a constructor is equivalent to calling `T(...)`.
@@ -35,7 +35,7 @@ use helpers::{
     resolve_constructor_sig, ConstructorSig, CODE,
 };
 
-/// Emits BSK-E0144 for invalid constructor calls via `type[T]` parameters.
+/// Emits constructors_call_type for invalid constructor calls via `type[T]` parameters.
 pub(crate) struct TypeCallConstructorViolation;
 
 impl Rule for TypeCallConstructorViolation {

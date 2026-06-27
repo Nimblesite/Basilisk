@@ -552,7 +552,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/typeddicts_required"
   },
   {
-    "code": "BSK-E0036",
+    "code": "classes_classvar",
     "severity": "error",
     "summary": "`ClassVar` used in an invalid context",
     "summaryHtml": "<code>ClassVar</code> used in an invalid context",
@@ -588,7 +588,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0036"
+    "docsUrl": "https://www.basilisk-python.dev/errors/classes_classvar"
   },
   {
     "code": "typeddicts_alt_syntax",
@@ -2229,7 +2229,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/protocols_variance"
   },
   {
-    "code": "BSK-E0111",
+    "code": "constructors_call_init",
     "severity": "error",
     "summary": "Constructor call errors via `__init__` method",
     "summaryHtml": "Constructor call errors via <code>__init__</code> method",
@@ -2260,7 +2260,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0111"
+    "docsUrl": "https://www.basilisk-python.dev/errors/constructors_call_init"
   },
   {
     "code": "narrowing_typeis",
@@ -2425,7 +2425,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/protocols_runtime_checkable_2"
   },
   {
-    "code": "BSK-E0120",
+    "code": "annotations_generators",
     "severity": "error",
     "summary": "Generator return type and yield type violations",
     "summaryHtml": "Generator return type and yield type violations",
@@ -2449,7 +2449,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0120"
+    "docsUrl": "https://www.basilisk-python.dev/errors/annotations_generators"
   },
   {
     "code": "protocols_definition_2",
@@ -2554,7 +2554,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/generics_type_erasure"
   },
   {
-    "code": "BSK-E0126",
+    "code": "literals_literalstring",
     "severity": "error",
     "summary": "`LiteralString` and `Literal` assignment incompatibilities",
     "summaryHtml": "<code>LiteralString</code> and <code>Literal</code> assignment incompatibilities",
@@ -2578,7 +2578,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0126"
+    "docsUrl": "https://www.basilisk-python.dev/errors/literals_literalstring"
   },
   {
     "code": "tuples_index_2",
@@ -2818,7 +2818,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/protocols_generic"
   },
   {
-    "code": "BSK-E0138",
+    "code": "dataclasses_transform_meta",
     "severity": "error",
     "summary": "`dataclass_transform` metaclass violations",
     "summaryHtml": "<code>dataclass_transform</code> metaclass violations",
@@ -2838,7 +2838,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0138"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_transform_meta"
   },
   {
     "code": "generics_typevartuple_specialization_2",
@@ -2901,7 +2901,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/callables_kwargs"
   },
   {
-    "code": "BSK-E0142",
+    "code": "dataclasses_transform_class",
     "severity": "error",
     "summary": "`dataclass_transform` violations when the transform is applied via a base class",
     "summaryHtml": "<code>dataclass_transform</code> violations when the transform is applied via a base class",
@@ -2921,7 +2921,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0142"
+    "docsUrl": "https://www.basilisk-python.dev/errors/dataclasses_transform_class"
   },
   {
     "code": "namedtuples_usage",
@@ -2947,7 +2947,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/namedtuples_usage"
   },
   {
-    "code": "BSK-E0144",
+    "code": "constructors_call_type",
     "severity": "error",
     "summary": "Invalid constructor call via `type[T]` parameter",
     "summaryHtml": "Invalid constructor call via <code>typeT</code> parameter",
@@ -2970,7 +2970,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0144"
+    "docsUrl": "https://www.basilisk-python.dev/errors/constructors_call_type"
   },
   {
     "code": "specialtypes_type",
@@ -3065,7 +3065,7 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/tuples_type_compat"
   },
   {
-    "code": "BSK-E0148",
+    "code": "generics_basic_3",
     "severity": "error",
     "summary": "Generic type argument violations",
     "summaryHtml": "Generic type argument violations",
@@ -3088,7 +3088,7 @@
       }
     ],
     "group": "Type System",
-    "docsUrl": "https://www.basilisk-python.dev/errors/BSK-E0148"
+    "docsUrl": "https://www.basilisk-python.dev/errors/generics_basic_3"
   },
   {
     "code": "generics_syntax_scoping",

@@ -540,7 +540,7 @@ fn check_missing_instance_vars(
 }
 
 /// Names of a protocol's writable instance variables: class-body attributes
-/// whose annotation is **not** `ClassVar` (those are covered by BSK-E0036).
+/// whose annotation is **not** `ClassVar` (those are covered by classes_classvar).
 fn protocol_instance_var_names<'a>(
     protocol_class: &'a basilisk_resolver::ClassInfo,
     source: &str,

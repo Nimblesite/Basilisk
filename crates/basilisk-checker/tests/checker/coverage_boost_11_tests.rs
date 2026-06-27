@@ -328,8 +328,8 @@ class MyClass:
     x: ClassVar[int, str] = 42
 "#;
     let diags = run(source)?;
-    let has_e0036 = diags.iter().any(|d| d.code.code == "BSK-E0036");
-    assert!(has_e0036, "Expected BSK-E0036 for multiple ClassVar args");
+    let has_e0036 = diags.iter().any(|d| d.code.code == "classes_classvar");
+    assert!(has_e0036, "Expected classes_classvar for multiple ClassVar args");
     Ok(())
 }
 

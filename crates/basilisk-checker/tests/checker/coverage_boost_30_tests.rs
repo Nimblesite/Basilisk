@@ -411,7 +411,7 @@ class Foo:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0036")
+        .filter(|d| d.code.code == "classes_classvar")
         .count();
     Ok(())
 }

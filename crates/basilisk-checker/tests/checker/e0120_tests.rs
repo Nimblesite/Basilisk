@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0120] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0120: Generator return type violations.
+//! Tests for [annotations_generators] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for annotations_generators: Generator return type violations.
 
 use super::common::*;
 
@@ -23,7 +23,7 @@ def good() -> Iterator[int]:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0120"),
+        !codes(&diags).contains(&"annotations_generators"),
         "Iterator return type should not fire E0120"
     );
     Ok(())
@@ -38,7 +38,7 @@ def good() -> Generator[int, None, None]:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0120"),
+        !codes(&diags).contains(&"annotations_generators"),
         "Generator return type should not fire E0120"
     );
     Ok(())
@@ -64,7 +64,7 @@ async def good_async() -> AsyncIterator[int]:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0120"),
+        !codes(&diags).contains(&"annotations_generators"),
         "AsyncIterator return type should not fire E0120"
     );
     Ok(())
@@ -79,7 +79,7 @@ def gen() -> Iterable[str]:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0120"),
+        !codes(&diags).contains(&"annotations_generators"),
         "Iterable return type should not fire E0120"
     );
     Ok(())
@@ -100,11 +100,11 @@ async def lifespan() -> AsyncIterator[None]:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0120"),
+        !codes(&diags).contains(&"annotations_generators"),
         "@asynccontextmanager async generator with AsyncIterator[None] must not fire E0120, got: {:?}",
         diags
             .iter()
-            .filter(|d| d.code.code == "BSK-E0120")
+            .filter(|d| d.code.code == "annotations_generators")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
     );
@@ -125,11 +125,11 @@ async def session() -> AsyncGenerator[int, None]:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0120"),
+        !codes(&diags).contains(&"annotations_generators"),
         "@asynccontextmanager async generator with AsyncGenerator[int, None] must not fire E0120, got: {:?}",
         diags
             .iter()
-            .filter(|d| d.code.code == "BSK-E0120")
+            .filter(|d| d.code.code == "annotations_generators")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
     );
@@ -150,11 +150,11 @@ async def lifespan() -> typing.AsyncIterator[None]:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0120"),
+        !codes(&diags).contains(&"annotations_generators"),
         "typing.AsyncIterator[None] async generator must not fire E0120, got: {:?}",
         diags
             .iter()
-            .filter(|d| d.code.code == "BSK-E0120")
+            .filter(|d| d.code.code == "annotations_generators")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
     );
@@ -173,11 +173,11 @@ async def agen() -> collections.abc.AsyncIterator[None]:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0120"),
+        !codes(&diags).contains(&"annotations_generators"),
         "collections.abc.AsyncIterator[None] must not fire E0120, got: {:?}",
         diags
             .iter()
-            .filter(|d| d.code.code == "BSK-E0120")
+            .filter(|d| d.code.code == "annotations_generators")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
     );
@@ -195,11 +195,11 @@ async def agen() -> "AsyncIterator[None]":
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0120"),
+        !codes(&diags).contains(&"annotations_generators"),
         "string annotation AsyncIterator[None] must not fire E0120, got: {:?}",
         diags
             .iter()
-            .filter(|d| d.code.code == "BSK-E0120")
+            .filter(|d| d.code.code == "annotations_generators")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
     );
@@ -217,11 +217,11 @@ def gen() -> typing.Iterator[int]:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0120"),
+        !codes(&diags).contains(&"annotations_generators"),
         "typing.Iterator[int] sync generator must not fire E0120, got: {:?}",
         diags
             .iter()
-            .filter(|d| d.code.code == "BSK-E0120")
+            .filter(|d| d.code.code == "annotations_generators")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
     );

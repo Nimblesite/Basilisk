@@ -1,5 +1,5 @@
-//! Implements [BSK-E0138] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Helper types and AST collection functions for BSK-E0138.
+//! Implements [dataclasses_transform_meta] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Helper types and AST collection functions for dataclasses_transform_meta.
 //!
 //! Contains data types describing `@dataclass_transform` metaclasses and
 //! derived classes, plus the AST-scanning passes that populate them.
@@ -14,8 +14,8 @@ use basilisk_resolver::Span;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 pub(super) const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0138",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0138",
+    code: "dataclasses_transform_meta",
+    docs_url: "https://www.basilisk-python.dev/errors/dataclasses_transform_meta",
 };
 
 // ---------------------------------------------------------------------------

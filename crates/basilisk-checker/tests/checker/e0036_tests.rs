@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0036] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
-// Integration tests for BSK-E0036: `ClassVar` used in invalid context.
+//! Tests for [classes_classvar] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
+// Integration tests for classes_classvar: `ClassVar` used in invalid context.
 
 use super::common::*;
 
@@ -13,7 +13,7 @@ class MyClass:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0036");
+    let msgs = messages_for(&diags, "classes_classvar");
     assert!(
         msgs.is_empty(),
         "ClassVar in class body should not fire E0036, got: {msgs:?}"
@@ -29,7 +29,7 @@ bad: ClassVar[int] = 3
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0036");
+    let msgs = messages_for(&diags, "classes_classvar");
     assert!(
         !msgs.is_empty(),
         "ClassVar at module level should fire E0036, got: {msgs:?}"
@@ -48,7 +48,7 @@ class MyClass:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0036");
+    let msgs = messages_for(&diags, "classes_classvar");
     assert!(
         !msgs.is_empty(),
         "ClassVar in function param should fire E0036, got: {msgs:?}"
@@ -67,7 +67,7 @@ class MyClass:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0036");
+    let msgs = messages_for(&diags, "classes_classvar");
     assert!(
         !msgs.is_empty(),
         "ClassVar in return type should fire E0036, got: {msgs:?}"
@@ -86,7 +86,7 @@ class MyClass:
 "#;
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0036");
+    let msgs = messages_for(&diags, "classes_classvar");
     assert!(
         !msgs.is_empty(),
         "ClassVar in local variable should fire E0036, got: {msgs:?}"
@@ -104,7 +104,7 @@ class MyClass:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0036");
+    let msgs = messages_for(&diags, "classes_classvar");
     assert!(
         !msgs.is_empty(),
         "nested ClassVar should fire E0036, got: {msgs:?}"
@@ -122,7 +122,7 @@ class MyClass:
 ";
     let diags = run(source)?;
 
-    let msgs = messages_for(&diags, "BSK-E0036");
+    let msgs = messages_for(&diags, "classes_classvar");
     assert!(
         !msgs.is_empty(),
         "ClassVar nested in list should fire E0036, got: {msgs:?}"

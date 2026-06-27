@@ -625,7 +625,7 @@ s = Simple()
 "#;
     let diags = run(source)?;
     assert!(
-        !has_code(&diags, "BSK-E0111"),
+        !has_code(&diags, "constructors_call_init"),
         "no-arg constructor should not fire E0111"
     );
     Ok(())

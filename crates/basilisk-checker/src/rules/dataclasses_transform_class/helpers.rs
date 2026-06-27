@@ -1,5 +1,5 @@
-//! Implements [BSK-E0142] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Helper types and functions for BSK-E0142.
+//! Implements [dataclasses_transform_class] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Helper types and functions for dataclasses_transform_class.
 //!
 //! Contains data types for transform-class settings, source text parsing
 //! utilities, and the four sub-checks that back [`DataclassTransformClassViolation`].
@@ -12,8 +12,8 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
 pub(super) const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0142",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0142",
+    code: "dataclasses_transform_class",
+    docs_url: "https://www.basilisk-python.dev/errors/dataclasses_transform_class",
 };
 
 /// Effective settings for a class that inherits from a `@dataclass_transform` base.

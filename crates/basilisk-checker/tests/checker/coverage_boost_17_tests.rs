@@ -1309,11 +1309,11 @@ def make_unbound(cls: type[T]) -> T:
     let diagnostics = run(source)?;
     let e0111_count = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0111")
+        .filter(|d| d.code.code == "constructors_call_init")
         .count();
     let e0144_count = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0144")
+        .filter(|d| d.code.code == "constructors_call_type")
         .count();
     assert!(
         e0111_count + e0144_count >= 2,

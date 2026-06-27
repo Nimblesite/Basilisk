@@ -1,5 +1,5 @@
-//! Implements [BSK-E0036] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
-//! Shared helper utilities for BSK-E0036: text-based `ClassVar` detection,
+//! Implements [classes_classvar] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-ownership
+//! Shared helper utilities for classes_classvar: text-based `ClassVar` detection,
 //! diagnostic construction, and the `TypeParamKind` classification enum.
 
 use basilisk_resolver::Span;
@@ -9,8 +9,8 @@ use crate::span_util::slice_span;
 
 /// The error code for this rule.
 pub(super) const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0036",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0036",
+    code: "classes_classvar",
+    docs_url: "https://www.basilisk-python.dev/errors/classes_classvar",
 };
 
 /// Classification of a type parameter for error messaging.
@@ -47,7 +47,7 @@ pub(super) fn has_nested_classvar(ann: &str) -> bool {
     ann.contains("[ClassVar[") && !ann.starts_with("Annotated[")
 }
 
-/// Construct a BSK-E0036 diagnostic with standard help and note text.
+/// Construct a classes_classvar diagnostic with standard help and note text.
 pub(super) fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     error_diagnostic_owned(
         CODE.clone(),

@@ -184,11 +184,11 @@ fn e0036_classvar_invalid() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("errors/e0036_classvar_invalid.py")?;
     let filtered: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0036")
+        .filter(|d| d.code.code == "classes_classvar")
         .collect();
     assert!(
         !filtered.is_empty(),
-        "expected at least one BSK-E0036 diagnostic"
+        "expected at least one classes_classvar diagnostic"
     );
     Ok(())
 }

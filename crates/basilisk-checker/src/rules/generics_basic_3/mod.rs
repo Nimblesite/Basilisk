@@ -1,4 +1,4 @@
-//! BSK-E0148: Generic type argument violations.
+//! generics_basic_3: Generic type argument violations.
 //!
 //! Detects several generic-type errors:
 //!
@@ -29,7 +29,7 @@ use helpers::{
     ModuleContext,
 };
 
-/// Emits BSK-E0148 for generic type argument violations.
+/// Emits generics_basic_3 for generic type argument violations.
 pub(crate) struct GenericTypeArgViolation;
 
 impl Rule for GenericTypeArgViolation {

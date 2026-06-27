@@ -1,4 +1,4 @@
-//! BSK-E0111: Constructor call errors via `__init__` method.
+//! constructors_call_init: Constructor call errors via `__init__` method.
 //!
 //! Detects several categories of constructor call errors when a class defines
 //! or inherits `__init__`:
@@ -35,7 +35,7 @@ use helpers::{
     resolve_string_annotation, CODE,
 };
 
-/// Emits BSK-E0111 for constructor call errors involving `__init__`.
+/// Emits constructors_call_init for constructor call errors involving `__init__`.
 pub(crate) struct ConstructorCallError;
 
 impl Rule for ConstructorCallError {

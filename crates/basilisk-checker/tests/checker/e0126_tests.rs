@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0126] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0126: `LiteralString` assignment incompatibilities.
+//! Tests for [literals_literalstring] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for literals_literalstring: `LiteralString` assignment incompatibilities.
 
 use super::common::*;
 
@@ -48,7 +48,7 @@ def func() -> None:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0126"),
+        !codes(&diags).contains(&"literals_literalstring"),
         "literal string constant should not fire E0126"
     );
     Ok(())

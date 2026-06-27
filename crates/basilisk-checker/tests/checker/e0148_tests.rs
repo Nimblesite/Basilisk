@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0148] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0148: Generic type argument violations.
+//! Tests for [generics_basic_3] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for generics_basic_3: Generic type argument violations.
 
 use super::common::*;
 
@@ -35,7 +35,7 @@ def good() -> None:
 "#;
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0148"),
+        !codes(&diags).contains(&"generics_basic_3"),
         "matching constraint groups should not fire E0148"
     );
     Ok(())

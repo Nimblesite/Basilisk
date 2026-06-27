@@ -86,7 +86,7 @@ pub enum EnumValueTypeViolationKind {
 /// - `x: ClassVar[str] = ""` — local variable annotation
 /// - `self.xx: ClassVar[str] = ""` — attribute annotation on `self` in a method
 ///
-/// Used by `BSK-E0036`.
+/// Used by `classes_classvar`.
 #[derive(Debug, Clone)]
 pub struct LocalClassVarViolation {
     /// The variable or attribute name being annotated.

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0144] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Helper types and functions for BSK-E0144.
+//! Implements [constructors_call_type] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Helper types and functions for constructors_call_type.
 //!
 //! Contains constructor signature resolution, argument type checking,
 //! and shared AST utilities used by the main rule.
@@ -16,8 +16,8 @@ use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 use crate::span_util::slice_span;
 
 pub(super) const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0144",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0144",
+    code: "constructors_call_type",
+    docs_url: "https://www.basilisk-python.dev/errors/constructors_call_type",
 };
 
 // ---------------------------------------------------------------------------

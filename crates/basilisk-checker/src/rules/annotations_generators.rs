@@ -1,5 +1,5 @@
-//! Implements [BSK-E0120] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! BSK-E0120: Generator return type and yield type violations.
+//! Implements [annotations_generators] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! annotations_generators: Generator return type and yield type violations.
 //!
 //! A generator function (one containing `yield` or `yield from`) must declare
 //! a return type compatible with generator protocols:
@@ -36,7 +36,7 @@ use crate::inference::infer_rhs;
 use crate::span_util::slice_span;
 use crate::types::InferredType;
 
-/// Emits BSK-E0120 for generator return type and yield type violations.
+/// Emits annotations_generators for generator return type and yield type violations.
 pub(crate) struct GeneratorReturnTypeViolation;
 
 impl Rule for GeneratorReturnTypeViolation {

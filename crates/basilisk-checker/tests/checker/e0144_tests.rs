@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0144] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0144: type[T] constructor call violations.
+//! Tests for [constructors_call_type] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for constructors_call_type: type[T] constructor call violations.
 
 use super::common::*;
 
@@ -44,7 +44,7 @@ def factory(cls: type[MyClass]) -> MyClass:
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0144"),
+        !codes(&diags).contains(&"constructors_call_type"),
         "valid type[T] call should not fire E0144"
     );
     Ok(())

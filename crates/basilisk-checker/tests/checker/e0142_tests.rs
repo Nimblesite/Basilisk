@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0142] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0142: `dataclass_transform` base violations.
+//! Tests for [dataclasses_transform_class] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for dataclasses_transform_class: `dataclass_transform` base violations.
 
 use super::common::*;
 

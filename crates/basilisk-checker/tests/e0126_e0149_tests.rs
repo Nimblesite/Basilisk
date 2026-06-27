@@ -1,4 +1,4 @@
-//! Tests for [BSK-E0126]-[generics_syntax_scoping] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [literals_literalstring]-[generics_syntax_scoping] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

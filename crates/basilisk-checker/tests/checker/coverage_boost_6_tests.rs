@@ -812,7 +812,7 @@ fn e0047_eval() -> Result<(), Box<dyn std::error::Error>> {
 fn e0036_outside_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import ClassVar\nx: ClassVar[int] = 42\n";
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0036"));
+    assert!(diags.iter().any(|d| d.code.code == "classes_classvar"));
     Ok(())
 }
 
@@ -820,7 +820,7 @@ fn e0036_outside_class() -> Result<(), Box<dyn std::error::Error>> {
 fn e0036_in_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import ClassVar\ndef f() -> None:\n    x: ClassVar[int] = 42\n";
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0036"));
+    assert!(diags.iter().any(|d| d.code.code == "classes_classvar"));
     Ok(())
 }
 
@@ -828,7 +828,7 @@ fn e0036_in_function() -> Result<(), Box<dyn std::error::Error>> {
 fn e0036_class_body_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import ClassVar\n\nclass MyClass:\n    count: ClassVar[int] = 0\n";
     let diags = run(source)?;
-    let cnt = diags.iter().filter(|d| d.code.code == "BSK-E0036").count();
+    let cnt = diags.iter().filter(|d| d.code.code == "classes_classvar").count();
     assert_eq!(cnt, 0);
     Ok(())
 }
@@ -837,7 +837,7 @@ fn e0036_class_body_ok() -> Result<(), Box<dyn std::error::Error>> {
 fn e0036_in_param() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import ClassVar\ndef f(x: ClassVar[int]) -> None:\n    pass\n";
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0036"));
+    assert!(diags.iter().any(|d| d.code.code == "classes_classvar"));
     Ok(())
 }
 
@@ -845,6 +845,6 @@ fn e0036_in_param() -> Result<(), Box<dyn std::error::Error>> {
 fn e0036_return_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import ClassVar\ndef f() -> ClassVar[int]:\n    return 1\n";
     let diags = run(source)?;
-    assert!(diags.iter().any(|d| d.code.code == "BSK-E0036"));
+    assert!(diags.iter().any(|d| d.code.code == "classes_classvar"));
     Ok(())
 }

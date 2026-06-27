@@ -1,4 +1,4 @@
-//! BSK-E0142: `dataclass_transform` violations when the transform is applied via a base class.
+//! dataclasses_transform_class: `dataclass_transform` violations when the transform is applied via a base class.
 //!
 //! When a class is decorated with `@dataclass_transform(...)`, subclasses that inherit
 //! from it behave like dataclasses with the transform's default settings overridable by
@@ -41,7 +41,7 @@ use helpers::{
     resolve_inherited_settings, TransformClassSettings,
 };
 
-/// Emits BSK-E0142 for `dataclass_transform` violations via class-based transform.
+/// Emits dataclasses_transform_class for `dataclass_transform` violations via class-based transform.
 pub(crate) struct DataclassTransformClassViolation;
 
 impl Rule for DataclassTransformClassViolation {

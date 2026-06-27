@@ -1,5 +1,5 @@
-//! Tests for [BSK-E0138] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for BSK-E0138: `dataclass_transform` metaclass violations.
+//! Tests for [dataclasses_transform_meta] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for dataclasses_transform_meta: `dataclass_transform` metaclass violations.
 
 use super::common::*;
 
@@ -59,7 +59,7 @@ m = Model(id=1)
 ";
     let diags = run(source)?;
     assert!(
-        !codes(&diags).contains(&"BSK-E0138"),
+        !codes(&diags).contains(&"dataclasses_transform_meta"),
         "valid transform metaclass should not fire E0138"
     );
     Ok(())

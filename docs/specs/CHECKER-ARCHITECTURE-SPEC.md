@@ -610,7 +610,7 @@ list — keep it in sync after adding or renaming a rule.
 | `directives_reveal_type` | Invalid `reveal_type()` call |
 | `qualifiers_final_decorator` | `@final` decorator violations |
 | `typeddicts_required` | `Required` / `NotRequired` used in an invalid context |
-| `BSK-E0036` | `ClassVar` used in an invalid context |
+| `classes_classvar` | `ClassVar` used in an invalid context |
 | `typeddicts_alt_syntax` | Invalid `TypedDict(...)` functional-syntax call |
 | `typeddicts_inheritance` | Invalid `TypedDict` inheritance |
 | `directives_assert_type` | Invalid `assert_type()` call |
@@ -685,7 +685,7 @@ list — keep it in sync after adding or renaming a rule.
 | `dataclasses_slots` | Dataclass slots violations |
 | `generics_upper_bound_2` | `TypeVar` bound violation at call site |
 | `protocols_variance` | Protocol variance violation |
-| `BSK-E0111` | Constructor call errors via `__init__` method |
+| `constructors_call_init` | Constructor call errors via `__init__` method |
 | `narrowing_typeis` | TypeGuard/TypeIs return type incompatibility in callable arguments |
 | `narrowing_typeis_2` | `TypeIs` narrows to a type inconsistent with the input type |
 | `protocols_runtime_checkable` | Protocol `isinstance`/`issubclass` violations |
@@ -694,13 +694,13 @@ list — keep it in sync after adding or renaming a rule.
 | `generics_scoping` | Unbound type variable in scope |
 | `protocols_explicit_2` | Calling `super().method()` on an abstract method with no default implementation |
 | `protocols_runtime_checkable_2` | Protocol `isinstance`/`issubclass` violations |
-| `BSK-E0120` | Generator return type and yield type violations |
+| `annotations_generators` | Generator return type and yield type violations |
 | `protocols_definition_2` | Protocol conformance violation in an annotated assignment or call argument |
 | `callables_protocol` | Callable call-site arity and argument validation |
 | `protocols_explicit_3` | `super()` call on abstract protocol method with no default implementation |
 | `protocols_subtyping` | Protocol attribute tuple element type mismatch |
 | `generics_type_erasure` | Access to instance attribute on a class object |
-| `BSK-E0126` | `LiteralString` and `Literal` assignment incompatibilities |
+| `literals_literalstring` | `LiteralString` and `Literal` assignment incompatibilities |
 | `tuples_index_2` | Tuple index out of range |
 | `generics_defaults_referential_2` | ```TypeVar``` default referential violations |
 | `literals_semantics_2` | Literal value assignment incompatibility |
@@ -711,17 +711,17 @@ list — keep it in sync after adding or renaming a rule.
 | `generics_base_class_3` | Invariant generic type mismatch at call site |
 | `callables_subtyping` | Callable subtyping violations (covariance / contravariance) |
 | `protocols_generic` | Generic protocol violations |
-| `BSK-E0138` | `dataclass_transform` metaclass violations |
+| `dataclasses_transform_meta` | `dataclass_transform` metaclass violations |
 | `generics_typevartuple_specialization_2` | Invalid `TypeVarTuple` specialization of generic alias |
 | `callables_protocol_2` | Callable and Protocol assignment compatibility |
 | `callables_kwargs` | Unpack[`TypedDict`] kwargs violations |
-| `BSK-E0142` | `dataclass_transform` violations when the transform is applied via a base class |
+| `dataclasses_transform_class` | `dataclass_transform` violations when the transform is applied via a base class |
 | `namedtuples_usage` | `NamedTuple` usage violations |
-| `BSK-E0144` | Invalid constructor call via `type[T]` parameter |
+| `constructors_call_type` | Invalid constructor call via `type[T]` parameter |
 | `specialtypes_type` | Invalid `type[X]` usage violations |
 | `protocols_class_objects_2` | Protocol class object violations |
 | `tuples_type_compat` | Tuple starred-unpack type compatibility violation |
-| `BSK-E0148` | Generic type argument violations |
+| `generics_basic_3` | Generic type argument violations |
 | `generics_syntax_scoping` | PEP 695 generic type parameter scoping violations |
 | `directives_version_platform` | Variable defined only in dead version/platform branch |
 | `aliases_typealiastype` | Invalid `TypeAliasType(...)` call |

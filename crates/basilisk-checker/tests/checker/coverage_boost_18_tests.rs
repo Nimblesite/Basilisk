@@ -28,7 +28,7 @@ def make(cls: type[Config]) -> Config:
     let diagnostics = run(source)?;
     let e0144 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0144")
+        .filter(|d| d.code.code == "constructors_call_type")
         .collect::<Vec<_>>();
     assert!(
         !e0144.is_empty(),
@@ -50,7 +50,7 @@ def make(cls: type[Widget]) -> Widget:
     let diagnostics = run(source)?;
     let e0144 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0144")
+        .filter(|d| d.code.code == "constructors_call_type")
         .collect::<Vec<_>>();
     assert!(
         !e0144.is_empty(),
@@ -437,7 +437,7 @@ def gen2() -> Generator[str, None, None]:
     let diagnostics = run(source)?;
     let gen_errors = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0120" || d.code.code == "annotations_generators_2")
+        .filter(|d| d.code.code == "annotations_generators" || d.code.code == "annotations_generators_2")
         .count();
     assert!(
         gen_errors >= 1,
@@ -511,7 +511,7 @@ r2 = c < d
     let diagnostics = run(source)?;
     let e0138 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0138")
+        .filter(|d| d.code.code == "dataclasses_transform_meta")
         .collect::<Vec<_>>();
     assert!(
         !e0138.is_empty(),
@@ -870,7 +870,7 @@ def test_bound(cls: type[TB]) -> TB:
     let diagnostics = run(source)?;
     let e0144 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0144")
+        .filter(|d| d.code.code == "constructors_call_type")
         .count();
     assert!(
         e0144 >= 3,
@@ -1004,7 +1004,7 @@ r2 = c < d
     let diagnostics = run(source)?;
     let e0138 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0138")
+        .filter(|d| d.code.code == "dataclasses_transform_meta")
         .count();
     assert!(
         e0138 >= 1,
@@ -1089,7 +1089,7 @@ def gen_multiple_yields() -> Generator[int, None, None]:
     let diagnostics = run(source)?;
     let gen_errors = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0120" || d.code.code == "annotations_generators_2")
+        .filter(|d| d.code.code == "annotations_generators" || d.code.code == "annotations_generators_2")
         .count();
     assert!(
         gen_errors >= 1,

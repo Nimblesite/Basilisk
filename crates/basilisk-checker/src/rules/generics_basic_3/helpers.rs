@@ -1,5 +1,5 @@
-//! Implements [BSK-E0148] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! All internal types, parsing, and checking logic for BSK-E0148.
+//! Implements [generics_basic_3] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! All internal types, parsing, and checking logic for generics_basic_3.
 
 use std::collections::HashMap;
 
@@ -14,8 +14,8 @@ pub(super) use crate::rules::shared::{ann_str, expr_name};
 use crate::rules::shared::{infer_expr_literal_type, is_type_compatible, split_top_level_commas};
 
 pub(super) const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0148",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0148",
+    code: "generics_basic_3",
+    docs_url: "https://www.basilisk-python.dev/errors/generics_basic_3",
 };
 
 // ---------------------------------------------------------------------------

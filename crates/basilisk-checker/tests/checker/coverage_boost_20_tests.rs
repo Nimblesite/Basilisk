@@ -282,7 +282,7 @@ def process(s: str) -> None:
     let diagnostics = run(source)?;
     let e0126 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0126")
+        .filter(|d| d.code.code == "literals_literalstring")
         .collect::<Vec<_>>();
     // LiteralString assignment checking not fully triggered from resolver
     let _ = e0126;
@@ -649,7 +649,7 @@ def combine(a: LiteralString, b: str) -> None:
     let diagnostics = run(source)?;
     let e0126 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0126")
+        .filter(|d| d.code.code == "literals_literalstring")
         .count();
     // LiteralString checking not fully triggered
     let _ = e0126;

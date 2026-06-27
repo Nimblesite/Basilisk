@@ -1,4 +1,4 @@
-//! Implements [BSK-E0142] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Implements [dataclasses_transform_class] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
 //! `dataclass_transform` field-specifier `converter` support (PEP 681).
 //!
 //! When a field specifier call carries `converter=fn`, the type accepted by

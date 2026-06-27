@@ -748,7 +748,7 @@ class MyClass:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0036")
+        .filter(|d| d.code.code == "classes_classvar")
         .count();
     Ok(())
 }
@@ -765,7 +765,7 @@ class MyClass:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0036")
+        .filter(|d| d.code.code == "classes_classvar")
         .count();
     Ok(())
 }
@@ -782,7 +782,7 @@ class MyClass:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0036")
+        .filter(|d| d.code.code == "classes_classvar")
         .count();
     Ok(())
 }
@@ -798,7 +798,7 @@ class MyClass:
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0036")
+        .filter(|d| d.code.code == "classes_classvar")
         .count();
     Ok(())
 }
@@ -817,7 +817,7 @@ obj.count = 5
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0036")
+        .filter(|d| d.code.code == "classes_classvar")
         .count();
     Ok(())
 }
@@ -832,7 +832,7 @@ x: ClassVar[int] = 1
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0036")
+        .filter(|d| d.code.code == "classes_classvar")
         .count();
     Ok(())
 }
@@ -1058,7 +1058,7 @@ a = Animal()
     let diagnostics = run(source)?;
     let _ = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0111")
+        .filter(|d| d.code.code == "constructors_call_init")
         .count();
     Ok(())
 }

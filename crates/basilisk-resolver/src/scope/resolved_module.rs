@@ -135,7 +135,7 @@ pub struct ResolvedModule {
     /// `ClassVar` annotations used in function-local variable or self-attribute
     /// positions, where they are forbidden by PEP 526.
     ///
-    /// Populated by the resolver visitor; used by `BSK-E0036`.
+    /// Populated by the resolver visitor; used by `classes_classvar`.
     pub local_classvar_violations: Vec<LocalClassVarViolation>,
     /// PEP 695 type parameter bound violations detected during AST resolution.
     ///

@@ -1,5 +1,5 @@
-//! Implements [BSK-E0120] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
-//! Helper functions for BSK-E0120: Generator return type and yield type
+//! Implements [annotations_generators] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag
+//! Helper functions for annotations_generators: Generator return type and yield type
 //! violations.
 //!
 //! This module provides type extraction and yield-from checking utilities used
@@ -13,10 +13,10 @@ use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 use crate::types::InferredType;
 
-/// BSK-E0120 error code shared between this module and the rule.
+/// annotations_generators error code shared between this module and the rule.
 pub(super) const CODE: ErrorCode = ErrorCode {
-    code: "BSK-E0120",
-    docs_url: "https://www.basilisk-python.dev/errors/BSK-E0120",
+    code: "annotations_generators",
+    docs_url: "https://www.basilisk-python.dev/errors/annotations_generators",
 };
 
 /// Valid return type base names for synchronous generator functions.
