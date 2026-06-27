@@ -230,8 +230,10 @@ fn basilisk_provenance_matches_the_bsk_naming_convention() {
     // used to hide: a new `BSK-` rule that forgot to tag itself (would silently
     // become on-by-default `pep`), and a non-`BSK-` rule wrongly tagged opt-in
     // (would silently vanish from the default PEP set).
-    let declared_basilisk: BTreeSet<String> =
-        basilisk_rule_codes().into_iter().map(str::to_owned).collect();
+    let declared_basilisk: BTreeSet<String> = basilisk_rule_codes()
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
     let bsk_prefixed: BTreeSet<String> = all_rule_codes()
         .into_iter()
         .filter(|code| code.starts_with("BSK-"))

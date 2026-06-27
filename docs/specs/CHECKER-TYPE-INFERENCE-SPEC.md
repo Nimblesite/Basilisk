@@ -2,8 +2,6 @@
 
 Basilisk implements premium type inference that not only improves type safety - it enforces the removal of redundant type annotations. The aim is to achieve something in the ballpark of Hindley Milner style functionality where we do not specify types unless there is a special reason to. We want to avoid forcing Python developers to specify types unless it's absolutely necessary. This means that Python continues to be a less verbose language with full type safety.
 
-Basilisk's type inference towers above the other systems like Pyrefly and PyRight.
-
 > **Canonical Python version**: 3.12
 >
 > **Authoritative references**: [PEP 484](https://peps.python.org/pep-0484/), [PEP 526](https://peps.python.org/pep-0526/), [Python Typing Spec](https://typing.readthedocs.io/en/latest/), [Python Typing Conformance Suite](https://github.com/python/typing/tree/main/conformance)
@@ -14,20 +12,20 @@ Basilisk's type inference towers above the other systems like Pyrefly and PyRigh
 
 ## Design Philosophy {#TYPEINF-PHILOSOPHY}
 
-Basilisk's type inference is **precise and bidirectional throughout**. Where Pyright makes inference optional or limits it to avoid false positives, Basilisk demands more from both the programmer and itself. Where Pyright falls back to `Unknown` or `Any`, Basilisk either produces a precise type or emits a diagnostic.
+Basilisk's type inference is **precise and bidirectional throughout**. Rather than making inference optional, or falling back to an unresolved/`Any` type when a type cannot be determined, Basilisk either produces a precise type or emits a diagnostic.
 
-Key design decisions that make Basilisk **more advanced than Pyright**:
+Key design decisions in Basilisk's inference engine:
 
-| Capability | Pyright | Basilisk |
-|---|---|---|
-| Unannotated parameter types | `Unknown` / infer from default | **Error** — all params must be annotated |
-| Return type inference | Inferred silently | Inferred **and** validated; mismatch is an error |
-| Container inference | `Unknown` for heterogeneous (loose mode) | **Union** always — `strictListInference` is always on |
-| TypeVar constraint solving | Heuristic, bounded recursion | **Bidirectional constraint propagation** with exhaustive solving |
-| Literal type inference | Context-sensitive | Literal-first: widen only when an annotation demands it |
-| Narrowing coverage | `isinstance`, `is None`, TypeGuard, TypeIs | All of the above + **pattern matching exhaustiveness**, **dict key existence**, **attribute presence** |
-| Unannotated functions | Checked via call-site inference | **Error** — every public function must be annotated |
-| Redundant annotations | Silently accepted | **Warning** — redundant explicit annotations must be removed |
+| Capability | Basilisk behavior |
+|---|---|
+| Unannotated parameter types | **Error** — all parameters must be annotated |
+| Return type inference | Inferred **and** validated; a mismatch is an error |
+| Container inference | **Union** of element types, always — no loose mode |
+| TypeVar constraint solving | **Bidirectional constraint propagation** with exhaustive solving |
+| Literal type inference | Literal-first: widen only when an annotation demands it |
+| Narrowing coverage | `isinstance`, `is None`, TypeGuard, TypeIs, **pattern-matching exhaustiveness**, **dict key existence**, **attribute presence** |
+| Unannotated functions | **Error** — every public function must be annotated |
+| Redundant annotations | **Warning** — redundant explicit annotations must be removed |
 
 ### Redundant Annotation Principle {#TYPEINF-REDUNDANT}
 
@@ -133,7 +131,7 @@ Basilisk **requires explicit annotations** for:
 - **All class-level attributes** at the class body level — E0003 if missing
 - **TypedDict fields**, `NamedTuple` fields, `Protocol` members — always explicit
 
-This is the fundamental difference from Pyright: Basilisk does not silently fall back to `Unknown`. A missing annotation is a **diagnostic**, not an inference opportunity.
+Basilisk does not silently fall back to an unresolved type. A missing annotation is a **diagnostic**, not an inference opportunity.
 
 ### Inference Algorithm {#TYPEINF-ALGO}
 
@@ -145,7 +143,7 @@ infer_type(expr, expected: Option<Type>) -> Type
 
 The `expected` parameter ("expected type" or "pushed type") flows from outer context into inner expressions. When present, it guides inference of ambiguous constructs (empty containers, lambdas, integer literals that could be `Literal[N]`).
 
-This is the same approach as described in the [bidirectional typing literature](https://www.cl.cam.ac.uk/~nk480/bidir.pdf) (Pierce & Turner, "Local Type Inference", 2000) and implemented in Pyright's `inferTypeForExpression` with expected-type context.
+This is the same approach described in the [bidirectional typing literature](https://www.cl.cam.ac.uk/~nk480/bidir.pdf) (Pierce & Turner, "Local Type Inference", 2000), in which an expected type flows from the surrounding context into the inference of subexpressions.
 
 ---
 
@@ -174,7 +172,7 @@ def f() -> None:
     y: Literal["active"] = "active"  # Literal["active"] (annotation drives it)
 ```
 
-This is stricter than Pyright, which applies literal inference uniformly and sometimes infers `Literal` in local scopes. Basilisk reserves `Literal` inference for module/class constants.
+Basilisk reserves `Literal` inference for module/class constants; within function bodies, literals are widened to their base types unless a literal-sensitive context demands otherwise.
 
 ### Multiple Assignment {#TYPEINF-VARS-FLOW}
 
@@ -247,11 +245,10 @@ The **only parameters that are inferred rather than annotated** are:
 - `__` (positional-only placeholder) → accepted as `Any` for compatibility
 
 > **Authority**: [PEP 673 (Self type)](https://peps.python.org/pep-0673/) for `Self` semantics.
-> Pyright docs: "The `self` parameter in instance methods is inferred as the containing class type using the `Self` type."
 
 ### Default Parameters {#TYPEINF-FUNC-DEFAULTS}
 
-When a parameter has no annotation but has a default, Basilisk **does not** infer the type from the default. The annotation is still required. This is stricter than Pyright, which infers `param: type(default)` for unannotated defaulted parameters.
+When a parameter has no annotation but has a default, Basilisk **does not** infer the type from the default. The annotation is still required.
 
 ```python
 def connect(timeout=30):        # BSK-E0001 — annotation required even with default
@@ -329,7 +326,7 @@ transform: Callable[[int], str] = lambda x: str(x)
 f = lambda x: x + 1   # warning: x is unknown
 ```
 
-Without an expected type, unannotated lambda parameters are `Unknown`. Unlike Pyright, Basilisk emits a **warning** (not silence) when a lambda's parameters cannot be inferred.
+Without an expected type, a lambda's parameter types cannot be inferred. Rather than leaving them silently untyped, Basilisk emits a **warning** (`BSK-W0040`).
 
 ### Overloads {#TYPEINF-FUNC-OVERLOADS}
 
@@ -369,7 +366,7 @@ With bidirectional context:
 x: list[float] = [1, 2, 3]   # list[float] — ints widen to float via expected type
 ```
 
-> **Difference from Pyright**: Pyright's loose mode uses `list[Unknown]` for heterogeneous lists. Basilisk always uses union types. Pyright's `strictListInference` is always-on in Basilisk.
+> **Container inference**: Basilisk always infers a **union** of element types for heterogeneous containers — there is no loose mode and no configuration switch to disable it.
 
 ### Dicts {#TYPEINF-COLLECTIONS-DICTS}
 
@@ -656,7 +653,7 @@ Assertions narrow the type for all code after the `assert` statement (within the
 
 ### Dict Key Existence Narrowing {#TYPEINF-NARROWING-DICTKEY}
 
-Basilisk supports narrowing `TypedDict` types via key existence checks — **beyond what Pyright currently implements**:
+Basilisk supports narrowing `TypedDict` types via key existence checks:
 
 ```python
 class Movie(TypedDict, total=False):
@@ -915,7 +912,7 @@ fn is_subtype_of(source: &ResolvedType, target: &ResolvedType, ctx: &SubtypeCont
 > **Authority**: [PEP 484 §The `Any` type](https://peps.python.org/pep-0484/#the-any-type):
 > "A special kind of type is `Any`. Every type is consistent with `Any`."
 
-Unannotated parameters do **not** default to `Any` in Basilisk — they produce `BSK-E0001`. This is the critical divergence from mypy's `--ignore-missing-imports` behavior and Pyright's unannotated-parameter inference.
+Unannotated parameters do **not** default to `Any` in Basilisk — they produce `BSK-E0001`. Basilisk never silently infers a public-API parameter type; a missing annotation is always a diagnostic.
 
 ### `Never` / `NoReturn` {#TYPEINF-SPECIAL-NEVER}
 
@@ -998,33 +995,33 @@ Inference-relevant conformance tests:
 
 ---
 
-## Where Basilisk Exceeds Pyright {#TYPEINF-EXCEEDS}
+## Distinctive Inference Behaviors {#TYPEINF-EXCEEDS}
 
-The following capabilities go beyond Pyright's current implementation:
+The following are deliberate, distinctive behaviors of Basilisk's inference engine:
 
-### No `Unknown` Fallback {#TYPEINF-EXCEEDS-NOUNKNOWN}
+### No Unresolved-Type Fallback {#TYPEINF-EXCEEDS-NOUNKNOWN}
 
-Pyright uses `Unknown` (a special `Any`) when it cannot determine a type. Basilisk **never produces `Unknown`** — every inferred type is either a concrete type or an error.
+Basilisk **never produces an unresolved/`Unknown` type** when it cannot determine a type — every inferred type is either a concrete type or an error.
 
 ### Strict Container Inference Always On {#TYPEINF-EXCEEDS-CONTAINERS}
 
-Pyright's `strictListInference` (union of element types) is off by default. Basilisk applies union inference to all containers in all modes — no configuration switch.
+Basilisk applies union-of-element-types inference to all containers unconditionally — there is no loose mode and no configuration switch to disable it.
 
 ### Dict Key Narrowing for TypedDict {#TYPEINF-EXCEEDS-DICTKEY}
 
-TypedDict narrowing via `"key" in d` is beyond Pyright's current narrowing capabilities. Basilisk implements this directly.
+Basilisk narrows `TypedDict` types via `"key" in d` key-existence checks directly.
 
 ### Exhaustive Pattern Matching Analysis {#TYPEINF-EXCEEDS-EXHAUSTIVE}
 
-Basilisk checks that `match` statements on union types are exhaustive. Pyright performs limited exhaustiveness analysis; Basilisk tracks exact variant coverage.
+Basilisk checks that `match` statements on union types are exhaustive, tracking exact variant coverage.
 
 ### Lambda Warnings {#TYPEINF-EXCEEDS-LAMBDA}
 
-When a lambda cannot have its parameter types inferred from context, Basilisk emits `BSK-W0040`. Pyright silently uses `Unknown`. This surfaces missing type annotations in higher-order functions early.
+When a lambda's parameter types cannot be inferred from context, Basilisk emits `BSK-W0040` rather than leaving them silently untyped — surfacing missing annotations in higher-order functions early.
 
 ### Annotation Required, Not Optional {#TYPEINF-EXCEEDS-REQUIRED}
 
-Pyright infers parameter types from defaults and call-site analysis. Basilisk treats every missing annotation as an error. "Silent inference" of public API types is not permitted.
+Basilisk treats every missing annotation as an error. "Silent inference" of public-API types is not permitted.
 
 ---
 
