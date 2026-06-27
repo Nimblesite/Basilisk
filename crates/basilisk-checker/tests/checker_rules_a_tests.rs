@@ -12,47 +12,47 @@
     dead_code
 )]
 mod common;
-#[path = "checker/e0001_tests.rs"]
-mod e0001;
-#[path = "checker/e0002_tests.rs"]
-mod e0002;
-#[path = "checker/e0003_tests.rs"]
-mod e0003;
-#[path = "checker/e0004_tests.rs"]
-mod e0004;
-#[path = "checker/e0005_tests.rs"]
-mod e0005;
-#[path = "checker/e0010_tests.rs"]
-mod e0010;
-#[path = "checker/e0011_tests.rs"]
-mod e0011;
-#[path = "checker/e0012_tests.rs"]
-mod e0012;
-#[path = "checker/e0013_tests.rs"]
-mod e0013;
-#[path = "checker/e0014_tests.rs"]
-mod e0014;
-#[path = "checker/e0015_tests.rs"]
-mod e0015;
-#[path = "checker/e0016_tests.rs"]
-mod e0016;
-#[path = "checker/e0017_tests.rs"]
-mod e0017;
-#[path = "checker/e0018_tests.rs"]
-mod e0018;
-#[path = "checker/e0019_tests.rs"]
-mod e0019;
-#[path = "checker/e0020_tests.rs"]
-mod e0020;
-#[path = "checker/e0021_tests.rs"]
-mod e0021;
-#[path = "checker/e0022_tests.rs"]
-mod e0022;
-#[path = "checker/e0022_e0023_tests.rs"]
-mod e0022_e0023;
-#[path = "checker/e0023_tests.rs"]
-mod e0023;
-#[path = "checker/e0024_tests.rs"]
-mod e0024;
-#[path = "checker/e0025_tests.rs"]
-mod e0025;
+#[path = "checker/missing_parameter_annotation_tests.rs"]
+mod missing_parameter_annotation;
+#[path = "checker/missing_return_annotation_tests.rs"]
+mod missing_return_annotation;
+#[path = "checker/missing_variable_type_tests.rs"]
+mod missing_variable_type;
+#[path = "checker/missing_vararg_annotation_tests.rs"]
+mod missing_vararg_annotation;
+#[path = "checker/missing_attribute_annotation_tests.rs"]
+mod missing_attribute_annotation;
+#[path = "checker/imports_unresolved_tests.rs"]
+mod imports_unresolved;
+#[path = "checker/returns_compatibility_tests.rs"]
+mod returns_compatibility;
+#[path = "checker/calls_argument_type_tests.rs"]
+mod calls_argument_type;
+#[path = "checker/returns_compatibility_2_tests.rs"]
+mod returns_compatibility_2;
+#[path = "checker/assignment_compatibility_tests.rs"]
+mod assignment_compatibility;
+#[path = "checker/callables_annotation_tests.rs"]
+mod callables_annotation;
+#[path = "checker/classes_override_tests.rs"]
+mod classes_override;
+#[path = "checker/classes_override_2_tests.rs"]
+mod classes_override_2;
+#[path = "checker/names_undefined_tests.rs"]
+mod names_undefined;
+#[path = "checker/names_unbound_tests.rs"]
+mod names_unbound;
+#[path = "checker/overloads_definitions_tests.rs"]
+mod overloads_definitions;
+#[path = "checker/overloads_consistency_tests.rs"]
+mod overloads_consistency;
+#[path = "checker/dict_key_hashable_tests.rs"]
+mod dict_key_hashable;
+#[path = "checker/dict_key_hashable_group_tests.rs"]
+mod dict_key_hashable_group;
+#[path = "checker/match_exhaustiveness_tests.rs"]
+mod match_exhaustiveness;
+#[path = "checker/annotations_typeexpr_tests.rs"]
+mod annotations_typeexpr;
+#[path = "checker/missing_override_decorator_tests.rs"]
+mod missing_override_decorator;

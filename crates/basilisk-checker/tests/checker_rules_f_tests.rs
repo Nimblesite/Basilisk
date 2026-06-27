@@ -12,55 +12,55 @@
     dead_code
 )]
 mod common;
-#[path = "checker/e0126_tests.rs"]
-mod e0126;
-#[path = "checker/e0127_tests.rs"]
-mod e0127;
-#[path = "checker/e0128_tests.rs"]
-mod e0128;
-#[path = "checker/e0129_tests.rs"]
-mod e0129;
-#[path = "checker/e0130_tests.rs"]
-mod e0130;
-#[path = "checker/e0131_tests.rs"]
-mod e0131;
-#[path = "checker/e0132_tests.rs"]
-mod e0132;
-#[path = "checker/e0133_tests.rs"]
-mod e0133;
-#[path = "checker/e0134_tests.rs"]
-mod e0134;
-#[path = "checker/e0136_tests.rs"]
-mod e0136;
-#[path = "checker/e0137_tests.rs"]
-mod e0137;
-#[path = "checker/e0138_tests.rs"]
-mod e0138;
-#[path = "checker/e0139_tests.rs"]
-mod e0139;
-#[path = "checker/e0140_tests.rs"]
-mod e0140;
-#[path = "checker/e0141_tests.rs"]
-mod e0141;
-#[path = "checker/e0142_tests.rs"]
-mod e0142;
-#[path = "checker/e0143_tests.rs"]
-mod e0143;
-#[path = "checker/e0144_tests.rs"]
-mod e0144;
-#[path = "checker/e0145_tests.rs"]
-mod e0145;
-#[path = "checker/e0146_tests.rs"]
-mod e0146;
-#[path = "checker/e0147_tests.rs"]
-mod e0147;
-#[path = "checker/e0148_tests.rs"]
-mod e0148;
-#[path = "checker/e0149_tests.rs"]
-mod e0149;
-#[path = "checker/w0014_tests.rs"]
-mod w0014;
-#[path = "checker/w0040_tests.rs"]
-mod w0040;
-#[path = "checker/w0050_tests.rs"]
-mod w0050;
+#[path = "checker/literals_literalstring_tests.rs"]
+mod literals_literalstring;
+#[path = "checker/tuples_index_2_tests.rs"]
+mod tuples_index_2;
+#[path = "checker/generics_defaults_referential_2_tests.rs"]
+mod generics_defaults_referential_2;
+#[path = "checker/literals_semantics_2_tests.rs"]
+mod literals_semantics_2;
+#[path = "checker/generics_variance_inference_tests.rs"]
+mod generics_variance_inference;
+#[path = "checker/annotations_generators_2_tests.rs"]
+mod annotations_generators_2;
+#[path = "checker/generics_base_class_2_tests.rs"]
+mod generics_base_class_2;
+#[path = "checker/protocols_variance_2_tests.rs"]
+mod protocols_variance_2;
+#[path = "checker/generics_base_class_3_tests.rs"]
+mod generics_base_class_3;
+#[path = "checker/callables_subtyping_tests.rs"]
+mod callables_subtyping;
+#[path = "checker/protocols_generic_tests.rs"]
+mod protocols_generic;
+#[path = "checker/dataclasses_transform_meta_tests.rs"]
+mod dataclasses_transform_meta;
+#[path = "checker/generics_typevartuple_specialization_2_tests.rs"]
+mod generics_typevartuple_specialization_2;
+#[path = "checker/callables_protocol_2_tests.rs"]
+mod callables_protocol_2;
+#[path = "checker/callables_kwargs_tests.rs"]
+mod callables_kwargs;
+#[path = "checker/dataclasses_transform_class_tests.rs"]
+mod dataclasses_transform_class;
+#[path = "checker/namedtuples_usage_tests.rs"]
+mod namedtuples_usage;
+#[path = "checker/constructors_call_type_tests.rs"]
+mod constructors_call_type;
+#[path = "checker/specialtypes_type_tests.rs"]
+mod specialtypes_type;
+#[path = "checker/protocols_class_objects_2_tests.rs"]
+mod protocols_class_objects_2;
+#[path = "checker/tuples_type_compat_tests.rs"]
+mod tuples_type_compat;
+#[path = "checker/generics_basic_3_tests.rs"]
+mod generics_basic_3;
+#[path = "checker/generics_syntax_scoping_tests.rs"]
+mod generics_syntax_scoping;
+#[path = "checker/explicit_any_tests.rs"]
+mod explicit_any;
+#[path = "checker/lambda_missing_annotations_tests.rs"]
+mod lambda_missing_annotations;
+#[path = "checker/redundant_annotation_rule_tests.rs"]
+mod redundant_annotation_rule;

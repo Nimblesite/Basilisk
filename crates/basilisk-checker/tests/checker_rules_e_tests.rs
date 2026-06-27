@@ -12,53 +12,53 @@
     dead_code
 )]
 mod common;
-#[path = "checker/e0101_tests.rs"]
-mod e0101;
-#[path = "checker/e0102_tests.rs"]
-mod e0102;
-#[path = "checker/e0103_tests.rs"]
-mod e0103;
-#[path = "checker/e0104_tests.rs"]
-mod e0104;
-#[path = "checker/e0105_tests.rs"]
-mod e0105;
-#[path = "checker/e0106_tests.rs"]
-mod e0106;
-#[path = "checker/e0107_tests.rs"]
-mod e0107;
-#[path = "checker/e0108_tests.rs"]
-mod e0108;
-#[path = "checker/e0109_tests.rs"]
-mod e0109;
-#[path = "checker/e0110_tests.rs"]
-mod e0110;
-#[path = "checker/e0111_tests.rs"]
-mod e0111;
-#[path = "checker/e0112_tests.rs"]
-mod e0112;
-#[path = "checker/e0113_tests.rs"]
-mod e0113;
-#[path = "checker/e0114_tests.rs"]
-mod e0114;
-#[path = "checker/e0115_tests.rs"]
-mod e0115;
-#[path = "checker/e0116_tests.rs"]
-mod e0116;
-#[path = "checker/e0117_tests.rs"]
-mod e0117;
-#[path = "checker/e0118_tests.rs"]
-mod e0118;
-#[path = "checker/e0119_tests.rs"]
-mod e0119;
-#[path = "checker/e0120_tests.rs"]
-mod e0120;
-#[path = "checker/e0121_tests.rs"]
-mod e0121;
-#[path = "checker/e0122_tests.rs"]
-mod e0122;
-#[path = "checker/e0123_tests.rs"]
-mod e0123;
-#[path = "checker/e0124_tests.rs"]
-mod e0124;
-#[path = "checker/e0125_tests.rs"]
-mod e0125;
+#[path = "checker/narrowing_typeguard_tests.rs"]
+mod narrowing_typeguard;
+#[path = "checker/generics_defaults_referential_tests.rs"]
+mod generics_defaults_referential;
+#[path = "checker/tuples_index_tests.rs"]
+mod tuples_index;
+#[path = "checker/aliases_recursive_tests.rs"]
+mod aliases_recursive;
+#[path = "checker/generics_syntax_declarations_2_tests.rs"]
+mod generics_syntax_declarations_2;
+#[path = "checker/protocols_class_objects_tests.rs"]
+mod protocols_class_objects;
+#[path = "checker/generics_variance_tests.rs"]
+mod generics_variance;
+#[path = "checker/dataclasses_slots_tests.rs"]
+mod dataclasses_slots;
+#[path = "checker/generics_upper_bound_2_tests.rs"]
+mod generics_upper_bound_2;
+#[path = "checker/protocols_variance_tests.rs"]
+mod protocols_variance;
+#[path = "checker/constructors_call_init_tests.rs"]
+mod constructors_call_init;
+#[path = "checker/narrowing_typeis_tests.rs"]
+mod narrowing_typeis;
+#[path = "checker/narrowing_typeis_2_tests.rs"]
+mod narrowing_typeis_2;
+#[path = "checker/protocols_runtime_checkable_tests.rs"]
+mod protocols_runtime_checkable;
+#[path = "checker/directives_deprecated_tests.rs"]
+mod directives_deprecated;
+#[path = "checker/namedtuples_define_class_tests.rs"]
+mod namedtuples_define_class;
+#[path = "checker/generics_scoping_tests.rs"]
+mod generics_scoping;
+#[path = "checker/protocols_explicit_2_tests.rs"]
+mod protocols_explicit_2;
+#[path = "checker/protocols_runtime_checkable_2_tests.rs"]
+mod protocols_runtime_checkable_2;
+#[path = "checker/annotations_generators_tests.rs"]
+mod annotations_generators;
+#[path = "checker/protocols_definition_2_tests.rs"]
+mod protocols_definition_2;
+#[path = "checker/callables_protocol_tests.rs"]
+mod callables_protocol;
+#[path = "checker/protocols_explicit_3_tests.rs"]
+mod protocols_explicit_3;
+#[path = "checker/protocols_subtyping_tests.rs"]
+mod protocols_subtyping;
+#[path = "checker/generics_type_erasure_tests.rs"]
+mod generics_type_erasure;

@@ -12,55 +12,55 @@
     dead_code
 )]
 mod common;
-#[path = "checker/e0026_tests.rs"]
-mod e0026;
-#[path = "checker/e0027_tests.rs"]
-mod e0027;
-#[path = "checker/e0029_tests.rs"]
-mod e0029;
-#[path = "checker/e0030_tests.rs"]
-mod e0030;
-#[path = "checker/e0031_tests.rs"]
-mod e0031;
-#[path = "checker/e0032_tests.rs"]
-mod e0032;
-#[path = "checker/e0033_tests.rs"]
-mod e0033;
-#[path = "checker/e0033_e0039_tests.rs"]
-mod e0033_e0039;
-#[path = "checker/e0034_tests.rs"]
-mod e0034;
-#[path = "checker/e0035_tests.rs"]
-mod e0035;
-#[path = "checker/e0036_tests.rs"]
-mod e0036;
-#[path = "checker/e0037_tests.rs"]
-mod e0037;
-#[path = "checker/e0038_tests.rs"]
-mod e0038;
-#[path = "checker/e0039_tests.rs"]
-mod e0039;
-#[path = "checker/e0040_tests.rs"]
-mod e0040;
-#[path = "checker/e0040_e0046_tests.rs"]
-mod e0040_e0046;
-#[path = "checker/e0041_tests.rs"]
-mod e0041;
-#[path = "checker/e0042_tests.rs"]
-mod e0042;
-#[path = "checker/e0043_tests.rs"]
-mod e0043;
-#[path = "checker/e0044_tests.rs"]
-mod e0044;
-#[path = "checker/e0045_tests.rs"]
-mod e0045;
-#[path = "checker/e0046_tests.rs"]
-mod e0046;
-#[path = "checker/e0047_tests.rs"]
-mod e0047;
-#[path = "checker/e0048_tests.rs"]
-mod e0048;
-#[path = "checker/e0049_tests.rs"]
-mod e0049;
-#[path = "checker/e0050_tests.rs"]
-mod e0050;
+#[path = "checker/generics_basic_tests.rs"]
+mod generics_basic;
+#[path = "checker/generics_base_class_tests.rs"]
+mod generics_base_class;
+#[path = "checker/typeddicts_class_syntax_tests.rs"]
+mod typeddicts_class_syntax;
+#[path = "checker/generics_defaults_tests.rs"]
+mod generics_defaults;
+#[path = "checker/directives_cast_tests.rs"]
+mod directives_cast;
+#[path = "checker/typeddicts_class_syntax_2_tests.rs"]
+mod typeddicts_class_syntax_2;
+#[path = "checker/directives_reveal_type_tests.rs"]
+mod directives_reveal_type;
+#[path = "checker/directives_reveal_type_group_tests.rs"]
+mod directives_reveal_type_group;
+#[path = "checker/qualifiers_final_decorator_tests.rs"]
+mod qualifiers_final_decorator;
+#[path = "checker/typeddicts_required_tests.rs"]
+mod typeddicts_required;
+#[path = "checker/classes_classvar_tests.rs"]
+mod classes_classvar;
+#[path = "checker/typeddicts_alt_syntax_tests.rs"]
+mod typeddicts_alt_syntax;
+#[path = "checker/typeddicts_inheritance_tests.rs"]
+mod typeddicts_inheritance;
+#[path = "checker/directives_assert_type_tests.rs"]
+mod directives_assert_type;
+#[path = "checker/enums_behaviors_tests.rs"]
+mod enums_behaviors;
+#[path = "checker/enums_behaviors_group_tests.rs"]
+mod enums_behaviors_group;
+#[path = "checker/calls_argument_count_tests.rs"]
+mod calls_argument_count;
+#[path = "checker/generics_syntax_compatibility_tests.rs"]
+mod generics_syntax_compatibility;
+#[path = "checker/generics_basic_2_tests.rs"]
+mod generics_basic_2;
+#[path = "checker/qualifiers_final_annotation_tests.rs"]
+mod qualifiers_final_annotation;
+#[path = "checker/qualifiers_annotated_tests.rs"]
+mod qualifiers_annotated;
+#[path = "checker/enums_members_tests.rs"]
+mod enums_members;
+#[path = "checker/annotations_forward_refs_tests.rs"]
+mod annotations_forward_refs;
+#[path = "checker/aliases_implicit_tests.rs"]
+mod aliases_implicit;
+#[path = "checker/tuples_type_form_tests.rs"]
+mod tuples_type_form;
+#[path = "checker/aliases_newtype_tests.rs"]
+mod aliases_newtype;

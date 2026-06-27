@@ -12,13 +12,13 @@
     dead_code
 )]
 mod common;
-#[path = "checker/e0156_tests.rs"]
-mod e0156;
-#[path = "checker/e0157_tests.rs"]
-mod e0157;
-#[path = "checker/e0158_tests.rs"]
-mod e0158;
-#[path = "checker/e0159_tests.rs"]
-mod e0159;
-#[path = "checker/e0160_tests.rs"]
-mod e0160;
+#[path = "checker/typeddicts_extra_items_tests.rs"]
+mod typeddicts_extra_items;
+#[path = "checker/dataclasses_inheritance_tests.rs"]
+mod dataclasses_inheritance;
+#[path = "checker/overloads_consistency_2_tests.rs"]
+mod overloads_consistency_2;
+#[path = "checker/classes_override_3_tests.rs"]
+mod classes_override_3;
+#[path = "checker/overloads_consistency_3_tests.rs"]
+mod overloads_consistency_3;

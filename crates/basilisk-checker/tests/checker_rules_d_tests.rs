@@ -12,51 +12,51 @@
     dead_code
 )]
 mod common;
-#[path = "checker/e0076_tests.rs"]
-mod e0076;
-#[path = "checker/e0077_tests.rs"]
-mod e0077;
-#[path = "checker/e0078_tests.rs"]
-mod e0078;
-#[path = "checker/e0079_tests.rs"]
-mod e0079;
-#[path = "checker/e0080_tests.rs"]
-mod e0080;
-#[path = "checker/e0081_tests.rs"]
-mod e0081;
-#[path = "checker/e0082_tests.rs"]
-mod e0082;
-#[path = "checker/e0083_tests.rs"]
-mod e0083;
-#[path = "checker/e0084_tests.rs"]
-mod e0084;
-#[path = "checker/e0085_tests.rs"]
-mod e0085;
-#[path = "checker/e0086_tests.rs"]
-mod e0086;
-#[path = "checker/e0088_tests.rs"]
-mod e0088;
-#[path = "checker/e0089_tests.rs"]
-mod e0089;
-#[path = "checker/e0090_tests.rs"]
-mod e0090;
-#[path = "checker/e0091_tests.rs"]
-mod e0091;
-#[path = "checker/e0092_tests.rs"]
-mod e0092;
-#[path = "checker/e0093_tests.rs"]
-mod e0093;
-#[path = "checker/e0094_tests.rs"]
-mod e0094;
-#[path = "checker/e0095_tests.rs"]
-mod e0095;
-#[path = "checker/e0096_tests.rs"]
-mod e0096;
-#[path = "checker/e0097_tests.rs"]
-mod e0097;
-#[path = "checker/e0098_tests.rs"]
-mod e0098;
-#[path = "checker/e0099_tests.rs"]
-mod e0099;
-#[path = "checker/e0100_tests.rs"]
-mod e0100;
+#[path = "checker/overloads_evaluation_tests.rs"]
+mod overloads_evaluation;
+#[path = "checker/generics_self_protocols_tests.rs"]
+mod generics_self_protocols;
+#[path = "checker/generics_self_basic_tests.rs"]
+mod generics_self_basic;
+#[path = "checker/protocols_modules_tests.rs"]
+mod protocols_modules;
+#[path = "checker/generics_upper_bound_tests.rs"]
+mod generics_upper_bound;
+#[path = "checker/generics_typevartuple_unpack_tests.rs"]
+mod generics_typevartuple_unpack;
+#[path = "checker/generics_typevartuple_callable_tests.rs"]
+mod generics_typevartuple_callable;
+#[path = "checker/generics_typevartuple_basic_2_tests.rs"]
+mod generics_typevartuple_basic_2;
+#[path = "checker/generics_typevartuple_basic_3_tests.rs"]
+mod generics_typevartuple_basic_3;
+#[path = "checker/generics_typevartuple_args_tests.rs"]
+mod generics_typevartuple_args;
+#[path = "checker/generics_typevartuple_specialization_tests.rs"]
+mod generics_typevartuple_specialization;
+#[path = "checker/typeddicts_usage_tests.rs"]
+mod typeddicts_usage;
+#[path = "checker/generics_syntax_declarations_tests.rs"]
+mod generics_syntax_declarations;
+#[path = "checker/tuples_type_form_2_tests.rs"]
+mod tuples_type_form_2;
+#[path = "checker/generics_defaults_2_tests.rs"]
+mod generics_defaults_2;
+#[path = "checker/generics_defaults_specialization_tests.rs"]
+mod generics_defaults_specialization;
+#[path = "checker/typeddicts_operations_tests.rs"]
+mod typeddicts_operations;
+#[path = "checker/generics_self_usage_tests.rs"]
+mod generics_self_usage;
+#[path = "checker/dataclasses_postinit_tests.rs"]
+mod dataclasses_postinit;
+#[path = "checker/dataclasses_usage_tests.rs"]
+mod dataclasses_usage;
+#[path = "checker/protocols_definition_tests.rs"]
+mod protocols_definition;
+#[path = "checker/protocols_merging_tests.rs"]
+mod protocols_merging;
+#[path = "checker/protocols_explicit_tests.rs"]
+mod protocols_explicit;
+#[path = "checker/literals_semantics_tests.rs"]
+mod literals_semantics;
