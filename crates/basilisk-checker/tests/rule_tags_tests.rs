@@ -10,8 +10,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use basilisk_checker::rule_tags::{
-    is_pep_category, is_provenance, is_valid_free_form, tags_for_code, BASILISK, FREE_FORM_TAGS,
-    PEP, PEP_CATEGORIES,
+    basilisk_rule_codes, is_pep_category, is_provenance, is_valid_free_form, tags_for_code,
+    BASILISK, FREE_FORM_TAGS, PEP, PEP_CATEGORIES,
 };
 
 fn rules_dir() -> PathBuf {
@@ -64,8 +64,11 @@ fn extract_codes(text: &str) -> Vec<String> {
 
 #[test]
 fn finds_the_whole_rule_set() {
+    // Ratcheted near the real count (159 at time of writing) so a parser
+    // regression that quietly drops a chunk of rules — shrinking the reach of
+    // every `for code in all_rule_codes()` invariant test — fails loudly.
     assert!(
-        all_rule_codes().len() >= 100,
+        all_rule_codes().len() >= 150,
         "expected to scan the full rule registry"
     );
 }
@@ -159,15 +162,7 @@ fn cross_cutting_core_checks_are_pep_without_a_category() {
 
 #[test]
 fn basilisk_rules_are_tagged_basilisk_and_never_carry_a_pep_category() {
-    for code in [
-        "BSK-E0001",
-        "BSK-E0025",
-        "BSK-W0014",
-        "BSK-W0050",
-        "BSK-E0152",
-        "imports_unresolved",
-        "version_target_syntax",
-    ] {
+    for code in ["BSK-E0001", "BSK-E0025", "BSK-W0014", "BSK-W0050", "BSK-E0152"] {
         let tags = tags_for_code(code);
         assert!(
             tags.contains(&BASILISK),
@@ -180,6 +175,78 @@ fn basilisk_rules_are_tagged_basilisk_and_never_carry_a_pep_category() {
                 "Basilisk rule `{code}` must not carry PEP category `{tag}`"
             );
         }
+    }
+}
+
+#[test]
+fn default_on_core_checks_are_pep_not_basilisk() {
+    // Per the config-only model: rule selection is via `check_with_config`, and
+    // the default config selects exactly the core PEP set. These checks have no
+    // gate in `check_with_config`, so they run by default → they are core PEP,
+    // NOT `basilisk` — even though `version_target_syntax` is Basilisk-authored.
+    for code in [
+        "imports_unresolved",
+        "imports_module_attribute",
+        "version_target_syntax",
+    ] {
+        let tags = tags_for_code(code);
+        assert!(
+            tags.contains(&PEP),
+            "default-on `{code}` must be `pep`, got {tags:?}"
+        );
+        assert!(
+            !tags.contains(&BASILISK),
+            "default-on `{code}` must not be `basilisk`"
+        );
+    }
+}
+
+#[test]
+fn no_basilisk_rule_key_is_stale() {
+    // The opt-in table is keyed by current diagnostic code. A rename elsewhere
+    // (the conformance-name migration) that leaves a key here stale would
+    // silently demote that rule to on-by-default `pep` — catch it here.
+    let live = all_rule_codes();
+    for code in basilisk_rule_codes() {
+        assert!(
+            live.contains(code),
+            "BASILISK_RULES key `{code}` is not a live rule code — provenance drifted (a rename?)"
+        );
+    }
+}
+
+#[test]
+fn pep_categories_match_conformance_test_prefixes() {
+    // [CHKTAG-PEP-CATEGORIES]: the category vocabulary is taken verbatim from the
+    // `python/typing` conformance suite. Assert (read-only) that every category
+    // is a real test-file prefix so the list cannot silently drift from source.
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("conformance")
+        .join("tests");
+    let prefixes: BTreeSet<String> = fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| name.ends_with(".py") || name.ends_with(".pyi"))
+        .filter_map(|name| {
+            name.trim_start_matches('_')
+                .split('_')
+                .next()
+                .map(str::to_owned)
+        })
+        .collect();
+    assert!(
+        !prefixes.is_empty(),
+        "found no conformance test files under {dir:?}"
+    );
+    for category in PEP_CATEGORIES {
+        assert!(
+            prefixes.contains(category),
+            "PEP category `{category}` is not a conformance test-file prefix — vocabulary drifted from its source"
+        );
     }
 }
 

@@ -124,12 +124,12 @@ benchmarkStrings:
       <h2 class="feature-row__title">Conformant by default.<br>Strict to taste.</h2>
       <p class="feature-row__body">
         Basilisk checks to the Python typing spec out of the box &mdash; the same rules the
-        official conformance suite grades. The strictness on top is Basilisk&rsquo;s own:
-        require an annotation on every parameter and return, flag redundant annotations, nudge
-        for <code>@override</code>. The spec treats unannotated code as <em>inferred</em>, not an
-        error &mdash; so that strictness is a choice, turned up or down per-file or per-path from
-        the editor UI or your config. And one-click enrichment fixes add the missing types
-        <em>for</em> you.
+        official conformance suite grades. Stricter checks are Basilisk&rsquo;s own and entirely
+        opt-in: require an annotation on every parameter and return, flag redundant annotations,
+        nudge for <code>@override</code>. The spec treats unannotated code as <em>inferred</em>,
+        not an error, so these stay off by default &mdash; switch them on through config, per-file
+        or per-path, when you want more than the spec. And one-click enrichment fixes add the
+        missing types <em>for</em> you.
       </p>
     </div>
     <div class="feature-row__visual">
@@ -205,7 +205,7 @@ benchmarkStrings:
         the same harness used to measure Pyright (~99%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>),
         mypy (~58%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>),
         and Pyrefly (~86%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>).
-        We run it on the real binary with every conformance rule enabled and nothing disabled: {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories pass at 100%, with {{ conformance.fp }} false positives and {{ conformance.missed }} missed required errors. Basilisk&rsquo;s extra house rules are opt-in, so they never pad the number. <a href="/docs/conformance/">How we measure this &rarr;</a>
+        We run it on the real binary with every conformance rule enabled and nothing disabled: {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories pass at 100%, with {{ conformance.fp }} false positives and {{ conformance.missed }} missed required errors. Basilisk&rsquo;s opt-in rules never run during conformance, so they can&rsquo;t pad the number. <a href="/docs/conformance/">How we measure this &rarr;</a>
       </p>
     </div>
   </div>

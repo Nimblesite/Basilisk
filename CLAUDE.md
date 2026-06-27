@@ -1,64 +1,41 @@
 <!-- agent-pmo:f87d349 -->
 # CLAUDE.md
 
-This codebase is held to a high standard: code here should comfortably pass review at a top-tier engineering organization. Please keep quality high and address shortcomings as you find them, rather than leaving them for later.
+This codebase is held to a high standard: code here should comfortably pass review at a top-tier engineering organization. Keep quality high and fix shortcomings as you find them rather than leaving them for later.
 
-⚠️ MOST AUTHORITATIVE DOC FROM WHICH ALL OTHER AUTHORITY IS DERIVED:
-https://github.com/python/typing/tree/main/conformance/tests
-CONFORMANCE IS MEASURED BY HOW ACCURATELY BASILISK PASSES THESE TESTS AND NOTHING ELSE ⚠️
+⚠️ The conformance test suite is the **single source of all authority**: https://github.com/python/typing/tree/main/conformance/tests. Conformance is measured ONLY by how accurately Basilisk passes these tests — nothing else. ⚠️
 
-⚠️ DISABLING, DELETING, OR UNREGISTERING ANY CONFORMANCE RULE IS ABSOLUTELY ⛔️ ILLEGAL ⚠️ PEP conformance MUST run the `basilisk` binary with **EVERY PEP rule enabled** — no `basilisk.json`, **no deleting rule source files (`crates/basilisk-checker/src/rules/*.rs`), no removing rules from `all_rules()`**, **NO EXCEPTIONS, NO MATTER WHAT**. Equally ⛔️ ILLEGAL: hand-editing `conformance/conformance_status.csv` or loosening the `coverage-thresholds.json` gate (`threshold` / `max_false_positives`) to match a faked run. Gaming the conformance score in ANY of these ways is ⛔️ ILLEGAL. `conformance/score.py` deletes any stale config before scoring; **deleting the rules themselves to dodge that guard is the same crime, not a loophole.** See [CHKARCH-CONFORMANCE]. 
+⚠️ Disabling, deleting, or unregistering ANY conformance rule is ILLEGAL. PEP conformance MUST run the `basilisk` binary with EVERY PEP rule enabled — no `basilisk.json`, no deleting rule source (`crates/basilisk-checker/src/rules/*.rs`), no removing rules from `all_rules()`, NO EXCEPTIONS. Equally illegal: hand-editing `conformance/conformance_status.csv` or loosening the `coverage-thresholds.json` gate (`threshold` / `max_false_positives`) to match a faked run. `conformance/score.py` deletes stale config before scoring — deleting the rules to dodge that guard is the same crime, not a loophole. See [CHKARCH-CONFORMANCE]. ⚠️
 
-⚠️ USING GIT IS ⛔️ ILLEGAL ⚠️ SIGNING A GIT COMMIT WITH CLAUDE CODE AS A COAUTHOR IS SUPER ⛔️ ILEGAL ⚠️
+Three ratchets hold at ALL times: conformance score only goes **up**; false positives and benchmark times only go **down**.
 
-CONFORMANCE SCORE INCREASES MONOTONICALLY, BENCHMARKS AND FALSE POSITIVES DECREASE MONOTONICALLY
+## Design Principles
 
-⚠️ AVOID DUPLICATION OF ALL KINDS AND PRACTICE TOKEN ECONOMICS ⚠️
+We are building a better Python developer experience: one IDE extension that delivers a complete, seamless, fast Python workflow. The LSP drives all functionality — IDE extensions only react to signals the LSP emits (commands, state changes) and NEVER register commands the LSP doesn't advertise.
 
-⚠️ DO NOT STOP TO ASK QUESTIONS. USE YOUR JUDGMENT WITHOUT ASKING THE USER ⚠️
-
-⚠️ DO NOT KILL A VS Code PROCESS (including in the browser) — it disrupts active debugging and test sessions. ⚠️
-
-
-
-Key design principles:
-
-- We are building a better Python dev experience
-- The LSP drives the functionality, not the IDE extension.
-- IDE extensions react to signals from the LSP (commands, state changes) and adjust accordingly.
-- IDE extensions never register commands the LSP doesn't advertise.
-
-Target: 100% PEP conformance. Canonical version: **Python 3.12**. Read the PEP conformance readme carefully.
-
-The project is a Python type checker and comprehensive LSP (test explorer, debugging, profiling, autofixes) built in Rust.
-
-**Overall aim: improve the Python developer experience.**
-One IDE extension should provide a complete, seamless, and fast Python development experience.
+Target: 100% PEP conformance. Read the PEP conformance readme carefully. The project is a strict-by-default Python type checker and comprehensive LSP (test explorer, debugging, profiling, autofixes) built in Rust.
 
 # Documentation Structure
 
-- All spec sections **must** have unique, non-numeric, hierarchically structured spec IDs.
-- All code **must** refer to a spec ID.
-- All tests must cross-reference the spec ID and code.
-- This is the fabric of the repository and how all information is linked — please treat it as non-negotiable.
-- If you find code or tests not linked to a spec ID, fix it.
-- If you find spec sections with no ID, add one.
+The spec-ID web is the fabric of this repository and is non-negotiable:
 
-- `docs/INDEX.md` — Full index of all docs
-- `docs/specs/` — Specifications (naming: `[COMPONENT]-[FEATURE]-SPEC.md`)
-- `docs/plans/` — Implementation plans (naming: `[COMPONENT]-[FEATURE]-PLAN.md`)
+- Every spec section has a unique, non-numeric, hierarchically structured ID (`[GROUP-TOPIC]` / `[GROUP-TOPIC-DETAIL]`).
+- All code references its spec ID in comments (e.g. `// Implements [LSP-HOVER]`) so `grep [LSP-` walks spec → code → tests in one shot.
+- All tests cross-reference both the spec ID and the code.
+- Find code, tests, or specs that aren't linked? Fix it — add the missing ID or reference.
+
+- `docs/INDEX.md` — full index of all docs
+- `docs/specs/` — specifications (naming: `[COMPONENT]-[FEATURE]-SPEC.md`)
+- `docs/plans/` — implementation plans (naming: `[COMPONENT]-[FEATURE]-PLAN.md`)
 
 `docs/specs/LSP-ARCHITECTURE-SPEC.md` is the **single source of truth** for all shared LSP/DAP/config/commands. Editor-specific specs point back to it.
-
-- Specs must have non-numeric, hierarchically structured IDs (`[GROUP-TOPIC]` / `[GROUP-TOPIC-DETAIL]`).
-- Code and tests must reference the spec IDs in comments (e.g. `// Implements [LSP-HOVER]`) so `grep [LSP-` finds spec -> code -> tests in one shot.
 
 # Critical Docs
 
 - [Python type system spec](https://typing.python.org/en/latest/spec/index.html)
 - [PEP Conformance](https://github.com/python/typing/blob/main/conformance/README.md)
 - [Pyrefly](https://pyrefly.org/en/docs/) | [Pyright](https://microsoft.github.io/pyright/#/) (reference implementations)
-- [Python Type System Conformance Test Results](https://github.com/python/typing/blob/main/conformance/results/results.html) (our goal is to be listed here; relevant background: https://sinon.github.io/future-python-type-checkers/#zuban-from-david-halter)
+- [Python Type System Conformance Test Results](https://github.com/python/typing/blob/main/conformance/results/results.html) (our goal is to be listed here; background: https://sinon.github.io/future-python-type-checkers/#zuban-from-david-halter)
 
 # Build Commands
 
@@ -74,135 +51,112 @@ make ci      # lint + test + build (full CI simulation)
 make setup   # post-create dev environment setup
 ```
 
-**There are exactly 7 standard targets — please don't add others.** `make test` runs the test runner with its fail-fast flag, collects coverage, asserts measured >= threshold from `coverage-thresholds.json`, and exits non-zero on any failure. To debug a single test, invoke the runner directly — that is not a Makefile target.
-
-**`make fmt`** formats code in-place. **`make lint`** runs linters/analyzers (read-only, no formatting). **`make test`** runs tests with coverage. Three separate targets — no overlap.
+There are exactly **7 standard targets — don't add others.** `make test` runs the test runner with its fail-fast flag, collects coverage, asserts measured >= threshold from `coverage-thresholds.json`, and exits non-zero on any failure; to debug a single test, invoke the runner directly (not a Makefile target). `make fmt` formats in place, `make lint` is read-only analysis, `make test` runs tests with coverage — three targets, no overlap.
 
 # Rules
 
-- Top priority: reduce code duplication. Merge similar code, and search for existing code before adding new code.
-- Use the Deslop MCP to check for existing similar code with `find-similar` before writing new code, and `top-offenders` after modifying code. Always merge duplicate code.
-- Keep it DRY. Check for existing code before writing new code.
-- Aggressively move code that can be shared out to shared crates/modules/packages.
-- Centralize all global state. 
-- All state that can change uses Signals for reactivity. No stale state on screen
-- Each app has a single file for global state. No state should live outside this file.
-- `allow(clippy = ...)` is not permitted.
-- Keep the dependencies and versions in these two files in sync at all times: `.github/workflows/ci.yml`, `.devcontainer/Dockerfile`.
+- **Top priority: reduce duplication.** Run `deslop:find-similar` BEFORE writing new code and `deslop:top-offenders` after changing code. Always merge duplicates and keep it DRY.
+- Aggressively hoist shared code into shared crates/modules/packages.
+- Centralize all global state: each app has a single global-state file, and NO state lives outside it. All mutable state uses Signals for reactivity — no stale state on screen.
+- `allow(clippy = ...)` is NEVER permitted.
+- Keep dependencies and versions in sync across `.github/workflows/ci.yml` and `.devcontainer/Dockerfile` at all times.
 - Ignore compiler code (except clippy fixes).
 - Don't use Git unless asked.
 - Treat legacy code as code to be removed — there is no legacy code in this codebase.
-- Avoid regex. Use the proper parsing mechanism — usually ruff.
-- Keep files under 500 LOC. Break up larger files.
-- Move files rather than copying them.
+- Avoid regex — use the proper parsing mechanism, usually ruff.
+- Keep files under 500 LOC; break up larger files. Move files rather than copying them.
+- Use your judgment — do NOT stop to ask the user questions.
+- NEVER kill a VS Code process (including in the browser) — it disrupts active debugging and test sessions.
 
 ## Documentation Honesty — No Unsubstantiated Claims
 
-Trust is the product. Fabricated, guessed, or mutually contradictory figures destroy it (e.g. citing a competitor's conformance as "~85%" in one doc and "~58%" in another — both invented).
+Trust is the product. Fabricated, guessed, or contradictory figures destroy it (e.g. citing a competitor's conformance as "~85%" in one doc and "~58%" in another — both invented).
 
-- **Every empirical or comparative claim about the outside world** — developer/industry statistics, adoption rates, competitor capability/performance/conformance numbers, market facts, attributed quotes — **must carry an inline link to the authoritative source that actually makes that claim.**
-- **Link the authoritative URL that actually makes the claim, or delete it if no such URL exists.** There is no third option. Never invent a URL, and never invent or approximate a number to fill the gap.
-- **Self-measured, reproducible metrics are exempt** (e.g. our own conformance score from the unmodified `python/typing` scorer run in CI) — but state how they are measured, and don't compare them against numbers produced by a different methodology.
-- A value that drifts (a competitor's version-pinned conformance %, a third-party download size) is **linked to its live source**, never frozen as a bare figure that silently rots.
-- This applies **everywhere in the repo** — specs, plans, README, the website, marketing copy, and code comments.
+- **Every empirical or comparative claim about the outside world** — developer/industry statistics, adoption rates, competitor capability/performance/conformance numbers, market facts, attributed quotes — MUST carry an inline link to the authoritative source that actually makes that claim.
+- Link the authoritative URL or delete the claim — there is no third option. NEVER invent a URL, a number, or an approximation to fill a gap.
+- **Self-measured, reproducible metrics are exempt** (e.g. our own conformance score from the unmodified `python/typing` scorer in CI) — but state how they're measured and don't compare them against numbers from a different methodology.
+- A value that drifts (a competitor's version-pinned conformance %, a third-party download size) is linked to its live source, NEVER frozen as a bare figure that silently rots.
+- This applies **everywhere in the repo** — specs, plans, README, website, marketing copy, and code comments.
 
 ## Git & Branch Discipline
 
 Git is off-limits unless you are explicitly asked. When git IS used:
 
-- **Never push to `main` directly.** Every change ships via PR → CI green → merge. No exceptions.
-- **Never list the agent as a commit co-author.** No `Co-Authored-By` trailer, no agent attribution.
-- **Work on exactly ONE branch at a time.** Reuse the existing feature branch; never open a second.
-- **Never start a new branch when a feature branch already exists.** Check first.
-- **If multiple feature branches exist, merge them into one immediately**, before any other work.
-- **Worktrees are forbidden.** Never run `git worktree`.
+- **NEVER push to `main` directly.** Every change ships via PR → CI green → merge. No exceptions.
+- **NEVER list the agent as a commit co-author** — no `Co-Authored-By` trailer, no agent attribution.
+- **Work on exactly ONE branch.** Reuse the existing feature branch; never open a second. If multiple feature branches exist, merge them into one immediately before any other work.
+- **Worktrees are forbidden** — never run `git worktree`.
 
 Auto-memory is OFF (`.claude/settings.json` → `"autoMemoryEnabled": false`). Every durable rule goes through a reviewed PR to this file — never auto-captured memory.
 
 ## Testing
 
-Testing is critical. We aim for 100% test coverage and a high mutation score at all times. Focus on assertions, not just coverage.
+We aim for 100% test coverage and a high mutation score at all times — focus on assertions, not just coverage. Only coarse e2e tests; no unit tests.
 
-- Never delete failing tests.
-- Mutation score monotonically increases. Include more Rust code in the mutation testing suite over time: widen scope by adding `#[mutation_safe]` tests over more rules/functions. The gate ([CHKARCH-TESTING-MUTATION-RATCHET], baseline `mutation_testing/mutation_scores.json`) fails CI if the viable mutant pool shrinks, caught drops, missed/timeout rise, or kill rate drops.
-- Never remove assertions that cause test failures.
-- Add more failing tests for broken or missing functionality — never remove them.
-- Don't reduce test assertiveness.
-- Don't ignore tests.
-- `make test` is FAIL-FAST — it stops at the first failure. Never use `--no-fail-fast`; it saves CI minutes.
-- `make test` always computes coverage and enforces it. The threshold lives in `coverage-thresholds.json` at the repo root — not env vars, not GH repo variables, not CI YAML. Below threshold fails the pipeline. Ratchet only.
+- NEVER delete a failing test, remove a failure-causing assertion, reduce assertiveness, or ignore tests. Broken or missing functionality gets MORE failing tests, never fewer.
+- Mutation score only increases. Widen scope over time by adding `#[mutation_safe]` tests over more rules/functions. The gate ([CHKARCH-TESTING-MUTATION-RATCHET], baseline `mutation_testing/mutation_scores.json`) fails CI if the viable mutant pool shrinks, caught drops, missed/timeout rise, or kill rate drops.
+- `make test` is FAIL-FAST — it stops at the first failure. NEVER use `--no-fail-fast`; it saves CI minutes.
+- `make test` always computes and enforces coverage. The threshold lives in `coverage-thresholds.json` at the repo root — not env vars, not GH repo variables, not CI YAML. Below threshold fails the pipeline. Ratchet only.
+
+### Bug Fix Process
+
+1. Write a test that fails because of the bug.
+2. Run it — confirm it fails because of the bug.
+3. Repeat until it's failing for the right reason.
+4. Fix the bug (do NOT change the test).
+5. Run it — confirm it passes.
+
+### IDE Extension Testing
+
+VSIX tests must not call `whenCommandReady` or `vscode.commands.getCommands(true)` to check for existence. The core code does that; tests assert the command exists through the UI or, worst case, internal VSIX state.
 
 ## Benchmarks
 
-Pay attention to benchmarks — performance is a feature and conformance must never be traded for it, nor it for conformance. Both ratchets hold simultaneously ([CHKARCH-TESTING-BENCH-RATCHET]).
+Performance is a feature: conformance must never be traded for it, nor it for conformance. Both ratchets hold simultaneously ([CHKARCH-TESTING-BENCH-RATCHET]).
 
 - Run `make bench` whenever you touch checker hot paths (resolver visitors, rule `check` loops, new conformance logic). It fails if basilisk gets >25% slower on any fixture vs the committed baseline `benchmarks/status/<machine>.csv`.
-- A conformance fix that blows the benchmark gate is not done — optimise or restructure it.
+- A conformance fix that blows the benchmark gate is NOT done — optimize or restructure it.
 - `BENCH_NO_GATE=1` baseline resets are for fixture-set changes only and must be justified in the PR description.
-
-## IDE Extension Testing
-
-- VSIX tests must not call things like `whenCommandReady` or `vscode.commands.getCommands(true)` to check for existence. The core code must do this, and the tests must assert the command exists through the UI or, worst case, internal VSIX state.
-
-## Core Principles
-
-- Logging is critical. If you can't see what's happening, add more logging.
-- DRY, DRY, DRY.
-- Use `deslop:find-similar` before creating new code and `deslop:top_offenders` after changing code.
-- 100% test coverage is only the start.
-- No unit tests. Only coarse e2e tests.
 
 ## Logging Standards
 
-- **Structured logging only.** Never `println!`/`eprintln!` for diagnostics. Use `tracing` + `tracing-subscriber`.
+- **Structured logging only.** NEVER `println!`/`eprintln!` for diagnostics — use `tracing` + `tracing-subscriber`. If you can't see what's happening, add more logging.
 - **Log at entry/exit of significant operations.** Levels: `error|warn|info|debug|trace`.
-- **Structured fields, not string interpolation.** `tracing::info!(user_id = 42, action = "checkout")` — never format strings.
-- **VS Code extension:** detailed logs to a file in the extension's state folder AND to the VS Code Output Channel.
-- **Never log PII** (names, emails, phone, IPs) or secrets. Log `"key: present"` or a truncated hash, never the value.
+- **Structured fields, not string interpolation** — `tracing::info!(user_id = 42, action = "checkout")`, never format strings.
+- **VS Code extension:** detailed logs go to a file in the extension's state folder AND to the VS Code Output Channel.
+- **NEVER log PII** (names, emails, phone, IPs) or secrets. Log `"key: present"` or a truncated hash, never the value.
 
 ## Rust Quality Standards
 
-- Run clippy and fmt routinely; fix violations promptly.
-- All lints at highest strictness (see Cargo.toml `[lints]`).
-- Add lints to Cargo.toml if in doubt. Never remove.
+- Run clippy and fmt routinely; fix violations promptly. All lints at highest strictness (see Cargo.toml `[lints]`). Add lints if in doubt; never remove them.
 - `unsafe` code is forbidden (`unsafe_code = "deny"`).
-- `unwrap()` is always a violation. Use `?` with proper error types.
-- No `panic!`, `todo!`, `unimplemented!` — handle all cases, return `Result<T,E>`.
+- `unwrap()` is always a violation — use `?` with proper error types.
+- No `panic!`, `todo!`, `unimplemented!` — handle every case and return `Result<T, E>`.
 
 ## Functional Programming Style
 
-- `Result<T,E>` and `Option<T>` everywhere.
+- `Result<T, E>` and `Option<T>` everywhere; early returns with `?` for clean propagation.
 - Expressions over statements — `match`, `if let`, iterator chains.
-- Pure functions, minimize side effects.
-- Pattern matching over casting or unwrapping.
-- Early returns with `?` for clean error propagation.
+- Pattern matching over casting or unwrapping. Pure functions; minimize side effects.
 
 ## Code Structure
 
-- Small, focused functions (<20 lines).
-- Low cognitive complexity (clippy::cognitive_complexity enabled).
+- Small, focused functions (<20 lines) with low cognitive complexity (clippy::cognitive_complexity enabled).
 - Descriptive variable names (no single letters except in closures).
-- Group related functionality into modules.
-- Public APIs must have documentation.
-
-## Bug Fix Process
-
-1. Write a test that fails because of the bug.
-2. Run the test — confirm it fails because of the bug.
-3. Repeat until it's failing for the right reason.
-4. Fix the bug (do not change the test).
-5. Run the test — confirm it passes.
+- Group related functionality into modules. Public APIs must have documentation.
 
 # Too Many Cooks — Multi-Agent Coordination
 
-Please register before starting work.
+Register before starting work.
 
 - Coordinator: dictate orders through plans and messages, and delegate.
 - Others: follow the coordinator's direction and check messages regularly.
-- Lock files before editing. Don't edit locked files.
+- Lock files before editing; don't edit locked files.
 - Respond to messages promptly — others may be waiting.
 
-## Website and CSS
+# Website
+
+## CSS
 
 - **Minimize CSS classes** — consolidate where possible.
 - Name classes after what the element IS, not what section it's in.
@@ -212,7 +166,7 @@ Please register before starting work.
 
 Marketing/doc screenshots of CLI output must be **real output of the actual binary**, never hand-typed code fences or synthetic renders (those drift and are usually inaccurate). Canonical location: `website/src/assets/images/` (referenced as `/assets/images/<name>.png`). Rule screenshots are named after the code (`e0001.png` … `e0025.png`); the homepage demo pair is `cli-demo.png` (errors) + `cli-clean.png` (pass).
 
-These are now generated **automatically** — no manual Terminal.app / `screencapture` / ImageMagick. From `website/`:
+These are generated **automatically** — no manual Terminal.app / `screencapture` / ImageMagick. From `website/`:
 
 ```bash
 npm run screenshots                       # regenerate every image
@@ -220,9 +174,9 @@ node screenshots/generate.mjs e0001 e0012 # a subset by name
 BASILISK_BIN=../target/release/basilisk npm run screenshots  # pin the binary
 ```
 
-`screenshots/generate.mjs` runs the real `basilisk check --color always` on each snippet in `screenshots/shots.mjs` (in a throwaway, neutrally-named temp dir so paths read `e0001.py:1:13` with no PII), **asserts the documented diagnostic actually fires** (the snippet→code pairing lives in the manifest, so a checker change can't silently ship a misleading image), then renders the genuine coloured output in a faithful macOS Terminal window via Playwright. See `[WEBSITE-SCREENSHOTS]` (`docs/specs/WEBSITE-SCREENSHOTS-SPEC.md`).
+`screenshots/generate.mjs` runs the real `basilisk check --color always` on each snippet in `screenshots/shots.mjs` (in a throwaway, neutrally-named temp dir so paths read `e0001.py:1:13` with no PII), **asserts the documented diagnostic actually fires** (the snippet→code pairing lives in the manifest, so a checker change can't silently ship a misleading image), then renders the genuine colored output in a faithful macOS Terminal window via Playwright. See `[WEBSITE-SCREENSHOTS]` (`docs/specs/WEBSITE-SCREENSHOTS-SPEC.md`).
 
-To add/change a screenshot, edit `screenshots/shots.mjs` (snippet + expected code) and rerun — never craft images by hand. The committed PNGs are regenerated locally when CLI output changes; CI only verifies they render (`website/tests/e2e/screenshots.spec.ts`, `[WEBSITE-SCREENSHOTS-VERIFY]`), never captures, per `[GITHUB-NO-ARTIFACTS]`. After regenerating, rebuild (`npm run build`) and confirm the images copy to `_site/assets/images/`. VSIX integration tests capture their own editor screenshots to the gitignored `vscode-extension/.screenshots/` (never committed, never a CI artifact).
+To add or change a screenshot, edit `screenshots/shots.mjs` (snippet + expected code) and rerun — never craft images by hand. Committed PNGs are regenerated locally when CLI output changes; CI only verifies they render (`website/tests/e2e/screenshots.spec.ts`, `[WEBSITE-SCREENSHOTS-VERIFY]`), never captures, per `[GITHUB-NO-ARTIFACTS]`. After regenerating, rebuild (`npm run build`) and confirm the images copy to `_site/assets/images/`. VSIX integration tests capture their own editor screenshots to the gitignored `vscode-extension/.screenshots/` (never committed, never a CI artifact).
 
 ## Per-diagnostic error pages (`/errors/BSK-XXXX/`)
 
@@ -244,7 +198,7 @@ npm run screenshots:editor
 
 This stages the binary into the dev extension, copies `shipwright.json` (gitignored dev artifacts), launches the **headed** "Editor screenshots" suite with `BASILISK_SCREENSHOTS=1`, and a dependency-free CDP sidecar (`screenshot-watcher.mjs`, Node's built-in WebSocket — no Playwright) captures the window to `website/src/assets/images/vscode-*.png`. The suite is a no-op without the env flag, so normal `npm test` never opens these windows. To add one, add a `test(...)` that makes the feature visible and calls `takeWindowScreenshot(...)`. As with the CLI shots, PNGs are committed and regenerated locally; CI only verifies they render (`website/tests/e2e/screenshots.spec.ts`), per `[GITHUB-NO-ARTIFACTS]`.
 
-## Architecture
+# Architecture
 
 Strict-by-default Python type checker and comprehensive LSP built in **Rust**. One IDE extension = complete Python dev experience. Users can flick errors down to warnings and incrementally adopt type safety, or just use the LSP for autofixes, formatting, debugging, and profiling.
 
@@ -254,16 +208,14 @@ Strict-by-default Python type checker and comprehensive LSP built in **Rust**. O
 - **Parallelism**: Rayon (work-stealing, file-level)
 - **No Pyright/mypy/Node.js** — zero TypeScript or Python runtime
 
-Diagnostic codes: `BSK-E####` / `BSK-W####`. Pyright is the reference implementation to compare against — never copy from the Pyright codebase.
-
-See `docs/specs/CHECKER-ARCHITECTURE-SPEC.md` for full architecture, diagnostic ranges, and testing strategy.
+Diagnostic codes: `BSK-E####` / `BSK-W####`. Pyright is the reference implementation to compare against — NEVER copy from the Pyright codebase. See `docs/specs/CHECKER-ARCHITECTURE-SPEC.md` for full architecture, diagnostic ranges, and testing strategy.
 
 ## Migration to `lspkit`
 
 The cross-cutting LSP scaffolding in this repo (tower-lsp setup, workspace index, file watcher + debouncer, diagnostics publication, capability builder, config loader) is being distilled into the generic `lspkit-*` workspace, maintained in the private repository [`Nimblesite/lsp_toolkit`](https://github.com/Nimblesite/lsp_toolkit).
 
-**For new LSP infrastructure work:** prefer `lspkit-*` crates over reinventing it here.
-**For changes to existing scaffolding in this repo:** flag in the PR description if the patch duplicates `lspkit` functionality, and reference the upstream crate.
+- **New LSP infrastructure work:** prefer `lspkit-*` crates over reinventing it here.
+- **Changes to existing scaffolding here:** flag in the PR description if the patch duplicates `lspkit` functionality, and reference the upstream crate.
 
 Mapping (current → toolkit crate):
 

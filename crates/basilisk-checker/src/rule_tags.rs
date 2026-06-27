@@ -58,20 +58,25 @@ pub const PEP_CATEGORIES: [&str; 21] = [
 /// The free-form descriptive tags Basilisk currently uses. Each is carefully
 /// named to avoid colliding with a reserved PEP-category name; the tagging test
 /// ([CHKTAG-TESTS]) asserts this for every entry. [CHKTAG-FREEFORM]
-pub const FREE_FORM_TAGS: [&str; 7] = [
+pub const FREE_FORM_TAGS: [&str; 6] = [
     "style",
     "redundancy",
     "strictness",
     "dependencies",
     "imports",
     "stubs",
-    "version",
 ];
 
 /// The Basilisk-original rules, keyed by current diagnostic code, with the
 /// free-form tags each carries. Membership here is what makes a rule
 /// [`BASILISK`] — the curated source of truth for provenance, independent of
 /// the cosmetic `BSK-` code prefix. Every other rule is a [`PEP`] rule.
+///
+/// This list **mirrors the opt-in set** gated in `check_with_config`: rule
+/// selection is config-only and the default config selects no rule listed here.
+/// A rule that runs under the default config is core PEP, not `basilisk` — even
+/// if it is a Basilisk-authored check (e.g. unresolved-import and
+/// version-target syntax checks run by default, so they are `pep`).
 /// [CHKTAG-PROVENANCE]
 const BASILISK_RULES: &[(&str, &[&str])] = &[
     // Annotation requirements beyond the spec (the spec never mandates these).
@@ -91,10 +96,6 @@ const BASILISK_RULES: &[(&str, &[&str])] = &[
     ("BSK-W0013", &["dependencies"]),            // stale lock file
     // Stub hygiene.
     ("BSK-E0152", &["stubs"]), // missing type stubs
-    ("imports_module_attribute", &["stubs", "imports"]), // local-stub member access
-    ("imports_unresolved", &["strictness", "imports"]), // "no implicit Any from imports"
-    // Version targeting (a Basilisk feature, not a spec requirement).
-    ("version_target_syntax", &["version"]),
 ];
 
 /// The full tag set for a diagnostic `code`: exactly one provenance tag followed
@@ -112,6 +113,15 @@ pub fn tags_for_code(code: &str) -> Vec<&'static str> {
         Some(category) => vec![PEP, category],
         None => vec![PEP],
     }
+}
+
+/// The diagnostic codes currently classified as Basilisk-original (the opt-in
+/// set). Exposed so tests can assert this table never drifts from the live rule
+/// registry — a renamed code here would otherwise silently fall through to a
+/// `pep` classification. [CHKTAG-PROVENANCE]
+#[must_use]
+pub fn basilisk_rule_codes() -> Vec<&'static str> {
+    BASILISK_RULES.iter().map(|(code, _)| *code).collect()
 }
 
 /// The PEP category a conformance-named rule belongs to, derived from the

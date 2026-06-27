@@ -136,9 +136,9 @@ benchmarkStrings:
       <h2 class="feature-row__title">默认符合规范。<br>严格程度随心调整。</h2>
       <p class="feature-row__body">
         Basilisk 开箱即按 Python 类型规范检查——与官方符合性套件评分所用的规则相同。
-        额外的严格性来自 Basilisk 自身：要求每个参数和返回值都有注解、标记冗余注解、
-        提示 <code>@override</code>。规范将未注解的代码视为<em>推断</em>类型而非错误——
-        所以这份严格性是一种选择，可通过编辑器 UI 或配置文件按文件或路径调高调低。
+        更严格的检查来自 Basilisk 自身，且完全可选：要求每个参数和返回值都有注解、
+        标记冗余注解、提示 <code>@override</code>。规范将未注解的代码视为<em>推断</em>类型而非错误，
+        因此这些检查默认关闭——当你需要超出规范的检查时，再通过配置按文件或路径开启。
         一键"补全"修复还能自动为您添加缺失的类型。
       </p>
     </div>
@@ -214,7 +214,7 @@ benchmarkStrings:
         与衡量 Pyright（约 99%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）、
         mypy（约 58%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）
         和 Pyrefly（约 86%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>）的套件相同。
-        我们在真实二进制文件上运行它，启用每一条符合性规则、不禁用任何规则：{{ conformance.categoriesTotal }} 个类别中有 {{ conformance.categoriesPass100 }} 个达到 100%，误报 {{ conformance.fp }} 处、遗漏的必需错误 {{ conformance.missed }} 处。Basilisk 额外的自有规则是可选启用的，因此绝不会虚增得分。<a href="/zh/docs/conformance/">我们如何衡量 &rarr;</a>
+        我们在真实二进制文件上运行它，启用每一条符合性规则、不禁用任何规则：{{ conformance.categoriesTotal }} 个类别中有 {{ conformance.categoriesPass100 }} 个达到 100%，误报 {{ conformance.fp }} 处、遗漏的必需错误 {{ conformance.missed }} 处。Basilisk 的可选规则在符合性评分中从不运行，因此无法虚增得分。<a href="/zh/docs/conformance/">我们如何衡量 &rarr;</a>
       </p>
     </div>
   </div>

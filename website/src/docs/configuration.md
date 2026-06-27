@@ -22,7 +22,7 @@ Basilisk is configured through `pyproject.toml`. All settings live under `[tool.
 python-version = "3.12"
 ```
 
-That's all you need. Basilisk finds Python files from the current directory and applies all rules.
+That's all you need. Basilisk finds Python files from the current directory and applies its default rule set — the **core PEP conformance rules**. Extra Basilisk rules that go beyond the spec are opt-in; enable them when you want stricter-than-spec checking.
 
 ## Full configuration example
 
@@ -167,4 +167,4 @@ To suppress all diagnostics in a file, add at the top:
 
 Basilisk searches for `pyproject.toml` starting from the directory of the file being checked, traversing up to the filesystem root. The first `pyproject.toml` containing a `[tool.basilisk]` section is used.
 
-If no configuration file is found, Basilisk uses defaults: all rules enabled, `python-version = "3.12"`, check the current directory.
+If no configuration file is found, Basilisk uses defaults: the **core PEP conformance rule set** enabled (extra Basilisk rules stay opt-in), `python-version = "3.12"`, check the current directory.

@@ -51,8 +51,8 @@ bare `pep` rule. The first element is always the provenance tag.
 aliases_newtype        -> ["pep", "aliases"]
 narrowing_typeguard    -> ["pep", "narrowing"]
 returns_compatibility  -> ["pep"]                       # cross-cutting core check
-BSK-W0050              -> ["basilisk", "redundancy", "style"]
-imports_unresolved     -> ["basilisk", "strictness", "imports"]
+imports_unresolved     -> ["pep"]                       # core check, on by default
+BSK-W0050              -> ["basilisk", "redundancy", "style"]   # opt-in house rule
 ```
 
 ## Provenance Tags {#CHKTAG-PROVENANCE}
@@ -62,19 +62,27 @@ exclusive.
 
 | Tag | Meaning |
 |---|---|
-| `pep` | The rule enforces the Python typing specification and is exercised by the `python/typing` conformance suite. |
-| `basilisk` | A Basilisk-original house rule that goes beyond the specification. Off by default; enabled only via configuration ([CHKARCH-CONFIGURATION-ONLY]). |
+| `pep` | A core rule selected by the **default** configuration — the `python/typing` conformance rules plus the core checks that run by default. The default config is exactly this "core PEP" set. |
+| `basilisk` | A Basilisk-original rule, **off by default**, that turns on only via opt-in configuration ([CHKARCH-CONFIGURATION-ONLY]). |
 
 Provenance is the curated source of truth in `rule_tags.rs`: the
 `BASILISK_RULES` table lists every Basilisk-original rule; **everything else is a
 PEP rule.** Provenance is never derived from a code prefix — see
 [CHKTAG-BSK-PREFIX].
 
-Provenance mirrors default activation: there is **no "strict mode"**
-([CHKARCH-CONFIGURATION-ONLY]). Default behaviour is the `pep` rules alone;
-`basilisk` rules are off by default and enabled only via configuration. The
-provenance tag is therefore the queryable answer to "is this rule on by
-default?" — not a behaviour mode.
+**Rule selection is configuration-only** ([CHKARCH-CONFIGURATION-ONLY]): running
+rules through `check_with_config` is the *only* valid way to select them, and the
+**default config selects exactly the core PEP set and nothing else**. Provenance
+mirrors that selection — a rule the default config enables is `pep`; a rule that
+turns on only via opt-in config is `basilisk`. Two consequences follow:
+
+- A default-on check is `pep` **even if it is Basilisk-authored** (e.g.
+  `imports_unresolved` and `version_target_syntax` run by default, so they are
+  `pep`, not `basilisk`). There is no "strict mode" and no behaviour the tag
+  switches on.
+- The default-config gating in `check_with_config` is the authoritative source;
+  `BASILISK_RULES` **mirrors** that opt-in set. Deriving the table directly from
+  the gating, to remove this duplication, is a tracked follow-up ([CHKTAG-IMPL]).
 
 ## PEP Category Tags {#CHKTAG-PEP-CATEGORIES}
 
@@ -117,9 +125,8 @@ Any rule may carry additional descriptive tags. The current vocabulary
 | `style` | A stylistic nudge (e.g. prefer a concrete type over `Any`). |
 | `redundancy` | Detects redundant code (e.g. a redundant annotation). |
 | `dependencies` | Dependency / lock-file hygiene. |
-| `imports` | Import-related strictness. |
+| `imports` | Import-related house rule (e.g. undeclared-dependency import). |
 | `stubs` | Type-stub hygiene. |
-| `version` | Target-version-aware syntax checks. |
 
 **Conflict rule (the load-bearing constraint):** a free-form tag must be
 non-empty and must collide with neither a provenance tag (`pep`/`basilisk`) nor a
@@ -153,11 +160,18 @@ Enforced by [CHKTAG-TESTS] over the full, live rule set:
 4. A `basilisk` rule never carries a PEP-category tag.
 5. `PEP_CATEGORIES` are unique, lowercase, and distinct from the provenance tags.
 6. Every declared `FREE_FORM_TAGS` entry is a valid free-form tag.
+7. Every `BASILISK_RULES` key is a **live** rule code (no stale keys after a
+   rename — a stale key would silently demote a rule to on-by-default `pep`).
+8. Every `PEP_CATEGORIES` entry is a real `python/typing` conformance test-file
+   prefix (the vocabulary cannot drift from its source).
+9. The default-on Basilisk-authored checks (`imports_unresolved`,
+   `imports_module_attribute`, `version_target_syntax`) resolve to `pep`, never
+   `basilisk` — provenance follows config selection, not authorship.
 
 ## Implementation {#CHKTAG-IMPL}
 
-[`rule_tags.rs`](../../crates/basilisk-checker/src/rule_tags.rs) is the single
-source of truth and the public, queryable API:
+[`rule_tags.rs`](../../crates/basilisk-checker/src/rule_tags.rs) is the source of
+truth for **tag classification** and the public, queryable API:
 
 - `PEP`, `BASILISK` — provenance tag constants.
 - `PEP_CATEGORIES` — the reserved category vocabulary.
@@ -165,14 +179,30 @@ source of truth and the public, queryable API:
 - `tags_for_code(code) -> Vec<&'static str>` — the full tag set for a diagnostic
   code (the bridge for any consumer holding a `Diagnostic`: look up by
   `diagnostic.code.code`).
+- `basilisk_rule_codes() -> Vec<&'static str>` — the opt-in Basilisk set, exposed
+  for the drift guard ([CHKTAG-TESTS], invariant 7).
 - `is_pep_category`, `is_provenance`, `is_valid_free_form` — vocabulary
   predicates.
 
+The module has no production consumers yet — the LSP/CLI/website integrations in
+[CHKTAG-CONSUMERS] are follow-ups — so it is the source of truth for the *tag
+vocabulary*, not (yet) for runtime behaviour.
+
 The table keys on the **current diagnostic code**. As the rule-rename work
 ([CHKARCH-DIAG-CODES](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CODES)) settles
-codes, `BASILISK_RULES` is updated in lockstep; the test scans the live rule
-source, so a renamed or newly restored rule is validated automatically (defaulting
-to a `pep` rule unless listed as Basilisk).
+codes, `BASILISK_RULES` is updated in lockstep; the drift guard (invariant 7)
+fails CI if a key goes stale, and the test scans the live rule source so a
+renamed or newly restored rule is validated automatically (defaulting to a `pep`
+rule unless listed as Basilisk).
+
+**Known duplication (tracked follow-up):** `BASILISK_RULES` and the default-config
+gating in `check_with_config` are today two hand-maintained lists of the same
+opt-in set. Since [rule selection is config-only][CHKARCH-CONFIGURATION-ONLY],
+the durable fix is to derive provenance from the gating (or attach it to the rule
+registry entry) so the two cannot drift. Until then, the drift guard plus the
+"default-on ⟹ `pep`" test (invariant 9) keep them honest.
+
+[CHKARCH-CONFIGURATION-ONLY]: CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIGURATION-ONLY
 
 ## Consumers {#CHKTAG-CONSUMERS}
 
@@ -190,4 +220,13 @@ Tags are designed to drive, without re-deriving classification:
 a coarse e2e test that scans every `code: "…"` literal under `src/rules` and
 asserts the [CHKTAG-INVARIANTS] for the live rule set, plus the worked examples
 in [CHKTAG-MODEL]. It needs no fixture updates when rules are added: a new rule's
-code is picked up automatically and validated.
+code is picked up automatically and validated. Beyond the shape invariants it
+also enforces the drift/source guards:
+
+- `no_basilisk_rule_key_is_stale` — every `BASILISK_RULES` key is a live code
+  (invariant 7).
+- `pep_categories_match_conformance_test_prefixes` — reads (read-only) the
+  `conformance/tests/` file names and asserts each `PEP_CATEGORIES` entry is a
+  real prefix (invariant 8).
+- `default_on_core_checks_are_pep_not_basilisk` — the default-on Basilisk-authored
+  checks resolve to `pep` (invariant 9).

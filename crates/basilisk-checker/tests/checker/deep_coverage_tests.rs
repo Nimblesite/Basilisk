@@ -159,7 +159,7 @@ s = Singleton()
 // ============================================================================
 
 #[test]
-fn exercise() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_structural_assignment_exercise() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
