@@ -21,6 +21,7 @@ import {
     NO_DIAGNOSTIC_WAIT_MS,
     SUITE_SETUP_TIMEOUT_MS,
     closeAllEditors,
+    extractHoverText,
     findBasiliskBinary,
     openPythonFile,
     pollUntilResult,
@@ -66,22 +67,6 @@ function filterBasiliskDiagnostics(diags: vscode.Diagnostic[]): vscode.Diagnosti
                 typeof d.code.value === 'string' &&
                 d.code.value.startsWith('BSK'))
     );
-}
-
-/**
- * Extract hover text content from hover results.
- */
-function extractHoverText(hovers: vscode.Hover[]): string {
-    return hovers
-        .flatMap((h) =>
-            h.contents.map((c) => {
-                if (typeof c === 'string') {return c;}
-                if (c instanceof vscode.MarkdownString) {return c.value;}
-                if ('value' in c) {return (c as { value: string }).value;}
-                return '';
-            })
-        )
-        .join('\n');
 }
 
 /**

@@ -27,9 +27,21 @@ Basilisk treats Python as a statically typed language. It is to Python what Type
 - Every variable assignment resolves to a known type.
 - `Any` is an explicit escape hatch, never an implicit default.
 
-There is no "basic" mode. There is no "standard" mode. There is no `--permissive` flag. The type system is the product. Escape hatches exist for pragmatism, but the burden is on the developer to justify the exception, not to remember to enable the rule.
+There is no "basic" mode. There is no "standard" mode. There is no "strict" mode either. There is no `--permissive` flag and no `--strict` flag. The type system is the product, and **everything Basilisk reports is decided by configuration alone** — a flat set of per-rule severities, not a dial you switch between. Escape hatches exist for pragmatism, but the burden is on the developer to justify the exception.
 
-Rust does not have a flag that disables the borrow checker. TypeScript's `strict: true` is the expected default. Basilisk takes the same stance for Python.
+Rust does not have a flag that disables the borrow checker, and Basilisk does not have a "strictness" dial. What it has is configuration: the **default configuration enables every PEP typing-spec rule and nothing else**, so a fresh project is measured as pure PEP conformance, and the opinionated house-style rules are opt-in from there.
+
+### No "strict mode" — behaviour is configuration only {#CHKARCH-CONFIGURATION-ONLY}
+
+Basilisk has **no modes**. There is no "strict mode", no "basic" or "standard" mode, no `--strict`, no `--permissive`. Other checkers ship a discrete dial — pyright's `off` / `basic` / `standard` / `strict`; Basilisk deliberately does not. Everything Basilisk reports is decided by **configuration alone**: a flat set of per-rule severities a project sets globally, per path, or per file.
+
+Two consequences follow, and both are load-bearing:
+
+1. **The default configuration is pure PEP conformance.** With no config file, Basilisk enables **every rule that implements the Python typing specification, and nothing else**. A fresh project is therefore measured purely against the PEP typing spec. This genuine, unconfigured default is exactly what the conformance scorer runs — no `basilisk.json`, no special "conformance mode" ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)). Every PEP rule is on; the score is the real out-of-the-box experience.
+
+2. **Everything beyond the spec is opt-in configuration.** Basilisk's opinionated house-style rules — require-an-annotation (`BSK-E0001`/`BSK-E0002`/`BSK-E0004`), require-`@override` (`BSK-E0025`), redundant-annotation (`BSK-W0050`), the explicit-`Any` nudge (`BSK-W0014`), uv dependency hygiene, and stub suggestions — are **off by default**. A project that wants them turns them on in configuration (`strict_annotations = true`, `uv_dependency_diagnostics = true`, …). They are never enabled implicitly and never by a "mode".
+
+Basilisk's *opinion* is still that you should type everything — the house rules encode that recommendation — but acting on it is a **configuration a project chooses**, not a baked-in mode and never a precondition of the conformance score. "Strict" is a property of a chosen configuration, not a switch in the product. The anti-gaming rule is unchanged: no PEP rule may be disabled, deleted, or unregistered to move the conformance number ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 
 ### Mojo: The North Star {#CHKARCH-MOJO}
 
@@ -37,7 +49,7 @@ Mojo demonstrated that Python-family syntax can support ownership semantics, imm
 
 ### Project Principles {#CHKARCH-PRINCIPLES}
 
-1. **Strict by default, escape hatches by choice** -- The safe path is the default path
+1. **Configuration over modes** -- behaviour is per-rule configuration, never a mode; the default is pure PEP conformance, strictness is opt-in, escape hatches by choice ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY))
 2. **Every error must teach** -- Diagnostics explain why, not just what
 3. **Don't reinvent wheels** -- Depend on quality open-source tools (Ruff, ty, typeshed) for everything we can
 4. **Performance is a feature** -- Sub-10ms incremental checks or it's broken
@@ -57,7 +69,7 @@ See the project README for competitive analysis.
 |---|---|---|---|---|---|---|---|
 | Implementation | TypeScript | Python/C | Rust | Rust | Rust | Rust | **Rust** |
 | License | MIT | MIT | MIT | MIT | AGPL | MIT | **MIT** |
-| Default strictness | Gradual | Gradual | Gradual | Gradual | Gradual | N/A | **Strict only** |
+| Default strictness | Gradual | Gradual | Gradual | Gradual | Gradual | N/A | **PEP by default; strict opt-in** |
 | PEP conformance (current) | ~95% | ~85% | ~15% | ~58% | ~69% | N/A | **46.6%** |
 | PEP conformance target | — | — | — | — | — | N/A | **100%** |
 | LSP server | Yes | No | Yes | Yes | Yes | No | **Yes** |
@@ -97,7 +109,7 @@ Basilisk does not reinvent wheels. We depend on quality open-source tools for ev
 |---|---|
 | Pyright/Pylance | TypeScript, Microsoft ecosystem. Cannot link. Cannot extend. |
 | mypy | Python, too slow for our architecture. Reference only. |
-| ty | MIT Rust, but we build our own checker with different philosophy (strict-by-default). We may contribute upstream or share crates where sensible. |
+| ty | MIT Rust, but we build our own checker with different philosophy (configuration-driven, PEP-conformant by default). We may contribute upstream or share crates where sensible. |
 | Pyrefly | MIT Rust, same reasoning as ty. Different design goals. |
 | Node.js | No JavaScript runtime dependency anywhere in the stack. |
 
@@ -117,9 +129,9 @@ Basilisk does not reinvent wheels. We depend on quality open-source tools for ev
 
 ### Strictness Model {#CHKARCH-STRICTNESS}
 
-#### Strict Is the Only Mode {#CHKARCH-STRICTNESS-ONLY}
+#### No Modes — Configuration Decides Everything {#CHKARCH-STRICTNESS-ONLY}
 
-Basilisk has one mode. It is strict.
+Basilisk has **no modes** — no "strict mode", no basic/standard dial. Behaviour is configuration. The default configuration is pure PEP conformance; the example below shows the require-annotation house rules (`BSK-E0001`/`BSK-E0002`) that fire **only once a project enables them in configuration** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)). Under the default config these snippets are accepted.
 
 ```python
 # ERROR: Missing parameter type annotation [BSK-E0001]
@@ -135,7 +147,7 @@ def greet(name: str) -> str:
     return f"Hello, {name}"
 ```
 
-There is no `--basic`, `--standard`, or `--permissive` flag. Every function parameter must be annotated. Every function must declare its return type. Every variable assigned from an untyped source must have an explicit annotation.
+There is no `--basic`, `--standard`, `--strict`, or `--permissive` flag — Basilisk has no modes. The behaviour above is configuration: enable the require-annotation house rules and every function parameter must be annotated, every function must declare its return type, and every variable assigned from an untyped source must carry an explicit annotation. Leave them off — the default — and the same code is accepted as pure PEP conformance.
 
 #### `Any` Is Explicit, Never Implicit {#CHKARCH-STRICTNESS-ANY}
 
@@ -148,7 +160,7 @@ from untyped_lib import do_stuff
 # OK: Explicit Any with reason
 result: Any = do_stuff()  # basilisk: allow[imports_unresolved] -- untyped dependency, tracking in #1234
 
-# ERROR: Bare Any without justification in strict mode
+# ERROR (when the explicit-Any house rule is enabled): Bare Any without justification
 def process(data: Any) -> Any:  # BSK-W0011: Explicit Any requires reason comment
     pass
 ```
@@ -224,7 +236,9 @@ Block directives work with all modes: `# type: warning[CODE]` / `# type: end-war
 **Per-directory configuration** in `pyproject.toml`:
 ```toml
 [tool.basilisk]
-strict = true  # default, cannot be set to false globally
+# Basilisk has no "strict"/"mode" switch. The default configuration is pure PEP
+# conformance; opt into house-style rules explicitly, by name:
+strict_annotations = true   # enable the require-annotation rules (BSK-E0001/E0002/E0004)
 
 [tool.basilisk.per-path-overrides."legacy/**"]
 disabled = ["returns_compatibility"]              # disable rules entirely for legacy code
@@ -780,14 +794,14 @@ to a `.pyi` under a configured `stub-paths` directory (including the
 auto-discovered `.basilisk/stubs/` that the "Create local type stub" quick fix
 writes — see [STUBRES-CREATE-LOCAL](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CREATE-LOCAL)),
 accessing `X.attr` where the stub declares neither `attr` nor a module-level
-`def __getattr__` is a hard error. This is the strict-by-default counterpart
+`def __getattr__` is a hard error. This is the counterpart
 that makes a hand-written or generated stub *mean something* — declare what you
 use, or it is flagged.
 
 The `def __getattr__(name: str) -> Any: ...` that the create-local skeleton ships
 by default is the **explicit opt-out**: keep it and every attribute is permitted
 (the module stays `Any`); remove it and declare specific symbols to opt into
-strictness.
+checked member access.
 
 Scope (Phase 1): only plain, single-segment `import X` backed by a user stub.
 The member API is captured during import resolution
@@ -1300,9 +1314,9 @@ basilisk migrate --from mypy      # Reads mypy.ini / setup.cfg -> pyproject.toml
 ```
 
 Semantic mapping:
-- Pyright `strict` mode -> Basilisk default (strict) with Mojo safety disabled
-- Pyright `standard` mode -> Basilisk `per-path-overrides` that disable or soften the stricter rules
-- mypy `--strict` -> Basilisk default with Mojo safety disabled
+- Pyright `strict` mode -> Basilisk with the house-style rules enabled in configuration (require-annotation, explicit-`Any`, …), Mojo safety disabled
+- Pyright `standard` mode -> Basilisk's PEP-only default plus selected house rules, softened in `per-path-overrides` where needed
+- mypy `--strict` -> Basilisk with the house-style rules enabled in configuration, Mojo safety disabled
 
 ---
 
@@ -1554,7 +1568,7 @@ separate and free — it does not count toward billed storage and is unaffected.
 ### From Pyright {#CHKARCH-MIGRATION-PYRIGHT}
 
 1. Run `basilisk migrate --from pyright`
-2. If using strict mode: minimal changes needed for core type checking
+2. If you were using Pyright's strict mode: minimal changes needed for core type checking
 3. Enable Mojo safety incrementally
 
 ### Gradual Adoption {#CHKARCH-MIGRATION-GRADUAL}
@@ -1599,7 +1613,7 @@ Basilisk follows the Python Typing Council's governance (PEP 729). We implement 
 - Integrated Python debugging via DAP proxy over debugpy (§10.1.1)
 - Neovim / Helix configuration
 
-### Phase 3: Strict-by-Default {#CHKARCH-ROADMAP-P3}
+### Phase 3: House Rules and Gradual Adoption {#CHKARCH-ROADMAP-P3}
 - All BSK-E0001 through BSK-E0025 rules
 - Gradual adoption (per-path / per-file relaxation)
 - `basilisk migrate` from mypy/Pyright
@@ -1662,10 +1676,10 @@ Basilisk follows the Python Typing Council's governance (PEP 729). We implement 
 
 | Term | Definition |
 |---|---|
-| **Basilisk** | This project — a strict-by-default Python type checker built in Rust. No escape hatches. |
+| **Basilisk** | This project — a configuration-driven Python type checker built in Rust. The default configuration is pure PEP conformance; opinionated house-style rules are available opt-in. |
 | **Borrowed** | Parameter convention: function reads but does not mutate or transfer the value (default) |
 | **Owned** | Parameter convention: function takes exclusive ownership; caller must not use value afterward |
 | **InOut** | Parameter convention: function may mutate the value in place |
-| **Strict mode** | Basilisk's only mode -- all types must be declared or inferable |
+| **Default configuration** | Basilisk has no modes (no basic/standard/strict). The default config enables every PEP typing-spec rule and nothing else; house-style rules are opt-in via configuration ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)) |
 | **Mojo safety** | The set of ownership, immutability, and coercion rules inspired by the Mojo language |
 | **Type completeness** | Percentage of symbols in a module/project with resolved (non-Any) types |
