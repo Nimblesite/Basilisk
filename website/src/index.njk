@@ -69,48 +69,9 @@ benchmarkStrings:
         </div>
       </div>
 
-      <!-- Before / After code demo -->
-      <div class="hero__code hero__demo">
-        <div class="demo-tabs">
-          <button class="demo-tab active" data-tab="before">bad.py</button>
-          <button class="demo-tab" data-tab="after">good.py</button>
-        </div>
-        <div class="demo-wrapper">
-
-          <div class="demo-panel active" data-panel="before">
-            <div class="diagnostic-block" style="padding:0;background:transparent;border:0">
-              <img src="/assets/images/vscode-diagnostics.png" alt="Basilisk flagging bad.py live in VS Code — inline diagnostics with the Problems panel listing each type error" style="width:100%;display:block;border-radius:8px" loading="lazy">
-            </div>
-          </div>
-
-          <div class="demo-panel" data-panel="after">
-            <div class="code-window">
-              <div class="code-window__chrome">
-                <span class="code-window__dot code-window__dot--close"></span>
-                <span class="code-window__dot code-window__dot--min"></span>
-                <span class="code-window__dot code-window__dot--expand"></span>
-                <span class="code-window__filename">good.py</span>
-              </div>
-              <div class="code-window__body">
-<pre><span class="tok-kw">def</span> <span class="tok-fn">process</span>(data<span class="tok-type">: str</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
-    <span class="tok-kw">return</span> data.upper()
-
-
-<span class="tok-kw">class</span> <span class="tok-fn">User</span>:
-    name<span class="tok-type">: str</span>
-    age<span class="tok-type">: int</span>
-
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name<span class="tok-type">: str</span>, age<span class="tok-type">: int</span>) <span class="tok-kw">-></span> <span class="tok-type">None</span>:
-        <span class="tok-kw">self</span>.name <span class="tok-kw">=</span> name
-        <span class="tok-kw">self</span>.age  <span class="tok-kw">=</span> age
-
-    <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
-        <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {self.name}"</span></pre>
-              </div>
-            </div>
-          </div>
-
-        </div>
+      <!-- Product screenshot — Basilisk running in VS Code -->
+      <div class="hero__code">
+        <img src="/assets/images/vscode-diagnostics.png" alt="Basilisk flagging type errors live in VS Code — inline diagnostics with the Problems panel listing each missing annotation" class="hero__shot" loading="lazy">
       </div>
 
     </div>

@@ -86,12 +86,29 @@ pub fn check_with_config(
         .filter_map(|mut diag| {
             let code = diag.code.code;
 
-            // 0. Config gating for uv diagnostics.
+            // 0. Config gating for Basilisk-only opt-in rules (all BSK-prefixed,
+            //    all off by default — the default config targets PEP conformance).
             if code == "BSK-E0152" && !config.uv_stub_suggestions {
                 return None;
             }
             if matches!(code, "BSK-W0011" | "BSK-W0012" | "BSK-W0013")
                 && !config.uv_dependency_diagnostics
+            {
+                return None;
+            }
+            // Strict-annotation rules: stricter-than-PEP discipline, opt-in only.
+            if matches!(
+                code,
+                "BSK-E0001"
+                    | "BSK-E0002"
+                    | "BSK-E0003"
+                    | "BSK-E0004"
+                    | "BSK-E0005"
+                    | "BSK-E0025"
+                    | "BSK-W0014"
+                    | "BSK-W0040"
+                    | "BSK-W0050"
+            ) && !config.strict_annotations
             {
                 return None;
             }

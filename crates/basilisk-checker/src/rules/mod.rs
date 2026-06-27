@@ -9,6 +9,11 @@
 //! so `cargo mutants` can discover them — it parses Rust with `syn` and does
 //! not expand macros, which means macro-declared modules are invisible to it.
 
+pub(crate) mod e0001;
+pub(crate) mod e0002;
+pub(crate) mod e0003;
+pub(crate) mod e0004;
+pub(crate) mod e0005;
 pub(crate) mod e0010;
 pub(crate) mod e0011;
 pub(crate) mod e0012;
@@ -24,6 +29,7 @@ pub(crate) mod e0021;
 pub(crate) mod e0022;
 pub(crate) mod e0023;
 pub(crate) mod e0024;
+pub(crate) mod e0025;
 pub(crate) mod e0026;
 pub(crate) mod e0027;
 pub(crate) mod e0029;
@@ -165,6 +171,9 @@ pub(crate) mod shared;
 pub(crate) mod w0011;
 pub(crate) mod w0012;
 pub(crate) mod w0013;
+pub(crate) mod w0014;
+pub(crate) mod w0040;
+pub(crate) mod w0050;
 
 use basilisk_resolver::ResolvedModule;
 
@@ -188,6 +197,11 @@ pub(crate) trait Rule {
 )]
 fn all_rules() -> &'static [&'static dyn Rule] {
     &[
+        &e0001::MissingParameterAnnotation,
+        &e0002::MissingReturnAnnotation,
+        &e0003::MissingVariableType,
+        &e0004::MissingVarArgAnnotation,
+        &e0005::MissingAttributeAnnotation,
         &e0010::ImportFromUntypedModule,
         &e0011::ReturnTypeMismatch,
         &e0012::ArgumentTypeMismatch,
@@ -203,6 +217,7 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &e0022::UnhashableDictKey,
         &e0023::NonExhaustiveMatch,
         &e0024::InvalidTypeForm,
+        &e0025::MissingOverrideDecorator,
         &e0026::TypeVarSingleConstraint,
         &e0027::DuplicateTypeVarInGeneric,
         &e0029::TypedDictMethodNotAllowed,
@@ -338,6 +353,9 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &w0011::UndeclaredDependencyImport,
         &w0012::UnusedDependency,
         &w0013::StaleLockFile,
+        &w0014::ExplicitAny,
+        &w0040::LambdaMissingAnnotations,
+        &w0050::RedundantAnnotationWarning,
     ]
 }
 

@@ -571,15 +571,8 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 /* Code side of hero */
 .hero__code { position: relative; }
 
-/* Demo tabs inside hero */
-.hero__demo .demo-tabs { display: flex; gap: 0; background: var(--color-bg-elevated); border: 1px solid var(--color-border-bright); border-bottom: none; border-radius: var(--radius-md) var(--radius-md) 0 0; }
-.hero__demo .demo-tab { padding: var(--space-2) var(--space-5); font-size: 0.8125rem; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; transition: all var(--ease-fast); border-right: 1px solid var(--color-border); background: none; }
-.hero__demo .demo-tab:last-child { border-right: none; }
-.hero__demo .demo-tab:hover { color: var(--color-text-primary); }
-.hero__demo .demo-tab.active { color: var(--color-text-primary); background: var(--color-bg-tertiary); }
-.hero__demo .demo-panel { display: none; }
-.hero__demo .demo-panel.active { display: block; }
-.hero__demo .demo-wrapper { border: 1px solid var(--color-border-bright); border-radius: 0 0 var(--radius-lg) var(--radius-lg); overflow: hidden; }
+/* Product screenshot in hero */
+.hero__shot { display: block; width: 100%; height: auto; border: 1px solid var(--color-border-bright); border-radius: var(--radius-lg); }
 
 @media (max-width: 900px) {
   .hero__split { grid-template-columns: 1fr; }

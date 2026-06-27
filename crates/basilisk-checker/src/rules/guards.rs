@@ -72,6 +72,15 @@ pub(crate) fn is_protocol_class(class: &ClassInfo) -> bool {
     class.bases.iter().any(|b| b == "Protocol")
 }
 
+/// Returns `true` when a class is a `NamedTuple` subclass.
+///
+/// `NamedTuple` fields are declared as bare annotations and synthesised into a
+/// tuple by the metaclass, so strict attribute-annotation enforcement must be
+/// suspended for them.
+pub(crate) fn is_namedtuple_class(class: &ClassInfo) -> bool {
+    class.bases.iter().any(|b| b == "NamedTuple")
+}
+
 /// Returns `true` when a class gets a synthesized `__init__` from a
 /// class-applied or metaclass-applied `@dataclass_transform`.
 ///
