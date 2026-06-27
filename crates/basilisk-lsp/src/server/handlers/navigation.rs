@@ -44,14 +44,19 @@ pub(in crate::server) async fn goto_definition(
                 return Some(resp);
             }
 
-            // Cross-file: extract identifier and check imported symbols.
+            // Cross-file: extract identifier and resolve it in the target module.
             let name = crate::util::identifier_at_offset(&text, byte_offset)?;
-            let ext_sym = resolved.imported_symbols.get(&name)?;
 
-            // Follow re-export chain: if the symbol in the target file is itself
-            // imported from another file, follow through to the actual definition.
-            let (final_path, final_span) =
-                follow_reexport_chain(idx, &ext_sym.source_path, &name, ext_sym.source_span);
+            // Prefer pre-populated imported symbols (crossModule mode), following
+            // re-export chains. When that map is empty — the default wholeModule
+            // mode does not pre-compute it — resolve the import on demand via its
+            // resolved_path so cmd+click across files works in every mode.
+            let (final_path, final_span) = match resolved.imported_symbols.get(&name) {
+                Some(ext_sym) => {
+                    follow_reexport_chain(idx, &ext_sym.source_path, &name, ext_sym.source_span)
+                }
+                None => resolve_imported_name_on_demand(idx, &resolved, &name)?,
+            };
 
             let target_entry = idx.files.get(&final_path)?;
             let range = crate::util::span_to_range(&target_entry.text, final_span);
@@ -101,6 +106,27 @@ fn follow_reexport_chain(
     (current_path, current_span)
 }
 
+/// Resolve an imported name to its cross-file definition on demand.
+///
+/// Used when `imported_symbols` is not pre-populated — the default `wholeModule`
+/// mode skips cross-module symbol population, so cross-file navigation must be
+/// resolved per request. Finds the import that binds `name`, follows its
+/// `resolved_path` (set by the import resolver in every mode) into the workspace
+/// index, and locates the symbol's definition in the target module. Returns the
+/// defining file path and the name span.
+fn resolve_imported_name_on_demand(
+    idx: &crate::workspace::WorkspaceIndex,
+    resolved: &basilisk_resolver::ResolvedModule,
+    name: &str,
+) -> Option<(std::path::PathBuf, basilisk_resolver::Span)> {
+    let import = crate::util::find_import_by_bound_name(resolved, name)?;
+    let target_path = import.resolved_path.as_ref()?;
+    let target_entry = idx.files.get(target_path)?;
+    let target_resolved = target_entry.resolved.as_ref()?;
+    let hit = crate::util::find_definition_by_name(target_resolved, name)?;
+    Some((target_path.clone(), crate::util::definition_span(&hit)))
+}
+
 /// Handle `textDocument/declaration`.
 pub(in crate::server) async fn goto_declaration(
     server: &LspServer,
@@ -139,11 +165,19 @@ pub(in crate::server) async fn goto_type_definition(
                 return Some(resp);
             }
 
-            // Cross-file: resolve the annotated type name through imported symbols.
+            // Cross-file: resolve the annotated type name through imported
+            // symbols (crossModule), falling back to on-demand resolution via
+            // resolved_path so type-def across files works in wholeModule too.
             let type_name = type_definition::type_name_at(&resolved, &text, byte_offset)?;
-            let ext_sym = resolved.imported_symbols.get(&type_name)?;
-            let (final_path, final_span) =
-                follow_reexport_chain(idx, &ext_sym.source_path, &type_name, ext_sym.source_span);
+            let (final_path, final_span) = match resolved.imported_symbols.get(&type_name) {
+                Some(ext_sym) => follow_reexport_chain(
+                    idx,
+                    &ext_sym.source_path,
+                    &type_name,
+                    ext_sym.source_span,
+                ),
+                None => resolve_imported_name_on_demand(idx, &resolved, &type_name)?,
+            };
 
             let target_entry = idx.files.get(&final_path)?;
             let range = crate::util::span_to_range(&target_entry.text, final_span);

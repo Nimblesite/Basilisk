@@ -491,6 +491,89 @@ async fn test_ws_goto_definition_member_through_aliased_stub_import() -> TestRes
 }
 
 #[tokio::test]
+async fn test_ws_goto_definition_cross_file_function_whole_module() -> TestResult<()> {
+    // Regression for the goto hammer cross-file failures in the SHIPPED default
+    // mode: cross-file go-to-definition must work in `wholeModule` (the
+    // extension's default), not only in `crossModule`. Cross-module symbol
+    // population is gated to crossModule, so navigation has to resolve the
+    // import on demand via its resolved_path. Same scenario as the crossModule
+    // test below, but proves the default-mode user gets a working cmd+click.
+    // Mirror the VS Code harness exactly: an EMPTY workspace root, with the
+    // fixtures living in a SEPARATE directory that is merely opened (not under
+    // any registered root). Cross-file resolution must still work via the
+    // importer's own directory + the open-document index.
+    let root = unique_temp_dir("bsk_goto_cross_whole_root");
+    std::fs::create_dir_all(&root)?;
+    let dir = unique_temp_dir("bsk_goto_cross_whole_files");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(
+        dir.join("helpers.py"),
+        "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n",
+    )?;
+    std::fs::write(
+        dir.join("main.py"),
+        "from helpers import greet\n\nresult: str = greet(\"world\")\n",
+    )?;
+
+    let root_uri = format!("file://{}", root.display());
+    let helpers_uri = format!("file://{}", dir.join("helpers.py").display());
+    let main_uri = format!("file://{}", dir.join("main.py").display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "wholeModule").await?;
+    for _ in 0..20 {
+        let msg = tokio::time::timeout(Duration::from_millis(500), fixture.ws_read.next()).await;
+        if msg.is_err() {
+            break;
+        }
+    }
+    // Open the target first so the importer can resolve it cross-file, mirroring
+    // the VS Code goto hammer ("Helper first so the subject's import resolves").
+    fixture
+        .did_open(
+            &helpers_uri,
+            "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n",
+        )
+        .await?;
+    fixture
+        .did_open(
+            &main_uri,
+            "from helpers import greet\n\nresult: str = greet(\"world\")\n",
+        )
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // main.py line 2: "result: str = greet("world")" — 'greet' at character 14.
+    let resp = fixture
+        .request(
+            760,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": main_uri },
+                "position": { "line": 2, "character": 14 }
+            }),
+        )
+        .await?
+        .ok_or("no response to wholeModule cross-file goto definition")?;
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "wholeModule cross-file goto-def must resolve (default-mode cmd+click): {resp}"
+    );
+    assert!(
+        parsed["result"]["uri"]
+            .as_str()
+            .unwrap_or("")
+            .contains("helpers.py"),
+        "wholeModule cross-file goto-def should jump to helpers.py: {resp}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&root);
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_ws_goto_definition_cross_file_function() -> TestResult<()> {
     // Set up a workspace with two files: helpers.py defines `greet`,
     // main.py imports and uses it.

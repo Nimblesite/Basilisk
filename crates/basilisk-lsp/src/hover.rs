@@ -8,7 +8,7 @@
 
 use std::fmt::Write as _;
 
-use basilisk_resolver::{ImportInfo, ImportKind, ImportResolution, PackageDepKind, ResolvedModule};
+use basilisk_resolver::{ImportInfo, ImportResolution, PackageDepKind, ResolvedModule};
 use tower_lsp::lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 
 use crate::util::{
@@ -104,7 +104,7 @@ pub fn hover_at(
             match stub_md {
                 Some(md) if !md.is_empty() => sections.push(md),
                 _ => {
-                    if let Some(imp) = find_import_by_bound_name(resolved, &name) {
+                    if let Some(imp) = crate::util::find_import_by_bound_name(resolved, &name) {
                         let sig = format_type_signature(&SymbolHit::Import(imp), source);
                         sections.push(format!("```python\n{sig}\n```"));
                     }
@@ -154,24 +154,6 @@ fn find_import_at_offset(resolved: &ResolvedModule, byte_offset: usize) -> Optio
         let start = import.span.start_usize();
         let end = import.span.end_usize();
         byte_offset >= start && byte_offset < end
-    })
-}
-
-/// Find the import that introduces `name` as a locally-bound symbol.
-///
-/// Matches `from m import name` / `from m import x as name` (the bound name lives
-/// in `names`) and `import name` / `import m as name` (the module or its alias).
-/// Star imports bind no specific name, so they never match. Used to render a
-/// deterministic hover for a *usage* of an imported name when cross-module
-/// resolution has not populated `imported_symbols`.
-fn find_import_by_bound_name<'a>(
-    resolved: &'a ResolvedModule,
-    name: &str,
-) -> Option<&'a ImportInfo> {
-    resolved.imports.iter().find(|imp| match imp.kind {
-        ImportKind::Star => false,
-        ImportKind::From => imp.names.iter().any(|n| n == name),
-        ImportKind::Plain => imp.names.iter().any(|n| n == name) || imp.module == name,
     })
 }
 

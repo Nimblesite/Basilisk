@@ -181,6 +181,24 @@ fn find_parameter_by_name<'a>(func: &'a FunctionInfo, name: &str) -> Option<Symb
     None
 }
 
+/// Find the import that introduces `name` as a locally-bound symbol.
+///
+/// Matches `from m import name` / `from m import x as name` (the bound name lives
+/// in `names`) and `import name` / `import m as name` (the module or its alias).
+/// Star imports bind no specific name, so they never match. Shared by hover
+/// (render the import declaration) and goto-definition (resolve the import's
+/// target file) when the cross-module symbol table has not populated yet.
+pub(crate) fn find_import_by_bound_name<'a>(
+    resolved: &'a ResolvedModule,
+    name: &str,
+) -> Option<&'a ImportInfo> {
+    resolved.imports.iter().find(|imp| match imp.kind {
+        ImportKind::Star => false,
+        ImportKind::From => imp.names.iter().any(|n| n == name),
+        ImportKind::Plain => imp.names.iter().any(|n| n == name) || imp.module == name,
+    })
+}
+
 /// Extract the identifier at a byte offset from source text.
 ///
 /// Expands left and right from the offset to capture the full identifier.
