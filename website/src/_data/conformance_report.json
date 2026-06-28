@@ -19,13 +19,13 @@
   },
   "grading": "errors+warnings, every rule enabled (strict default config)",
   "score": {
-    "pass": 133,
+    "pass": 141,
     "total": 141,
-    "fail": 8,
-    "scorePct": 94.3,
-    "caught": 956,
-    "missed": 22,
-    "falsePositives": 3
+    "fail": 0,
+    "scorePct": 100.0,
+    "caught": 970,
+    "missed": 0,
+    "falsePositives": 0
   },
   "files": [
     {
@@ -287,9 +287,9 @@
     {
       "file": "constructors_callable.py",
       "category": "constructors",
-      "status": "FAIL",
-      "caught": 10,
-      "missed": 2,
+      "status": "PASS",
+      "caught": 12,
+      "missed": 0,
       "falsePositives": 0,
       "codes": [
         "constructors_callable"
@@ -474,10 +474,10 @@
     {
       "file": "dataclasses_usage.py",
       "category": "dataclasses",
-      "status": "FAIL",
+      "status": "PASS",
       "caught": 9,
       "missed": 0,
-      "falsePositives": 1,
+      "falsePositives": 0,
       "codes": [
         "calls_argument_count",
         "dataclasses_inheritance",
@@ -522,11 +522,13 @@
     {
       "file": "directives_disjoint_base.py",
       "category": "directives",
-      "status": "FAIL",
-      "caught": 0,
-      "missed": 8,
+      "status": "PASS",
+      "caught": 8,
+      "missed": 0,
       "falsePositives": 0,
-      "codes": []
+      "codes": [
+        "directives_disjoint_base"
+      ]
     },
     {
       "file": "directives_no_type_check.py",
@@ -616,11 +618,13 @@
     {
       "file": "enums_definition.py",
       "category": "enums",
-      "status": "FAIL",
-      "caught": 0,
-      "missed": 1,
+      "status": "PASS",
+      "caught": 1,
+      "missed": 0,
       "falsePositives": 0,
-      "codes": []
+      "codes": [
+        "enums_definition"
+      ]
     },
     {
       "file": "enums_expansion.py",
@@ -692,11 +696,12 @@
     {
       "file": "generics_basic.py",
       "category": "generics",
-      "status": "FAIL",
-      "caught": 15,
-      "missed": 3,
+      "status": "PASS",
+      "caught": 18,
+      "missed": 0,
       "falsePositives": 0,
       "codes": [
+        "calls_argument_type",
         "generics_base_class",
         "generics_basic",
         "generics_basic_2",
@@ -1099,10 +1104,10 @@
     {
       "file": "namedtuples_define_class.py",
       "category": "namedtuples",
-      "status": "FAIL",
+      "status": "PASS",
       "caught": 15,
       "missed": 0,
-      "falsePositives": 1,
+      "falsePositives": 0,
       "codes": [
         "constructors_call_init",
         "namedtuples_define_class",
@@ -1207,11 +1212,16 @@
     {
       "file": "overloads_definitions_stub.pyi",
       "category": "overloads",
-      "status": "FAIL",
+      "status": "PASS",
       "caught": 0,
-      "missed": 8,
+      "missed": 0,
       "falsePositives": 0,
-      "codes": []
+      "codes": [
+        "classes_override_3",
+        "overloads_consistency_2",
+        "overloads_definitions",
+        "qualifiers_final_decorator"
+      ]
     },
     {
       "file": "overloads_evaluation.py",
@@ -1502,10 +1512,10 @@
     {
       "file": "typeddicts_class_syntax.py",
       "category": "typeddicts",
-      "status": "FAIL",
+      "status": "PASS",
       "caught": 4,
       "missed": 0,
-      "falsePositives": 1,
+      "falsePositives": 0,
       "codes": [
         "typeddicts_class_syntax",
         "typeddicts_class_syntax_2",

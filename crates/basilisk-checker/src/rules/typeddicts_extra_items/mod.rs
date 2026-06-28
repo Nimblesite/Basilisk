@@ -39,13 +39,13 @@ impl Rule for TypedDictExtraItemsViolation {
     fn check(
         &self,
         module: &ResolvedModule,
-        _ctx: &super::CheckContext,
+        ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
-        let models = collect_models(&parsed.ast.body);
+        let models = collect_models(&parsed.ast.body, ctx.target_version);
         if models.is_empty() {
             return;
         }

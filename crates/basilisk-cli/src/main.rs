@@ -719,6 +719,14 @@ pub(crate) fn excluded_dirs_and_log<'a>(
     excluded
 }
 
+/// `true` for the Python source extensions Basilisk type-checks: `.py`
+/// implementation files and `.pyi` stub files (whose overload-definition and
+/// `@final`/`@override` rules differ — see `overloads_*`). Stubs were silently
+/// dropped before, so a `basilisk check foo.pyi` produced no diagnostics.
+fn is_python_source_ext(ext: &std::ffi::OsStr) -> bool {
+    ext.eq_ignore_ascii_case("py") || ext.eq_ignore_ascii_case("pyi")
+}
+
 pub(crate) fn collect_python_files(
     paths: &[String],
     excluded: &HashSet<&str>,
@@ -740,7 +748,7 @@ pub(crate) fn collect_python_files(
         if meta.is_file() {
             if std::path::Path::new(root)
                 .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
+                .is_some_and(is_python_source_ext)
             {
                 files.push(root.clone());
             }
@@ -767,11 +775,7 @@ pub(crate) fn collect_python_files(
                 })
                 .filter_map(Result::ok)
                 .filter(|e| e.file_type().is_file())
-                .filter(|e| {
-                    e.path()
-                        .extension()
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
-                })
+                .filter(|e| e.path().extension().is_some_and(is_python_source_ext))
                 // File-level globs (e.g. `*.pb.py`, `**/conftest.py`) are honoured
                 // here; directory globs are already pruned above before recursing.
                 .filter(|e| !is_excluded_path(e.path(), root_path, excluded))

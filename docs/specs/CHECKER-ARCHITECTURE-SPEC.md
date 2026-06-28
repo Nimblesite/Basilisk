@@ -65,7 +65,7 @@ See the project README for competitive analysis.
 | Implementation | TypeScript | Python/C | Rust | Rust | Rust | Rust | **Rust** |
 | License | MIT | MIT | MIT | MIT | AGPL | MIT | **MIT** |
 | Default strictness | Gradual | Gradual | Gradual | Gradual | Gradual | N/A | **PEP by default; strict opt-in** |
-| PEP conformance (current) | [live results][cf] | [cf] | [cf] | [cf] | [cf] | N/A | **<!--g:score-->94.3%<!--/g:score-->** (self-measured) |
+| PEP conformance (current) | [live results][cf] | [cf] | [cf] | [cf] | [cf] | N/A | **<!--g:score-->100.0%<!--/g:score-->** (self-measured) |
 | PEP conformance target | — | — | — | — | — | N/A | **100%** |
 | LSP server | Yes | No | Yes | Yes | Yes | No | **Yes** |
 | Incremental computation | Lazy eval | Daemon | Salsa | Module-level | No | N/A | **Salsa** |
@@ -82,7 +82,7 @@ See the project README for competitive analysis.
 | VS Code extension | Pylance (proprietary) | No | Yes | Yes | Yes | Yes | **Yes (open source)** |
 | No Microsoft dependency | No (Node.js) | Yes | Yes | Yes | Yes | Yes | **Yes** |
 
-> Rival conformance figures move as those tools evolve, so rather than freeze (and inevitably misstate) them here, the rival cells link to the official, continuously-updated scoreboard. Basilisk's **<!--g:score-->94.3%<!--/g:score-->** is self-measured by that same suite's calculator run over the unmodified binary in its default config, against `python/typing@main` at the exact commit recorded in `conformance_report.json` ([CHKARCH-CONFORMANCE](#CHKARCH-CONFORMANCE)); it is not directly comparable to numbers produced under a different methodology or grading.
+> Rival conformance figures move as those tools evolve, so rather than freeze (and inevitably misstate) them here, the rival cells link to the official, continuously-updated scoreboard. Basilisk's **<!--g:score-->100.0%<!--/g:score-->** is self-measured by that same suite's calculator run over the unmodified binary in its default config, against `python/typing@main` at the exact commit recorded in `conformance_report.json` ([CHKARCH-CONFORMANCE](#CHKARCH-CONFORMANCE)); it is not directly comparable to numbers produced under a different methodology or grading.
 
 [cf]: https://github.com/python/typing/blob/main/conformance/results/results.html
 
@@ -299,7 +299,7 @@ The `# type:` prefix ensures compatibility with editors and tools that already r
 
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
-Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->f6e2e58<!--/g:short-->`](https://github.com/python/typing/tree/f6e2e588880a057a939cee76c6c919aebd4db37c/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->133<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->94.3%<!--/g:score-->)**, with **<!--g:fp-->3<!--/g:fp--> false positives** and **<!--g:missed-->22<!--/g:missed--> missed required errors** (<!--g:caught-->956<!--/g:caught--> caught). The remaining gap is a few strict-default false positives plus newer spec features not yet implemented (e.g. PEP 800 disjoint bases, version-conditional members). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
+Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->f6e2e58<!--/g:short-->`](https://github.com/python/typing/tree/f6e2e588880a057a939cee76c6c919aebd4db37c/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
 
 #### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
@@ -1453,13 +1453,11 @@ checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with.
 - **Current score** — measured against `python/typing@main` at the exact graded
   commit recorded in `conformance_report.json`, currently
   [`<!--g:short-->f6e2e58<!--/g:short-->`](https://github.com/python/typing/tree/f6e2e588880a057a939cee76c6c919aebd4db37c/conformance):
-  **<!--g:pass-->133<!--/g:pass--> / <!--g:total-->141<!--/g:total--> = <!--g:score-->94.3%<!--/g:score-->**, **<!--g:fp-->3<!--/g:fp--> false positives**, **<!--g:missed-->22<!--/g:missed--> missed required errors**, with
-  **<!--g:caught-->956<!--/g:caught-->** required errors caught. The binary runs in its default configuration — the
+  **<!--g:pass-->141<!--/g:pass--> / <!--g:total-->141<!--/g:total--> = <!--g:score-->100.0%<!--/g:score-->**, **<!--g:fp-->0<!--/g:fp--> false positives**, **<!--g:missed-->0<!--/g:missed--> missed required errors**, with
+  **<!--g:caught-->970<!--/g:caught-->** required errors caught. The binary runs in its default configuration — the
   PEP conformance set — and `score.py` deletes any `basilisk.json` first so nothing
   can silence a rule; Basilisk's opt-in house-style rules never run during scoring,
-  so they can neither pad nor sink the number. The remaining gap is a few
-  strict-default false positives plus newer spec features not yet implemented (e.g.
-  PEP 800 disjoint bases, `sys.version_info` version-conditional members). The gate
+  so they can neither pad nor sink the number. The gate
   ratchets the pass-percentage **up** and the false-positive ceiling **down**
   (`coverage-thresholds.json` → `conformance.threshold` /
   `conformance.max_false_positives`), driven only by genuinely fixing the checker,
@@ -1478,9 +1476,9 @@ opinionated *house-style* rules (require-annotations `BSK-E0001`/`BSK-E0002`/`BS
 require-`@override` `BSK-E0025`, redundant-annotation `BSK-W0050`, the explicit-`Any`
 nudge `BSK-W0014`) are **opt-in and off by default**, so they never run during scoring
 and can neither pad nor sink the number. The figure is the genuine out-of-the-box
-conformance result — currently <!--g:score-->94.3%<!--/g:score--> — and the remaining gap is real checker work: spec
-features not yet implemented (e.g. PEP 800 disjoint bases, version-conditional members)
-plus a handful of false positives from over-strict *conformance* rules.
+conformance result — currently <!--g:score-->100.0%<!--/g:score-->. Any shortfall would be a real
+checker bug to fix (a missing spec feature, or a false positive from an over-strict
+*conformance* rule), never something to paper over by silencing a rule.
 
 ⛔️ **Disabling, deleting, or unregistering a conformance (PEP) rule to move the number
 is forbidden** — as is hand-editing `conformance_status.csv` or loosening the

@@ -77,4 +77,9 @@ pub struct AttributeInfo {
     /// `InitVar` fields are not real attributes — they are passed as parameters
     /// to `__post_init__` and cannot be accessed as instance attributes.
     pub is_init_var: bool,
+    /// Static `if`-guard the field was defined under, if any (`None` for an
+    /// unconditional member). A field whose guard is statically false at the
+    /// target version is pruned by `resolve_with_target`, so consumers see only
+    /// the members that exist for the target.
+    pub guard: Option<crate::static_condition::StaticCondition>,
 }

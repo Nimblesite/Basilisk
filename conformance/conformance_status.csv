@@ -21,7 +21,7 @@ constructors_call_init|generics_defaults_referential_2,constructors_call_init.py
 calls_argument_count,constructors_call_metaclass.py,constructors,PASS,2,0,0
 constructors_call_new,constructors_call_new.py,constructors,PASS,2,0,0
 constructors_call_type,constructors_call_type.py,constructors,PASS,8,0,0
-constructors_callable,constructors_callable.py,constructors,FAIL,10,2,0
+constructors_callable,constructors_callable.py,constructors,PASS,12,0,0
 ,constructors_consistency.py,constructors,PASS,0,0,0
 ,dataclasses_descriptors.py,dataclasses,PASS,0,0,0
 qualifiers_final_annotation_2,dataclasses_final.py,dataclasses,PASS,5,0,0
@@ -38,11 +38,11 @@ dataclasses_transform_class,dataclasses_transform_converter.py,dataclasses,PASS,
 dataclasses_kwonly,dataclasses_transform_field.py,dataclasses,PASS,2,0,0
 assignment_compatibility|constructors_call_init|dataclasses_frozen|dataclasses_kwonly|dataclasses_order,dataclasses_transform_func.py,dataclasses,PASS,5,0,0
 dataclasses_transform_meta,dataclasses_transform_meta.py,dataclasses,PASS,6,0,0
-calls_argument_count|dataclasses_inheritance|dataclasses_kwonly|dataclasses_usage,dataclasses_usage.py,dataclasses,FAIL,9,0,1
+calls_argument_count|dataclasses_inheritance|dataclasses_kwonly|dataclasses_usage,dataclasses_usage.py,dataclasses,PASS,9,0,0
 directives_assert_type|directives_assert_type_2,directives_assert_type.py,directives,PASS,7,0,0
 directives_cast,directives_cast.py,directives,PASS,3,0,0
 directives_deprecated,directives_deprecated.py,directives,PASS,12,0,0
-,directives_disjoint_base.py,directives,FAIL,0,8,0
+directives_disjoint_base,directives_disjoint_base.py,directives,PASS,8,0,0
 calls_argument_count|calls_argument_type|returns_compatibility_2,directives_no_type_check.py,directives,PASS,1,0,0
 directives_reveal_type,directives_reveal_type.py,directives,PASS,2,0,0
 ,directives_type_checking.py,directives,PASS,0,0,0
@@ -51,14 +51,14 @@ directives_reveal_type,directives_reveal_type.py,directives,PASS,2,0,0
 assignment_compatibility,directives_type_ignore_file2.py,directives,PASS,1,0,0
 directives_version_platform,directives_version_platform.py,directives,PASS,3,0,0
 enums_behaviors|enums_expansion,enums_behaviors.py,enums,PASS,1,0,0
-,enums_definition.py,enums,FAIL,0,1,0
+enums_definition,enums_definition.py,enums,PASS,1,0,0
 enums_expansion,enums_expansion.py,enums,PASS,1,0,0
 ,enums_member_names.py,enums,PASS,0,0,0
 enums_member_values,enums_member_values.py,enums,PASS,2,0,0
 enums_members|enums_members_2,enums_members.py,enums,PASS,7,0,0
 ,exceptions_context_managers.py,exceptions,PASS,0,0,0
 annotations_forward_refs|generics_base_class|generics_base_class_2|generics_base_class_3|generics_defaults_specialization,generics_base_class.py,generics,PASS,7,0,0
-generics_base_class|generics_basic|generics_basic_2|generics_basic_3|generics_variance_inference,generics_basic.py,generics,FAIL,15,3,0
+calls_argument_type|generics_base_class|generics_basic|generics_basic_2|generics_basic_3|generics_variance_inference,generics_basic.py,generics,PASS,18,0,0
 directives_assert_type_2|generics_defaults|generics_defaults_2|generics_defaults_specialization,generics_defaults.py,generics,PASS,5,0,0
 generics_defaults_referential|generics_defaults_referential_2|generics_variance_inference,generics_defaults_referential.py,generics,PASS,7,0,0
 assignment_compatibility|generics_defaults_specialization,generics_defaults_specialization.py,generics,PASS,3,0,0
@@ -92,7 +92,7 @@ tuples_index_2,literals_interactions.py,literals,PASS,4,0,0
 assignment_compatibility|generics_upper_bound_2|literals_literalstring|literals_parameterizations|literals_semantics_2,literals_literalstring.py,literals,PASS,9,0,0
 assignment_compatibility|generics_scoping|generics_variance_inference|literals_parameterizations|literals_parameterizations_2|literals_semantics_2,literals_parameterizations.py,literals,PASS,17,0,0
 assignment_compatibility|literals_semantics_2,literals_semantics.py,literals,PASS,4,0,0
-constructors_call_init|namedtuples_define_class|namedtuples_usage,namedtuples_define_class.py,namedtuples,FAIL,15,0,1
+constructors_call_init|namedtuples_define_class|namedtuples_usage,namedtuples_define_class.py,namedtuples,PASS,15,0,0
 calls_argument_count|namedtuples_define_functional,namedtuples_define_functional.py,namedtuples,PASS,9,0,0
 namedtuples_type_compat,namedtuples_type_compat.py,namedtuples,PASS,2,0,0
 namedtuples_usage,namedtuples_usage.py,namedtuples,PASS,8,0,0
@@ -101,7 +101,7 @@ narrowing_typeguard|narrowing_typeis|narrowing_typeis_2,narrowing_typeis.py,narr
 overloads_basic,overloads_basic.py,overloads,PASS,1,0,0
 overloads_consistency_3,overloads_consistency.py,overloads,PASS,0,0,0
 classes_override_3|overloads_consistency_2|overloads_definitions|qualifiers_final_decorator,overloads_definitions.py,overloads,PASS,0,0,0
-,overloads_definitions_stub.pyi,overloads,FAIL,0,8,0
+classes_override_3|overloads_consistency_2|overloads_definitions|qualifiers_final_decorator,overloads_definitions_stub.pyi,overloads,PASS,0,0,0
 calls_argument_count|calls_argument_type|overloads_evaluation,overloads_evaluation.py,overloads,PASS,4,0,0
 protocols_class_objects_2|protocols_explicit,protocols_class_objects.py,protocols,PASS,8,0,0
 classes_classvar|protocols_definition|protocols_definition_2,protocols_definition.py,protocols,PASS,21,0,0
@@ -126,7 +126,7 @@ assignment_compatibility|qualifiers_annotated|tuples_type_compat,tuples_type_com
 assignment_compatibility|tuples_type_form|tuples_type_form_2,tuples_type_form.py,tuples,PASS,11,0,0
 tuples_type_form,tuples_unpacked.py,tuples,PASS,4,0,0
 typeddicts_alt_syntax,typeddicts_alt_syntax.py,typeddicts,PASS,4,0,0
-typeddicts_class_syntax|typeddicts_class_syntax_2|typeddicts_extra_items,typeddicts_class_syntax.py,typeddicts,FAIL,4,0,1
+typeddicts_class_syntax|typeddicts_class_syntax_2|typeddicts_extra_items,typeddicts_class_syntax.py,typeddicts,PASS,4,0,0
 assignment_compatibility|callables_kwargs|typeddicts_extra_items|typeddicts_operations,typeddicts_extra_items.py,typeddicts,PASS,22,0,0
 ,typeddicts_final.py,typeddicts,PASS,0,0,0
 typeddicts_inheritance,typeddicts_inheritance.py,typeddicts,PASS,2,0,0
