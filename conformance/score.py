@@ -2,14 +2,17 @@
 # Implements [CHKARCH-CONFORMANCE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md
 """Grade Basilisk with the REAL python/typing conformance calculator.
 
-This script does NOT reimplement the conformance scoring. It **imports the
-committed upstream tool** — `conformance/upstream_main.py`, a byte-identical,
-sha256-verified copy of `conformance/src/main.py` from `python/typing` pinned to
-the same commit the test fixtures come from — and **calls upstream's own
-`get_expected_errors` + `diff_expected_errors` functions unmodified**. Those two
-functions are the entire conformance algorithm: the same code that grades
-pyright, mypy, pyrefly, ty, zuban and pycroscope. Nothing about the calculation
-is ours, and nothing is downloaded at score time.
+This script does NOT reimplement the conformance scoring. It tracks the LATEST
+`python/typing@main`: every run resolves the current `main` tip, refreshes the
+vendored calculator (`conformance/upstream_main.py`, a byte-identical copy of
+`conformance/src/main.py`) and the `# E`-annotated fixtures when `main` has
+moved, records the resolved commit + the calculator's sha256 in the website
+report, then **calls upstream's own `get_expected_errors` +
+`diff_expected_errors` functions unmodified**. Those two functions are the entire
+conformance algorithm: the same code that grades pyright, mypy, pyrefly, ty,
+zuban and pycroscope. Nothing about the calculation is ours. When `main` cannot
+be reached the cached fixtures are scored instead and the result is flagged
+`stale`.
 
 The only Basilisk-specific code here is a checker *adapter* — exactly what
 upstream itself has for every checker (`PyrightTypeChecker`, `MypyTypeChecker`,
@@ -36,19 +39,18 @@ user gets out of the box. If basilisk's strict defaults flag valid type-system
 code, that is a REAL conformance gap to FIX in the Rust checker — never to hide by
 turning a rule off. The honest number is the only number. See [CHKARCH-CONFORMANCE].
 
-This one file is the whole Basilisk side of conformance: it runs the binary,
-scores with the official functions, writes `conformance/conformance_status.csv`,
-and enforces the ratchet gate (`--gate`). There is no Rust test and no shell
-script. Two upstream inputs, handled differently:
-  • the official calculator → `conformance/upstream_main.py`: COMMITTED and
-    sha256-pinned, never downloaded at score time (re-pin with --refresh-upstream).
-  • the `# E`-annotated test fixtures → `conformance/tests/*.py`: git-ignored and
-    DOWNLOADED on demand (--fetch / --fetch-only; auto-fetched if missing).
+This one file is the whole Basilisk side of conformance: it tracks `main`, runs
+the binary, scores with the official functions, writes
+`conformance/conformance_status.csv` and the website report
+(`website/src/_data/conformance_report.json`, which records the resolved commit
+and calculator hash), and enforces the ratchet gate (`--gate`). The fixtures and
+the vendored calculator both track `python/typing@main` and are git-ignored /
+refreshed on demand; the report and CSV are committed so the website builds
+without running the scorer.
 
 Usage:
     python3 conformance/score.py [--bin PATH] [--gate]
-                                 [--conformance-dir DIR] [--fetch | --fetch-only]
-                                 [--refresh-upstream]
+                                 [--conformance-dir DIR] [--fetch-only]
 """
 
 from __future__ import annotations
@@ -62,26 +64,33 @@ import types
 from pathlib import Path
 from typing import Callable, Sequence
 
-# The single home for the pinned upstream commit. The fixtures (FIXTURES_API)
-# and the vendored calculator (UPSTREAM_MAIN) both track it. To bump: edit this,
-# run `--refresh-upstream` (re-pins upstream_main.py + its sha256), then `--fetch`.
-PINNED_TYPING_REF = "f6e2e588880a057a939cee76c6c919aebd4db37c"
-UPSTREAM_MAIN_URL = (
-    f"https://raw.githubusercontent.com/python/typing/{PINNED_TYPING_REF}"
-    "/conformance/src/main.py"
+# We track the LATEST `python/typing@main` rather than freezing a commit: every
+# run resolves the current `main` tip, re-fetches the fixtures + calculator when
+# it has moved, and records the resolved commit in the website report below.
+UPSTREAM_REPO = "python/typing"
+UPSTREAM_REF = "main"
+# Resolve `main` -> commit metadata; list the fixtures dir; fetch raw files.
+COMMITS_API = f"https://api.github.com/repos/{UPSTREAM_REPO}/commits/{UPSTREAM_REF}"
+CONTENTS_API = f"https://api.github.com/repos/{UPSTREAM_REPO}/contents/conformance/tests"
+RAW_MAIN_AT = (
+    f"https://raw.githubusercontent.com/{UPSTREAM_REPO}/{{sha}}/conformance/src/main.py"
 )
-# The committed, byte-identical copy of upstream's calculator, and its sha256.
+# The vendored copy of upstream's calculator (refreshed from the resolved commit).
 UPSTREAM_MAIN = Path(__file__).resolve().parent / "upstream_main.py"
-UPSTREAM_MAIN_SHA256 = (
-    "3cb2a27bfc689e89a541528f8bdaa8ed24ae8845ce048eaff69717ef0205b112"
-)
+# Records which commit the fixtures/calculator were last fetched at.
+REF_STAMP = Path(__file__).resolve().parent / "tests" / ".ref-sha"
 # The two functions that constitute the official scoring algorithm.
 OFFICIAL_FUNCS = ("get_expected_errors", "diff_expected_errors")
-# The `# E`-annotated test fixtures are downloaded (git-ignored) into
-# conformance/tests. This API lists them at the pinned ref for the fetch.
-FIXTURES_API = (
-    "https://api.github.com/repos/python/typing/contents/conformance/tests"
-    f"?ref={PINNED_TYPING_REF}"
+# Machine-readable report consumed by the website build (Eleventy global
+# `conformanceReport`): the resolved upstream commit, the calculator hash, and
+# the full score. Written on every run so the site never re-derives or hard-codes
+# the number — see website/src/_data/conformance.js.
+WEBSITE_REPORT = (
+    Path(__file__).resolve().parent.parent
+    / "website"
+    / "src"
+    / "_data"
+    / "conformance_report.json"
 )
 
 
@@ -102,19 +111,14 @@ class _StubModule(types.ModuleType):
 def load_official_calc() -> tuple[Callable, Callable, str]:
     """Return upstream's real (get_expected_errors, diff_expected_errors).
 
-    Reads the committed `conformance/upstream_main.py`, verifies it is byte-for-
-    byte the pinned upstream `conformance/src/main.py` (sha256), imports it behind
-    module stubs (above), and hands back its two functions unmodified. No network
-    access; no code of ours in the calculation.
+    Reads the vendored `conformance/upstream_main.py` (refreshed from the
+    resolved `main` commit), imports it behind module stubs (above), and hands
+    back its two functions unmodified. The file's sha256 is recorded in the
+    website report so the build can re-verify it; nothing of ours touches the
+    calculation.
     """
     raw = UPSTREAM_MAIN.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
-    if digest != UPSTREAM_MAIN_SHA256:
-        raise RuntimeError(
-            f"{UPSTREAM_MAIN.name} sha256 {digest[:12]}… != pinned "
-            f"{UPSTREAM_MAIN_SHA256[:12]}… — the vendored upstream calculator was "
-            "modified. Restore it from git, or run --refresh-upstream to re-pin."
-        )
 
     for dep in (
         "tomli",
@@ -137,74 +141,52 @@ def load_official_calc() -> tuple[Callable, Callable, str]:
     funcs = tuple(getattr(module, name, None) for name in OFFICIAL_FUNCS)
     if not all(funcs):
         raise RuntimeError(
-            f"committed upstream main.py is missing {OFFICIAL_FUNCS}; the upstream "
-            "layout changed — re-check the pinned ref"
+            f"vendored upstream main.py is missing {OFFICIAL_FUNCS}; the upstream "
+            "layout changed at python/typing@main"
         )
     return funcs[0], funcs[1], f"sha256:{digest[:12]}"
 
 
-def refresh_upstream() -> int:
-    """Re-download upstream main.py to the committed path and print its sha256.
-
-    Maintenance only — run when bumping PINNED_TYPING_REF. This is the ONLY code
-    path that touches the network; the normal score path never does.
-    """
-    import urllib.request  # local import: never loaded on the score path
-
-    with urllib.request.urlopen(UPSTREAM_MAIN_URL, timeout=30) as resp:  # noqa: S310 (pinned https)
-        raw = resp.read()
-    UPSTREAM_MAIN.write_bytes(raw)
-    digest = hashlib.sha256(raw).hexdigest()
-    print(f"  fetched {UPSTREAM_MAIN_URL}")
-    print(f"  wrote   {UPSTREAM_MAIN} ({len(raw)} bytes)")
-    print(f"  sha256  {digest}")
-    if digest != UPSTREAM_MAIN_SHA256:
-        print(f'  -> update UPSTREAM_MAIN_SHA256 = "{digest}" (ref changed)')
-    return 0
-
-
 # ---------------------------------------------------------------------------
-# Download the (git-ignored) test fixtures on demand
+# Track python/typing@main: resolve the tip and (re)download fixtures+calculator
 # ---------------------------------------------------------------------------
 
 
-def ensure_fixtures(conf_dir: Path, force: bool) -> None:
-    """Download python/typing's conformance fixtures into `conf_dir`.
-
-    Fetches BOTH the `.py` test fixtures AND the `.pyi` support stubs they import
-    (e.g. `qualifiers_final_decorator.py` does `from _qualifiers_final_decorator
-    import Base3` — a cross-module `@final` test that is meaningless unless that
-    sibling stub is on disk). Upstream ships both side by side; fetching only
-    `.py` silently drops the stubs and makes any import-resolving check score
-    those files wrong. Only `*.py` are ever SCORED (see `score()`); the `.pyi`
-    are import-only inputs.
-
-    The fixtures are git-ignored and fetched on demand (auto when missing, or via
-    `--fetch` / `--fetch-only`). No-op when already present at the pinned ref (a
-    `.ref-sha` stamp records it) unless `force`; bumping `PINNED_TYPING_REF`
-    invalidates the stamp. Honors `GITHUB_TOKEN` to raise the API rate limit.
-    """
+def _gh_headers() -> dict:
+    """GitHub API headers, honouring `GITHUB_TOKEN` to raise the rate limit."""
     import os
-    import urllib.request  # local: network only happens here and in refresh
-
-    stamp = conf_dir / ".ref-sha"
-    cached_ref = stamp.read_text(encoding="utf-8").strip() if stamp.exists() else ""
-    # Require BOTH the `.py` fixtures and the `.pyi` support stubs: a restored
-    # cache (or older checkout) that predates stub-fetching has `.py` but no
-    # `.pyi`, and must re-fetch rather than score the cross-module tests wrong.
-    present = (
-        conf_dir.exists() and any(conf_dir.glob("*.py")) and any(conf_dir.glob("*.pyi"))
-    )
-    if present and cached_ref == PINNED_TYPING_REF and not force:
-        return
 
     headers = {"Accept": "application/vnd.github+json"}
     token = os.environ.get("GITHUB_TOKEN")
     if token:
         headers["Authorization"] = f"token {token}"
+    return headers
 
-    listing_req = urllib.request.Request(FIXTURES_API, headers=headers)
-    with urllib.request.urlopen(listing_req, timeout=60) as resp:  # noqa: S310 (pinned https)
+
+def resolve_upstream_commit() -> dict:
+    """Resolve the current `python/typing@main` tip to its commit metadata."""
+    import urllib.request
+
+    req = urllib.request.Request(COMMITS_API, headers=_gh_headers())
+    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 (pinned https)
+        data = json.loads(resp.read())
+    sha = data["sha"]
+    date = data.get("commit", {}).get("committer", {}).get("date", "")[:10]
+    return {"sha": sha, "short": sha[:7], "date": date}
+
+
+def download_fixtures(conf_dir: Path, sha: str) -> int:
+    """Download every `.py`/`.pyi` fixture from `conformance/tests` at `sha`.
+
+    Fetches BOTH the `.py` tests AND the `.pyi` support stubs they import (e.g.
+    `qualifiers_final_decorator.py` imports `_qualifiers_final_decorator`). Only
+    non-`_` `.py`/`.pyi` files are SCORED (see `score()`); the rest are inputs.
+    """
+    import urllib.request
+
+    listing = f"{CONTENTS_API}?ref={sha}"
+    req = urllib.request.Request(listing, headers=_gh_headers())
+    with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310
         entries = json.loads(resp.read())
     fixtures = [
         e
@@ -212,7 +194,7 @@ def ensure_fixtures(conf_dir: Path, force: bool) -> None:
         if e.get("type") == "file" and e["name"].endswith((".py", ".pyi"))
     ]
     if not fixtures:
-        raise RuntimeError(f"no .py/.pyi fixtures found at {FIXTURES_API}")
+        raise RuntimeError(f"no .py/.pyi fixtures at {listing}")
 
     conf_dir.mkdir(parents=True, exist_ok=True)
     for stale in (*conf_dir.glob("*.py"), *conf_dir.glob("*.pyi")):
@@ -220,11 +202,147 @@ def ensure_fixtures(conf_dir: Path, force: bool) -> None:
     for entry in fixtures:
         with urllib.request.urlopen(entry["download_url"], timeout=60) as resp:  # noqa: S310
             (conf_dir / entry["name"]).write_bytes(resp.read())
-    stamp.write_text(PINNED_TYPING_REF + "\n", encoding="utf-8")
-    print(
-        f"  fetched {len(fixtures)} conformance fixtures "
-        f"(python/typing@{PINNED_TYPING_REF}) -> {conf_dir}"
+    return len(fixtures)
+
+
+def download_calculator(sha: str) -> None:
+    """Refresh the vendored calculator from `conformance/src/main.py` at `sha`."""
+    import urllib.request
+
+    with urllib.request.urlopen(RAW_MAIN_AT.format(sha=sha), timeout=30) as resp:  # noqa: S310
+        UPSTREAM_MAIN.write_bytes(resp.read())
+
+
+def fetch_upstream(conf_dir: Path) -> dict:
+    """Track `python/typing@main`: resolve its tip, refresh fixtures + calculator.
+
+    Every run pulls the latest `main` — CI and release included — so the score is
+    always against the current upstream suite: it resolves the tip and
+    re-downloads the ~150 fixtures + the calculator unconditionally. On any
+    network failure the cached fixtures are scored instead, flagged `stale`.
+    Returns the resolved commit plus the calculator hash/size for the report.
+    Honors `GITHUB_TOKEN`.
+    """
+    try:
+        commit = resolve_upstream_commit()
+    except Exception as exc:  # noqa: BLE001 — degrade to cache, never crash the score
+        return _cached_commit(conf_dir, exc, None)
+
+    try:
+        count = download_fixtures(conf_dir, commit["sha"])
+        download_calculator(commit["sha"])
+        REF_STAMP.parent.mkdir(parents=True, exist_ok=True)
+        REF_STAMP.write_text(commit["sha"] + "\n", encoding="utf-8")
+        print(
+            f"  fetched {count} fixtures + calculator "
+            f"(python/typing@{commit['short']})"
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _cached_commit(conf_dir, exc, commit)
+
+    return _with_calculator_hash(commit, stale=False)
+
+
+def _with_calculator_hash(commit: dict, *, stale: bool) -> dict:
+    raw = UPSTREAM_MAIN.read_bytes() if UPSTREAM_MAIN.exists() else b""
+    return {
+        **commit,
+        "calculator_sha256": hashlib.sha256(raw).hexdigest() if raw else "",
+        "calculator_bytes": len(raw),
+        "stale": stale,
+    }
+
+
+def _cached_commit(conf_dir: Path, exc: Exception, commit: dict | None) -> dict:
+    """Fall back to cached fixtures when `main` cannot be reached."""
+    present = conf_dir.exists() and any(conf_dir.glob("*.py"))
+    if not present:
+        raise RuntimeError(
+            f"cannot reach python/typing@{UPSTREAM_REF} and no cached fixtures: {exc}"
+        )
+    cached_sha = (
+        REF_STAMP.read_text(encoding="utf-8").strip() if REF_STAMP.exists() else ""
     )
+    sha = (commit or {}).get("sha") or cached_sha
+    print(
+        f"  ⚠  could not reach python/typing@{UPSTREAM_REF} ({exc}); "
+        "scoring cached fixtures"
+    )
+    base = {
+        "sha": sha,
+        "short": (commit or {}).get("short") or (sha[:7] if sha else "unknown"),
+        "date": (commit or {}).get("date", ""),
+    }
+    return _with_calculator_hash(base, stale=True)
+
+
+def write_website_report(commit: dict, rows: list[Row], totals: Totals, n: int) -> None:
+    """Write the machine-readable report the website build consumes."""
+    pct = round(totals["pass"] * 100.0 / n, 1) if n else 0.0
+    report = {
+        "_doc": (
+            "Generated by conformance/score.py on every run. The website build "
+            "(website/src/_data/conformance.js) reads this for the upstream commit "
+            "and calculator hash. Do not hand-edit."
+        ),
+        "upstream": {
+            "repo": UPSTREAM_REPO,
+            "ref": UPSTREAM_REF,
+            "sha": commit.get("sha", ""),
+            "shortSha": commit.get("short", ""),
+            "commitDate": commit.get("date", ""),
+            "stale": commit.get("stale", False),
+        },
+        "calculator": {
+            "file": "conformance/upstream_main.py",
+            "sha256": commit.get("calculator_sha256", ""),
+            "bytes": commit.get("calculator_bytes", 0),
+            "funcs": list(OFFICIAL_FUNCS),
+        },
+        "grading": "errors+warnings, every rule enabled (strict default config)",
+        "score": {
+            "pass": totals["pass"],
+            "total": n,
+            "fail": n - totals["pass"],
+            "scorePct": pct,
+            "caught": totals["caught"],
+            "missed": totals["missed"],
+            "falsePositives": totals["fp"],
+        },
+        "files": [
+            {
+                "file": name,
+                "category": cat,
+                "status": "PASS" if passed else "FAIL",
+                "caught": caught,
+                "missed": missed,
+                "falsePositives": fp,
+                "codes": codes,
+            }
+            for name, cat, passed, caught, missed, fp, codes in rows
+        ],
+    }
+    WEBSITE_REPORT.parent.mkdir(parents=True, exist_ok=True)
+    WEBSITE_REPORT.write_text(
+        json.dumps(report, indent=2) + "\n", encoding="utf-8"
+    )
+    print(f"  Website report: {WEBSITE_REPORT}")
+
+
+def stamp_reference_docs(root: Path) -> None:
+    """Refresh the score + commit quoted in the README/spec from the report.
+
+    Best-effort and never fails the score; see
+    `scripts/gen_conformance_reference.py` (also runnable standalone / in CI with
+    `--check`).
+    """
+    script = root / "scripts" / "gen_conformance_reference.py"
+    if not script.exists():
+        return
+    try:
+        subprocess.run([sys.executable, str(script)], check=False)
+    except OSError as exc:  # noqa: BLE001 — doc stamping must never break scoring
+        print(f"  ⚠  could not stamp reference docs: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -383,18 +501,21 @@ def print_scorecard(
     files: list[Path],
     rows: list[Row],
     totals: Totals,
+    commit: dict,
     digest: str,
 ) -> None:
     n = len(files)
     pct = (totals["pass"] * 100.0 / n) if n else 0.0
+    stale = "  [STALE — offline, cached fixtures]" if commit.get("stale") else ""
     print()
     print("=" * 68)
     print(
         "  BASILISK PEP CONFORMANCE — REAL python/typing CALCULATOR [errors+warnings]"
     )
-    print("  calc: imported verbatim from committed conformance/upstream_main.py")
+    print("  calc: imported verbatim from vendored conformance/upstream_main.py")
     print(
-        f"  ref:  python/typing@{PINNED_TYPING_REF}  ({digest})  funcs: {', '.join(OFFICIAL_FUNCS)}"
+        f"  ref:  python/typing@{commit.get('short', '?')}  ({digest})  "
+        f"funcs: {', '.join(OFFICIAL_FUNCS)}{stale}"
     )
     print("=" * 68)
     print(f"  Files:    {n} total | {totals['pass']} pass | {n - totals['pass']} fail")
@@ -434,8 +555,6 @@ def parse_args(argv: list[str]) -> dict:
         "bin": None,
         "gate": False,
         "dir": None,
-        "refresh": False,
-        "fetch": False,
         "fetch_only": False,
     }
     it = iter(argv)
@@ -446,12 +565,10 @@ def parse_args(argv: list[str]) -> dict:
             opts["gate"] = True
         elif a == "--conformance-dir":
             opts["dir"] = next(it, None)
-        elif a == "--refresh-upstream":
-            opts["refresh"] = True
-        elif a == "--fetch":
-            opts["fetch"] = True
         elif a == "--fetch-only":
             opts["fetch_only"] = True
+        # `--fetch` / `--refresh-upstream` are accepted for back-compat but are
+        # no-ops: every run already tracks the latest `main`.
     return opts
 
 
@@ -487,28 +604,16 @@ def enforce_gate(root: Path, files: list[Path], totals: Totals) -> bool:
 
 def main(argv: list[str]) -> int:
     opts = parse_args(argv)
-    if opts["refresh"]:
-        return refresh_upstream()
-
     root = repo_root()
     conf_dir = Path(opts["dir"]) if opts["dir"] else root / "conformance/tests"
 
-    # The fixtures are downloaded (git-ignored), unlike the committed calculator.
-    # Fetch them when forced (--fetch), in fetch-only mode, or when absent. A
-    # network failure is fatal only if a fetch was explicitly requested; on the
-    # plain score path a missing suite is skipped (fresh checkout, offline).
-    present = conf_dir.exists() and any(conf_dir.glob("*.py"))
-    if opts["fetch"] or opts["fetch_only"] or not present:
-        try:
-            ensure_fixtures(conf_dir, force=opts["fetch"])
-        except Exception as exc:  # noqa: BLE001 — surface fetch failure clearly
-            if opts["fetch"] or opts["fetch_only"]:
-                print(
-                    f"  ✗ could not fetch conformance fixtures: {exc}", file=sys.stderr
-                )
-                return 1
-            print("  ⚠  Conformance suite not present and fetch failed — skipping.")
-            return 0
+    # Always track the latest python/typing@main; degrade to cached fixtures when
+    # offline. Fatal only when there is no cache at all to fall back to.
+    try:
+        commit = fetch_upstream(conf_dir)
+    except Exception as exc:  # noqa: BLE001 — surface fetch failure clearly
+        print(f"  ✗ {exc}", file=sys.stderr)
+        return 1
     if opts["fetch_only"]:
         return 0
 
@@ -533,8 +638,11 @@ def main(argv: list[str]) -> int:
 
     checker = BasiliskTypeChecker(binary)
     files, rows, totals = score(checker, get_expected, diff_errors, conf_dir)
-    print_scorecard(files, rows, totals, digest)
+    print_scorecard(files, rows, totals, commit, digest)
     write_csv(root, rows)
+    write_website_report(commit, rows, totals, len(files))
+    if not commit.get("stale"):
+        stamp_reference_docs(root)
 
     if not opts["gate"]:
         return 0

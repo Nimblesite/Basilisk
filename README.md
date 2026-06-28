@@ -21,6 +21,14 @@
   <a href="https://www.basilisk-python.dev/docs/comparison/">Compare</a>
 </p>
 
+<p align="center">
+  <a href="https://www.basilisk-python.dev/docs/conformance/"><strong><!--g:score-->94.3%<!--/g:score--> PEP conformance</strong></a> &mdash; <!--g:pass-->133<!--/g:pass--> of <!--g:total-->141<!--/g:total--> tests in the official
+  <a href="https://github.com/python/typing/tree/f6e2e588880a057a939cee76c6c919aebd4db37c/conformance"><code>python/typing</code></a>
+  conformance suite (commit <code><!--g:short-->f6e2e58<!--/g:short--></code>), scored on the real binary in its default config by
+  <a href="https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py"><code>conformance/score.py</code></a>.
+  We target <code>python/typing@main</code> and ratchet the score up only.
+</p>
+
 ---
 
 <p align="center">

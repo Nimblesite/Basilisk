@@ -23,6 +23,14 @@
   <a href="https://www.basilisk-python.dev/zh/docs/comparison/">对比</a>
 </p>
 
+<p align="center">
+  <a href="https://www.basilisk-python.dev/zh/docs/conformance/"><strong>PEP 符合性 <!--g:score-->94.3%<!--/g:score--></strong></a> &mdash; 官方
+  <a href="https://github.com/python/typing/tree/f6e2e588880a057a939cee76c6c919aebd4db37c/conformance"><code>python/typing</code></a>
+  符合性套件 <!--g:total-->141<!--/g:total--> 个测试中通过 <!--g:pass-->133<!--/g:pass--> 个（提交 <code><!--g:short-->f6e2e58<!--/g:short--></code>），由
+  <a href="https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py"><code>conformance/score.py</code></a>
+  在默认配置下对真实二进制文件评分。我们对标 <code>python/typing@main</code>，得分只升不降。
+</p>
+
 ---
 
 <p align="center">

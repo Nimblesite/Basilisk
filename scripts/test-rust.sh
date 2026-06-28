@@ -24,12 +24,9 @@ HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
 # Ensure llvm-tools-preview is installed so cargo-llvm-cov never prompts.
 rustup component add llvm-tools-preview 2>/dev/null || true
 
-# ── Fetch the (git-ignored) conformance fixtures if missing or stale ──────────
-# Only the fixtures are downloaded; the official calculator
-# (conformance/upstream_main.py) is committed and never fetched. score.py pins
-# the ref and re-fetches when the cached ref differs — single source of truth.
-header "Ensuring PEP conformance fixtures are current"
-python3 "$REPO_ROOT/conformance/score.py" --fetch-only
+# The conformance gate below (score.py --gate) pulls the latest
+# python/typing@main itself — it resolves the tip and re-downloads the fixtures +
+# calculator on every run — so there is no separate fetch step here.
 
 # ── Rust tests + conformance, one instrumented coverage pool ─────────────────
 # Coverage is gathered in TWO phases that share ONE profile pool, reported once:
@@ -76,12 +73,13 @@ ok "basilisk binary ready: $BASILISK_BIN"
 
 # ── PEP conformance gate (also contributes coverage) ──────────────────────────
 # Score the REAL compiled binary with the official python/typing calculator
-# (conformance/score.py imports the committed, sha256-verified upstream_main.py)
-# and enforce the ratchet gate from coverage-thresholds.json. The binary runs
-# under the sourced llvm-cov env, so its profile data joins the test pool and the
-# checker/resolver paths these 146 files exercise count toward coverage. The whole
-# conformance system is these two Python files + the gitignored fixtures, scored
-# on the compiled binary — no Rust test.
+# (score.py runs upstream_main.py's get_expected_errors + diff_expected_errors,
+# fetched fresh from python/typing@main) and enforce the gate from
+# coverage-thresholds.json — 100% pass, 0 false positives, or the build fails. The
+# binary runs under the sourced llvm-cov env, so its profile data joins the test
+# pool and the checker/resolver paths these fixtures exercise count toward
+# coverage. The whole conformance system is these two Python files + the
+# gitignored fixtures, scored on the compiled binary — no Rust test.
 header "Enforcing PEP conformance gate (official python/typing calculator)"
 python3 "$REPO_ROOT/conformance/score.py" --bin "$BASILISK_BIN" --gate
 

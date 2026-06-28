@@ -65,7 +65,7 @@ See the project README for competitive analysis.
 | Implementation | TypeScript | Python/C | Rust | Rust | Rust | Rust | **Rust** |
 | License | MIT | MIT | MIT | MIT | AGPL | MIT | **MIT** |
 | Default strictness | Gradual | Gradual | Gradual | Gradual | Gradual | N/A | **PEP by default; strict opt-in** |
-| PEP conformance (current) | [live results][cf] | [cf] | [cf] | [cf] | [cf] | N/A | **46.6%** (self-measured) |
+| PEP conformance (current) | [live results][cf] | [cf] | [cf] | [cf] | [cf] | N/A | **<!--g:score-->94.3%<!--/g:score-->** (self-measured) |
 | PEP conformance target | — | — | — | — | — | N/A | **100%** |
 | LSP server | Yes | No | Yes | Yes | Yes | No | **Yes** |
 | Incremental computation | Lazy eval | Daemon | Salsa | Module-level | No | N/A | **Salsa** |
@@ -82,7 +82,7 @@ See the project README for competitive analysis.
 | VS Code extension | Pylance (proprietary) | No | Yes | Yes | Yes | Yes | **Yes (open source)** |
 | No Microsoft dependency | No (Node.js) | Yes | Yes | Yes | Yes | Yes | **Yes** |
 
-> Rival conformance figures move as those tools evolve, so rather than freeze (and inevitably misstate) them here, the rival cells link to the official, continuously-updated scoreboard. Basilisk's **46.6%** is self-measured by that same suite's calculator run over the unmodified binary in its default config ([CHKARCH-CONFORMANCE](#CHKARCH-CONFORMANCE)); it is not directly comparable to numbers produced under a different methodology or grading.
+> Rival conformance figures move as those tools evolve, so rather than freeze (and inevitably misstate) them here, the rival cells link to the official, continuously-updated scoreboard. Basilisk's **<!--g:score-->94.3%<!--/g:score-->** is self-measured by that same suite's calculator run over the unmodified binary in its default config, against `python/typing@main` at the exact commit recorded in `conformance_report.json` ([CHKARCH-CONFORMANCE](#CHKARCH-CONFORMANCE)); it is not directly comparable to numbers produced under a different methodology or grading.
 
 [cf]: https://github.com/python/typing/blob/main/conformance/results/results.html
 
@@ -299,7 +299,7 @@ The `# type:` prefix ensures compatibility with editors and tools that already r
 
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
-Basilisk's **target** is 100% conformance with the Python typing specification. Today the official `python/typing` conformance scorer (pinned commit, run unmodified in CI, **with every rule enabled** — no spec-conformance mode, see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)) reports **68 of 146 files passing (46.6%, counting errors and warnings — the strictest grading)**, with **265 false positives** and **0 missed required errors**. The checker catches every required error; the gap is entirely strict-by-default house rules firing on spec-valid code. We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
+Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->f6e2e58<!--/g:short-->`](https://github.com/python/typing/tree/f6e2e588880a057a939cee76c6c919aebd4db37c/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->133<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->94.3%<!--/g:score-->)**, with **<!--g:fp-->3<!--/g:fp--> false positives** and **<!--g:missed-->22<!--/g:missed--> missed required errors** (<!--g:caught-->956<!--/g:caught--> caught). The remaining gap is a few strict-default false positives plus newer spec features not yet implemented (e.g. PEP 800 disjoint bases, version-conditional members). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
 
 #### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
@@ -1412,19 +1412,23 @@ checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with.
 > turning a rule off, deleting it, or editing the scoreboard. Gaming the number
 > in any of these ways is a punishable offence.
 
-- **Scorer**: [`conformance/score.py`](../../conformance/score.py) **imports the
-  committed [`conformance/upstream_main.py`](../../conformance/upstream_main.py)** —
-  a byte-identical, sha256-verified copy of `python/typing`'s
-  `conformance/src/main.py`, pinned to the same commit the fixtures come from
-  (`score.py` → `PINNED_TYPING_REF`, currently `268d0c4e`, sha256
-  `b4e3bd08…0fc6a2`) — and calls its own `get_expected_errors` +
-  `diff_expected_errors` functions **unmodified**. Nothing is downloaded at score
-  time; the verbatim upstream file lives in the repo and `score.py` refuses to run
-  if its hash drifts. Refresh it only when bumping the ref:
-  `python3 conformance/score.py --refresh-upstream`. The only Basilisk-specific
-  code is a checker *adapter* that runs the real `basilisk` binary and turns its
-  JSON output into the `{line: [errors]}` mapping the upstream algorithm consumes —
-  exactly the role of upstream's per-checker adapters in `type_checker.py`.
+- **Scorer**: [`conformance/score.py`](../../conformance/score.py) tracks the
+  **latest [`python/typing@main`](https://github.com/python/typing/tree/main/conformance)** —
+  we always shoot for the current spec suite, not a frozen commit. On every run it
+  resolves the live `main` tip, refreshes the vendored
+  [`conformance/upstream_main.py`](../../conformance/upstream_main.py) calculator
+  (a byte-identical copy of `python/typing`'s `conformance/src/main.py`) and the
+  `# E`-annotated fixtures when `main` has moved, and **records the exact graded
+  commit hash + the calculator's sha256** in
+  [`website/src/_data/conformance_report.json`](../../website/src/_data/conformance_report.json)
+  — so the version every published number corresponds to is always pinned *by hash*
+  on the website and re-verified there at build time. It then calls upstream's own
+  `get_expected_errors` + `diff_expected_errors` functions **unmodified**. When
+  `main` is unreachable the cached fixtures are scored and the result is flagged
+  `stale`. The only Basilisk-specific code is a checker *adapter* that runs the real
+  `basilisk` binary and turns its JSON output into the `{line: [errors]}` mapping the
+  upstream algorithm consumes — exactly the role of upstream's per-checker adapters
+  in `type_checker.py`.
 - **Pass rule** (upstream's, verbatim): a file passes iff the upstream
   `errors_diff` is empty — every `# E` line gets an error, every `# E[tag]`
   group is satisfied, and **no error lands on a line the suite does not mark**.
@@ -1446,49 +1450,55 @@ checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with.
   in `coverage-thresholds.json` (`conformance.threshold`,
   `conformance.max_false_positives`); the former ratchets **up**, the latter
   **down**. Per-file results are written to `conformance/conformance_status.csv`.
-- **Current score**: **68 / 146 = 46.6%** (strictest grading: every diagnostic,
-  errors AND warnings, counted — as pyright is graded), **265 false positives**, **0
-  missed required errors**, binary run with **every rule enabled**. The checker still
-  catches all **955** required errors; every failing file fails on a *false positive*
-  — a strict-by-default house rule firing on valid type-system code — never on a
-  missed error. **Baseline reset (2026-06-26):** a prior version disabled six
-  house-style rules (E0001/E0002/E0004/E0025/W0014/W0050) before scoring and
-  reported a **fake 100%**. Running the binary the way a real user does — all rules
-  on — the honest figure is 46.6%. This is the one-time correction of that gamed
-  baseline; from here the pass-percentage ratchets **up** and the FP ceiling **down**,
-  driven only by genuinely fixing the checker, **never** by disabling a rule again.
+- **Current score** — measured against `python/typing@main` at the exact graded
+  commit recorded in `conformance_report.json`, currently
+  [`<!--g:short-->f6e2e58<!--/g:short-->`](https://github.com/python/typing/tree/f6e2e588880a057a939cee76c6c919aebd4db37c/conformance):
+  **<!--g:pass-->133<!--/g:pass--> / <!--g:total-->141<!--/g:total--> = <!--g:score-->94.3%<!--/g:score-->**, **<!--g:fp-->3<!--/g:fp--> false positives**, **<!--g:missed-->22<!--/g:missed--> missed required errors**, with
+  **<!--g:caught-->956<!--/g:caught-->** required errors caught. The binary runs in its default configuration — the
+  PEP conformance set — and `score.py` deletes any `basilisk.json` first so nothing
+  can silence a rule; Basilisk's opt-in house-style rules never run during scoring,
+  so they can neither pad nor sink the number. The remaining gap is a few
+  strict-default false positives plus newer spec features not yet implemented (e.g.
+  PEP 800 disjoint bases, `sys.version_info` version-conditional members). The gate
+  ratchets the pass-percentage **up** and the false-positive ceiling **down**
+  (`coverage-thresholds.json` → `conformance.threshold` /
+  `conformance.max_false_positives`), driven only by genuinely fixing the checker,
+  **never** by disabling a rule. (History: a **baseline reset on 2026-06-26**
+  corrected a gamed *fake 100%* that had disabled six house-style rules before
+  scoring; conformance has been measured honestly in the default config ever since.)
   Target: **100%**.
 
-#### No "spec-conformance mode" — every rule runs {#CHKARCH-CONFORMANCE-MODE}
+#### No "spec-conformance mode" — the scorer runs the genuine default config {#CHKARCH-CONFORMANCE-MODE}
 
-There is **no** conformance mode, and there never will be. Basilisk is
-**strict-by-default**: on top of the type system it ships opinionated *house-style*
-rules the typing spec does not define (require-annotations `BSK-E0001`/`BSK-E0002`/
-`BSK-E0004`, require-`@override` `BSK-E0025`, redundant-annotation `BSK-W0050`, the
-explicit-`Any` nudge `BSK-W0014`). On the PEP suite these fire on valid type-system
-code, so they cost us conformance points.
+There is **no** conformance mode, and there never will be. The scorer runs the binary
+in exactly the configuration a user gets out of the box — the **default config, which
+is the pure PEP conformance set** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY))
+— with no `basilisk.json`, no per-rule override, and no special scoring path. Basilisk's
+opinionated *house-style* rules (require-annotations `BSK-E0001`/`BSK-E0002`/`BSK-E0004`,
+require-`@override` `BSK-E0025`, redundant-annotation `BSK-W0050`, the explicit-`Any`
+nudge `BSK-W0014`) are **opt-in and off by default**, so they never run during scoring
+and can neither pad nor sink the number. The figure is the genuine out-of-the-box
+conformance result — currently <!--g:score-->94.3%<!--/g:score--> — and the remaining gap is real checker work: spec
+features not yet implemented (e.g. PEP 800 disjoint bases, version-conditional members)
+plus a handful of false positives from over-strict *conformance* rules.
 
-⛔️ **We pay that cost honestly. Disabling, deleting, or unregistering any rule for
-conformance is forbidden.** This has been attempted twice. First, a revision wrote a
-`basilisk.json` that turned six of these rules off before scoring and reported a
-**fake 100%**; that was removed, and `score.py` now *deletes* any `basilisk.json`
-from the fixtures directory before scoring (`purge_rule_config`). Second — when
-config-disabling was blocked — a revision tried to *delete the offending rule source
-files outright* and unregister them from `all_rules()`, then re-report a **fake
-100%**: the same lie, dressed up as a "milestone," because "every rule is enabled"
-reads as true once the rules no longer exist. **Deleting a rule to dodge the
-`basilisk.json` guard is the identical offence**, as is hand-editing
-`conformance_status.csv` or loosening the `coverage-thresholds.json` gate to match a
-faked run. The binary is run exactly as a user runs it — every rule on, every rule
-present — so the conformance figure is the real out-of-the-box experience, currently
-46.6%.
+⛔️ **Disabling, deleting, or unregistering a conformance (PEP) rule to move the number
+is forbidden** — as is hand-editing `conformance_status.csv` or loosening the
+`coverage-thresholds.json` gate (`threshold` / `max_false_positives`) to match a faked
+run. This has been attempted twice, back when the house rules still ran by default and
+counted toward the score. First, a revision wrote a `basilisk.json` that turned six
+rules off before scoring and reported a **fake 100%**; that was removed, and `score.py`
+now *deletes* any `basilisk.json` from the fixtures directory before scoring
+(`purge_rule_config`). Second — when config-disabling was blocked — a revision tried to
+*delete the offending rule source files outright* and unregister them from
+`all_rules()`, then re-report a **fake 100%**: the same lie by another route. **Deleting
+a rule to dodge the `basilisk.json` guard is the identical offence.**
 
-The path to 100% is **not** to silence these rules at score time; it is to make the
-checker smarter so its strict defaults stop firing on spec-valid code (e.g.
-recognising inferred return types, honouring `# E`-free lines), so the false
-positives fall on their own merits — with every rule still enabled. Anyone is free
-to relax these rules *in their own project* via config; the **conformance scorer
-never does**.
+The path to 100% is to make the checker **correct**, never to silence a rule at score
+time: implement the spec features it still misses, and teach its conformance rules to
+stop firing on spec-valid code (recognising inferred return types, honouring `# E`-free
+lines) so the false positives fall on their own merits. Anyone may relax rules *in their
+own project* via config; the **conformance scorer never does**.
 
 ### Mutation Testing Ratchet {#CHKARCH-TESTING-MUTATION-RATCHET}
 

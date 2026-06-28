@@ -31,7 +31,7 @@ Basilisk 由**官方 `python/typing` 符合性套件**评分——也就是类�
 - 一个小型**评分工具**对这些文件运行某个类型检查器，并将其输出与注释做差异比对。文件只有在差异为空时才*通过*：每个必需错误都被报告，且没有任何诊断落在套件未标记的行上。
 - 维护者用它为每个检查器打分，并发布[结果表](https://github.com/python/typing/blob/main/conformance/results/results.html)——这是 pyright、mypy、pyrefly、ty 等工具当前得分的实时权威来源。
 
-我们使用这套套件，固定在提交 [`{{ conformance.pinnedRef }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance)。同样的工具与文件为所有人打分，因此这个数字在各检查器之间可比，也不是我们能朝有利方向调整的。
+我们针对上次从 `main` 拉取的套件的确切提交评分——[`{{ conformance.pinnedRefShort }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance){% if conformance.commitDate %}，{{ conformance.commitDate }}{% endif %}——以完整哈希记录，因此即使 `main` 继续推进，此链接也始终固定指向我们所评分的确切文件。同样的工具与文件为所有人打分，因此这个数字在各检查器之间可比，也不是我们能朝有利方向调整的。
 
 ## 一个文件如何评分
 
