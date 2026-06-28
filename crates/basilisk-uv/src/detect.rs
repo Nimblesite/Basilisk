@@ -32,6 +32,9 @@ pub struct UvProjectInfo {
 /// - `pyproject.toml` contains a `[tool.uv]` section
 /// - `.venv/pyvenv.cfg` contains a `uv = true` marker
 //
+// Implements [LSPARCH-UV-DETECT] — the startup detection step that gates building
+// the PackageRegistry (registry build/workspace-member discovery live in the LSP
+// server's build_uv_registry and basilisk-uv's registry/workspace modules).
 // Implements [LSPUV-DETECTION-SIGNALS] — filesystem-only signal check (no
 // subprocess), evaluated in spec order: uv.lock, then `[tool.uv]`, then
 // `.venv/pyvenv.cfg` `uv = true`. Note: the spec's fourth Medium-confidence

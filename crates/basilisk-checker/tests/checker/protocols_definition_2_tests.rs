@@ -1,4 +1,4 @@
-//! Tests for [`protocols_definition_2`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//! Tests for [`protocols_definition_2`] from [CHKARCH-DIAG-CATEGORIES] / [TYPEINF-SUBTYPING-PROTOCOL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 // Integration tests for protocols_definition_2: Protocol conformance violation.
 
 use super::common::*;

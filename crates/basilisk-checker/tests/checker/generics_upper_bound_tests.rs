@@ -1,4 +1,4 @@
-//! Tests for [`generics_upper_bound`] from [CHKARCH-DIAG-UNUSED]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
+//! Tests for [`generics_upper_bound`] from [CHKARCH-DIAG-UNUSED] / [TYPEINF-GENERICS-BOUND]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-UNUSED
 // Tests for generics_upper_bound: `TypeVar` upper bound violation at call site.
 //
 // This rule detects when a call site passes a value whose type does not satisfy

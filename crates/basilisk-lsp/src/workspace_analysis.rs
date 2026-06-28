@@ -137,6 +137,7 @@ pub(crate) fn fnv1a(s: &str) -> u64 {
     })
 }
 
+// Implements [ANALYSIS-CONFIG-PRI]
 /// Extract `AnalysisMode` from `InitializationOptions` JSON, falling back to
 /// workspace config file, then the hard default (`WholeModule`).
 #[must_use]

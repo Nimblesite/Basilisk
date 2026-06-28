@@ -5,15 +5,17 @@
 
 ## Overview {#REFACTOR-OVERVIEW}
 
-Deterministic, type-aware refactoring tools that bring Basilisk to feature parity with Pylance and beyond. Every refactoring is a structured code transformation — no regex, no string hacking. All operations use the resolved AST and type information from the checker.
+Deterministic, type-aware refactoring. Every refactoring is a structured transformation over the resolved AST and checker type information — no regex, no string hacking.
 
 ## Design Principles {#REFACTOR-PRINCIPLES}
 
-1. **Deterministic first** — every refactoring produces a single, predictable result. AI-assisted variants live in [LSP-AI-SPEC.md §LSPAI-FEATURE-REFACTOR](LSP-AI-SPEC.md#LSPAI-FEATURE-REFACTOR), never here.
-2. **Type-aware** — refactorings use full type information (resolved types, import graph, call sites) to produce correct transformations.
-3. **Cross-file** — all refactorings that affect imports or references operate across the workspace via the import graph.
-4. **Atomic undo** — each refactoring returns a single `WorkspaceEdit` so the user can undo in one step.
-5. **Safe by default** — refactorings that could change runtime behavior are clearly marked and require confirmation.
+Invariants every refactoring must satisfy:
+
+1. **Deterministic** — a single, predictable result. AI-assisted variants live in [LSP-AI-SPEC.md §LSPAI-FEATURE-REFACTOR](LSP-AI-SPEC.md#LSPAI-FEATURE-REFACTOR), never here.
+2. **Type-aware** — uses resolved types, import graph, call sites.
+3. **Cross-file** — operates across the workspace via the import graph.
+4. **Atomic undo** — returns a single `WorkspaceEdit` (one undo step).
+5. **Safe by default** — refactorings that could change runtime behavior are marked and require confirmation.
 
 ## Code Action Kinds {#REFACTOR-KINDS}
 
@@ -37,11 +39,11 @@ Additionally, `textDocument/rename` and `textDocument/prepareRename` handle symb
 
 **LSP methods**: `textDocument/rename`, `textDocument/prepareRename`
 
-Current implementation renames identifiers across files using the import graph. Enhancements needed:
+Renames identifiers across files using the import graph. Enhancements needed:
 
 ### Scope-Aware Rename {#REFACTOR-RENAME-SCOPE}
 
-The current rename uses whole-word text matching. It must become scope-aware:
+The current whole-word text matching must become scope-aware:
 
 - **Local variables**: rename only within the enclosing function/block scope.
 - **Parameters**: rename the parameter and all references within the function body. If the function has callers using keyword arguments, rename those too.
@@ -60,7 +62,7 @@ Before applying a rename, validate:
 
 ### Docstring Updates {#REFACTOR-RENAME-DOCS}
 
-When renaming a parameter, offer to update references in docstrings (`:param old_name:` → `:param new_name:`). This is opt-in, not automatic.
+When renaming a parameter, offer (opt-in) to update docstring references (`:param old_name:` → `:param new_name:`).
 
 ---
 
@@ -164,7 +166,7 @@ When a user renames a `.py` file in their editor:
 4. **Replace** the call expression with the substituted body.
 5. **Remove** the function definition if it has no other callers (offer as option).
 
-This is a complex refactoring. Initial implementation should support only single-expression bodies (i.e., `def f(x): return x + 1` → inline `f(y)` to `y + 1`).
+Initial implementation supports only single-expression bodies (`def f(x): return x + 1` → inline `f(y)` to `y + 1`).
 
 ---
 
@@ -187,7 +189,7 @@ This is a complex refactoring. Initial implementation should support only single
 
 ### Move to New File {#REFACTOR-MOVE-NEW}
 
-Same as above, but the destination is a new file named after the symbol (e.g., `my_func` → `my_func.py` in the same directory).
+As above, but the destination is a new file named after the symbol (`my_func` → `my_func.py` in the same directory).
 
 ---
 
@@ -212,7 +214,7 @@ Each operation produces a `WorkspaceEdit` covering the definition and all call s
 
 **Code action kind**: `refactor.rewrite.convert`
 
-Context-sensitive conversions offered when the cursor is on an applicable construct:
+Context-sensitive conversions offered when the cursor is on an applicable construct. Each must preserve runtime semantics:
 
 | Conversion | Trigger | Action |
 |---|---|---|
@@ -224,8 +226,6 @@ Context-sensitive conversions offered when the cursor is on an applicable constr
 | `Optional[X]` ↔ `X \| None` | Cursor on `Optional` type | Convert to PEP 604 syntax |
 | `TypedDict` ↔ `dataclass` | Cursor on a class definition | Convert between equivalent data structures |
 | Named tuple class ↔ functional | Cursor on a `NamedTuple` | Convert between class syntax and functional form |
-
-These are offered as code actions only when applicable and safe. Each conversion must preserve runtime semantics.
 
 ---
 
@@ -249,13 +249,15 @@ These are offered as code actions only when applicable and safe. Each conversion
 
 ## Cross-Cutting Concerns {#REFACTOR-CROSS}
 
+Constraints applying to every refactoring.
+
 ### Formatter Conflict {#REFACTOR-FORMATTER}
 
-All generated code must match the project's formatting settings. After generating a `WorkspaceEdit`, run the formatter (ruff) on the affected ranges to normalize style. This prevents the refactoring from triggering a format-on-save diff.
+After generating a `WorkspaceEdit`, run ruff on the affected ranges so generated code matches project formatting and does not trigger a format-on-save diff.
 
 ### Undo Granularity {#REFACTOR-UNDO}
 
-Every refactoring returns exactly one `WorkspaceEdit`. The editor treats this as one undo step. Never split a refactoring into multiple sequential edits.
+Every refactoring returns exactly one `WorkspaceEdit` (one undo step). Never split into multiple sequential edits.
 
 ### Telemetry {#REFACTOR-TELEMETRY}
 
@@ -284,15 +286,15 @@ abstract_method_body = "raise"
 
 ## Priority Order {#REFACTOR-PRIORITY}
 
-For reaching feature parity with Pylance, implement in this order:
+Implementation order:
 
-1. **Rename Symbol** enhancements (scope-aware, validation) — highest impact, builds on existing code.
-2. **Rename Module** (`workspace/willRenameFiles`) — critical for file reorganization.
-3. **Extract Function** — high impact, builds on the extract-variable infrastructure.
-4. **Extract Variable** — frequently used, simpler than extract function.
-5. **Move Symbol** — enables large-scale refactoring.
-6. **Implement Abstract Methods** — high quality-of-life, moderate complexity.
-7. **Convert Between Constructs** — incremental, each conversion is independent.
-8. **Inline Variable** — useful but less frequently needed.
-9. **Change Signature** — complex, high value for large codebases.
-10. **Inline Function** — least common, most complex.
+1. **Rename Symbol** enhancements (scope-aware, validation)
+2. **Rename Module** (`workspace/willRenameFiles`)
+3. **Extract Function**
+4. **Extract Variable**
+5. **Move Symbol**
+6. **Implement Abstract Methods**
+7. **Convert Between Constructs** (each conversion independent)
+8. **Inline Variable**
+9. **Change Signature**
+10. **Inline Function**

@@ -88,6 +88,10 @@ fn hash_config(config: &BasiliskConfig) -> u64 {
 }
 
 /// Hash the resolution environment: search paths plus `uv.lock` contents.
+///
+/// This is the v1 boundary: site-packages changes without a `uv.lock` edit are
+/// not detected, which is why the cache is opt-in.
+// Implements [CHKCACHE-LIMITS]
 fn hash_env(search_paths: &ImportSearchPaths, project_root: &Path) -> u64 {
     let mut parts = vec![paths_field("roots", &search_paths.roots)];
     parts.push(paths_field("extra", &search_paths.extra_paths));

@@ -1,51 +1,25 @@
 # Rule Tagging {#CHKTAG}
 
-Basilisk classifies every diagnostic rule with a flat set of string **tags**.
-This is a *tagging* system, not a *categorisation* system: there is no single
-hierarchical "category" field a rule must slot into. A rule simply carries the
-set of labels that are true of it.
-
-The one place a hierarchy survives is the **PEP category** axis, and it exists
-only because the `python/typing` conformance suite defines it. Basilisk does not
-invent its own category taxonomy; it tags PEP rules with the conformance
-category they belong to, and tags everything else with plain descriptive labels.
+Basilisk classifies every diagnostic rule with a flat, de-duplicated set of
+string **tags** — no single hierarchical "category" field. The one hierarchy is
+the **PEP category** axis, which exists only because the `python/typing`
+conformance suite defines it: PEP rules are tagged with their conformance
+category, everything else with plain descriptive labels.
 
 - **Authoritative source (code):** [`crates/basilisk-checker/src/rule_tags.rs`](../../crates/basilisk-checker/src/rule_tags.rs)
 - **Conformance test (tests):** [`crates/basilisk-checker/tests/rule_tags_tests.rs`](../../crates/basilisk-checker/tests/rule_tags_tests.rs)
 - **Related:** [CHKARCH-DIAG](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG) (diagnostic rules),
   [CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE) (conformance scoring)
 
-## Principles {#CHKTAG-PRINCIPLES}
-
-1. **Tags, not categories.** Rules are described by a set of tags, not by
-   membership in one taxonomy. A rule can be `pep` + `narrowing`, or `basilisk`
-   + `style` + `strictness`.
-2. **Categories pertain to PEP only.** The only category vocabulary Basilisk
-   maintains is the set of `python/typing` conformance categories
-   ([CHKTAG-PEP-CATEGORIES]). Basilisk-original rules have **no** category — they
-   are described purely by tags.
-3. **Provenance is explicit.** Every rule declares whether it implements the
-   typing specification (`pep`) or is a Basilisk-original house rule
-   (`basilisk`) ([CHKTAG-PROVENANCE]). This is data, not something inferred from
-   a code prefix.
-4. **The `BSK-` prefix is cosmetic.** Basilisk-original rules are conventionally
-   named/prefixed `BSK` for human recognition. That prefix is *semantically
-   meaningless* to the checker ([CHKTAG-BSK-PREFIX]).
-5. **Free-form tags must not conflict.** Arbitrary descriptive tags (`style`,
-   `redundancy`, …) are allowed, but must be named so they never collide with a
-   reserved PEP-category name ([CHKTAG-FREEFORM]).
-
 ## Tag Model {#CHKTAG-MODEL}
 
 A **tag** is a non-empty, lowercase string label. A rule carries an *ordered,
-de-duplicated* set of tags. The set always contains **exactly one** provenance
-tag, optionally one PEP-category tag (PEP rules only), and zero or more free-form
-tags.
+de-duplicated* set: **exactly one** provenance tag (always first), optionally one
+PEP-category tag (PEP rules only), and zero or more free-form tags.
 
-The set for any diagnostic code is produced by
-[`rule_tags::tags_for_code`](../../crates/basilisk-checker/src/rule_tags.rs). It
-never panics and never returns an empty set; an unrecognised code resolves to a
-bare `pep` rule. The first element is always the provenance tag.
+[`rule_tags::tags_for_code`](../../crates/basilisk-checker/src/rule_tags.rs)
+produces the set for any code. It never panics and never returns an empty set; an
+unrecognised code resolves to a bare `pep` rule.
 
 ```text
 aliases_newtype        -> ["pep", "aliases"]
@@ -57,41 +31,38 @@ BSK-W0050              -> ["basilisk", "redundancy", "style"]   # opt-in house r
 
 ## Provenance Tags {#CHKTAG-PROVENANCE}
 
-Exactly one of the following is present on every rule. They are mutually
-exclusive.
+Exactly one is present on every rule; they are mutually exclusive.
 
 | Tag | Meaning |
 |---|---|
-| `pep` | A core rule selected by the **default** configuration — the `python/typing` conformance rules plus the core checks that run by default. The default config is exactly this "core PEP" set. |
-| `basilisk` | A Basilisk-original rule, **off by default**, that turns on only via opt-in configuration ([CHKARCH-CONFIGURATION-ONLY]). |
+| `pep` | A core rule selected by the **default** config — the `python/typing` conformance rules plus the core checks that run by default. The default config is exactly this "core PEP" set. |
+| `basilisk` | A Basilisk-original rule, **off by default**, on only via opt-in config ([CHKARCH-CONFIGURATION-ONLY]). |
 
-Provenance is **self-declared by each rule**: a rule returns
-`Some(OptInSpec { .. })` from `Rule::opt_in_spec()` to mark itself `basilisk`, or
-returns `None` (the trait default) to be a `pep` rule. `rule_tags` reads these
-declarations from the live rule registry — there is **no central rule list**, and
-provenance is never derived from a code prefix (see [CHKTAG-BSK-PREFIX]).
+Provenance is **self-declared by each rule**: returning `Some(OptInSpec { .. })`
+from `Rule::opt_in_spec()` marks it `basilisk`; returning `None` (the trait
+default) makes it `pep`. `rule_tags` reads these from the live rule registry —
+**no central rule list**, never derived from a code prefix (see
+[CHKTAG-BSK-PREFIX]).
 
-**Rule selection is configuration-only** ([CHKARCH-CONFIGURATION-ONLY]): running
-rules through `check_with_config` is the *only* valid way to select them, and the
-**default config selects exactly the core PEP set and nothing else**. Selection
-and classification read the **same** self-declared source, so they cannot drift:
+**Rule selection is configuration-only** ([CHKARCH-CONFIGURATION-ONLY]):
+`check_with_config` is the only way to select rules, and the default config
+selects exactly the core PEP set. Selection and classification read the **same**
+self-declared source, so they cannot drift:
 
-- `check_with_config` gates a rule off when it declares an `opt_in_spec()` whose
-  tags the configuration has not enabled (the `opt_in_tag_enabled` bridge maps the
-  config's opt-in switches to tags). A rule with no `opt_in_spec()` is `pep` and
-  always runs.
-- A default-on check is `pep` **even if it is Basilisk-authored** (e.g.
-  `imports_unresolved` and `version_target_syntax` declare no `opt_in_spec()`, so
-  they run by default and are `pep`, not `basilisk`). There is no "strict mode"
-  and no behaviour the tag switches on.
+- `check_with_config` gates a rule off when its `opt_in_spec()` tags are not
+  enabled in config (the `opt_in_tag_enabled` bridge maps config opt-in switches
+  to tags). A rule with no `opt_in_spec()` is `pep` and always runs.
+- A default-on check is `pep` **even if Basilisk-authored** (e.g.
+  `imports_unresolved`, `version_target_syntax` declare no `opt_in_spec()`, so run
+  by default and are `pep`). There is no "strict mode".
 
 ## PEP Category Tags {#CHKTAG-PEP-CATEGORIES}
 
-The **only** category axis Basilisk keeps. The vocabulary is taken verbatim from
-the `python/typing` conformance suite — the file-name prefixes under
+The **only** category axis Basilisk keeps. The vocabulary is verbatim from the
+`python/typing` conformance suite — the file-name prefixes under
 [`conformance/tests/`](../../conformance/tests) and the `category` column of
-[`conformance/conformance_status.csv`](../../conformance/conformance_status.csv).
-It is mirrored as `rule_tags::PEP_CATEGORIES`:
+[`conformance/conformance_status.csv`](../../conformance/conformance_status.csv) —
+mirrored as `rule_tags::PEP_CATEGORIES`:
 
 ```
 aliases      annotations  callables    classes      constructors
@@ -103,15 +74,12 @@ typeforms
 
 Rules:
 
-- A PEP-category tag may appear **only** on a rule that also has the `pep`
-  provenance tag.
-- A `pep` rule **should** carry exactly one PEP-category tag — the category it
-  belongs to. It is derived from the rule's conformance name (the portion of the
-  code before the first `_`, which the rule-rename work aligns with the
-  conformance category).
+- A PEP-category tag may appear **only** on a `pep` rule.
+- A `pep` rule **should** carry exactly one PEP-category tag, derived from the
+  rule's conformance name (the portion of the code before the first `_`).
 - Cross-cutting core checks with no single home category (e.g.
   `returns_compatibility`, `calls_argument_type`, `names_undefined`) are `pep`
-  with **no** category tag. This is allowed and expected.
+  with **no** category tag.
 - These 21 names are **reserved**: no free-form tag may reuse one
   ([CHKTAG-FREEFORM]).
 
@@ -122,34 +90,30 @@ Any rule may carry additional descriptive tags. The current vocabulary
 
 | Tag | Meaning |
 |---|---|
-| `strictness` | Enforces a stricter-than-spec requirement (e.g. requiring annotations). Describes a rule's intent — **not** a "strict mode"; like all `basilisk` rules these are off by default and opt-in via config. |
+| `strictness` | Enforces a stricter-than-spec requirement (e.g. requiring annotations). Intent, **not** a "strict mode"; off by default like all `basilisk` rules. |
 | `style` | A stylistic nudge (e.g. prefer a concrete type over `Any`). |
 | `redundancy` | Detects redundant code (e.g. a redundant annotation). |
 | `dependencies` | Dependency / lock-file hygiene. |
 | `imports` | Import-related house rule (e.g. undeclared-dependency import). |
 | `stubs` | Type-stub hygiene. |
 
-**Conflict rule (the load-bearing constraint):** a free-form tag must be
-non-empty and must collide with neither a provenance tag (`pep`/`basilisk`) nor a
-reserved PEP-category name. `rule_tags::is_valid_free_form` is the guard, and
-[CHKTAG-TESTS] asserts it for every declared and emitted free-form tag. So, for
-example, a Basilisk missing-annotation rule is tagged `strictness` — **never**
-`annotations`, because `annotations` is the reserved PEP category.
+**Conflict rule (load-bearing):** a free-form tag must be non-empty and collide
+with neither a provenance tag (`pep`/`basilisk`) nor a reserved PEP-category
+name. `rule_tags::is_valid_free_form` is the guard, asserted by [CHKTAG-TESTS]
+for every declared and emitted free-form tag. So a Basilisk missing-annotation
+rule is tagged `strictness`, **never** `annotations` (the reserved PEP category).
 
-New free-form tags are added by extending `FREE_FORM_TAGS` and the relevant
-rules' `opt_in_spec()` declarations; the test fails if any new tag collides.
+Add a free-form tag by extending `FREE_FORM_TAGS` and the relevant
+`opt_in_spec()` declarations; the test fails on any collision.
 
 ## The `BSK-` Naming Convention {#CHKTAG-BSK-PREFIX}
 
-Basilisk-original rules are conventionally named/prefixed `BSK` (e.g.
-`BSK-W0050`). This is **purely cosmetic** — a branding/recognition convention for
-humans. The type checker identifies a Basilisk rule **solely by its `basilisk`
-tag** (the rule's own `opt_in_spec()` declaration), and never by inspecting the
-prefix. The prefix could be dropped entirely and provenance would be unchanged —
-[CHKTAG-TESTS] asserts the convention and the self-declared set agree both ways.
-
-Conversely, PEP rules are named after their conformance test (e.g.
-`aliases_newtype`) and carry no `BSK` prefix.
+Basilisk-original rules are conventionally prefixed `BSK` (e.g. `BSK-W0050`) —
+**purely cosmetic**. The checker identifies a Basilisk rule **solely by its
+`basilisk` tag** (its `opt_in_spec()` declaration), never the prefix. Dropping
+the prefix would leave provenance unchanged; [CHKTAG-TESTS] asserts convention
+and self-declared set agree both ways. PEP rules are named after their
+conformance test (e.g. `aliases_newtype`) with no `BSK` prefix.
 
 ## Invariants {#CHKTAG-INVARIANTS}
 
@@ -178,16 +142,15 @@ Enforced by [CHKTAG-TESTS] over the full, live rule set:
 ## Implementation {#CHKTAG-IMPL}
 
 Provenance lives **on the rules**: each Basilisk-original rule declares
-`Rule::opt_in_spec() -> Option<OptInSpec>` in its own source file, returning
-`Some(OptInSpec { code, tags })`; core PEP rules use the trait default (`None`).
-This is the **single source of truth** — there is no `BASILISK_RULES` table and no
-hand-maintained gating list. Adding a Basilisk rule means tagging the rule, and
-nothing else.
+`Rule::opt_in_spec() -> Option<OptInSpec>` returning `Some(OptInSpec { code, tags })`
+in its own source file; core PEP rules use the trait default (`None`). This is the
+**single source of truth** — no `BASILISK_RULES` table, no hand-maintained gating
+list. Adding a Basilisk rule means tagging the rule, nothing else.
 
 [`rule_tags.rs`](../../crates/basilisk-checker/src/rule_tags.rs) gathers those
 declarations once from the live rule registry
 ([`rules::opt_in_specs`](../../crates/basilisk-checker/src/rules/mod.rs)) and
-exposes the public, queryable API:
+exposes the queryable API:
 
 - `PEP`, `BASILISK` — provenance tag constants.
 - `PEP_CATEGORIES` — the reserved category vocabulary.
@@ -203,40 +166,40 @@ exposes the public, queryable API:
 - `is_pep_category`, `is_provenance`, `is_valid_free_form` — vocabulary
   predicates.
 
-This is now a **runtime** source of truth, not only a vocabulary: `check_with_config`
-calls `opt_in_spec_for_code` to gate opt-in rules, with `opt_in_tag_enabled`
-([`lib.rs`](../../crates/basilisk-checker/src/lib.rs)) the single bridge from the
-config's opt-in switches to tags. Because selection and classification read the
-same declarations, they cannot drift. The remaining consumers in
-[CHKTAG-CONSUMERS] (LSP/CLI/website) are follow-ups.
+This is a **runtime** source of truth: `check_with_config` calls
+`opt_in_spec_for_code` to gate opt-in rules, with `opt_in_tag_enabled`
+([`lib.rs`](../../crates/basilisk-checker/src/lib.rs)) the single bridge from
+config opt-in switches to tags. Selection and classification read the same
+declarations, so cannot drift. The [CHKTAG-CONSUMERS] (LSP/CLI/website) are
+follow-ups.
 
-As the rule-rename work
+A rule's `opt_in_spec().code` moves with its emitted code in the same file as the
+rule-rename work
 ([CHKARCH-DIAG-CODES](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CODES)) settles
-codes, a rule's `opt_in_spec().code` moves with its emitted code in the same file;
-the drift guard (invariant 7) fails CI if a declared code goes stale, and the
-parity guard (invariant 10) fails if the self-declared set and the `BSK-`
-convention ever disagree.
+codes; the drift guard (invariant 7) fails CI on a stale declared code, and the
+parity guard (invariant 10) on any disagreement between the self-declared set and
+the `BSK-` convention.
 
 [CHKARCH-CONFIGURATION-ONLY]: CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIGURATION-ONLY
 
 ## Consumers {#CHKTAG-CONSUMERS}
 
-Tags are designed to drive, without re-deriving classification:
+Tags drive, without re-deriving classification:
 
-- LSP/CLI filtering and bulk rule operations ("disable all `style` rules",
-  "show only `pep` diagnostics").
+- LSP/CLI filtering and bulk rule operations ("disable all `style` rules", "show
+  only `pep` diagnostics").
 - The website rules reference and per-error pages
-  ([WEBSITE-ERROR-PAGES](WEBSITE-ERROR-PAGES-SPEC.md)) — surfacing tags is a
-  follow-up that reads the same source rather than maintaining a parallel list.
+  ([WEBSITE-ERROR-PAGES](WEBSITE-ERROR-PAGES-SPEC.md)) — a follow-up reading the
+  same source rather than a parallel list.
 
 ## Testing {#CHKTAG-TESTS}
 
 [`rule_tags_tests.rs`](../../crates/basilisk-checker/tests/rule_tags_tests.rs) is
 a coarse e2e test that scans every `code: "…"` literal under `src/rules` and
-asserts the [CHKTAG-INVARIANTS] for the live rule set, plus the worked examples
-in [CHKTAG-MODEL]. It needs no fixture updates when rules are added: a new rule's
-code is picked up automatically and validated. Beyond the shape invariants it
-also enforces the drift/source guards:
+asserts the [CHKTAG-INVARIANTS] for the live rule set plus the [CHKTAG-MODEL]
+worked examples. It needs no fixture updates when rules are added — a new rule's
+code is picked up automatically. Beyond the shape invariants it enforces the
+drift/source guards:
 
 - `no_basilisk_rule_key_is_stale` — every `opt_in_spec()` code is a live code
   (invariant 7).

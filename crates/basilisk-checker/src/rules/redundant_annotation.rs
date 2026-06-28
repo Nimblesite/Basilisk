@@ -25,6 +25,8 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 /// Emits BSK-W0050 for redundant type annotations.
+// Implements [TYPEINF-REDUNDANT] — when the written annotation is identical to
+// what inference would produce, the annotation is noise and BSK-W0050 fires.
 pub(crate) struct RedundantAnnotationWarning;
 
 impl Rule for RedundantAnnotationWarning {

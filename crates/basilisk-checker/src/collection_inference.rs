@@ -1,11 +1,15 @@
-//! Implements [TYPEINF-COLLECTIONS]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#typeinf-collections
+//! Implements [TYPEINF-COLLECTIONS] / [TYPEINF-EXCEEDS-CONTAINERS]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#typeinf-collections
 //! Collection type inference for lists, dicts, sets, and tuples.
+//!
+//! [TYPEINF-EXCEEDS-CONTAINERS]: the union-of-element-types inference below is
+//! unconditional — there is no loose mode and no switch to disable it.
 
 use crate::inference::infer_rhs;
 use crate::types::InferredType;
 use basilisk_resolver::RhsKind;
 
 /// Infers the type of a list literal from its element [`RhsKind`]s.
+// Implements [TYPEINF-COLLECTIONS-LISTS]
 #[must_use]
 pub fn infer_list_type(elements: &[RhsKind]) -> InferredType {
     if elements.is_empty() {
@@ -19,6 +23,7 @@ pub fn infer_list_type(elements: &[RhsKind]) -> InferredType {
 }
 
 /// Infers the type of a dict literal from key-value [`RhsKind`] pairs.
+// Implements [TYPEINF-COLLECTIONS-DICTS]
 #[must_use]
 pub fn infer_dict_type(pairs: &[(RhsKind, RhsKind)]) -> InferredType {
     if pairs.is_empty() {
@@ -36,6 +41,7 @@ pub fn infer_dict_type(pairs: &[(RhsKind, RhsKind)]) -> InferredType {
 }
 
 /// Infers the type of a set literal from its element [`RhsKind`]s.
+// Implements [TYPEINF-COLLECTIONS-SETS]
 #[must_use]
 pub fn infer_set_type(elements: &[RhsKind]) -> InferredType {
     if elements.is_empty() {

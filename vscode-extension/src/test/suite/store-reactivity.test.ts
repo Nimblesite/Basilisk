@@ -88,6 +88,8 @@ suite("Centralized analysis reactivity (issue #58)", () => {
     });
   });
 
+  // Tests the client side of [EXTACT-LSP-COMMANDS-MODULE-CHANGED]: the
+  // `basilisk/moduleChanged` server notification bumps analysisRevision.
   test("analysisRevision bumps on basilisk/moduleChanged", () => {
     withStubbedCommands(() => {
       const { store, handles } = storeWithFakeClient();

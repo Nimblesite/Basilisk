@@ -9,6 +9,7 @@
 )]
 //! Integration tests for basilisk-stubs.
 
+// Exercises [STUBRES-TYPESHED] — `lookup_builtin` over the bundled typeshed index.
 #[test]
 fn lookup_builtin_str_type() {
     // Phase 5: the stubs library must know about Python built-in types.

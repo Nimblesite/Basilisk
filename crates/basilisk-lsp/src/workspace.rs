@@ -23,6 +23,9 @@ use crate::workspace_scan::{collect_python_files, deduplicate_by_stem, path_to_u
 // Implements [ANALYSIS-INDEX-STRUCT] — the spec's FileEntry shape (source_hash,
 // resolved, diagnostics, version, is_open); `text` is carried so reload/recheck
 // need not re-read the buffer.
+// Implements [LSPARCH-ARCH-CACHE] — caches the resolved module (the spec's
+// `DocumentState.resolved`), refreshed on did_open/did_change and reused by every
+// feature handler.
 #[derive(Debug)]
 pub struct FileEntry {
     /// FNV-1a hash of the source text at last analysis; used for invalidation.

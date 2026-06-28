@@ -79,6 +79,9 @@ impl ImportSearchPaths {
     }
 }
 
+// Implements [LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND] — the registry-driven
+// classifier (NotInDeps / NeedsSync / NotInstalled) that makes "module not found"
+// context-aware; the diagnostic message text is emitted in basilisk-checker.
 /// Classify why an import is unresolved using the package registry.
 #[must_use]
 pub fn classify_unresolved(
@@ -455,6 +458,8 @@ fn detect_python_site_packages() -> Option<PathBuf> {
     None
 }
 
+// Implements [LSPUV-DETECTION-FALLBACK] — the existing venv-discovery path used
+// when uv detection fails or is ambiguous; uv integration is additive.
 /// Find the venv directory from config or by scanning workspace roots.
 fn find_venv_dir(roots: &[PathBuf], config: &crate::config::WorkspaceConfig) -> Option<PathBuf> {
     // 1. Explicit venv path from config.
@@ -594,6 +599,8 @@ fn capture_user_stub_api(
     ))
 }
 
+// Implements [LSPUV-HOVER-DATA-FLOW] steps 2-3 — match the import against the
+// PackageRegistry and attach PackageInfo metadata onto the ImportInfo for hover.
 /// Enrich an import with package metadata from the uv registry.
 ///
 /// Sets `package_dep_kind`, `package_version`, and `package_name` in a

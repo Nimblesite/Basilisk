@@ -8,7 +8,7 @@
 - Mass Autofix spec: EXISTS ([LSP-MASS-AUTOFIX-SPEC.md §AUTOFIX-AI](../specs/LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-AI) — Phase 5 AI Typing Hooks not yet implemented)
 - AI provider code: NOTHING exists
 
-**This plan expands:** `LSP-MASS-AUTOFIX-PLAN.md` Phase 5 (AI Typing Hooks — stubs only). That phase was designed as a stub. This plan upgrades the stubs to a full provider abstraction. Mass Autofix Phases 1-4 are **completely independent of this plan** — they are deterministic features that work without AI. AI is an optional enhancement layer that plugs in after deterministic fixes for diagnostics that can't be fixed otherwise.
+**This plan expands:** `LSP-MASS-AUTOFIX-PLAN.md` Phase 5 (AI Typing Hooks — stubs only), upgrading the stubs to a full provider abstraction. Mass Autofix Phases 1-4 are **independent of this plan** — deterministic features that work without AI. AI is an optional layer that plugs in after deterministic fixes for diagnostics that can't be fixed otherwise.
 
 **Dependency:** Mass Autofix Phase 1 (Fix Metadata Infrastructure) must land first. AI fixes use the same `Fix` struct.
 
@@ -68,7 +68,7 @@
 
 ## Phase 2: OpenAI-Compatible Provider {#LSPAIPLAN-OPENAI-PROVIDER}
 
-**Goal:** Any model behind an OpenAI-compatible API works. This covers Ollama, LM Studio, vLLM, llama.cpp, OpenAI, Azure, Groq, Together, Fireworks, and anything else that speaks this protocol.
+**Goal:** Any model behind an OpenAI-compatible API works — Ollama, LM Studio, vLLM, llama.cpp, OpenAI, Azure, Groq, Together, Fireworks, and anything else speaking the protocol.
 
 ### Tasks {#LSPAIPLAN-OPENAI-PROVIDER-TASKS}
 
@@ -445,7 +445,7 @@ Mass Autofix Phase 1 (Fix Metadata)
     Phase 5 (CLI)
 ```
 
-Phases 6, 7, and 8a-e all depend on Phase 1 only. They can run in parallel with each other and with Phases 2-5. This means a contributor working on semantic search doesn't block someone working on refactoring.
+Phases 6, 7, and 8a-e depend on Phase 1 only and can run in parallel with each other and with Phases 2-5.
 
 ---
 
@@ -453,9 +453,9 @@ Phases 6, 7, and 8a-e all depend on Phase 1 only. They can run in parallel with 
 
 Things this plan does NOT do:
 
-- **General code generation.** Basilisk enhances specific LSP features with AI. It doesn't generate arbitrary code from natural language prompts. That's Copilot/Cursor territory.
-- **Training or fine-tuning.** Basilisk sends prompts. It doesn't train models.
-- **Bundling a model.** No shipping a 4GB GGUF with the binary. Users bring their own model.
-- **Agent loops.** No "let the AI iterate until the file has zero errors." One request, one response, user decides.
-- **Chat interface.** No chatbot in the sidebar. Structured requests, structured responses, code actions.
-- **Full IDE replacement.** Basilisk is a type checker with an LSP. AI enhances the type checking and code intelligence features. It doesn't try to be a general-purpose AI coding assistant.
+- **General code generation.** Enhances specific LSP features; no arbitrary code from natural-language prompts (Copilot/Cursor territory).
+- **Training or fine-tuning.** Sends prompts only; doesn't train models.
+- **Bundling a model.** No shipping a 4GB GGUF with the binary; users bring their own model.
+- **Agent loops.** No "iterate until zero errors." One request, one response, user decides.
+- **Chat interface.** No sidebar chatbot. Structured requests, structured responses, code actions.
+- **Full IDE replacement.** A type checker with an LSP whose AI enhances type-checking and code-intelligence features — not a general-purpose AI coding assistant.

@@ -13,9 +13,9 @@ use super::helpers::{leading_indent_of_line, WorkspaceEditBuilder};
 /// Only offered when the assignment is a simple `name = expr` (no tuple
 /// unpacking, no augmented assignment) and the name appears at least once
 /// after the assignment within the same indentation scope.
-// Implements [REFACTOR-INLINE-VAR-ALGO] — find the simple `name = expr`
-// definition (step 1), find references in scope (step 2), replace each with
-// the expression (step 4), and delete the assignment (step 5).
+// Implements [REFACTOR-INLINE-VAR] and [REFACTOR-INLINE-VAR-ALGO] — find the
+// simple `name = expr` definition (step 1), find references in scope (step 2),
+// replace each with the expression (step 4), and delete the assignment (step 5).
 #[must_use]
 pub(in crate::code_actions) fn inline_variable(
     uri: &Url,

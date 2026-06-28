@@ -15,8 +15,9 @@ use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit
 /// Only offered when:
 /// - The cursor is on a parameter name in a `def` line.
 /// - The function has at least 2 parameters (removing the last one is silly).
-// Implements [REFACTOR-SIGNATURE-OPS] "Remove parameter" — remove the param
-// from the def and the corresponding argument at every call site.
+// Implements [REFACTOR-SIGNATURE] and [REFACTOR-SIGNATURE-OPS] "Remove parameter"
+// — remove the param from the def and the corresponding argument at every call
+// site.
 #[must_use]
 pub(in crate::code_actions) fn remove_parameter(
     uri: &Url,

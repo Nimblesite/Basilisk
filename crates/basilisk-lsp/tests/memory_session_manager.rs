@@ -32,6 +32,7 @@ fn leak_confidence(result: &IngestResult) -> Result<String, String> {
     }
 }
 
+// Exercises [PROFILE-MEMORY-CONFIDENCE]
 /// A snapshot is parsed, retained, and yields an allocation diagnostic; then
 /// repeated diffs of the same growing site escalate leak confidence across
 /// snapshots (the whole point of the per-session `LeakTracker`).

@@ -7,6 +7,7 @@
 
 use super::common::*;
 
+// Exercises [TYPEINF-COLLECTIONS-LISTS]
 #[test]
 fn test_empty_list_inference() -> Result<(), Box<dyn std::error::Error>> {
     let src = "
@@ -18,6 +19,7 @@ def f() -> None:
     Ok(())
 }
 
+// Exercises [TYPEINF-COLLECTIONS-DICTS]
 #[test]
 fn test_empty_dict_inference() -> Result<(), Box<dyn std::error::Error>> {
     let src = "
@@ -117,6 +119,7 @@ def f() -> None:
     Ok(())
 }
 
+// Exercises [TYPEINF-COLLECTIONS-SETS]
 #[test]
 fn test_set_inference() -> Result<(), Box<dyn std::error::Error>> {
     let src = "
@@ -139,6 +142,7 @@ def f() -> None:
     Ok(())
 }
 
+// Exercises [TYPEINF-NARROWING-ASSIGN]
 #[test]
 fn test_assignment_narrowing() -> Result<(), Box<dyn std::error::Error>> {
     let src = "
@@ -151,6 +155,7 @@ def f() -> None:
     Ok(())
 }
 
+// Exercises [TYPEINF-NARROWING-ISINSTANCE]
 #[test]
 fn test_isinstance_narrowing() -> Result<(), Box<dyn std::error::Error>> {
     let src = "
@@ -165,6 +170,7 @@ def f(x: int | str) -> None:
     Ok(())
 }
 
+// Exercises [TYPEINF-NARROWING-NONE]
 #[test]
 fn test_is_none_narrowing() -> Result<(), Box<dyn std::error::Error>> {
     let src = "

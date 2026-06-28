@@ -302,6 +302,7 @@ async fn drain_until_stopped(reader: &mut BufReader<tokio::net::unix::OwnedReadH
     false
 }
 
+// Exercises [PROFILE-HELPER-PROTOCOL]
 #[cfg(target_os = "linux")]
 #[tokio::test]
 async fn helper_socket_full_protocol_with_real_binary() {
@@ -501,6 +502,7 @@ async fn missing_helper_binary_surfaces_spawn_error() {
     );
 }
 
+// Exercises [PROFILE-PERMISSIONS-MACOS] (elevated helper spawn is macOS-only)
 /// Off macOS, `HelperSpawn::Elevated` has no supported path and must surface a
 /// clear error (the socket is still bound first, so this also exercises the
 /// driver's spawn-failure teardown).

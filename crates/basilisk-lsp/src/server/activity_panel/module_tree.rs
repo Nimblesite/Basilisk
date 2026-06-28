@@ -16,6 +16,7 @@ pub(crate) struct WorkspaceModulesResult {
     pub workspace: serde_json::Value,
 }
 
+// Implements [LSPARCH-DATAMODEL]
 /// Build the module tree from the workspace index.
 ///
 /// Implements the server side of [EXTACT-MODULES-MODULE-ROW] (each node carries

@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 
 // Implements [WEBSITE-E2E-SMOKE]: navigation smoke tests on desktop + phone.
+// Tests [WEBSITE-E2E] / [WEBSITE-E2E-PURPOSE]: this is the end-to-end smoke suite
+// that exercises the production `_site/` build so navigation regressions fail CI.
 // See docs/specs/WEBSITE-E2E-SPEC.md.
 
 // Top-level nav links exist and resolve on every viewport (the markup is in the

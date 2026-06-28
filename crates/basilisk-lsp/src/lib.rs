@@ -81,6 +81,7 @@ pub fn check_source(source: &str) -> Vec<String> {
     check_source_with_config(source, &basilisk_config::BasiliskConfig::default())
 }
 
+// Implements [LSPARCH-ARCH-PIPELINE]
 /// Like [`check_source`] but honoring an explicit project configuration.
 ///
 /// House rules (e.g. require-annotation `BSK-E0001`) are off by default — the

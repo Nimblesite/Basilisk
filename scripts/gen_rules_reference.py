@@ -19,6 +19,9 @@ Usage:
     python3 scripts/gen_rules_reference.py --check FILE  # verify FILE contains
                                                         # every current code
 
+This is the generator behind [WEBSITE-ERROR-PAGES-PURPOSE]: a landing page for
+EVERY diagnostic code, built from the checker source so the pages can never drift
+from the diagnostics the binary emits.
 The `--data` output ([WEBSITE-ERROR-PAGES-DATA]) drives both the complete
 reference table and the per-code /errors/BSK-XXXX/ pages on the website, so the
 pages the CLI deep-links to (`see: https://www.basilisk-python.dev/errors/BSK-EXXXX`)
@@ -149,6 +152,9 @@ def parse_body(doc_lines: list[str]) -> list[dict]:
     return blocks
 
 
+# Implements [WEBSITE-ERROR-PAGES-PURPOSE]: build one record per diagnostic code
+# directly from the checker rule sources, so the generated /errors/<code>/ pages
+# can never drift from the diagnostics the binary actually emits.
 def extract() -> list[dict]:
     """One record per code: summary, body blocks, severity, group, docsUrl."""
     records: dict[str, dict] = {}

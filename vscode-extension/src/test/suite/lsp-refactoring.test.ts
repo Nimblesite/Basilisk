@@ -33,6 +33,9 @@ const OUTER_USAGE_LINE = 5;
 const HELPER_DEF_CHAR_OFFSET = 4;
 const MIN_MULTI_RENAME_EDITS = 4;
 
+// Exercises [REFACTOR-RENAME-SCOPE] (scope-aware rename, shadowing) and
+// [REFACTOR-RENAME-VALIDATE] (keyword / invalid-identifier rejection) through the
+// real LSP rename round-trip.
 // eslint-disable-next-line max-lines-per-function
 suite('LSP Refactoring Tests', () => {
     let tmpDir: string;
