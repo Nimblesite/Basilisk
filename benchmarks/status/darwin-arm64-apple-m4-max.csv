@@ -3,25 +3,25 @@
 # arch: arm64
 # os: Darwin 25.5.0
 # cores: 14
-# tools: basilisk=basilisk 0.0.0-dev+g2ef8bc05-dirty, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0
+# tools: basilisk=basilisk 0.0.0-dev+gadef9611-dirty, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0, zuban=zuban 0.9.0
 # runs: 10 (hyperfine mean wall-clock, milliseconds)
-# generated: 2026-06-27T12:11:47+1000
-# note: <tool>_ms = COLD full-file CLI check from scratch. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures).
-fixture,basilisk_ms,basilisk-warm_ms,pyright_ms,mypy_ms,mypy-warm_ms,ty_ms,pyrefly_ms
-e0001_missing_param,93.1,21.4,535.9,625.2,202.2,49.2,113.8
-e0002_missing_return,154.4,21.8,565.1,618.8,159.9,36.7,110.5
-e0010_unresolved_import,136.4,73.0,462.8,642.5,163.0,364.6,755.4
-e0011_explicit_any,233.5,18.9,507.7,608.1,156.7,30.5,103.8
-e0012_argument_type_mismatch,155.3,60.0,668.6,601.0,157.7,54.5,113.5
-e0014_assignment_incompatibility,103.7,63.1,593.3,569.9,160.4,50.8,109.7
-e0016_incompatible_override,137.2,19.0,633.9,605.9,161.3,53.2,111.7
-e0018_undefined_name,259.5,144.6,491.6,615.0,162.7,49.9,536.4
-e0022_unhashable_dict_key,211.4,110.9,516.7,601.9,162.3,39.6,101.8
-e0023_nonexhaustive_match,129.0,42.0,512.9,606.2,159.3,25.8,108.6
-e0026_typevar_single_constraint,139.7,82.4,713.7,600.2,161.9,40.3,109.5
-e0036_classvar_misuse,264.5,106.8,610.6,607.1,158.9,56.2,128.5
-e0038_typeddict_readonly_inheritance,137.4,30.7,657.1,561.5,157.7,37.4,110.3
-e0050_newtype_name_mismatch,139.9,89.4,712.4,608.7,158.8,43.6,114.4
-e0054_final_reassignment,50.7,28.9,453.6,564.8,162.3,28.5,97.9
-e0056_readonly_typeddict_mutation,89.2,32.2,614.8,592.8,163.4,42.4,107.2
-e0093_typeddict_invalid_key,85.2,30.3,605.9,576.1,160.5,37.8,108.2
+# generated: 2026-06-28T20:59:27+1000
+# note: <tool>_ms = COLD full-file CLI check from scratch. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly/zuban keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures); zuban runs as `zuban mypy --strict` for the same reason (its default `zuban check` mode skips these strictness rules).
+fixture,basilisk_ms,basilisk-warm_ms,pyright_ms,mypy_ms,mypy-warm_ms,ty_ms,pyrefly_ms,zuban_ms
+e0001_missing_param,108.9,19.9,535.2,633.3,163.3,30.8,108.7,33.0
+e0002_missing_return,179.9,20.5,574.6,616.4,164.0,38.0,111.9,35.2
+e0010_unresolved_import,134.2,73.8,475.9,640.7,160.2,364.8,764.4,302.3
+e0011_explicit_any,247.2,23.6,513.9,600.9,162.0,31.3,106.2,30.7
+e0012_argument_type_mismatch,166.2,57.4,653.3,610.7,165.3,55.2,113.7,47.5
+e0014_assignment_incompatibility,102.9,63.1,591.9,578.4,158.9,49.6,109.3,30.2
+e0016_incompatible_override,141.7,19.9,654.8,611.4,162.3,54.4,115.9,30.5
+e0018_undefined_name,273.5,144.2,505.0,625.0,166.8,50.4,541.7,34.6
+e0022_unhashable_dict_key,238.8,111.6,531.4,606.6,159.5,37.2,99.8,31.6
+e0023_nonexhaustive_match,128.0,40.9,525.0,594.5,159.3,24.3,106.6,26.4
+e0026_typevar_single_constraint,137.2,81.1,722.0,590.7,163.0,39.6,107.9,33.2
+e0036_classvar_misuse,285.0,106.8,610.1,619.0,163.8,56.9,130.0,32.1
+e0038_typeddict_readonly_inheritance,137.9,31.6,676.6,568.1,161.1,37.5,112.9,25.2
+e0050_newtype_name_mismatch,140.5,90.0,726.4,639.3,167.0,45.2,118.1,36.6
+e0054_final_reassignment,52.7,29.1,479.9,580.8,171.3,28.6,97.9,24.5
+e0056_readonly_typeddict_mutation,89.0,32.7,628.8,573.0,162.5,41.5,106.8,25.7
+e0093_typeddict_invalid_key,84.0,29.9,655.1,583.2,162.6,38.6,113.2,26.9

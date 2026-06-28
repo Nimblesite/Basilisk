@@ -31,7 +31,7 @@ Diagnostics are published only for open documents. Suitable for large monorepos 
 | **Startup scan** | Full workspace scan; diagnostics published for every file |
 | **Performance cost** | Higher startup cost; incremental updates are fast |
 
-This is the default mode. It corresponds to Pyright's [`diagnosticMode: workspace`](https://microsoft.github.io/pyright/#/configuration) setting: the entire project is indexed and diagnostics are visible for **all** files, not just open ones.
+Default mode. Equivalent to Pyright's [`diagnosticMode: workspace`](https://microsoft.github.io/pyright/#/configuration): the entire project is indexed and diagnostics are visible for all files, not just open ones.
 
 ### crossModule {#ANALYSIS-CROSS}
 

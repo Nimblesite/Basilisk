@@ -2,7 +2,7 @@
 
 ## Goal {#PROFILE-GOAL}
 
-Embed a state-of-the-art Python profiler directly into the Basilisk LSP. No `pip install`. No separate tool. One binary does type checking, debugging, and profiling. The profiler attaches to running Python processes, samples call stacks, and surfaces hotspots inline in the editor — VS Code and Zed.
+A Python profiler embedded in the Basilisk LSP — no separate tool or `pip install`. It attaches to running Python processes, samples call stacks, and surfaces hotspots inline (VS Code and Zed).
 
 ## UI Availability Gate {#PROFILE-UI-GATE}
 
@@ -25,7 +25,7 @@ py-spy is a **Rust crate on crates.io**. Basilisk is Rust. This is the only Pyth
 
 > Comparison drawn from each project's own documentation — [py-spy](https://github.com/benfred/py-spy), [Scalene](https://github.com/plasma-umass/scalene), [Memray](https://github.com/bloomberg/memray), [Austin](https://github.com/P403n1x87/austin); overhead figures are approximate and workload-dependent.
 
-py-spy reads the target process's memory directly via OS calls (`vm_read` on macOS, `process_vm_readv` on Linux, `ReadProcessMemory` on Windows). It resolves the CPython interpreter state and walks `PyFrameObject` chains to build stack traces. Zero injection, zero instrumentation, zero overhead on the target.
+py-spy reads the target process's memory directly via OS calls (`vm_read` on macOS, `process_vm_readv` on Linux, `ReadProcessMemory` on Windows). It resolves the CPython interpreter state and walks `PyFrameObject` chains to build stack traces — no injection or instrumentation in the target.
 
 ## Architecture {#PROFILE-ARCH}
 
@@ -767,13 +767,6 @@ doesn't render it).
 - **Code / Filenames**: JetBrains Mono 400
 - **Numbers / Percentages**: JetBrains Mono 500
 
-### Animation Principles {#PROFILE-VIS-ANIMATION}
-
-- Entry: 200ms ease-out, charts fade in at 95%-100% scale, numbers count up from 0
-- Transitions: 120ms ease for hover, 200ms ease for view switches
-- Live updates: smooth interpolation, no jarring jumps
-- Loading: pulsing Basilisk orange glow, no spinners
-
 ### Chart Components {#PROFILE-VIS-CHARTS}
 
 All charts rendered in Canvas 2D (no heavy dependencies like d3).
@@ -802,10 +795,6 @@ Hot lines get colored decorations in the editor gutter:
 | Cool | `#4a5468` Muted | 1-5% |
 
 Memory profiling uses the purple palette for a separate decoration track showing allocation sizes and leak warnings.
-
-### Profiler Dashboard {#PROFILE-VIS-DASHBOARD}
-
-Full dashboard with summary cards (samples, duration, threads), donut chart, timeline, flamegraph, and hot functions table. All charts are interactive and cross-linked. Updates live during active profiling.
 
 ## Editor Integration {#PROFILE-EDITOR}
 

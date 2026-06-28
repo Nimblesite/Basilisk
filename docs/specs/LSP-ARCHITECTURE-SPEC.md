@@ -72,7 +72,7 @@ flowchart TB
 - Solid arrows are runtime data flow. Dotted arrows are process spawns or build-time bundling.
 - The VSIX ships the `basilisk` binary and `basilisk-profiler-helper` for 5 platforms (darwin x64/arm64, linux x64/arm64, win32 x64). Zed and Neovim users install `basilisk` themselves.
 - The DAP connection from each editor goes directly to `debugpy` over TCP — `basilisk` only spawns `debugpy` and tells the editor which port to dial.
-- See [Three-Phase Pipeline](#three-phase-pipeline) below for what happens inside the pipeline.
+- See [Three-Phase Pipeline](#LSPARCH-ARCH-PIPELINE) below for what happens inside the pipeline.
 
 ---
 

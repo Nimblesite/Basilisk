@@ -1,40 +1,6 @@
 # Basilisk Debug Integration via debugpy {#LSPDEBUG}
 
-## Goal {#LSPDEBUG-GOAL}
-
-The Basilisk LSP **is** the debug adapter. When the editor needs to debug Python, it sends a custom LSP request. The LSP spawns debugpy on a TCP port and tells the editor where to connect. No separate binary, no separate process, no bundling. One LSP, both editors.
-
-## Architecture {#LSPDEBUG-ARCH}
-
-```mermaid
-graph TB
-    subgraph "Editor (VS Code / Zed)"
-        UI[Debug UI — breakpoints, variables, call stack]
-        DAP_CLIENT[Built-in DAP Client]
-        LSP_CLIENT[LSP Client]
-    end
-
-    subgraph "basilisk lsp (Rust)"
-        LSP_CORE[Language Server — diagnostics, completions, hover, ...]
-        DEBUG_MGR[Debug Session Manager]
-        PYRES[Python Resolver]
-    end
-
-    subgraph "Python Runtime"
-        DEBUGPY["debugpy.adapter (TCP DAP server)"]
-        TARGET[User's Python Program]
-    end
-
-    LSP_CLIENT -->|"LSP over stdin/stdout"| LSP_CORE
-    LSP_CLIENT -->|"basilisk/startDebugSession"| DEBUG_MGR
-    DEBUG_MGR --> PYRES
-    DEBUG_MGR -->|"Spawns on free TCP port"| DEBUGPY
-    DEBUG_MGR -->|"Returns host:port"| DAP_CLIENT
-    DAP_CLIENT -->|"DAP over TCP"| DEBUGPY
-    DEBUGPY -->|"Launches & controls"| TARGET
-```
-
-The LSP already runs as a long-lived process. It already knows the workspace roots and can resolve the Python interpreter. Adding debug session management is a natural extension — not a separate system. The design is editor-agnostic: any LSP-compatible editor sends `basilisk.startDebugSession` and connects to the returned TCP port.
+The Basilisk LSP brokers Python debugging: the editor sends a custom LSP request, the LSP spawns `debugpy.adapter` on a free TCP port and returns `host:port`, and the editor's built-in DAP client connects directly to debugpy over TCP. The LSP brokers the connection only — it does not proxy DAP traffic. The design is editor-agnostic: any LSP-compatible editor sends `basilisk.startDebugSession` and connects to the returned port.
 
 ## How It Works {#LSPDEBUG-FLOW}
 
@@ -65,8 +31,6 @@ sequenceDiagram
     Editor->>LSP: basilisk/stopDebugSession
     LSP->>LSP: Clean up child process
 ```
-
-The editor's DAP client connects directly to debugpy over TCP. The LSP just brokers the connection — it doesn't proxy any DAP traffic.
 
 ## LSP Custom Requests {#LSPDEBUG-LSP}
 
@@ -143,38 +107,6 @@ sequenceDiagram
 
 For attach, the editor connects directly to the remote debugpy server. The LSP is not involved.
 
-## Component Diagram {#LSPDEBUG-COMPONENTS}
-
-```mermaid
-graph LR
-    subgraph "basilisk lsp (single Rust process)"
-        LANG[Language Features<br/>diagnostics, completions, hover, ...]
-        DEBUG[Debug Session Manager<br/>spawn debugpy, track sessions]
-        PYRES[Python Resolver<br/>venv detection, interpreter lookup]
-    end
-
-    subgraph "VS Code Extension (TypeScript)"
-        FACTORY["DebugAdapterFactory<br/>(asks LSP for port)"]
-        LSPCLIENT["LSP Client<br/>(existing)"]
-    end
-
-    subgraph "Any LSP-compatible Editor (Zed, etc.)"
-        OTHER["LSP client<br/>(same commands work)"]
-    end
-
-    subgraph "User's Python Environment"
-        DEBUGPY["debugpy<br/>(pip install debugpy)"]
-    end
-
-    LSPCLIENT --> LANG
-    FACTORY -->|"basilisk.startDebugSession"| DEBUG
-    OTHER --> LANG
-    OTHER -->|"basilisk.startDebugSession"| DEBUG
-    DEBUG --> PYRES
-    LANG --> PYRES
-    DEBUG -->|"spawns"| DEBUGPY
-```
-
 ## Error Handling {#LSPDEBUG-ERRORS}
 
 When debugpy is not installed, the LSP returns a clear error:
@@ -203,4 +135,4 @@ When the Python interpreter can't be found, the error tells the user exactly wha
 
 ## Python Version Targeting {#LSPDEBUG-PYTHON}
 
-**Primary target: Python 3.12** — this is the canonical version for the entire Basilisk project. debugpy uses `sys.settrace` (via pydevd internally) on Python 3.12, which is fully supported.
+Primary target: Python 3.12 (the canonical Basilisk version). debugpy uses `sys.settrace` (via pydevd) on 3.12, which is fully supported.

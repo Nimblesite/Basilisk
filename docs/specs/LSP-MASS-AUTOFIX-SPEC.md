@@ -1,19 +1,15 @@
 # Mass Autofix & Gradual Adoption — Specification {#AUTOFIX}
 
-## Problem {#AUTOFIX-PROBLEM}
-
-When a user opens an existing Python module in Basilisk for the first time, the file is **red with errors**. Every missing type annotation, every implicit `Any`, every untyped parameter — they all fire as hard errors. This is correct behavior (strict-by-default is the point), but it makes Basilisk hostile to adoption on existing codebases. The user cannot work productively when the entire file is a wall of red.
-
-We need two things:
+Two features for adopting strict-by-default checking on existing code:
 
 1. **Mass Autofix** — apply every safe autofix in one action (single diagnostic, file, or entire module).
-2. **Gradual Adoption Mode** — after autofixing everything possible, demote all remaining errors to warnings *per-file*, so the user sees yellow instead of red and can fix issues incrementally without being blocked.
+2. **Gradual Adoption Mode** — after autofixing everything possible, demote remaining errors to warnings *per-file* so the user can fix issues incrementally without being blocked.
 
 ## Mass Autofix {#AUTOFIX-MASS}
 
-### Overview {#AUTOFIX-MASS-OVERVIEW}
+### Scopes {#AUTOFIX-MASS-OVERVIEW}
 
-Basilisk already produces diagnostics with structured fix metadata. Mass Autofix extends this so that **all applicable fixes can be applied in a single action** at three scopes:
+Mass Autofix applies all applicable fixes in a single action at three scopes:
 
 | Scope | Trigger | What it does |
 |---|---|---|
@@ -97,11 +93,7 @@ Mass Autofix is a single undo unit in VS Code. One `Ctrl+Z` reverts all changes 
 
 ## Gradual Adoption Mode {#AUTOFIX-ADOPTION}
 
-### Overview {#AUTOFIX-ADOPTION-OVERVIEW}
-
-After Mass Autofix has done everything it can, there will still be diagnostics that cannot be auto-fixed. In a strict-by-default checker, these are **errors** — red squiggles that block the user's flow.
-
-Gradual Adoption Mode **demotes all remaining unfixable errors to warnings per-file**. The user sees yellow instead of red. They can work productively and fix warnings one by one at their own pace.
+After Mass Autofix runs, diagnostics that cannot be auto-fixed are demoted from error to warning **per-file**, so the user can fix them incrementally instead of being blocked.
 
 ### How It Works {#AUTOFIX-ADOPTION-FLOW}
 
@@ -149,28 +141,15 @@ demoted = ["BSK-E0001", "BSK-E0002"]
 
 ## AI Typing Hooks {#AUTOFIX-AI}
 
-AI Typing is an AI-assisted type inference feature that goes beyond what deterministic analysis can achieve. When Basilisk encounters a diagnostic it cannot autofix (typically missing type information), it feeds the **full analyzer context** — the AST, inferred types, call graph, usage patterns, and surrounding code — to an AI model. The model returns its best guess for the correct fix.
+For a diagnostic that cannot be deterministically autofixed (typically missing type information), AI Typing feeds the analyzer context (AST, inferred types, call graph, usage patterns, surrounding code) to an AI model that returns a candidate fix. AI-assisted fixes are always `Unsafe` and require confirmation.
 
-> For the full AI provider abstraction, request/response types, and implementation plan, see [LSP-AI-SPEC.md §LSPAI-FEATURE-MASSAUTOFIX](LSP-AI-SPEC.md#LSPAI-FEATURE-MASSAUTOFIX). This section documents only the integration point between Mass Autofix and the AI layer.
+> The AI provider abstraction, request/response types, and implementation plan live in [LSP-AI-SPEC.md §LSPAI-FEATURE-MASSAUTOFIX](LSP-AI-SPEC.md#LSPAI-FEATURE-MASSAUTOFIX). This section documents only the Mass Autofix ↔ AI integration point.
 
 ### Scope {#AUTOFIX-AI-SCOPE}
 
-**AI Typing implementation is outside the scope of the Mass Autofix / Gradual Adoption work.** The current plan only requires:
+AI Typing implementation is out of scope for the Mass Autofix / Gradual Adoption work. This spec requires only the AI-ready seams in the fix pipeline:
 
 1. The `FixSource::AiAssisted` variant in the fix metadata.
 2. The `AiTypingProvider` trait definition.
 3. A no-op default implementation that returns `None` for all requests.
 4. The `AiTypingRequest` / `AiTypingResponse` structures.
-
-This ensures the fix pipeline is AI-ready without blocking the core autofix and adoption features on AI integration work. When AI Typing is implemented later, it slots in without architectural changes.
-
----
-
-## Summary {#AUTOFIX-SUMMARY}
-
-| Feature | User sees | Scope | Safety |
-|---|---|---|---|
-| Mass Autofix (Safe) | Fixes applied, no review needed | Diagnostic / File / Workspace | Only deterministic, semantics-preserving fixes |
-| Mass Autofix (All) | Fixes applied, review list for unsafe ones | Diagnostic / File / Workspace | Includes heuristic and potentially wrong fixes |
-| Gradual Adoption | Errors become warnings, user unblocked | File / Workspace | No code changes, only severity overrides |
-| AI Typing (future) | AI-suggested fixes with explanations | Single diagnostic | Always unsafe, always requires confirmation |

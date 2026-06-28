@@ -5,15 +5,17 @@
 
 ## Overview {#REFACTOR-OVERVIEW}
 
-Deterministic, type-aware refactoring tools that bring Basilisk to feature parity with Pylance and beyond. Every refactoring is a structured code transformation — no regex, no string hacking. All operations use the resolved AST and type information from the checker.
+Deterministic, type-aware refactoring tools. Every refactoring is a structured code transformation — no regex, no string hacking. All operations use the resolved AST and type information from the checker.
 
 ## Design Principles {#REFACTOR-PRINCIPLES}
 
-1. **Deterministic first** — every refactoring produces a single, predictable result. AI-assisted variants live in [LSP-AI-SPEC.md §LSPAI-FEATURE-REFACTOR](LSP-AI-SPEC.md#LSPAI-FEATURE-REFACTOR), never here.
-2. **Type-aware** — refactorings use full type information (resolved types, import graph, call sites) to produce correct transformations.
-3. **Cross-file** — all refactorings that affect imports or references operate across the workspace via the import graph.
-4. **Atomic undo** — each refactoring returns a single `WorkspaceEdit` so the user can undo in one step.
-5. **Safe by default** — refactorings that could change runtime behavior are clearly marked and require confirmation.
+Invariants every refactoring must satisfy:
+
+1. **Deterministic** — produces a single, predictable result. AI-assisted variants live in [LSP-AI-SPEC.md §LSPAI-FEATURE-REFACTOR](LSP-AI-SPEC.md#LSPAI-FEATURE-REFACTOR), never here.
+2. **Type-aware** — uses full type information (resolved types, import graph, call sites).
+3. **Cross-file** — refactorings affecting imports or references operate across the workspace via the import graph.
+4. **Atomic undo** — returns a single `WorkspaceEdit` (one undo step).
+5. **Safe by default** — refactorings that could change runtime behavior are marked and require confirmation.
 
 ## Code Action Kinds {#REFACTOR-KINDS}
 
@@ -249,6 +251,8 @@ These are offered as code actions only when applicable and safe. Each conversion
 
 ## Cross-Cutting Concerns {#REFACTOR-CROSS}
 
+Constraints that apply to every refactoring regardless of kind.
+
 ### Formatter Conflict {#REFACTOR-FORMATTER}
 
 All generated code must match the project's formatting settings. After generating a `WorkspaceEdit`, run the formatter (ruff) on the affected ranges to normalize style. This prevents the refactoring from triggering a format-on-save diff.
@@ -284,7 +288,7 @@ abstract_method_body = "raise"
 
 ## Priority Order {#REFACTOR-PRIORITY}
 
-For reaching feature parity with Pylance, implement in this order:
+Implementation order:
 
 1. **Rename Symbol** enhancements (scope-aware, validation) — highest impact, builds on existing code.
 2. **Rename Module** (`workspace/willRenameFiles`) — critical for file reorganization.

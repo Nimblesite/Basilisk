@@ -12,20 +12,7 @@
 
 uv is a Rust-based Python package and environment manager. Like Basilisk, it is written in Rust; it manages interpreters, virtual environments, dependencies, and lockfiles. Today's LSPs treat environment detection as an afterthought — probe for `.venv`, hope for the best, restart when things change.
 
-Basilisk can do better. uv's `uv.lock` is a **TOML file containing the complete dependency graph** — every package, every version, every platform marker. We can parse it directly in Rust with zero subprocess overhead. Combined with `.python-version`, `pyproject.toml [tool.uv]`, and uv workspace layouts, Basilisk can achieve **perfect environment understanding without running a single external command**.
-
-### What This Unlocks {#LSPUV-WHY-UNLOCKS}
-
-| Capability | Without uv | With uv integration |
-|---|---|---|
-| Know what's installed | Scan `site-packages` dirs | Parse `uv.lock` — instant, complete |
-| Python version | Probe interpreter binary | Read `.python-version` — no subprocess |
-| Missing package diagnostics | "Module not found" | "Module `requests` not found — run `uv add requests`" |
-| Missing stubs | Silent `Unknown` types | Code action: "Install type stubs: `uv add --dev types-requests`" |
-| Dep changes | Restart LSP | Watch `uv.lock` — hot reload, zero restart |
-| Monorepo support | Flat workspace roots | Parse `[tool.uv.workspace]` — correct resolution per member |
-| Unused deps | Not possible | Cross-reference imports against `pyproject.toml` |
-| Hover context | Type signature only | Type + package version + direct/transitive + stub status |
+Basilisk can do better. uv's `uv.lock` is a TOML file containing the complete dependency graph — every package, every version, every platform marker — parseable directly in Rust with zero subprocess overhead. Combined with `.python-version`, `pyproject.toml [tool.uv]`, and uv workspace layouts, Basilisk achieves environment understanding entirely from local files (no external commands).
 
 ---
 
@@ -455,35 +442,22 @@ file and republishes diagnostics.
 
 ## 12. Logging {#LSPUV-LOGGING}
 
-All uv integration activity is logged at appropriate levels:
+uv integration logs (structured `tracing`) at these levels:
 
-| Level | Examples |
-|-------|---------|
-| `info` | `"Detected uv project at /home/user/myapp"`, `"Parsed uv.lock: 47 packages"` |
-| `debug` | `"uv.lock changed: +requests@2.31.0, -urllib3@1.26.0"`, `"Resolved 'requests' → site-packages via uv.lock"` |
-| `warn` | `"uv.lock appears stale (pyproject.toml modified after lock)"`, `"uv binary not found — code actions disabled"` |
-| `error` | `"Failed to parse uv.lock: invalid TOML at line 42"` |
+| Level | Event |
+|-------|-------|
+| `info` | Project detected; `uv.lock` parsed (package count) |
+| `debug` | Lock diff on reload; per-import resolution decisions |
+| `warn` | Stale `uv.lock`; `uv` binary not found (code actions disabled) |
+| `error` | `uv.lock` parse failure (invalid TOML) |
 
 ---
 
 ## 13. Non-Goals {#LSPUV-NON-GOALS}
 
-These are explicitly **out of scope**:
+Out of scope, stated as hard invariants for the implementation:
 
-- **Replacing uv** — Basilisk delegates package management to uv, never reimplements it
-- **Network calls** — No PyPI queries, no package index lookups. Everything comes from local files
-- **Poetry/Pipenv/PDM integration** — Different spec. uv first because it's the best match (Rust, fast, TOML lockfile)
-- **uv.lock writing** — Basilisk is read-only on lock files. Mutations go through `uv` CLI
-- **pip fallback** — If it's not a uv project, existing import resolution handles it. No pip subprocess calls
-
----
-
-## 14. Interaction with Other Specs {#LSPUV-INTERACTIONS}
-
-| Spec | Interaction |
-|------|-------------|
-| [LSP-ANALYSIS-MODES-SPEC.md](LSP-ANALYSIS-MODES-SPEC.md) | `PackageRegistry` feeds into import resolution for all analysis modes |
-| [CHECKER-CROSS-MODULE-PLAN.md](../plans/CHECKER-CROSS-MODULE-PLAN.md) | Phase 1 (stub infrastructure) gains lock-file-aware stub detection |
-| [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md) | New commands, settings, and file watchers added |
-| [LSP-MASS-AUTOFIX-SPEC.md](LSP-MASS-AUTOFIX-SPEC.md) | Mass autofix can batch `uv add --dev` for all missing stubs |
-| [LSP-TEST-INTEGRATION-SPEC.md](LSP-TEST-INTEGRATION-SPEC.md) | `uv run pytest` for deterministic test execution, `PackageRegistry` verifies pytest/pytest-cov availability, code actions to install missing test dependencies |
+- **uv.lock writing** — Basilisk is read-only on lock files; all mutations go through the `uv` CLI.
+- **Network calls** — no PyPI queries or index lookups; every resolution input comes from local files.
+- **Replacing uv** — package management is delegated to uv, never reimplemented.
+- **Non-uv managers** — Poetry/Pipenv/PDM and pip have no dedicated path; non-uv projects fall back to existing import resolution ([LSPUV-DETECTION-FALLBACK]).

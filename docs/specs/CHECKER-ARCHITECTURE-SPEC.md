@@ -6,32 +6,7 @@
 
 ---
 
-## Vision and Philosophy {#CHKARCH-VISION}
-
-### The Problem {#CHKARCH-PROBLEM}
-
-Python has a type system. Nobody uses it properly.
-
-Type hints are widespread, but most projects never enforce them. Every mainstream type checker defaults to gradual typing -- untyped code passes silently. The result: type annotations are documentation, not contracts. They rot. They lie. They give false confidence.
-
-The Python ecosystem has no equivalent of TypeScript. No tool exists that says: **"This code is not typed. It does not compile."**
-
-Basilisk is that tool.
-
-### Design Thesis {#CHKARCH-THESIS}
-
-Basilisk treats Python as a statically typed language. It is to Python what TypeScript is to JavaScript -- a strict, typed superset that enforces contracts at analysis time.
-
-- Every function parameter has a type.
-- Every return type is declared.
-- Every variable assignment resolves to a known type.
-- `Any` is an explicit escape hatch, never an implicit default.
-
-There is no "basic" mode. There is no "standard" mode. There is no "strict" mode either. There is no `--permissive` flag and no `--strict` flag. The type system is the product, and **everything Basilisk reports is decided by configuration alone** — a flat set of per-rule severities, not a dial you switch between. Escape hatches exist for pragmatism, but the burden is on the developer to justify the exception.
-
-Rust does not have a flag that disables the borrow checker, and Basilisk does not have a "strictness" dial. What it has is configuration: the **default configuration enables every PEP typing-spec rule and nothing else**, so a fresh project is measured as pure PEP conformance, and the opinionated house-style rules are opt-in from there.
-
-### No "strict mode" — behaviour is configuration only {#CHKARCH-CONFIGURATION-ONLY}
+## No "strict mode" — behaviour is configuration only {#CHKARCH-CONFIGURATION-ONLY}
 
 Basilisk has **no modes**. There is no "strict mode", no "basic" or "standard" mode, no `--strict`, no `--permissive`. Other checkers ship a discrete dial — pyright's `off` / `basic` / `standard` / `strict`; Basilisk deliberately does not. Everything Basilisk reports is decided by **configuration alone**: a flat set of per-rule severities a project sets globally, per path, or per file.
 
@@ -43,22 +18,9 @@ Two consequences follow, and both are load-bearing:
 
 Basilisk's *opinion* is still that you should type everything — the house rules encode that recommendation — but acting on it is a **configuration a project chooses**, not a baked-in mode and never a precondition of the conformance score. "Strict" is a property of a chosen configuration, not a switch in the product. The anti-gaming rule is unchanged: no PEP rule may be disabled, deleted, or unregistered to move the conformance number ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 
-### Project Principles {#CHKARCH-PRINCIPLES}
-
-1. **Configuration over modes** -- behaviour is per-rule configuration, never a mode; the default is pure PEP conformance, strictness is opt-in, escape hatches by choice ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY))
-2. **Every error must teach** -- Diagnostics explain why, not just what
-3. **Don't reinvent wheels** -- Depend on quality open-source tools (Ruff, ty, typeshed) for everything we can
-4. **Performance is a feature** -- Sub-10ms incremental checks or it's broken
-5. **Open source means open governance** -- No proprietary layers, no vendor lock-in
-6. **First-class developer experience** -- VS Code extensions, LSP, CLI -- everything works out of the box
-
 ---
 
-## Ecosystem Gap Analysis {#CHKARCH-GAP}
-
-See the project README for competitive analysis.
-
-### Capability Matrix {#CHKARCH-MATRIX}
+## Capability Matrix {#CHKARCH-MATRIX}
 
 | Capability | Pyright | mypy | ty | Pyrefly | Zuban | Ruff | **Basilisk** |
 |---|---|---|---|---|---|---|---|
@@ -90,7 +52,7 @@ See the project README for competitive analysis.
 
 ## Dependency Strategy {#CHKARCH-DEPS}
 
-Basilisk does not reinvent wheels. We depend on quality open-source tools for everything we can.
+Basilisk depends on established open-source tools rather than reimplementing them.
 
 ### Direct Dependencies {#CHKARCH-DEPS-DIRECT}
 
@@ -126,11 +88,15 @@ Basilisk does not reinvent wheels. We depend on quality open-source tools for ev
 
 ## Core Type System {#CHKARCH-TYPESYS}
 
+How Basilisk decides what to report (configuration, not modes), the PEPs it covers, and how it infers, narrows, and reasons about reachability.
+
 ### Strictness Model {#CHKARCH-STRICTNESS}
+
+Behaviour is per-rule configuration. The subsections below define the default (pure PEP conformance), the suppression/override directives, and their precedence.
 
 #### No Modes — Configuration Decides Everything {#CHKARCH-STRICTNESS-ONLY}
 
-Basilisk has **no modes** — no "strict mode", no basic/standard dial. Behaviour is configuration. The default configuration is pure PEP conformance; the example below shows the require-annotation house rules (`BSK-E0001`/`BSK-E0002`) that fire **only once a project enables them in configuration** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)). Under the default config these snippets are accepted.
+The require-annotation house rules (`BSK-E0001`/`BSK-E0002`) fire **only once a project enables them in configuration** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)). Under the default config these snippets are accepted as pure PEP conformance.
 
 ```python
 # ERROR: Missing parameter type annotation [BSK-E0001]
@@ -145,8 +111,6 @@ def greet(name: str):
 def greet(name: str) -> str:
     return f"Hello, {name}"
 ```
-
-There is no `--basic`, `--standard`, `--strict`, or `--permissive` flag — Basilisk has no modes. The behaviour above is configuration: enable the require-annotation house rules and every function parameter must be annotated, every function must declare its return type, and every variable assigned from an untyped source must carry an explicit annotation. Leave them off — the default — and the same code is accepted as pure PEP conformance.
 
 #### `Any` Is Explicit, Never Implicit {#CHKARCH-STRICTNESS-ANY}
 
@@ -1082,11 +1046,7 @@ Disk-backed cache between sessions. On startup, Basilisk loads the cache and onl
 
 ## Language Server Protocol {#CHKARCH-LSP}
 
-### LSP-First Design {#CHKARCH-LSP-FIRST}
-
-Basilisk is an LSP server first, CLI tool second. The LSP server is the primary product. The CLI is a batch-mode wrapper around the same engine. This ensures interactive and CI experiences are always consistent.
-
-> For the complete LSP specification — all 21 features, custom commands, configuration settings, binary resolution, DAP integration, and DapTcpProxy — see **[LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)**.
+The LSP server and the CLI are two front-ends over the same engine, so interactive and CI results are always consistent. For the complete LSP specification — features, custom commands, configuration settings, binary resolution, and DAP integration — see **[LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)**.
 
 ### Supported LSP Methods {#CHKARCH-LSP-METHODS}
 

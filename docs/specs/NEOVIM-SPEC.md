@@ -1,37 +1,6 @@
 # Basilisk Neovim Extension (`basilisk.nvim`) {#NVIM}
 
-## Goal {#NVIM-GOAL}
-
-A first-class Neovim plugin that connects to the same `basilisk lsp` binary as the VS Code and Zed extensions. One LSP, three editors. Feature parity across all of them.
-
-**CRITICAL: AIMING FOR FEATURE PARITY BETWEEN NEOVIM, VS CODE, AND ZED EXTENSIONS**
-
-All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** — the single source of truth. This spec only documents **Neovim-specific implementation details**.
-
-## Critical Docs {#NVIM-CRITICAL-DOCS}
-
-### Neovim Core {#NVIM-CRITICAL-DOCS-NEOVIM-CORE}
-- [Neovim LSP Client](https://neovim.io/doc/user/lsp.html) — Built-in LSP client API (`vim.lsp.config`, `vim.lsp.enable`, `vim.lsp.buf.*`)
-- [Neovim API (Extensibility/Scripting/Plugins)](https://neovim.io/doc/user/#_api-%28extensibility%2fscripting%2fplugins%29) — Full API reference
-- [Neovim API Reference](https://neovim.io/doc/user/api.html) — `nvim_buf_*`, `nvim_create_autocmd`, `nvim_create_user_command`, extmarks
-- [Neovim Lua Guide](https://neovim.io/doc/user/lua.html) — Lua 5.1 runtime, `vim.*` namespace, module system
-- [Neovim Lua Plugin Guide](https://neovim.io/doc/user/lua-plugin.html) — Plugin structure, `plugin/`, `ftplugin/`, `after/`
-- [Neovim Diagnostic API](https://neovim.io/doc/user/diagnostic.html) — `vim.diagnostic.*` for rendering diagnostics
-- [Neovim 0.11 LSP Changes](https://gpanders.com/blog/whats-new-in-neovim-0-11/) — Modern `vim.lsp.config()` + `vim.lsp.enable()` pattern
-
-### Neovim Ecosystem {#NVIM-CRITICAL-DOCS-NEOVIM-ECOSYSTEM}
-- [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig) — Community LSP server configurations (submit PR for basic support)
-- [nvim-dap](https://github.com/mfussenegger/nvim-dap) — Debug Adapter Protocol client
-- [nvim-dap-ui](https://github.com/rcarriga/nvim-dap-ui) — Debug UI (variables, watches, call stack, breakpoints, console)
-- [nvim-dap-virtual-text](https://github.com/theHamsta/nvim-dap-virtual-text) — Inline variable display during debugging
-- [neotest](https://github.com/nvim-neotest/neotest) — Test runner framework (alternative to custom test explorer)
-- [lazy.nvim](https://github.com/folke/lazy.nvim) — Primary plugin manager
-- [lualine.nvim](https://github.com/nvim-lualine/lualine.nvim) — Status line (provide component)
-- [plenary.nvim](https://github.com/nvim-lua/plenary.nvim) — Test framework for Neovim plugins
-
-### Architecture Reference (Gold Standard) {#NVIM-CRITICAL-DOCS-ARCHITECTURE-REFERENCE}
-- [rustaceanvim](https://github.com/mrcjkb/rustaceanvim) — Rust-analyzer Neovim plugin (our architectural model)
-- [nvim-best-practices](https://github.com/nvim-neorocks/nvim-best-practices) — Plugin development best practices
+A Neovim plugin that connects to the same `basilisk lsp` binary as the VS Code and Zed extensions. All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** (the single source of truth); this spec only documents **Neovim-specific implementation details**. The plugin targets the built-in Neovim 0.10+ LSP client (`vim.lsp.config` / `vim.lsp.enable`).
 
 ---
 
@@ -386,21 +355,19 @@ GitHub Actions: run plenary.nvim tests on Neovim 0.10, 0.11, nightly.
 
 ### Release & Versioning {#NVIM-DISTRIBUTION-RELEASE}
 
-`basilisk.nvim/` is canonical inside the `Nimblesite/Basilisk` monorepo, but Neovim plugin
-managers (and `vim.pack`) can only install a repo whose root *is* the plugin — none install from a
-subdirectory. On each `vX.Y.Z` tag, the `publish-nvim` job in `release.yml` publishes the
-`basilisk.nvim/` tree to the standalone mirror **`Nimblesite/basilisk.nvim`** (the repo users
-install), using the **same write convention as `publish-homebrew` / `publish-scoop`**: clone the
-sibling `Nimblesite/*` repo with the shared `BREW_SCOOP_PAT` via the `x-access-token` credential,
-replace its content with the plugin tree, commit as `github-actions[bot]` (`basilisk ${VERSION}`),
-and push.
+`basilisk.nvim/` is canonical in the `Nimblesite/Basilisk` monorepo, but plugin managers (and
+`vim.pack`) only install a repo whose root *is* the plugin — none install from a subdirectory. On
+each `vX.Y.Z` tag, the `publish-nvim` job in `release.yml` mirrors the `basilisk.nvim/` tree to the
+standalone repo **`Nimblesite/basilisk.nvim`** (the repo users install), using the same write
+convention as `publish-homebrew` / `publish-scoop`: clone the sibling repo with the shared
+`BREW_SCOOP_PAT` via `x-access-token`, replace its content with the plugin tree, commit as
+`github-actions[bot]` (`basilisk ${VERSION}`), and push.
 
-- The mirror is also tagged with the identical `vX.Y.Z`, so the plugin version always matches the
-  binary that `binary.lua` auto-downloads from `Nimblesite/Basilisk` releases, and version-pinned
-  installs (`vim.pack` / lazy.nvim) resolve. Tagging is nvim-specific — plugins are git-tag
-  versioned, unlike the Homebrew formula and Scoop manifest.
+- The mirror is tagged with the identical `vX.Y.Z`, so the plugin version matches the binary that
+  `binary.lua` auto-downloads from `Nimblesite/Basilisk` releases and version-pinned installs
+  (`vim.pack` / lazy.nvim) resolve. Versioning is **tag-only** — the plugin carries no embedded
+  version string; `:BasiliskInfo` and `:checkhealth basilisk` report the binary version, which
+  equals the tag.
 
-Versioning is **tag-only** — the plugin carries no embedded version string; `:BasiliskInfo` and
-`:checkhealth basilisk` report the binary version, which equals the tag. See
-`docs/plans/NEOVIM-RELEASE-PLAN.md` for the full rollout, required secrets, and the
+See `docs/plans/NEOVIM-RELEASE-PLAN.md` for the full rollout, required secrets, and the
 LuaRocks / nvim-lspconfig secondary channels.

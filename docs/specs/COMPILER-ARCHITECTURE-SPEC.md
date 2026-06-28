@@ -16,43 +16,6 @@
 
 ---
 
-## Vision {#COMPILER-VISION}
-
-Basilisk is a compiled subset of Python. Every Basilisk program is a valid Python 3.12 program. Not every Python program is a valid Basilisk program.
-
-The compiler takes `.py` files that pass Basilisk's type checker, lowers them to LLVM IR, and produces native machine code. You run a Basilisk script the same way you run any Python script -- but it compiles and executes as native code.
-
-```bash
-basilisk run script.py          # compile + execute (JIT)
-basilisk build script.py        # compile to native binary (AOT)
-python3 script.py               # still works -- it's valid Python
-```
-
-### What This Is {#COMPILER-WHAT}
-
-- A **strict subset** of Python 3.12 that compiles to native code
-- Aims to be PEP compliant for the features it supports
-- LLVM-based: JIT for development, AOT for deployment
-- Interoperable with the Python ecosystem via CPython embedding
-- A single binary (`basilisk`) that checks, compiles, and runs
-
-### What This Is Not {#COMPILER-WHATNOT}
-
-- **Not Mojo.** No new syntax. No `fn` vs `def`. No `let` vs `var`. No MLIR. No hardware abstractions. Basilisk is Python -- the typed part.
-- **Not Cython.** No `.pyx` files. No C type declarations. No mixed Python/C syntax.
-- **Not Nuitka.** Does not attempt to compile all of CPython. Only compiles the statically typed subset.
-- **Not PyPy.** No tracing JIT over the full interpreter. Compilation is driven by static type information.
-- **Not a transpiler.** Does not emit Python, C, or Rust source. Emits LLVM IR directly.
-- **Not a drop-in CPython replacement.** Untyped code and dynamic features go through the Python interpreter via interop.
-
-### Design Thesis {#COMPILER-THESIS}
-
-Python has two halves: the typed half and the dynamic half. The typed half -- annotated functions, typed classes, generics, protocols, pattern matching -- is a perfectly good statically typed language hiding inside a dynamically typed one. Basilisk compiles that half.
-
-The dynamic half -- `eval`, `exec`, monkey-patching, runtime metaclasses -- stays in CPython where it belongs. Basilisk provides a clean interop boundary so you can call Python when you need to, but you never pay for dynamism you aren't using.
-
----
-
 ## The Basilisk Subset {#COMPILER-SUBSET}
 
 Basilisk supports every Python 3.12 feature that can be statically typed and compiled. The boundary is simple: **if the type checker can verify it, the compiler can compile it.**
@@ -697,15 +660,15 @@ No circular dependencies. The existing `parser → resolver → checker` chain i
 
 ## Performance Targets {#COMPILER-PERF}
 
-| Benchmark | Target vs C/Rust | CPython Comparison | Notes |
-|---|---|---|---|
-| Fibonacci(40) recursive | Within 2x of C | ~100x faster than CPython | Tests function call overhead |
-| String processing (100MB) | Within 3x of Rust | ~50x faster than CPython | Tests string allocation and iteration |
-| JSON parsing | Within 2x of serde_json | ~20x faster than CPython json | Tests dict/list construction |
-| List comprehension (1M elements) | Within 2x of Rust Vec | ~30x faster than CPython | Tests collection allocation |
-| Startup time (hello world) | < 50ms | CPython ~30ms | JIT compilation + execution |
-| Binary size (hello world) | < 5MB | N/A | Statically linked with runtime |
-| Compilation speed | < 1s for 10K LOC | N/A | Incremental: < 100ms for single file change |
+| Benchmark | Target vs C/Rust | Notes |
+|---|---|---|
+| Fibonacci(40) recursive | Within 2x of C | Tests function call overhead |
+| String processing (100MB) | Within 3x of Rust | Tests string allocation and iteration |
+| JSON parsing | Within 2x of serde_json | Tests dict/list construction |
+| List comprehension (1M elements) | Within 2x of Rust Vec | Tests collection allocation |
+| Startup time (hello world) | < 50ms | JIT compilation + execution |
+| Binary size (hello world) | < 5MB | Statically linked with runtime |
+| Compilation speed | < 1s for 10K LOC | Incremental: < 100ms for single file change |
 
 ---
 

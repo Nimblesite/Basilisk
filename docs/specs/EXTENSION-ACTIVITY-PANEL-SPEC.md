@@ -2,11 +2,9 @@
 
 ## Goal {#EXTACT-GOAL}
 
-The Basilisk activity icon opens a sidebar that is **genuinely useful** — not a branding placeholder. It gives Python developers immediate, actionable insight into their codebase: module structure, type coverage, diagnostics, adoption progress, and what Basilisk actually does for them.
+The Basilisk activity icon opens a sidebar surfacing module structure, type coverage, diagnostics, and adoption progress.
 
-Every panel must pass the bar: **"Would I leave this open while coding?"** If not, cut it.
-
-**Cross-editor spec.** The LSP commands and data model are shared. The rendering differs per editor. This spec defines the shared protocol first, then per-editor implementation notes. Only **differences** are documented per-editor — if it's the same, it's in the shared section.
+**Cross-editor spec.** The LSP commands and data model are shared; rendering differs per editor. This spec defines the shared protocol first, then per-editor notes — only **differences** are documented per-editor.
 
 ## Critical Docs {#EXTACT-CRITICAL-DOCS}
 
@@ -399,23 +397,19 @@ and reactive via Preact signals (issue #58). Panels MUST NOT hand-roll
 
 ## Type Health {#EXTACT-HEALTH}
 
-At-a-glance view of how well-typed the codebase is. Answers: "How much of my code does Basilisk actually understand?"
+At-a-glance view of how well-typed the codebase is.
 
-> **Merged into the Modules panel (issue #103).** Type Health and the Module
-> Explorer rendered the same per-module list twice — coverage is a rollup of data
-> the module tree already carries. In editors with a unified sidebar (VS Code),
-> Type Health is **not a separate panel**: the per-module rollup is folded onto
-> each module row ([EXTACT-MODULES-MODULE-ROW](#EXTACT-MODULES-MODULE-ROW)) and the
-> workspace summary lives in the view's message + badge
+> **Merged into the Modules panel (issue #103).** In editors with a unified
+> sidebar (VS Code), Type Health is **not a separate panel**: the per-module
+> rollup is folded onto each module row
+> ([EXTACT-MODULES-MODULE-ROW](#EXTACT-MODULES-MODULE-ROW)) and the workspace
+> summary lives in the view's message + badge
 > ([EXTACT-MODULES-HEADER](#EXTACT-MODULES-HEADER)). The `basilisk/typeHealth`
 > command, `TypeHealthResponse`, and the tree structure below remain the **shared
 > health surface** for editors without a unified panel (Zed `/health`, Neovim
-> `:BasiliskHealth`), computed from the same per-file figures as the folded rollup.
-> The icon thresholds, coverage bar, and `[adopted]` badge described here all
-> carry over to the merged panel — whose flat-view sort is the explicit
-> Module Name / Path / Type Coverage picker
-> ([EXTACT-MODULES-TOOLBAR](#EXTACT-MODULES-TOOLBAR), #189), defaulting to
-> least-typed-first.
+> `:BasiliskHealth`), computed from the same per-file figures as the folded
+> rollup. Icon thresholds, coverage bar, and `[adopted]` badge carry over to the
+> merged panel.
 
 ### Tree Structure {#EXTACT-HEALTH-TREE-STRUCTURE}
 
@@ -661,6 +655,8 @@ Every row is a read-only display row and carries the read-only affordance define
 ---
 
 ## Editor-Specific Implementation {#EXTACT-EDITORS}
+
+Per-editor rendering of the shared panels. Only differences from the shared protocol above are documented here.
 
 ### VS Code {#EXTACT-EDITORS-VSCODE}
 

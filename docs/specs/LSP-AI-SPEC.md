@@ -9,9 +9,7 @@
 > truncation, no `MockProvider`. Sections below describe intended behaviour, not
 > current reality; see [`CONFAUDIT-ROADMAP`](../plans/SPEC-CONFORMANCE-AUDIT-PLAN.md#CONFAUDIT-ROADMAP).
 
-> **Goal**: Model-agnostic AI integration in the Basilisk LSP. Any model, anywhere — local, cloud, GitHub Copilot, Claude, Ollama, whatever. The LSP doesn't care what's behind the provider. It sends structured context, gets structured responses back.
-
-AI enhances every part of the LSP — fixes, completions, refactoring, navigation, explanations, import resolution, rename suggestions, stub generation, and more. Every deterministic LSP feature works without AI. AI is the optional turbocharger, never the engine.
+> **Goal**: Model-agnostic AI integration in the Basilisk LSP (local, cloud, GitHub Copilot, Claude, Ollama). The LSP sends structured context and receives structured responses; it is agnostic to the provider behind the trait. AI is optional — every deterministic LSP feature works without it.
 
 ---
 
@@ -73,14 +71,7 @@ Not all models are equal. The provider declares what it can do.
 | `supports_batch` | Supports efficient batch requests |
 | `max_latency_ms` | Maximum acceptable latency for latency-critical features (0 = no constraint) |
 
-**Capability profiles:**
-
-| Model class | Example | Good at | Bad at |
-|---|---|---|---|
-| Large cloud | Claude Opus, GPT-4o | Everything | Cost, latency |
-| Medium cloud | Claude Sonnet, GPT-4o-mini | Most features | Complex refactoring |
-| Large local | Codestral 22B, DeepSeek-Coder 33B | Fixes, completions, stubs | Semantic search, next-edit |
-| Small local | CodeLlama 7B, Phi-3 | Explanations, simple fixes | Refactoring, stubs, search |
+A provider advertises only the capabilities its model supports; features whose capability is absent are skipped for that provider.
 
 ### Provider Errors {#LSPAI-ERRORS}
 
@@ -186,7 +177,7 @@ No AI SDK dependencies in core — providers use HTTP/process I/O only.
 
 ### Feature 1: AI Type Annotation Suggestions {#LSPAI-FEATURE-ANNOTATIONS}
 
-Triggered when BSK-E0001-E0005 fires and deterministic fix is unavailable. The model sees the function source, inferred types, call sites, and available types. Returns `data: str` with high confidence because it sees `data` passed to `json.loads()` and called with `str` arguments.
+Triggered when BSK-E0001-E0005 fires and no deterministic fix is available. The model receives the function source, inferred types, call sites, and available types, and returns a type annotation with a confidence score.
 
 ### Feature 2: AI Type Error Fixes {#LSPAI-FEATURE-TYPEERROR}
 
@@ -210,7 +201,7 @@ Called only when deterministic resolver fails or returns ambiguous results. Mode
 
 ### Feature 7: AI Rename Suggestions {#LSPAI-FEATURE-RENAME}
 
-When user presses F2, AI suggests better names alongside the rename input. Model reads the function body (sees `d["username"]` and `d["email"]`), suggests `user_data`. The actual rename (updating references) is deterministic.
+When the user presses F2, AI suggests better names alongside the rename input, based on the symbol's body and usage. The actual rename (updating references) is deterministic.
 
 ### Feature 8: AI Refactoring Suggestions {#LSPAI-FEATURE-REFACTOR}
 
@@ -228,7 +219,7 @@ For untyped third-party packages with no stubs. LSP gathers module source, usage
 
 ### Feature 11: AI Dead Code Detection {#LSPAI-FEATURE-DEADCODE}
 
-Before reporting a zero-reference symbol as dead, the LSP sends it to AI with decorators, module path, and config snippets. AI understands framework magic (`@app.route`, Django URLs, Click commands, pytest discovery, `__init_subclass__`, entry points) that static analysis can't follow. Without AI, dead code detection is nearly useless in framework-heavy Python projects.
+Before reporting a zero-reference symbol as dead, the LSP sends it to AI with decorators, module path, and config snippets, so framework-implicit references (`@app.route`, Django URLs, Click commands, pytest discovery, `__init_subclass__`, entry points) that static analysis cannot follow do not produce false positives. Command: `basilisk/ai/analyzeDeadCode`.
 
 ### Feature 12: AI Code Modernization {#LSPAI-FEATURE-MODERNIZE}
 
@@ -362,11 +353,10 @@ For small local models, the LSP truncates context payloads based on `max_context
 
 ## Security & Privacy {#LSPAI-SECURITY}
 
-1. **API keys never in config files.** Always environment variables.
-2. **Local models = zero data exfiltration.**
-3. **Cloud provider consent.** One-time confirmation before sending code context.
-4. **No telemetry.** Basilisk collects nothing about AI feature usage.
-5. **Context payload is inspectable.** `basilisk ai debug-context` CLI dumps the exact payload.
+1. **API keys never in config files.** Read from environment variables only ([LSPAI-CONFIG-ENV]).
+2. **Cloud provider consent.** One-time confirmation before sending code context to a non-local provider.
+3. **No telemetry.** Basilisk collects nothing about AI feature usage.
+4. **Context payload is inspectable.** `basilisk ai debug-context` dumps the exact payload sent to the provider.
 
 ---
 

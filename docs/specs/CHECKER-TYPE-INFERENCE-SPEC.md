@@ -1,6 +1,6 @@
 # Basilisk Type Inference Specification {#TYPEINF}
 
-Basilisk implements premium type inference that not only improves type safety - it enforces the removal of redundant type annotations. The aim is to achieve something in the ballpark of Hindley Milner style functionality where we do not specify types unless there is a special reason to. We want to avoid forcing Python developers to specify types unless it's absolutely necessary. This means that Python continues to be a less verbose language with full type safety.
+Basilisk infers types precisely and bidirectionally, and requires annotations only where inference cannot determine a type (or where an annotation changes the type). Where inference suffices, a redundant annotation is a diagnostic (see [TYPEINF-REDUNDANT]).
 
 > **Canonical Python version**: 3.12
 >
@@ -10,24 +10,7 @@ Basilisk implements premium type inference that not only improves type safety - 
 
 ---
 
-## Design Philosophy {#TYPEINF-PHILOSOPHY}
-
-Basilisk's type inference is **precise and bidirectional throughout**. Rather than making inference optional, or falling back to an unresolved/`Any` type when a type cannot be determined, Basilisk either produces a precise type or emits a diagnostic.
-
-Key design decisions in Basilisk's inference engine:
-
-| Capability | Basilisk behavior |
-|---|---|
-| Unannotated parameter types | **Error** — all parameters must be annotated |
-| Return type inference | Inferred **and** validated; a mismatch is an error |
-| Container inference | **Union** of element types, always — no loose mode |
-| TypeVar constraint solving | **Bidirectional constraint propagation** with exhaustive solving |
-| Literal type inference | Literal-first: widen only when an annotation demands it |
-| Narrowing coverage | `isinstance`, `is None`, TypeGuard, TypeIs, **pattern-matching exhaustiveness**, **dict key existence**, **attribute presence** |
-| Unannotated functions | **Error** — every public function must be annotated |
-| Redundant annotations | **Warning** — redundant explicit annotations must be removed |
-
-### Redundant Annotation Principle {#TYPEINF-REDUNDANT}
+## Redundant Annotation Principle {#TYPEINF-REDUNDANT}
 
 > **This is a critical, non-negotiable design goal.**
 
@@ -81,7 +64,7 @@ This rule applies to:
 
 ## Governing PEPs {#TYPEINF-PEPS}
 
-The following PEPs define the ground truth for Basilisk's inference rules. All are required reading for implementors.
+PEPs that define the ground truth for Basilisk's inference rules:
 
 | PEP | Title | Relevant to inference |
 |---|---|---|
@@ -131,7 +114,7 @@ Basilisk **requires explicit annotations** for:
 - **All class-level attributes** at the class body level — E0003 if missing
 - **TypedDict fields**, `NamedTuple` fields, `Protocol` members — always explicit
 
-Basilisk does not silently fall back to an unresolved type. A missing annotation is a **diagnostic**, not an inference opportunity.
+Basilisk never silently falls back to an unresolved type: a missing annotation is a diagnostic, not an inference opportunity.
 
 ### Inference Algorithm {#TYPEINF-ALGO}
 
@@ -969,9 +952,7 @@ query("SELECT * FROM " + table)    # callables_annotation — not LiteralString
 
 ## Conformance Test Coverage {#TYPEINF-CONFORMANCE}
 
-The [Python typing conformance suite](https://github.com/python/typing/tree/main/conformance) is the canonical benchmark. Basilisk **targets** 100% conformance (Pass on all 146 test files) — a target, not a present-day achievement. The official, unmodified `python/typing` scorer currently reports **68 of 146 files passing (46.6%, counting errors and warnings — the strictest grading)**, with the binary run with **every rule enabled** — no config, no `basilisk.json`, no "spec-conformance mode", no exceptions. The remaining gap is **265 false positives and 0 missed required errors**: the checker catches every required error, and every failing fixture fails only because strict-by-default house-style rules (require-annotation E0001/E0002/E0004, missing-`@override` E0025, explicit-`Any` W0014, redundant-annotation W0050) fire on spec-valid code where the spec treats unannotated as inferred rather than an error. The only legitimate path to 100% is fixing the checker so these strict defaults stop firing on spec-valid code, with every rule still enabled — never by disabling a rule.
-
-> **History (stated plainly):** the last honest score was 59 of 146 = 40.4% (285 false positives) at PR #183. PRs #184/#185/#191 inflated the reported number to a fake 100% by writing a `basilisk.json` that **disabled** those six house rules at score time (the so-called "spec-conformance mode"). The checker was not made smarter; the false positives were merely hidden. That disabling has been **removed**, and disabling any conformance rule for scoring is now forbidden. Genuine progress over that span was real but modest: 40.4% → 46.6%. There is no "spec-conformance mode" any more.
+The [Python typing conformance suite](https://github.com/python/typing/tree/main/conformance) is the canonical benchmark. Basilisk targets 100% conformance with every rule enabled (no config, no `basilisk.json`); the reproducible score is measured by the unmodified `python/typing` scorer in CI (`python3 conformance/score.py`). The remaining gap is false positives from strict-by-default house-style rules firing on spec-valid code, not missed required errors. The only legitimate path to 100% is fixing the checker so those rules stop firing on spec-valid code — never by disabling a rule. See [CHKARCH-CONFORMANCE] for the scoring methodology.
 
 Inference-relevant conformance tests:
 
@@ -1006,10 +987,6 @@ Basilisk **never produces an unresolved/`Unknown` type** when it cannot determin
 ### Strict Container Inference Always On {#TYPEINF-EXCEEDS-CONTAINERS}
 
 Basilisk applies union-of-element-types inference to all containers unconditionally — there is no loose mode and no configuration switch to disable it.
-
-### Dict Key Narrowing for TypedDict {#TYPEINF-EXCEEDS-DICTKEY}
-
-Basilisk narrows `TypedDict` types via `"key" in d` key-existence checks directly.
 
 ### Exhaustive Pattern Matching Analysis {#TYPEINF-EXCEEDS-EXHAUSTIVE}
 
