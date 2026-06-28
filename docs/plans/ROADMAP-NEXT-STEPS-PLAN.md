@@ -1,4 +1,4 @@
-# Basilisk — Next Steps Roadmap (Post-Launch)
+# Basilisk — Next Steps Roadmap (Post-Launch) {#NEXTSTEPS}
 
 > **Nature of this doc**: This is an *aggregation* roadmap, not a detailed implementation plan. It
 > deliberately stays shallow and links out to the per-area specs and plans that carry the detail
@@ -11,7 +11,7 @@
 
 ---
 
-## How to read this doc
+## How to read this doc {#NEXTSTEPS-HOW-TO-READ}
 
 Each section is a rough overview of an area of work, with the *current state* noted up front so we
 don't re-litigate what's already done. The actionable, divided-up checklist lives at the **bottom**
@@ -26,7 +26,7 @@ Every TODO item is tagged so we know who picks it up:
 
 ---
 
-## Top 5 bang-for-buck — start here
+## Top 5 bang-for-buck — start here {#NEXTSTEPS-TOP-5}
 
 > Ranked by reward ÷ effort, for the goal of broadening IDE coverage and getting discovered.
 > Sequence matters: **1 → 2** (publish everywhere *before* you announce).
@@ -58,7 +58,7 @@ Every TODO item is tagged so we know who picks it up:
 
 ---
 
-## 1. Editor releases (the critical path)
+## 1. Editor releases (the critical path) {#NEXTSTEPS-EDITOR-RELEASES}
 
 This is the single highest-leverage block: the code is largely done, but **nothing actually ships
 to users yet**. Every extension is still stamped `0.0.0-PLACEHOLDER`, and `release.yml` builds the
@@ -85,7 +85,7 @@ go-to-def, debug, and profile all light up. That's a human sign-off step.
 
 ---
 
-## 2. Debugging (DAP) — cross-editor verification
+## 2. Debugging (DAP) — cross-editor verification {#NEXTSTEPS-DEBUGGING}
 
 Spec: `docs/specs/LSP-DEBUG-INTEGRATION-SPEC.md`. The Basilisk binary serves as both language server
 and debug adapter (embedded debugpy over TCP). Implementation exists and is tested in all three
@@ -97,7 +97,7 @@ degradation holds when the editor's DAP client (e.g. nvim-dap) is absent.
 
 ---
 
-## 3. Profiling — smoothing off
+## 3. Profiling — smoothing off {#NEXTSTEPS-PROFILING}
 
 Spec: `docs/specs/LSP-PROFILING-SPEC.md`. py-spy is embedded; start/stop/snapshot requests, CLI,
 and per-editor UI (VS Code command, Zed `/profile`, Neovim heat map) all exist and have e2e tests.
@@ -108,7 +108,7 @@ the inline visualization / Speedscope hand-off wants a real-world pass for UX ro
 
 ---
 
-## 4. Competitive parity with Pyright / Pylance
+## 4. Competitive parity with Pyright / Pylance {#NEXTSTEPS-COMPETITIVE-PARITY}
 
 The bar to credibly displace Pylance is feature *and* correctness parity on the things people
 actually feel day to day. Rough priorities (refine with human judgment — see TODO):
@@ -137,7 +137,7 @@ actually feel day to day. Rough priorities (refine with human judgment — see T
 
 ---
 
-## 5. Scale & resource testing (large real-world codebases)
+## 5. Scale & resource testing (large real-world codebases) {#NEXTSTEPS-SCALE-TESTING}
 
 We claim "fast" — we need to *prove* it on real, famously large Python codebases, not just our own
 fixtures. This is an objective-measurement exercise:
@@ -153,7 +153,7 @@ fixtures. This is an objective-measurement exercise:
 
 ---
 
-## 6. Typing-philosophy survey (strict-by-default + the downgrade path)
+## 6. Typing-philosophy survey (strict-by-default + the downgrade path) {#NEXTSTEPS-TYPING-PHILOSOPHY}
 
 The product promise is **strict-by-default with a graceful off-ramp** ("flick errors down to
 warnings, adopt incrementally"). This section is a *survey + proof* task, not new features:
@@ -171,7 +171,7 @@ warnings, adopt incrementally"). This section is a *survey + proof* task, not ne
 
 ---
 
-## 7. MCP server — semantic codebase navigation for agents
+## 7. MCP server — semantic codebase navigation for agents {#NEXTSTEPS-MCP-SERVER}
 
 A first-class **Basilisk MCP server** that exposes the checker's semantic understanding (symbols,
 resolved types, signatures, call/import graph, type health) to AI agents, so an agent navigating a
@@ -184,7 +184,7 @@ dedup tool, not this). Needs a spec + plan before building. Likely tools: semant
 
 ---
 
-## 8. Deeper AI integration (nimblesite.ai → autofixes)
+## 8. Deeper AI integration (nimblesite.ai → autofixes) {#NEXTSTEPS-AI-INTEGRATION}
 
 Specs/plans exist: `docs/specs/LSP-AI-SPEC.md` + `docs/plans/LSP-AI-PLAN.md` define a **model-agnostic**
 AI layer (deterministic features work without it; AI is optional and pluggable).
@@ -197,7 +197,7 @@ hermetic, plus an opt-in integration test against the real agent.
 
 ---
 
-## 9. Finish near-complete plans (bang for buck)
+## 9. Finish near-complete plans (bang for buck) {#NEXTSTEPS-FINISH-PLANS}
 
 Several of these are close enough that finishing them is cheap and visibly improves the product (the
 conformance and false-positive work is larger — sized honestly below against the unmodified scorer):
@@ -219,7 +219,7 @@ conformance and false-positive work is larger — sized honestly below against t
 
 ---
 
-## 10. IntelliJ / PyCharm (JetBrains)
+## 10. IntelliJ / PyCharm (JetBrains) {#NEXTSTEPS-JETBRAINS}
 
 No plugin code exists; the website already says "coming soon." This is the largest *net-new* effort
 on the list and a strategic call: the JetBrains/PyCharm Python audience is huge, but a JetBrains
@@ -232,7 +232,7 @@ shipped and stable? If we go: start with a spec + plan doc (`docs/specs/JETBRAIN
 
 ---
 
-## 11. Internationalization & translation
+## 11. Internationalization & translation {#NEXTSTEPS-I18N}
 
 **Current state:** the Eleventy site now runs the `eleventy-plugin-techdoc` i18n system with
 `features.i18n: true` (`defaultLanguage: en`, `languages: [en, zh]`). The existing Simplified-Chinese
@@ -271,7 +271,7 @@ before it goes live** — especially diagnostics, where wording precision matter
 
 ---
 
-## 12. Marketing & community
+## 12. Marketing & community {#NEXTSTEPS-MARKETING}
 
 Assets that exist: launch blog post (`website/src/blog/introducing-basilisk.md`), comparison/feature
 docs, READMEs, OG image + logo. What's missing is *distribution*.
@@ -287,12 +287,12 @@ Rough plan (most of this is human-led — voice, accounts, timing, relationships
 
 ---
 
-# Detailed TODO
+# Detailed TODO {#NEXTSTEPS-DETAILED-TODO}
 
 > Legend: **`[AGENT]`** agent-drivable · **`[HUMAN]`** human discretion · **`[HYBRID]`** agent
 > prepares, human approves/supplies credentials. Ordering within a group is rough priority.
 
-## A. Shared release plumbing  *(do first)*
+## A. Shared release plumbing  *(do first)* {#NEXTSTEPS-RELEASE-PLUMBING}
 
 - [ ] **`[AGENT]`** Replace `0.0.0-PLACEHOLDER` everywhere with a single git-tag-driven version source.
 - [ ] **`[AGENT]`** Extend `release.yml` to publish per-platform binaries on tagged releases.
@@ -301,7 +301,7 @@ Rough plan (most of this is human-led — voice, accounts, timing, relationships
 - [ ] **`[HUMAN]`** Decide the versioning scheme (single repo-wide version vs. per-extension) and the release cadence.
 - [ ] **`[AGENT]`** Website: if a version is displayed anywhere, source it dynamically from the latest GitHub release — never hardcode it in copy (hardcoded `v0.1` strings were removed 2026-05-30; `site.json` still carries `0.0.0-PLACEHOLDER`).
 
-## B. Editor publishing
+## B. Editor publishing {#NEXTSTEPS-EDITOR-PUBLISHING}
 
 - [ ] **`[HYBRID]`** Add `vsce` package + VS Code Marketplace publish workflow (agent writes it; human holds the token).
 - [ ] **`[HYBRID]`** Add `ovsx` publish workflow so Basilisk is installable in **Cursor & Windsurf**.
@@ -309,30 +309,30 @@ Rough plan (most of this is human-led — voice, accounts, timing, relationships
 - [ ] **`[AGENT]`** Verify/expand e2e + screenshot regression suites for nvim/zed/vsix before each first publish.
 - [ ] **`[HUMAN]`** Clean-machine smoke test of each **published** artifact (install from marketplace, not dev build): diagnostics, hover, go-to-def, debug, profile.
 
-## C. Debugging (DAP) verification
+## C. Debugging (DAP) verification {#NEXTSTEPS-DAP-VERIFICATION}
 
 - [ ] **`[AGENT]`** Confirm DAP e2e tests cover breakpoint → step → inspect → continue in all three editors.
 - [ ] **`[HUMAN]`** Manual debug session against a published artifact per editor; confirm graceful degradation when the editor DAP client is absent.
 
-## D. Profiling smoothing
+## D. Profiling smoothing {#NEXTSTEPS-PROFILING-SMOOTHING}
 
 - [ ] **`[AGENT]`** Harden profiler e2e tests (start/stop/snapshot, Speedscope export integrity).
 - [ ] **`[HUMAN]`** UX pass on inline visualization / heat map across editors; note rough edges (incl. macOS elevation prompt behaviour).
 
-## E. Scale & resource testing
+## E. Scale & resource testing {#NEXTSTEPS-SCALE-RESOURCE-TESTING}
 
 - [ ] **`[AGENT]`** Build a reproducible benchmark harness that clones N large public Python repos and runs full + incremental checks (fixtures stay out of the repo).
 - [ ] **`[AGENT]`** Capture objective metrics per repo: peak RSS, CPU time, full-check wall-clock, incremental latency p50/p95/p99, panic/crash/hang count.
 - [ ] **`[AGENT]`** Run the same corpus through Pyright and produce a side-by-side results table.
 - [ ] **`[HUMAN]`** Pick the canonical corpus and the headline numbers to publish.
 
-## F. Typing-philosophy survey + proof
+## F. Typing-philosophy survey + proof {#NEXTSTEPS-TYPING-PHILOSOPHY-PROOF}
 
 - [ ] **`[AGENT]`** Audit and document where the default severity is set; confirm no lenient default exists.
 - [ ] **`[AGENT]`** Add/confirm e2e tests asserting (a) fresh project is strict by default, (b) each downgrade path (per-rule, per-path, `adoptions.toml`, `# type: ignore`) lowers severity.
 - [ ] **`[AGENT]`** Write the short survey writeup ("strict AF? easy to down-shift?") linked to the named tests.
 
-## G. Finish near-complete plans
+## G. Finish near-complete plans {#NEXTSTEPS-FINISH-NEAR-COMPLETE-PLANS}
 
 - [ ] **`[AGENT]`** Fix `generics_syntax_scoping` docstring/line-scanning showstopper — re-ground the rule on the AST (`CHECK-ELIMINATE-FALSE-POSITIVES.md`).
 - [ ] **`[AGENT]`** Clear the remaining 265 false positives (by making the checker smarter — every rule stays enabled; never by disabling a rule).
@@ -340,30 +340,30 @@ Rough plan (most of this is human-led — voice, accounts, timing, relationships
 - [ ] **`[AGENT]`** Finish `CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md` Phase 4 — wire the no-line-scanning lint into CI.
 - [ ] **`[HUMAN]`** Decide whether `LSP-STUBBING-PLAN.md` Phase 5 (Salsa perf) ships now or later.
 
-## H. Competitive parity (Pyright/Pylance)
+## H. Competitive parity (Pyright/Pylance) {#NEXTSTEPS-COMPETITIVE-PARITY-TODO}
 
 - [ ] **`[HUMAN]`** Prioritize the parity gap list — which features actually move adoption.
 - [ ] **`[AGENT]`** Audit editor UX features vs. Pylance (completions, signature help, semantic tokens, inlay hints, organize-imports, workspace symbols) and report gaps.
 - [ ] **`[HYBRID]`** Drive toward the official Python conformance-results listing (agent does the conformance work; human handles the submission).
 
-## I. MCP server (semantic codebase navigation)
+## I. MCP server (semantic codebase navigation) {#NEXTSTEPS-MCP-SERVER-TODO}
 
 - [ ] **`[AGENT]`** Draft `docs/specs/MCP-SERVER-SPEC.md` + plan — tool surface, transport, how it reuses the existing LSP/workspace index.
 - [ ] **`[AGENT]`** Implement the server (semantic symbol search, type-of, callers, protocol implementers, module/type-health summaries) with e2e tests.
 - [ ] **`[HUMAN]`** Decide packaging/distribution (bundled in the binary vs. separate) and which agent ecosystems to target first.
 
-## J. Deeper AI integration (nimblesite.ai)
+## J. Deeper AI integration (nimblesite.ai) {#NEXTSTEPS-AI-INTEGRATION-TODO}
 
 - [ ] **`[AGENT]`** Wire nimblesite.ai as a provider behind the existing model-agnostic AI-fix hooks (`LSP-AI-SPEC.md`), preserving the optional/pluggable contract.
 - [ ] **`[AGENT]`** Add hermetic provider-boundary tests (mocked backend) plus an opt-in integration test against the real agent.
 - [ ] **`[HUMAN]`** Provide nimblesite.ai credentials/config and decide default-on vs. opt-in.
 
-## K. IntelliJ / PyCharm
+## K. IntelliJ / PyCharm {#NEXTSTEPS-JETBRAINS-TODO}
 
 - [ ] **`[HUMAN]`** Go/no-go decision on a JetBrains plugin now vs. deferring.
 - [ ] **`[AGENT]`** *(if go)* Draft `docs/specs/JETBRAINS-SPEC.md` + `docs/plans/JETBRAINS-PLAN.md` mirroring the per-editor docs (LSP-first, LSP4IJ vs. custom client).
 
-## L. Internationalization & translation
+## L. Internationalization & translation {#NEXTSTEPS-I18N-TODO}
 
 - [x] **`[AGENT]`** Build a real Eleventy i18n system; fold existing `/zh` content into it (replace the manual parallel pages). *(Done — `eleventy-plugin-techdoc` i18n with `features.i18n: true`; zh ships with standard hreflang/switcher/sitemap. See §11.)*
 - [ ] **`[AGENT]`** Add a drift/staleness guard so a translated page that falls behind its English source is flagged (English is canonical; mark each locale page with the source commit/date it was synced from).
@@ -373,7 +373,7 @@ Rough plan (most of this is human-led — voice, accounts, timing, relationships
 - [ ] **`[HUMAN]`** Native-speaker review of every locale before go-live — especially diagnostics (consider hiring reviewers).
 - [ ] **`[HUMAN]`** Decide if/when Spanish (#4) gets added after the top 3.
 
-## M. Marketing & community
+## M. Marketing & community {#NEXTSTEPS-MARKETING-TODO}
 
 - [ ] **`[AGENT]`** Polish the launch blog post; draft 2–3 follow-up technical posts (architecture, strict-by-default philosophy, scale-benchmark numbers, conformance milestone).
 - [ ] **`[AGENT]`** Draft X threads, Reddit (r/Python, r/rust), dev.to, and Show HN posts for human review.

@@ -27,6 +27,9 @@ include!(concat!(env!("OUT_DIR"), "/stub_map.rs"));
 ///
 /// Extracts the root segment (before the first `.`) and checks it against the
 /// compiled typeshed index. O(1) lookup via perfect hashing.
+// Implements [STUBRES-TYPESHED] — `lookup_builtin`/this set are the bundled
+// typeshed index built by `build.rs` into a `phf` set for O(1) lookup; the
+// stdlib whitelist is derived data, not a maintained list.
 #[must_use]
 pub fn is_stdlib_module(module_name: &str) -> bool {
     let root = module_name.split('.').next().unwrap_or(module_name);
@@ -42,6 +45,9 @@ pub fn is_stdlib_module(module_name: &str) -> bool {
 /// `types-PyYAML`). Returns `None` when no typeshed stub distribution is known —
 /// either the package ships inline `py.typed` types or no stubs exist — so
 /// callers can avoid suggesting a package that would fail to resolve on `PyPI`.
+// Implements [STUBRES-PEP561] step 3 (stub-only packages) — names the
+// `types-<dist>` distribution the resolver/quick-fix installs to satisfy a
+// stub-only import; backed by the `build.rs`-generated typeshed stub map.
 #[must_use]
 pub fn typeshed_stub_distribution(module_name: &str) -> Option<&'static str> {
     let root = module_name.split('.').next().unwrap_or(module_name);
@@ -54,6 +60,9 @@ pub fn typeshed_stub_distribution(module_name: &str) -> Option<&'static str> {
 /// Walks up from the resolved file looking for a `py.typed` file, stopping at
 /// the `site-packages` boundary — installed packages are its direct children,
 /// so the marker never lives at or above that level. Implements [STUBRES-ENGINE].
+// Implements [STUBRES-PEP561] step 4 (inline-typed packages) — detects the
+// PEP 561 `py.typed` opt-in marker that distinguishes an inline-typed package
+// from an untyped one.
 #[must_use]
 pub fn has_py_typed_marker(resolved_path: &std::path::Path) -> bool {
     let mut dir = resolved_path.parent();
@@ -73,6 +82,8 @@ pub fn has_py_typed_marker(resolved_path: &std::path::Path) -> bool {
 ///
 /// Returns type information for Python built-in types.
 /// Unknown names return `None`.
+// Implements [STUBRES-TYPESHED] — `lookup_builtin()` over the bundled typeshed
+// index (here: Python primitives).
 #[must_use]
 pub fn lookup_builtin(name: &str) -> Option<&'static str> {
     match name {

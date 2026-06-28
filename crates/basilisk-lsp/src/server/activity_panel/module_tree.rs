@@ -18,6 +18,11 @@ pub(crate) struct WorkspaceModulesResult {
 
 /// Build the module tree from the workspace index.
 ///
+/// Implements the server side of [EXTACT-MODULES-MODULE-ROW] (each node carries
+/// the folded coverage %, error/warning counts, and adoption state rendered on
+/// the module row) and [EXTACT-MODULES-HEADER] (the `workspace` `HealthStats`
+/// summary that drives the view's message + badge).
+///
 /// Each file becomes a module node containing its top-level symbols and a folded
 /// health rollup (coverage %, error/warning counts, adoption state). The
 /// workspace-wide rollup is accumulated in the same single pass, so the merged
@@ -114,6 +119,10 @@ pub(crate) fn build_module_tree(
 }
 
 /// Build the list of top-level symbols from a resolved module.
+///
+/// Implements the server side of [EXTACT-MODULES-ITEM-PROPERTIES]: each symbol
+/// carries its name, kind, source line, and `annotated` flag so the client can
+/// render the per-symbol drill-down rows and the "untyped" decoration.
 pub(crate) fn build_symbol_list(
     resolved: &basilisk_resolver::ResolvedModule,
     text: &str,

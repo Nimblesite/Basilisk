@@ -82,6 +82,8 @@ interface PackageTreeNode {
 
 type TreeItem = ModuleTreeItem | SymbolTreeItem | PackageTreeItem;
 
+// Implements [EXTACT-MODULES-MODULE-ROW] — the module row: label, coverage-tinted
+// icon, folded-health description, tooltip, and open-on-click action.
 export class ModuleTreeItem extends vscode.TreeItem {
   constructor(
     public readonly module: ModuleNode,
@@ -147,6 +149,9 @@ export class PackageTreeItem extends vscode.TreeItem {
   }
 }
 
+// Implements [EXTACT-MODULES-ITEM-PROPERTIES] (label + type-signature description
+// + per-kind icon + open-at-line click) and [EXTACT-MODULES-DECORATIONS] (the
+// "untyped"/"private"/"exported" suffixes and the unannotated warning-tinted icon).
 class SymbolTreeItem extends vscode.TreeItem {
   constructor(
     public readonly symbol: SymbolNode,
@@ -218,6 +223,9 @@ function coverageColor(percent: number): vscode.ThemeColor {
   return new vscode.ThemeColor("list.errorForeground");
 }
 
+// [EXTACT-MODULES-COUNT-STYLE] is the diagnostic-tally surface for module rows.
+// NOTE (conformance): the spec mandates coloured glyphs `🔴 n` / `🟠 n` here and
+// "never `2E 3W`"; this renders `nE nW`. See the audit deviation for this section.
 /** Module row description: coverage bar + % + error/warning counts + adopted badge. */
 function moduleDescription(module: ModuleNode): string {
   const issues: string[] = [];
@@ -240,6 +248,9 @@ function moduleTooltip(module: ModuleNode): string {
   ].filter(Boolean).join("\n");
 }
 
+// Shared container-row tally for [EXTACT-MODULES-COUNT-STYLE] / the
+// [EXTACT-MODULES-TREE-STRUCTURE] folder roll-up. NOTE (conformance): the spec
+// mandates `🔴 n` / `🟠 n` glyphs and "never `nE nW`"; this renders `nE nW`.
 /** `nE nW` diagnostic tally, or "" when clean. Shared by folder/package rows. */
 function diagnosticTally(errors: number, warnings: number): string {
   const issues: string[] = [];
@@ -288,8 +299,10 @@ function packageTooltip(node: PackageTreeNode): string {
 /**
  * Workspace summary rendered into the tree view's native `message` chrome.
  *
- * [EXTACT-HEALTH] An empty workspace (no Python files) renders an explicit
+ * Implements [EXTACT-MODULES-HEADER] (`treeView.message`: "73% typed · …").
+ * [EXTACT-HEALTH-HEADER] An empty workspace (no Python files) renders an explicit
  * "No Python files found" — never a misleading 100% for 0/0 symbols (#57).
+ * NOTE (conformance): the spec's tally uses `🔴 n` / `🟠 n` glyphs, not `nE nW`.
  */
 export function workspaceHealthMessage(stats: HealthStats | undefined): string {
   if (stats === undefined) { return ""; }
@@ -301,6 +314,8 @@ export function workspaceHealthMessage(stats: HealthStats | undefined): string {
   return `${stats.coveragePercent}% typed${issueStr}`;
 }
 
+// Implements [EXTACT-MODULES-HEADER] `treeView.badge`: numeric count of
+// outstanding diagnostics, hidden when zero or on an empty workspace.
 /** Numeric view badge: outstanding diagnostics (errors + warnings), or none. */
 export function workspaceHealthBadge(stats: HealthStats | undefined): vscode.ViewBadge | undefined {
   if (stats === undefined || stats.totalFiles === 0) { return undefined; }
@@ -350,6 +365,8 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     this.treeView = treeView;
   }
 
+  // Implements [EXTACT-MODULES-REFRESH] — the manual refresh button (and the
+  // create/delete/rename full re-fetch) clear the cache and re-query the LSP.
   public refresh(): void {
     this.modules = [];
     this.workspace = undefined;
@@ -367,11 +384,15 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     this.emitter.fire(undefined);
   }
 
+  // Implements [EXTACT-MODULES-TOOLBAR] Sort — the explicit Module Name / Path /
+  // Type Coverage picker (#189) with the active mode marked, never a blind cycle.
   /** Labelled sort options with the active one marked, to drive the picker (#189). */
   public sortOptions(): readonly { readonly mode: SortMode; readonly label: string; readonly current: boolean }[] {
     return SORT_OPTIONS.map((option) => ({ ...option, current: option.mode === this.sortMode }));
   }
 
+  // Implements [EXTACT-MODULES-TOOLBAR] Toggle View — switch tree<->flat and
+  // publish the `basilisk.moduleExplorerView` context key that gates Sort (#151).
   /** Toggle between tree and flat view modes, persisted in workspaceState. */
   public toggleViewMode(context: vscode.ExtensionContext): void {
     this.viewMode = this.viewMode === "tree" ? "flat" : "tree";
@@ -386,6 +407,7 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     void vscode.commands.executeCommand("setContext", "basilisk.moduleExplorerView", this.viewMode);
   }
 
+  // Implements [EXTACT-MODULES-TOOLBAR] Filter — the glob search over module names.
   /** Set the glob filter pattern and re-render. */
   public setFilter(pattern: string): void {
     this.filterPattern = pattern;
@@ -548,6 +570,8 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     });
   }
 
+  // Implements the client side of [EXTACT-LSP-COMMANDS-WORKSPACE-MODULES] —
+  // requests the flat module list + folded health rollup from the LSP.
   private async fetchModules(): Promise<void> {
     const client = this.store.client.value;
     if (!client?.isRunning()) {
@@ -601,8 +625,8 @@ function registerExplorerCommands(
       provider.toggleViewMode(context);
     }),
     vscode.commands.registerCommand("basilisk.sortModuleExplorer", async () => {
-      // Explicit picker with the active mode checked, so the current sort is
-      // always visible — never a blind cycle (#189).
+      // Implements [EXTACT-MODULES-TOOLBAR] Sort: explicit picker with the active
+      // mode checked, so the current sort is always visible — never a blind cycle (#189).
       const items = provider.sortOptions().map((option) => ({
         label: option.current ? `$(check) ${option.label}` : option.label,
         mode: option.mode,
@@ -620,6 +644,7 @@ function registerExplorerCommands(
       });
       provider.setFilter(input ?? "");
     }),
+    // Implements [EXTACT-MODULES-CONTEXT-MENU] Copy Import Path.
     vscode.commands.registerCommand("basilisk.copyImportPath", (item: TreeItem) => {
       if (item instanceof SymbolTreeItem) {
         copyToClipboard(`from ${item.moduleName} import ${item.symbol.name}`);
@@ -628,6 +653,7 @@ function registerExplorerCommands(
       const module = itemModule(item);
       if (module !== undefined) { copyToClipboard(`import ${module.name}`); }
     }),
+    // Implements [EXTACT-MODULES-CONTEXT-MENU] Copy Qualified Name.
     vscode.commands.registerCommand("basilisk.copyQualifiedName", (item: TreeItem) => {
       if (item instanceof SymbolTreeItem) {
         copyToClipboard(`${item.moduleName}.${item.symbol.name}`);

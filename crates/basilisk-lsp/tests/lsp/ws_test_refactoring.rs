@@ -42,6 +42,7 @@ fn has_action(resp: &str, title_fragment: &str) -> bool {
 
 // ── Extract Variable ─────────────────────────────────────────────────────────
 
+// Exercises [REFACTOR-EXTRACT-VAR] / [REFACTOR-EXTRACT-VAR-ALGO].
 #[tokio::test]
 async fn test_ws_extract_variable_offered() -> TestResult<()> {
     let uri = "file:///refactor_extract_var.py";
@@ -82,6 +83,7 @@ async fn test_ws_extract_constant_offered() -> TestResult<()> {
 
 // ── Extract Function ─────────────────────────────────────────────────────────
 
+// Exercises [REFACTOR-EXTRACT-FUNC] / [REFACTOR-EXTRACT-FUNC-ALGO].
 #[tokio::test]
 async fn test_ws_extract_function_offered() -> TestResult<()> {
     let uri = "file:///refactor_extract_func.py";
@@ -102,6 +104,7 @@ async fn test_ws_extract_function_offered() -> TestResult<()> {
 
 // ── Inline Variable ──────────────────────────────────────────────────────────
 
+// Exercises [REFACTOR-INLINE-VAR] / [REFACTOR-INLINE-VAR-ALGO].
 #[tokio::test]
 async fn test_ws_inline_variable_offered() -> TestResult<()> {
     let uri = "file:///refactor_inline_var.py";
@@ -122,6 +125,7 @@ async fn test_ws_inline_variable_offered() -> TestResult<()> {
 
 // ── Inline Function ──────────────────────────────────────────────────────────
 
+// Exercises [REFACTOR-INLINE-FUNC] / [REFACTOR-INLINE-FUNC-ALGO].
 #[tokio::test]
 async fn test_ws_inline_function_offered() -> TestResult<()> {
     let uri = "file:///refactor_inline_func.py";
@@ -142,6 +146,7 @@ async fn test_ws_inline_function_offered() -> TestResult<()> {
 
 // ── Convert Union ────────────────────────────────────────────────────────────
 
+// Exercises [REFACTOR-CONVERT] — Union[X, Y] ↔ X | Y row.
 #[tokio::test]
 async fn test_ws_convert_union_offered() -> TestResult<()> {
     let uri = "file:///refactor_union.py";
@@ -162,6 +167,7 @@ async fn test_ws_convert_union_offered() -> TestResult<()> {
 
 // ── Convert Optional ─────────────────────────────────────────────────────────
 
+// Exercises [REFACTOR-CONVERT] — Optional[X] ↔ X | None row.
 #[tokio::test]
 async fn test_ws_convert_optional_offered() -> TestResult<()> {
     let uri = "file:///refactor_optional.py";
@@ -181,6 +187,7 @@ async fn test_ws_convert_optional_offered() -> TestResult<()> {
 
 // ── Convert f-string ─────────────────────────────────────────────────────────
 
+// Exercises [REFACTOR-CONVERT] — f-string ↔ .format() row.
 #[tokio::test]
 async fn test_ws_convert_fstring_offered() -> TestResult<()> {
     let uri = "file:///refactor_fstring.py";
@@ -201,6 +208,7 @@ async fn test_ws_convert_fstring_offered() -> TestResult<()> {
 
 // ── Convert dict literal ─────────────────────────────────────────────────────
 
+// Exercises [REFACTOR-CONVERT] — dict() ↔ {} row.
 #[tokio::test]
 async fn test_ws_convert_dict_literal_offered() -> TestResult<()> {
     let uri = "file:///refactor_dict.py";
@@ -220,6 +228,7 @@ async fn test_ws_convert_dict_literal_offered() -> TestResult<()> {
 
 // ── Convert list literal ─────────────────────────────────────────────────────
 
+// Exercises [REFACTOR-CONVERT] — list() ↔ [] row.
 #[tokio::test]
 async fn test_ws_convert_list_literal_offered() -> TestResult<()> {
     let uri = "file:///refactor_list.py";
@@ -239,6 +248,7 @@ async fn test_ws_convert_list_literal_offered() -> TestResult<()> {
 
 // ── Convert ternary ──────────────────────────────────────────────────────────
 
+// Exercises [REFACTOR-CONVERT] — Ternary ↔ if/else block row.
 #[tokio::test]
 async fn test_ws_convert_ternary_offered() -> TestResult<()> {
     let uri = "file:///refactor_ternary.py";
@@ -259,6 +269,7 @@ async fn test_ws_convert_ternary_offered() -> TestResult<()> {
 
 // ── Convert NamedTuple ───────────────────────────────────────────────────────
 
+// Exercises [REFACTOR-CONVERT] — Named tuple class ↔ functional row.
 #[tokio::test]
 async fn test_ws_convert_namedtuple_offered() -> TestResult<()> {
     let uri = "file:///refactor_namedtuple.py";
@@ -280,6 +291,7 @@ async fn test_ws_convert_namedtuple_offered() -> TestResult<()> {
 
 // ── Implement Abstract Methods ───────────────────────────────────────────────
 
+// Exercises [REFACTOR-ABSTRACT] / [REFACTOR-ABSTRACT-ALGO].
 #[tokio::test]
 async fn test_ws_implement_abstract_methods_offered() -> TestResult<()> {
     let uri = "file:///refactor_abstract.py";
@@ -300,6 +312,7 @@ async fn test_ws_implement_abstract_methods_offered() -> TestResult<()> {
 
 // ── Change Signature: Remove Parameter ───────────────────────────────────────
 
+// Exercises [REFACTOR-SIGNATURE] / [REFACTOR-SIGNATURE-OPS] — Remove parameter.
 #[tokio::test]
 async fn test_ws_change_signature_remove_param_offered() -> TestResult<()> {
     let uri = "file:///refactor_remove_param.py";
@@ -320,6 +333,7 @@ async fn test_ws_change_signature_remove_param_offered() -> TestResult<()> {
 
 // ── Change Signature: Add Parameter ─────────────────────────────────────────
 
+// Exercises [REFACTOR-SIGNATURE] / [REFACTOR-SIGNATURE-OPS] — Add parameter.
 #[tokio::test]
 async fn test_ws_change_signature_add_param_offered() -> TestResult<()> {
     let uri = "file:///refactor_add_param.py";
@@ -340,6 +354,8 @@ async fn test_ws_change_signature_add_param_offered() -> TestResult<()> {
 
 // ── Change Signature: Reorder Parameters ────────────────────────────────────
 
+// Exercises [REFACTOR-SIGNATURE-OPS] — Reorder parameters (def-line only;
+// see DEVIATION: callers are not updated).
 #[tokio::test]
 async fn test_ws_change_signature_reorder_offered() -> TestResult<()> {
     let uri = "file:///refactor_reorder_params.py";

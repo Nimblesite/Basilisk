@@ -52,6 +52,9 @@ pub(super) fn suppress_with_code(
 }
 
 /// Append `  # type: warning[CODE]` to demote the error to a warning.
+// Related to [AUTOFIX-ADOPTION] (error→warning demotion) but a DIFFERENT
+// mechanism: this is a per-LINE inline comment, not the per-file
+// `.basilisk/adoptions.toml` override store the adoption flow uses.
 pub(super) fn demote_to_warning(
     uri: &Url,
     diag: &Diagnostic,

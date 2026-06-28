@@ -1,3 +1,5 @@
+# Extension manifest. Implements [ZED-EXTTOML]; the placeholder version is
+# stamped only during CI per [ZED-CARGOTOML] / [ZED-MIRROR].
 id = "basilisk"
 name = "Basilisk"
 version = "0.0.0-PLACEHOLDER"
@@ -12,6 +14,7 @@ repository = "https://github.com/Nimblesite/Basilisk"
 # query files in languages/python/ augment the built-in grammar. See
 # docs/specs/ZED-SPEC.md [ZED-GRAMMAR].
 
+# LSP wiring: Zed launches `basilisk lsp` for Python. Implements [ZED-LSP].
 [language_servers.basilisk]
 name = "Basilisk"
 languages = ["Python"]
@@ -19,6 +22,8 @@ languages = ["Python"]
 [language_servers.basilisk.language_ids]
 "Python" = "python"
 
+# Slash commands (profiling, memory, activity-panel, tests). Implements
+# [ZED-PROFILE]; dispatch + output live in src/logic.rs.
 [slash_commands.modules]
 description = "Show workspace module tree"
 requires_argument = false
@@ -71,5 +76,7 @@ requires_argument = false
 description = "Run all tests in the current file"
 requires_argument = false
 
+# DAP adapter registration; the launch/attach schema lives at schema_path.
+# Implements [ZED-DAP].
 [debug_adapters.basilisk-debug]
 schema_path = "debug_adapter_schemas/basilisk-debug.json"

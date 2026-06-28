@@ -10,6 +10,10 @@ use serde::Serialize;
 use super::diff::AllocationGrowth;
 
 /// Confidence level for a suspected memory leak.
+///
+/// Implements [PROFILE-MEMORY-CONFIDENCE] — the four-level scale (Low, Medium,
+/// High, Definite) and its criteria. `Ord` is derived ascending so callers can
+/// compare `>= Medium` etc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum LeakConfidence {
     /// Single-diff growth, small size — could be normal warmup.
@@ -133,6 +137,10 @@ impl LeakTracker {
 const LARGE_GROWTH_THRESHOLD: i64 = 10 * 1024 * 1024;
 
 /// Score a single allocation site based on its history and current growth.
+///
+/// Implements [PROFILE-MEMORY-CONFIDENCE]: High for 3+ consecutive growths,
+/// Medium for 2 consecutive *or* a single-diff growth >10 MB, else Low.
+/// (Definite — `__del__` in a cycle — is decided from gc output, not here.)
 fn score_leak(history: &AllocationHistory, growth: &AllocationGrowth) -> (LeakConfidence, String) {
     if history.consecutive_growths >= 3 {
         (
@@ -201,6 +209,7 @@ mod tests {
         Ok(())
     }
 
+    // [PROFILE-MEMORY-CONFIDENCE] 3+ consecutive growth diffs escalate to High.
     #[test]
     fn three_consecutive_growths_is_high() -> Result<(), String> {
         let mut tracker = LeakTracker::new();

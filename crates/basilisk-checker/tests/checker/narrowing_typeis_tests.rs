@@ -3,6 +3,8 @@
 
 use super::common::*;
 
+// Exercises [TYPEINF-NARROWING-TYPEGUARD] / [TYPEINF-NARROWING-TYPEIS] —
+// callable-context return-type compatibility for narrowing functions.
 #[test]
 fn typeguard_passed_where_str_expected() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"

@@ -147,6 +147,8 @@ fn version_json_matches_shipwright_contract() -> Result<(), Box<dyn std::error::
 }
 
 // ── Exit codes ───────────────────────────────────────────────────────────────
+// Exercises [CHKARCH-CLI-EXITCODES]: 0 = clean, 1 = type errors, 3 = internal
+// error. (Spec code 2 = configuration error is not exercised — unimplemented.)
 
 #[test]
 fn exit_0_for_clean_file() -> Result<(), Box<dyn std::error::Error>> {
@@ -183,6 +185,9 @@ fn clean_file_prints_no_issues_found() -> Result<(), Box<dyn std::error::Error>>
 }
 
 // ── Error output format ──────────────────────────────────────────────────────
+// Exercises [CHKARCH-CLI-OUTPUT] (human-readable text default) and the
+// rustc-standard layout of [CHKARCH-DIAGEXP-QUALITY]: code, `-->` location,
+// source snippet, caret underline, and `= help:`/`= note:`/`= see:` lines.
 
 #[test]
 fn output_contains_error_code_e0001() -> Result<(), Box<dyn std::error::Error>> {

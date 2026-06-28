@@ -42,6 +42,10 @@ impl SymbolKind {
 /// The action creates a new file named after the symbol (`snake_case`),
 /// moves the full definition there, replaces the original with an import,
 /// and adds the symbol to the original module's `__all__` if present.
+// Implements [REFACTOR-MOVE-NEW] — the "Move to New File" variant of
+// [REFACTOR-MOVE-ALGO]: identify the symbol + its imports (step 1), move the
+// definition to a new file named after the symbol (step 3), and leave a
+// re-export import in the source.
 #[must_use]
 pub(in crate::code_actions) fn move_symbol_to_new_file(
     uri: &Url,
@@ -82,6 +86,9 @@ pub(in crate::code_actions) fn move_symbol_to_new_file(
 /// than a direct workspace edit, because the destination file is chosen
 /// by the user at execution time.  The command arguments carry all the
 /// information the server needs to perform the move.
+// Implements [REFACTOR-MOVE-ALGO] step 2 — the user picks an existing
+// destination module at execution time (the move itself runs in the
+// `basilisk.moveSymbol` command handler).
 #[must_use]
 pub(in crate::code_actions) fn move_symbol_to_existing_file(
     uri: &Url,
@@ -216,6 +223,8 @@ fn to_snake_case(name: &str) -> String {
 ///
 /// These imports are carried into the new file so the moved symbol
 /// can still reference its dependencies.
+// Implements [REFACTOR-MOVE-ALGO] step 1 (imports) / step 3 (add required
+// imports to the destination) — carry the source module's imports along.
 fn collect_imports_before_symbol(source: &str, start_line: usize) -> String {
     let mut imports = String::new();
     for line in source.lines().take(start_line) {
@@ -489,6 +498,8 @@ mod tests {
 
     // ── full integration ─────────────────────────────────────────────────
 
+    // Exercises [REFACTOR-MOVE-NEW] / [REFACTOR-MOVE-ALGO] — create new file,
+    // write the symbol body, and replace the original with a re-export import.
     #[test]
     fn test_move_symbol_produces_action() {
         let source = "import os\n\nclass MyWidget:\n    pass\n";

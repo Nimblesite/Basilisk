@@ -13,6 +13,9 @@ use super::helpers::{leading_indent_of_line, WorkspaceEditBuilder};
 /// Only offered when the assignment is a simple `name = expr` (no tuple
 /// unpacking, no augmented assignment) and the name appears at least once
 /// after the assignment within the same indentation scope.
+// Implements [REFACTOR-INLINE-VAR-ALGO] — find the simple `name = expr`
+// definition (step 1), find references in scope (step 2), replace each with
+// the expression (step 4), and delete the assignment (step 5).
 #[must_use]
 pub(in crate::code_actions) fn inline_variable(
     uri: &Url,
@@ -48,6 +51,8 @@ pub(in crate::code_actions) fn inline_variable(
 
 /// Parse a simple `name = expr` from a line. Returns `None` for augmented
 /// assignments, tuple unpacking, or empty expressions.
+// Implements [REFACTOR-INLINE-VAR-ALGO] step 1 — restrict to a simple
+// `name = expr` assignment (no augmented assignment, no tuple unpacking).
 fn parse_simple_assignment(line: &str) -> Option<(&str, &str)> {
     let trimmed = line.trim();
     let eq_pos = trimmed.find('=')?;

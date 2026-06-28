@@ -229,6 +229,11 @@ function disposeAllCommands(signals: StoreSignals): void {
   signals.serverCommands.value = new Set();
 }
 
+// Implements [VSIX-COMMANDS] — registers the two client-only commands declared in
+// vscode-extension/package.json (contributes.commands): basilisk.restartServer
+// ([VSIX-ERROR-RECOVERY] manual recovery) and basilisk.showOutput
+// ([VSIX-OUTPUT-CHANNELS]). All other contributed commands are server-advertised
+// and auto-registered via syncServerCommands (per the Command Registration Rule).
 /** Register all client-only commands. Called when LSP reaches Running. */
 function registerClientCommands(signals: StoreSignals, context: vscode.ExtensionContext): void {
   registerCommand({ signals, context, commandId: "basilisk.restartServer" }, async () => {

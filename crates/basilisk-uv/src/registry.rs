@@ -51,6 +51,11 @@ impl PackageRegistry {
     /// appear there are classified as [`DepKind::Direct`]; those that appear
     /// in any package's `dev-dependencies` list are [`DepKind::Dev`]; all
     /// others are [`DepKind::Transitive`].
+    //
+    // Implements [LSPUV-LOCK-REGISTRY] — the fast lookup structure keyed by
+    // normalised import name ([LSPUV-LOCK-IMPORT-MAPPING] via
+    // `package_to_import_name`), carrying version, direct/dev/transitive
+    // classification, and editable-source flag for each package.
     #[must_use]
     pub fn from_lock_file(lock: &LockFile, pyproject_deps: &[String]) -> Self {
         let dev_names = collect_dev_dep_names(&lock.packages);
@@ -94,6 +99,12 @@ impl PackageRegistry {
     /// Search for a type-stub package (e.g. `types-requests` for `requests`).
     ///
     /// Returns the import name of the stub package if found.
+    //
+    // Implements [LSPUV-DIAGNOSTICS-MISSING-STUBS] — the "a matching stub
+    // package exists in uv.lock" precondition for the BSK-E0152 typeshed
+    // suggestion. NOTE: only the `types_{name}` form is checked here; the
+    // spec also names the `{name}-stubs` form, which this does not detect.
+    // See conformance audit (DEVIATION).
     #[must_use]
     pub fn find_stub_package(&self, name: &str) -> Option<String> {
         let stub_import = format!("types_{name}");
@@ -240,6 +251,8 @@ mod tests {
         }
     }
 
+    // [LSPUV-LOCK-REGISTRY]: direct/dev/transitive classification, editable
+    // detection, lookup by import name, and import-name mapping on build.
     #[test]
     fn classifies_direct_dependency() {
         let lock = make_lock_file();
@@ -332,6 +345,8 @@ mod tests {
         assert!(registry.has_package("my_editable"));
     }
 
+    // [LSPUV-DIAGNOSTICS-MISSING-STUBS]: a `types-<pkg>` entry in uv.lock is
+    // discoverable as the matching stub package (keyed `types_<pkg>`).
     #[test]
     fn find_stub_package_found() {
         let lock = LockFile {

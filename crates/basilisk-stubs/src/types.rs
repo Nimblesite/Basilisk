@@ -54,6 +54,9 @@ pub enum StubTier {
 /// Where a type's information originated, from the perspective of the type
 /// checker.  Used for cascade suppression (suppress downstream errors from
 /// untyped imports) and hover annotations.
+// Implements [STUBRES-PROVENANCE] — the `TypeProvenance` metadata each tracked
+// type carries; cascade-suppression behaviour by variant lives in the checker
+// (out of crate; see report).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum TypeProvenance {
     /// From source code annotations or inference.
@@ -80,6 +83,9 @@ impl From<(&StubSource, &StubTier)> for TypeProvenance {
 
 impl TypeProvenance {
     /// Human-readable label for hover tooltips.
+    // Implements [STUBRES-PROVENANCE-HOVER] — the per-provenance suffix shown in
+    // LSP hover (e.g. `(typeshed)`, `(best-effort stub, may be inaccurate)`,
+    // `(no type stubs available)`); the LSP hover renderer appends it.
     #[must_use]
     pub fn hover_label(self) -> Option<&'static str> {
         match self {

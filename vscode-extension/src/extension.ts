@@ -238,6 +238,12 @@ export function deactivate(): Promise<void> | undefined {
 
 // ── Initialization helpers ────────────────────────────────────────────────
 
+// Implements [VSIX-OUTPUT-CHANNELS] — creates the main "Basilisk" output channel
+// and the file log sink. DEVIATION: the spec names the file sink
+// "/tmp/basilisk-debug-trace.log", but for security (js/insecure-temporary-file)
+// the log lives at context.logUri/basilisk-debug-trace.log (per-extension private
+// dir), not world-writable /tmp. The "Basilisk LSP Trace" channel is created in
+// lsp-client.ts.
 function initLogging(context: vscode.ExtensionContext, s: Store): void {
   const logChannel = vscode.window.createOutputChannel("Basilisk", { log: true });
   s.setOutputChannel(logChannel);
@@ -258,6 +264,9 @@ function initLogging(context: vscode.ExtensionContext, s: Store): void {
   context.subscriptions.push(logChannel);
 }
 
+// Implements [VSIX-STATUS-BAR] — creates the persistent status bar item whose
+// text/state is driven by updateStatusBar (server state) and
+// updateStatusBarDiagnostics (per-file error/warning counts).
 function initStatusBar(context: vscode.ExtensionContext, s: Store): void {
   const item = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
@@ -268,6 +277,13 @@ function initStatusBar(context: vscode.ExtensionContext, s: Store): void {
   context.subscriptions.push(item);
 }
 
+// Implements [VSIX-PYTHON-DEBUGGER-DAP-ARCHITECTURE] / [VSIX-PYTHON-DEBUGGER-START]
+// — registers the `basilisk-debug` adapter-descriptor factory, the (Dynamic +
+// default) config provider, and the tracker factory. The matching activation
+// events (onDebug, onDebugResolve/onDebugDynamicConfigurations:basilisk-debug)
+// are declared in vscode-extension/package.json so these register before a Python
+// file is opened. [VSIX-PYTHON-DEBUGGER-DAP-TRACKER]: tracker callbacks feed PID +
+// pause signals to the store.
 function registerDebugSupport(context: vscode.ExtensionContext, s: Store): void {
   // Debug adapter factories can only be registered once per type.
   // Push to singletonDisposables so deactivate() can dispose them
@@ -348,6 +364,10 @@ function registerDebugLifecycleLogging(context: vscode.ExtensionContext): void {
 
 // ── Status bar ────────────────────────────────────────────────────────────
 
+// Implements [VSIX-STATUS-BAR] — server-state faces: starting → $(sync~spin)
+// ("analyzing"), ready → $(check), error → $(error) (server failed/not running),
+// stopped → $(circle-slash). Note: the spec lists only check/warning/error/
+// sync~spin; "stopped" uses $(circle-slash) (not in the spec's enumerated list).
 function updateStatusBar(state: "starting" | "ready" | "error" | "stopped"): void {
   // Set context key for panel visibility conditions.
   void vscode.commands.executeCommand("setContext", "basilisk.serverState", state === "ready" ? "running" : state);
@@ -379,6 +399,11 @@ function updateStatusBar(state: "starting" | "ready" | "error" | "stopped"): voi
   item.show();
 }
 
+// Implements [VSIX-STATUS-BAR] — per-file diagnostic count face. DEVIATION from
+// spec text: the spec shows "$(warning) Basilisk (3) — errors in current file",
+// but errors use the $(error) icon (red errorBackground) and warnings use
+// $(warning) (warningBackground); no issues → $(check). The spec's example
+// conflates the warning icon with an error count.
 function updateStatusBarDiagnostics(): void {
   const item = store?.statusBarItem.value;
   if (!item) {return;}
@@ -406,6 +431,11 @@ function updateStatusBarDiagnostics(): void {
 
 // ── Runtime resolution ────────────────────────────────────────────────────
 
+// Implements [VSIX-ERROR-RECOVERY] — resolves the binary then starts LSP mode or,
+// when basilisk.useLsp is false, the subprocess fallback ([VSIX-CONFIGURATION-
+// SETTINGS-VS-CODE-ONLY]). On failure it surfaces a user-visible error
+// (reportRuntimeFailure) and flips the status bar to the error face.
+// [VSIX-BINARY-RESOLUTION] is delegated to resolveBasiliskRuntime (Shipwright).
 async function startRuntime(context: vscode.ExtensionContext, s: Store): Promise<void> {
   try {
     const runtime = await resolveBasiliskRuntime(context);

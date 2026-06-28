@@ -1,5 +1,8 @@
 --- Memory Profiler E2E tests for the Basilisk Neovim extension.
 ---
+--- Tests [NVIM-USER-COMMANDS-MEMORY-UI] (leak report, retention paths,
+--- :BasiliskMemRefs completion).
+---
 --- Full parity with vscode-extension/src/test/suite/profiler.test.ts
 --- (Memory Profiler sections).
 --- Validates the complete memory profiling workflow:

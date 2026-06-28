@@ -15,6 +15,8 @@ use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit
 /// Only offered when:
 /// - The cursor is on a parameter name in a `def` line.
 /// - The function has at least 2 parameters (removing the last one is silly).
+// Implements [REFACTOR-SIGNATURE-OPS] "Remove parameter" — remove the param
+// from the def and the corresponding argument at every call site.
 #[must_use]
 pub(in crate::code_actions) fn remove_parameter(
     uri: &Url,
@@ -216,6 +218,8 @@ fn split_params(text: &str) -> Vec<&str> {
 ///
 /// Only offered when the cursor is on a `def` line.  The new parameter is
 /// appended at the end with `new_param=None`.
+// Implements [REFACTOR-SIGNATURE-OPS] "Add parameter" — insert a new param
+// with a default value so all existing callers remain valid.
 #[must_use]
 pub(in crate::code_actions) fn add_parameter(
     uri: &Url,
@@ -256,6 +260,10 @@ pub(in crate::code_actions) fn add_parameter(
 ///
 /// Only offered when the function has 3+ non-self parameters (reordering
 /// 2 is trivial and not worth a code action).
+// Implements [REFACTOR-SIGNATURE-OPS] "Reorder parameters" (partial) — edits
+// only the def line. NOTE: the spec also requires updating callers that use
+// positional arguments; this implementation does not, so a positional caller
+// would silently break. See conformance DEVIATION report.
 #[must_use]
 pub(in crate::code_actions) fn reorder_parameters(
     uri: &Url,

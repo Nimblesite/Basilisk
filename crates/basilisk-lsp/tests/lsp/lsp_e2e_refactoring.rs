@@ -124,6 +124,7 @@ fn test_refactor_extract_function_offered() -> TestResult<()> {
     Ok(())
 }
 
+// Exercises [REFACTOR-EXTRACT-FUNC-EDGE] — reject selections containing yield.
 #[test]
 fn test_refactor_extract_function_rejects_yield() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
@@ -372,6 +373,7 @@ fn test_refactor_inline_function_offered() -> TestResult<()> {
 
 // ── Move Symbol ─────────────────────────────────────────────────────────────
 
+// Exercises [REFACTOR-MOVE] / [REFACTOR-MOVE-NEW] — move a class to a new file.
 #[test]
 fn test_refactor_move_symbol_offered() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
@@ -433,6 +435,8 @@ fn test_refactor_convert_namedtuple_offered() -> TestResult<()> {
 
 // ── Rename with Scope Awareness ─────────────────────────────────────────────
 
+// Exercises [REFACTOR-RENAME] / [REFACTOR-RENAME-SCOPE]. Implementation lives
+// out of scope in crates/basilisk-lsp/src/references.rs + scope_tree.rs.
 #[test]
 fn test_refactor_rename_produces_scoped_edits() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;

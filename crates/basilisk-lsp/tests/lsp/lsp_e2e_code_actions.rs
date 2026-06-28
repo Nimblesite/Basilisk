@@ -499,6 +499,8 @@ fn test_lsp_code_action_redundant_annotation_w0050() -> TestResult<()> {
 }
 
 // ── Mass Autofix (Fix All in File) ──────────────────────────────────────────
+// Exercises [AUTOFIX-MASS] (File scope) and [AUTOFIX-MASS-VSCODE] (the
+// `source.fixAll.basilisk` code action + `basilisk.fixFile` command).
 
 #[test]
 fn test_lsp_fix_all_in_file_returns_combined_edit() -> TestResult<()> {

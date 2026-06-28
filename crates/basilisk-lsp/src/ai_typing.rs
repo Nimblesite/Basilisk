@@ -17,6 +17,12 @@ use std::fmt;
 // ---------------------------------------------------------------------------
 
 /// Error type for AI typing operations.
+//
+// Implements [LSPAI-ERRORS] — PARTIAL: spec names `AiProviderError` with variants
+// `NotConfigured`, `Transport`, `MalformedResponse`, `RateLimited(Option<Duration>)`,
+// `Refused`, `Other`. This module ships a narrower `AiTypingError`
+// (`Unavailable`/`ProviderError`/`Timeout`) for the type-annotation slice only.
+// DEVIATION: type name and variant set differ from the spec.
 #[derive(Debug)]
 pub enum AiTypingError {
     /// The AI provider is not configured or unavailable.
@@ -53,6 +59,10 @@ pub enum FixSafety {
 }
 
 /// Origin of a proposed fix.
+//
+// Implements [LSPAI-PRINCIPLES] (principle 3 "Always unsafe") — `FixSource::AiAssisted`
+// is the marker every AI-generated fix carries; pairs with `FixSafety::Unsafe`.
+// (The spec section is otherwise narrative; only this concrete enum is behavioral.)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FixSource {
     /// Deterministic fix derived from the rule definition.
@@ -68,6 +78,11 @@ pub enum FixSource {
 // ---------------------------------------------------------------------------
 
 /// Context payload sent to an AI typing provider.
+//
+// Implements [LSPAI-CONTEXT] — PARTIAL: a single flat request carrying the diagnostic,
+// surrounding source, and position. DEVIATION: the spec's structured payload
+// ([LSPAI-TYPES-FIX]: `InferredTypeInfo`, `CallSiteContext`, available-import types,
+// `is_batch`) is NOT present — only a `source_context: String` blob.
 #[derive(Debug)]
 pub struct AiTypingRequest {
     /// The diagnostic code (e.g. `"BSK-E0001"`).
@@ -85,6 +100,10 @@ pub struct AiTypingRequest {
 }
 
 /// Response from an AI typing provider.
+//
+// Implements [LSPAI-TYPES-FIX] — PARTIAL (response side, annotation use-case only):
+// carries `suggested_type`, `confidence`, and `reasoning`. DEVIATION: the spec returns
+// a full `Fix` plus ranked `alternatives`; this returns a single type string.
 #[derive(Debug)]
 pub struct AiTypingResponse {
     /// The proposed type annotation text (e.g. `"int"`, `"list[str]"`, `"Optional[int]"`).
@@ -104,6 +123,12 @@ pub struct AiTypingResponse {
 /// Implementors suggest type annotations for diagnostics that deterministic
 /// analysis cannot resolve. All AI-suggested fixes are classified as
 /// [`FixSafety::Unsafe`] and [`FixSource::AiAssisted`].
+//
+// Implements [LSPAI-TRAIT] — PARTIAL: spec's `AiProvider` declares `name`,
+// `capabilities`, and 9 `suggest_*`/`generate_*`/`explain_*`/`enhance_*` methods.
+// This `AiTypingProvider` ships only `suggest_fix` + `is_available` (the
+// type-annotation slice). DEVIATION: trait name and method surface differ;
+// `name()`/`capabilities()` and all non-fix features are UNIMPLEMENTED.
 pub trait AiTypingProvider: Send + Sync {
     /// Given diagnostic context, suggest a type annotation fix.
     ///
@@ -130,6 +155,11 @@ pub trait AiTypingProvider: Send + Sync {
 /// No-op AI typing provider — always returns `None`.
 ///
 /// This is the default provider used when AI typing is not configured.
+//
+// Implements [LSPAI-PROVIDERS] (the `NoOpProvider` row) — the offline-first default
+// from [LSPAI-PRINCIPLES] principle 4: `is_available() == false`, zero overhead.
+// The other rows (`OpenAiCompatibleProvider`, `AnthropicProvider`, `CopilotProvider`,
+// `ProcessProvider`) are UNIMPLEMENTED.
 #[derive(Debug)]
 pub struct NoOpAiTypingProvider;
 
@@ -169,6 +199,7 @@ mod tests {
         }
     }
 
+    // Exercises [LSPAI-PROVIDERS] (NoOpProvider) + [LSPAI-TRAIT] suggest_fix.
     #[test]
     fn noop_provider_returns_none() {
         let provider = NoOpAiTypingProvider;
@@ -176,18 +207,22 @@ mod tests {
         assert!(result.is_none());
     }
 
+    // Exercises [LSPAI-PROVIDERS] (NoOpProvider) + [LSPAI-PRINCIPLES] principle 4
+    // (offline-first default): is_available() == false.
     #[test]
     fn noop_provider_is_not_available() {
         let provider = NoOpAiTypingProvider;
         assert!(!provider.is_available());
     }
 
+    // Exercises [LSPAI-ERRORS] — Display for the (partial) error type.
     #[test]
     fn error_display_unavailable() {
         let err = AiTypingError::Unavailable;
         assert_eq!(err.to_string(), "AI typing provider is not available");
     }
 
+    // Exercises [LSPAI-ERRORS].
     #[test]
     fn error_display_provider_error() {
         let err = AiTypingError::ProviderError("connection refused".to_owned());
@@ -197,6 +232,7 @@ mod tests {
         );
     }
 
+    // Exercises [LSPAI-ERRORS].
     #[test]
     fn error_display_timeout() {
         let err = AiTypingError::Timeout;
@@ -209,6 +245,7 @@ mod tests {
         assert_ne!(FixSafety::Safe, FixSafety::Unsafe);
     }
 
+    // Exercises [LSPAI-PRINCIPLES] principle 3 — FixSource::AiAssisted marker.
     #[test]
     fn fix_source_equality() {
         assert_eq!(FixSource::RuleBased, FixSource::RuleBased);

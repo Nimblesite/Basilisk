@@ -12,6 +12,8 @@
 local M = {}
 
 --- Activate code lens for a buffer using the best API the runtime exposes.
+--- Implements [NVIM-LSP-CLIENT-CONFIGURATION-API-MAPPINGS] (Code Lens row) —
+--- vim.lsp.codelens.enable on 0.12+, refresh() fallback on 0.10/0.11.
 ---@param bufnr integer
 function M.activate(bufnr)
   if vim.lsp.codelens.enable then

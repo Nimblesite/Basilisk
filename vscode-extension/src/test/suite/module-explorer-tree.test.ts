@@ -222,6 +222,7 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
     }
   });
 
+  // Tests [EXTACT-MODULES-TOOLBAR] Sort — the explicit, labelled name/path/coverage picker.
   test("flat-view exposes explicit name/path/coverage sort modes with a visible active mode (#151, #189)", async () => {
     const provider = new ModuleExplorerProvider(storeWith(MODULES));
     try {
@@ -267,6 +268,7 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
     }
   });
 
+  // Tests [EXTACT-MODULES-TOOLBAR] Sort (Path mode).
   test("flat-view offers an explicit sort-by-path mode (#189)", async () => {
     // Paths are chosen so file-path order (a/ < b/ < c/) differs from BOTH name
     // order (alpha < beta < gamma) and score order (10 < 50 < 90) — so only a

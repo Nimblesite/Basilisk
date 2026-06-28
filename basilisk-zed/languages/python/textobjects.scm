@@ -1,3 +1,5 @@
+; Vim text objects (functions, classes, arguments, comments). Implements [ZED-TREESITTER].
+
 ; Function text objects
 (function_definition) @function.around
 (function_definition body: (block) @function.inside)

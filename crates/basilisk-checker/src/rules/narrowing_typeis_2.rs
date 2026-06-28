@@ -18,6 +18,10 @@ const CODE: ErrorCode = ErrorCode {
 
 /// Emits `narrowing_typeis_2` when a function returns `TypeIs[X]` but `X` is not
 /// consistent with the first parameter type.
+///
+/// Implements [TYPEINF-NARROWING-TYPEIS] — the PEP 742 consistency precondition:
+/// because `TypeIs` narrows bidirectionally, the narrowed type `X` must be a
+/// subtype of (consistent with) the input parameter type.
 pub(crate) struct TypeIsInconsistentNarrowing;
 
 /// Extract the inner type from `TypeIs[X]` or `TypeGuard[X]`. Returns the inner type text.

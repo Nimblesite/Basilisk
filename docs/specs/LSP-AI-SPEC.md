@@ -1,5 +1,14 @@
 # AI-Powered LSP Features — Specification {#LSPAI}
 
+> ⚠️ **Status: ROADMAP (interface-only).** This spec describes the target
+> design. What ships today is a **single ~250-line slice**
+> (`crates/basilisk-lsp/src/ai_typing.rs`): the `AiTypingProvider` trait, the
+> `NoOpAiTypingProvider` default (`is_available() == false`), and the
+> request/response/error types — wired in but invoked nowhere. No concrete
+> providers, no per-feature behaviours, no config/env, no protocol commands, no
+> truncation, no `MockProvider`. Sections below describe intended behaviour, not
+> current reality; see [`CONFAUDIT-ROADMAP`](../plans/SPEC-CONFORMANCE-AUDIT-PLAN.md#CONFAUDIT-ROADMAP).
+
 > **Goal**: Model-agnostic AI integration in the Basilisk LSP. Any model, anywhere — local, cloud, GitHub Copilot, Claude, Ollama, whatever. The LSP doesn't care what's behind the provider. It sends structured context, gets structured responses back.
 
 AI enhances every part of the LSP — fixes, completions, refactoring, navigation, explanations, import resolution, rename suggestions, stub generation, and more. Every deterministic LSP feature works without AI. AI is the optional turbocharger, never the engine.

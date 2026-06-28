@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 ///
 /// Edges go from importer → imported (i.e., if `main.py` imports `utils.py`,
 /// there is an edge `main.py → utils.py`).
+// Implements [ANALYSIS-GRAPH-STRUCT] — forward/reverse adjacency maps; spec's
+// HashMap<PathBuf, HashSet<PathBuf>> shape, plus a detected-cycles cache.
 #[derive(Debug, Default)]
 pub struct ImportGraph {
     /// Forward edges: file → set of files it imports.
@@ -80,6 +82,8 @@ impl ImportGraph {
 
     /// Get all transitive importers of a file (files that would need re-analysis
     /// if this file changes).
+    // Implements [ANALYSIS-GRAPH-TRANS] — BFS over reverse edges; drives
+    // invalidation cascading when a file changes.
     #[must_use]
     pub fn transitive_importers(&self, path: &Path) -> Vec<PathBuf> {
         let mut visited = HashSet::new();
@@ -119,6 +123,8 @@ impl ImportGraph {
     /// Returns files ordered so that imported modules appear before their
     /// importers. Files in cycles are placed after their non-cyclic dependencies
     /// using Kahn's algorithm.
+    // Implements [ANALYSIS-GRAPH-TOPO] — Kahn's algorithm yielding an
+    // imported-first ordering so imported symbols are available before importers.
     #[must_use]
     pub fn topological_order(&self) -> Vec<PathBuf> {
         let mut in_degree: HashMap<PathBuf, usize> = HashMap::new();
@@ -174,6 +180,9 @@ impl ImportGraph {
     ///
     /// Uses DFS with coloring (white/gray/black) to find back edges.
     /// Returns a list of detected cycles.
+    // Implements [ANALYSIS-GRAPH-CYCLES] — DFS white/gray/black colouring finds
+    // back edges; cycles are recorded (and broken for ordering by Kahn's algo,
+    // which simply leaves cyclic nodes last in `topological_order`).
     pub fn detect_cycles(&mut self) -> &[ImportCycle] {
         self.cycles = detect_cycles_inner(&self.forward);
         &self.cycles
@@ -189,6 +198,8 @@ impl ImportGraph {
     ///
     /// Walks all files in the index, extracts `ImportInfo.resolved_path` from
     /// each `ResolvedModule`, and adds edges to the graph.
+    // Implements [ANALYSIS-GRAPH-BUILD] — walks `ImportInfo.resolved_path` for
+    // every indexed file, populating forward and reverse edges.
     pub fn build_from_index(&mut self, index: &crate::workspace::WorkspaceIndex) {
         for entry in &index.files {
             let importer_path = entry.key().clone();
@@ -295,6 +306,7 @@ mod tests {
         assert_eq!(graph.edge_count(), 1);
     }
 
+    // Exercises [ANALYSIS-GRAPH-TOPO]: imported-first ordering.
     #[test]
     fn topological_order_simple_chain() {
         let mut graph = ImportGraph::new();
@@ -335,6 +347,7 @@ mod tests {
         assert!(pos_base < pos_main, "base must come before main");
     }
 
+    // Exercises [ANALYSIS-GRAPH-CYCLES]: DFS back-edge detection.
     #[test]
     fn cycle_detection() {
         let mut graph = ImportGraph::new();
@@ -360,6 +373,7 @@ mod tests {
         assert!(cycles.is_empty(), "DAG should have no cycles");
     }
 
+    // Exercises [ANALYSIS-GRAPH-TRANS]: BFS over reverse edges.
     #[test]
     fn transitive_importers() {
         let mut graph = ImportGraph::new();

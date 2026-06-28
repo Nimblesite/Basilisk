@@ -83,6 +83,8 @@ print(json.dumps(results))
 ///
 /// Returns `StubGenError::Subprocess` if the Python process fails or times out.
 /// Returns `StubGenError::Import` if the module cannot be imported.
+// Implements [STUBRES-AUTOGEN-MODES] "Runtime introspection" — highest
+// accuracy: `inspect.signature()` via a Python subprocess sees actual signatures.
 pub fn generate_runtime_stubs(
     module_name: &str,
     python_path: &Path,

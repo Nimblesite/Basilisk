@@ -28,9 +28,9 @@ export default defineConfig({
         launchArgs: [
             '--disable-extensions',
             '--user-data-dir', userDataDir,
-            // [VSIX-EDITOR-SCREENSHOTS]: when capturing website screenshots, expose
-            // the headed VS Code window over CDP so the Playwright watcher
-            // (screenshot-watcher.mjs) can grab it. No effect on normal test runs.
+            // [VSIX-EDITOR-SCREENSHOTS-PIPELINE]: when capturing website
+            // screenshots, expose the headed VS Code window over CDP so the
+            // watcher (screenshot-watcher.mjs) can grab it. No effect normally.
             ...(process.env.BASILISK_SCREENSHOTS
                 ? [`--remote-debugging-port=${process.env.BASILISK_SCREENSHOT_CDP_PORT ?? '9229'}`]
                 : []),

@@ -11,7 +11,7 @@
 //! The `BSK-` prefix some rule codes still carry is a cosmetic naming
 //! convention for Basilisk-original rules — it is *semantically meaningless* to
 //! the checker, which identifies a Basilisk rule solely by its [`BASILISK`] tag
-//! via [`tags_for_code`], never by inspecting the prefix.
+//! via [`tags_for_code`], never by inspecting the prefix. [CHKTAG-BSK-PREFIX]
 
 /// Provenance tag: a core rule selected by the **default** configuration — the
 /// `python/typing` conformance rules plus the core checks that run by default.
@@ -78,7 +78,8 @@ pub const FREE_FORM_TAGS: [&str; 6] = [
 /// list. A rule's provenance and tags live on the rule itself, and both the
 /// selection in `check_with_config` and the classification in [`tags_for_code`]
 /// read them from here. To add a Basilisk rule, tag the rule — nothing else.
-/// [CHKTAG-PROVENANCE]
+/// [CHKTAG-PROVENANCE] [CHKTAG-IMPL] — the `OptInSpec { code, tags }` data type
+/// rules attach to themselves; the rest of this module is its public query API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OptInSpec {
     /// The diagnostic code this opt-in rule emits (e.g. `"BSK-W0050"`).

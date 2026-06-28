@@ -13,11 +13,14 @@ use tracing::info;
 
 use super::aggregator::{HotspotConfig, ProfileData};
 
-/// Diagnostic code for hot lines.
+/// Diagnostic code for hot lines ([PROFILE-CONFIG-CODES]: `BSK-PROF-LINE`, Hint).
 const CODE_PROF_LINE: &str = "BSK-PROF-LINE";
-/// Diagnostic code for hot functions.
+/// Diagnostic code for hot functions ([PROFILE-CONFIG-CODES]: `BSK-PROF-FUNC`, Hint).
 const CODE_PROF_FUNC: &str = "BSK-PROF-FUNC";
-/// Source identifier for all profiling diagnostics.
+/// Source identifier for all profiling diagnostics. Implements
+/// [PROFILE-NOTIFICATIONS-DIAG]: profiling diagnostics use a distinct
+/// `"basilisk-profiler"` source and severity `Hint` so they never inflate
+/// error/warning counts.
 const SOURCE: &str = "basilisk-profiler";
 
 /// A set of diagnostics grouped by file URI.
@@ -180,6 +183,8 @@ mod tests {
         data
     }
 
+    // [PROFILE-NOTIFICATIONS-DIAG]/[PROFILE-CONFIG-CODES] Hot lines become
+    // `BSK-PROF-LINE` Hint diagnostics with the `basilisk-profiler` source.
     #[test]
     fn generates_line_diagnostics() -> Result<(), String> {
         let data = make_test_profile();

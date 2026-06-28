@@ -21,6 +21,10 @@ use super::LspServer;
 
 /// Handle `basilisk.workspaceModules`.
 ///
+/// Implements [EXTACT-LSP-COMMANDS-WORKSPACE-MODULES] — the client->server
+/// request returning the module tree with the folded type-health rollup.
+/// The optional `scope` param is the spec's module-name prefix filter.
+///
 /// Walks the workspace index and builds a hierarchical module tree from the
 /// resolved symbol tables. Supports an optional `scope` parameter for prefix
 /// filtering (used for lazy child loading).
@@ -55,6 +59,11 @@ pub(super) async fn execute_workspace_modules(
 
 /// Handle `basilisk.typeHealth`.
 ///
+/// Implements [EXTACT-LSP-COMMANDS-TYPE-HEALTH] — the standalone workspace
+/// health command for editors without a unified panel (Zed `/health`, Neovim
+/// `:BasiliskHealth`); computed from the same per-file figures as the rollup
+/// folded into `basilisk.workspaceModules`.
+///
 /// Computes type coverage statistics (annotated vs unannotated symbols),
 /// error/warning counts, and adoption state for each file in the workspace.
 pub(super) async fn execute_type_health(
@@ -83,6 +92,9 @@ pub(super) async fn execute_type_health(
 // ── Module change notification ────────────────────────────────────────────
 
 /// Notification type for `basilisk/moduleChanged`.
+///
+/// Implements [EXTACT-LSP-COMMANDS-MODULE-CHANGED] — the server->client
+/// notification carrying `{ module: ModuleNode }` after file-save re-analysis.
 pub(crate) struct ModuleChangedNotification;
 
 impl tower_lsp::lsp_types::notification::Notification for ModuleChangedNotification {
@@ -93,6 +105,9 @@ impl tower_lsp::lsp_types::notification::Notification for ModuleChangedNotificat
 /// Send a debounced `basilisk/moduleChanged` notification for a file that was
 /// just re-analysed. Waits 300 ms after the last save before sending, so rapid
 /// saves don't flood the client.
+///
+/// Implements [EXTACT-PERFORMANCE] (and [EXTACT-LSP-COMMANDS-MODULE-CHANGED]):
+/// the 300 ms debounce the spec mandates lives in `MODULE_CHANGED_DEBOUNCE_MS`.
 pub(crate) async fn send_module_changed(server: &LspServer, uri: &tower_lsp::lsp_types::Url) {
     let uri = uri.clone();
     let index_lock = std::sync::Arc::clone(&server.index);

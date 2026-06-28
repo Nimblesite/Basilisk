@@ -13,6 +13,7 @@ use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit
 ///
 /// Returns zero, one, or two actions depending on which patterns appear near
 /// the cursor.
+// Implements [REFACTOR-CONVERT] — the "Named tuple class ↔ functional" row.
 #[must_use]
 pub(in crate::code_actions) fn convert_namedtuple(
     uri: &Url,

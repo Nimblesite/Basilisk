@@ -45,6 +45,10 @@ pub(crate) fn byte_offset_to_line(text: &str, offset: u32) -> usize {
 
 /// Compute coverage percentage without raw `as` casts.
 ///
+/// Implements the spec's coverage formula `annotatedSymbols / totalSymbols * 100`
+/// ([EXTACT-DATA-MODEL] `HealthStats.coveragePercent`); zero symbols yields the
+/// vacuous 100 the empty-workspace header branch must suppress ([EXTACT-MODULES-HEADER]).
+///
 /// Symbol counts are far below 2^52 so f64 precision loss is negligible.
 /// The result is always 0..=100 so truncation/sign-loss is impossible.
 #[expect(

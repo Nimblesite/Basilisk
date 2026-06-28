@@ -36,8 +36,8 @@ async function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Capture the real VS Code window for the website via the Playwright CDP sidecar
- * ([VSIX-EDITOR-SCREENSHOTS], screenshot-watcher.mjs). Writes a `.signal` file
+ * Capture the real VS Code window for the website via the CDP sidecar
+ * ([VSIX-EDITOR-SCREENSHOTS-PIPELINE], screenshot-watcher.mjs). Writes a `.signal` file
  * into the website image dir and waits for the sidecar to produce the PNG, then
  * renames it into place.
  *

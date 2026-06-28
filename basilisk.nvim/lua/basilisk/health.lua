@@ -7,6 +7,9 @@ local binary = require("basilisk.binary")
 
 local M = {}
 
+--- Implements [NVIM-HEALTH-CHECK] — :checkhealth basilisk reports Neovim version,
+--- the basilisk binary + version, Python, and the optional debugpy/nvim-dap/
+--- nvim-dap-ui/ruff integrations (plus uv and a config summary).
 function M.check()
   vim.health.start("basilisk.nvim")
 

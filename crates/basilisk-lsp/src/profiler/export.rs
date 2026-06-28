@@ -127,6 +127,13 @@ fn validate_thread(data: &ProfileData, tid: u64, stacks: &[Vec<usize>]) -> Resul
 ///
 /// Writes the file to `output_dir` and returns the path.
 ///
+/// Implements [PROFILE-SPEEDSCOPE-MAPPING]: `ProfileData.frames` →
+/// `shared.frames[i] { name, file, line }`; one `profiles[i]` per thread named
+/// after `thread_name`; each thread's `thread_stacks` (already reversed to
+/// root-first in `ingest_traces`) become `samples`, with `1/sample_rate` per
+/// entry in `weights`. Frames were deduplicated by `(name, filename, line)` at
+/// ingest time, so samples index into `shared.frames`.
+///
 /// # Errors
 ///
 /// Returns an error string if the data is not viewer-loadable

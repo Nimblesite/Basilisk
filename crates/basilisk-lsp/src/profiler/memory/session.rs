@@ -99,6 +99,11 @@ impl MemorySession {
     }
 
     /// Marker-dispatch the raw script output to the matching parser.
+    ///
+    /// Implements [PROFILE-MEMORY-INGEST] (server side): detects the
+    /// `__BASILISK_MEM*__` marker, parses with the existing parsers, scores leaks
+    /// via the per-session `LeakTracker`, and returns the kind-tagged outcome plus
+    /// the diagnostics to publish. A marker-less payload is an error.
     fn ingest(&mut self, output: &str) -> Result<IngestResult, String> {
         // Dispatch to the marker that appears EARLIEST in the output. Each
         // script prints exactly one marker at the start of its payload line; an

@@ -37,6 +37,10 @@ struct TreeNode {
 }
 
 /// Build a V8 `SamplingHeapProfile` (`.heapprofile`) JSON value from a snapshot.
+///
+/// Implements [PROFILE-NATIVE] (memory leg): maps each `tracemalloc` site to a
+/// `head`-tree node with `selfSize`, so VS Code's built-in viewer renders it
+/// natively (flame chart + Self/Total table). Written on snapshot ingest.
 #[must_use]
 pub fn snapshot_to_heapprofile(snapshot: &MemorySnapshot) -> Value {
     let mut nodes: Vec<TreeNode> = vec![new_node(0, String::new(), -1)];
@@ -241,6 +245,8 @@ mod tests {
         })
     }
 
+    // [PROFILE-NATIVE] The `.heapprofile` matches V8's `SamplingHeapProfile`
+    // schema (head tree + samples, selfSize, 0-based lines).
     #[test]
     fn heapprofile_matches_v8_schema() -> Result<(), String> {
         let snapshot = snapshot_with_site("/tmp/app.py", 42, 24_567_890);

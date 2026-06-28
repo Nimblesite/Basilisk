@@ -171,6 +171,10 @@ fn to_pyspy_pid(pid: u32) -> py_spy::Pid {
 
 /// Start a sampler thread for the given configuration.
 ///
+/// Implements [PROFILE-API] — the `Sampler` thread component: attaches via the
+/// `py-spy` Rust crate (`py_spy::PythonSpy::new`) and runs
+/// `get_stack_traces()` on a dedicated OS thread, feeding the aggregator.
+///
 /// Returns a handle that can be used to receive samples and stop the sampler.
 ///
 /// # Errors

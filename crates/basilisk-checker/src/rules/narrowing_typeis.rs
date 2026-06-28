@@ -32,6 +32,11 @@ const CODE: ErrorCode = ErrorCode {
 
 /// Emits `narrowing_typeis` when a TypeGuard/TypeIs function is passed to a callable
 /// parameter whose return type is not `bool`.
+///
+/// Implements [TYPEINF-NARROWING-TYPEGUARD] and [TYPEINF-NARROWING-TYPEIS] — the
+/// callable-context subtyping rule for narrowing functions: `TypeGuard`/`TypeIs`
+/// are subtypes of `bool`, `TypeGuard[X]` is covariant in `X`, and `TypeIs[X]` is
+/// invariant in `X` (and the two are not interchangeable).
 pub(crate) struct TypeGuardCallableReturnMismatch;
 
 /// Returns `true` if the annotation text indicates a `TypeGuard` or `TypeIs`

@@ -229,20 +229,24 @@ suite("Basilisk Activity Panel E2E Tests", function () {
 
   // ── Module Explorer Commands ──────────────────────────────────────────
 
+  // Tests [EXTACT-MODULES-TOOLBAR] / [EXTACT-MODULES-CONTEXT-MENU] command registration.
   test("module explorer commands are registered", function () {
     for (const cmd of MODULE_EXPLORER_COMMANDS) {
       assertCommandRegistered(cmd, "Module Explorer");
     }
   });
 
+  // Tests [EXTACT-MODULES-REFRESH] manual refresh button.
   test("refreshModuleExplorer command is executable", async function () {
     await vscode.commands.executeCommand("basilisk.refreshModuleExplorer");
   });
 
+  // Tests [EXTACT-MODULES-TOOLBAR] Toggle View.
   test("toggleModuleExplorerView command is executable", async function () {
     await vscode.commands.executeCommand("basilisk.toggleModuleExplorerView");
   });
 
+  // Tests [EXTACT-MODULES-TOOLBAR] Sort (the explicit picker, #189).
   test("sortModuleExplorer command opens the sort picker (#189)", async function () {
     // The command now shows a QuickPick of the explicit sort modes; dismiss it
     // so the test exercises the command without blocking on user input.
@@ -450,9 +454,10 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     }
   });
 
-  // Issue #151: the Sort button silently no-ops in the default tree view (sort is
-  // flat-only per [EXTACT-MODULES-TOOLBAR]). It must only appear where it works —
-  // gated on the flat view — so it is never a visible, enabled no-op.
+  // Tests [EXTACT-MODULES-TOOLBAR] Sort gating. Issue #151: the Sort button
+  // silently no-ops in the default tree view (sort is flat-only). It must only
+  // appear where it works — gated on the flat view — so it is never a visible,
+  // enabled no-op.
   test("Sort is gated to flat view so it is never a no-op in the tree view", function () {
     const contributes = loadContributes();
     const sortEntry = (contributes?.menus?.["view/title"] ?? []).find(
@@ -495,11 +500,12 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     );
   });
 
-  // Defect 3 of issue #103: Server Info went stale — the provider only
-  // re-rendered on configuration changes, so "Server: stopped" / a missing
-  // Version row persisted after the server came up. The provider now holds a
-  // signals effect on store.lspState/store.client; restarting the real server
-  // must therefore fire the tree's change event without any config change.
+  // Tests [EXTACT-INFO-SERVER-INFO] freshness rule. Defect 3 of issue #103:
+  // Server Info went stale — the provider only re-rendered on configuration
+  // changes, so "Server: stopped" / a missing Version row persisted after the
+  // server came up. The provider now holds a signals effect on
+  // store.lspState/store.client; restarting the real server must therefore fire
+  // the tree's change event without any config change.
   test("info panel re-renders on LSP state changes (no stale Server Info)", async function () {
     this.timeout(60_000);
     const store = getStore();
@@ -535,6 +541,7 @@ suite("Basilisk Activity Panel E2E Tests", function () {
 
   // ── Server-Advertised Commands ────────────────────────────────────────
 
+  // Tests [EXTACT-LSP-COMMANDS-WORKSPACE-MODULES] is server-advertised.
   test("LSP server advertises basilisk.workspaceModules command", function () {
     const store = getStore();
     assert.ok(store, "Store should exist");
@@ -548,6 +555,7 @@ suite("Basilisk Activity Panel E2E Tests", function () {
   // folded into workspaceModules, issue #103), but the command remains the
   // shared workspace-health rollup for editors without a unified panel
   // (Zed /health, Neovim :BasiliskHealth). Guard that it stays advertised.
+  // Tests [EXTACT-LSP-COMMANDS-TYPE-HEALTH] stays advertised for Zed/Neovim.
   test("LSP server still advertises basilisk.typeHealth for other editors", function () {
     const store = getStore();
     assert.ok(store, "Store should exist");
@@ -593,6 +601,7 @@ suite("Basilisk Activity Panel E2E Tests", function () {
 
   // ── Menu Contributions ────────────────────────────────────────────────
 
+  // Tests [EXTACT-MODULES-TOOLBAR] contribution (Refresh / Toggle View / Filter / Sort).
   test("module explorer has toolbar actions in package.json", function () {
     const contributes = loadContributes();
     const titleMenus = contributes?.menus?.["view/title"] ?? [];
@@ -614,6 +623,7 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     );
   });
 
+  // Tests [EXTACT-MODULES-CONTEXT-MENU] Copy Import Path / Copy Qualified Name.
   test("module explorer has context menu for copy actions", function () {
     const contributes = loadContributes();
     const contextMenus = contributes?.menus?.["view/item/context"] ?? [];

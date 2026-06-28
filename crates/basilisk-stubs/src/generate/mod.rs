@@ -18,6 +18,8 @@ pub mod runtime;
 use std::path::Path;
 
 /// Generation mode for auto-stub creation.
+// Implements [STUBRES-AUTOGEN-MODES] — the three documented modes (runtime
+// introspection, AST-based inference, hybrid).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StubGenMode {
     /// Use `inspect.signature()` via Python subprocess.
@@ -61,6 +63,9 @@ pub struct GeneratedStub {
 /// # Errors
 ///
 /// Returns `StubGenError` if generation fails for any reason.
+// Implements [STUBRES-AUTOGEN] — dispatches `basilisk stubs generate` to the
+// chosen [STUBRES-AUTOGEN-MODES] backend; output is tagged Tier 3 so the
+// provenance system reports warnings, never false confidence.
 pub fn generate_stubs(
     module_name: &str,
     source_path: &Path,

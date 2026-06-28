@@ -54,7 +54,7 @@ suite('Basilisk Extension E2E Tests', () => {
     });
 
     // ----------------------------------------------------------------
-    // 2. Extension registers expected commands
+    // 2. Extension registers expected commands [VSIX-COMMANDS]
     // ----------------------------------------------------------------
     test('Extension registers basilisk.restartServer command', () => {
         const store = getStore();
@@ -85,6 +85,9 @@ suite('Basilisk Extension E2E Tests', () => {
 
     // ----------------------------------------------------------------
     // 3. Extension contributes configuration settings
+    // [VSIX-CONFIGURATION-SETTINGS], [VSIX-CONFIGURATION-SETTINGS-VS-CODE-ONLY]
+    // (useLsp/trace.server). executablePath/bundled resolution → [VSIX-BINARY-
+    // RESOLUTION] / [VSIX-BINARY-DISTRIBUTION].
     // ----------------------------------------------------------------
     test('Extension contributes basilisk.executablePath setting', () => {
         const cfg = vscode.workspace.getConfiguration('basilisk');
@@ -204,7 +207,8 @@ suite('Basilisk Extension E2E Tests', () => {
     });
 
     // ----------------------------------------------------------------
-    // 4. Status bar item is created after activation
+    // 4. Status bar item is created after activation [VSIX-STATUS-BAR]
+    //    (also exercises basilisk.showOutput → [VSIX-OUTPUT-CHANNELS])
     // ----------------------------------------------------------------
     test('Status bar item is created after activation', async () => {
         const ext = vscode.extensions.getExtension(EXTENSION_ID);

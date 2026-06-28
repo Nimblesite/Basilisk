@@ -2,6 +2,11 @@
 //!
 //! Utility for inserting rule overrides into `pyproject.toml`.
 
+// Related to [AUTOFIX-ADOPTION] severity overrides but DISTINCT: this writes a
+// project-wide `[tool.basilisk.rules]` severity (used by the "Disable rule in
+// project config" quick fix), not the per-file `.basilisk/adoptions.toml`
+// demotion store that the adoption flow ([AUTOFIX-ADOPTION-FILE]) maintains.
+
 /// Insert or update a rule override in `pyproject.toml` content.
 ///
 /// Adds `[tool.basilisk.rules]` section if missing, then sets `RULE = "severity"`.

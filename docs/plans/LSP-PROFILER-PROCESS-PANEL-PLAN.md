@@ -1,7 +1,7 @@
 # Profiler Process Panel — Implementation Plan {#PROFPANEL-PLAN}
 
 **Spec:** [LSP-PROFILING-SPEC.md](../specs/LSP-PROFILING-SPEC.md) `{#LSPPROF}` — this plan adds the
-`{#PROFILE-PROCESSES}` family of spec sections (listed under [Spec changes](#spec-changes-required) below).
+`{#PROFILE-PROCESSES}` family of spec sections (listed under [Spec changes](#PROFPANEL-SPEC-CHANGES) below).
 **Related:** [EXTENSION-ACTIVITY-PANEL-SPEC.md](../specs/EXTENSION-ACTIVITY-PANEL-SPEC.md) `{#EXTACT}`
 (the activity-bar panel pattern we mirror), [LSP-ARCHITECTURE-SPEC.md](../specs/LSP-ARCHITECTURE-SPEC.md)
 (custom command registration).
@@ -177,7 +177,7 @@ Follows [LSP-PROFILING-SPEC.md#PROFILE-TESTING] and the CLAUDE.md "coarse e2e on
   sorted/grouped tree items and that inline-button commands carry the right `pid` argument.
 - **Coverage:** ratchet `coverage-thresholds.json` upward only; never down.
 
-## Spec changes required {#spec-changes-required}
+## Spec changes required {#PROFPANEL-SPEC-CHANGES}
 
 Add to [LSP-PROFILING-SPEC.md](../specs/LSP-PROFILING-SPEC.md), all under a new
 `## Process Enumeration & Selection {#PROFILE-PROCESSES}` section beside `{#PROFILE-PROTOCOL}`:
@@ -195,14 +195,14 @@ Add to [LSP-PROFILING-SPEC.md](../specs/LSP-PROFILING-SPEC.md), all under a new
 
 ## TODO {#PROFPANEL-TODO}
 
-### Phase 0 — Spec & scaffolding
+### Phase 0 — Spec & scaffolding {#PROFPANEL-TODO-SCAFFOLDING}
 - [ ] Add `{#PROFILE-PROCESSES}` section family to `LSP-PROFILING-SPEC.md` (all sub-IDs above).
 - [ ] Amend `{#PROFILE-REQUESTS-START}` to stop claiming unimplemented auto-detect.
 - [ ] Register this plan in `docs/INDEX.md` Plans table.
 - [ ] Add `sysinfo` to `crates/basilisk-lsp/Cargo.toml`; mirror version into
       `.github/workflows/ci.yml` and `.devcontainer/Dockerfile`.
 
-### Phase 1 — LSP process enumeration (Rust, the core)
+### Phase 1 — LSP process enumeration (Rust, the core) {#PROFPANEL-TODO-ENUMERATION}
 - [ ] New `crates/basilisk-lsp/src/profiler/processes.rs`: `ProcessEnumerator` over `sysinfo`,
       producing `ProcessInfo` (`// Implements [PROFILE-PROCESSES-MODEL]`). Keep file < 500 LOC.
 - [ ] Python detection: interpreter-name/exe match + `cmd[0]` interpreter + launcher tagging.
@@ -216,12 +216,12 @@ Add to [LSP-PROFILING-SPEC.md](../specs/LSP-PROFILING-SPEC.md), all under a new
       (`// Implements [PROFILE-PROCESSES-NOTIFY]`).
 - [ ] Structured logging only: log process **count** + truncated interpreter basenames, never cmdline/user.
 
-### Phase 2 — Fix the broken start path
+### Phase 2 — Fix the broken start path {#PROFPANEL-TODO-FIX-START}
 - [ ] Delete the lying input box in [profiler.ts:166](../../vscode-extension/src/profiler.ts); rewrite
       `basilisk.profileStart` to focus the new panel + toast.
 - [ ] Decide: implement real LSP-side auto-detect OR remove the claim from spec & UI (track in Phase 5).
 
-### Phase 3 — The panel (VS Code extension)
+### Phase 3 — The panel (VS Code extension) {#PROFPANEL-TODO-PANEL}
 - [ ] New `vscode-extension/src/process-explorer.ts`: `TreeDataProvider<ProcessNode>` calling
       `basilisk.profiler.processes`; subscribe to `processesChanged`
       (`// Implements [PROFILE-PROCESSES-PANEL]`).
@@ -232,7 +232,7 @@ Add to [LSP-PROFILING-SPEC.md](../specs/LSP-PROFILING-SPEC.md), all under a new
 - [ ] Visibility-gated auto-refresh timer (`basilisk.profiler.processRefreshMs`); manual refresh button.
 - [ ] Register the provider in [extension.ts](../../vscode-extension/src/extension.ts).
 
-### Phase 4 — Launch UX (`{#PROFILE-PROCESSES-LAUNCH}`)
+### Phase 4 — Launch UX (`{#PROFILE-PROCESSES-LAUNCH}`) {#PROFPANEL-TODO-LAUNCH-UX}
 - [ ] `package.json`: add the `basilisk.pythonProcesses` view, all new commands, `view/title` toolbar
       menus, `view/item/context` inline + context menus, `viewsWelcome` empty state, new settings.
 - [ ] `basilisk.profileProcess` / `basilisk.memoryTrackProcess`: start CPU/memory profiling with the
@@ -242,7 +242,7 @@ Add to [LSP-PROFILING-SPEC.md](../specs/LSP-PROFILING-SPEC.md), all under a new
       path; reuse the debug-launch plumbing where possible.
 - [ ] `basilisk.copyProcessPid`, `basilisk.revealProcessScript`.
 
-### Phase 5 — Tests, polish, ratchet
+### Phase 5 — Tests, polish, ratchet {#PROFPANEL-TODO-TESTS}
 - [ ] LSP e2e in `profiler_e2e_pyspy.rs`: spawn Python → `processes` lists it → assert fields +
       eventual version + `requiresElevation == false`; assert noise excluded.
 - [ ] VSIX test: stub `ProcessInfo[]` → assert sorted/grouped `getChildren()` tree + inline command
@@ -252,5 +252,5 @@ Add to [LSP-PROFILING-SPEC.md](../specs/LSP-PROFILING-SPEC.md), all under a new
 - [ ] (Optional) auto-detect: pick the highest-CPU `interpreter`-kind process when start is invoked with
       no pid and exactly one strong candidate; otherwise focus the panel.
 
-### Phase 6 — Cross-editor follow-up (not v1)
+### Phase 6 — Cross-editor follow-up (not v1) {#PROFPANEL-TODO-CROSS-EDITOR}
 - [ ] Zed/Neovim: consume the shared `basilisk.profiler.processes` command; surface as a list/slash UI.

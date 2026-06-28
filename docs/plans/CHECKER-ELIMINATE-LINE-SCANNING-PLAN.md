@@ -1,6 +1,6 @@
-# Plan: Eliminate Line-Based String Scanning ("Regex-Equivalent") in Checker Rules
+# Plan: Eliminate Line-Based String Scanning ("Regex-Equivalent") in Checker Rules {#LINESCANPLAN}
 
-## Context
+## Context {#LINESCANPLAN-CONTEXT}
 
 `CLAUDE.md` is explicit: **"Regex = ⛔️ ILLEGAL. Use the proper parsing mechanism — usually ruff"**.
 
@@ -12,7 +12,7 @@ This plan eliminates line-based scanning across all 13 rules and re-grounds them
 
 ---
 
-## Scope: 13 rules, 31 `.lines()` call sites
+## Scope: 13 rules, 31 `.lines()` call sites {#LINESCANPLAN-SCOPE}
 
 Inventory produced by repo-wide grep audit (2026-05-23). Severity reflects false-positive blast radius — HIGH means the rule shares generics_syntax_scoping's exact bug class (string-matching `class `/`def `/`type ` prefixes that fire inside docstrings).
 
@@ -38,7 +38,7 @@ Inventory produced by repo-wide grep audit (2026-05-23). Severity reflects false
 
 ---
 
-## Principle
+## Principle {#LINESCANPLAN-PRINCIPLE}
 
 **Every rule consumes `ResolvedModule` AST nodes. No rule iterates `source.lines()` to reconstruct Python structure.**
 
@@ -60,9 +60,9 @@ Permitted line-level access:
 
 ---
 
-## Phase 1 — Stop the bleeding (HIGH severity, blocks #43 and prevents next showstopper)
+## Phase 1 — Stop the bleeding (HIGH severity, blocks #43 and prevents next showstopper) {#LINESCANPLAN-PHASE-BLEEDING}
 
-### Step 1.1: E0149 — full AST rewrite *(closes #43)*
+### Step 1.1: E0149 — full AST rewrite *(closes #43)* {#LINESCANPLAN-PHASE-BLEEDING-E0149}
 
 **Files**: `crates/basilisk-checker/src/rules/e0149/violations.rs`, `crates/basilisk-checker/src/rules/e0149/mod.rs`, `crates/basilisk-checker/src/rules/e0149/helpers.rs`
 
@@ -80,7 +80,7 @@ If `ResolvedModule` doesn't already carry PEP 695 type params on `ClassDef` / `F
 3. All existing `e0149_tests.rs` and `e0126_e0149_tests.rs` pass.
 4. Conformance suite FP count for E0149 stays at 0.
 
-### Step 1.2: E0130 — TypeVar scoping AST rewrite
+### Step 1.2: E0130 — TypeVar scoping AST rewrite {#LINESCANPLAN-PHASE-BLEEDING-E0130}
 
 **Files**: all 6 files under `crates/basilisk-checker/src/rules/e0130/`
 
@@ -88,7 +88,7 @@ Same pattern: `e0130/collect.rs` and `e0130/check.rs` both line-iterate looking 
 
 **Verification**: existing E0130 tests pass; add a docstring-prose fixture that previously would have falsely fired.
 
-### Step 1.3: E0126 — return statement / body-boundary AST rewrite
+### Step 1.3: E0126 — return statement / body-boundary AST rewrite {#LINESCANPLAN-PHASE-BLEEDING-E0126}
 
 **File**: `crates/basilisk-checker/src/rules/e0126_helpers.rs`
 
@@ -98,7 +98,7 @@ Currently scans for `def `/`class `/`@` to find function body boundaries, and fo
 
 ---
 
-## Phase 2 — MEDIUM severity (false positives possible but narrower)
+## Phase 2 — MEDIUM severity (false positives possible but narrower) {#LINESCANPLAN-PHASE-MEDIUM}
 
 Each of the following is the same shape: replace `.lines()` walks with iteration over the relevant `ResolvedModule` collection. One sub-step per rule.
 
@@ -116,7 +116,7 @@ Each sub-step ships with:
 
 ---
 
-## Phase 3 — LOW severity cleanup (defensible, but should still go)
+## Phase 3 — LOW severity cleanup (defensible, but should still go) {#LINESCANPLAN-PHASE-LOW}
 
 - **3.1 E0127**, **3.2 E0129**, **3.3 E0131**: indent / comment / blank-line filtering. Replace with `FunctionDef.body_span` lookups. Lexically simple but inconsistent — kill it for uniformity.
 - **3.4 E0125**: line-offset usage is safe; leave it but add a comment justifying why this one is OK (it doesn't look at line *contents*).
@@ -124,9 +124,9 @@ Each sub-step ships with:
 
 ---
 
-## Phase 4 — Enforcement (prevent regression)
+## Phase 4 — Enforcement (prevent regression) {#LINESCANPLAN-ENFORCEMENT}
 
-### Step 4.1: Lint script
+### Step 4.1: Lint script {#LINESCANPLAN-ENFORCEMENT-LINT-SCRIPT}
 
 Add `scripts/check-no-line-scanning.sh` (or a make target) that runs:
 
@@ -137,7 +137,7 @@ Add `scripts/check-no-line-scanning.sh` (or a make target) that runs:
 
 Wire into `make lint` and CI (`.github/workflows/ci.yml`). Any new `.lines()` call site in `rules/` fails the build.
 
-### Step 4.2: Forbidden-pattern lint for keyword string matching
+### Step 4.2: Forbidden-pattern lint for keyword string matching {#LINESCANPLAN-ENFORCEMENT-KEYWORD-LINT}
 
 ```
 ! grep -rn 'starts_with("class \|starts_with("def \|starts_with("async def \|starts_with("type \|starts_with("@\|starts_with("import \|starts_with("from ' crates/basilisk-checker/src/ \
@@ -146,19 +146,19 @@ Wire into `make lint` and CI (`.github/workflows/ci.yml`). Any new `.lines()` ca
 
 Same wiring. Currently 64 hits across the rule tree — Phase 1+2 should drive this to 0.
 
-### Step 4.3: CLAUDE.md amendment
+### Step 4.3: CLAUDE.md amendment {#LINESCANPLAN-ENFORCEMENT-CLAUDEMD}
 
 Add to the **Rules** section of `CLAUDE.md`:
 
 > **Line-based string scanning is regex.** `source.lines()` + `line.starts_with("class "|"def "|"type "|"@"|"import "|"from ")` is the moral equivalent of regex and is equally **⛔️ ILLEGAL**. Drive every rule off `ResolvedModule` AST nodes. If the AST is missing what you need, extend the resolver — don't re-parse the text in the rule. Permitted exceptions: `span_for_line` (diagnostic geometry), `suppression.rs` `# type: ignore` parsing. Nothing else.
 
-### Step 4.4: GitHub issues for each HIGH rule
+### Step 4.4: GitHub issues for each HIGH rule {#LINESCANPLAN-ENFORCEMENT-GITHUB-ISSUES}
 
 File one issue per HIGH rule (E0149 = #43 already filed, plus E0130 and E0126) with label `showstopper`, linking back to this plan and #43. MEDIUM/LOW rules get one umbrella tracking issue.
 
 ---
 
-## Verification (whole plan)
+## Verification (whole plan) {#LINESCANPLAN-VERIFICATION}
 
 - `make ci` passes.
 - Conformance suite FP count strictly decreases (ratchet).
@@ -168,7 +168,7 @@ File one issue per HIGH rule (E0149 = #43 already filed, plus E0130 and E0126) w
 
 ---
 
-## Out of scope
+## Out of scope {#LINESCANPLAN-OUT-OF-SCOPE}
 
 - `lspkit-*` migration (tracked separately in `CLAUDE.md`).
 - IDE extension code (line-based parsing in TS/Rust LSP server is mostly LSP-position arithmetic, not Python-keyword matching).
@@ -176,6 +176,6 @@ File one issue per HIGH rule (E0149 = #43 already filed, plus E0130 and E0126) w
 
 ---
 
-## Risk
+## Risk {#LINESCANPLAN-RISK}
 
 The resolver may not carry all the structured info HIGH rules need today (e.g. PEP 695 type params on `ClassDef`). Phase 1.1 may grow the resolver. That's fine — it's a one-time cost that benefits every subsequent rule and aligns with the architecture. Better than 13 rules each re-parsing the same text wrong.

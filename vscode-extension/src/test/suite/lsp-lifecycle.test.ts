@@ -61,7 +61,8 @@ suite('LSP Lifecycle Tests', () => {
     });
 
     // ----------------------------------------------------------------
-    // 1. restartServer command works
+    // 1. restartServer command works [VSIX-ERROR-RECOVERY] (manual recovery),
+    //    [VSIX-COMMANDS]
     // ----------------------------------------------------------------
     test('restartServer command works and server remains functional', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + RESTART_EXTRA_TIMEOUT_MS);
@@ -102,7 +103,7 @@ suite('LSP Lifecycle Tests', () => {
     });
 
     // ----------------------------------------------------------------
-    // 2. showOutput command works
+    // 2. showOutput command works [VSIX-OUTPUT-CHANNELS], [VSIX-COMMANDS]
     // ----------------------------------------------------------------
     test('showOutput command works without error', async function () {
         this.timeout(SERVER_START_WAIT_MS);
@@ -123,7 +124,7 @@ suite('LSP Lifecycle Tests', () => {
     });
 
     // ----------------------------------------------------------------
-    // 3. Status bar exists after activation
+    // 3. Status bar exists after activation [VSIX-STATUS-BAR]
     // ----------------------------------------------------------------
     test('status bar exists after activation', async function () {
         this.timeout(SERVER_START_WAIT_MS);

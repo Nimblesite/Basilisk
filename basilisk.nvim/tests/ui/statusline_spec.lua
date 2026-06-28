@@ -1,5 +1,7 @@
 --- UI tests for basilisk.statusline module.
 ---
+--- Tests [NVIM-STATUS-LINE].
+---
 --- Covers: get/get_color for all states, lualine component, profiler status,
 --- state pinning, diagnostic counts.
 

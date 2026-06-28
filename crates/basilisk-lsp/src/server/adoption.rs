@@ -15,6 +15,10 @@ use super::LspServer;
 ///
 /// Records all current error codes for the given file in the adoption store,
 /// demoting them from errors to warnings until the user fixes them.
+// Implements [AUTOFIX-ADOPTION-FLOW] (Adopt File) + [AUTOFIX-ADOPTION-VSCODE]
+// command `basilisk.adoptFile`. DEVIATION vs spec step 2: this does NOT run
+// Mass Autofix (safe) first — it records the file's current error codes
+// directly, then re-publishes with demoted severities. See report.
 pub(super) async fn execute_adopt_file(
     server: &LspServer,
     args: &[serde_json::Value],
@@ -103,6 +107,9 @@ pub(super) async fn execute_adopt_file(
 ///
 /// Adopts all files in the workspace that have errors, recording their error
 /// codes in the adoption store.
+// Implements [AUTOFIX-ADOPTION-FLOW] (Adopt Workspace) + [AUTOFIX-ADOPTION-VSCODE]
+// command `basilisk.adoptWorkspace`. Same step-2 deviation as adopt_file (no
+// pre-pass Mass Autofix).
 pub(super) async fn execute_adopt_workspace(
     server: &LspServer,
     _args: &[serde_json::Value],
@@ -198,6 +205,8 @@ pub(super) async fn execute_adopt_workspace(
 ///
 /// Removes all adoption overrides for the given file, restoring full
 /// strictness.
+// Implements [AUTOFIX-ADOPTION-RULES] (Manual un-adoption) +
+// [AUTOFIX-ADOPTION-VSCODE] command `basilisk.unadoptFile`.
 pub(super) async fn execute_unadopt_file(
     server: &LspServer,
     args: &[serde_json::Value],
@@ -250,6 +259,12 @@ pub(super) async fn execute_unadopt_file(
 }
 
 /// Re-publish LSP diagnostics for a single URI, applying adoption overrides.
+// Implements [AUTOFIX-ADOPTION-FLOW] step 5 — demote adopted codes to Warning
+// via `apply_adoptions`. DEVIATION: only invoked from these adopt/unadopt
+// command handlers; the normal diagnostic-publish path (server/document.rs,
+// server/init.rs) does NOT call apply_adoptions, so demotions are lost on the
+// next edit/re-check and `auto_graduate` ([AUTOFIX-ADOPTION-RULES]) never runs
+// in production. See report.
 async fn republish_diagnostics_for_uri(
     server: &LspServer,
     uri: &tower_lsp::lsp_types::Url,

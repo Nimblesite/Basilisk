@@ -1,5 +1,5 @@
-// Implements [VSIX-EDITOR-SCREENSHOTS]: dependency-free sidecar that captures the
-// real VS Code window for the website. Runs alongside the VSIX suite only when
+// Implements [VSIX-EDITOR-SCREENSHOTS-PIPELINE]: dependency-free sidecar that
+// captures the real VS Code window for the website. Runs with the VSIX suite when
 // BASILISK_SCREENSHOTS=1. The harness launches VS Code with
 // --remote-debugging-port; this watcher speaks the Chrome DevTools Protocol over
 // Node's built-in WebSocket (no Playwright / browser download), watches for

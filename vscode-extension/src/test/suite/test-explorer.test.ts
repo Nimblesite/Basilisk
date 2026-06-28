@@ -115,6 +115,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   });
 
   // ── Command Advertisement ──────────────────────────────────────────
+  // Exercises [LSPTEST-LSP-PROTOCOL-COMMANDS] — discoverTests/runTests/runTestFile/debugTest advertised.
 
   test("LSP server advertises basilisk.discoverTests command", () => {
     const store = getStore();
@@ -178,6 +179,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   });
 
   // ── Settings Defaults ──────────────────────────────────────────────
+  // Exercises [LSPTEST-CONFIGURATION-SETTINGS] — default values for the testExplorer.* settings.
 
   test("testExplorer.enabled setting defaults to true", () => {
     const cfg = vscode.workspace.getConfiguration("basilisk");
@@ -264,6 +266,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   });
 
   // ── Test Discovery: Workspace ──────────────────────────────────────
+  // Exercises [LSPTEST-TEST-DISCOVERY] + [LSPTEST-SUPPORTED-FRAMEWORKS] end-to-end through the LSP.
 
   test("discoverTests returns items for workspace with test files", async function () {
     const wsRoot = requireWorkspaceRoot();
@@ -358,6 +361,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   });
 
   // ── Test Discovery: Test Class with Methods ────────────────────────
+  // Exercises [LSPTEST-TEST-ITEM-DATA-MODEL-HIERARCHY] — File > Class > Method nesting and kinds.
 
   test("discovery finds test class with child methods", async function () {
     const wsRoot = requireWorkspaceRoot();
@@ -406,6 +410,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   });
 
   // ── Test Discovery: unittest.TestCase ──────────────────────────────
+  // Exercises [LSPTEST-SUPPORTED-FRAMEWORKS] — unittest.TestCase subclass detection.
 
   test("discovery finds unittest.TestCase subclass with methods", async function () {
     const wsRoot = requireWorkspaceRoot();
@@ -601,6 +606,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   });
 
   // ── Test Discovery: Test IDs ───────────────────────────────────────
+  // Exercises [LSPTEST-TEST-ITEM-DATA-MODEL] — `<file>::<name>` / `<file>::<Class>::<method>` ids.
 
   test("discovery generates correct test IDs with :: separator", async function () {
     const wsRoot = requireWorkspaceRoot();
@@ -670,6 +676,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   });
 
   // ── Test Run: runTests Command ─────────────────────────────────────
+  // Exercises [LSPTEST-TEST-EXECUTION] + [LSPTEST-LSP-PROTOCOL-COMMANDS] — runTests/runTestFile/debugTest.
 
   test("runTests command returns structured result", async function () {
     const client = requireClient();
@@ -771,6 +778,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   });
 
   // ── Discovery Notification ─────────────────────────────────────────
+  // Exercises [LSPTEST-LSP-PROTOCOL-CUSTOM-NOTIFICATIONS] — `basilisk/testDiscoveryResult`.
 
   test("basilisk/testDiscoveryResult notification is received on open", async function () {
     const client = requireClient();
@@ -869,6 +877,7 @@ suite("Basilisk Test Explorer E2E Tests", function () {
   });
 
   // ── Coverage Command Execution ─────────────────────────────────────
+  // Exercises [LSPTEST-UV-INTEGRATION-COVERAGE] — coverage run command + `basilisk/coverageResult`.
 
   test("runTestsCoverage command returns structured result", async function () {
     const client = requireClient();

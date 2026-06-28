@@ -59,6 +59,9 @@ local M = {}
 ---@field statusline BasiliskStatusline
 ---@field log_level "trace"|"debug"|"info"|"warn"|"error"
 
+--- Implements [NVIM-NEOVIM-ONLY-CONFIGURATION] — the Neovim-specific settings
+--- (keymaps.enabled/prefix, statusline.enabled, test_explorer.position/width,
+--- log_level) live here; shared settings are forwarded to the LSP server.
 ---@type BasiliskConfig
 M.defaults = {
   binary_path = nil,

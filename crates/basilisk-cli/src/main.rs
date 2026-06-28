@@ -44,6 +44,10 @@ enum Transport {
     Ws,
 }
 
+// Implements [CHKARCH-CLI-COMMANDS]: the `check` core command (with `--watch`
+// deferred — see report). `fix`/`adopt`/`unadopt`/`lsp`/`stubs` extend the spec
+// list; the spec's `stats`/`migrate`/`init` commands are not implemented.
+// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-COMMANDS
 #[derive(Subcommand)]
 enum Command {
     /// Type check one or more files or directories.
@@ -420,10 +424,14 @@ fn run_stubs_status() -> u8 {
 
 /// Run the check subcommand.
 ///
-/// Exit codes:
+/// Implements [CHKARCH-CLI-EXITCODES]. Exit codes:
 /// - `0` — clean, no errors
 /// - `1` — type errors found
 /// - `3` — internal error
+///
+/// Note: the spec's exit code `2` (configuration error) is not produced — a
+/// malformed config silently falls back to defaults rather than erroring (see
+/// report). See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-EXITCODES
 fn run_check(paths: &[String], format: OutputFormat, cache: &cache_check::CacheOptions) -> u8 {
     let mut stats = cache_check::CacheStats::default();
     let result = collect_and_check(paths, cache, &mut stats);
@@ -431,6 +439,9 @@ fn run_check(paths: &[String], format: OutputFormat, cache: &cache_check::CacheO
         stats.report();
     }
     match result {
+        // Implements [CHKARCH-CLI-OUTPUT]: the human-readable text default and
+        // machine-readable JSON. The spec's `sarif`/`junit` formats are not
+        // implemented (see report).
         Ok((diagnostics, sources)) => match format {
             OutputFormat::Json => {
                 render_diagnostics_json(&diagnostics, &sources);

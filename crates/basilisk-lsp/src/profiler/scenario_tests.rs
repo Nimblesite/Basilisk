@@ -51,6 +51,9 @@ fn trace(thread_id: u64, active: bool, frames: &[(&str, &str, i32)]) -> py_spy::
 ///
 /// Models: HTTP request → view → ORM query → template rendering.
 /// 60% in ORM (the bottleneck), 25% in template, 15% in view logic.
+///
+/// Exercises [PROFILE-AGGREGATION-LOGIC] (leaf vs total samples drive the
+/// bottleneck ranking) over a realistic call tree.
 #[test]
 fn scenario_django_request_identifies_orm_as_bottleneck() {
     let mut data = ProfileData::default();

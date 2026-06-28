@@ -1,4 +1,6 @@
 // Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
+// Exercises [AUTOFIX-MASS] (File scope) and [AUTOFIX-MASS-VSCODE] — the
+// `basilisk.fixFile` command and `source.fixAll.basilisk` code action.
 /**
  * LSP Fix-All E2E Tests for the Basilisk VS Code Extension.
  *

@@ -13,6 +13,10 @@ use tracing::{error, info, warn};
 
 use super::LspServer;
 
+// Implements [LSPTEST-LSP-PROTOCOL-CUSTOM-NOTIFICATIONS] (server→client `basilisk/testDiscoveryResult`).
+// NOTE: the spec lists client→server `basilisk/discoverTests` as a *planned* custom notification;
+// the actual trigger is the `basilisk.discoverTests` executeCommand below, which then emits the
+// `basilisk/testDiscoveryResult` notification.
 /// Handle `basilisk.discoverTests`.
 ///
 /// Discovers tests in the workspace or a specific file. Accepts an optional
@@ -72,6 +76,10 @@ pub(super) async fn execute_discover_tests(
     Ok(Some(serde_json::json!({ "items": items })))
 }
 
+// Implements [LSPTEST-LSP-PROTOCOL-COMMANDS] `basilisk.runTests` (run all / by node ID).
+// NOTE: [LSPTEST-LSP-PROTOCOL-CUSTOM-NOTIFICATIONS] lists a *planned* server→client
+// `basilisk/testRunResult` notification; results are instead returned as the executeCommand
+// JSON-RPC response (`TestRunResult`), not pushed as a notification.
 /// Handle `basilisk.runTests`.
 ///
 /// Runs one or more tests by node ID. Args: `{ testIds: string[] }`.
@@ -96,6 +104,8 @@ pub(super) async fn execute_run_tests(
     run_and_report(server, &run_config).await
 }
 
+// Implements [LSPTEST-LSP-PROTOCOL-COMMANDS] `basilisk.runTestFile` (run every test in one file)
+// — realises the "test file" scope of [LSPTEST-TEST-EXECUTION].
 /// Handle `basilisk.runTestFile`.
 ///
 /// Runs all tests in the current file. Args: `uri` string.
@@ -136,6 +146,10 @@ pub(super) async fn execute_run_test_file(
     run_and_report(server, &run_config).await
 }
 
+// Implements [LSPTEST-LSP-PROTOCOL-COMMANDS] `basilisk.debugTest` — debug a specific test via the
+// existing DAP proxy ([LSPTEST-EDITOR-SPECIFIC-INTEGRATION-VSCODE] "Debug integration via existing
+// DAP proxy"). NOTE: spec lists a *planned* client→server `basilisk/runTest {id, debug}` notification;
+// realised here as the `basilisk.debugTest` executeCommand.
 /// Handle `basilisk.debugTest`.
 ///
 /// Starts a debug session targeting a specific test. Args: `{ testId: string }`.
@@ -288,6 +302,9 @@ async fn run_and_report(
     }
 }
 
+// Implements [LSPTEST-UV-INTEGRATION-COVERAGE] — runs pytest with coverage and (via run_and_report)
+// emits `basilisk/coverageResult`. NOTE: `basilisk.runTestsCoverage` is a coverage extension to the
+// [LSPTEST-LSP-PROTOCOL-COMMANDS] table (not itself listed there).
 /// Handle `basilisk.runTestsCoverage`.
 ///
 /// Runs tests with `--cov` and `--cov-report=xml` to generate coverage data.
@@ -355,6 +372,11 @@ impl tower_lsp::lsp_types::notification::Notification for CoverageResultNotifica
 /// Diagnostic code for pytest not found in uv project.
 pub(crate) const PYTEST_NOT_FOUND_CODE: &str = "BSK-W0014";
 
+// Implements [LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION] — "pytest not in uv.lock" Warning.
+// DEVIATION: the spec's table message is `Test runner "pytest" is not installed. Run "uv add --dev
+// pytest" to install.`; the message emitted below differs. The reused code is `BSK-W0014`, which
+// CLAUDE.md documents as the explicit-`Any` nudge rule — reusing that code for a test-dependency
+// warning is a cross-purpose overlap worth confirming.
 /// Build a `BSK-W0014` diagnostic for a test file missing pytest.
 pub(super) fn make_pytest_not_found_diagnostic() -> Diagnostic {
     Diagnostic {
@@ -379,6 +401,9 @@ pub(super) fn make_pytest_not_found_diagnostic() -> Diagnostic {
     }
 }
 
+// Implements [LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION] — "pytest-cov not in uv.lock"
+// (coverage requested) → Info. Reads availability from the uv-built `PackageRegistry`, and is gated
+// on uv-project detection per [LSPTEST-UV-INTEGRATION] ("only emitted in uv projects").
 /// Check if pytest-cov is available in the uv package registry.
 ///
 /// Sends an info message if coverage is requested but pytest-cov is missing.
@@ -412,6 +437,8 @@ pub(super) async fn check_pytest_cov_availability(server: &LspServer) {
     }
 }
 
+// Implements [LSPTEST-LSP-PROTOCOL-CUSTOM-NOTIFICATIONS] — server→client
+// `basilisk/testDiscoveryResult { items }`.
 /// Send test discovery results as a notification to the client.
 ///
 /// Called after workspace initialization and on file save for test files.
@@ -477,6 +504,7 @@ mod tests {
         assert_eq!(ids, vec!["test_a", "test_b"]);
     }
 
+    // Exercises [LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION] — pytest-missing Warning shape.
     #[test]
     fn make_pytest_not_found_diagnostic_has_correct_code() {
         let diag = make_pytest_not_found_diagnostic();
@@ -502,6 +530,7 @@ mod tests {
         );
     }
 
+    // Exercises [LSPTEST-LSP-PROTOCOL-CUSTOM-NOTIFICATIONS] — `basilisk/testDiscoveryResult` method name.
     #[test]
     fn test_discovery_notification_method() {
         assert_eq!(

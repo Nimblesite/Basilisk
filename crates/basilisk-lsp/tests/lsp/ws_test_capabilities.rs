@@ -1,4 +1,6 @@
-//! Tests for [LSPARCH-TESTING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-TESTING
+//! Tests for [LSPARCH-TESTING], [LSPARCH-CMDREG] (server advertises every command via
+//! `executeCommandProvider`), [LSPARCH-FEATURES-TYPEHIER] (typeHierarchyProvider).
+//! See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDREG
 // Tests for LSP: `ws_test_capabilities`.
 
 use super::ws_test_common::*;

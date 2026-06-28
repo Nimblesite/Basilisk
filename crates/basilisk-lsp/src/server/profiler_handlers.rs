@@ -63,6 +63,10 @@ fn profiler_error(code: i64, message: impl Into<String>) -> tower_lsp::jsonrpc::
 
 /// Handle `basilisk.profiler.start` — begin profiling a Python process.
 ///
+/// Implements [PROFILE-REQUESTS-START]. A missing `pid` is rejected with
+/// `-32001` (no silent auto-detect); on success returns `sessionId`, `pid`,
+/// `pythonVersion`, `startedAt`.
+///
 /// Accepts a JSON object with:
 /// - `pid` (u32, required): target process ID
 /// - `sampleRate` (u64, optional): samples per second (default 100)
@@ -85,6 +89,8 @@ pub(super) async fn execute_profiler_start(
         .map(|p| u32::try_from(p).unwrap_or(0));
 
     let Some(target_pid) = pid else {
+        // [PROFILE-REQUESTS-START] A missing `pid` is rejected with `-32001`;
+        // PID discovery is an explicit, user-visible step (#62) — no auto-detect.
         return Err(profiler_error(-32001, "Missing required parameter: pid"));
     };
 
@@ -228,6 +234,11 @@ pub(super) async fn execute_profiler_cooperative_attach(
 
 /// Handle `basilisk.profiler.stop` — stop profiling and return results.
 ///
+/// Implements [PROFILE-REQUESTS-STOP]: returns `sessionId`, `duration`,
+/// `totalSamples`, the export artifact paths (`outputFile`, `flamegraphPath`,
+/// `cpuProfilePath`), `exportError`, and the `hotFunctions[]`/`hotLines[]`
+/// summaries; also publishes profiling diagnostics ([PROFILE-NOTIFICATIONS-DIAG]).
+///
 /// Accepts a JSON object with:
 /// - `sessionId` (string, required): the session to stop
 /// - `format` (string, optional): `"speedscope"` (default), `"flamegraph"`, `"summary"`
@@ -310,6 +321,9 @@ fn export_stop_artifacts(
 }
 
 /// Handle `basilisk.profiler.snapshot` — take a point-in-time snapshot.
+///
+/// Implements [PROFILE-REQUESTS-SNAPSHOT]: same result shape as `stop` but the
+/// session keeps sampling; also publishes the current profiling diagnostics.
 ///
 /// Accepts a JSON object with:
 /// - `sessionId` (string, required): the session to snapshot
@@ -453,6 +467,9 @@ pub(super) async fn execute_profiler_processes(
 }
 
 /// Handle `basilisk.profiler.list` — list active profiling sessions.
+///
+/// Implements [PROFILE-REQUESTS-LIST]: returns `sessions[]` with `sessionId`,
+/// `pid`, `startedAt`, `sampleCount`, `duration`.
 pub(super) async fn execute_profiler_list(
     server: &LspServer,
     _args: &[serde_json::Value],
@@ -483,6 +500,11 @@ pub(super) async fn execute_profiler_list(
 ///
 /// If so, begin profiling the debuggee PID automatically. Called from the debug
 /// session start handler after debugpy spawns the target process.
+///
+/// Implements [PROFILE-SAME-PROCESS] (server leg): the profiler stays PID-based
+/// — the editor captured the debuggee `pid` from debugpy's `process` event and
+/// the existing privilege layer routes the attach; there is no server-side
+/// `debugSession`→PID resolution.
 ///
 /// # Returns
 ///

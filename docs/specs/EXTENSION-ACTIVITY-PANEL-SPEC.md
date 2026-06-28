@@ -108,6 +108,14 @@ interface ModuleNode {
     children: ModuleNode[];
     /** Top-level symbols exported by this module */
     symbols: SymbolNode[];
+    /**
+     * Every diagnostic emitted for this module, so the `errors`/`warnings`
+     * counts below are *reachable* in the tree rather than dead tallies
+     * ([EXTACT-MODULES-DIAGNOSTICS]). The flat list mirrors the file's
+     * `textDocument/publishDiagnostics`; the panel groups it under the module
+     * row. `errors === diagnostics.filter(d => d.severity === "error").length`.
+     */
+    diagnostics: DiagnosticNode[];
     // --- Folded type-health rollup (single source of truth; see Type Health) ---
     /** annotatedSymbols / totalSymbols * 100 over this module's symbols */
     coveragePercent: number;
@@ -115,6 +123,18 @@ interface ModuleNode {
     warnings: number;
     /** true if the file is in adopted (errors-as-warnings) mode */
     adopted: boolean;
+}
+
+interface DiagnosticNode {
+    /** Severity drives the row's icon + colour ([EXTACT-MODULES-COUNT-STYLE]). */
+    severity: "error" | "warning";
+    /** Diagnostic code, e.g. "BSK-E0001"; rendered in the row description. */
+    code: string;
+    /** Single-line message, e.g. "Function is missing a return type annotation". */
+    message: string;
+    /** Zero-based start position, for the navigate-on-click range. */
+    line: number;
+    character: number;
 }
 
 interface SymbolNode {
@@ -180,16 +200,67 @@ Each top-level module row renders its folded health:
 | Property | Value |
 |----------|-------|
 | Label | Module name (`myapp.api.auth`) |
-| Description | Coverage bar + `%`, then `nE nW` error/warning tallies, then `[adopted]` badge — e.g. `████████░░ 80% — 2E 3W [adopted]` |
+| Description | Coverage bar + `%`, then the diagnostic tally in [count style](#EXTACT-MODULES-COUNT-STYLE) (`🔴 2  🟠 3`, **never** `2E 3W`), then `[adopted]` badge — e.g. `████████░░ 80% 🔴 2 🟠 3 [adopted]` |
 | Icon | `symbol-namespace` (package) / `symbol-file` (module), **tinted** green (>=90%) / yellow (50–89%) / red (<50%) by coverage |
 | Tooltip | Name, path, coverage %, error/warning counts, adoption status |
-| Drill-down | Expand to the module's symbols; the per-symbol "untyped" decoration is the type-health drill-down |
+| Drill-down | Expand to the module's **diagnostics first** ([EXTACT-MODULES-DIAGNOSTICS]) — so the advertised `🔴 n` errors are reachable, not a dead tally — then its symbols (the per-symbol "untyped" decoration is the type-coverage drill-down) |
+
+### Diagnostic Count Style {#EXTACT-MODULES-COUNT-STYLE}
+
+Error/warning tallies appear on module rows, container rows, and the workspace
+header. They render **without the `E`/`W` letters** and are coloured by severity
+to match the editor's own diagnostics — red errors, orange/yellow warnings:
+
+- **Severity colours are the editor's diagnostic tokens** — errors use
+  `editorError.foreground`, warnings use `editorWarning.foreground`: the exact
+  colours that paint the squiggles and the Problems panel, so the panel tracks
+  the active theme rather than a hard-coded red/orange.
+- **Where the colour is exact.** A `ThemeIcon` accepts a `ThemeColor`, so each
+  per-diagnostic row ([EXTACT-MODULES-DIAGNOSTICS]) and each severity-tinted row
+  icon uses those tokens directly — pixel-exact and theme-adaptive.
+- **Where it cannot be (a real VS Code constraint).** Tree `label` /
+  `description` / `message` are **plain strings**: they cannot colour a sub-span
+  and do not render `$(codicon)` markup. The inline tally there uses the coloured
+  Unicode glyphs `🔴 n` (errors) / `🟠 n` (warnings) — no letters, visibly
+  red/orange — accepting that emoji glyph colours are fixed, not theme-token
+  exact. A zero count for a severity is omitted, never shown as `🔴 0`.
+
+> Theme-token-exact coloured *numbers* inline would require replacing the native
+> `TreeView` with a webview. That is rejected: it forfeits native tree
+> affordances (collapse-all, selection, the
+> [context menu](#EXTACT-MODULES-CONTEXT-MENU)) for a cosmetic gain. Exact colour
+> lives on the icons and the drill-down rows; the inline glyphs carry colour in
+> the plain-text surfaces.
+
+### Diagnostics Drill-Down {#EXTACT-MODULES-DIAGNOSTICS}
+
+A count is only honest if you can reach what it counts. Expanding a module/file
+row therefore lists that file's **actual diagnostics as the first children** —
+above its symbols — so `🔴 29` is 29 navigable rows, not a dead tally. This
+closes the defect where a row advertised "29 errors" yet expanded only to
+symbols, leaving the errors themselves unreachable anywhere in the tree.
+
+Each diagnostic row:
+
+| Property | Value |
+|----------|-------|
+| Label | The diagnostic message (`Function is missing a return type annotation`) |
+| Description | `BSK-E0001 · Ln 42` — code + 1-based line |
+| Icon | `$(error)` tinted `editorError.foreground` / `$(warning)` tinted `editorWarning.foreground` — the editor's own diagnostic colours ([EXTACT-MODULES-COUNT-STYLE]) |
+| Order | Errors before warnings, then by ascending line; the module's symbols follow beneath the diagnostics |
+| Click action | Open the file with the selection on the diagnostic's range |
+
+A clean module (no diagnostics) drills straight to its symbols, exactly as
+before. The per-module diagnostic list rides on `basilisk/workspaceModules`
+(`ModuleNode.diagnostics`), derived from the same publish-diagnostics the editor
+shows, so the panel needs no extra round-trip and can never disagree with the
+`errors`/`warnings` rollup it is counted from.
 
 ### Workspace Health Header {#EXTACT-MODULES-HEADER}
 
 The workspace-wide summary renders in the tree view's **native chrome**, not a synthetic summary row:
 
-- **`treeView.message`**: `"73% typed · 14E 23W"` (coverage + error/warning tallies).
+- **`treeView.message`**: `"73% typed · 🔴 14  🟠 23"` (coverage + diagnostic tally in [count style](#EXTACT-MODULES-COUNT-STYLE) — no `E`/`W`; `message` is plain text, so the coloured glyphs carry severity).
 - **`treeView.badge`**: numeric — the count of outstanding diagnostics (errors + warnings); hidden when zero.
 - **Empty workspace** (`totalFiles == 0`): the message reads `"No Python files found"` — never a misleading `100%` for 0/0 symbols, and no badge (preserves the issue #57 guarantee in the merged panel).
 
@@ -243,10 +314,11 @@ name into path segments and threading it into a node trie
   modules, each alphabetical by segment. The flat-view sort toggle does not
   apply in tree view ([EXTACT-MODULES-TOOLBAR](#EXTACT-MODULES-TOOLBAR)).
 - **Diagnostics roll up onto containers.** Each folder/package row shows the
-  total `nE nW` rolled up across its whole subtree and tints its icon red (any
-  descendant error) / yellow (any descendant warning), so a branch hiding errors
-  is visible at a glance without expanding it. Coverage % stays per-module (the
-  flat list carries no per-module symbol counts to weight a folder rollup).
+  total rolled up across its whole subtree in [count style](#EXTACT-MODULES-COUNT-STYLE)
+  (`🔴 n  🟠 n`, never `nE nW`) and tints its icon red (any descendant error) /
+  yellow (any descendant warning), so a branch hiding errors is visible at a
+  glance without expanding it. Coverage % stays per-module (the flat list carries
+  no per-module symbol counts to weight a folder rollup).
 
 **Flat view (`flat`, opt-in toggle).** Flat view drops the folder nesting and
 lists **every module** as one sortable row labelled by its full dotted name,

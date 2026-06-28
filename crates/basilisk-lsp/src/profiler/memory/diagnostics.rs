@@ -2,8 +2,10 @@
 //!
 //! Generate LSP diagnostics from memory profiling data.
 //!
-//! Converts allocation snapshots, snapshot diffs, and gc collection results
-//! into `publishDiagnostics` entries. Uses the purple memory palette:
+//! Implements [PROFILE-MEMORY-CODES] — the `BSK-MEM-*` diagnostic codes and
+//! their severities. Converts allocation snapshots, snapshot diffs, and gc
+//! collection results into `publishDiagnostics` entries. Uses the purple memory
+//! palette:
 //! - `BSK-MEM-ALLOC` (Hint) for allocation hotspots
 //! - `BSK-MEM-GROWTH` (Warning) for memory growth between snapshots
 //! - `BSK-MEM-LEAK` (Warning/Error) for suspected/definite leaks
@@ -321,7 +323,8 @@ fn json_str(value: &serde_json::Value, key: &str, default: &str) -> String {
         .to_owned()
 }
 
-/// Map leak confidence to diagnostic severity.
+/// Map leak confidence to diagnostic severity ([PROFILE-MEMORY-CODES]:
+/// `BSK-MEM-LEAK` is an Error for Definite, Warning for High/Medium leaks).
 fn severity_for_confidence(confidence: LeakConfidence) -> DiagnosticSeverity {
     match confidence {
         LeakConfidence::Definite => DiagnosticSeverity::ERROR,
@@ -606,6 +609,7 @@ mod tests {
         Ok(())
     }
 
+    // [PROFILE-MEMORY-CODES] Uncollectable cycles become `BSK-MEM-CYCLE` Errors.
     #[test]
     fn cycle_diagnostics_from_gc_collect() -> Result<(), String> {
         let gc_json = r#"{
@@ -698,6 +702,8 @@ mod tests {
         Ok(())
     }
 
+    // [PROFILE-MEMORY-CODES] Confidence → severity: Definite=Error, High/Medium=
+    // Warning, Low=Hint.
     #[test]
     fn severity_maps_correctly() {
         assert_eq!(

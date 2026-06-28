@@ -59,6 +59,12 @@ function readTestExplorerSettings(cfg: vscode.WorkspaceConfiguration): Record<st
   };
 }
 
+// Implements [VSIX-CONFIGURATION-SETTINGS] — reads the basilisk.* settings whose
+// package.json schema is declared in vscode-extension/package.json (contributes.
+// configuration); these are forwarded to the LSP server as initializationOptions
+// and on didChangeConfiguration. [VSIX-CONFIGURATION-SETTINGS-VS-CODE-ONLY]:
+// basilisk.useLsp / basilisk.trace.server are consumed here and in extension.ts,
+// not sent to the server.
 export function readBasiliskSettings(): Record<string, unknown> {
   const cfg = vscode.workspace.getConfiguration("basilisk");
   const ruff = readRuffSettings(cfg);
@@ -88,6 +94,10 @@ interface LspClientOptions {
   outputChannel: vscode.LogOutputChannel | undefined;
 }
 
+// Implements [VSIX-LSP-CLIENT-CONFIGURATION] — builds ServerOptions/clientOptions
+// and starts the LanguageClient ("basilisk lsp" over stdio). The executablePath
+// arrives from binary resolution ([VSIX-BINARY-RESOLUTION], delegated to
+// Shipwright in shipwright-runtime.ts).
 export function startLspClient(
   options: LspClientOptions,
   store: Store,
@@ -106,6 +116,8 @@ export function startLspClient(
     },
   };
 
+  // [VSIX-OUTPUT-CHANNELS] "Basilisk LSP Trace" channel — surfaces LSP
+  // communication when basilisk.trace.server is enabled.
   // vscode-languageclient 10 requires `traceOutputChannel` to be a
   // `LogOutputChannel` (created with `{ log: true }`).
   const traceChannel = vscode.window.createOutputChannel("Basilisk LSP Trace", {
@@ -188,6 +200,9 @@ function buildClientOptions(
   traceCh: vscode.LogOutputChannel,
   updateStatusBar: StatusBarUpdater
 ): LanguageClientOptions {
+  // Implements [VSIX-LSP-CLIENT-CONFIGURATION] — documentSelector (python files),
+  // synchronize.configurationSection "basilisk", initializationOptions, and the
+  // trace channel wiring per the spec's client-options shape.
   return {
     documentSelector: [{ scheme: "file", language: "python" }],
     synchronize: {
@@ -198,6 +213,8 @@ function buildClientOptions(
     traceOutputChannel: traceCh,
     outputChannel: outputCh,
     revealOutputChannelOn: RevealOutputChannelOn.Never,
+    // Implements [VSIX-ERROR-RECOVERY] — errorHandler shuts the server down after
+    // MAX_LSP_ERRORS_BEFORE_SHUTDOWN (3) errors and auto-restarts on close.
     errorHandler: {
       error: (error, _message, count) => {
         Logger.error(`LSP error: ${error.message ?? error}`);

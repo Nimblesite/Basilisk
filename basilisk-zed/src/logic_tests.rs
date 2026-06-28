@@ -45,6 +45,7 @@ const ALL_SLASH_COMMANDS: [&str; 13] = [
 ];
 
 // ── Slash command output ─────────────────────────────────────────────────
+// Exercises [ZED-PROFILE]: every slash command's dispatch and markdown output.
 
 #[test]
 fn profile_without_pid() {
@@ -345,6 +346,8 @@ fn profiler_slash_commands_dont_contain_raw_code_paths() {
 }
 
 // ── DAP config building ─────────────────────────────────────────────
+// Exercises [ZED-DAP]: launch/attach config building, request-kind detection,
+// and scenario builders matching basilisk-debug.json.
 
 #[test]
 fn build_dap_config_defaults() {
@@ -454,6 +457,7 @@ fn attach_scenario_no_pid() {
 }
 
 // ── Workspace configuration ─────────────────────────────────────────
+// Exercises [ZED-CONFIG]: default config + wrapping under the "basilisk" key.
 
 #[test]
 fn default_config_has_inlay_hints() {

@@ -48,6 +48,7 @@ async fn collect_all_diagnostics(
 
 // ---------------------------------------------------------------------------
 // Cross-module: imported symbol suppresses E0018 (undefined variable)
+// Exercises [ANALYSIS-SYMBOLS-POP] (cross-module symbol population).
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -123,6 +124,7 @@ async fn cross_module_undefined_variable_still_fires() -> TestResult<()> {
 
 // ---------------------------------------------------------------------------
 // Cross-module: import graph is built correctly
+// Exercises [ANALYSIS-GRAPH-BUILD] (import-graph construction over a chain).
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -225,6 +227,7 @@ async fn cross_module_class_import() -> TestResult<()> {
 
 // ---------------------------------------------------------------------------
 // Cross-module: circular import detection
+// Exercises [ANALYSIS-GRAPH-CYCLES] / [ANALYSIS-ERRORS] (detect, don't crash).
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -350,6 +353,7 @@ async fn cross_module_package_import() -> TestResult<()> {
 
 // ---------------------------------------------------------------------------
 // Cross-module: Go to Definition across files
+// Exercises [ANALYSIS-CROSSLSP-GOTODEF].
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -437,7 +441,7 @@ async fn cross_module_goto_definition() -> TestResult<()> {
 /// `d.target_func(...)`) must jump to the symbol's cross-file definition.
 /// Capturing the alias in `ImportInfo.names` made cross-module resolution treat
 /// the aliased import as a `from`-import and publish no symbols, so this stopped
-/// working. The user-reported symptom of the #180 fix.
+/// working. The user-reported symptom of the #180 fix. [ANALYSIS-CROSSLSP-GOTODEF]
 #[tokio::test]
 async fn cross_module_goto_definition_through_aliased_import() -> TestResult<()> {
     let (dir, root_uri) = setup_cross_module_workspace(&[
@@ -507,6 +511,7 @@ async fn cross_module_goto_definition_through_aliased_import() -> TestResult<()>
 
 // ---------------------------------------------------------------------------
 // Cross-module: Find All References across files
+// Exercises [ANALYSIS-CROSSLSP-REFS] (reverse-edge importer search).
 // ---------------------------------------------------------------------------
 
 #[tokio::test]

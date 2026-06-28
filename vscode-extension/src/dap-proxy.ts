@@ -388,6 +388,9 @@ export class DapTcpProxy {
 
   // ── stepOut auto-next ──────────────────────────────────────────────
 
+  // Implements [VSIX-PYTHON-DEBUGGER-DAP-PROXY] Quirk 1 — stepOut lands before
+  // assignment: arm an auto-next on the stepOut response, then inject `next`
+  // (handleStepOutStop) on the next stop, swallowing the intermediate stop.
   /** Arm auto-next when stepOut response arrives. */
   private handleStepOutResponse(msg: DapMessage): void {
     if (
@@ -483,6 +486,10 @@ export class DapTcpProxy {
     return true; // always consume the stackTrace response
   }
 
+  // Implements [VSIX-PYTHON-DEBUGGER-DAP-PROXY] Quirk 2 — structural line stops:
+  // after a stepOver stop, requests a stackTrace and skips `try:` lines
+  // (STRUCTURAL_LINE_RE) by injecting another `next`. except:/finally: are NOT
+  // skipped, matching the spec.
   /** Check if the top frame is a structural line and inject a skip if so. */
   private trySkipStructuralLine(stackMsg: DapMessage, stoppedMsg: DapMessage): boolean {
     const frames = (stackMsg.body as { stackFrames?: { line?: number; source?: { path?: string } }[] })?.stackFrames;
@@ -540,6 +547,10 @@ export class DapTcpProxy {
     }
   }
 
+  // Implements [VSIX-PYTHON-DEBUGGER-DAP-PROXY] Quirk 4 — session termination
+  // timing: ensure the `exited` event is sent before `terminated` (injecting a
+  // synthetic `exited` if debugpy never sent one) so VS Code clears
+  // activeDebugSession in the right order.
   /** Handle exited, thread, and terminated events. Returns true if consumed. */
   private handleTerminationEvents(msg: DapMessage): boolean {
     if (msg.type !== "event") {return false;}

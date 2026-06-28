@@ -83,6 +83,7 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
     return provider.getChildren(section);
   }
 
+  // Tests [EXTACT-INFO-STRUCTURE] / [EXTACT-INFO-QUICK-ACTIONS] (no Quick Actions section).
   test("root is exactly the feature toggles followed by Server Info — no section headers, no Quick Actions", () => {
     const labels = provider.getChildren().map(labelOf);
     assert.deepStrictEqual(
@@ -94,6 +95,7 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
     assert.ok(!labels.includes("Quick Actions"), "the Quick Actions section was removed (actions live on the Modules toolbar / status bar / palette)");
   });
 
+  // Tests [EXTACT-INFO-ACTION-WIRING]: no shown-but-dead actions in the panel.
   test("no row in the entire panel carries a command other than the registered toggle", () => {
     // Regression for issue #103 defect 1: a row that looks clickable but has
     // no live handler raises "command not found". The slimmed panel makes
@@ -115,6 +117,7 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
     }
   });
 
+  // Tests [EXTACT-INFO-FEATURE-STATUS]: only effect-bearing toggles ship.
   test("every no-op toggle stays hidden", () => {
     const labels = provider.getChildren().map(labelOf);
     for (const removed of REMOVED_FEATURE_LABELS) {
@@ -125,6 +128,7 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
     }
   });
 
+  // Tests [EXTACT-INFO-SERVER-INFO]: no live server-state row.
   test("Server Info has no live Server state row (status bar owns it)", () => {
     const labels = serverInfoRows().map(labelOf);
     assert.ok(
@@ -133,6 +137,7 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
     );
   });
 
+  // Tests [EXTACT-INFO-SERVER-INFO]: one uv row, sub-settings in the tooltip.
   test("uv sub-settings are folded into the uv row tooltip, not separate rows", () => {
     const rows = serverInfoRows();
     const labels = rows.map(labelOf);
@@ -152,6 +157,7 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
   // visible, so that state is reachable. The target now derives from the live
   // folder count; the helper is pure in the count because the e2e host always
   // launches with a folder, making the no-folder branch unreachable end-to-end.
+  // Tests [EXTACT-INFO-FEATURE-STATUS] write-target rule (Workspace vs Global).
   test("featureToggleTarget picks Workspace with a folder and Global without (defect 2)", () => {
     assert.strictEqual(
       featureToggleTarget(1),
@@ -165,6 +171,7 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
     );
   });
 
+  // Tests [EXTACT-INFO-FEATURE-STATUS]: a toggle has an observable, namesake effect.
   test("toggleFeature writes through and the panel reflects it", async () => {
     // End-to-end: flip uv Integration off via the real command (this host has
     // a folder, so it writes the Workspace target) and assert the toggle row

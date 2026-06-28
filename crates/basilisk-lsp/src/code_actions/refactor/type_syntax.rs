@@ -17,6 +17,7 @@ use super::helpers::{
 ///
 /// Returns zero, one, or two actions depending on what patterns appear on the
 /// line containing the cursor.
+// Implements [REFACTOR-CONVERT] — the "Union[X, Y] ↔ X | Y" (PEP 604) row.
 #[must_use]
 pub(in crate::code_actions) fn convert_union_syntax(
     uri: &Url,
@@ -156,6 +157,7 @@ fn pipe_to_union(uri: &Url, line: &str, line_num: u32) -> Option<CodeAction> {
 // ── Convert Optional syntax ─────────────────────────────────────────────────
 
 /// Offer to convert between `Optional[X]` and `X | None`.
+// Implements [REFACTOR-CONVERT] — the "Optional[X] ↔ X | None" (PEP 604) row.
 #[must_use]
 pub(in crate::code_actions) fn convert_optional_syntax(
     uri: &Url,
