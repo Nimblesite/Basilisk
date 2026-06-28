@@ -43,20 +43,6 @@ determined (a recorded dependency is now missing/unreadable, the entry cannot be
 parsed, the config cannot be fingerprinted), the result is a MISS and the check
 runs in full.
 
-### `CHKCACHE-SOUNDNESS` — Why this never misses an error {#CHKCACHE-SOUNDNESS}
-
-The check is a pure function of inputs (1)–(5): identical inputs ⟹ identical
-diagnostics, *and* identical inputs ⟹ the check reads the identical set of files.
-Therefore, if the target and every recorded dependency are byte-identical and the
-config/env/version match, re-running the check would read the same files and
-produce the same diagnostics — so returning the stored diagnostics is sound. The
-only way the read-set could differ is if some recorded input changed, which is
-exactly what a hit checks for. ∎
-
-The dependency set is captured by **recording the actual file reads** during the
-miss path (see `CHKCACHE-READSET`), not by inferring it from the import list — so
-a transitively-read stub that influenced the result is always fingerprinted.
-
 ### `CHKCACHE-LIMITS` — Documented v1 boundary {#CHKCACHE-LIMITS}
 
 The environment fingerprint (`CHKCACHE-INPUT-ENV`) hashes the search-path
@@ -66,47 +52,6 @@ v1. This is why the cache is **opt-in**: clear the cache (or omit `--cache`)
 after mutating the environment outside the lockfile. Source, config, lockfile,
 and version changes are always detected. This boundary is the reason v1 ships
 behind a flag rather than on by default.
-
-### `CHKCACHE-POSITIONING` — When this cache helps, and the Salsa endgame {#CHKCACHE-POSITIONING}
-
-This v1 cache is **correct everywhere but only *useful* in narrow conditions**,
-and the documentation must say so plainly.
-
-- **`CHKCACHE-POSITIONING-WATCHER` — a cache is only useful with invalidation on
-  edit.** A result cache earns its keep when something tells it *which* files
-  changed so unchanged work can be skipped. In a long-lived process that means a
-  **file watcher** that invalidates entries the moment a file is edited. v1 has
-  no watcher: it is a one-shot CLI cache that lazily re-verifies the recorded
-  read-set on the *next* lookup (re-reading and re-hashing every dependency).
-  That keeps it correct, but its value is confined to **repeated batch runs over
-  a mostly-unchanged tree** (CI re-runs, pre-commit, `basilisk check` loops). In
-  an interactive editor it is the wrong shape — the LSP already holds documents
-  in memory and is notified of edits, so a re-verify-on-read disk cache buys
-  little.
-
-- **`CHKCACHE-POSITIONING-SMART` — invalidation must be smart, not blanket.**
-  Re-checking every file because one changed defeats the purpose. Useful
-  invalidation is **dependency-aware**: an edit invalidates only the edited file
-  and its transitive importers (the reverse of the read-set this cache already
-  records), leaving everything else cached. v1 approximates this lazily and
-  per-file; it does not maintain the reverse dependency graph needed to
-  invalidate *eagerly* and *precisely* on a watcher event.
-
-- **`CHKCACHE-POSITIONING-SALSA` — Salsa (basilisk-db Phase 2) is the better
-  vehicle.** Watcher-driven, smart, sub-file invalidation is exactly what a
-  query-memoization engine gives for free: with Salsa
-  ([`CHKARCH-INCREMENTAL-SALSA`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA)),
-  parse / semantic-index / infer / check become tracked queries, an edit
-  invalidates only the affected queries and their dependents, and the
-  granularity is per-function rather than per-file. That subsumes this cache: the
-  read-set this cache records by hand is the dependency graph Salsa tracks
-  automatically. **v1 is therefore a deliberately small, correct stepping
-  stone** — it proves the fingerprint/read-set model and gives the benchmark a
-  real warm number today — not the destination. When `basilisk-db` Phase 2
-  lands, the persistent result cache should be reframed as (or replaced by) a
-  Salsa-backed durable database, and this whole-file content-hash cache retired.
-
----
 
 ## `CHKCACHE-READSET` — Capturing the exact read-set {#CHKCACHE-READSET}
 

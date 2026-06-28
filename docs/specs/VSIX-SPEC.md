@@ -1,22 +1,6 @@
 # Basilisk VS Code Extension {#VSIX}
 
-## Goal {#VSIX-GOAL}
-
-A first-class VS Code extension that connects to the `basilisk lsp` binary. The primary integration. Open source. No Microsoft proprietary dependencies.
-
-**CRITICAL: AIMING FOR FEATURE PARITY BETWEEN VS CODE, ZED, AND NEOVIM EXTENSIONS**
-
-All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** — the single source of truth. This spec only documents **VS Code-specific implementation details**.
-
-## Critical Docs {#VSIX-CRITICAL-DOCS}
-
-- [VS Code Extension API](https://code.visualstudio.com/api)
-- [VS Code Language Extensions](https://code.visualstudio.com/api/language-extensions/overview)
-- [VS Code Testing API](https://code.visualstudio.com/api/extension-guides/testing)
-- [VS Code Debug Adapter Protocol](https://code.visualstudio.com/api/extension-guides/debugger-extension)
-- [Debug Adapter Protocol Specification](https://microsoft.github.io/debug-adapter-protocol/)
-
----
+VS Code extension that connects to the `basilisk lsp` binary. All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** — the single source of truth. This spec documents only **VS Code-specific implementation details**, kept at feature parity with the Zed and Neovim extensions.
 
 ## Architecture {#VSIX-ARCHITECTURE}
 

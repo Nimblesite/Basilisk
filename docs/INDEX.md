@@ -53,6 +53,4 @@ Implementation roadmaps tracking phasing, priorities, and progress.
 | [CHECK-ELIMINATE-FALSE-POSITIVES.md](plans/CHECK-ELIMINATE-FALSE-POSITIVES.md) | Eliminate conformance-suite false positives — rule-specific fixes and engine work. |
 | [FP-REMAINING-NOTES.md](plans/FP-REMAINING-NOTES.md) | Working notes on remaining conformance false positives and their root causes. |
 | [LSP-AI-PLAN.md](plans/LSP-AI-PLAN.md) | AI provider abstraction — model-agnostic hooks for fixes, completions, refactoring (interface + no-op default shipped). |
-| [LSP-PROFILER-PROCESS-PANEL-PLAN.md](plans/LSP-PROFILER-PROCESS-PANEL-PLAN.md) | Python Processes activity-bar panel — LSP-driven process enumeration, sort/group, one-click CPU/memory profiling. |
 | [EXTENSION-ACTIVITY-PANEL-PLAN.md](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Activity panel rollout — LSP backend, VS Code panels, Zed slash commands, Neovim buffers. |
-| [NEOVIM-PLAN.md](plans/NEOVIM-PLAN.md) | basilisk.nvim plugin — LSP client, DAP proxy, command mappings, health checks, test explorer. |

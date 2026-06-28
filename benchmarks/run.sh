@@ -56,9 +56,20 @@ mkdir -p "$OUT" "$STATUS_DIR"
 # tools qualify:
 #   * basilisk-warm  — opt-in result-cache hit (basilisk check --cache)
 #   * mypy-warm      — incremental .mypy_cache hit; cold mypy is --no-incremental
-# pyright/ty/pyrefly/zuban keep NO cross-run result cache (verified: zero cache
-# artifacts — zuban exposes no --cache-dir/incremental flag), so a repeat run
-# lands ~= cold — they are measured COLD-only.
+# pyright/ty/pyrefly keep NO cross-run result cache (verified: zero cache
+# artifacts), so a repeat run lands ~= cold — they are measured COLD-only.
+# zuban is ALSO measured cold-only, but it is the one cold tool that DOES emit a
+# cross-run cache: `zuban mypy` mirrors mypy and reads/writes a `.mypy_cache` in
+# the working dir whenever one is present, and it exposes no --cache-dir /
+# --no-incremental flag to opt out (verified: both rejected as unknown args; it
+# also ignores $MYPY_CACHE_DIR). Left alone, hyperfine's warmup runs would prime
+# that cache and turn every measured run into a warm incremental hit — the exact
+# apples-to-oranges trap we avoid for mypy with --no-incremental. So we bust the
+# cache before EVERY timed run (see the `--prepare` on the per-fixture hyperfine
+# call below). Measured cold==warm for zuban on these single-file fixtures
+# (~31ms either way — its incremental cache buys nothing when a whole-file check
+# is already this cheap, unlike mypy's 4.7x cache win), but we force cold so the
+# COLD label holds by construction, not by luck on small fixtures.
 # mypy is run with --strict: without it, mypy reports "no issues" on the
 # strictness fixtures (e.g. missing-parameter annotations) and "checks" nothing,
 # making its timing an apples-to-oranges lie. --strict makes mypy perform the
@@ -114,12 +125,17 @@ if command -v pyrefly >/dev/null 2>&1; then
   add_tool "pyrefly" "pyrefly check {}"
 fi
 if command -v zuban >/dev/null 2>&1; then
-  # No cross-run result cache → cold-only (zuban exposes no cache/incremental
-  # flag, so a repeat run = cold). `zuban mypy --strict` (alias of `zmypy
-  # --strict`) so it performs the strict-mode analysis the fixtures stress —
-  # zuban's default `zuban check` mode skips these strictness rules and reports
-  # "no issues" on the missing-annotation fixtures, which would time a
-  # do-nothing run, exactly as plain (non-strict) mypy would.
+  # `zuban mypy --strict` (alias of `zmypy --strict`) so it performs the
+  # strict-mode analysis the fixtures stress — zuban's default `zuban check`
+  # mode skips these strictness rules and reports "no issues" on the
+  # missing-annotation fixtures, which would time a do-nothing run, exactly as
+  # plain (non-strict) mypy would.
+  # Unlike pyright/ty/pyrefly, zuban's mypy mode reads/writes a `.mypy_cache` in
+  # the cwd when one is present and offers no flag to disable it, so we measure
+  # it COLD by wiping that cache before every timed run (ZUBAN_PRESENT gates the
+  # `--prepare` on the hyperfine call). Cold==warm here (~31ms), but this keeps
+  # the COLD column honest by construction.
+  ZUBAN_PRESENT=1
   add_tool "zuban" "zuban mypy --strict --ignore-missing-imports --no-error-summary {}"
 fi
 
@@ -213,6 +229,14 @@ for FILE in "${FIXTURES[@]}"; do
 
   HF=(hyperfine --ignore-failure --warmup "$WARMUP" --runs "$RUNS"
       --export-json "$OUT/${STEM}.json")
+  # When zuban is measured, wipe ./.mypy_cache before EVERY timed run: zuban's
+  # mypy mode reuses an existing .mypy_cache and has no flag to disable it, so
+  # without this its warmed-up runs would be warm incremental hits, not cold.
+  # Harmless to the other tools — their caches live in dedicated --cache-dir
+  # paths (basilisk-warm/mypy-warm), and cold mypy uses --no-incremental, so
+  # none of them read or write ./.mypy_cache. hyperfine excludes --prepare time
+  # from the measurement.
+  [[ -n "${ZUBAN_PRESENT:-}" ]] && HF+=(--prepare 'rm -rf .mypy_cache')
   for i in "${!TOOL_NAMES[@]}"; do
     CMD="${TOOL_CMDS[$i]//\{\}/$FPATH}"
     HF+=(--command-name "${TOOL_NAMES[$i]}" "$CMD")
@@ -325,7 +349,7 @@ csv_lines = [
     f"# tools: {os.environ['BENCH_TOOLS']}",
     f"# runs: {os.environ['BENCH_RUNS']} (hyperfine mean wall-clock, milliseconds)",
     f"# generated: {os.environ['BENCH_GENERATED']}",
-    f"# note: <tool>_ms = COLD full-file CLI check from scratch. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly/zuban keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures); zuban runs as `zuban mypy --strict` for the same reason (its default `zuban check` mode skips these strictness rules).",
+    f"# note: <tool>_ms = COLD full-file CLI check from scratch. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. zuban is also cold-only but its mypy mode DOES reuse a ./.mypy_cache when present (no flag disables it), so we wipe ./.mypy_cache before every timed run to keep the measurement cold (cold==warm anyway on these single-file fixtures, ~31ms). mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures); zuban runs as `zuban mypy --strict` for the same reason (its default `zuban check` mode skips these strictness rules).",
     "fixture," + ",".join(f"{t}_ms" for t in all_tools),
 ]
 for stem, means in rows:

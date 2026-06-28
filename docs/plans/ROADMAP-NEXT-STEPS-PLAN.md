@@ -68,13 +68,13 @@ core binaries but has no marketplace-publish steps.
 - Version stamping: replace `0.0.0-PLACEHOLDER` across `vscode-extension/`, `basilisk-zed/`,
   `basilisk.nvim/` with a single source of truth driven from a git tag.
 - Binary distribution: tagged GitHub releases with per-platform binaries (extensions download these
-  on first run — Neovim's auto-download is the last gap in `NEOVIM-PLAN.md`).
+  on first run — the Neovim plugin's auto-download + outdated-binary version check already ship).
 
 **Per-editor state:**
 
 | Editor | Code state | Release gap |
 |---|---|---|
-| **Neovim** (`basilisk.nvim`) | ~95%, 189 e2e tests passing, feature parity reached | Binary auto-download + outdated-binary version check; tagging/release mechanism (luarocks optional) |
+| **Neovim** (`basilisk.nvim`) | Feature-complete: 189 e2e tests passing, feature parity reached, binary auto-download + outdated-binary version check shipped | tagging/release mechanism (luarocks optional); nvim-lspconfig PR (`[HUMAN]`) |
 | **Zed** (`basilisk-zed`) | WASM builds, DAP + slash commands declared | No Zed extension-registry publish step in CI; version stamp |
 | **VS Code** (`vscode-extension`) | Full feature set, 297 tests, marketplace metadata set | No `vsce` package/publish workflow; version stamp |
 | **Open VSX** (Cursor/Windsurf) | Same VSIX artifact as VS Code | No `ovsx` publish step — this is what makes us installable in Cursor & Windsurf |
@@ -215,7 +215,6 @@ conformance and false-positive work is larger — sized honestly below against t
   Phase 4 (wire the no-line-scanning lint into CI so the anti-pattern can't return).
 - **`LSP-STUBBING-PLAN.md`** (~95%, Phase 5 deferred): essentially shippable; decide whether the
   deferred Salsa perf work is worth doing now or later.
-- **`NEOVIM-PLAN.md`** (~95%): the two gaps (version check + binary auto-download) overlap with §1.
 
 ---
 
@@ -296,7 +295,7 @@ Rough plan (most of this is human-led — voice, accounts, timing, relationships
 
 - [ ] **`[AGENT]`** Replace `0.0.0-PLACEHOLDER` everywhere with a single git-tag-driven version source.
 - [ ] **`[AGENT]`** Extend `release.yml` to publish per-platform binaries on tagged releases.
-- [ ] **`[AGENT]`** Finish Neovim binary auto-download from GitHub releases + outdated-binary version check (last `NEOVIM-PLAN.md` gaps).
+- [x] **`[AGENT]`** Neovim binary auto-download from GitHub releases + outdated-binary version check (shipped in `basilisk.nvim/lua/basilisk/binary.lua`).
 - [ ] **`[HUMAN]`** Create/confirm publisher accounts and store CI secrets: VS Code Marketplace (VSCE_PAT), Open VSX (OVSX_PAT), Zed registry, (optional) luarocks.
 - [ ] **`[HUMAN]`** Decide the versioning scheme (single repo-wide version vs. per-extension) and the release cadence.
 - [ ] **`[AGENT]`** Website: if a version is displayed anywhere, source it dynamically from the latest GitHub release — never hardcode it in copy (hardcoded `v0.1` strings were removed 2026-05-30; `site.json` still carries `0.0.0-PLACEHOLDER`).

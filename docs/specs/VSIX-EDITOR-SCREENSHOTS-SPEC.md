@@ -1,22 +1,10 @@
 # VS Code Editor Screenshots {#VSIX-EDITOR-SCREENSHOTS}
 
-**Version**: 0.1.0
-**Status**: Active
-**License**: MIT
-
----
-
-## Purpose {#VSIX-EDITOR-SCREENSHOTS-PURPOSE}
-
-The website needs **real screenshots of the Basilisk extension running in VS Code**
-— diagnostics with squiggles, the hover type popup, the Quick Fix menu, the
-activity panel — not mockups. This spec defines an automated pipeline that drives
-the actual extension in a headed VS Code instance and captures the real window,
-so the marketing/docs editor screenshots are genuine and reproducible.
-
-It is the editor-side companion to the CLI pipeline ([WEBSITE-SCREENSHOTS]): both
-produce committed PNGs from the real product and are verified (not captured) in
-CI, honouring [GITHUB-NO-ARTIFACTS].
+An automated pipeline that drives the actual extension in a headed VS Code
+instance and captures the real window (diagnostics, hover, Quick Fix, activity
+panel) for the website. It is the editor-side companion to the CLI pipeline
+([WEBSITE-SCREENSHOTS]): both produce committed PNGs from the real product and are
+verified (not captured) in CI, honouring [GITHUB-NO-ARTIFACTS].
 
 ## Capture pipeline {#VSIX-EDITOR-SCREENSHOTS-PIPELINE}
 

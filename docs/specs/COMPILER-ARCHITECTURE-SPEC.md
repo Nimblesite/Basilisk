@@ -387,7 +387,7 @@ interop = ["interop/"]      # stays in CPython, accessed via interop layer
 **How it works:**
 - Imports within `compile` directories are native calls (zero overhead)
 - Imports from `interop` directories cross the interop boundary automatically (value conversion at the call site)
-- Imports from installed third-party packages follow the stub strategy: if the package passes the Basilisk checker, it can be compiled; otherwise it goes through interop (see [stub-strategy.md](stub-strategy.md))
+- Imports from installed third-party packages follow the stub strategy: if the package passes the Basilisk checker, it can be compiled; otherwise it goes through interop (see [CHECKER-STUB-RESOLUTION-SPEC.md](CHECKER-STUB-RESOLUTION-SPEC.md))
 
 **Gradual migration:** move files from `interop/` to `src/` (or whichever `compile` directory) as you add type annotations and fix checker errors. The boundary moves with you.
 
@@ -474,7 +474,7 @@ This produces a native shared library (`.bsk.so` / `.bsk.dylib`) that can be lin
 - All dependencies must either be natively compiled or available via interop
 - The library must not use any excluded features ([Excluded Features](#COMPILER-EXCLUDED))
 
-**For libraries with stubs but dynamic implementations**, see [stub-strategy.md](stub-strategy.md). Libraries that have type stubs but use dynamic features internally cannot be natively compiled -- they go through the interop layer.
+**For libraries with stubs but dynamic implementations**, see [CHECKER-STUB-RESOLUTION-SPEC.md](CHECKER-STUB-RESOLUTION-SPEC.md). Libraries that have type stubs but use dynamic features internally cannot be natively compiled -- they go through the interop layer.
 
 ---
 

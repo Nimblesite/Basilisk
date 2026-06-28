@@ -205,7 +205,7 @@ shows a progress surface from click to outcome:
 Starting a profile must never require the user to hand-type a PID (#62). The LSP
 owns process **discovery**; editors only render it. This section defines the
 enumeration command, its data model, and the panel/launch UX that replaces the
-old raw PID input box. Design + phased TODO: [LSP-PROFILER-PROCESS-PANEL-PLAN.md](../plans/LSP-PROFILER-PROCESS-PANEL-PLAN.md) `{#PROFPANEL-PLAN}`.
+old raw PID input box. This is implemented and shipped (see `[PROFILE-PROCESSES-LSP]` and the VS Code process panel).
 
 ### basilisk.profiler.processes {#PROFILE-PROCESSES-LSP}
 
@@ -882,7 +882,7 @@ graph TB
 
 Memory profiling requires an active **debug session** (debugpy). Crucially, **the
 LSP holds no DAP connection — the editor does** (the editor connects directly to
-debugpy; see [LSP-DEBUG-INTEGRATION-SPEC]). So the LSP cannot inject Python
+debugpy; see [LSP-DEBUG-INTEGRATION-SPEC.md](LSP-DEBUG-INTEGRATION-SPEC.md)). So the LSP cannot inject Python
 itself. Instead, memory analysis is a **two-leg round-trip with the editor as
 courier**, and debugpy can only `evaluate` against a **stopped** frame. The
 editor satisfies that invariant itself: when the program is running, memory

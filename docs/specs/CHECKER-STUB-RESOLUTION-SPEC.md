@@ -258,10 +258,9 @@ Generated stubs go into `.basilisk/stubs/`, tagged as Tier 3. The provenance sys
 
 ---
 
-## Risks and Mitigations {#STUBRES-RISKS}
+## Constraints {#STUBRES-RISKS}
 
-| Risk | Mitigation |
+| Constraint | Resolution |
 |------|------------|
 | Bundled typeshed stubs add binary size | Compress with `include_bytes!`, bundle stdlib only initially |
 | PEP 561 discovery needs `sys.path` | Require `python-path` or `venv-path` in config; fall back to `python3 -c "import sys; print(sys.path)"`. In uv projects, `uv.lock` + `.python-version` eliminate the subprocess |
-| Auto-generated stubs may be wrong | Tier system + provenance = auto-stubs produce warnings, never silent false positives |

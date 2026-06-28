@@ -15,26 +15,6 @@ category they belong to, and tags everything else with plain descriptive labels.
 - **Related:** [CHKARCH-DIAG](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG) (diagnostic rules),
   [CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE) (conformance scoring)
 
-## Principles {#CHKTAG-PRINCIPLES}
-
-1. **Tags, not categories.** Rules are described by a set of tags, not by
-   membership in one taxonomy. A rule can be `pep` + `narrowing`, or `basilisk`
-   + `style` + `strictness`.
-2. **Categories pertain to PEP only.** The only category vocabulary Basilisk
-   maintains is the set of `python/typing` conformance categories
-   ([CHKTAG-PEP-CATEGORIES]). Basilisk-original rules have **no** category — they
-   are described purely by tags.
-3. **Provenance is explicit.** Every rule declares whether it implements the
-   typing specification (`pep`) or is a Basilisk-original house rule
-   (`basilisk`) ([CHKTAG-PROVENANCE]). This is data, not something inferred from
-   a code prefix.
-4. **The `BSK-` prefix is cosmetic.** Basilisk-original rules are conventionally
-   named/prefixed `BSK` for human recognition. That prefix is *semantically
-   meaningless* to the checker ([CHKTAG-BSK-PREFIX]).
-5. **Free-form tags must not conflict.** Arbitrary descriptive tags (`style`,
-   `redundancy`, …) are allowed, but must be named so they never collide with a
-   reserved PEP-category name ([CHKTAG-FREEFORM]).
-
 ## Tag Model {#CHKTAG-MODEL}
 
 A **tag** is a non-empty, lowercase string label. A rule carries an *ordered,

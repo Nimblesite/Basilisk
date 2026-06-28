@@ -426,4 +426,4 @@ The LSP produces all the underlying data; only the visualization differs.
 | Flamegraph rendering | Per-editor | VS Code webview / browser fallback |
 | Tree-sitter queries | Zed-only | `basilisk-zed/languages/python/` |
 
-The entire backend is shared; only thin editor-specific glue differs. See [ZED-PLAN.md](../plans/ZED-PLAN.md) for the implementation plan and phasing.
+The entire backend is shared; only thin editor-specific glue differs. See [LSP-PLAN.md](../plans/LSP-PLAN.md) for cross-editor implementation phasing.

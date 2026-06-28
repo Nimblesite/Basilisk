@@ -2,7 +2,7 @@
 
 > **Goal**: Make Basilisk the first type checker that deeply understands uv projects — zero-config, instant, always in sync.
 >
-> **Plan**: [LSP-UV-INTEGRATION-PLAN.md](../plans/LSP-UV-INTEGRATION-PLAN.md)
+> **Plan**: [LSP-PLAN.md](../plans/LSP-PLAN.md)
 >
 > **LSP Spec**: [LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md) — configuration, commands, binary resolution
 
