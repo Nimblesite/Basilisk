@@ -92,19 +92,25 @@ and the documentation must say so plainly.
   per-file; it does not maintain the reverse dependency graph needed to
   invalidate *eagerly* and *precisely* on a watcher event.
 
-- **`CHKCACHE-POSITIONING-SALSA` — Salsa (basilisk-db Phase 2) is the better
-  vehicle.** Watcher-driven, smart, sub-file invalidation is exactly what a
-  query-memoization engine gives for free: with Salsa
-  ([`CHKARCH-INCREMENTAL-SALSA`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA)),
-  parse / semantic-index / infer / check become tracked queries, an edit
-  invalidates only the affected queries and their dependents, and the
-  granularity is per-function rather than per-file. That subsumes this cache: the
-  read-set this cache records by hand is the dependency graph Salsa tracks
-  automatically. **v1 is therefore a deliberately small, correct stepping
-  stone** — it proves the fingerprint/read-set model and gives the benchmark a
-  real warm number today — not the destination. When `basilisk-db` Phase 2
-  lands, the persistent result cache should be reframed as (or replaced by) a
-  Salsa-backed durable database, and this whole-file content-hash cache retired.
+- **`CHKCACHE-POSITIONING-SALSA` — Salsa is the better vehicle for *in-session*
+  invalidation.** Smart, demand-driven invalidation is exactly what a
+  query-memoization engine gives for free, and the in-session engine now exists
+  ([`CHKARCH-INCREMENTAL-SALSA`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA),
+  `crates/basilisk-db` + `basilisk-checker`'s `checked_file` query): `parse →
+  resolve → check` is a tracked query, and an edit re-executes only the affected
+  file's query, leaving every other file's memo intact. Granularity today is
+  **module-level** (the pipeline is fused into one tracked query per file); finer
+  per-function granularity is possible but not yet implemented. The read-set this
+  cache records by hand is the dependency graph Salsa tracks automatically.
+
+  The two layers are **complementary, not redundant**: this content-addressed
+  cache is the *cross-session* durable layer (a fresh process recomputes only
+  files whose read-set changed on disk), while Salsa is the *in-session* layer (a
+  live editing session recomputes only the file you touched). The remaining step
+  is to make the salsa database itself durable across sessions — at which point
+  this whole-file content-hash cache could be retired in its favour — but until
+  that lands, **this cache remains the cross-session mechanism** and is not
+  superseded.
 
 ---
 

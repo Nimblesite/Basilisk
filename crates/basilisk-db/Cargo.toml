@@ -1,17 +1,19 @@
 [package]
 name        = "basilisk-db"
-description = "Incremental computation database for Basilisk (Salsa-based, Phase 2+)"
+description = "Salsa-backed incremental computation database for Basilisk"
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
 
 [dependencies]
 basilisk-common = { path = "../basilisk-common" }
+salsa.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-tempfile = "3"
+basilisk-test-utils = { workspace = true, features = ["salsa"] }
+salsa.workspace = true
 
 [lints]
 workspace = true

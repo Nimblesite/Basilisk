@@ -30,6 +30,7 @@ pub mod cached;
 pub mod collection_inference;
 pub mod context;
 pub mod diagnostic;
+pub mod incremental;
 pub mod inference;
 pub mod rule_tags;
 pub mod rules;
@@ -40,6 +41,11 @@ pub mod types_parsing;
 
 pub use cached::CachedDiagnostic;
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};
+pub use incremental::{checked_file, file_diagnostics};
+
+// Re-export the incremental-database handles so consumers can drive the
+// memoized `checked_file` query without depending on `basilisk-db` directly.
+pub use basilisk_db::{BasiliskDatabase, Db, SourceFile};
 
 /// Run all rules and apply inline suppression / mode overrides.
 ///

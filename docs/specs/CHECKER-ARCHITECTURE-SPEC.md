@@ -1054,22 +1054,77 @@ so the Howard Hinnant `civil_from_days` algorithm exists in exactly one place.
 
 ### Salsa Architecture {#CHKARCH-INCREMENTAL-SALSA}
 
-Basilisk uses the Salsa incremental computation framework (the same system powering rust-analyzer).
+Basilisk uses the [Salsa](https://crates.io/crates/salsa) incremental computation
+framework (the same system powering rust-analyzer) for **in-session** incremental
+checking.
 
-**Input queries**: Source file contents, configuration, stub files
-**Derived queries**: Parsed ASTs, resolved names, type assignments, diagnostics
+- **Input query**: a file's source text — `SourceFile::text`, the single root
+  input (`crates/basilisk-db/src/db.rs`). The database (`BasiliskDatabase`) and
+  the shared `Db` trait live there too; `basilisk-db` is the dependency-graph
+  foundation, so the derived queries are defined in the crates that own the work.
+- **Derived query**: the per-file diagnostics — `checked_file`
+  (`crates/basilisk-checker/src/incremental.rs`), which runs `parse → resolve →
+  check` and memoizes the result. Granularity is **module-level**: the pipeline
+  is fused into one tracked query keyed on the file, matching the `Module-level`
+  granularity row in [CHKARCH-MATRIX]. Editing one file re-executes only that
+  file's query;
+  unrelated files are served from their memos.
 
-When a source file changes, only queries that depend on the changed input are recomputed. The dependency graph is tracked automatically by Salsa.
+The value type is the owned `CachedDiagnostic` (it satisfies salsa's `Update`
+bound), so the engine adds **no** salsa dependency to `basilisk-resolver` or
+`basilisk-stubs`.
+
+**Equivalence guarantee.** `checked_file` is a pure memoization wrapper over
+[`check`](#CHKARCH-ARCH-PIPELINE): for any file that parses and resolves,
+`file_diagnostics(db, file)` equals `check(&resolved)` byte-for-byte. This is
+asserted directly (`crates/basilisk-checker/tests/incremental_tests.rs`,
+`checked_file_is_equivalent_to_direct_check`), so salsa memoization can never
+corrupt a result.
+
+**Scope — not yet the CLI/LSP path.** The equivalence is to the *pure*
+pipeline, **not** to what `basilisk check` emits. The batch CLI (`process_file`)
+and the LSP run an extra step between resolve and check —
+`basilisk_lsp::import_resolver::resolve_module_imports`, which resolves imports
+against the venv/`uv.lock` and so changes both the `imports_unresolved` rule and
+cascade suppression for import-bearing files. That step reads the filesystem and
+cannot be a pure salsa query without promoting the search paths (and
+configuration) to salsa inputs. So today the query covers the **default-config,
+import-free** pipeline only, and the engine is **not yet wired** into the
+published-diagnostics paths — those remain on the direct pipeline, which is why
+this change cannot affect the conformance score. Unblocking full adoption needs
+`BasiliskConfig` / `ImportSearchPaths` to gain salsa-compatible identity
+(`PartialEq`, so the derive's fallback applies) and become tracked inputs; the
+engine is already a public API (`basilisk_checker::{BasiliskDatabase, SourceFile,
+checked_file, file_diagnostics}`) ready for that work.
+
+Incremental behaviour is proven by `crates/basilisk-db/tests/db_tests.rs`
+(memoization, invalidation, cross-file isolation) and the checker tests above.
 
 ### Cancellation {#CHKARCH-INCREMENTAL-CANCEL}
 
-When a new keystroke arrives while a check is in progress, the current computation is cancelled and restarted with the new input. This is critical for responsive IDE experience.
+When a new keystroke arrives while a check is in progress, the in-flight
+computation must be abandoned rather than run to completion and waste work — this
+is what keeps an editor responsive under fast typing. Salsa provides this: a write
+raises the revision's cancellation flag, and the next query checkpoint unwinds
+with the `Cancelled` sentinel. Verified deterministically by
+`crates/basilisk-db/tests/db_tests.rs::cancellation_unwinds_in_flight_work`.
 
 ### Persistent Cache {#CHKARCH-INCREMENTAL-CACHE}
 
-Disk-backed cache between sessions. On startup, Basilisk loads the cache and only recomputes files that changed since last run. This eliminates cold-start latency for repeat sessions.
+Cross-session persistence is the **content-addressed result cache**
+([CHKCACHE](CHECKER-CACHE-SPEC.md), `crates/basilisk-db/src/cache.rs`), not salsa:
+a fresh process loads cached diagnostics and recomputes only files whose recorded
+read-set changed on disk, eliminating cold-start cost. The two layers are
+complementary — salsa makes an *editing session* incremental; the result cache
+makes *repeat invocations* incremental — and a hit in either is sound by
+construction (salsa via tracked dependencies, the result cache by re-verifying
+every recorded file).
 
 ### Performance Targets {#CHKARCH-INCREMENTAL-PERF}
+
+These are design targets, not yet measured against the salsa path (the benchmark
+harness in [ROADMAP-NEXT-STEPS-PLAN](../plans/ROADMAP-NEXT-STEPS-PLAN.md) is the
+vehicle for validating them); they are not a claim of achieved numbers.
 
 | Scenario | Target |
 |---|---|

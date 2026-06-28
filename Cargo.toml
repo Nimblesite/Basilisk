@@ -57,6 +57,10 @@ toml      = "1.1"
 phf       = "0.14"
 colored   = "3.0"
 
+# Incremental computation — Salsa powers the demand-driven query engine
+# ([CHKARCH-INCREMENTAL-SALSA]); the same framework underpins rust-analyzer.
+salsa     = "0.27"
+
 # Workspace crates
 basilisk-db       = { path = "crates/basilisk-db" }
 basilisk-parser   = { path = "crates/basilisk-parser" }
