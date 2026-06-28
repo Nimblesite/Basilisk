@@ -14,6 +14,12 @@ import { subscribeRevision } from "./reactive-refresh";
 import { Logger } from "./logger";
 
 // ── LSP response types ───────────────────────────────────────────────────
+//
+// Implements the client mirror of [EXTACT-DATA-MODEL] — the shared
+// WorkspaceModulesResponse / ModuleNode / SymbolNode / HealthStats wire shapes
+// returned by basilisk.workspaceModules. (The spec's DiagnosticNode /
+// ModuleNode.diagnostics drill-down [EXTACT-MODULES-DIAGNOSTICS] is not yet
+// modelled here — see the activity-panel audit notes.)
 
 interface SymbolNode {
   readonly name: string;

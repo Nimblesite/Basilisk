@@ -65,6 +65,9 @@ function readTestExplorerSettings(cfg: vscode.WorkspaceConfiguration): Record<st
 // and on didChangeConfiguration. [VSIX-CONFIGURATION-SETTINGS-VS-CODE-ONLY]:
 // basilisk.useLsp / basilisk.trace.server are consumed here and in extension.ts,
 // not sent to the server.
+// Implements the editor-setting source of [ANALYSIS-CONFIG-SRC] — `analysisMode`
+// (default "wholeModule") is read from the workspace setting, the highest-priority
+// config source ([ANALYSIS-CONFIG-PRI]), and forwarded to the server.
 export function readBasiliskSettings(): Record<string, unknown> {
   const cfg = vscode.workspace.getConfiguration("basilisk");
   const ruff = readRuffSettings(cfg);
@@ -253,6 +256,11 @@ function buildClientOptions(
   };
 }
 
+// Implements the client wiring of [EXTACT-HEALTH-CONTEXT-MENU] (Fix All in File /
+// Adopt File / Un-adopt File), the file-scoped half of [AUTOFIX-MASS-VSCODE]
+// (`basilisk.fixFile`), and [AUTOFIX-ADOPTION-VSCODE] (`basilisk.adoptFile` /
+// `basilisk.unadoptFile`) — these server-advertised, file-scoped commands get the
+// active editor's URI injected so they act on the right file.
 /** Commands that need the active editor URI injected as the first arg. */
 const EDITOR_URI_COMMANDS = new Set([
   "basilisk.fixFile",
@@ -260,6 +268,8 @@ const EDITOR_URI_COMMANDS = new Set([
   "basilisk.unadoptFile",
 ]);
 
+// Implements the client UI of [LSPUV-COMMANDS] (the `{package}`-taking uv
+// commands) — prompts the user for the package name before the server runs uv.
 /** Commands that prompt the user for a package name before execution. */
 const PACKAGE_COMMANDS: Record<string, { prompt: string; placeholder: string }> = {
   "basilisk.uv.add": { prompt: "Package name to add", placeholder: "e.g. requests" },

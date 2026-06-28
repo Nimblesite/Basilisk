@@ -25,6 +25,8 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 /// Emits `match_exhaustiveness` for every `match` statement that lacks a wildcard branch.
+// Implements the exhaustiveness side of [TYPEINF-NARROWING-MATCH] and
+// [TYPEINF-EXCEEDS-EXHAUSTIVE] — flags `match` statements that may fall through.
 pub(crate) struct NonExhaustiveMatch;
 
 impl Rule for NonExhaustiveMatch {

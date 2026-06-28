@@ -1,4 +1,4 @@
-//! Tests for [CHKCACHE]. See docs/specs/CHECKER-CACHE-SPEC.md
+//! Tests for [CHKCACHE] / [CHKCACHE-TEST]. See docs/specs/CHECKER-CACHE-SPEC.md
 #![allow(
     clippy::allow_attributes,
     clippy::expect_used,
@@ -184,6 +184,7 @@ fn changing_config_invalidates() {
 // ── CHKCACHE-TEST-DISABLED ──────────────────────────────────────────────────
 
 /// Without `--cache`, no cache directory is created and output is unchanged.
+// Exercises [CHKCACHE-CLI]
 #[test]
 fn disabled_creates_no_cache_dir() {
     let dir = unique_dir("disabled");

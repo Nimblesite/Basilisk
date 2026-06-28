@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Implements [WEBSITE-E2E] / [WEBSITE-E2E-PURPOSE]: the browser smoke-test
+// harness — it runs the production build of `_site/` on both a desktop and a real
+// phone viewport so navigation regressions are caught in CI rather than shipping.
 // Implements [WEBSITE-E2E-SMOKE]: navigation smoke tests on a desktop and a
 // real phone viewport, run against the production build of `_site/`.
 // See docs/specs/WEBSITE-E2E-SPEC.md.

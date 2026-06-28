@@ -60,6 +60,7 @@ use tower_lsp::{Client, LspService, Server};
 
 use crate::workspace::WorkspaceIndex;
 
+// Implements [ANALYSIS-INCR-DEBOUNCE]
 /// Debounce interval for file-watcher notifications (milliseconds).
 pub(super) const FILE_WATCHER_DEBOUNCE_MS: u64 = 200;
 
@@ -76,6 +77,7 @@ pub(super) fn no_workspace_root_error() -> tower_lsp::jsonrpc::Error {
 /// Debounce interval for `basilisk/moduleChanged` notifications (milliseconds).
 pub(super) const MODULE_CHANGED_DEBOUNCE_MS: u64 = 300;
 
+// Implements [LSPTEST-CONFIGURATION-SETTINGS]
 /// Runtime test explorer configuration received from the client.
 #[derive(Debug, Clone)]
 pub(super) struct TestExplorerConfig {
@@ -114,6 +116,7 @@ pub struct LspServer {
     pub(super) index: Arc<RwLock<Option<WorkspaceIndex>>>,
     /// Workspace root folders discovered during initialization.
     pub(super) workspace_roots: RwLock<Vec<std::path::PathBuf>>,
+    // Implements [LSPDEBUG-WIRE] (DebugSessionManager added to LspServer)
     /// Debug session manager — spawns debugpy and tracks active sessions.
     pub(super) debug_manager: crate::debug::DebugSessionManager,
     /// Profiler session manager — py-spy sampling, aggregation, export.

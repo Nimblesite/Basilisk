@@ -35,6 +35,9 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 /// Emits `directives_version_platform` for variables defined only in dead version/platform branches.
+// Implements [CHKARCH-VERSION-NARROWING] — evaluates `sys.version_info` /
+// `sys.platform` guards against the configured target so dead-branch analysis
+// follows the project's real target.
 pub(crate) struct DeadBranchVariable;
 
 impl Rule for DeadBranchVariable {

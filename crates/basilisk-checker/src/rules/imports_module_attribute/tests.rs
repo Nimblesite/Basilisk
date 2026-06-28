@@ -1,3 +1,5 @@
+//! Tests for [CHKARCH-DIAG-STUB-MEMBER]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#chkarch-diag-stub-member
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 

@@ -130,6 +130,7 @@ fn build_capabilities() -> ServerCapabilities {
             prepare_provider: Some(true),
             work_done_progress_options: WorkDoneProgressOptions::default(),
         })),
+        // Implements [LSPARCH-CMDREG]
         execute_command_provider: Some(ExecuteCommandOptions {
             commands: basilisk_common::commands::ALL
                 .iter()
@@ -198,6 +199,7 @@ pub(super) async fn initialized(server: &LspServer) {
     let Some(mode) = mode else { return };
 
     match mode {
+        // Implements [ANALYSIS-STARTUP-OPEN]
         AnalysisMode::OpenFilesOnly => {
             server
                 .client
@@ -379,6 +381,8 @@ pub(super) async fn did_change_workspace_folders(
     }
 }
 
+// Implements [LSPUV-WATCHERS] (uv.lock, .python-version, pyproject.toml,
+// basilisk.json; the spec's `.venv/pyvenv.cfg` row is not watched).
 /// Register file watchers for uv-related configuration files.
 ///
 /// Watches `**/uv.lock`, `**/.python-version`, and `**/pyproject.toml` so
@@ -534,6 +538,8 @@ fn scan_resolve_and_check_with_roots(
     }
 }
 
+// Implements [ANALYSIS-PUBLISH] (runtime mode-switch → clear non-open files;
+// per-mode publish and delete→empty live in run_workspace_scan and document.rs).
 /// Clear diagnostics for all non-open files (used when switching to `openFilesOnly`).
 async fn clear_non_open_diagnostics(server: &LspServer) {
     let guard = server.index.read().await;
@@ -622,6 +628,8 @@ fn build_uv_registry(roots: &[std::path::PathBuf]) -> Option<Arc<basilisk_uv::Pa
     Some(Arc::new(registry))
 }
 
+// Implements [LSPARCH-UV-HOTRELOAD] and [LSPUV-LOCK-HOT-RELOAD] (full rebuild on
+// uv.lock change — no package-level diff; logs a simpler message than the spec)
 /// Rebuild the uv package registry and re-resolve all workspace imports.
 ///
 /// Called after uv commands complete or when `uv.lock` changes on disk.

@@ -107,6 +107,7 @@ pub fn document_symbols(resolved: &ResolvedModule, source: &str) -> Vec<Document
     top_level
 }
 
+// Implements [LSPARCH-FEATURES-WSSYM]
 /// Aggregate symbols across all open documents, filtered by a query string.
 ///
 /// Returns a flat `Vec<SymbolInformation>` for `workspace/symbol`.
