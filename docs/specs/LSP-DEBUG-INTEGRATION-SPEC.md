@@ -1,6 +1,6 @@
 # Basilisk Debug Integration via debugpy {#LSPDEBUG}
 
-The Basilisk LSP brokers Python debugging: the editor sends a custom LSP request, the LSP spawns `debugpy.adapter` on a free TCP port and returns `host:port`, and the editor's built-in DAP client connects directly to debugpy over TCP. The LSP brokers the connection only — it does not proxy DAP traffic. The design is editor-agnostic: any LSP-compatible editor sends `basilisk.startDebugSession` and connects to the returned port.
+The Basilisk LSP brokers Python debugging: the editor sends a custom LSP request, the LSP spawns `debugpy.adapter` on a free TCP port and returns `host:port`, and the editor's built-in DAP client connects directly to debugpy over TCP. The LSP brokers the connection only — it does not proxy DAP traffic. Editor-agnostic: any LSP-compatible editor sends `basilisk.startDebugSession` and connects to the returned port.
 
 ## How It Works {#LSPDEBUG-FLOW}
 
@@ -36,7 +36,7 @@ sequenceDiagram
 
 ### startDebugSession {#LSPDEBUG-START}
 
-The LSP only needs to know which Python to use. All DAP config (program, args, justMyCode, etc.) goes directly from the editor to debugpy after the TCP connection is established.
+The LSP only needs which Python to use. All DAP config (program, args, justMyCode, etc.) goes directly from editor to debugpy after the TCP connection is established.
 
 **Request:**
 ```json
@@ -56,7 +56,7 @@ The LSP only needs to know which Python to use. All DAP config (program, args, j
 }
 ```
 
-The LSP waits until debugpy is actually accepting TCP connections before returning. This avoids a race where the editor tries to connect before debugpy is ready.
+The LSP waits until debugpy is accepting TCP connections before returning, avoiding a race where the editor connects before debugpy is ready.
 
 ### stopDebugSession {#LSPDEBUG-STOP}
 
@@ -88,7 +88,7 @@ Add `DebugSessionManager` to `LspServer` and handle `basilisk.startDebugSession`
 
 ## VS Code Extension {#LSPDEBUG-VSCODE}
 
-See [VSIX-SPEC.md VSIX-DAP](VSIX-SPEC.md#VSIX-DAP) for VS Code-specific DAP implementation.
+VS Code-specific DAP implementation: [VSIX-SPEC.md VSIX-DAP](VSIX-SPEC.md#VSIX-DAP).
 
 ## Attach Session Flow {#LSPDEBUG-ATTACH}
 
@@ -105,11 +105,11 @@ sequenceDiagram
     debugpy-->>Editor: Stopped events, variables, etc.
 ```
 
-For attach, the editor connects directly to the remote debugpy server. The LSP is not involved.
+For attach, the editor connects directly to the remote debugpy server; the LSP is not involved.
 
 ## Error Handling {#LSPDEBUG-ERRORS}
 
-When debugpy is not installed, the LSP returns a clear error:
+When debugpy is not installed, the LSP returns:
 
 ```json
 {
@@ -120,9 +120,9 @@ When debugpy is not installed, the LSP returns a clear error:
 }
 ```
 
-The editor extension surfaces this as a notification with an action button to run `pip install debugpy` in the terminal.
+The editor surfaces this as a notification with an action button to run `pip install debugpy` in the terminal.
 
-When the Python interpreter can't be found, the error tells the user exactly what was tried:
+When the Python interpreter can't be found, the error lists what was tried:
 
 ```json
 {
@@ -135,4 +135,4 @@ When the Python interpreter can't be found, the error tells the user exactly wha
 
 ## Python Version Targeting {#LSPDEBUG-PYTHON}
 
-Primary target: Python 3.12 (the canonical Basilisk version). debugpy uses `sys.settrace` (via pydevd) on 3.12, which is fully supported.
+Primary target Python 3.12 (canonical Basilisk version), where debugpy's `sys.settrace`/pydevd path is fully supported.

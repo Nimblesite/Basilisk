@@ -1,11 +1,10 @@
 # Basilisk — Next Steps Roadmap (Post-Launch) {#NEXTSTEPS}
 
-> **Nature of this doc**: This is an *aggregation* roadmap, not a detailed implementation plan. It
-> deliberately stays shallow and links out to the per-area specs and plans that carry the detail
-> (or flags where one doesn't exist yet). Treat it as the map, not the territory.
+> **Nature of this doc**: an *aggregation* roadmap, not a detailed plan. It stays shallow and links
+> out to the per-area specs/plans that carry the detail (or flags where one doesn't exist).
 >
 > **Source-of-truth specs**: `docs/specs/LSP-ARCHITECTURE-SPEC.md` (shared LSP/DAP/config/commands),
-> plus the per-editor specs (`VSIX-SPEC.md`, `ZED-SPEC.md`, `NEOVIM-SPEC.md`).
+> plus per-editor specs (`VSIX-SPEC.md`, `ZED-SPEC.md`, `NEOVIM-SPEC.md`).
 >
 > **Last surveyed**: 2026-05-30.
 
@@ -13,58 +12,45 @@
 
 ## How to read this doc {#NEXTSTEPS-HOW-TO-READ}
 
-Each section is a rough overview of an area of work, with the *current state* noted up front so we
-don't re-litigate what's already done. The actionable, divided-up checklist lives at the **bottom**
-of this doc under [Detailed TODO](#detailed-todo).
+Each section overviews an area with its *current state* up front; the actionable checklist lives at
+the bottom under [Detailed TODO](#detailed-todo). Every TODO item is tagged:
 
-Every TODO item is tagged so we know who picks it up:
-
-- **`[AGENT]`** — mechanical, verifiable, code/test/docs work an agent can drive end-to-end.
-- **`[HUMAN]`** — requires human discretion: accounts, secrets/tokens, money, brand voice, outreach
-  relationships, strategic prioritization, or native-speaker judgment.
+- **`[AGENT]`** — mechanical, verifiable code/test/docs work an agent can drive end-to-end.
+- **`[HUMAN]`** — requires human discretion: accounts, secrets/tokens, money, brand voice, outreach,
+  strategic prioritization, or native-speaker judgment.
 - **`[HYBRID]`** — agent drafts/prepares; human reviews, approves, or supplies credentials.
 
 ---
 
 ## Top 5 bang-for-buck — start here {#NEXTSTEPS-TOP-5}
 
-> Ranked by reward ÷ effort, for the goal of broadening IDE coverage and getting discovered.
-> Sequence matters: **1 → 2** (publish everywhere *before* you announce).
+> Ranked by reward ÷ effort. Sequence: **1 → 2** (publish everywhere *before* announcing).
 
-1. **Open VSX → Cursor & Windsurf** *(TODO B)* — **Effort: tiny. Reward: huge.** The VSIX is already
-   built; this is one `ovsx publish` CI step + an `OVSX_PAT`. Instantly puts Basilisk in the two
-   fastest-growing Python editors, and the site already promises them ("coming very soon"). Nothing
-   else has this ratio. **Do this first** so the launch can truthfully say "VS Code, Cursor, Windsurf."
+1. **Open VSX → Cursor & Windsurf** *(TODO B)* — one `ovsx publish` CI step + an `OVSX_PAT`; the VSIX
+   is already built. Puts Basilisk in Cursor & Windsurf (the site already promises them). **Do first**
+   so the launch can say "VS Code, Cursor, Windsurf."
 
-2. **Launch announcement blitz** *(TODO M)* — **Effort: low. Reward: highest for discovery.** ~14
-   installs = invisible. The product already ships on VS Code; the gap is distribution. One coordinated
-   push (Show HN + r/Python + r/rust + dev.to + X — "open-source Pylance replacement, strict-by-default,
-   in Rust") can drive thousands of installs + stars in 48h. Sequence right after #1 so arrivals can
-   install everywhere. The single biggest "people actually find out" lever.
+2. **Launch announcement blitz** *(TODO M)* — one coordinated push (Show HN + r/Python + r/rust +
+   dev.to + X). Sequence right after #1 so arrivals can install everywhere.
 
-3. **Get listed on the official Python typing conformance results** *(TODO H + G)* — **Effort: medium.
-   Reward: very high.** We're at 46.6% (68/146, per the unmodified python/typing scorer, every rule
-   enabled — no config, no "spec-conformance mode"); even at this
-   score, submitting results earns a spot on the [official python/typing scoreboard](https://github.com/python/typing/tree/main/conformance/results) the whole target audience watches, and every failing file we close lifts our standing. Correctness + credibility + organic discovery in one (the
-   Zuban/David Halter precedent proves it draws eyes).
+3. **Get listed on the official Python typing conformance results** *(TODO H + G)* — we're at 46.6%
+   (68/146, unmodified python/typing scorer, every rule enabled, no config). Even now, submitting
+   results earns a spot on the [official python/typing scoreboard](https://github.com/python/typing/tree/main/conformance/results), and every file we close lifts standing.
 
-4. **Ship Neovim + Zed for real** *(TODO A/B)* — **Effort: low-medium. Reward: high.** Both are ~95%
-   done. Neovim needs a tagged release + binary auto-download; Zed needs the registry-publish PR.
-   Cheaply covers two evangelist-heavy communities that amplify disproportionately.
+4. **Ship Neovim + Zed for real** *(TODO A/B)* — both ~95% done. Neovim needs a tagged release +
+   binary auto-download; Zed needs the registry-publish PR.
 
-5. **Publishable benchmark vs Pyright on large real codebases** *(TODO E)* — **Effort: medium. Reward:
-   high.** Turns "fast" from a claim into headline numbers — ammunition for #2's posts, the website,
-   and #3's story. Content leverage that compounds.
+5. **Publishable benchmark vs Pyright on large real codebases** *(TODO E)* — turns "fast" into
+   headline numbers feeding #2 and #3.
 
 ---
 
 ## 1. Editor releases (the critical path) {#NEXTSTEPS-EDITOR-RELEASES}
 
-This is the single highest-leverage block: the code is largely done, but **nothing actually ships
-to users yet**. Every extension is still stamped `0.0.0-PLACEHOLDER`, and `release.yml` builds the
-core binaries but has no marketplace-publish steps.
+The code is largely done, but **nothing ships to users yet**: every extension is stamped
+`0.0.0-PLACEHOLDER`, and `release.yml` builds the core binaries but has no marketplace-publish steps.
 
-**Shared release plumbing (do this first — everything else depends on it):**
+**Shared release plumbing (do first):**
 - Version stamping: replace `0.0.0-PLACEHOLDER` across `vscode-extension/`, `basilisk-zed/`,
   `basilisk.nvim/` with a single source of truth driven from a git tag.
 - Binary distribution: tagged GitHub releases with per-platform binaries (extensions download these
@@ -79,108 +65,99 @@ core binaries but has no marketplace-publish steps.
 | **VS Code** (`vscode-extension`) | Full feature set, 297 tests, marketplace metadata set | No `vsce` package/publish workflow; version stamp |
 | **Open VSX** (Cursor/Windsurf) | Same VSIX artifact as VS Code | No `ovsx` publish step — this is what makes us installable in Cursor & Windsurf |
 
-Each editor needs a **real-world smoke test on a clean machine** before its first publish — install
+Each editor needs a **real-world smoke test on a clean machine** before its first publish: install
 the published artifact (not the dev build), open a Python project, confirm diagnostics, hover,
-go-to-def, debug, and profile all light up. That's a human sign-off step.
+go-to-def, debug, and profile. A human sign-off step.
 
 ---
 
 ## 2. Debugging (DAP) — cross-editor verification {#NEXTSTEPS-DEBUGGING}
 
-Spec: `docs/specs/LSP-DEBUG-INTEGRATION-SPEC.md`. The Basilisk binary serves as both language server
-and debug adapter (embedded debugpy over TCP). Implementation exists and is tested in all three
-editors; the `loop_and_accumulate` race condition is fixed (`VSIX-DEBUG-LOOP-TIMEOUT-PLAN.md` — done).
+Spec: `docs/specs/LSP-DEBUG-INTEGRATION-SPEC.md`. The binary serves as language server and debug
+adapter (embedded debugpy over TCP); implemented and tested in all three editors; the
+`loop_and_accumulate` race is fixed (`VSIX-DEBUG-LOOP-TIMEOUT-PLAN.md` — done).
 
-Remaining work is **verification, not building**: confirm a breakpoint → step → inspect → continue
-loop works against a published artifact in each editor on a clean machine, and that graceful
-degradation holds when the editor's DAP client (e.g. nvim-dap) is absent.
+Remaining work is **verification, not building**: confirm breakpoint → step → inspect → continue
+against a published artifact in each editor on a clean machine, and that graceful degradation holds
+when the editor's DAP client (e.g. nvim-dap) is absent.
 
 ---
 
 ## 3. Profiling — smoothing off {#NEXTSTEPS-PROFILING}
 
 Spec: `docs/specs/LSP-PROFILING-SPEC.md`. py-spy is embedded; start/stop/snapshot requests, CLI,
-and per-editor UI (VS Code command, Zed `/profile`, Neovim heat map) all exist and have e2e tests.
+and per-editor UI (VS Code command, Zed `/profile`, Neovim heat map) exist and have e2e tests.
 
-This is mostly polish: the macOS elevation prompt was a sharp edge (handled in the debug plan), and
-the inline visualization / Speedscope hand-off wants a real-world pass for UX rough edges. Treat as
-"smoothing," not net-new feature work.
+Remaining is polish: the macOS elevation prompt (handled in the debug plan) and a real-world UX pass
+on inline visualization / Speedscope hand-off. Smoothing, not net-new work.
 
 ---
 
 ## 4. Competitive parity with Pyright / Pylance {#NEXTSTEPS-COMPETITIVE-PARITY}
 
-The bar to credibly displace Pylance is feature *and* correctness parity on the things people
-actually feel day to day. Rough priorities (refine with human judgment — see TODO):
+Priorities (refine with human judgment — see TODO):
 
-- **Conformance & correctness**: per the official `python/typing` scorer (run unmodified, pinned
-  commit `268d0c4e`), PEP conformance is currently **68/146 files PASS (46.6%, errors+warnings strictest)**, with **265 false
-  positives** and **0 missed required errors** — the checker catches every required error; every failing fixture is
-  false positives from strict-by-default house-style rules (require-annotation E0001/E0002/E0004, missing-@override
-  E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code where the spec treats unannotated
-  as inferred, not an error. The score is run with **every rule enabled** — no config, no `basilisk.json`, no
-  "spec-conformance mode" (no such mode exists any more — see CHKARCH-CONFORMANCE-MODE). *(History: the previous
-  honest score was 40.4% / 285 FPs at PR #183; PRs #184/#185/#191 inflated the reported number to a fake 100% by
-  writing a `basilisk.json` that disabled those 6 house rules at score time — the false positives were merely hidden,
-  not fixed. That disabling has been removed; disabling any conformance rule for scoring is now forbidden. Genuine
-  progress over that span was real but modest: 40.4% → 46.6%.)* Failing files
-  cluster in Protocols, Callables, TypeVarTuple, ParamSpec, TypedDicts. The only legitimate path to 100% is fixing
-  the checker so its strict defaults stop firing on spec-valid code — never by disabling a rule. FPs hurt credibility more
-  than missed cases — prioritize accordingly.
+- **Conformance & correctness**: per the official `python/typing` scorer (unmodified, pinned commit
+  `268d0c4e`), PEP conformance is **68/146 files PASS (46.6%, errors+warnings strictest)**, with
+  **265 false positives** and **0 missed required errors** — every failing fixture is false positives
+  from strict-by-default house-style rules (require-annotation E0001/E0002/E0004, missing-@override
+  E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code where the spec
+  treats unannotated as inferred. Run with **every rule enabled** — no config, no `basilisk.json`, no
+  "spec-conformance mode" (no such mode exists — see CHKARCH-CONFORMANCE-MODE). *(History: honest
+  score was 40.4% / 285 FPs at PR #183; PRs #184/#185/#191 inflated it to a fake 100% via a
+  `basilisk.json` disabling those 6 house rules at score time — now removed and forbidden; genuine
+  progress 40.4% → 46.6%.)* Failing files cluster in Protocols, Callables, TypeVarTuple, ParamSpec,
+  TypedDicts. The only legitimate path to 100% is fixing the checker so its strict defaults stop
+  firing — never by disabling a rule.
 - **Latency**: sub-10ms incremental checks are the promise (Salsa). Need a published benchmark vs.
-  Pyright/Pylance — see §5 for the scale/resource methodology.
-- **Editor UX parity**: completions, signature help, semantic tokens, inlay hints, organize-imports,
-  workspace symbol search — audit each against Pylance and note any gaps.
-- **Trust signals**: getting listed on the official
+  Pyright/Pylance — see §5 for methodology.
+- **Editor UX parity**: audit completions, signature help, semantic tokens, inlay hints,
+  organize-imports, workspace symbol search against Pylance; note gaps.
+- **Trust signals**: listing on the official
   [Python type-checker conformance results](https://github.com/python/typing/blob/main/conformance/results/results.html)
-  is a marketing-grade credibility win and a concrete conformance target.
+  is a concrete conformance target.
 
 ---
 
 ## 5. Scale & resource testing (large real-world codebases) {#NEXTSTEPS-SCALE-TESTING}
 
-We claim "fast" — we need to *prove* it on real, famously large Python codebases, not just our own
-fixtures. This is an objective-measurement exercise:
+Prove "fast" on real large codebases, not just our fixtures. An objective-measurement exercise:
 
-- **Corpus**: download a handful of well-known large codebases (e.g. CPython's `Lib/`, Django,
-  pandas, Home Assistant, SymPy, Salt, Sentry) and run full + incremental checks against each.
-- **Objective measurements**: peak RSS / memory high-water mark, CPU time, full-check wall-clock,
-  incremental-check latency distribution (p50/p95/p99), and any panics/crashes/hangs. Monitor
-  **CPU and memory** throughout — capture numbers, not vibes.
-- **Comparison**: run the same corpus through Pyright where feasible and tabulate side-by-side.
-- **Output**: a reproducible benchmark harness + a results table we can publish (feeds §4 and the
-  marketing material in §12). Fixtures must not be committed to the repo (they're large and external).
+- **Corpus**: well-known large codebases (e.g. CPython's `Lib/`, Django, pandas, Home Assistant,
+  SymPy, Salt, Sentry); run full + incremental checks against each.
+- **Measurements**: peak RSS, CPU time, full-check wall-clock, incremental-check latency
+  (p50/p95/p99), and any panics/crashes/hangs.
+- **Comparison**: run the same corpus through Pyright where feasible; tabulate side-by-side.
+- **Output**: a reproducible benchmark harness + a publishable results table (feeds §4 and §12).
+  Fixtures must not be committed to the repo (large, external).
 
 ---
 
 ## 6. Typing-philosophy survey (strict-by-default + the downgrade path) {#NEXTSTEPS-TYPING-PHILOSOPHY}
 
-The product promise is **strict-by-default with a graceful off-ramp** ("flick errors down to
-warnings, adopt incrementally"). This section is a *survey + proof* task, not new features:
+The promise is **strict-by-default with a graceful off-ramp**. A survey + proof task, not new features:
 
-- **Confirm the default really is strict.** Severity is encoded in the rule code prefix
-  (`BSK-E` = error, `BSK-W` = warning). Verify there is no hidden lenient default.
-- **Confirm the off-ramp works and is easy.** Downgrades exist at four levels: per-rule
+- **Confirm the default is strict.** Severity is encoded in the rule prefix (`BSK-E` = error,
+  `BSK-W` = warning). Verify no hidden lenient default.
+- **Confirm the off-ramp works.** Downgrades exist at four levels: per-rule
   (`[tool.basilisk.rules."BSK-E…"] = "warning"` in `pyproject.toml`), per-path, gradual-adoption file
   (`adoptions.toml`, auto-generated by mass-fix — see `docs/specs/LSP-MASS-AUTOFIX-SPEC.md`), and
-  `# type: ignore` line/file. Verify each path end-to-end.
-- **Prove it with tests.** We need explicit e2e tests that assert (a) a fresh project is strict by
-  default, and (b) each downgrade mechanism actually lowers severity. If those assertions don't
-  exist, add them. The deliverable is a short written survey ("is it strict AF, and is the
-  down-shift easy?") backed by named, passing tests.
+  `# type: ignore` line/file. Verify each end-to-end.
+- **Prove it with tests.** Add e2e tests asserting (a) a fresh project is strict by default, and
+  (b) each downgrade mechanism lowers severity. Deliverable: a short survey backed by named, passing
+  tests.
 
 ---
 
 ## 7. MCP server — semantic codebase navigation for agents {#NEXTSTEPS-MCP-SERVER}
 
-A first-class **Basilisk MCP server** that exposes the checker's semantic understanding (symbols,
-resolved types, signatures, call/import graph, type health) to AI agents, so an agent navigating a
-Python codebase *knows what's actually there* instead of grepping blind. This is a natural extension
-of the LSP intelligence we already compute — the same index, surfaced over MCP.
+A **Basilisk MCP server** exposing the checker's semantic understanding (symbols, resolved types,
+signatures, call/import graph, type health) to AI agents — the same index we compute for the LSP,
+surfaced over MCP.
 
-State: no Basilisk product MCP server exists yet (the `deslop` MCP used in this repo is a dev-time
-dedup tool, not this). Needs a spec + plan before building. Likely tools: semantic symbol search,
-"what type is this", "who calls this", "what implements this protocol", module/type-health summaries.
+State: no Basilisk product MCP server exists yet (the `deslop` MCP in this repo is a dev-time dedup
+tool, not this). Needs a spec + plan first. Likely tools: semantic symbol search, "what type is
+this", "who calls this", "what implements this protocol", module/type-health summaries.
 
 ---
 
@@ -189,98 +166,85 @@ dedup tool, not this). Needs a spec + plan before building. Likely tools: semant
 Specs/plans exist: `docs/specs/LSP-AI-SPEC.md` + `docs/plans/LSP-AI-PLAN.md` define a **model-agnostic**
 AI layer (deterministic features work without it; AI is optional and pluggable).
 
-Next step: wire the **nimblesite.ai agent** in as a provider behind the existing AI-fix hooks so it
-can drive autofixes (and, later, completions/refactoring), then back it with tests. Keep the
-model-agnostic contract intact — nimblesite.ai becomes *a* provider, not a hard dependency. Tests
-should cover the provider boundary with a deterministic/mocked backend so the suite stays
-hermetic, plus an opt-in integration test against the real agent.
+Next step: wire the **nimblesite.ai agent** as a provider behind the existing AI-fix hooks to drive
+autofixes (later, completions/refactoring), then back it with tests. Keep the model-agnostic contract
+intact — nimblesite.ai becomes *a* provider, not a hard dependency. Cover the provider boundary with
+a mocked backend (hermetic) plus an opt-in integration test against the real agent.
 
 ---
 
 ## 9. Finish near-complete plans (bang for buck) {#NEXTSTEPS-FINISH-PLANS}
 
-Several of these are close enough that finishing them is cheap and visibly improves the product (the
-conformance and false-positive work is larger — sized honestly below against the unmodified scorer):
-
-- **`CHECK-ELIMINATE-FALSE-POSITIVES.md`** (active): the real python/typing scorer (every rule enabled, no
-  config) reports **265 false positives** to drive down — all from basilisk's strict-by-default house-style rules
-  firing on spec-valid code. The only legitimate fix is making the checker smarter so those defaults stop firing on
-  inferred-not-an-error code; disabling a rule to hide them is forbidden (history: PRs #184/#185/#191 did exactly
-  that to fake a 100% score, now reverted). **Plus an open showstopper**: `generics_syntax_scoping` line-scans source text and misfires on
-  docstrings containing `class`/`def` prefixes + bracketed tokens (e.g. our own `[SPEC-ID]` convention).
-  Re-ground the rule on the AST. High credibility payoff.
-- **`CHECKER-PEP-CONFORMANCE-PLAN.md`** (active, 46.6% — 68/146, every rule enabled): clear the **78 failing files** toward the
-  conformance results listing.
+- **`CHECK-ELIMINATE-FALSE-POSITIVES.md`** (active): the real python/typing scorer (every rule
+  enabled, no config) reports **265 false positives** to drive down — all from strict-by-default
+  house-style rules firing on spec-valid code. The only legitimate fix is making the checker smarter;
+  disabling a rule to hide them is forbidden (history: PRs #184/#185/#191 did exactly that to fake a
+  100% score, now reverted). **Plus an open showstopper**: `generics_syntax_scoping` line-scans
+  source text and misfires on docstrings containing `class`/`def` prefixes + bracketed tokens (e.g.
+  our `[SPEC-ID]` convention). Re-ground the rule on the AST.
+- **`CHECKER-PEP-CONFORMANCE-PLAN.md`** (active, 46.6% — 68/146, every rule enabled): clear the
+  **78 failing files** toward the conformance results listing.
 - **`CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md`** (~40%): the E0149 fix above is part of this; finish
   Phase 4 (wire the no-line-scanning lint into CI so the anti-pattern can't return).
-- **`LSP-STUBBING-PLAN.md`** (~95%, Phase 5 deferred): essentially shippable; decide whether the
-  deferred Salsa perf work is worth doing now or later.
+- **`LSP-STUBBING-PLAN.md`** (~95%, Phase 5 deferred): shippable; decide whether the deferred Salsa
+  perf work ships now or later.
 
 ---
 
 ## 10. IntelliJ / PyCharm (JetBrains) {#NEXTSTEPS-JETBRAINS}
 
-No plugin code exists; the website already says "coming soon." This is the largest *net-new* effort
-on the list and a strategic call: the JetBrains/PyCharm Python audience is huge, but a JetBrains
-plugin is a real project (Kotlin/Java plugin, LSP4IJ or custom client, JetBrains Marketplace
-process). The LSP-first architecture helps — much of the value is already in the server.
+No plugin code exists; the website says "coming soon." The largest *net-new* effort and a strategic
+call: the JetBrains/PyCharm audience is huge, but a JetBrains plugin is a real project (Kotlin/Java
+plugin, LSP4IJ or custom client, Marketplace process). The LSP-first architecture helps — much of
+the value is already in the server.
 
-**Decision needed (human):** commit to a JetBrains plugin now, or defer until the other editors are
-shipped and stable? If we go: start with a spec + plan doc (`docs/specs/JETBRAINS-SPEC.md`,
-`docs/plans/JETBRAINS-PLAN.md`) mirroring the existing per-editor docs.
+**Decision needed (human):** commit now, or defer until the other editors ship and stabilize? If go:
+start with `docs/specs/JETBRAINS-SPEC.md` + `docs/plans/JETBRAINS-PLAN.md` mirroring the per-editor docs.
 
 ---
 
 ## 11. Internationalization & translation {#NEXTSTEPS-I18N}
 
-**Current state:** the Eleventy site now runs the `eleventy-plugin-techdoc` i18n system with
-`features.i18n: true` (`defaultLanguage: en`, `languages: [en, zh]`). The existing Simplified-Chinese
-content under `website/src/zh/` is folded into it and ships **in the standard way**: `<html lang>`,
-a reciprocal `hreflang` cluster (en/zh/x-default), per-locale canonicals, `og:locale`, a bidirectional
-language switcher on every page, translated nav/footer strings (`src/_data/i18n.json`), and all `/zh/`
-URLs in the sitemap. What remains is **content discipline, not plumbing**: zh pages are still authored
-as parallel files that can drift from English, so we need a drift/staleness guard and native-speaker
-review before any locale is treated as authoritative — and the same wiring extended to ja and pt-BR.
-The product itself (diagnostic messages, CLI output) is still English-only.
+**Current state:** the Eleventy site runs the `eleventy-plugin-techdoc` i18n system with
+`features.i18n: true` (`defaultLanguage: en`, `languages: [en, zh]`). The Simplified-Chinese content
+under `website/src/zh/` is folded in and ships standard: `<html lang>`, a reciprocal `hreflang`
+cluster (en/zh/x-default), per-locale canonicals, `og:locale`, a bidirectional language switcher,
+translated nav/footer strings (`src/_data/i18n.json`), and all `/zh/` URLs in the sitemap. Remaining
+is **content discipline, not plumbing**: zh pages are parallel files that can drift, so we need a
+drift/staleness guard and native-speaker review before any locale is authoritative — and the same
+wiring extended to ja and pt-BR. The product (diagnostic messages, CLI output) is still English-only.
 
 **Target languages (ranked by community size × English-proficiency gap):**
 
-1. **Chinese (Simplified)** — non-negotiable #1. Largest community, low English proficiency. (Partial
-   content already exists in `/zh`.)
-2. **Japanese** — smaller community, but low and *declining* English proficiency; an English-only
-   site genuinely locks them out.
-3. **Portuguese (Brazil)** — large, very active Python scene (Python Brasil), low English proficiency.
-4. **Spanish** — large aggregate market at moderate proficiency. **Stretch / next after the top 3.**
+1. **Chinese (Simplified)** — #1. Largest community, low English proficiency. (Partial content in `/zh`.)
+2. **Japanese** — smaller community, low and *declining* English proficiency.
+3. **Portuguese (Brazil)** — large, active Python scene (Python Brasil), low English proficiency.
+4. **Spanish** — large aggregate market, moderate proficiency. **Stretch / after the top 3.**
 
 **Scope (three surfaces — increasing difficulty):**
 
-- **Website → top 3** (zh-Hans, ja, pt-BR). First build a real i18n system in Eleventy and fold the
-  existing `/zh` content into it, *then* add ja and pt-BR.
+- **Website → top 3** (zh-Hans, ja, pt-BR). Fold the existing `/zh` content into the i18n system,
+  *then* add ja and pt-BR.
 - **Extension UI → top 3.** Investigate VS Code's `package.nls.<locale>.json` localization for command
-  titles/settings descriptions; assess whether Zed/Neovim have a comparable story (likely limited —
-  report findings rather than assuming).
-- **LSP / CLI output → top 3 (the hard, high-value one).** Localize the actual **diagnostic messages
-  and CLI text** emitted by the Rust core. This touches every `BSK-E####`/`BSK-W####` message string,
-  so it needs a message-catalog / localization layer in the checker (locale resolved from config or
-  `LANG`), keyed by diagnostic code. Significant but it's what makes Basilisk genuinely usable by
-  non-English developers — the diagnostics are the product.
+  titles/settings descriptions; assess Zed/Neovim (likely limited — report findings).
+- **LSP / CLI output → top 3 (the hard, high-value one).** Localize the **diagnostic messages and CLI
+  text** from the Rust core. Touches every `BSK-E####`/`BSK-W####` message string, so it needs a
+  message-catalog / localization layer (locale from config or `LANG`), keyed by diagnostic code.
 
-Machine-translate every surface as a first pass, but **each locale needs native-speaker review
-before it goes live** — especially diagnostics, where wording precision matters.
+Machine-translate each surface as a first pass, but **each locale needs native-speaker review before
+go-live** — especially diagnostics, where wording precision matters.
 
 ---
 
 ## 12. Marketing & community {#NEXTSTEPS-MARKETING}
 
-Assets that exist: launch blog post (`website/src/blog/introducing-basilisk.md`), comparison/feature
-docs, READMEs, OG image + logo. What's missing is *distribution*.
-
-Rough plan (most of this is human-led — voice, accounts, timing, relationships, budget):
-- **Owned content**: launch blog post polish; follow-up technical posts (the Rust/Salsa
-  architecture, the strict-by-default philosophy, the scale-benchmark numbers from §5, "we got
-  listed on the conformance results").
+Existing assets: launch blog post (`website/src/blog/introducing-basilisk.md`), comparison/feature
+docs, READMEs, OG image + logo. What's missing is *distribution* (mostly human-led — voice, accounts,
+timing, relationships, budget):
+- **Owned content**: polish the launch blog post; follow-up technical posts (Rust/Salsa architecture,
+  strict-by-default philosophy, scale-benchmark numbers from §5, conformance-results listing).
 - **Syndication**: X threads, Reddit (r/Python, r/rust), [dev.to](https://dev.to) cross-posts,
-  Hacker News (Show HN). An agent can *draft* these; a human owns posting, voice, and timing.
+  Hacker News (Show HN). An agent drafts; a human owns posting, voice, timing.
 - **Community outreach**: Python Discord/forums, Python Brasil, JP Python communities (ties into i18n).
 - **Paid**: paid UGC / sponsorships — budget and vendor selection are human calls.
 

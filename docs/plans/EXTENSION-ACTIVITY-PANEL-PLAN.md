@@ -4,17 +4,16 @@
 
 ## Status {#EXTACT-PLAN-STATUS}
 
-**Core panels are SHIPPED across all editors.** The three LSP custom commands
+Core panels are SHIPPED across all editors. The three LSP custom commands
 (`basilisk/workspaceModules`, `basilisk/typeHealth`, `basilisk/moduleChanged`) are
-implemented in `crates/basilisk-lsp/src/server/activity_panel/`. VS Code panels
-(`vscode-extension/src/module-explorer.ts`, type-health, basilisk-info; views +
-walkthrough + icon registered in `package.json`), Zed slash commands
+implemented in `crates/basilisk-lsp/src/server/activity_panel/`. Live with e2e tests:
+VS Code panels (`vscode-extension/src/module-explorer.ts`, type-health, basilisk-info;
+views + walkthrough + icon in `package.json`), Zed slash commands
 (`/modules`, `/symbols`, `/health`, `/basilisk` in `basilisk-zed/src/logic.rs`),
-and Neovim modules (`:BasiliskModules`, `:BasiliskHealth`, `:BasiliskInfo`) are all
-live with e2e tests.
+and Neovim modules (`:BasiliskModules`, `:BasiliskHealth`, `:BasiliskInfo`).
 
-What remains is **(1) making the Feature Status toggles real**, **(2)
-performance/accessibility polish**, and a few cross-editor follow-ups.
+Remaining: **(1) make the Feature Status toggles real**, **(2)
+performance/accessibility polish**, and cross-editor follow-ups.
 
 ---
 
@@ -24,15 +23,15 @@ performance/accessibility polish**, and a few cross-editor follow-ups.
 > [EXTACT-INFO-FEATURE-STATUS](../specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-FEATURE-STATUS).
 
 **Background (audit, 2026-05-30).** The Feature Status section shipped eight
-toggles. Six were no-ops: the extension wrote the setting via
-`basilisk.toggleFeature`, but nothing on either side read it back. Root cause:
-the LSP server's `did_change_configuration`
+toggles; six were no-ops — the extension wrote the setting via
+`basilisk.toggleFeature`, but nothing read it back. Root cause: the LSP server's
+`did_change_configuration`
 ([`crates/basilisk-lsp/src/server/init.rs`](../../crates/basilisk-lsp/src/server/init.rs))
-only parses `analysisMode` and `testExplorer.*`; every other forwarded field
+parses only `analysisMode` and `testExplorer.*`; every other forwarded field
 (`inlayHints.*`, `ruff.*`, `uv.*`) is silently dropped. The no-op toggles were
-**removed** from the panel; only `Type Checking` (`basilisk.enabled`, gates
-diagnostic publication client-side) and `uv Integration` (`basilisk.uv.enabled`,
-gates the uv surface in the panel) remain.
+**removed**; only `Type Checking` (`basilisk.enabled`, gates diagnostic
+publication client-side) and `uv Integration` (`basilisk.uv.enabled`, gates the
+uv surface in the panel) remain.
 
 A toggle returns to the panel ONLY when both are true:
 1. Flipping the setting produces a real, observable effect that matches the label.

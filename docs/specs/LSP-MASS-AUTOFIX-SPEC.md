@@ -2,14 +2,14 @@
 
 Two features for adopting strict-by-default checking on existing code:
 
-1. **Mass Autofix** — apply every safe autofix in one action (single diagnostic, file, or entire module).
-2. **Gradual Adoption Mode** — after autofixing everything possible, demote remaining errors to warnings *per-file* so the user can fix issues incrementally without being blocked.
+1. **Mass Autofix** — apply every safe autofix in one action (single diagnostic, file, or module).
+2. **Gradual Adoption Mode** — after autofixing, demote remaining errors to warnings *per-file* for incremental fixing without being blocked.
 
 ## Mass Autofix {#AUTOFIX-MASS}
 
 ### Scopes {#AUTOFIX-MASS-OVERVIEW}
 
-Mass Autofix applies all applicable fixes in a single action at three scopes:
+Applies all applicable fixes in one action at three scopes:
 
 | Scope | Trigger | What it does |
 |---|---|---|
@@ -26,10 +26,10 @@ Every autofix is classified into one of two safety tiers:
 | **Safe** | `SafeFix` | Guaranteed not to change runtime semantics. Can be applied without review. | Adding `: int` to a parameter where the type is unambiguously inferred from usage |
 | **Unsafe** | `UnsafeFix` | Might change semantics or could be wrong. Requires review. | Inserting `-> None` on a function that might actually return something in an unreachable branch |
 
-When the user triggers Mass Autofix, they choose one of:
+The user chooses one of:
 
 - **Safe only** (default) — applies only `SafeFix` items.
-- **All fixes** — applies both `SafeFix` and `UnsafeFix` items, with each unsafe fix marked in a review list.
+- **All fixes** — applies `SafeFix` and `UnsafeFix`, each unsafe fix marked in a review list.
 
 ### Fix Metadata {#AUTOFIX-METADATA}
 
@@ -66,9 +66,9 @@ pub enum FixSource {
 
 ### VS Code Integration {#AUTOFIX-MASS-VSCODE}
 
-The extension exposes Mass Autofix through:
+Exposed through:
 
-1. **Code Actions** — when the cursor is on a diagnostic, the lightbulb menu shows "Fix this", "Fix all in file (safe)", "Fix all in file (all)".
+1. **Code Actions** — on a diagnostic, the lightbulb shows "Fix this", "Fix all in file (safe)", "Fix all in file (all)".
 2. **Command Palette**:
    - `Basilisk: Fix All (Safe) in File`
    - `Basilisk: Fix All in File`
@@ -87,13 +87,13 @@ When multiple fixes target overlapping text ranges in the same file:
 
 ### Undo {#AUTOFIX-UNDO}
 
-Mass Autofix is a single undo unit in VS Code. One `Ctrl+Z` reverts all changes from the batch.
+Mass Autofix is a single undo unit in VS Code — one `Ctrl+Z` reverts the whole batch.
 
 ---
 
 ## Gradual Adoption Mode {#AUTOFIX-ADOPTION}
 
-After Mass Autofix runs, diagnostics that cannot be auto-fixed are demoted from error to warning **per-file**, so the user can fix them incrementally instead of being blocked.
+After Mass Autofix runs, diagnostics that cannot be auto-fixed are demoted from error to warning **per-file** for incremental fixing.
 
 ### How It Works {#AUTOFIX-ADOPTION-FLOW}
 
@@ -123,10 +123,10 @@ demoted = ["BSK-E0001", "BSK-E0002"]
 
 ### Behavior Rules {#AUTOFIX-ADOPTION-RULES}
 
-- **New code is still strict.** If you create a new file, all rules are errors. Adoption only applies to files that have been explicitly adopted.
-- **New violations in adopted files are still errors.** If an adopted file has `BSK-E0001` demoted, and the user adds a *new* function with a missing type annotation, that new `BSK-E0001` is still a warning (the demotion is per-code-per-file, not per-instance). This is intentional — the user should not be blocked.
-- **Fixing all instances of a demoted code auto-removes the override.** When Basilisk detects that a file has zero remaining instances of a demoted code, it removes that code from the adoption file. The file progressively "graduates" to full strictness.
-- **Manual un-adoption.** The user can remove entries from `adoptions.toml` manually or via `Basilisk: Un-adopt File` to restore full strictness.
+- **New code is still strict.** Adoption applies only to explicitly adopted files; new files are all errors.
+- **New violations in adopted files stay demoted.** Demotion is per-code-per-file, not per-instance: a new `BSK-E0001` in a file with `BSK-E0001` demoted is still a warning.
+- **Fixing all instances auto-removes the override.** When a file has zero remaining instances of a demoted code, Basilisk removes that code from the adoption file — the file "graduates" to full strictness.
+- **Manual un-adoption.** Remove entries from `adoptions.toml` manually or via `Basilisk: Un-adopt File`.
 
 ### VS Code Integration {#AUTOFIX-ADOPTION-VSCODE}
 
@@ -141,15 +141,15 @@ demoted = ["BSK-E0001", "BSK-E0002"]
 
 ## AI Typing Hooks {#AUTOFIX-AI}
 
-For a diagnostic that cannot be deterministically autofixed (typically missing type information), AI Typing feeds the analyzer context (AST, inferred types, call graph, usage patterns, surrounding code) to an AI model that returns a candidate fix. AI-assisted fixes are always `Unsafe` and require confirmation.
+For a diagnostic that cannot be deterministically autofixed (typically missing type information), AI Typing feeds analyzer context (AST, inferred types, call graph, usage patterns, surrounding code) to an AI model that returns a candidate fix. AI-assisted fixes are always `Unsafe` and require confirmation.
 
-> The AI provider abstraction, request/response types, and implementation plan live in [LSP-AI-SPEC.md §LSPAI-FEATURE-MASSAUTOFIX](LSP-AI-SPEC.md#LSPAI-FEATURE-MASSAUTOFIX). This section documents only the Mass Autofix ↔ AI integration point.
+> The AI provider abstraction, request/response types, and plan live in [LSP-AI-SPEC.md §LSPAI-FEATURE-MASSAUTOFIX](LSP-AI-SPEC.md#LSPAI-FEATURE-MASSAUTOFIX). This section documents only the Mass Autofix ↔ AI integration point.
 
 ### Scope {#AUTOFIX-AI-SCOPE}
 
-AI Typing implementation is out of scope for the Mass Autofix / Gradual Adoption work. This spec requires only the AI-ready seams in the fix pipeline:
+AI Typing implementation is out of scope here. This spec requires only the AI-ready seams in the fix pipeline:
 
 1. The `FixSource::AiAssisted` variant in the fix metadata.
 2. The `AiTypingProvider` trait definition.
-3. A no-op default implementation that returns `None` for all requests.
+3. A no-op default implementation returning `None` for all requests.
 4. The `AiTypingRequest` / `AiTypingResponse` structures.

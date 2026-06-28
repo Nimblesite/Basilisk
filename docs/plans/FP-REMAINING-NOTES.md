@@ -8,8 +8,7 @@ must add ZERO new `missed` and flip NO file PASS→FAIL. Verify with
 
 ## Landed (do not re-investigate) {#FPNOTES-LANDED}
 
-These three originally-listed items are implemented; kept only as a pointer so they
-are not re-opened:
+These three items are implemented; kept as a pointer so they are not re-opened:
 
 - **literals_semantics.py `L[` Literal-alias parsing** — `parse_complex_annotation`
   (`crates/basilisk-checker/src/types_parsing.rs`) now accepts the `l[` prefix

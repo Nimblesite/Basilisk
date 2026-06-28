@@ -3,25 +3,25 @@
 # arch: arm64
 # os: Darwin 25.5.0
 # cores: 14
-# tools: basilisk=basilisk 0.0.0-dev+gadef9611-dirty, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0, zuban=zuban 0.9.0
+# tools: basilisk=basilisk 0.0.0-dev+g28ed754c-dirty, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0, zuban=zuban 0.9.0
 # runs: 10 (hyperfine mean wall-clock, milliseconds)
-# generated: 2026-06-28T20:59:27+1000
-# note: <tool>_ms = COLD full-file CLI check from scratch. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly/zuban keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures); zuban runs as `zuban mypy --strict` for the same reason (its default `zuban check` mode skips these strictness rules).
+# generated: 2026-06-28T21:46:52+1000
+# note: <tool>_ms = COLD full-file CLI check from scratch. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. zuban is also cold-only but its mypy mode DOES reuse a ./.mypy_cache when present (no flag disables it), so we wipe ./.mypy_cache before every timed run to keep the measurement cold (cold==warm anyway on these single-file fixtures, ~31ms). mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures); zuban runs as `zuban mypy --strict` for the same reason (its default `zuban check` mode skips these strictness rules).
 fixture,basilisk_ms,basilisk-warm_ms,pyright_ms,mypy_ms,mypy-warm_ms,ty_ms,pyrefly_ms,zuban_ms
-e0001_missing_param,108.9,19.9,535.2,633.3,163.3,30.8,108.7,33.0
-e0002_missing_return,179.9,20.5,574.6,616.4,164.0,38.0,111.9,35.2
-e0010_unresolved_import,134.2,73.8,475.9,640.7,160.2,364.8,764.4,302.3
-e0011_explicit_any,247.2,23.6,513.9,600.9,162.0,31.3,106.2,30.7
-e0012_argument_type_mismatch,166.2,57.4,653.3,610.7,165.3,55.2,113.7,47.5
-e0014_assignment_incompatibility,102.9,63.1,591.9,578.4,158.9,49.6,109.3,30.2
-e0016_incompatible_override,141.7,19.9,654.8,611.4,162.3,54.4,115.9,30.5
-e0018_undefined_name,273.5,144.2,505.0,625.0,166.8,50.4,541.7,34.6
-e0022_unhashable_dict_key,238.8,111.6,531.4,606.6,159.5,37.2,99.8,31.6
-e0023_nonexhaustive_match,128.0,40.9,525.0,594.5,159.3,24.3,106.6,26.4
-e0026_typevar_single_constraint,137.2,81.1,722.0,590.7,163.0,39.6,107.9,33.2
-e0036_classvar_misuse,285.0,106.8,610.1,619.0,163.8,56.9,130.0,32.1
-e0038_typeddict_readonly_inheritance,137.9,31.6,676.6,568.1,161.1,37.5,112.9,25.2
-e0050_newtype_name_mismatch,140.5,90.0,726.4,639.3,167.0,45.2,118.1,36.6
-e0054_final_reassignment,52.7,29.1,479.9,580.8,171.3,28.6,97.9,24.5
-e0056_readonly_typeddict_mutation,89.0,32.7,628.8,573.0,162.5,41.5,106.8,25.7
-e0093_typeddict_invalid_key,84.0,29.9,655.1,583.2,162.6,38.6,113.2,26.9
+e0001_missing_param,107.3,20.6,513.4,628.2,167.6,32.6,108.9,32.0
+e0002_missing_return,177.6,20.3,578.5,630.8,166.8,37.9,113.5,35.2
+e0010_unresolved_import,135.2,73.1,494.2,652.0,165.6,376.9,779.4,303.5
+e0011_explicit_any,247.3,18.7,532.4,618.5,166.2,32.5,108.8,30.9
+e0012_argument_type_mismatch,167.3,59.0,673.4,637.7,171.9,54.9,116.1,47.7
+e0014_assignment_incompatibility,104.2,64.4,609.7,604.2,169.1,51.3,116.2,30.7
+e0016_incompatible_override,147.9,20.4,664.2,632.5,169.5,55.7,118.2,30.7
+e0018_undefined_name,277.3,148.4,510.1,666.8,169.3,51.3,547.9,33.8
+e0022_unhashable_dict_key,239.0,115.6,547.6,651.2,166.0,38.0,106.3,32.6
+e0023_nonexhaustive_match,131.9,42.8,552.9,632.6,162.2,24.8,110.6,26.9
+e0026_typevar_single_constraint,138.9,83.7,736.7,616.3,168.1,39.4,114.2,34.4
+e0036_classvar_misuse,288.6,106.6,616.0,627.4,168.2,58.0,136.9,31.8
+e0038_typeddict_readonly_inheritance,140.0,33.2,690.4,587.9,163.6,38.5,115.0,27.5
+e0050_newtype_name_mismatch,142.4,93.3,724.1,634.2,171.2,45.1,124.4,37.3
+e0054_final_reassignment,53.2,29.7,494.5,603.2,168.4,27.3,101.0,23.0
+e0056_readonly_typeddict_mutation,90.2,34.5,721.2,591.9,172.4,41.5,109.2,25.8
+e0093_typeddict_invalid_key,89.6,30.8,740.7,601.8,169.2,36.0,108.2,26.4

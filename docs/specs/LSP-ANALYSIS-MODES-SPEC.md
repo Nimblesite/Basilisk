@@ -7,7 +7,7 @@
 
 ## Analysis Modes {#ANALYSIS-MODES}
 
-Three modes govern which files are analysed and how symbol information flows between them.
+Three modes govern which files are analysed and how symbol information flows.
 
 ### openFilesOnly {#ANALYSIS-OPEN}
 
@@ -19,7 +19,7 @@ Three modes govern which files are analysed and how symbol information flows bet
 | **Startup scan** | None |
 | **Performance cost** | Minimal — only active documents are analysed |
 
-Diagnostics are published only for open documents. Suitable for large monorepos where full workspace analysis is too expensive.
+Diagnostics published only for open documents. For large monorepos where full workspace analysis is too expensive.
 
 ### wholeModule {#ANALYSIS-WHOLE}
 
@@ -43,7 +43,7 @@ Default mode. Equivalent to Pyright's [`diagnosticMode: workspace`](https://micr
 | **Startup scan** | Full workspace scan + import graph construction |
 | **Performance cost** | Highest |
 
-`crossModule` enables features that depend on knowing what a symbol *is* across file boundaries: cross-file Go to Definition, cross-file Find References, cross-file Rename, and auto-import suggestions.
+`crossModule` enables features that need cross-boundary symbol identity: cross-file Go to Definition, Find References, Rename, and auto-import suggestions.
 
 | Concern | `wholeModule` | `crossModule` |
 |---------|---------------|---------------|
@@ -70,11 +70,11 @@ Default mode. Equivalent to Pyright's [`diagnosticMode: workspace`](https://micr
 | `"wholeModule"` | Analyse all workspace files (default) |
 | `"crossModule"` | Cross-file import graph analysis |
 
-Default: `"wholeModule"`. Basilisk is strict by default — the user must explicitly opt down to `openFilesOnly`.
+Default: `"wholeModule"`. The user must explicitly opt down to `openFilesOnly`.
 
 ### Config Priority {#ANALYSIS-CONFIG-PRI}
 
-Config resolution order (highest wins):
+Resolution order (highest wins):
 
 1. Editor workspace setting (`basilisk.analysisMode`)
 2. `analysisMode` in `basilisk.json`
@@ -85,7 +85,7 @@ Config resolution order (highest wins):
 
 ## Workspace Index {#ANALYSIS-INDEX}
 
-`wholeModule` and `crossModule` modes both require a **workspace index** — a persistent, process-scoped data structure that holds the resolved state of every file in the workspace.
+`wholeModule` and `crossModule` both require a **workspace index** — a process-scoped structure holding the resolved state of every workspace file.
 
 ### Structure {#ANALYSIS-INDEX-STRUCT}
 
@@ -118,13 +118,13 @@ When invalidated: re-parse, re-resolve, re-check, update `source_hash` and `diag
 
 ### Open-File Priority {#ANALYSIS-INDEX-OPEN}
 
-When a file is open in the editor, the in-memory text (from `didOpen`/`didChange`) is authoritative. File-watcher events for the same path are silently ignored as long as `is_open == true`. When closed (`didClose`), on-disk text is re-read to rebuild the `FileEntry`.
+For an open file, the in-memory text (`didOpen`/`didChange`) is authoritative; file-watcher events for that path are ignored while `is_open == true`. On `didClose`, on-disk text is re-read to rebuild the `FileEntry`.
 
 ---
 
 ## Import Graph {#ANALYSIS-GRAPH}
 
-The import graph is the core data structure that distinguishes `crossModule` from `wholeModule`.
+The import graph is what distinguishes `crossModule` from `wholeModule`.
 
 ### Structure {#ANALYSIS-GRAPH-STRUCT}
 
@@ -142,15 +142,15 @@ pub struct ImportGraph {
 
 ### Topological Ordering {#ANALYSIS-GRAPH-TOPO}
 
-`topological_order()` uses Kahn's algorithm to produce an imported-first ordering. Files are analysed in this order so that imported symbols are available before importers are checked.
+`topological_order()` uses Kahn's algorithm for imported-first ordering, so imported symbols are available before importers are checked.
 
 ### Cycle Detection {#ANALYSIS-GRAPH-CYCLES}
 
-`detect_cycles()` uses DFS with white/gray/black coloring. Detected cycles produce an `ImportCycle` diagnostic. Cycles are broken for analysis ordering — one edge is arbitrarily dropped to allow analysis to proceed.
+`detect_cycles()` uses DFS with white/gray/black coloring. Detected cycles produce an `ImportCycle` diagnostic and are broken for ordering — one edge is arbitrarily dropped.
 
 ### Transitive Importers {#ANALYSIS-GRAPH-TRANS}
 
-`transitive_importers()` performs BFS over reverse edges. Used for invalidation cascading: when a file changes, all transitive importers may need re-analysis.
+`transitive_importers()` performs BFS over reverse edges, used for invalidation cascading: when a file changes, all transitive importers may need re-analysis.
 
 ---
 
@@ -176,45 +176,39 @@ Each `ResolvedModule` carries `imported_symbols: HashMap<String, ExternalSymbol>
 
 `populate_cross_module_symbols()` in `cross_module.rs`:
 
-1. **Export extraction pass**: For each file, `extract_exports()` collects all public symbols (functions, classes, module-level variables) and builds their signatures via `build_function_signature()`.
-2. **Import resolution pass**: For each file's `ImportInfo`, look up the target file's exports and populate `imported_symbols` in the importer's `ResolvedModule`.
+1. **Export extraction**: per file, `extract_exports()` collects public symbols (functions, classes, module-level variables) and builds signatures via `build_function_signature()`.
+2. **Import resolution**: per file's `ImportInfo`, look up the target's exports and populate `imported_symbols` in the importer's `ResolvedModule`.
 
 ### Invalidation Cascading {#ANALYSIS-SYMBOLS-INVAL}
 
-When a file changes — whether on disk (file watcher) or in the editor
-(`didChange` / `didSave` on an **open** file) — its exports are diffed:
+When a file changes — on disk (file watcher) or in the editor (`didChange`/`didSave` on an **open** file) — its exports are diffed:
 
 1. Re-analyse the changed file.
 2. `exported_symbol_names()` compares old and new exports.
-3. If exports changed, re-resolve the workspace and re-check importers
-   (`reresolve_imports_and_recheck`) so their cross-module diagnostics refresh
-   without a reload. The watcher path uses `reload_and_diff_exports`; the
-   open-file path uses `set_open_refresh_dependents` — the watcher's
-   `reload_from_disk` skips open files, so editing an open module would
-   otherwise leave dependents stale (GitHub #56).
-4. If exports unchanged, skip the cascade (most edits don't change public API).
+3. If exports changed, re-resolve the workspace and re-check importers (`reresolve_imports_and_recheck`) so cross-module diagnostics refresh without a reload. Watcher path uses `reload_and_diff_exports`; open-file path uses `set_open_refresh_dependents` — the watcher's `reload_from_disk` skips open files, so editing an open module would otherwise leave dependents stale (GitHub #56).
+4. If exports unchanged, skip the cascade.
 
 ---
 
 ## Cross-File LSP Features {#ANALYSIS-CROSSLSP}
 
-Features enabled by `crossModule` that are unavailable or degraded in `wholeModule`:
+Features enabled by `crossModule`, unavailable or degraded in `wholeModule`:
 
 ### Cross-File Go to Definition {#ANALYSIS-CROSSLSP-GOTODEF}
 
-Follow `ImportInfo.resolved_path`, find the symbol's `name_span` in the target `ResolvedModule`. Re-exports are followed across the import chain.
+Follow `ImportInfo.resolved_path` to the symbol's `name_span` in the target `ResolvedModule`; re-exports are followed across the import chain.
 
 ### Cross-File Find All References {#ANALYSIS-CROSSLSP-REFS}
 
-Use import graph reverse edges. For a symbol defined in file A, search all importers of A for usage of that symbol name.
+Use import-graph reverse edges: for a symbol defined in file A, search all importers of A for usage of that name.
 
 ### Cross-File Rename {#ANALYSIS-CROSSLSP-RENAME}
 
-Produces a multi-file `WorkspaceEdit`: definition site + import sites (`from module import old_name` → `from module import new_name`) + all usage sites in importing files.
+Produces a multi-file `WorkspaceEdit`: definition site + import sites (`from module import old_name` → `new_name`) + all usage sites in importing files.
 
 ### Auto-Import Completion {#ANALYSIS-CROSSLSP-IMPORT}
 
-`SymbolIndex` (built in `auto_import.rs`) indexes all workspace exports. When the user types an unknown symbol, completion suggests imports with `additionalTextEdits` that insert the import statement.
+`SymbolIndex` (`auto_import.rs`) indexes all workspace exports. Typing an unknown symbol suggests imports with `additionalTextEdits` that insert the import statement.
 
 ---
 
@@ -222,15 +216,15 @@ Produces a multi-file `WorkspaceEdit`: definition site + import sites (`from mod
 
 ### openFilesOnly Startup {#ANALYSIS-STARTUP-OPEN}
 
-No workspace scan. The server waits passively for `didOpen` notifications.
+No workspace scan; the server waits for `didOpen` notifications.
 
 ### wholeModule Startup {#ANALYSIS-STARTUP-WHOLE}
 
-On `initialized`: all `.py` / `.pyi` files under workspace roots are collected (respecting `include`/`exclude`), analysed in parallel, diagnostics published. Progress reported via `window/workDoneProgress`.
+On `initialized`: all `.py`/`.pyi` files under workspace roots are collected (respecting `include`/`exclude`), analysed in parallel, diagnostics published. Progress via `window/workDoneProgress`.
 
 ### crossModule Startup {#ANALYSIS-STARTUP-CROSS}
 
-Same as `wholeModule`, with an additional pass: the import graph is built from `ImportInfo`, files are topologically sorted, and `populate_cross_module_symbols()` resolves inter-module references. Files whose diagnostics change are re-checked and re-published.
+Same as `wholeModule` plus: build the import graph from `ImportInfo`, topologically sort files, and run `populate_cross_module_symbols()` to resolve inter-module references. Files whose diagnostics change are re-checked and re-published.
 
 ---
 
@@ -238,21 +232,21 @@ Same as `wholeModule`, with an additional pass: the import graph is built from `
 
 ### didChange {#ANALYSIS-INCR-CHANGE}
 
-Incremental text edits are applied to the in-memory buffer, then parse → resolve → check runs for the changed file. In `crossModule`, direct importers are queued for re-analysis if the exported symbol table changed.
+Incremental edits are applied to the in-memory buffer, then parse → resolve → check runs for the changed file. In `crossModule`, direct importers are queued for re-analysis if the exported symbol table changed.
 
 ### Import resolution on incremental re-check {#ANALYSIS-INCR-IMPORTS}
 
-The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk reload, dependent invalidation) MUST resolve third-party and workspace imports against the **same** `ImportSearchPaths` (venv site-packages, workspace members, stub paths, uv registry) that the full workspace scan used. The full scan builds these once and caches them on the workspace index; incremental re-checks reuse the cached value rather than recomputing it (site-packages discovery may touch the filesystem or spawn a subprocess and MUST NOT run per keystroke).
+The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk reload, dependent invalidation) MUST resolve third-party and workspace imports against the **same** `ImportSearchPaths` (venv site-packages, workspace members, stub paths, uv registry) the full scan used. The full scan builds and caches these on the workspace index; incremental re-checks reuse the cached value (site-packages discovery may touch the filesystem or spawn a subprocess and MUST NOT run per keystroke).
 
-Without this, the syntactic resolver marks every import `Unresolved`, so opening or editing a file resurrects false `imports_unresolved` ("Cannot resolve import … no type information available") in the editor for packages that resolve cleanly on the CLI and during the startup scan. The diagnostics an incremental re-check **publishes** MUST already reflect import resolution — not just the cached symbol table used by navigation features.
+Otherwise the syntactic resolver marks every import `Unresolved`, resurrecting false `imports_unresolved` for packages that resolve cleanly on the CLI and at startup. The diagnostics an incremental re-check **publishes** MUST reflect import resolution — not just the cached symbol table used by navigation.
 
 ### File-Watcher Event {#ANALYSIS-INCR-WATCH}
 
-If the file is open, the event is ignored. Otherwise the file is read from disk; if `source_hash` is unchanged the entry is left as-is. If changed, the pipeline re-runs.
+If the file is open, the event is ignored. Otherwise read from disk; if `source_hash` is unchanged, leave the entry as-is; if changed, re-run the pipeline.
 
 ### Debouncing {#ANALYSIS-INCR-DEBOUNCE}
 
-File-watcher events MUST be debounced with a 150 ms delay to avoid thrashing during bulk saves. `didChange` events are NOT debounced — latency matters.
+File-watcher events MUST be debounced 150 ms to avoid thrashing during bulk saves. `didChange` events are NOT debounced — latency matters.
 
 ---
 
@@ -264,7 +258,7 @@ File-watcher events MUST be debounced with a 150 ms delay to avoid thrashing dur
 | `wholeModule` | All workspace files (open and closed) |
 | `crossModule` | All workspace files + any file whose diagnostics changed due to cross-module re-analysis |
 
-When a file is **deleted**, publish empty diagnostics to clear the error panel. When the user switches mode at runtime, clear all diagnostics, re-analyse, re-publish.
+On **delete**, publish empty diagnostics to clear the error panel. On runtime mode switch, clear all diagnostics, re-analyse, re-publish.
 
 ---
 
@@ -296,13 +290,13 @@ When `analysisMode` is `openFilesOnly`, these capabilities are omitted.
 | Diagnostic publish latency (open file) | < 100 ms after last keystroke |
 | Memory per file in index | < 500 KB average |
 
-Large workspaces (> 500 K LOC) MAY show a progress notification and allow the user to cancel.
+Large workspaces (> 500 K LOC) MAY show a cancellable progress notification.
 
 ---
 
 ## Error Handling {#ANALYSIS-ERRORS}
 
-- If a file cannot be read (permissions, encoding), log a `window/logMessage` warning and skip it. Do not crash.
-- If the workspace root does not exist, skip silently.
-- If the workspace scan exceeds 30 s, log a warning and continue in degraded mode.
+- File unreadable (permissions, encoding): log a `window/logMessage` warning and skip. Do not crash.
+- Workspace root missing: skip silently.
+- Workspace scan exceeds 30 s: log a warning, continue in degraded mode.
 - Circular imports: detect, emit diagnostic, break cycle for ordering.

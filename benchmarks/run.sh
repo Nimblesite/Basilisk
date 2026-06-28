@@ -130,14 +130,25 @@ if command -v zuban >/dev/null 2>&1; then
   # mode skips these strictness rules and reports "no issues" on the
   # missing-annotation fixtures, which would time a do-nothing run, exactly as
   # plain (non-strict) mypy would.
-  # Unlike pyright/ty/pyrefly, zuban's mypy mode reads/writes a `.mypy_cache` in
-  # the cwd when one is present and offers no flag to disable it, so we measure
+  # Unlike pyright/ty/pyrefly, zuban's mypy mode REUSES a `.mypy_cache` in the cwd
+  # whenever one is present (it has no flag to disable it) — and the cold-mypy
+  # column scribbles exactly such a cache earlier in the same hyperfine run, so
+  # without intervention zuban would read it back and be measured WARM. We force
   # it COLD by wiping that cache before every timed run (ZUBAN_PRESENT gates the
   # `--prepare` on the hyperfine call). Cold==warm here (~31ms), but this keeps
   # the COLD column honest by construction.
   ZUBAN_PRESENT=1
   add_tool "zuban" "zuban mypy --strict --ignore-missing-imports --no-error-summary {}"
 fi
+
+# Clean up the ./.mypy_cache that the cold-mypy column writes (mypy scribbles one
+# even under --no-incremental) and that zuban's mypy mode would reuse — so a
+# benchmark run never leaves cache litter in the repo. Gated on those two tools
+# being measured so we don't delete an unrelated cache when neither ran. The trap
+# fires on every exit path, including the regression-gate failure (exit 3).
+case " ${TOOL_NAMES[*]} " in
+  *" mypy "*|*" zuban "*) trap 'rm -rf .mypy_cache' EXIT ;;
+esac
 
 version_of() {
   local base="${1%-warm}" v=""
