@@ -65,7 +65,7 @@ from typing import Callable, Sequence
 # The single home for the pinned upstream commit. The fixtures (FIXTURES_API)
 # and the vendored calculator (UPSTREAM_MAIN) both track it. To bump: edit this,
 # run `--refresh-upstream` (re-pins upstream_main.py + its sha256), then `--fetch`.
-PINNED_TYPING_REF = "268d0c4e"
+PINNED_TYPING_REF = "f6e2e588880a057a939cee76c6c919aebd4db37c"
 UPSTREAM_MAIN_URL = (
     f"https://raw.githubusercontent.com/python/typing/{PINNED_TYPING_REF}"
     "/conformance/src/main.py"
@@ -73,7 +73,7 @@ UPSTREAM_MAIN_URL = (
 # The committed, byte-identical copy of upstream's calculator, and its sha256.
 UPSTREAM_MAIN = Path(__file__).resolve().parent / "upstream_main.py"
 UPSTREAM_MAIN_SHA256 = (
-    "b4e3bd089c73856f9920ef494350d622c2914fac238c9193ec0bb3f93f0fc6a2"
+    "3cb2a27bfc689e89a541528f8bdaa8ed24ae8845ce048eaff69717ef0205b112"
 )
 # The two functions that constitute the official scoring algorithm.
 OFFICIAL_FUNCS = ("get_expected_errors", "diff_expected_errors")
@@ -348,7 +348,14 @@ def score(
     diff_errors: Callable,
     conf_dir: Path,
 ) -> tuple[list[Path], list[Row], Totals]:
-    files = sorted(conf_dir.glob("*.py"))
+    # Match upstream's get_test_cases: score both `.py` and `.pyi` test files,
+    # skip `_`-prefixed support modules (import-only inputs, no `# E` markers).
+    # Real stub tests like `overloads_definitions_stub.pyi` MUST be graded.
+    files = sorted(
+        p
+        for p in (*conf_dir.glob("*.py"), *conf_dir.glob("*.pyi"))
+        if not p.name.startswith("_")
+    )
     rows, totals = [], {"pass": 0, "missed": 0, "fp": 0, "caught": 0}
     for f in files:
         output = checker.run_test(f)
