@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Benchmark: Basilisk vs Pyright vs mypy vs ty vs Pyrefly.
+# Benchmark: Basilisk vs Pyright vs mypy vs ty vs Pyrefly vs Zuban.
 #
 # Uses hyperfine for accurate wall-clock timing. Each fixture is a large
 # single-rule stress file (2k–3.5k lines) so the numbers reflect steady-state
@@ -56,14 +56,20 @@ mkdir -p "$OUT" "$STATUS_DIR"
 # tools qualify:
 #   * basilisk-warm  — opt-in result-cache hit (basilisk check --cache)
 #   * mypy-warm      — incremental .mypy_cache hit; cold mypy is --no-incremental
-# pyright/ty/pyrefly keep NO cross-run result cache (verified: zero cache
-# artifacts), so a repeat run lands ~= cold — they are measured COLD-only.
+# pyright/ty/pyrefly/zuban keep NO cross-run result cache (verified: zero cache
+# artifacts — zuban exposes no --cache-dir/incremental flag), so a repeat run
+# lands ~= cold — they are measured COLD-only.
 # mypy is run with --strict: without it, mypy reports "no issues" on the
 # strictness fixtures (e.g. missing-parameter annotations) and "checks" nothing,
 # making its timing an apples-to-oranges lie. --strict makes mypy perform the
 # strict-mode analysis these fixtures exist to stress, matching basilisk's
 # strict-by-default workload.
-ALL_TOOLS="basilisk basilisk-warm pyright mypy mypy-warm ty pyrefly"
+# zuban is run as `zuban mypy --strict` for exactly the same reason: its default
+# `zuban check` mode skips these strictness rules (it flags 0 errors on the
+# missing-annotation fixtures), so only the Mypy-compatible strict mode performs
+# the analysis being measured. `zuban mypy` is the strict-mode workload, just as
+# `mypy --strict` is — they are the apples-to-apples pair.
+ALL_TOOLS="basilisk basilisk-warm pyright mypy mypy-warm ty pyrefly zuban"
 
 # ─── Preconditions ────────────────────────────────────────────────────────────
 if ! command -v hyperfine >/dev/null 2>&1; then
@@ -106,6 +112,15 @@ fi
 if command -v pyrefly >/dev/null 2>&1; then
   # No cross-run result cache → cold-only.
   add_tool "pyrefly" "pyrefly check {}"
+fi
+if command -v zuban >/dev/null 2>&1; then
+  # No cross-run result cache → cold-only (zuban exposes no cache/incremental
+  # flag, so a repeat run = cold). `zuban mypy --strict` (alias of `zmypy
+  # --strict`) so it performs the strict-mode analysis the fixtures stress —
+  # zuban's default `zuban check` mode skips these strictness rules and reports
+  # "no issues" on the missing-annotation fixtures, which would time a
+  # do-nothing run, exactly as plain (non-strict) mypy would.
+  add_tool "zuban" "zuban mypy --strict --ignore-missing-imports --no-error-summary {}"
 fi
 
 version_of() {
@@ -310,7 +325,7 @@ csv_lines = [
     f"# tools: {os.environ['BENCH_TOOLS']}",
     f"# runs: {os.environ['BENCH_RUNS']} (hyperfine mean wall-clock, milliseconds)",
     f"# generated: {os.environ['BENCH_GENERATED']}",
-    f"# note: <tool>_ms = COLD full-file CLI check from scratch. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures).",
+    f"# note: <tool>_ms = COLD full-file CLI check from scratch. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly/zuban keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures); zuban runs as `zuban mypy --strict` for the same reason (its default `zuban check` mode skips these strictness rules).",
     "fixture," + ",".join(f"{t}_ms" for t in all_tools),
 ]
 for stem, means in rows:
@@ -357,6 +372,7 @@ for FILE in "${FIXTURES[@]}"; do
       mypy)     n=$($CMD 2>/dev/null | grep -cE ": error:" || true) ;;
       ty)       n=$($CMD 2>/dev/null | grep -cE "error\[|error:" || true) ;;
       pyrefly)  n=$($CMD 2>/dev/null | grep -cE "error\[|ERROR " || true) ;;
+      zuban)    n=$($CMD 2>/dev/null | grep -cE ": error:" || true) ;;
       *)        n=0 ;;
     esac
     printf " %9s" "$n"
