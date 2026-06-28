@@ -24,9 +24,15 @@ HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
 # Ensure llvm-tools-preview is installed so cargo-llvm-cov never prompts.
 rustup component add llvm-tools-preview 2>/dev/null || true
 
-# The conformance gate below (score.py --gate) pulls the latest
-# python/typing@main itself — it resolves the tip and re-downloads the fixtures +
-# calculator on every run — so there is no separate fetch step here.
+# ── Fetch the (git-ignored) conformance fixtures BEFORE the tests ─────────────
+# score.py --fetch-only pulls the latest python/typing@main (resolves the tip and
+# re-downloads the fixtures + calculator; degrades to cache when offline). This
+# MUST run before the workspace test suite: some tests (e.g. rule_tags_tests'
+# `pep_categories_match_conformance_test_prefixes`) read `conformance/tests/*.py`,
+# which is git-ignored and absent on a fresh checkout. The gate below re-resolves
+# main and re-scores against the same tip.
+header "Ensuring PEP conformance fixtures are current"
+python3 "$REPO_ROOT/conformance/score.py" --fetch-only
 
 # ── Rust tests + conformance, one instrumented coverage pool ─────────────────
 # Coverage is gathered in TWO phases that share ONE profile pool, reported once:

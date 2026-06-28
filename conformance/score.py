@@ -71,7 +71,9 @@ UPSTREAM_REPO = "python/typing"
 UPSTREAM_REF = "main"
 # Resolve `main` -> commit metadata; list the fixtures dir; fetch raw files.
 COMMITS_API = f"https://api.github.com/repos/{UPSTREAM_REPO}/commits/{UPSTREAM_REF}"
-CONTENTS_API = f"https://api.github.com/repos/{UPSTREAM_REPO}/contents/conformance/tests"
+CONTENTS_API = (
+    f"https://api.github.com/repos/{UPSTREAM_REPO}/contents/conformance/tests"
+)
 RAW_MAIN_AT = (
     f"https://raw.githubusercontent.com/{UPSTREAM_REPO}/{{sha}}/conformance/src/main.py"
 )
@@ -234,8 +236,7 @@ def fetch_upstream(conf_dir: Path) -> dict:
         REF_STAMP.parent.mkdir(parents=True, exist_ok=True)
         REF_STAMP.write_text(commit["sha"] + "\n", encoding="utf-8")
         print(
-            f"  fetched {count} fixtures + calculator "
-            f"(python/typing@{commit['short']})"
+            f"  fetched {count} fixtures + calculator (python/typing@{commit['short']})"
         )
     except Exception as exc:  # noqa: BLE001
         return _cached_commit(conf_dir, exc, commit)
@@ -323,9 +324,7 @@ def write_website_report(commit: dict, rows: list[Row], totals: Totals, n: int) 
         ],
     }
     WEBSITE_REPORT.parent.mkdir(parents=True, exist_ok=True)
-    WEBSITE_REPORT.write_text(
-        json.dumps(report, indent=2) + "\n", encoding="utf-8"
-    )
+    WEBSITE_REPORT.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"  Website report: {WEBSITE_REPORT}")
 
 
