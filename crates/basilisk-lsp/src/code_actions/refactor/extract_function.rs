@@ -24,10 +24,10 @@ use super::helpers::{leading_indent_of_line, selected_text};
 /// function is `async`, the extracted function is also `async` and called
 /// with `await`.  If the selection is inside a method (first param is
 /// `self`/`cls`), the extraction produces a method with `self`/`cls`.
-// Implements [REFACTOR-EXTRACT-FUNC-ALGO] — snap to complete lines (step 1),
-// data-flow analysis for params/returns (step 2), async/method context (step 3),
-// generate function + return (step 4), replace selection with call (step 5),
-// and place before enclosing def/class (step 6).
+// Implements [REFACTOR-EXTRACT-FUNC] and [REFACTOR-EXTRACT-FUNC-ALGO] — snap to
+// complete lines (step 1), data-flow analysis for params/returns (step 2),
+// async/method context (step 3), generate function + return (step 4), replace
+// selection with call (step 5), and place before enclosing def/class (step 6).
 #[must_use]
 pub(in crate::code_actions) fn extract_function(
     uri: &Url,

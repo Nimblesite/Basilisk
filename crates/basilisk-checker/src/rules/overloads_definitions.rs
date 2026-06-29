@@ -25,6 +25,8 @@ const CODE: ErrorCode = ErrorCode {
 
 /// Emits `overloads_definitions` when a set of `@overload` functions has no matching
 /// implementation (a same-named function without `@overload`).
+// Implements [TYPEINF-FUNC-OVERLOADS] — an `@overload` group in a regular module
+// requires a concrete implementation signature.
 pub(crate) struct MissingOverloadImpl;
 
 impl Rule for MissingOverloadImpl {

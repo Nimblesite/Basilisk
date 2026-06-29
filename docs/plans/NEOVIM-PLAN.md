@@ -7,9 +7,15 @@
 
 ## Status {#NVIMPLAN-STATUS}
 
-Phases 1–11 mostly COMPLETE. 189 tests (80 unit + 103 real LSP e2e + 6 screenshot regression), 0 failures. All rename tests passing — fixed symlink canonicalization bug in LSP server (macOS `/var` → `/private/var`). Feature parity with VS Code/Zed achieved for all LSP commands.
+The plugin **code** is largely complete (189 tests: 80 unit + 103 real LSP e2e + 6 screenshot regression, 0 failures; feature parity with VS Code/Zed for all LSP commands). The `Nimblesite/basilisk.nvim` mirror exists and is current.
 
-**Remaining gaps**: Version check (warn on outdated binary), binary auto-download from GitHub releases.
+**It is NOT yet fully live / usable out of the box.** Concrete gaps to close before it can be called shipped:
+
+- [ ] **Register in nvim-lspconfig** — submit the `lsp/basilisk.lua` PR upstream so lspconfig users get Basilisk without manual `vim.lsp.config`. *(Phase 9; the single biggest "usable out of the box" blocker.)*
+- [ ] **Real CI version matrix** — CI currently pins a single Neovim version (`v0.11.6` in `.github/workflows/ci.yml`); wire the actual `0.10 / 0.11 / nightly` matrix so we don't ship untested against the minimum supported and bleeding-edge versions. See [NVIM-DISTRIBUTION-CI].
+- [ ] **Publish a tagged release on the mirror** — `Nimblesite/basilisk.nvim` has no GitHub Release (`latestRelease: null`); the `publish-nvim` job tags the mirror but no Release object exists for users who pin releases. Confirm the tag-sync actually fires on monorepo release and cut the first mirror release.
+- [ ] **Verify outdated-binary warning + auto-download** end-to-end against real GitHub release assets (Phase 11 — implemented in `binary.lua` but unverified against published artifacts).
+- [ ] **Strip committed coverage junk** — `basilisk.nvim/*.profraw` and `.pytest_cache/` should not live in the plugin tree that mirrors to users; gitignore + remove.
 
 ---
 
@@ -214,7 +220,7 @@ Phases 1–11 mostly COMPLETE. 189 tests (80 unit + 103 real LSP e2e + 6 screens
 
 ### Phase 9: CI & Distribution {#NVIMPLAN-TODO-CI-DISTRIBUTION}
 
-- [x] GitHub Actions CI — run plenary.nvim tests on Neovim 0.10, 0.11, nightly
+- [ ] GitHub Actions CI — run plenary.nvim tests on the Neovim **0.10 / 0.11 / nightly** matrix. **Not done:** `ci.yml` currently pins a single version (`v0.11.6`); the matrix is not wired. See [NVIM-DISTRIBUTION-CI].
 - [x] Test on macOS and Linux (via CI matrix)
 - [x] lazy.nvim package spec (`{ 'Nimblesite/basilisk.nvim', ft = 'python' }`)
 - [x] Release/tagging mechanism — `publish-nvim` job in `release.yml` subtree-splits
@@ -232,7 +238,7 @@ Phases 1–11 mostly COMPLETE. 189 tests (80 unit + 103 real LSP e2e + 6 screens
 #### Test Infrastructure {#NVIMPLAN-TODO-UI-TESTING-INFRASTRUCTURE}
 
 - [x] `tests/ui/helpers.lua` — shared utilities: wait for condition, find floating window, assert extmarks, buffer keymaps
-- [x] CI integration — run UI tests in GitHub Actions via `nvim --headless` on Neovim 0.10, 0.11, nightly
+- [ ] CI integration — run UI tests in GitHub Actions via `nvim --headless` on the Neovim **0.10 / 0.11 / nightly** matrix (currently single-version only; see [NVIM-DISTRIBUTION-CI])
 
 #### Status Line Tests (10 tests passing) {#NVIMPLAN-TODO-UI-TESTING-STATUS-LINE}
 

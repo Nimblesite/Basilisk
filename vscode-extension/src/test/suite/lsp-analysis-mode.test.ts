@@ -47,6 +47,9 @@ function filterBasiliskDiagnostics(diags: vscode.Diagnostic[]): vscode.Diagnosti
     );
 }
 
+// Tests the editor-setting source of [ANALYSIS-CONFIG-SRC] — the
+// `basilisk.analysisMode` workspace setting: default `wholeModule`, all three
+// enum values accepted, and the server respecting the selected scope.
 // eslint-disable-next-line max-lines-per-function
 suite('Analysis Mode Tests', () => {
     let tmpDir: string;

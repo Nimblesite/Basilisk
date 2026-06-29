@@ -100,6 +100,8 @@ suite('Basilisk Extension E2E Tests', () => {
         );
     });
 
+    // Tests [VSIX-BINARY-RESOLUTION]: the default resolution cascade picks the
+    // bundled per-platform VSIX binary (Shipwright source = "bundled").
     test('Shipwright resolves basilisk from the bundled VSIX binary by default', () => {
         const store = getStore();
         assert.ok(store, 'Store should be available after activation');

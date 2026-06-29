@@ -42,9 +42,9 @@ impl SymbolKind {
 /// The action creates a new file named after the symbol (`snake_case`),
 /// moves the full definition there, replaces the original with an import,
 /// and adds the symbol to the original module's `__all__` if present.
-// Implements [REFACTOR-MOVE-NEW] — the "Move to New File" variant of
-// [REFACTOR-MOVE-ALGO]: identify the symbol + its imports (step 1), move the
-// definition to a new file named after the symbol (step 3), and leave a
+// Implements [REFACTOR-MOVE] and [REFACTOR-MOVE-NEW] — the "Move to New File"
+// variant of [REFACTOR-MOVE-ALGO]: identify the symbol + its imports (step 1),
+// move the definition to a new file named after the symbol (step 3), and leave a
 // re-export import in the source.
 #[must_use]
 pub(in crate::code_actions) fn move_symbol_to_new_file(

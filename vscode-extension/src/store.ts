@@ -305,8 +305,11 @@ function bindClientStateListener(
       disposeAllCommands(signals);
       syncServerCommands(signals);
       registerClientCommands(signals, context);
-      // Re-analysis completion: registered after disposeAllCommands each
-      // Running cycle so restarts re-bind it ([EXTACT-REACTIVE-STATE]).
+      // Implements the client side of [EXTACT-LSP-COMMANDS-MODULE-CHANGED] —
+      // consumes the server's `basilisk/moduleChanged` notification (re-analysis
+      // complete) to bump the analysis revision. Registered after
+      // disposeAllCommands each Running cycle so restarts re-bind it
+      // ([EXTACT-REACTIVE-STATE]).
       signals.commandDisposables.push(
         lspClient.onNotification("basilisk/moduleChanged", () => {
           bumpAnalysisRevision(signals);

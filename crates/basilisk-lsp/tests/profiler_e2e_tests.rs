@@ -120,6 +120,7 @@ fn wait_for_marker(guard: &mut ProcessGuard, marker: &str, timeout: Duration) {
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
+// Exercises [PROFILE-API]
 /// Attach to a real Python child process and verify we receive sample batches
 /// with valid stack traces.
 #[test]

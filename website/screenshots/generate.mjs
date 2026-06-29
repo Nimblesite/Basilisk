@@ -1,3 +1,7 @@
+// Implements [WEBSITE-SCREENSHOTS] / [WEBSITE-SCREENSHOTS-PURPOSE]: the single,
+// fully automated, reproducible command that produces the site's CLI screenshots —
+// real `basilisk check --color always` output, PII-free, with a built-in guard
+// that every snippet still triggers the diagnostic it documents.
 // Implements [WEBSITE-SCREENSHOTS-GENERATE]: regenerate every CLI screenshot on
 // the site from the real `basilisk` binary, with no manual Terminal/screencapture
 // step. See docs/specs/WEBSITE-SCREENSHOTS-SPEC.md.

@@ -91,6 +91,7 @@ pub(super) async fn execute_type_health(
 
 // ── Module change notification ────────────────────────────────────────────
 
+// Implements [LSPARCH-NOTIFS]
 /// Notification type for `basilisk/moduleChanged`.
 ///
 /// Implements [EXTACT-LSP-COMMANDS-MODULE-CHANGED] — the server->client

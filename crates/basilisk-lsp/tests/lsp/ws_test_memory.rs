@@ -71,6 +71,7 @@ async fn start_memory_session(
     Ok((session_id, script))
 }
 
+// Exercises [PROFILE-MEMORY-COMMANDS]
 /// `start` mints a `mem-` session and hands out a tracemalloc script; ingesting a
 /// snapshot returns the parsed allocation summary.
 #[tokio::test]

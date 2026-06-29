@@ -1,24 +1,23 @@
 # Spec ↔ Code Conformance Audit — Findings & Remediation {#CONFAUDIT}
 
-This plan records the conformance deviations found during the repo-wide spec-ID
-cross-referencing pass (every implemented spec section was read against its
-implementing code). Each finding cites the spec ID so `grep` walks spec → code →
-this tracker. Findings are grouped by **category**, because the fix differs:
+Conformance deviations found during the repo-wide spec-ID cross-referencing pass
+(every implemented spec section read against its implementing code). Each finding
+cites the spec ID so `grep` walks spec → code → this tracker. Grouped by **category**,
+because the fix differs:
 
-- **`CONFAUDIT-STALE-SPEC`** — the code is correct and intentional; the **spec
-  text is stale**. Fix = correct the spec (docs honesty). Several are fixed in
-  this same change; the rest are listed for follow-up.
-- **`CONFAUDIT-ROADMAP`** — the spec describes a feature that is **not yet
-  built**. The spec reads as if complete and must carry an honest status marker
-  ([Documentation Honesty](../../CLAUDE.md)). Banners added in this change.
-- **`CONFAUDIT-CODE-BUG`** — the **spec is the intended behaviour and the code
-  deviates**. Fix = change the code under the project's TDD bug process
-  (failing test first). Listed here as the authoritative backlog; none are
-  silently "fixed" by weakening a test.
+- **`CONFAUDIT-STALE-SPEC`** — code is correct and intentional; the **spec text is
+  stale**. Fix = correct the spec (docs honesty). Some fixed in this change; the rest
+  are follow-up.
+- **`CONFAUDIT-ROADMAP`** — spec describes a feature **not yet built**, reads as if
+  complete, and must carry an honest status marker ([Documentation Honesty](../../CLAUDE.md)).
+  Banners added in this change.
+- **`CONFAUDIT-CODE-BUG`** — **spec is the intended behaviour and the code deviates**.
+  Fix = change code under the TDD bug process (failing test first). Authoritative
+  backlog below; none silently "fixed" by weakening a test.
 
-Cross-references to the implementing code were added at every site below, with an
-inline `NOTE (conformance)` where the code diverges — so no `// Implements [...]`
-comment makes a false claim.
+Cross-references to implementing code were added at every site below, with an inline
+`NOTE (conformance)` where the code diverges — so no `// Implements [...]` comment makes
+a false claim.
 
 ---
 
@@ -60,8 +59,8 @@ comment makes a false claim.
 ## `CONFAUDIT-CODE-BUG` — code deviates from intended spec (backlog) {#CONFAUDIT-CODE-BUG}
 
 Each needs a failing test then a fix (TDD), per [CLAUDE.md](../../CLAUDE.md). Not
-fixed in this change to keep it a pure cross-reference/docs pass; filed here so
-the deviation is tracked, not hidden.
+fixed in this change (kept a pure cross-reference/docs pass); filed here so each
+deviation is tracked, not hidden.
 
 | Spec ID | Bug | Location |
 |---|---|---|

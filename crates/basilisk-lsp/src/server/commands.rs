@@ -53,6 +53,7 @@ async fn dispatch_stub_command(
     }
 }
 
+// Implements [LSPARCH-CMDS]
 /// Dispatch `workspace/executeCommand` to the appropriate handler.
 pub(super) async fn dispatch_execute_command(
     server: &LspServer,
@@ -64,6 +65,7 @@ pub(super) async fn dispatch_execute_command(
         basilisk_common::commands::ORGANIZE_IMPORTS => {
             execute_organize_imports(server, &params.arguments).await
         }
+        // Implements [LSPDEBUG-WIRE] (handle debug commands in execute_command dispatch)
         basilisk_common::commands::START_DEBUG_SESSION => {
             execute_start_debug_session(server, &params.arguments).await
         }
@@ -211,6 +213,7 @@ async fn dispatch_profiler_or_memory(
     }
 }
 
+// Implements [LSPARCH-FEATURES-EXECCMD]
 /// Handle `basilisk.organizeImports`.
 async fn execute_organize_imports(
     server: &LspServer,

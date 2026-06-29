@@ -21,6 +21,7 @@ fn flow_tracker_single_assignment() {
     assert!(result.is_some());
 }
 
+// Exercises [TYPEINF-VARS-FLOW] — multi-branch assignment yields a union.
 #[test]
 fn flow_tracker_multi_branch_union() {
     let mut tracker = FlowUnionTracker::new();

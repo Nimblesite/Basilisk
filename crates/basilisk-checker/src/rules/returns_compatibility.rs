@@ -33,6 +33,8 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 /// Emits `returns_compatibility` for detectable return type mismatches.
+// Implements [TYPEINF-FUNC-RETURN] — the returned value's inferred type must be
+// assignable to the declared return type; a mismatch fires `returns_compatibility`.
 pub(crate) struct ReturnTypeMismatch;
 
 impl Rule for ReturnTypeMismatch {

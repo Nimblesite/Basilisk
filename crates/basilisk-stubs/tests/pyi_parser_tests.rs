@@ -1,4 +1,4 @@
-//! Tests for [STUBRES-ENGINE]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
+//! Tests for [STUBRES-ENGINE] / [STUBRES-PYI]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,

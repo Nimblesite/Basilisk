@@ -154,6 +154,8 @@ function initExtension(context: vscode.ExtensionContext): void {
   }
 }
 
+// Implements [EXTACT] — wires up the Basilisk activity sidebar (Modules + Basilisk
+// info panels) plus the profiling/memory UI and the Getting Started walkthrough.
 /**
  * Register activity panels, profiler UI, memory profiler, and walkthrough.
  * Called once on the first activation only.
@@ -196,6 +198,9 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
   // hunt is "set a breakpoint and press Continue" ([PROFILE-MEMORY-AUTOPILOT]).
   singletonDisposables.push(...registerMemoryAutopilot(s));
 
+  // Implements [EXTACT-INFO-GETTING-STARTED] — the Getting Started items open the
+  // built-in `basilisk.gettingStarted` walkthrough (contributes.walkthroughs in
+  // package.json) directly via this command.
   // Walkthrough command.
   singletonDisposables.push(
     vscode.commands.registerCommand("basilisk.openWalkthrough", () => {

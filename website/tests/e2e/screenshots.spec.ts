@@ -3,6 +3,9 @@ import { test, expect, type Page } from "@playwright/test";
 // Implements [WEBSITE-SCREENSHOTS-VERIFY]: every CLI screenshot the docs embed
 // must actually exist and render (non-zero pixels), so a missing or zero-byte
 // regeneration is caught in CI rather than shipping a broken image.
+// Tests [WEBSITE-SCREENSHOTS] / [WEBSITE-SCREENSHOTS-PURPOSE]: the committed,
+// real-binary CLI screenshots actually render on the production site, so the
+// automated-screenshot pipeline's output is enforced in CI.
 // See docs/specs/WEBSITE-SCREENSHOTS-SPEC.md.
 
 // Every shot in the manifest is a rule shot embedded on its per-code

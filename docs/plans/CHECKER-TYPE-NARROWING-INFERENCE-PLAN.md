@@ -8,9 +8,7 @@
 
 ## Context {#NARROWPLAN-CONTEXT}
 
-The checker currently uses text-based annotation parsing and literal-only RHS inference. It has no control-flow graph, no type narrowing, and no TypeVar constraint solving. ~125 of the remaining ~196 false positives in the conformance suite cannot be fixed without this fundamental engine work.
-
-The spec ([CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-OVERVIEW](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-OVERVIEW)) defines the full target state. This plan is the implementation roadmap to get there.
+The checker uses text-based annotation parsing and literal-only RHS inference, with no control-flow graph, type narrowing, or TypeVar constraint solving. ~125 of the remaining ~196 conformance false positives need this engine work. The target state is the spec ([CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-OVERVIEW](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-OVERVIEW)); this is the implementation roadmap.
 
 ### Current State {#NARROWPLAN-CONTEXT-CURRENT-STATE}
 
@@ -27,11 +25,11 @@ The spec ([CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-OVERVIEW](../specs/CHECKER-T
 
 ### What This Unblocks {#NARROWPLAN-CONTEXT-UNBLOCKS}
 
-**assignment_compatibility (~98 FP)**: Assignment checks compare annotation text to RHS literal kind. When the RHS is a function call, parameter reference, class instantiation, or any non-literal expression, the checker cannot determine the RHS type. Named-to-Named subtyping (e.g., `x: Animal = Dog()`) requires resolving class hierarchies and protocol structural conformance.
+**assignment_compatibility (~98 FP)**: Assignment checks compare annotation text to RHS literal kind; non-literal RHS (function call, parameter reference, class instantiation) yields no RHS type. Named-to-Named subtyping (`x: Animal = Dog()`) needs class-hierarchy resolution and protocol structural conformance.
 
-**directives_assert_type_2 (~12 FP)**: `assert_type()` validation is deliberately disabled (comment in source: "requires full type inference to avoid false positives"). Re-enabling requires knowing the inferred type at every expression site, including after narrowing guards.
+**directives_assert_type_2 (~12 FP)**: `assert_type()` validation is disabled (source comment: "requires full type inference to avoid false positives"). Re-enabling needs the inferred type at every expression site, including after narrowing guards.
 
-**returns_compatibility_2 (~15 FP)**: Return type checking skips function call RHS entirely. Protocol property return types, narrowing function return types, and context manager `__exit__` return types all require resolving call targets.
+**returns_compatibility_2 (~15 FP)**: Return type checking skips function-call RHS entirely. Protocol property return types, narrowing-function return types, and context-manager `__exit__` return types all need call-target resolution.
 
 ---
 
@@ -40,7 +38,7 @@ The spec ([CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-OVERVIEW](../specs/CHECKER-T
 **File**: `crates/basilisk-checker/src/narrowing.rs` (expand stub)
 **Spec**: [§TYPEINF-NARROWING-ISINSTANCE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-ISINSTANCE) through [§TYPEINF-NARROWING-SCOPE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-SCOPE)
 
-Build a per-function narrowing engine that tracks type state through control flow.
+Per-function narrowing engine that tracks type state through control flow.
 
 ### 1a. Core Data Structure {#NARROWPLAN-ENGINE-DATA-STRUCTURE}
 
@@ -77,7 +75,7 @@ impl NarrowingContext {
 
 ### 1c. Approach {#NARROWPLAN-ENGINE-APPROACH}
 
-Walk the function body as a sequence of narrowing events. At branch points (`if`/`else`, `match`/`case`), fork the type state. At join points, union the states. This does not require a full CFG — a structured walk of the AST is sufficient for Python's block-scoped control flow.
+Walk the function body as a sequence of narrowing events: fork type state at branch points (`if`/`else`, `match`/`case`), union at join points. A structured AST walk suffices for Python's block-scoped control flow — no full CFG needed.
 
 ### 1d. Scope Limitations ([§TYPEINF-NARROWING-SCOPE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-NARROWING-SCOPE)) {#NARROWPLAN-ENGINE-SCOPE}
 
@@ -104,12 +102,12 @@ Extend `infer_rhs()` from literal-only to full expression inference.
 ### 2a. Function Call Return Types (highest value) {#NARROWPLAN-EXPR-INFERENCE-CALLS}
 
 Resolve call target → function signature → return type annotation:
-- Same-module functions: look up in `ResolvedModule::function_defs`
-- Cross-module functions: look up via `ImportGraph` + target `ResolvedModule`
+- Same-module functions: `ResolvedModule::function_defs`
+- Cross-module functions: `ImportGraph` + target `ResolvedModule`
 - Constructor calls: `ClassName()` → `ClassName` (the class type itself)
 - Method calls: `obj.method()` → resolve `method` on class → return type
 
-This is the single highest-value target — it unblocks the majority of E0014 FPs where the RHS is `Dog()`, `create_widget()`, etc.
+Highest-value target: unblocks most E0014 FPs where the RHS is `Dog()`, `create_widget()`, etc.
 
 ### 2b. Attribute Access {#NARROWPLAN-EXPR-INFERENCE-ATTRIBUTE}
 
@@ -202,7 +200,7 @@ impl ConstraintSolver {
 **File**: `crates/basilisk-checker/src/subtyping.rs` (new)
 **Spec**: [CHECKER-TYPE-INFERENCE-SPEC.md §TYPEINF-SUBTYPING](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING)
 
-This is the **single largest FP blocker** (~80 of the remaining 177 FPs). The current `is_assignable_to()` in `types.rs` compares `Named` types by string name — it cannot determine that `Dog` is a subtype of `Animal` or that a class with `def draw(self)` satisfies a `Drawable` Protocol.
+Single largest FP blocker (~80 of the remaining 177 FPs). `is_assignable_to()` in `types.rs` compares `Named` types by string name — it cannot see that `Dog` is a subtype of `Animal`, or that a class with `def draw(self)` satisfies a `Drawable` Protocol.
 
 ### 4a. `SubtypeContext` — Core Data Structure {#NARROWPLAN-SUBTYPING-DATA-STRUCTURE}
 
@@ -259,7 +257,7 @@ struct ProtocolMember<'a> {
 
 3. **If ALL members matched** → `S` satisfies `P`. Otherwise → not a subtype.
 
-**Key subtlety**: A plain attribute `x: int` satisfies a `@property` requirement `def x(self) -> int`. A mutable attribute satisfies a read-write property. An immutable attribute (or `@property` without setter) does NOT satisfy a read-write property.
+**Subtlety**: a plain attribute `x: int` satisfies a `@property` requirement `def x(self) -> int`; a mutable attribute satisfies a read-write property; an immutable attribute (or `@property` without setter) does NOT satisfy a read-write property.
 
 ### 4d. Generic Subtyping with Variance {#NARROWPLAN-SUBTYPING-GENERIC}
 
@@ -288,7 +286,7 @@ struct ProtocolMember<'a> {
 
 ### 4f. Callable Subtyping ([§TYPEINF-SUBTYPING-CALLABLE](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING-CALLABLE)) {#NARROWPLAN-SUBTYPING-CALLABLE}
 
-Already partially implemented in `is_assignable_to()`. Needs extension for:
+Partially in `is_assignable_to()`. Extend for:
 - `*args`/`**kwargs` parameter compatibility
 - Default parameter arity tolerance (source can have more defaults than target)
 - `Protocol.__call__` ↔ `Callable` equivalence
@@ -355,7 +353,7 @@ Replace:
 | 4. Class hierarchy + structural subtyping | Named-to-Named, protocols, TypedDict, callables | High | ~50 | Phase 2 |
 | 5. Wire into rules | All remaining | Medium | ~10 | Phases 1-4 |
 
-Phases 1 and 2 are independent and can be parallelized. Phase 3 depends on Phase 2 (needs expression inference to collect constraints). Phase 4 depends on Phase 2 (needs resolved types). Phase 5 depends on all prior phases.
+Phases 1 and 2 are independent (parallelizable). Phase 3 depends on Phase 2 (constraint collection needs expression inference). Phase 4 depends on Phase 2 (needs resolved types). Phase 5 depends on all prior phases.
 
 ---
 
@@ -418,5 +416,5 @@ Phases 1 and 2 are independent and can be parallelized. Phase 3 depends on Phase
   - [ ] 5a. E0014 — `VarCheckContext` with `SubtypeContext`, uses `is_subtype_with_context()` for assignability
   - [ ] 5b. E0013 — `SubtypeContext` passed to `check_function()`, removed `contains_named` early exit for Named types
   - [ ] 5c. E0053 — `is_likely_narrowed()` heuristic suppresses narrowing-dependent FPs; Union normalization in `types_match()`
-  - [x] 5d. Full conformance suite verification — the official, UNMODIFIED `python/typing` scorer (pinned `268d0c4e`) reports **68 of 146 fixtures passing (46.6%)** with the `basilisk` binary run with **EVERY rule enabled** — no config, no `basilisk.json`, no "spec-conformance mode", no exceptions. That score reflects **265 false positives and 0 missed required errors**: the checker catches every required error, and every failing fixture is false positives from strict-by-default house-style rules (require-annotation E0001/E0002/E0004, missing-@override E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code that the spec treats as inferred rather than an error. HISTORY: the last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#185/#191 inflated the reported number to a fake 100% by writing a `basilisk.json` that DISABLED those 6 house rules at score time — the checker was never made smarter, the FPs were merely hidden. That disabling has been removed, and disabling any conformance rule for scoring is now forbidden (a punishable offence). Genuine progress over that span was real but modest: 40.4% → 46.6%. The only legitimate path to 100% is fixing the checker so its strict defaults stop firing on spec-valid code, with every rule still enabled — never by disabling a rule. Driving FPs down remains active work.
+  - [x] 5d. Full conformance suite verification — the unmodified `python/typing` scorer (pinned `268d0c4e`) reports **68 of 146 fixtures passing (46.6%)** with the `basilisk` binary, **EVERY rule enabled** — no config, no `basilisk.json`, no "spec-conformance mode". That score reflects **265 false positives and 0 missed required errors**: every required error is caught; every failing fixture is FPs from strict-by-default house rules (require-annotation E0001/E0002/E0004, missing-@override E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code the spec treats as inferred. HISTORY: last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#185/#191 inflated it to a fake 100% via a `basilisk.json` that DISABLED those 6 house rules at score time — FPs hidden, checker never improved. That disabling is removed; disabling any conformance rule for scoring is now forbidden. Real progress over that span: 40.4% → 46.6%. The only legitimate path to 100% is making strict defaults stop firing on spec-valid code with every rule enabled — never by disabling a rule. Driving FPs down remains active work.
   - [ ] Checker-side modules: `narrowing.rs` (NarrowingContext), `expr_inference.rs` (ExpressionInferrer), `constraint_solver.rs` (ConstraintSolver)

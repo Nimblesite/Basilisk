@@ -1,27 +1,24 @@
 # AI-Powered LSP Features — Specification {#LSPAI}
 
-> ⚠️ **Status: ROADMAP (interface-only).** This spec describes the target
-> design. What ships today is a **single ~250-line slice**
-> (`crates/basilisk-lsp/src/ai_typing.rs`): the `AiTypingProvider` trait, the
+> ⚠️ **Status: ROADMAP (interface-only).** Ships today: a ~250-line slice
+> (`crates/basilisk-lsp/src/ai_typing.rs`) — the `AiTypingProvider` trait, the
 > `NoOpAiTypingProvider` default (`is_available() == false`), and the
 > request/response/error types — wired in but invoked nowhere. No concrete
-> providers, no per-feature behaviours, no config/env, no protocol commands, no
-> truncation, no `MockProvider`. Sections below describe intended behaviour, not
-> current reality; see [`CONFAUDIT-ROADMAP`](../plans/SPEC-CONFORMANCE-AUDIT-PLAN.md#CONFAUDIT-ROADMAP).
+> providers, per-feature behaviours, config/env, protocol commands, truncation,
+> or `MockProvider`. Sections below describe intended behaviour, not current
+> reality; see [`CONFAUDIT-ROADMAP`](../plans/SPEC-CONFORMANCE-AUDIT-PLAN.md#CONFAUDIT-ROADMAP).
 
-> **Goal**: Model-agnostic AI integration in the Basilisk LSP. Any model, anywhere — local, cloud, GitHub Copilot, Claude, Ollama, whatever. The LSP doesn't care what's behind the provider. It sends structured context, gets structured responses back.
-
-AI enhances every part of the LSP — fixes, completions, refactoring, navigation, explanations, import resolution, rename suggestions, stub generation, and more. Every deterministic LSP feature works without AI. AI is the optional turbocharger, never the engine.
+Model-agnostic AI integration in the Basilisk LSP (local, cloud, Copilot, Claude, Ollama). The LSP sends structured context and receives structured responses; it is agnostic to the provider behind the trait. AI is optional — every deterministic LSP feature works without it.
 
 ---
 
 ## Design Principles {#LSPAI-PRINCIPLES}
 
-1. **Model-agnostic.** Basilisk defines a trait. Providers implement it. Swap models by changing a config line.
-2. **Structured in, structured out.** The LSP sends rich analyzer context (AST, types, call graph, diagnostics). The provider returns structured fixes. No "paste this code and ask GPT to fix it."
-3. **Always unsafe.** Every AI-generated fix is `FixSafety::Unsafe` and `FixSource::AiAssisted`. Never auto-applied. Always requires user confirmation.
-4. **Offline-first.** AI features disabled by default. Local models work without internet. Cloud providers need explicit opt-in.
-5. **Privacy-respecting.** Local models = nothing leaves. Cloud providers = user opts in, context payload is visible.
+1. **Model-agnostic.** Basilisk defines a trait; providers implement it. Swap models via one config line.
+2. **Structured in, structured out.** The LSP sends analyzer context (AST, types, call graph, diagnostics); the provider returns structured fixes.
+3. **Always unsafe.** Every AI fix is `FixSafety::Unsafe` and `FixSource::AiAssisted`. Never auto-applied; always requires user confirmation.
+4. **Offline-first.** Disabled by default. Local models work offline; cloud providers need explicit opt-in.
+5. **Privacy-respecting.** Local models keep everything local; cloud providers require opt-in with an inspectable payload.
 6. **No vendor lock-in.** The provider interface is the contract.
 
 ---
@@ -30,7 +27,7 @@ AI enhances every part of the LSP — fixes, completions, refactoring, navigatio
 
 ### AiProvider Trait {#LSPAI-TRAIT}
 
-The core abstraction. Every AI integration implements this. The LSP server holds a `Box<dyn AiProvider>`.
+Every AI integration implements this trait; the LSP server holds a `Box<dyn AiProvider>`.
 
 ```rust
 pub trait AiProvider: Send + Sync {
@@ -52,7 +49,7 @@ pub trait AiProvider: Send + Sync {
 
 ### Provider Capabilities {#LSPAI-CAPS}
 
-Not all models are equal. The provider declares what it can do.
+The provider declares what it can do; features whose capability is absent are skipped for that provider.
 
 | Capability | Description |
 |---|---|
@@ -73,15 +70,6 @@ Not all models are equal. The provider declares what it can do.
 | `supports_batch` | Supports efficient batch requests |
 | `max_latency_ms` | Maximum acceptable latency for latency-critical features (0 = no constraint) |
 
-**Capability profiles:**
-
-| Model class | Example | Good at | Bad at |
-|---|---|---|---|
-| Large cloud | Claude Opus, GPT-4o | Everything | Cost, latency |
-| Medium cloud | Claude Sonnet, GPT-4o-mini | Most features | Complex refactoring |
-| Large local | Codestral 22B, DeepSeek-Coder 33B | Fixes, completions, stubs | Semantic search, next-edit |
-| Small local | CodeLlama 7B, Phi-3 | Explanations, simple fixes | Refactoring, stubs, search |
-
 ### Provider Errors {#LSPAI-ERRORS}
 
 `AiProviderError` variants: `NotConfigured`, `Transport`, `MalformedResponse`, `RateLimited(Option<Duration>)`, `Refused`, `Other`.
@@ -90,7 +78,7 @@ Not all models are equal. The provider declares what it can do.
 
 ## Context Payload {#LSPAI-CONTEXT}
 
-The AI gets the same structured data the type checker uses. Each request type sends rich context, not raw source and a prayer.
+The AI gets the same structured data the type checker uses.
 
 ### Request/Response Types {#LSPAI-TYPES}
 
@@ -186,61 +174,59 @@ No AI SDK dependencies in core — providers use HTTP/process I/O only.
 
 ### Feature 1: AI Type Annotation Suggestions {#LSPAI-FEATURE-ANNOTATIONS}
 
-Triggered when BSK-E0001-E0005 fires and deterministic fix is unavailable. The model sees the function source, inferred types, call sites, and available types. Returns `data: str` with high confidence because it sees `data` passed to `json.loads()` and called with `str` arguments.
+Triggered when BSK-E0001-E0005 fires with no deterministic fix. Model receives function source, inferred types, call sites, and available types; returns a type annotation with confidence.
 
 ### Feature 2: AI Type Error Fixes {#LSPAI-FEATURE-TYPEERROR}
 
-Triggered on imports_unresolved-E0025 with no deterministic fix. Model chooses between changing the annotation, adding a conversion, or widening the parameter type based on context.
+Triggered on imports_unresolved-E0025 with no deterministic fix. Model chooses between changing the annotation, adding a conversion, or widening the parameter type.
 
 ### Feature 3: AI-Enhanced Mass Autofix {#LSPAI-FEATURE-MASSAUTOFIX}
 
-Mass Autofix is a **deterministic feature** (see [LSP-MASS-AUTOFIX-SPEC.md §AUTOFIX-MASS](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-MASS)). AI is an optional second pass for diagnostics that deterministic fixers cannot resolve. Deterministic safe fixes apply immediately. Remaining unfixable diagnostics are batched to the AI provider. AI fixes are presented in a review panel, never auto-applied. `suggest_fixes_batch` enables single-round-trip efficiency.
+Mass Autofix is deterministic (see [LSP-MASS-AUTOFIX-SPEC.md §AUTOFIX-MASS](LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-MASS)); AI is an optional second pass. Deterministic safe fixes apply immediately; remaining unfixable diagnostics are batched via `suggest_fixes_batch` (single round-trip) and presented in a review panel, never auto-applied.
 
 ### Feature 4: Diagnostic Explanation {#LSPAI-FEATURE-EXPLAIN}
 
-User triggers `"(AI) Explain this error"`. Model returns plain-language explanation. Lowest-risk AI feature — doesn't modify code. Good candidate for small/local models.
+User triggers `"(AI) Explain this error"`; model returns a plain-language explanation. Lowest-risk feature — no code modification; suits small/local models.
 
 ### Feature 5: AI Docstring Generation {#LSPAI-FEATURE-DOCSTRING}
 
-Model receives function signature, body, inferred types, call sites. Returns docstring in project's preferred style (Google, NumPy, reST — detected from existing docstrings or configured).
+Model receives signature, body, inferred types, and call sites; returns a docstring in the project's preferred style (Google, NumPy, reST — detected or configured).
 
 ### Feature 6: AI Import Resolution {#LSPAI-FEATURE-IMPORT}
 
-Called only when deterministic resolver fails or returns ambiguous results. Model sees the name, usage context, existing imports (ecosystem signal: numpy imported = probably data science), and installed packages. Returns ranked import suggestions. AI handles re-exports, `__init__.py` barrel exports, and overlapping package names that defeat deterministic resolution.
+Called only when the deterministic resolver fails or is ambiguous. Model sees the name, usage context, existing imports (ecosystem signal: numpy imported = probably data science), and installed packages; returns ranked import suggestions, handling re-exports, `__init__.py` barrel exports, and overlapping package names.
 
 ### Feature 7: AI Rename Suggestions {#LSPAI-FEATURE-RENAME}
 
-When user presses F2, AI suggests better names alongside the rename input. Model reads the function body (sees `d["username"]` and `d["email"]`), suggests `user_data`. The actual rename (updating references) is deterministic.
+On F2, AI suggests better names from the symbol's body and usage alongside the rename input. The actual rename (updating references) is deterministic.
 
 ### Feature 8: AI Refactoring Suggestions {#LSPAI-FEATURE-REFACTOR}
 
-User-initiated: select code, get AI-suggested refactorings (extract method, convert to dataclass, etc.). Proactive: LSP background-analyzes complex functions and surfaces refactoring hints as diagnostics.
-
-Refactoring kinds: ExtractMethod, ConvertToDataclass, ConvertToTypedDict, SimplifyConditionals, ConvertToPatternMatch, ExtractConstant.
+User-initiated (select code → suggested refactorings) or proactive (background analysis surfaces hints as diagnostics). Kinds: ExtractMethod, ConvertToDataclass, ConvertToTypedDict, SimplifyConditionals, ConvertToPatternMatch, ExtractConstant.
 
 ### Feature 9: AI-Enhanced Completions {#LSPAI-FEATURE-COMPLETIONS}
 
-Deterministic completions show immediately. AI re-ranking happens async — if it arrives within `max_latency_ms`, the list updates; if not, the deterministic list stands. AI can re-rank, add documentation, and suggest additional items marked with `(AI)`.
+Deterministic completions show immediately; AI re-ranking runs async and updates the list only if it arrives within `max_latency_ms`. AI can re-rank, add documentation, and add items marked `(AI)`.
 
 ### Feature 10: AI Stub Generation {#LSPAI-FEATURE-STUBS}
 
-For untyped third-party packages with no stubs. LSP gathers module source, usage patterns, and docstrings. Model generates `.pyi` stubs written to the project's stub directory. AI stubs are Tier 3 provenance (best-effort, lower confidence than typeshed or bundled stubs). CLI: `basilisk stubs generate --ai thirdparty`.
+For untyped third-party packages with no stubs. LSP gathers module source, usage patterns, and docstrings; model generates `.pyi` stubs into the project's stub directory at Tier 3 provenance (lower confidence than typeshed/bundled). CLI: `basilisk stubs generate --ai thirdparty`.
 
 ### Feature 11: AI Dead Code Detection {#LSPAI-FEATURE-DEADCODE}
 
-Before reporting a zero-reference symbol as dead, the LSP sends it to AI with decorators, module path, and config snippets. AI understands framework magic (`@app.route`, Django URLs, Click commands, pytest discovery, `__init_subclass__`, entry points) that static analysis can't follow. Without AI, dead code detection is nearly useless in framework-heavy Python projects.
+Before reporting a zero-reference symbol as dead, the LSP sends it to AI with decorators, module path, and config snippets, so framework-implicit references (`@app.route`, Django URLs, Click commands, pytest discovery, `__init_subclass__`, entry points) don't produce false positives. Command: `basilisk/ai/analyzeDeadCode`.
 
 ### Feature 12: AI Code Modernization {#LSPAI-FEATURE-MODERNIZE}
 
-Deterministic rules handle simple syntax swaps (`Union[X, Y]` to `X | Y`, `typing.List` to `list`). AI handles nuanced transformations: isinstance chains to pattern matching, manual `__init__` to `@dataclass`, `.format()` to f-strings, context manager classes to `@contextmanager`. Suggestions only appear if the project's target Python version supports the feature.
+Deterministic rules handle simple syntax swaps (`Union[X, Y]` → `X | Y`, `typing.List` → `list`); AI handles nuanced transformations (isinstance chains → pattern match, manual `__init__` → `@dataclass`, `.format()` → f-strings, context manager classes → `@contextmanager`). Suggestions appear only if the project's target Python version supports the feature.
 
 ### Feature 13: AI Semantic Search {#LSPAI-FEATURE-SEARCH}
 
-User searches workspace symbols by intent ("handles authentication"). Normal search finds nothing; AI ranks pre-filtered symbols by semantic relevance (`verify_jwt_token`, `login_handler`, `UserCredentials`). Symbol index pre-filtered by text similarity to keep context manageable. Custom command: `basilisk/ai/findByIntent`.
+User searches workspace symbols by intent ("handles authentication"); AI ranks symbols pre-filtered by text similarity by semantic relevance. Command: `basilisk/ai/findByIntent`.
 
 ### Feature 14: AI Next-Edit Prediction {#LSPAI-FEATURE-NEXTEDIT}
 
-After a user edit, AI predicts follow-up edits at other locations (e.g., adding new parameter to call sites after adding it to a function signature). Shows ghost text at predicted location. Target: <200ms. The LSP debounces edit events (500ms after last keystroke). Fast local models are ideal; cloud models may be too slow.
+After an edit, AI predicts follow-up edits elsewhere (e.g. updating call sites after a new parameter), shown as ghost text. Target <200ms; edit events debounced 500ms. Suits fast local models; cloud models may be too slow.
 
 ---
 
@@ -345,28 +331,27 @@ AI code actions carry `provider`, `confidence`, `reasoning`, `isAiGenerated`, an
 
 ### Status Reporting {#LSPAI-PROTOCOL-STATUS}
 
-On initialization: AI enabled + available shows connection message. AI enabled + unavailable shows error. AI disabled shows nothing.
+On initialization: enabled + available → connection message; enabled + unavailable → error; disabled → nothing.
 
 ---
 
 ## Context Truncation {#LSPAI-TRUNCATION}
 
-For small local models, the LSP truncates context payloads based on `max_context_tokens`:
+For small local models, the LSP truncates context payloads by `max_context_tokens` priority:
 
-1. **Always include**: diagnostic itself, diagnostic source line(s)
-2. **High priority**: enclosing function/class, inferred types for symbols in the diagnostic
-3. **Medium priority**: call sites, available types
-4. **Low priority**: surrounding file context beyond enclosing scope
+1. **Always**: diagnostic itself, diagnostic source line(s)
+2. **High**: enclosing function/class, inferred types for diagnostic symbols
+3. **Medium**: call sites, available types
+4. **Low**: surrounding file context beyond enclosing scope
 
 ---
 
 ## Security & Privacy {#LSPAI-SECURITY}
 
-1. **API keys never in config files.** Always environment variables.
-2. **Local models = zero data exfiltration.**
-3. **Cloud provider consent.** One-time confirmation before sending code context.
-4. **No telemetry.** Basilisk collects nothing about AI feature usage.
-5. **Context payload is inspectable.** `basilisk ai debug-context` CLI dumps the exact payload.
+1. **API keys never in config files** — read from environment variables only ([LSPAI-CONFIG-ENV]).
+2. **Cloud provider consent** — one-time confirmation before sending context to a non-local provider.
+3. **No telemetry** about AI feature usage.
+4. **Context payload inspectable** — `basilisk ai debug-context` dumps the exact payload sent.
 
 ---
 
@@ -381,7 +366,7 @@ For small local models, the LSP truncates context payloads based on `max_context
 
 ## Testing Strategy {#LSPAI-TESTING}
 
-AI features are tested without real AI models via `MockProvider` (pre-configured responses, simulated latency) and `NoOpProvider`.
+AI features are tested without real models via `MockProvider` (pre-configured responses, simulated latency) and `NoOpProvider`.
 
 | Test Category | What it checks |
 |---|---|

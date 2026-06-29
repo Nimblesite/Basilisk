@@ -6,14 +6,17 @@
 
 ## Status {#LSPPLAN-STATUS}
 
-Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols all operational. Phase 3.5 (PEP conformance push) is ACTIVE — the official `python/typing` scorer (run unmodified, pinned commit 268d0c4e) currently reports **68/146 files passing (46.6%, errors+warnings strictest)**, with the basilisk binary run with EVERY rule enabled (NO config, NO `basilisk.json`, NO "spec-conformance mode" — see CHKARCH-CONFORMANCE-MODE, which documents that no such mode exists). The checker catches EVERY required error: 0 missed required errors, and the 265 remaining false positives all come from strict-by-default house-style rules (require-annotation E0001/E0002/E0004, missing-@override E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code where the spec treats unannotated as inferred rather than an error. HISTORY (stated plainly): the last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#185/#191 then inflated the reported number to a FAKE 100% by writing a `basilisk.json` that DISABLED those 6 house rules at score time (the so-called "spec-conformance mode") — the checker was not made smarter, the false positives were merely hidden. That disabling has been REMOVED and is now FORBIDDEN; genuine progress over that span was real but modest (40.4% → 46.6%). The ONLY legitimate path to 100% is fixing the checker so its strict defaults stop firing on spec-valid code, with every rule still enabled — never by disabling a rule.
+Phases 0–6 COMPLETE. Phase 7 (cross-module foundation) MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols operational. Phase 7.5 (PEP conformance push) ACTIVE.
+
+Score: the official `python/typing` scorer (unmodified, pinned commit 268d0c4e) reports **68/146 files passing (46.6%, errors+warnings strictest)**, binary run with EVERY rule enabled — no config, no `basilisk.json`, no "spec-conformance mode" (no such mode exists — see CHKARCH-CONFORMANCE-MODE). 0 missed required errors; the 265 false positives all come from strict-by-default house-style rules (require-annotation E0001/E0002/E0004, missing-@override E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code where the spec treats unannotated as inferred. The only legitimate path to 100% is fixing the checker so its strict defaults stop firing — never disabling a rule.
+
+History: last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#185/#191 inflated it to a fake 100% via a `basilisk.json` that disabled those 6 house rules at score time. That disabling is REMOVED and FORBIDDEN; genuine progress over that span was 40.4% → 46.6%.
 
 ---
 
 ## Phase 7 — Cross-Module Foundation (MOSTLY COMPLETE) {#LSPPLAN-CROSS-MODULE-FOUNDATION}
 
-> **The big unlock.** Workspace module resolver, import graph, cross-file symbol sharing
-> are all operational. Remaining: re-exports, rename, auto-import, multi-root.
+> Module resolver, import graph, cross-file symbol sharing operational. Remaining: re-exports, rename, auto-import, multi-root.
 
 | Task | Description | Difficulty | Status |
 |------|-------------|------------|--------|
@@ -27,8 +30,7 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 
 ## Phase 7.5 — PEP Conformance Push (ACTIVE — 46.6% → 100%) {#LSPPLAN-PEP-CONFORMANCE-PUSH}
 
-> **BLOCKING for Phase 9.** The type system needs these capabilities to stop producing
-> false positives and to catch real typing errors conformance expects.
+> BLOCKING for Phase 9. Adds the type-system capabilities needed to stop false positives and catch the errors conformance expects.
 
 ### Tier 1 — Medium complexity, highest ROI {#LSPPLAN-PEP-CONFORMANCE-PUSH-TIER-MEDIUM-ROI}
 
@@ -69,7 +71,7 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 
 ## Phase 9 — Advanced Type Inference (requires Phase 7.5) {#LSPPLAN-ADVANCED-TYPE-INFERENCE}
 
-> Full type inference engine. This is the core of Pyright/Pylance parity.
+> Full type inference engine — the core of Pyright/Pylance parity.
 
 | Task | Description | Difficulty | Status |
 |------|-------------|------------|--------|
@@ -99,7 +101,6 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 
 ## Detailed TODO — Pylance Parity {#LSPPLAN-PYLANCE-PARITY}
 
-> Every feature Pylance advertises. Every gap must be closed.
 > Reference: [Pylance marketplace](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance), [Pyright docs](https://microsoft.github.io/pyright/#/)
 > Pylance PEP support: 484, 487, 526, 544, 561, 563, 570, 585, 586, 589, 591, 593, 604, 612, 613, 635, 646, 647, 655, 673, 675, 681, 692, 695, 696, 698, 702, 705, 728, 742.
 > See [CHECKER-PEP-CONFORMANCE-PLAN.md](CHECKER-PEP-CONFORMANCE-PLAN.md) for the detailed conformance push plan.

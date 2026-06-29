@@ -1,4 +1,4 @@
-//! Tests for [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
+//! Tests for [CHKARCH-TESTING] / [TYPEINF-REDUNDANT]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
 // Comprehensive tests for redundant type annotations.
 //
 // Tests the interaction between BSK-E0005 (missing annotation) and BSK-W0050 (redundant

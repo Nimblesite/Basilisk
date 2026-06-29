@@ -44,6 +44,9 @@ pub(crate) const CODE: ErrorCode = ErrorCode {
 
 /// Emits `assignment_compatibility` for annotated module variables whose annotation and literal
 /// RHS are obviously incompatible.
+// Implements [TYPEINF-VARS-ANNOTATED] — the annotation is the declared type; the
+// inferred RHS type must be assignable to it (e.g. `x: float = 42` is OK,
+// `x: str = 42` is an error).
 pub(crate) struct AssignmentTypeMismatch;
 
 impl Rule for AssignmentTypeMismatch {

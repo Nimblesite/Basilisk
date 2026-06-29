@@ -34,6 +34,8 @@ const CODE: ErrorCode = ErrorCode {
 
 /// Emits `generics_upper_bound` when a call site passes a value whose type does not satisfy
 /// the `TypeVar` upper bound declared on the corresponding parameter.
+// Implements [TYPEINF-GENERICS-BOUND] — a bounded `TypeVar` is an upper bound:
+// only a subtype of the bound satisfies it, enforced at the call site.
 pub(crate) struct TypeVarBoundViolation;
 
 impl Rule for TypeVarBoundViolation {

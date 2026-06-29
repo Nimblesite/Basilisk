@@ -7,6 +7,7 @@
 
 use super::common::*;
 
+// Exercises [TYPEINF-VARS-ANNOTATED]
 #[test]
 fn test_e0014_int_assigned_to_str_original() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("x: str = 42\n")?;
@@ -69,6 +70,7 @@ def process(flag: bool):
     Ok(())
 }
 
+// Exercises [TYPEINF-FUNC-SELFCLS] — self/cls exempt from the annotation requirement.
 #[test]
 fn test_self_no_e0001() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config("def method(self): pass\n", &annotation_rules_config())?;
@@ -91,6 +93,7 @@ fn test_cls_no_e0001() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// Exercises [TYPEINF-FUNC-PARAMS] — every parameter must be annotated.
 #[test]
 fn test_unannotated_param_fires_e0001() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run_with_config("def process(data): pass\n", &annotation_rules_config())?;
@@ -206,6 +209,7 @@ def process(flag: bool) -> None:
     Ok(())
 }
 
+// Exercises [TYPEINF-VARS-WALRUS]
 #[test]
 fn test_walrus_operator_inference() -> Result<(), Box<dyn std::error::Error>> {
     let src = r"
@@ -222,6 +226,7 @@ def f(a: list) -> None:
     Ok(())
 }
 
+// Exercises [TYPEINF-VARS-AUGMENTED]
 #[test]
 fn test_augmented_assign_int() -> Result<(), Box<dyn std::error::Error>> {
     let src = r"
@@ -238,6 +243,7 @@ def f() -> None:
     Ok(())
 }
 
+// Exercises [TYPEINF-VARS-SIMPLE] — simple module-scope assignment inference.
 #[test]
 fn test_literal_inference_module_scope() -> Result<(), Box<dyn std::error::Error>> {
     let src = r#"

@@ -723,6 +723,7 @@ suite("Modules panel health chrome [EXTACT-MODULES-HEADER]", function () {
     assert.strictEqual(badge.value, 5, "badge should count errors + warnings (2 + 3)");
   });
 
+  // Tests [EXTACT-MODULES-MODULE-ROW] — the module row's folded-health description.
   test("each module row renders a coverage bar, percentage, and tallies", function () {
     const item = new ModuleTreeItem({
       name: "myapp.api",
@@ -744,6 +745,7 @@ suite("Modules panel health chrome [EXTACT-MODULES-HEADER]", function () {
     );
   });
 
+  // Tests [EXTACT-MODULES-MODULE-ROW] — the row's `[adopted]` badge.
   test("adopted module row shows the [adopted] badge", function () {
     const item = new ModuleTreeItem({
       name: "legacy",
