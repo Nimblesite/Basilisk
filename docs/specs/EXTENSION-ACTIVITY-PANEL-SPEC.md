@@ -454,9 +454,9 @@ A living dashboard of feature status and quick actions.
 
 ### Structure {#EXTACT-INFO-STRUCTURE}
 
-Slimmed per issue #103: feature toggles render **at the root** (two toggles do
-not justify a "Feature Status" header) followed by one compact read-only **Server
-Info** section. There is **no Quick Actions section** — see
+Slimmed per issue #103: feature toggles render **at the root** (a single shipped
+toggle does not justify a "Feature Status" header) followed by one compact
+read-only **Server Info** section. There is **no Quick Actions section** — see
 [EXTACT-INFO-QUICK-ACTIONS](#EXTACT-INFO-QUICK-ACTIONS) for where each action lives.
 
 Every row is one of two **interaction classes**, which **must be visually
@@ -466,7 +466,6 @@ notation, not literal glyphs.
 
 ```
 [A] Type Checking                         Enabled        (click to disable)
-[A] uv Integration                        Enabled        (click to disable)
 
 Server Info                               (read-only — display only)
   ·   Version: 0.4.2                      (present once the server is up)
@@ -530,15 +529,14 @@ VS Code `contributes.walkthroughs` content (not panel rows).
 **A toggle may appear here ONLY if flipping it has a real, observable effect
 matching its label, proven by a VSIX test.** A toggle that writes a setting no
 code reads must not exist. (Audited 2026-05-30: most originally-specced toggles
-were no-ops — the server's `did_change_configuration` parses only `analysisMode`
-and `testExplorer`; every other forwarded setting was silently dropped.)
+were no-ops — the server's `did_change_configuration` parses only `analysisMode`,
+`testExplorer`, and `enabled`; every other forwarded setting was silently dropped.)
 
 **Shipped toggles** (each has a namesake effect):
 
 | Feature | Setting | Effect when off |
 |---------|---------|-----------------|
-| Type Checking | `basilisk.enabled` | Extension stops publishing diagnostics (`checkDocument` clears them) |
-| uv Integration | `basilisk.uv.enabled` | uv Quick Actions and uv Server Info rows are hidden from this panel |
+| Type Checking | `basilisk.enabled` | The LSP — authoritative for diagnostics in the default mode — clears all published diagnostics and suppresses new ones; re-enabling re-scans. See [ANALYSIS-ENABLED]. Subprocess mode mirrors this via `checkDocument`. (GitHub #65 / #119) |
 
 **Not yet implemented** — removed because the setting is currently ignored. They
 return only once the server honors the setting AND a VSIX test proves the effect.
@@ -546,6 +544,7 @@ See [EXTENSION-ACTIVITY-PANEL-PLAN.md](../plans/EXTENSION-ACTIVITY-PANEL-PLAN.md
 
 | Feature | Setting | Why it's not shipped |
 |---------|---------|----------------------|
+| uv Integration | `basilisk.uv.enabled` | No server code reads it — the toggle never disabled uv integration (a no-op affordance). Removed per GitHub #190; uv commands stay in the palette / code actions and the read-only "uv" Server Info row still reports uv status |
 | Inlay Hints (Params) | `basilisk.inlayHints.parameterNames` | Server emits hints unconditionally; setting dropped |
 | Inlay Hints (Types) | `basilisk.inlayHints.variableTypes` | Server emits hints unconditionally; setting dropped |
 | Ruff Integration | `basilisk.ruff.enabled` | Server runs ruff unconditionally; setting dropped |
@@ -556,7 +555,7 @@ See [EXTENSION-ACTIVITY-PANEL-PLAN.md](../plans/EXTENSION-ACTIVITY-PANEL-PLAN.md
 
 **Click action**: toggles the setting, immediate effect. Every row is actionable per [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE).
 
-**Layout**: toggles render at the panel root with **no "Feature Status" header** — with two shipped toggles a header is noise (issue #103). Reintroduce it if the set grows past ~4.
+**Layout**: toggles render at the panel root with **no "Feature Status" header** — with a single shipped toggle a header is noise (issue #103). Reintroduce it if the set grows past ~4.
 
 **Write target**: `basilisk.toggleFeature` picks `ConfigurationTarget` from the live workspace-folder count — `Workspace` when a folder is open, `Global` otherwise (no `when` clause makes the no-folder state reachable, where `Workspace` is invalid; issue #103 defect 2).
 

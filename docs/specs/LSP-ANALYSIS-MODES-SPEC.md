@@ -262,6 +262,40 @@ On **delete**, publish empty diagnostics to clear the error panel. On runtime mo
 
 ---
 
+## Type Checking Toggle {#ANALYSIS-ENABLED}
+
+The `basilisk.enabled` setting (surfaced as the **Type Checking** toggle in the
+activity panel, [EXTACT-INFO-FEATURE-STATUS]) gates **all diagnostic
+publication**. The LSP is authoritative for diagnostics in every mode, so the
+toggle is honoured **server-side** — the editor's own
+[`subprocess-mode`](VSIX-SPEC.md) path mirrors it only as a fallback.
+
+Contract (GitHub #65 / #119):
+
+- **Forwarded:** the editor MUST include `enabled` in `initializationOptions` and
+  in every `workspace/didChangeConfiguration` payload (both the flat top-level
+  key and the nested `basilisk.enabled` shape are accepted).
+- **On disable** (`true → false`): publish **empty** diagnostics for every
+  indexed URI (clearing stale errors everywhere they surface — editor squiggles,
+  Problems panel, module tree) and **suppress** all further publication. The
+  index keeps tracking edits; only publication is gated.
+- **While disabled:** `didOpen` / `didChange` / `didSave` / `didClose`, the
+  file-watcher re-analysis, the startup scan, and registry rebuilds all run but
+  publish **nothing**.
+- **On enable** (`false → true`): re-scan per the active mode and re-publish, so
+  diagnostics cleared on disable come back.
+- **At startup:** a client that initializes with `enabled = false` gets **no**
+  diagnostics from the initial workspace scan.
+
+Implemented in `crates/basilisk-lsp/src/server/init.rs`
+(`apply_type_checking_toggle`, `clear_all_diagnostics`, `rescan_after_enable`)
+and the gated publish paths in `crates/basilisk-lsp/src/server/document.rs`;
+forwarded by `readBasiliskSettings()` in `vscode-extension/src/lsp-client.ts`.
+Exercised by `ws_test_type_checking_toggle.rs` (real LSP) and
+`type-checking-toggle.test.ts` (real VS Code window).
+
+---
+
 ## LSP Capabilities {#ANALYSIS-CAPS}
 
 When `analysisMode` is `wholeModule` or `crossModule`, the server advertises:

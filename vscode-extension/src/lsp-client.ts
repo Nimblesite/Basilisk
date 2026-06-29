@@ -71,9 +71,17 @@ function readTestExplorerSettings(cfg: vscode.WorkspaceConfiguration): Record<st
 export function readBasiliskSettings(): Record<string, unknown> {
   const cfg = vscode.workspace.getConfiguration("basilisk");
   const ruff = readRuffSettings(cfg);
+  // The "Type Checking" toggle (`basilisk.enabled`) MUST reach the server — the
+  // LSP is authoritative for diagnostics, so it clears/suppresses them when the
+  // toggle is off. Omitting it here left the toggle a cosmetic no-op (GitHub
+  // #65 / #119). Implements [ANALYSIS-ENABLED] (server side) and the
+  // [EXTACT-INFO-FEATURE-STATUS] "Type Checking" effect.
+  const enabled = cfg.get<boolean>("enabled") ?? true;
   return {
+    enabled,
     analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
     basilisk: {
+      enabled,
       python: cfg.get<string>("python") ?? "",
       analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
       inlayHints: readInlayHints(cfg),
