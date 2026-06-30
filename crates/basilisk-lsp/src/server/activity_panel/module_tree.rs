@@ -32,6 +32,7 @@ pub(crate) fn build_module_tree(
     idx: &WorkspaceIndex,
     scope: &str,
     project_root: Option<&Path>,
+    type_checking_enabled: bool,
 ) -> WorkspaceModulesResult {
     let adoption_store =
         project_root.and_then(|root| basilisk_config::AdoptionStore::load(root).ok());
@@ -71,10 +72,26 @@ pub(crate) fn build_module_tree(
             adoption_store.as_ref(),
         );
 
+        // The module tree is a PULL surface that reads stored diagnostics
+        // directly, bypassing the publish gate. When type checking is disabled the
+        // error/warning counts must read empty too, mirroring the cleared editor
+        // diagnostics ([ANALYSIS-ENABLED], GitHub #119). Coverage and adoption are
+        // annotation metrics, not type-check diagnostics, so they remain.
+        let errors = if type_checking_enabled {
+            health.errors
+        } else {
+            0
+        };
+        let warnings = if type_checking_enabled {
+            health.warnings
+        } else {
+            0
+        };
+
         total_symbols += health.total_symbols;
         total_annotated += health.annotated_symbols;
-        total_errors += health.errors;
-        total_warnings += health.warnings;
+        total_errors += errors;
+        total_warnings += warnings;
         if health.adopted {
             total_adopted += 1;
         }
@@ -94,8 +111,8 @@ pub(crate) fn build_module_tree(
             "kind": kind,
             "symbols": symbols,
             "coveragePercent": health.coverage_percent,
-            "errors": health.errors,
-            "warnings": health.warnings,
+            "errors": errors,
+            "warnings": warnings,
             "adopted": health.adopted,
         }));
     }
@@ -277,7 +294,7 @@ mod tests {
         let _ = idx.set_open(&uri_a, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_b, "y: str = 'hi'\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root));
+        let tree = build_module_tree(&idx, "", Some(&root), true);
         assert_eq!(tree.modules.len(), 2, "expected 2 modules in the tree");
 
         let names: Vec<&str> = tree
@@ -305,7 +322,7 @@ mod tests {
         let uri = make_uri("/workspace/pkg/__init__.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root));
+        let tree = build_module_tree(&idx, "", Some(&root), true);
         assert_eq!(tree.modules.len(), 1);
         let kind = tree.modules[0]
             .get("kind")
@@ -321,7 +338,7 @@ mod tests {
         let uri = make_uri("/workspace/mod.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root));
+        let tree = build_module_tree(&idx, "", Some(&root), true);
         assert_eq!(tree.modules.len(), 1);
         let kind = tree.modules[0]
             .get("kind")
@@ -339,7 +356,7 @@ mod tests {
         let _ = idx.set_open(&uri_a, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_b, "y: int = 2\n", 1);
 
-        let tree = build_module_tree(&idx, "pkg", Some(&root));
+        let tree = build_module_tree(&idx, "pkg", Some(&root), true);
         assert_eq!(tree.modules.len(), 1, "scope filter should keep only pkg.a");
         let name = tree.modules[0]
             .get("name")
@@ -358,7 +375,7 @@ mod tests {
         let _ = idx.set_open(&uri_full, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_partial, "a: int = 1\nb = 2\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root));
+        let tree = build_module_tree(&idx, "", Some(&root), true);
 
         // Every module node carries its folded health fields.
         for module in &tree.modules {

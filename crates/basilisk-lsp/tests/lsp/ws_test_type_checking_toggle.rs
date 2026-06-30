@@ -250,3 +250,69 @@ async fn test_ws_type_checking_reenabled_open_files_only_republishes() -> TestRe
 
     Ok(())
 }
+
+// Exercises [ANALYSIS-ENABLED] — the module tree (`basilisk.workspaceModules`) is
+// a PULL surface: it reads each file's STORED diagnostics directly, bypassing the
+// publish gate. So disabling type checking, which only clears the published
+// (editor / Problems-panel) diagnostics, leaves the module tree showing stale red
+// error counts. GitHub #119 explicitly requires "module tree error counts/status"
+// to clear on disable. This asserts the workspace error/warning rollup goes to
+// zero once type checking is off.
+#[tokio::test]
+async fn test_ws_type_checking_disabled_clears_module_tree_error_counts() -> TestResult<()> {
+    let mut fixture = WsTestFixture::new().await?;
+    let file_path = fixture.workspace_root.join("module_health.py");
+    std::fs::write(&file_path, ERRORING_SOURCE)?;
+
+    let _ = fixture.initialize().await?; // wholeModule startup scan stores diagnostics
+
+    // Startup scan publishes (and stores in the index) diagnostics for the file.
+    let startup = fixture.wait_for_diagnostics().await?;
+    assert!(
+        startup.contains("module_health.py") && startup.contains("\"diagnostics\":[{"),
+        "precondition: startup scan should publish diagnostics: {startup}"
+    );
+
+    // Precondition: while enabled, the module tree reports a non-zero error count.
+    let resp = execute_command(
+        &mut fixture,
+        10,
+        "basilisk.workspaceModules",
+        serde_json::json!({}),
+    )
+    .await?;
+    let tree = command_result(&resp, "workspaceModules")?;
+    let errors_enabled = tree["workspace"]["errors"].as_u64().unwrap_or(0);
+    assert!(
+        errors_enabled >= 1,
+        "precondition: module tree should report errors while enabled: {tree}"
+    );
+
+    // Disable type checking — wait for the editor clear so the toggle is applied.
+    set_type_checking(&mut fixture, false, "wholeModule").await?;
+    let cleared = fixture.wait_for_diagnostics().await?;
+    assert!(
+        cleared.contains("module_health.py") && cleared.contains("\"diagnostics\":[]"),
+        "disable should clear the file's published diagnostics: {cleared}"
+    );
+
+    // The module tree must now report ZERO errors/warnings. Today it re-reads the
+    // stale stored diagnostics ungated, so the counts persist — the #119 bug.
+    let resp = execute_command(
+        &mut fixture,
+        11,
+        "basilisk.workspaceModules",
+        serde_json::json!({}),
+    )
+    .await?;
+    let tree = command_result(&resp, "workspaceModules")?;
+    let errors_disabled = tree["workspace"]["errors"].as_u64().unwrap_or(0);
+    let warnings_disabled = tree["workspace"]["warnings"].as_u64().unwrap_or(0);
+    assert_eq!(
+        (errors_disabled, warnings_disabled),
+        (0, 0),
+        "module tree error/warning counts must clear when type checking is disabled: {tree}"
+    );
+
+    Ok(())
+}
