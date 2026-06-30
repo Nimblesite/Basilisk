@@ -454,10 +454,9 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     }
   });
 
-  // Tests [EXTACT-MODULES-TOOLBAR] Sort gating. Issue #151: the Sort button
-  // silently no-ops in the default tree view (sort is flat-only). It must only
-  // appear where it works — gated on the flat view — so it is never a visible,
-  // enabled no-op.
+  // Issue #151: the Sort button silently no-ops in the default tree view (sort is
+  // flat-only per [EXTACT-MODULES-TOOLBAR]). It must only appear where it works —
+  // gated on the flat view — so it is never a visible, enabled no-op.
   test("Sort is gated to flat view so it is never a no-op in the tree view", function () {
     const contributes = loadContributes();
     const sortEntry = (contributes?.menus?.["view/title"] ?? []).find(

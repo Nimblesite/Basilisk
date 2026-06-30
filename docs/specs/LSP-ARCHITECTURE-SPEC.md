@@ -138,11 +138,11 @@ The LSP server is the single source of truth for commands; it advertises every c
 The `basilisk.moduleExplorer` (MODULES) view title-bar contract (issue #113):
 
 1. **Deterministic order.** Every `view/title` entry carries an explicit `@N` index — bare `"group": "navigation"` is forbidden.
-2. **Collapse All is native, never contributed.** VS Code renders it from the tree view's `showCollapseAll: true`. The panel must NOT contribute a custom collapse command; exactly one Collapse All may exist (the native one), and no contributed command may carry the `$(collapse-all)` glyph.
-3. **Read-only inline, mutating in overflow.** Contributed inline row = read-only view-state actions in order: refresh (`navigation@1`), tree/flat toggle (`@2`), filter (`@3`), sort (`@4`); native Collapse All renders alongside. Mutating actions (`organizeImports`, `fixWorkspace` → group `1_modify`) and server control (`restartServer` → group `9_server`) live in the `…` overflow, in distinct groups (divider between them).
-4. **Sort is flat-view-only.** Gated on `basilisk.moduleExplorerView == 'flat'` ([EXTACT-MODULES-TOOLBAR]) so it never surfaces as an enabled no-op in tree view (issue #151).
-5. **No colliding glyphs.** No two inline buttons may share a codicon; `restartServer` (`$(debug-restart)`) stays in overflow to avoid near-duplicating `$(refresh)`.
-6. **Fix All is feature-flagged.** `basilisk.fixWorkspace` is gated on `config.basilisk.experimental.fixAll` (boolean, default `false`) and on `basilisk.serverState == 'running'`.
+2. **Collapse All is native, never contributed.** VS Code renders the Collapse All button from the tree view's `showCollapseAll: true`. The panel must **not** also contribute a custom collapse command — the dead `basilisk.collapseModuleExplorer` no-op next to the native button was the duplicate Collapse All in #113. Exactly one Collapse All may exist, and it is the native one; no contributed command may carry the `$(collapse-all)` glyph.
+3. **Read-only inline, mutating in overflow.** The *contributed* inline icon row is exactly the read-only view-state actions, in this order: refresh (`navigation@1`), tree/flat toggle (`@2`), filter (`@3`), sort (`@4`). The native Collapse All renders alongside them. Mutating actions (`organizeImports`, `fixWorkspace` → group `1_modify`) and server control (`restartServer` → group `9_server`) live in the `…` overflow menu, in distinct groups so VS Code renders a divider between them.
+4. **Sort is flat-view-only.** Sort applies only in flat view ([EXTACT-MODULES-TOOLBAR]); its `view/title` entry is gated on `basilisk.moduleExplorerView == 'flat'` so it never surfaces as an enabled no-op in the default tree view (issue #151).
+5. **No colliding glyphs.** No two inline buttons may use the same codicon. Keeping `restartServer` (`$(debug-restart)`) in the overflow keeps it from rendering as a near-duplicate of `$(refresh)`.
+6. **Fix All is feature-flagged.** `basilisk.fixWorkspace` is additionally gated on `config.basilisk.experimental.fixAll` (boolean setting, default `false`). It must not surface to users who have not opted in, and stays gated on `basilisk.serverState == 'running'`.
 
 Enforced by the toolbar contract tests in `vscode-extension/src/test/suite/activity-panel.test.ts`.
 

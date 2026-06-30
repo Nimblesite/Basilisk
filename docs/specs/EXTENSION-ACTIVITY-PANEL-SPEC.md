@@ -279,32 +279,36 @@ myapp/
 ```
 
 **Reconstruction (client-side).** `basilisk/workspaceModules` returns a **flat**
-list of modules keyed by fully-qualified dotted name (`pkg.sub.mod`), no
-`children` nesting (flat wire format for performance). The VS Code provider
-rebuilds the hierarchy by splitting each dotted name into path segments and
-threading it into a node trie (`module-explorer.ts::ModuleExplorerProvider.buildPackageTree`):
+list of modules keyed by fully-qualified dotted name (`pkg.sub.mod`), with no
+`children` nesting (the server keeps the wire format flat for performance). The
+VS Code provider rebuilds the hierarchy above by splitting each module's dotted
+name into path segments and threading it into a node trie
+(`module-explorer.ts::ModuleExplorerProvider.buildPackageTree`):
 
-- Each segment becomes a node labelled by that **segment** (`auth`), never the
-  full dotted name (#149 defect).
-- A segment matching a real package file (`pkg/__init__.py`, dotted name `pkg`)
-  attaches that `ModuleNode`, so the folder row carries the package's coverage
-  rollup and symbols.
-- Intermediate folders that are **not** packages (no `__init__.py`, e.g. `models/`)
-  have no `ModuleNode`; they are **synthesised** as structural container nodes
-  with a namespace icon, no coverage rollup, no open action.
-- Sibling order is structural: containers before leaf modules, each alphabetical
-  by segment. The flat-view sort toggle does not apply in tree view ([EXTACT-MODULES-TOOLBAR](#EXTACT-MODULES-TOOLBAR)).
+- Each segment becomes a tree node labelled by that **segment** (`auth`), never
+  the full dotted name (`myapp.api.auth`) — a flat dotted list at the root is the
+  exact #149 defect.
+- A segment that corresponds to a real package file (`pkg/__init__.py`, dotted
+  name `pkg`) attaches that `ModuleNode` to its node, so the folder row carries
+  the package's coverage rollup and its own symbols.
+- Intermediate folders that are **not** Python packages (no `__init__.py`, e.g.
+  `models/` above) have no `ModuleNode`; they are **synthesised** as structural
+  container nodes with a namespace icon, no coverage rollup, and no open action.
+- Sibling order is structural: containers (packages/folders) before leaf
+  modules, each alphabetical by segment. The flat-view sort picker does not
+  apply in tree view ([EXTACT-MODULES-TOOLBAR](#EXTACT-MODULES-TOOLBAR)).
 - **Diagnostics roll up onto containers.** Each folder/package row shows the
-  subtree total in [count style](#EXTACT-MODULES-COUNT-STYLE) (`🔴 n  🟠 n`) and
-  tints its icon red (any descendant error) / yellow (any descendant warning).
-  Coverage % stays per-module (the flat list carries no per-module symbol counts
-  to weight a folder rollup).
+  total `nE nW` rolled up across its whole subtree and tints its icon red (any
+  descendant error) / yellow (any descendant warning), so a branch hiding errors
+  is visible at a glance without expanding it. Coverage % stays per-module (the
+  flat list carries no per-module symbol counts to weight a folder rollup).
 
-**Flat view (`flat`, opt-in toggle).** Drops folder nesting and lists **every
-module** as one sortable row labelled by its full dotted name, ordered by the
-selected sort mode (module name / path / type coverage — #189). Symbols still
-expand **under their owning module**, never dumped bare at the tree root (#149 §2
-defect). Default view is always the nested tree.
+**Flat view (`flat`, opt-in toggle).** Flat view drops the folder nesting and
+lists **every module** as one sortable row labelled by its full dotted name,
+ordered by the selected sort mode (module name / path / type coverage — #189).
+It is "flat" only in that folders are not nested — symbols still expand **under
+their owning module** and are **never** dumped bare at the tree root (the #149
+§2 flat-mode defect). The default view is always the nested tree.
 
 ### Tree Item Properties {#EXTACT-MODULES-ITEM-PROPERTIES}
 

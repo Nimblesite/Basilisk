@@ -1,7 +1,7 @@
 // Tests for [EXTACT-MODULES-TREE-STRUCTURE]. See docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-MODULES-TREE-STRUCTURE
 //
 // Coarse component tests for the Module Explorer's nested folder/package tree
-// (#149) and the flat-view sort toggle (#151). Per CLAUDE.md we drive the real
+// (#149) and the flat-view sort picker (#151/#189). Per CLAUDE.md we drive the real
 // provider: a stubbed WorkspaceModulesResponse is fed through a fake LSP client
 // and getChildren() output is asserted. Crucially the LSP returns a FLAT list of
 // dotted module names — the provider must rebuild the hierarchy client-side, so

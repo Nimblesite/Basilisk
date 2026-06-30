@@ -17,7 +17,90 @@ performance/accessibility polish**, and cross-editor follow-ups.
 
 ---
 
-## Remaining: Feature Status toggles — make them REAL {#EXTACT-PLAN-FEATURE-TOGGLES}
+## Shipped Panel Inventory {#EXTACT-PLAN-SHIPPED-INVENTORY}
+
+### LSP Backend
+- [x] Implement `basilisk/workspaceModules` handler in `basilisk-lsp`
+- [x] Implement `ModuleNode` / `SymbolNode` construction from `ResolvedModule`
+- [x] Implement `scope` parameter filtering for `basilisk/workspaceModules`
+- [x] Implement `basilisk/moduleChanged` notification on re-analysis
+- [x] Implement 300ms debounce for `basilisk/moduleChanged`
+- [x] Implement `basilisk/typeHealth` handler
+- [x] Implement `HealthStats` computation (annotated vs unannotated symbol counting)
+- [x] Implement `ModuleHealth` per-module breakdown
+- [x] Wire adoption state into `ModuleHealth.adopted`
+- [x] Add all three custom commands to `LSP-ARCHITECTURE-SPEC.md`
+- [x] Unit tests: `basilisk/workspaceModules` returns correct tree for test workspace
+- [x] Unit tests: `basilisk/typeHealth` returns correct coverage percentages
+- [x] Unit tests: `basilisk/moduleChanged` fires after file change, not before
+
+### VS Code Extension
+- [x] Create `basilisk-icon.svg` (monochrome, 24x24, light + dark theme compatible)
+- [x] Add `viewsContainers` and `views` to `package.json`
+- [x] Add `viewsWelcome` entries to `package.json`
+- [x] Add all menu contributions to `package.json`
+- [x] Add walkthrough contribution to `package.json`
+- [x] Implement `ModuleExplorerProvider` — `TreeDataProvider` with lazy child loading
+- [x] Implement module tree item rendering (codicons, descriptions, tooltips, click-to-open)
+- [x] Implement symbol decorations (unannotated italic, private dimmed, exported overlay, error dot)
+- [x] Implement `basilisk/moduleChanged` notification handler -> incremental tree refresh
+- [x] Implement tree/flat view toggle with `workspaceState` persistence
+- [x] Implement module filter input box with glob support
+- [x] Implement `TypeHealthProvider` — `TreeDataProvider` with summary header
+- [x] Implement coverage bar rendering in description field
+- [x] Implement explicit module sort picker (module name / path / type coverage)
+- [x] Implement `BasiliskInfoProvider` — static tree with four sections
+- [x] Implement Feature Status toggle-on-click
+- [x] Implement Server Info section (version, binary, python, analysis mode, file count)
+- [x] Register `basilisk.refreshModuleExplorer` command
+- [x] Register `basilisk.toggleModuleExplorerView` command
+- [x] Collapse All uses VS Code's native `showCollapseAll` — no contributed command (issue #113)
+- [x] Register `basilisk.copyImportPath` command (clipboard: `from x.y import Z`)
+- [x] Register `basilisk.copyQualifiedName` command (clipboard: `x.y.Z`)
+- [x] Register `basilisk.refreshTypeHealth` command
+- [x] Register `basilisk.sortTypeHealth` command
+- [x] Register `basilisk.openWalkthrough` command
+- [x] Set context keys: `basilisk.serverState`, `basilisk.hasWorkspace`, `basilisk.moduleExplorerView`
+- [x] E2E test: activity bar icon appears, clicking opens sidebar
+- [x] E2E test: module explorer shows correct tree for test workspace
+- [x] E2E test: type health shows correct coverage for test workspace
+- [x] E2E test: copy import path produces correct `from x import y` string
+- [x] E2E test: feature toggle click changes setting and updates tree item
+
+### Zed Extension
+- [x] Register `/modules` slash command
+- [x] Register `/symbols` slash command
+- [x] Register `/health` slash command
+- [x] Register `/basilisk` slash command
+- [x] Implement markdown tree formatting for module output
+- [x] Implement markdown table formatting for health output
+- [x] Implement argument completion for `/modules` and `/symbols` (module names)
+- [x] Test: `/modules` output matches `basilisk/workspaceModules` data
+- [x] Test: `/health` output matches `basilisk/typeHealth` data
+- [ ] When Zed adds panel API: implement native panels using same LSP commands
+
+### Neovim Plugin
+- [x] Implement `basilisk.modules` Lua module (split buffer, foldable tree)
+- [x] Implement tree rendering with `nvim_buf_set_lines` + virtual text for types
+- [x] Implement keybindings: `<CR>` open, `o` toggle, `r` refresh, `y` copy import, `q` close
+- [x] Implement `basilisk.health` Lua module (split buffer, colored highlights)
+- [x] Implement green/yellow/red highlights via `nvim_buf_add_highlight`
+- [x] Implement `basilisk.info` Lua module (floating window)
+- [x] Register `:BasiliskModules`, `:BasiliskHealth`, `:BasiliskInfo` commands
+- [x] Set default keymaps: `<leader>bm`, `<leader>bh`, `<leader>bi`
+- [x] Handle `basilisk/moduleChanged` via `vim.lsp.handlers` for live refresh
+- [ ] Test: `:BasiliskModules` renders correct tree for test workspace
+- [ ] Test: `:BasiliskHealth` renders correct coverage stats
+
+### Polish
+- [ ] Performance test: `basilisk/workspaceModules` < 100ms for 1000-file workspace
+- [ ] Performance test: `basilisk/typeHealth` < 50ms for 1000-file workspace
+- [ ] Performance test: `basilisk/moduleChanged` notification < 20ms per file change
+- [ ] Accessibility audit: VS Code screen reader testing
+- [x] Final icon design for activity bar
+- [ ] Documentation: add panel usage to README / user guide
+
+## Feature Status toggles — make them REAL {#EXTACT-PLAN-FEATURE-TOGGLES}
 
 > Implements the "Not yet implemented" table in
 > [EXTACT-INFO-FEATURE-STATUS](../specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-FEATURE-STATUS).
