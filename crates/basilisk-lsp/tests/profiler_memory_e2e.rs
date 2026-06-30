@@ -286,6 +286,7 @@ async fn repeated_real_growth_escalates_leak_confidence() -> Result<(), String> 
 
 // ── GC: real reference cycle is detected ─────────────────────────────────────
 
+// Exercises [PROFILE-MEMORY-CODES]
 /// Build and drop real `__del__` reference cycles, then run the gc-collect
 /// script. With `DEBUG_SAVEALL` the collector retains them, so the ingested
 /// result must report a real collection and surface uncollectable objects.

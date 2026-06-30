@@ -395,6 +395,9 @@ function isBlank(value: string | undefined): boolean {
   return value === undefined || value === "";
 }
 
+// Implements [VSIX-PYTHON-DEBUGGER-DAP-LAUNCH-CONFIGURATIONS] (launch shape) —
+// the zero-config "launch" configuration (type/request/program) offered in the
+// Run-and-Debug picker and used to fill an empty/partial config.
 /** The default launch config for the current file. */
 function defaultLaunchConfig(): vscode.DebugConfiguration {
   return {

@@ -3,8 +3,8 @@
  * Info Panel contents E2E tests — the slimmed panel of issue #103.
  *
  * The panel is exactly: the feature toggles at the root (no "Feature Status"
- * section header — two toggles don't justify one) plus a compact read-only
- * Server Info section. There is NO Quick Actions section: the high-value
+ * section header — a single shipped toggle doesn't justify one) plus a compact
+ * read-only Server Info section. There is NO Quick Actions section: the high-value
  * actions are Modules-toolbar buttons gated on the server running (see
  * activity-panel.test.ts), Show Output is the status-bar click action, and
  * everything stays in the command palette.
@@ -29,10 +29,13 @@ import { createStore } from "../../store";
 import { EXTENSION_ID, SUITE_SETUP_TIMEOUT_MS, waitForLspReady } from "./test-helpers";
 
 /** Toggles that ship — each has a namesake, observable effect. */
-const KEPT_FEATURE_LABELS = ["Type Checking", "uv Integration"] as const;
+const KEPT_FEATURE_LABELS = ["Type Checking"] as const;
 
 /** Toggles removed because their setting was a no-op (server dropped it). */
 const REMOVED_FEATURE_LABELS = [
+  // Removed per GitHub #190: no server code reads basilisk.uv.enabled, so the
+  // toggle never disabled uv integration — a no-op affordance.
+  "uv Integration",
   "Inlay Hints (Params)",
   "Inlay Hints (Types)",
   "Ruff Integration",
@@ -89,9 +92,9 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
     assert.deepStrictEqual(
       labels,
       [...KEPT_FEATURE_LABELS, "Server Info"],
-      "slimmed panel root must be the two toggles + Server Info, in order",
+      "slimmed panel root must be the shipped toggle(s) + Server Info, in order",
     );
-    assert.ok(!labels.includes("Feature Status"), "the Feature Status header was removed (two toggles don't justify it)");
+    assert.ok(!labels.includes("Feature Status"), "the Feature Status header was removed (one toggle doesn't justify it)");
     assert.ok(!labels.includes("Quick Actions"), "the Quick Actions section was removed (actions live on the Modules toolbar / status bar / palette)");
   });
 
@@ -173,17 +176,18 @@ suite("Basilisk Info Panel Contents (slimmed, issue #103)", () => {
 
   // Tests [EXTACT-INFO-FEATURE-STATUS]: a toggle has an observable, namesake effect.
   test("toggleFeature writes through and the panel reflects it", async () => {
-    // End-to-end: flip uv Integration off via the real command (this host has
-    // a folder, so it writes the Workspace target) and assert the toggle row
-    // re-renders as Disabled.
+    // End-to-end: flip Type Checking off via the real command (this host has a
+    // folder, so it writes the Workspace target) and assert the toggle row
+    // re-renders as Disabled. (The deeper effect — diagnostics actually clear —
+    // is proven end-to-end in type-checking-toggle.test.ts.)
     const cfg = vscode.workspace.getConfiguration();
     try {
-      await vscode.commands.executeCommand("basilisk.toggleFeature", "basilisk.uv.enabled", false);
-      const uvToggle = provider.getChildren().find((row) => labelOf(row) === "uv Integration");
-      assert.ok(uvToggle, "uv Integration toggle should exist");
-      assert.strictEqual(uvToggle.description, "Disabled", "toggle row must reflect the written setting");
+      await vscode.commands.executeCommand("basilisk.toggleFeature", "basilisk.enabled", false);
+      const toggle = provider.getChildren().find((row) => labelOf(row) === "Type Checking");
+      assert.ok(toggle, "Type Checking toggle should exist");
+      assert.strictEqual(toggle.description, "Disabled", "toggle row must reflect the written setting");
     } finally {
-      await cfg.update("basilisk.uv.enabled", undefined, vscode.ConfigurationTarget.Workspace);
+      await cfg.update("basilisk.enabled", undefined, vscode.ConfigurationTarget.Workspace);
     }
   });
 });

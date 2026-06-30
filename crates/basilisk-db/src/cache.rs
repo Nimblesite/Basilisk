@@ -62,6 +62,7 @@ impl CheckCache {
     ///
     /// Returns `None` on any mismatch, missing/unreadable dependency, or
     /// unparseable entry — never a stale result.
+    // Implements [CHKCACHE-CONTRACT]
     #[must_use]
     pub fn lookup<T: DeserializeOwned>(
         &self,

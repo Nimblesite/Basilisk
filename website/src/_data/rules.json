@@ -1157,6 +1157,29 @@
     "docsUrl": "https://www.basilisk-python.dev/errors/directives_deprecated"
   },
   {
+    "code": "directives_disjoint_base",
+    "severity": "error",
+    "summary": "PEP 800 disjoint bases",
+    "summaryHtml": "PEP 800 disjoint bases",
+    "body": [
+      {
+        "type": "text",
+        "html": "PEP 800 introduces <code>typing.disjoint_base</code>. A class is a <em>disjoint base</em> when it is decorated <code>@disjoint_base</code> or defines a non-empty <code>__slots__</code>. A class definition must have a single <em>dominating</em> disjoint base among its bases:"
+      },
+      {
+        "type": "code",
+        "lang": "python",
+        "code": "@disjoint_base\nclass Left: ...\n@disjoint_base\nclass Right: ...\n\nclass Both(Left, Right): ...   # error \u2014 incompatible disjoint bases"
+      },
+      {
+        "type": "text",
+        "html": "The decorator may be used only on nominal classes (including <code>NamedTuple</code>); it is an error to apply it to a function, a <code>TypedDict</code>, or a <code>Protocol</code>."
+      }
+    ],
+    "group": "Type System",
+    "docsUrl": "https://www.basilisk-python.dev/errors/directives_disjoint_base"
+  },
+  {
     "code": "directives_reveal_type",
     "severity": "error",
     "summary": "Invalid `reveal_type()` call",
@@ -1211,6 +1234,29 @@
     ],
     "group": "Type System",
     "docsUrl": "https://www.basilisk-python.dev/errors/enums_behaviors"
+  },
+  {
+    "code": "enums_definition",
+    "severity": "error",
+    "summary": "access to an enum member that does not exist for the target",
+    "summaryHtml": "access to an enum member that does not exist for the target",
+    "body": [
+      {
+        "type": "text",
+        "html": "Enum members may be defined conditionally on a statically-known check such as the Python version:"
+      },
+      {
+        "type": "code",
+        "lang": "python",
+        "code": "class Color(Enum):\n    RED = 1\n    if sys.version_info >= (4, 0):\n        BLUE = 3      # absent when checking for 3.12\n\nColor.BLUE            # error \u2014 BLUE does not exist at the target version"
+      },
+      {
+        "type": "text",
+        "html": "This rule flags access to a member that was defined only under an <code>if</code>-guard that is statically false at the configured target. It is intentionally narrow \u2014 it never touches unconditional members, inherited attributes, or functional <code>Enum(...)</code> calls \u2014 so it cannot fire on valid code."
+      }
+    ],
+    "group": "Type System",
+    "docsUrl": "https://www.basilisk-python.dev/errors/enums_definition"
   },
   {
     "code": "enums_expansion",
@@ -2440,11 +2486,7 @@
       },
       {
         "type": "text",
-        "html": "<em> If any signature is <code>@staticmethod</code> / <code>@classmethod</code>, </em>all<em> signatures and   the implementation must carry the same decorator. </em> <code>@final</code> and <code>@override</code> apply to the <em>implementation only</em> (or, in a stub,   the first overload). Placing either on an <code>@overload</code> signature when an   implementation is present is an error."
-      },
-      {
-        "type": "text",
-        "html": "These checks run only on groups that have a concrete implementation, so stub declarations (which legitimately place <code>@final</code>/<code>@override</code> on the first overload) are never flagged."
+        "html": "<em> If any signature is <code>@staticmethod</code> / <code>@classmethod</code>, </em>all<em> signatures and   the implementation must carry the same decorator. </em> <code>@final</code> and <code>@override</code> apply to the <em>implementation only</em> (or, in a stub,   the first overload). Placing either on an <code>@overload</code> signature when an   implementation is present is an error; in a stub (no implementation),   placing either on any but the first overload is an error."
       }
     ],
     "group": "Type System",

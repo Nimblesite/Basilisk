@@ -1,4 +1,4 @@
-//! Tests for [`match_exhaustiveness`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+//! Tests for [`match_exhaustiveness`] from [CHKARCH-DIAG-TYPESAFETY] / [TYPEINF-NARROWING-MATCH] / [TYPEINF-EXCEEDS-EXHAUSTIVE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 // Integration tests for match_exhaustiveness: Non-exhaustive match statement.
 
 use super::common::*;

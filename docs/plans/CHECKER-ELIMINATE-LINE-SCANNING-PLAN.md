@@ -2,11 +2,9 @@
 
 ## Context {#LINESCANPLAN-CONTEXT}
 
-`CLAUDE.md` is explicit: **"Regex = ⛔️ ILLEGAL. Use the proper parsing mechanism — usually ruff"**.
+`CLAUDE.md`: **"Regex = ⛔️ ILLEGAL. Use the proper parsing mechanism — usually ruff"**.
 
-Good news: there is **zero `regex` / `fancy_regex` crate usage** in `crates/basilisk-checker/`. No `Cargo.toml` depends on a regex engine.
-
-Bad news: 13 rules implement the **moral equivalent** — they iterate `source.lines()` and `String::starts_with` / `find` / `contains` Python keywords to reconstruct structure that already exists in `basilisk_resolver::ResolvedModule`. This is exactly the anti-pattern that produced the generics_syntax_scoping showstopper false positive (issue [#43](https://github.com/Nimblesite/Basilisk/issues/43)): a line *inside a module docstring* whose trimmed prefix happens to start with `class ` was parsed as a real class definition, polluting the type-param table and triggering a hard error on innocent prose.
+There is **zero `regex` / `fancy_regex` crate usage** in `crates/basilisk-checker/`; no `Cargo.toml` depends on a regex engine. But 13 rules implement the moral equivalent — they iterate `source.lines()` and `String::starts_with` / `find` / `contains` on Python keywords to reconstruct structure already in `basilisk_resolver::ResolvedModule`. This is the anti-pattern behind the generics_syntax_scoping showstopper FP (issue [#43](https://github.com/Nimblesite/Basilisk/issues/43)): a line *inside a module docstring* whose trimmed prefix starts with `class ` was parsed as a real class definition, polluting the type-param table and triggering a hard error on prose.
 
 This plan eliminates line-based scanning across all 13 rules and re-grounds them on the AST.
 
@@ -66,13 +64,13 @@ Permitted line-level access:
 
 **Files**: `crates/basilisk-checker/src/rules/e0149/violations.rs`, `crates/basilisk-checker/src/rules/e0149/mod.rs`, `crates/basilisk-checker/src/rules/e0149/helpers.rs`
 
-Delete `collect_pep695_type_params` (lines 19–38 of `violations.rs`) and the main line-iteration driver in `mod.rs:78-117`. Replace with:
+Delete `collect_pep695_type_params` (lines 19–38 of `violations.rs`) and the line-iteration driver in `mod.rs:78-117`. Replace with:
 
-- `module.type_statements` for PEP 695 `type Foo[T] = ...` aliases (already has name, params with bounds, RHS spans).
+- `module.type_statements` for PEP 695 `type Foo[T] = ...` aliases (has name, params with bounds, RHS spans).
 - `module.classes` + `module.functions` filtered to those with `type_params: Vec<TypeParam>` populated by the resolver.
 - For each violation check (bound cross-reference, module-level use, decorator use, method shadowing, `type` stmt circular / in-function / old-TypeVar), walk the AST node — not the line.
 
-If `ResolvedModule` doesn't already carry PEP 695 type params on `ClassDef` / `FunctionDef` / `TypeStmt`, **add them in the resolver** as part of this step. That's a one-time cost paid by every rule below.
+If `ResolvedModule` doesn't already carry PEP 695 type params on `ClassDef` / `FunctionDef` / `TypeStmt`, **add them in the resolver** here — a one-time cost paid by every rule below.
 
 **Verification**:
 1. Minimal repro from #43 produces zero diagnostics.
@@ -84,7 +82,7 @@ If `ResolvedModule` doesn't already carry PEP 695 type params on `ClassDef` / `F
 
 **Files**: all 6 files under `crates/basilisk-checker/src/rules/e0130/`
 
-Same pattern: `e0130/collect.rs` and `e0130/check.rs` both line-iterate looking for `class ` / `def ` prefixes and `Generic[...]` usage. Drive off `module.classes` (incl. bases for `Generic[T]`) and `module.functions`. `module.typevar_calls` is already structured.
+`e0130/collect.rs` and `e0130/check.rs` line-iterate for `class ` / `def ` prefixes and `Generic[...]` usage. Drive off `module.classes` (incl. bases for `Generic[T]`) and `module.functions`; `module.typevar_calls` is already structured.
 
 **Verification**: existing E0130 tests pass; add a docstring-prose fixture that previously would have falsely fired.
 
@@ -92,7 +90,7 @@ Same pattern: `e0130/collect.rs` and `e0130/check.rs` both line-iterate looking 
 
 **File**: `crates/basilisk-checker/src/rules/e0126_helpers.rs`
 
-Currently scans for `def `/`class `/`@` to find function body boundaries, and for `return ` / `assert_type` inside the function. AST already has `FunctionDef.body` spans; use them. `assert_type` calls are in `module.calls`.
+Scans for `def `/`class `/`@` to find function body boundaries, and for `return ` / `assert_type` inside the function. Use `FunctionDef.body` spans instead; `assert_type` calls are in `module.calls`.
 
 **Verification**: existing E0126 tests pass; add a docstring fixture containing the strings `def foo():` and `return None` and assert no false positive.
 
@@ -100,7 +98,7 @@ Currently scans for `def `/`class `/`@` to find function body boundaries, and fo
 
 ## Phase 2 — MEDIUM severity (false positives possible but narrower) {#LINESCANPLAN-PHASE-MEDIUM}
 
-Each of the following is the same shape: replace `.lines()` walks with iteration over the relevant `ResolvedModule` collection. One sub-step per rule.
+Same shape for each: replace `.lines()` walks with iteration over the relevant `ResolvedModule` collection. One sub-step per rule.
 
 - **2.1 E0060** — `module.classes`/`functions` for decorator/header iteration.
 - **2.2 E0070** — `module.module_vars` for annotated module-level assignments.
@@ -178,4 +176,4 @@ File one issue per HIGH rule (E0149 = #43 already filed, plus E0130 and E0126) w
 
 ## Risk {#LINESCANPLAN-RISK}
 
-The resolver may not carry all the structured info HIGH rules need today (e.g. PEP 695 type params on `ClassDef`). Phase 1.1 may grow the resolver. That's fine — it's a one-time cost that benefits every subsequent rule and aligns with the architecture. Better than 13 rules each re-parsing the same text wrong.
+The resolver may not carry all structured info HIGH rules need today (e.g. PEP 695 type params on `ClassDef`), so Phase 1.1 may grow the resolver. That one-time cost benefits every subsequent rule and aligns with the architecture — better than 13 rules each re-parsing the same text wrong.

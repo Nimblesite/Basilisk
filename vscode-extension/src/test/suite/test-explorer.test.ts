@@ -92,6 +92,8 @@ async function discoverTests(
   return typed;
 }
 
+// Tests [VSIX-TEST-EXPLORER-INTEGRATION] — the VS Code Test Explorer wiring
+// (TestController, discovery, execution) over the real LSP.
 // eslint-disable-next-line max-lines-per-function
 suite("Basilisk Test Explorer E2E Tests", function () {
 

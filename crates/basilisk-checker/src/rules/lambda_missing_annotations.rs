@@ -25,6 +25,9 @@ const CODE: ErrorCode = ErrorCode {
 };
 
 /// Emits BSK-W0040 when lambda functions are assigned to unannotated variables.
+// Implements [TYPEINF-FUNC-LAMBDA] / [TYPEINF-EXCEEDS-LAMBDA] — warn (BSK-W0040)
+// when a lambda's parameter types cannot be inferred from an expected type;
+// an annotated target supplies that context and is accepted.
 pub(crate) struct LambdaMissingAnnotations;
 
 impl Rule for LambdaMissingAnnotations {

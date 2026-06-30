@@ -101,20 +101,20 @@ fn parse_qualified(text: &str) -> (String, bool, Option<Qualifier>) {
 /// Collect every `TypedDict` in declaration order. A class is a `TypedDict` when
 /// it names `TypedDict` directly or inherits from a `TypedDict` collected
 /// earlier (Python requires a base be defined before use).
-pub(super) fn collect_models(stmts: &[Stmt]) -> Vec<TdModel> {
+pub(super) fn collect_models(stmts: &[Stmt], target: (u32, u32)) -> Vec<TdModel> {
     let mut models: Vec<TdModel> = Vec::new();
-    collect_into(stmts, &mut models);
+    collect_into(stmts, &mut models, target);
     models
 }
 
-fn collect_into(stmts: &[Stmt], models: &mut Vec<TdModel>) {
+fn collect_into(stmts: &[Stmt], models: &mut Vec<TdModel>, target: (u32, u32)) {
     for stmt in stmts {
         match stmt {
             Stmt::ClassDef(cls) => {
-                if let Some(model) = model_from_class(cls, models) {
+                if let Some(model) = model_from_class(cls, models, target) {
                     models.push(model);
                 }
-                collect_into(&cls.body, models);
+                collect_into(&cls.body, models, target);
             }
             Stmt::Assign(assign) => {
                 if let Some(model) = model_from_functional(assign) {
@@ -135,16 +135,17 @@ fn is_typeddict_class(cls: &ast::StmtClassDef, known: &[TdModel]) -> bool {
     })
 }
 
-fn model_from_class(cls: &ast::StmtClassDef, known: &[TdModel]) -> Option<TdModel> {
+fn model_from_class(
+    cls: &ast::StmtClassDef,
+    known: &[TdModel],
+    target: (u32, u32),
+) -> Option<TdModel> {
     if !is_typeddict_class(cls, known) {
         return None;
     }
     let total = class_total(cls);
-    let fields = cls
-        .body
-        .iter()
-        .filter_map(|s| field_from_stmt(s, total))
-        .collect();
+    let mut fields = Vec::new();
+    collect_td_fields(&cls.body, total, target, &mut fields);
     let bases = cls
         .arguments
         .as_ref()
@@ -165,6 +166,50 @@ fn model_from_class(cls: &ast::StmtClassDef, known: &[TdModel]) -> Option<TdMode
         closed: closed_keyword(cls),
         span: mk_span(cls.range()),
     })
+}
+
+/// Collect `TypedDict` fields from a class body, descending into `if` guards
+/// (`sys.version_info`, `TYPE_CHECKING`) and admitting only branches that are not
+/// statically false at the target version — so a version-conditional item exists
+/// exactly when it would at runtime.
+fn collect_td_fields(stmts: &[Stmt], total: bool, target: (u32, u32), out: &mut Vec<TdField>) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::AnnAssign(_) => {
+                if let Some(field) = field_from_stmt(stmt, total) {
+                    out.push(field);
+                }
+            }
+            Stmt::If(if_stmt) => collect_td_fields_in_if(if_stmt, total, target, out),
+            _ => {}
+        }
+    }
+}
+
+/// Admit fields from each statically-reachable branch of an `if`/`elif`/`else`.
+fn collect_td_fields_in_if(
+    if_stmt: &ast::StmtIf,
+    total: bool,
+    target: (u32, u32),
+    out: &mut Vec<TdField>,
+) {
+    use basilisk_resolver::{evaluate, parse_static_condition, BranchTruth};
+    let test = parse_static_condition(&if_stmt.test);
+    if evaluate(&test, target) != BranchTruth::AlwaysFalse {
+        collect_td_fields(&if_stmt.body, total, target, out);
+    }
+    for clause in &if_stmt.elif_else_clauses {
+        let reachable = match &clause.test {
+            Some(elif) => {
+                evaluate(&parse_static_condition(elif), target) != BranchTruth::AlwaysFalse
+            }
+            // The `else` is reachable unless the `if` test is always taken.
+            None => evaluate(&test, target) != BranchTruth::AlwaysTrue,
+        };
+        if reachable {
+            collect_td_fields(&clause.body, total, target, out);
+        }
+    }
 }
 
 fn field_from_stmt(stmt: &Stmt, total: bool) -> Option<TdField> {

@@ -616,10 +616,10 @@ async function launchAndWaitForBreakpoint(
 }
 
 // ── Test Suite ──────────────────────────────────────────────────────────────
-// Exercises [VSIX-PYTHON-DEBUGGER-DAP-FEATURES] end-to-end against real debugpy:
-// launch/attach, breakpoints, step in/over/out, variable inspection, watch
-// expressions, call stack, hover/REPL evaluation, and clean termination. The PID-
-// capture test covers [VSIX-PYTHON-DEBUGGER-DAP-TRACKER].
+// Exercises [VSIX-PYTHON-DEBUGGER-DAP] / [VSIX-PYTHON-DEBUGGER-DAP-FEATURES]
+// end-to-end against real debugpy: launch/attach, breakpoints, step in/over/out,
+// variable inspection, watch expressions, call stack, hover/REPL evaluation, and
+// clean termination. The PID-capture test covers [VSIX-PYTHON-DEBUGGER-DAP-TRACKER].
 
 // eslint-disable-next-line max-lines-per-function
 suite('Debug Integration E2E Tests', () => {

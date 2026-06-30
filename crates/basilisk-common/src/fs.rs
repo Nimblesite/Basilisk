@@ -45,6 +45,7 @@ pub fn content_hash(content: &str) -> u64 {
 /// # Errors
 ///
 /// Propagates any [`std::io::Error`] from reading `path`.
+// Implements [CHKCACHE-READSET]
 pub fn read_tracked(path: &Path) -> io::Result<String> {
     let content = std::fs::read_to_string(path)?;
     RECORDER.with(|cell| {

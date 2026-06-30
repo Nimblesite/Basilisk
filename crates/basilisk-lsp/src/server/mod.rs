@@ -43,7 +43,7 @@ use tower_lsp::lsp_types::{
     CallHierarchyOutgoingCall, CallHierarchyOutgoingCallsParams, CallHierarchyPrepareParams,
     CodeActionParams, CodeActionResponse, CodeLens, CodeLensParams, ColorInformation,
     ColorPresentation, ColorPresentationParams, CompletionItem, CompletionParams,
-    CompletionResponse, DidChangeConfigurationParams, DidChangeTextDocumentParams,
+    CompletionResponse, Diagnostic, DidChangeConfigurationParams, DidChangeTextDocumentParams,
     DidChangeWatchedFilesParams, DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams,
     DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentColorParams,
     DocumentFormattingParams, DocumentHighlight, DocumentHighlightParams, DocumentSymbolParams,
@@ -60,6 +60,7 @@ use tower_lsp::{Client, LspService, Server};
 
 use crate::workspace::WorkspaceIndex;
 
+// Implements [ANALYSIS-INCR-DEBOUNCE]
 /// Debounce interval for file-watcher notifications (milliseconds).
 pub(super) const FILE_WATCHER_DEBOUNCE_MS: u64 = 200;
 
@@ -76,6 +77,7 @@ pub(super) fn no_workspace_root_error() -> tower_lsp::jsonrpc::Error {
 /// Debounce interval for `basilisk/moduleChanged` notifications (milliseconds).
 pub(super) const MODULE_CHANGED_DEBOUNCE_MS: u64 = 300;
 
+// Implements [LSPTEST-CONFIGURATION-SETTINGS]
 /// Runtime test explorer configuration received from the client.
 #[derive(Debug, Clone)]
 pub(super) struct TestExplorerConfig {
@@ -114,6 +116,7 @@ pub struct LspServer {
     pub(super) index: Arc<RwLock<Option<WorkspaceIndex>>>,
     /// Workspace root folders discovered during initialization.
     pub(super) workspace_roots: RwLock<Vec<std::path::PathBuf>>,
+    // Implements [LSPDEBUG-WIRE] (DebugSessionManager added to LspServer)
     /// Debug session manager — spawns debugpy and tracks active sessions.
     pub(super) debug_manager: crate::debug::DebugSessionManager,
     /// Profiler session manager — py-spy sampling, aggregation, export.
@@ -127,6 +130,14 @@ pub struct LspServer {
     pub(super) module_changed_debounce: Mutex<Option<AbortHandle>>,
     /// Test explorer configuration from the client.
     pub(super) test_config: RwLock<TestExplorerConfig>,
+    // Implements [ANALYSIS-ENABLED] (the `basilisk.enabled` / "Type Checking"
+    // toggle). The LSP is authoritative for diagnostics in the default mode, so
+    // when the toggle is off the server clears published diagnostics and stops
+    // publishing new ones — instead of leaving stale errors on screen.
+    // GitHub #65 / #119. Shared as an `Arc` so debounced/spawned publish tasks
+    // (file-watcher, startup scan) can read it after the handler returns.
+    /// Whether type checking (diagnostic publication) is enabled.
+    pub(super) type_checking_enabled: Arc<RwLock<bool>>,
 }
 
 impl std::fmt::Debug for LspServer {
@@ -149,7 +160,27 @@ impl LspServer {
             watcher_debounce: Mutex::new(None),
             module_changed_debounce: Mutex::new(None),
             test_config: RwLock::new(TestExplorerConfig::default()),
+            // Type checking is on by default; the client opts out via
+            // `basilisk.enabled = false`. Implements [ANALYSIS-ENABLED].
+            type_checking_enabled: Arc::new(RwLock::new(true)),
         }
+    }
+
+    /// Whether type checking (diagnostic publication) is currently enabled.
+    /// Implements [ANALYSIS-ENABLED].
+    pub(super) async fn is_type_checking_enabled(&self) -> bool {
+        *self.type_checking_enabled.read().await
+    }
+
+    /// Publish diagnostics only while type checking is enabled.
+    ///
+    /// Every live diagnostic-producing path routes through here so that the
+    /// `basilisk.enabled` toggle is honoured uniformly. Clearing (publishing an
+    /// empty set on disable) deliberately bypasses this gate via
+    /// [`publish_diagnostics_gated`] with `force_clear`. Implements
+    /// [ANALYSIS-ENABLED] / [ANALYSIS-PUBLISH].
+    pub(super) async fn publish_diagnostics_if_enabled(&self, uri: Url, diags: Vec<Diagnostic>) {
+        publish_diagnostics_gated(&self.client, &self.type_checking_enabled, uri, diags).await;
     }
 
     /// Borrow the index and call `f` with it. Returns `None` if not yet
@@ -193,6 +224,26 @@ impl LspServer {
         };
         let byte_offset = crate::util::position_to_byte_offset(&text, pos);
         Ok(handler(&resolved, &text, byte_offset, &uri, &diags))
+    }
+}
+
+// Implements [ANALYSIS-ENABLED] — the single choke point for the
+// `basilisk.enabled` gate, callable from spawned tasks that hold a cloned
+// `Client` + flag `Arc` (file-watcher debounce, startup scan) without a
+// `&LspServer`.
+/// Publish `diags` for `uri` only while the `enabled` flag is set.
+///
+/// The disable path clears already-published diagnostics by publishing an empty
+/// set; that clearing must happen regardless of the flag, so callers wanting to
+/// clear use [`Client::publish_diagnostics`] directly rather than this gate.
+pub(super) async fn publish_diagnostics_gated(
+    client: &Client,
+    enabled: &RwLock<bool>,
+    uri: Url,
+    diags: Vec<Diagnostic>,
+) {
+    if *enabled.read().await {
+        client.publish_diagnostics(uri, diags, None).await;
     }
 }
 

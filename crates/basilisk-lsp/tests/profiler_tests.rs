@@ -176,6 +176,7 @@ fn profile_data_default_is_empty() {
     );
 }
 
+// Exercises [PROFILE-AGGREGATION-STRUCTS]
 #[test]
 fn profile_data_aggregation_with_synthetic_traces() {
     let mut data = ProfileData::default();
@@ -519,6 +520,7 @@ fn speedscope_export_produces_valid_json() {
     let _ = std::fs::remove_file(&export_result.path);
 }
 
+// Exercises [PROFILE-FLAMEGRAPH]
 #[test]
 fn flamegraph_export_produces_svg() {
     let data = make_test_profile_data();
@@ -1293,6 +1295,7 @@ fn profile_error_display_export_failed() {
     assert!(msg.contains("disk full"), "should contain error message");
 }
 
+// Exercises [PROFILE-ERRORS]
 #[test]
 fn profile_error_codes_are_negative() {
     let errors = vec![
@@ -1691,6 +1694,7 @@ fn verify_profile_diff(
     );
 }
 
+// Exercises [PROFILE-CONFIG-CODES]
 #[test]
 fn full_pipeline_realistic_web_app_profile() {
     let mut data = ProfileData::default();

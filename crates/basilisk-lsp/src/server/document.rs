@@ -27,7 +27,9 @@ pub(super) async fn did_open(server: &LspServer, params: DidOpenTextDocumentPara
     let Some(index) = guard.as_ref() else { return };
     let diags = index.set_open(&uri, &text, version);
     drop(guard);
-    server.client.publish_diagnostics(uri, diags, None).await;
+    // Index stays current, but publication respects the Type Checking toggle
+    // ([ANALYSIS-ENABLED]) — disabled means no diagnostics reach the editor.
+    server.publish_diagnostics_if_enabled(uri, diags).await;
 }
 
 /// Handle `textDocument/didChange`: apply incremental edits and republish diagnostics.
@@ -59,7 +61,7 @@ pub(super) async fn did_change(server: &LspServer, params: DidChangeTextDocument
     let results = index.set_open_refresh_dependents(&uri, &text, version);
     drop(guard);
     for (target, diags) in results {
-        server.client.publish_diagnostics(target, diags, None).await;
+        server.publish_diagnostics_if_enabled(target, diags).await;
     }
 }
 
@@ -75,7 +77,7 @@ pub(super) async fn did_save(server: &LspServer, params: DidSaveTextDocumentPara
     let results = index.set_open_refresh_dependents(&uri, &text, 0);
     drop(guard);
     for (target, diags) in results {
-        server.client.publish_diagnostics(target, diags, None).await;
+        server.publish_diagnostics_if_enabled(target, diags).await;
     }
 
     // Notify activity panels that this module changed.
@@ -120,7 +122,7 @@ pub(super) async fn did_close(server: &LspServer, params: DidCloseTextDocumentPa
     let Some(index) = guard.as_ref() else {
         super::diaglog!("[DIAG] did_close: no index, clearing");
         info!(uri = %uri, "did_close: no index, clearing diagnostics");
-        server.client.publish_diagnostics(uri, vec![], None).await;
+        server.publish_diagnostics_if_enabled(uri, vec![]).await;
         return;
     };
     let mode = index.mode;
@@ -141,7 +143,7 @@ pub(super) async fn did_close(server: &LspServer, params: DidCloseTextDocumentPa
             drop(guard);
             super::diaglog!("[DIAG] did_close: OpenFilesOnly -> clearing uri={uri}");
             info!(uri = %uri, "did_close: openFilesOnly — clearing diagnostics");
-            server.client.publish_diagnostics(uri, vec![], None).await;
+            server.publish_diagnostics_if_enabled(uri, vec![]).await;
         }
         AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
             let in_workspace = uri
@@ -157,8 +159,7 @@ pub(super) async fn did_close(server: &LspServer, params: DidCloseTextDocumentPa
                 );
                 info!(uri = %uri, diag_count, "did_close: wholeModule in-workspace — republishing");
                 server
-                    .client
-                    .publish_diagnostics(publish_uri, diags, None)
+                    .publish_diagnostics_if_enabled(publish_uri, diags)
                     .await;
             } else {
                 // Remove from index so no subsequent event republishes.
@@ -170,7 +171,7 @@ pub(super) async fn did_close(server: &LspServer, params: DidCloseTextDocumentPa
                     "[DIAG] did_close: WholeModule out-of-workspace -> clearing uri={uri}"
                 );
                 info!(uri = %uri, "did_close: wholeModule out-of-workspace — clearing");
-                server.client.publish_diagnostics(uri, vec![], None).await;
+                server.publish_diagnostics_if_enabled(uri, vec![]).await;
             }
         }
     }
@@ -250,6 +251,9 @@ pub(super) async fn did_change_watched_files(
     // that fires after FILE_WATCHER_DEBOUNCE_MS milliseconds.
     let index_lock = Arc::clone(&server.index);
     let client = server.client.clone();
+    // Clone the toggle so the debounced re-analysis respects [ANALYSIS-ENABLED]
+    // when it fires after the handler has returned.
+    let enabled = Arc::clone(&server.type_checking_enabled);
 
     let task = tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(FILE_WATCHER_DEBOUNCE_MS)).await;
@@ -288,10 +292,10 @@ pub(super) async fn did_change_watched_files(
         drop(guard);
 
         for (uri, diags) in publish_set {
-            client.publish_diagnostics(uri, diags, None).await;
+            super::publish_diagnostics_gated(&client, &enabled, uri, diags).await;
         }
         for uri in delete_targets {
-            client.publish_diagnostics(uri, vec![], None).await;
+            super::publish_diagnostics_gated(&client, &enabled, uri, vec![]).await;
         }
     });
 

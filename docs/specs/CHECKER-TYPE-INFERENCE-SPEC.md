@@ -1,6 +1,6 @@
 # Basilisk Type Inference Specification {#TYPEINF}
 
-Basilisk implements premium type inference that not only improves type safety - it enforces the removal of redundant type annotations. The aim is to achieve something in the ballpark of Hindley Milner style functionality where we do not specify types unless there is a special reason to. We want to avoid forcing Python developers to specify types unless it's absolutely necessary. This means that Python continues to be a less verbose language with full type safety.
+Basilisk infers types precisely and bidirectionally, and requires annotations only where inference cannot determine a type (or where an annotation changes the type). Where inference suffices, a redundant annotation is a diagnostic (see [TYPEINF-REDUNDANT]).
 
 > **Canonical Python version**: 3.12
 >
@@ -10,53 +10,23 @@ Basilisk implements premium type inference that not only improves type safety - 
 
 ---
 
-## Design Philosophy {#TYPEINF-PHILOSOPHY}
+## Redundant Annotation Principle {#TYPEINF-REDUNDANT}
 
-Basilisk's type inference is **precise and bidirectional throughout**. Rather than making inference optional, or falling back to an unresolved/`Any` type when a type cannot be determined, Basilisk either produces a precise type or emits a diagnostic.
+Ignore this section when it conflicts with PEP conformance.
 
-Key design decisions in Basilisk's inference engine:
-
-| Capability | Basilisk behavior |
-|---|---|
-| Unannotated parameter types | **Error** — all parameters must be annotated |
-| Return type inference | Inferred **and** validated; a mismatch is an error |
-| Container inference | **Union** of element types, always — no loose mode |
-| TypeVar constraint solving | **Bidirectional constraint propagation** with exhaustive solving |
-| Literal type inference | Literal-first: widen only when an annotation demands it |
-| Narrowing coverage | `isinstance`, `is None`, TypeGuard, TypeIs, **pattern-matching exhaustiveness**, **dict key existence**, **attribute presence** |
-| Unannotated functions | **Error** — every public function must be annotated |
-| Redundant annotations | **Warning** — redundant explicit annotations must be removed |
-
-### Redundant Annotation Principle {#TYPEINF-REDUNDANT}
-
-> **This is a critical, non-negotiable design goal.**
-
-But, ignore this section when it conflicts with PEP conformance
-
-Basilisk enforces a **clean separation between what must be annotated and what must not be**. When the type system can infer a type precisely, writing an explicit annotation for that same type is **noise** — it clutters the code, creates maintenance burden, and masks real inference failures.
-
-**Rule**: If Basilisk can infer the type of an expression unambiguously, and the written annotation is identical to the inferred type, Basilisk emits `BSK-W0050: redundant type annotation — inferred type is identical; remove the annotation`.
+**Rule**: If Basilisk can infer an expression's type unambiguously and the written annotation is identical, it emits `BSK-W0050: redundant type annotation — inferred type is identical; remove the annotation`. Annotation is required when it changes the type (widens, constrains, documents a contract); forbidden when it merely repeats inference.
 
 ```python
-# BAD — Basilisk emits BSK-W0050 for every one of these
-x: int = 42                     # inferred: int — annotation redundant
-y: str = "hello"                # inferred: str — annotation redundant
-z: list[int] = [1, 2, 3]        # inferred: list[int] — annotation redundant
-items: list[str] = ["a", "b"]   # inferred: list[str] — annotation redundant
+# BAD — BSK-W0050: annotation equals inferred type
+x: int = 42                     # inferred: int
+z: list[int] = [1, 2, 3]        # inferred: list[int]
 
-def f(n: int) -> int:
-    result: int = n * 2         # inferred: int — annotation redundant
-    return result
-
-# GOOD — annotation adds information not available from inference alone
-x: float = 42                   # widens int to float — meaningful
-items: list[int | str] = [1]    # widens list[int] to list[int | str] — meaningful
-coords: tuple[float, float] = (0, 0)  # widens tuple[int, int] — meaningful
+# GOOD — annotation adds information
+x: float = 42                   # widens int → float
+items: list[int | str] = [1]    # widens list[int] → list[int | str]
 ```
 
-**Annotation is required when it changes the type** (widens, constrains, or documents a contract). Annotation is forbidden when it merely repeats what inference would produce.
-
-This rule applies to:
+Applies to:
 - Local variable assignments
 - Module-level variable assignments
 - Class body variable assignments
@@ -75,13 +45,13 @@ This rule applies to:
   field; never redundant (issues #110, #39)
 - `ClassVar` and `Final` — the qualifier itself is non-redundant even if the base type is inferrable
 
-**Interaction with conformance**: This rule does not conflict with PEP 526 or any conformance test. The conformance suite tests that annotations are respected when present; it does not require annotations where inference suffices. Basilisk goes further by enforcing that redundant annotations are absent.
+This does not conflict with PEP 526 or the conformance suite, which tests that annotations are respected when present but never requires them where inference suffices.
 
 ---
 
 ## Governing PEPs {#TYPEINF-PEPS}
 
-The following PEPs define the ground truth for Basilisk's inference rules. All are required reading for implementors.
+PEPs defining ground truth for Basilisk's inference rules:
 
 | PEP | Title | Relevant to inference |
 |---|---|---|
@@ -131,19 +101,17 @@ Basilisk **requires explicit annotations** for:
 - **All class-level attributes** at the class body level — E0003 if missing
 - **TypedDict fields**, `NamedTuple` fields, `Protocol` members — always explicit
 
-Basilisk does not silently fall back to an unresolved type. A missing annotation is a **diagnostic**, not an inference opportunity.
+A missing annotation is a diagnostic, not an inference opportunity — Basilisk never silently falls back to an unresolved type.
 
 ### Inference Algorithm {#TYPEINF-ALGO}
 
-Basilisk uses a **bidirectional type inference** algorithm:
+Basilisk uses **bidirectional type inference**:
 
 ```
 infer_type(expr, expected: Option<Type>) -> Type
 ```
 
-The `expected` parameter ("expected type" or "pushed type") flows from outer context into inner expressions. When present, it guides inference of ambiguous constructs (empty containers, lambdas, integer literals that could be `Literal[N]`).
-
-This is the same approach described in the [bidirectional typing literature](https://www.cl.cam.ac.uk/~nk480/bidir.pdf) (Pierce & Turner, "Local Type Inference", 2000), in which an expected type flows from the surrounding context into the inference of subexpressions.
+The `expected` ("pushed") type flows from outer context into inner expressions, guiding inference of ambiguous constructs (empty containers, lambdas, integer literals that could be `Literal[N]`). This follows [Pierce & Turner, "Local Type Inference", 2000](https://www.cl.cam.ac.uk/~nk480/bidir.pdf).
 
 ---
 
@@ -159,7 +127,7 @@ b = True        # bool
 n = None        # None
 ```
 
-**Literal inference rule**: By default Basilisk infers the **most specific type** (literal) for constants assigned at module scope or class scope. Within function bodies, literals are widened to their base types unless the value is used in a literal-sensitive context.
+**Literal inference rule**: Basilisk infers the most specific type (`Literal`) for constants at module or class scope; within function bodies, literals are widened to their base types unless used in a literal-sensitive context.
 
 ```python
 # Module scope — literal inference
@@ -168,15 +136,13 @@ MAX = 100           # Literal[100]
 
 # Function body — widened
 def f() -> None:
-    x = "active"   # str  (widened — no need for Literal in local scope)
+    x = "active"   # str  (widened)
     y: Literal["active"] = "active"  # Literal["active"] (annotation drives it)
 ```
 
-Basilisk reserves `Literal` inference for module/class constants; within function bodies, literals are widened to their base types unless a literal-sensitive context demands otherwise.
-
 ### Multiple Assignment {#TYPEINF-VARS-FLOW}
 
-When a variable is assigned in multiple branches, the inferred type is the **union** of all assigned types:
+A variable assigned in multiple branches infers the **union** of all assigned types:
 
 ```python
 def f(cond: bool) -> None:
@@ -187,7 +153,7 @@ def f(cond: bool) -> None:
     reveal_type(x)  # int | str
 ```
 
-This follows [PEP 484 §Union types](https://peps.python.org/pep-0484/#union-types) and the Python typing spec on [variable type narrowing](https://typing.readthedocs.io/en/latest/spec/narrowing.html).
+> **Authority**: [PEP 484 §Union types](https://peps.python.org/pep-0484/#union-types), [typing spec — narrowing](https://typing.readthedocs.io/en/latest/spec/narrowing.html).
 
 ### Annotated Variable {#TYPEINF-VARS-ANNOTATED}
 
@@ -228,7 +194,7 @@ The walrus operator `:=` assigns the value and the **expression type equals the 
 
 ### Parameters {#TYPEINF-FUNC-PARAMS}
 
-**All parameters must be explicitly annotated.** There are no exceptions for public API functions. This fires `BSK-E0001`.
+**All parameters must be explicitly annotated** (no exceptions); missing fires `BSK-E0001`.
 
 ```python
 def process(data):          # BSK-E0001: parameter 'data' has no type annotation
@@ -238,7 +204,7 @@ def process(data: bytes):   # ✓
     pass
 ```
 
-The **only parameters that are inferred rather than annotated** are:
+The only parameters inferred rather than annotated are:
 
 - `self` in instance methods → inferred as `Self` (the containing class bound to `Self`)
 - `cls` in class methods → inferred as `type[Self]`
@@ -248,7 +214,7 @@ The **only parameters that are inferred rather than annotated** are:
 
 ### Default Parameters {#TYPEINF-FUNC-DEFAULTS}
 
-When a parameter has no annotation but has a default, Basilisk **does not** infer the type from the default. The annotation is still required.
+A parameter with a default but no annotation is **not** inferred from the default; the annotation is still required.
 
 ```python
 def connect(timeout=30):        # BSK-E0001 — annotation required even with default
@@ -260,9 +226,7 @@ def connect(timeout: int = 30): # ✓
 
 ### Return Types {#TYPEINF-FUNC-RETURN}
 
-Return types are **inferred from the function body** but an annotation is required for all non-trivial public functions (those that are not `-> None` trivially).
-
-The inferred return type is the **union of all `return` expression types**:
+Return types are inferred from the body (the **union of all `return` expression types**), but an annotation is required for all non-trivial public functions (those not trivially `-> None`):
 
 ```python
 def f(x: int) -> int | str:    # ✓ — annotation matches inference
@@ -296,7 +260,7 @@ def sometimes_returns(x: int) -> int | None:
 | `cls` | `__init_subclass__` | `type[Self]` |
 | `mcs` or `cls` | Metaclass `__new__`/`__init__` | `type[Self]` |
 
-`Self` participates in inheritance correctly: a subclass calling an inherited method infers the subclass type, not the base class type.
+`Self` participates in inheritance: a subclass calling an inherited method infers the subclass type, not the base class type.
 
 ```python
 class Builder:
@@ -315,18 +279,12 @@ reveal_type(b)  # AdvancedBuilder — not Builder
 
 ### Lambda Inference {#TYPEINF-FUNC-LAMBDA}
 
-Lambdas cannot have annotated parameters. Basilisk infers lambda parameter types exclusively from **bidirectional context** (the expected type pushed from the outer expression).
+Lambdas cannot have annotated parameters; Basilisk infers their parameter types exclusively from **bidirectional context** (the expected type pushed from the outer expression). Without one, it emits `BSK-W0040` rather than leaving them silently untyped.
 
 ```python
-# Expected type provides context
-transform: Callable[[int], str] = lambda x: str(x)
-#                                        ^ x is inferred as int from expected type
-
-# No context — BSK-W0040: lambda parameter types unknown
-f = lambda x: x + 1   # warning: x is unknown
+transform: Callable[[int], str] = lambda x: str(x)  # x inferred as int from expected type
+f = lambda x: x + 1   # BSK-W0040: lambda parameter types unknown
 ```
-
-Without an expected type, a lambda's parameter types cannot be inferred. Rather than leaving them silently untyped, Basilisk emits a **warning** (`BSK-W0040`).
 
 ### Overloads {#TYPEINF-FUNC-OVERLOADS}
 
@@ -366,7 +324,7 @@ With bidirectional context:
 x: list[float] = [1, 2, 3]   # list[float] — ints widen to float via expected type
 ```
 
-> **Container inference**: Basilisk always infers a **union** of element types for heterogeneous containers — there is no loose mode and no configuration switch to disable it.
+> **Container inference**: Basilisk always infers a **union** of element types for heterogeneous containers — no loose mode, no switch to disable.
 
 ### Dicts {#TYPEINF-COLLECTIONS-DICTS}
 
@@ -450,7 +408,7 @@ encode(b"bytes")  # AnyStr = bytes → bytes
 encode(42)        # calls_argument_type: int does not match any constraint (str, bytes)
 ```
 
-When a subtype is passed to a constrained TypeVar, the type is **widened to the matching constraint**, not kept at the subtype:
+A subtype passed to a constrained TypeVar is **widened to the matching constraint**, not kept at the subtype:
 
 ```python
 class MyStr(str): pass
@@ -459,8 +417,7 @@ result = encode(MyStr("x"))   # AnyStr = str (not MyStr) — widened to constrai
 reveal_type(result)            # str
 ```
 
-> **Authority**: [Typing spec — Constrained TypeVars](https://typing.readthedocs.io/en/latest/spec/generics.html#constrained-type-variables).
-> [Pyright docs](https://github.com/microsoft/pyright/blob/main/docs/type-inference.md): "When a subtype is passed to a constrained TypeVar, the inferred type is the matching constraint, not the subtype."
+> **Authority**: [Typing spec — Constrained TypeVars](https://typing.readthedocs.io/en/latest/spec/generics.html#constrained-type-variables), [Pyright type-inference docs](https://github.com/microsoft/pyright/blob/main/docs/type-inference.md).
 
 ### Bound TypeVars {#TYPEINF-GENERICS-BOUND}
 
@@ -531,7 +488,7 @@ def logged(f: Callable[P, T]) -> Callable[P, T]:
     return wrapper
 ```
 
-`P` captures the full parameter specification. The wrapped function has the same signature as the original.
+`P` captures the full parameter specification; the wrapper has the same signature as the original.
 
 > **Authority**: [PEP 612](https://peps.python.org/pep-0612/).
 
@@ -549,11 +506,10 @@ def f(x: int | str) -> None:
         reveal_type(x)  # str
 ```
 
-Narrowing with `isinstance` against a union:
-- In the `if` branch: `x` is narrowed to the intersection of its current type and the checked type
-- In the `else` branch: `x` is narrowed to the **complement** — original type minus the checked type
-
-For `isinstance(x, (A, B))` (tuple of types): the `if` branch narrows to `A | B`.
+Narrowing `isinstance` against a union:
+- `if` branch: intersection of current type and checked type
+- `else` branch: the **complement** — original type minus the checked type
+- `isinstance(x, (A, B))`: `if` branch narrows to `A | B`
 
 ### `is None` / `is not None` {#TYPEINF-NARROWING-NONE}
 
@@ -583,7 +539,7 @@ x = 42
 reveal_type(x)  # int — narrowed by assignment
 ```
 
-After an assignment, the type of the variable is the type of the assigned value (possibly narrower than the declared type).
+After assignment, the variable's type is that of the assigned value (possibly narrower than the declared type).
 
 ### Pattern Matching Narrowing {#TYPEINF-NARROWING-MATCH}
 
@@ -599,7 +555,7 @@ def process(cmd: Command) -> None:
             reveal_type(cmd)  # Command (remaining)
 ```
 
-Basilisk performs **exhaustiveness checking** on match statements against union types. If all variants of a union are handled, the `case _` branch (if present) has type `Never`.
+Basilisk performs **exhaustiveness checking** on match statements against union types: if all variants are handled, the `case _` branch (if present) has type `Never`.
 
 > **Authority**: [PEP 634](https://peps.python.org/pep-0634/), [PEP 635](https://peps.python.org/pep-0635/).
 
@@ -653,7 +609,7 @@ Assertions narrow the type for all code after the `assert` statement (within the
 
 ### Dict Key Existence Narrowing {#TYPEINF-NARROWING-DICTKEY}
 
-Basilisk supports narrowing `TypedDict` types via key existence checks:
+`TypedDict` types narrow via key existence checks:
 
 ```python
 class Movie(TypedDict, total=False):
@@ -677,7 +633,7 @@ Narrowing does **not** persist across:
 
 ## Bidirectional Inference {#TYPEINF-BIDIR}
 
-Bidirectional inference propagates the **expected type** from the surrounding context into an expression. This resolves ambiguity that purely bottom-up inference cannot.
+Bidirectional inference propagates the **expected type** from surrounding context into an expression, resolving ambiguity that bottom-up inference cannot.
 
 ### Assignment with Annotation {#TYPEINF-BIDIR-ASSIGN}
 
@@ -726,7 +682,7 @@ x: str | int = "hello" if flag else 42
 
 ### Overload Selection with Bidirectional Context {#TYPEINF-BIDIR-OVERLOAD}
 
-When calling an overloaded function, the expected return type narrows overload candidate selection:
+The expected return type narrows overload candidate selection:
 
 ```python
 @overload
@@ -741,13 +697,13 @@ result: float = parse("3.14")  # selects float overload via expected type
 
 ## Subtyping {#TYPEINF-SUBTYPING}
 
-Basilisk implements both **nominal** and **structural** subtyping. This is the core of type compatibility — `is_assignable_to(source, target)` must answer "can a value of type `source` be used where type `target` is expected?"
+Basilisk implements both **nominal** and **structural** subtyping. `is_assignable_to(source, target)` answers "can a value of type `source` be used where type `target` is expected?"
 
 > **Authority**: [PEP 484 §Subtype relationships](https://peps.python.org/pep-0484/), [PEP 544 §Protocols: Structural subtyping](https://peps.python.org/pep-0544/), [Python Typing Spec — Type system concepts](https://typing.readthedocs.io/en/latest/spec/concepts.html)
 
 ### Nominal Subtyping {#TYPEINF-SUBTYPING-NOMINAL}
 
-A type `A` is a nominal subtype of `B` if `B` appears in `A.__mro__` (Method Resolution Order). This is Python's standard class inheritance model.
+`A` is a nominal subtype of `B` if `B` appears in `A.__mro__` (Method Resolution Order) — Python's standard class inheritance model.
 
 ```python
 class Animal: ...
@@ -766,7 +722,7 @@ x: Animal = Dog()  # OK — Dog is a nominal subtype of Animal
 
 ### Protocol Structural Subtyping {#TYPEINF-SUBTYPING-PROTOCOL}
 
-A type `A` structurally satisfies a `Protocol` `P` if `A` provides **all members** declared in `P` with compatible types. No explicit inheritance is required.
+`A` structurally satisfies a `Protocol` `P` if `A` provides **all members** declared in `P` with compatible types — no explicit inheritance required.
 
 ```python
 class Drawable(Protocol):
@@ -878,7 +834,7 @@ g: Callable[[Dog], Animal]  # accepts Dog, returns Animal
 
 ### Implementation: `is_subtype_of()` {#TYPEINF-SUBTYPING-IMPL}
 
-The current `is_assignable_to()` in `types.rs` handles primitives, containers, unions, optionals, and callables but falls back to name comparison for `Named` types. The full subtyping engine replaces this with:
+The current `is_assignable_to()` in `types.rs` handles primitives, containers, unions, optionals, and callables but falls back to name comparison for `Named` types. The full subtyping engine:
 
 ```rust
 fn is_subtype_of(source: &ResolvedType, target: &ResolvedType, ctx: &SubtypeContext) -> bool {
@@ -907,23 +863,20 @@ fn is_subtype_of(source: &ResolvedType, target: &ResolvedType, ctx: &SubtypeCont
 
 ### `Any` {#TYPEINF-SPECIAL-ANY}
 
-`Any` is bidirectionally compatible with all types. It represents an **explicit escape hatch**, not a default. In Basilisk, `Any` only appears when the programmer writes it. It is never inferred as a fallback.
+`Any` is bidirectionally compatible with all types — an **explicit escape hatch**, never inferred as a fallback; it appears only when written. Unannotated parameters do **not** default to `Any`; they produce `BSK-E0001`.
 
-> **Authority**: [PEP 484 §The `Any` type](https://peps.python.org/pep-0484/#the-any-type):
-> "A special kind of type is `Any`. Every type is consistent with `Any`."
-
-Unannotated parameters do **not** default to `Any` in Basilisk — they produce `BSK-E0001`. Basilisk never silently infers a public-API parameter type; a missing annotation is always a diagnostic.
+> **Authority**: [PEP 484 §The `Any` type](https://peps.python.org/pep-0484/#the-any-type): "Every type is consistent with `Any`."
 
 ### `Never` / `NoReturn` {#TYPEINF-SPECIAL-NEVER}
 
-`Never` is the **bottom type**: no value has type `Never`. Functions inferred to always raise have return type `Never`.
+`Never` is the **bottom type**: no value has it, it is assignable to everything, and functions inferred to always raise return it.
 
 ```python
 def fail(msg: str) -> Never:
     raise AssertionError(msg)
 ```
 
-`Never` is assignable to everything. A variable of type `Never` can never be reached. Basilisk uses this for **exhaustiveness checking**:
+Basilisk uses `Never` for **exhaustiveness checking**:
 
 ```python
 def check(x: int | str) -> None:
@@ -937,7 +890,7 @@ def check(x: int | str) -> None:
 
 ### `Self` {#TYPEINF-SPECIAL-SELF}
 
-`Self` represents the current class in a method's return type or parameter type. It is automatically inferred for `self` and `cls` but can be written explicitly for factory methods:
+`Self` represents the current class in a method's return or parameter type. Inferred automatically for `self`/`cls`; written explicitly for factory methods:
 
 ```python
 from typing import Self
@@ -952,7 +905,7 @@ class Node:
 
 ### `LiteralString` {#TYPEINF-SPECIAL-LITERALSTRING}
 
-A supertype of all `Literal[str]` types. Used to enforce that only string literals (not dynamically constructed strings) are passed to security-sensitive APIs:
+A supertype of all `Literal[str]` types, enforcing that only string literals (not dynamically constructed strings) reach security-sensitive APIs:
 
 ```python
 from typing import LiteralString
@@ -969,9 +922,7 @@ query("SELECT * FROM " + table)    # callables_annotation — not LiteralString
 
 ## Conformance Test Coverage {#TYPEINF-CONFORMANCE}
 
-The [Python typing conformance suite](https://github.com/python/typing/tree/main/conformance) is the canonical benchmark. Basilisk **targets** 100% conformance (Pass on all 146 test files) — a target, not a present-day achievement. The official, unmodified `python/typing` scorer currently reports **68 of 146 files passing (46.6%, counting errors and warnings — the strictest grading)**, with the binary run with **every rule enabled** — no config, no `basilisk.json`, no "spec-conformance mode", no exceptions. The remaining gap is **265 false positives and 0 missed required errors**: the checker catches every required error, and every failing fixture fails only because strict-by-default house-style rules (require-annotation E0001/E0002/E0004, missing-`@override` E0025, explicit-`Any` W0014, redundant-annotation W0050) fire on spec-valid code where the spec treats unannotated as inferred rather than an error. The only legitimate path to 100% is fixing the checker so these strict defaults stop firing on spec-valid code, with every rule still enabled — never by disabling a rule.
-
-> **History (stated plainly):** the last honest score was 59 of 146 = 40.4% (285 false positives) at PR #183. PRs #184/#185/#191 inflated the reported number to a fake 100% by writing a `basilisk.json` that **disabled** those six house rules at score time (the so-called "spec-conformance mode"). The checker was not made smarter; the false positives were merely hidden. That disabling has been **removed**, and disabling any conformance rule for scoring is now forbidden. Genuine progress over that span was real but modest: 40.4% → 46.6%. There is no "spec-conformance mode" any more.
+The [Python typing conformance suite](https://github.com/python/typing/tree/main/conformance) is the canonical benchmark. Basilisk targets 100% conformance with every rule enabled (no config, no `basilisk.json`); the reproducible score is measured by the unmodified `python/typing` scorer in CI (`python3 conformance/score.py`). The remaining gap is false positives from strict house-style rules firing on spec-valid code, not missed required errors; the only legitimate fix is teaching the checker to stop firing — never disabling a rule. See [CHKARCH-CONFORMANCE].
 
 Inference-relevant conformance tests:
 
@@ -997,47 +948,41 @@ Inference-relevant conformance tests:
 
 ## Distinctive Inference Behaviors {#TYPEINF-EXCEEDS}
 
-The following are deliberate, distinctive behaviors of Basilisk's inference engine:
+Deliberate, distinctive behaviors of Basilisk's inference engine:
 
 ### No Unresolved-Type Fallback {#TYPEINF-EXCEEDS-NOUNKNOWN}
 
-Basilisk **never produces an unresolved/`Unknown` type** when it cannot determine a type — every inferred type is either a concrete type or an error.
+Basilisk **never produces an unresolved/`Unknown` type** — every inferred type is either concrete or an error.
 
 ### Strict Container Inference Always On {#TYPEINF-EXCEEDS-CONTAINERS}
 
-Basilisk applies union-of-element-types inference to all containers unconditionally — there is no loose mode and no configuration switch to disable it.
-
-### Dict Key Narrowing for TypedDict {#TYPEINF-EXCEEDS-DICTKEY}
-
-Basilisk narrows `TypedDict` types via `"key" in d` key-existence checks directly.
+Union-of-element-types inference applies to all containers unconditionally — no loose mode, no switch to disable.
 
 ### Exhaustive Pattern Matching Analysis {#TYPEINF-EXCEEDS-EXHAUSTIVE}
 
-Basilisk checks that `match` statements on union types are exhaustive, tracking exact variant coverage.
+`match` statements on union types are checked for exhaustiveness with exact variant coverage.
 
 ### Lambda Warnings {#TYPEINF-EXCEEDS-LAMBDA}
 
-When a lambda's parameter types cannot be inferred from context, Basilisk emits `BSK-W0040` rather than leaving them silently untyped — surfacing missing annotations in higher-order functions early.
+A lambda whose parameter types cannot be inferred from context emits `BSK-W0040` rather than being silently untyped.
 
 ### Annotation Required, Not Optional {#TYPEINF-EXCEEDS-REQUIRED}
 
-Basilisk treats every missing annotation as an error. "Silent inference" of public-API types is not permitted.
+Every missing annotation is an error; silent inference of public-API types is not permitted.
 
 ---
 
 ## Implementation Notes {#TYPEINF-IMPL}
 
-The type inference engine is implemented in the `basilisk-checker` crate using [Salsa](https://github.com/salsa-rs/salsa) for incremental computation.
+The inference engine lives in the `basilisk-checker` crate, using [Salsa](https://github.com/salsa-rs/salsa) for incremental computation. Results are stored as Salsa query results, enabling **sub-10ms incremental re-inference** on single-file changes.
 
 Key components:
 
 - **`InferenceEngine`** — top-level bidirectional inference driver
 - **`ConstraintSolver`** — TypeVar constraint collection and solving
-- **`NarrowingEngine`** — flow-sensitive type narrowing via control-flow graph
+- **`NarrowingEngine`** — flow-sensitive narrowing via control-flow graph
 - **`OverloadResolver`** — 5-step overload resolution per conformance spec
 - **`LiteralFolder`** — Literal type widening/narrowing rules
-
-All inference results are stored as Salsa query results, enabling **sub-10ms incremental re-inference** when a single file changes.
 
 ---
 

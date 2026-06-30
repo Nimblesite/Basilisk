@@ -779,17 +779,20 @@ fn attr_only_in_child_not_in_base_does_not_fire() -> Result<(), Box<dyn std::err
 // ---------------------------------------------------------------------------
 
 #[test]
-fn single_overload_function_does_not_fire() -> Result<(), Box<dyn std::error::Error>> {
-    // Only one @overload definition (len < 2) — must not fire
+fn single_overload_function_fires() -> Result<(), Box<dyn std::error::Error>> {
+    // A lone @overload with no implementation is invalid: the typing spec
+    // requires at least two @overload definitions (python/typing conformance
+    // `overloads_definitions_stub::func1`).
     let src = "from typing import overload\n@overload\ndef foo(x: int) -> int: ...\n";
     let diags = run(src)?;
-    let e20: Vec<_> = diags
+    let hits: Vec<_> = diags
         .iter()
         .filter(|d| d.code.code == "overloads_definitions")
         .collect();
-    assert!(
-        e20.is_empty(),
-        "single @overload must not fire E0020 (< 2 defs)"
+    assert_eq!(
+        hits.len(),
+        1,
+        "a single @overload with no implementation must fire overloads_definitions"
     );
     Ok(())
 }

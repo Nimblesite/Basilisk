@@ -1,22 +1,6 @@
 # Basilisk VS Code Extension {#VSIX}
 
-## Goal {#VSIX-GOAL}
-
-A first-class VS Code extension that connects to the `basilisk lsp` binary. The primary integration. Open source. No Microsoft proprietary dependencies.
-
-**CRITICAL: AIMING FOR FEATURE PARITY BETWEEN VS CODE, ZED, AND NEOVIM EXTENSIONS**
-
-All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** — the single source of truth. This spec only documents **VS Code-specific implementation details**.
-
-## Critical Docs {#VSIX-CRITICAL-DOCS}
-
-- [VS Code Extension API](https://code.visualstudio.com/api)
-- [VS Code Language Extensions](https://code.visualstudio.com/api/language-extensions/overview)
-- [VS Code Testing API](https://code.visualstudio.com/api/extension-guides/testing)
-- [VS Code Debug Adapter Protocol](https://code.visualstudio.com/api/extension-guides/debugger-extension)
-- [Debug Adapter Protocol Specification](https://microsoft.github.io/debug-adapter-protocol/)
-
----
+VS Code extension connecting to the `basilisk lsp` binary. All LSP features, DAP integration, custom commands, configuration, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** (single source of truth). This spec documents only **VS Code-specific details**, kept at feature parity with the Zed and Neovim extensions.
 
 ## Architecture {#VSIX-ARCHITECTURE}
 
@@ -40,7 +24,7 @@ flowchart LR
 ```
 
 - VSIX bundles a pre-compiled LSP server binary per platform
-- No Node.js dependency for the server (the extension activation layer uses VS Code's extension API)
+- No Node.js dependency for the server; the activation layer uses VS Code's extension API
 - Configuration exposed via VS Code settings with JSON schema validation
 
 ---
@@ -83,7 +67,7 @@ client.start();
 
 ## Commands {#VSIX-COMMANDS}
 
-> **Command Registration Rule**: See `LSP-ARCHITECTURE-SPEC.md` § Command Registration Rule. The extension MUST NOT call `registerCommand()` for any command the LSP server advertises. Server commands are auto-registered by `vscode-languageclient` from the server's `executeCommandProvider` capabilities. Client-side UI (input prompts, toasts) belongs in the `executeCommand` middleware.
+> **Command Registration Rule**: See `LSP-ARCHITECTURE-SPEC.md` § Command Registration Rule. The extension MUST NOT call `registerCommand()` for any command the LSP server advertises — `vscode-languageclient` auto-registers those from the server's `executeCommandProvider` capabilities. Client-side UI (input prompts, toasts) belongs in the `executeCommand` middleware.
 
 ### `package.json` contribution {#VSIX-COMMANDS-PACKAGE-JSON-CONTRIBUTION}
 
@@ -104,7 +88,7 @@ client.start();
 
 ## Configuration Settings (`package.json` contribution) {#VSIX-CONFIGURATION-SETTINGS}
 
-> Shared settings (sent to LSP server) are defined in `LSP-ARCHITECTURE-SPEC.md` § Shared Configuration Settings. Below is their `package.json` schema representation plus VS Code-only settings.
+> Shared settings (sent to the LSP server) are defined in `LSP-ARCHITECTURE-SPEC.md` § Shared Configuration Settings. Below is their `package.json` schema plus VS Code-only settings.
 
 ```json
 {
@@ -210,10 +194,7 @@ Persistent item showing server state and diagnostic count:
 - `$(error) Basilisk` — server failed/not running
 - `$(sync~spin) Basilisk` — analyzing
 
-Additional indicators (future):
-- Type completeness indicator: `"87% typed"`
-- Migration dashboard — see [EXTENSION-ACTIVITY-PANEL-SPEC.md](EXTENSION-ACTIVITY-PANEL-SPEC.md)
-- Ownership visualization (gutter icons: borrowed/owned/inout)
+Future indicators: type completeness (`"87% typed"`), migration dashboard ([EXTENSION-ACTIVITY-PANEL-SPEC.md](EXTENSION-ACTIVITY-PANEL-SPEC.md)), ownership gutter icons (borrowed/owned/inout).
 
 ---
 
@@ -247,48 +228,30 @@ flowchart LR
     Proxy -.-> Impl["DebugAdapterInlineImplementation"]
 ```
 
-The LSP server spawns `debugpy.adapter --port <free-port>` via `basilisk/startDebugSession`. The proxy connects to that port and relays DAP messages bidirectionally, intercepting specific message patterns.
+The LSP server spawns `debugpy.adapter --port <free-port>` via `basilisk/startDebugSession`. The proxy connects to that port and relays DAP messages bidirectionally, intercepting specific patterns.
 
 ### Starting a session (zero-config) {#VSIX-PYTHON-DEBUGGER-START}
 
-The `basilisk-debug` debugger is **factory-based** (no `program`/`runtime` in the
-manifest), so the extension must own both activation and config provisioning:
+The `basilisk-debug` debugger is **factory-based** (no `program`/`runtime` in the manifest), so the extension owns both activation and config provisioning:
 
-- **Activation:** `activationEvents` includes `onDebug`,
-  `onDebugResolve:basilisk-debug`, and `onDebugDynamicConfigurations:basilisk-debug`
-  so the adapter/tracker register whenever debugging starts — not only after a
-  Python file is opened.
-- **Config provider:** `createBasiliskDebugConfigProvider` (`debug-adapter.ts`) is
-  registered for `basilisk-debug` (Dynamic + default). It makes **"Run and Debug"
-  / F5 work with no `launch.json`**: `provideDebugConfigurations` offers a
-  "Python: Current File (Basilisk)" entry, and `resolveDebugConfiguration` (pure
-  `applyDebugConfigDefaults`) fills an empty/partial config to launch the active
-  Python file (`program: ${file}`). Without this, an empty-state workspace shows
-  no Basilisk debug option.
+- **Activation:** `activationEvents` includes `onDebug`, `onDebugResolve:basilisk-debug`, and `onDebugDynamicConfigurations:basilisk-debug`, so the adapter/tracker register whenever debugging starts — not only after a Python file is opened.
+- **Config provider:** `createBasiliskDebugConfigProvider` (`debug-adapter.ts`), registered for `basilisk-debug` (Dynamic + default), makes **"Run and Debug" / F5 work with no `launch.json`**: `provideDebugConfigurations` offers a "Python: Current File (Basilisk)" entry, and `resolveDebugConfiguration` (pure `applyDebugConfigDefaults`) fills an empty/partial config to launch the active file (`program: ${file}`). Without it, an empty-state workspace shows no Basilisk debug option.
 
 ### Tracker capture {#VSIX-PYTHON-DEBUGGER-DAP-TRACKER}
 
-`BasiliskDebugAdapterTracker` is the single observability point for debugpy →
-VS Code traffic. It captures the debuggee's `process` event (`systemProcessId`,
-used by the CPU profiler — see [LSP-PROFILING-SPEC.md] `#PROFILE-SAME-PROCESS`)
-and `output` events (the `__BASILISK_MEM*__` payloads the memory round-trip
-recovers, since debugpy delivers `print()` output here, not in `evaluate`).
+`BasiliskDebugAdapterTracker` is the single observability point for debugpy → VS Code traffic. It captures the debuggee's `process` event (`systemProcessId`, used by the CPU profiler — see [LSP-PROFILING-SPEC.md] `#PROFILE-SAME-PROCESS`) and `output` events (the `__BASILISK_MEM*__` payloads the memory round-trip recovers, since debugpy delivers `print()` output here, not in `evaluate`).
 
 ### Debug Adapter Proxy (VS Code Implementation) {#VSIX-PYTHON-DEBUGGER-DAP-PROXY}
 
-The proxy (`vscode-extension/src/dap-proxy.ts`) implements `vscode.DebugAdapter` via `DebugAdapterInlineImplementation`. It fixes four debugpy quirks:
+The proxy (`vscode-extension/src/dap-proxy.ts`) implements `vscode.DebugAdapter` via `DebugAdapterInlineImplementation`, fixing four debugpy quirks:
 
-**Quirk 1 -- stepOut lands before assignment**:
-After `stepOut`, debugpy stops at the call-site line *before* the return value is assigned. The proxy detects the `stepOut` response -> first `stopped` event sequence and injects an automatic `next` request, swallowing the intermediate stop.
+**Quirk 1 — stepOut lands before assignment**: after `stepOut`, debugpy stops at the call-site line *before* the return value is assigned. The proxy detects the `stepOut` response → first `stopped` event sequence and injects an automatic `next`, swallowing the intermediate stop.
 
-**Quirk 2 -- Structural line stops during stepOver**:
-debugpy stops on `try:` lines during `next` (stepOver). The proxy inspects each post-step stop by requesting a `stackTrace`, reading the source, and checking if the stopped line matches `/^\s*(try\s*:)\s*(#.*)?$/`. If so, it injects another `next`. `except:` and `finally:` lines are NOT skipped.
+**Quirk 2 — structural line stops during stepOver**: debugpy stops on `try:` lines during `next`. The proxy requests a `stackTrace`, reads the source, and if the stopped line matches `/^\s*(try\s*:)\s*(#.*)?$/`, injects another `next`. `except:` and `finally:` are NOT skipped.
 
-**Quirk 3 -- Single-connection slot protection**:
-`debugpy.adapter --port` accepts exactly one TCP connection. The proxy's bind-based `isPortAlive` check (attempt to bind, `EADDRINUSE` = alive) is non-destructive. In attach mode, if the port is dead, the factory respawns debugpy via the LSP.
+**Quirk 3 — single-connection slot protection**: `debugpy.adapter --port` accepts exactly one TCP connection. The proxy's bind-based `isPortAlive` check (attempt to bind, `EADDRINUSE` = alive) is non-destructive. In attach mode, if the port is dead, the factory respawns debugpy via the LSP.
 
-**Quirk 4 -- Session termination timing**:
-VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSession` fires. The proxy ensures the `exited` event is sent before `terminated`, with a minimal delay.
+**Quirk 4 — session termination timing**: VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSession` fires. The proxy sends `exited` before `terminated`, with a minimal delay.
 
 ### DAP Features {#VSIX-PYTHON-DEBUGGER-DAP-FEATURES}
 
@@ -305,11 +268,11 @@ VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSessi
 | Type-aware hover | Hover shows both runtime value AND static type (from LSP) |
 | Type assertions | Break when a runtime type doesn't match the static annotation |
 
-**Type-aware debugging** (unique to Basilisk):
-- **Type mismatch breakpoints**: automatically break when a variable's runtime type doesn't match its annotation
+**Type-aware debugging** (Basilisk-specific):
+- **Type mismatch breakpoints**: break when a variable's runtime type doesn't match its annotation
 - **Annotation overlay**: debug hover shows `(static: str, runtime: str)` side-by-side
-- **Type narrowing visualization**: show which branch of a union type is active at a breakpoint
-- **Parameter contract verification**: warn when a function receives a value that violates its annotation at runtime
+- **Type narrowing visualization**: show which branch of a union is active at a breakpoint
+- **Parameter contract verification**: warn when an argument violates its annotation at runtime
 
 ### Launch Configurations {#VSIX-PYTHON-DEBUGGER-DAP-LAUNCH-CONFIGURATIONS}
 
@@ -365,9 +328,7 @@ The VSIX bundles pre-compiled `basilisk` binaries per platform:
 
 ## Build & Packaging Parity {#VSIX-PACKAGING-PARITY}
 
-The VSIX that ships and the VSIX the tests exercise **must be the same artifact**.
-A green test run against a different bundle than users install is worthless, so a
-single recipe owns packaging and every other path routes through it:
+The shipped VSIX and the tested VSIX **must be the same artifact**. A single recipe owns packaging; every path routes through it:
 
 | Path | Entry point | Purpose |
 |---|---|---|
@@ -377,27 +338,10 @@ single recipe owns packaging and every other path routes through it:
 
 Invariants:
 
-- **One packaging recipe.** `_release_vsix` (Makefile) mirrors the release `vsix`
-  job step for step: `cargo build --release --target <triple>` for every bundled
-  binary, `stage-runtime.mjs` to stage exactly the manifest-declared binaries into
-  `bin/<platform>/`, `vendor-debugpy.mjs`, then
-  `vsce package --target <platform> --ignore-other-target-folders`.
-- **One staging helper.** `stage-runtime.mjs` is the only code that decides which
-  binaries enter the bundle — used by the release workflow, `_release_vsix`, and
-  `_test_vsix` alike — so bundle contents are manifest-driven everywhere and cannot
-  drift between the tested and shipped packages.
-- **Tests run the shipped bytes.** `_test_vsix` builds the bundle via `_release_vsix`
-  and then runs the e2e suite against that staged extension directory — the exact
-  tree `vsce package` zips — so the suite validates the release artifact, not a
-  bespoke debug build.
-- **`reinstall-vsix-macos`** pins `darwin-arm64` (the only macOS target the release
-  ships) and rebuilds every binary from a clean tree (`cargo clean`), so a local
-  install is byte-for-byte the published macOS VSIX.
-- **Intentional difference:** local builds keep the `0.0.0-PLACEHOLDER` version (no
-  release tag), whereas `release.yml` runs `stamp-version.sh` first. Package
-  *structure* and *binaries* are identical; only the embedded version string
-  differs, and it stays internally consistent (manifest and binary agree).
+- **One packaging recipe.** `_release_vsix` (Makefile) mirrors the release `vsix` job step for step: `cargo build --release --target <triple>` for every bundled binary, `stage-runtime.mjs` to stage the manifest-declared binaries into `bin/<platform>/`, `vendor-debugpy.mjs`, then `vsce package --target <platform> --ignore-other-target-folders`.
+- **One staging helper.** `stage-runtime.mjs` is the only code deciding which binaries enter the bundle — used by the release workflow, `_release_vsix`, and `_test_vsix` — so contents are manifest-driven everywhere and cannot drift between tested and shipped packages.
+- **Tests run the shipped bytes.** `_test_vsix` builds via `_release_vsix` and runs the e2e suite against that staged directory — the exact tree `vsce package` zips.
+- **`reinstall-vsix-macos`** pins `darwin-arm64` (the only macOS target shipped) and rebuilds from a clean tree (`cargo clean`), so a local install is byte-for-byte the published macOS VSIX.
+- **Intentional difference:** local builds keep `0.0.0-PLACEHOLDER`; `release.yml` runs `stamp-version.sh` first. Structure and binaries are identical; only the embedded version string differs, staying internally consistent (manifest and binary agree).
 
-`verify-shipwright.mjs vsix` enforces the bundle matches the manifest on every path
-(rejecting missing, unmanifested, or wrong-platform binaries), so drift fails the
-build rather than shipping.
+`verify-shipwright.mjs vsix` enforces the bundle matches the manifest on every path (rejecting missing, unmanifested, or wrong-platform binaries), so drift fails the build rather than shipping.

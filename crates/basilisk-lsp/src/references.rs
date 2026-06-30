@@ -68,6 +68,9 @@ pub fn prepare_rename(
     None
 }
 
+// Implements [LSPARCH-FEATURES-RENAME] and [REFACTOR-RENAME] (single-file core;
+// the cross-file handler half lives in server/handlers/navigation.rs under
+// [ANALYSIS-CROSSLSP-RENAME]).
 /// Rename the symbol at a byte offset, returning a workspace edit (scope-aware).
 ///
 /// Handles parameter keyword arguments and `__all__` entry updates.
@@ -221,6 +224,7 @@ fn find_dunder_all_entries(source: &str, name: &str) -> Vec<Range> {
     results
 }
 
+// Implements [REFACTOR-RENAME-DOCS]
 /// Find docstring parameter references for a function parameter rename.
 ///
 /// Searches for `:param param_name:` (reST), `:type param_name:`, `@param`,

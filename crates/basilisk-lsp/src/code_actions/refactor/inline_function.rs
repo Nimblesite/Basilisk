@@ -12,10 +12,11 @@ use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit
 ///
 /// Returns `None` if the function cannot be found, has multiple statements, or
 /// the argument count does not match the parameter count.
-// Implements [REFACTOR-INLINE-FUNC-ALGO] — resolve the call (step 1), require
-// a single `return expr` body (step 2), substitute args for params (step 3),
-// and replace the call expression with the substituted body (step 4). Per the
-// spec, this initial implementation supports only single-expression bodies.
+// Implements [REFACTOR-INLINE-FUNC] and [REFACTOR-INLINE-FUNC-ALGO] — resolve the
+// call (step 1), require a single `return expr` body (step 2), substitute args
+// for params (step 3), and replace the call expression with the substituted body
+// (step 4). Per the spec, this initial implementation supports only
+// single-expression bodies.
 #[must_use]
 pub(in crate::code_actions) fn inline_function_call(
     uri: &Url,

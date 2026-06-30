@@ -36,7 +36,7 @@ It works like this:
 - A small **scoring tool** runs a type checker over those files and diffs its output against the annotations. A file *passes* only if the diff is empty: every required error is reported, and nothing is reported on a line the suite does not mark.
 - The maintainers run every checker through it and publish the [results table](https://github.com/python/typing/blob/main/conformance/results/results.html) — the live, authoritative source for how pyright, mypy, pyrefly, ty, and the others currently score.
 
-We use that suite at the pinned commit [`{{ conformance.pinnedRef }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance). The same tool and files grade everyone, so the number is comparable across checkers and not something we can tune in our favour.
+We score against the exact commit of the suite we last pulled from `main` — [`{{ conformance.pinnedRefShort }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance){% if conformance.commitDate %}, {{ conformance.commitDate }}{% endif %} — recorded by its full hash so this link stays fixed at the exact files we graded, even as `main` moves on. The same tool and files grade everyone, so the number is comparable across checkers and not something we can tune in our favour.
 
 ## How a file is scored
 

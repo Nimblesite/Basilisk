@@ -454,10 +454,9 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     }
   });
 
-  // Tests [EXTACT-MODULES-TOOLBAR] Sort gating. Issue #151: the Sort button
-  // silently no-ops in the default tree view (sort is flat-only). It must only
-  // appear where it works — gated on the flat view — so it is never a visible,
-  // enabled no-op.
+  // Issue #151: the Sort button silently no-ops in the default tree view (sort is
+  // flat-only per [EXTACT-MODULES-TOOLBAR]). It must only appear where it works —
+  // gated on the flat view — so it is never a visible, enabled no-op.
   test("Sort is gated to flat view so it is never a no-op in the tree view", function () {
     const contributes = loadContributes();
     const sortEntry = (contributes?.menus?.["view/title"] ?? []).find(
@@ -723,6 +722,7 @@ suite("Modules panel health chrome [EXTACT-MODULES-HEADER]", function () {
     assert.strictEqual(badge.value, 5, "badge should count errors + warnings (2 + 3)");
   });
 
+  // Tests [EXTACT-MODULES-MODULE-ROW] — the module row's folded-health description.
   test("each module row renders a coverage bar, percentage, and tallies", function () {
     const item = new ModuleTreeItem({
       name: "myapp.api",
@@ -744,6 +744,7 @@ suite("Modules panel health chrome [EXTACT-MODULES-HEADER]", function () {
     );
   });
 
+  // Tests [EXTACT-MODULES-MODULE-ROW] — the row's `[adopted]` badge.
   test("adopted module row shows the [adopted] badge", function () {
     const item = new ModuleTreeItem({
       name: "legacy",

@@ -42,8 +42,20 @@ pub(super) async fn execute_workspace_modules(
     let project_root = roots.first().cloned();
     drop(roots);
 
+    // The module tree's error/warning rollup mirrors the publish gate: with type
+    // checking disabled the counts must read empty, just like the cleared editor
+    // diagnostics ([ANALYSIS-ENABLED], GitHub #119).
+    let type_checking_enabled = server.is_type_checking_enabled().await;
+
     let tree = server
-        .with_index(|idx| Some(build_module_tree(idx, scope, project_root.as_deref())))
+        .with_index(|idx| {
+            Some(build_module_tree(
+                idx,
+                scope,
+                project_root.as_deref(),
+                type_checking_enabled,
+            ))
+        })
         .await;
 
     let response = match tree {
@@ -91,6 +103,7 @@ pub(super) async fn execute_type_health(
 
 // ── Module change notification ────────────────────────────────────────────
 
+// Implements [LSPARCH-NOTIFS]
 /// Notification type for `basilisk/moduleChanged`.
 ///
 /// Implements [EXTACT-LSP-COMMANDS-MODULE-CHANGED] — the server->client

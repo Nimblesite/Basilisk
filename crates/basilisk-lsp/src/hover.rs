@@ -157,6 +157,7 @@ fn find_import_at_offset(resolved: &ResolvedModule, byte_offset: usize) -> Optio
     })
 }
 
+// Implements [LSPUV-HOVER]
 /// Format import resolution details as a Markdown snippet for hover display.
 fn format_import_hover(import_info: &ImportInfo) -> String {
     let mut parts: Vec<String> = Vec::new();

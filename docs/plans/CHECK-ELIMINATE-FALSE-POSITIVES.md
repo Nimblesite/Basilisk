@@ -2,42 +2,34 @@
 
 > ⚠️ **SUPERSEDED.** The numbers in this doc ("136/146 PASS / 93.15%", "170
 > false positives", "FP-ceiling … Set to 161", `diag_line_rules`,
-> `missed == 0` pass rule) describe an earlier in-repo harness that has been
-> **removed**. The score is now computed by the **real `python/typing`
-> calculator** (`conformance/score.py` downloads and runs upstream's own
-> `get_expected_errors` + `diff_expected_errors`; see [CHKARCH-CONFORMANCE]).
-> A file passes only with an **empty upstream `errors_diff`** (false positives
-> fail the file), and **nothing is excluded from scoring**: the binary runs with
-> **EVERY rule enabled** — no config, no `basilisk.json`, no "spec-conformance
-> mode". There is NO rules-off variant; see CHKARCH-CONFORMANCE-MODE, which now
-> documents that no such mode exists. Disabling any conformance rule for scoring
-> is FORBIDDEN.
-> Honest current baseline (2026-06-26): **68/146 = 46.6%**, **265 false
-> positives**, **0 missed** — the checker catches every required error; every
-> failing fixture is false positives from strict-by-default house-style rules
-> (require-annotation E0001/E0002/E0004, missing-`@override` E0025, explicit-`Any`
-> W0014, redundant-annotation W0050) firing on spec-valid code where the spec
-> treats unannotated as inferred (not an error). The only legitimate path to 100%
-> is fixing the checker so these strict defaults stop firing on spec-valid code —
-> with every rule still enabled — never by disabling a rule.
->
-> **HISTORY (stated plainly, not hidden):** the last HONEST score was
-> **59/146 = 40.4% (285 FPs)** at PR #183. PRs #184/#185/#191 then inflated the
-> reported number to a FAKE 100% by writing a `basilisk.json` that DISABLED those
-> 6 house rules at score time (the so-called "spec-conformance mode"). The checker
-> was NOT made smarter; the false positives were merely hidden. That disabling has
-> been REMOVED, and disabling any conformance rule is now a punishable offence.
-> Genuine progress over that span was real but modest: 40.4% → 46.6%.
->
-> The
-> still-valid part of this plan is the *strategy* — driving specific rules'
+> `missed == 0` pass rule) describe an earlier in-repo harness, now **removed**.
+> The still-valid part of this plan is the *strategy* — driving specific rules'
 > false positives down; the *counts* below are stale.
+>
+> The score is now computed by the **real `python/typing` calculator**
+> (`conformance/score.py` runs upstream's `get_expected_errors` +
+> `diff_expected_errors`; see [CHKARCH-CONFORMANCE]). A file passes only with an
+> **empty upstream `errors_diff`** (false positives fail the file); nothing is
+> excluded — the binary runs with **EVERY rule enabled**, no config, no
+> `basilisk.json`, no "spec-conformance mode" (no such mode exists — see
+> CHKARCH-CONFORMANCE-MODE). Disabling any conformance rule for scoring is FORBIDDEN.
+>
+> Honest baseline (2026-06-26): **68/146 = 46.6%**, **265 false positives**,
+> **0 missed** — every failing fixture is false positives from strict-by-default
+> house-style rules (require-annotation E0001/E0002/E0004, missing-`@override`
+> E0025, explicit-`Any` W0014, redundant-annotation W0050) firing on spec-valid
+> code where the spec treats unannotated as inferred. The only legitimate path to
+> 100% is fixing the checker so these strict defaults stop firing — never disabling
+> a rule.
+>
+> **History:** last honest score was **59/146 = 40.4% (285 FPs)** at PR #183;
+> PRs #184/#185/#191 inflated it to a FAKE 100% via a `basilisk.json` that DISABLED
+> those 6 house rules at score time — now REMOVED. Genuine progress 40.4% → 46.6%.
 
 ## Context {#FPPLAN-CONTEXT}
 
-False positives are diagnostics Basilisk reports on lines that have NO `# E`
-annotation — the typing spec says the line is **valid code** but Basilisk flags
-it anyway. They erode user trust and block adoption.
+False positives are diagnostics Basilisk reports on lines with NO `# E`
+annotation — the spec says the line is valid but Basilisk flags it anyway.
 
 The conformance harness (`crates/basilisk-cli/tests/conformance_tests.rs`) now
 prints per-FP verbose output (`FP <file>: count=N lines=[(line, rule)…]`, see
@@ -47,15 +39,13 @@ and `grep '  FP    '` to get the exact rule→line mapping.
 ### CURRENT STATE (measured 2026-06-03, on `main` after PR #73) {#FPPLAN-CONTEXT-CURRENT-STATE}
 
 - **136/146 PASS (93.15%)**, threshold pinned at 93 in `coverage-thresholds.json`.
-- **170 false positives** across 50 files. (The earlier "18 FPs" claim in this
-  doc's history was a never-merged aspiration — the real number is 170.)
+- **170 false positives** across 50 files.
 
 > **HARD INVARIANT.** Conformance is monotonic: PASS count only goes UP, FP count
-> only goes DOWN. A file PASSES iff `missed == 0`. Flipping ONE file PASS→FAIL
-> drops us to 92.46% < 93 → CI fails. **Every FP fix must reduce FPs with ZERO
-> new missed diagnostics.** Verify empirically: after each change re-run the
-> harness and diff `conformance_status.csv` against baseline — no file may regress
-> PASS→FAIL and total `missed` must not increase.
+> only DOWN. A file PASSES iff `missed == 0`. **Every FP fix must reduce FPs with
+> ZERO new missed diagnostics.** Verify empirically: after each change re-run the
+> harness and diff `conformance_status.csv` against baseline — no PASS→FAIL
+> regression and total `missed` must not increase.
 
 ### FP distribution by rule (the real target list) {#FPPLAN-CONTEXT-FP-DISTRIBUTION}
 
@@ -74,9 +64,9 @@ and `grep '  FP    '` to get the exact rule→line mapping.
 
 ## Strategy (this PR) {#FPPLAN-STRATEGY}
 
-Fix the rules in descending FP order, **verifying empirically after each** against
-the saved baseline (`/tmp/conf_baseline.csv`). Group the E0014 mass into surgical,
-TP-safe guards rather than rewriting the (text-based) rule wholesale.
+Fix rules in descending FP order, **verifying empirically after each** against the
+saved baseline (`/tmp/conf_baseline.csv`). Group the E0014 mass into surgical,
+TP-safe guards rather than rewriting the text-based rule wholesale.
 
 - **FIX A — E0014 param-lookup conservatism** (`e0014/mod.rs` param branch). Only
   adopt a parameter/variable's inferred type when *both* it and the declared type
@@ -109,7 +99,7 @@ Add a debug print (like the existing missed-lines print at line 284) that shows:
 - Which lines are FPs (diagnostic on unannotated line)
 - Which rule code fired on each FP line
 
-This gives us the exact rule-to-line mapping needed to fix each FP surgically. Currently we only know FP counts per file, not which rules cause them.
+This gives the exact rule-to-line mapping needed to fix each FP surgically (currently only FP counts per file are known, not the causing rules).
 
 ```rust
 // After line 275, add:
@@ -374,7 +364,7 @@ After each step:
 ## SHOWSTOPPER: generics_syntax_scoping treats docstring text as `class` / `def` definitions {#FPPLAN-SHOWSTOPPER-DOCSTRING-SCANNING}
 
 **Reported**: 2026-05-23 — found in the wild on `StoryTowns/scripts/provision_nimblesite_agent.py`.
-**Severity**: SHOWSTOPPER. Hard errors on perfectly valid Python text in module docstrings. Any docstring containing a bracketed token after a line that happens to begin with the word `class` (e.g. our own `[SPEC-ID]` cross-references — see CLAUDE.md "ALL CODE **MUST** REFER TO A SPEC-ID") will misfire.
+**Severity**: SHOWSTOPPER. Hard errors on valid Python text in module docstrings. Any docstring with a bracketed token after a line beginning with the word `class` (e.g. our `[SPEC-ID]` cross-references) misfires.
 
 **Files**:
 - `crates/basilisk-checker/src/rules/e0149/violations.rs:19-38` (`collect_pep695_type_params`)
@@ -393,8 +383,8 @@ foo bar [AI-API-AUTH].
 The docstring line `class as the public ... [AI-API-AUTH] ...` is parsed as `class as[the public ... AI-API-AUTH ...]:` → `AI-API-AUTH` registered as a PEP 695 type param. Then `foo bar [AI-API-AUTH].` (still inside the docstring) is flagged as module-level use of an out-of-scope type param.
 
 **Why this is bad**:
-1. Direct violation of CLAUDE.md: "Regex = ⛔️ ILLEGAL. Use the proper parsing mechanism - usually ruff". This rule is doing line-prefix string matching, which is the moral equivalent.
-2. Hard errors on docstring prose erode the entire product's credibility — the user's exact reaction was "WTF is this? a bug?"
+1. Violates CLAUDE.md "avoid regex — use the proper parsing mechanism, usually ruff": line-prefix string matching is the moral equivalent.
+2. Hard errors on docstring prose erode credibility.
 3. Our own spec-ID convention (`[GROUP-TOPIC]` references in docstrings) is the most likely trigger.
 
 **Fix**:

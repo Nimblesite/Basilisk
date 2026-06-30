@@ -19,6 +19,18 @@
 //! `fizzbuzz`-style control flow is exercised via the other fixtures).
 //! NOTE: per the spec these tests should compile + run a native binary; here
 //! they drive the tree-walking interpreter (see `src/codegen.rs`).
+//!
+//! By running `compile_and_run` end to end these fixtures also exercise the
+//! implemented portions of the pipeline and value model:
+//! - Exercises [COMPILER-PIPELINE] — the parse → resolve → check-gate sequence.
+//! - Exercises [COMPILER-CODEGEN] — the interpreter standing in for codegen
+//!   (DEVIATION: no LLVM/native code; see `src/codegen.rs`).
+//! - Exercises [COMPILER-TYPES-INT] — i64 integer arithmetic (`arithmetic.py`,
+//!   `recursion.py`); the spec's `--big-int`/overflow-trap semantics are NOT
+//!   exercised (unimplemented).
+//! - Exercises [COMPILER-TYPES-STR] — string indexing, slicing, and methods
+//!   (`strings.py`); the spec's code-point `len()` semantics are NOT exercised
+//!   (the interpreter uses byte length — see the DEVIATION note in `src/codegen.rs`).
 
 use std::path::Path;
 

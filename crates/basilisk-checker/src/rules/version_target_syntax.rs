@@ -28,6 +28,8 @@ const CODE: ErrorCode = ErrorCode {
 const PEP695_MIN_VERSION: (u32, u32) = (3, 12);
 
 /// Emits `version_target_syntax` for PEP 695 syntax on sub-3.12 targets.
+// Implements [CHKARCH-VERSION-NARROWING] — rejects PEP 695 syntax when the
+// configured target version cannot parse it.
 pub(crate) struct Pep695BelowTargetViolation;
 
 impl Rule for Pep695BelowTargetViolation {

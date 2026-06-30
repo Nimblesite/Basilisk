@@ -16,6 +16,8 @@ const CODE: ErrorCode = ErrorCode {
 ///
 /// `*args` and `**kwargs` are handled by [`super::missing_vararg_annotation`].
 /// Skipped for `@overload`, `@abstractmethod`, and `Protocol` methods.
+// Implements [TYPEINF-FUNC-PARAMS] / [TYPEINF-EXCEEDS-REQUIRED] — every missing
+// parameter annotation is a diagnostic, never a silent inference.
 pub(crate) struct MissingParameterAnnotation;
 
 impl Rule for MissingParameterAnnotation {
@@ -40,6 +42,9 @@ impl Rule for MissingParameterAnnotation {
     }
 }
 
+// Implements [TYPEINF-FUNC-SELFCLS] — the self/cls exemption side: `self` and
+// `cls` are never required to be annotated (their types are implicit). Note: the
+// spec's full Self / type[Self] inference is not modelled here.
 fn check_function(func: &FunctionInfo, path: &str, out: &mut Vec<Diagnostic>) {
     func.parameters
         .iter()

@@ -15,9 +15,10 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{FunctionInfo, ResolvedModule, RhsKind, Span};
+use basilisk_resolver::{FunctionInfo, ResolvedModule, RhsKind, Span, TypeVarCallInfo};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
+use crate::rules::shared::{is_type_compatible, parse_subscript_annotation};
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -49,6 +50,14 @@ impl Rule for ArgumentTypeMismatch {
             }
         }
 
+        // TypeVar bounds/constraints, used to detect calls for which no TypeVar
+        // assignment exists (e.g. a `list[T_int]` parameter given `list[str]`).
+        let typevars: HashMap<&str, &TypeVarCallInfo> = module
+            .typevar_calls
+            .iter()
+            .map(|tv| (tv.name.as_str(), tv))
+            .collect();
+
         for call in &module.calls {
             // Only check calls to locally-defined functions for now.
             // Cross-module argument checking requires parsing imported function
@@ -78,12 +87,15 @@ impl Rule for ArgumentTypeMismatch {
 
                 let arg_source = slice_span(&module.source, *arg_span);
 
-                if let Some(description) = arg_rhs_mismatch(ann_text, rhs_kind, arg_source) {
+                let mismatch = container_mismatch(ann_text, rhs_kind, &typevars).or_else(|| {
+                    arg_rhs_mismatch(ann_text, rhs_kind, arg_source).map(str::to_owned)
+                });
+                if let Some(description) = mismatch {
                     diagnostics.push(make_diagnostic(
                         &call.callee,
                         &param.name,
                         ann_text,
-                        description,
+                        &description,
                         *arg_span,
                         &module.path,
                     ));
@@ -203,6 +215,98 @@ fn arg_rhs_mismatch(
         ("none", RhsKind::CallExpr) if is_type_call(arg_source) => {
             Some("`type(None)` (a class object, not the value `None`)")
         }
+        _ => None,
+    }
+}
+
+/// A container parameter (`list[...]`, `set[...]`, …) that no `TypeVar`
+/// assignment can satisfy: either a scalar literal argument, or a homogeneous
+/// literal whose element type violates the parameter's `TypeVar` bound/constraints.
+///
+/// Implements the typing-spec rule that a call is an error when the collected
+/// constraints for a type variable have no common solution
+/// ([CHKARCH-DIAG-TYPESAFETY]).
+fn container_mismatch(
+    annotation: &str,
+    rhs: &RhsKind,
+    typevars: &HashMap<&str, &TypeVarCallInfo>,
+) -> Option<String> {
+    let (base, args) = parse_subscript_annotation(annotation)?;
+    let base = base.trim().to_ascii_lowercase();
+    if !matches!(
+        base.as_str(),
+        "list" | "set" | "frozenset" | "dict" | "tuple"
+    ) {
+        return None;
+    }
+
+    // (a) A scalar literal can never satisfy a container parameter, whatever the
+    //     element type — no assignment of any TypeVar makes it valid.
+    if is_scalar_literal(rhs) {
+        return Some(format!(
+            "a scalar literal where `{annotation}` is required — no type-variable \
+             assignment makes it valid"
+        ));
+    }
+
+    // (b) An invariant container of a single bounded/constrained TypeVar, given a
+    //     homogeneous literal whose element type violates the bound/constraints.
+    if matches!(base.as_str(), "list" | "set" | "frozenset") {
+        let inner = args.first()?;
+        let tv = typevars.get(inner.as_str())?;
+        let elem = homogeneous_element_type(rhs)?;
+        let satisfiable = match &tv.bound_type_name {
+            Some(bound) => is_type_compatible(&elem, bound),
+            None if !tv.constraint_type_names.is_empty() => tv
+                .constraint_type_names
+                .iter()
+                .any(|constraint| is_type_compatible(&elem, constraint)),
+            None => true,
+        };
+        if !satisfiable {
+            return Some(format!(
+                "`{base}[{elem}]` where `{annotation}` is required — `{elem}` does not \
+                 satisfy type variable `{inner}`"
+            ));
+        }
+    }
+    None
+}
+
+/// `true` for a scalar literal argument (`1`, `"x"`, `True`, `b"x"`, `1.0`, `None`).
+fn is_scalar_literal(rhs: &RhsKind) -> bool {
+    matches!(
+        rhs,
+        RhsKind::IntLiteral
+            | RhsKind::FloatLiteral
+            | RhsKind::StrLiteral
+            | RhsKind::BoolLiteral
+            | RhsKind::BytesLiteral
+            | RhsKind::NoneValue
+    )
+}
+
+/// The element type name of a `list`/`set` literal whose elements are all the
+/// same scalar literal kind (e.g. `[""]` → `str`); `None` otherwise.
+fn homogeneous_element_type(rhs: &RhsKind) -> Option<String> {
+    let (RhsKind::List(elements) | RhsKind::Set(elements)) = rhs else {
+        return None;
+    };
+    let first = scalar_type_name(elements.first()?)?;
+    elements
+        .iter()
+        .all(|elem| scalar_type_name(elem) == Some(first))
+        .then(|| first.to_owned())
+}
+
+/// The Python type name for a scalar literal kind.
+fn scalar_type_name(rhs: &RhsKind) -> Option<&'static str> {
+    match rhs {
+        RhsKind::IntLiteral => Some("int"),
+        RhsKind::FloatLiteral => Some("float"),
+        RhsKind::StrLiteral => Some("str"),
+        RhsKind::BoolLiteral => Some("bool"),
+        RhsKind::BytesLiteral => Some("bytes"),
         _ => None,
     }
 }
