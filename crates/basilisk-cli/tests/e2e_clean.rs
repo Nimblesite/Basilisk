@@ -206,7 +206,7 @@ fn clean_typed_match_is_silent() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0010 — stdlib imports must NOT trigger E0010
+// stdlib imports must NOT trigger E0010
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -214,7 +214,7 @@ fn clean_stdlib_imports_are_silent() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("clean/typed_stdlib_imports.py")?;
     let e0010: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0010")
+        .filter(|d| d.code.code == "imports_unresolved")
         .collect();
     assert!(
         e0010.is_empty(),
@@ -224,25 +224,25 @@ fn clean_stdlib_imports_are_silent() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// E0011 — typing.Any import itself must NOT trigger E0010/E0011
+// concrete annotations must NOT trigger the explicit-Any warning
 // ---------------------------------------------------------------------------
 
 #[test]
-fn clean_any_with_comment_is_silent() -> Result<(), Box<dyn std::error::Error>> {
+fn clean_concrete_annotations_no_any_warning() -> Result<(), Box<dyn std::error::Error>> {
     let diags = run("clean/typed_any_justified.py")?;
-    let e0011: Vec<_> = diags
+    let any_warnings: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0011")
+        .filter(|d| d.code.code == "BSK-W0014")
         .collect();
     assert!(
-        e0011.is_empty(),
-        "justified Any must not produce E0011, got:\n{e0011:#?}"
+        any_warnings.is_empty(),
+        "concrete annotations must not produce the BSK-W0014 explicit-Any warning, got:\n{any_warnings:#?}"
     );
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// E0023 — match with wildcard must NOT trigger E0023
+// match with wildcard must NOT trigger E0023
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -250,7 +250,7 @@ fn clean_match_with_wildcard_is_silent() -> Result<(), Box<dyn std::error::Error
     let diags = run("clean/typed_match.py")?;
     let e0023: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0023")
+        .filter(|d| d.code.code == "match_exhaustiveness")
         .collect();
     assert!(
         e0023.is_empty(),
@@ -260,7 +260,7 @@ fn clean_match_with_wildcard_is_silent() -> Result<(), Box<dyn std::error::Error
 }
 
 // ---------------------------------------------------------------------------
-// E0025 — override WITH @override must NOT trigger E0025
+// override WITH @override must NOT trigger BSK-E0025
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -272,13 +272,13 @@ fn clean_override_with_decorator_is_silent() -> Result<(), Box<dyn std::error::E
         .collect();
     assert!(
         e0025.is_empty(),
-        "override with @override must not produce E0025, got:\n{e0025:#?}"
+        "override with @override must not produce BSK-E0025, got:\n{e0025:#?}"
     );
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// E0020 — proper @overload with implementation must NOT trigger E0020
+// proper @overload with implementation must NOT trigger E0020
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -286,7 +286,7 @@ fn clean_overloads_with_implementation_is_silent() -> Result<(), Box<dyn std::er
     let diags = run("clean/typed_overloads.py")?;
     let e0020: Vec<_> = diags
         .iter()
-        .filter(|d| d.code.code == "BSK-E0020")
+        .filter(|d| d.code.code == "overloads_definitions")
         .collect();
     assert!(
         e0020.is_empty(),

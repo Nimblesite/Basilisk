@@ -58,8 +58,8 @@ fn interner_reuses_static_storage_for_repeated_codes() {
     // Two diagnostics with the same code must intern to the SAME `&'static`
     // pointer — proving the interner returns the existing entry, not a fresh
     // leak per replay.
-    let first = CachedDiagnostic::from(&sample("BSK-E0123", false)).into_diagnostic();
-    let second = CachedDiagnostic::from(&sample("BSK-E0123", false)).into_diagnostic();
+    let first = CachedDiagnostic::from(&sample("protocols_explicit_3", false)).into_diagnostic();
+    let second = CachedDiagnostic::from(&sample("protocols_explicit_3", false)).into_diagnostic();
     assert_eq!(first.code.code, second.code.code);
     assert!(
         std::ptr::eq(first.code.code, second.code.code),

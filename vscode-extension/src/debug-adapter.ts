@@ -90,24 +90,41 @@ function summarizeCollectionFields(obj: Record<string, unknown>, parts: string[]
 
 // ── DAP message tracker ───────────────────────────────────────────────────
 
+/** Callbacks the DAP tracker fires on profiler-relevant debuggee events. */
+export interface DebugTrackerCallbacks {
+  /** Receives `(sessionId, pid)` once debugpy emits its `process` event. */
+  readonly onDebuggeeProcessId?: DebuggeeProcessIdCallback;
+  /**
+   * Receives `(sessionId, body)` on every `stopped` event — the memory autopilot
+   * captures on pause off this signal ([PROFILE-MEMORY-AUTOPILOT-PAUSE]). Fired
+   * AFTER the suspension bookkeeping is recorded, so a handler can immediately
+   * resolve the stopped frame.
+   */
+  readonly onStopped?: (sessionId: string, body: unknown) => void;
+}
+
+// Implements [VSIX-PYTHON-DEBUGGER-DAP-TRACKER] — single observability point for
+// debugpy → VS Code traffic. Captures the `process` event (systemProcessId, used
+// by the CPU profiler) and `output` events (__BASILISK_MEM*__ payloads for the
+// memory round-trip).
 /**
  * Factory that creates per-session DAP message trackers.
  *
  * The tracker is the single observability point for debugpy → VS Code traffic,
- * so it captures both the debuggee `process` event (the PID the CPU profiler
- * targets — "same process") and `output` events (the marker payloads the
- * memory round-trip recovers). `onDebuggeeProcessId`, when supplied, receives
- * `(sessionId, pid)` once the `process` event arrives.
+ * so it captures the debuggee `process` event (the PID the CPU profiler targets —
+ * "same process"), `output` events (the marker payloads the memory round-trip
+ * recovers), and `stopped` events (suspension bookkeeping + the autopilot's
+ * pause trigger). Callbacks, when supplied, route those out.
  */
 export class BasiliskDebugAdapterTrackerFactory
   implements vscode.DebugAdapterTrackerFactory
 {
-  constructor(private readonly onDebuggeeProcessId?: DebuggeeProcessIdCallback) {}
+  constructor(private readonly callbacks: DebugTrackerCallbacks = {}) {}
 
   public createDebugAdapterTracker(
     session: vscode.DebugSession
   ): vscode.ProviderResult<vscode.DebugAdapterTracker> {
-    return new BasiliskDebugAdapterTracker(session, this.onDebuggeeProcessId);
+    return new BasiliskDebugAdapterTracker(session, this.callbacks);
   }
 }
 
@@ -118,7 +135,7 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
 
   constructor(
     session: vscode.DebugSession,
-    private readonly onDebuggeeProcessId?: DebuggeeProcessIdCallback
+    private readonly callbacks: DebugTrackerCallbacks
   ) {
     this.sessionId = session.id.slice(0, SESSION_ID_PREFIX_LEN);
     this.fullSessionId = session.id;
@@ -174,9 +191,9 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
       // The debuggee's OS PID — captured so the CPU profiler can attach to the
       // SAME process the debugger drives (DAP: body.systemProcessId).
       const pid = (body as { systemProcessId?: number } | undefined)?.systemProcessId;
-      if (typeof pid === "number" && this.onDebuggeeProcessId !== undefined) {
+      if (typeof pid === "number" && this.callbacks.onDebuggeeProcessId !== undefined) {
         Logger.info(`[DAP ${this.sessionId}] debuggee systemProcessId=${pid}`);
-        this.onDebuggeeProcessId(this.fullSessionId, pid);
+        this.callbacks.onDebuggeeProcessId(this.fullSessionId, pid);
       }
       return;
     }
@@ -185,6 +202,12 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
       // Pause bookkeeping for the memory/cooperative couriers — see
       // `currentStoppedFrameId` (dap-evaluate.ts) for why this can't be probed.
       trackSuspensionEvent(this.fullSessionId, event, body);
+    }
+    if (event === "stopped") {
+      // The memory autopilot captures on every genuine user pause
+      // ([PROFILE-MEMORY-AUTOPILOT-PAUSE]). Fired after the bookkeeping above so
+      // the handler can resolve the now-stopped frame straight away.
+      this.callbacks.onStopped?.(this.fullSessionId, body);
     }
     if (event === "terminated") {
       Logger.info(`[DAP ${this.sessionId}] program terminated`);
@@ -202,6 +225,10 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
 
 // ── Debug adapter factory ─────────────────────────────────────────────────
 
+// Implements [VSIX-PYTHON-DEBUGGER-DAP-PROXY] Quirk 3 — single-connection slot
+// protection: a bind-based liveness probe (EADDRINUSE = alive) is non-destructive
+// (it does not consume debugpy's one TCP slot). handleAttachMode respawns debugpy
+// via the LSP when the port is dead.
 /**
  * Non-destructive port check — attempts to bind to the port.
  * If binding fails with EADDRINUSE, something is listening.
@@ -221,6 +248,10 @@ async function isPortAlive(_host: string, port: number): Promise<boolean> {
 /** Callback that receives the debuggee OS PID once debugpy emits its `process` event. */
 export type DebuggeeProcessIdCallback = (sessionId: string, pid: number) => void;
 
+// Implements [VSIX-PYTHON-DEBUGGER-DAP-FEATURES] (Attach) + [VSIX-PYTHON-DEBUGGER-
+// DAP-LAUNCH-CONFIGURATIONS] (request:"attach", connect:{host,port}) — connects to
+// the user-specified debugpy host:port via the proxy, respawning debugpy through
+// the LSP if the slot is dead (Quirk 3).
 /** Handle attach mode: connect to user-specified host:port, respawning if needed. */
 async function handleAttachMode(
   config: vscode.DebugConfiguration,
@@ -306,6 +337,9 @@ function showDebugError(msg: string): void {
   }
 }
 
+// Implements [VSIX-PYTHON-DEBUGGER-DAP-ARCHITECTURE] — the LSP spawns
+// `debugpy.adapter --port <free>` via basilisk.startDebugSession; the proxy then
+// connects to that port and is returned to VS Code as a DebugAdapterServer.
 /** Handle launch mode: ask LSP to spawn debugpy. */
 async function handleLaunchMode(
   config: vscode.DebugConfiguration,
@@ -361,6 +395,9 @@ function isBlank(value: string | undefined): boolean {
   return value === undefined || value === "";
 }
 
+// Implements [VSIX-PYTHON-DEBUGGER-DAP-LAUNCH-CONFIGURATIONS] (launch shape) —
+// the zero-config "launch" configuration (type/request/program) offered in the
+// Run-and-Debug picker and used to fill an empty/partial config.
 /** The default launch config for the current file. */
 function defaultLaunchConfig(): vscode.DebugConfiguration {
   return {
@@ -375,15 +412,14 @@ function defaultLaunchConfig(): vscode.DebugConfiguration {
 }
 
 /**
- * Fill in a runnable `basilisk-debug` config from an empty or partial one.
+ * Synthesize/complete a runnable `basilisk-debug` config (program defaulting).
  *
  * This is what makes "Run and Debug" / F5 work **without a launch.json**: VS
  * Code calls the provider with an empty config (no type), and for a Python file
  * we synthesize a launch of the current file. A partial config missing
- * `program` defaults to `${file}`. Pure (no VS Code APIs) so it is unit-testable;
- * the active language id is passed in.
+ * `program` defaults to `${file}`. Pure (no VS Code APIs).
  */
-export function applyDebugConfigDefaults(
+function withProgramDefaults(
   config: vscode.DebugConfiguration,
   activeLanguageId: string | undefined,
 ): vscode.DebugConfiguration {
@@ -404,6 +440,47 @@ export function applyDebugConfigDefaults(
   return config;
 }
 
+// Implements [VSIX-PYTHON-DEBUGGER-START] — pure config defaulting for the
+// factory-based `basilisk-debug` debugger: fills an empty/partial config so F5 /
+// "Run and Debug" launch the active Python file with no launch.json.
+/**
+ * Resolve a runnable `basilisk-debug` config, defaulting `program` and marking
+ * profiling runs.
+ *
+ * When the global `basilisk.profiler.profileOnLaunch` setting is on, every
+ * CPU-profilable basilisk-debug launch is a profiling run, so it is marked
+ * `profileOnLaunch: true`. That flag makes the DAP proxy neutralise the user's
+ * breakpoints so the run completes instead of stopping interactively
+ * ([PROFILE-LAUNCH-NOSTOP], #145) — matching `shouldProfileOnLaunch`'s two
+ * equivalent triggers (the explicit launch arg, or this global setting).
+ *
+ * A "Run & Track Memory" launch (`memoryTrackOnLaunch`) is explicitly excluded:
+ * it is not a CPU run, and stamping it would (a) strip its breakpoints and
+ * (b) make the CPU sampler auto-start alongside tracemalloc, the two fighting
+ * over the single entry pause (dap-1). Pure (the setting is passed in) so it
+ * stays unit-testable; the active language id is passed in too.
+ */
+export function applyDebugConfigDefaults(
+  config: vscode.DebugConfiguration,
+  activeLanguageId: string | undefined,
+  profileOnLaunchGlobal = false,
+): vscode.DebugConfiguration {
+  const resolved = withProgramDefaults(config, activeLanguageId);
+  if (
+    profileOnLaunchGlobal &&
+    resolved.type === "basilisk-debug" &&
+    resolved.request === "launch" &&
+    resolved.profileOnLaunch !== true &&
+    resolved.memoryTrackOnLaunch !== true
+  ) {
+    return { ...resolved, profileOnLaunch: true };
+  }
+  return resolved;
+}
+
+// Implements [VSIX-PYTHON-DEBUGGER-START] — the DebugConfigurationProvider for
+// `basilisk-debug` (registered Dynamic + default in extension.ts), offering a
+// "Python: Current File (Basilisk)" entry and resolving empty/partial configs.
 /**
  * Provider that lets `basilisk-debug` start with no `launch.json`: it offers a
  * default configuration in the Run-and-Debug picker and resolves empty/partial
@@ -418,7 +495,11 @@ export function createBasiliskDebugConfigProvider(): vscode.DebugConfigurationPr
       _folder: vscode.WorkspaceFolder | undefined,
       config: vscode.DebugConfiguration,
     ): vscode.DebugConfiguration {
-      return applyDebugConfigDefaults(config, vscode.window.activeTextEditor?.document.languageId);
+      return applyDebugConfigDefaults(
+        config,
+        vscode.window.activeTextEditor?.document.languageId,
+        vscode.workspace.getConfiguration("basilisk").get<boolean>("profiler.profileOnLaunch", false),
+      );
     },
   };
 }

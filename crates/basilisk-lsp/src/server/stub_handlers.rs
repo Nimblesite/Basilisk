@@ -20,7 +20,7 @@ use super::LspServer;
 ///
 /// **Strict by default**: the skeleton declares *nothing*, so once it exists the
 /// `BSK-E0152` "no stubs" error clears, and accessing any attribute the stub does
-/// not declare is a `BSK-E0154` error — forcing the developer to type what they
+/// not declare is a `imports_module_attribute` error — forcing the developer to type what they
 /// actually use. The opt-out (`def __getattr__(name: str) -> Any: ...`, the
 /// authoring guide's "incomplete stub" escape hatch that makes every attribute
 /// `Any`) is documented in a comment but deliberately not emitted, so the stub is
@@ -31,7 +31,7 @@ fn skeleton_for(module: &str) -> String {
          # Strict by default: declare each name you use, e.g.\n\
          #     def some_function(arg: str) -> str: ...\n\
          #     class SomeClass: ...\n\
-         # Accessing an attribute this stub does not declare is a BSK-E0154 error.\n\
+         # Accessing an attribute this stub does not declare is a imports_module_attribute error.\n\
          # To opt out and allow ANY attribute instead, add a module-level fallback:\n\
          #     from typing import Any\n\
          #     def __getattr__(name: str) -> Any: ...\n\
@@ -124,7 +124,7 @@ fn append_member(content: &str, snippet: &str) -> String {
 /// Handle `basilisk.stubs.addMember` (args: stub path, snippet line).
 ///
 /// Appends a missing method/attribute to an existing local stub so the
-/// `BSK-E0154` "no attribute" error clears, then re-resolves. Implements
+/// `imports_module_attribute` "no attribute" error clears, then re-resolves. Implements
 /// [STUBRES-ADD-MEMBER].
 pub(super) async fn execute_add_stub_member(
     server: &LspServer,
@@ -224,7 +224,7 @@ mod tests {
         );
         assert!(stub.contains("`acme`"));
         assert!(
-            stub.contains("BSK-E0154"),
+            stub.contains("imports_module_attribute"),
             "the skeleton must explain that undeclared access errors: {stub}"
         );
         // The opt-out is documented (as a comment), not emitted as a live def.
@@ -240,7 +240,7 @@ mod tests {
         assert!(path.ends_with("acme_private_pkg.pyi"));
         assert!(path.is_file(), "the .pyi must exist on disk");
         let on_disk = std::fs::read_to_string(&path).unwrap();
-        assert!(on_disk.contains("BSK-E0154"));
+        assert!(on_disk.contains("imports_module_attribute"));
         // It lives under the resolver's auto-included Tier-3 cache dir.
         assert!(path
             .to_string_lossy()

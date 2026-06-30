@@ -1,4 +1,4 @@
-//! Tests for [CHKARCH-CLI]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI
+//! Tests for [CHKARCH-CLI] / [CHKARCH-CONFIG-FILE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,
@@ -46,25 +46,38 @@ fn run_with_config(
     Ok(check_with_config(&resolved, config))
 }
 
+/// Config that opts into the annotation house rules (`strict_annotations =
+/// true`). `BSK-E0001`/`BSK-E0002` are off by default — the default config is
+/// pure PEP conformance — so a project must enable them before any
+/// severity/path override has something to act on. These tests layer overrides
+/// on top via `..annotations_on()`. No modes; this is configuration. See
+/// [CHKARCH-CONFIGURATION-ONLY].
+fn annotations_on() -> BasiliskConfig {
+    BasiliskConfig {
+        strict_annotations: true,
+        ..Default::default()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Global rule severity overrides
 // ---------------------------------------------------------------------------
 
 #[test]
 fn global_severity_off_suppresses_e0001() -> Result<(), Box<dyn std::error::Error>> {
-    // missing_param_annotation.py triggers E0001 — should be suppressed
+    // missing_param_annotation.py triggers BSK-E0001 — should be suppressed
     let mut rules = HashMap::new();
     rules.insert("BSK-E0001".to_owned(), RuleSeverity::Disabled);
     let config = BasiliskConfig {
         rules,
-        ..Default::default()
+        ..annotations_on()
     };
 
     let diags = run_with_config("missing_param_annotation.py", &config)?;
     let has_e0001 = diags.iter().any(|d| d.code.code == "BSK-E0001");
     assert!(
         !has_e0001,
-        "E0001 should be suppressed by global rule override, got: {diags:#?}"
+        "BSK-E0001 should be suppressed by global rule override, got: {diags:#?}"
     );
     Ok(())
 }
@@ -75,7 +88,7 @@ fn global_severity_warning_demotes_e0001() -> Result<(), Box<dyn std::error::Err
     rules.insert("BSK-E0001".to_owned(), RuleSeverity::Warning);
     let config = BasiliskConfig {
         rules,
-        ..Default::default()
+        ..annotations_on()
     };
 
     let diags = run_with_config("missing_param_annotation.py", &config)?;
@@ -85,13 +98,13 @@ fn global_severity_warning_demotes_e0001() -> Result<(), Box<dyn std::error::Err
         .collect();
     assert!(
         !e0001_diags.is_empty(),
-        "should still emit E0001, just demoted"
+        "should still emit BSK-E0001, just demoted"
     );
     for diag in &e0001_diags {
         assert_eq!(
             diag.severity,
             Severity::Warning,
-            "E0001 should be demoted to warning, got: {diag:?}"
+            "BSK-E0001 should be demoted to warning, got: {diag:?}"
         );
     }
     Ok(())
@@ -103,7 +116,7 @@ fn global_severity_info_demotes_e0001() -> Result<(), Box<dyn std::error::Error>
     rules.insert("BSK-E0001".to_owned(), RuleSeverity::Info);
     let config = BasiliskConfig {
         rules,
-        ..Default::default()
+        ..annotations_on()
     };
 
     let diags = run_with_config("missing_param_annotation.py", &config)?;
@@ -113,13 +126,13 @@ fn global_severity_info_demotes_e0001() -> Result<(), Box<dyn std::error::Error>
         .collect();
     assert!(
         !e0001_diags.is_empty(),
-        "should still emit E0001, just demoted to info"
+        "should still emit BSK-E0001, just demoted to info"
     );
     for diag in &e0001_diags {
         assert_eq!(
             diag.severity,
             Severity::Info,
-            "E0001 should be demoted to info, got: {diag:?}"
+            "BSK-E0001 should be demoted to info, got: {diag:?}"
         );
     }
     Ok(())
@@ -164,7 +177,7 @@ fn per_module_override_suppresses_e0010() -> Result<(), Box<dyn std::error::Erro
     };
 
     let diags = run_with_config("errors/e0010_untyped_import.py", &config)?;
-    let has_e0010 = diags.iter().any(|d| d.code.code == "BSK-E0010");
+    let has_e0010 = diags.iter().any(|d| d.code.code == "imports_unresolved");
     assert!(
         !has_e0010,
         "E0010 should be suppressed for 'requests' via per-module override, got: {diags:#?}"
@@ -192,7 +205,7 @@ fn per_module_wildcard_suppresses_e0010() -> Result<(), Box<dyn std::error::Erro
     // Note: whether `requests.*` matches `requests` depends on the wildcard logic.
     // The important thing is we exercise the full pipeline path.
     // If the wildcard doesn't match bare `requests`, E0010 is still emitted.
-    let _has_e0010 = diags.iter().any(|d| d.code.code == "BSK-E0010");
+    let _has_e0010 = diags.iter().any(|d| d.code.code == "imports_unresolved");
     // Just assert we didn't crash — the exact match behavior is tested in config unit tests.
     Ok(())
 }
@@ -217,7 +230,7 @@ fn per_path_disabled_suppresses_all_diagnostics() -> Result<(), Box<dyn std::err
     );
     let config = BasiliskConfig {
         per_path_overrides: path_overrides,
-        ..Default::default()
+        ..annotations_on()
     };
 
     let diags = run_with_config("missing_both.py", &config)?;
@@ -227,7 +240,7 @@ fn per_path_disabled_suppresses_all_diagnostics() -> Result<(), Box<dyn std::err
         .collect();
     assert!(
         e0001_e0002.is_empty(),
-        "E0001 and E0002 should be suppressed by per-path override, got: {e0001_e0002:#?}"
+        "BSK-E0001 and BSK-E0002 should be suppressed by per-path override, got: {e0001_e0002:#?}"
     );
     Ok(())
 }
@@ -246,7 +259,7 @@ fn per_path_warning_demotes_severity() -> Result<(), Box<dyn std::error::Error>>
     );
     let config = BasiliskConfig {
         per_path_overrides: path_overrides,
-        ..Default::default()
+        ..annotations_on()
     };
 
     let diags = run_with_config("missing_param_annotation.py", &config)?;
@@ -256,13 +269,13 @@ fn per_path_warning_demotes_severity() -> Result<(), Box<dyn std::error::Error>>
         .collect();
     assert!(
         !e0001_diags.is_empty(),
-        "E0001 should still be emitted as warning"
+        "BSK-E0001 should still be emitted as warning"
     );
     for diag in &e0001_diags {
         assert_eq!(
             diag.severity,
             Severity::Warning,
-            "E0001 should be demoted to warning via per-path override"
+            "BSK-E0001 should be demoted to warning via per-path override"
         );
     }
     Ok(())
@@ -291,7 +304,7 @@ fn per_path_overrides_global_severity() -> Result<(), Box<dyn std::error::Error>
     let config = BasiliskConfig {
         rules,
         per_path_overrides: path_overrides,
-        ..Default::default()
+        ..annotations_on()
     };
 
     let diags = run_with_config("missing_param_annotation.py", &config)?;
@@ -299,7 +312,7 @@ fn per_path_overrides_global_severity() -> Result<(), Box<dyn std::error::Error>
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
-    assert!(!e0001_diags.is_empty(), "E0001 should still be emitted");
+    assert!(!e0001_diags.is_empty(), "BSK-E0001 should still be emitted");
     for diag in &e0001_diags {
         assert_eq!(
             diag.severity,

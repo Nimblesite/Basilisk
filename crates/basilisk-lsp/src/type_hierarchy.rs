@@ -32,6 +32,7 @@ fn class_to_item(
 ///
 /// Returns a `TypeHierarchyItem` for the class whose name span contains the
 /// given byte offset, or an empty vec if the cursor is not on a class name.
+// Implements [LSPARCH-FEATURES-TYPEHIER] — Prepare: find ClassInfo at cursor.
 #[must_use]
 pub fn prepare(
     resolved: &ResolvedModule,
@@ -53,6 +54,7 @@ pub fn prepare(
 ///
 /// Looks up the `ClassInfo` for `class_name`, then finds each base class by
 /// name in the resolved module and returns a `TypeHierarchyItem` for each.
+// Implements [LSPARCH-FEATURES-TYPEHIER] — Supertypes: use ClassInfo.bases to find parent classes.
 #[must_use]
 pub fn supertypes(
     resolved: &ResolvedModule,
@@ -78,6 +80,7 @@ pub fn supertypes(
 ///
 /// Scans all classes in the resolved module whose `bases` list contains
 /// `class_name` and returns a `TypeHierarchyItem` for each.
+// Implements [LSPARCH-FEATURES-TYPEHIER] — Subtypes: find classes whose bases contains target class name.
 #[must_use]
 pub fn subtypes(
     resolved: &ResolvedModule,

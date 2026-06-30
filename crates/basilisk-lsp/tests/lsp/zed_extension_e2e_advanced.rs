@@ -66,6 +66,7 @@ fn test_zed_execute_organize_imports() -> TestResult<()> {
 
 /// Execute command: start debug session. Even if debugpy isn't installed,
 /// the LSP should return a structured error (not crash).
+// Tests [LSPDEBUG-START] / [LSPDEBUG-WIRE]: basilisk.startDebugSession dispatch.
 #[test]
 fn test_zed_execute_start_debug_session() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
@@ -104,6 +105,7 @@ fn test_zed_execute_start_debug_session() -> TestResult<()> {
 
 /// Execute command: stop debug session with a fake session ID.
 /// Should not crash the LSP.
+// Tests [LSPDEBUG-STOP] / [LSPDEBUG-WIRE]: basilisk.stopDebugSession dispatch.
 #[test]
 fn test_zed_execute_stop_debug_session() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;

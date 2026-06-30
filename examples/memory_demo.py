@@ -1,19 +1,25 @@
-"""Basilisk Memory Profiling Demo — open this file and start a memory session.
+"""Basilisk Memory Profiling Demo — open this file and click
+"Run & Track Memory (Current File)" in the Python Processes panel.
 
-Launch under the Basilisk debugger (F5) and set a breakpoint on the marked
-line inside `main`'s loop. Each time you hit it, take a memory snapshot: the
-diff between snapshots is where the interesting trace lives.
+No breakpoint required: Basilisk starts tracemalloc at the entry pause, runs the
+program to completion, and captures a final memory snapshot as it exits — so the
+run ends in a viewable result (the V8 `.heapprofile` plus the purple allocation
+heat map on the hot line), never a dead end.
 
 The workload exercises every signal the memory profiler reports:
 
-    leak_cache       -> sustained growth across snapshots (never evicted)
-    transient_spike  -> a big allocation that is freed before the next snapshot
+    leak_cache       -> retained forever in a module-global list (the leak)
+    transient_spike  -> a big allocation that is freed before the program ends
     make_cycle       -> reference cycle with __del__, only the GC can reclaim
 
-Things to look for once the .heapprofile opens or in the diff view:
-  * `_LEAK` keeps climbing every snapshot -> escalating leak confidence.
-  * `transient_spike` shows up in peak memory but not in the running total.
-  * The Node cycle survives until `gc.collect()` -> a definite leak until then.
+What to look for once the final snapshot opens:
+  * `leak_cache`'s `bytes(512 * 1024)` line dominates — ~3 MiB still retained.
+  * `transient_spike` shows up in PEAK memory but not in the final total.
+  * The Node cycle survives until `gc.collect()` runs at the very end.
+
+Prefer the interactive flow? Set a breakpoint on the marked line inside `main`'s
+loop, launch under the debugger (F5), and take a snapshot each pass — the diff
+between snapshots is where leak confidence escalates.
 """
 
 import gc

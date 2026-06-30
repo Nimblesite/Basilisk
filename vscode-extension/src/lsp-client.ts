@@ -59,12 +59,29 @@ function readTestExplorerSettings(cfg: vscode.WorkspaceConfiguration): Record<st
   };
 }
 
+// Implements [VSIX-CONFIGURATION-SETTINGS] — reads the basilisk.* settings whose
+// package.json schema is declared in vscode-extension/package.json (contributes.
+// configuration); these are forwarded to the LSP server as initializationOptions
+// and on didChangeConfiguration. [VSIX-CONFIGURATION-SETTINGS-VS-CODE-ONLY]:
+// basilisk.useLsp / basilisk.trace.server are consumed here and in extension.ts,
+// not sent to the server.
+// Implements the editor-setting source of [ANALYSIS-CONFIG-SRC] — `analysisMode`
+// (default "wholeModule") is read from the workspace setting, the highest-priority
+// config source ([ANALYSIS-CONFIG-PRI]), and forwarded to the server.
 export function readBasiliskSettings(): Record<string, unknown> {
   const cfg = vscode.workspace.getConfiguration("basilisk");
   const ruff = readRuffSettings(cfg);
+  // The "Type Checking" toggle (`basilisk.enabled`) MUST reach the server — the
+  // LSP is authoritative for diagnostics, so it clears/suppresses them when the
+  // toggle is off. Omitting it here left the toggle a cosmetic no-op (GitHub
+  // #65 / #119). Implements [ANALYSIS-ENABLED] (server side) and the
+  // [EXTACT-INFO-FEATURE-STATUS] "Type Checking" effect.
+  const enabled = cfg.get<boolean>("enabled") ?? true;
   return {
+    enabled,
     analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
     basilisk: {
+      enabled,
       python: cfg.get<string>("python") ?? "",
       analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
       inlayHints: readInlayHints(cfg),
@@ -88,6 +105,10 @@ interface LspClientOptions {
   outputChannel: vscode.LogOutputChannel | undefined;
 }
 
+// Implements [VSIX-LSP-CLIENT-CONFIGURATION] — builds ServerOptions/clientOptions
+// and starts the LanguageClient ("basilisk lsp" over stdio). The executablePath
+// arrives from binary resolution ([VSIX-BINARY-RESOLUTION], delegated to
+// Shipwright in shipwright-runtime.ts).
 export function startLspClient(
   options: LspClientOptions,
   store: Store,
@@ -106,6 +127,8 @@ export function startLspClient(
     },
   };
 
+  // [VSIX-OUTPUT-CHANNELS] "Basilisk LSP Trace" channel — surfaces LSP
+  // communication when basilisk.trace.server is enabled.
   // vscode-languageclient 10 requires `traceOutputChannel` to be a
   // `LogOutputChannel` (created with `{ log: true }`).
   const traceChannel = vscode.window.createOutputChannel("Basilisk LSP Trace", {
@@ -188,6 +211,9 @@ function buildClientOptions(
   traceCh: vscode.LogOutputChannel,
   updateStatusBar: StatusBarUpdater
 ): LanguageClientOptions {
+  // Implements [VSIX-LSP-CLIENT-CONFIGURATION] — documentSelector (python files),
+  // synchronize.configurationSection "basilisk", initializationOptions, and the
+  // trace channel wiring per the spec's client-options shape.
   return {
     documentSelector: [{ scheme: "file", language: "python" }],
     synchronize: {
@@ -198,6 +224,8 @@ function buildClientOptions(
     traceOutputChannel: traceCh,
     outputChannel: outputCh,
     revealOutputChannelOn: RevealOutputChannelOn.Never,
+    // Implements [VSIX-ERROR-RECOVERY] — errorHandler shuts the server down after
+    // MAX_LSP_ERRORS_BEFORE_SHUTDOWN (3) errors and auto-restarts on close.
     errorHandler: {
       error: (error, _message, count) => {
         Logger.error(`LSP error: ${error.message ?? error}`);
@@ -236,6 +264,11 @@ function buildClientOptions(
   };
 }
 
+// Implements the client wiring of [EXTACT-HEALTH-CONTEXT-MENU] (Fix All in File /
+// Adopt File / Un-adopt File), the file-scoped half of [AUTOFIX-MASS-VSCODE]
+// (`basilisk.fixFile`), and [AUTOFIX-ADOPTION-VSCODE] (`basilisk.adoptFile` /
+// `basilisk.unadoptFile`) — these server-advertised, file-scoped commands get the
+// active editor's URI injected so they act on the right file.
 /** Commands that need the active editor URI injected as the first arg. */
 const EDITOR_URI_COMMANDS = new Set([
   "basilisk.fixFile",
@@ -243,6 +276,8 @@ const EDITOR_URI_COMMANDS = new Set([
   "basilisk.unadoptFile",
 ]);
 
+// Implements the client UI of [LSPUV-COMMANDS] (the `{package}`-taking uv
+// commands) — prompts the user for the package name before the server runs uv.
 /** Commands that prompt the user for a package name before execution. */
 const PACKAGE_COMMANDS: Record<string, { prompt: string; placeholder: string }> = {
   "basilisk.uv.add": { prompt: "Package name to add", placeholder: "e.g. requests" },

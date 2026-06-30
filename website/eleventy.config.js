@@ -108,7 +108,7 @@ export default function (eleventyConfig) {
       blog: true,
       docs: true,
       darkMode: true,
-      i18n: false,
+      i18n: true,
     },
     // Register the languages the site actually ships so the base layout emits a
     // complete hreflang cluster (en + zh + x-default) and og:locale:alternate.

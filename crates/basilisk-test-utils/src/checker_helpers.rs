@@ -66,7 +66,7 @@ impl Expected {
 pub fn assert_diagnostics(source: &str, diags: &[Diagnostic], expected: &[Expected]) {
     let mut sorted = diags.to_vec();
     // Sort by span start, then by code for a stable order when two diagnostics
-    // share the same position (e.g. E0025 and E0002 on the same method line).
+    // share the same position (e.g. BSK-E0025 and BSK-E0002 on the same method line).
     sorted.sort_by(|a, b| {
         a.span
             .start

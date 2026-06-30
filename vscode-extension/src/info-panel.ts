@@ -60,6 +60,9 @@ class FeatureItem extends vscode.TreeItem {
   }
 }
 
+// Implements the read-only affordance of [EXTACT-INFO-AFFORDANCE] /
+// [EXTACT-INFO-SERVER-INFO]: contextValue `info`, no command, no inline button,
+// value shown in the row description.
 /** Read-only info text. */
 class InfoTextItem extends vscode.TreeItem {
   constructor(label: string, value: string, icon?: string) {
@@ -79,20 +82,25 @@ interface FeatureDef {
   readonly settingKey: string;
 }
 
-// Only features whose toggle has a real, observable effect belong here.
-// A toggle that writes a setting the server (or extension) never reads is
-// a lie to the user and must not exist. Audited 2026-05-30:
-//   - Type Checking (basilisk.enabled): gates diagnostic publication in
-//     extension.ts `checkDocument` — disabling clears diagnostics.
-//   - uv Integration (basilisk.uv.enabled): gates the uv Quick Actions and
-//     uv Server Info rows below (buildQuickActionsSection / buildUvInfoItems).
-// Removed because the setting was silently dropped by the LSP server (it only
-// parses analysisMode + testExplorer in did_change_configuration) and nothing
-// else read it: Inlay Hints (Params/Types), Ruff Integration, Test Explorer,
-// Debugger (never even declared), AI Typing. See EXTACT-INFO-FEATURE-STATUS.
+// Implements [EXTACT-INFO-FEATURE-STATUS]: only features whose toggle has a
+// real, observable effect belong here. A toggle that writes a setting the server
+// (or extension) never reads is a lie to the user and must not exist.
+//   - Type Checking (basilisk.enabled): the LSP is authoritative for diagnostics
+//     and honours this setting — disabling clears published diagnostics and
+//     suppresses new ones; re-enabling re-scans. See [ANALYSIS-ENABLED]
+//     (crates/basilisk-lsp/src/server/init.rs) and GitHub #65 / #119.
+// Removed because the setting is silently dropped by the LSP server (it parses
+// analysisMode + testExplorer + enabled in did_change_configuration) and nothing
+// else acts on it:
+//   - uv Integration (basilisk.uv.enabled): NO server code reads it, so the
+//     toggle never disabled uv integration — a no-op affordance. Removed per
+//     GitHub #190; the uv commands remain in the palette / code actions and the
+//     read-only "uv" Server Info row still reports uv status.
+//   - Inlay Hints (Params/Types), Ruff Integration, Test Explorer, Debugger
+//     (never even declared), AI Typing — all dropped server-side likewise.
+// See EXTACT-INFO-FEATURE-STATUS.
 const FEATURES: readonly FeatureDef[] = [
   { label: "Type Checking", settingKey: "basilisk.enabled" },
-  { label: "uv Integration", settingKey: "basilisk.uv.enabled" },
 ];
 
 // ── Provider ─────────────────────────────────────────────────────────────
@@ -100,6 +108,9 @@ const FEATURES: readonly FeatureDef[] = [
 /**
  * Build the top-level feature toggles. Rendered directly at the root — two
  * toggles do not justify a "Feature Status" section header (issue #103).
+ *
+ * Implements [EXTACT-INFO-STRUCTURE] (toggles at root, no section header) and
+ * the actionable half of [EXTACT-INFO-FEATURE-STATUS].
  */
 function buildFeatureToggles(): FeatureItem[] {
   const cfg = vscode.workspace.getConfiguration();
@@ -112,6 +123,8 @@ function buildFeatureToggles(): FeatureItem[] {
 /**
  * Build the single compact uv info row. The verbose sub-settings (auto-sync,
  * stub suggestions) live in the tooltip, not as their own rows (issue #103).
+ *
+ * Implements the one-uv-row rule of [EXTACT-INFO-SERVER-INFO].
  */
 function buildUvInfoItem(cfg: vscode.WorkspaceConfiguration): InfoTextItem {
   const uvEnabled = cfg.get<boolean>("uv.enabled") ?? true;
@@ -147,10 +160,11 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
         }
       }),
     );
-    // Defect 3 (issue #103): Server Info must not go stale. Re-render whenever
-    // the LSP lifecycle signals change (e.g. the Version row appears once the
-    // client's initializeResult arrives) — same signals pattern as
-    // bindLspStateEffects in lsp-client.ts.
+    // Implements the freshness rule of [EXTACT-INFO-STRUCTURE] /
+    // [EXTACT-INFO-SERVER-INFO] — defect 3 (issue #103): Server Info must not go
+    // stale. Re-render whenever the LSP lifecycle signals change (e.g. the
+    // Version row appears once the client's initializeResult arrives) — same
+    // signals pattern as bindLspStateEffects in lsp-client.ts.
     const disposeEffect = effect(() => {
       // Subscribe to both signals; the values themselves are read in
       // buildServerInfoSection on the re-render this triggers.
@@ -180,15 +194,18 @@ export class InfoPanelProvider implements vscode.TreeDataProvider<InfoItem>, vsc
     }
     if (element !== undefined) { return []; }
 
-    // Slimmed layout (issue #103): toggles at the root, then compact Server
-    // Info. No Quick Actions section — those are Modules-toolbar buttons,
-    // the status bar, and the command palette.
+    // Implements [EXTACT-INFO-STRUCTURE] / [EXTACT-INFO-QUICK-ACTIONS]: slimmed
+    // layout (issue #103) — toggles at the root, then compact Server Info. No
+    // Quick Actions section: those are Modules-toolbar buttons, the status bar,
+    // and the command palette.
     return [
       ...buildFeatureToggles(),
       this.buildServerInfoSection(),
     ];
   }
 
+  // Implements [EXTACT-INFO-SERVER-INFO]: compact read-only Version / Analysis
+  // Mode / Python / uv / Binary rows; no live server-state row.
   private buildServerInfoSection(): SectionItem {
     // No live "Server" state row: the status bar already shows it (issue
     // #103). The lspState/client effect in the constructor still re-renders
@@ -265,6 +282,9 @@ export function registerInfoPanel(
 
 /**
  * Configuration target for feature toggles — defect 2 of issue #103.
+ *
+ * Implements the write-target rule of [EXTACT-INFO-STRUCTURE] /
+ * [EXTACT-INFO-FEATURE-STATUS]: Workspace when a folder is open, else Global.
  *
  * The info panel is always visible (`visibility: "visible"`, no `when`), so
  * toggles can be clicked with no folder open. Writing to

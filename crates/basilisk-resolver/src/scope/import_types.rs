@@ -42,7 +42,7 @@ pub enum PackageDepKind {
 
 /// Why an import could not be resolved.
 ///
-/// Used by BSK-E0010 to produce context-aware diagnostic messages when uv
+/// Used by `imports_unresolved` to produce context-aware diagnostic messages when uv
 /// package registry information is available.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnresolvedReason {
@@ -65,8 +65,10 @@ pub enum UnresolvedReason {
 pub struct ImportInfo {
     /// The dotted module name being imported (e.g. `"os.path"`, `"requests"`).
     pub module: String,
-    /// Names imported from the module (`from X import A, B` → `["A", "B"]`).
-    /// Empty for plain `import X` statements.
+    /// Locally-bound names introduced by the import.
+    /// `from X import A, B` → `["A", "B"]` (alias-aware: `import C as D` → `["D"]`).
+    /// Plain `import X` / `import X.Y` is empty — the bound name is the top-level
+    /// module (see `module`); aliased `import X as Y` → `["Y"]`.
     pub names: Vec<String>,
     /// The source span of the import statement.
     pub span: Span,
@@ -107,7 +109,7 @@ pub struct ImportInfo {
 /// controls and wants to be authoritative — so mere presence in
 /// [`super::ResolvedModule::imported_modules`] is the gate, and third-party
 /// typeshed / `py.typed` packages are deliberately not captured here yet.
-/// Consumed by `BSK-E0154`.
+/// Consumed by `imports_module_attribute`.
 #[derive(Debug, Clone)]
 pub struct ImportedModuleApi {
     /// Top-level names the stub declares (functions, classes, variables).

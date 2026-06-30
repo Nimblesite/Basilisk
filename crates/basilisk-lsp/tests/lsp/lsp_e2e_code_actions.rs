@@ -499,6 +499,8 @@ fn test_lsp_code_action_redundant_annotation_w0050() -> TestResult<()> {
 }
 
 // ── Mass Autofix (Fix All in File) ──────────────────────────────────────────
+// Exercises [AUTOFIX-MASS] (File scope) and [AUTOFIX-MASS-VSCODE] (the
+// `source.fixAll.basilisk` code action + `basilisk.fixFile` command).
 
 #[test]
 fn test_lsp_fix_all_in_file_returns_combined_edit() -> TestResult<()> {
@@ -514,7 +516,7 @@ fn test_lsp_fix_all_in_file_returns_combined_edit() -> TestResult<()> {
         .ok_or("no diagnostics published")?;
 
     // Request source.fixAll code actions — the server should return a single
-    // combined action with edits for both W0050 diagnostics.
+    // combined action with edits for both BSK-W0050 diagnostics.
     let resp = send_request(
         &mut fixture,
         200,
@@ -662,7 +664,7 @@ fn test_lsp_fix_all_by_rule_in_quickfix_menu() -> TestResult<()> {
     );
     assert!(
         resp.contains("3 fixes"),
-        "should fix all 3 W0050 instances: {resp}"
+        "should fix all 3 BSK-W0050 instances: {resp}"
     );
     // Also verify the global fix-all is present.
     assert!(
@@ -677,7 +679,7 @@ fn test_lsp_fix_all_by_rule_not_shown_for_single_instance() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;
     let _ = fixture.initialize()?;
 
-    // Only one W0050 — per-rule fix-all should not appear.
+    // Only one BSK-W0050 — per-rule fix-all should not appear.
     let code = "x: int = 42\n";
     fixture.did_open("file:///fixrule1.py", code)?;
 

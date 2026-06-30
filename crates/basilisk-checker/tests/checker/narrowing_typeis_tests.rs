@@ -1,0 +1,63 @@
+//! Tests for [`narrowing_typeis`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+// Integration tests for narrowing_typeis: `TypeGuard` callable return type mismatch.
+
+use super::common::*;
+
+// Exercises [TYPEINF-NARROWING-TYPEGUARD] / [TYPEINF-NARROWING-TYPEIS] —
+// callable-context return-type compatibility for narrowing functions.
+#[test]
+fn typeguard_passed_where_str_expected() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypeGuard, Callable
+def takes_callable_str(f: Callable[[object], str]) -> None: ...
+def simple_typeguard(val: object) -> TypeGuard[int]: ...
+takes_callable_str(simple_typeguard)
+";
+    let diags = run(source)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn typeguard_passed_where_bool_expected_ok() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypeGuard, Callable
+def takes_callable_bool(f: Callable[[object], bool]) -> None: ...
+def simple_typeguard(val: object) -> TypeGuard[int]: ...
+takes_callable_bool(simple_typeguard)
+";
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"narrowing_typeis"),
+        "TypeGuard is a subtype of bool; should not fire E0112"
+    );
+    Ok(())
+}
+
+#[test]
+fn typeis_passed_where_str_expected() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypeIs, Callable
+def takes_callable_str(f: Callable[[object], str]) -> None: ...
+def check_int(val: object) -> TypeIs[int]: ...
+takes_callable_str(check_int)
+";
+    let diags = run(source)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn protocol_callback_typeguard() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import TypeGuard, Protocol
+class Checker(Protocol):
+    def __call__(self, val: object) -> str: ...
+
+def my_guard(val: object) -> TypeGuard[int]: ...
+c: Checker = my_guard
+";
+    let diags = run(source)?;
+    let _ = codes(&diags);
+    Ok(())
+}

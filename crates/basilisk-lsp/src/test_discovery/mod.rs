@@ -18,6 +18,7 @@ pub use self::runner::{
     parse_pytest_output, run_tests, PerTestResult, TestRunConfig, TestRunResult,
 };
 
+// Implements [LSPTEST-TEST-ITEM-DATA-MODEL] — name/id/file/line/kind/children fields match the spec struct exactly.
 /// A discovered test item in the workspace.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestItem {
@@ -35,6 +36,7 @@ pub struct TestItem {
     pub children: Vec<TestItem>,
 }
 
+// Implements [LSPTEST-TEST-ITEM-DATA-MODEL] — File | Function | Class | Method kinds per the spec data model.
 /// The kind of test item.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -117,7 +117,7 @@ fn adopt_files(paths: &[String]) -> Result<AdoptSummary, String> {
     let mut demoted_count: usize = 0;
 
     for path_str in python_files {
-        match check_file_errors(&path_str) {
+        match check_file_errors(&path_str, &config) {
             Ok(error_codes) => {
                 if error_codes.is_empty() {
                     continue;
@@ -171,11 +171,17 @@ fn unadopt_files(paths: &[String]) -> Result<usize, String> {
     Ok(count)
 }
 
-/// Check a single file and return all error codes found.
-fn check_file_errors(path: &str) -> Result<Vec<String>, String> {
+/// Check a single file under the project configuration and return all error
+/// codes found. Honors config so adoption records exactly the diagnostics the
+/// project has enabled (house rules are off by default). See
+/// [CHKARCH-CONFIGURATION-ONLY].
+fn check_file_errors(
+    path: &str,
+    config: &basilisk_config::BasiliskConfig,
+) -> Result<Vec<String>, String> {
     let parsed = basilisk_parser::parse_file(path).map_err(|e| e.to_string())?;
     let resolved = basilisk_resolver::resolve(&parsed).map_err(|e| e.to_string())?;
-    let diags = basilisk_checker::check(&resolved);
+    let diags = basilisk_checker::check_with_config(&resolved, config);
 
     let codes: Vec<String> = diags
         .iter()
@@ -218,12 +224,28 @@ mod tests {
     /// Fully typed Python code that should produce zero errors.
     const CLEAN_PYTHON: &str = "def greet(name: str) -> str:\n    return name\n";
 
-    /// Create a fresh temporary directory, removing any leftover from a prior run.
+    /// Create a fresh temporary project directory (removing any leftover from a
+    /// prior run) that ships a `basilisk.json` opting into the annotation house
+    /// rules. `adopt` records the diagnostics a project has enabled, and those
+    /// rules (`BSK-E0001`/`BSK-E0002`/…) are off by default — so the test project
+    /// turns them on exactly as a real adopter would. No modes; this is
+    /// configuration. See [CHKARCH-CONFIGURATION-ONLY].
     fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("bsk_adopt_test_{name}"));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("basilisk.json"), "{\"strictAnnotations\": true}\n").unwrap();
         dir
+    }
+
+    /// Config that opts into the annotation house rules — the in-memory mirror of
+    /// the `basilisk.json` [`temp_dir`] writes, for tests that call
+    /// `check_file_errors` directly. See [CHKARCH-CONFIGURATION-ONLY].
+    fn annotations_on() -> basilisk_config::BasiliskConfig {
+        basilisk_config::BasiliskConfig {
+            strict_annotations: true,
+            ..Default::default()
+        }
     }
 
     /// Write a `.py` file inside `dir` and return its absolute path as a `String`.
@@ -356,7 +378,7 @@ mod tests {
         let dir = temp_dir("check_bad");
         let path = write_py(&dir, "bad.py", BAD_PYTHON);
 
-        let codes = check_file_errors(&path).unwrap();
+        let codes = check_file_errors(&path, &annotations_on()).unwrap();
         assert!(
             !codes.is_empty(),
             "bad code must produce at least one error"
@@ -372,7 +394,7 @@ mod tests {
         let dir = temp_dir("check_clean");
         let path = write_py(&dir, "clean.py", CLEAN_PYTHON);
 
-        let codes = check_file_errors(&path).unwrap();
+        let codes = check_file_errors(&path, &annotations_on()).unwrap();
         assert!(
             codes.is_empty(),
             "clean code should produce no errors, got: {codes:?}"
@@ -381,7 +403,7 @@ mod tests {
 
     #[test]
     fn check_file_errors_nonexistent_file_returns_err() {
-        let result = check_file_errors("/no/such/file.py");
+        let result = check_file_errors("/no/such/file.py", &annotations_on());
         assert!(result.is_err(), "nonexistent file must return Err");
     }
 

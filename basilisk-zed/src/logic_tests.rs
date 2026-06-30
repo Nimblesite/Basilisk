@@ -45,6 +45,7 @@ const ALL_SLASH_COMMANDS: [&str; 13] = [
 ];
 
 // ── Slash command output ─────────────────────────────────────────────────
+// Exercises [ZED-PROFILE]: every slash command's dispatch and markdown output.
 
 #[test]
 fn profile_without_pid() {
@@ -345,6 +346,8 @@ fn profiler_slash_commands_dont_contain_raw_code_paths() {
 }
 
 // ── DAP config building ─────────────────────────────────────────────
+// Exercises [ZED-DAP]: launch/attach config building, request-kind detection,
+// and scenario builders matching basilisk-debug.json.
 
 #[test]
 fn build_dap_config_defaults() {
@@ -454,6 +457,7 @@ fn attach_scenario_no_pid() {
 }
 
 // ── Workspace configuration ─────────────────────────────────────────
+// Exercises [ZED-CONFIG]: default config + wrapping under the "basilisk" key.
 
 #[test]
 fn default_config_has_inlay_hints() {
@@ -531,19 +535,27 @@ fn find_env_var_empty_list() {
 }
 
 #[test]
-fn cargo_bin_path_construction() {
+fn binary_override_prefers_settings_path() {
     assert_eq!(
-        cargo_bin_path("/home/user"),
-        "/home/user/.cargo/bin/basilisk"
+        resolve_binary_override(Some("/custom/basilisk"), Some("/env/basilisk")),
+        Some("/custom/basilisk".to_string())
     );
 }
 
 #[test]
-fn cargo_bin_path_trailing_slash() {
+fn binary_override_falls_back_to_env() {
     assert_eq!(
-        cargo_bin_path("/home/user/"),
-        "/home/user//.cargo/bin/basilisk"
+        resolve_binary_override(None, Some("/env/basilisk")),
+        Some("/env/basilisk".to_string())
     );
+}
+
+#[test]
+fn binary_override_none_triggers_download() {
+    // No explicit override -> None, which signals the managed GitHub-release
+    // download. There is no `~/.cargo/bin` (or any) filesystem default, so
+    // installing the extension alone is enough. Guards [ZED-DIST].
+    assert_eq!(resolve_binary_override(None, None), None);
 }
 
 // ── Version check ───────────────────────────────────────────────────

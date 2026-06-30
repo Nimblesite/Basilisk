@@ -34,7 +34,7 @@ def handle_post(
 # Any is justified here — JSON can be any valid JSON type
 def serialize(
     value: object,
-) -> str:  # basilisk: allow[BSK-E0011] -- JSON is inherently untyped
+) -> str:  # basilisk: allow[returns_compatibility] -- JSON is inherently untyped
     return json.dumps(value)
 
 

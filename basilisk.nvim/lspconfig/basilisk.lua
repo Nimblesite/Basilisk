@@ -1,5 +1,8 @@
 --- nvim-lspconfig server definition for Basilisk.
 ---
+--- Implements [NVIM-DISTRIBUTION-SECONDARY-LSPCONFIG-PR] — the minimal LSP-only
+--- config submitted to nvim-lspconfig for users who just want basic LSP.
+---
 --- This file is intended for submission to the nvim-lspconfig repository:
 --- https://github.com/neovim/nvim-lspconfig
 ---

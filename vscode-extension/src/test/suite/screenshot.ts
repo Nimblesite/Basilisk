@@ -21,6 +21,60 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
+ * Directory for the *committed* website editor screenshots. Resolves to
+ * `website/src/assets/images/` (`__dirname` is `out/test/suite`, four levels up
+ * is the repo root).
+ */
+function websiteImageDir(): string {
+    return path.resolve(__dirname, '..', '..', '..', '..', 'website', 'src', 'assets', 'images');
+}
+
+async function sleep(ms: number): Promise<void> {
+    await new Promise<void>((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
+
+/**
+ * Capture the real VS Code window for the website via the CDP sidecar
+ * ([VSIX-EDITOR-SCREENSHOTS-PIPELINE], screenshot-watcher.mjs). Writes a `.signal` file
+ * into the website image dir and waits for the sidecar to produce the PNG, then
+ * renames it into place.
+ *
+ * No-op unless `BASILISK_SCREENSHOTS=1` — so normal test runs are unaffected and
+ * never write into the repo. Call after assertions prove the feature is visible.
+ *
+ * @param filename final PNG name, e.g. `vscode-diagnostics.png`.
+ */
+export async function takeWindowScreenshot(filename: string): Promise<void> {
+    if (process.env.BASILISK_SCREENSHOTS === undefined) {
+        return;
+    }
+    const dir = websiteImageDir();
+    fs.mkdirSync(dir, { recursive: true });
+    const tempFilename = `${filename}.tmp-${process.pid.toString()}.png`;
+    const tempPath = path.join(dir, tempFilename);
+    const signalPath = path.join(dir, `${tempFilename}.signal`);
+    const outPath = path.join(dir, filename);
+    if (fs.existsSync(tempPath)) {
+        fs.rmSync(tempPath, { force: true });
+    }
+    fs.writeFileSync(signalPath, filename, 'utf8');
+
+    const deadline = Date.now() + 20_000;
+    while (Date.now() < deadline) {
+        if (fs.existsSync(tempPath)) {
+            fs.renameSync(tempPath, outPath);
+            // eslint-disable-next-line no-console
+            console.log(`[screenshot] wrote ${filename}`);
+            return;
+        }
+        await sleep(100);
+    }
+    throw new Error(`screenshot sidecar did not produce ${filename} within 20s`);
+}
+
+/**
  * Directory where screenshots are written. Resolves to
  * `vscode-extension/.screenshots/` (gitignored). `__dirname` is
  * `out/test/suite`, so three levels up reaches the extension root.

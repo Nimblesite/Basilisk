@@ -17,6 +17,8 @@
   <a href="https://github.com/Nimblesite/Basilisk">GitHub</a>
 </p>
 
+<p align="center"><strong>English</strong> · <a href="README.zh.md">简体中文</a></p>
+
 ---
 
 <p align="center">
@@ -105,21 +107,21 @@ All rules are **on by default**. There is no way to relax them globally.
 
 | Code | What it catches |
 |------|----------------|
-| `BSK-E0010` | Import from untyped module |
-| `BSK-E0011` | Explicit `Any` annotation (warning) |
-| `BSK-E0012` | Argument type mismatch |
-| `BSK-E0013` | Return type mismatch |
-| `BSK-E0014` | Assignment type mismatch |
-| `BSK-E0015` | Wrong number of type arguments |
-| `BSK-E0016` | Incompatible method override |
-| `BSK-E0017` | Incompatible class variable override |
-| `BSK-E0018` | Undefined name |
-| `BSK-E0019` | Used before assignment |
-| `BSK-E0020` | `@overload` missing implementation |
-| `BSK-E0021` | Overlapping `@overload` signatures |
-| `BSK-E0022` | Unhashable dict key |
-| `BSK-E0023` | Non-exhaustive `match` |
-| `BSK-E0024` | Invalid type expression |
+| `imports_unresolved` | Import from untyped module |
+| `returns_compatibility` | Explicit `Any` annotation (warning) |
+| `calls_argument_type` | Argument type mismatch |
+| `returns_compatibility_2` | Return type mismatch |
+| `assignment_compatibility` | Assignment type mismatch |
+| `callables_annotation` | Wrong number of type arguments |
+| `classes_override` | Incompatible method override |
+| `classes_override_2` | Incompatible class variable override |
+| `names_undefined` | Undefined name |
+| `names_unbound` | Used before assignment |
+| `overloads_definitions` | `@overload` missing implementation |
+| `overloads_consistency` | Overlapping `@overload` signatures |
+| `dict_key_hashable` | Unhashable dict key |
+| `match_exhaustiveness` | Non-exhaustive `match` |
+| `annotations_typeexpr` | Invalid type expression |
 | `BSK-E0025` | Missing `@override` decorator |
 
 ---

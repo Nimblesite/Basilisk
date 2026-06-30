@@ -18,6 +18,9 @@ M.config = nil
 local did_setup = false
 
 --- Register LSP command handlers for custom commands.
+--- Implements [NVIM-LSP-CLIENT-CONFIGURATION-CUSTOM-COMMANDS] — installs
+--- vim.lsp.commands handlers for server-advertised commands (the server is the
+--- single source of truth; the plugin never registers a command it does not own).
 local function register_lsp_commands()
   vim.lsp.commands["basilisk.organizeImports"] = function(cmd, ctx)
     local edit = cmd.edit or cmd.arguments and cmd.arguments[1]

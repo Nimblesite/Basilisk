@@ -27,8 +27,10 @@ pub const ALL_FIXABLE_RULES: &[&str] = &[
 ///
 /// BSK-E0003 is intentionally excluded: its fix (adding `: Any`) conflicts
 /// with BSK-W0050's fix (removing redundant annotations), producing a
-/// non-idempotent cycle. Users who want E0003 auto-fixed must pass it
+/// non-idempotent cycle. Users who want BSK-E0003 auto-fixed must pass it
 /// explicitly via `--rules BSK-E0003` or use `--unsafe`.
+// Implements [AUTOFIX-CLASSIFY] — the Safe vs Unsafe tiers: SAFE_FIXABLE_RULES
+// is the "Safe only" (default) set; ALL_FIXABLE_RULES is the "All fixes" set.
 pub const SAFE_FIXABLE_RULES: &[&str] = &["BSK-E0001", "BSK-E0002", "BSK-E0005", "BSK-W0050"];
 
 /// Custom `CodeActionKind` for "fix all safe diagnostics in this file".
@@ -43,6 +45,8 @@ pub(crate) fn fix_all_kind() -> CodeActionKind {
 ///
 /// Returns `None` if no diagnostics have applicable fixes.
 /// Uses `source.fixAll.basilisk` kind (for on-save / command palette).
+// Implements [AUTOFIX-MASS] — the File scope: applies all fixable diagnostics
+// in one action, as a single WorkspaceEdit (one VS Code undo unit, [AUTOFIX-UNDO]).
 #[must_use]
 pub fn fix_all_in_file(uri: &Url, diagnostics: &[Diagnostic], source: &str) -> Option<CodeAction> {
     build_fix_all(
@@ -172,6 +176,9 @@ fn build_fix_all(
 
 /// Collect text edits for all fixable diagnostics, discarding any that
 /// overlap with an earlier (by start position) edit.
+// Implements [AUTOFIX-CONFLICTS] — sort fixes by start position ascending, then
+// greedily skip any fix that overlaps an already-accepted (earlier) one. The
+// skipped (losing) fix may become applicable on a later re-check pass.
 fn collect_non_overlapping_edits(
     uri: &Url,
     diagnostics: &[Diagnostic],
@@ -294,6 +301,8 @@ mod tests {
         assert_eq!(edits.len(), 1);
     }
 
+    // Exercises [AUTOFIX-MASS] / [AUTOFIX-CONFLICTS]: multiple fixes combined
+    // into one action; ranges_overlap tests below cover the conflict predicate.
     #[test]
     fn test_fix_all_multiple_non_overlapping() {
         let uri = Url::parse("file:///test.py").unwrap();
@@ -328,7 +337,7 @@ mod tests {
         );
         assert!(action.title.contains("2 fixes"), "title: {}", action.title);
         assert_eq!(action.kind, Some(CodeActionKind::QUICKFIX));
-        // Verify only W0050 diagnostics are attached.
+        // Verify only BSK-W0050 diagnostics are attached.
         let attached = action.diagnostics.unwrap();
         assert!(attached.iter().all(|d| matches!(
             &d.code,
@@ -388,11 +397,11 @@ mod tests {
             make_diag("BSK-W0050", 1, 0, 1),
             make_diag("BSK-E0001", 1, 5, 10), // different rule
         ];
-        // Only allow W0050 — E0001 should be excluded.
+        // Only allow BSK-W0050 — BSK-E0001 should be excluded.
         let action = fix_filtered_in_file(&uri, &diags, source, &["BSK-W0050"]);
-        assert!(action.is_some(), "should produce a fix for W0050");
+        assert!(action.is_some(), "should produce a fix for BSK-W0050");
         let action = action.unwrap();
-        // All attached diagnostics must be W0050.
+        // All attached diagnostics must be BSK-W0050.
         let attached = action.diagnostics.unwrap();
         assert!(attached.iter().all(|d| matches!(
             &d.code,
@@ -405,7 +414,7 @@ mod tests {
         let uri = Url::parse("file:///test.py").unwrap();
         let source = "x: int = 42\n";
         let diags = vec![make_diag("BSK-W0050", 0, 0, 1)];
-        // Only allow E0001 — W0050 should be filtered out.
+        // Only allow BSK-E0001 — BSK-W0050 should be filtered out.
         let action = fix_filtered_in_file(&uri, &diags, source, &["BSK-E0001"]);
         assert!(
             action.is_none(),

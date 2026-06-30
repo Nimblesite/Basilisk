@@ -61,6 +61,9 @@ function getUncoveredDecoration(): vscode.TextEditorDecorationType {
  *
  * For each file in the coverage result, finds matching open editors
  * and applies covered/uncovered line decorations.
+ *
+ * Implements [LSPTEST-UV-INTEGRATION-COVERAGE] (VS Code side) — renders the
+ * `basilisk/coverageResult` payload parsed from the deterministic coverage XML.
  */
 export function applyCoverageDecorations(coverage: LspCoverageResult): void {
   const enabled = vscode.workspace

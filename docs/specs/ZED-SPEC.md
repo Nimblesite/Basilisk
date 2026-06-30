@@ -1,26 +1,14 @@
 # Basilisk Zed Extension {#ZED}
 
-## Goal {#ZED-GOAL}
+Zed extension connecting to the same `basilisk lsp` binary as the VS Code and Neovim extensions. All LSP features, DAP integration, custom commands, configuration, and binary resolution live in **[LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)** (single source of truth); this spec documents only **Zed-specific details**.
 
-A first-class Zed extension that connects to the same `basilisk lsp` binary as the VS Code and Neovim extensions. One LSP, three editors. The Zed extension provides language intelligence, debugging, and profiling — reusing 100% of the Rust backend.
+Target: **wasm32 (64-bit) only**.
 
-MAX CODE SHARING BETWEEN RUST COMPONENTS!!!
-Share code between the Zed extension and the other crates AMAP - even if just sharing at file level!
-
-**CRITICAL: AIMING FOR FEATURE PARITY BETWEEN ZED, VS CODE, AND NEOVIM EXTENSIONS**
-
-All LSP features, DAP integration, custom commands, configuration settings, and binary resolution are defined in **[LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)** — the single source of truth. This spec only documents **Zed-specific implementation details**.
-
-CRITICAL: We only target Wasm 64 bit. We don't need to support 32 bit wasm for now
-
-## Critical Docs {#ZED-DOCS}
-
-- [Zed Extension Development](https://zed.dev/docs/extensions/developing-extensions)
-- [Zed Python Language Support](https://zed.dev/docs/languages/python)
+Reference: [Zed Extension Development](https://zed.dev/docs/extensions/developing-extensions), [Zed Python Language Support](https://zed.dev/docs/languages/python).
 
 ## Zed Extension Capabilities {#ZED-CAPS}
 
-Zed extensions are Rust compiled to WASM. The API surface is deliberately narrow:
+Zed extensions are Rust compiled to WASM with a deliberately narrow API:
 
 | Capability | Available | Mechanism |
 |---|---|---|
@@ -29,7 +17,7 @@ Zed extensions are Rust compiled to WASM. The API surface is deliberately narrow
 | DAP debugging | Yes | `get_dap_binary()` on Extension trait |
 | Slash commands | Yes | `run_slash_command()` on Extension trait |
 | Themes | Yes | `themes/` directory |
-| Custom UI / webviews | **No** | Not supported (open issue #21208) |
+| Custom UI / webviews | **No** | Not supported ([zed-industries/zed#21208](https://github.com/zed-industries/zed/issues/21208)) |
 | Inline decorations | **No** | Not available via extension API |
 | Gutter decorations | **No** | Not available via extension API |
 | Custom commands | **No** | Only slash commands in AI context |
@@ -38,7 +26,7 @@ Zed extensions are Rust compiled to WASM. The API surface is deliberately narrow
 | File watchers | **No** | Not available |
 | Terminal control | **No** | Not available |
 
-This means: **all intelligence flows through LSP and DAP.** No client-side tricks. The LSP must be the source of everything. See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDRULE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDRULE) — the server advertises all commands, clients never pre-register them.
+All intelligence flows through LSP and DAP — no client-side tricks. See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDRULE](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDRULE): the server advertises all commands, clients never pre-register them.
 
 ## Architecture {#ZED-ARCH}
 
@@ -102,10 +90,9 @@ version = "0.1.0"
 schema_version = 1
 authors = ["Basilisk Contributors"]
 description = "Strict-by-default Python type checker with debugging and profiling"
-repository = "https://github.com/basilisk-lang/basilisk"
+repository = "https://github.com/Nimblesite/Basilisk"
 
-# No [grammars.python] block — see [ZED-GRAMMAR]. The language reuses Zed's
-# built-in tree-sitter-python grammar, so no grammar is compiled from source.
+# No [grammars.python] block — reuses Zed's built-in tree-sitter-python grammar. See [ZED-GRAMMAR].
 
 [language_servers.basilisk]
 name = "Basilisk"
@@ -226,23 +213,23 @@ zed::register_extension!(BasiliskExtension);
 
 ### Language Intelligence {#ZED-LSP}
 
-> All 21 LSP features are defined in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES). Zed supports all of them natively via its built-in LSP client. Zero work needed in the Zed extension — the LSP protocol handles everything.
+> All 21 LSP features ([LSP-ARCHITECTURE-SPEC.md §LSPARCH-FEATURES](LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES)) are native via Zed's built-in LSP client — zero extension work.
 
-**Zed-specific note**: Semantic tokens require `"semantic_tokens": "combined"` in Zed settings.
+Semantic tokens require `"semantic_tokens": "combined"` in Zed settings.
 
 ### Debugging {#ZED-DAP}
 
-> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for `basilisk/startDebugSession` and [§LSPARCH-DAPPROXY](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DAPPROXY) for the shared proxy specification.
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for `basilisk/startDebugSession` and [§LSPARCH-DAPPROXY](LSP-ARCHITECTURE-SPEC.md#LSPARCH-DAPPROXY) for the shared proxy.
 
-Zed has native DAP support. The debug flow:
+Zed has native DAP. Debug flow:
 
-1. User triggers debug (F5 or debug button)
-2. Zed extension's `get_dap_binary()` returns the basilisk binary
-3. Basilisk spawns debugpy on a free TCP port via `basilisk/startDebugSession`
-4. Zed's DAP client connects directly to debugpy over TCP
-5. Full debugging: breakpoints, stepping, variables, call stack, watch expressions
+1. User triggers debug (F5 or debug button).
+2. `get_dap_binary()` returns the basilisk binary.
+3. Basilisk spawns debugpy on a free TCP port via `basilisk/startDebugSession`.
+4. Zed's DAP client connects directly to debugpy over TCP.
+5. Full debugging: breakpoints, stepping, variables, call stack, watch expressions.
 
-The `debug_adapter_schemas/basilisk-debug.json` schema defines the Zed-specific launch/attach configuration:
+`debug_adapter_schemas/basilisk-debug.json` defines the Zed launch/attach config:
 
 ```json
 {
@@ -267,9 +254,9 @@ The `debug_adapter_schemas/basilisk-debug.json` schema defines the Zed-specific 
 
 ### Profiling {#ZED-PROFILE}
 
-> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for the profiling and memory command specifications shared across all editors.
+> See [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CMDS](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDS) for the shared profiling and memory commands.
 
-Zed has no webview support, so profiling visualization works differently than VS Code:
+Zed has no webviews, so visualization differs from VS Code:
 
 | Visualization | VS Code | Zed |
 |---|---|---|
@@ -278,64 +265,80 @@ Zed has no webview support, so profiling visualization works differently than VS
 | Hot function list | TreeView panel | Slash command output in AI panel |
 | Live updates | Custom notifications | LSP diagnostics refresh |
 
-**Profiling in Zed uses three mechanisms:**
+Three mechanisms:
 
-1. **LSP Diagnostics** — The profiler emits hotspot diagnostics (hint severity) with per-line timing data.
-2. **Slash Commands** — `/profile` and `/profstop` trigger profiling via the AI assistant panel.
-3. **External Viewer** — The LSP generates a speedscope JSON file and opens it in the browser.
+1. **LSP Diagnostics** — hotspot diagnostics (hint severity) with per-line timing.
+2. **Slash Commands** — `/profile` and `/profstop` via the AI assistant panel.
+3. **External Viewer** — LSP generates speedscope JSON and opens it in the browser.
 
 ### Tree-sitter Queries {#ZED-TREESITTER}
 
-The extension ships tree-sitter-python queries for:
+The extension ships tree-sitter-python queries:
 
-- **highlights.scm** — Full Python syntax highlighting (keywords, builtins, decorators, f-strings, type annotations)
+- **highlights.scm** — syntax highlighting (keywords, builtins, decorators, f-strings, type annotations)
 - **brackets.scm** — `()`, `[]`, `{}`, string quotes
-- **outline.scm** — Functions, classes, methods for the outline panel
-- **indents.scm** — Python's indentation-based structure
-- **injections.scm** — SQL in strings, regex patterns, docstring formatting
+- **outline.scm** — functions, classes, methods for the outline panel
+- **indents.scm** — indentation-based structure
+- **injections.scm** — SQL in strings, regex, docstring formatting
 - **textobjects.scm** — Vim motions for functions, classes, arguments, comments
-- **runnables.scm** — Detect `if __name__ == "__main__"` and pytest functions for run buttons
+- **runnables.scm** — detect `if __name__ == "__main__"` and pytest functions for run buttons
 
-Note: Zed already has built-in Python support via tree-sitter-python. The Basilisk extension can either augment the built-in queries or rely on them entirely, only providing the LSP and DAP integration.
+Zed already ships built-in Python support; these queries augment it (or the extension can rely on the built-in queries entirely and provide only LSP/DAP).
 
 ### Grammar Reuse {#ZED-GRAMMAR}
 
-`extension.toml` deliberately omits a `[grammars.python]` block. `languages/python/config.toml` declares `grammar = "python"`, which Zed resolves to its **built-in** tree-sitter-python grammar; the query files above (`highlights.scm`, `outline.scm`, `runnables.scm`, …) augment that built-in grammar.
+`extension.toml` omits `[grammars.python]`; `languages/python/config.toml` declares `grammar = "python"`, which Zed resolves to its **built-in** tree-sitter-python grammar that the query files above augment.
 
-Bundling `[grammars.python]` would force Zed to compile the grammar from source on install, which requires downloading and extracting the ~400 MB `wasi-sdk` toolchain. On a constrained disk that extraction can fail mid-way (`No space left on device`), leaving a corrupt cache that then surfaces as the misleading `failed to compile grammar 'python'`. Reusing the built-in grammar removes the compile step entirely — installs are instant and need no toolchain. Implemented in `basilisk-zed/extension.toml` (absence of `[grammars.*]`).
+Bundling `[grammars.python]` would force Zed to compile the grammar from source on install, requiring the multi-hundred-megabyte [`wasi-sdk`](https://github.com/WebAssembly/wasi-sdk/releases) toolchain — an extraction that can fail on a constrained disk (`No space left on device`) and surface as the misleading `failed to compile grammar 'python'`. Reusing the built-in grammar removes the compile step. Implemented in `basilisk-zed/extension.toml` (absence of `[grammars.*]`).
 
 ## Binary Distribution {#ZED-DIST}
 
-The extension downloads the `basilisk` binary from GitHub Releases on first activation:
+Installing the extension is enough — no separate binary install. Per the Shipwright contract, the binary ships with every release (`.github/workflows/release.yml`); the extension downloads the matching asset on first activation, caches it in its data directory, and reuses it until a newer release appears. There is **no filesystem default** (no `~/.cargo/bin`, no PATH guess) — a missing override means "download", never "guess".
+
+Resolution order (`basilisk-zed/src/lib.rs::resolve_binary`):
 
 ```rust
-fn resolve_binary(&self, worktree: &zed::Worktree) -> Result<String> {
-    // 1. Check if basilisk is already on PATH
-    // 2. Check ~/.cargo/bin/basilisk
-    // 3. Check extension's data directory for cached download
-    // 4. Download from GitHub releases:
-    let (os, arch) = zed::current_platform();
+fn resolve_binary(&mut self, worktree: &zed::Worktree) -> Result<String> {
+    // 1. Explicit override — `binary.path` in the Zed LSP settings
+    // 2. Explicit override — the `BASILISK_PATH` environment variable
+    // 3. Default — download the matching binary from the latest GitHub release
     let release = zed::latest_github_release(
-        "basilisk-lang/basilisk",
+        release::GITHUB_REPO, // "Nimblesite/Basilisk" — see basilisk_common::release
         zed::GithubReleaseOptions {
             require_assets: true,
             pre_release: false,
         },
     )?;
-    // Match platform to asset name, download, make executable
+    // asset_name() / is_zip_archive() / extracted_binary_path() pick the asset,
+    // archive kind, and in-archive path — one source of truth shared with release.yml.
 }
 ```
 
-Target assets:
-- `basilisk-x86_64-apple-darwin.tar.gz`
-- `basilisk-aarch64-apple-darwin.tar.gz`
+The two overrides exist only for development (locally built binary) and for a system install (Homebrew/Scoop); never required for a normal install.
+
+Target assets (must match `release.yml` — see `basilisk_common::release::asset_name`):
+- `basilisk-aarch64-apple-darwin.zip` — macOS **zip** (`ditto`), nested under `basilisk-darwin/`, carrying `basilisk` and `basilisk-profiler-helper`
 - `basilisk-x86_64-unknown-linux-gnu.tar.gz`
 - `basilisk-aarch64-unknown-linux-gnu.tar.gz`
 - `basilisk-x86_64-pc-windows-msvc.zip`
+- `basilisk-aarch64-pc-windows-msvc.zip`
+
+Archive kind and in-archive binary path are platform-specific (macOS zip nested; Linux `tar.gz` and Windows zip flat), derived from `basilisk_common::release::{is_zip_archive, extracted_binary_path}` so the downloader cannot drift from the release pipeline.
+
+## Registry Publishing {#ZED-MIRROR}
+
+Zed has no upload API. Extensions are listed in [`zed-industries/extensions`](https://github.com/zed-industries/extensions) as **git submodules**; that repo's CI compiles each to WASM from the pinned commit and publishes on merge. Two properties of the in-repo `basilisk-zed/` crate make it unpublishable as-is, so the release pipeline renders a self-contained mirror:
+
+1. **Placeholder version.** Every monorepo commit carries `0.0.0-PLACEHOLDER` in `Cargo.toml` + `extension.toml`; real versions are stamped only in CI (see [ZED-CARGOTOML](#ZED-CARGOTOML)). The registry pins a commit, so it cannot point at `main`.
+2. **Workspace path dependency.** The crate depends on `basilisk-common` via `{ path = "../crates/basilisk-common" }`, which does not resolve when the registry builds the submodule standalone.
+
+`scripts/render-zed-mirror.sh` resolves both: vendors `basilisk-common` (zero-dependency, WASM-safe) under `vendor/basilisk-common`, rewrites the path dependency, stamps the release version, makes the mirror its own workspace root, and drops the workspace-only `[lints]` inheritance. The `publish-zed` job in `release.yml` renders the tree, **gates the push on a real `cargo build --release --target wasm32-wasip2`**, then pushes to [`Nimblesite/basilisk-zed`](https://github.com/Nimblesite/basilisk-zed) and tags it with the monorepo tag — same clone-replace-commit-push convention as `publish-nvim`, using the `BREW_SCOOP_PAT` org secret.
+
+The mirror version equals the monorepo tag (`v1.2.3` → `1.2.3`); the binary [ZED-DIST](#ZED-DIST) updates independently at runtime. The first listing is a one-time human-reviewed PR adding the submodule to `zed-industries/extensions`; subsequent bumps amend that pointer.
 
 ## Zed Settings {#ZED-CONFIG}
 
-> Shared configuration settings are defined in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG). Below shows how to map them into Zed's `settings.json` structure.
+> Shared settings are defined in [LSP-ARCHITECTURE-SPEC.md §LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG); mapped into Zed's `settings.json` below.
 
 ```json
 {
@@ -372,7 +375,7 @@ Target assets:
 
 ## Limitations {#ZED-LIMITS}
 
-These features exist in the VS Code extension but have no Zed equivalent:
+VS Code features with no Zed equivalent:
 
 | Feature | VS Code | Zed | Workaround |
 |---|---|---|---|
@@ -383,7 +386,7 @@ These features exist in the VS Code extension but have no Zed equivalent:
 | Custom settings UI | contributes.configuration | Not available | Manual settings.json |
 | Auto-restart on crash | Client-side logic | Not available | Zed handles LSP restart natively |
 
-As Zed's extension API matures (webviews are in discussion), these gaps will close. The LSP already produces all the data — it's only the visualization that differs.
+The LSP produces all underlying data; only visualization differs.
 
 ## Shared Code Budget {#ZED-SHARED}
 
@@ -399,77 +402,4 @@ As Zed's extension API matures (webviews are in discussion), these gaps will clo
 | Flamegraph rendering | Per-editor | VS Code webview / browser fallback |
 | Tree-sitter queries | Zed-only | `basilisk-zed/languages/python/` |
 
-The entire backend is shared. Only thin editor-specific glue differs.
-
----
-
-## Status {#ZED-STATUS}
-
-See [ZED-PLAN.md](../plans/ZED-PLAN.md) for the full implementation plan with phasing.
-
-### Extension Scaffolding {#ZED-STATUS-SCAFFOLD}
-- [x] Create `basilisk-zed/` directory with `extension.toml`, `Cargo.toml`, `src/lib.rs`
-- [x] Implement `zed::Extension` trait with `language_server_command()`
-- [x] Implement binary resolution (PATH, ~/.cargo/bin, BASILISK_PATH env var)
-- [x] Implement GitHub release download fallback via `zed::latest_github_release()`
-- [x] Implement `language_server_initialization_options()` — pass workspace root
-- [x] Implement `language_server_workspace_configuration()` — read Zed settings
-- [x] Register extension with `zed::register_extension!(BasiliskExtension)`
-- [x] Version check: warn user when newer basilisk release is available
-
-### LSP Verification {#ZED-STATUS-LSP}
-- [x] Diagnostics appear on Python files
-- [x] Completions (dot-triggered and symbol)
-- [x] Hover shows type info
-- [x] Go to definition / declaration / type definition
-- [x] Find references
-- [x] Rename symbol
-- [x] Inlay hints (parameter names, variable types)
-- [x] Code actions (add annotations, organize imports)
-- [x] Semantic tokens with `"semantic_tokens": "combined"`
-- [x] Formatting via Ruff
-- [x] Document symbols in outline panel
-- [x] Code lens (reference counts)
-- [x] Call hierarchy
-- [x] Signature help
-
-### Tree-sitter Queries {#ZED-STATUS-TREESITTER}
-- [x] Reuse Zed's built-in tree-sitter-python grammar — no `[grammars.python]` block ([ZED-GRAMMAR])
-- [x] Create `languages/python/config.toml`
-- [x] Create `highlights.scm` — keywords, builtins, decorators, f-strings, type annotations
-- [x] Create `brackets.scm` — `()`, `[]`, `{}`
-- [x] Create `outline.scm` — functions, classes, methods
-- [x] Create `indents.scm` — Python indentation rules
-- [x] Create `injections.scm` — SQL in strings, regex, docstrings
-- [x] Create `textobjects.scm` — Vim motions for functions, classes, arguments
-- [x] Create `runnables.scm` — `if __name__ == "__main__"`, pytest functions
-
-### Debugging (DAP) {#ZED-STATUS-DAP}
-- [x] Implement `get_dap_binary()` — resolve basilisk binary
-- [x] Create `debug_adapter_schemas/basilisk-debug.json` (launch + attach schema)
-- [x] Implement `dap_request_kind()` — launch vs attach
-- [x] Implement `dap_config_to_scenario()`
-- [ ] Test: breakpoints, stepping, variables, debug console (manual — no Zed test framework)
-
-### Slash Commands (Profiling & Memory) {#ZED-STATUS-SLASH}
-- [x] Register `/profile`, `/profstop`, `/profsnapshot` slash commands
-- [x] Register `/memleak`, `/memstop`, `/memrefs` slash commands
-- [x] Implement `run_slash_command()` dispatch with markdown output
-- [x] `/profile [pid]` — start profiling, return session info
-- [x] `/profstop` — stop profiling, format hot functions/lines as markdown
-- [x] `/profsnapshot` — snapshot without stopping
-- [x] `/memleak` — start memory tracking via debug session
-- [x] `/memstop` — snapshot + diff, format leak report
-- [x] `/memrefs <TypeName>` — walk reference graph, format retention paths
-- [x] Implement argument completion (PIDs for /profile, type names for /memrefs)
-- [ ] Wire to actual LSP profiler/memory commands (blocked on profiling engine)
-
-### Testing {#ZED-STATUS-TESTING}
-- [x] Extract testable pure logic into `logic.rs` (33 unit tests)
-- [x] LSP E2E tests in `zed_extension_e2e_tests.rs` / `zed_extension_e2e_advanced.rs`
-- [x] Set up CI: build WASM (`wasm32-wasip2`), run unit tests, clippy
-- [x] Cross-platform CI: macOS aarch64, Linux x86_64
-
-### Polish & Publishing {#ZED-STATUS-POLISH}
-- [x] Create Basilisk dark theme (`themes/basilisk-dark.json`)
-- [ ] Publish to Zed extension registry
+The entire backend is shared; only thin editor-specific glue differs. See [LSP-PLAN.md](../plans/LSP-PLAN.md) for cross-editor phasing.

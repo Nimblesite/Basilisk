@@ -1,4 +1,10 @@
 # agent-pmo:0b21609
+
+# ⚠️ NEVER STORE CI ARTIFACTS — they cost money even on this PUBLIC repo (compute on standard runners is free; **storage is billed**). 
+# The ONLY artifacts we keep are the **GitHub Releases** (Release assets are free + unlimited). NO `actions/upload-artifact` for coverage HTML, mutation reports, logs, screenshots, or any diagnostic. 
+# The sole permitted upload is a transient in-run cross-job hand-off, and it MUST set `retention-days: 1` (the floor) so it is consumed and deleted within the same run. 
+# Set retention to 1 day wherever you see a deviation. See [GITHUB-NO-ARTIFACTS]. ⚠️
+
 name: CI
 
 on:
@@ -66,7 +72,10 @@ jobs:
             # `website` gates the site build: only files the published site is
             # actually built from (templates/assets + the benchmark CSVs it reads).
             case "$f" in
-              website/*|benchmarks/status/*) website=true ;;
+              # The site build, plus the checker rule sources the diagnostic
+              # data (website/src/_data/rules.json) and /errors/ pages are
+              # generated from — so a new/renamed rule re-runs the drift guard.
+              website/*|benchmarks/status/*|crates/basilisk-checker/src/rules/*) website=true ;;
             esac
             # `code` gates the heavy Rust/extension/mutation matrix. Everything
             # that never reaches the Rust toolchain is excluded: the whole site,
@@ -96,7 +105,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      # fetch-depth: 0 — mirrors deploy-pages.yml so the conformance over-time
+      # chart (built from the git history of conformance_status.csv) is exercised
+      # by the pre-merge build check, not just the post-merge deploy.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
@@ -108,9 +122,38 @@ jobs:
         working-directory: website
         run: npm ci
 
+      # The /errors/ pages and the rules reference are generated from the checker
+      # source ([WEBSITE-ERROR-PAGES]); fail if the committed data is stale so the
+      # pages the CLI deep-links to can never drift from the diagnostics it emits.
+      - name: Check generated diagnostic data is in sync with the checker
+        run: |
+          python3 scripts/gen_rules_reference.py --data /tmp/rules.json
+          diff -u website/src/_data/rules.json /tmp/rules.json \
+            || { echo "::error::rules.json is stale — run: python3 scripts/gen_rules_reference.py --data"; exit 1; }
+
       - name: Build site
         working-directory: website
+        # GITHUB_TOKEN raises the GitHub API rate limit for _data/releases.js
+        # (the releases page is generated from the live Releases API at build
+        # time); the build still degrades gracefully if the call fails.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run build
+
+      # Navigation smoke tests ([WEBSITE-E2E-SMOKE]) and CLI-screenshot render
+      # checks ([WEBSITE-SCREENSHOTS-VERIFY]). Both presets (Desktop Chrome +
+      # Pixel 5) run on Chromium, so only chromium is installed. The screenshots
+      # are committed, regenerated locally with `npm run screenshots` against the
+      # real binary — CI only verifies they render, it never captures them.
+      - name: Install Playwright browser
+        working-directory: website
+        run: npx playwright install --with-deps chromium
+
+      - name: Run navigation + screenshot smoke tests (desktop + mobile)
+        working-directory: website
+        # CI uses the stdout `list` reporter only — no HTML report, trace,
+        # video or screenshot is produced or uploaded ([GITHUB-NO-ARTIFACTS]).
+        run: npm run test:e2e
 
   # ── Lint (runs in parallel with all test jobs) ─────────────────────────────
   lint:
@@ -225,18 +268,10 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@81ee9698f20724138a785d788c7567d40f14cd2d # cargo-llvm-cov
 
-      # The PEP conformance suite is fetched fresh from the upstream typing repo
-      # on every run (network-bound, one HTTP request per test file). Cache it
-      # keyed on conformance.sh, which holds the pinned TYPING_REF — bumping the
-      # ref edits that file and busts the cache; conformance.sh itself re-fetches
-      # whenever the stamped ref differs, so a stale restore self-heals.
-      - name: Cache conformance suite
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: crates/basilisk-cli/tests/conformance
-          key: conformance-suite-${{ hashFiles('scripts/conformance.sh') }}
-          restore-keys: conformance-suite-
-
+      # The conformance suite is NOT cached: score.py pulls the latest
+      # python/typing@main on every run (resolves the tip and re-downloads the
+      # fixtures + calculator), so the gate always scores against the current
+      # upstream suite. GITHUB_TOKEN raises the API rate limit for that fetch.
       - name: Run Rust tests with coverage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -30,6 +30,9 @@ pub fn generate_ast_stubs(
 /// # Errors
 ///
 /// Returns `StubGenError::Parse` if the source cannot be parsed.
+// Implements [STUBRES-AUTOGEN-MODES] "AST-based inference" — medium accuracy:
+// parses `.py` source with `ruff_python_parser`, no subprocess, misses dynamic
+// patterns.
 pub fn generate_ast_stubs_from_source(
     module_name: &str,
     source: &str,

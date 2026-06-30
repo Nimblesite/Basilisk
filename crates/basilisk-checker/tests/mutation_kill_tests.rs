@@ -3,21 +3,41 @@
 //! mutants identified by cargo-mutants. Each test asserts BOTH that violations
 //! ARE caught and that correct code is NOT flagged.
 
-use basilisk_checker::check;
+use basilisk_checker::check_with_config;
+use basilisk_config::BasiliskConfig;
 use basilisk_parser::parse_source;
 use basilisk_resolver::resolve;
 use basilisk_test_macros::mutation_safe;
 
+// Basilisk has no modes — config in, diagnostics out. `run` uses the default
+// config (every PEP rule, no house rules); `run_with_config` honors an explicit
+// config; `annotation_rules_config` is the config a project writes to opt into
+// the annotation house rules (E0001..E0005, E0025, W0014, W0040, W0050). See
+// [CHKARCH-CONFIGURATION-ONLY].
 fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
-    let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
-    let resolved = resolve(&parsed)?;
-    Ok(check(&resolved))
+    run_with_config(source, &BasiliskConfig::default())
 }
 
-fn e0014_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
+fn run_with_config(
+    source: &str,
+    config: &BasiliskConfig,
+) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::error::Error>> {
+    let parsed = parse_source(source.to_owned(), "test.py".to_owned())?;
+    let resolved = resolve(&parsed)?;
+    Ok(check_with_config(&resolved, config))
+}
+
+fn annotation_rules_config() -> BasiliskConfig {
+    BasiliskConfig {
+        strict_annotations: true,
+        ..BasiliskConfig::default()
+    }
+}
+
+fn assignment_compatibility_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
     diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .count()
 }
 
@@ -43,13 +63,13 @@ c: Optional[int] = "wrong"
 d: int = None
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 2,
         "at least 2 mismatches expected (c and d), got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -78,7 +98,7 @@ c: Union[int, str] = 3.14
 d: Union[int, str] = [1, 2]
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 union mismatch expected, got {e0014}"
@@ -106,7 +126,7 @@ c: set[int] = {1, 2, 3}
 d: set[int] = {"a", "b"}
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 list/set type element mismatch expected, got {e0014}"
@@ -131,7 +151,7 @@ b: dict[str, int] = {"x": "wrong"}
 c: dict[str, int] = {1: 2}
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 dict type mismatch expected, got {e0014}"
@@ -156,7 +176,7 @@ b: tuple[int, str] = ("wrong", 42)
 c: tuple[int, str] = (1,)
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 tuple mismatch expected, got {e0014}"
@@ -213,13 +233,13 @@ g: float = "bad"
 h: bytes = 42
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 3,
         "at least 3 named type mismatches, got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -246,7 +266,7 @@ e: Union[int, str, float] = 3.14
 f: Union[int, str, float] = [1, 2]
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 union mismatch expected, got {e0014}"
@@ -255,7 +275,7 @@ f: Union[int, str, float] = [1, 2]
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0097: Protocol undeclared self attrs — kill all mutants
+// Protocol undeclared self attrs — kill all mutants
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -276,7 +296,7 @@ class MyProto(Protocol):
     let diagnostics = run(source)?;
     let e0097: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0097")
+        .filter(|d| d.code.code == "protocols_definition")
         .collect();
     // Must flag z and w
     assert!(
@@ -298,7 +318,7 @@ class MyProto(Protocol):
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0150: Dead branch — kill mutants in version/platform detection
+// Dead branch — kill mutants in version/platform detection
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -318,7 +338,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         e0150.iter().any(|d| d.message.contains("dead")),
@@ -349,7 +369,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         e0150.iter().any(|d| d.message.contains("dead")),
@@ -378,7 +398,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         !e0150.is_empty(),
@@ -402,7 +422,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         !e0150.is_empty(),
@@ -412,10 +432,10 @@ def check():
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0014: Various literal type mismatches — each type path
+// Various literal type mismatches — each type path
 // ═══════════════════════════════════════════════════════════════════════
 
-#[mutation_safe(rule = "e0014", fns = "check_vars")]
+#[mutation_safe(rule = "assignment_compatibility", fns = "check_vars")]
 #[test]
 fn mutant_e0014_every_literal_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -438,13 +458,13 @@ m: bool = True
 n: bytes = b"data"
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 6,
         "at least 6 type mismatches expected, got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -452,10 +472,10 @@ n: bytes = b"data"
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0014: Negative literal and float literal
+// Negative literal and float literal
 // ═══════════════════════════════════════════════════════════════════════
 
-#[mutation_safe(rule = "e0014", fns = "check_vars")]
+#[mutation_safe(rule = "assignment_compatibility", fns = "check_vars")]
 #[test]
 fn mutant_e0014_negative_and_float() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -472,7 +492,7 @@ c: int = 3.14
 d: float = 3.14
 ";
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 mismatch (b: str = -42 or c: int = 3.14), got {e0014}"
@@ -491,7 +511,7 @@ d: float = 3.14
 /// still fire. Flipping `||`→`&&` (or dropping either `starts_with`) makes the
 /// guard never skip, so the quoted lines would be processed and fire E0014 —
 /// observably changing the count.
-#[mutation_safe(rule = "e0014", fns = "check_vars")]
+#[mutation_safe(rule = "assignment_compatibility", fns = "check_vars")]
 #[test]
 fn mutant_e0014_quoted_annotation_skip() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -500,7 +520,7 @@ b: 'int' = 'hello'
 c: int = "hello"
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert_eq!(
         e0014,
         1,
@@ -508,7 +528,7 @@ c: int = "hello"
          annotations are skipped, got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -528,7 +548,7 @@ c: int = "hello"
 /// alias lines would then be processed and wrongly fire E0014, raising the count
 /// from 1 to 3 — observably killing the mutant. Keeping both forms also pins the
 /// individual operands against future deletion mutants.
-#[mutation_safe(rule = "e0014", fns = "check_vars")]
+#[mutation_safe(rule = "assignment_compatibility", fns = "check_vars")]
 #[test]
 fn mutant_e0014_type_alias_skip() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -546,7 +566,7 @@ b: Bar = "hello"
 c: int = "hello"
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert_eq!(
         e0014,
         1,
@@ -554,7 +574,7 @@ c: int = "hello"
          fires, got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -572,7 +592,7 @@ c: int = "hello"
 /// (complex `3j`) fires. Deleting the `!` flips the guard so bare alias names
 /// are no longer intercepted, falling back to the `Named`-vs-literal compare,
 /// which rejects the valid value too — raising the E0014 count.
-#[mutation_safe(rule = "e0014", fns = "check_vars")]
+#[mutation_safe(rule = "assignment_compatibility", fns = "check_vars")]
 #[test]
 fn mutant_e0014_recursive_union_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -584,7 +604,7 @@ ok: Json = [1, {"a": 1}]
 bad: Json = {"a": 3j}
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert_eq!(
         e0014,
         1,
@@ -592,14 +612,14 @@ bad: Json = {"a": 3j}
          value fires, got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
     Ok(())
 }
 
-fn e0001_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
+fn missing_parameter_annotation_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
     diagnostics
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
@@ -607,14 +627,14 @@ fn e0001_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0001 check_function: !p.has_annotation guard
+// BSK-E0001 check_function: !p.has_annotation guard
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Kills mutant: e0001.rs:33 `delete ! in check_function` and `replace != with ==`
-/// on the name guards. Asserts BOTH that an unannotated regular param fires E0001
+/// on the name guards. Asserts BOTH that an unannotated regular param fires BSK-E0001
 /// AND that an annotated regular param does NOT — so flipping the polarity of the
 /// annotation check or the name guards produces an observable diagnostic count.
-#[mutation_safe(rule = "e0001", fns = "check_function")]
+#[mutation_safe(rule = "missing_parameter_annotation", fns = "check_function")]
 #[test]
 fn mutant_e0001_annotation_polarity() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -624,14 +644,14 @@ def has_annotated_only(annotated: int) -> int:
 def missing(unannotated, annotated: int) -> int:
     return annotated
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let e0001: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
     let [only] = e0001.as_slice() else {
         return Err(format!(
-            "exactly one E0001 expected for `unannotated` only, got {}: {e0001:?}",
+            "exactly one BSK-E0001 expected for `unannotated` only, got {}: {e0001:?}",
             e0001.len()
         )
         .into());
@@ -645,15 +665,15 @@ def missing(unannotated, annotated: int) -> int:
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0001 check_function: self/cls guards (&& vs ||)
+// BSK-E0001 check_function: self/cls guards (&& vs ||)
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Kills mutants: e0001.rs:33 `replace && with ||` (both occurrences).
 /// With `||` instead of `&&`, every parameter satisfies at least one branch,
-/// so unannotated `self`/`cls` would fire E0001 (false positive). This test
+/// so unannotated `self`/`cls` would fire BSK-E0001 (false positive). This test
 /// asserts that unannotated `self` and `cls` do NOT fire while a sibling
 /// unannotated regular param DOES — exactly distinguishing && from ||.
-#[mutation_safe(rule = "e0001", fns = "check_function")]
+#[mutation_safe(rule = "missing_parameter_annotation", fns = "check_function")]
 #[test]
 fn mutant_e0001_self_and_cls_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -665,7 +685,7 @@ class Foo:
     def klass(cls, y):
         return y
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let e0001: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
@@ -679,30 +699,30 @@ class Foo:
     let names: Vec<&str> = e0001.iter().map(|d| d.message.as_str()).collect();
     assert!(
         names.iter().any(|m| m.contains("`x`")),
-        "E0001 must fire for `x`, got: {names:?}"
+        "BSK-E0001 must fire for `x`, got: {names:?}"
     );
     assert!(
         names.iter().any(|m| m.contains("`y`")),
-        "E0001 must fire for `y`, got: {names:?}"
+        "BSK-E0001 must fire for `y`, got: {names:?}"
     );
     assert!(
         !names
             .iter()
             .any(|m| m.contains("`self`") || m.contains("`cls`")),
-        "E0001 must NOT fire for `self` or `cls`, got: {names:?}"
+        "BSK-E0001 must NOT fire for `self` or `cls`, got: {names:?}"
     );
     Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0001 check (impl): is_stub_context filter (delete !)
+// BSK-E0001 check (impl): is_stub_context filter (delete !)
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Kills mutant: e0001.rs:25 `delete ! in check`. Without the negation,
 /// only stub-context functions are checked — so unannotated params in regular
 /// (non-stub) functions are missed AND unannotated params inside Protocol
 /// methods would incorrectly fire. This test asserts both directions.
-#[mutation_safe(rule = "e0001", fns = "check")]
+#[mutation_safe(rule = "missing_parameter_annotation", fns = "check")]
 #[test]
 fn mutant_e0001_stub_context_negation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -714,14 +734,14 @@ class Iface(Protocol):
 def regular(unannotated):
     return unannotated
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let e0001: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
     let [only] = e0001.as_slice() else {
         return Err(format!(
-            "exactly one E0001 expected (for `unannotated` in regular fn), \
+            "exactly one BSK-E0001 expected (for `unannotated` in regular fn), \
              got {}: {e0001:?}",
             e0001.len()
         )
@@ -736,19 +756,19 @@ def regular(unannotated):
 }
 
 /// Kills mutant: e0001.rs:22 `replace check with ()`. With the empty body,
-/// no E0001 ever fires. A simple presence-of-diagnostic assertion kills it.
-#[mutation_safe(rule = "e0001", fns = "check")]
+/// no BSK-E0001 ever fires. A simple presence-of-diagnostic assertion kills it.
+#[mutation_safe(rule = "missing_parameter_annotation", fns = "check")]
 #[test]
 fn mutant_e0001_check_body_present() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def f(unannotated):
     return unannotated
 ";
-    let diagnostics = run(source)?;
-    let count = e0001_count(&diagnostics);
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
+    let count = missing_parameter_annotation_count(&diagnostics);
     assert_eq!(
         count, 1,
-        "E0001 must fire exactly once for unannotated param, got {count}"
+        "BSK-E0001 must fire exactly once for unannotated param, got {count}"
     );
     Ok(())
 }
@@ -757,20 +777,20 @@ def f(unannotated):
 /// `Default::default()` produces an empty Diagnostic (empty code, empty message).
 /// Asserting both code AND message content kills the mutant — `Default` cannot
 /// produce `BSK-E0001` and a parameter-named message simultaneously.
-#[mutation_safe(rule = "e0001", fns = "make_diagnostic")]
+#[mutation_safe(rule = "missing_parameter_annotation", fns = "make_diagnostic")]
 #[test]
 fn mutant_e0001_diagnostic_payload() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def f(specific_name):
     return specific_name
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let e0001: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.code.code == "BSK-E0001")
         .collect();
     let [only] = e0001.as_slice() else {
-        return Err(format!("exactly one E0001 expected: {e0001:?}").into());
+        return Err(format!("exactly one BSK-E0001 expected: {e0001:?}").into());
     };
     assert_eq!(only.code.code, "BSK-E0001");
     assert!(
@@ -792,22 +812,22 @@ fn count_code(diagnostics: &[basilisk_checker::Diagnostic], code: &str) -> usize
     diagnostics.iter().filter(|d| d.code.code == code).count()
 }
 
-#[mutation_safe(rule = "e0002")]
+#[mutation_safe(rule = "missing_return_annotation")]
 #[test]
 fn mutant_e0002_smoke() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def no_return_annotation(x: int):
     return x
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     assert!(
         count_code(&diagnostics, "BSK-E0002") >= 1,
-        "E0002 must fire for missing return annotation: {diagnostics:?}"
+        "BSK-E0002 must fire for missing return annotation: {diagnostics:?}"
     );
     Ok(())
 }
 
-#[mutation_safe(rule = "e0003")]
+#[mutation_safe(rule = "missing_variable_type")]
 #[test]
 fn mutant_e0003_smoke() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -815,15 +835,95 @@ empty_list = []
 empty_dict = {}
 nothing = None
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     assert!(
         count_code(&diagnostics, "BSK-E0003") >= 1,
-        "E0003 must fire for unannotated empty-collection vars: {diagnostics:?}"
+        "BSK-E0003 must fire for unannotated empty-collection vars: {diagnostics:?}"
     );
     Ok(())
 }
 
-#[mutation_safe(rule = "e0023")]
+// ─────────────────────────────────────────────────────────────────────
+// Mutants unmasked when the descriptive-rename fix re-enabled mutant
+// selection: opt_in_spec gating (BSK house rules off by default) plus
+// assignment-compatibility scope/offset logic.
+// ─────────────────────────────────────────────────────────────────────
+
+#[mutation_safe(rule = "missing_return_annotation")]
+#[test]
+fn mutant_e0002_opt_in_gating() -> Result<(), Box<dyn std::error::Error>> {
+    // BSK-E0002 is an opt-in house rule (provenance basilisk): it must fire only
+    // when the project opts in, and stay silent under the default (PEP-only)
+    // config. The default-off assertion kills `opt_in_spec -> None`, which would
+    // reclassify the rule as a default-on PEP rule.
+    let source = "def f(x: int):\n    return x\n";
+    assert!(
+        count_code(
+            &run_with_config(source, &annotation_rules_config())?,
+            "BSK-E0002"
+        ) >= 1,
+        "BSK-E0002 must fire when annotation house rules are enabled"
+    );
+    assert_eq!(
+        count_code(&run(source)?, "BSK-E0002"),
+        0,
+        "BSK-E0002 must be OFF under the default config (opt-in only)"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "missing_variable_type")]
+#[test]
+fn mutant_e0003_opt_in_gating() -> Result<(), Box<dyn std::error::Error>> {
+    // As above for BSK-E0003; the default-off assertion kills `opt_in_spec -> None`.
+    let source = "empty_list = []\n";
+    assert!(
+        count_code(
+            &run_with_config(source, &annotation_rules_config())?,
+            "BSK-E0003"
+        ) >= 1,
+        "BSK-E0003 must fire when annotation house rules are enabled"
+    );
+    assert_eq!(
+        count_code(&run(source)?, "BSK-E0003"),
+        0,
+        "BSK-E0003 must be OFF under the default config (opt-in only)"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "assignment_compatibility", fns = "check_vars")]
+#[test]
+fn mutant_e0014_unannotated_dict_not_checked() -> Result<(), Box<dyn std::error::Error>> {
+    // `check_vars` only inspects vars that are BOTH annotated AND have a value
+    // (`has_annotation && rhs_span.is_some()`). An unannotated dict literal — whose
+    // line contains a `:` inside the literal — must NOT be treated as annotated.
+    // The `&& -> ||` mutant would include it, mis-read `1: 2` as an annotation, and
+    // emit a spurious assignment_compatibility diagnostic.
+    let source = "data = {1: 2}\n";
+    assert_eq!(
+        assignment_compatibility_count(&run(source)?),
+        0,
+        "unannotated dict literal must not produce assignment_compatibility"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "assignment_compatibility", fns = "extract_annotation")]
+#[test]
+fn mutant_e0014_non_first_line_annotation_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+    // The annotated mismatch is on a non-first line, so `extract_annotation`'s
+    // `line_start` (`rfind('\n') + 1`) is exercised on a real newline rather than
+    // the `map_or(0, …)` first-line fallback.
+    let source = "x = 1\nbad: int = \"wrong\"\n";
+    assert!(
+        assignment_compatibility_count(&run(source)?) >= 1,
+        "`int = str` on a non-first line must produce assignment_compatibility"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "match_exhaustiveness")]
 #[test]
 fn mutant_e0023_smoke() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -837,13 +937,37 @@ def classify(x: int) -> str:
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0023") >= 1,
+        count_code(&diagnostics, "match_exhaustiveness") >= 1,
         "E0023 must fire for non-exhaustive match: {diagnostics:?}"
     );
     Ok(())
 }
 
-#[mutation_safe(rule = "e0027")]
+// Kills `replace && with ||` (and `replace !has_structural_pattern with true`)
+// in `NonExhaustiveMatch::check`'s filter `!has_wildcard && !has_structural_pattern`.
+// A `match` with a structural (sequence/mapping) pattern and NO wildcard is
+// exempt: with `&&` no diagnostic fires; the `||` mutant would wrongly flag it.
+#[mutation_safe(rule = "match_exhaustiveness")]
+#[test]
+fn mutant_e0023_structural_pattern_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def handle(seq: list) -> str:
+    match seq:
+        case [a]:
+            return 'one'
+        case [a, b]:
+            return 'two'
+    return 'other'
+";
+    let diagnostics = run(source)?;
+    assert!(
+        count_code(&diagnostics, "match_exhaustiveness") == 0,
+        "E0023 must NOT fire for a match with a structural pattern (no wildcard): {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[mutation_safe(rule = "generics_base_class")]
 #[test]
 fn mutant_e0027_smoke() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -856,13 +980,13 @@ class Dup(Generic[T, T]):
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0027") >= 1,
+        count_code(&diagnostics, "generics_base_class") >= 1,
         "E0027 must fire for duplicate TypeVar in Generic: {diagnostics:?}"
     );
     Ok(())
 }
 
-#[mutation_safe(rule = "e0029")]
+#[mutation_safe(rule = "typeddicts_class_syntax")]
 #[test]
 fn mutant_e0029_smoke() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -877,13 +1001,13 @@ class Movie(TypedDict):
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0029") >= 1,
+        count_code(&diagnostics, "typeddicts_class_syntax") >= 1,
         "E0029 must fire for TypedDict method: {diagnostics:?}"
     );
     Ok(())
 }
 
-#[mutation_safe(rule = "e0033")]
+#[mutation_safe(rule = "directives_reveal_type")]
 #[test]
 fn mutant_e0033_smoke() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -892,13 +1016,13 @@ reveal_type(1, 2)
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0033") >= 1,
+        count_code(&diagnostics, "directives_reveal_type") >= 1,
         "E0033 must fire for invalid reveal_type call: {diagnostics:?}"
     );
     Ok(())
 }
 
-#[mutation_safe(rule = "e0039")]
+#[mutation_safe(rule = "directives_assert_type")]
 #[test]
 fn mutant_e0039_smoke() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -907,13 +1031,13 @@ assert_type(1, int, 'extra')
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0039") >= 1,
+        count_code(&diagnostics, "directives_assert_type") >= 1,
         "E0039 must fire for invalid assert_type call: {diagnostics:?}"
     );
     Ok(())
 }
 
-#[mutation_safe(rule = "e0049")]
+#[mutation_safe(rule = "tuples_type_form")]
 #[test]
 fn mutant_e0049_smoke() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -926,13 +1050,13 @@ def f(t: tuple[*tuple[str, ...], *tuple[int, ...]]) -> None:
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0049") >= 1,
+        count_code(&diagnostics, "tuples_type_form") >= 1,
         "E0049 must fire for multiple unbounded tuple components: {diagnostics:?}"
     );
     Ok(())
 }
 
-#[mutation_safe(rule = "e0088")]
+#[mutation_safe(rule = "typeddicts_usage")]
 #[test]
 fn mutant_e0088_smoke() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -946,13 +1070,13 @@ isinstance(x, TD)
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0088") >= 1,
+        count_code(&diagnostics, "typeddicts_usage") >= 1,
         "E0088 must fire for isinstance() with TypedDict: {diagnostics:?}"
     );
     Ok(())
 }
 
-#[mutation_safe(rule = "e0105")]
+#[mutation_safe(rule = "generics_syntax_declarations_2")]
 #[test]
 fn mutant_e0105_smoke() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -962,14 +1086,14 @@ class C[T: str]:
 ";
     let diagnostics = run(source)?;
     assert!(
-        count_code(&diagnostics, "BSK-E0105") >= 1,
+        count_code(&diagnostics, "generics_syntax_declarations_2") >= 1,
         "E0105 must fire for invalid attr on bounded TypeVar: {diagnostics:?}"
     );
     Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0038: TypedDict ReadOnly/Required redeclaration legality (PEP 705).
+// TypedDict ReadOnly/Required redeclaration legality (PEP 705).
 // Implements [CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE]. See
 // docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE
 //
@@ -979,8 +1103,8 @@ class C[T: str]:
 // boolean, comparison, or match arm in those functions is observable.
 // ═══════════════════════════════════════════════════════════════════════
 
-fn e0038_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
-    count_code(diagnostics, "BSK-E0038")
+fn typeddicts_inheritance_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
+    count_code(diagnostics, "typeddicts_inheritance")
 }
 
 /// Common prelude importing every `TypedDict` qualifier the tests use.
@@ -990,7 +1114,7 @@ const TD_PRELUDE: &str = "from typing import TypedDict, Required, NotRequired\n\
 /// `parse_field_qualifiers`: a writable item redeclared `ReadOnly` is illegal,
 /// but a `ReadOnly` item redeclared writable is allowed. Also pins that the
 /// `ReadOnly[...]` detection actually reads the wrapper.
-#[mutation_safe(rule = "e0038", fns = "parse_field_qualifiers")]
+#[mutation_safe(rule = "typeddicts_inheritance", fns = "parse_field_qualifiers")]
 #[test]
 fn mutant_e0038_parse_readonly() -> Result<(), Box<dyn std::error::Error>> {
     let illegal = format!(
@@ -998,7 +1122,7 @@ fn mutant_e0038_parse_readonly() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: ReadOnly[int]\n"
     );
     assert!(
-        e0038_count(&run(&illegal)?) >= 1,
+        typeddicts_inheritance_count(&run(&illegal)?) >= 1,
         "writable item redeclared ReadOnly must fire E0038"
     );
 
@@ -1007,7 +1131,7 @@ fn mutant_e0038_parse_readonly() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    name: str\n"
     );
     assert_eq!(
-        e0038_count(&run(&legal)?),
+        typeddicts_inheritance_count(&run(&legal)?),
         0,
         "ReadOnly item redeclared writable is allowed — no E0038"
     );
@@ -1017,7 +1141,7 @@ fn mutant_e0038_parse_readonly() -> Result<(), Box<dyn std::error::Error>> {
 /// `parse_field_qualifiers` required-ness: `NotRequired` must be recognised
 /// ahead of `Required` (its text contains `required[`), and the implicit
 /// required-ness falls back to the class `total=` setting.
-#[mutation_safe(rule = "e0038", fns = "redeclaration_violation")]
+#[mutation_safe(rule = "typeddicts_inheritance", fns = "redeclaration_violation")]
 #[test]
 fn mutant_e0038_required_relaxing() -> Result<(), Box<dyn std::error::Error>> {
     // Explicit Required -> NotRequired is illegal.
@@ -1026,7 +1150,7 @@ fn mutant_e0038_required_relaxing() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: NotRequired[int]\n"
     );
     assert!(
-        e0038_count(&run(&illegal)?) >= 1,
+        typeddicts_inheritance_count(&run(&illegal)?) >= 1,
         "required item redeclared not-required must fire E0038"
     );
 
@@ -1037,7 +1161,7 @@ fn mutant_e0038_required_relaxing() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: NotRequired[int]\n"
     );
     assert!(
-        e0038_count(&run(&illegal_total)?) >= 1,
+        typeddicts_inheritance_count(&run(&illegal_total)?) >= 1,
         "total-required item redeclared not-required must fire E0038"
     );
 
@@ -1047,7 +1171,7 @@ fn mutant_e0038_required_relaxing() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: Required[int]\n"
     );
     assert_eq!(
-        e0038_count(&run(&legal)?),
+        typeddicts_inheritance_count(&run(&legal)?),
         0,
         "not-required item redeclared required is allowed — no E0038"
     );
@@ -1056,7 +1180,7 @@ fn mutant_e0038_required_relaxing() -> Result<(), Box<dyn std::error::Error>> {
 
 /// `value_type_incompatible`: writable items are invariant (any type change is
 /// illegal); a same-typed redeclaration is fine.
-#[mutation_safe(rule = "e0038", fns = "value_type_incompatible")]
+#[mutation_safe(rule = "typeddicts_inheritance", fns = "value_type_incompatible")]
 #[test]
 fn mutant_e0038_writable_invariant() -> Result<(), Box<dyn std::error::Error>> {
     let illegal = format!(
@@ -1064,7 +1188,7 @@ fn mutant_e0038_writable_invariant() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: str\n"
     );
     assert!(
-        e0038_count(&run(&illegal)?) >= 1,
+        typeddicts_inheritance_count(&run(&illegal)?) >= 1,
         "writable item with changed value type must fire E0038"
     );
 
@@ -1073,7 +1197,7 @@ fn mutant_e0038_writable_invariant() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: int\n"
     );
     assert_eq!(
-        e0038_count(&run(&legal)?),
+        typeddicts_inheritance_count(&run(&legal)?),
         0,
         "identical redeclaration is allowed — no E0038"
     );
@@ -1083,7 +1207,7 @@ fn mutant_e0038_writable_invariant() -> Result<(), Box<dyn std::error::Error>> {
 /// `is_invariant_container`: narrowing the type argument of an invariant
 /// container (`list`/`dict`/`set`) under `ReadOnly` is illegal, but narrowing a
 /// covariant container (`Sequence`) is allowed.
-#[mutation_safe(rule = "e0038", fns = "is_invariant_container")]
+#[mutation_safe(rule = "typeddicts_inheritance", fns = "is_invariant_container")]
 #[test]
 fn mutant_e0038_invariant_container() -> Result<(), Box<dyn std::error::Error>> {
     for container in ["list", "set"] {
@@ -1092,7 +1216,7 @@ fn mutant_e0038_invariant_container() -> Result<(), Box<dyn std::error::Error>> 
              class Child(Base):\n    a: ReadOnly[{container}[int]]\n"
         );
         assert!(
-            e0038_count(&run(&illegal)?) >= 1,
+            typeddicts_inheritance_count(&run(&illegal)?) >= 1,
             "narrowing ReadOnly[{container}[...]] arg must fire E0038"
         );
     }
@@ -1101,7 +1225,7 @@ fn mutant_e0038_invariant_container() -> Result<(), Box<dyn std::error::Error>> 
          class Child(Base):\n    a: ReadOnly[dict[str, int]]\n"
     );
     assert!(
-        e0038_count(&run(&illegal_dict)?) >= 1,
+        typeddicts_inheritance_count(&run(&illegal_dict)?) >= 1,
         "narrowing ReadOnly[dict[...]] arg must fire E0038"
     );
 
@@ -1112,7 +1236,7 @@ fn mutant_e0038_invariant_container() -> Result<(), Box<dyn std::error::Error>> 
          class Child(Base):\n    a: ReadOnly[Sequence[int]]\n"
     );
     assert_eq!(
-        e0038_count(&run(&legal)?),
+        typeddicts_inheritance_count(&run(&legal)?),
         0,
         "narrowing a covariant ReadOnly[Sequence[...]] is allowed — no E0038"
     );
@@ -1123,7 +1247,7 @@ fn mutant_e0038_invariant_container() -> Result<(), Box<dyn std::error::Error>> 
 /// covariant subtype, e.g. `Collection[T]` -> `list[T]`) is allowed, while the
 /// *same* invariant container with different args is not. Distinguishes
 /// head-comparison from full-string comparison.
-#[mutation_safe(rule = "e0038", fns = "type_head")]
+#[mutation_safe(rule = "typeddicts_inheritance", fns = "type_head")]
 #[test]
 fn mutant_e0038_type_head() -> Result<(), Box<dyn std::error::Error>> {
     let legal = format!(
@@ -1132,7 +1256,7 @@ fn mutant_e0038_type_head() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: ReadOnly[list[int]]\n"
     );
     assert_eq!(
-        e0038_count(&run(&legal)?),
+        typeddicts_inheritance_count(&run(&legal)?),
         0,
         "narrowing ReadOnly[Collection[int]] to ReadOnly[list[int]] is allowed"
     );
@@ -1142,7 +1266,7 @@ fn mutant_e0038_type_head() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: ReadOnly[list[bool]]\n"
     );
     assert!(
-        e0038_count(&run(&illegal)?) >= 1,
+        typeddicts_inheritance_count(&run(&illegal)?) >= 1,
         "same invariant container with different args must fire E0038"
     );
     Ok(())
@@ -1150,7 +1274,7 @@ fn mutant_e0038_type_head() -> Result<(), Box<dyn std::error::Error>> {
 
 /// `check_field_override`: end-to-end single-inheritance redeclaration drives
 /// the rule, and an unrelated new field added by the subclass is never flagged.
-#[mutation_safe(rule = "e0038", fns = "check_field_override")]
+#[mutation_safe(rule = "typeddicts_inheritance", fns = "check_field_override")]
 #[test]
 fn mutant_e0038_field_override() -> Result<(), Box<dyn std::error::Error>> {
     let illegal = format!(
@@ -1158,7 +1282,7 @@ fn mutant_e0038_field_override() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: ReadOnly[NotRequired[int]]\n"
     );
     assert!(
-        e0038_count(&run(&illegal)?) >= 1,
+        typeddicts_inheritance_count(&run(&illegal)?) >= 1,
         "ReadOnly required -> ReadOnly not-required must fire E0038"
     );
 
@@ -1167,7 +1291,7 @@ fn mutant_e0038_field_override() -> Result<(), Box<dyn std::error::Error>> {
          class Child(Base):\n    a: ReadOnly[Required[int]]\n    b: int\n"
     );
     assert_eq!(
-        e0038_count(&run(&legal)?),
+        typeddicts_inheritance_count(&run(&legal)?),
         0,
         "ReadOnly not-required -> ReadOnly required (plus a new field) is allowed"
     );
@@ -1177,7 +1301,7 @@ fn mutant_e0038_field_override() -> Result<(), Box<dyn std::error::Error>> {
 /// `bases_conflict` / `check_conflicting_bases`: multiple inheritance with two
 /// bases declaring the same field incompatibly (by core type, required-ness, or
 /// read-only-ness) is illegal; identical declarations merge cleanly.
-#[mutation_safe(rule = "e0038", fns = "bases_conflict")]
+#[mutation_safe(rule = "typeddicts_inheritance", fns = "bases_conflict")]
 #[test]
 fn mutant_e0038_bases_conflict() -> Result<(), Box<dyn std::error::Error>> {
     // Core-type conflict.
@@ -1186,7 +1310,7 @@ fn mutant_e0038_bases_conflict() -> Result<(), Box<dyn std::error::Error>> {
          class C(A, B):\n    pass\n"
     );
     assert!(
-        e0038_count(&run(&core)?) >= 1,
+        typeddicts_inheritance_count(&run(&core)?) >= 1,
         "conflicting core types across bases must fire E0038"
     );
 
@@ -1197,7 +1321,7 @@ fn mutant_e0038_bases_conflict() -> Result<(), Box<dyn std::error::Error>> {
          class C(A, B):\n    pass\n"
     );
     assert!(
-        e0038_count(&run(&req)?) >= 1,
+        typeddicts_inheritance_count(&run(&req)?) >= 1,
         "conflicting required-ness across bases must fire E0038"
     );
 
@@ -1207,7 +1331,7 @@ fn mutant_e0038_bases_conflict() -> Result<(), Box<dyn std::error::Error>> {
          class C(A, B):\n    pass\n"
     );
     assert!(
-        e0038_count(&run(&ro)?) >= 1,
+        typeddicts_inheritance_count(&run(&ro)?) >= 1,
         "conflicting read-only-ness across bases must fire E0038"
     );
 
@@ -1217,7 +1341,7 @@ fn mutant_e0038_bases_conflict() -> Result<(), Box<dyn std::error::Error>> {
          class C(A, B):\n    pass\n"
     );
     assert_eq!(
-        e0038_count(&run(&legal)?),
+        typeddicts_inheritance_count(&run(&legal)?),
         0,
         "identical field declarations across bases must not conflict"
     );
@@ -1229,7 +1353,7 @@ fn mutant_e0038_bases_conflict() -> Result<(), Box<dyn std::error::Error>> {
          class D(TypedDict):\n    z: int\nclass C(A, B, D):\n    pass\n"
     );
     assert!(
-        e0038_count(&run(&three)?) >= 1,
+        typeddicts_inheritance_count(&run(&three)?) >= 1,
         "a conflict among three bases must still fire E0038"
     );
     Ok(())
@@ -1237,7 +1361,7 @@ fn mutant_e0038_bases_conflict() -> Result<(), Box<dyn std::error::Error>> {
 
 /// `check_conflicting_bases` guard: a single `TypedDict` base (no multiple
 /// inheritance) never triggers the conflict path, even with qualifiers.
-#[mutation_safe(rule = "e0038", fns = "check_conflicting_bases")]
+#[mutation_safe(rule = "typeddicts_inheritance", fns = "check_conflicting_bases")]
 #[test]
 fn mutant_e0038_single_base_no_conflict() -> Result<(), Box<dyn std::error::Error>> {
     let single = format!(
@@ -1245,7 +1369,7 @@ fn mutant_e0038_single_base_no_conflict() -> Result<(), Box<dyn std::error::Erro
          class C(A):\n    y: int\n"
     );
     assert_eq!(
-        e0038_count(&run(&single)?),
+        typeddicts_inheritance_count(&run(&single)?),
         0,
         "a single base with a new field must not raise a conflict"
     );
@@ -1253,7 +1377,7 @@ fn mutant_e0038_single_base_no_conflict() -> Result<(), Box<dyn std::error::Erro
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0014: Generic callback-protocol substitution (specialize_sig)
+// Generic callback-protocol substitution (specialize_sig)
 // ═══════════════════════════════════════════════════════════════════════
 
 /// `specialize_sig` must substitute parameter types when a generic callback
@@ -1261,7 +1385,7 @@ fn mutant_e0038_single_base_no_conflict() -> Result<(), Box<dyn std::error::Erro
 /// `T := int` is applied to the `__call__` parameter. A mutant that keeps the
 /// unsubstituted `T` makes the valid assignment flag (extra E0014), and a
 /// mutant that over-suppresses misses the invalid one.
-#[mutation_safe(rule = "e0014", fns = "specialize_sig")]
+#[mutation_safe(rule = "assignment_compatibility", fns = "specialize_sig")]
 #[test]
 fn mutant_e0014_generic_callback_substitution() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -1285,7 +1409,7 @@ def func(int_cb: IntCb, str_cb: StrCb) -> None:
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert_eq!(
         e0014.len(),
@@ -1307,7 +1431,7 @@ def func(int_cb: IntCb, str_cb: StrCb) -> None:
 /// gradual signature that still checks the `Concatenate`-style prefix.
 /// Deleting the arm collapses to "Unknown" and silently suppresses the
 /// invalid assignment below.
-#[mutation_safe(rule = "e0014", fns = "specialize_sig")]
+#[mutation_safe(rule = "assignment_compatibility", fns = "specialize_sig")]
 #[test]
 fn mutant_e0014_paramspec_ellipsis_prefix() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -1331,7 +1455,7 @@ def func(int_first: IntFirst, str_first: StrFirst) -> None:
     let diagnostics = run(source)?;
     let e0014: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .collect();
     assert_eq!(
         e0014.len(),
@@ -1355,7 +1479,7 @@ def func(int_first: IntFirst, str_first: StrFirst) -> None:
 //  direction, so these mutants survived them.
 // ═══════════════════════════════════════════════════════════════════════
 
-#[mutation_safe(rule = "e0002")]
+#[mutation_safe(rule = "missing_return_annotation")]
 #[test]
 fn mutant_e0002_annotated_function_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -1365,7 +1489,7 @@ def fully_annotated(x: int) -> int:
 def returns_nothing() -> None:
     pass
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
         count_code(&diagnostics, "BSK-E0002"),
         0,
@@ -1374,7 +1498,7 @@ def returns_nothing() -> None:
     Ok(())
 }
 
-#[mutation_safe(rule = "e0003")]
+#[mutation_safe(rule = "missing_variable_type")]
 #[test]
 fn mutant_e0003_resolvable_or_annotated_vars_not_flagged() -> Result<(), Box<dyn std::error::Error>>
 {
@@ -1384,7 +1508,7 @@ annotated_none: int | None = None
 resolvable_int = 5
 resolvable_str = 'text'
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     assert_eq!(
         count_code(&diagnostics, "BSK-E0003"),
         0,
@@ -1393,7 +1517,7 @@ resolvable_str = 'text'
     Ok(())
 }
 
-#[mutation_safe(rule = "e0003")]
+#[mutation_safe(rule = "missing_variable_type")]
 #[test]
 fn mutant_e0003_messages_name_the_rhs_kind() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -1401,7 +1525,7 @@ empty_list = []
 empty_dict = {}
 nothing = None
 ";
-    let diagnostics = run(source)?;
+    let diagnostics = run_with_config(source, &annotation_rules_config())?;
     let messages: Vec<&str> = diagnostics
         .iter()
         .filter(|d| d.code.code == "BSK-E0003")
@@ -1429,7 +1553,7 @@ nothing = None
     Ok(())
 }
 
-#[mutation_safe(rule = "e0029")]
+#[mutation_safe(rule = "typeddicts_class_syntax")]
 #[test]
 fn mutant_e0029_diagnostic_targets_the_typeddict_method() -> Result<(), Box<dyn std::error::Error>>
 {
@@ -1451,7 +1575,7 @@ class Movie(TypedDict):
     let diagnostics = run(source)?;
     let e0029: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0029")
+        .filter(|d| d.code.code == "typeddicts_class_syntax")
         .collect();
     assert_eq!(
         e0029.len(),

@@ -4,6 +4,8 @@
 
 <h1 align="center">Basilisk</h1>
 
+<p align="center"><strong>English</strong> · <a href="README.zh.md">简体中文</a></p>
+
 <p align="center">
   <strong>The open-source Python language server.</strong><br>
   Complete language server, type checker, debugger, and profiler — strict by default.<br>
@@ -17,6 +19,14 @@
   <a href="https://www.basilisk-python.dev/docs/rules/">Rules</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/refactoring/">Refactoring</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/comparison/">Compare</a>
+</p>
+
+<p align="center">
+  <a href="https://www.basilisk-python.dev/docs/conformance/"><strong><!--g:score-->100.0%<!--/g:score--> PEP conformance</strong></a> &mdash; <!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> tests in the official
+  <a href="https://github.com/python/typing/tree/f6e2e588880a057a939cee76c6c919aebd4db37c/conformance"><code>python/typing</code></a>
+  conformance suite (commit <code><!--g:short-->f6e2e58<!--/g:short--></code>), scored on the real binary in its default config by
+  <a href="https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py"><code>conformance/score.py</code></a>.
+  We target <code>python/typing@main</code> and ratchet the score up only.
 </p>
 
 ---
@@ -85,25 +95,25 @@ All rules are on by default. There is no way to relax them globally.
 
 | Code | Triggers when |
 |------|---------------|
-| `BSK-E0010` | Import cannot be resolved |
-| `BSK-E0011` | Explicit `Any` annotation (emitted as a warning), or a return type mismatch |
-| `BSK-E0012` | Argument type does not match parameter type |
-| `BSK-E0013` | Return type does not match declared return type |
-| `BSK-E0014` | Assignment type does not match declared variable type |
-| `BSK-E0015` | Wrong number of type arguments (e.g. `list[int, str]`) |
-| `BSK-E0016` | Method override has incompatible signature |
-| `BSK-E0017` | Class variable override has incompatible type |
-| `BSK-E0018` | Reference to an undefined name |
-| `BSK-E0019` | Variable used before it is assigned |
-| `BSK-E0020` | `@overload` group has no non-decorated implementation |
-| `BSK-E0021` | Two `@overload` signatures overlap |
-| `BSK-E0022` | Dict key type is not hashable |
-| `BSK-E0023` | `match` statement is not exhaustive |
-| `BSK-E0024` | Type expression is not valid (e.g. a numeric literal used as a type) |
+| `imports_unresolved` | Import cannot be resolved |
+| `returns_compatibility` | Explicit `Any` annotation (emitted as a warning), or a return type mismatch |
+| `calls_argument_type` | Argument type does not match parameter type |
+| `returns_compatibility_2` | Return type does not match declared return type |
+| `assignment_compatibility` | Assignment type does not match declared variable type |
+| `callables_annotation` | Wrong number of type arguments (e.g. `list[int, str]`) |
+| `classes_override` | Method override has incompatible signature |
+| `classes_override_2` | Class variable override has incompatible type |
+| `names_undefined` | Reference to an undefined name |
+| `names_unbound` | Variable used before it is assigned |
+| `overloads_definitions` | `@overload` group has no non-decorated implementation |
+| `overloads_consistency` | Two `@overload` signatures overlap |
+| `dict_key_hashable` | Dict key type is not hashable |
+| `match_exhaustiveness` | `match` statement is not exhaustive |
+| `annotations_typeexpr` | Type expression is not valid (e.g. a numeric literal used as a type) |
 | `BSK-E0025` | Override method is missing the `@override` decorator |
-| `BSK-E0026` | `TypeVar` declared with a single constraint |
-| `BSK-E0027` | Duplicate `TypeVar` in a `Generic[...]` base |
-| `BSK-E0029` | Method defined inside a `TypedDict` class |
+| `generics_basic` | `TypeVar` declared with a single constraint |
+| `generics_base_class` | Duplicate `TypeVar` in a `Generic[...]` base |
+| `typeddicts_class_syntax` | Method defined inside a `TypedDict` class |
 
 These are the most common rules. Basilisk ships **155 diagnostic codes** in total (150 errors, 5 warnings) — see the [complete diagnostic reference](https://www.basilisk-python.dev/docs/rules/) (generated from the checker source by `scripts/gen_rules_reference.py`).
 
@@ -216,6 +226,15 @@ cargo fmt            # format
 ```
 
 Rust 1.87+ required.
+
+---
+
+## Contributing
+
+Basilisk is built by a human + AI partnership, with the work split on purpose. See
+[CONTRIBUTING.md](CONTRIBUTING.md) — **For Humans** (testing, code-quality review,
+conformance/security audits, IDE feature parity, sharpening the AI instructions) and
+**For AI** (the technical execution, under the standing rules in [CLAUDE.md](CLAUDE.md)).
 
 ---
 

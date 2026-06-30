@@ -5,6 +5,9 @@ description: "OpenAI 正在收购 Astral——Ruff、uv 和 ty 的缔造者。Ba
 date: 2026-06-20
 author: Basilisk 项目
 image: /assets/images/blog/openai-acquires-astral.png
+imageAlt: "开源工具链星图汇聚在稳定 Basilisk 基础之上的抽象图像"
+imageWidth: 1200
+imageHeight: 675
 tags: posts
 category: announcements
 lang: zh
@@ -92,7 +95,7 @@ Basilisk 与 Astral 的关系是具体而承重的：
 
 1. **我们的解析器就是 Ruff 的解析器。** Basilisk 依赖 `ruff_python_parser`、`ruff_python_ast` 与 `ruff_text_size`，并将它们钉在 `astral-sh/ruff` 上一个**不可变的 git 提交**（`rev 7c645a9`，等同于标签 `0.15.17`）。我们钉的是 `rev` 而非标签，正是为了让这个版本"永远无法被人从我们脚下换掉"。那份代码是 MIT 授权的，并且已经写进了我们的 `Cargo.lock`。这次收购无法回过头去改变我们所构建的那些字节。
 2. **我们的检查/格式化路径调用的是 Ruff CLI**——`ruff==0.15.17`，在 CI 和开发容器中钉得完全一致。同样的道理：一个我们自己掌控版本的、宽松许可的二进制文件。
-3. **ty 如今是有 OpenAI 撑腰的竞争对手。** Astral 的类型检查器 ty 与 Basilisk 的检查器处在同一概念空间，如今它背后将有 OpenAI 的资源。我们认真对待这一点——但它磨砺、而非威胁了 Basilisk 的差异化所在：**默认严格的合规性**、集成在单一扩展中的一套**完整 LSP**（测试浏览器、调试、性能分析、自动修复），以及朝着 100% PEP 合规一路推进的执着。一个资金更雄厚的类型检查器，恰恰印证了"Python 值得拥有一流、Rust 级速度的工具"这一判断——它并不会让我们的差异化变得不再成立。
+3. **ty 如今是有 OpenAI 撑腰的竞争对手。** Astral 的类型检查器 ty 与 Basilisk 的检查器处在同一概念空间，如今它背后将有 OpenAI 的资源。我们认真对待这一点——但它磨砺、而非威胁了 Basilisk 的差异化所在：**开箱即用的 PEP 合规性**、集成在单一扩展中的一套**完整 LSP**（测试浏览器、调试、性能分析、自动修复），以及朝着 100% PEP 合规一路推进的执着。一个资金更雄厚的类型检查器，恰恰印证了"Python 值得拥有一流、Rust 级速度的工具"这一判断——它并不会让我们的差异化变得不再成立。
 4. **共同的架构押注——如今得到了印证。** 与 Astral 的工具一样，Basilisk 用 Rust 构建、基于 Ruff AST、以 Salsa 实现增量计算。Astral 已经证明这套技术栈能扩展到数以百万计的用户。我们独立地做出了同样的选择。这令人安心，而非令人不安。
 
 **对今天的你而言，净影响：** 零。你的 Basilisk 安装构建自被钉死的、MIT 授权的 Ruff 代码和一个被钉死的 Ruff 二进制文件。这次收购不会、也不能改变其中任何一个。

@@ -87,6 +87,9 @@ async fn wait_for_file_diagnostics(
 
 // ── Tests ────────────────────────────────────────────────────────────────
 
+// [LSPUV-COMMANDS] + [LSPUV-ACTIONS-EXECUTION]: each `basilisk.uv.*` command
+// dispatches via workspace/executeCommand, runs the uv subprocess in the
+// project root, and returns `{success, stdout, stderr}`.
 #[tokio::test]
 async fn test_uv_add_dispatches_and_returns_success() -> TestResult<()> {
     if !uv_available() {
@@ -222,6 +225,10 @@ async fn test_uv_sync_dispatches_and_returns_success() -> TestResult<()> {
     Ok(())
 }
 
+// [LSPUV-LOCK-HOT-RELOAD] + [LSPUV-ACTIONS-EXECUTION]: a successful uv command
+// re-parses the lock file, rebuilds the registry, re-resolves imports, and
+// republishes diagnostics with no LSP restart — the imports_unresolved error
+// clears automatically.
 #[tokio::test]
 async fn test_uv_add_triggers_registry_rebuild_and_clears_diagnostics() -> TestResult<()> {
     if !uv_available() {
@@ -239,7 +246,7 @@ async fn test_uv_add_triggers_registry_rebuild_and_clears_diagnostics() -> TestR
     let mut fixture = WsTestFixture::new().await?;
     let _ = initialize_with_root(&mut fixture, &root_uri, "wholeModule").await?;
 
-    // Wait for initial diagnostics — should contain BSK-E0010 for `six`.
+    // Wait for initial diagnostics — should contain imports_unresolved for `six`.
     let initial_diag = wait_for_file_diagnostics(&mut fixture, "app.py", 15).await;
     assert!(
         initial_diag.is_some(),
@@ -247,8 +254,8 @@ async fn test_uv_add_triggers_registry_rebuild_and_clears_diagnostics() -> TestR
     );
     let initial_msg = initial_diag.ok_or("expected initial diagnostics")?;
     assert!(
-        initial_msg.contains("BSK-E0010"),
-        "initial diagnostics should contain BSK-E0010 for unresolved import: {initial_msg}"
+        initial_msg.contains("imports_unresolved"),
+        "initial diagnostics should contain imports_unresolved for unresolved import: {initial_msg}"
     );
 
     // Drain any remaining startup messages.
@@ -313,13 +320,13 @@ async fn test_uv_add_triggers_registry_rebuild_and_clears_diagnostics() -> TestR
         .ok_or("expected diagnostics array")?;
 
     let has_e0010_for_six = diags.iter().any(|d| {
-        d["code"].as_str() == Some("BSK-E0010")
+        d["code"].as_str() == Some("imports_unresolved")
             && d["message"].as_str().is_some_and(|m| m.contains("six"))
     });
 
     assert!(
         !has_e0010_for_six,
-        "BSK-E0010 for 'six' should be cleared after uv add: {updated_msg}"
+        "imports_unresolved for 'six' should be cleared after uv add: {updated_msg}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -550,6 +557,8 @@ async fn execute_and_wait_for_diags(
     Ok((command_succeeded, final_diag))
 }
 
+// [LSPUV-ACTIONS-QUICK-FIXES]: imports_unresolved offers the `basilisk.uv.add`
+// quick fix; executing it adds the package and clears the diagnostic.
 #[tokio::test]
 async fn test_e0010_code_action_to_execute_command_full_flow() -> TestResult<()> {
     if !uv_available() {
@@ -567,17 +576,17 @@ async fn test_e0010_code_action_to_execute_command_full_flow() -> TestResult<()>
     let mut fixture = WsTestFixture::new().await?;
     let _ = initialize_with_root(&mut fixture, &root_uri, "wholeModule").await?;
 
-    // Step 1: Wait for BSK-E0010 diagnostic.
+    // Step 1: Wait for imports_unresolved diagnostic.
     let diag_msg = wait_for_file_diagnostics(&mut fixture, "main.py", 15)
         .await
         .ok_or("no diagnostics for main.py")?;
 
     assert!(
-        diag_msg.contains("BSK-E0010"),
-        "should fire BSK-E0010 for unresolved import: {diag_msg}"
+        diag_msg.contains("imports_unresolved"),
+        "should fire imports_unresolved for unresolved import: {diag_msg}"
     );
 
-    // Step 2: Request code actions for the BSK-E0010 diagnostic.
+    // Step 2: Request code actions for the imports_unresolved diagnostic.
     let diag_json: serde_json::Value = serde_json::from_str(&diag_msg)?;
     let diagnostics = diag_json["params"]["diagnostics"]
         .as_array()
@@ -585,8 +594,8 @@ async fn test_e0010_code_action_to_execute_command_full_flow() -> TestResult<()>
 
     let e0010_diag = diagnostics
         .iter()
-        .find(|d| d["code"].as_str() == Some("BSK-E0010"))
-        .ok_or("no BSK-E0010 diagnostic")?;
+        .find(|d| d["code"].as_str() == Some("imports_unresolved"))
+        .ok_or("no imports_unresolved diagnostic")?;
 
     let ca_resp = fixture
         .request(
@@ -614,7 +623,7 @@ async fn test_e0010_code_action_to_execute_command_full_flow() -> TestResult<()>
                 || a["title"].as_str().is_some_and(|t| t.contains("uv add"))
         })
         .ok_or(format!(
-            "no basilisk.uv.add code action offered for BSK-E0010. Actions: {actions:?}"
+            "no basilisk.uv.add code action offered for imports_unresolved. Actions: {actions:?}"
         ))?;
 
     assert!(
@@ -628,7 +637,7 @@ async fn test_e0010_code_action_to_execute_command_full_flow() -> TestResult<()>
 
     assert!(command_succeeded, "uv add six should succeed");
 
-    // Step 5: Verify BSK-E0010 for 'six' is cleared.
+    // Step 5: Verify imports_unresolved for 'six' is cleared.
     let updated_msg = final_diag.ok_or("should receive updated diagnostics after uv add")?;
     let updated_json: serde_json::Value = serde_json::from_str(&updated_msg)?;
     let updated_diags = updated_json["params"]["diagnostics"]
@@ -636,13 +645,13 @@ async fn test_e0010_code_action_to_execute_command_full_flow() -> TestResult<()>
         .ok_or("expected diagnostics array")?;
 
     let still_has_e0010 = updated_diags.iter().any(|d| {
-        d["code"].as_str() == Some("BSK-E0010")
+        d["code"].as_str() == Some("imports_unresolved")
             && d["message"].as_str().is_some_and(|m| m.contains("six"))
     });
 
     assert!(
         !still_has_e0010,
-        "BSK-E0010 for 'six' should be cleared after executing the code action: {updated_msg}"
+        "imports_unresolved for 'six' should be cleared after executing the code action: {updated_msg}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);

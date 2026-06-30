@@ -208,3 +208,68 @@ async fn test_ws_hover_class_docstring() -> TestResult<()> {
 
     Ok(())
 }
+
+// Regression for #200: hovering a function-local binding returned nothing
+// because the symbol lookup never searched `local_vars`/`local_unannotated_vars`.
+// Mirrors the VSIX "hover: local variable inside a function (squared)" check.
+#[tokio::test]
+async fn test_ws_hover_local_variable_at_definition() -> TestResult<()> {
+    let uri = "file:///hover_local_def.py";
+    let code = "def calculate(operand: int) -> int:\n    squared = operand * operand\n    return squared\n";
+    // Cursor on `squared` at its definition site (line 1, col 4).
+    let resp = hover_at(uri, code, 1, 4, 312).await?;
+
+    assert!(
+        resp.contains("(variable)"),
+        "local var hover should contain (variable): {resp}"
+    );
+    assert!(
+        resp.contains("squared"),
+        "local var hover should contain squared: {resp}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_hover_local_variable_at_usage() -> TestResult<()> {
+    let uri = "file:///hover_local_use.py";
+    let code = "def calculate(operand: int) -> int:\n    squared = operand * operand\n    return squared\n";
+    // Cursor on the `squared` reference in `return squared` (line 2, col 11).
+    let resp = hover_at(uri, code, 2, 11, 313).await?;
+
+    assert!(
+        resp.contains("(variable)"),
+        "local var usage hover should contain (variable): {resp}"
+    );
+    assert!(
+        resp.contains("squared"),
+        "local var usage hover should contain squared: {resp}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_hover_local_annotated_variable() -> TestResult<()> {
+    let uri = "file:///hover_local_ann.py";
+    let code =
+        "def calculate(operand: int) -> int:\n    total: int = operand + 1\n    return total\n";
+    // Cursor on the annotated local `total` at its definition (line 1, col 4).
+    let resp = hover_at(uri, code, 1, 4, 314).await?;
+
+    assert!(
+        resp.contains("(variable)"),
+        "annotated local hover should contain (variable): {resp}"
+    );
+    assert!(
+        resp.contains("total"),
+        "annotated local hover should contain total: {resp}"
+    );
+    assert!(
+        resp.contains("int"),
+        "annotated local hover should show its type int: {resp}"
+    );
+
+    Ok(())
+}

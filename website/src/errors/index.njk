@@ -1,0 +1,30 @@
+---
+# Implements [WEBSITE-ERROR-PAGES-PAGES]: the grouped, browsable directory of
+# every diagnostic code (the companion to the per-code error.njk pages).
+layout: layouts/docs.njk
+title: "Basilisk Error Reference — Every BSK Diagnostic Code Explained"
+description: "Browse every Basilisk diagnostic code (BSK-E errors and BSK-W warnings) with an explanation and fix for each — the page the CLI links to for any reported error."
+permalink: "/errors/index.html"
+---
+<h1>Error reference</h1>
+
+<p>
+  Every Basilisk diagnostic has a unique code. When the checker reports one it
+  links here — <code>see: https://www.basilisk-python.dev/errors/BSK-XXXX</code> —
+  so you can read what it means and how to fix it. {{ rules.length }} codes in total.
+</p>
+
+<p>For worked examples with real CLI output, start with the
+  <a href="/docs/rules/">rules overview</a>.</p>
+
+{% for group in ruleGroups %}
+<h2 id="{{ group.id }}">{{ group.group }} <span class="error-count">({{ group.items.length }})</span></h2>
+<ul class="error-list">
+  {% for rule in group.items %}
+  <li>
+    <a href="/errors/{{ rule.code }}/"><code>{{ rule.code }}</code></a>
+    <span class="error-list__summary">{{ rule.summaryHtml | safe }}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endfor %}

@@ -1,0 +1,30 @@
+//! Tests for [`historical_positional`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
+// Integration tests for historical_positional: Historical positional-only syntax.
+
+use super::common::*;
+
+#[test]
+fn positional_only_exercise() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def func(x: int, /, y: int) -> int:
+    return x + y
+
+func(1, y=2)
+";
+    let diags = run(source)?;
+    let _ = codes(&diags);
+    Ok(())
+}
+
+#[test]
+fn keyword_for_positional_only() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+def func(x: int, /) -> int:
+    return x
+
+func(x=1)
+";
+    let diags = run(source)?;
+    let _ = codes(&diags);
+    Ok(())
+}

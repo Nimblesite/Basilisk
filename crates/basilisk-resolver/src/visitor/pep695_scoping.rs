@@ -1,5 +1,5 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
-//! AST walk producing [`Pep695Scoping`] facts for `BSK-E0149`.
+//! AST walk producing [`Pep695Scoping`] facts for `generics_syntax_scoping`.
 //!
 //! Every fact is derived from `ruff_python_ast` nodes, so string/comment/
 //! docstring content can never be mistaken for real declarations.
@@ -120,6 +120,8 @@ fn collect_alias(alias: &StmtTypeAlias, ctx: &Ctx<'_>, source: &str, out: &mut P
     let params = extract_params(alias.type_params.as_deref(), source);
     let mut rhs_refs = Vec::new();
     collect_name_refs_from_expr(&alias.value, &mut rhs_refs);
+    let mut rhs_bare_refs = Vec::new();
+    collect_bare_refs(&alias.value, &mut rhs_bare_refs);
 
     out.aliases.push(Pep695AliasDef {
         name: name.clone(),
@@ -127,6 +129,7 @@ fn collect_alias(alias: &StmtTypeAlias, ctx: &Ctx<'_>, source: &str, out: &mut P
         self_ref_args: find_self_ref_args(&alias.value, &name),
         params,
         rhs_refs,
+        rhs_bare_refs,
         in_function: ctx.scope == Scope::Function,
     });
     record_module_binding_offset(ctx, &name, alias.name.range().start().to_u32(), out);
@@ -221,6 +224,21 @@ fn enclosing_params(ctx: &Ctx<'_>) -> Vec<String> {
 
 /// Find the first `alias_name[args]` subscript anywhere in `expr` and return
 /// the simple names of its arguments.
+/// Collect names that appear at the *top level* of a type-alias RHS: a bare
+/// `Name`, or a direct member of a top-level `X | Y` union. Subscripts/calls are
+/// NOT descended into — a reference through a container terminates and so is not
+/// a bare reference. (Optional `X | None` contributes `X`; `None` is ignored.)
+fn collect_bare_refs(expr: &Expr, out: &mut Vec<String>) {
+    match expr {
+        Expr::Name(name) => out.push(name.id.to_string()),
+        Expr::BinOp(bin) => {
+            collect_bare_refs(&bin.left, out);
+            collect_bare_refs(&bin.right, out);
+        }
+        _ => {}
+    }
+}
+
 fn find_self_ref_args(expr: &Expr, alias_name: &str) -> Option<Vec<String>> {
     match expr {
         Expr::Subscript(sub) => {

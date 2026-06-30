@@ -226,6 +226,78 @@ async fn test_ws_goto_definition_variable() -> TestResult<()> {
 }
 
 #[tokio::test]
+async fn test_ws_goto_definition_parameter_use() -> TestResult<()> {
+    // Regression for the goto hammer "parameter use resolves to the parameter"
+    // (#200): a use of a function parameter must resolve to the parameter's
+    // declaration. `find_definition_by_name` previously did not search params.
+    let code = "def calculate(operand: int) -> int:\n    return operand * operand\n";
+    let (_fixture, resp) = open_and_request(
+        "file:///ws_goto_param.py",
+        code,
+        960,
+        "textDocument/definition",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///ws_goto_param.py" },
+            // Line 1: "    return operand * operand" — first `operand` at char 11.
+            "position": { "line": 1, "character": 13 }
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "goto-def on a parameter use must resolve: {resp}"
+    );
+    let start = &parsed["result"]["range"]["start"];
+    assert_eq!(
+        start["line"], 0,
+        "parameter definition is on line 0 (the def line): {resp}"
+    );
+    assert_eq!(
+        start["character"], 14,
+        "parameter `operand` begins at char 14 in `def calculate(operand...`: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_definition_attribute_use() -> TestResult<()> {
+    // Goto hammer "attribute use resolves to the attribute def": a `self.attr`
+    // read must resolve to the attribute's declaration in the class body.
+    let code = "\
+class Widget:
+    width: int = 10
+    def resize(self) -> int:
+        return self.width
+";
+    let (_fixture, resp) = open_and_request(
+        "file:///ws_goto_attr.py",
+        code,
+        961,
+        "textDocument/definition",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///ws_goto_attr.py" },
+            // Line 3: "        return self.width" — `width` after `self.` at char 20.
+            "position": { "line": 3, "character": 22 }
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "goto-def on an attribute use must resolve: {resp}"
+    );
+    let start = &parsed["result"]["range"]["start"];
+    assert_eq!(
+        start["line"], 1,
+        "attribute `width` is declared on line 1: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_ws_goto_declaration() -> TestResult<()> {
     let code = "\
 def compute(x: int) -> int:
@@ -359,6 +431,149 @@ x = 42
 }
 
 #[tokio::test]
+async fn test_ws_goto_definition_member_through_aliased_stub_import() -> TestResult<()> {
+    // The user's exact #180 case: an aliased import of a module backed by a
+    // `.pyi` STUB (`import datetime as _dt`, datetime.pyi) — clicking a member
+    // (`_dt.datetime`, here `g.area`) must jump into the stub. The #180 alias
+    // capture made cross-module resolution treat the aliased import as a
+    // `from`-import and publish nothing, returning `result: null`; cbee4ff
+    // restores it by discriminating on `kind`. Proven to fail (null) without the
+    // fix and resolve with it.
+    let dir = unique_temp_dir("bsk_goto_stub_alias");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(
+        dir.join("geometry.pyi"),
+        "def area(r: float) -> float: ...\n",
+    )?;
+    let main_src = "import geometry as g\n\n\ndef use() -> float:\n    return g.area(1.0)\n";
+    std::fs::write(dir.join("main.py"), main_src)?;
+    let root_uri = format!("file://{}", dir.display());
+    let main_uri = format!("file://{}", dir.join("main.py").display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+    for _ in 0..20 {
+        let msg = tokio::time::timeout(Duration::from_millis(500), fixture.ws_read.next()).await;
+        if msg.is_err() {
+            break;
+        }
+    }
+    fixture.did_open(&main_uri, main_src).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // main.py line 4: `    return g.area(1.0)` — `area` begins at character 13.
+    let resp = fixture
+        .request(
+            730,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": main_uri },
+                "position": { "line": 4, "character": 14 }
+            }),
+        )
+        .await?
+        .ok_or("no response to member goto-def through aliased stub import")?;
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "member goto-def through an aliased .pyi-stub import must resolve: {resp}"
+    );
+    assert!(
+        parsed["result"]["uri"]
+            .as_str()
+            .unwrap_or("")
+            .contains("geometry.pyi"),
+        "goto-def should jump into the stub geometry.pyi: {resp}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_definition_cross_file_function_whole_module() -> TestResult<()> {
+    // Regression for the goto hammer cross-file failures in the SHIPPED default
+    // mode: cross-file go-to-definition must work in `wholeModule` (the
+    // extension's default), not only in `crossModule`. Cross-module symbol
+    // population is gated to crossModule, so navigation has to resolve the
+    // import on demand via its resolved_path. Same scenario as the crossModule
+    // test below, but proves the default-mode user gets a working cmd+click.
+    // Mirror the VS Code harness exactly: an EMPTY workspace root, with the
+    // fixtures living in a SEPARATE directory that is merely opened (not under
+    // any registered root). Cross-file resolution must still work via the
+    // importer's own directory + the open-document index.
+    let root = unique_temp_dir("bsk_goto_cross_whole_root");
+    std::fs::create_dir_all(&root)?;
+    let dir = unique_temp_dir("bsk_goto_cross_whole_files");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(
+        dir.join("helpers.py"),
+        "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n",
+    )?;
+    std::fs::write(
+        dir.join("main.py"),
+        "from helpers import greet\n\nresult: str = greet(\"world\")\n",
+    )?;
+
+    let root_uri = format!("file://{}", root.display());
+    let helpers_uri = format!("file://{}", dir.join("helpers.py").display());
+    let main_uri = format!("file://{}", dir.join("main.py").display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "wholeModule").await?;
+    for _ in 0..20 {
+        let msg = tokio::time::timeout(Duration::from_millis(500), fixture.ws_read.next()).await;
+        if msg.is_err() {
+            break;
+        }
+    }
+    // Open the target first so the importer can resolve it cross-file, mirroring
+    // the VS Code goto hammer ("Helper first so the subject's import resolves").
+    fixture
+        .did_open(
+            &helpers_uri,
+            "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n",
+        )
+        .await?;
+    fixture
+        .did_open(
+            &main_uri,
+            "from helpers import greet\n\nresult: str = greet(\"world\")\n",
+        )
+        .await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // main.py line 2: "result: str = greet("world")" — 'greet' at character 14.
+    let resp = fixture
+        .request(
+            760,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": main_uri },
+                "position": { "line": 2, "character": 14 }
+            }),
+        )
+        .await?
+        .ok_or("no response to wholeModule cross-file goto definition")?;
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "wholeModule cross-file goto-def must resolve (default-mode cmd+click): {resp}"
+    );
+    assert!(
+        parsed["result"]["uri"]
+            .as_str()
+            .unwrap_or("")
+            .contains("helpers.py"),
+        "wholeModule cross-file goto-def should jump to helpers.py: {resp}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&root);
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_ws_goto_definition_cross_file_function() -> TestResult<()> {
     // Set up a workspace with two files: helpers.py defines `greet`,
     // main.py imports and uses it.
@@ -424,6 +639,121 @@ async fn test_ws_goto_definition_cross_file_function() -> TestResult<()> {
     assert_eq!(
         start["character"], 4,
         "cross-file goto-def should land at char 4 where 'greet' is defined: {resp}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_definition_member_through_dotted_aliased_import() -> TestResult<()> {
+    // Regression (follow-up to #180): clicking a member accessed through a
+    // *dotted, aliased* import — `import pkg.sub as ps` → `ps.helper(...)`, the
+    // same shape as `import os.path as _osp` → `_osp.join(...)` — must jump to
+    // the member's cross-file definition. The #180 alias capture briefly routed
+    // such imports as `from`-imports and published no symbols; cbee4ff restores
+    // it by discriminating on `kind`.
+    let dir = unique_temp_dir("bsk_goto_dotted_alias");
+    std::fs::create_dir_all(dir.join("pkg"))?;
+    std::fs::write(dir.join("pkg/__init__.py"), "")?;
+    std::fs::write(
+        dir.join("pkg/sub.py"),
+        "def helper(x: int) -> int:\n    return x\n",
+    )?;
+    let main_src = "import pkg.sub as ps\n\n\ndef use() -> int:\n    return ps.helper(1)\n";
+    std::fs::write(dir.join("main.py"), main_src)?;
+    let root_uri = format!("file://{}", dir.display());
+    let main_uri = format!("file://{}", dir.join("main.py").display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+    for _ in 0..20 {
+        let msg = tokio::time::timeout(Duration::from_millis(500), fixture.ws_read.next()).await;
+        if msg.is_err() {
+            break;
+        }
+    }
+    fixture.did_open(&main_uri, main_src).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // main.py line 4: `    return ps.helper(1)` — `helper` begins at character 14.
+    let resp = fixture
+        .request(
+            720,
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": main_uri },
+                "position": { "line": 4, "character": 16 }
+            }),
+        )
+        .await?
+        .ok_or("no response to member goto-def through dotted aliased import")?;
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "member goto-def through a dotted aliased import must resolve: {resp}"
+    );
+    let result_uri = parsed["result"]["uri"].as_str().unwrap_or("");
+    assert!(
+        result_uri.contains("sub.py"),
+        "goto-def should jump to pkg/sub.py, got: {result_uri}"
+    );
+    assert_eq!(
+        parsed["result"]["range"]["start"]["line"], 0,
+        "goto-def should land on `helper` at line 0 of pkg/sub.py: {resp}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ws_goto_type_definition_cross_file_class() -> TestResult<()> {
+    // Goto hammer "type-def: variable resolves to cross-file class type": a
+    // variable annotated with an imported class must resolve via typeDefinition
+    // to the class's cross-file declaration.
+    let dir = unique_temp_dir("bsk_typedef_cross");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("models.py"), "class Dog:\n    name: str\n")?;
+    let main_src = "from models import Dog\n\ninstance: Dog = Dog()\n";
+    std::fs::write(dir.join("main.py"), main_src)?;
+    let root_uri = format!("file://{}", dir.display());
+    let main_uri = format!("file://{}", dir.join("main.py").display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+    for _ in 0..20 {
+        let msg = tokio::time::timeout(Duration::from_millis(500), fixture.ws_read.next()).await;
+        if msg.is_err() {
+            break;
+        }
+    }
+    fixture.did_open(&main_uri, main_src).await?;
+    let _ = fixture.wait_for_diagnostics().await;
+
+    // main.py line 2: "instance: Dog = Dog()" — `instance` at char 0.
+    let resp = fixture
+        .request(
+            740,
+            "textDocument/typeDefinition",
+            serde_json::json!({
+                "textDocument": { "uri": main_uri },
+                "position": { "line": 2, "character": 2 }
+            }),
+        )
+        .await?
+        .ok_or("no response to cross-file type definition")?;
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "cross-file type-def must resolve to the imported class: {resp}"
+    );
+    assert!(
+        parsed["result"]["uri"]
+            .as_str()
+            .unwrap_or("")
+            .contains("models.py"),
+        "cross-file type-def should jump to models.py: {resp}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);

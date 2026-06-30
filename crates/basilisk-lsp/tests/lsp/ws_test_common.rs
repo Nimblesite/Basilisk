@@ -34,7 +34,20 @@ pub struct WsTestFixture {
             tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
         >,
     >,
+    /// Temp workspace root opened by [`WsTestFixture::initialize`]. It ships a
+    /// `basilisk.json` that opts into the annotation house rules (off by default
+    /// — the default config is pure PEP conformance). Documents fall back to this
+    /// root's config, so house diagnostics (`BSK-E0001` …) fire exactly as they
+    /// do for a project that enabled them. No modes; configuration.
+    /// See [CHKARCH-CONFIGURATION-ONLY].
+    pub workspace_root: std::path::PathBuf,
     _server_handle: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for WsTestFixture {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.workspace_root);
+    }
 }
 
 impl WsTestFixture {
@@ -62,9 +75,19 @@ impl WsTestFixture {
         let (ws_stream, _response) = tokio_tungstenite::connect_async(&url).await?;
         let (ws_write, ws_read) = ws_stream.split();
 
+        // Create a temp workspace that opts into the annotation house rules so
+        // documents (which fall back to the root's checker config) see them.
+        let workspace_root = unique_temp_dir("bsk_ws_fixture");
+        std::fs::create_dir_all(&workspace_root)?;
+        std::fs::write(
+            workspace_root.join("basilisk.json"),
+            "{\"strictAnnotations\": true}\n",
+        )?;
+
         Ok(Self {
             ws_write,
             ws_read,
+            workspace_root,
             _server_handle: server_handle,
         })
     }
@@ -94,13 +117,17 @@ impl WsTestFixture {
     ///
     /// Returns an error if sending or receiving the handshake messages fails.
     pub async fn initialize(&mut self) -> TestResult<String> {
+        // Open the configured workspace root so documents resolve to a config
+        // that has the annotation house rules enabled. See
+        // [CHKARCH-CONFIGURATION-ONLY].
+        let root_uri = format!("file://{}", self.workspace_root.to_string_lossy());
         self.send_json(&serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
             "method": "initialize",
             "params": {
                 "processId": null,
-                "rootUri": null,
+                "rootUri": root_uri,
                 "capabilities": {},
                 "trace": "off"
             }
@@ -207,6 +234,48 @@ impl WsTestFixture {
 }
 
 // ── Shared helper functions ─────────────────────────────────────────────────
+
+/// Send a `workspace/executeCommand` request and return the parsed JSON-RPC
+/// response object (with `result` or `error`). `arg` is wrapped as the single
+/// command argument, matching how the editor invokes `basilisk.*` commands.
+///
+/// # Errors
+///
+/// Returns an error if sending fails or no response with the matching id arrives.
+pub async fn execute_command(
+    fixture: &mut WsTestFixture,
+    id: u64,
+    command: &str,
+    arg: serde_json::Value,
+) -> TestResult<serde_json::Value> {
+    let resp = fixture
+        .request(
+            id,
+            "workspace/executeCommand",
+            serde_json::json!({ "command": command, "arguments": [arg] }),
+        )
+        .await?
+        .ok_or_else(|| format!("no response to {command}"))?;
+    Ok(serde_json::from_str(&resp)?)
+}
+
+/// Extract the `result` of a JSON-RPC response, turning a present `error` (or a
+/// missing/null `result`) into an `Err` with context.
+///
+/// # Errors
+///
+/// Returns an error if the response carries a JSON-RPC error or no result.
+pub fn command_result<'a>(
+    resp: &'a serde_json::Value,
+    ctx: &str,
+) -> Result<&'a serde_json::Value, String> {
+    if let Some(err) = resp.get("error").filter(|err| !err.is_null()) {
+        return Err(format!("{ctx} returned an error: {err}"));
+    }
+    resp.get("result")
+        .filter(|value| !value.is_null())
+        .ok_or_else(|| format!("{ctx}: response carried no result: {resp}"))
+}
 
 /// Initialize + open a file + wait for diagnostics. Returns the fixture.
 ///

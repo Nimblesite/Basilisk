@@ -24,8 +24,12 @@ impl InferredType {
             "none" => InferredType::None_,
             // Bare `tuple` is `tuple[Any, ...]` — equivalent to Any for assignment.
             // Bare `type` is `type[Any]` (any class object) — Any-like for assignment.
+            // Implements [TYPEINF-SPECIAL-ANY] — `Any`/`object` (and bare gradual
+            // forms) parse to the Any escape hatch for assignment purposes.
             "any" | "object" | "final" | "tuple" | "type" => InferredType::Any,
+            // Implements [TYPEINF-SPECIAL-NEVER].
             "never" => InferredType::Never,
+            // Implements [TYPEINF-SPECIAL-LITERALSTRING].
             "literalstring" => InferredType::LiteralString,
             // A bare `Callable` annotation is `Callable[..., Any]` (PEP 484):
             // empty `param_types` represents the arbitrary-parameter form.
@@ -43,6 +47,9 @@ impl InferredType {
 }
 
 /// Parse complex (non-primitive) annotation text.
+///
+/// Implements [TYPEINF-SUBTYPING-UNION] — `X | Y` (PEP 604) and `Union[...]`
+/// annotations are lowered to [`InferredType::Union`] here.
 fn parse_complex_annotation(annotation: &str) -> InferredType {
     // PEP 604 unions split first (bracket-aware) so `L[1] | L[2]` parses as a
     // union of `Literal`s rather than one malformed subscript.
@@ -89,6 +96,11 @@ fn parse_complex_annotation(annotation: &str) -> InferredType {
 }
 
 /// Parse container types (list, dict, set, tuple, optional, union via `|`).
+///
+/// Implements [TYPEINF-COLLECTIONS-LISTS], [TYPEINF-COLLECTIONS-DICTS],
+/// [TYPEINF-COLLECTIONS-SETS] and [TYPEINF-COLLECTIONS-TUPLES] at the annotation
+/// level — `list[T]`/`dict[K, V]`/`set[T]`/`tuple[...]` (including `tuple[()]` and
+/// `tuple[X, ...]`) parse into the corresponding [`InferredType`] container.
 fn parse_container_annotation(annotation: &str) -> InferredType {
     if annotation.starts_with("list[") && annotation.ends_with(']') {
         let inner = &annotation[5..annotation.len() - 1];
@@ -278,6 +290,10 @@ pub(super) fn split_type_params(inner: &str) -> Vec<&str> {
 /// Parses the inner content of a `Callable[...]` annotation into an `InferredType`.
 ///
 /// Handles `Callable[[param_types...], return_type]` and `Callable[..., return_type]`.
+///
+/// Implements [TYPEINF-SUBTYPING-CALLABLE] at the annotation level — produces the
+/// [`CallableInfo`] (param list + return type) whose variance is checked by
+/// [`InferredType::is_assignable_to`].
 fn parse_callable_annotation(inner: &str) -> InferredType {
     let inner = inner.trim();
     let mut depth = 0u32;

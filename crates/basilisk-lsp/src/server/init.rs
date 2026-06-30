@@ -60,6 +60,17 @@ pub(super) async fn initialize(
         &roots,
     );
 
+    // Honor the Type Checking toggle (`basilisk.enabled`) supplied at startup so
+    // a client that opens with type checking off never sees a flash of
+    // diagnostics from the initial scan. Implements [ANALYSIS-ENABLED] (#65/#119).
+    if let Some(enabled) = params
+        .initialization_options
+        .as_ref()
+        .and_then(parse_enabled)
+    {
+        *server.type_checking_enabled.write().await = enabled;
+    }
+
     // Store workspace roots for later use by import resolution.
     (*server.workspace_roots.write().await).clone_from(&roots);
 
@@ -130,6 +141,7 @@ fn build_capabilities() -> ServerCapabilities {
             prepare_provider: Some(true),
             work_done_progress_options: WorkDoneProgressOptions::default(),
         })),
+        // Implements [LSPARCH-CMDREG]
         execute_command_provider: Some(ExecuteCommandOptions {
             commands: basilisk_common::commands::ALL
                 .iter()
@@ -198,6 +210,7 @@ pub(super) async fn initialized(server: &LspServer) {
     let Some(mode) = mode else { return };
 
     match mode {
+        // Implements [ANALYSIS-STARTUP-OPEN]
         AnalysisMode::OpenFilesOnly => {
             server
                 .client
@@ -219,6 +232,9 @@ pub(super) async fn initialized(server: &LspServer) {
             // prevents ALL request handling until the scan completes.
             let scan_client = server.client.clone();
             let scan_index = Arc::clone(&server.index);
+            // Clone the toggle so the spawned scan suppresses publication when a
+            // client started with type checking off. Implements [ANALYSIS-ENABLED].
+            let scan_enabled = Arc::clone(&server.type_checking_enabled);
             let scan_roots = {
                 let roots = server.workspace_roots.read().await;
                 roots.clone()
@@ -229,7 +245,8 @@ pub(super) async fn initialized(server: &LspServer) {
                     let scan_result = scan_resolve_and_check_with_roots(index, &scan_roots);
                     drop(guard);
                     for (uri, diags) in scan_result.diagnostics {
-                        scan_client.publish_diagnostics(uri, diags, None).await;
+                        super::publish_diagnostics_gated(&scan_client, &scan_enabled, uri, diags)
+                            .await;
                     }
                     scan_client
                         .log_message(
@@ -261,6 +278,15 @@ pub(super) async fn did_change_configuration(
 
     // Update test explorer config if present.
     update_test_explorer_config(server, &settings).await;
+
+    // Apply the Type Checking toggle (`basilisk.enabled`) first: the LSP owns
+    // diagnostics, so flipping it must clear-or-restore them, and while disabled
+    // every scan/publish below is suppressed. Implements [ANALYSIS-ENABLED]
+    // (#65/#119). Returning here on a settled-disabled state stops an unrelated
+    // setting change (e.g. analysisMode) from re-publishing through the gate.
+    if !apply_type_checking_toggle(server, &settings).await {
+        return;
+    }
 
     let mut mode = None;
     if let Some(mode_str) = settings
@@ -315,6 +341,95 @@ pub(super) async fn did_change_configuration(
         }
         AnalysisMode::OpenFilesOnly => {
             clear_non_open_diagnostics(server).await;
+        }
+    }
+}
+
+// Implements [ANALYSIS-ENABLED] — the Type Checking toggle (`basilisk.enabled`).
+/// Parse the `basilisk.enabled` toggle from a settings / init-options value.
+///
+/// Accepts both shapes the editor sends: the flat
+/// `initializationOptions = readBasiliskSettings()` (top-level `enabled`) and the
+/// `didChangeConfiguration` payload `{ basilisk: { enabled } }` (nested).
+fn parse_enabled(value: &serde_json::Value) -> Option<bool> {
+    value
+        .get("enabled")
+        .or_else(|| value.get("basilisk").and_then(|b| b.get("enabled")))
+        .and_then(serde_json::Value::as_bool)
+}
+
+/// Apply the Type Checking toggle from a `didChangeConfiguration` payload.
+///
+/// Returns `true` when the caller should continue to analysis-mode handling, and
+/// `false` when the toggle fully handled this notification — because it just
+/// cleared diagnostics (disabled), re-scanned (re-enabled), or the server is
+/// settled-disabled and every subsequent scan/publish must stay suppressed.
+/// Implements [ANALYSIS-ENABLED] (GitHub #65 / #119).
+async fn apply_type_checking_toggle(server: &LspServer, settings: &serde_json::Value) -> bool {
+    let current = server.is_type_checking_enabled().await;
+
+    if let Some(new_enabled) = parse_enabled(settings) {
+        if new_enabled != current {
+            *server.type_checking_enabled.write().await = new_enabled;
+            if new_enabled {
+                info!("type checking re-enabled — re-scanning workspace");
+                rescan_after_enable(server).await;
+            } else {
+                info!("type checking disabled — clearing published diagnostics");
+                clear_all_diagnostics(server).await;
+            }
+            return false;
+        }
+    }
+
+    // No toggle change: proceed to mode handling only while enabled, so an
+    // unrelated setting change cannot resurrect diagnostics while disabled.
+    current
+}
+
+/// Publish empty diagnostics for every indexed URI, clearing stale errors when
+/// type checking is switched off. Bypasses the enable gate deliberately — the
+/// flag is already `false`, but clearing must still reach the editor.
+/// Implements [ANALYSIS-ENABLED] / [ANALYSIS-PUBLISH].
+async fn clear_all_diagnostics(server: &LspServer) {
+    let guard = server.index.read().await;
+    let Some(index) = guard.as_ref() else { return };
+    let uris: Vec<Url> = index
+        .files
+        .iter()
+        .filter_map(|entry| Url::from_file_path(entry.key()).ok())
+        .collect();
+    drop(guard);
+    let count = uris.len();
+    for uri in uris {
+        server.client.publish_diagnostics(uri, vec![], None).await;
+    }
+    info!(count, "cleared diagnostics for all indexed files");
+}
+
+/// Re-publish diagnostics after type checking is re-enabled, matching the active
+/// analysis mode. Implements [ANALYSIS-ENABLED].
+async fn rescan_after_enable(server: &LspServer) {
+    let mode = {
+        let guard = server.index.read().await;
+        guard.as_ref().map(|idx| idx.mode)
+    };
+    let Some(mode) = mode else { return };
+
+    match mode {
+        AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
+            run_workspace_scan(server, mode).await;
+        }
+        AnalysisMode::OpenFilesOnly => {
+            // Only open files are indexed in this mode; re-check and re-publish
+            // each one (the gate is already back on, so publishing is correct).
+            let guard = server.index.read().await;
+            let Some(index) = guard.as_ref() else { return };
+            let results = recheck_with_cross_module_symbols(index);
+            drop(guard);
+            for (uri, diags) in results {
+                server.publish_diagnostics_if_enabled(uri, diags).await;
+            }
         }
     }
 }
@@ -379,6 +494,8 @@ pub(super) async fn did_change_workspace_folders(
     }
 }
 
+// Implements [LSPUV-WATCHERS] (uv.lock, .python-version, pyproject.toml,
+// basilisk.json; the spec's `.venv/pyvenv.cfg` row is not watched).
 /// Register file watchers for uv-related configuration files.
 ///
 /// Watches `**/uv.lock`, `**/.python-version`, and `**/pyproject.toml` so
@@ -434,8 +551,10 @@ async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
     let scan_result = scan_resolve_and_check(server, index).await;
     drop(guard);
 
+    // Respect the Type Checking toggle ([ANALYSIS-ENABLED]): suppress publication
+    // when disabled instead of flooding the editor with scan diagnostics.
     for (uri, diags) in scan_result.diagnostics {
-        server.client.publish_diagnostics(uri, diags, None).await;
+        server.publish_diagnostics_if_enabled(uri, diags).await;
     }
     server
         .client
@@ -498,11 +617,11 @@ fn scan_resolve_and_check_with_roots(
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
     // Cache the search paths so incremental single-file re-checks (didOpen /
     // didChange) resolve third-party imports identically to this scan, instead
-    // of resurrecting false BSK-E0010. Implements [ANALYSIS-INCR-IMPORTS].
+    // of resurrecting false imports_unresolved. Implements [ANALYSIS-INCR-IMPORTS].
     index.set_search_paths(search_paths);
 
     // Re-check all files now that imports are resolved. The initial scan()
-    // generates diagnostics before workspace members are known, so BSK-E0010
+    // generates diagnostics before workspace members are known, so imports_unresolved
     // fires for imports that are actually resolvable via workspace members.
     let diagnostics = if matches!(index.mode, AnalysisMode::CrossModule) {
         crate::cross_module::populate_cross_module_symbols(index);
@@ -534,6 +653,8 @@ fn scan_resolve_and_check_with_roots(
     }
 }
 
+// Implements [ANALYSIS-PUBLISH] (runtime mode-switch → clear non-open files;
+// per-mode publish and delete→empty live in run_workspace_scan and document.rs).
 /// Clear diagnostics for all non-open files (used when switching to `openFilesOnly`).
 async fn clear_non_open_diagnostics(server: &LspServer) {
     let guard = server.index.read().await;
@@ -622,6 +743,8 @@ fn build_uv_registry(roots: &[std::path::PathBuf]) -> Option<Arc<basilisk_uv::Pa
     Some(Arc::new(registry))
 }
 
+// Implements [LSPARCH-UV-HOTRELOAD] and [LSPUV-LOCK-HOT-RELOAD] (full rebuild on
+// uv.lock change — no package-level diff; logs a simpler message than the spec)
 /// Rebuild the uv package registry and re-resolve all workspace imports.
 ///
 /// Called after uv commands complete or when `uv.lock` changes on disk.
@@ -669,7 +792,7 @@ pub(super) async fn rebuild_registry_and_resolve(server: &LspServer) {
 
     let file_count = results.len();
     for (uri, diags) in results {
-        server.client.publish_diagnostics(uri, diags, None).await;
+        server.publish_diagnostics_if_enabled(uri, diags).await;
     }
 
     info!(
@@ -719,6 +842,7 @@ async fn update_test_explorer_config(server: &LspServer, settings: &serde_json::
 fn spawn_initial_test_discovery(server: &LspServer) {
     let client = server.client.clone();
     let index = Arc::clone(&server.index);
+    let enabled = Arc::clone(&server.type_checking_enabled);
     let roots_lock = &server.workspace_roots;
 
     // Read the workspace root synchronously (fast, just a lock read).
@@ -749,7 +873,7 @@ fn spawn_initial_test_discovery(server: &LspServer) {
             .await;
 
         // Check pytest availability using the cloned index.
-        check_pytest_from_index(&client, &index, &root).await;
+        check_pytest_from_index(&client, &index, &enabled, &root).await;
     }));
 }
 
@@ -760,6 +884,7 @@ fn spawn_initial_test_discovery(server: &LspServer) {
 async fn check_pytest_from_index(
     client: &Client,
     index: &Arc<RwLock<Option<WorkspaceIndex>>>,
+    enabled: &RwLock<bool>,
     root: &std::path::Path,
 ) {
     // We need workspace roots to detect uv — use root directly.
@@ -793,7 +918,8 @@ async fn check_pytest_from_index(
                 continue;
             };
             let diag = super::test_handlers::make_pytest_not_found_diagnostic();
-            client.publish_diagnostics(uri, vec![diag], None).await;
+            // Suppressed while type checking is off ([ANALYSIS-ENABLED]).
+            super::publish_diagnostics_gated(client, enabled, uri, vec![diag]).await;
         }
     }
 

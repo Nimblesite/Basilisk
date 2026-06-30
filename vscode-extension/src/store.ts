@@ -25,6 +25,8 @@ import { POLL_INTERVAL_MS, WAIT_MS } from "./timeouts";
 import {
   createProfilerActions,
   isProfilerBusy,
+  isCpuBusy,
+  isMemoryBusy,
   IDLE_PROFILER_SESSION,
   type ProfilerActions,
   type ProfilerSession,
@@ -76,6 +78,10 @@ export interface Store extends ProfilerActions {
   readonly profiler: ReadonlySignal<ProfilerSession>;
   /** True while any CPU or memory profiling activity is starting or running. */
   readonly profilerBusy: ReadonlySignal<boolean>;
+  /** True while the CPU leg is starting or running (gates CPU starts only). */
+  readonly cpuBusy: ReadonlySignal<boolean>;
+  /** True while the memory leg is starting or running (gates memory starts only). */
+  readonly memoryBusy: ReadonlySignal<boolean>;
 
   // Read-only access to the ready handle (for whenReady callers).
   readonly lspReadyPromise: ReadonlySignal<Promise<void> | undefined>;
@@ -223,6 +229,11 @@ function disposeAllCommands(signals: StoreSignals): void {
   signals.serverCommands.value = new Set();
 }
 
+// Implements [VSIX-COMMANDS] — registers the two client-only commands declared in
+// vscode-extension/package.json (contributes.commands): basilisk.restartServer
+// ([VSIX-ERROR-RECOVERY] manual recovery) and basilisk.showOutput
+// ([VSIX-OUTPUT-CHANNELS]). All other contributed commands are server-advertised
+// and auto-registered via syncServerCommands (per the Command Registration Rule).
 /** Register all client-only commands. Called when LSP reaches Running. */
 function registerClientCommands(signals: StoreSignals, context: vscode.ExtensionContext): void {
   registerCommand({ signals, context, commandId: "basilisk.restartServer" }, async () => {
@@ -294,8 +305,11 @@ function bindClientStateListener(
       disposeAllCommands(signals);
       syncServerCommands(signals);
       registerClientCommands(signals, context);
-      // Re-analysis completion: registered after disposeAllCommands each
-      // Running cycle so restarts re-bind it ([EXTACT-REACTIVE-STATE]).
+      // Implements the client side of [EXTACT-LSP-COMMANDS-MODULE-CHANGED] —
+      // consumes the server's `basilisk/moduleChanged` notification (re-analysis
+      // complete) to bump the analysis revision. Registered after
+      // disposeAllCommands each Running cycle so restarts re-bind it
+      // ([EXTACT-REACTIVE-STATE]).
       signals.commandDisposables.push(
         lspClient.onNotification("basilisk/moduleChanged", () => {
           bumpAnalysisRevision(signals);
@@ -457,6 +471,8 @@ export function createStore(onReset?: () => void): Store {
     sessionIdToPid: signals.sessionIdToPid,
     profiler: signals.profiler,
     profilerBusy,
+    cpuBusy: computed(() => isCpuBusy(signals.profiler.value)),
+    memoryBusy: computed(() => isMemoryBusy(signals.profiler.value)),
     lspReadyPromise,
     isServerReady,
     analysisRevision: signals.analysisRevision,

@@ -2,9 +2,12 @@
 //!
 //! LSP command handlers for `basilisk.memory.*` memory profiling commands.
 //!
-//! Memory profiling requires an active debug session (debugpy). These handlers
-//! extract arguments, delegate to the memory profiling engine, and return
-//! structured JSON responses.
+//! Implements [PROFILE-MEMORY-COMMANDS] (the leg-1 `start`/`snapshot`/`diff`/
+//! `references`/`objectsByType`/`gcCollect` commands that return `{ script }`)
+//! and [PROFILE-MEMORY-INGEST] (leg 2 — the editor posts the script output
+//! back). Memory profiling requires an active debug session (debugpy). These
+//! handlers extract arguments, delegate to the memory profiling engine, and
+//! return structured JSON responses.
 
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::MessageType;
@@ -19,7 +22,9 @@ use crate::profiler::memory::session::IngestOutcome;
 /// the dashboard only needs the top sites.
 const MAX_SNAPSHOT_STATS: usize = 100;
 
-/// Construct a memory-domain LSP error (`-32010`).
+/// Construct a memory-domain LSP error (`-32010`). Implements
+/// [PROFILE-MEMORY-INGEST]: an unknown session or a marker-less payload is
+/// rejected with `-32010`.
 fn memory_error(message: impl Into<String>) -> tower_lsp::jsonrpc::Error {
     tower_lsp::jsonrpc::Error {
         code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32010),
@@ -57,12 +62,26 @@ pub(super) async fn execute_memory_start(
         .and_then(serde_json::Value::as_u64)
         .map_or(25, |d| u32::try_from(d).unwrap_or(25));
 
-    let script = crate::profiler::memory::scripts::start_tracemalloc(traceback_depth);
-
     // Register a real session so subsequent snapshot/diff ingests can accumulate
     // cross-call leak history. The editor runs `script` in the debuggee and posts
     // the output back via `basilisk.memory.ingest` (the LSP holds no DAP wire).
     let memory_session_id = server.memory_manager.start_session(traceback_depth).await;
+
+    // [PROFILE-MEMORY-FINAL] Mint the at-exit snapshot file the injected script's
+    // `atexit` hook writes to, and return its path so the editor can read it when
+    // the debug session terminates — this is what gives the breakpoint-free
+    // "Run & Track Memory (Current File)" flow a visible result instead of a
+    // dead end. The path is unique per session, just like the cooperative
+    // sampler's sample file ([PROFILE-COOPERATIVE]).
+    let final_snapshot_file = std::env::temp_dir()
+        .join(format!("basilisk-{memory_session_id}.memfinal"))
+        .to_string_lossy()
+        .into_owned();
+    let script = crate::profiler::memory::scripts::start_tracemalloc(
+        traceback_depth,
+        &final_snapshot_file,
+        MAX_SNAPSHOT_STATS,
+    );
 
     server
         .client
@@ -79,6 +98,7 @@ pub(super) async fn execute_memory_start(
         "tracingStarted": true,
         "script": script,
         "tracebackDepth": traceback_depth,
+        "finalSnapshotFile": final_snapshot_file,
     })))
 }
 
@@ -338,6 +358,9 @@ async fn publish_memory_diagnostics(server: &LspServer, diagnostics: &Diagnostic
 
 /// Serialize an ingest outcome into the editor wire format (camelCase, tagged
 /// by `kind` so the editor can dispatch).
+///
+/// Implements [PROFILE-MEMORY-INGEST] — the `kind`-tagged result shapes
+/// (`snapshot`/`diff`/`gc`/`refs`/`objects`/`ack`) the editor renders.
 fn ingest_outcome_to_json(session_id: &str, outcome: &IngestOutcome) -> serde_json::Value {
     match outcome {
         IngestOutcome::Snapshot(snapshot) => serde_json::json!({

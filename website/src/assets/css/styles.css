@@ -248,7 +248,11 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   .sidebar { position: static; max-height: none; padding-right: 0; border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-6); }
 }
 @media (max-width: 768px) {
+  /* [WEBSITE-MOBILE-DOCS-NAV] On phones the docs sidebar collapses, but the
+     hamburger (mobile-menu.js toggles `.open`) must be able to reveal it — else
+     the per-section submenu is unreachable. Mirrors the `.nav-links.open` rule. */
   .sidebar { display: none; }
+  .sidebar.open { display: block; }
 }
 
 .docs-nav, .sidebar nav { padding: 0; }
@@ -404,7 +408,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 /* Blog single post page */
 .blog-post { max-width: var(--content-width); margin-inline: auto; padding: var(--space-10) var(--space-8); }
-.blog-hero { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border: 1px solid var(--color-border-bright); border-radius: var(--radius-lg); margin-bottom: var(--space-8); }
+.blog-post .blog-hero { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border: 1px solid var(--color-border-bright); border-radius: var(--radius-md); margin: 0 0 var(--space-8); }
 .blog-post-header { margin-bottom: var(--space-10); border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-8); }
 .blog-post-footer { margin-top: var(--space-12); text-align: center; }
 
@@ -509,14 +513,25 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
    HERO — Split layout: big text left, code right
 ══════════════════════════════════════════════════════════ */
 .hero {
-  padding: calc(var(--header-height) + var(--space-16)) 0 var(--space-16);
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12);
   border-bottom: 1px solid var(--color-border);
+}
+/* Hero spans most of the viewport width with a generous side gutter; content is
+   vertically centred so the hero fills the viewport height. */
+.hero > .container {
+  width: 100%;
+  max-width: 2200px;
+  padding-inline: clamp(var(--space-6), 3vw, var(--space-12));
 }
 
 .hero__split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-16);
+  grid-template-columns: 1fr 1.1fr;
+  gap: var(--space-12);
   align-items: center;
 }
 
@@ -557,31 +572,61 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 .hero__meta {
   display: flex;
-  gap: var(--space-6);
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
   font-size: 0.8125rem;
   color: var(--color-text-muted);
 }
-.hero__meta span { display: flex; align-items: center; gap: var(--space-1); }
+.hero__meta span { display: flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 .hero__meta strong { color: var(--color-text-secondary); font-weight: 500; }
+
+/* Front-and-centre PEP conformance badge — the headline metric, tied to the
+   exact python/typing commit we graded against. */
+.hero__conformance {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: var(--space-5) 0 var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease;
+}
+.hero__conformance:hover { border-color: var(--color-primary); }
+.hero__conformance-score {
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--color-text-primary);
+}
+.hero__conformance-pct { color: var(--color-primary); }
+.hero__conformance-text { font-size: 0.8125rem; line-height: 1.4; color: var(--color-text-muted); }
+.hero__conformance-text strong { color: var(--color-text-secondary); font-weight: 600; }
+.hero__conformance-text code { color: var(--color-text-secondary); }
+.hero__conformance-cta { color: var(--color-primary); white-space: nowrap; }
 
 /* Code side of hero */
 .hero__code { position: relative; }
 
-/* Demo tabs inside hero */
-.hero__demo .demo-tabs { display: flex; gap: 0; background: var(--color-bg-elevated); border: 1px solid var(--color-border-bright); border-bottom: none; border-radius: var(--radius-md) var(--radius-md) 0 0; }
-.hero__demo .demo-tab { padding: var(--space-2) var(--space-5); font-size: 0.8125rem; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; transition: all var(--ease-fast); border-right: 1px solid var(--color-border); background: none; }
-.hero__demo .demo-tab:last-child { border-right: none; }
-.hero__demo .demo-tab:hover { color: var(--color-text-primary); }
-.hero__demo .demo-tab.active { color: var(--color-text-primary); background: var(--color-bg-tertiary); }
-.hero__demo .demo-panel { display: none; }
-.hero__demo .demo-panel.active { display: block; }
-.hero__demo .demo-wrapper { border: 1px solid var(--color-border-bright); border-radius: 0 0 var(--radius-lg) var(--radius-lg); overflow: hidden; }
+/* Product screenshot in hero — shown whole at its natural aspect, NEVER cropped */
+.hero__shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border-bright);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 30px 70px -25px rgba(0, 0, 0, 0.65);
+}
 
 @media (max-width: 900px) {
+  .hero { min-height: 0; }
   .hero__split { grid-template-columns: 1fr; }
   .hero__split > * { min-width: 0; }
   .hero__subheadline { max-width: none; }
-  .hero__meta { flex-wrap: wrap; gap: var(--space-4); }
+  .hero__meta { gap: var(--space-3) var(--space-4); }
 }
 @media (max-width: 640px) {
   .hero { padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12); }
@@ -964,6 +1009,169 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 .citations-list a:hover { color: var(--color-accent); }
 
+/* ── Conformance methodology ───────────────────────────────── */
+.conformance-method {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  max-width: 68ch;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--color-text-secondary);
+}
+.conformance-method li + li { margin-top: var(--space-3); }
+.conformance-method strong { color: var(--color-text-primary); font-weight: 600; }
+.conformance-method code,
+.conformance-method__note code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--color-code-type);
+  background: var(--color-bg-elevated);
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+.conformance-method__note {
+  margin-top: var(--space-6);
+  max-width: 68ch;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+.conformance-method__note a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ── PEP conformance over-time chart ───────────────────────── */
+.conf-chart {
+  margin: var(--space-8) 0;
+  padding: var(--space-6);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.conf-chart__head { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-4); }
+.conf-chart__label {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+.conf-chart__title { font-size: 1.125rem; font-weight: 600; color: var(--color-text-primary); }
+.conf-chart__svg { display: block; width: 100%; height: auto; overflow: visible; }
+.conf-chart__grid { stroke: var(--color-border); stroke-width: 1; }
+.conf-chart__axis, .conf-chart__date { fill: var(--color-text-muted); font-family: var(--font-mono); font-size: 11px; }
+.conf-chart__line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+/* Climb to 100% = the earlier (incorrect) era, in red. */
+.conf-chart__line--prev { stroke: var(--color-error); }
+/* The drop and everything after = the official (correct) era, in green. */
+.conf-chart__line--official { stroke: var(--color-success); }
+.conf-chart__drop { stroke: var(--color-success); stroke-width: 3; stroke-linecap: round; }
+.conf-chart__dot--prev { fill: var(--color-error); }
+.conf-chart__dot--official { fill: var(--color-success); }
+.conf-chart__value { font-family: var(--font-mono); font-size: 14px; font-weight: 700; }
+.conf-chart__value--peak { fill: var(--color-error); }
+.conf-chart__value--current { fill: var(--color-success); }
+.conf-chart__drop-note {
+  margin: var(--space-5) 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+.conf-chart__drop-note strong { color: var(--color-error); }
+.conf-chart__legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+.conf-chart__legend li { display: flex; align-items: center; gap: var(--space-2); }
+.conf-chart__swatch { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+.conf-chart__swatch--prev { background: var(--color-error); }
+.conf-chart__swatch--official { background: var(--color-success); }
+.conf-chart__caption { margin: var(--space-4) 0 0; font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.6; }
+.conf-chart__caption code { font-family: var(--font-mono); font-size: 0.85em; }
+
+/* ── Conformance methodology page bits ─────────────────────── */
+.conf-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-6) 0;
+}
+.conf-links a {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border-bright);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+.conf-links a:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.conf-cat-bar {
+  display: inline-block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--color-primary);
+  vertical-align: middle;
+  min-width: 2px;
+}
+.conf-verified {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  color: var(--color-success);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+
+/* ── Releases (/docs/releases/) ────────────────────────────── */
+.releases-intro { font-size: 1.0625rem; }
+.release-list { display: flex; flex-direction: column; gap: var(--space-6); margin-top: var(--space-8); }
+.release {
+  padding: var(--space-6);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-bright);
+  border-radius: var(--radius-lg);
+}
+.release-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-4); }
+.release-title { font-family: var(--font-mono); font-size: 1.25rem; font-weight: 700; margin: 0; padding: 0; border: none; }
+.release-title a { color: var(--color-text-primary); text-decoration: none; }
+.release-title a:hover { color: var(--color-primary); }
+.release-badge { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.15em 0.5em; border-radius: var(--radius-sm); }
+.release-badge--latest { color: var(--color-success); background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.35); }
+.release-badge--pre { color: var(--color-warning); background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.35); }
+.release-date { margin-left: auto; font-size: 0.8125rem; color: var(--color-text-muted); font-family: var(--font-mono); }
+/* Tame the heading scale of the maintainer-authored notes so a release's own
+   `## headings` don't impersonate the docs page's top-level sections. */
+.release-notes > :first-child { margin-top: 0; }
+.release-notes h1, .release-notes h2, .release-notes h3, .release-notes h4 {
+  font-size: 1rem; font-weight: 600; margin-top: var(--space-5); margin-bottom: var(--space-2);
+  padding: 0; border: none; color: var(--color-text-primary); letter-spacing: 0;
+}
+.release-assets { margin-top: var(--space-5); border-top: 1px solid var(--color-border); padding-top: var(--space-4); }
+.release-assets summary { cursor: pointer; font-size: 0.875rem; font-weight: 600; color: var(--color-text-secondary); }
+.release-assets summary:hover { color: var(--color-primary); }
+.release-asset-list { list-style: none !important; padding-left: 0 !important; margin-top: var(--space-3); }
+.release-asset-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-3); margin-bottom: var(--space-2); }
+.release-asset-list a { font-family: var(--font-mono); font-size: 0.875rem; }
+.release-asset-meta { font-size: 0.75rem; color: var(--color-text-muted); font-family: var(--font-mono); }
+
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .section-heading { font-size: 1.75rem; }
@@ -975,3 +1183,31 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   .demo-section { padding: var(--space-12) 0; }
   .cta-section { padding: var(--space-12) 0; }
 }
+
+/* ── Error reference pages ([WEBSITE-ERROR-PAGES]) ─────────────────── */
+.breadcrumb { font-size: 0.8125rem; color: var(--color-text-muted); margin-bottom: var(--space-5); }
+.breadcrumb a { color: var(--color-text-secondary); }
+.breadcrumb a:hover { color: var(--color-primary-light); }
+.breadcrumb span[aria-hidden] { margin: 0 0.4em; color: var(--color-border-bright); }
+
+.error-title { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.error-title code { font-size: 1.5rem; color: var(--color-text-primary); background: var(--color-bg-tertiary); border: 1px solid var(--color-border-bright); padding: 0.1em 0.4em; }
+
+.badge { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.2em 0.6em; border-radius: var(--radius-sm); }
+.badge--error { color: var(--color-error); background: var(--color-error-dim); border: 1px solid rgba(248, 113, 113, 0.35); }
+.badge--warning { color: var(--color-warning); background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.35); }
+
+.error-summary { font-size: 1.125rem; color: var(--color-text-secondary); margin: var(--space-4) 0 var(--space-6); }
+.error-screenshot { max-width: 100%; height: auto; border-radius: var(--radius-lg); border: 1px solid var(--color-border-bright); display: block; }
+.error-perma { font-size: 0.8125rem; color: var(--color-text-muted); border-top: 1px solid var(--color-border); padding-top: var(--space-4); margin-top: var(--space-8); word-break: break-all; }
+
+.error-list { list-style: none; padding: 0; margin: 0 0 var(--space-8); display: grid; gap: var(--space-2); }
+.error-list li { display: flex; gap: var(--space-3); align-items: baseline; padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border); }
+.error-list a { flex: 0 0 auto; }
+.error-list__summary { color: var(--color-text-secondary); font-size: 0.9375rem; }
+.error-count { color: var(--color-text-muted); font-weight: 400; font-size: 0.875rem; }
+
+.rules-table { width: 100%; border-collapse: collapse; margin-bottom: var(--space-6); font-size: 0.9375rem; }
+.rules-table th, .rules-table td { text-align: left; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border); vertical-align: top; }
+.rules-table th { color: var(--color-text-muted); font-weight: 600; font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.rules-table td:first-child { white-space: nowrap; }

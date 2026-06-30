@@ -136,6 +136,10 @@ fn build_pipeline_test_data() -> ProfileData {
 }
 
 /// Full pipeline test: ingestion → aggregation → export → diagnostics.
+///
+/// Exercises [PROFILE-AGGREGATION-LOGIC]/[PROFILE-AGGREGATION-THRESHOLD] (hot
+/// line/function detection) and [PROFILE-SPEEDSCOPE-MAPPING] (one profile per
+/// thread, deduplicated `shared.frames`).
 #[test]
 fn pipeline_ingest_export_diagnostics_e2e() -> Result<(), String> {
     let data = build_pipeline_test_data();
@@ -235,6 +239,8 @@ fn pipeline_ingest_export_diagnostics_e2e() -> Result<(), String> {
 }
 
 /// Verify that multi-thread data produces per-thread profiles in speedscope.
+///
+/// [PROFILE-SPEEDSCOPE-MAPPING] — `StackTrace.thread_name` → `profiles[i].name`.
 #[test]
 fn pipeline_multi_thread_export() -> Result<(), String> {
     let data = build_pipeline_test_data();

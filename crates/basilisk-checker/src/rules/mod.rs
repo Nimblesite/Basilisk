@@ -9,166 +9,172 @@
 //! so `cargo mutants` can discover them — it parses Rust with `syn` and does
 //! not expand macros, which means macro-declared modules are invisible to it.
 
-pub(crate) mod e0001;
-pub(crate) mod e0002;
-pub(crate) mod e0003;
-pub(crate) mod e0004;
-pub(crate) mod e0005;
-pub(crate) mod e0010;
-pub(crate) mod e0011;
-pub(crate) mod e0012;
-pub(crate) mod e0013;
-pub(crate) mod e0014;
-pub(crate) mod e0015;
-pub(crate) mod e0016;
-pub(crate) mod e0017;
-pub(crate) mod e0018;
-pub(crate) mod e0019;
-pub(crate) mod e0020;
-pub(crate) mod e0021;
-pub(crate) mod e0022;
-pub(crate) mod e0023;
-pub(crate) mod e0024;
-pub(crate) mod e0025;
-pub(crate) mod e0026;
-pub(crate) mod e0027;
-pub(crate) mod e0029;
-pub(crate) mod e0030;
-pub(crate) mod e0031;
-pub(crate) mod e0032;
-pub(crate) mod e0033;
-pub(crate) mod e0034;
-pub(crate) mod e0035;
-pub(crate) mod e0036;
-pub(crate) mod e0037;
-pub(crate) mod e0038;
-pub(crate) mod e0039;
-pub(crate) mod e0040;
-pub(crate) mod e0041;
-pub(crate) mod e0042;
-pub(crate) mod e0043;
-pub(crate) mod e0044;
-pub(crate) mod e0045;
-pub(crate) mod e0046;
-pub(crate) mod e0047;
-pub(crate) mod e0048;
-pub(crate) mod e0049;
-pub(crate) mod e0050;
-pub(crate) mod e0051;
-pub(crate) mod e0052;
-pub(crate) mod e0053;
-pub(crate) mod e0054;
-pub(crate) mod e0055;
-pub(crate) mod e0056;
-pub(crate) mod e0057;
-pub(crate) mod e0058;
-pub(crate) mod e0059;
-pub(crate) mod e0060;
-pub(crate) mod e0061;
-pub(crate) mod e0062;
-pub(crate) mod e0063;
-pub(crate) mod e0064;
-pub(crate) mod e0065;
-pub(crate) mod e0066;
-pub(crate) mod e0067;
-pub(crate) mod e0068;
-pub(crate) mod e0069;
-pub(crate) mod e0070;
-pub(crate) mod e0071;
-pub(crate) mod e0072;
-pub(crate) mod e0073;
-pub(crate) mod e0074;
-pub(crate) mod e0075;
-pub(crate) mod e0076;
-pub(crate) mod e0077;
-pub(crate) mod e0078;
-pub(crate) mod e0079;
-pub(crate) mod e0080;
-pub(crate) mod e0081;
-pub(crate) mod e0082;
-pub(crate) mod e0083;
-pub(crate) mod e0084;
-pub(crate) mod e0085;
-pub(crate) mod e0086;
-pub(crate) mod e0087;
-pub(crate) mod e0088;
-pub(crate) mod e0089;
-pub(crate) mod e0090;
-pub(crate) mod e0091;
-pub(crate) mod e0092;
-pub(crate) mod e0093;
-pub(crate) mod e0094;
-pub(crate) mod e0095;
-pub(crate) mod e0096;
-pub(crate) mod e0097;
-pub(crate) mod e0098;
-pub(crate) mod e0099;
-pub(crate) mod e0100;
-pub(crate) mod e0101;
-pub(crate) mod e0102;
-pub(crate) mod e0103;
-pub(crate) mod e0104;
-pub(crate) mod e0105;
-pub(crate) mod e0106;
-pub(crate) mod e0107;
-pub(crate) mod e0108;
-pub(crate) mod e0109;
-pub(crate) mod e0110;
-pub(crate) mod e0111;
-pub(crate) mod e0112;
-pub(crate) mod e0113;
-pub(crate) mod e0114;
-pub(crate) mod e0115;
-pub(crate) mod e0116;
-pub(crate) mod e0117;
-pub(crate) mod e0118;
-pub(crate) mod e0119;
-pub(crate) mod e0120;
-pub(crate) mod e0120_helpers;
-pub(crate) mod e0121;
-pub(crate) mod e0122;
-pub(crate) mod e0123;
-pub(crate) mod e0124;
-pub(crate) mod e0125;
-pub(crate) mod e0126;
-pub(crate) mod e0126_helpers;
-pub(crate) mod e0127;
-pub(crate) mod e0128;
-pub(crate) mod e0128_helpers;
-pub(crate) mod e0129;
-pub(crate) mod e0130;
-pub(crate) mod e0131;
-pub(crate) mod e0132;
-pub(crate) mod e0133;
-pub(crate) mod e0134;
-pub(crate) mod e0136;
-pub(crate) mod e0137;
-pub(crate) mod e0138;
-pub(crate) mod e0139;
-pub(crate) mod e0140;
-pub(crate) mod e0141;
-pub(crate) mod e0142;
-pub(crate) mod e0143;
-pub(crate) mod e0144;
-pub(crate) mod e0145;
-pub(crate) mod e0146;
-pub(crate) mod e0147;
-pub(crate) mod e0148;
-pub(crate) mod e0149;
-pub(crate) mod e0150;
-pub(crate) mod e0151;
-pub(crate) mod e0152;
-pub(crate) mod e0153;
-pub(crate) mod e0154;
-pub(crate) mod e0155;
-pub(crate) mod e0156;
+pub(crate) mod aliases_implicit;
+pub(crate) mod aliases_newtype;
+pub(crate) mod aliases_recursive;
+pub(crate) mod aliases_type_statement;
+pub(crate) mod aliases_typealiastype;
+pub(crate) mod annotations_forward_refs;
+pub(crate) mod annotations_generators;
+pub(crate) mod annotations_generators_2;
+pub(crate) mod annotations_generators_helpers;
+pub(crate) mod annotations_typeexpr;
+pub(crate) mod assignment_compatibility;
+pub(crate) mod callables_annotation;
+pub(crate) mod callables_kwargs;
+pub(crate) mod callables_protocol;
+pub(crate) mod callables_protocol_2;
+pub(crate) mod callables_subtyping;
+pub(crate) mod calls_argument_count;
+pub(crate) mod calls_argument_type;
+pub(crate) mod classes_classvar;
+pub(crate) mod classes_override;
+pub(crate) mod classes_override_2;
+pub(crate) mod classes_override_3;
+pub(crate) mod constructors_call_init;
+pub(crate) mod constructors_call_new;
+pub(crate) mod constructors_call_type;
+pub(crate) mod constructors_callable;
+pub(crate) mod dataclasses_frozen;
+pub(crate) mod dataclasses_hash;
+pub(crate) mod dataclasses_inheritance;
+pub(crate) mod dataclasses_kwonly;
+pub(crate) mod dataclasses_match_args;
+pub(crate) mod dataclasses_order;
+pub(crate) mod dataclasses_postinit;
+pub(crate) mod dataclasses_slots;
+pub(crate) mod dataclasses_transform_class;
+pub(crate) mod dataclasses_transform_meta;
+pub(crate) mod dataclasses_usage;
+pub(crate) mod dict_key_hashable;
+pub(crate) mod directives_assert_type;
+pub(crate) mod directives_assert_type_2;
+pub(crate) mod directives_cast;
+pub(crate) mod directives_deprecated;
+pub(crate) mod directives_disjoint_base;
+pub(crate) mod directives_reveal_type;
+pub(crate) mod directives_version_platform;
+pub(crate) mod enums_behaviors;
+pub(crate) mod enums_expansion;
+pub(crate) mod enums_member_access;
+pub(crate) mod enums_member_values;
+pub(crate) mod enums_members;
+pub(crate) mod enums_members_2;
+pub(crate) mod explicit_any;
+pub(crate) mod generics_base_class;
+pub(crate) mod generics_base_class_2;
+pub(crate) mod generics_base_class_3;
+pub(crate) mod generics_basic;
+pub(crate) mod generics_basic_2;
+pub(crate) mod generics_basic_3;
+pub(crate) mod generics_defaults;
+pub(crate) mod generics_defaults_2;
+pub(crate) mod generics_defaults_referential;
+pub(crate) mod generics_defaults_referential_2;
+pub(crate) mod generics_defaults_referential_2_helpers;
+pub(crate) mod generics_defaults_specialization;
+pub(crate) mod generics_scoping;
+pub(crate) mod generics_self_attributes;
+pub(crate) mod generics_self_basic;
+pub(crate) mod generics_self_protocols;
+pub(crate) mod generics_self_usage;
+pub(crate) mod generics_syntax_compatibility;
+pub(crate) mod generics_syntax_declarations;
+pub(crate) mod generics_syntax_declarations_2;
+pub(crate) mod generics_syntax_scoping;
+pub(crate) mod generics_type_erasure;
+pub(crate) mod generics_typevartuple_args;
+pub(crate) mod generics_typevartuple_basic;
+pub(crate) mod generics_typevartuple_basic_2;
+pub(crate) mod generics_typevartuple_basic_3;
+pub(crate) mod generics_typevartuple_callable;
+pub(crate) mod generics_typevartuple_specialization;
+pub(crate) mod generics_typevartuple_specialization_2;
+pub(crate) mod generics_typevartuple_unpack;
+pub(crate) mod generics_upper_bound;
+pub(crate) mod generics_upper_bound_2;
+pub(crate) mod generics_variance;
+pub(crate) mod generics_variance_inference;
 pub(crate) mod guards;
+pub(crate) mod historical_positional;
+pub(crate) mod imports_module_attribute;
+pub(crate) mod imports_unresolved;
+pub(crate) mod lambda_missing_annotations;
+pub(crate) mod literals_literalstring;
+pub(crate) mod literals_literalstring_helpers;
+pub(crate) mod literals_parameterizations;
+pub(crate) mod literals_parameterizations_2;
+pub(crate) mod literals_semantics;
+pub(crate) mod literals_semantics_2;
+pub(crate) mod match_exhaustiveness;
+pub(crate) mod missing_attribute_annotation;
+pub(crate) mod missing_override_decorator;
+pub(crate) mod missing_parameter_annotation;
+pub(crate) mod missing_return_annotation;
+pub(crate) mod missing_type_stubs;
+pub(crate) mod missing_vararg_annotation;
+pub(crate) mod missing_variable_type;
+pub(crate) mod namedtuples_define_class;
+pub(crate) mod namedtuples_define_functional;
+pub(crate) mod namedtuples_type_compat;
+pub(crate) mod namedtuples_usage;
+pub(crate) mod names_unbound;
+pub(crate) mod names_undefined;
+pub(crate) mod narrowing_typeguard;
+pub(crate) mod narrowing_typeis;
+pub(crate) mod narrowing_typeis_2;
+pub(crate) mod overloads_basic;
+pub(crate) mod overloads_consistency;
+pub(crate) mod overloads_consistency_2;
+pub(crate) mod overloads_consistency_3;
+pub(crate) mod overloads_definitions;
+pub(crate) mod overloads_evaluation;
+pub(crate) mod protocols_class_objects;
+pub(crate) mod protocols_class_objects_2;
+pub(crate) mod protocols_definition;
+pub(crate) mod protocols_definition_2;
+pub(crate) mod protocols_explicit;
+pub(crate) mod protocols_explicit_2;
+pub(crate) mod protocols_explicit_3;
+pub(crate) mod protocols_generic;
+pub(crate) mod protocols_merging;
+pub(crate) mod protocols_modules;
+pub(crate) mod protocols_runtime_checkable;
+pub(crate) mod protocols_runtime_checkable_2;
+pub(crate) mod protocols_subtyping;
+pub(crate) mod protocols_variance;
+pub(crate) mod protocols_variance_2;
+pub(crate) mod qualifiers_annotated;
+pub(crate) mod qualifiers_annotated_2;
+pub(crate) mod qualifiers_final_annotation;
+pub(crate) mod qualifiers_final_annotation_2;
+pub(crate) mod qualifiers_final_decorator;
+pub(crate) mod redundant_annotation;
+pub(crate) mod returns_compatibility;
+pub(crate) mod returns_compatibility_2;
 pub(crate) mod shared;
-pub(crate) mod w0011;
-pub(crate) mod w0012;
-pub(crate) mod w0013;
-pub(crate) mod w0040;
-pub(crate) mod w0050;
+pub(crate) mod specialtypes_never;
+pub(crate) mod specialtypes_never_2;
+pub(crate) mod specialtypes_promotions;
+pub(crate) mod specialtypes_type;
+pub(crate) mod stale_lock_file;
+pub(crate) mod tuples_index;
+pub(crate) mod tuples_index_2;
+pub(crate) mod tuples_type_compat;
+pub(crate) mod tuples_type_form;
+pub(crate) mod tuples_type_form_2;
+pub(crate) mod typeddicts_alt_syntax;
+pub(crate) mod typeddicts_class_syntax;
+pub(crate) mod typeddicts_class_syntax_2;
+pub(crate) mod typeddicts_extra_items;
+pub(crate) mod typeddicts_inheritance;
+pub(crate) mod typeddicts_operations;
+pub(crate) mod typeddicts_readonly;
+pub(crate) mod typeddicts_required;
+pub(crate) mod typeddicts_usage;
+pub(crate) mod undeclared_dependency_import;
+pub(crate) mod unused_dependency;
+pub(crate) mod version_target_syntax;
 
 use basilisk_resolver::ResolvedModule;
 
@@ -183,6 +189,17 @@ pub(crate) trait Rule {
     /// `ctx` carries the configured target version/platform
     /// ([CHKARCH-VERSION-TARGET]) so rules never hardcode a Python version.
     fn check(&self, module: &ResolvedModule, ctx: &CheckContext, diagnostics: &mut Vec<Diagnostic>);
+
+    /// This rule's opt-in tag declaration, or `None` for a core PEP rule.
+    ///
+    /// Returning `Some(..)` marks the rule as Basilisk-original: off by default,
+    /// selected only when the configuration opts into one of its tags. This is
+    /// the single source of rule provenance — there is no central rule list, and
+    /// the `BSK-` code prefix is cosmetic. See [`crate::rule_tags::OptInSpec`].
+    /// [CHKTAG-PROVENANCE]
+    fn opt_in_spec(&self) -> Option<crate::rule_tags::OptInSpec> {
+        None
+    }
 }
 
 /// All registered Phase 1 rules.
@@ -192,160 +209,167 @@ pub(crate) trait Rule {
 )]
 fn all_rules() -> &'static [&'static dyn Rule] {
     &[
-        &e0001::MissingParameterAnnotation,
-        &e0002::MissingReturnAnnotation,
-        &e0003::MissingVariableType,
-        &e0004::MissingVarArgAnnotation,
-        &e0005::MissingAttributeAnnotation,
-        &e0010::ImportFromUntypedModule,
-        &e0011::ReturnTypeMismatch,
-        &e0012::ArgumentTypeMismatch,
-        &e0013::ReturnTypeMismatch,
-        &e0014::AssignmentTypeMismatch,
-        &e0015::InvalidTypeArgCount,
-        &e0016::IncompatibleOverride,
-        &e0017::IncompatibleVariableOverride,
-        &e0018::UndefinedVariable,
-        &e0019::UnboundVariable,
-        &e0020::MissingOverloadImpl,
-        &e0021::OverlappingOverloads,
-        &e0022::UnhashableDictKey,
-        &e0023::NonExhaustiveMatch,
-        &e0024::InvalidTypeForm,
-        &e0025::MissingOverrideDecorator,
-        &e0026::TypeVarSingleConstraint,
-        &e0027::DuplicateTypeVarInGeneric,
-        &e0029::TypedDictMethodNotAllowed,
-        &e0030::NonDefaultAfterDefault,
-        &e0031::InvalidCastCall,
-        &e0032::InvalidTypedDictBase,
-        &e0033::InvalidRevealTypeCall,
-        &e0034::FinalViolation,
-        &e0035::RequiredNotRequiredContext,
-        &e0036::ClassVarInvalidContext,
-        &e0037::InvalidTypedDictCall,
-        &e0038::InvalidTypedDictInheritance,
-        &e0039::InvalidAssertTypeCall,
-        &e0040::EnumWithMembersFinal,
-        &e0041::TooFewArguments,
-        &e0042::Pep695TraditionalTypeVarMix,
-        &e0043::NonTypeVarInGeneric,
-        &e0044::FinalInvalidPosition,
-        &e0045::AnnotatedInvalidFirstArg,
-        &e0046::EnumMemberAnnotated,
-        &e0047::InvalidTypeAnnotation,
-        &e0048::TypeAliasInvalidRhs,
-        &e0049::MultipleUnboundedTupleTypes,
-        &e0050::InvalidNewType,
-        &e0051::InvalidLiteralParam,
-        &e0052::FrozenDataclassAssignment,
-        &e0053::AssertTypeMismatch,
-        &e0054::FinalAnnotationViolation,
-        &e0055::TypeVarInvalidKwargs,
-        &e0056::ReadOnlyTypedDictMutation,
-        &e0057::TypeStatementInvalidRhs,
-        &e0058::AnnotatedTooFewArguments,
-        &e0059::MatchArgsFalseAccess,
-        &e0060::CrossTypeDataclassOrderComparison,
-        &e0061::AssertTypeEnumLiteralMismatch,
-        &e0062::NoReturnFallThrough,
-        &e0063::NonHashableDataclassAssignment,
-        &e0064::InvalidNamedTupleCall,
-        &e0065::FloatParamIntAttrAccess,
-        &e0066::EnumValueTypeMismatch,
-        &e0067::EnumNonMemberInLiteral,
-        &e0068::LiteralStringEnumMismatch,
-        &e0069::DataclassKwOnlyViolation,
-        &e0070::NeverTypeCompatibility,
-        &e0071::HistoricalPositionalViolation,
-        &e0072::NoMatchingOverload,
-        &e0073::NamedTupleTupleCompat,
-        &e0074::ConstructorCallNewMismatch,
-        &e0075::SelfTypeAttributeIncompatible,
-        &e0076::OverloadUnionExpansionFailure,
-        &e0077::ProtocolSelfViolation,
-        &e0078::SelfTypeViolation,
-        &e0079::ModuleProtocolIncompatible,
-        &e0080::TypeVarBoundViolation,
-        &e0081::TypeVarTupleUnpackViolation,
-        &e0082::TypeVarTupleCallableMismatch,
-        &e0083::TypeVarTupleUnpackRequired,
-        &e0084::TypeVarTupleInvalidParams,
-        &e0085::TypeVarTupleArgCountMismatch,
-        &e0086::MultipleTypeVarTuplesInGeneric,
-        &e0088::TypedDictRuntimeViolation,
-        &e0089::Pep695InvalidBound,
-        &e0090::InvalidTupleTypeSyntax,
-        &e0091::TypeVarDefaultIncompatible,
-        &e0092::TooFewTypeArguments,
-        &e0093::TypedDictKeyValidation,
-        &e0094::SelfInvalidLocation,
-        &e0095::InitVarViolation,
-        &e0096::DataclassFieldDefaultFactoryMismatch,
-        &e0097::ProtocolNewSelfAttrViolation,
-        &e0098::NonProtocolBaseInProtocol,
-        &e0099::ProtocolInstantiation,
-        &e0100::LiteralAugmentedAssign,
-        &e0101::TypeGuardNoNarrowingParam,
-        &e0102::TypeVarDefaultReferential,
-        &e0103::TupleIndexOutOfBounds,
-        &e0104::CyclicalTypeAliasReference,
-        &e0105::BoundedTypeVarAttrAccess,
-        &e0106::ProtocolClassObject,
-        &e0107::VarianceIncompatibleBase,
-        &e0108::DataclassSlotsViolation,
-        &e0109::TypeVarBoundCallViolation,
-        &e0110::ProtocolVarianceViolation,
-        &e0111::ConstructorCallError,
-        &e0112::TypeGuardCallableReturnMismatch,
-        &e0113::TypeIsInconsistentNarrowing,
-        &e0114::ProtocolRuntimeCheckableViolation,
-        &e0115::DeprecatedUsage,
-        &e0116::NamedTupleDefError,
-        &e0117::UnboundTypeVarScope,
-        &e0118::SuperAbstractCall,
-        &e0119::ProtocolUnsafeOverlap,
-        &e0120::GeneratorReturnTypeViolation,
-        &e0121::ProtocolAssignmentConformance,
-        &e0122::CallableCallSiteViolation,
-        &e0123::SuperCallOnAbstractProtocolMethod,
-        &e0124::ProtocolTupleElementMismatch,
-        &e0125::InstanceAttrOnClass,
-        &e0126::LiteralStringAssignment,
-        &e0127::TupleIndexOutOfRange,
-        &e0128::TypeVarDefaultReferential,
-        &e0129::LiteralValueIncompatible,
-        &e0130::TypeVarScopeViolation,
-        &e0131::GeneratorTypeMismatch,
-        &e0132::InconsistentTypeVarOrder,
-        &e0133::ProtocolVarianceMismatch,
-        &e0134::InvariantGenericArgMismatch,
-        &e0136::CallableSubtypingViolation,
-        &e0137::GenericProtocolViolation,
-        &e0138::DataclassTransformMetaViolation,
-        &e0139::TypeVarTupleSpecializationViolation,
-        &e0140::CallableAssignmentViolation,
-        &e0141::UnpackKwargsViolation,
-        &e0142::DataclassTransformClassViolation,
-        &e0143::NamedTupleUsageViolation,
-        &e0144::TypeCallConstructorViolation,
-        &e0145::TypeBracketViolation,
-        &e0146::ProtocolClassObjectViolation,
-        &e0147::TupleStarredUnpackCompatibility,
-        &e0148::GenericTypeArgViolation,
-        &e0149::Pep695TypeParamScopingViolation,
-        &e0150::DeadBranchVariable,
-        &e0151::TypeAliasTypeViolation,
-        &e0152::MissingTypeStubs,
-        &e0153::ConstructorCallableMisuse,
-        &e0154::ModuleAttributeUndefined,
-        &e0155::Pep695BelowTargetViolation,
-        &e0156::TypedDictExtraItemsViolation,
-        &w0011::UndeclaredDependencyImport,
-        &w0012::UnusedDependency,
-        &w0013::StaleLockFile,
-        &w0040::LambdaMissingAnnotations,
-        &w0050::RedundantAnnotationWarning,
+        &missing_parameter_annotation::MissingParameterAnnotation,
+        &missing_return_annotation::MissingReturnAnnotation,
+        &missing_variable_type::MissingVariableType,
+        &missing_vararg_annotation::MissingVarArgAnnotation,
+        &missing_attribute_annotation::MissingAttributeAnnotation,
+        &imports_unresolved::ImportFromUntypedModule,
+        &returns_compatibility::ReturnTypeMismatch,
+        &calls_argument_type::ArgumentTypeMismatch,
+        &returns_compatibility_2::ReturnTypeMismatch,
+        &assignment_compatibility::AssignmentTypeMismatch,
+        &callables_annotation::InvalidTypeArgCount,
+        &classes_override::IncompatibleOverride,
+        &classes_override_2::IncompatibleVariableOverride,
+        &names_undefined::UndefinedVariable,
+        &names_unbound::UnboundVariable,
+        &overloads_definitions::MissingOverloadImpl,
+        &overloads_consistency::OverlappingOverloads,
+        &dict_key_hashable::UnhashableDictKey,
+        &match_exhaustiveness::NonExhaustiveMatch,
+        &annotations_typeexpr::InvalidTypeForm,
+        &missing_override_decorator::MissingOverrideDecorator,
+        &generics_basic::TypeVarSingleConstraint,
+        &generics_base_class::DuplicateTypeVarInGeneric,
+        &typeddicts_class_syntax::TypedDictMethodNotAllowed,
+        &generics_defaults::NonDefaultAfterDefault,
+        &directives_cast::InvalidCastCall,
+        &typeddicts_class_syntax_2::InvalidTypedDictBase,
+        &directives_reveal_type::InvalidRevealTypeCall,
+        &qualifiers_final_decorator::FinalViolation,
+        &typeddicts_required::RequiredNotRequiredContext,
+        &classes_classvar::ClassVarInvalidContext,
+        &typeddicts_alt_syntax::InvalidTypedDictCall,
+        &typeddicts_inheritance::InvalidTypedDictInheritance,
+        &directives_assert_type::InvalidAssertTypeCall,
+        &enums_behaviors::EnumWithMembersFinal,
+        &calls_argument_count::TooFewArguments,
+        &generics_syntax_compatibility::Pep695TraditionalTypeVarMix,
+        &generics_basic_2::NonTypeVarInGeneric,
+        &qualifiers_final_annotation::FinalInvalidPosition,
+        &qualifiers_annotated::AnnotatedInvalidFirstArg,
+        &enums_members::EnumMemberAnnotated,
+        &enums_member_access::EnumMemberAccess,
+        &annotations_forward_refs::InvalidTypeAnnotation,
+        &aliases_implicit::TypeAliasInvalidRhs,
+        &tuples_type_form::MultipleUnboundedTupleTypes,
+        &aliases_newtype::InvalidNewType,
+        &literals_parameterizations::InvalidLiteralParam,
+        &dataclasses_frozen::FrozenDataclassAssignment,
+        &directives_assert_type_2::AssertTypeMismatch,
+        &qualifiers_final_annotation_2::FinalAnnotationViolation,
+        &generics_typevartuple_basic::TypeVarInvalidKwargs,
+        &typeddicts_readonly::ReadOnlyTypedDictMutation,
+        &aliases_type_statement::TypeStatementInvalidRhs,
+        &qualifiers_annotated_2::AnnotatedTooFewArguments,
+        &dataclasses_match_args::MatchArgsFalseAccess,
+        &dataclasses_order::CrossTypeDataclassOrderComparison,
+        &enums_expansion::AssertTypeEnumLiteralMismatch,
+        &specialtypes_never::NoReturnFallThrough,
+        &dataclasses_hash::NonHashableDataclassAssignment,
+        &namedtuples_define_functional::InvalidNamedTupleCall,
+        &specialtypes_promotions::FloatParamIntAttrAccess,
+        &enums_member_values::EnumValueTypeMismatch,
+        &enums_members_2::EnumNonMemberInLiteral,
+        &literals_parameterizations_2::LiteralStringEnumMismatch,
+        &dataclasses_kwonly::DataclassKwOnlyViolation,
+        &specialtypes_never_2::NeverTypeCompatibility,
+        &historical_positional::HistoricalPositionalViolation,
+        &overloads_basic::NoMatchingOverload,
+        &namedtuples_type_compat::NamedTupleTupleCompat,
+        &constructors_call_new::ConstructorCallNewMismatch,
+        &generics_self_attributes::SelfTypeAttributeIncompatible,
+        &overloads_evaluation::OverloadUnionExpansionFailure,
+        &generics_self_protocols::ProtocolSelfViolation,
+        &generics_self_basic::SelfTypeViolation,
+        &protocols_modules::ModuleProtocolIncompatible,
+        &generics_upper_bound::TypeVarBoundViolation,
+        &generics_typevartuple_unpack::TypeVarTupleUnpackViolation,
+        &generics_typevartuple_callable::TypeVarTupleCallableMismatch,
+        &generics_typevartuple_basic_2::TypeVarTupleUnpackRequired,
+        &generics_typevartuple_basic_3::TypeVarTupleInvalidParams,
+        &generics_typevartuple_args::TypeVarTupleArgCountMismatch,
+        &generics_typevartuple_specialization::MultipleTypeVarTuplesInGeneric,
+        &typeddicts_usage::TypedDictRuntimeViolation,
+        &generics_syntax_declarations::Pep695InvalidBound,
+        &tuples_type_form_2::InvalidTupleTypeSyntax,
+        &generics_defaults_2::TypeVarDefaultIncompatible,
+        &generics_defaults_specialization::TooFewTypeArguments,
+        &typeddicts_operations::TypedDictKeyValidation,
+        &generics_self_usage::SelfInvalidLocation,
+        &dataclasses_postinit::InitVarViolation,
+        &dataclasses_usage::DataclassFieldDefaultFactoryMismatch,
+        &protocols_definition::ProtocolNewSelfAttrViolation,
+        &protocols_merging::NonProtocolBaseInProtocol,
+        &protocols_explicit::ProtocolInstantiation,
+        &literals_semantics::LiteralAugmentedAssign,
+        &narrowing_typeguard::TypeGuardNoNarrowingParam,
+        &generics_defaults_referential::TypeVarDefaultReferential,
+        &tuples_index::TupleIndexOutOfBounds,
+        &aliases_recursive::CyclicalTypeAliasReference,
+        &generics_syntax_declarations_2::BoundedTypeVarAttrAccess,
+        &protocols_class_objects::ProtocolClassObject,
+        &generics_variance::VarianceIncompatibleBase,
+        &dataclasses_slots::DataclassSlotsViolation,
+        &generics_upper_bound_2::TypeVarBoundCallViolation,
+        &protocols_variance::ProtocolVarianceViolation,
+        &constructors_call_init::ConstructorCallError,
+        &narrowing_typeis::TypeGuardCallableReturnMismatch,
+        &narrowing_typeis_2::TypeIsInconsistentNarrowing,
+        &protocols_runtime_checkable::ProtocolRuntimeCheckableViolation,
+        &directives_deprecated::DeprecatedUsage,
+        &directives_disjoint_base::DisjointBaseViolation,
+        &namedtuples_define_class::NamedTupleDefError,
+        &generics_scoping::UnboundTypeVarScope,
+        &protocols_explicit_2::SuperAbstractCall,
+        &protocols_runtime_checkable_2::ProtocolUnsafeOverlap,
+        &annotations_generators::GeneratorReturnTypeViolation,
+        &protocols_definition_2::ProtocolAssignmentConformance,
+        &callables_protocol::CallableCallSiteViolation,
+        &protocols_explicit_3::SuperCallOnAbstractProtocolMethod,
+        &protocols_subtyping::ProtocolTupleElementMismatch,
+        &generics_type_erasure::InstanceAttrOnClass,
+        &literals_literalstring::LiteralStringAssignment,
+        &tuples_index_2::TupleIndexOutOfRange,
+        &generics_defaults_referential_2::TypeVarDefaultReferential,
+        &literals_semantics_2::LiteralValueIncompatible,
+        &generics_variance_inference::TypeVarScopeViolation,
+        &annotations_generators_2::GeneratorTypeMismatch,
+        &generics_base_class_2::InconsistentTypeVarOrder,
+        &protocols_variance_2::ProtocolVarianceMismatch,
+        &generics_base_class_3::InvariantGenericArgMismatch,
+        &callables_subtyping::CallableSubtypingViolation,
+        &protocols_generic::GenericProtocolViolation,
+        &dataclasses_transform_meta::DataclassTransformMetaViolation,
+        &generics_typevartuple_specialization_2::TypeVarTupleSpecializationViolation,
+        &callables_protocol_2::CallableAssignmentViolation,
+        &callables_kwargs::UnpackKwargsViolation,
+        &dataclasses_transform_class::DataclassTransformClassViolation,
+        &namedtuples_usage::NamedTupleUsageViolation,
+        &constructors_call_type::TypeCallConstructorViolation,
+        &specialtypes_type::TypeBracketViolation,
+        &protocols_class_objects_2::ProtocolClassObjectViolation,
+        &tuples_type_compat::TupleStarredUnpackCompatibility,
+        &generics_basic_3::GenericTypeArgViolation,
+        &generics_syntax_scoping::Pep695TypeParamScopingViolation,
+        &directives_version_platform::DeadBranchVariable,
+        &aliases_typealiastype::TypeAliasTypeViolation,
+        &missing_type_stubs::MissingTypeStubs,
+        &constructors_callable::ConstructorCallableMisuse,
+        &imports_module_attribute::ModuleAttributeUndefined,
+        &version_target_syntax::Pep695BelowTargetViolation,
+        &typeddicts_extra_items::TypedDictExtraItemsViolation,
+        &dataclasses_inheritance::DataclassFieldOrder,
+        &overloads_consistency_2::OverloadDecoratorConsistency,
+        &classes_override_3::OverrideWithoutBaseMethod,
+        &overloads_consistency_3::OverloadImplConsistency,
+        &undeclared_dependency_import::UndeclaredDependencyImport,
+        &unused_dependency::UnusedDependency,
+        &stale_lock_file::StaleLockFile,
+        &explicit_any::ExplicitAny,
+        &lambda_missing_annotations::LambdaMissingAnnotations,
+        &redundant_annotation::RedundantAnnotationWarning,
     ]
 }
 
@@ -356,4 +380,14 @@ pub fn run_all(module: &ResolvedModule, ctx: &CheckContext) -> Vec<Diagnostic> {
         rule.check(module, ctx, &mut acc);
         acc
     })
+}
+
+/// Each Basilisk-original rule's self-declared [`crate::rule_tags::OptInSpec`],
+/// gathered from the live registry so rule provenance can never drift from a
+/// hand-maintained list. Consumed by the tagging layer. [CHKTAG-PROVENANCE]
+pub(crate) fn opt_in_specs() -> Vec<crate::rule_tags::OptInSpec> {
+    all_rules()
+        .iter()
+        .filter_map(|rule| rule.opt_in_spec())
+        .collect()
 }

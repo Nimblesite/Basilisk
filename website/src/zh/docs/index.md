@@ -1,14 +1,14 @@
 ---
 layout: layouts/docs.njk
 title: 简介
-description: Basilisk 是完整的开源 Python 语言服务器——默认严格的类型检查、自动补全、重构、调试和性能分析，支持 VS Code、Cursor、Windsurf、Zed 和 Neovim。
+description: Basilisk 是完整的开源 Python 语言服务器——默认符合 PEP 规范的类型检查、自动补全、重构、调试和性能分析，支持 VS Code、Cursor、Windsurf、Zed 和 Neovim。
 keywords: basilisk, python, 语言服务器, lsp, 类型检查器, vs code, cursor, zed, neovim, 严格, rust
 lang: zh
 ---
 
 # 简介
 
-Basilisk 是一个**完整的开源 Python 语言服务器**。您依赖现代 Python 扩展提供的一切——自动补全、跳转到定义、悬停信息、重构、诊断、集成调试、性能分析——Basilisk 全部提供，完全开源，默认严格模式。
+Basilisk 是一个**完整的开源 Python 语言服务器**。您依赖现代 Python 扩展提供的一切——自动补全、跳转到定义、悬停信息、重构、诊断、集成调试、性能分析——Basilisk 全部提供，完全开源，默认符合 Python 类型规范。
 
 它不仅仅是一个类型检查器。它是一个功能完整的 LSP，为 **VS Code**、**Zed** 和 **Neovim** 提供一流扩展——以及任何支持语言服务器协议的其他编辑器。**Cursor** 和 **Windsurf**（通过 Open VSX）即将推出，JetBrains（IntelliJ / PyCharm）也在路上。无专有扩展。无 Node.js。单个 Rust 二进制文件，在每款编辑器中提供相同的体验。
 
@@ -16,9 +16,9 @@ Basilisk 是一个**完整的开源 Python 语言服务器**。您依赖现代 P
 
 [Pylance](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance) 是 VS Code 中默认的 Python 语言扩展。它也是**专有软件**——您无法检查、修改或重新发布它。Pyright，底层的开源类型检查器，很强大，但它*只是*一个类型检查器——没有专有 Pylance 包装，它不提供补全、悬停、跳转到定义或重构。
 
-其他每个 Python 类型检查器（mypy、ty、Pyrefly）都默认使用*渐进类型*。未类型化的代码静默通过。`Any` 在类型推断中扩散而不发出警告。严格性是您必须故意选择加入、配置、记住在 CI 中强制执行，并向每个新团队成员重新解释的东西。
+其他每个 Python 类型检查器（mypy、ty、Pyrefly）都*只是*检查器——没有补全、没有重构、没有调试器。你得另外搭一个语言服务器，并让两者在团队中保持同步。
 
-Basilisk 采取不同的立场。它将整个工具栈——类型检查、语言功能、调试和性能分析——整合为一个默认严格的开源工具，在**每一款**编辑器中运行方式相同，而不仅仅是 VS Code。类型注解是契约，不是文档。
+Basilisk 采取不同的立场。它的默认*就是*类型规范——开箱即完全符合 PEP——并将整个工具栈（类型检查、语言功能、调试、性能分析）整合为一个开源工具，在**每一款**编辑器中运行方式相同，而不仅仅是 VS Code。想要比规范更严格的检查？开启可选的 Basilisk 规则。类型注解是契约，不是文档。
 
 ## Basilisk 是什么
 
@@ -27,7 +27,7 @@ Basilisk 采取不同的立场。它将整个工具栈——类型检查、语�
 - **补全修复**——一键代码操作，自动为您添加缺失的类型注解
 - **集成调试器**——按 F5 调试 Python，支持断点、单步执行、变量检查和监视表达式，全部通过 Basilisk LSP 代理
 - **集成性能分析器**——通过 py-spy 进行 CPU 分析，具有内联热图注解、火焰图、内存泄漏检测和引用图可视化，全部在您的编辑器内
-- **默认严格的类型检查器**——无 `--strict` 标志，无渐进模式，无需选择加入
+- **默认符合 PEP 规范的类型检查器**——开箱即用核心规范规则集，并提供可选的 Basilisk 规则以实现比规范更严格的检查
 - **用于 CI 集成的 CLI 工具**——发现错误时以代码 1 退出
 - **迁移助手**，读取您现有的 `pyrightconfig.json` 或 `mypy.ini`
 - **uv 集成**——工作区检测、锁文件解析和包管理命令
@@ -39,21 +39,21 @@ Basilisk 采取不同的立场。它将整个工具栈——类型检查、语�
 - 不是运行时类型检查器——分析在开发时静态发生
 - 不依赖特定编辑器——同一个服务器驱动 VS Code、Cursor、Windsurf、Zed 和 Neovim
 
-## 只有一种模式
+## 默认符合规范，并可从此配置
 
-Basilisk 有一种单一的操作模式。没有 `--basic`、`--standard` 或 `--permissive` 标志。这是故意的。
+Basilisk 的行为完全由**配置**决定，而默认配置恰好就是**核心 PEP 符合性规则集**——与官方类型符合性套件评分所用的规则相同。开箱即得一个遵循规范的检查器，无需记住任何标志。
 
-当严格性是选择加入的时候，团队会向宽松的默认值漂移。截止日期来临。技术债务积累。`--strict` 标志从未被添加到 CI 脚本中。Basilisk 完全消除了这种可能性。
+比规范更严格的检查是**可选启用**的。Basilisk 还附带规范未定义的额外规则——要求每个参数和返回值都有注解、冗余注解警告、缺失 `@override` 提示、显式 `Any` 提示。在你于配置中启用之前，它们始终**关闭**。由于它们会标记规范视为有效的代码，刻意开启它们就是用严格的规范符合换取由团队自行选择的更严格标准——这是逐项目的选择，绝非默认。
 
-选择退出仍然是可能的——对于遗留目录，您可以按路径禁用或降低特定规则：
+配置同样是你为需要的路径放宽规则的地方——例如在某个遗留目录中软化或禁用某条规则：
 
 ```toml
 [tool.basilisk.per-path-overrides."legacy/**"]
-disabled = ["BSK-E0011"]        # 为遗留代码完全禁用某规则
-rules."BSK-E0010" = "warning"   # 或仅降低其严重性
+disabled = ["returns_compatibility"]        # 为遗留代码完全禁用某规则
+rules."imports_unresolved" = "warning"   # 或仅降低其严重性
 ```
 
-这承认大型代码库不能在一夜之间完全类型化，同时使放宽保持明确并限定在需要的路径上。
+这让默认保持诚实——纯粹的规范符合——同时让每个团队在他们想要的地方精确地调节严格程度。
 
 ## 项目状态
 
@@ -63,7 +63,7 @@ Basilisk 目前处于 **alpha**——核心检查器、LSP 服务器和编辑器
 |---|---|---|
 | 1 | 解析器、解析器、类型检查器、CLI | 完成 |
 | 2 | LSP 服务器、编辑器扩展（VS Code、Cursor、Zed、Neovim） | 完成 |
-| 3 | 扩展规则集，98.6% PEP 符合性，渐进式采用 | 进行中 |
+| 3 | 扩展规则集，PEP 符合性（固定套件上 {{ conformance.scorePct }}%），渐进式采用 | 进行中 |
 | 4 | 所有权与不可变性分析（Mojo 启发） | 计划中 |
 | 5 | WASM 插件，Django/Pydantic/SQLAlchemy | 计划中 |
 | 6 | 95%+ PEP，SARIF/JUnit，JetBrains 扩展 | 计划中 |

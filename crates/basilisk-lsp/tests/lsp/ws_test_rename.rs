@@ -162,6 +162,7 @@ async fn test_ws_rename_multiple_occurrences() -> TestResult<()> {
     Ok(())
 }
 
+// Exercises [ANALYSIS-CROSSLSP-RENAME]
 #[tokio::test]
 async fn test_ws_rename_cross_file() -> TestResult<()> {
     // Set up workspace: helpers.py defines `greet`, main.py imports and uses it.

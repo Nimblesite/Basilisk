@@ -42,7 +42,7 @@ function asBuffer(chunk: string | Buffer): Buffer {
 }
 
 /** Minimal shape of a DAP message for type narrowing. */
-interface DapMessage {
+export interface DapMessage {
   type: string;
   seq?: number;
   request_seq?: number;
@@ -51,6 +51,33 @@ interface DapMessage {
   success?: boolean;
   body?: unknown;
   arguments?: Record<string, unknown>;
+}
+
+// Implements [PROFILE-LAUNCH-NOSTOP]. See docs/specs/LSP-PROFILING-SPEC.md#PROFILE-LAUNCH-NOSTOP
+/**
+ * Strip the breakpoints from a client request so a "Run & Profile" launch runs
+ * to completion instead of presenting as an interactive debug session that
+ * halts at the user's breakpoints / exception stops (#145).
+ *
+ * Applies only when the session was launched for profiling (`profileOnLaunch`);
+ * normal debug sessions and every non-breakpoint request pass through untouched.
+ * Critically it only neutralises `setBreakpoints` / `setExceptionBreakpoints` —
+ * `stopOnEntry` is a launch argument, not a breakpoint, so the macOS cooperative
+ * sampler can still inject at the entry pause ([PROFILE-COOPERATIVE]).
+ */
+export function suppressBreakpointsForProfiling(msg: DapMessage, profilingLaunch: boolean): DapMessage {
+  if (!profilingLaunch || msg.type !== "request") {
+    return msg;
+  }
+  // Source-line and function breakpoints both arm `breakpoints`; clear it so
+  // debugpy arms none.
+  if (msg.command === "setBreakpoints" || msg.command === "setFunctionBreakpoints") {
+    return { ...msg, arguments: { ...msg.arguments, breakpoints: [] } };
+  }
+  if (msg.command === "setExceptionBreakpoints") {
+    return { ...msg, arguments: { ...msg.arguments, filters: [], filterOptions: [], exceptionOptions: [] } };
+  }
+  return msg;
 }
 
 /**
@@ -97,6 +124,14 @@ export class DapTcpProxy {
 
   /** Track whether we're in attach mode for special handling. */
   private isAttachMode = false;
+
+  /**
+   * Whether this session was launched for profiling (`profileOnLaunch`). When
+   * set, the proxy neutralises user breakpoints so the run completes instead of
+   * stopping interactively ([PROFILE-LAUNCH-NOSTOP], #145). `launch` always
+   * reaches the proxy before `setBreakpoints`, so this is known in time.
+   */
+  private profilingLaunch = false;
 
   /** Track pending attach request for timeout-based response injection. */
   private pendingAttachSeq: number | undefined;
@@ -255,6 +290,16 @@ export class DapTcpProxy {
 
   // ── Process messages from VS Code (client → debugpy) ─────────────────
 
+  /**
+   * Record whether this session is a profiling run, read from the `launch`
+   * request's `profileOnLaunch` argument ([PROFILE-LAUNCH-NOSTOP], #145).
+   */
+  private maybeRecordProfilingLaunch(msg: DapMessage): void {
+    if (msg.type === "request" && msg.command === "launch") {
+      this.profilingLaunch = msg.arguments?.profileOnLaunch === true;
+    }
+  }
+
   private processFromClient(msg: DapMessage): void {
     if (msg.type === "request") {
       Logger.debug(`[DAP Proxy] client → debugpy: ${msg.command} seq=${msg.seq}`);
@@ -295,6 +340,11 @@ export class DapTcpProxy {
       Logger.debug(`[DAP Proxy] outgoing next seq=${msg.seq}`);
     }
 
+    // A "Run & Profile" launch must run to completion, not present as an
+    // interactive debug session — record it so user breakpoints are neutralised
+    // ([PROFILE-LAUNCH-NOSTOP], #145).
+    this.maybeRecordProfilingLaunch(msg);
+
     // Detect attach mode.
     if (msg.type === "request" && msg.command === "attach") {
       this.isAttachMode = true;
@@ -316,7 +366,7 @@ export class DapTcpProxy {
       }, WAIT_MS);
     }
 
-    this.sendToDebugpy(msg);
+    this.sendToDebugpy(suppressBreakpointsForProfiling(msg, this.profilingLaunch));
   }
 
   // ── Process messages from debugpy (debugpy → client) ─────────────────
@@ -338,6 +388,9 @@ export class DapTcpProxy {
 
   // ── stepOut auto-next ──────────────────────────────────────────────
 
+  // Implements [VSIX-PYTHON-DEBUGGER-DAP-PROXY] Quirk 1 — stepOut lands before
+  // assignment: arm an auto-next on the stepOut response, then inject `next`
+  // (handleStepOutStop) on the next stop, swallowing the intermediate stop.
   /** Arm auto-next when stepOut response arrives. */
   private handleStepOutResponse(msg: DapMessage): void {
     if (
@@ -433,6 +486,10 @@ export class DapTcpProxy {
     return true; // always consume the stackTrace response
   }
 
+  // Implements [VSIX-PYTHON-DEBUGGER-DAP-PROXY] Quirk 2 — structural line stops:
+  // after a stepOver stop, requests a stackTrace and skips `try:` lines
+  // (STRUCTURAL_LINE_RE) by injecting another `next`. except:/finally: are NOT
+  // skipped, matching the spec.
   /** Check if the top frame is a structural line and inject a skip if so. */
   private trySkipStructuralLine(stackMsg: DapMessage, stoppedMsg: DapMessage): boolean {
     const frames = (stackMsg.body as { stackFrames?: { line?: number; source?: { path?: string } }[] })?.stackFrames;
@@ -490,6 +547,10 @@ export class DapTcpProxy {
     }
   }
 
+  // Implements [VSIX-PYTHON-DEBUGGER-DAP-PROXY] Quirk 4 — session termination
+  // timing: ensure the `exited` event is sent before `terminated` (injecting a
+  // synthetic `exited` if debugpy never sent one) so VS Code clears
+  // activeDebugSession in the right order.
   /** Handle exited, thread, and terminated events. Returns true if consumed. */
   private handleTerminationEvents(msg: DapMessage): boolean {
     if (msg.type !== "event") {return false;}

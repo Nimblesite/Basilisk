@@ -1,3 +1,5 @@
+; Outline panel symbols (functions, classes, methods). Implements [ZED-TREESITTER].
+
 ; Top-level functions
 (function_definition
   name: (identifier) @name) @item

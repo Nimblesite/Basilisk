@@ -15,6 +15,10 @@ use super::helpers::{leading_indent_of_line, selected_text};
 /// 1. "Extract variable (basilisk)" — replaces only the selection.
 /// 2. "Extract variable — replace all (basilisk)" — replaces every identical
 ///    occurrence in the file.
+// Implements [REFACTOR-EXTRACT-VAR] and [REFACTOR-EXTRACT-VAR-ALGO] — validate
+// single-line expression (step 1), insert `<name> = <expr>` before the first
+// occurrence (steps 3-4), and replace the selection; the replace-all variant
+// covers steps 2 and 5.
 #[must_use]
 pub(in crate::code_actions) fn extract_variable(
     uri: &Url,
@@ -95,6 +99,8 @@ fn build_single_action(
 
 /// Build the "replace all" extract variable action when multiple occurrences
 /// of the selected expression exist in the source.
+// Implements [REFACTOR-EXTRACT-VAR-ALGO] steps 2 & 5 — find all occurrences
+// and offer to replace them all (alternative to replacing only the selection).
 fn build_replace_all_action(
     uri: &Url,
     source: &str,

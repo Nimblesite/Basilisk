@@ -2,6 +2,9 @@
 ---
 --- Discovers tests via pytest, displays a tree UI in a side panel,
 --- and supports run/debug integration.
+---
+--- Implements [NVIM-TEST-EXPLORER] — Neovim tree UI, keymaps, and nvim-dap
+--- integration for the test explorer (architecture in LSP-TEST-INTEGRATION-SPEC).
 
 local log = require("basilisk.log")
 

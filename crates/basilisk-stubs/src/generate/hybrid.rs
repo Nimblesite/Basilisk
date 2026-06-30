@@ -14,6 +14,8 @@ use super::{GeneratedStub, StubGenError, StubGenMode};
 /// # Errors
 ///
 /// Returns `StubGenError` only if **both** methods fail.
+// Implements [STUBRES-AUTOGEN-MODES] "Hybrid" — prefer runtime introspection,
+// fall back to AST inference (best of both).
 pub fn generate_hybrid_stubs(
     module_name: &str,
     source_path: &Path,

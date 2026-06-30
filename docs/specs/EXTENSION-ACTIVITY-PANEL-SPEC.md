@@ -2,11 +2,7 @@
 
 ## Goal {#EXTACT-GOAL}
 
-The Basilisk activity icon opens a sidebar that is **genuinely useful** — not a branding placeholder. It gives Python developers immediate, actionable insight into their codebase: module structure, type coverage, diagnostics, adoption progress, and what Basilisk actually does for them.
-
-Every panel must pass the bar: **"Would I leave this open while coding?"** If not, cut it.
-
-**Cross-editor spec.** The LSP commands and data model are shared. The rendering differs per editor. This spec defines the shared protocol first, then per-editor implementation notes. Only **differences** are documented per-editor — if it's the same, it's in the shared section.
+The Basilisk activity icon opens a sidebar surfacing module structure, type coverage, diagnostics, and adoption progress. LSP commands and the data model are shared; rendering differs per editor. This spec defines the shared protocol first; per-editor sections document only the **differences**.
 
 ## Critical Docs {#EXTACT-CRITICAL-DOCS}
 
@@ -27,8 +23,8 @@ flowchart TB
         direction TB
         subgraph Sidebar["Activity Sidebar"]
             direction TB
-            ME["Modules<br/>Semantic tree of workspace Python modules with folded<br/>type health: coverage %, diagnostics, adoption per module.<br/>Workspace summary in the view message + numeric badge."]
-            BK["Basilisk<br/>What is this? Feature status. Quick actions.<br/>Getting started. Toggle features."]
+            ME["Modules<br/>Semantic module tree with folded type health:<br/>coverage %, diagnostics, adoption per module.<br/>Workspace summary in view message + badge."]
+            BK["Basilisk<br/>Feature status, server info, toggles."]
         end
         subgraph LSP["basilisk lsp (Rust)"]
             direction TB
@@ -41,21 +37,20 @@ flowchart TB
     Sidebar <-->|"all data via LSP custom commands"| LSP
 ```
 
-All data flows from the LSP server via custom commands. The editor extension is a **thin rendering layer**.
+All data flows from the LSP server via custom commands; the editor extension is a thin rendering layer.
 
 ---
 
 ## Custom LSP Commands (Shared) {#EXTACT-LSP-COMMANDS}
 
-These commands are the shared backbone. Every editor uses the same request/response types.
+Every editor uses the same request/response types.
 
 ### `basilisk/workspaceModules` {#EXTACT-LSP-COMMANDS-WORKSPACE-MODULES}
 
-Returns the semantic module tree for the workspace **with the type-health rollup
-folded in** — each `ModuleNode` carries its coverage %, error/warning counts, and
-adoption state, and the response carries a workspace-wide `HealthStats` summary.
-This single response powers the merged Modules panel, so it needs no separate
-`basilisk/typeHealth` round-trip or client-side join.
+Returns the semantic module tree with the type-health rollup folded in — each
+`ModuleNode` carries coverage %, error/warning counts, and adoption state, and
+the response carries a workspace-wide `HealthStats` summary. Powers the merged
+Modules panel with no separate `basilisk/typeHealth` round-trip or client-side join.
 
 - **Direction**: Client -> Server (request)
 - **Params**: `{ scope?: string }` — optional module name prefix filter (e.g. `"myapp.api"`)
@@ -72,12 +67,11 @@ Server pushes updated module data after re-analysis.
 
 ### `basilisk/typeHealth` {#EXTACT-LSP-COMMANDS-TYPE-HEALTH}
 
-Returns type coverage and diagnostic health for the workspace. The per-file
-computation is shared with (and identical to) the rollup folded into
-`basilisk/workspaceModules`. Editors with a unified panel (VS Code's merged
-Modules panel) read the folded rollup and do **not** call this command; it
-remains the standalone workspace-health command for editors without a unified
-panel — Zed's `/health` slash command and Neovim's `:BasiliskHealth`.
+Returns type coverage and diagnostic health for the workspace, computed
+identically to the rollup folded into `basilisk/workspaceModules`. Editors with a
+unified panel (VS Code) read the folded rollup and do **not** call this command;
+it remains the standalone workspace-health command for editors without a unified
+panel — Zed's `/health` and Neovim's `:BasiliskHealth`.
 
 - **Direction**: Client -> Server (request)
 - **Params**: `{}` (whole workspace) or `{ module?: string }` (specific module)
@@ -108,6 +102,14 @@ interface ModuleNode {
     children: ModuleNode[];
     /** Top-level symbols exported by this module */
     symbols: SymbolNode[];
+    /**
+     * Every diagnostic emitted for this module, so the `errors`/`warnings`
+     * counts below are *reachable* in the tree rather than dead tallies
+     * ([EXTACT-MODULES-DIAGNOSTICS]). The flat list mirrors the file's
+     * `textDocument/publishDiagnostics`; the panel groups it under the module
+     * row. `errors === diagnostics.filter(d => d.severity === "error").length`.
+     */
+    diagnostics: DiagnosticNode[];
     // --- Folded type-health rollup (single source of truth; see Type Health) ---
     /** annotatedSymbols / totalSymbols * 100 over this module's symbols */
     coveragePercent: number;
@@ -115,6 +117,18 @@ interface ModuleNode {
     warnings: number;
     /** true if the file is in adopted (errors-as-warnings) mode */
     adopted: boolean;
+}
+
+interface DiagnosticNode {
+    /** Severity drives the row's icon + colour ([EXTACT-MODULES-COUNT-STYLE]). */
+    severity: "error" | "warning";
+    /** Diagnostic code, e.g. "BSK-E0001"; rendered in the row description. */
+    code: string;
+    /** Single-line message, e.g. "Function is missing a return type annotation". */
+    message: string;
+    /** Zero-based start position, for the navigate-on-click range. */
+    line: number;
+    character: number;
 }
 
 interface SymbolNode {
@@ -169,9 +183,9 @@ interface ModuleHealth {
 
 ## Panel 1: Modules {#EXTACT-MODULES}
 
-The killer panel. Shows the **semantic** structure of the workspace — not a file tree, a *module* tree. Every Python developer needs to understand their module graph, and the built-in Explorer doesn't show it.
+Shows the **semantic** module tree of the workspace — not a file tree.
 
-This panel also **subsumes Type Health** (issue #103): the per-module health rollup is folded into `basilisk/workspaceModules`, so each module row shows its coverage and diagnostics inline, and the workspace summary lives in native view chrome ([EXTACT-MODULES-HEADER](#EXTACT-MODULES-HEADER)). There is no separate Type Health panel in editors with a unified sidebar.
+This panel **subsumes Type Health** (issue #103): the per-module health rollup is folded into `basilisk/workspaceModules`, so each module row shows coverage and diagnostics inline, and the workspace summary lives in native view chrome ([EXTACT-MODULES-HEADER](#EXTACT-MODULES-HEADER)). No separate Type Health panel in editors with a unified sidebar.
 
 ### Module Row Rendering {#EXTACT-MODULES-MODULE-ROW}
 
@@ -180,16 +194,57 @@ Each top-level module row renders its folded health:
 | Property | Value |
 |----------|-------|
 | Label | Module name (`myapp.api.auth`) |
-| Description | Coverage bar + `%`, then `nE nW` error/warning tallies, then `[adopted]` badge — e.g. `████████░░ 80% — 2E 3W [adopted]` |
+| Description | Coverage bar + `%`, then the diagnostic tally in [count style](#EXTACT-MODULES-COUNT-STYLE) (`🔴 2  🟠 3`, **never** `2E 3W`), then `[adopted]` badge — e.g. `████████░░ 80% 🔴 2 🟠 3 [adopted]` |
 | Icon | `symbol-namespace` (package) / `symbol-file` (module), **tinted** green (>=90%) / yellow (50–89%) / red (<50%) by coverage |
 | Tooltip | Name, path, coverage %, error/warning counts, adoption status |
-| Drill-down | Expand to the module's symbols; the per-symbol "untyped" decoration is the type-health drill-down |
+| Drill-down | Expand to the module's **diagnostics first** ([EXTACT-MODULES-DIAGNOSTICS]) — so the advertised `🔴 n` errors are reachable, not a dead tally — then its symbols (the per-symbol "untyped" decoration is the type-coverage drill-down) |
+
+### Diagnostic Count Style {#EXTACT-MODULES-COUNT-STYLE}
+
+Error/warning tallies appear on module rows, container rows, and the workspace
+header, rendered **without the `E`/`W` letters** and coloured by severity to
+match the editor's own diagnostics:
+
+- **Colours are the editor's diagnostic tokens** — errors `editorError.foreground`,
+  warnings `editorWarning.foreground` — so the panel tracks the active theme.
+- **Icons are exact**: a `ThemeIcon` accepts a `ThemeColor`, so each per-diagnostic
+  row ([EXTACT-MODULES-DIAGNOSTICS]) and each severity-tinted row icon uses those
+  tokens directly.
+- **Plain-text surfaces cannot be**: tree `label` / `description` / `message` are
+  plain strings — no sub-span colour, no `$(codicon)` markup. The inline tally
+  there uses coloured Unicode glyphs `🔴 n` (errors) / `🟠 n` (warnings); a zero
+  count for a severity is omitted, never shown as `🔴 0`.
+
+Theme-token-exact coloured numbers inline would require a webview, forfeiting
+native tree affordances (collapse-all, selection, [context menu](#EXTACT-MODULES-CONTEXT-MENU));
+rejected. Exact colour lives on icons and drill-down rows; glyphs carry colour in
+plain-text surfaces.
+
+### Diagnostics Drill-Down {#EXTACT-MODULES-DIAGNOSTICS}
+
+Expanding a module/file row lists that file's **actual diagnostics as the first
+children** — above its symbols — so `🔴 29` is 29 navigable rows, not a dead tally.
+
+Each diagnostic row:
+
+| Property | Value |
+|----------|-------|
+| Label | The diagnostic message (`Function is missing a return type annotation`) |
+| Description | `BSK-E0001 · Ln 42` — code + 1-based line |
+| Icon | `$(error)` tinted `editorError.foreground` / `$(warning)` tinted `editorWarning.foreground` — the editor's own diagnostic colours ([EXTACT-MODULES-COUNT-STYLE]) |
+| Order | Errors before warnings, then by ascending line; the module's symbols follow beneath the diagnostics |
+| Click action | Open the file with the selection on the diagnostic's range |
+
+A clean module (no diagnostics) drills straight to its symbols. The per-module
+diagnostic list rides on `basilisk/workspaceModules` (`ModuleNode.diagnostics`),
+derived from the same publish-diagnostics the editor shows, so it needs no extra
+round-trip and can never disagree with the `errors`/`warnings` rollup.
 
 ### Workspace Health Header {#EXTACT-MODULES-HEADER}
 
 The workspace-wide summary renders in the tree view's **native chrome**, not a synthetic summary row:
 
-- **`treeView.message`**: `"73% typed · 14E 23W"` (coverage + error/warning tallies).
+- **`treeView.message`**: `"73% typed · 🔴 14  🟠 23"` (coverage + diagnostic tally in [count style](#EXTACT-MODULES-COUNT-STYLE) — no `E`/`W`; `message` is plain text, so the coloured glyphs carry severity).
 - **`treeView.badge`**: numeric — the count of outstanding diagnostics (errors + warnings); hidden when zero.
 - **Empty workspace** (`totalFiles == 0`): the message reads `"No Python files found"` — never a misleading `100%` for 0/0 symbols, and no badge (preserves the issue #57 guarantee in the merged panel).
 
@@ -309,37 +364,34 @@ signal — see [#EXTACT-REACTIVE-STATE].
 
 ### Centralized Reactive State (MANDATORY) {#EXTACT-REACTIVE-STATE}
 
-All panel state is centralized in the store (`vscode-extension/src/store.ts`)
-and reactive via Preact signals (issue #58). Panels MUST NOT hand-roll
-`setInterval` polls or register their own LSP notification listeners.
+All panel state is centralized in the store (`vscode-extension/src/store.ts`),
+reactive via Preact signals (issue #58). Panels MUST NOT hand-roll `setInterval`
+polls or register their own LSP notification listeners.
 
 - The store owns a monotonic **`analysisRevision`** signal that bumps when:
   1. the server reaches `Running` (initial analysis),
   2. `basilisk/moduleChanged` fires (re-analysis complete),
   3. diagnostics change (debounced 300 ms).
 - Panels subscribe with a signals `effect(...)` (see
-  `module-explorer.ts::wireReactiveRefresh`) so a state change fires a refresh
-  automatically — the user never has to click Refresh to see the first result.
+  `module-explorer.ts::wireReactiveRefresh`) so a state change auto-fires a refresh.
 - Tests: `vscode-extension/src/test/suite/store-reactivity.test.ts`.
 
 ---
 
 ## Type Health {#EXTACT-HEALTH}
 
-At-a-glance view of how well-typed the codebase is. Answers: "How much of my code does Basilisk actually understand?"
+At-a-glance view of how well-typed the codebase is.
 
-> **Merged into the Modules panel (issue #103).** Type Health and the Module
-> Explorer rendered the same per-module list twice — coverage is a rollup of data
-> the module tree already carries. In editors with a unified sidebar (VS Code),
-> Type Health is **not a separate panel**: the per-module rollup is folded onto
-> each module row ([EXTACT-MODULES-MODULE-ROW](#EXTACT-MODULES-MODULE-ROW)) and the
-> workspace summary lives in the view's message + badge
+> **Merged into the Modules panel (issue #103).** In editors with a unified
+> sidebar (VS Code), Type Health is **not a separate panel**: the per-module
+> rollup is folded onto each module row
+> ([EXTACT-MODULES-MODULE-ROW](#EXTACT-MODULES-MODULE-ROW)) and the workspace
+> summary lives in the view's message + badge
 > ([EXTACT-MODULES-HEADER](#EXTACT-MODULES-HEADER)). The `basilisk/typeHealth`
 > command, `TypeHealthResponse`, and the tree structure below remain the **shared
 > health surface** for editors without a unified panel (Zed `/health`, Neovim
-> `:BasiliskHealth`), computed from the same per-file figures as the folded rollup.
-> The icon thresholds, coverage bar, `[adopted]` badge, and worst-first sort
-> described here all carry over to the merged panel.
+> `:BasiliskHealth`), computed from the same per-file figures. Icon thresholds,
+> coverage bar, and `[adopted]` badge carry over to the merged panel.
 
 ### Tree Structure {#EXTACT-HEALTH-TREE-STRUCTURE}
 
@@ -372,7 +424,7 @@ The top-level item is a summary row showing workspace-wide stats:
 - **Coverage bar**: progress bar rendered in description
 - **Totals**: errors, warnings, adopted file count
 - **Trend indicator** (future): up/down since last session
-- **Empty workspace**: when `totalFiles == 0` (no Python files found), the summary renders an explicit `No Python files found` state with a neutral info icon — never a `100%` coverage bar or a green "pass" icon, which would misleadingly read as "perfectly typed". (Editors **must** branch on `totalFiles == 0`; the `coveragePercent` value is vacuously 100 for an empty workspace and must not be displayed.)
+- **Empty workspace** (`totalFiles == 0`): renders an explicit `No Python files found` state with a neutral info icon — never a `100%` bar or green "pass" icon. Editors **must** branch on `totalFiles == 0`; `coveragePercent` is vacuously 100 for an empty workspace and must not be displayed.
 
 ### Toolbar Actions {#EXTACT-HEALTH-TOOLBAR}
 
@@ -402,25 +454,22 @@ The top-level item is a summary row showing workspace-wide stats:
 
 ## Panel 3: Basilisk {#EXTACT-INFO}
 
-Helps users understand what Basilisk **is** and what it **does**. Not a static about page — a living dashboard of feature status and quick actions.
+A living dashboard of feature status and quick actions.
 
 ### Structure {#EXTACT-INFO-STRUCTURE}
 
-Slimmed per issue #103: the feature toggles render **at the root** (two real
-toggles do not justify a "Feature Status" section header) followed by one
-compact read-only **Server Info** section. There is **no Quick Actions
-section** — see [EXTACT-INFO-QUICK-ACTIONS](#EXTACT-INFO-QUICK-ACTIONS) for
-where each action lives now.
+Slimmed per issue #103: feature toggles render **at the root** (a single shipped
+toggle does not justify a "Feature Status" header) followed by one compact
+read-only **Server Info** section. There is **no Quick Actions section** — see
+[EXTACT-INFO-QUICK-ACTIONS](#EXTACT-INFO-QUICK-ACTIONS) for where each action lives.
 
-Every row falls into exactly one of two **interaction classes**, and the two classes
-**must be visually unmistakable** (see [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE)):
-`[A]` marks an **actionable** row (clicking does something), `·` marks a **read-only**
-display row (clicking does nothing). The markers below are notation for this spec, not
-literal glyphs.
+Every row is one of two **interaction classes**, which **must be visually
+unmistakable** (see [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE)): `[A]` marks
+an **actionable** row, `·` marks a **read-only** display row. The markers are spec
+notation, not literal glyphs.
 
 ```
 [A] Type Checking                         Enabled        (click to disable)
-[A] uv Integration                        Enabled        (click to disable)
 
 Server Info                               (read-only — display only)
   ·   Version: 0.4.2                      (present once the server is up)
@@ -439,89 +488,67 @@ Notably absent, by design (issue #103):
 - **No separate uv Auto-Sync / Stub Suggestions rows** — folded into the uv
   row's tooltip.
 
-**Freshness:** the provider re-renders on `basilisk.*` configuration changes
-AND on `lspState`/`client` signal changes (a signals `effect()`, the same
-pattern as the status bar) so the Version row appears as soon as the server
-initializes — Server Info must never go stale (issue #103 defect 3).
+**Freshness:** the provider re-renders on `basilisk.*` configuration changes AND
+on `lspState`/`client` signal changes (a signals `effect()`) so the Version row
+appears as soon as the server initializes — never stale (issue #103 defect 3).
 
 **Toggle write target:** the panel is always visible, so toggles are clickable
 with no folder open. `basilisk.toggleFeature` writes to
-`ConfigurationTarget.Workspace` when a workspace folder exists and falls back
-to `ConfigurationTarget.Global` otherwise (issue #103 defect 2).
+`ConfigurationTarget.Workspace` when a folder exists, else `Global` (issue #103 defect 2).
 
 ### Interaction Affordance {#EXTACT-INFO-AFFORDANCE}
 
-The panel mixes actionable rows (feature toggles, quick actions, getting-started links)
-with read-only display rows (server info). Users **must** be able to tell, at a glance and
-without clicking, which rows do something and which are just information. This distinction
-is mandatory and is verified by tests.
+Users **must** be able to tell at a glance, without clicking, which rows are
+actionable and which are read-only. Verified by tests.
 
-**Actionable rows** (`contextValue` of `feature` — the slimmed panel's only
-actionable class; the former `action` and `gettingStarted` rows were removed
-in issue #103):
+**Actionable rows** (`contextValue` of `feature` — the only actionable class;
+former `action` and `gettingStarted` rows removed in issue #103):
 
-- **Must** carry a `command` that runs on row click, and that command **must** be registered
-  by the extension — a row that looks clickable but invokes an unregistered/no-op command is
-  a defect (see [EXTACT-INFO-ACTION-WIRING](#EXTACT-INFO-ACTION-WIRING)).
-- **Must** surface their command as an **always-visible inline action button** (the `inline`
-  `view/item/context` menu group) so a literal button affordance is present, not only a
-  whole-row click target.
-- **Must** carry a tooltip phrased as an imperative describing the effect
-  (e.g. "Restart the language server", "Click to disable Type Checking").
-- Use an icon that connotes action (toggle state for features; a verb/tool icon for actions).
+- **Must** carry a `command` that runs on row click, and that command **must** be
+  registered (see [EXTACT-INFO-ACTION-WIRING](#EXTACT-INFO-ACTION-WIRING)).
+- **Must** surface their command as an **always-visible inline action button** (the
+  `inline` `view/item/context` menu group).
+- **Must** carry a tooltip phrased as an imperative (e.g. "Restart the language server").
+- Use an action-connoting icon (toggle state for features; verb/tool icon for actions).
 
 **Read-only rows** (`contextValue` of `info`):
 
-- **Must not** carry a `command`, and **must not** contribute any inline action button.
-- **Must not** use an icon that reads as a button; the value is shown in the row `description`.
+- **Must not** carry a `command` or any inline action button.
+- **Must not** use a button-like icon; the value shows in the row `description`.
 - Tooltip, if present, states the fact — never an imperative.
 
-A single, centralized helper **must** own the construction of each interaction class so the
-affordance rules cannot drift per call site. No row may be both actionable and read-only.
+A single centralized helper **must** own each interaction class so affordance rules
+cannot drift per call site. No row may be both actionable and read-only.
 
 ### Getting Started Section {#EXTACT-INFO-GETTING-STARTED}
 
-**Walkthrough: "What is Basilisk?"**
+VS Code `contributes.walkthroughs` content (not panel rows).
 
-1. **Type Checker** — Basilisk checks your Python types in real-time, like TypeScript does for JavaScript. No mypy, no Pyright, no Node.js. Pure Rust, sub-10ms incremental checks.
-2. **Autofix Engine** — Detected a type error? Basilisk suggests and applies fixes automatically. Organize imports, add annotations, fix common patterns.
-3. **Debugger** — Integrated Python debugging with type-aware features. See both static types and runtime values side-by-side.
-4. **Test Explorer** — Discover and run pytest/unittest tests directly from your editor. No configuration needed.
-5. **Gradual Adoption** — Don't want errors yet? "Adopt" files to downgrade errors to warnings. Incrementally migrate your codebase to full type safety.
-6. **Ruff-Powered Formatting** — Basilisk delegates linting and formatting to Ruff. One extension, complete Python tooling.
+**Walkthrough "What is Basilisk?"** — Type Checker (real-time, Rust, sub-10ms incremental); Autofix Engine (organize imports, add annotations, fix patterns); Debugger (type-aware, static + runtime values); Test Explorer (pytest/unittest); Gradual Adoption (adopt files to downgrade errors to warnings); Ruff-Powered Formatting.
 
-**Walkthrough: "Quick Setup"**
-
-1. **Binary Found** — Is `basilisk` on your PATH?
-2. **Python Detected** — Which interpreter is Basilisk using?
-3. **Open a Python File** — See diagnostics appear
-4. **Try an Autofix** — Hover a diagnostic, click the lightbulb
-5. **Run a Test** — Open Test Explorer, click play
+**Walkthrough "Quick Setup"** — Binary on PATH; Python interpreter detected; open a Python file (diagnostics appear); try an autofix (lightbulb); run a test.
 
 ### Feature Status Section {#EXTACT-INFO-FEATURE-STATUS}
 
-**A toggle may appear here ONLY if flipping it has a real, observable effect that
-matches its label, proven by a VSIX test.** A toggle that writes a setting no
-code reads is a lie to the user and must not exist. (Audited 2026-05-30: most of
-the originally-specced toggles were no-ops because the LSP server's
-`did_change_configuration` only parses `analysisMode` and `testExplorer` — every
-other forwarded setting was silently dropped.)
+**A toggle may appear here ONLY if flipping it has a real, observable effect
+matching its label, proven by a VSIX test.** A toggle that writes a setting no
+code reads must not exist. (Audited 2026-05-30: most originally-specced toggles
+were no-ops — the server's `did_change_configuration` parses only `analysisMode`,
+`testExplorer`, and `enabled`; every other forwarded setting was silently dropped.)
 
 **Shipped toggles** (each has a namesake effect):
 
 | Feature | Setting | Effect when off |
 |---------|---------|-----------------|
-| Type Checking | `basilisk.enabled` | Extension stops publishing diagnostics (`checkDocument` clears them) |
-| uv Integration | `basilisk.uv.enabled` | uv Quick Actions and uv Server Info rows are hidden from this panel |
+| Type Checking | `basilisk.enabled` | The LSP — authoritative for diagnostics in the default mode — clears all published diagnostics and suppresses new ones; re-enabling re-scans. See [ANALYSIS-ENABLED]. Subprocess mode mirrors this via `checkDocument`. (GitHub #65 / #119) |
 
-**Not yet implemented** — these were removed from the panel because the setting
-is currently ignored. They return only once the server honors the setting AND a
-VSIX test proves the effect. See
-[EXTENSION-ACTIVITY-PANEL-PLAN.md](../plans/EXTENSION-ACTIVITY-PANEL-PLAN.md#EXTACT-PLAN-FEATURE-TOGGLES)
-for the work required.
+**Not yet implemented** — removed because the setting is currently ignored. They
+return only once the server honors the setting AND a VSIX test proves the effect.
+See [EXTENSION-ACTIVITY-PANEL-PLAN.md](../plans/EXTENSION-ACTIVITY-PANEL-PLAN.md#EXTACT-PLAN-FEATURE-TOGGLES).
 
 | Feature | Setting | Why it's not shipped |
 |---------|---------|----------------------|
+| uv Integration | `basilisk.uv.enabled` | No server code reads it — the toggle never disabled uv integration (a no-op affordance). Removed per GitHub #190; uv commands stay in the palette / code actions and the read-only "uv" Server Info row still reports uv status |
 | Inlay Hints (Params) | `basilisk.inlayHints.parameterNames` | Server emits hints unconditionally; setting dropped |
 | Inlay Hints (Types) | `basilisk.inlayHints.variableTypes` | Server emits hints unconditionally; setting dropped |
 | Ruff Integration | `basilisk.ruff.enabled` | Server runs ruff unconditionally; setting dropped |
@@ -530,22 +557,17 @@ for the work required.
 | AI Suggestions | `basilisk.aiTyping.enabled` | No provider implemented; nothing reads the setting |
 | Profiler | `basilisk.profiler.enabled` | Setting does not exist; profiler is always available |
 
-**Click action**: toggles the setting. Disabled -> enabled, enabled -> disabled. Immediate effect. Every row is an actionable row and carries the actionable affordance defined in [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE).
+**Click action**: toggles the setting, immediate effect. Every row is actionable per [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE).
 
-**Layout**: the toggles render at the panel root with **no "Feature Status"
-section header** — with only two shipped toggles a header is noise (issue
-#103). If the shipped set ever grows past ~4, reintroduce the header.
+**Layout**: toggles render at the panel root with **no "Feature Status" header** — with a single shipped toggle a header is noise (issue #103). Reintroduce it if the set grows past ~4.
 
-**Write target**: `basilisk.toggleFeature` picks its `ConfigurationTarget`
-from the live workspace-folder count — `Workspace` when a folder is open,
-`Global` otherwise. The panel has no `when` clause, so the no-folder state is
-reachable and writing `Workspace` there is invalid (issue #103 defect 2).
+**Write target**: `basilisk.toggleFeature` picks `ConfigurationTarget` from the live workspace-folder count — `Workspace` when a folder is open, `Global` otherwise (no `when` clause makes the no-folder state reachable, where `Workspace` is invalid; issue #103 defect 2).
 
 ### Quick Actions {#EXTACT-INFO-QUICK-ACTIONS}
 
-There is **no Quick Actions section in this panel** (issue #103). A list of
-pseudo-buttons in an always-visible panel kept surfacing rows whose handlers
-were not alive. Each action now lives on a surface that can gate it properly:
+There is **no Quick Actions section in this panel** (issue #103) — pseudo-buttons
+in an always-visible panel surfaced rows whose handlers were not alive. Each
+action now lives on a surface that can gate it properly:
 
 | Action | Where it lives now | Gating |
 |--------|--------------------|--------|
@@ -560,14 +582,12 @@ effect in `lsp-client.ts` (values: `idle | starting | running | stopped`).
 
 #### Action Wiring {#EXTACT-INFO-ACTION-WIRING}
 
-A quick action that is contributed to any surface (toolbar button, panel row,
-or `contributes.commands` in `package.json`) **must** have a live handler
-registered via `registerCommand` whenever it is visible/invocable. Contributing
-a command without a handler — so the button renders but clicking it raises
-"command not found" — is a defect. Server-dependent actions **must** be
-`when`-gated on `basilisk.serverState == 'running'` (toolbar) or hidden
-(rows); never shown-but-dead. This is asserted by e2e tests that drive the
-real contribution, not by inspecting the command registry directly.
+A quick action contributed to any surface (toolbar button, panel row, or
+`contributes.commands`) **must** have a live `registerCommand` handler whenever
+it is visible/invocable — a command without a handler ("command not found" on
+click) is a defect. Server-dependent actions **must** be `when`-gated on
+`basilisk.serverState == 'running'` (toolbar) or hidden (rows); never shown-but-dead.
+Asserted by e2e tests driving the real contribution, not by inspecting the registry.
 
 ### Server Info Section {#EXTACT-INFO-SERVER-INFO}
 
@@ -576,21 +596,23 @@ Compact read-only information fetched from:
 - Extension settings (binary path, python path, analysis mode, uv)
 
 Rules (issue #103):
-- **No live server-state row** — the status bar is the single home for "running/stopped"; this section never duplicates it.
-- **One uv row** — the verbose sub-settings (executable path, auto-sync, stub suggestions) live in that row's tooltip, not as separate rows.
-- **Never stale** — the provider re-renders on `lspState`/`client` signal changes (defect 3), so the Version row tracks the actual server lifecycle.
+- **No live server-state row** — the status bar is the single home for "running/stopped".
+- **One uv row** — sub-settings (executable path, auto-sync, stub suggestions) live in its tooltip, not separate rows.
+- **Never stale** — re-renders on `lspState`/`client` signal changes (defect 3), so the Version row tracks the server lifecycle.
 
-Every row is a read-only display row and carries the read-only affordance defined in [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE): no command, no inline button, no button-like icon.
+Every row is read-only per [EXTACT-INFO-AFFORDANCE](#EXTACT-INFO-AFFORDANCE): no command, no inline button, no button-like icon.
 
 ---
 
 ## Editor-Specific Implementation {#EXTACT-EDITORS}
 
+Per-editor rendering of the shared panels; only differences from the shared protocol are documented.
+
 ### VS Code {#EXTACT-EDITORS-VSCODE}
 
-Full native support via TreeView API. This is the reference implementation.
+Reference implementation, full native TreeView API support.
 
-**Activity bar icon**: `vscode-extension/resources/basilisk-icon.svg` — monochrome, 24x24px, works on light and dark themes.
+**Activity bar icon**: `vscode-extension/resources/basilisk-icon.svg` — monochrome, 24x24px, light/dark themes.
 
 **package.json contributions**:
 
@@ -724,17 +746,17 @@ Full native support via TreeView API. This is the reference implementation.
 | `basilisk.hasWorkspace` | `boolean` | Show/hide module explorer content |
 | `basilisk.moduleExplorerView` | `"tree" \| "flat"` | Toggle icon state |
 
-**Walkthroughs**: VS Code's built-in walkthrough system via `contributes.walkthroughs` in package.json. The Getting Started items open these directly.
+**Walkthroughs**: `contributes.walkthroughs` in package.json; Getting Started items open these directly.
 
 **Tree icons**: Codicons — `symbol-class`, `symbol-method`, `symbol-variable`, `symbol-constant`, `symbol-namespace`.
 
-**Filter**: Built-in VS Code tree filter plus `basilisk.moduleExplorer.filter` command for glob-style module filtering. Filter state persists in `workspaceState`.
+**Filter**: built-in tree filter plus `basilisk.moduleExplorer.filter` command for glob-style filtering. State persists in `workspaceState`.
 
 ### Zed {#EXTACT-EDITORS-ZED}
 
-Zed does **not** currently support custom sidebar panels (open issue #21208). Until it does, the same data is surfaced through available Zed mechanisms:
+Zed does **not** currently support custom sidebar panels ([zed-industries/zed#21208](https://github.com/zed-industries/zed/issues/21208)). Until it does, data is surfaced via slash commands:
 
-**Module Explorer alternative — slash commands**:
+**Module Explorer — slash commands**:
 
 | Slash Command | Output |
 |---------------|--------|
@@ -742,32 +764,32 @@ Zed does **not** currently support custom sidebar panels (open issue #21208). Un
 | `/modules myapp.api` | Filtered to a specific package |
 | `/symbols myapp.api.auth` | All symbols in a specific module with types |
 
-These slash commands call `basilisk/workspaceModules` and format the response as markdown in the AI assistant panel.
+These call `basilisk/workspaceModules` and format the response as markdown in the AI assistant panel.
 
-**Type Health alternative — slash command**:
+**Type Health — slash command**:
 
 | Slash Command | Output |
 |---------------|--------|
 | `/health` | Workspace health summary + per-module breakdown as markdown table |
 | `/health myapp.api` | Filtered to specific package |
 
-Calls `basilisk/typeHealth` and formats as markdown.
+Calls `basilisk/typeHealth`, formats as markdown.
 
-**Feature Status / Server Info alternative — slash command**:
+**Feature Status / Server Info — slash command**:
 
 | Slash Command | Output |
 |---------------|--------|
 | `/basilisk` | Server version, binary path, Python path, analysis mode, feature status |
 
-**When Zed adds panel support**: the Zed extension will implement the same three panels using the same LSP commands. The slash commands remain as a complementary interface. No data model changes needed — the LSP commands are already editor-agnostic.
+**When Zed adds panel support**: implement the same three panels using the same (editor-agnostic) LSP commands; slash commands remain complementary. No data model changes.
 
-**Activity bar icon**: Zed uses the extension icon from `extension.toml`. Same SVG, rendered per Zed's theme.
+**Activity bar icon**: Zed uses the extension icon from `extension.toml` (same SVG).
 
 ### Neovim {#EXTACT-EDITORS-NEOVIM}
 
-Neovim has no built-in sidebar framework, but the Lua ecosystem has mature tree plugins. `basilisk.nvim` implements the panels as Lua-rendered floating/split windows.
+`basilisk.nvim` implements the panels as Lua-rendered floating/split windows.
 
-**Module Explorer**: Custom Lua buffer using `vim.api.nvim_buf_set_lines` with foldable tree structure. Keybindings mirror NvimTree / neo-tree conventions:
+**Module Explorer**: Lua buffer via `vim.api.nvim_buf_set_lines` with a foldable tree. Keybindings mirror NvimTree / neo-tree:
 
 | Key | Action |
 |-----|--------|
@@ -778,15 +800,13 @@ Neovim has no built-in sidebar framework, but the Lua ecosystem has mature tree 
 | `Y` | Copy qualified name |
 | `q` | Close panel |
 
-Opened via `:BasiliskModules` command or keymap (default: `<leader>bm`).
+Opened via `:BasiliskModules` or keymap (default `<leader>bm`).
 
-**Type Health**: Lua buffer with colored virtual text (highlights via `nvim_buf_add_highlight`). Green/yellow/red per coverage threshold.
-
-Opened via `:BasiliskHealth` command or keymap (default: `<leader>bh`).
+**Type Health**: Lua buffer with colored virtual text (`nvim_buf_add_highlight`), green/yellow/red per coverage threshold. Opened via `:BasiliskHealth` or `<leader>bh`.
 
 **Basilisk Info**: `:BasiliskInfo` opens a floating window with feature status, server info, and quick-toggle keymaps.
 
-**All three panels** call the same `basilisk/workspaceModules` and `basilisk/typeHealth` LSP commands via `vim.lsp.buf_request`.
+All three panels call `basilisk/workspaceModules` and `basilisk/typeHealth` via `vim.lsp.buf_request`.
 
 ---
 
@@ -801,11 +821,11 @@ Opened via `:BasiliskHealth` command or keymap (default: `<leader>bh`).
 
 ## Performance {#EXTACT-PERFORMANCE}
 
-- **Lazy loading**: Module Explorer fetches children on expand, not upfront. Top-level modules loaded first, symbols loaded when a module is expanded.
-- **Debounced updates**: `basilisk/moduleChanged` notifications are debounced (300ms) to avoid flicker during rapid saves.
-- **Cached state**: Tree state (expanded nodes, scroll position) persisted across sessions (VS Code: `workspaceState`, Neovim: session file, Zed: N/A until panels exist).
-- **Type Health**: Computed server-side using existing diagnostic + resolver data. No additional file I/O.
-- **Large workspaces**: Modules with >100 symbols show a "Show all..." node. Type Health shows top 50 files by default with "Show all..." at bottom.
+- **Lazy loading**: Module Explorer fetches children on expand — top-level modules first, symbols when a module is expanded.
+- **Debounced updates**: `basilisk/moduleChanged` debounced 300ms to avoid flicker during rapid saves.
+- **Cached state**: tree state (expanded nodes, scroll) persisted across sessions (VS Code `workspaceState`, Neovim session file, Zed N/A until panels exist).
+- **Type Health**: computed server-side from existing diagnostic + resolver data, no extra file I/O.
+- **Large workspaces**: modules with >100 symbols show a "Show all..." node; Type Health shows top 50 files with "Show all..." at bottom.
 
 ---
 

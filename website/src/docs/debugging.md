@@ -8,7 +8,7 @@ dateModified: 2026-03-31
 author: The Basilisk Project
 eleventyNavigation:
   key: Debugging
-  order: 4
+  order: 5
 ---
 
 # Debugging

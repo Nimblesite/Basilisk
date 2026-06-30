@@ -20,6 +20,9 @@ use super::LspServer;
 ///
 /// Reads the symbol body from the source file, appends it to the
 /// destination file, and replaces the original with a relative import.
+// Implements [REFACTOR-MOVE-ALGO] step 3 — executes the move to an existing
+// file: append the definition to the destination and replace the source with a
+// re-export import, all in a single atomic `WorkspaceEdit` ([REFACTOR-UNDO]).
 pub(super) async fn execute_move_symbol(
     server: &LspServer,
     args: &[serde_json::Value],
@@ -340,6 +343,8 @@ mod tests {
         assert!(parse_move_args(&[]).is_none());
     }
 
+    // Exercises [REFACTOR-MOVE-ALGO] step 3 + [REFACTOR-UNDO] — a single
+    // WorkspaceEdit covering both the source and destination files.
     #[test]
     fn build_move_edit_has_both_files() {
         let source_uri = Url::parse("file:///src/a.py").expect("valid URL");

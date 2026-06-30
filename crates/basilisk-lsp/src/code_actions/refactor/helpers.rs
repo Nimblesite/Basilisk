@@ -316,6 +316,10 @@ impl WorkspaceEditBuilder {
 }
 
 /// Clean up inserted text: strip trailing whitespace from each line.
+// Partially implements [REFACTOR-FORMATTER] — normalizes trailing whitespace
+// on inserted text. NOTE: the spec calls for running the project formatter
+// (ruff) over the affected ranges; this only strips trailing whitespace. See
+// conformance DEVIATION report.
 fn format_inserted_text(text: &str) -> String {
     let mut result: String = text
         .lines()

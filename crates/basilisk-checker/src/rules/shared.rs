@@ -6,9 +6,26 @@
 
 use std::collections::{HashMap, HashSet};
 
+use crate::span_util::slice_span;
+use crate::types::InferredType;
 use basilisk_parser::ParsedModule;
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule, Span, TypeVarCallInfo};
 use ruff_python_ast::{self as ast, Expr};
+
+/// Returns `true` when the annotation text denotes a `ClassVar[...]` type.
+///
+/// `ClassVar` fields are excluded from the dataclass `__init__` parameter list,
+/// so dataclass rules (field ordering, constructor arity) skip them.
+pub(crate) fn annotation_is_classvar(source: &str, span: Option<Span>) -> bool {
+    let Some(text) = span.and_then(|span| slice_span(source, span)) else {
+        return false;
+    };
+    let t = text.trim();
+    t.starts_with("ClassVar[")
+        || t.starts_with("ClassVar ")
+        || t == "ClassVar"
+        || t.contains(".ClassVar[")
+}
 
 // ---------------------------------------------------------------------------
 // Source-text geometry
@@ -438,5 +455,50 @@ impl StarParam {
     /// Build from an optional annotation of a present parameter.
     pub(crate) fn from_annotation(annotation: Option<String>) -> StarParam {
         annotation.map_or(StarParam::Untyped, StarParam::Typed)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Return-type verifiability (shared by E0011 and E0013)
+// ---------------------------------------------------------------------------
+
+/// Returns true when a return annotation cannot be reliably verified against a
+/// *value-less* inferred return type — at the top level or nested inside a
+/// union, container, optional, callable, or type-form.
+///
+/// Two kinds defeat kind-only return inference (`infer_rhs` knows the *kind* of
+/// a returned expression, never its value):
+/// - `Named`: protocols/classes/aliases (and quote-mangled forward references
+///   like `"int | Meta2"`) need class-hierarchy/structural analysis the return
+///   rules cannot perform.
+/// - `Literal`: verifying a `Literal[v]` target requires the *value* of the
+///   returned expression, but `return True` infers `Bool`, not `Literal[True]`.
+///   Any `Literal`-target check is therefore unreliable, so it is skipped.
+///
+/// Both E0011 and E0013 gate their assignability check on this to avoid false
+/// positives (consolidated here so the two sibling rules stay in lock-step).
+pub(crate) fn is_unverifiable_return_type(ty: &InferredType) -> bool {
+    match ty {
+        InferredType::Named(_) | InferredType::Literal(_) => true,
+        InferredType::Optional(inner)
+        | InferredType::List(inner)
+        | InferredType::Set(inner)
+        | InferredType::TypeForm(inner) => is_unverifiable_return_type(inner),
+        InferredType::Dict(key, value) => {
+            is_unverifiable_return_type(key) || is_unverifiable_return_type(value)
+        }
+        InferredType::Union(types) => types.iter().any(is_unverifiable_return_type),
+        // The variable-length form `tuple[X, ...]` parses the `...` terminator to
+        // `Named("...")`; that is a structural marker handled by `is_assignable_to`,
+        // not an unresolvable type, so it must not trigger the skip.
+        InferredType::Tuple(types) => types.iter().any(|elem| {
+            !matches!(elem, InferredType::Named(name) if name == "...")
+                && is_unverifiable_return_type(elem)
+        }),
+        InferredType::Callable(info) => {
+            is_unverifiable_return_type(&info.return_type)
+                || info.param_types.iter().any(is_unverifiable_return_type)
+        }
+        _ => false,
     }
 }

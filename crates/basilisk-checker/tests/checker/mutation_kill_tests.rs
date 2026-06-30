@@ -6,10 +6,10 @@
 use super::common::*;
 use basilisk_test_macros::mutation_safe;
 
-fn e0014_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
+fn assignment_compatibility_count(diagnostics: &[basilisk_checker::Diagnostic]) -> usize {
     diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0014")
+        .filter(|d| d.code.code == "assignment_compatibility")
         .count()
 }
 
@@ -35,13 +35,13 @@ c: Optional[int] = "wrong"
 d: int = None
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 2,
         "at least 2 mismatches expected (c and d), got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -70,7 +70,7 @@ c: Union[int, str] = 3.14
 d: Union[int, str] = [1, 2]
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 union mismatch expected, got {e0014}"
@@ -98,7 +98,7 @@ c: set[int] = {1, 2, 3}
 d: set[int] = {"a", "b"}
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 list/set type element mismatch expected, got {e0014}"
@@ -123,7 +123,7 @@ b: dict[str, int] = {"x": "wrong"}
 c: dict[str, int] = {1: 2}
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 dict type mismatch expected, got {e0014}"
@@ -148,7 +148,7 @@ b: tuple[int, str] = ("wrong", 42)
 c: tuple[int, str] = (1,)
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 tuple mismatch expected, got {e0014}"
@@ -205,13 +205,13 @@ g: float = "bad"
 h: bytes = 42
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 3,
         "at least 3 named type mismatches, got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -238,7 +238,7 @@ e: Union[int, str, float] = 3.14
 f: Union[int, str, float] = [1, 2]
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 union mismatch expected, got {e0014}"
@@ -247,7 +247,7 @@ f: Union[int, str, float] = [1, 2]
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0097: Protocol undeclared self attrs — kill all mutants
+// Protocol undeclared self attrs — kill all mutants
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -268,7 +268,7 @@ class MyProto(Protocol):
     let diagnostics = run(source)?;
     let e0097: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0097")
+        .filter(|d| d.code.code == "protocols_definition")
         .collect();
     // Must flag z and w
     assert!(
@@ -290,7 +290,7 @@ class MyProto(Protocol):
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0150: Dead branch — kill mutants in version/platform detection
+// Dead branch — kill mutants in version/platform detection
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -310,7 +310,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         e0150.iter().any(|d| d.message.contains("dead")),
@@ -341,7 +341,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         e0150.iter().any(|d| d.message.contains("dead")),
@@ -370,7 +370,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         !e0150.is_empty(),
@@ -394,7 +394,7 @@ def check():
     let diagnostics = run(source)?;
     let e0150: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0150")
+        .filter(|d| d.code.code == "directives_version_platform")
         .collect();
     assert!(
         !e0150.is_empty(),
@@ -404,10 +404,10 @@ def check():
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0014: Various literal type mismatches — each type path
+// Various literal type mismatches — each type path
 // ═══════════════════════════════════════════════════════════════════════
 
-#[mutation_safe(rule = "e0014")]
+#[mutation_safe(rule = "assignment_compatibility")]
 #[test]
 fn mutant_e0014_every_literal_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -430,13 +430,13 @@ m: bool = True
 n: bytes = b"data"
 "#;
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 6,
         "at least 6 type mismatches expected, got {e0014}: {:?}",
         diagnostics
             .iter()
-            .filter(|d| d.code.code == "BSK-E0014")
+            .filter(|d| d.code.code == "assignment_compatibility")
             .map(|d| &d.message)
             .collect::<Vec<_>>()
     );
@@ -444,10 +444,10 @@ n: bytes = b"data"
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0014: Negative literal and float literal
+// Negative literal and float literal
 // ═══════════════════════════════════════════════════════════════════════
 
-#[mutation_safe(rule = "e0014")]
+#[mutation_safe(rule = "assignment_compatibility")]
 #[test]
 fn mutant_e0014_negative_and_float() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -464,7 +464,7 @@ c: int = 3.14
 d: float = 3.14
 ";
     let diagnostics = run(source)?;
-    let e0014 = e0014_count(&diagnostics);
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert!(
         e0014 >= 1,
         "at least 1 mismatch (b: str = -42 or c: int = 3.14), got {e0014}"

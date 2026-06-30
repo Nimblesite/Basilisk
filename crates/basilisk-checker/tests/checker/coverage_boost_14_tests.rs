@@ -5,11 +5,11 @@ use super::common::*;
 // Also targets remaining uncovered branches in many other rules with highly specific patterns.
 
 // =============================================================================
-// E0149: PEP 695 type parameter scoping - DEEP coverage
+// PEP 695 type parameter scoping - DEEP coverage
 // =============================================================================
 
 #[test]
-fn e0149_pep695_class_type_params() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_class_type_params() -> Result<(), Box<dyn std::error::Error>> {
     // PEP 695 syntax: class Foo[T]:
     let source = r#"
 class Container[T]:
@@ -23,7 +23,7 @@ class Container[T]:
 }
 
 #[test]
-fn e0149_pep695_function_type_params() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_function_type_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def identity[T](x: T) -> T:
     return x
@@ -33,7 +33,7 @@ def identity[T](x: T) -> T:
 }
 
 #[test]
-fn e0149_pep695_bound_cross_reference() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_bound_cross_reference() -> Result<(), Box<dyn std::error::Error>> {
     // T's bound references U, which is in the same type param list
     let source = r#"
 from typing import Sequence
@@ -41,16 +41,18 @@ class Foo[T: Sequence[U], U]:
     pass
 "#;
     let diags = run(source)?;
-    let has_e0149 = diags.iter().any(|d| d.code.code == "BSK-E0149");
+    let has_e0149 = diags
+        .iter()
+        .any(|d| d.code.code == "generics_syntax_scoping");
     assert!(
         has_e0149,
-        "Expected BSK-E0149 for cross-reference in PEP 695 bounds"
+        "Expected generics_syntax_scoping for cross-reference in PEP 695 bounds"
     );
     Ok(())
 }
 
 #[test]
-fn e0149_pep695_bound_self_reference() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_bound_self_reference() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Bar[T: list[U], U: dict[T, int]]:
     pass
@@ -60,7 +62,7 @@ class Bar[T: list[U], U: dict[T, int]]:
 }
 
 #[test]
-fn e0149_pep695_module_level_usage() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_module_level_usage() -> Result<(), Box<dyn std::error::Error>> {
     // Using T at module level after it's defined as a PEP 695 type param
     let source = r#"
 class Container[T]:
@@ -73,7 +75,7 @@ x = T
 }
 
 #[test]
-fn e0149_pep695_decorator_uses_class_param() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_decorator_uses_class_param() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def my_decorator(cls):
     return cls
@@ -87,7 +89,7 @@ class Stack[T]:
 }
 
 #[test]
-fn e0149_pep695_multiple_params() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_multiple_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Pair[T, U]:
     first: T
@@ -101,7 +103,7 @@ class Pair[T, U]:
 }
 
 #[test]
-fn e0149_pep695_async_def_type_params() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_async_def_type_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 async def fetch[T](url: str) -> T:
     ...
@@ -111,7 +113,7 @@ async def fetch[T](url: str) -> T:
 }
 
 #[test]
-fn e0149_pep695_nested_class_params() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_nested_class_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Outer[T]:
     class Inner[U]:
@@ -124,7 +126,7 @@ class Outer[T]:
 }
 
 #[test]
-fn e0149_pep695_starred_params() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_starred_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Tuple[*Ts]:
     pass
@@ -137,7 +139,7 @@ def func[**P](*args: P.args, **kwargs: P.kwargs) -> None:
 }
 
 #[test]
-fn e0149_pep695_param_with_bound() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_param_with_bound() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class NumericContainer[T: int]:
     value: T
@@ -150,7 +152,7 @@ class NumericContainer[T: int]:
 }
 
 #[test]
-fn e0149_pep695_module_level_print() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_module_level_print() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Box[T]:
     value: T
@@ -162,7 +164,7 @@ print(T)
 }
 
 #[test]
-fn e0149_pep695_shadowed_by_module_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_shadowed_by_module_assignment() -> Result<(), Box<dyn std::error::Error>> {
     // T = TypeVar("T") at module level shadows the PEP 695 T
     let source = r#"
 from typing import TypeVar
@@ -178,11 +180,11 @@ x: T = 42
 }
 
 // =============================================================================
-// E0107: Variance - deeply exercise compose_variance and all paths
+// Variance - deeply exercise compose_variance and all paths
 // =============================================================================
 
 #[test]
-fn e0107_variance_resolve_rich_types() -> Result<(), Box<dyn std::error::Error>> {
+fn variance_resolve_rich_types() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, Sequence, Iterable
 
@@ -206,7 +208,7 @@ class Pipe(Source[int], Sink[str]):
 }
 
 #[test]
-fn e0107_variance_with_type_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn variance_with_type_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, TypeAlias
 
@@ -226,7 +228,7 @@ class IntWrapper(Wrapper[int]):
 }
 
 #[test]
-fn e0107_variance_three_deep() -> Result<(), Box<dyn std::error::Error>> {
+fn variance_three_deep() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -251,11 +253,11 @@ class D(A[int], B[str], C[float]):
 }
 
 // =============================================================================
-// E0144: type() constructor - exercise all detection paths
+// type() constructor - exercise all detection paths
 // =============================================================================
 
 #[test]
-fn e0144_type_constructor_name_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn type_constructor_name_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 Foo = type("Bar", (object,), {})
 "#;
@@ -264,7 +266,7 @@ Foo = type("Bar", (object,), {})
 }
 
 #[test]
-fn e0144_type_constructor_non_string_name() -> Result<(), Box<dyn std::error::Error>> {
+fn type_constructor_non_string_name() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 Foo = type(42, (object,), {})
 "#;
@@ -273,7 +275,7 @@ Foo = type(42, (object,), {})
 }
 
 #[test]
-fn e0144_type_constructor_non_tuple_bases() -> Result<(), Box<dyn std::error::Error>> {
+fn type_constructor_non_tuple_bases() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 Foo = type("Foo", [object], {})
 "#;
@@ -282,7 +284,7 @@ Foo = type("Foo", [object], {})
 }
 
 #[test]
-fn e0144_type_constructor_non_dict_namespace() -> Result<(), Box<dyn std::error::Error>> {
+fn type_constructor_non_dict_namespace() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 Foo = type("Foo", (object,), [1, 2, 3])
 "#;
@@ -291,7 +293,7 @@ Foo = type("Foo", (object,), [1, 2, 3])
 }
 
 #[test]
-fn e0144_type_constructor_complex_bases() -> Result<(), Box<dyn std::error::Error>> {
+fn type_constructor_complex_bases() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class MyBase:
     x: int = 0
@@ -307,7 +309,7 @@ Created = type("Created", (MyBase, MyMixin, object), {"y": 42})
 }
 
 #[test]
-fn e0144_type_constructor_with_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn type_constructor_with_methods() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def init(self, x):
     self.x = x
@@ -322,11 +324,11 @@ Point = type("Point", (), {"__init__": init, "__repr__": repr})
 }
 
 // =============================================================================
-// E0115: Deprecated - exercise remaining uncovered visitors
+// Deprecated - exercise remaining uncovered visitors
 // =============================================================================
 
 #[test]
-fn e0115_deprecated_in_list_comprehension() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_in_list_comprehension() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -341,7 +343,7 @@ result = [old_func(i) for i in range(10)]
 }
 
 #[test]
-fn e0115_deprecated_in_dict_comprehension() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_in_dict_comprehension() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -356,7 +358,7 @@ result = {old_key(i): i for i in range(5)}
 }
 
 #[test]
-fn e0115_deprecated_in_ternary() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_in_ternary() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -371,7 +373,7 @@ result = 1 if old_check() else 0
 }
 
 #[test]
-fn e0115_deprecated_chained_calls() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_chained_calls() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -391,7 +393,7 @@ result = b.build()
 }
 
 #[test]
-fn e0115_deprecated_multiple_operators() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_multiple_operators() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import deprecated
 
@@ -421,11 +423,11 @@ num *= 2
 }
 
 // =============================================================================
-// E0138: Dataclass transform - deeper metaclass/base paths
+// Dataclass transform - deeper metaclass/base paths
 // =============================================================================
 
 #[test]
-fn e0138_transform_metaclass_with_slots() -> Result<(), Box<dyn std::error::Error>> {
+fn transform_metaclass_with_slots() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import dataclass_transform
 
@@ -442,7 +444,7 @@ class FrozenModel(metaclass=FrozenMeta):
 }
 
 #[test]
-fn e0138_transform_base_with_init_subclass() -> Result<(), Box<dyn std::error::Error>> {
+fn transform_base_with_init_subclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import dataclass_transform
 
@@ -461,11 +463,11 @@ class Config(KWBase):
 }
 
 // =============================================================================
-// E0122: Callable arity - deeper return type and varargs checks
+// Callable arity - deeper return type and varargs checks
 // =============================================================================
 
 #[test]
-fn e0122_callable_varargs_function() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_varargs_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -479,7 +481,7 @@ f: Callable[[int, str, float], bool] = varargs_func
 }
 
 #[test]
-fn e0122_callable_with_kwonly_and_regular() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_with_kwonly_and_regular() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -493,11 +495,11 @@ f: Callable[[int, str], bool] = mixed
 }
 
 // =============================================================================
-// E0143: NamedTuple - deeper functional and class paths
+// NamedTuple - deeper functional and class paths
 // =============================================================================
 
 #[test]
-fn e0143_namedtuple_typing_functional() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_typing_functional() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -509,7 +511,7 @@ Color = NamedTuple("Color", [("r", int), ("g", int), ("b", int)])
 }
 
 #[test]
-fn e0143_namedtuple_with_class_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_with_class_methods() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -534,11 +536,11 @@ class Vector(NamedTuple):
 }
 
 // =============================================================================
-// E0095: InitVar - exercise deeper paths including complex defaults
+// InitVar - exercise deeper paths including complex defaults
 // =============================================================================
 
 #[test]
-fn e0095_initvar_complex_post_init() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_complex_post_init() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, InitVar, field
 from typing import List, Optional
@@ -560,11 +562,11 @@ class Database:
 }
 
 // =============================================================================
-// E0121: Protocol conformance - deeper attribute checks
+// Protocol conformance - deeper attribute checks
 // =============================================================================
 
 #[test]
-fn e0121_protocol_with_class_method() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_class_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -582,7 +584,7 @@ class Widget:
 }
 
 #[test]
-fn e0121_protocol_multiple_missing_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_multiple_missing_methods() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -600,11 +602,11 @@ class Partial:
 }
 
 // =============================================================================
-// E0139: TypeVarTuple - deeper paths
+// TypeVarTuple - deeper paths
 // =============================================================================
 
 #[test]
-fn e0139_typevartuple_with_mixed_params() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_with_mixed_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, TypeVarTuple, Generic, Unpack
 
@@ -622,7 +624,7 @@ class Mixed(Generic[T, Unpack[Ts]]):
 }
 
 #[test]
-fn e0139_typevartuple_callable() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_callable() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Callable, Unpack
 
@@ -636,11 +638,11 @@ def apply(func: Callable[[Unpack[Ts]], int], *args: Unpack[Ts]) -> int:
 }
 
 // =============================================================================
-// E0126: Literal - deeper value comparison paths
+// Literal - deeper value comparison paths
 // =============================================================================
 
 #[test]
-fn e0126_literal_union_int_and_str() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_union_int_and_str() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal, Union
 
@@ -651,7 +653,7 @@ x: Union[Literal[1], Literal["hello"]] = 2
 }
 
 #[test]
-fn e0126_literal_none_assignability() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_none_assignability() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Literal, Optional
 
@@ -663,11 +665,11 @@ y: Literal[42] = None
 }
 
 // =============================================================================
-// E0119: Protocol isinstance - deeper paths
+// Protocol isinstance - deeper paths
 // =============================================================================
 
 #[test]
-fn e0119_non_runtime_checkable_isinstance() -> Result<(), Box<dyn std::error::Error>> {
+fn non_runtime_checkable_isinstance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -682,7 +684,7 @@ isinstance(x, MyProto)
 }
 
 #[test]
-fn e0119_runtime_checkable_issubclass() -> Result<(), Box<dyn std::error::Error>> {
+fn runtime_checkable_issubclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, runtime_checkable
 
@@ -702,11 +704,11 @@ result2 = issubclass(MyList, Sized)
 }
 
 // =============================================================================
-// E0116: NamedTuple definition - deeper paths
+// NamedTuple definition - deeper paths
 // =============================================================================
 
 #[test]
-fn e0116_namedtuple_functional_wrong_name() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_functional_wrong_name() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -717,7 +719,7 @@ Foo = NamedTuple("Bar", [("x", int)])
 }
 
 #[test]
-fn e0116_namedtuple_class_with_mutable_default() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_class_with_mutable_default() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -730,11 +732,11 @@ class Config(NamedTuple):
 }
 
 // =============================================================================
-// E0073: NamedTuple tuple compat - deeper paths
+// NamedTuple tuple compat - deeper paths
 // =============================================================================
 
 #[test]
-fn e0073_namedtuple_tuple_too_many_fields() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_tuple_too_many_fields() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -750,11 +752,11 @@ p: tuple[int, int] = Point3D(1, 2, 3)
 }
 
 // =============================================================================
-// E0102: TypeVar default - exercise deeper paths
+// TypeVar default - exercise deeper paths
 // =============================================================================
 
 #[test]
-fn e0102_typevar_default_outside_constraints() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_outside_constraints() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -765,11 +767,11 @@ T = TypeVar("T", int, str, default=list)
 }
 
 // =============================================================================
-// E0131: Yield type - exercise deeper paths
+// Yield type - exercise deeper paths
 // =============================================================================
 
 #[test]
-fn e0131_yield_expression_in_loop() -> Result<(), Box<dyn std::error::Error>> {
+fn yield_expression_in_loop() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -784,7 +786,7 @@ def counter() -> Generator[int, None, None]:
 }
 
 #[test]
-fn e0131_yield_in_try_except() -> Result<(), Box<dyn std::error::Error>> {
+fn yield_in_try_except() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -802,11 +804,11 @@ def safe_gen() -> Generator[int, None, None]:
 }
 
 // =============================================================================
-// E0130: TypeVar scoping - deeper nested class paths
+// TypeVar scoping - deeper nested class paths
 // =============================================================================
 
 #[test]
-fn e0130_typevar_in_deeply_nested() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_in_deeply_nested() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -822,11 +824,11 @@ class A(Generic[T]):
 }
 
 // =============================================================================
-// E0054: Final reassignment - deeper paths
+// Final reassignment - deeper paths
 // =============================================================================
 
 #[test]
-fn e0054_final_in_class_method() -> Result<(), Box<dyn std::error::Error>> {
+fn final_in_class_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -841,7 +843,7 @@ class Config:
 }
 
 #[test]
-fn e0054_final_typed() -> Result<(), Box<dyn std::error::Error>> {
+fn final_typed() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Final
 
@@ -853,11 +855,11 @@ X = 100
 }
 
 // =============================================================================
-// E0112: TypeGuard - deeper callable return paths
+// TypeGuard - deeper callable return paths
 // =============================================================================
 
 #[test]
-fn e0112_typeis_return() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeIs
 
@@ -869,7 +871,7 @@ def is_int(x: object) -> TypeIs[int]:
 }
 
 #[test]
-fn e0112_typeguard_in_class() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_in_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeGuard
 
@@ -883,11 +885,11 @@ class Checker:
 }
 
 // =============================================================================
-// E0145: Invalid type bracket - deeper paths
+// Invalid type bracket - deeper paths
 // =============================================================================
 
 #[test]
-fn e0145_type_bracket_generic() -> Result<(), Box<dyn std::error::Error>> {
+fn type_bracket_generic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -901,11 +903,11 @@ def foo(x: type[Generic[T]]) -> None:
 }
 
 // =============================================================================
-// E0147: Tuple starred unpack - deeper paths
+// Tuple starred unpack - deeper paths
 // =============================================================================
 
 #[test]
-fn e0147_tuple_starred_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_starred_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Unpack, TypeVarTuple
 
@@ -919,11 +921,11 @@ def foo(*args: Unpack[tuple[int, str, float]]) -> None:
 }
 
 // =============================================================================
-// E0148: Generic type arg - deeper paths
+// Generic type arg - deeper paths
 // =============================================================================
 
 #[test]
-fn e0148_dict_wrong_arg_count() -> Result<(), Box<dyn std::error::Error>> {
+fn dict_wrong_arg_count() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Dict
 
@@ -935,7 +937,7 @@ y: Dict[int, str, float] = {}
 }
 
 #[test]
-fn e0148_set_with_args() -> Result<(), Box<dyn std::error::Error>> {
+fn set_with_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Set, FrozenSet
 
@@ -947,11 +949,11 @@ y: FrozenSet[int, str] = frozenset()
 }
 
 // =============================================================================
-// E0146: Protocol class object - deeper paths
+// Protocol class object - deeper paths
 // =============================================================================
 
 #[test]
-fn e0146_protocol_class_with_class_vars() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_class_with_class_vars() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, ClassVar
 
@@ -969,11 +971,11 @@ class App:
 }
 
 // =============================================================================
-// E0079: Module protocol - exercise the code paths we can reach
+// Module protocol - exercise the code paths we can reach
 // =============================================================================
 
 #[test]
-fn e0079_protocol_with_module_import() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_module_import() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 import json
@@ -988,11 +990,11 @@ x: JsonLike = json
 }
 
 // =============================================================================
-// E0057: PEP 695 type alias validation
+// PEP 695 type alias validation
 // =============================================================================
 
 #[test]
-fn e0057_pep695_type_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_type_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 type Vector = list[float]
 type Matrix = list[Vector]
@@ -1003,7 +1005,7 @@ type Scalar = int | float
 }
 
 #[test]
-fn e0057_pep695_type_alias_with_params() -> Result<(), Box<dyn std::error::Error>> {
+fn pep695_type_alias_with_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 type Pair[T] = tuple[T, T]
 type Triple[T] = tuple[T, T, T]
@@ -1013,11 +1015,11 @@ type Triple[T] = tuple[T, T, T]
 }
 
 // =============================================================================
-// E0047: Invalid type expression - exercise remaining branches
+// Invalid type expression - exercise remaining branches
 // =============================================================================
 
 #[test]
-fn e0047_attribute_annotation_numeric() -> Result<(), Box<dyn std::error::Error>> {
+fn attribute_annotation_numeric() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Foo:
     x: 42 = None
@@ -1028,7 +1030,7 @@ class Foo:
 }
 
 #[test]
-fn e0047_star_import_module_names() -> Result<(), Box<dyn std::error::Error>> {
+fn star_import_module_names() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import *
 from collections.abc import *
@@ -1041,11 +1043,11 @@ y: Mapping[str, int] = {}
 }
 
 // =============================================================================
-// E0014: Dataclass attr assignment - exercise classify_literal
+// Dataclass attr assignment - exercise classify_literal
 // =============================================================================
 
 #[test]
-fn e0014_classify_literal_all_types() -> Result<(), Box<dyn std::error::Error>> {
+fn classify_literal_all_types() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -1069,7 +1071,7 @@ obj.e = "string_to_bool"
 }
 
 #[test]
-fn e0014_classify_literal_single_quote() -> Result<(), Box<dyn std::error::Error>> {
+fn classify_literal_single_quote() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -1085,7 +1087,7 @@ c.name = 'single_quoted'
 }
 
 #[test]
-fn e0014_classify_literal_bytes() -> Result<(), Box<dyn std::error::Error>> {
+fn classify_literal_bytes() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -1102,7 +1104,7 @@ d.value = b'single_bytes'
 }
 
 #[test]
-fn e0014_classify_literal_none() -> Result<(), Box<dyn std::error::Error>> {
+fn classify_literal_none() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -1118,7 +1120,7 @@ h.value = None
 }
 
 #[test]
-fn e0014_classify_literal_negative() -> Result<(), Box<dyn std::error::Error>> {
+fn classify_literal_negative() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -1134,11 +1136,11 @@ c.value = -42
 }
 
 // =============================================================================
-// E0063: Non-hashable dataclass - exercise deeper code paths
+// Non-hashable dataclass - exercise deeper code paths
 // =============================================================================
 
 #[test]
-fn e0063_dataclass_with_hash_method() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_with_hash_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 from typing import Hashable
@@ -1153,7 +1155,7 @@ class CustomHash:
 v: Hashable = CustomHash(42)
 "#;
     let diags = run(source)?;
-    let has_e0063 = diags.iter().any(|d| d.code.code == "BSK-E0063");
+    let has_e0063 = diags.iter().any(|d| d.code.code == "dataclasses_hash");
     assert!(
         !has_e0063,
         "Dataclass with __hash__ should not trigger E0063"
@@ -1162,7 +1164,7 @@ v: Hashable = CustomHash(42)
 }
 
 #[test]
-fn e0063_dataclass_unsafe_hash() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_unsafe_hash() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 from typing import Hashable
@@ -1174,7 +1176,7 @@ class UnsafeHash:
 v: Hashable = UnsafeHash(42)
 "#;
     let diags = run(source)?;
-    let has_e0063 = diags.iter().any(|d| d.code.code == "BSK-E0063");
+    let has_e0063 = diags.iter().any(|d| d.code.code == "dataclasses_hash");
     assert!(
         !has_e0063,
         "Dataclass with unsafe_hash should not trigger E0063"
@@ -1183,7 +1185,7 @@ v: Hashable = UnsafeHash(42)
 }
 
 #[test]
-fn e0063_dataclass_eq_false() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_eq_false() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 from typing import Hashable
@@ -1195,7 +1197,7 @@ class NoEq:
 v: Hashable = NoEq(42)
 "#;
     let diags = run(source)?;
-    let has_e0063 = diags.iter().any(|d| d.code.code == "BSK-E0063");
+    let has_e0063 = diags.iter().any(|d| d.code.code == "dataclasses_hash");
     assert!(
         !has_e0063,
         "Dataclass with eq=False should not trigger E0063"

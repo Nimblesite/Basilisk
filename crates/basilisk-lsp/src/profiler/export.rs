@@ -85,7 +85,7 @@ struct SpeedscopeProfile {
 /// # Errors
 ///
 /// Returns an error string describing the first violated invariant.
-fn validate_exportable(data: &ProfileData) -> Result<(), String> {
+pub(crate) fn validate_exportable(data: &ProfileData) -> Result<(), String> {
     let sample_count: usize = data.thread_stacks.values().map(Vec::len).sum();
     if sample_count == 0 {
         return Err("no samples were collected — nothing to export".to_owned());
@@ -126,6 +126,13 @@ fn validate_thread(data: &ProfileData, tid: u64, stacks: &[Vec<usize>]) -> Resul
 /// Export `ProfileData` to speedscope JSON format.
 ///
 /// Writes the file to `output_dir` and returns the path.
+///
+/// Implements [PROFILE-SPEEDSCOPE-MAPPING]: `ProfileData.frames` →
+/// `shared.frames[i] { name, file, line }`; one `profiles[i]` per thread named
+/// after `thread_name`; each thread's `thread_stacks` (already reversed to
+/// root-first in `ingest_traces`) become `samples`, with `1/sample_rate` per
+/// entry in `weights`. Frames were deduplicated by `(name, filename, line)` at
+/// ingest time, so samples index into `shared.frames`.
 ///
 /// # Errors
 ///

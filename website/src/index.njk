@@ -1,7 +1,7 @@
 ---
 layout: layouts/base.njk
-title: "Basilisk — Open-Source Python Language Server, Strict by Default"
-description: "Open-source Python language server in Rust — strict-by-default checking, autocomplete, refactoring, debugging & profiling in VS Code, Cursor, Zed & Neovim."
+title: "Basilisk — Open-Source, PEP-Conformant Python Language Server"
+description: "Open-source Python language server in Rust — PEP-conformant type checking, autocomplete, refactoring, debugging & profiling in VS Code, Cursor, Zed & Neovim."
 permalink: /
 # Translatable prose for the shared benchmark macro (_includes/benchmark-section.njk).
 # The numbers come from _data/benchmarks.js (the git-tracked CSV); only the words live here.
@@ -42,7 +42,7 @@ benchmarkStrings:
           Autocomplete, go-to-definition, hover info, refactoring,
           diagnostics, integrated debugging &mdash; everything you rely on,
           without the proprietary lock-in. In VS Code, Cursor, Zed, and Neovim
-          &mdash; wherever you write Python. Strict by default. Built in Rust.
+          &mdash; wherever you write Python. Conformant to the typing spec, strict to taste. Built in Rust.
         </p>
 
         <div class="hero__cta-group">
@@ -60,6 +60,15 @@ benchmarkStrings:
           </a>
         </div>
 
+        {% if conformance.hasData %}
+        <a href="/docs/conformance/" class="hero__conformance">
+          <span class="hero__conformance-score">{{ conformance.scorePct }}<span class="hero__conformance-pct">%</span></span>
+          <span class="hero__conformance-text">
+            <strong>PEP&nbsp;conformance</strong> &mdash; {{ conformance.pass }} of {{ conformance.total }} tests in the official <code>python/typing</code> suite, graded against commit <code>{{ conformance.pinnedRefShort }}</code>. <span class="hero__conformance-cta">How we measure &rarr;</span>
+          </span>
+        </a>
+        {% endif %}
+
         <div class="hero__meta">
           <span>Full <strong>LSP</strong></span>
           <span>Built in <strong>Rust</strong></span>
@@ -69,72 +78,9 @@ benchmarkStrings:
         </div>
       </div>
 
-      <!-- Before / After code demo -->
-      <div class="hero__code hero__demo">
-        <div class="demo-tabs">
-          <button class="demo-tab active" data-tab="before">bad.py</button>
-          <button class="demo-tab" data-tab="after">good.py</button>
-        </div>
-        <div class="demo-wrapper">
-
-          <div class="demo-panel active" data-panel="before">
-            <div class="code-window">
-              <div class="code-window__chrome">
-                <span class="code-window__dot code-window__dot--close"></span>
-                <span class="code-window__dot code-window__dot--min"></span>
-                <span class="code-window__dot code-window__dot--expand"></span>
-                <span class="code-window__filename">bad.py</span>
-              </div>
-              <div class="code-window__body">
-<pre><span class="tok-kw">def</span> <span class="tok-fn">process</span>(data):
-<span class="code-error-line">    <span class="tok-kw">return</span> data.upper()
-</span>
-<span class="tok-kw">class</span> <span class="tok-fn">User</span>:
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name, age):
-        <span class="tok-kw">self</span>.name <span class="tok-kw">=</span> name
-        <span class="tok-kw">self</span>.age  <span class="tok-kw">=</span> age
-
-    <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>):
-<span class="code-error-line">        <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {self.name}"</span>
-</span></pre>
-              </div>
-            </div>
-            <div class="diagnostic-block" style="padding:0;background:transparent;border:0">
-              <img src="/assets/images/cli-demo.png" alt="Real basilisk check output for bad.py — six type errors reported with no configuration" style="width:100%;display:block;border-radius:8px" loading="lazy">
-            </div>
-          </div>
-
-          <div class="demo-panel" data-panel="after">
-            <div class="code-window">
-              <div class="code-window__chrome">
-                <span class="code-window__dot code-window__dot--close"></span>
-                <span class="code-window__dot code-window__dot--min"></span>
-                <span class="code-window__dot code-window__dot--expand"></span>
-                <span class="code-window__filename">good.py</span>
-              </div>
-              <div class="code-window__body">
-<pre><span class="tok-kw">def</span> <span class="tok-fn">process</span>(data<span class="tok-type">: str</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
-    <span class="tok-kw">return</span> data.upper()
-
-
-<span class="tok-kw">class</span> <span class="tok-fn">User</span>:
-    name<span class="tok-type">: str</span>
-    age<span class="tok-type">: int</span>
-
-    <span class="tok-kw">def</span> <span class="tok-fn">__init__</span>(<span class="tok-kw">self</span>, name<span class="tok-type">: str</span>, age<span class="tok-type">: int</span>) <span class="tok-kw">-></span> <span class="tok-type">None</span>:
-        <span class="tok-kw">self</span>.name <span class="tok-kw">=</span> name
-        <span class="tok-kw">self</span>.age  <span class="tok-kw">=</span> age
-
-    <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(<span class="tok-kw">self</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
-        <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {self.name}"</span></pre>
-              </div>
-            </div>
-            <div class="diagnostic-block diagnostic-block--success" style="padding:0;background:transparent;border:0">
-              <img src="/assets/images/cli-clean.png" alt="Real basilisk check output for the fixed good.py — all checks pass, no issues found" style="width:100%;display:block;border-radius:8px" loading="lazy">
-            </div>
-          </div>
-
-        </div>
+      <!-- Product screenshot — Basilisk running in VS Code -->
+      <div class="hero__code">
+        <img src="/assets/images/vscode-diagnostics.png" alt="Basilisk flagging type errors live in VS Code — inline diagnostics with the Problems panel listing each missing annotation" class="hero__shot" loading="lazy">
       </div>
 
     </div>
@@ -164,7 +110,7 @@ benchmarkStrings:
         </li>
         <li>
           <span class="problem__num">03</span>
-          <span><strong>Every type checker defaults to permissive.</strong> You get type checking only where you add <code>--strict</code>. Basilisk is strict by default &mdash; no opt-in required.</span>
+          <span><strong>Every type checker defaults to permissive.</strong> You get real checking only where you add <code>--strict</code>. Basilisk checks to the Python typing spec out of the box &mdash; and lets you turn strictness up from there.</span>
         </li>
         <li>
           <span class="problem__num">04</span>
@@ -183,18 +129,22 @@ benchmarkStrings:
 
   <div class="feature-row">
     <div class="feature-row__text">
-      <p class="feature-row__num">01 &mdash; Strict by default</p>
-      <h2 class="feature-row__title">Strict from line one.<br>Yours to dial down.</h2>
+      <p class="feature-row__num">01 &mdash; Conformance first</p>
+      <h2 class="feature-row__title">Conformant by default.<br>Strict to taste.</h2>
       <p class="feature-row__body">
-        Basilisk treats every untyped function as an error &mdash; because that&rsquo;s what it is.
-        But you stay in control: relax rules per-file or per-path from the editor UI or your
-        config. And one-click enrichment fixes add the missing types <em>for</em> you.
+        Basilisk checks to the Python typing spec out of the box &mdash; the same rules the
+        official conformance suite grades. Stricter checks are Basilisk&rsquo;s own and entirely
+        opt-in: require an annotation on every parameter and return, flag redundant annotations,
+        nudge for <code>@override</code>. The spec treats unannotated code as <em>inferred</em>,
+        not an error, so these stay off by default &mdash; switch them on through config, per-file
+        or per-path, when you want more than the spec. And one-click enrichment fixes add the
+        missing types <em>for</em> you.
       </p>
     </div>
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">0<span class="stat-block__unit">%</span></span>
-        <span class="stat-block__label">untyped code, by default</span>
+        <span class="stat-block__number">{{ ruleStats.total }}</span>
+        <span class="stat-block__label">rules, every one configurable</span>
       </div>
     </div>
   </div>
@@ -252,19 +202,18 @@ benchmarkStrings:
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">98.6<span class="stat-block__unit">%</span></span>
+        <span class="stat-block__number">{{ conformance.scorePct }}<span class="stat-block__unit">%</span></span>
         <span class="stat-block__label">PEP conformance score</span>
       </div>
     </div>
     <div class="feature-row__text">
       <p class="feature-row__num">04 &mdash; PEP conformance</p>
-      <h2 class="feature-row__title">144 of 146 tests passing.<br>Target: 100%.</h2>
+      <h2 class="feature-row__title">{{ conformance.pass }} of {{ conformance.total }} tests passing ({{ conformance.scorePct }}%).<br>Every conformance rule enabled.</h2>
       <p class="feature-row__body">
-        Tested against the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" style="color:var(--color-accent)">official Python typing conformance suite</a> &mdash;
-        the same suite used to measure Pyright (~99%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>),
-        mypy (~58%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>),
-        and Pyrefly (~86%<a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a>).
-        19 of 21 categories pass at 100%, with zero false positives. The remaining two &mdash; a TypeVarTuple generics case and one protocol-definition case &mdash; are next.
+        Scored by the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">official Python typing conformance suite</a>, graded against <a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance">commit <code>{{ conformance.pinnedRefShort }}</code></a> &mdash; the exact suite version we target &mdash;
+        the same published harness that grades Pyright, mypy, and Pyrefly, whose
+        current scores live in that results table.
+        We run it on the real binary with every conformance rule enabled and nothing disabled: {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories pass at 100%, with {{ conformance.fp }} false positives and {{ conformance.missed }} missed required errors. Basilisk&rsquo;s opt-in rules never run during conformance, so they can&rsquo;t pad the number. <a href="/docs/conformance/">How we measure this &rarr;</a>
       </p>
     </div>
   </div>
@@ -363,20 +312,20 @@ benchmarkStrings:
         </thead>
         <tbody>
           <tr>
-            <td>Strict by default</td>
+            <td>Enrichment fixes (auto-add types)</td>
             <td class="col-basilisk check-yes">&#10003;</td>
-            <td><span class="check-partial">opt-in</span></td>
-            <td><span class="check-partial">opt-in</span></td>
-            <td><span class="check-partial">opt-in</span></td>
-            <td><span class="check-partial">opt-in</span></td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
           </tr>
           <tr>
             <td>PEP conformance <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a></td>
-            <td class="col-basilisk">98.6% <em style="font-size:0.75rem;color:var(--color-text-muted)">(144/146)</em></td>
-            <td>~99%</td>
-            <td>~58% full-pass</td>
+            <td class="col-basilisk">{{ conformance.scorePct }}% <em style="font-size:0.75rem;color:var(--color-text-muted)">({{ conformance.pass }}/{{ conformance.total }})</em></td>
+            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html">published</a></td>
+            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html">published</a></td>
             <td>alpha</td>
-            <td>~86%</td>
+            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html">published</a></td>
           </tr>
           <tr>
             <td>Implementation</td>
@@ -479,7 +428,7 @@ benchmarkStrings:
 <span class="tok-kw">def</span> <span class="tok-fn">fetch_user</span>(user_id):          <span class="tok-cmt">  # BSK-E0001, BSK-E0002</span>
     <span class="tok-kw">return</span> database.query(user_id)
 
-<span class="tok-kw">def</span> <span class="tok-fn">save_record</span>(data: Any) <span class="tok-kw">-></span> <span class="tok-type">bool</span>:  <span class="tok-cmt"> # BSK-E0011 (warning)</span>
+<span class="tok-kw">def</span> <span class="tok-fn">save_record</span>(data: Any) <span class="tok-kw">-></span> <span class="tok-type">bool</span>:  <span class="tok-cmt"> # returns_compatibility (warning)</span>
     <span class="tok-kw">return</span> <span class="tok-kw">True</span></pre>
             </div>
           </div>
@@ -495,13 +444,13 @@ benchmarkStrings:
 <span class="diag-bar">  --> </span><span class="diag-path">api.py:3:5</span>
 <span class="diag-bar">   = </span><span class="diag-help">help: Add a return type: `def fetch_user(...) -> &lt;type&gt;:`</span>
 
-<span class="diag-prefix" style="color:var(--color-warning)">warning</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0011</span><span class="diag-bar">]: </span><span class="diag-msg">Parameter `data` is annotated `Any` — prefer a concrete type</span>
+<span class="diag-prefix" style="color:var(--color-warning)">warning</span><span class="diag-bar">[</span><span class="diag-code">returns_compatibility</span><span class="diag-bar">]: </span><span class="diag-msg">Parameter `data` is annotated `Any` — prefer a concrete type</span>
 <span class="diag-bar">  --> </span><span class="diag-path">api.py:6:17</span>
 <span class="diag-bar">   |</span>
 <span class="diag-bar"> 6 | </span><span class="diag-src">def save_record(data: Any) -> bool:</span>
 <span class="diag-bar">   |                 </span><span class="diag-caret">^^^^</span>
 <span class="diag-bar">   = </span><span class="diag-help">help: Replace `Any` on `data` with the actual expected type</span>
-<span class="diag-bar">   = </span><span class="diag-see">see: https://www.basilisk-python.dev/errors/BSK-E0011</span>
+<span class="diag-bar">   = </span><span class="diag-see">see: https://www.basilisk-python.dev/errors/returns_compatibility</span>
           </div>
         </div>
 
@@ -515,23 +464,23 @@ benchmarkStrings:
             </div>
             <div class="code-window__body">
 <pre><span class="tok-kw">def</span> <span class="tok-fn">get_count</span>(rows<span class="tok-type">: list[int]</span>) <span class="tok-kw">-></span> <span class="tok-type">int</span>:
-<span class="code-error-line">    <span class="tok-kw">return</span> <span class="tok-str">"many"</span>  <span class="tok-cmt"># BSK-E0013: str is not int</span>
+<span class="code-error-line">    <span class="tok-kw">return</span> <span class="tok-str">"many"</span>  <span class="tok-cmt"># returns_compatibility_2: str is not int</span>
 </span>
 <span class="tok-kw">def</span> <span class="tok-fn">greet</span>(name<span class="tok-type">: str</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
     <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {name}"</span>
 
-<span class="code-error-line">greet(<span class="tok-num">42</span>)  <span class="tok-cmt"># BSK-E0012: int is not str</span></span></pre>
+<span class="code-error-line">greet(<span class="tok-num">42</span>)  <span class="tok-cmt"># calls_argument_type: int is not str</span></span></pre>
             </div>
           </div>
           <div class="diagnostic-block">
-<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0013</span><span class="diag-bar">]: </span><span class="diag-msg">Return type mismatch</span>
+<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">returns_compatibility_2</span><span class="diag-bar">]: </span><span class="diag-msg">Return type mismatch</span>
 <span class="diag-bar">  --> </span><span class="diag-path">totals.py:2:12</span>
 <span class="diag-bar">   |</span>
 <span class="diag-bar"> 2 | </span><span class="diag-src">    return "many"</span>
 <span class="diag-bar">   |            </span><span class="diag-caret">^^^^^^</span> <span class="diag-note">`str` is not assignable to declared return type `int`</span>
 <span class="diag-bar">   |</span>
 <span class="diag-bar">   = </span><span class="diag-help">help: return an `int`, or change the return annotation to `str`</span>
-<span class="diag-bar">   = </span><span class="diag-see">see: https://www.basilisk-python.dev/docs/rules/type-safety/#BSK-E0013</span>
+<span class="diag-bar">   = </span><span class="diag-see">see: https://www.basilisk-python.dev/docs/rules/type-safety/#returns_compatibility_2</span>
           </div>
         </div>
 
@@ -617,7 +566,7 @@ Install from <span class="tok-str">Extensions</span>
 <section class="cta-section">
   <div class="container">
     <div class="cta-inner">
-      <h2>Open source.<br>Strict by default.</h2>
+      <h2>Open source.<br>Conformant by default.</h2>
       <div>
         <p>
           Basilisk is in alpha. The type checker, LSP server, and editor
@@ -642,7 +591,7 @@ Install from <span class="tok-str">Extensions</span>
   <div class="container">
     <h3 class="citations-heading">Sources</h3>
     <ol class="citations-list">
-      <li>Full-pass conformance scores from the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">official python/typing conformance suite</a> (pyright 1.1.408, mypy 1.19.1, pyrefly 0.54.0). mypy&rsquo;s partial+pass score is 96.4%.</li>
+      <li>Competitor PEP-conformance scores are published in the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">official python/typing conformance results</a>, which lists each tool&rsquo;s current score and version. We link the live table rather than restate a figure, because those scores change as the tools improve.</li>
       <li>Pyrefly throughput (1.85M LOC/sec) from <a href="https://pyrefly.org/" target="_blank" rel="noopener">pyrefly.org</a> (measured on 166-core Meta infrastructure).</li>
       <li>Performance-benchmark table: mean wall-clock over {{ benchmarks.meta.runsCount }} hyperfine runs of each tool&rsquo;s CLI against large single-rule fixtures, measured on {{ benchmarks.meta.cpu }} ({{ benchmarks.meta.os }}, {{ benchmarks.meta.arch }}, {{ benchmarks.meta.cores }} cores) on {{ benchmarks.meta.generated }}. Tool versions: {% for t in benchmarks.meta.toolVersions %}{{ t.tool }} {{ t.version }}{% if not loop.last %}, {% endif %}{% endfor %}. Source <code>benchmarks/status/{{ benchmarks.primary }}.csv</code>; reproduce with <code>make bench</code>. These are cold full-file runs and do not reflect warm incremental (LSP) performance.</li>
     </ol>

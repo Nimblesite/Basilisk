@@ -31,6 +31,15 @@ pub struct UvProjectInfo {
 /// - A `uv.lock` file exists
 /// - `pyproject.toml` contains a `[tool.uv]` section
 /// - `.venv/pyvenv.cfg` contains a `uv = true` marker
+//
+// Implements [LSPARCH-UV-DETECT] — the startup detection step that gates building
+// the PackageRegistry (registry build/workspace-member discovery live in the LSP
+// server's build_uv_registry and basilisk-uv's registry/workspace modules).
+// Implements [LSPUV-DETECTION-SIGNALS] — filesystem-only signal check (no
+// subprocess), evaluated in spec order: uv.lock, then `[tool.uv]`, then
+// `.venv/pyvenv.cfg` `uv = true`. Note: the spec's fourth Medium-confidence
+// signal (`.python-version` present + no poetry/pipenv lock) is NOT checked
+// here — see the conformance audit (DEVIATION).
 pub fn detect_uv_project(workspace_roots: &[PathBuf]) -> Option<UvProjectInfo> {
     for root in workspace_roots {
         let has_lockfile = root.join("uv.lock").is_file();
@@ -59,6 +68,9 @@ pub fn detect_uv_project(workspace_roots: &[PathBuf]) -> Option<UvProjectInfo> {
 }
 
 /// Check whether `pyproject.toml` at `root` contains a `[tool.uv]` section.
+//
+// Implements [LSPUV-DETECTION-SIGNALS] — the "uv config section" Definitive
+// signal, via real TOML parsing (not string matching) per the avoid-regex rule.
 fn check_tool_uv_section(root: &Path) -> bool {
     let path = root.join("pyproject.toml");
 
@@ -78,6 +90,9 @@ fn check_tool_uv_section(root: &Path) -> bool {
 }
 
 /// Check whether `.venv/pyvenv.cfg` contains a `uv = true` marker.
+//
+// Implements [LSPUV-DETECTION-SIGNALS] — the "uv-created venv" High-confidence
+// signal.
 fn check_uv_managed_venv(root: &Path) -> bool {
     let path = root.join(".venv").join("pyvenv.cfg");
 
@@ -94,6 +109,8 @@ fn check_uv_managed_venv(root: &Path) -> bool {
     })
 }
 
+// Tests for [LSPUV-DETECTION-SIGNALS]: each detection signal in isolation,
+// all together, the negative cases, and first-matching-root selection.
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test-only")]
 mod tests {

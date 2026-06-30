@@ -1,5 +1,8 @@
 --- Profiler E2E tests for the Basilisk Neovim extension.
 ---
+--- Tests [NVIM-USER-COMMANDS-PROFILING-UI] (heat map, hot-function list,
+--- flamegraph export).
+---
 --- Full parity with vscode-extension/src/test/suite/profiler.test.ts.
 --- Validates the complete CPU profiling workflow:
 --- - Profiler commands are registered and callable

@@ -44,6 +44,10 @@ enum Transport {
     Ws,
 }
 
+// Implements [CHKARCH-CLI-COMMANDS]: the `check` core command (with `--watch`
+// deferred — see report). `fix`/`adopt`/`unadopt`/`lsp`/`stubs` extend the spec
+// list; the spec's `stats`/`migrate`/`init` commands are not implemented.
+// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-COMMANDS
 #[derive(Subcommand)]
 enum Command {
     /// Type check one or more files or directories.
@@ -420,10 +424,14 @@ fn run_stubs_status() -> u8 {
 
 /// Run the check subcommand.
 ///
-/// Exit codes:
+/// Implements [CHKARCH-CLI-EXITCODES]. Exit codes:
 /// - `0` — clean, no errors
 /// - `1` — type errors found
 /// - `3` — internal error
+///
+/// Note: the spec's exit code `2` (configuration error) is not produced — a
+/// malformed config silently falls back to defaults rather than erroring (see
+/// report). See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-EXITCODES
 fn run_check(paths: &[String], format: OutputFormat, cache: &cache_check::CacheOptions) -> u8 {
     let mut stats = cache_check::CacheStats::default();
     let result = collect_and_check(paths, cache, &mut stats);
@@ -431,6 +439,9 @@ fn run_check(paths: &[String], format: OutputFormat, cache: &cache_check::CacheO
         stats.report();
     }
     match result {
+        // Implements [CHKARCH-CLI-OUTPUT]: the human-readable text default and
+        // machine-readable JSON. The spec's `sarif`/`junit` formats are not
+        // implemented (see report).
         Ok((diagnostics, sources)) => match format {
             OutputFormat::Json => {
                 render_diagnostics_json(&diagnostics, &sources);
@@ -635,7 +646,7 @@ fn process_file(
 
     // Resolve imports against venv/site-packages and uv registry using the same
     // routine the LSP uses, so the CLI and editor agree on what resolves and on
-    // package-dependency metadata (W0011 transitive-import warnings, etc.).
+    // package-dependency metadata (BSK-W0011 transitive-import warnings, etc.).
     basilisk_lsp::import_resolver::resolve_module_imports(&mut resolved, search_paths);
 
     // Apply the project's `[tool.basilisk.rules]` / per-path overrides so the
@@ -708,6 +719,14 @@ pub(crate) fn excluded_dirs_and_log<'a>(
     excluded
 }
 
+/// `true` for the Python source extensions Basilisk type-checks: `.py`
+/// implementation files and `.pyi` stub files (whose overload-definition and
+/// `@final`/`@override` rules differ — see `overloads_*`). Stubs were silently
+/// dropped before, so a `basilisk check foo.pyi` produced no diagnostics.
+fn is_python_source_ext(ext: &std::ffi::OsStr) -> bool {
+    ext.eq_ignore_ascii_case("py") || ext.eq_ignore_ascii_case("pyi")
+}
+
 pub(crate) fn collect_python_files(
     paths: &[String],
     excluded: &HashSet<&str>,
@@ -729,7 +748,7 @@ pub(crate) fn collect_python_files(
         if meta.is_file() {
             if std::path::Path::new(root)
                 .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
+                .is_some_and(is_python_source_ext)
             {
                 files.push(root.clone());
             }
@@ -756,11 +775,7 @@ pub(crate) fn collect_python_files(
                 })
                 .filter_map(Result::ok)
                 .filter(|e| e.file_type().is_file())
-                .filter(|e| {
-                    e.path()
-                        .extension()
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
-                })
+                .filter(|e| e.path().extension().is_some_and(is_python_source_ext))
                 // File-level globs (e.g. `*.pb.py`, `**/conftest.py`) are honoured
                 // here; directory globs are already pruned above before recursing.
                 .filter(|e| !is_excluded_path(e.path(), root_path, excluded))
@@ -882,12 +897,21 @@ mod tests {
     #[test]
     fn collect_and_check_returns_diagnostics_for_bad_code() -> Result<(), Box<dyn std::error::Error>>
     {
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_bad_code.py");
+        // `def foo(x)` violates the annotation house rules (BSK-E0001/E0002),
+        // which are OFF by default — the default config is pure PEP conformance.
+        // Run inside an isolated project that opts in, exactly as a user would.
+        // See [CHKARCH-CONFIGURATION-ONLY].
+        let dir = unique_project_dir("basilisk_test_bad_code");
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(
+            dir.join("basilisk.json"),
+            b"{\"strictAnnotations\": true}\n",
+        )?;
+        let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x):\n    pass\n")?;
         let path = py.to_string_lossy().into_owned();
         let (diags, _) = collect_and_check_uncached(&[path])?;
-        let _ = std::fs::remove_file(&py);
+        let _ = std::fs::remove_dir_all(&dir);
         assert!(
             !diags.is_empty(),
             "unannotated function must produce diagnostics"
@@ -916,9 +940,14 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let dir = unique_project_dir("basilisk_cli_cfg_promote");
         std::fs::create_dir_all(&dir)?;
+        // A severity override only re-grades a rule that is ALREADY enabled;
+        // BSK-W0050 is an off-by-default house rule, so the project must opt in
+        // (`strict-annotations = true`) AND escalate it. See
+        // [CHKARCH-CONFIGURATION-ONLY].
         std::fs::write(
             dir.join("pyproject.toml"),
             b"[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n\
+              [tool.basilisk]\nstrict-annotations = true\n\n\
               [tool.basilisk.rules]\n\"BSK-W0050\" = \"error\"\n",
         )?;
         let py = dir.join("m.py");
@@ -937,7 +966,7 @@ mod tests {
             w0050
                 .iter()
                 .all(|d| d.severity == basilisk_checker::Severity::Error),
-            "project config `BSK-W0050 = \"error\"` must promote W0050 to error \
+            "project config `BSK-W0050 = \"error\"` must promote BSK-W0050 to error \
              through the CLI; got {:?}",
             w0050.iter().map(|d| d.severity).collect::<Vec<_>>()
         );
@@ -979,12 +1008,18 @@ mod tests {
     /// and `== / < / >=` at line 65 (which would change the return value).
     #[test]
     fn run_check_json_bad_code_returns_one() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_rc_json_bad.py");
+        // BSK-E0001 (unannotated `x`) is off by default; opt in via project config.
+        let dir = unique_project_dir("basilisk_test_rc_json_bad");
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(
+            dir.join("basilisk.json"),
+            b"{\"strictAnnotations\": true}\n",
+        )?;
+        let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
         let path = py.to_string_lossy().into_owned();
         let code = run_check(&[path], OutputFormat::Json, &no_cache());
-        let _ = std::fs::remove_file(&py);
+        let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(code, 1, "bad code must make run_check return 1 (Json)");
         Ok(())
     }
@@ -1007,12 +1042,18 @@ mod tests {
     /// Kills `>=` mutant at line 81 (which always returns 1 since usize >= 0).
     #[test]
     fn run_check_text_bad_code_returns_one() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_rc_text_bad.py");
+        // BSK-E0001 (unannotated `x`) is off by default; opt in via project config.
+        let dir = unique_project_dir("basilisk_test_rc_text_bad");
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(
+            dir.join("basilisk.json"),
+            b"{\"strictAnnotations\": true}\n",
+        )?;
+        let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
         let path = py.to_string_lossy().into_owned();
         let code = run_check(&[path], OutputFormat::Text, &no_cache());
-        let _ = std::fs::remove_file(&py);
+        let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(code, 1, "bad code must make run_check return 1 (Text)");
         Ok(())
     }

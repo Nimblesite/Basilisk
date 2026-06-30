@@ -78,6 +78,21 @@ pub mod workspace_scan;
 /// `"parse-error:"`.
 #[must_use]
 pub fn check_source(source: &str) -> Vec<String> {
+    check_source_with_config(source, &basilisk_config::BasiliskConfig::default())
+}
+
+// Implements [LSPARCH-ARCH-PIPELINE]
+/// Like [`check_source`] but honoring an explicit project configuration.
+///
+/// House rules (e.g. require-annotation `BSK-E0001`) are off by default — the
+/// default config is pure PEP conformance — so pass a config that opts them in
+/// to observe them. The checker does exactly what the config says; there are no
+/// modes. See [CHKARCH-CONFIGURATION-ONLY].
+#[must_use]
+pub fn check_source_with_config(
+    source: &str,
+    config: &basilisk_config::BasiliskConfig,
+) -> Vec<String> {
     let parsed = match basilisk_parser::parse_source(source.to_owned(), "<stdin>".to_owned()) {
         Ok(p) => p,
         Err(e) => return vec![format!("parse-error: {e}")],
@@ -88,7 +103,7 @@ pub fn check_source(source: &str) -> Vec<String> {
         Err(e) => return vec![format!("resolve-error: {e}")],
     };
 
-    let diagnostics = basilisk_checker::check(&resolved);
+    let diagnostics = basilisk_checker::check_with_config(&resolved, config);
 
     diagnostics
         .into_iter()

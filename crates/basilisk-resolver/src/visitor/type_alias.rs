@@ -403,7 +403,7 @@ pub(super) fn build_type_alias_info(name: String, rhs: &Expr, stmt: &Stmt) -> Ty
 }
 
 // ---------------------------------------------------------------------------
-// BSK-E0099: Protocol instantiation violation detection
+// protocols_explicit: Protocol instantiation violation detection
 // ---------------------------------------------------------------------------
 
 /// Check if a class is a Protocol (has `Protocol` in its bases).

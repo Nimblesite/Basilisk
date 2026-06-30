@@ -9,7 +9,12 @@ layout: layouts/base.njk
   "@type": "BlogPosting",
   "headline": "{{ title }}",
   "description": "{{ description | default(site.description) }}",
-  {% if image %}"image": "{{ site.url }}{{ image }}",
+  {% if image %}"image": {
+    "@type": "ImageObject",
+    "url": "{{ site.url }}{{ image }}",
+    "width": "{{ imageWidth | default(1200) }}",
+    "height": "{{ imageHeight | default(675) }}"
+  },
   {% endif %}"author": {
     "@type": "Person",
     "name": "{{ author | default(site.author) | default('Anonymous') }}"
@@ -40,7 +45,7 @@ layout: layouts/base.njk
 <article class="blog-post">
   <div class="blog-container">
     {% if image %}
-    <img class="blog-hero" src="{{ image }}" alt="{{ title }}" width="1200" height="675" loading="eager">
+    <img class="blog-hero" src="{{ image }}" alt="{{ imageAlt | default(title) }}" width="{{ imageWidth | default(1200) }}" height="{{ imageHeight | default(675) }}" loading="eager" decoding="async">
     {% endif %}
     <header class="blog-post-header">
       <p class="blog-post-meta">

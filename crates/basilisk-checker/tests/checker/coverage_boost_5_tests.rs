@@ -7,7 +7,7 @@ use super::common::*;
 // --- Deep E0074: __new__ constructor mismatch ---
 
 #[test]
-fn e0074_new_no_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn new_no_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Simple:
     def __new__(cls, x: int) -> "Simple":
@@ -20,7 +20,7 @@ s = Simple(42)
 }
 
 #[test]
-fn e0074_new_with_kwargs() -> Result<(), Box<dyn std::error::Error>> {
+fn new_with_kwargs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar, Self
 
@@ -39,7 +39,7 @@ c = Config[int](42, name="test")
 // --- Deep E0075: Self type attribute ---
 
 #[test]
-fn e0075_optional_self_attr() -> Result<(), Box<dyn std::error::Error>> {
+fn optional_self_attr() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Self, Optional
 from dataclasses import dataclass
@@ -57,7 +57,7 @@ node = TreeNode(1, left=TreeNode(2), right=TreeNode(3))
 }
 
 #[test]
-fn e0075_self_in_method_return() -> Result<(), Box<dyn std::error::Error>> {
+fn self_in_method_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Self
 
@@ -77,7 +77,7 @@ b = Builder().set_name('test').set_value(42)
 // --- Deep E0079: Module protocol incompat ---
 
 #[test]
-fn e0079_protocol_with_multiple_attrs() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_multiple_attrs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -93,7 +93,7 @@ class Config(Protocol):
 // --- Deep E0121: Protocol conformance ---
 
 #[test]
-fn e0121_protocol_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -117,7 +117,7 @@ process(JsonObject())
 }
 
 #[test]
-fn e0121_protocol_partial_impl() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_partial_impl() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -141,7 +141,7 @@ use_readable(PartialImpl())
 // --- Deep E0122: Callable arity deep ---
 
 #[test]
-fn e0122_callable_with_positional_only() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_with_positional_only() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -158,7 +158,7 @@ takes_unary(pos_only)
 }
 
 #[test]
-fn e0122_callable_with_mixed_params() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_with_mixed_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -181,7 +181,7 @@ takes_binary(wrong_arity)
 // --- Deep E0127: Tuple index ---
 
 #[test]
-fn e0127_named_tuple_index() -> Result<(), Box<dyn std::error::Error>> {
+fn named_tuple_index() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -201,7 +201,7 @@ c = p[5]
 // --- Deep E0136: Callable subtyping ---
 
 #[test]
-fn e0136_callable_contravariance() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_contravariance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -222,7 +222,7 @@ takes_object_func(object_func)
 }
 
 #[test]
-fn e0136_callable_covariance_return() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_covariance_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -245,7 +245,7 @@ takes_int_returning(returns_float)
 // --- Deep E0145: Invalid type bracket ---
 
 #[test]
-fn e0145_various_subscripts() -> Result<(), Box<dyn std::error::Error>> {
+fn various_subscripts() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import List, Dict, Set, FrozenSet, Tuple, Optional, Union, Type
 
@@ -263,7 +263,7 @@ h: Type[int] = int
 }
 
 #[test]
-fn e0145_nested_subscripts() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_subscripts() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Dict, List, Optional
 
@@ -277,7 +277,7 @@ y: List[Dict[str, int]] = []
 // --- Deep E0146: Protocol class object ---
 
 #[test]
-fn e0146_type_protocol_usage() -> Result<(), Box<dyn std::error::Error>> {
+fn type_protocol_usage() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -302,7 +302,7 @@ obj = create(IntWrapper, 42)
 // --- Deep E0148: Generic type arg ---
 
 #[test]
-fn e0148_constrained_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn constrained_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -323,7 +323,7 @@ s3: Store[float] = Store(3.14)
 // --- Deep E0149: PEP 695 type param scoping ---
 
 #[test]
-fn e0149_nested_generic_classes() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_generic_classes() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -343,7 +343,7 @@ class Container(Generic[T]):
 // --- Deep E0107: Variance incompatibility ---
 
 #[test]
-fn e0107_invariant_used_correctly() -> Result<(), Box<dyn std::error::Error>> {
+fn invariant_used_correctly() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -359,7 +359,7 @@ class MutableContainer(Generic[T]):
 }
 
 #[test]
-fn e0107_variance_with_property() -> Result<(), Box<dyn std::error::Error>> {
+fn variance_with_property() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -376,7 +376,7 @@ class ReadOnly(Generic[T_co]):
 // --- Deep E0117: Unbound TypeVar ---
 
 #[test]
-fn e0117_typevar_in_function_only() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_in_function_only() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -390,7 +390,7 @@ def identity(x: T) -> T:
 }
 
 #[test]
-fn e0117_multiple_unbound_in_method() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_unbound_in_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -409,7 +409,7 @@ class MyClass(Generic[T]):
 // --- Deep E0118: super() abstract ---
 
 #[test]
-fn e0118_diamond_inheritance() -> Result<(), Box<dyn std::error::Error>> {
+fn diamond_inheritance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from abc import ABC, abstractmethod
 
@@ -436,7 +436,7 @@ class D(B, C):
 // --- Deep E0092: Too few type args ---
 
 #[test]
-fn e0092_generic_with_defaults() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_with_defaults() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, TypeAlias
 
@@ -456,7 +456,7 @@ y: Container[str, float]
 // --- Deep E0094: Self type location ---
 
 #[test]
-fn e0094_self_in_classmethod() -> Result<(), Box<dyn std::error::Error>> {
+fn self_in_classmethod() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Self
 
@@ -470,7 +470,7 @@ class Factory:
 }
 
 #[test]
-fn e0094_self_in_staticmethod() -> Result<(), Box<dyn std::error::Error>> {
+fn self_in_staticmethod() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Self
 

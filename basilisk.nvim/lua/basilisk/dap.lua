@@ -2,6 +2,9 @@
 ---
 --- Registers an nvim-dap adapter that communicates with the basilisk LSP
 --- to spawn debugpy sessions. Implements DapTcpProxy using vim.uv (libuv).
+---
+--- Implements [NVIM-DAP-INTEGRATION] — detects nvim-dap at runtime via
+--- pcall(require, 'dap') and degrades gracefully when it is absent.
 
 local log = require("basilisk.log")
 local ui = require("basilisk.ui")
@@ -61,6 +64,8 @@ local function is_structural_step_out(msg)
 end
 
 --- Create and start a DapTcpProxy.
+--- Implements [NVIM-DAP-INTEGRATION-DAP-TCP-PROXY] — vim.uv.new_tcp() socket pair
+--- with Content-Length header framing and the DAP interception rules.
 ---@param remote_host string
 ---@param remote_port integer
 ---@param callback fun(proxy_port: integer) Called with the local proxy port.
@@ -185,6 +190,9 @@ function M.setup(config)
   end
 
   -- Register the basilisk DAP adapter.
+  -- Implements [NVIM-DAP-INTEGRATION-ADAPTER-REGISTRATION] — sends
+  -- basilisk.startDebugSession to the LSP, then points nvim-dap at the local
+  -- DapTcpProxy port returned by create_proxy.
   dap.adapters.basilisk = function(callback, dap_config)
     local client = ui.get_client()
     if not client then
@@ -231,6 +239,8 @@ function M.setup(config)
   end
 
   -- Default launch configurations.
+  -- Implements [NVIM-DAP-INTEGRATION-DEFAULT-CONFIGURATIONS] — adds the launch
+  -- (Current File) and attach (port 5678) configurations the spec documents.
   if not dap.configurations.python or #dap.configurations.python == 0 then
     dap.configurations.python = {}
   end
@@ -268,7 +278,9 @@ function M.setup(config)
     }
   end
 
-  -- Optional: nvim-dap-ui auto open/close.
+  -- Optional integrations.
+  -- Implements [NVIM-DAP-INTEGRATION-OPTIONAL-INTEGRATIONS] — nvim-dap-ui
+  -- auto open/close on initialized/terminated, and nvim-dap-virtual-text.
   local dapui_ok, dapui = pcall(require, "dapui")
   if dapui_ok then
     dap.listeners.after.event_initialized["basilisk"] = function()

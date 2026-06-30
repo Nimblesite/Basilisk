@@ -15,6 +15,7 @@ use tracing::info;
 use crate::server::LspServer;
 use crate::workspace::WorkspaceIndex;
 
+// Implements [REFACTOR-RENAMEMOD]
 /// Handle `workspace/willRenameFiles`.
 ///
 /// For each renamed `.py` file, computes the old and new Python module paths,

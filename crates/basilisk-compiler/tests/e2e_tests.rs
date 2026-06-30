@@ -9,8 +9,28 @@
 )]
 //! E2E compiler tests.
 //!
-//! Iterates every `.py` file in `tests/e2e/`, compiles and runs it,
-//! then asserts stdout matches the corresponding `-expectedoutput.txt`.
+//! Implements [COMPILER-TESTING-E2E] and [COMPILER-TESTING-EXAMPLES]: iterates
+//! every `.py` file in `tests/e2e/`, runs it through `compile_and_run`, and
+//! asserts captured stdout matches the corresponding `-expectedoutput.txt`
+//! byte-for-byte. Also implements [COMPILER-TESTING-FAILURES]: a `-expectederror.txt`
+//! fixture asserts the expected diagnostic code (e.g. BSK-E0001) instead.
+//! Fixtures present today: hello, arithmetic, classes, closures, dicts, dostuff,
+//! lists, recursion, strings (the `controlflow` example from the spec is absent;
+//! `fizzbuzz`-style control flow is exercised via the other fixtures).
+//! NOTE: per the spec these tests should compile + run a native binary; here
+//! they drive the tree-walking interpreter (see `src/codegen.rs`).
+//!
+//! By running `compile_and_run` end to end these fixtures also exercise the
+//! implemented portions of the pipeline and value model:
+//! - Exercises [COMPILER-PIPELINE] — the parse → resolve → check-gate sequence.
+//! - Exercises [COMPILER-CODEGEN] — the interpreter standing in for codegen
+//!   (DEVIATION: no LLVM/native code; see `src/codegen.rs`).
+//! - Exercises [COMPILER-TYPES-INT] — i64 integer arithmetic (`arithmetic.py`,
+//!   `recursion.py`); the spec's `--big-int`/overflow-trap semantics are NOT
+//!   exercised (unimplemented).
+//! - Exercises [COMPILER-TYPES-STR] — string indexing, slicing, and methods
+//!   (`strings.py`); the spec's code-point `len()` semantics are NOT exercised
+//!   (the interpreter uses byte length — see the DEVIATION note in `src/codegen.rs`).
 
 use std::path::Path;
 
@@ -28,7 +48,8 @@ fn run_e2e_test(py_path: &Path) {
 
     match basilisk_compiler::compile_and_run(&source, &path_str) {
         Ok(result) => {
-            // If we expected an error, check diagnostics contain the code
+            // [COMPILER-TESTING-FAILURES]: a `-expectederror.txt` fixture means
+            // compilation must fail with the named diagnostic code.
             if error_path.exists() {
                 let expected_error = std::fs::read_to_string(&error_path)
                     .unwrap_or_else(|e| panic!("failed to read {}: {e}", error_path.display()));
@@ -79,6 +100,7 @@ fn run_e2e_test(py_path: &Path) {
             let expected = std::fs::read_to_string(&expected_path)
                 .unwrap_or_else(|e| panic!("failed to read {}: {e}", expected_path.display()));
 
+            // [COMPILER-TESTING-E2E]: stdout must match the expected-output fixture.
             assert_eq!(
                 result.stdout.trim_end(),
                 expected.trim_end(),

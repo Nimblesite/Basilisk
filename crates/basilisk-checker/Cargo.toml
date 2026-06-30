@@ -17,6 +17,7 @@ serde.workspace             = true
 
 [dev-dependencies]
 basilisk-test-macros.workspace = true
+basilisk-config.workspace = true
 serde_json.workspace = true
 tempfile = "3"
 

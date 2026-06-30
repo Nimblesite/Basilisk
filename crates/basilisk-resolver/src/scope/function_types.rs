@@ -68,7 +68,7 @@ pub struct ReturnStmtInfo {
     pub value_is_call: bool,
     /// What kind of expression is returned, if any.
     ///
-    /// Used for return type inference in E0002.
+    /// Used for return type inference in BSK-E0002.
     pub rhs_kind: RhsKind,
 }
 
@@ -123,7 +123,7 @@ pub struct FunctionInfo {
     pub class_name: Option<String>,
     /// `true` when this function is lexically nested inside a class body — e.g.
     /// a closure defined inside a method — even though it is not itself a method
-    /// (`class_name` is `None`).  Used by [BSK-E0094] to know that `Self` still
+    /// (`class_name` is `None`).  Used by `generics_self_usage` to know that `Self` still
     /// has a valid enclosing-class binding and must not be flagged as
     /// module-level `Self` usage.
     pub nested_in_class: bool,
@@ -143,7 +143,7 @@ pub struct FunctionInfo {
     pub unhashable_keys: Vec<super::module_types::UnhashableKeyRef>,
     /// `true` when the entire function body is a stub (only `...` or `pass`).
     ///
-    /// Stub bodies are exempt from E0001/E0002/E0004: they appear in overload
+    /// Stub bodies are exempt from BSK-E0001/BSK-E0002/BSK-E0004: they appear in overload
     /// signatures, Protocol bodies used as stubs, and `.pyi`-style inline stubs.
     pub is_stub_body: bool,
     /// `true` when the last top-level statement in the function body unconditionally

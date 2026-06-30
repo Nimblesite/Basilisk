@@ -56,6 +56,7 @@ fn class_item(class: &basilisk_resolver::ClassInfo, source: &str, uri: &Url) -> 
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /// Prepare call hierarchy: find the function or class at the given byte offset.
+// Implements [LSPARCH-FEATURES-CALLHIER] — Prepare: find function/class at cursor, return CallHierarchyItem.
 #[must_use]
 pub fn prepare(
     resolved: &ResolvedModule,
@@ -77,6 +78,7 @@ pub fn prepare(
 ///
 /// Iterates all call sites in the module, filters those where `callee == item_name`,
 /// determines the enclosing function for each call, and groups by caller.
+// Implements [LSPARCH-FEATURES-CALLHIER] — Incoming: find all CallSites where callee == name, group by enclosing function.
 #[must_use]
 pub fn incoming_calls(
     resolved: &ResolvedModule,
@@ -128,6 +130,7 @@ pub fn incoming_calls(
 ///
 /// Finds the function with the given name, then collects all call sites within
 /// its `def_span` and groups them by callee.
+// Implements [LSPARCH-FEATURES-CALLHIER] — Outgoing: find all CallSites within function's def_span.
 #[must_use]
 pub fn outgoing_calls(
     resolved: &ResolvedModule,

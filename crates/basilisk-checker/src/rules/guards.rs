@@ -10,7 +10,11 @@ use std::collections::HashMap;
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
 /// Returns `true` when a function is in a "stub context" — a context where
-/// annotation enforcement (E0001, E0002, E0004) should be skipped.
+/// annotation enforcement (BSK-E0001, BSK-E0002, BSK-E0004) should be skipped.
+///
+/// Implements the exemption side of [TYPEINF-FUNC-PARAMS] / [TYPEINF-FUNC-OVERLOADS]:
+/// Protocol/abstract/stub bodies legitimately omit annotations, but `@overload`
+/// variants are explicitly NOT exempt (their signatures drive resolution).
 ///
 /// A stub context is any of:
 /// - A non-`@overload` function whose body is a pure stub (only `...`, `pass`,
@@ -42,10 +46,19 @@ pub(crate) fn is_stub_context(func: &FunctionInfo, classes: &[ClassInfo]) -> boo
     })
 }
 
+/// Returns `true` when a function is decorated with `@no_type_check`.
+///
+/// PEP 484 / `typing.no_type_check` directs checkers to suppress *body* type
+/// checks for the function, so return-value/assignment diagnostics (E0011) must
+/// not fire. Argument-count (E0041) and similar signature checks still apply.
+pub(crate) fn is_no_type_check(func: &FunctionInfo) -> bool {
+    func.decorators.iter().any(|d| d == "no_type_check")
+}
+
 /// Returns `true` when a class is an Enum subclass.
 ///
 /// Enum members are unannotated by design — their type is `Literal[EnumClass.member]`,
-/// synthesised by the Enum metaclass.  Firing E0005 on them is a false positive.
+/// synthesised by the Enum metaclass.  Firing BSK-E0005 on them is a false positive.
 pub(crate) fn is_enum_class(class: &ClassInfo) -> bool {
     class.bases.iter().any(|b| {
         matches!(
@@ -59,14 +72,19 @@ pub(crate) fn is_enum_class(class: &ClassInfo) -> bool {
 ///
 /// Protocol attributes are interface specifications, not concrete class variables.
 /// Unannotated names in a Protocol body are structural members, not bugs.
+///
+/// Implements the gating predicate for [TYPEINF-SUBTYPING-PROTOCOL] — identifies
+/// the structural-subtyping target class. The member-by-member conformance check
+/// itself lives in the out-of-scope `protocols_subtyping` rule (see the map).
 pub(crate) fn is_protocol_class(class: &ClassInfo) -> bool {
     class.bases.iter().any(|b| b == "Protocol")
 }
 
-/// Returns `true` when a class directly inherits from `NamedTuple`.
+/// Returns `true` when a class is a `NamedTuple` subclass.
 ///
-/// `NamedTuple` classes use un-annotated attributes as class variables (not
-/// fields), so they should not require type annotations on those attributes.
+/// `NamedTuple` fields are declared as bare annotations and synthesised into a
+/// tuple by the metaclass, so strict attribute-annotation enforcement must be
+/// suspended for them.
 pub(crate) fn is_namedtuple_class(class: &ClassInfo) -> bool {
     class.bases.iter().any(|b| b == "NamedTuple")
 }

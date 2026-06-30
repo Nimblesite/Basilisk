@@ -33,7 +33,7 @@ pub struct BasiliskConfig {
 
     /// Global rule severity overrides.
     ///
-    /// Maps rule codes (e.g. `"BSK-E0010"`) to severity levels.
+    /// Maps rule codes (e.g. `"imports_unresolved"`) to severity levels.
     pub rules: HashMap<String, RuleSeverity>,
 
     /// Per-module overrides keyed by module name or pattern.
@@ -50,16 +50,28 @@ pub struct BasiliskConfig {
 
     /// Whether to emit BSK-E0152 (missing type stubs) diagnostics.
     ///
-    /// When `true` (default), flags installed packages lacking type stubs.
+    /// `BSK-`prefixed rules are Basilisk-only extras that are **off by default**
+    /// — the default configuration targets PEP conformance first. Enable this to
+    /// flag installed packages lacking type stubs.
     /// Maps to `basilisk.uv.stubSuggestions` in the LSP config.
     pub uv_stub_suggestions: bool,
 
-    /// Whether to emit dependency hygiene diagnostics (BSK-W0011, W0012, W0013).
+    /// Whether to emit dependency hygiene diagnostics (BSK-W0011, BSK-W0012, BSK-W0013).
     ///
     /// When `true`, warns about undeclared transitive dependencies, unused
     /// declared dependencies, and stale lock files. Disabled by default.
     /// Maps to `basilisk.uv.dependencyDiagnostics` in the LSP config.
     pub uv_dependency_diagnostics: bool,
+
+    /// Whether to emit Basilisk's opinionated strict-annotation diagnostics
+    /// (BSK-E0001..BSK-E0005, BSK-E0025, BSK-W0014, BSK-W0040, BSK-W0050).
+    ///
+    /// These `BSK-`prefixed rules enforce stricter-than-PEP discipline (mandatory
+    /// parameter/return/variable/attribute annotations, mandatory `@override`,
+    /// no bare `Any`, no redundant annotations). They are **off by default** so
+    /// the out-of-the-box experience is pure PEP conformance; opt in for stricter
+    /// projects. Maps to `basilisk.strictAnnotations` in the LSP config.
+    pub strict_annotations: bool,
 
     /// Auto-stub generation mode: `"runtime"`, `"ast"`, `"hybrid"`, or `"disabled"`.
     ///
@@ -99,8 +111,9 @@ impl Default for BasiliskConfig {
             rules: HashMap::new(),
             per_module_overrides: HashMap::new(),
             per_path_overrides: HashMap::new(),
-            uv_stub_suggestions: true,
+            uv_stub_suggestions: false,
             uv_dependency_diagnostics: false,
+            strict_annotations: false,
             auto_stub_mode: "hybrid".to_owned(),
             auto_stub_path: PathBuf::from(".basilisk/stubs"),
             python_version: None,
@@ -110,7 +123,7 @@ impl Default for BasiliskConfig {
 }
 
 impl BasiliskConfig {
-    /// Check whether BSK-E0010 should be suppressed for a given module.
+    /// Check whether `imports_unresolved` should be suppressed for a given module.
     #[must_use]
     pub fn should_ignore_missing_stubs(&self, module_name: &str) -> bool {
         crate::overrides::find_module_override(module_name, &self.per_module_overrides)
@@ -212,6 +225,13 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
         }
     }
 
+    // Basilisk-only strict-annotation rules (off by default).
+    if let Some(val) = alias_get(obj, "strictAnnotations", "strict-annotations")
+        .and_then(serde_json::Value::as_bool)
+    {
+        cfg.strict_annotations = val;
+    }
+
     // perModuleOverrides
     if let Some(overrides_obj) =
         alias_get(obj, "perModuleOverrides", "per-module-overrides").and_then(|v| v.as_object())
@@ -256,6 +276,12 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
 }
 
 /// Load configuration from `pyproject.toml` `[tool.basilisk]` section.
+///
+/// Implements [CHKARCH-CONFIG-FILE]: parses the `[tool.basilisk]` table —
+/// `python-version`/`python-platform`, `stub-paths`, `include`/`exclude`,
+/// `rules`, `per-module-overrides`, and `per-path-overrides`. (The spec's
+/// `[tool.basilisk.mojo-safety]` keys are not parsed — those rules are unshipped;
+/// see report.) See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-FILE
 pub fn load_from_pyproject(path: &Path) -> Option<BasiliskConfig> {
     let content = std::fs::read_to_string(path).ok()?;
     let table: toml::Table = content.parse().ok()?;
@@ -306,6 +332,14 @@ pub fn load_from_pyproject(path: &Path) -> Option<BasiliskConfig> {
         {
             cfg.uv_dependency_diagnostics = val;
         }
+    }
+
+    // Basilisk-only strict-annotation rules (off by default).
+    if let Some(val) = basilisk
+        .get("strict-annotations")
+        .and_then(toml::Value::as_bool)
+    {
+        cfg.strict_annotations = val;
     }
 
     // per-module-overrides

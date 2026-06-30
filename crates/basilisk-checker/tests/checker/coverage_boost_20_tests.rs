@@ -7,11 +7,11 @@ use super::common::*;
 // e0148, e0119, e0146, e0120, e0131, e0102, e0130, e0149, e0139, e0111.
 
 // =============================================================================
-// E0067: Enum non-member in Literal
+// Enum non-member in Literal
 // =============================================================================
 
 #[test]
-fn e0067_enum_non_member_method() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_non_member_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 from typing import Literal
@@ -28,7 +28,7 @@ x: Literal[Color.display]
     let diagnostics = run(source)?;
     let e0067 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0067")
+        .filter(|d| d.code.code == "enums_members_2")
         .collect::<Vec<_>>();
     assert!(
         !e0067.is_empty(),
@@ -39,7 +39,7 @@ x: Literal[Color.display]
 }
 
 #[test]
-fn e0067_enum_valid_member_literal() -> Result<(), Box<dyn std::error::Error>> {
+fn enum_valid_member_literal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from enum import Enum
 from typing import Literal
@@ -55,11 +55,11 @@ x: Literal[Color.RED] = Color.RED
 }
 
 // =============================================================================
-// E0072: No matching overload for subscript
+// No matching overload for subscript
 // =============================================================================
 
 #[test]
-fn e0072_overload_getitem_no_match() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_getitem_no_match() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -78,7 +78,7 @@ x = b["invalid"]
     let diagnostics = run(source)?;
     let e0072 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0072")
+        .filter(|d| d.code.code == "overloads_basic")
         .collect::<Vec<_>>();
     // Overload getitem checking not fully implemented
     let _ = e0072;
@@ -86,11 +86,11 @@ x = b["invalid"]
 }
 
 // =============================================================================
-// E0113: TypeIs inconsistent narrowing
+// TypeIs inconsistent narrowing
 // =============================================================================
 
 #[test]
-fn e0113_typeis_inconsistent() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_inconsistent() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeIs
 
@@ -100,7 +100,7 @@ def is_str(x: int) -> TypeIs[str]:
     let diagnostics = run(source)?;
     let e0113 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0113")
+        .filter(|d| d.code.code == "narrowing_typeis_2")
         .collect::<Vec<_>>();
     assert!(
         !e0113.is_empty(),
@@ -111,7 +111,7 @@ def is_str(x: int) -> TypeIs[str]:
 }
 
 #[test]
-fn e0113_typeis_consistent() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_consistent() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeIs
 
@@ -121,7 +121,7 @@ def is_str(x: object) -> TypeIs[str]:
     let diagnostics = run(source)?;
     let e0113 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0113")
+        .filter(|d| d.code.code == "narrowing_typeis_2")
         .collect::<Vec<_>>();
     assert!(
         e0113.is_empty(),
@@ -132,11 +132,11 @@ def is_str(x: object) -> TypeIs[str]:
 }
 
 // =============================================================================
-// E0041: Too few arguments
+// Too few arguments
 // =============================================================================
 
 #[test]
-fn e0041_too_few_plain_call() -> Result<(), Box<dyn std::error::Error>> {
+fn too_few_plain_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def greet(name: str, greeting: str) -> str:
     return f"{greeting}, {name}"
@@ -146,7 +146,7 @@ greet("Alice")
     let diagnostics = run(source)?;
     let e0041 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0041")
+        .filter(|d| d.code.code == "calls_argument_count")
         .collect::<Vec<_>>();
     assert!(
         !e0041.is_empty(),
@@ -157,7 +157,7 @@ greet("Alice")
 }
 
 #[test]
-fn e0041_constructor_too_few() -> Result<(), Box<dyn std::error::Error>> {
+fn constructor_too_few() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Point:
     def __init__(self, x: int, y: int, z: int) -> None:
@@ -168,7 +168,7 @@ p = Point(1)
     let diagnostics = run(source)?;
     let e0041 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0041")
+        .filter(|d| d.code.code == "calls_argument_count")
         .collect::<Vec<_>>();
     assert!(
         !e0041.is_empty(),
@@ -179,7 +179,7 @@ p = Point(1)
 }
 
 #[test]
-fn e0041_namedtuple_too_few() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_too_few() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -193,7 +193,7 @@ p = Point(1)
     let diagnostics = run(source)?;
     let e0041 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0041")
+        .filter(|d| d.code.code == "calls_argument_count")
         .collect::<Vec<_>>();
     // NamedTuple constructor checking not fully implemented
     let _ = e0041;
@@ -201,7 +201,7 @@ p = Point(1)
 }
 
 #[test]
-fn e0041_no_args_call() -> Result<(), Box<dyn std::error::Error>> {
+fn no_args_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def greet(name: str, greeting: str) -> str:
     return f"{greeting}, {name}"
@@ -211,7 +211,7 @@ greet()
     let diagnostics = run(source)?;
     let e0041 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0041")
+        .filter(|d| d.code.code == "calls_argument_count")
         .collect::<Vec<_>>();
     assert!(
         !e0041.is_empty(),
@@ -222,11 +222,11 @@ greet()
 }
 
 // =============================================================================
-// E0047: Invalid type expression
+// Invalid type expression
 // =============================================================================
 
 #[test]
-fn e0047_invalid_annotation_deep() -> Result<(), Box<dyn std::error::Error>> {
+fn invalid_annotation_deep() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def process(x: 42) -> None:
     pass
@@ -240,11 +240,11 @@ def compute(y: "invalid annotation") -> None:
 }
 
 // =============================================================================
-// E0015: Invalid type argument count
+// Invalid type argument count
 // =============================================================================
 
 #[test]
-fn e0015_generic_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Optional, List, Dict, Set
 
@@ -256,7 +256,7 @@ w: Set[int, str, float] = set()
     let diagnostics = run(source)?;
     let e0015 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .count();
     assert!(
         e0015 >= 1,
@@ -268,11 +268,11 @@ w: Set[int, str, float] = set()
 }
 
 // =============================================================================
-// E0126: LiteralString deep
+// LiteralString deep
 // =============================================================================
 
 #[test]
-fn e0126_literal_string_assignment_deep() -> Result<(), Box<dyn std::error::Error>> {
+fn literal_string_assignment_deep() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import LiteralString
 
@@ -282,7 +282,7 @@ def process(s: str) -> None:
     let diagnostics = run(source)?;
     let e0126 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0126")
+        .filter(|d| d.code.code == "literals_literalstring")
         .collect::<Vec<_>>();
     // LiteralString assignment checking not fully triggered from resolver
     let _ = e0126;
@@ -290,11 +290,11 @@ def process(s: str) -> None:
 }
 
 // =============================================================================
-// E0142: dataclass_transform base
+// dataclass_transform base
 // =============================================================================
 
 #[test]
-fn e0142_dataclass_transform_base_class() -> Result<(), Box<dyn std::error::Error>> {
+fn dataclass_transform_base_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import dataclass_transform
 
@@ -311,11 +311,11 @@ class User(ModelBase):
 }
 
 // =============================================================================
-// E0120: Generator violations deep
+// Generator violations deep
 // =============================================================================
 
 #[test]
-fn e0120_generator_yield_all_types() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_yield_all_types() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -337,11 +337,11 @@ def gen3() -> Generator[float, None, str]:
 }
 
 // =============================================================================
-// E0102: TypeVar default deep paths
+// TypeVar default deep paths
 // =============================================================================
 
 #[test]
-fn e0102_typevar_default_various() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -357,11 +357,11 @@ class Container(Generic[T1, T2, T3]):
 }
 
 // =============================================================================
-// E0130: TypeVar scoping in many places
+// TypeVar scoping in many places
 // =============================================================================
 
 #[test]
-fn e0130_typevar_in_many_functions() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_in_many_functions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -387,11 +387,11 @@ def multi(x: T, y: U) -> T:
 }
 
 // =============================================================================
-// E0076: Overload deep
+// Overload deep
 // =============================================================================
 
 #[test]
-fn e0076_overload_class_method() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_class_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -409,11 +409,11 @@ class Parser:
 }
 
 // =============================================================================
-// E0146: Protocol class deep
+// Protocol class deep
 // =============================================================================
 
 #[test]
-fn e0146_protocol_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_multiple_methods() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -432,11 +432,11 @@ class JSONSerializer:
 }
 
 // =============================================================================
-// E0116: NamedTuple definition deep
+// NamedTuple definition deep
 // =============================================================================
 
 #[test]
-fn e0116_namedtuple_with_generic() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_with_generic() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple, Generic, TypeVar
 
@@ -451,11 +451,11 @@ class Pair(NamedTuple, Generic[T]):
 }
 
 // =============================================================================
-// E0143: NamedTuple usage deep
+// NamedTuple usage deep
 // =============================================================================
 
 #[test]
-fn e0143_namedtuple_assign_subscript_oob() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_assign_subscript_oob() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -474,7 +474,7 @@ del r[1]
     let diagnostics = run(source)?;
     let e0143 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0143")
+        .filter(|d| d.code.code == "namedtuples_usage")
         .count();
     assert!(
         e0143 >= 2,
@@ -518,7 +518,7 @@ z: Literal[Status.label]
     let diagnostics = run(source)?;
     let e0067 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0067")
+        .filter(|d| d.code.code == "enums_members_2")
         .count();
     assert!(
         e0067 >= 1,
@@ -565,7 +565,7 @@ r = Record(1)
     let diagnostics = run(source)?;
     let e0041 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0041")
+        .filter(|d| d.code.code == "calls_argument_count")
         .count();
     assert!(
         e0041 >= 3,
@@ -593,7 +593,7 @@ def is_list(x: object) -> TypeIs[list]:
     let diagnostics = run(source)?;
     let e0113 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0113")
+        .filter(|d| d.code.code == "narrowing_typeis_2")
         .count();
     assert!(
         e0113 >= 1,
@@ -626,7 +626,7 @@ z = c[1:3]
     let diagnostics = run(source)?;
     let e0072 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0072")
+        .filter(|d| d.code.code == "overloads_basic")
         .count();
     // Overload getitem checking not fully implemented
     let _ = e0072;
@@ -649,7 +649,7 @@ def combine(a: LiteralString, b: str) -> None:
     let diagnostics = run(source)?;
     let e0126 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0126")
+        .filter(|d| d.code.code == "literals_literalstring")
         .count();
     // LiteralString checking not fully triggered
     let _ = e0126;
@@ -672,7 +672,7 @@ g: Type[int, str] = int
     let diagnostics = run(source)?;
     let e0015 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0015")
+        .filter(|d| d.code.code == "callables_annotation")
         .count();
     assert!(
         e0015 >= 3,

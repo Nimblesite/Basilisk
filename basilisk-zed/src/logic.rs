@@ -25,7 +25,7 @@ struct SlashCommand {
 
 /// Every slash command the extension exposes. Single source of truth for both
 /// [`slash_command_output`] and [`slash_completions`] — adding a command here
-/// wires up dispatch and completion in one place.
+/// wires up dispatch and completion in one place. Implements [ZED-PROFILE].
 const SLASH_COMMANDS: &[SlashCommand] = &[
     SlashCommand {
         name: slash_commands::PROFILE,
@@ -421,6 +421,8 @@ pub fn slash_completions(command: &str) -> Vec<(String, String, bool)> {
 }
 
 // ── DAP config building ──────────────────────────────────────────────────────
+// Launch/attach config normalisation for the basilisk-debug adapter; mirrors
+// debug_adapter_schemas/basilisk-debug.json. Implements [ZED-DAP].
 
 /// Build the DAP configuration JSON from an adapter config value.
 ///
@@ -500,7 +502,8 @@ pub fn is_newer_version(current: &str, latest: &str) -> bool {
 // ── Workspace configuration ──────────────────────────────────────────────────
 
 /// Build the default workspace configuration sent when the user has no
-/// explicit `basilisk` settings in Zed.
+/// explicit `basilisk` settings in Zed. Maps shared LSP config into Zed's
+/// settings structure — implements [ZED-CONFIG].
 pub fn default_workspace_config() -> Value {
     serde_json::json!({
         config_keys::INLAY_HINTS: {
@@ -557,9 +560,23 @@ pub fn find_env_var<'a>(env: &'a [(String, String)], name: &str) -> Option<&'a s
         .map(|(_, value)| value.as_str())
 }
 
-/// Build the cargo bin path from a home directory.
-pub fn cargo_bin_path(home: &str) -> String {
-    format!("{home}/.cargo/bin/basilisk")
+/// Resolve an explicit, user-provided binary override, if any.
+///
+/// Precedence: the Zed LSP `binary.path` setting, then the `BASILISK_PATH`
+/// environment variable. Returns `None` when neither is set — the signal to
+/// fall back to the managed GitHub-release download.
+///
+/// There is deliberately **no** filesystem default (e.g. `~/.cargo/bin`):
+/// installing the extension alone must be enough to get a working binary, so
+/// the absence of an explicit override means "download the matching release
+/// asset", never "guess a path that probably does not exist". Implements
+/// [ZED-DIST].
+#[must_use]
+pub fn resolve_binary_override(
+    settings_path: Option<&str>,
+    env_path: Option<&str>,
+) -> Option<String> {
+    settings_path.or(env_path).map(str::to_string)
 }
 
 #[cfg(test)]

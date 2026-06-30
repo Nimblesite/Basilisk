@@ -47,6 +47,8 @@ pub async fn is_uv_available() -> bool {
 /// # Errors
 ///
 /// Returns an `io::Error` if the subprocess cannot be spawned.
+//
+// Implements [LSPUV-COMMANDS] — `basilisk.uv.sync` ({}) → `uv sync`.
 pub async fn uv_sync(project_root: &Path) -> Result<UvCommandResult, std::io::Error> {
     run_uv(project_root, &["sync"]).await
 }
@@ -56,6 +58,8 @@ pub async fn uv_sync(project_root: &Path) -> Result<UvCommandResult, std::io::Er
 /// # Errors
 ///
 /// Returns an `io::Error` if the subprocess cannot be spawned.
+//
+// Implements [LSPUV-COMMANDS] — `basilisk.uv.add` {package} → `uv add <pkg>`.
 pub async fn uv_add(project_root: &Path, package: &str) -> Result<UvCommandResult, std::io::Error> {
     run_uv(project_root, &["add", package]).await
 }
@@ -65,6 +69,9 @@ pub async fn uv_add(project_root: &Path, package: &str) -> Result<UvCommandResul
 /// # Errors
 ///
 /// Returns an `io::Error` if the subprocess cannot be spawned.
+//
+// Implements [LSPUV-COMMANDS] — `basilisk.uv.addDev` {package} →
+// `uv add --dev <pkg>` (the BSK-E0152 stub-install path, [LSPUV-ACTIONS-QUICK-FIXES]).
 pub async fn uv_add_dev(
     project_root: &Path,
     package: &str,
@@ -77,6 +84,8 @@ pub async fn uv_add_dev(
 /// # Errors
 ///
 /// Returns an `io::Error` if the subprocess cannot be spawned.
+//
+// Implements [LSPUV-COMMANDS] — `basilisk.uv.remove` {package} → `uv remove <pkg>`.
 pub async fn uv_remove(
     project_root: &Path,
     package: &str,
@@ -89,6 +98,9 @@ pub async fn uv_remove(
 /// # Errors
 ///
 /// Returns an `io::Error` if the subprocess cannot be spawned.
+//
+// Implements [LSPUV-COMMANDS] — `basilisk.uv.lock` ({}) → `uv lock`
+// (resolve without installing).
 pub async fn uv_lock(project_root: &Path) -> Result<UvCommandResult, std::io::Error> {
     run_uv(project_root, &["lock"]).await
 }
@@ -98,6 +110,9 @@ pub async fn uv_lock(project_root: &Path) -> Result<UvCommandResult, std::io::Er
 /// # Errors
 ///
 /// Returns an `io::Error` if the subprocess cannot be spawned.
+//
+// Implements [LSPUV-COMMANDS] — `basilisk.uv.createEnv` {pythonVersion?} →
+// `uv venv [--python <ver>]`.
 pub async fn uv_create_env(
     project_root: &Path,
     python_version: Option<&str>,
@@ -110,6 +125,13 @@ pub async fn uv_create_env(
 
 /// Shared helper: spawn `uv` with the given arguments, capture output, apply
 /// the 30-second timeout, and return a structured result.
+//
+// Implements [LSPUV-ACTIONS-EXECUTION] — runs `uv` as a subprocess in the
+// project root and returns `{success, stdout, stderr}` (here plus `exit_code`).
+// The lock-file re-parse on success is wired by the caller in
+// `server::uv_handlers::run_uv_and_refresh`. CONFORMANCE NOTE: spawns a bare
+// `uv` (OS PATH only); it does NOT use the `[LSPUV-CONFIG-BINARY-RESOLUTION]`
+// cascade in `basilisk_uv::binary::find_uv_binary`. See conformance audit.
 async fn run_uv(project_root: &Path, args: &[&str]) -> Result<UvCommandResult, std::io::Error> {
     info!(project_root = %project_root.display(), args = ?args, "running uv command");
 

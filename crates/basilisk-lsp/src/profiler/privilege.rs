@@ -31,6 +31,11 @@ pub enum PermissionStatus {
 
 /// Check whether the current process can profile the target PID.
 ///
+/// Implements [PROFILE-PERMISSIONS]: a child PID yields `Allowed` (in-process
+/// py-spy), an external PID yields `ElevationRequired` (macOS helper socket), and
+/// a missing PID yields `Denied`. This is the authoritative attach-time check
+/// that the panel's `requiresElevation` hint defers to.
+///
 /// Returns [`PermissionStatus::Allowed`] if no elevation is needed,
 /// [`PermissionStatus::ElevationRequired`] if the helper must be spawned,
 /// or [`PermissionStatus::Denied`] if profiling is not possible.
@@ -161,8 +166,11 @@ fn check_permissions_for_platform(_pid: u32) -> Result<PermissionStatus, String>
 
 /// Check macOS profiling permissions for a target PID.
 ///
-/// Parent processes can trace their children without elevation. For external
-/// processes, root privileges are required for `task_for_pid` / `vm_read`.
+/// Implements [PROFILE-PERMISSIONS-MACOS]: a child Basilisk launched can be
+/// traced by its parent with no elevation; any **external** process (even
+/// same-user) needs root for `task_for_pid` / `vm_read`, so it returns
+/// `ElevationRequired` (the LSP then spawns the elevated helper). There is no
+/// "same-user, no-elevation" shortcut on macOS.
 #[cfg(target_os = "macos")]
 fn check_macos_permissions(pid: u32) -> PermissionStatus {
     if !process_exists(pid) {
@@ -186,6 +194,12 @@ fn check_macos_permissions(pid: u32) -> PermissionStatus {
 // ── Linux ──────────────────────────────────────────────────────────────────
 
 /// Check Linux profiling permissions by reading `ptrace_scope`.
+///
+/// Implements [PROFILE-PERMISSIONS-LINUX]: works without root if
+/// `ptrace_scope=0`; under the default `1` the precheck **attempts the attach**
+/// rather than denying upfront (Yama still grants ancestors and `PR_SET_PTRACER`
+/// opt-ins), with a real `EPERM` surfaced as a classified error + remedies;
+/// scopes `2`/`3` are denied upfront.
 ///
 /// - `ptrace_scope` = 0: classic, any process can trace any other.
 /// - `ptrace_scope` = 1: restricted, only parent can trace child.
@@ -260,8 +274,8 @@ fn read_ptrace_scope() -> Result<u8, String> {
 
 /// Check Windows profiling permissions.
 ///
-/// `ReadProcessMemory` works without elevation for processes owned by the
-/// same user, so no special handling is needed.
+/// Implements [PROFILE-PERMISSIONS-WINDOWS]: `ReadProcessMemory` works without
+/// elevation for same-user processes, so this is always `Allowed`.
 #[cfg(target_os = "windows")]
 fn check_windows_permissions() -> Result<PermissionStatus, String> {
     debug!("Windows: ReadProcessMemory works for same-user processes");
@@ -450,6 +464,8 @@ mod tests {
         assert!(result.is_ok());
     }
 
+    // [PROFILE-PERMISSIONS-MACOS] An external (non-child) process needs elevation
+    // unless we're root.
     #[cfg(target_os = "macos")]
     #[test]
     fn macos_non_child_requires_elevation_when_not_root() {
@@ -472,6 +488,7 @@ mod tests {
     /// Restricted Yama (`ptrace_scope=1`) must attempt the attach instead of
     /// denying upfront: the kernel still grants ancestors (debug-session
     /// debuggees) and `PR_SET_PTRACER` opt-ins, which the precheck cannot see.
+    /// [PROFILE-PERMISSIONS-LINUX]
     #[test]
     fn restricted_ptrace_scope_attempts_attach_instead_of_denying() {
         assert_eq!(classify_ptrace_scope(0), PermissionStatus::Allowed);
@@ -552,6 +569,7 @@ mod tests {
         assert!(msg.len() > 20, "message should be descriptive");
     }
 
+    // [PROFILE-PERMISSIONS] A child PID is Allowed (sampled in-process, no helper).
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     #[test]
     fn child_process_does_not_require_elevation() -> Result<(), String> {

@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "Quick Start — Type-Check Your First File in 5 Minutes"
-description: "Get started with Basilisk in 5 minutes. Install the VS Code extension, run your first type check, and see strict-by-default Python diagnostics in action."
+description: "Get started with Basilisk in 5 minutes. Install the VS Code extension, run your first type check, and see PEP-conformant Python diagnostics in action."
 keywords: basilisk, quick start, python language server, type checking, tutorial, vs code
 date: 2026-02-28
 dateModified: 2026-03-31
@@ -148,13 +148,17 @@ error[BSK-E0001]: Missing parameter type annotation for `data`
 - **`= note:`** — why the rule exists
 - **`= see:`** — link to full documentation
 
+The same information is available in your editor — hover any symbol for its inferred type:
+
+![Basilisk hover in VS Code — hovering a function shows its full inferred signature](/assets/images/vscode-hover.png)
+
 ## Step 6 — Intentional suppressions
 
 When you genuinely need to use `Any` or suppress a diagnostic, you can — but you must provide a reason:
 
 ```python
 # This suppression requires a reason comment
-result: Any = legacy_sdk_call()  # basilisk: ignore[BSK-E0011] -- tracked in #847
+result: Any = legacy_sdk_call()  # basilisk: ignore[returns_compatibility] -- tracked in #847
 ```
 
 Suppressions without reasons are themselves flagged. This is intentional: if you need to suppress a diagnostic, you should be able to explain why.

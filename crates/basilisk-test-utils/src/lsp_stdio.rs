@@ -30,6 +30,13 @@ pub struct LspStdioFixture {
     pub responses: Receiver<String>,
     /// Auto-incrementing request ID counter.
     pub next_id: i64,
+    /// Temp workspace root opened during initialize. It ships a `basilisk.json`
+    /// that opts into the annotation house rules (off by default — the default
+    /// config is pure PEP conformance). Documents fall back to this root's
+    /// config, so house diagnostics (`BSK-E0001` …) fire exactly as they do for
+    /// a project that enabled them. No modes; configuration.
+    /// See [CHKARCH-CONFIGURATION-ONLY].
+    pub workspace_root: std::path::PathBuf,
 }
 
 impl std::fmt::Debug for LspStdioFixture {
@@ -46,6 +53,9 @@ impl LspStdioFixture {
     /// # Errors
     /// Returns an error if the server process fails to spawn.
     pub fn new() -> TestResult<Self> {
+        // Per-process sequence for unique temp workspace names.
+        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
         let mut child = Command::new(basilisk_binary())
             .arg("lsp")
             .stdin(Stdio::piped())
@@ -106,11 +116,23 @@ impl LspStdioFixture {
             }
         });
 
+        // Create a temp workspace that opts into the annotation house rules so
+        // documents (which fall back to the root's checker config) see them.
+        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let workspace_root =
+            std::env::temp_dir().join(format!("bsk_lsp_stdio_{}_{seq}", std::process::id()));
+        std::fs::create_dir_all(&workspace_root)?;
+        std::fs::write(
+            workspace_root.join("basilisk.json"),
+            "{\"strictAnnotations\": true}\n",
+        )?;
+
         Ok(Self {
             child,
             stdin,
             responses: rx,
             next_id: 1,
+            workspace_root,
         })
     }
 
@@ -144,13 +166,16 @@ impl LspStdioFixture {
     /// # Errors
     /// Returns an error if the handshake fails or no response is received.
     pub fn initialize(&mut self) -> TestResult<String> {
+        // Open the configured workspace root so documents resolve to a config
+        // with the annotation house rules enabled. See [CHKARCH-CONFIGURATION-ONLY].
+        let root_uri = format!("file://{}", self.workspace_root.to_string_lossy());
         self.send_json(&serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
             "method": "initialize",
             "params": {
                 "processId": std::process::id(),
-                "rootUri": null,
+                "rootUri": root_uri,
                 "capabilities": {},
                 "trace": "off"
             }
@@ -178,16 +203,21 @@ impl LspStdioFixture {
     /// Returns an error if the handshake fails or no response is received.
     pub fn initialize_zed_style(&mut self) -> TestResult<String> {
         let id = self.next_id();
+        // Point both rootUri and the Zed-style workspaceRoot option at the
+        // configured temp workspace so documents resolve to a config with the
+        // annotation house rules enabled. See [CHKARCH-CONFIGURATION-ONLY].
+        let root_path = self.workspace_root.to_string_lossy().into_owned();
+        let root_uri = format!("file://{root_path}");
         self.send_json(&serde_json::json!({
             "jsonrpc": "2.0",
             "id": id,
             "method": "initialize",
             "params": {
                 "processId": std::process::id(),
-                "rootUri": null,
+                "rootUri": root_uri,
                 "capabilities": {},
                 "initializationOptions": {
-                    "workspaceRoot": "/tmp/basilisk-zed-test"
+                    "workspaceRoot": root_path
                 },
                 "trace": "off"
             }
@@ -375,5 +405,6 @@ impl Drop for LspStdioFixture {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+        let _ = std::fs::remove_dir_all(&self.workspace_root);
     }
 }

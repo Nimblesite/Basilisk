@@ -12,6 +12,11 @@ use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit
 ///
 /// Returns `None` if the function cannot be found, has multiple statements, or
 /// the argument count does not match the parameter count.
+// Implements [REFACTOR-INLINE-FUNC] and [REFACTOR-INLINE-FUNC-ALGO] — resolve the
+// call (step 1), require a single `return expr` body (step 2), substitute args
+// for params (step 3), and replace the call expression with the substituted body
+// (step 4). Per the spec, this initial implementation supports only
+// single-expression bodies.
 #[must_use]
 pub(in crate::code_actions) fn inline_function_call(
     uri: &Url,
@@ -220,6 +225,8 @@ fn extract_def_params(trimmed: &str, def_prefix: &str) -> Option<Vec<String>> {
 
 /// Check that the function body (lines after the def) contains exactly one
 /// `return expr` statement and return the expression.
+// Implements [REFACTOR-INLINE-FUNC-ALGO] step 2 — validate the body is a
+// single `return expr` (the only form supported by the initial implementation).
 fn extract_single_return(all_lines: &[&str], def_idx: usize, def_line: &str) -> Option<String> {
     let def_indent_len = def_line.len() - def_line.trim_start().len();
     let body_indent_len = def_indent_len + 4;
