@@ -11,7 +11,7 @@ use crate::overrides::{ModuleOverride, PathOverride, RuleSeverity};
 /// This is the rich configuration model with per-module and per-path overrides.
 /// It supplements the `WorkspaceConfig` in `basilisk-lsp` which handles
 /// analysis mode, python version, and other LSP-level settings.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct BasiliskConfig {
     /// Directory names to exclude from file discovery.
     ///

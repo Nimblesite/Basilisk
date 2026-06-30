@@ -916,16 +916,21 @@ Basilisk uses the [Salsa](https://crates.io/crates/salsa) incremental computatio
 framework (the same system powering rust-analyzer) for **in-session** incremental
 checking.
 
-- **Input query**: a file's source text — `SourceFile::text`, the single root
-  input (`crates/basilisk-db/src/db.rs`). The database (`BasiliskDatabase`) and
-  the shared `Db` trait live there too; `basilisk-db` is the dependency-graph
-  foundation, so the derived queries are defined in the crates that own the work.
+- **Input queries**: a file's source text — `SourceFile::text`
+  (`crates/basilisk-db/src/db.rs`) — and the effective configuration —
+  `ConfigInput::value`, a `ConfigValue(BasiliskConfig)`
+  (`crates/basilisk-checker/src/incremental.rs`). The database
+  (`BasiliskDatabase`) and the shared `Db` trait live in `basilisk-db`, the
+  dependency-graph foundation, so the derived queries are defined in the crates
+  that own the work. `ConfigInput` lives in `basilisk-checker` (beside its only
+  consumer) so the salsa `Update` wrapper never reaches the salsa-free
+  `basilisk-config` leaf crate.
 - **Derived query**: the per-file diagnostics — `checked_file`
   (`crates/basilisk-checker/src/incremental.rs`), which runs `parse → resolve →
-  check` and memoizes the result. Granularity is **module-level**: the pipeline
-  is fused into one tracked query keyed on the file, matching the `Module-level`
-  granularity row in [CHKARCH-MATRIX]. Editing one file re-executes only that
-  file's query;
+  check_with_config` and memoizes the result. Granularity is **module-level**:
+  the pipeline is fused into one tracked query keyed on the `(file, config)`
+  pair, matching the `Module-level` granularity row in [CHKARCH-MATRIX]. Editing
+  one file — or the configuration — re-executes only the affected queries;
   unrelated files are served from their memos.
 
 The value type is the owned `CachedDiagnostic` (it satisfies salsa's `Update`
@@ -933,11 +938,14 @@ bound), so the engine adds **no** salsa dependency to `basilisk-resolver` or
 `basilisk-stubs`.
 
 **Equivalence guarantee.** `checked_file` is a pure memoization wrapper over
-[`check`](#CHKARCH-ARCH-PIPELINE): for any file that parses and resolves,
-`file_diagnostics(db, file)` equals `check(&resolved)` byte-for-byte. This is
-asserted directly (`crates/basilisk-checker/tests/incremental_tests.rs`,
-`checked_file_is_equivalent_to_direct_check`), so salsa memoization can never
-corrupt a result.
+[`check_with_config`](#CHKARCH-ARCH-PIPELINE): for any file that parses and
+resolves, `file_diagnostics(db, file, config)` equals
+`check_with_config(&resolved, cfg)` byte-for-byte, and with the default config
+equals `check(&resolved)`. This is asserted directly
+(`crates/basilisk-checker/tests/incremental_tests.rs`,
+`checked_file_is_equivalent_to_direct_check` plus
+`checked_file_honours_strict_annotations` for the config differential), so salsa
+memoization can never corrupt a result.
 
 **Scope — not yet the CLI/LSP path.** The equivalence is to the *pure*
 pipeline, **not** to what `basilisk check` emits. The batch CLI (`process_file`)
@@ -945,15 +953,21 @@ and the LSP run an extra step between resolve and check —
 `basilisk_lsp::import_resolver::resolve_module_imports`, which resolves imports
 against the venv/`uv.lock` and so changes both the `imports_unresolved` rule and
 cascade suppression for import-bearing files. That step reads the filesystem and
-cannot be a pure salsa query without promoting the search paths (and
-configuration) to salsa inputs. So today the query covers the **default-config,
-import-free** pipeline only, and the engine is **not yet wired** into the
-published-diagnostics paths — those remain on the direct pipeline, which is why
-this change cannot affect the conformance score. Unblocking full adoption needs
-`BasiliskConfig` / `ImportSearchPaths` to gain salsa-compatible identity
-(`PartialEq`, so the derive's fallback applies) and become tracked inputs; the
+cannot be a pure salsa query without promoting the search paths to a salsa
+input. Configuration, by contrast, **is** now a tracked input: `ConfigInput`
+wraps a `ConfigValue(BasiliskConfig)` whose `salsa::Update` resolves through
+`BasiliskConfig`'s `PartialEq` — the same dispatch fallback `CachedDiagnostic`
+uses for `Span`/`Severity`, so no salsa dependency reaches `basilisk-config`.
+Editing it invalidates exactly the files it affects, proven by
+`editing_config_input_invalidates_checked_file` (and
+`editing_override_maps_reinvalidates` for nested override identity). So the query
+now covers the **configurable, import-free** pipeline, but the engine is still
+**not yet wired** into the published-diagnostics paths — those remain on the
+direct pipeline, which is why this change cannot affect the conformance score.
+The remaining step before adoption is to give `ImportSearchPaths`
+salsa-compatible identity and fold import resolution into a tracked query; the
 engine is already a public API (`basilisk_checker::{BasiliskDatabase, SourceFile,
-checked_file, file_diagnostics}`) ready for that work.
+ConfigInput, ConfigValue, checked_file, file_diagnostics}`) ready for that work.
 
 Incremental behaviour is proven by `crates/basilisk-db/tests/db_tests.rs`
 (memoization, invalidation, cross-file isolation) and the checker tests above.
