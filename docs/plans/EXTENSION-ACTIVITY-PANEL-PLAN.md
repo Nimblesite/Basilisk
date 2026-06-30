@@ -17,7 +17,7 @@ performance/accessibility polish**, and cross-editor follow-ups.
 
 ---
 
-## Remaining: Feature Status toggles — make them REAL {#EXTACT-PLAN-FEATURE-TOGGLES}
+## Shipped Panel Inventory {#EXTACT-PLAN-SHIPPED-INVENTORY}
 
 ### LSP Backend
 - [x] Implement `basilisk/workspaceModules` handler in `basilisk-lsp`
@@ -48,7 +48,7 @@ performance/accessibility polish**, and cross-editor follow-ups.
 - [x] Implement module filter input box with glob support
 - [x] Implement `TypeHealthProvider` — `TreeDataProvider` with summary header
 - [x] Implement coverage bar rendering in description field
-- [x] Implement sort cycling (worst-first / best-first / alphabetical)
+- [x] Implement explicit module sort picker (module name / path / type coverage)
 - [x] Implement `BasiliskInfoProvider` — static tree with four sections
 - [x] Implement Feature Status toggle-on-click
 - [x] Implement Server Info section (version, binary, python, analysis mode, file count)

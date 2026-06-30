@@ -241,6 +241,7 @@ suite("Basilisk Activity Panel E2E Tests", function () {
     await vscode.commands.executeCommand("basilisk.refreshModuleExplorer");
   });
 
+  // Tests [EXTACT-MODULES-TOOLBAR] Toggle View.
   test("toggleModuleExplorerView command is executable", async function () {
     await vscode.commands.executeCommand("basilisk.toggleModuleExplorerView");
   });

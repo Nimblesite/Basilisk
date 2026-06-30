@@ -13,9 +13,9 @@ CI that a visitor can navigate the site.
 `mobile` = Pixel 5), served by `website/tests/static-server.js`. Run with
 `npm run test:e2e` (`test:e2e:ui` locally). Asserts per viewport:
 
-- **Top navigation resolves** — the home page links to Docs, Rules, Blog and
-  GitHub (matched by `href`, so the check holds even where the nav is collapsed
-  behind the hamburger on a phone).
+- **Top navigation resolves** — the home page links to Docs, Rules, Blog,
+  Discord and GitHub (matched by `href`, so the check holds even where the nav
+  is collapsed behind the hamburger on a phone).
 - **Docs landing page loads** — `/docs/` renders with the docs sidebar present.
 - **Desktop sidebar** — the docs sidebar is permanently visible and navigates
   between sections without any toggle.

@@ -295,7 +295,7 @@ name into path segments and threading it into a node trie
   `models/` above) have no `ModuleNode`; they are **synthesised** as structural
   container nodes with a namespace icon, no coverage rollup, and no open action.
 - Sibling order is structural: containers (packages/folders) before leaf
-  modules, each alphabetical by segment. The flat-view sort toggle does not
+  modules, each alphabetical by segment. The flat-view sort picker does not
   apply in tree view ([EXTACT-MODULES-TOOLBAR](#EXTACT-MODULES-TOOLBAR)).
 - **Diagnostics roll up onto containers.** Each folder/package row shows the
   total `nE nW` rolled up across its whole subtree and tints its icon red (any
@@ -305,10 +305,10 @@ name into path segments and threading it into a node trie
 
 **Flat view (`flat`, opt-in toggle).** Flat view drops the folder nesting and
 lists **every module** as one sortable row labelled by its full dotted name,
-ordered by the sort toggle (worst/best/alpha). It is "flat" only in that folders
-are not nested — symbols still expand **under their owning module** and are
-**never** dumped bare at the tree root (the #149 §2 flat-mode defect). The
-default view is always the nested tree.
+ordered by the selected sort mode (module name / path / type coverage — #189).
+It is "flat" only in that folders are not nested — symbols still expand **under
+their owning module** and are **never** dumped bare at the tree root (the #149
+§2 flat-mode defect). The default view is always the nested tree.
 
 ### Tree Item Properties {#EXTACT-MODULES-ITEM-PROPERTIES}
 
@@ -347,7 +347,7 @@ default view is always the nested tree.
 | Collapse All | VS Code's **native** `showCollapseAll` button — never a contributed command. A custom collapse command alongside it is a duplicate (issue #113). |
 | Filter | Toggle filter input to search modules/symbols by name |
 | Toggle View | Switch between tree (nested folder/package hierarchy, default) and flat (every module as one sortable row) |
-| Sort | Cycle worst-first -> best-first -> alphabetical. Applied only in flat view; tree view stays structural. Its toolbar entry is **gated on `basilisk.moduleExplorerView == 'flat'`** so it is hidden in tree view rather than rendering as a silent no-op (issue #151). Carried over from the merged Type Health panel. |
+| Sort | Picker of three labelled modes — **Module Name**, **Path**, **Type Coverage** — with the active mode checked (no blind cycle, issue #189). Coverage sorts ascending (least-typed first), the default. Flat view only; gated on `basilisk.moduleExplorerView == 'flat'` so it is hidden (not a silent no-op) in tree view (issue #151). |
 | Fix All | Run `basilisk.fixWorkspace`. Promoted from the info panel (issue #103); `when`-gated on `basilisk.serverState == 'running'` **and** the `config.basilisk.experimental.fixAll` flag (default off, issue #113). |
 | Organize Imports | Run `basilisk.organizeImports`. Same promotion + gating. |
 | Restart Server | Run `basilisk.restartServer`. Same promotion + gating. |

@@ -225,3 +225,131 @@ fn int_literal(expr: &Expr) -> Option<u32> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ruff_python_ast::{CmpOp, Stmt};
+
+    use super::{evaluate, parse_static_condition, BranchTruth, StaticCondition};
+
+    fn parse_if_test(source: &str) -> Result<StaticCondition, String> {
+        let parsed = basilisk_parser::parse_source(
+            source.to_string(),
+            "<static-condition-test>".to_string(),
+        )
+        .map_err(|err| err.to_string())?;
+        let Some(Stmt::If(if_stmt)) = parsed.ast.body.first() else {
+            return Err("test fixture should start with an if statement".to_string());
+        };
+        Ok(parse_static_condition(&if_stmt.test))
+    }
+
+    #[test]
+    fn parses_type_checking_and_boolean_composition() -> Result<(), String> {
+        let cond = parse_if_test(
+            r"
+if typing.TYPE_CHECKING and (not False or feature_flag):
+    x = 1
+",
+        )?;
+
+        assert_eq!(
+            cond,
+            StaticCondition::All(vec![
+                StaticCondition::TypeChecking,
+                StaticCondition::Any(vec![
+                    StaticCondition::Not(Box::new(StaticCondition::Bool(false))),
+                    StaticCondition::Unknown,
+                ]),
+            ]),
+        );
+        assert_eq!(evaluate(&cond, (3, 12)), BranchTruth::AlwaysTrue);
+        Ok(())
+    }
+
+    #[test]
+    fn evaluates_boolean_all_unknown_and_false_cases() {
+        let with_unknown =
+            StaticCondition::All(vec![StaticCondition::Bool(true), StaticCondition::Unknown]);
+        let with_false = StaticCondition::All(vec![
+            StaticCondition::Bool(true),
+            StaticCondition::Bool(false),
+        ]);
+
+        assert_eq!(evaluate(&with_unknown, (3, 12)), BranchTruth::Unknown);
+        assert_eq!(evaluate(&with_false, (3, 12)), BranchTruth::AlwaysFalse);
+    }
+
+    #[test]
+    fn evaluates_boolean_any_unknown_and_false_cases() {
+        let with_unknown =
+            StaticCondition::Any(vec![StaticCondition::Bool(false), StaticCondition::Unknown]);
+        let all_false = StaticCondition::Any(vec![
+            StaticCondition::Bool(false),
+            StaticCondition::Bool(false),
+        ]);
+
+        assert_eq!(evaluate(&with_unknown, (3, 12)), BranchTruth::Unknown);
+        assert_eq!(evaluate(&all_false, (3, 12)), BranchTruth::AlwaysFalse);
+    }
+
+    #[test]
+    fn parses_reversed_version_comparison_and_micro_tuple() -> Result<(), String> {
+        let cond = parse_if_test(
+            r"
+if (3, 11, 7) <= sys.version_info:
+    x = 1
+",
+        )?;
+
+        assert_eq!(
+            cond,
+            StaticCondition::Version {
+                op: CmpOp::GtE,
+                guard: (3, 11),
+            },
+        );
+        assert_eq!(evaluate(&cond, (3, 12)), BranchTruth::AlwaysTrue);
+        assert_eq!(evaluate(&cond, (3, 10)), BranchTruth::AlwaysFalse);
+        Ok(())
+    }
+
+    #[test]
+    fn evaluates_each_supported_version_operator() {
+        let target = (3, 12);
+
+        for (op, expected) in [
+            (CmpOp::Lt, BranchTruth::AlwaysFalse),
+            (CmpOp::LtE, BranchTruth::AlwaysTrue),
+            (CmpOp::Gt, BranchTruth::AlwaysFalse),
+            (CmpOp::Eq, BranchTruth::AlwaysTrue),
+            (CmpOp::NotEq, BranchTruth::AlwaysFalse),
+        ] {
+            let cond = StaticCondition::Version { op, guard: (3, 12) };
+            assert_eq!(evaluate(&cond, target), expected);
+        }
+    }
+
+    #[test]
+    fn unsupported_version_operator_is_unknown() {
+        let cond = StaticCondition::Version {
+            op: CmpOp::In,
+            guard: (3, 12),
+        };
+        assert_eq!(evaluate(&cond, (3, 12)), BranchTruth::Unknown);
+    }
+
+    #[test]
+    fn unsupported_version_shapes_parse_as_unknown() -> Result<(), String> {
+        for source in [
+            "if sys.version_info >= (3,):\n    x = 1\n",
+            "if sys.version_info >= version:\n    x = 1\n",
+            "if (3, 12) < platform.version_info:\n    x = 1\n",
+            "if sys.version_info < (3.12, 0):\n    x = 1\n",
+            "if sys.version_info < (999999999999999999999999, 0):\n    x = 1\n",
+        ] {
+            assert_eq!(parse_if_test(source)?, StaticCondition::Unknown);
+        }
+        Ok(())
+    }
+}

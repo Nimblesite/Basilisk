@@ -5,8 +5,8 @@
     "ref": "main",
     "sha": "f6e2e588880a057a939cee76c6c919aebd4db37c",
     "shortSha": "f6e2e58",
-    "commitDate": "",
-    "stale": true
+    "commitDate": "2026-06-23",
+    "stale": false
   },
   "calculator": {
     "file": "conformance/upstream_main.py",

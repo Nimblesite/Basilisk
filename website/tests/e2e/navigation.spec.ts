@@ -11,13 +11,16 @@ const TOP_NAV = [
   { name: "Docs", href: "/docs/" },
   { name: "Rules", href: "/docs/rules/" },
   { name: "Blog", href: "/blog/" },
+  { name: "Discord", href: "https://discord.gg/4wBDSGEZQd" },
   { name: "GitHub", href: "https://github.com/Nimblesite/Basilisk" },
 ];
 
 test.describe("top navigation", () => {
   // Viewport-agnostic: on a phone the nav is collapsed (display:none), so we
   // match the anchors by href rather than by visible role.
-  test("home page links to Docs, Rules, Blog and GitHub", async ({ page }) => {
+  test("home page links to Docs, Rules, Blog, Discord and GitHub", async ({
+    page,
+  }) => {
     await page.goto("/");
     for (const { name, href } of TOP_NAV) {
       const link = page.locator(`.nav-links a[href="${href}"]`);

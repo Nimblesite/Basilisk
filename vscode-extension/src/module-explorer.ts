@@ -155,6 +155,8 @@ export class PackageTreeItem extends vscode.TreeItem {
   }
 }
 
+// Implements [EXTACT-MODULES-ITEM-PROPERTIES] and [EXTACT-MODULES-DECORATIONS]
+// for symbol labels, suffixes, icons, and open-at-line commands.
 class SymbolTreeItem extends vscode.TreeItem {
   constructor(
     public readonly symbol: SymbolNode,
@@ -251,7 +253,7 @@ function moduleTooltip(module: ModuleNode): string {
   ].filter(Boolean).join("\n");
 }
 
-/** `nE nW` diagnostic tally, or "" when clean. Shared by folder/package rows. */
+/** Implements [EXTACT-MODULES-COUNT-STYLE]: `nE nW`, or "" when clean. */
 function diagnosticTally(errors: number, warnings: number): string {
   const issues: string[] = [];
   if (errors > 0) { issues.push(`${errors}E`); }
@@ -448,7 +450,7 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
 
     if (this.viewMode === "flat") {
       // Flat view: one sortable row per module (full dotted name); the sort
-      // toggle reorders this list (#151). Symbols stay grouped under their
+      // picker reorders this list (#151/#189). Symbols stay grouped under their
       // owning module — never dumped bare at the tree root (#149).
       return this.sortModules([...filtered]).map((mod) => new ModuleTreeItem(mod));
     }
@@ -537,7 +539,7 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     });
   }
 
-  /** Order modules for flat view per the current sort toggle. */
+  /** Order modules for flat view per the current picker selection. */
   private sortModules(modules: ModuleNode[]): ModuleNode[] {
     switch (this.sortMode) {
       case "name": return modules.sort((a, b) => a.name.localeCompare(b.name));
@@ -570,6 +572,8 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     });
   }
 
+  // Implements [EXTACT-LSP-COMMANDS-WORKSPACE-MODULES] by requesting the flat
+  // module list and folded health rollup from the LSP.
   private async fetchModules(): Promise<void> {
     const client = this.store.client.value;
     if (!client?.isRunning()) {
