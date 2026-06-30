@@ -23,10 +23,27 @@ History: last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#18
 | 7.1 | Workspace module resolver — scan workspace, resolve `import X` to file paths | Hard | DONE — `import_resolver.rs` resolves imports, `workspace.rs` scans files |
 | 7.2 | Multi-file `ResolvedModule` graph — cross-file symbol sharing | Hard | DONE — `imported_symbols: HashMap<String, ExternalSymbol>` on `ResolvedModule`, populated by `cross_module.rs` |
 | 7.3 | Import graph — topological ordering, cycle detection, incremental invalidation | Medium | DONE — `import_graph.rs` with forward+reverse edges, Kahn's algorithm, DFS cycle detection |
-| 7.4 | Salsa integration — memoized incremental computation (like rust-analyzer) | Hard | TODO — no `salsa` dependency, current `DashMap` + `Arc` approach works |
+| 7.4 | Salsa integration — memoized incremental computation (like rust-analyzer) | Hard | PARTIAL — engine landed ([CHKARCH-INCREMENTAL-SALSA](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA)): `salsa` 0.27 dependency, `basilisk-db` (`SourceFile` input + `BasiliskDatabase`), and the `checked_file` tracked query in `basilisk-checker` memoizing `parse → resolve → check`. Tests prove memoization, invalidation, cross-file isolation, cancellation, and byte-for-byte equivalence to the direct pipeline. NOT yet wired into the CLI/LSP published-diagnostics paths — covers the default-config, import-free pipeline only, so it cannot affect the conformance score. Remaining: promote `BasiliskConfig` + import search paths to salsa inputs, fold in `resolve_module_imports`, then switch the LSP (and CLI) onto `file_diagnostics`. The `DashMap` + `Arc` path remains canonical until then |
 | 7.5 | Stub file (`.pyi`) support — resolve type info from `.pyi` alongside `.py` | Medium | DONE — full `.pyi` parser in `pyi_parser.rs`, PEP 561 resolution order implemented |
 | 7.6 | Third-party type stubs — typeshed bundling, `py.typed` marker detection (PEP 561) | Medium | DONE — `phf` stdlib module set, `py.typed` detection, stub package discovery |
 | 7.7 | Config file reading — `pyproject.toml`, `basilisk.json` | Medium | DONE — `basilisk-config` crate with per-module/per-path overrides |
+
+### Task 7.4 — Salsa incremental engine: status at a glance {#LSPPLAN-SALSA-STATUS}
+
+> Spec: [CHKARCH-INCREMENTAL-SALSA](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA). The engine is built and proven correct, but is **not yet on any user-visible path** — nothing in the CLI or LSP calls it, so it cannot affect output or the conformance score until wired in.
+
+**Done:**
+- [x] `salsa` 0.27 dependency; `basilisk-db` is a real database, not the old stub.
+- [x] `SourceFile` input query (`path` + `text`) and `BasiliskDatabase` (`crates/basilisk-db/src/db.rs`); `Debug` redacted so source text never reaches logs.
+- [x] `checked_file` `#[salsa::tracked]` query memoizing `parse → resolve → check` in the default config, returning owned `CachedDiagnostic`s (`crates/basilisk-checker/src/incremental.rs`); plus `file_diagnostics` convenience.
+- [x] Tests: memoization, edit-invalidation, cross-file isolation, cancellation, no-source-leak, and byte-for-byte equivalence to direct `check(&resolved)` (`basilisk-db/tests/db_tests.rs`, `basilisk-checker/tests/incremental_tests.rs`).
+
+**Remaining (blocks adoption):**
+- [ ] Promote `BasiliskConfig` to a salsa input (needs salsa-compatible identity / `PartialEq`) so non-default configs are tracked.
+- [ ] Promote import search paths to a salsa input and fold `basilisk_lsp::import_resolver::resolve_module_imports` into the tracked query (today it runs between resolve and check, reads the filesystem, and so changes `imports_unresolved` + cascade suppression).
+- [ ] Wire the LSP diagnostics path onto `file_diagnostics`; then the CLI batch path.
+- [ ] Cross-session salsa persistence (today cross-session is the separate content-addressed result cache, [CHKCACHE](../specs/CHECKER-CACHE-SPEC.md)).
+- [ ] Finer-than-module granularity (per-function) — optional, not yet implemented.
 
 ## Phase 7.5 — PEP Conformance Push (ACTIVE — 46.6% → 100%) {#LSPPLAN-PEP-CONFORMANCE-PUSH}
 
