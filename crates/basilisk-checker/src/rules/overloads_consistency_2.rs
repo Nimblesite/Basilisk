@@ -8,11 +8,8 @@
 //!   the implementation must carry the same decorator.
 //! * `@final` and `@override` apply to the *implementation only* (or, in a stub,
 //!   the first overload). Placing either on an `@overload` signature when an
-//!   implementation is present is an error.
-//!
-//! These checks run only on groups that have a concrete implementation, so stub
-//! declarations (which legitimately place `@final`/`@override` on the first
-//! overload) are never flagged.
+//!   implementation is present is an error; in a stub (no implementation),
+//!   placing either on any but the first overload is an error.
 
 use std::collections::HashMap;
 
@@ -62,21 +59,41 @@ fn check_group(funcs: &[&FunctionInfo], path: &str, out: &mut Vec<Diagnostic>) {
         .iter()
         .filter(|f| has_dec(&f.decorators, "overload"))
         .collect();
+    if overloads.is_empty() {
+        return;
+    }
     let implementation = funcs.iter().find(|f| !has_dec(&f.decorators, "overload"));
 
-    // Only meaningful for a real overload group WITH an implementation present.
-    let (Some(impl_fn), false) = (implementation, overloads.is_empty()) else {
-        return;
-    };
-
-    check_static_class_consistency(&overloads, impl_fn, out, path);
-    check_impl_only_decorators(&overloads, out, path);
+    match implementation {
+        // Group WITH an implementation: `@final`/`@override` belong on the
+        // implementation, never on an overload signature.
+        Some(impl_fn) => {
+            check_static_class_consistency(&overloads, Some(impl_fn), out, path);
+            check_impl_only_decorators(&overloads, out, path);
+        }
+        // Group WITHOUT an implementation is legal only in a stub (`.pyi`); there
+        // `@final`/`@override` must appear on the FIRST overload only.
+        None if is_stub(path) => {
+            check_static_class_consistency(&overloads, None, out, path);
+            check_first_overload_only_decorators(&overloads, out, path);
+        }
+        None => {}
+    }
 }
 
-/// `@staticmethod` / `@classmethod` must be uniform across the whole group.
+/// Stub files (`.pyi`) declare overloads without an implementation.
+fn is_stub(path: &str) -> bool {
+    std::path::Path::new(path)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("pyi"))
+}
+
+/// `@staticmethod` / `@classmethod` must be uniform across the whole group
+/// (every overload plus the implementation, if present). With no implementation
+/// the diagnostic is reported on the first overload.
 fn check_static_class_consistency(
     overloads: &[&&FunctionInfo],
-    impl_fn: &FunctionInfo,
+    impl_fn: Option<&FunctionInfo>,
     out: &mut Vec<Diagnostic>,
     path: &str,
 ) {
@@ -84,7 +101,13 @@ fn check_static_class_consistency(
         overloads
             .iter()
             .map(|f| &f.decorators)
-            .chain([&impl_fn.decorators])
+            .chain(impl_fn.map(|f| &f.decorators))
+    };
+    let Some((owner_name, report_span)) = impl_fn
+        .map(|f| (f.name.as_str(), f.name_span))
+        .or_else(|| overloads.first().map(|f| (f.name.as_str(), f.name_span)))
+    else {
+        return;
     };
     for kind in ["staticmethod", "classmethod"] {
         let any = members().any(|d| has_dec(d, kind));
@@ -92,14 +115,42 @@ fn check_static_class_consistency(
         if any && !all {
             out.push(make_diagnostic(
                 format!(
-                    "Inconsistent `@{kind}` across overloads of `{}`: it must be on every \
-                     overload and the implementation, or none",
-                    impl_fn.name
+                    "Inconsistent `@{kind}` across overloads of `{owner_name}`: it must be on \
+                     every overload and the implementation, or none"
                 ),
-                impl_fn.name_span,
+                report_span,
                 path,
             ));
             return; // one decorator-consistency diagnostic per group is enough
+        }
+    }
+}
+
+/// In a stub the `@final`/`@override` decorator must be on the FIRST overload
+/// only. Flag the first later overload that carries either decorator.
+fn check_first_overload_only_decorators(
+    overloads: &[&&FunctionInfo],
+    out: &mut Vec<Diagnostic>,
+    path: &str,
+) {
+    for overload in overloads.iter().skip(1) {
+        for kind in ["final", "override"] {
+            if let Some((_, span)) = overload
+                .decorator_spans
+                .iter()
+                .find(|(name, _)| name == kind || name.ends_with(&format!(".{kind}")))
+            {
+                out.push(make_diagnostic(
+                    format!(
+                        "`@{kind}` on a later overload of `{}`: in a stub it must appear only on \
+                         the first overload",
+                        overload.name
+                    ),
+                    *span,
+                    path,
+                ));
+                return; // one placement diagnostic per group is enough
+            }
         }
     }
 }

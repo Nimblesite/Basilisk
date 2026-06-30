@@ -83,20 +83,24 @@ interface FeatureDef {
 }
 
 // Implements [EXTACT-INFO-FEATURE-STATUS]: only features whose toggle has a
-// real, observable effect belong here.
-// A toggle that writes a setting the server (or extension) never reads is
-// a lie to the user and must not exist. Audited 2026-05-30:
-//   - Type Checking (basilisk.enabled): gates diagnostic publication in
-//     extension.ts `checkDocument` — disabling clears diagnostics.
-//   - uv Integration (basilisk.uv.enabled): gates the uv Quick Actions and
-//     uv Server Info rows below (buildQuickActionsSection / buildUvInfoItems).
-// Removed because the setting was silently dropped by the LSP server (it only
-// parses analysisMode + testExplorer in did_change_configuration) and nothing
-// else read it: Inlay Hints (Params/Types), Ruff Integration, Test Explorer,
-// Debugger (never even declared), AI Typing. See EXTACT-INFO-FEATURE-STATUS.
+// real, observable effect belong here. A toggle that writes a setting the server
+// (or extension) never reads is a lie to the user and must not exist.
+//   - Type Checking (basilisk.enabled): the LSP is authoritative for diagnostics
+//     and honours this setting — disabling clears published diagnostics and
+//     suppresses new ones; re-enabling re-scans. See [ANALYSIS-ENABLED]
+//     (crates/basilisk-lsp/src/server/init.rs) and GitHub #65 / #119.
+// Removed because the setting is silently dropped by the LSP server (it parses
+// analysisMode + testExplorer + enabled in did_change_configuration) and nothing
+// else acts on it:
+//   - uv Integration (basilisk.uv.enabled): NO server code reads it, so the
+//     toggle never disabled uv integration — a no-op affordance. Removed per
+//     GitHub #190; the uv commands remain in the palette / code actions and the
+//     read-only "uv" Server Info row still reports uv status.
+//   - Inlay Hints (Params/Types), Ruff Integration, Test Explorer, Debugger
+//     (never even declared), AI Typing — all dropped server-side likewise.
+// See EXTACT-INFO-FEATURE-STATUS.
 const FEATURES: readonly FeatureDef[] = [
   { label: "Type Checking", settingKey: "basilisk.enabled" },
-  { label: "uv Integration", settingKey: "basilisk.uv.enabled" },
 ];
 
 // ── Provider ─────────────────────────────────────────────────────────────

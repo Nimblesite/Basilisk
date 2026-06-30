@@ -416,6 +416,22 @@ fn check_typevar_conflict(
             continue;
         };
         let Some(element) = list_literal_element(arg) else {
+            // A non-list scalar literal can never satisfy a `list[tv]` parameter:
+            // no assignment of `tv` makes it valid.
+            if let Some(scalar) = non_list_scalar_literal(arg) {
+                return Some(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
+                        "Argument for the `list[{tv}]` parameter of the constructor-derived \
+                         callable for `{class_name}` is a `{scalar}` literal — no assignment \
+                         of type variable `{tv}` makes it valid"
+                    ),
+                    Span::from(arg.range()),
+                    path,
+                    None,
+                    None,
+                ));
+            }
             continue;
         };
         if let Some(previous) = bindings.insert(tv, element) {
@@ -443,6 +459,15 @@ fn list_typevar<'a>(annotation: Option<&'a str>, typevars: &[&str]) -> Option<&'
     let text = annotation?.trim();
     let inner = text.strip_prefix("list[")?.strip_suffix(']')?.trim();
     typevars.contains(&inner).then_some(inner)
+}
+
+/// A scalar literal that is definitely not a list (so it can never satisfy a
+/// `list[...]` parameter).
+fn non_list_scalar_literal(arg: &Expr) -> Option<&'static str> {
+    match arg {
+        Expr::List(_) => None,
+        _ => literal_type_name(arg),
+    }
 }
 
 /// Return the literal element type of a homogeneous list literal `[lit, ...]`.

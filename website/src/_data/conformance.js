@@ -2,10 +2,10 @@
 // from the committed outputs of the REAL python/typing calculator — never
 // hand-typed. Implements [CHKARCH-CONFORMANCE]; mirrors _data/benchmarks.js.
 //
-//   conformance/conformance_status.csv  -> live per-file pass/fail (score.py)
-//   conformance/score.py                -> pinned upstream ref + sha256
-//   conformance/upstream_main.py        -> re-hashed here to re-verify the pin
-//   git log of conformance_status.csv   -> the over-time chart (real commits)
+//   conformance/conformance_status.csv         -> live per-file pass/fail (score.py)
+//   website/src/_data/conformance_report.json  -> resolved python/typing@main commit + calc hash (score.py)
+//   conformance/upstream_main.py               -> re-hashed here to re-verify the calculator
+//   git log of conformance_status.csv          -> the over-time chart (real commits)
 //
 // A file passes iff the official calculator's `errors_diff` is empty. Every
 // number the website shows is whatever that scorer last produced and committed —
@@ -22,8 +22,10 @@ const REPO_ROOT = join(__dirname, "../../..");
 const CONF_DIR = join(REPO_ROOT, "conformance");
 const STATUS_REL = "conformance/conformance_status.csv";
 const STATUS_CSV = join(CONF_DIR, "conformance_status.csv");
-const SCORE_PY = join(CONF_DIR, "score.py");
 const UPSTREAM_MAIN = join(CONF_DIR, "upstream_main.py");
+// score.py writes this on every run: the resolved python/typing@main commit it
+// tracked, the calculator hash, and the score. It lives in this same _data dir.
+const REPORT = join(__dirname, "conformance_report.json");
 
 // The day the official python/typing calculator replaced our earlier in-repo
 // script. That script excluded some diagnostic codes and did not count false
@@ -51,15 +53,15 @@ function shortDate(iso) {
   return Number.isFinite(m) && Number.isFinite(d) ? `${MONTHS[m - 1]} ${d}` : iso;
 }
 
-// Pull a `NAME = "value"` string constant straight out of score.py so the pin
-// shown on the website is the exact one the scorer enforces, not a copy. Handles
-// both single-line (`NAME = "v"`) and the formatter's parenthesised wrap
-// (`NAME = (\n    "v"\n)`) the 64-char sha256 gets — `\(?\s*` spans the newline.
-function constFromScorePy(name) {
-  if (!existsSync(SCORE_PY)) return null;
-  const src = readFileSync(SCORE_PY, "utf-8");
-  const m = src.match(new RegExp(`^${name}\\s*=\\s*\\(?\\s*"([^"]+)"`, "m"));
-  return m ? m[1] : null;
+// Read score.py's machine-readable report (the single source for the upstream
+// commit + calculator hash). Written on every scorer run; never hand-edited.
+function readReport() {
+  if (!existsSync(REPORT)) return null;
+  try {
+    return JSON.parse(readFileSync(REPORT, "utf-8"));
+  } catch {
+    return null;
+  }
 }
 
 // Tally one CSV body (pass/total/fp/missed) from its raw text.
@@ -211,9 +213,13 @@ export default function () {
     return { hasData: false, scorePct: null, categories: [], failing: [], history: [], chart: null };
   }
 
-  const pinnedRef = constFromScorePy("PINNED_TYPING_REF");
-  const sha256 = constFromScorePy("UPSTREAM_MAIN_SHA256");
-  // Re-verify the committed calculator at build time — the page states this.
+  // The resolved upstream commit + calculator hash come from score.py's report.
+  const report = readReport();
+  const upstream = report?.upstream ?? {};
+  const calc = report?.calculator ?? {};
+  const pinnedRef = upstream.sha ?? null;
+  const sha256 = calc.sha256 ?? null;
+  // Re-verify the vendored calculator at build time against the recorded hash.
   let liveSha = null, upstreamBytes = null, verified = false;
   if (existsSync(UPSTREAM_MAIN)) {
     const raw = readFileSync(UPSTREAM_MAIN);
@@ -226,7 +232,11 @@ export default function () {
   return {
     hasData: true,
     ...status,
+    upstreamRef: upstream.ref ?? "main",
     pinnedRef,
+    pinnedRefShort: upstream.shortSha ?? (pinnedRef ? pinnedRef.slice(0, 7) : null),
+    commitDate: upstream.commitDate || null,
+    stale: upstream.stale ?? false,
     sha256,
     sha256Short: sha256 ? sha256.slice(0, 12) : null,
     liveSha256Short: liveSha ? liveSha.slice(0, 12) : null,

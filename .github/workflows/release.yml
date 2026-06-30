@@ -122,9 +122,33 @@ jobs:
           path: ${{ matrix.archive }}
           retention-days: 1
 
+  conformance:
+    name: PEP conformance gate — 100% vs latest python/typing@main
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: conformance
+
+      - name: Build basilisk
+        run: cargo build --release --bin basilisk
+
+      # Pull the LATEST python/typing@main and require a perfect score — anything
+      # less than 100%, or a single false positive, tanks the release
+      # (coverage-thresholds.json → conformance.threshold 100, max_false_positives 0).
+      - name: Enforce 100% PEP conformance
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 conformance/score.py --bin target/release/basilisk --gate
+
   release:
     name: Publish binaries to release
-    needs: build
+    needs: [build, conformance]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

@@ -51,10 +51,12 @@ pub(crate) mod directives_assert_type;
 pub(crate) mod directives_assert_type_2;
 pub(crate) mod directives_cast;
 pub(crate) mod directives_deprecated;
+pub(crate) mod directives_disjoint_base;
 pub(crate) mod directives_reveal_type;
 pub(crate) mod directives_version_platform;
 pub(crate) mod enums_behaviors;
 pub(crate) mod enums_expansion;
+pub(crate) mod enums_member_access;
 pub(crate) mod enums_member_values;
 pub(crate) mod enums_members;
 pub(crate) mod enums_members_2;
@@ -248,6 +250,7 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &qualifiers_final_annotation::FinalInvalidPosition,
         &qualifiers_annotated::AnnotatedInvalidFirstArg,
         &enums_members::EnumMemberAnnotated,
+        &enums_member_access::EnumMemberAccess,
         &annotations_forward_refs::InvalidTypeAnnotation,
         &aliases_implicit::TypeAliasInvalidRhs,
         &tuples_type_form::MultipleUnboundedTupleTypes,
@@ -316,6 +319,7 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &narrowing_typeis_2::TypeIsInconsistentNarrowing,
         &protocols_runtime_checkable::ProtocolRuntimeCheckableViolation,
         &directives_deprecated::DeprecatedUsage,
+        &directives_disjoint_base::DisjointBaseViolation,
         &namedtuples_define_class::NamedTupleDefError,
         &generics_scoping::UnboundTypeVarScope,
         &protocols_explicit_2::SuperAbstractCall,

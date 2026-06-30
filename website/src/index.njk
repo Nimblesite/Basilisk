@@ -60,6 +60,15 @@ benchmarkStrings:
           </a>
         </div>
 
+        {% if conformance.hasData %}
+        <a href="/docs/conformance/" class="hero__conformance">
+          <span class="hero__conformance-score">{{ conformance.scorePct }}<span class="hero__conformance-pct">%</span></span>
+          <span class="hero__conformance-text">
+            <strong>PEP&nbsp;conformance</strong> &mdash; {{ conformance.pass }} of {{ conformance.total }} tests in the official <code>python/typing</code> suite, graded against commit <code>{{ conformance.pinnedRefShort }}</code>. <span class="hero__conformance-cta">How we measure &rarr;</span>
+          </span>
+        </a>
+        {% endif %}
+
         <div class="hero__meta">
           <span>Full <strong>LSP</strong></span>
           <span>Built in <strong>Rust</strong></span>
@@ -201,7 +210,7 @@ benchmarkStrings:
       <p class="feature-row__num">04 &mdash; PEP conformance</p>
       <h2 class="feature-row__title">{{ conformance.pass }} of {{ conformance.total }} tests passing ({{ conformance.scorePct }}%).<br>Every conformance rule enabled.</h2>
       <p class="feature-row__body">
-        Scored by the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">official Python typing conformance suite</a> &mdash;
+        Scored by the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">official Python typing conformance suite</a>, graded against <a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance">commit <code>{{ conformance.pinnedRefShort }}</code></a> &mdash; the exact suite version we target &mdash;
         the same published harness that grades Pyright, mypy, and Pyrefly, whose
         current scores live in that results table.
         We run it on the real binary with every conformance rule enabled and nothing disabled: {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories pass at 100%, with {{ conformance.fp }} false positives and {{ conformance.missed }} missed required errors. Basilisk&rsquo;s opt-in rules never run during conformance, so they can&rsquo;t pad the number. <a href="/docs/conformance/">How we measure this &rarr;</a>

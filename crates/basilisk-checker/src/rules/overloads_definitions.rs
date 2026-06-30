@@ -74,18 +74,32 @@ impl Rule for MissingOverloadImpl {
                 .collect();
 
             // Case 1: ALL definitions carry @overload (no implementation).
-            // Exempt Protocol/ABC classes — they never need a concrete impl.
-            // Also require at least 2 @overload signatures — a lone @overload in
-            // a stub or protocol declaration is common and must not be flagged.
             if non_overloaded.is_empty() {
-                if overloaded.len() < 2 {
-                    continue;
-                }
                 let is_protocol = class_name.is_some_and(|cls| protocol_classes.contains(cls));
                 let has_abstract = overloaded
                     .iter()
                     .any(|f| has_decorator(&f.decorators, "abstractmethod"));
-                // Stub files (`.pyi`) declare overloads without an implementation.
+
+                // A lone `@overload` is invalid in any context: the spec requires
+                // at least two `@overload`-decorated definitions. Stubs/protocols/
+                // ABCs are exempt only from the *implementation* requirement below,
+                // not from the "at least two" rule. (Protocol/abstract single
+                // declarations are tolerated to avoid noise on partial code.)
+                if overloaded.len() == 1 {
+                    if !is_protocol && !has_abstract {
+                        if let Some(first) = overloaded.first() {
+                            diagnostics.push(make_single_overload_diagnostic(
+                                first,
+                                name,
+                                &module.path,
+                            ));
+                        }
+                    }
+                    continue;
+                }
+
+                // 2+ overloads with no implementation. Stub files (`.pyi`),
+                // Protocols and abstract methods legitimately omit it.
                 let is_stub = std::path::Path::new(&module.path)
                     .extension()
                     .is_some_and(|ext| ext.eq_ignore_ascii_case("pyi"));

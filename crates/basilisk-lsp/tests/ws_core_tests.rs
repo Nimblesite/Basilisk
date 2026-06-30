@@ -29,3 +29,5 @@ mod ws_test_diagnostics_rules_advanced;
 mod ws_test_diagnostics_structure;
 #[path = "lsp/ws_test_shutdown.rs"]
 mod ws_test_shutdown;
+#[path = "lsp/ws_test_type_checking_toggle.rs"]
+mod ws_test_type_checking_toggle;

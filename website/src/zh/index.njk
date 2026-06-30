@@ -72,6 +72,15 @@ benchmarkStrings:
           </a>
         </div>
 
+        {% if conformance.hasData %}
+        <a href="/zh/docs/conformance/" class="hero__conformance">
+          <span class="hero__conformance-score">{{ conformance.scorePct }}<span class="hero__conformance-pct">%</span></span>
+          <span class="hero__conformance-text">
+            <strong>PEP&nbsp;符合性</strong> &mdash; 官方 <code>python/typing</code> 套件 {{ conformance.total }} 个测试中通过 {{ conformance.pass }} 个，对照提交 <code>{{ conformance.pinnedRefShort }}</code> 评分。<span class="hero__conformance-cta">我们如何衡量 &rarr;</span>
+          </span>
+        </a>
+        {% endif %}
+
         <div class="hero__meta">
           <span>完整 <strong>LSP</strong></span>
           <span>用 <strong>Rust</strong> 构建</span>
@@ -210,7 +219,7 @@ benchmarkStrings:
       <p class="feature-row__num">04 &mdash; PEP 符合性</p>
       <h2 class="feature-row__title">{{ conformance.total }} 个测试中 {{ conformance.pass }} 个通过（{{ conformance.scorePct }}%）。<br>每条符合性规则均已启用。</h2>
       <p class="feature-row__body">
-        由<a href="https://github.com/python/typing/blob/main/conformance/results/results.html">官方 Python 类型符合性套件</a>评分——
+        由<a href="https://github.com/python/typing/blob/main/conformance/results/results.html">官方 Python 类型符合性套件</a>评分，对照<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance">提交 <code>{{ conformance.pinnedRefShort }}</code></a>——我们所对标的确切套件版本——
         同一套公开的评分工具也为 Pyright、mypy 和 Pyrefly 打分，它们的当前得分见该结果表。
         我们在真实二进制文件上运行它，启用每一条符合性规则、不禁用任何规则：{{ conformance.categoriesTotal }} 个类别中有 {{ conformance.categoriesPass100 }} 个达到 100%，误报 {{ conformance.fp }} 处、遗漏的必需错误 {{ conformance.missed }} 处。Basilisk 的可选规则在符合性评分中从不运行，因此无法虚增得分。<a href="/zh/docs/conformance/">我们如何衡量 &rarr;</a>
       </p>

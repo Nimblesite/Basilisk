@@ -580,6 +580,34 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .hero__meta span { display: flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 .hero__meta strong { color: var(--color-text-secondary); font-weight: 500; }
 
+/* Front-and-centre PEP conformance badge — the headline metric, tied to the
+   exact python/typing commit we graded against. */
+.hero__conformance {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: var(--space-5) 0 var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease;
+}
+.hero__conformance:hover { border-color: var(--color-primary); }
+.hero__conformance-score {
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--color-text-primary);
+}
+.hero__conformance-pct { color: var(--color-primary); }
+.hero__conformance-text { font-size: 0.8125rem; line-height: 1.4; color: var(--color-text-muted); }
+.hero__conformance-text strong { color: var(--color-text-secondary); font-weight: 600; }
+.hero__conformance-text code { color: var(--color-text-secondary); }
+.hero__conformance-cta { color: var(--color-primary); white-space: nowrap; }
+
 /* Code side of hero */
 .hero__code { position: relative; }
 
