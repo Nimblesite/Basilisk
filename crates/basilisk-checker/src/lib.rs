@@ -30,6 +30,7 @@ pub mod cached;
 pub mod collection_inference;
 pub mod context;
 pub mod diagnostic;
+pub mod imports;
 pub mod incremental;
 pub mod inference;
 pub mod rule_tags;

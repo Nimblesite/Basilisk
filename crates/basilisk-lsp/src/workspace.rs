@@ -1450,7 +1450,7 @@ mod tests {
         let uri = Url::from_file_path(&test_path).unwrap();
         let _ = idx.set_open(&uri, "import configure_agent_backend\n", 1);
 
-        let search_paths = crate::import_resolver::ImportSearchPaths::from_config(
+        let search_paths = crate::import_resolver::search_paths_from_config(
             &roots, &config, /*registry=*/ None,
         );
         crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
@@ -1540,7 +1540,7 @@ mod tests {
 
         // Mirror the LSP init flow: from_config discovers workspace_members
         // (src/ for src-layout projects), then imports are resolved.
-        let search_paths = crate::import_resolver::ImportSearchPaths::from_config(
+        let search_paths = crate::import_resolver::search_paths_from_config(
             &roots, &config, /*registry=*/ None,
         );
         crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
@@ -1785,7 +1785,7 @@ mod tests {
     ) {
         let registry = build_registry_from_roots(roots);
         let search_paths =
-            crate::import_resolver::ImportSearchPaths::from_config(roots, config, registry);
+            crate::import_resolver::search_paths_from_config(roots, config, registry);
         crate::import_resolver::resolve_workspace_imports(idx, &search_paths);
     }
 

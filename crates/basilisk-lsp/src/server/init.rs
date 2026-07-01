@@ -605,8 +605,7 @@ fn scan_resolve_and_check_with_roots(
 
     // Detect uv project, build package registry and discover workspace members.
     let registry = build_uv_registry(roots);
-    let search_paths =
-        crate::import_resolver::ImportSearchPaths::from_config(roots, &config, registry);
+    let search_paths = crate::import_resolver::search_paths_from_config(roots, &config, registry);
     info!(
         site_packages = ?search_paths.site_packages,
         workspace_members = search_paths.workspace_members.len(),
@@ -762,8 +761,7 @@ pub(super) async fn rebuild_registry_and_resolve(server: &LspServer) {
         .unwrap_or_default();
 
     let registry = build_uv_registry(&roots);
-    let search_paths =
-        crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
+    let search_paths = crate::import_resolver::search_paths_from_config(&roots, &config, registry);
     crate::import_resolver::resolve_workspace_imports(index, &search_paths);
     // Refresh the cached search paths so subsequent incremental re-checks pick
     // up the rebuilt registry / venv. Implements [ANALYSIS-INCR-IMPORTS].

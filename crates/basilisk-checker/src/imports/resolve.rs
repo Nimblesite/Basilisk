@@ -1,0 +1,281 @@
+//! Implements [ANALYSIS-CROSSLSP-IMPORT]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP-IMPORT
+//! Filesystem path resolution: `module_name` + [`ImportSearchPaths`] → a file.
+
+use std::path::Path;
+
+use basilisk_resolver::scope::{ImportResolution, UnresolvedReason};
+
+use super::{ImportSearchPaths, ResolvedImport};
+
+// Implements [LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND] — the registry-driven
+// classifier (NotInDeps / NeedsSync / NotInstalled) that makes "module not found"
+// context-aware; the diagnostic message text is emitted in basilisk-checker.
+/// Classify why an import is unresolved using the package registry.
+#[must_use]
+pub fn classify_unresolved(
+    module_name: &str,
+    search_paths: &ImportSearchPaths,
+) -> UnresolvedReason {
+    let Some(registry) = &search_paths.registry else {
+        return UnresolvedReason::Unknown;
+    };
+
+    // The registry is keyed by import name (issue #25): look the module up
+    // directly — full dotted name first (`google.protobuf`), then the root.
+    let root_module = module_name.split('.').next().unwrap_or(module_name);
+    if let Some(info) = registry
+        .lookup(module_name)
+        .or_else(|| registry.lookup(root_module))
+    {
+        if info.kind == basilisk_uv::DepKind::Transitive {
+            return UnresolvedReason::NotInDeps;
+        }
+        // Package is known but not found on filesystem — needs sync
+        return UnresolvedReason::NeedsSync;
+    }
+
+    UnresolvedReason::NotInstalled
+}
+
+/// Resolve an absolute import following PEP 561 resolution order.
+///
+/// 1. **User stubs** — `.pyi` files in `stub-paths` directories
+/// 2. **User source** — `.py`/`.pyi` files in workspace roots and `extraPaths`
+/// 3. **Stub-only packages** — installed `foopkg-stubs` in site-packages
+/// 4. **Inline-typed packages** — installed packages with `py.typed` marker
+/// 5. **Bundled typeshed** — handled externally via `basilisk_stubs::is_stdlib_module()`
+#[must_use]
+pub fn resolve_module(
+    module_name: &str,
+    search_paths: &ImportSearchPaths,
+) -> Option<ResolvedImport> {
+    // 1. User stubs (stub-paths: only .pyi files)
+    for stub_dir in &search_paths.stub_paths {
+        if let Some(resolved) = try_resolve_stub_only(module_name, stub_dir) {
+            return Some(resolved);
+        }
+    }
+
+    // 2. User source (workspace roots + workspace members + extraPaths: .pyi preferred over .py)
+    for dir in search_paths
+        .roots
+        .iter()
+        .chain(search_paths.workspace_members.iter())
+        .chain(search_paths.extra_paths.iter())
+    {
+        if let Some(resolved) = try_resolve_in_dir(module_name, dir) {
+            return Some(resolved);
+        }
+    }
+
+    // 3+4. Site-packages: stub-only packages (-stubs), then inline-typed (py.typed), then plain
+    if let Some(sp) = &search_paths.site_packages {
+        // 3. Check for `<module>-stubs` package first
+        if let Some(resolved) = try_resolve_stub_package(module_name, sp) {
+            return Some(resolved);
+        }
+        // 4. Check for inline-typed packages (py.typed marker) and plain packages
+        if let Some(resolved) = try_resolve_in_dir(module_name, sp) {
+            return Some(resolved);
+        }
+    }
+
+    None
+}
+
+/// Resolve an absolute import, also searching the importing file's own directory.
+///
+/// Python adds the directory of the script being run to `sys.path[0]`, so a
+/// bare `import foo` in `scripts/test.py` can resolve to `scripts/foo.py` even
+/// when `scripts/` is not listed as a workspace root.  This function replicates
+/// that behaviour by checking the importer's directory after the normal PEP 561
+/// search order but before concluding that the import is unresolved.
+///
+/// Use this in place of [`resolve_module`] whenever the path of the importing
+/// file is known (i.e. everywhere in the workspace resolver loop).
+#[must_use]
+pub fn resolve_module_with_importer(
+    module_name: &str,
+    search_paths: &ImportSearchPaths,
+    importing_file: Option<&Path>,
+) -> Option<ResolvedImport> {
+    // Standard PEP 561 search first.
+    if let Some(resolved) = resolve_module(module_name, search_paths) {
+        return Some(resolved);
+    }
+    // Fall back to the importer's own directory — mirrors Python's sys.path[0].
+    let importer_dir = importing_file?.parent()?;
+    try_resolve_in_dir(module_name, importer_dir)
+}
+
+/// Try resolving a module in a stub-only directory (only `.pyi` files).
+fn try_resolve_stub_only(module_name: &str, stub_dir: &Path) -> Option<ResolvedImport> {
+    let parts: Vec<&str> = module_name.split('.').collect();
+    let mut current = stub_dir.to_path_buf();
+
+    let (leading, trailing) = parts.split_at(parts.len().saturating_sub(1));
+    for &part in leading {
+        current = current.join(part);
+        if !current.is_dir() {
+            return None;
+        }
+    }
+
+    let last = trailing.first()?;
+
+    // Only look for .pyi files in stub directories
+    let pyi = current.join(format!("{last}.pyi"));
+    if pyi.is_file() {
+        return Some(ResolvedImport {
+            path: pyi,
+            resolution: ImportResolution::StubPyi,
+        });
+    }
+
+    let pkg_pyi = current.join(last).join("__init__.pyi");
+    if pkg_pyi.is_file() {
+        return Some(ResolvedImport {
+            path: pkg_pyi,
+            resolution: ImportResolution::StubPyi,
+        });
+    }
+
+    None
+}
+
+/// Try resolving a PEP 561 stub-only package (`foopkg-stubs/`) in site-packages.
+fn try_resolve_stub_package(module_name: &str, site_packages: &Path) -> Option<ResolvedImport> {
+    let root = module_name.split('.').next()?;
+    let stubs_dir = site_packages.join(format!("{root}-stubs"));
+    if !stubs_dir.is_dir() {
+        return None;
+    }
+
+    // Resolve within the stubs package directory
+    let remainder = module_name.strip_prefix(root);
+    match remainder {
+        // Top-level: look for __init__.pyi in the stubs dir
+        None | Some("") => {
+            let init_pyi = stubs_dir.join("__init__.pyi");
+            if init_pyi.is_file() {
+                return Some(ResolvedImport {
+                    path: init_pyi,
+                    resolution: ImportResolution::StubPyi,
+                });
+            }
+            None
+        }
+        // Sub-module: strip leading dot and resolve within stubs dir
+        Some(sub) => {
+            let sub_name = sub.strip_prefix('.').unwrap_or(sub);
+            try_resolve_stub_only(sub_name, &stubs_dir)
+        }
+    }
+}
+
+/// Resolve a relative import (`from . import X`, `from ..utils import Y`).
+#[must_use]
+pub fn resolve_relative_import(
+    importing_file: &Path,
+    level: u32,
+    module_name: &str,
+    _search_paths: &ImportSearchPaths,
+) -> Option<ResolvedImport> {
+    let mut base = importing_file.parent()?.to_path_buf();
+    for _ in 1..level {
+        base = base.parent()?.to_path_buf();
+    }
+    if module_name.is_empty() {
+        return try_resolve_init(&base);
+    }
+    try_resolve_in_dir(module_name, &base)
+}
+
+/// Try resolving a dotted module name within a single directory.
+fn try_resolve_in_dir(module_name: &str, dir: &Path) -> Option<ResolvedImport> {
+    let parts: Vec<&str> = module_name.split('.').collect();
+    let mut current = dir.to_path_buf();
+
+    // Navigate through package directories for all but the last part.
+    let (leading, trailing) = parts.split_at(parts.len().saturating_sub(1));
+    for &part in leading {
+        current = current.join(part);
+        if !current.is_dir() {
+            return None;
+        }
+    }
+
+    let last = trailing.first()?;
+    try_resolve_name(&current, last)
+}
+
+/// Try resolving a single name (the last segment) within a directory.
+fn try_resolve_name(dir: &Path, name: &str) -> Option<ResolvedImport> {
+    // 1. name.pyi (stub preferred)
+    let pyi = dir.join(format!("{name}.pyi"));
+    if pyi.is_file() {
+        return Some(ResolvedImport {
+            path: pyi,
+            resolution: ImportResolution::StubPyi,
+        });
+    }
+    // 2. name.py
+    let py = dir.join(format!("{name}.py"));
+    if py.is_file() {
+        return Some(ResolvedImport {
+            path: py,
+            resolution: ImportResolution::SourcePy,
+        });
+    }
+    // 3. name/__init__.pyi (package stub)
+    let pkg_pyi = dir.join(name).join("__init__.pyi");
+    if pkg_pyi.is_file() {
+        return Some(ResolvedImport {
+            path: pkg_pyi,
+            resolution: ImportResolution::StubPyi,
+        });
+    }
+    // 4. name/__init__.py (package)
+    let pkg_py = dir.join(name).join("__init__.py");
+    if pkg_py.is_file() {
+        return Some(ResolvedImport {
+            path: pkg_py,
+            resolution: ImportResolution::SourcePy,
+        });
+    }
+    None
+}
+
+/// Try resolving a directory as a package (`__init__.py` or `__init__.pyi`).
+fn try_resolve_init(dir: &Path) -> Option<ResolvedImport> {
+    let init_pyi = dir.join("__init__.pyi");
+    if init_pyi.is_file() {
+        return Some(ResolvedImport {
+            path: init_pyi,
+            resolution: ImportResolution::StubPyi,
+        });
+    }
+    let init_py = dir.join("__init__.py");
+    if init_py.is_file() {
+        return Some(ResolvedImport {
+            path: init_py,
+            resolution: ImportResolution::SourcePy,
+        });
+    }
+    None
+}
+
+/// Check whether an installed package has a `py.typed` marker (PEP 561).
+#[must_use]
+pub fn is_inline_typed_package(module_name: &str, site_packages: &Path) -> bool {
+    let root = module_name.split('.').next().unwrap_or(module_name);
+    let pkg_dir = site_packages.join(root);
+    pkg_dir.join("py.typed").is_file()
+}
+
+/// Check whether a stub-only package exists for a module in site-packages.
+#[must_use]
+pub fn has_stub_package(module_name: &str, site_packages: &Path) -> bool {
+    let root = module_name.split('.').next().unwrap_or(module_name);
+    site_packages.join(format!("{root}-stubs")).is_dir()
+}

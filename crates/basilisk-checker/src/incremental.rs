@@ -58,13 +58,16 @@ pub struct ConfigInput {
 /// the default config it equals [`crate::check`]. It is deliberately **not**
 /// equal to the batch CLI's output: `process_file`
 /// (`basilisk-cli/src/main.rs`) additionally runs
-/// `basilisk_lsp::import_resolver::resolve_module_imports` between resolve and
+/// [`crate::imports::resolve_module_imports`] (also surfaced as
+/// `basilisk_lsp::import_resolver::resolve_module_imports`) between resolve and
 /// check, which resolves imports against the venv/`uv.lock` and so changes both
 /// the `imports_unresolved` rule and cascade suppression for import-bearing
 /// files. That step reads the filesystem and cannot be a pure salsa query
 /// without promoting the search paths to a salsa input — so this query covers
 /// the import-free pipeline only, and is not yet a drop-in for the CLI/LSP
 /// diagnostics paths (see [CHKARCH-INCREMENTAL-SALSA] for the adoption plan).
+/// The engine now living in [`crate::imports`] is the enabling prerequisite for
+/// that fold.
 ///
 /// A file that fails to parse or resolve yields no diagnostics, matching the
 /// batch CLI's handling of such files (it logs and emits nothing for them).
