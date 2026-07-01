@@ -970,16 +970,29 @@ consumer re-sets the `SearchPathsInput` (in-session the LSP does so on
 venv / `uv.lock` / file-watch events). Content-precise cross-file invalidation
 (modelling each imported file as its own `SourceFile` input) is a later step.
 
-**Scope — not yet on the published path.** Both configuration and import
-resolution are now tracked inputs, so `checked_file_resolved` reproduces the full
-`basilisk check` pipeline incrementally. But the engine is still **not yet
-wired** into the published-diagnostics paths — the CLI (`process_file`) and LSP
-remain on the direct pipeline, which is why this work cannot affect the
-conformance score. The remaining step is *adoption*: point the LSP diagnostics
-path (then the CLI) at `file_diagnostics_resolved`. The engine is a public API
+**LSP adoption.** The LSP now drives its **interactive single-file analysis**
+through the engine. `basilisk-lsp`'s `SalsaAnalysisEngine` (`salsa_engine.rs`)
+holds a persistent [`BasiliskDatabase`] plus the input handles (one `SourceFile`
+per file, one `ConfigInput` per root, one `SearchPathsInput`), sets them to the
+current values on each analysis, and reads [`resolved_module`] (for
+navigation — hover / references / go-to-definition) and
+[`file_diagnostics_resolved`] (for diagnostics). `WorkspaceIndex::analyse_and_resolve`
+routes the `didOpen`/`didChange` path through it once the workspace scan has
+populated the search paths; the pre-scan import-free path is unchanged. This is
+behaviour-preserving — the full LSP e2e suite stays green — because
+`file_diagnostics_resolved` is byte-for-byte equal to the pipeline that path ran
+before. `ResolvedModule` (and its transitively-contained types) derive
+`PartialEq` so `Arc<ResolvedModule>` satisfies salsa's `Update` bound via the
+fallback, keeping `basilisk-resolver` salsa-free.
+
+**Scope — the CLI/conformance path is deliberately unchanged.** The batch CLI
+(`process_file`) still runs the direct pipeline, so this work **cannot affect the
+conformance score**. Routing the CLI (and the LSP's bulk scan) through the engine
+is future work — the CLI is the conformance path (must prove byte-for-byte parity
+first) and, being one-shot, reuses no memos. The engine is a public API
 (`basilisk_checker::{BasiliskDatabase, SourceFile, ConfigInput, ConfigValue,
-SearchPathsInput, checked_file, file_diagnostics, checked_file_resolved,
-file_diagnostics_resolved}`) ready for that work.
+SearchPathsInput, checked_file, file_diagnostics, resolved_module,
+checked_file_resolved, file_diagnostics_resolved}`).
 
 Incremental behaviour is proven by `crates/basilisk-db/tests/db_tests.rs`
 (memoization, invalidation, cross-file isolation) and the checker tests above.

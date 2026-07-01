@@ -14,7 +14,9 @@ use tower_lsp::lsp_types::Url;
 
 use crate::config::AnalysisMode;
 use crate::import_graph::ImportGraph;
-use crate::workspace_analysis::{analyse_with_config, bsk_to_lsp, fnv1a};
+use crate::workspace_analysis::{
+    analyse_with_config, bsk_to_lsp, fnv1a, make_entry, parse_error_diagnostic,
+};
 use crate::workspace_scan::{collect_python_files, deduplicate_by_stem, path_to_uri};
 
 // ── FileEntry ────────────────────────────────────────────────────────────────
@@ -86,6 +88,11 @@ pub struct WorkspaceIndex {
     /// Implements [ANALYSIS-INCR-IMPORTS]. See
     /// docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-INCR-IMPORTS
     pub search_paths: std::sync::RwLock<Option<Arc<crate::import_resolver::ImportSearchPaths>>>,
+    /// In-session Salsa engine backing the incremental single-file analysis path
+    /// once the search paths are known. Memoizes `parse → resolve →
+    /// resolve_module_imports → check` per file. Implements
+    /// [CHKARCH-INCREMENTAL-SALSA].
+    pub(crate) salsa_engine: crate::salsa_engine::SalsaAnalysisEngine,
 }
 
 impl std::fmt::Debug for WorkspaceIndex {
@@ -116,6 +123,7 @@ impl WorkspaceIndex {
             root_configs,
             checker_config,
             search_paths: std::sync::RwLock::new(None),
+            salsa_engine: crate::salsa_engine::SalsaAnalysisEngine::default(),
         }
     }
 
@@ -195,7 +203,39 @@ impl WorkspaceIndex {
         path: &std::path::Path,
     ) -> (FileEntry, Vec<tower_lsp::lsp_types::Diagnostic>) {
         let config = self.config_for_file(path);
-        let (mut entry, lsp_diags) = analyse_with_config(text, path, config);
+
+        // Before the first scan populates the search paths, keep the import-free
+        // path (no salsa engine): it matches the pre-scan behaviour exactly and
+        // avoids marking every third-party import unresolved.
+        let Some(search_paths) = self.search_paths_snapshot() else {
+            let (mut entry, lsp_diags) = analyse_with_config(text, path, config);
+            if self.is_path_excluded(path) || self.is_outside_include_roots(path) {
+                entry.diagnostics.clear();
+                return (entry, Vec::new());
+            }
+            return (entry, lsp_diags);
+        };
+
+        // Search paths are known: run the memoized salsa engine, which resolves
+        // imports so third-party/workspace imports match the bulk scan and
+        // `basilisk check`. Implements [ANALYSIS-INCR-IMPORTS] via
+        // [CHKARCH-INCREMENTAL-SALSA].
+        let root_key = self.config_root_key(path);
+        let analysis = self
+            .salsa_engine
+            .analyse(path, text, config, &root_key, &search_paths);
+        let hash = fnv1a(text);
+
+        // Parse failure: surface BSK-PARSE, no navigable module (matches the
+        // non-salsa path).
+        if let Some(message) = analysis.parse_error {
+            return (
+                make_entry(hash, text, None, Vec::new()),
+                vec![parse_error_diagnostic(&message)],
+            );
+        }
+
+        let mut entry = make_entry(hash, text, analysis.resolved, analysis.diagnostics);
 
         // Excluded files, and files outside the configured `include` roots, are
         // parsed so navigation still works but never contribute diagnostics — the
@@ -208,23 +248,25 @@ impl WorkspaceIndex {
             return (entry, Vec::new());
         }
 
-        let Some(search_paths) = self.search_paths_snapshot() else {
-            return (entry, lsp_diags);
-        };
-        let Some(resolved_arc) = entry.resolved.as_mut() else {
-            return (entry, lsp_diags);
-        };
-
-        let resolved = Arc::make_mut(resolved_arc);
-        crate::import_resolver::resolve_module_imports(resolved, &search_paths);
-
-        let checker_diags = basilisk_checker::check_with_config(resolved, config);
-        let lsp_diags = checker_diags
+        let lsp_diags = entry
+            .diagnostics
             .iter()
-            .map(|d| crate::workspace_analysis::bsk_to_lsp(d, text))
+            .map(|d| bsk_to_lsp(d, text))
             .collect();
-        entry.diagnostics = checker_diags;
         (entry, lsp_diags)
+    }
+
+    /// The config-input key for `file_path`: its owning workspace root, or an
+    /// empty path for the fallback `checker_config`. Files that share a config
+    /// (same owning root) share one salsa `ConfigInput`.
+    #[must_use]
+    fn config_root_key(&self, file_path: &std::path::Path) -> PathBuf {
+        self.roots
+            .iter()
+            .filter(|root| file_path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Get the checker config for a file, looking up the owning root.

@@ -302,6 +302,7 @@ dependencies = [
  "futures-util",
  "inferno",
  "py-spy",
+ "salsa",
  "serde",
  "serde_json",
  "sysinfo",
