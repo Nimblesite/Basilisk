@@ -44,7 +44,8 @@ pub use cached::CachedDiagnostic;
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};
 pub use incremental::{
     checked_file, checked_file_resolved, file_diagnostics, file_diagnostics_resolved,
-    resolved_module, ConfigInput, ConfigValue, ResolvedFile, SearchPathsInput,
+    resolved_module, ConfigInput, ConfigValue, FileRegistry, ResolvedFile, SearchPathsInput,
+    WorkspaceFiles,
 };
 
 // Re-export the incremental-database handles so consumers can drive the

@@ -960,15 +960,18 @@ CLI's `process_file` core. Both are asserted directly
 `resolved_query_applies_import_resolution`), so salsa memoization can never
 corrupt a result.
 
-**Filesystem-impurity boundary.** `resolve_module_imports` probes the filesystem
-(existence checks, venv site-packages, imported-file content). Those reads are
-**not** tracked salsa edges: `checked_file_resolved` re-runs only when
-`file.text`, the `ConfigInput`, or the `SearchPathsInput` changes — mirroring the
-[CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS) boundary. Installing a
-package, or editing an imported sibling, does not invalidate a memo unless a
-consumer re-sets the `SearchPathsInput` (in-session the LSP does so on
-venv / `uv.lock` / file-watch events). Content-precise cross-file invalidation
-(modelling each imported file as its own `SourceFile` input) is a later step.
+**Cross-file invalidation + filesystem-impurity boundary.** `resolved_module`
+takes a `WorkspaceFiles` input (a path → `SourceFile` map) and, after resolution,
+reads the text of every imported file the workspace tracks — recording a salsa
+edge on each. So editing a tracked imported file re-runs exactly its importers'
+queries (`editing_an_imported_file_invalidates_only_the_importer`). What remains
+**untracked** (mirroring [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)):
+`resolve_module_imports`' existence probes and the content of files *outside* the
+workspace (third-party packages, venv site-packages) — those invalidate only on
+a re-set `SearchPathsInput` / `WorkspaceFiles`. The mechanism exists; its LSP
+adoption waits until the query itself consumes imported *types* (today the LSP's
+separate cross-module pass does), so that a cross-file re-run changes output
+rather than merely repeating work.
 
 **LSP adoption.** The LSP now drives its **interactive single-file analysis**
 through the engine. `basilisk-lsp`'s `SalsaAnalysisEngine` (`salsa_engine.rs`)

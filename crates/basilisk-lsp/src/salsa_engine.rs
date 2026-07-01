@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use basilisk_checker::imports::ImportSearchPaths;
 use basilisk_checker::{
     file_diagnostics_resolved, resolved_module, BasiliskDatabase, ConfigInput, ConfigValue,
-    Diagnostic, ResolvedFile, SearchPathsInput, SourceFile,
+    Diagnostic, FileRegistry, ResolvedFile, SearchPathsInput, SourceFile, WorkspaceFiles,
 };
 use basilisk_config::BasiliskConfig;
 use dashmap::DashMap;
@@ -45,6 +45,11 @@ pub(crate) struct SalsaAnalysisEngine {
     config_inputs: DashMap<PathBuf, ConfigInput>,
     /// The single workspace-wide import search-paths input.
     search_paths_input: Mutex<Option<SearchPathsInput>>,
+    /// The workspace file registry input for content-precise cross-file
+    /// invalidation. Empty for now — the query only gains cross-file edges once
+    /// cross-module type-sharing moves into it; populating it before then would
+    /// only over-invalidate. [CHKARCH-INCREMENTAL-SALSA]
+    workspace_files: Mutex<Option<WorkspaceFiles>>,
 }
 
 impl Default for SalsaAnalysisEngine {
@@ -54,6 +59,7 @@ impl Default for SalsaAnalysisEngine {
             sources: DashMap::new(),
             config_inputs: DashMap::new(),
             search_paths_input: Mutex::new(None),
+            workspace_files: Mutex::new(None),
         }
     }
 }
@@ -89,10 +95,11 @@ impl SalsaAnalysisEngine {
         let source = self.source_for(&mut db, path, &path_str, text);
         let config_input = self.config_for(&mut db, root_key, config);
         let search_paths_input = self.search_paths_for(&mut db, search_paths);
+        let workspace = self.workspace_files_for(&mut db);
 
         // One memoized parse+resolve, whose outcome distinguishes a parse error
         // (→ BSK-PARSE) from a resolve error (→ nothing) from a resolved module.
-        match resolved_module(&*db, source, search_paths_input) {
+        match resolved_module(&*db, source, search_paths_input, workspace) {
             ResolvedFile::ParseError(message) => EngineAnalysis {
                 resolved: None,
                 diagnostics: Vec::new(),
@@ -105,8 +112,13 @@ impl SalsaAnalysisEngine {
             },
             ResolvedFile::Resolved(module) => {
                 let resolved = Some(Arc::clone(module));
-                let diagnostics =
-                    file_diagnostics_resolved(&*db, source, config_input, search_paths_input);
+                let diagnostics = file_diagnostics_resolved(
+                    &*db,
+                    source,
+                    config_input,
+                    search_paths_input,
+                    workspace,
+                );
                 EngineAnalysis {
                     resolved,
                     diagnostics,
@@ -114,6 +126,15 @@ impl SalsaAnalysisEngine {
                 }
             }
         }
+    }
+
+    /// Get-or-create the (currently empty) workspace file registry input.
+    fn workspace_files_for(&self, db: &mut BasiliskDatabase) -> WorkspaceFiles {
+        let mut guard = self
+            .workspace_files
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *guard.get_or_insert_with(|| WorkspaceFiles::new(&*db, FileRegistry::default()))
     }
 
     /// Get-or-create the [`SourceFile`] input for `path`, set to `text`.

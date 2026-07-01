@@ -12,12 +12,14 @@
 //! reflects the search paths), and invalidate when the file, config, OR the
 //! `SearchPathsInput` changes.
 
+use std::collections::HashMap;
 use std::fs;
 
 use basilisk_checker::imports::ImportSearchPaths;
 use basilisk_checker::{
     check_with_config, checked_file_resolved, file_diagnostics_resolved, resolved_module,
-    ConfigInput, ConfigValue, Diagnostic, ResolvedFile, SearchPathsInput, SourceFile,
+    ConfigInput, ConfigValue, Diagnostic, FileRegistry, ResolvedFile, SearchPathsInput, SourceFile,
+    WorkspaceFiles,
 };
 use basilisk_config::BasiliskConfig;
 use basilisk_resolver::scope::ImportResolution;
@@ -33,6 +35,12 @@ const PROBE: &str = "zzz_unique_import_probe";
 
 fn default_config(db: &EventDb) -> ConfigInput {
     ConfigInput::new(db, ConfigValue(BasiliskConfig::default()))
+}
+
+/// An empty workspace file registry (no cross-file edges) for tests that do not
+/// exercise cross-file invalidation.
+fn empty_workspace(db: &EventDb) -> WorkspaceFiles {
+    WorkspaceFiles::new(db, FileRegistry::default())
 }
 
 /// The exact import-resolving pipeline `basilisk-cli`'s `process_file` runs.
@@ -65,6 +73,7 @@ fn assert_same(got: &[Diagnostic], want: &[Diagnostic], label: &str) {
 #[test]
 fn resolved_query_equivalent_to_direct_import_pipeline() {
     let db = EventDb::default();
+    let workspace = empty_workspace(&db);
     let config = default_config(&db);
     let sp_value = make_search_paths(vec![]);
     let search_paths = SearchPathsInput::new(&db, sp_value.clone());
@@ -79,7 +88,7 @@ fn resolved_query_equivalent_to_direct_import_pipeline() {
     ];
     for (path, src) in fixtures {
         let file = SourceFile::new(&db, (*path).to_owned(), (*src).to_owned());
-        let got = file_diagnostics_resolved(&db, file, config, search_paths);
+        let got = file_diagnostics_resolved(&db, file, config, search_paths, workspace);
         let want = reference_resolved(path, src, &sp_value, &BasiliskConfig::default());
         assert_same(&got, &want, path);
     }
@@ -91,13 +100,14 @@ fn resolved_query_equivalent_to_direct_import_pipeline() {
 #[test]
 fn resolved_query_applies_import_resolution() {
     let db = EventDb::default();
+    let workspace = empty_workspace(&db);
     let config = default_config(&db);
     let dir = make_tmp_dir("bsk_resolved_applies");
     fs::write(dir.join(format!("{PROBE}.py")), "x = 1\n").unwrap();
     let file = SourceFile::new(&db, "main.py".to_owned(), format!("import {PROBE}\n"));
 
     let empty = SearchPathsInput::new(&db, make_search_paths(vec![]));
-    let empty_diags = file_diagnostics_resolved(&db, file, config, empty);
+    let empty_diags = file_diagnostics_resolved(&db, file, config, empty, workspace);
     assert!(
         empty_diags
             .iter()
@@ -106,7 +116,7 @@ fn resolved_query_applies_import_resolution() {
     );
 
     let rooted = SearchPathsInput::new(&db, make_search_paths(vec![dir.clone()]));
-    let rooted_diags = file_diagnostics_resolved(&db, file, config, rooted);
+    let rooted_diags = file_diagnostics_resolved(&db, file, config, rooted, workspace);
     assert!(
         !rooted_diags
             .iter()
@@ -122,20 +132,21 @@ fn resolved_query_applies_import_resolution() {
 #[test]
 fn editing_search_paths_input_invalidates_resolved_query() {
     let mut db = EventDb::default();
+    let workspace = empty_workspace(&db);
     let config = default_config(&db);
     let dir = make_tmp_dir("bsk_resolved_invalidate");
     fs::write(dir.join(format!("{PROBE}.py")), "x = 1\n").unwrap();
     let file = SourceFile::new(&db, "main.py".to_owned(), format!("import {PROBE}\n"));
     let search_paths = SearchPathsInput::new(&db, make_search_paths(vec![]));
 
-    let _first = checked_file_resolved(&db, file, config, search_paths);
+    let _first = checked_file_resolved(&db, file, config, search_paths, workspace);
     let _ = db.executions_of("checked_file_resolved"); // drain priming
 
     // Add the dir to the search path — the probe module now resolves.
     let _previous = search_paths
         .set_value(&mut db)
         .to(make_search_paths(vec![dir.clone()]));
-    let after = file_diagnostics_resolved(&db, file, config, search_paths);
+    let after = file_diagnostics_resolved(&db, file, config, search_paths, workspace);
     assert_eq!(
         db.executions_of("checked_file_resolved"),
         1,
@@ -153,6 +164,7 @@ fn editing_search_paths_input_invalidates_resolved_query() {
 #[test]
 fn editing_config_invalidates_resolved_query() {
     let mut db = EventDb::default();
+    let workspace = empty_workspace(&db);
     let search_paths = SearchPathsInput::new(&db, make_search_paths(vec![]));
     let config = ConfigInput::new(&db, ConfigValue(BasiliskConfig::default()));
     let file = SourceFile::new(
@@ -161,14 +173,14 @@ fn editing_config_invalidates_resolved_query() {
         "def f(x):\n    return x\n".to_owned(),
     );
 
-    let _first = checked_file_resolved(&db, file, config, search_paths);
+    let _first = checked_file_resolved(&db, file, config, search_paths, workspace);
     let _ = db.executions_of("checked_file_resolved"); // drain priming
 
     let _previous = config.set_value(&mut db).to(ConfigValue(BasiliskConfig {
         strict_annotations: true,
         ..BasiliskConfig::default()
     }));
-    let after = file_diagnostics_resolved(&db, file, config, search_paths);
+    let after = file_diagnostics_resolved(&db, file, config, search_paths, workspace);
     assert_eq!(
         db.executions_of("checked_file_resolved"),
         1,
@@ -184,26 +196,27 @@ fn editing_config_invalidates_resolved_query() {
 #[test]
 fn resolved_query_memoizes_then_invalidates_on_source_edit() {
     let mut db = EventDb::default();
+    let workspace = empty_workspace(&db);
     let config = default_config(&db);
     let search_paths = SearchPathsInput::new(&db, make_search_paths(vec![]));
     let file = SourceFile::new(&db, "a.py".to_owned(), "x: int = 1\n".to_owned());
 
-    let _first = checked_file_resolved(&db, file, config, search_paths);
+    let _first = checked_file_resolved(&db, file, config, search_paths, workspace);
     assert_eq!(
         db.executions_of("checked_file_resolved"),
         1,
         "first check executes once"
     );
 
-    let _second = checked_file_resolved(&db, file, config, search_paths);
+    let _second = checked_file_resolved(&db, file, config, search_paths, workspace);
     assert_eq!(
         db.executions_of("checked_file_resolved"),
         0,
-        "an unchanged (file, config, search_paths) triple is served from the memo"
+        "an unchanged (file, config, search_paths, workspace) triple is served from the memo"
     );
 
     let _previous = file.set_text(&mut db).to("x: int = \"oops\"\n".to_owned());
-    let _third = checked_file_resolved(&db, file, config, search_paths);
+    let _third = checked_file_resolved(&db, file, config, search_paths, workspace);
     assert_eq!(
         db.executions_of("checked_file_resolved"),
         1,
@@ -216,16 +229,17 @@ fn resolved_query_memoizes_then_invalidates_on_source_edit() {
 #[test]
 fn resolved_query_unparseable_file_yields_no_diagnostics() {
     let db = EventDb::default();
+    let workspace = empty_workspace(&db);
     let config = default_config(&db);
     let search_paths = SearchPathsInput::new(&db, make_search_paths(vec![]));
     let file = SourceFile::new(&db, "broken.py".to_owned(), "def (= :\n".to_owned());
 
     assert!(
-        file_diagnostics_resolved(&db, file, config, search_paths).is_empty(),
+        file_diagnostics_resolved(&db, file, config, search_paths, workspace).is_empty(),
         "an unparseable file must yield no diagnostics"
     );
     assert!(
-        checked_file_resolved(&db, file, config, search_paths).is_empty(),
+        checked_file_resolved(&db, file, config, search_paths, workspace).is_empty(),
         "the memoized projection is empty too"
     );
 }
@@ -234,12 +248,13 @@ fn resolved_query_unparseable_file_yields_no_diagnostics() {
 #[test]
 fn resolved_module_resolves_imports() {
     let db = EventDb::default();
+    let workspace = empty_workspace(&db);
     let dir = make_tmp_dir("bsk_rm_resolves");
     fs::write(dir.join(format!("{PROBE}.py")), "x = 1\n").unwrap();
     let file = SourceFile::new(&db, "main.py".to_owned(), format!("import {PROBE}\n"));
     let search_paths = SearchPathsInput::new(&db, make_search_paths(vec![dir.clone()]));
 
-    let ResolvedFile::Resolved(module) = resolved_module(&db, file, search_paths) else {
+    let ResolvedFile::Resolved(module) = resolved_module(&db, file, search_paths, workspace) else {
         panic!("the file parses and resolves");
     };
     let import = module
@@ -260,11 +275,12 @@ fn resolved_module_resolves_imports() {
 #[test]
 fn resolved_module_none_on_parse_error() {
     let db = EventDb::default();
+    let workspace = empty_workspace(&db);
     let search_paths = SearchPathsInput::new(&db, make_search_paths(vec![]));
     let file = SourceFile::new(&db, "broken.py".to_owned(), "def (= :\n".to_owned());
     assert!(
         matches!(
-            resolved_module(&db, file, search_paths),
+            resolved_module(&db, file, search_paths, workspace),
             ResolvedFile::ParseError(_)
         ),
         "an unparseable file yields a ParseError outcome"
@@ -277,6 +293,7 @@ fn resolved_module_none_on_parse_error() {
 #[test]
 fn config_edit_does_not_reresolve_module() {
     let mut db = EventDb::default();
+    let workspace = empty_workspace(&db);
     let search_paths = SearchPathsInput::new(&db, make_search_paths(vec![]));
     let config = ConfigInput::new(&db, ConfigValue(BasiliskConfig::default()));
     let file = SourceFile::new(
@@ -285,7 +302,7 @@ fn config_edit_does_not_reresolve_module() {
         "def f(x):\n    return x\n".to_owned(),
     );
 
-    let _first = checked_file_resolved(&db, file, config, search_paths);
+    let _first = checked_file_resolved(&db, file, config, search_paths, workspace);
     let _ = db.executions_of("resolved_module"); // drain priming
     let _ = db.executions_of("checked_file_resolved");
 
@@ -293,7 +310,7 @@ fn config_edit_does_not_reresolve_module() {
         strict_annotations: true,
         ..BasiliskConfig::default()
     }));
-    let _after = checked_file_resolved(&db, file, config, search_paths);
+    let _after = checked_file_resolved(&db, file, config, search_paths, workspace);
     assert_eq!(
         db.executions_of("checked_file_resolved"),
         1,
@@ -304,4 +321,62 @@ fn config_edit_does_not_reresolve_module() {
         0,
         "config is not a dependency of resolved_module — the resolved module is reused"
     );
+}
+
+/// Content-precise cross-file invalidation: `resolved_module(A)` reads the
+/// `SourceFile` text of every file A imports (via `WorkspaceFiles`), so editing
+/// an imported file re-runs A's query — but editing an unrelated file does not.
+#[test]
+fn editing_an_imported_file_invalidates_only_the_importer() {
+    let mut db = EventDb::default();
+    let dir = make_tmp_dir("bsk_crossfile");
+    let b_path = dir.join(format!("{PROBE}.py"));
+    let c_path = dir.join("zzz_unrelated_probe.py");
+    fs::write(&b_path, "x = 1\n").unwrap();
+    fs::write(&c_path, "y = 1\n").unwrap();
+
+    // A imports B (not C). B and C are workspace files with their own inputs.
+    let a = SourceFile::new(
+        &db,
+        dir.join("a.py").to_string_lossy().into_owned(),
+        format!("import {PROBE}\n"),
+    );
+    let b = SourceFile::new(
+        &db,
+        b_path.to_string_lossy().into_owned(),
+        "x = 1\n".to_owned(),
+    );
+    let c = SourceFile::new(
+        &db,
+        c_path.to_string_lossy().into_owned(),
+        "y = 1\n".to_owned(),
+    );
+    let search_paths = SearchPathsInput::new(&db, make_search_paths(vec![dir.clone()]));
+    let workspace = WorkspaceFiles::new(
+        &db,
+        FileRegistry(HashMap::from([(b_path.clone(), b), (c_path.clone(), c)])),
+    );
+
+    let _first = resolved_module(&db, a, search_paths, workspace);
+    let _ = db.executions_of("resolved_module"); // drain priming
+
+    // Editing an unrelated file (A does not import C) must NOT re-run A.
+    let _c_prev = c.set_text(&mut db).to("y = 2\n".to_owned());
+    let _a_again = resolved_module(&db, a, search_paths, workspace);
+    assert_eq!(
+        db.executions_of("resolved_module"),
+        0,
+        "editing a file the importer does not import must not re-run its query"
+    );
+
+    // Editing the imported file B must re-run A.
+    let _b_prev = b.set_text(&mut db).to("x = 2\n".to_owned());
+    let _a_after = resolved_module(&db, a, search_paths, workspace);
+    assert_eq!(
+        db.executions_of("resolved_module"),
+        1,
+        "editing an imported file must re-run the importer's resolved_module query"
+    );
+
+    let _ = fs::remove_dir_all(&dir);
 }

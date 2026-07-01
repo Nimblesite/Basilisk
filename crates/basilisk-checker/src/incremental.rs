@@ -136,8 +136,33 @@ pub enum ResolvedFile {
     ResolveError,
 }
 
+/// A path → [`SourceFile`] map — the value of the [`WorkspaceFiles`] input.
+///
+/// Lets an import-resolving query depend on the *content* of the files it
+/// imports: [`resolved_module`] reads each imported file's `SourceFile` text
+/// through this map, so editing an imported file invalidates its importers'
+/// memos (content-precise cross-file invalidation). A path absent from the map
+/// simply creates no edge — a file the workspace does not track (e.g. a
+/// third-party package) is treated as external.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct FileRegistry(pub std::collections::HashMap<std::path::PathBuf, SourceFile>);
+
+/// The workspace's known source files as a Salsa **input**, keyed by absolute
+/// path.
+///
+/// Editing a file's `SourceFile` text invalidates every importer whose
+/// [`resolved_module`] read it (fine-grained); this *input* changes only when
+/// files are added to or removed from the workspace — a coarse but rare event.
+/// [CHKARCH-INCREMENTAL-SALSA]
+#[salsa::input]
+pub struct WorkspaceFiles {
+    /// The path → `SourceFile` map.
+    #[returns(ref)]
+    pub files: FileRegistry,
+}
+
 /// Tracked query: the **import-resolved module** for one file, memoized by salsa
-/// and keyed on the `(file, search_paths)` pair.
+/// and keyed on the `(file, search_paths, workspace)` triple.
 ///
 /// Runs `parse → resolve → `[`crate::imports::resolve_module_imports`], yielding
 /// the module with its imports resolved against the search paths — the navigable
@@ -148,17 +173,19 @@ pub enum ResolvedFile {
 /// config-only edit reuses the memoized module: [`checked_file_resolved`] re-runs
 /// only the cheap `check_with_config` step.
 ///
-/// **Filesystem-impurity boundary** (mirrors
-/// [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)): the existence
-/// probes and imported-file *content* that `resolve_module_imports` reads are
-/// **not** tracked salsa edges — the memo invalidates only on `file.text` or a
-/// re-set `SearchPathsInput`. Content-precise cross-file invalidation is a later
-/// step.
+/// **Cross-file invalidation.** After resolution, the query reads the
+/// `SourceFile` text of every imported file the [`WorkspaceFiles`] input knows
+/// about, recording a salsa edge on each — so editing an imported file
+/// invalidates this importer's memo. Imported-file *existence* probes (and the
+/// content of files outside the workspace, e.g. third-party packages) remain
+/// untracked, mirroring the [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)
+/// boundary; those invalidate only on a re-set `SearchPathsInput`/`WorkspaceFiles`.
 #[salsa::tracked(returns(ref))]
 pub fn resolved_module(
     db: &dyn Db,
     file: SourceFile,
     search_paths: SearchPathsInput,
+    workspace: WorkspaceFiles,
 ) -> ResolvedFile {
     let parsed = match basilisk_parser::parse_source(file.text(db).clone(), file.path(db).clone()) {
         Ok(parsed) => parsed,
@@ -169,7 +196,28 @@ pub fn resolved_module(
     };
     // Reading `search_paths.value(db)` registers the salsa dependency edge.
     crate::imports::resolve_module_imports(&mut resolved, search_paths.value(db));
+    register_import_dependencies(db, &resolved, workspace);
     ResolvedFile::Resolved(std::sync::Arc::new(resolved))
+}
+
+/// Record a salsa dependency on the content of every imported file the workspace
+/// tracks, so editing an imported file invalidates this importer's memo.
+fn register_import_dependencies(
+    db: &dyn Db,
+    resolved: &basilisk_resolver::ResolvedModule,
+    workspace: WorkspaceFiles,
+) {
+    let registry = workspace.files(db);
+    for import in &resolved.imports {
+        if let Some(imported) = import
+            .resolved_path
+            .as_ref()
+            .and_then(|path| registry.0.get(path))
+        {
+            // Reading the imported file's text is what records the salsa edge.
+            let _ = imported.text(db);
+        }
+    }
 }
 
 /// Tracked query: the **import-resolved** diagnostics for one file, memoized by
@@ -189,8 +237,10 @@ pub fn checked_file_resolved(
     file: SourceFile,
     config: ConfigInput,
     search_paths: SearchPathsInput,
+    workspace: WorkspaceFiles,
 ) -> Vec<CachedDiagnostic> {
-    let ResolvedFile::Resolved(resolved) = resolved_module(db, file, search_paths) else {
+    let ResolvedFile::Resolved(resolved) = resolved_module(db, file, search_paths, workspace)
+    else {
         return Vec::new();
     };
     crate::check_with_config(resolved, &config.value(db).0)
@@ -206,8 +256,9 @@ pub fn file_diagnostics_resolved(
     file: SourceFile,
     config: ConfigInput,
     search_paths: SearchPathsInput,
+    workspace: WorkspaceFiles,
 ) -> Vec<Diagnostic> {
-    checked_file_resolved(db, file, config, search_paths)
+    checked_file_resolved(db, file, config, search_paths, workspace)
         .iter()
         .cloned()
         .map(CachedDiagnostic::into_diagnostic)
