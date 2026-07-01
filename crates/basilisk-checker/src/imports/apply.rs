@@ -65,24 +65,7 @@ fn capture_user_stub_api(
     import: &basilisk_resolver::ImportInfo,
     search_paths: &ImportSearchPaths,
 ) -> Option<(String, ImportedModuleApi)> {
-    if import.kind != ImportKind::Plain || import.module.contains('.') {
-        return None;
-    }
-    let stub_path = import.resolved_path.as_ref()?;
-    if stub_path.extension().is_none_or(|ext| ext != "pyi") {
-        return None;
-    }
-    // A user stub is a `.pyi` under one of the configured stub-paths (which
-    // includes the auto-added `.basilisk/stubs`). Other `.pyi` (typeshed,
-    // `*-stubs`, py.typed packages) are deferred to Phase 2.
-    if !search_paths
-        .stub_paths
-        .iter()
-        .any(|dir| stub_path.starts_with(dir))
-    {
-        return None;
-    }
-
+    let stub_path = user_stub_path(import, search_paths)?;
     let stub = basilisk_stubs::parse_pyi_file(
         stub_path,
         &import.module,
@@ -90,23 +73,72 @@ fn capture_user_stub_api(
         basilisk_stubs::StubTier::Tier1,
     )
     .ok()?;
+    Some((import.module.clone(), build_stub_api(&stub, stub_path)))
+}
 
+/// Re-capture a user-stub import's API from stub **source text** rather than
+/// disk.
+///
+/// The incremental engine calls this so an edited-but-unsaved `.pyi` (whose
+/// live content lives in a salsa `SourceFile`) updates its importers'
+/// `imports_module_attribute` diagnostics. Returns `None` when `import` is not a
+/// user stub or `stub_source` fails to parse.
+#[must_use]
+pub fn recapture_user_stub_from_source(
+    import: &basilisk_resolver::ImportInfo,
+    search_paths: &ImportSearchPaths,
+    stub_source: &str,
+) -> Option<(String, ImportedModuleApi)> {
+    let stub_path = user_stub_path(import, search_paths)?;
+    let stub = basilisk_stubs::parse_pyi_source(
+        stub_source,
+        stub_path,
+        &import.module,
+        basilisk_stubs::StubSource::UserStub,
+        basilisk_stubs::StubTier::Tier1,
+    )
+    .ok()?;
+    Some((import.module.clone(), build_stub_api(&stub, stub_path)))
+}
+
+/// The `.pyi` path this import binds as a user stub, if any: a single-segment
+/// plain `import X` resolved to a `.pyi` under a configured `stub-paths` dir
+/// (which includes the auto-added `.basilisk/stubs`). Other `.pyi` (typeshed,
+/// `*-stubs`, py.typed packages) are out of scope.
+fn user_stub_path<'a>(
+    import: &'a basilisk_resolver::ImportInfo,
+    search_paths: &ImportSearchPaths,
+) -> Option<&'a std::path::Path> {
+    if import.kind != ImportKind::Plain || import.module.contains('.') {
+        return None;
+    }
+    let stub_path = import.resolved_path.as_deref()?;
+    if stub_path.extension().is_none_or(|ext| ext != "pyi") {
+        return None;
+    }
+    search_paths
+        .stub_paths
+        .iter()
+        .any(|dir| stub_path.starts_with(dir))
+        .then_some(stub_path)
+}
+
+/// Build the [`ImportedModuleApi`] (top-level member names + `__getattr__`
+/// presence) from a parsed user stub.
+fn build_stub_api(
+    stub: &basilisk_stubs::StubModule,
+    stub_path: &std::path::Path,
+) -> ImportedModuleApi {
     let mut member_names = std::collections::HashSet::new();
     member_names.extend(stub.functions.keys().cloned());
     member_names.extend(stub.classes.keys().cloned());
     member_names.extend(stub.variables.keys().cloned());
     member_names.extend(stub.overloads.keys().cloned());
-
-    let has_getattr = stub.functions.contains_key("__getattr__");
-
-    Some((
-        import.module.clone(),
-        ImportedModuleApi {
-            member_names,
-            has_getattr,
-            stub_path: stub_path.clone(),
-        },
-    ))
+    ImportedModuleApi {
+        member_names,
+        has_getattr: stub.functions.contains_key("__getattr__"),
+        stub_path: stub_path.to_path_buf(),
+    }
 }
 
 // Implements [LSPUV-HOVER-DATA-FLOW] steps 2-3 — match the import against the

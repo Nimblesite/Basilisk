@@ -964,14 +964,21 @@ corrupt a result.
 takes a `WorkspaceFiles` input (a path → `SourceFile` map) and, after resolution,
 reads the text of every imported file the workspace tracks — recording a salsa
 edge on each. So editing a tracked imported file re-runs exactly its importers'
-queries (`editing_an_imported_file_invalidates_only_the_importer`). What remains
-**untracked** (mirroring [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)):
+queries (`editing_an_imported_file_invalidates_only_the_importer`). For a
+workspace-tracked **user-stub `.pyi`**, the query re-derives the stub's API from
+that in-memory text (`recapture_user_stub_from_source`), so editing the stub's
+content updates the importer's `imports_module_attribute` diagnostics — a
+cross-file edge that changes *output*, not just triggers a re-run
+(`editing_a_user_stub_updates_the_importer_diagnostics`). The LSP populates
+`WorkspaceFiles` from its open documents, making this live in the editor. What
+remains **untracked** (mirroring
+[CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)):
 `resolve_module_imports`' existence probes and the content of files *outside* the
 workspace (third-party packages, venv site-packages) — those invalidate only on
-a re-set `SearchPathsInput` / `WorkspaceFiles`. The mechanism exists; its LSP
-adoption waits until the query itself consumes imported *types* (today the LSP's
-separate cross-module pass does), so that a cross-file re-run changes output
-rather than merely repeating work.
+a re-set `SearchPathsInput` / `WorkspaceFiles`. Sibling `.py` **type** sharing
+still flows through the LSP's separate cross-module pass, not the query, so
+editing a dependency's signatures does not yet update its importers' type errors
+incrementally; moving that into the query is the remaining step.
 
 **LSP adoption.** The LSP now drives its **interactive single-file analysis**
 through the engine. `basilisk-lsp`'s `SalsaAnalysisEngine` (`salsa_engine.rs`)

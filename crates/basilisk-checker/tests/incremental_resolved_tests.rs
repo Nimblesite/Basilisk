@@ -380,3 +380,58 @@ fn editing_an_imported_file_invalidates_only_the_importer() {
 
     let _ = fs::remove_dir_all(&dir);
 }
+
+/// Cross-file invalidation that changes **output**: editing a workspace-tracked
+/// user-stub `.pyi`'s content updates the importer's `imports_module_attribute`
+/// diagnostics — proving the cross-file edge drives the result, not just
+/// re-execution. The stub's `SourceFile` is edited (disk is left stale), so this
+/// passes only because the query re-derives the stub API from the tracked text.
+#[test]
+fn editing_a_user_stub_updates_the_importer_diagnostics() {
+    let mut db = EventDb::default();
+    let stub_dir = make_tmp_dir("bsk_crossfile_stub");
+    let x_pyi = stub_dir.join("xmod.pyi");
+    fs::write(&x_pyi, "def foo() -> None: ...\n").unwrap();
+
+    // A imports the user stub `xmod` and accesses `xmod.bar` (undeclared so far).
+    let a = SourceFile::new(
+        &db,
+        "a.py".to_owned(),
+        "import xmod\ny = xmod.bar\n".to_owned(),
+    );
+    let x = SourceFile::new(
+        &db,
+        x_pyi.to_string_lossy().into_owned(),
+        "def foo() -> None: ...\n".to_owned(),
+    );
+
+    // The stub dir is a `stub-paths` entry, so `xmod` resolves as a user stub.
+    let mut sp = make_search_paths(vec![]);
+    sp.stub_paths = vec![stub_dir.clone()];
+    let search_paths = SearchPathsInput::new(&db, sp);
+    let config = default_config(&db);
+    let workspace = WorkspaceFiles::new(&db, FileRegistry(HashMap::from([(x_pyi.clone(), x)])));
+
+    let before = file_diagnostics_resolved(&db, a, config, search_paths, workspace);
+    assert!(
+        before
+            .iter()
+            .any(|d| d.code.code == "imports_module_attribute"),
+        "accessing xmod.bar (undeclared in the stub) must flag imports_module_attribute"
+    );
+
+    // Edit the stub's SourceFile to declare `bar` (disk stays stale).
+    let _prev = x
+        .set_text(&mut db)
+        .to("def foo() -> None: ...\ndef bar() -> None: ...\n".to_owned());
+
+    let after = file_diagnostics_resolved(&db, a, config, search_paths, workspace);
+    assert!(
+        !after
+            .iter()
+            .any(|d| d.code.code == "imports_module_attribute"),
+        "after the stub declares `bar`, the importer's imports_module_attribute must clear"
+    );
+
+    let _ = fs::remove_dir_all(&stub_dir);
+}

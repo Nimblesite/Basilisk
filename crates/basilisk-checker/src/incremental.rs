@@ -196,27 +196,45 @@ pub fn resolved_module(
     };
     // Reading `search_paths.value(db)` registers the salsa dependency edge.
     crate::imports::resolve_module_imports(&mut resolved, search_paths.value(db));
-    register_import_dependencies(db, &resolved, workspace);
+    register_import_dependencies(db, &mut resolved, search_paths.value(db), workspace);
     ResolvedFile::Resolved(std::sync::Arc::new(resolved))
 }
 
 /// Record a salsa dependency on the content of every imported file the workspace
-/// tracks, so editing an imported file invalidates this importer's memo.
+/// tracks, and re-capture user-stub `.pyi` APIs from that in-memory content.
+///
+/// Reading each imported file's `SourceFile` text records the cross-file edge
+/// (so editing it invalidates this importer). For a workspace-tracked user
+/// stub, the same text is re-parsed and its API overrides the disk-based one
+/// `resolve_module_imports` produced — so an edited-but-unsaved `.pyi` updates
+/// this importer's `imports_module_attribute` diagnostics.
 fn register_import_dependencies(
     db: &dyn Db,
-    resolved: &basilisk_resolver::ResolvedModule,
+    resolved: &mut basilisk_resolver::ResolvedModule,
+    search_paths: &crate::imports::ImportSearchPaths,
     workspace: WorkspaceFiles,
 ) {
     let registry = workspace.files(db);
+    let mut updates = Vec::new();
     for import in &resolved.imports {
-        if let Some(imported) = import
+        let Some(imported) = import
             .resolved_path
             .as_ref()
             .and_then(|path| registry.0.get(path))
+        else {
+            continue;
+        };
+        // Reading the imported file's text records the salsa edge...
+        let text = imported.text(db);
+        // ...and, for a tracked user stub, re-derives its API from that text.
+        if let Some(update) =
+            crate::imports::recapture_user_stub_from_source(import, search_paths, text)
         {
-            // Reading the imported file's text is what records the salsa edge.
-            let _ = imported.text(db);
+            updates.push(update);
         }
+    }
+    for (binding, api) in updates {
+        let _ = resolved.imported_modules.insert(binding, api);
     }
 }
 

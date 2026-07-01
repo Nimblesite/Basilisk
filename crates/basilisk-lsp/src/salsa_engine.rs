@@ -13,6 +13,7 @@
 //! a `set` to an unchanged value, so setting every input on every call is cheap.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use basilisk_checker::imports::ImportSearchPaths;
@@ -46,10 +47,13 @@ pub(crate) struct SalsaAnalysisEngine {
     /// The single workspace-wide import search-paths input.
     search_paths_input: Mutex<Option<SearchPathsInput>>,
     /// The workspace file registry input for content-precise cross-file
-    /// invalidation. Empty for now — the query only gains cross-file edges once
-    /// cross-module type-sharing moves into it; populating it before then would
-    /// only over-invalidate. [CHKARCH-INCREMENTAL-SALSA]
+    /// invalidation — a path → `SourceFile` map so a query can depend on the
+    /// content of the files it imports (e.g. an edited user-stub `.pyi` updates
+    /// its importers). [CHKARCH-INCREMENTAL-SALSA]
     workspace_files: Mutex<Option<WorkspaceFiles>>,
+    /// Set when a new `SourceFile` is added, so the next analysis rebuilds
+    /// `workspace_files`. Editing an existing file leaves the registry untouched.
+    registry_dirty: AtomicBool,
 }
 
 impl Default for SalsaAnalysisEngine {
@@ -60,6 +64,7 @@ impl Default for SalsaAnalysisEngine {
             config_inputs: DashMap::new(),
             search_paths_input: Mutex::new(None),
             workspace_files: Mutex::new(None),
+            registry_dirty: AtomicBool::new(false),
         }
     }
 }
@@ -128,13 +133,39 @@ impl SalsaAnalysisEngine {
         }
     }
 
-    /// Get-or-create the (currently empty) workspace file registry input.
+    /// Get-or-create the workspace file registry input, rebuilding it from the
+    /// current `sources` only when a new file has been added since last time.
+    /// Editing an existing file leaves the registry untouched (its content edge
+    /// flows through that file's own `SourceFile`), so steady-state editing does
+    /// not churn the registry.
     fn workspace_files_for(&self, db: &mut BasiliskDatabase) -> WorkspaceFiles {
         let mut guard = self
             .workspace_files
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *guard.get_or_insert_with(|| WorkspaceFiles::new(&*db, FileRegistry::default()))
+        match *guard {
+            Some(input) if !self.registry_dirty.swap(false, Ordering::Relaxed) => input,
+            Some(input) => {
+                let _ = input.set_files(db).to(self.build_registry());
+                input
+            }
+            None => {
+                self.registry_dirty.store(false, Ordering::Relaxed);
+                let input = WorkspaceFiles::new(&*db, self.build_registry());
+                *guard = Some(input);
+                input
+            }
+        }
+    }
+
+    /// Snapshot the current path → `SourceFile` map for the workspace registry.
+    fn build_registry(&self) -> FileRegistry {
+        FileRegistry(
+            self.sources
+                .iter()
+                .map(|entry| (entry.key().clone(), *entry.value()))
+                .collect(),
+        )
     }
 
     /// Get-or-create the [`SourceFile`] input for `path`, set to `text`.
@@ -153,6 +184,8 @@ impl SalsaAnalysisEngine {
         } else {
             let source = SourceFile::new(&*db, path_str.to_owned(), text.to_owned());
             let _ = self.sources.insert(path.to_path_buf(), source);
+            // A new file joined the workspace — the registry must be rebuilt.
+            self.registry_dirty.store(true, Ordering::Relaxed);
             source
         }
     }
