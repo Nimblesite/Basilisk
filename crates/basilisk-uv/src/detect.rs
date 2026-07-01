@@ -9,6 +9,9 @@ use std::path::{Path, PathBuf};
 use tracing::debug;
 
 /// Information about a detected uv-managed project.
+///
+/// Implements [LSPUV-DETECTION-RESULT]: raw boolean signals plus the matched
+/// root — consumers derive paths from `root` themselves.
 #[derive(Debug, Clone)]
 pub struct UvProjectInfo {
     /// Absolute path to the project root directory.

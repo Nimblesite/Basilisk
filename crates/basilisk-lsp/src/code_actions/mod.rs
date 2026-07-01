@@ -366,6 +366,9 @@ fn make_uv_add_dev_pytest_action(diag: &Diagnostic) -> CodeAction {
 /// Returns `None` when no stub distribution is known (the package ships inline
 /// `py.typed` types or no stubs exist), so we never offer a quick-fix that would
 /// fail to resolve on `PyPI` (e.g. the nonexistent `pydantic_ai-stubs`).
+///
+/// Implements [LSPUV-DIAGNOSTICS-MISSING-STUBS] — the `basilisk.uv.addDev`
+/// quick fix, gated on the bundled typeshed index.
 fn make_uv_add_stubs_action(diag: &Diagnostic, module: &str) -> Option<CodeAction> {
     let stubs_package = basilisk_stubs::typeshed_stub_distribution(module)?;
     Some(CodeAction {

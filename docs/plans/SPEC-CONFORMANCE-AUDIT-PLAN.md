@@ -32,7 +32,16 @@ a false claim.
 | `VSIX-PYTHON-DEBUGGER-DAP-LAUNCH-CONFIGURATIONS` | Shows debugger `type: "basilisk"` + `env`/`typeChecking` launch fields | Real type is `basilisk-debug`; launch schema differs | Follow-up |
 | `VSIX-OUTPUT-CHANNELS` | Says file log at `/tmp/basilisk-debug-trace.log` | Code uses `context.logUri` (secure per-extension dir) — intentional | Follow-up (spec should adopt secure path) |
 | `VSIX-STATUS-BAR` | Example uses `$(warning)` for an error count | Code uses `$(error)` for errors, `$(warning)` for warnings (correct) | Follow-up |
-| `ANALYSIS-INDEX-STRUCT`, `LSPUV-DETECTION-RESULT`, `LSPUV-WORKSPACE-MODEL`, `LSPUV-LOCK-REGISTRY` | Spec Rust struct shapes are simplified illustrations | Real structs differ (often more correct, e.g. `version: i32`) | Follow-up (refresh examples) |
+| `ANALYSIS-INDEX-STRUCT`, `LSPUV-WORKSPACE-MODEL`, `LSPUV-LOCK-REGISTRY` | Spec Rust struct shapes are simplified illustrations | Real structs differ (often more correct, e.g. `version: i32`) | Follow-up (refresh examples) |
+| `LSPUV-DETECTION-RESULT` | Spec showed a fictional `EnvironmentManager` enum + path-rich `UvProjectInfo` | `basilisk-uv/src/detect.rs` boolean-signal struct; `Option<UvProjectInfo>` is the whole decision | **Fixed** (spec rewritten, #232) |
+| `LSPUV-DIAGNOSTICS-MISSING-STUBS` | Spec's `types-{name}`/`{name}-stubs` name-guessing precondition was unimplementable; shipped design uses the bundled typeshed index + PEP 561 resolution | `basilisk-stubs::typeshed_stub_distribution`; `import_resolver.rs` `try_resolve_stub_package` | **Fixed** (spec rewritten, #208) |
+| `LSPUV-PYTHON-VERSION-RESOLUTION-ORDER` | Spec's venv `python3 --version` probe (step 5) is deliberately unbuilt (non-deterministic across machines, subprocess on check path); spec's step 1 named the wrong setting | `basilisk-uv/src/python_version.rs` + consumers | **Fixed** (spec rewritten to the 5-step cascade, #209) |
+| `ANALYSIS-INCR-DEBOUNCE` | Spec said 150 ms; code shipped 200 ms from day one (pure tuning constant, no external contract) | `basilisk-lsp/src/server/mod.rs` `FILE_WATCHER_DEBOUNCE_MS` | **Fixed** (spec now documents 200 ms, #210) |
+| `AUTOFIX-CONFLICTS` | Spec's safer-fix-wins + "skipped due to conflict" report + internal re-pass never built; resolution is purely positional and mixed-safety overlaps are unreachable with the shipped fix set | `code_actions/mass_fix.rs` `collect_non_overlapping_edits` | **Fixed** (spec rewritten, #220) |
+| `TYPEINF-EXCEEDS-NOUNKNOWN` | Spec claimed no `Unknown` is ever produced; `Unknown` is a deliberate internal insufficient-information sentinel that (mostly) suppresses diagnostics | `basilisk-checker/src/{types.rs,inference.rs}` | **Fixed** (spec rewritten, #223) |
+| `TYPEINF-SUBTYPING-NOMINAL` | Spec pinned C3-linearization MRO cache + `bytearray <: bytes` (removed from the tracked typing spec); shipped two-tier numeric tower passes conformance | `types_parsing.rs`, `rules/shared.rs::is_numeric_subtype` | **Fixed** (spec rewritten, #224) |
+| `TYPEINF-VARS-AUGMENTED`, `TYPEINF-NARROWING-ASSIGN`, `TYPEINF-NARROWING-DICTKEY` | Aspirational narrowing/inference prose; conservative shipped behavior passes conformance at 100%/0 FP; roadmap lives in NARROWPLAN | resolver/checker | **Fixed** (spec rewritten to document shipped behavior, #225) |
+| `TYPEINF-SUBTYPING-IMPL` / `TYPEINF-IMPL` | Spec described a fictional `is_subtype_of(ctx)` engine, `SubtypeContext`, Salsa-backed named components | `basilisk-checker/src/types.rs` `InferredType::is_assignable_to` + per-rule modules | **Fixed** (spec rewritten, #226) |
 | `WEBSITE-MOBILE-DOCS-NAV` | Names a non-existent `mobile-menu.js` | Toggle ships from `eleventy-plugin-techdoc`; reveal rule in `styles.css` | Follow-up |
 | `STUBRES-PROVENANCE-HOVER` | Tier-2 label wording differs between hover label and diag table | `basilisk-stubs/src/types.rs` `hover_label` | Follow-up (wording) |
 
@@ -68,9 +77,6 @@ deviation is tracked, not hidden.
 | `LSPUV-CONFIG-BINARY-RESOLUTION` | 5-priority `find_uv_binary` cascade has **no caller**; `run_uv` spawns bare `uv`, so `executablePath`/`UV_PATH` are ignored | `basilisk-uv/src/binary.rs` vs `uv_commands.rs` |
 | `LSPUV-DETECTION-SIGNALS` | 4th detection signal (`.python-version` w/o poetry/Pipfile lock) not checked | `basilisk-uv/src/detect.rs` |
 | `LSPUV-LOCK-IMPORT-MAPPING` | site-packages top-level-module scan (mechanism 1) not implemented | `basilisk-uv/src/import_map.rs` |
-| `LSPUV-DIAGNOSTICS-MISSING-STUBS` | `{name}-stubs` stub form not matched (only `types-{name}`) | `basilisk-uv/src/registry.rs` `find_stub_package` |
-| `LSPUV-PYTHON-VERSION-RESOLUTION-ORDER` | venv `python3 --version` probe (step 5) missing | `basilisk-uv/src/python_version.rs` |
-| `ANALYSIS-INCR-DEBOUNCE` | spec mandates 150 ms; code uses 200 ms | `basilisk-lsp/src/server/mod.rs` `FILE_WATCHER_DEBOUNCE_MS` |
 | `LSPTEST-...-ENVIRONMENT-VARIABLES` | `PYTHONDONTWRITEBYTECODE=1` never set | `basilisk-lsp/src/test_discovery/runner.rs` `set_venv_env` |
 | `LSPTEST-UV-INTEGRATION-COVERAGE` | emits bare `--cov` instead of `--cov=<src_root>` | `runner.rs` |
 | `LSPTEST-...-PYTEST-RESOLUTION-CASCADE` | `pytestPath` priority does not pre-empt `uv run`; cascade order differs | `runner.rs` `run_tests` |
@@ -82,13 +88,8 @@ deviation is tracked, not hidden.
 | `REFACTOR-FORMATTER` | strips whitespace only; never runs ruff | `code_actions/refactor/helpers.rs` `format_inserted_text` |
 | `REFACTOR-ABSTRACT-ALGO` | only direct same-module bases; no MRO; body hardcoded (ignores `REFACTOR-CONFIG`) | `code_actions/refactor/abstract_methods.rs` |
 | `REFACTOR-RENAME-VALIDATE` | shadowing/builtin-conflict rejections computed then discarded | `references.rs` |
-| `AUTOFIX-CONFLICTS` | overlap keeps earlier-by-position fix; never compares `FixSafety` (spec rule 2) | `code_actions/mass_fix.rs` `collect_non_overlapping_edits` |
 | `AUTOFIX-ADOPTION-RULES` | `auto_graduate` only called from tests; never runs in production | `basilisk-config/src/adoption.rs` |
 | `AUTOFIX-ADOPTION-FLOW` | Adopt does not run safe autofix first; demotions only applied on the adopt-command path, not normal publish | `basilisk-lsp/src/server/adoption.rs`, `workspace_analysis.rs` |
-| `TYPEINF-EXCEEDS-NOUNKNOWN` | spec claims no `Unknown` ever produced, but `InferredType::Unknown` is produced for calls/lambdas and treated as bidirectionally compatible | `basilisk-checker/src/{types.rs,inference.rs}` |
-| `TYPEINF-SUBTYPING-NOMINAL` | `complex` collapsed into `Float` at parse (loses `float <: complex`); `bytearray <: bytes` not modeled | `basilisk-checker/src/types_parsing.rs` |
-| `TYPEINF-VARS-AUGMENTED`, `TYPEINF-NARROWING-ASSIGN`, `TYPEINF-NARROWING-DICTKEY` | not implemented (augmented-assign re-typing; assignment narrowing extraction; `"k" in typed_dict` narrowing) | resolver/checker |
-| `TYPEINF-SUBTYPING-IMPL` / `TYPEINF-IMPL` | spec describes an `is_subtype_of(ctx)` engine + named components that don't exist; real path is `InferredType::is_assignable_to` (name-comparison fallback) | `basilisk-checker/src/types.rs` |
 | `CHKARCH-CLI-EXITCODES` | exit code `2` (configuration error) never produced; malformed config silently falls back to defaults | `basilisk-cli/src/main.rs`, `basilisk-config/src/lib.rs` |
 | `LSPDEBUG-ERRORS` | all `start_session` failures map to `-32002` (spec reserves it for "no Python interpreter") | `basilisk-lsp/src/server/commands.rs` |
 
@@ -99,4 +100,7 @@ deviation is tracked, not hidden.
 Tracked for added coverage (mutation/coverage ratchets only rise):
 `ANALYSIS-CROSSLSP-RENAME` (cross-file), `ANALYSIS-CAPS`, `NVIM-DEFAULT-KEYMAPS-STANDARD-LSP`,
 LSP adoption command handlers + `apply_adoptions`, `REFACTOR-FORMATTER`, `REFACTOR-INLINE-VAR-SAFETY`,
-`PROFILE-MEMORY-VIS-REFGRAPH`, `PROFILE-PERMISSIONS-WINDOWS` (cfg-gated).
+`PROFILE-MEMORY-VIS-REFGRAPH`, `PROFILE-PERMISSIONS-WINDOWS` (cfg-gated),
+`LSPUV-PYTHON-VERSION-RESOLUTION-ORDER` (the `requires-python`/`uv.lock` fallback steps of
+`resolve_target_python_version` and `constraint_lower_bound` have no direct test — only the
+`.python-version` step is covered).

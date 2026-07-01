@@ -129,6 +129,10 @@ fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
 /// official authoring guide so a developer — or an AI assisting in the editor —
 /// has self-contained context to write the stub. No shell command appears here:
 /// per [STUBRES-CODEACTIONS] the quick fix does the work, the help only explains.
+///
+/// Implements [LSPUV-DIAGNOSTICS-MISSING-STUBS]: the typeshed branch is gated
+/// on the bundled typeshed index — stub names are never guessed by
+/// concatenation.
 fn stub_help_text(root_module: &str) -> String {
     match basilisk_stubs::typeshed_stub_distribution(root_module) {
         Some(distribution) => {

@@ -28,22 +28,18 @@ A workspace is a uv project if **any** of these are true (checked in order):
 
 ### 2.2 Detection Result {#LSPUV-DETECTION-RESULT}
 
-```rust
-pub enum EnvironmentManager {
-    Uv(UvProjectInfo),
-    TraditionalVenv,
-    NoEnvironment,
-}
+`basilisk_uv::detect_uv_project(workspace_roots: &[PathBuf]) -> Option<UvProjectInfo>` scans the roots in order and returns info for the first directory matching a [detection signal](#LSPUV-DETECTION-SIGNALS); `None` means "not a uv project".
 
+```rust
 pub struct UvProjectInfo {
-    pub project_root: PathBuf,
-    pub lock_file: Option<PathBuf>,          // uv.lock
-    pub pyproject: PathBuf,                  // pyproject.toml
-    pub python_version_file: Option<PathBuf>, // .python-version
-    pub venv_dir: Option<PathBuf>,           // .venv
-    pub workspace: Option<UvWorkspaceInfo>,  // if [tool.uv.workspace] present
+    pub root: PathBuf,          // matched workspace root
+    pub has_lockfile: bool,     // uv.lock exists at root
+    pub has_tool_uv: bool,      // pyproject.toml contains [tool.uv]
+    pub uv_managed_venv: bool,  // .venv/pyvenv.cfg contains `uv = true`
 }
 ```
+
+The result carries the raw boolean signals, not resolved paths — consumers derive paths from `root` (e.g. `root.join("uv.lock")` in the `build_uv_registry` functions in `crates/basilisk-lsp/src/server/init.rs` and `crates/basilisk-cli/src/main.rs`). Workspace members ([LSPUV-WORKSPACE-MODEL](#LSPUV-WORKSPACE-MODEL)), `.python-version` resolution ([LSPUV-PYTHON-VERSION](#LSPUV-PYTHON-VERSION)), and venv discovery ([LSPUV-DETECTION-FALLBACK](#LSPUV-DETECTION-FALLBACK)) are separate call paths, not fields on the detection result. There is no `EnvironmentManager` enum: `Option<UvProjectInfo>` is the whole environment-manager decision — `Some` enables the additive uv features (lock-file registry, uv-run test execution, uv status); `None` only skips them, and venv discovery via `find_venv_dir()` runs either way.
 
 ### 2.3 Fallback {#LSPUV-DETECTION-FALLBACK}
 
@@ -119,12 +115,13 @@ When `uv.lock` changes (LSP file watcher or `workspace/didChangeWatchedFiles`): 
 
 Highest wins:
 
-1. `basilisk.python` setting (explicit user override — always wins)
-2. `.python-version` file in workspace root (uv standard)
-3. `[project].requires-python` in `pyproject.toml` (lower bound)
-4. `uv.lock` top-level `requires-python` field
-5. Probe `python3 --version` in the detected venv
-6. Default: `3.12`
+1. Explicit `python-version` in project config (`[tool.basilisk] python-version` in `pyproject.toml`, or `pythonVersion`/`python-version` in `basilisk.json`) — always wins
+2. `.python-version` file in the project root (uv standard; first non-empty, non-comment line)
+3. `[project].requires-python` in `pyproject.toml` — lower bound of the first `>=`/`==`/`~=` clause
+4. `uv.lock` top-level `requires-python` — same lower-bound extraction
+5. Default: `3.12` (the checker's centralized `DEFAULT_TARGET_VERSION`, [`[CHKARCH-VERSION-TARGET]`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-VERSION-TARGET))
+
+Steps 2–4 are `basilisk_uv::python_version::resolve_target_python_version`; step 1 and the default belong to the consumers (`WorkspaceIndex::load_root_configs`, CLI `main.rs`, `CheckContext::from_config`). Resolution reads declared project metadata only — Basilisk deliberately never probes the venv interpreter (`python3 --version`): the resolved target stays deterministic across machines (a venv built with a different interpreter does not silently shift checker semantics) and version resolution adds no subprocess spawn. The `basilisk.python` VS Code setting is the interpreter *path* for the debugger/profiler and plays no role in version resolution.
 
 ### 4.2 Impact on Type Checking {#LSPUV-PYTHON-VERSION-IMPACT}
 
@@ -189,7 +186,7 @@ error[BSK-E0152]: Package `acme_internal` is installed but has no type stubs ava
 
 Per [STUBRES-CODEACTIONS](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CODEACTIONS) the help describes the fix and never embeds a shell command — the code action does the work. `help`/`note` lines are folded onto the LSP diagnostic message so editors (no `help`/`note` fields) still surface the guidance.
 
-The typeshed stub suggestion (and its `basilisk.uv.addDev` quick fix) is emitted only when: the package IS in `uv.lock`; a matching stub package exists (`types-{name}` or `{name}-stubs`); and the stub is NOT already in `uv.lock`.
+The typeshed stub suggestion (and its `basilisk.uv.addDev` quick fix) is emitted only when the bundled typeshed index (`basilisk_stubs::typeshed_stub_distribution` — a committed TSV regenerated from python/typeshed's `stubs/<DIST>` tree, `crates/basilisk-stubs/data/typeshed_stub_distributions.tsv`, compiled into a phf map by `build.rs`) maps the import root to a real published `types-<DIST>` distribution (e.g. `yaml` → `types-PyYAML`). Stub names are never guessed by string concatenation — neither `types-{name}` nor `{name}-stubs` — so the quick fix never offers a package that does not exist on PyPI. The "stub already installed" case needs no lockfile check: an installed stub-only package (a `{name}-stubs` directory in site-packages — the install form of both typeshed `types-*` distributions and third-party stub packages such as `pandas-stubs`) resolves first in the PEP 561 order ([STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561) step 3), so the import no longer resolves to an untyped `.py` and BSK-E0152 does not fire at all.
 
 The **create-local-stub** quick fix (`basilisk.stubs.createLocal`, [STUBRES-CREATE-LOCAL](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CREATE-LOCAL)) is offered for **every** BSK-E0152 — the only fix when no typeshed stub exists, a fallback when one does.
 
