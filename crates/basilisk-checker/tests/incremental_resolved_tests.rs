@@ -3,6 +3,7 @@
     clippy::allow_attributes,
     clippy::unwrap_used,
     clippy::expect_used,
+    clippy::panic,
     missing_docs
 )]
 //! Behavioural tests for the **import-resolved** salsa query
@@ -16,7 +17,7 @@ use std::fs;
 use basilisk_checker::imports::ImportSearchPaths;
 use basilisk_checker::{
     check_with_config, checked_file_resolved, file_diagnostics_resolved, resolved_module,
-    ConfigInput, ConfigValue, Diagnostic, SearchPathsInput, SourceFile,
+    ConfigInput, ConfigValue, Diagnostic, ResolvedFile, SearchPathsInput, SourceFile,
 };
 use basilisk_config::BasiliskConfig;
 use basilisk_resolver::scope::ImportResolution;
@@ -238,9 +239,9 @@ fn resolved_module_resolves_imports() {
     let file = SourceFile::new(&db, "main.py".to_owned(), format!("import {PROBE}\n"));
     let search_paths = SearchPathsInput::new(&db, make_search_paths(vec![dir.clone()]));
 
-    let module = resolved_module(&db, file, search_paths)
-        .as_ref()
-        .expect("the file parses and resolves");
+    let ResolvedFile::Resolved(module) = resolved_module(&db, file, search_paths) else {
+        panic!("the file parses and resolves");
+    };
     let import = module
         .imports
         .iter()
@@ -262,8 +263,11 @@ fn resolved_module_none_on_parse_error() {
     let search_paths = SearchPathsInput::new(&db, make_search_paths(vec![]));
     let file = SourceFile::new(&db, "broken.py".to_owned(), "def (= :\n".to_owned());
     assert!(
-        resolved_module(&db, file, search_paths).is_none(),
-        "an unparseable file yields no resolved module"
+        matches!(
+            resolved_module(&db, file, search_paths),
+            ResolvedFile::ParseError(_)
+        ),
+        "an unparseable file yields a ParseError outcome"
     );
 }
 

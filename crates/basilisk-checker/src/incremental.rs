@@ -118,16 +118,35 @@ pub fn file_diagnostics(db: &dyn Db, file: SourceFile, config: ConfigInput) -> V
         .collect()
 }
 
+/// The outcome of parsing and resolving one file — the value of the
+/// [`resolved_module`] query.
+///
+/// Distinguishes a parse failure (which a consumer surfaces as `BSK-PARSE`) from
+/// a resolve failure (no module, no diagnostics) so a single memoized parse
+/// serves diagnostics, navigation, and parse-error reporting alike. `PartialEq`
+/// gives it salsa's `Update` via the fallback (`Arc<ResolvedModule>` compares by
+/// value; `basilisk-resolver` stays salsa-free).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResolvedFile {
+    /// Parsed and resolved: the import-resolved, navigable module.
+    Resolved(std::sync::Arc<basilisk_resolver::ResolvedModule>),
+    /// The file failed to parse; the error message drives `BSK-PARSE`.
+    ParseError(String),
+    /// The file parsed but failed to resolve — no module, no diagnostics.
+    ResolveError,
+}
+
 /// Tracked query: the **import-resolved module** for one file, memoized by salsa
 /// and keyed on the `(file, search_paths)` pair.
 ///
 /// Runs `parse → resolve → `[`crate::imports::resolve_module_imports`], yielding
 /// the module with its imports resolved against the search paths — the navigable
 /// view a consumer (the LSP) needs for hover / references / go-to-definition.
-/// Returns `None` if the file fails to parse or resolve. It is **not** keyed on
-/// the config (resolution is config-independent), so a config-only edit reuses
-/// the memoized module: [`checked_file_resolved`] re-runs only the cheap
-/// `check_with_config` step.
+/// The [`ResolvedFile`] outcome also carries a parse error, so the one memoized
+/// parse serves diagnostics, navigation, and `BSK-PARSE` reporting. It is
+/// **not** keyed on the config (resolution is config-independent), so a
+/// config-only edit reuses the memoized module: [`checked_file_resolved`] re-runs
+/// only the cheap `check_with_config` step.
 ///
 /// **Filesystem-impurity boundary** (mirrors
 /// [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)): the existence
@@ -140,17 +159,17 @@ pub fn resolved_module(
     db: &dyn Db,
     file: SourceFile,
     search_paths: SearchPathsInput,
-) -> Option<std::sync::Arc<basilisk_resolver::ResolvedModule>> {
-    let Ok(parsed) = basilisk_parser::parse_source(file.text(db).clone(), file.path(db).clone())
-    else {
-        return None;
+) -> ResolvedFile {
+    let parsed = match basilisk_parser::parse_source(file.text(db).clone(), file.path(db).clone()) {
+        Ok(parsed) => parsed,
+        Err(error) => return ResolvedFile::ParseError(error.to_string()),
     };
     let Ok(mut resolved) = basilisk_resolver::resolve(&parsed) else {
-        return None;
+        return ResolvedFile::ResolveError;
     };
     // Reading `search_paths.value(db)` registers the salsa dependency edge.
     crate::imports::resolve_module_imports(&mut resolved, search_paths.value(db));
-    Some(std::sync::Arc::new(resolved))
+    ResolvedFile::Resolved(std::sync::Arc::new(resolved))
 }
 
 /// Tracked query: the **import-resolved** diagnostics for one file, memoized by
@@ -171,7 +190,7 @@ pub fn checked_file_resolved(
     config: ConfigInput,
     search_paths: SearchPathsInput,
 ) -> Vec<CachedDiagnostic> {
-    let Some(resolved) = resolved_module(db, file, search_paths) else {
+    let ResolvedFile::Resolved(resolved) = resolved_module(db, file, search_paths) else {
         return Vec::new();
     };
     crate::check_with_config(resolved, &config.value(db).0)

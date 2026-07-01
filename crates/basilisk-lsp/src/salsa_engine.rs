@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use basilisk_checker::imports::ImportSearchPaths;
 use basilisk_checker::{
     file_diagnostics_resolved, resolved_module, BasiliskDatabase, ConfigInput, ConfigValue,
-    Diagnostic, SearchPathsInput, SourceFile,
+    Diagnostic, ResolvedFile, SearchPathsInput, SourceFile,
 };
 use basilisk_config::BasiliskConfig;
 use dashmap::DashMap;
@@ -81,17 +81,6 @@ impl SalsaAnalysisEngine {
     ) -> EngineAnalysis {
         let path_str = path.to_string_lossy().into_owned();
 
-        // Parse-error detection stays outside salsa: the queries return empty on
-        // parse failure, but the LSP surfaces a `BSK-PARSE` diagnostic, so we
-        // must distinguish parse failure from a clean (possibly empty) result.
-        if let Err(e) = basilisk_parser::parse_source(text.to_owned(), path_str.clone()) {
-            return EngineAnalysis {
-                resolved: None,
-                diagnostics: Vec::new(),
-                parse_error: Some(e.to_string()),
-            };
-        }
-
         let mut db = self
             .db
             .lock()
@@ -101,13 +90,29 @@ impl SalsaAnalysisEngine {
         let config_input = self.config_for(&mut db, root_key, config);
         let search_paths_input = self.search_paths_for(&mut db, search_paths);
 
-        let resolved = resolved_module(&*db, source, search_paths_input).clone();
-        let diagnostics = file_diagnostics_resolved(&*db, source, config_input, search_paths_input);
-
-        EngineAnalysis {
-            resolved,
-            diagnostics,
-            parse_error: None,
+        // One memoized parse+resolve, whose outcome distinguishes a parse error
+        // (→ BSK-PARSE) from a resolve error (→ nothing) from a resolved module.
+        match resolved_module(&*db, source, search_paths_input) {
+            ResolvedFile::ParseError(message) => EngineAnalysis {
+                resolved: None,
+                diagnostics: Vec::new(),
+                parse_error: Some(message.clone()),
+            },
+            ResolvedFile::ResolveError => EngineAnalysis {
+                resolved: None,
+                diagnostics: Vec::new(),
+                parse_error: None,
+            },
+            ResolvedFile::Resolved(module) => {
+                let resolved = Some(Arc::clone(module));
+                let diagnostics =
+                    file_diagnostics_resolved(&*db, source, config_input, search_paths_input);
+                EngineAnalysis {
+                    resolved,
+                    diagnostics,
+                    parse_error: None,
+                }
+            }
         }
     }
 
