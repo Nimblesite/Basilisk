@@ -924,50 +924,62 @@ checking.
   dependency-graph foundation, so the derived queries are defined in the crates
   that own the work. `ConfigInput` lives in `basilisk-checker` (beside its only
   consumer) so the salsa `Update` wrapper never reaches the salsa-free
-  `basilisk-config` leaf crate.
-- **Derived query**: the per-file diagnostics — `checked_file`
-  (`crates/basilisk-checker/src/incremental.rs`), which runs `parse → resolve →
-  check_with_config` and memoizes the result. Granularity is **module-level**:
-  the pipeline is fused into one tracked query keyed on the `(file, config)`
-  pair, matching the `Module-level` granularity row in [CHKARCH-MATRIX]. Editing
-  one file — or the configuration — re-executes only the affected queries;
-  unrelated files are served from their memos.
+  `basilisk-config` leaf crate. The **resolution environment** is likewise a
+  tracked input — `SearchPathsInput::value`, an `ImportSearchPaths` (workspace
+  roots, `extraPaths`, stub dirs, venv site-packages, and the `uv.lock`-derived
+  `PackageRegistry`); `ImportSearchPaths` lives in `basilisk-checker` and derives
+  `salsa::Update` directly (its `Arc<PackageRegistry>` compares by value via
+  `PartialEq`, so no salsa dependency reaches `basilisk-uv`).
+- **Derived queries**: the per-file diagnostics
+  (`crates/basilisk-checker/src/incremental.rs`). `checked_file` runs `parse →
+  resolve → check_with_config`, keyed on `(file, config)` — the **pure**,
+  import-free pipeline. `checked_file_resolved` additionally runs
+  `resolve_module_imports` between resolve and check, keyed on `(file, config,
+  search_paths)` — the **full** pipeline the batch CLI runs. Granularity is
+  **module-level**: each pipeline is fused into one tracked query per file,
+  matching the `Module-level` granularity row in [CHKARCH-MATRIX]. Editing one
+  file — or the configuration, or the search paths — re-executes only the
+  affected queries; unrelated files are served from their memos.
 
 The value type is the owned `CachedDiagnostic` (it satisfies salsa's `Update`
 bound), so the engine adds **no** salsa dependency to `basilisk-resolver` or
 `basilisk-stubs`.
 
-**Equivalence guarantee.** `checked_file` is a pure memoization wrapper over
-[`check_with_config`](#CHKARCH-ARCH-PIPELINE): for any file that parses and
-resolves, `file_diagnostics(db, file, config)` equals
-`check_with_config(&resolved, cfg)` byte-for-byte, and with the default config
-equals `check(&resolved)`. This is asserted directly
-(`crates/basilisk-checker/tests/incremental_tests.rs`,
-`checked_file_is_equivalent_to_direct_check` plus
-`checked_file_honours_strict_annotations` for the config differential), so salsa
-memoization can never corrupt a result.
+**Equivalence guarantee.** Each query is a pure memoization wrapper over the
+[check pipeline](#CHKARCH-ARCH-PIPELINE). For any file that parses and resolves,
+`file_diagnostics(db, file, config)` equals `check_with_config(&resolved, cfg)`
+byte-for-byte (and, with the default config, `check(&resolved)`);
+`file_diagnostics_resolved(db, file, config, search_paths)` equals
+`{ resolve_module_imports; check_with_config }` byte-for-byte — i.e. the batch
+CLI's `process_file` core. Both are asserted directly
+(`crates/basilisk-checker/tests/incremental_tests.rs`
+`checked_file_is_equivalent_to_direct_check` +
+`checked_file_honours_strict_annotations`;
+`incremental_resolved_tests.rs`
+`resolved_query_equivalent_to_direct_import_pipeline` +
+`resolved_query_applies_import_resolution`), so salsa memoization can never
+corrupt a result.
 
-**Scope — not yet the CLI/LSP path.** The equivalence is to the *pure*
-pipeline, **not** to what `basilisk check` emits. The batch CLI (`process_file`)
-and the LSP run an extra step between resolve and check —
-`basilisk_lsp::import_resolver::resolve_module_imports`, which resolves imports
-against the venv/`uv.lock` and so changes both the `imports_unresolved` rule and
-cascade suppression for import-bearing files. That step reads the filesystem and
-cannot be a pure salsa query without promoting the search paths to a salsa
-input. Configuration, by contrast, **is** now a tracked input: `ConfigInput`
-wraps a `ConfigValue(BasiliskConfig)` whose `salsa::Update` resolves through
-`BasiliskConfig`'s `PartialEq` — the same dispatch fallback `CachedDiagnostic`
-uses for `Span`/`Severity`, so no salsa dependency reaches `basilisk-config`.
-Editing it invalidates exactly the files it affects, proven by
-`editing_config_input_invalidates_checked_file` (and
-`editing_override_maps_reinvalidates` for nested override identity). So the query
-now covers the **configurable, import-free** pipeline, but the engine is still
-**not yet wired** into the published-diagnostics paths — those remain on the
-direct pipeline, which is why this change cannot affect the conformance score.
-The remaining step before adoption is to give `ImportSearchPaths`
-salsa-compatible identity and fold import resolution into a tracked query; the
-engine is already a public API (`basilisk_checker::{BasiliskDatabase, SourceFile,
-ConfigInput, ConfigValue, checked_file, file_diagnostics}`) ready for that work.
+**Filesystem-impurity boundary.** `resolve_module_imports` probes the filesystem
+(existence checks, venv site-packages, imported-file content). Those reads are
+**not** tracked salsa edges: `checked_file_resolved` re-runs only when
+`file.text`, the `ConfigInput`, or the `SearchPathsInput` changes — mirroring the
+[CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS) boundary. Installing a
+package, or editing an imported sibling, does not invalidate a memo unless a
+consumer re-sets the `SearchPathsInput` (in-session the LSP does so on
+venv / `uv.lock` / file-watch events). Content-precise cross-file invalidation
+(modelling each imported file as its own `SourceFile` input) is a later step.
+
+**Scope — not yet on the published path.** Both configuration and import
+resolution are now tracked inputs, so `checked_file_resolved` reproduces the full
+`basilisk check` pipeline incrementally. But the engine is still **not yet
+wired** into the published-diagnostics paths — the CLI (`process_file`) and LSP
+remain on the direct pipeline, which is why this work cannot affect the
+conformance score. The remaining step is *adoption*: point the LSP diagnostics
+path (then the CLI) at `file_diagnostics_resolved`. The engine is a public API
+(`basilisk_checker::{BasiliskDatabase, SourceFile, ConfigInput, ConfigValue,
+SearchPathsInput, checked_file, file_diagnostics, checked_file_resolved,
+file_diagnostics_resolved}`) ready for that work.
 
 Incremental behaviour is proven by `crates/basilisk-db/tests/db_tests.rs`
 (memoization, invalidation, cross-file isolation) and the checker tests above.

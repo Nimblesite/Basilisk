@@ -40,7 +40,13 @@ pub struct ResolvedImport {
 }
 
 /// Search paths used for import resolution.
-#[derive(Debug, Clone)]
+///
+/// Derives `salsa::Update` so it can be the value of a `#[salsa::input]`
+/// ([`crate::SearchPathsInput`]): the derive resolves each field through its
+/// `PartialEq` (the `Arc<PackageRegistry>` compares the pooled registry by
+/// value), mirroring the `CachedDiagnostic`/`ConfigValue` idiom, so no salsa
+/// dependency leaks into `basilisk-uv`.
+#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct ImportSearchPaths {
     /// Workspace root directories.
     pub roots: Vec<PathBuf>,

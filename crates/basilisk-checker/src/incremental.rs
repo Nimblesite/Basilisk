@@ -17,6 +17,7 @@ use basilisk_db::{Db, SourceFile};
 
 use crate::cached::CachedDiagnostic;
 use crate::diagnostic::Diagnostic;
+use crate::imports::ImportSearchPaths;
 
 /// The effective checker configuration, wrapped so it can be a Salsa input value.
 ///
@@ -41,6 +42,21 @@ pub struct ConfigInput {
     /// The effective `BasiliskConfig` applied to the check.
     #[returns(ref)]
     pub value: ConfigValue,
+}
+
+/// The import search paths as a Salsa **input**.
+///
+/// Resolution environment (workspace roots, `extraPaths`, stub dirs, venv
+/// site-packages, and the `uv.lock`-derived [`basilisk_uv::PackageRegistry`])
+/// is a genuine input of an import-resolving check: a venv sync, a `uv.lock`
+/// edit, or a new stub dir changes *which* files an import resolves to. Re-set
+/// it via `set_value` and salsa re-runs exactly the files whose diagnostics
+/// depend on it. [CHKARCH-INCREMENTAL-SALSA]
+#[salsa::input(debug)]
+pub struct SearchPathsInput {
+    /// The effective [`ImportSearchPaths`] applied to the check.
+    #[returns(ref)]
+    pub value: ImportSearchPaths,
 }
 
 /// Tracked query: the diagnostics for one file, memoized by salsa.
@@ -96,6 +112,66 @@ pub fn checked_file(db: &dyn Db, file: SourceFile, config: ConfigInput) -> Vec<C
 #[must_use]
 pub fn file_diagnostics(db: &dyn Db, file: SourceFile, config: ConfigInput) -> Vec<Diagnostic> {
     checked_file(db, file, config)
+        .iter()
+        .cloned()
+        .map(CachedDiagnostic::into_diagnostic)
+        .collect()
+}
+
+/// Tracked query: the **import-resolved** diagnostics for one file, memoized by
+/// salsa and keyed on the `(file, config, search_paths)` triple.
+///
+/// Runs the full pipeline the batch CLI runs — parse → resolve →
+/// [`crate::imports::resolve_module_imports`] → [`crate::check_with_config`] —
+/// so, unlike [`checked_file`], it honours import resolution: the
+/// `imports_unresolved` rule and the cascade suppression of downstream errors
+/// from unresolved imports both see the resolved import set. Equivalence is
+/// **exactly** to `basilisk-cli`'s `process_file` core: for any file that parses
+/// and resolves, [`file_diagnostics_resolved`] equals `{ resolve_module_imports;
+/// check_with_config }` byte-for-byte.
+///
+/// **Filesystem-impurity boundary** (mirrors
+/// [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)): salsa re-runs this
+/// only when `file.text`, the [`ConfigInput`], or the [`SearchPathsInput`]
+/// changes. The existence probes and imported-file *content* that
+/// `resolve_module_imports` reads are **not** tracked salsa edges — installing a
+/// package into site-packages, or editing an imported sibling, does not
+/// invalidate a memo unless the `SearchPathsInput` is re-set. In-session a
+/// consumer (the LSP) re-sets that input on venv / `uv.lock` / file-watch
+/// events; content-precise cross-file invalidation is a later step.
+#[salsa::tracked(returns(ref))]
+pub fn checked_file_resolved(
+    db: &dyn Db,
+    file: SourceFile,
+    config: ConfigInput,
+    search_paths: SearchPathsInput,
+) -> Vec<CachedDiagnostic> {
+    let Ok(parsed) = basilisk_parser::parse_source(file.text(db).clone(), file.path(db).clone())
+    else {
+        return Vec::new();
+    };
+    let Ok(mut resolved) = basilisk_resolver::resolve(&parsed) else {
+        return Vec::new();
+    };
+    // Reading `search_paths.value(db)` / `config.value(db)` registers the salsa
+    // dependency edges, so a venv/config edit invalidates exactly the files it
+    // affects.
+    crate::imports::resolve_module_imports(&mut resolved, search_paths.value(db));
+    crate::check_with_config(&resolved, &config.value(db).0)
+        .iter()
+        .map(CachedDiagnostic::from)
+        .collect()
+}
+
+/// Run [`checked_file_resolved`] and materialise owned [`Diagnostic`]s.
+#[must_use]
+pub fn file_diagnostics_resolved(
+    db: &dyn Db,
+    file: SourceFile,
+    config: ConfigInput,
+    search_paths: SearchPathsInput,
+) -> Vec<Diagnostic> {
+    checked_file_resolved(db, file, config, search_paths)
         .iter()
         .cloned()
         .map(CachedDiagnostic::into_diagnostic)

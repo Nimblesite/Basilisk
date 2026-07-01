@@ -22,7 +22,7 @@ pub enum DepKind {
 }
 
 /// Resolved information about a single package.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageInfo {
     /// Normalised `PyPI` package name.
     pub name: String,
@@ -37,7 +37,7 @@ pub struct PackageInfo {
 }
 
 /// An in-memory index of all resolved packages, keyed by import name.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct PackageRegistry {
     packages: HashMap<String, Arc<PackageInfo>>,
 }

@@ -42,7 +42,10 @@ pub mod types_parsing;
 
 pub use cached::CachedDiagnostic;
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};
-pub use incremental::{checked_file, file_diagnostics, ConfigInput, ConfigValue};
+pub use incremental::{
+    checked_file, checked_file_resolved, file_diagnostics, file_diagnostics_resolved, ConfigInput,
+    ConfigValue, SearchPathsInput,
+};
 
 // Re-export the incremental-database handles so consumers can drive the
 // memoized `checked_file` query without depending on `basilisk-db` directly.
