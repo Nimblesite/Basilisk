@@ -15,10 +15,11 @@ use std::fs;
 
 use basilisk_checker::imports::ImportSearchPaths;
 use basilisk_checker::{
-    check_with_config, checked_file_resolved, file_diagnostics_resolved, ConfigInput, ConfigValue,
-    Diagnostic, SearchPathsInput, SourceFile,
+    check_with_config, checked_file_resolved, file_diagnostics_resolved, resolved_module,
+    ConfigInput, ConfigValue, Diagnostic, SearchPathsInput, SourceFile,
 };
 use basilisk_config::BasiliskConfig;
+use basilisk_resolver::scope::ImportResolution;
 use basilisk_test_utils::EventDb;
 use salsa::Setter;
 
@@ -225,5 +226,78 @@ fn resolved_query_unparseable_file_yields_no_diagnostics() {
     assert!(
         checked_file_resolved(&db, file, config, search_paths).is_empty(),
         "the memoized projection is empty too"
+    );
+}
+
+/// `resolved_module` returns the import-resolved module for navigation.
+#[test]
+fn resolved_module_resolves_imports() {
+    let db = EventDb::default();
+    let dir = make_tmp_dir("bsk_rm_resolves");
+    fs::write(dir.join(format!("{PROBE}.py")), "x = 1\n").unwrap();
+    let file = SourceFile::new(&db, "main.py".to_owned(), format!("import {PROBE}\n"));
+    let search_paths = SearchPathsInput::new(&db, make_search_paths(vec![dir.clone()]));
+
+    let module = resolved_module(&db, file, search_paths)
+        .as_ref()
+        .expect("the file parses and resolves");
+    let import = module
+        .imports
+        .iter()
+        .find(|i| i.module == PROBE)
+        .expect("the import is present");
+    assert_ne!(
+        import.resolution,
+        ImportResolution::Unresolved,
+        "resolve_module_imports must have resolved the sibling import in the navigable module"
+    );
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// `resolved_module` yields `None` for a file that fails to parse.
+#[test]
+fn resolved_module_none_on_parse_error() {
+    let db = EventDb::default();
+    let search_paths = SearchPathsInput::new(&db, make_search_paths(vec![]));
+    let file = SourceFile::new(&db, "broken.py".to_owned(), "def (= :\n".to_owned());
+    assert!(
+        resolved_module(&db, file, search_paths).is_none(),
+        "an unparseable file yields no resolved module"
+    );
+}
+
+/// A config-only edit re-runs the cheap `check`, but NOT `resolved_module`
+/// (config is not one of its keys), so parse + resolve + import-resolution are
+/// reused — the granularity win of splitting the two queries.
+#[test]
+fn config_edit_does_not_reresolve_module() {
+    let mut db = EventDb::default();
+    let search_paths = SearchPathsInput::new(&db, make_search_paths(vec![]));
+    let config = ConfigInput::new(&db, ConfigValue(BasiliskConfig::default()));
+    let file = SourceFile::new(
+        &db,
+        "f.py".to_owned(),
+        "def f(x):\n    return x\n".to_owned(),
+    );
+
+    let _first = checked_file_resolved(&db, file, config, search_paths);
+    let _ = db.executions_of("resolved_module"); // drain priming
+    let _ = db.executions_of("checked_file_resolved");
+
+    let _previous = config.set_value(&mut db).to(ConfigValue(BasiliskConfig {
+        strict_annotations: true,
+        ..BasiliskConfig::default()
+    }));
+    let _after = checked_file_resolved(&db, file, config, search_paths);
+    assert_eq!(
+        db.executions_of("checked_file_resolved"),
+        1,
+        "a config edit re-runs the check step"
+    );
+    assert_eq!(
+        db.executions_of("resolved_module"),
+        0,
+        "config is not a dependency of resolved_module — the resolved module is reused"
     );
 }

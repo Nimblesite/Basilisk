@@ -4,7 +4,7 @@
 use super::{span::Span, variable_types::AttributeInfo};
 
 /// Type parameters declared in a `Generic[T1, T2, ...]` base expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GenericParamInfo {
     /// The name of the type parameter (e.g. `"T"`, `"T_co"`).
     pub name: String,
@@ -18,7 +18,7 @@ pub struct GenericParamInfo {
 /// A type argument in a subscript expression, possibly nested.
 ///
 /// Represents both simple names (`T`) and parameterised types (`list[T]`).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TypeArg {
     /// A simple name reference (e.g. `T`, `int`).
     Simple(String),
@@ -35,7 +35,7 @@ pub enum TypeArg {
 ///
 /// For `class Foo(Base[T, int])`, this captures `base_name = "Base"`,
 /// `type_arg_names = ["T", "int"]`, and the structured `type_args`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BaseSubscriptEntry {
     /// The base class name being subscripted.
     pub base_name: String,
@@ -48,7 +48,7 @@ pub struct BaseSubscriptEntry {
 }
 
 /// A class definition with its attributes and method names.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "Python classes have many boolean flags"

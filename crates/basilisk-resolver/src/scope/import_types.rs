@@ -61,7 +61,7 @@ pub enum UnresolvedReason {
 }
 
 /// A single import statement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ImportInfo {
     /// The dotted module name being imported (e.g. `"os.path"`, `"requests"`).
     pub module: String,
@@ -110,7 +110,7 @@ pub struct ImportInfo {
 /// [`super::ResolvedModule::imported_modules`] is the gate, and third-party
 /// typeshed / `py.typed` packages are deliberately not captured here yet.
 /// Consumed by `imports_module_attribute`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ImportedModuleApi {
     /// Top-level names the stub declares (functions, classes, variables).
     pub member_names: std::collections::HashSet<String>,

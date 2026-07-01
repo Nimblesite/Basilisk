@@ -7,7 +7,7 @@ use super::span::Span;
 ///
 /// These are gathered in the resolver so that the checker rule (`E0047`) can
 /// emit them without duplicating AST-walking logic.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FinalViolationInfo {
     /// The kind of violation.
     pub kind: FinalViolationKind,
@@ -51,7 +51,7 @@ pub enum FinalViolationKind {
 ///
 /// Populated by the resolver visitor; used by `dataclasses_hash` to emit diagnostics
 /// without re-walking the AST.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EnumValueTypeViolationInfo {
     /// The kind of violation.
     pub kind: EnumValueTypeViolationKind,
@@ -87,7 +87,7 @@ pub enum EnumValueTypeViolationKind {
 /// - `self.xx: ClassVar[str] = ""` — attribute annotation on `self` in a method
 ///
 /// Used by `classes_classvar`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LocalClassVarViolation {
     /// The variable or attribute name being annotated.
     pub name: String,
@@ -115,7 +115,7 @@ pub enum Pep695BoundViolationKind {
 }
 
 /// A PEP 695 type parameter bound violation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Pep695BoundViolation {
     /// The kind of violation.
     pub kind: Pep695BoundViolationKind,
@@ -141,7 +141,7 @@ pub enum HistoricalPositionalViolationKind {
 }
 
 /// A historical positional-only parameter violation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct HistoricalPositionalViolation {
     /// The kind of violation.
     pub kind: HistoricalPositionalViolationKind,
@@ -163,7 +163,7 @@ pub enum InvalidStringAnnotationKind {
 }
 
 /// An invalid string annotation detected during AST resolution.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InvalidStringAnnotation {
     /// The kind of invalidity.
     pub kind: InvalidStringAnnotationKind,
@@ -188,7 +188,7 @@ pub struct InvalidStringAnnotation {
 /// ```
 ///
 /// Used by `namedtuples_type_compat`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProtocolSelfViolation {
     /// The name of the class that was passed as argument.
     pub class_name: String,
@@ -209,7 +209,7 @@ pub struct ProtocolSelfViolation {
 /// concrete subclasses that do not implement all abstract/stub methods or
 /// required `ClassVar` attributes are effectively abstract and cannot be
 /// instantiated.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProtocolInstantiationViolation {
     /// The name of the class being instantiated.
     pub class_name: String,
@@ -225,7 +225,7 @@ pub struct ProtocolInstantiationViolation {
 /// with `issubclass`.
 ///
 /// Used by `protocols_runtime_checkable`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProtocolRtcViolation {
     /// The span of the offending call expression.
     pub span: Span,
@@ -234,7 +234,7 @@ pub struct ProtocolRtcViolation {
 }
 
 /// The kind of `@runtime_checkable` protocol violation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ProtocolRtcViolationKind {
     /// Protocol is not decorated with `@runtime_checkable`.
     NotRuntimeCheckable {
@@ -258,7 +258,7 @@ pub enum ProtocolRtcViolationKind {
 /// - Yield-from type mismatch (`yield from iter_a` in `Iterator[B]` where A != B)
 ///
 /// Used by `directives_deprecated`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GeneratorViolation {
     /// The span of the offending expression.
     pub span: Span,
@@ -267,7 +267,7 @@ pub struct GeneratorViolation {
 }
 
 /// The kind of generator violation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum GeneratorViolationKind {
     /// A generator function (has yield) with a non-generator return type.
     InvalidReturnType {
@@ -305,7 +305,7 @@ pub enum GeneratorViolationKind {
 /// - Inner class reusing an outer class's `TypeVar` in `Generic[T]`
 /// - Inner class body annotations using outer class `TypeVars`
 /// - Function-nested class using function-scoped `TypeVars` in `Generic[T]`
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct UnboundTypeVarUsage {
     /// The source span of the unbound usage.
     pub span: Span,
@@ -316,7 +316,7 @@ pub struct UnboundTypeVarUsage {
 }
 
 /// A violation where augmented assignment widens a `Literal`-typed variable.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LiteralAugmentedAssignViolation {
     /// The source span of the augmented assignment.
     pub span: Span,
@@ -325,7 +325,7 @@ pub struct LiteralAugmentedAssignViolation {
 }
 
 /// A violation where a tuple is indexed out of bounds.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TupleIndexViolation {
     /// The source span of the index expression.
     pub span: Span,
@@ -339,7 +339,7 @@ pub struct TupleIndexViolation {
 
 /// A violation where an attribute is accessed on a bounded type variable
 /// that does not exist on the bound type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BoundedTypeVarAttrViolation {
     /// The source span of the attribute access.
     pub span: Span,
@@ -354,7 +354,7 @@ pub struct BoundedTypeVarAttrViolation {
 }
 
 /// A violation where a Protocol class is used where `type[Proto]` is expected.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProtocolClassObjectViolation {
     /// The source span of the violation.
     pub span: Span,
@@ -368,7 +368,7 @@ pub struct ProtocolClassObjectViolation {
 ///
 /// Covers module-level subscript assignment (`td["key"] = val`) and `.update()` calls
 /// on `TypedDict` variables that have `ReadOnly` fields.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReadOnlyViolationInfo {
     /// The name of the variable being mutated.
     pub var_name: String,
@@ -390,7 +390,7 @@ pub enum ReadOnlyViolationKind {
 }
 
 /// A violation detected in a `TypeAliasType(...)` call.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeAliasTypeViolation {
     /// The source span to highlight.
     pub span: Span,

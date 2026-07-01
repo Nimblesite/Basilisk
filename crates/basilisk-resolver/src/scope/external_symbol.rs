@@ -28,7 +28,7 @@ pub enum ExternalSymbolKind {
 ///
 /// Contains enough information for the checker and LSP to provide
 /// cross-file type checking, hover, go-to-definition, etc.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExternalSymbol {
     /// The symbol's name as it appears in the source module.
     pub name: String,

@@ -6,7 +6,7 @@ use super::{
 };
 
 /// Information about a single function parameter.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "Python parameters have many boolean flags"
@@ -54,7 +54,7 @@ impl ReturnAnnotationKind {
 }
 
 /// A `return` statement found inside a function body.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReturnStmtInfo {
     /// The span of the `return` keyword.
     pub span: Span,
@@ -73,7 +73,7 @@ pub struct ReturnStmtInfo {
 }
 
 /// A `yield` or `yield from` expression found inside a generator function body.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct YieldExprInfo {
     /// The span of the `yield` keyword.
     pub span: Span,
@@ -87,7 +87,7 @@ pub struct YieldExprInfo {
 }
 
 /// Information about a single function definition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "Python functions have many boolean flags"

@@ -118,27 +118,52 @@ pub fn file_diagnostics(db: &dyn Db, file: SourceFile, config: ConfigInput) -> V
         .collect()
 }
 
+/// Tracked query: the **import-resolved module** for one file, memoized by salsa
+/// and keyed on the `(file, search_paths)` pair.
+///
+/// Runs `parse → resolve → `[`crate::imports::resolve_module_imports`], yielding
+/// the module with its imports resolved against the search paths — the navigable
+/// view a consumer (the LSP) needs for hover / references / go-to-definition.
+/// Returns `None` if the file fails to parse or resolve. It is **not** keyed on
+/// the config (resolution is config-independent), so a config-only edit reuses
+/// the memoized module: [`checked_file_resolved`] re-runs only the cheap
+/// `check_with_config` step.
+///
+/// **Filesystem-impurity boundary** (mirrors
+/// [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)): the existence
+/// probes and imported-file *content* that `resolve_module_imports` reads are
+/// **not** tracked salsa edges — the memo invalidates only on `file.text` or a
+/// re-set `SearchPathsInput`. Content-precise cross-file invalidation is a later
+/// step.
+#[salsa::tracked(returns(ref))]
+pub fn resolved_module(
+    db: &dyn Db,
+    file: SourceFile,
+    search_paths: SearchPathsInput,
+) -> Option<std::sync::Arc<basilisk_resolver::ResolvedModule>> {
+    let Ok(parsed) = basilisk_parser::parse_source(file.text(db).clone(), file.path(db).clone())
+    else {
+        return None;
+    };
+    let Ok(mut resolved) = basilisk_resolver::resolve(&parsed) else {
+        return None;
+    };
+    // Reading `search_paths.value(db)` registers the salsa dependency edge.
+    crate::imports::resolve_module_imports(&mut resolved, search_paths.value(db));
+    Some(std::sync::Arc::new(resolved))
+}
+
 /// Tracked query: the **import-resolved** diagnostics for one file, memoized by
 /// salsa and keyed on the `(file, config, search_paths)` triple.
 ///
-/// Runs the full pipeline the batch CLI runs — parse → resolve →
-/// [`crate::imports::resolve_module_imports`] → [`crate::check_with_config`] —
-/// so, unlike [`checked_file`], it honours import resolution: the
-/// `imports_unresolved` rule and the cascade suppression of downstream errors
-/// from unresolved imports both see the resolved import set. Equivalence is
-/// **exactly** to `basilisk-cli`'s `process_file` core: for any file that parses
-/// and resolves, [`file_diagnostics_resolved`] equals `{ resolve_module_imports;
-/// check_with_config }` byte-for-byte.
-///
-/// **Filesystem-impurity boundary** (mirrors
-/// [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)): salsa re-runs this
-/// only when `file.text`, the [`ConfigInput`], or the [`SearchPathsInput`]
-/// changes. The existence probes and imported-file *content* that
-/// `resolve_module_imports` reads are **not** tracked salsa edges — installing a
-/// package into site-packages, or editing an imported sibling, does not
-/// invalidate a memo unless the `SearchPathsInput` is re-set. In-session a
-/// consumer (the LSP) re-sets that input on venv / `uv.lock` / file-watch
-/// events; content-precise cross-file invalidation is a later step.
+/// A thin `check_with_config` over [`resolved_module`], so it honours import
+/// resolution: the `imports_unresolved` rule and the cascade suppression of
+/// downstream errors from unresolved imports both see the resolved import set.
+/// Sharing [`resolved_module`] means parse + resolve + import-resolution run at
+/// most once per `(file, search_paths)`, reused by both diagnostics and
+/// navigation. Equivalence is **exactly** to `basilisk-cli`'s `process_file`
+/// core: for any file that parses and resolves, [`file_diagnostics_resolved`]
+/// equals `{ resolve_module_imports; check_with_config }` byte-for-byte.
 #[salsa::tracked(returns(ref))]
 pub fn checked_file_resolved(
     db: &dyn Db,
@@ -146,18 +171,10 @@ pub fn checked_file_resolved(
     config: ConfigInput,
     search_paths: SearchPathsInput,
 ) -> Vec<CachedDiagnostic> {
-    let Ok(parsed) = basilisk_parser::parse_source(file.text(db).clone(), file.path(db).clone())
-    else {
+    let Some(resolved) = resolved_module(db, file, search_paths) else {
         return Vec::new();
     };
-    let Ok(mut resolved) = basilisk_resolver::resolve(&parsed) else {
-        return Vec::new();
-    };
-    // Reading `search_paths.value(db)` / `config.value(db)` registers the salsa
-    // dependency edges, so a venv/config edit invalidates exactly the files it
-    // affects.
-    crate::imports::resolve_module_imports(&mut resolved, search_paths.value(db));
-    crate::check_with_config(&resolved, &config.value(db).0)
+    crate::check_with_config(resolved, &config.value(db).0)
         .iter()
         .map(CachedDiagnostic::from)
         .collect()

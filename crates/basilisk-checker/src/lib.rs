@@ -43,8 +43,8 @@ pub mod types_parsing;
 pub use cached::CachedDiagnostic;
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};
 pub use incremental::{
-    checked_file, checked_file_resolved, file_diagnostics, file_diagnostics_resolved, ConfigInput,
-    ConfigValue, SearchPathsInput,
+    checked_file, checked_file_resolved, file_diagnostics, file_diagnostics_resolved,
+    resolved_module, ConfigInput, ConfigValue, SearchPathsInput,
 };
 
 // Re-export the incremental-database handles so consumers can drive the
