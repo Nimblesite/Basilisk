@@ -965,3 +965,100 @@ async fn open_module_export_edit_refreshes_dependent_diagnostics() -> TestResult
 fn is_thing_undefined(d: &serde_json::Value) -> bool {
     d["message"].as_str().unwrap_or("").contains("`thing`")
 }
+
+// ---------------------------------------------------------------------------
+// KNOWN LIMITATION (characterization test): the salsa cross-file recapture
+// (`recapture_user_stub_from_source`, proven at the checker level in
+// `incremental_resolved_tests::editing_a_user_stub_updates_the_importer_diagnostics`)
+// is NOT wired into the LSP's dependent-refresh. When a dependency changes, the
+// LSP refreshes importers via `set_open_refresh_dependents` →
+// `reresolve_imports_and_recheck`, a disk-based, non-salsa pass — so an
+// in-memory edit to an open user-stub `.pyi` does NOT update its importer.
+// This test PINS that current boundary: when cross-module analysis moves into the
+// salsa query, editing the stub should clear the importer's error and this
+// assertion must be flipped. See [CHKARCH-INCREMENTAL-SALSA].
+// ---------------------------------------------------------------------------
+
+/// True iff the diagnostic is an `imports_module_attribute` error.
+fn is_module_attr_error(d: &serde_json::Value) -> bool {
+    d["code"].as_str() == Some("imports_module_attribute")
+}
+
+fn importer_has_attr_error(
+    diags: &std::collections::HashMap<String, serde_json::Value>,
+    uri: &str,
+) -> bool {
+    diags.get(uri).is_some_and(|d| {
+        d["params"]["diagnostics"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().any(is_module_attr_error))
+    })
+}
+
+#[tokio::test]
+async fn editing_open_stub_does_not_yet_refresh_importer_via_salsa() -> TestResult<()> {
+    // A user stub under `.basilisk/stubs/` (auto-added to stub-paths) declares
+    // only `foo`; `a.py` accesses `xmod.bar`, which is undeclared.
+    let (dir, root_uri) = setup_cross_module_workspace(&[
+        (".basilisk/stubs/xmod.pyi", "def foo() -> None: ...\n"),
+        (
+            "a.py",
+            "import xmod\n\ndef use() -> None:\n    xmod.bar()\n",
+        ),
+    ]);
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+
+    let a_uri = format!("{root_uri}/a.py");
+    let stub_uri = format!("{root_uri}/.basilisk/stubs/xmod.pyi");
+
+    // Precondition: the startup scan flags `xmod.bar` in a.py.
+    let startup = collect_all_diagnostics(&mut fixture).await;
+    assert!(
+        importer_has_attr_error(&startup, &a_uri),
+        "precondition: a.py must flag xmod.bar as an undeclared module attribute — got: {startup:#?}"
+    );
+
+    // Open the stub so it enters the salsa engine's tracked sources.
+    fixture
+        .did_open(&stub_uri, "def foo() -> None: ...\n")
+        .await?;
+    let _ = collect_all_diagnostics(&mut fixture).await;
+
+    // Edit the stub in-memory to declare `bar` (no save — disk stays stale).
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": { "uri": stub_uri, "version": 2 },
+                "contentChanges": [
+                    { "text": "def foo() -> None: ...\ndef bar() -> None: ...\n" }
+                ]
+            }
+        }))
+        .await?;
+
+    // CURRENT BEHAVIOUR: the importer's error is NOT cleared by the in-memory
+    // stub edit — the dependent refresh is disk-based (stub still declares only
+    // `foo` on disk), and the salsa cross-file edge is bypassed. If `a.py` is
+    // re-published it still carries the error; if it is not re-published its prior
+    // erroring state stands. Either way the error is not cleared.
+    let after = collect_all_diagnostics(&mut fixture).await;
+    if let Some(a_after) = after.get(&a_uri) {
+        let empty = vec![];
+        let diagnostics = a_after["params"]["diagnostics"]
+            .as_array()
+            .unwrap_or(&empty);
+        assert!(
+            diagnostics.iter().any(is_module_attr_error),
+            "KNOWN LIMITATION: an in-memory stub edit is not (yet) reflected in the importer via \
+             salsa — the dependent refresh reads disk. If this now clears, cross-file has been \
+             wired into the LSP and the test should assert the clear. Got: {diagnostics:#?}"
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}

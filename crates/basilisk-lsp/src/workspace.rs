@@ -515,6 +515,7 @@ impl WorkspaceIndex {
         // clear its diagnostics (e.g. an in-memory-only test file).
         let Ok(text) = std::fs::read_to_string(&path) else {
             let _ = self.files.remove(&path);
+            self.salsa_engine.remove(&path);
             return (uri.clone(), vec![]);
         };
         let (entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
@@ -530,6 +531,7 @@ impl WorkspaceIndex {
     pub fn forget_file(&self, uri: &Url) {
         if let Ok(path) = uri.to_file_path() {
             let _ = self.files.remove(&path);
+            self.salsa_engine.remove(&path);
         }
     }
 

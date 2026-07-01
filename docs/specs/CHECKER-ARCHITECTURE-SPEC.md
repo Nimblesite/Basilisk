@@ -949,9 +949,14 @@ bound), so the engine adds **no** salsa dependency to `basilisk-resolver` or
 [check pipeline](#CHKARCH-ARCH-PIPELINE). For any file that parses and resolves,
 `file_diagnostics(db, file, config)` equals `check_with_config(&resolved, cfg)`
 byte-for-byte (and, with the default config, `check(&resolved)`);
-`file_diagnostics_resolved(db, file, config, search_paths)` equals
+`file_diagnostics_resolved(db, file, config, search_paths, workspace)` equals
 `{ resolve_module_imports; check_with_config }` byte-for-byte — i.e. the batch
-CLI's `process_file` core. Both are asserted directly
+CLI's `process_file` core — **when `workspace` (the `WorkspaceFiles` registry) is
+empty or every tracked file's `SourceFile` matches disk.** With a non-empty
+registry the user-stub re-capture intentionally reads a tracked `.pyi`'s
+in-memory text instead of disk, so it *diverges* from `process_file` for an
+edited-but-unsaved stub (correct editor behaviour, but no longer byte-identical
+to disk). Both equalities are asserted directly with an empty registry
 (`crates/basilisk-checker/tests/incremental_tests.rs`
 `checked_file_is_equivalent_to_direct_check` +
 `checked_file_honours_strict_annotations`;
@@ -969,9 +974,14 @@ workspace-tracked **user-stub `.pyi`**, the query re-derives the stub's API from
 that in-memory text (`recapture_user_stub_from_source`), so editing the stub's
 content updates the importer's `imports_module_attribute` diagnostics — a
 cross-file edge that changes *output*, not just triggers a re-run
-(`editing_a_user_stub_updates_the_importer_diagnostics`). The LSP populates
-`WorkspaceFiles` from its open documents, making this live in the editor. What
-remains **untracked** (mirroring
+(`editing_a_user_stub_updates_the_importer_diagnostics`). **This is proven at the
+checker level only — it is NOT yet live in the LSP.** The LSP populates
+`WorkspaceFiles` from its open documents, but when a dependency changes it
+refreshes importers through `set_open_refresh_dependents` →
+`reresolve_imports_and_recheck`, a disk-based non-salsa pass that bypasses the
+recapture; the characterization test
+`editing_open_stub_does_not_yet_refresh_importer_via_salsa` pins that boundary.
+What remains **untracked** (mirroring
 [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)):
 `resolve_module_imports`' existence probes and the content of files *outside* the
 workspace (third-party packages, venv site-packages) — those invalidate only on
@@ -989,11 +999,22 @@ navigation — hover / references / go-to-definition) and
 [`file_diagnostics_resolved`] (for diagnostics). `WorkspaceIndex::analyse_and_resolve`
 routes the `didOpen`/`didChange` path through it once the workspace scan has
 populated the search paths; the pre-scan import-free path is unchanged. This is
-behaviour-preserving — the full LSP e2e suite stays green — because
-`file_diagnostics_resolved` is byte-for-byte equal to the pipeline that path ran
-before. `ResolvedModule` (and its transitively-contained types) derive
-`PartialEq` so `Arc<ResolvedModule>` satisfies salsa's `Update` bound via the
-fallback, keeping `basilisk-resolver` salsa-free.
+behaviour-preserving — the full LSP e2e suite stays green, and the path is
+genuinely exercised (instrumentation counted 61 engine hits in `ws_core_tests`).
+`ResolvedModule` (and its transitively-contained types) derive `PartialEq` so
+`Arc<ResolvedModule>` satisfies salsa's `Update` bound via the fallback, keeping
+`basilisk-resolver` salsa-free.
+
+**Honest scope — additive, not a replacement.** The engine runs *alongside* the
+LSP's existing machinery (the `FileEntry` index, `cross_module.rs`,
+`import_graph.rs`, and the non-salsa bulk scan / dependent-refresh), replacing
+none of it; `FileEntry.resolved` shares the salsa memo's `Arc<ResolvedModule>`
+(no duplication). Its incremental win over the existing per-file cache is
+therefore *situational* — config-only edits skip re-parse/resolve, and unaffected
+transitive importers become memo-hits — not a general speedup on single-file
+edits. Engine `SourceFile`/registry bookkeeping is dropped on file deletion
+(`SalsaAnalysisEngine::remove`), though salsa 0.27 cannot reclaim an input's
+internal memo, so a deleted file's memo lingers until the database is dropped.
 
 **Scope — the CLI/conformance path is deliberately unchanged.** The batch CLI
 (`process_file`) still runs the direct pipeline, so this work **cannot affect the

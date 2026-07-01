@@ -158,6 +158,26 @@ impl SalsaAnalysisEngine {
         }
     }
 
+    /// Drop a deleted file's `SourceFile` from the engine and mark the registry
+    /// stale, so a cross-file edge never points at a path that no longer exists
+    /// and the engine's map stays consistent with the workspace index.
+    ///
+    /// Note: salsa 0.27 cannot reclaim the input's internal storage/memos, so a
+    /// re-created file gets a fresh input (the old memo lingers until the DB is
+    /// dropped). This keeps the *engine's own* bookkeeping bounded; it is not a
+    /// full salsa-DB reclaim.
+    pub(crate) fn remove(&self, path: &Path) {
+        if self.sources.remove(path).is_some() {
+            self.registry_dirty.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// Number of files the engine currently tracks (test hook).
+    #[cfg(test)]
+    pub(crate) fn tracked_source_count(&self) -> usize {
+        self.sources.len()
+    }
+
     /// Snapshot the current path → `SourceFile` map for the workspace registry.
     fn build_registry(&self) -> FileRegistry {
         FileRegistry(
@@ -227,5 +247,46 @@ impl SalsaAnalysisEngine {
             *guard = Some(input);
             input
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_search_paths() -> ImportSearchPaths {
+        ImportSearchPaths {
+            roots: vec![],
+            extra_paths: vec![],
+            stub_paths: vec![],
+            workspace_members: vec![],
+            site_packages: None,
+            registry: None,
+        }
+    }
+
+    /// A deleted file's `SourceFile` is dropped from the engine's map so its
+    /// bookkeeping stays bounded by tracked files, not every file ever touched.
+    #[test]
+    fn remove_drops_a_tracked_source() {
+        let engine = SalsaAnalysisEngine::default();
+        let config = BasiliskConfig::default();
+        let sp = empty_search_paths();
+        let path = Path::new("/tmp/bsk_engine_remove/a.py");
+        let root = Path::new("/tmp/bsk_engine_remove");
+
+        let _ = engine.analyse(path, "x = 1\n", &config, root, &sp);
+        assert_eq!(
+            engine.tracked_source_count(),
+            1,
+            "analysing a file must track its SourceFile input"
+        );
+
+        engine.remove(path);
+        assert_eq!(
+            engine.tracked_source_count(),
+            0,
+            "removing a deleted file must drop its SourceFile input"
+        );
     }
 }
