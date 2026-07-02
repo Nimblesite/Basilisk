@@ -476,6 +476,12 @@ suite("CPU profiling — real end-to-end", () => {
         timeoutMs: 20_000,
       });
 
+      // Let the sampler accumulate a real window before stopping, exactly like
+      // the sibling heat-map journeys: stopping at the first observed sample
+      // can leave zero samples attributed to the burner's lines (all in
+      // bootstrap/injection frames), so no heat decorations would paint.
+      await new Promise<void>((resolve) => setTimeout(resolve, SAMPLE_WINDOW_MS));
+
       // [PROFILE-PROCESSES-REACTIVE] The OOTB one-click flow must drive the
       // reactive panel on macOS too: busy + a live "Profiling PID …" readout.
       const store = getStore();
