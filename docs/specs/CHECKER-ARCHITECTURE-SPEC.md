@@ -260,7 +260,7 @@ The `# type:` prefix keeps compatibility with tools that recognize `# type: igno
 
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
-Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->f6e2e58<!--/g:short-->`](https://github.com/python/typing/tree/f6e2e588880a057a939cee76c6c919aebd4db37c/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
+Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->c94dfce<!--/g:short-->`](https://github.com/python/typing/tree/c94dfceff0af70c6626a1f86bc8f979135ae4652/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
 
 #### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
@@ -1278,7 +1278,7 @@ the reference checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are grade
   **down**. Per-file results are written to `conformance/conformance_status.csv`.
 - **Current score** — measured against `python/typing@main` at the exact graded
   commit recorded in `conformance_report.json`, currently
-  [`<!--g:short-->f6e2e58<!--/g:short-->`](https://github.com/python/typing/tree/f6e2e588880a057a939cee76c6c919aebd4db37c/conformance):
+  [`<!--g:short-->c94dfce<!--/g:short-->`](https://github.com/python/typing/tree/c94dfceff0af70c6626a1f86bc8f979135ae4652/conformance):
   **<!--g:pass-->141<!--/g:pass--> / <!--g:total-->141<!--/g:total--> = <!--g:score-->100.0%<!--/g:score-->**, **<!--g:fp-->0<!--/g:fp--> false positives**, **<!--g:missed-->0<!--/g:missed--> missed required errors**, with
   **<!--g:caught-->970<!--/g:caught-->** required errors caught. The binary runs in its default configuration — the
   PEP conformance set — and `score.py` deletes any `basilisk.json` first so nothing

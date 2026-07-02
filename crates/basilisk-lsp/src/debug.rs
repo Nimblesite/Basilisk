@@ -485,11 +485,41 @@ mod tests {
         }
     }
 
-    // Tests [LSPDEBUG-PYRES]: check_debugpy fails when the interpreter is absent.
+    // Tests [LSPDEBUG-PYRES]: a missing interpreter is a missing-Python
+    // condition, not a debugpy condition.
     #[tokio::test]
     async fn check_debugpy_with_nonexistent_python_returns_err() {
         let result = check_debugpy("/nonexistent/python").await;
-        assert!(result.is_err(), "nonexistent python must fail");
+        assert!(
+            matches!(result, Err(DebugError::PythonNotFound(_))),
+            "a nonexistent interpreter must map to PythonNotFound, got {result:?}"
+        );
+    }
+
+    // Tests [LSPDEBUG-ERRORS]: each error variant maps to the JSON-RPC code the
+    // spec reserves for it — -32001 only for debugpy-missing, -32002 only for
+    // interpreter-missing, and a generic server error for transport failures so
+    // an adapter crash is not reported as "no Python interpreter".
+    #[test]
+    fn jsonrpc_code_matches_spec_reservations() {
+        assert_eq!(
+            DebugError::DebugpyNotFound("python3".to_owned()).jsonrpc_code(),
+            -32001
+        );
+        assert_eq!(
+            DebugError::PythonNotFound("python3".to_owned()).jsonrpc_code(),
+            -32002
+        );
+        for err in [
+            DebugError::PortAllocation(std::io::Error::from(std::io::ErrorKind::AddrInUse)),
+            DebugError::SpawnFailed(std::io::Error::from(std::io::ErrorKind::PermissionDenied)),
+            DebugError::Timeout(5678),
+            DebugError::AdapterExited("signal 9".to_owned()),
+        ] {
+            let code = err.jsonrpc_code();
+            assert_eq!(code, -32000, "{err:?} must use the generic server code");
+            assert!(code != -32001 && code != -32002, "{err:?} must not use a reserved code");
+        }
     }
 
     /// The user-facing timeout message must name the REAL budget — a stale
