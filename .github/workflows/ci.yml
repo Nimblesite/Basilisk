@@ -76,6 +76,10 @@ jobs:
               # data (website/src/_data/rules.json) and /errors/ pages are
               # generated from — so a new/renamed rule re-runs the drift guard.
               website/*|benchmarks/status/*|crates/basilisk-checker/src/rules/*) website=true ;;
+              # The conformance score + graded python/typing commit are stamped
+              # into these by scripts/gen_conformance_reference.py — editing
+              # them re-runs the website job's stamp drift guard.
+              README.md|README.zh.md|docs/specs/CHECKER-ARCHITECTURE-SPEC.md) website=true ;;
             esac
             # `code` gates the heavy Rust/extension/mutation matrix. Everything
             # that never reaches the Rust toolchain is excluded: the whole site,
@@ -130,6 +134,13 @@ jobs:
           python3 scripts/gen_rules_reference.py --data /tmp/rules.json
           diff -u website/src/_data/rules.json /tmp/rules.json \
             || { echo "::error::rules.json is stale — run: python3 scripts/gen_rules_reference.py --data"; exit 1; }
+
+      # The README/spec quote the live score + graded python/typing commit,
+      # stamped by scripts/gen_conformance_reference.py on every scorer run;
+      # fail if the committed text drifted from conformance_report.json so a
+      # quoted commit can never go stale ([CHKARCH-CONFORMANCE]).
+      - name: Check stamped conformance references are in sync with the report
+        run: python3 scripts/gen_conformance_reference.py --check
 
       - name: Build site
         working-directory: website

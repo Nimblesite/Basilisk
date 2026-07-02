@@ -581,8 +581,11 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .hero__meta strong { color: var(--color-text-secondary); font-weight: 500; }
 
 /* Front-and-centre PEP conformance badge — the headline metric, tied to the
-   exact python/typing commit we graded against. */
+   exact python/typing commit we graded against. The CTA link stretches over
+   the whole card (::after overlay); the commit link sits above it (z-index)
+   and jumps straight to the graded python/typing tree on GitHub. */
 .hero__conformance {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
@@ -590,11 +593,16 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  text-decoration: none;
-  color: inherit;
   transition: border-color 0.15s ease;
 }
 .hero__conformance:hover { border-color: var(--color-primary); }
+.hero__conformance-commit {
+  position: relative;
+  z-index: 1;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.hero__conformance-commit:hover code { color: var(--color-primary); }
 .hero__conformance-score {
   font-size: clamp(2rem, 4vw, 2.75rem);
   font-weight: 800;
@@ -607,6 +615,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .hero__conformance-text strong { color: var(--color-text-secondary); font-weight: 600; }
 .hero__conformance-text code { color: var(--color-text-secondary); }
 .hero__conformance-cta { color: var(--color-primary); white-space: nowrap; }
+.hero__conformance-cta::after { content: ""; position: absolute; inset: 0; }
 
 /* Code side of hero */
 .hero__code { position: relative; }

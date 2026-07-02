@@ -28,55 +28,39 @@ Today that gives **{{ conformance.scorePct }}%** — **{{ conformance.pass }} of
 
 ## What the conformance suite is
 
-The [Python typing specification](https://typing.python.org/en/latest/spec/) defines how the type system should behave — generics, protocols, `TypedDict`, overloads, and the rest. To keep it honest, the typing community maintains a **conformance test suite** beside it in the [`python/typing`](https://github.com/python/typing/tree/main/conformance) repository.
+The [Python typing specification](https://typing.python.org/en/latest/spec/) defines how the type system should behave — generics, protocols, `TypedDict`, overloads, and the rest. To keep it honest, the typing community maintains a **conformance test suite** beside it in the [`python/typing`](https://github.com/python/typing/tree/main/conformance) repository: ordinary Python modules that mark, with `# E` comments, every line where a conforming checker **must** report an error. A scoring tool diffs a checker's output against those annotations, and the maintainers publish the [results table](https://github.com/python/typing/blob/main/conformance/results/results.html) for every major checker.
 
-It works like this:
+We score against the exact commit of the suite we last pulled from `main` — [`{{ conformance.pinnedRefShort }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance){% if conformance.commitDate %}, {{ conformance.commitDate }}{% endif %} — recorded by its full hash, so the link stays fixed at the exact files we graded.
 
-- Each spec chapter has one or more **test files** — ordinary Python modules that exercise a feature and mark, with `# E` comments, every line where a conforming type checker **must** report an error (and, with `# E[tag]` groups, where one of several related errors is acceptable).
-- A small **scoring tool** runs a type checker over those files and diffs its output against the annotations. A file *passes* only if the diff is empty: every required error is reported, and nothing is reported on a line the suite does not mark.
-- The maintainers run every checker through it and publish the [results table](https://github.com/python/typing/blob/main/conformance/results/results.html) — the live, authoritative source for how pyright, mypy, pyrefly, ty, and the others currently score.
-
-We score against the exact commit of the suite we last pulled from `main` — [`{{ conformance.pinnedRefShort }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance){% if conformance.commitDate %}, {{ conformance.commitDate }}{% endif %} — recorded by its full hash so this link stays fixed at the exact files we graded, even as `main` moves on. The same tool and files grade everyone, so the number is comparable across checkers and not something we can tune in our favour.
+That pin never goes stale: we run in **lock step** with `python/typing@main`. Every `make test`, every CI run of the checker, and a dedicated release job re-resolve the *current* tip, re-download the suite when it has moved, and re-grade the binary at **100% pass, 0 false positives** — an upstream test we fail blocks merge and release until the checker conforms. The commit is inserted into every page automatically from the scorer's report, never typed by hand.
 
 ## How a file is scored
 
-The entire algorithm is two functions in the suite's `main.py` — `get_expected_errors` (reads the `# E` annotations) and `diff_expected_errors` (diffs them against the checker's output). A file passes **iff** that diff is empty:
-
-- the suite's rule (`upstream_main.py:185`): `"Fail" if errors_diff.strip() else "Pass"`
-
-We count **every** diagnostic the checker emits — errors *and* warnings, **no codes excluded**. That's the strictest reading, and how pyright (the reference checker) is graded: one unexpected diagnostic — a false positive — fails the whole file, so our false-positive count matters as much as the pass count.
+The entire algorithm is two functions in the suite's `main.py` — `get_expected_errors` (reads the `# E` annotations) and `diff_expected_errors` (diffs them against the checker's output). A file passes **iff** that diff is empty (`upstream_main.py:185`: `"Fail" if errors_diff.strip() else "Pass"`): every required error reported, nothing reported on an unmarked line. We count **every** diagnostic the checker emits — errors *and* warnings, no codes excluded — so a single false positive fails the whole file.
 
 ## How we run it without forking it
 
-The suite's `main.py` is the maintainers' batch harness — it grades every known checker at once and has no way to invoke ours. So, exactly as it does for every checker (`PyrightTypeChecker`, `MypyTypeChecker`, …), we add a thin **adapter** and reuse the suite's own scoring instead of reimplementing it. Our [`score.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py):
+The suite's `main.py` grades every known checker at once and has no way to invoke ours. So, exactly as the suite does for pyright and mypy, [`score.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py) adds a thin **adapter** and reuses the suite's own scoring:
 
-1. **Adapter** — runs `basilisk check --output json` and shapes the result into the `{line: [errors]}` dict the suite's functions expect (the one thing the suite can't do for us).
-2. **Calculator** — imports `get_expected_errors` and `diff_expected_errors` from a committed, byte-identical copy of the suite's `main.py` and calls them unmodified (`score.py:287` mirrors the suite's own call at `upstream_main.py:175`). It contains no scoring logic of its own.
+1. **Adapter** — runs `basilisk check --output json` and shapes the result into the `{line: [errors]}` dict the suite's functions expect.
+2. **Calculator** — imports `get_expected_errors` and `diff_expected_errors` from a committed, byte-identical copy of the suite's `main.py` and calls them unmodified — no scoring logic of our own.
 3. **Gate** — compares the result against `coverage-thresholds.json` and fails CI on any regression.
 
-To keep the calculator trustworthy, the vendored copy is **sha256-pinned**. `score.py` re-hashes it on every run and refuses to score if it has drifted (`score.py:99`), and this website re-hashes it again at build time:
+The vendored calculator is **sha256-pinned**: `score.py` re-hashes it on every run and refuses to score if it has drifted, and this website re-hashes it again at build time:
 
 {% if conformance.verified %}
 <p><span class="conf-verified">✓ verified at build — conformance/upstream_main.py is {{ conformance.upstreamBytes }} bytes, sha256 {{ conformance.sha256Short }}…, matching the pin</span></p>
 {% endif %}
 
-The adapter and gate live in a separate, auditable file, so the calculator stays byte-for-byte the suite's own.
-
 ## What the score measures — and what it never runs
 
-We score the binary exactly as a real user runs it, in its **default configuration**. Basilisk decides which rules run **purely from config**, and the default config matches the **core PEP conformance set, exactly** — nothing more. Before scoring, `score.py` *deletes* any `basilisk.json` from the fixtures directory, so a config file can neither silence a conformance rule nor quietly switch extra ones on. Disabling a conformance rule to lift the number is forbidden — and so is *deleting* its source file or unregistering it from the checker, the same dishonesty by another route.
+We score the binary exactly as a real user runs it: the **default configuration**, which enables the **core PEP conformance set** — nothing more. Before scoring, `score.py` *deletes* any `basilisk.json` from the fixtures directory, so a config file can neither silence a conformance rule nor quietly switch extra ones on. Disabling a conformance rule to lift the number is forbidden — and so is deleting or unregistering it.
 
-Basilisk also ships **opt-in Basilisk rules** — extra checks the spec doesn't define, such as *require an annotation* on every parameter, return, and `*args`/`**kwargs`, a redundant-annotation warning, a missing-`@override` nudge, and an explicit-`Any` nudge. They turn on **only when you enable them in config**; a fresh install runs none of them. They are **not** conformance rules, the conformance run never executes them, and they have never added — or cost — a single point.
-
-If anything, switching them on **breaks** PEP conformance. The spec treats an unannotated value as *inferred*, not an error — so a rule like *require an annotation* fires on perfectly spec-valid code and registers as a **false positive** against the suite. That is precisely why these rules ship off, and why conformance is measured against the default config: the plain binary, the core PEP set, and nothing else. Enable the extra rules in your own project when you want checking *stricter than the spec* — just know that "stricter than the spec" and "100% conformant to the spec" are different goals, and this score only ever measures the second.
+Basilisk's **opt-in rules** (require-annotation, redundant-annotation, missing-`@override`, explicit-`Any`) never run during scoring; a fresh install runs none of them. Enabling them would *lower* the score, not raise it: the spec treats an unannotated value as *inferred*, not an error, so require-annotation fires on spec-valid code and counts as a **false positive**. "Stricter than the spec" and "conformant to the spec" are different goals — this score measures only the second.
 
 ## How the score changed
 
-The site has shown a conformance number for a while, and it wasn't always measured honestly — we'd rather say so plainly than quietly paper over it. An earlier in-repo script inflated the figure by **excluding some diagnostic codes from the diff and not counting false positives at all**, so files that should have failed were scored as passing. We threw it out and adopted the official `python/typing` calculator, run unmodified on the real default binary.
-
-That official figure is what you see today: **{{ conformance.scorePct }}%** ({{ conformance.pass }} / {{ conformance.total }} files, {{ conformance.fp }} false positives, {{ conformance.missed }} missed required errors), every conformance rule enabled and the opt-in Basilisk rules left exactly where a fresh install leaves them — off. The number is what the spec gives the out-of-the-box binary, nothing tuned in our favour.
-
-The chart below is read straight from the **git history of `conformance/conformance_status.csv`** at build time: one point per commit that changed it, plotting the score that commit actually recorded — including the correction when we switched from the in-repo script to the official calculator.
+The score wasn't always measured honestly, and we'd rather say so plainly than paper over it. An earlier in-repo script inflated the figure by **excluding some diagnostic codes from the diff and not counting false positives at all**; we threw it out and adopted the official `python/typing` calculator, run unmodified on the real default binary. The chart below is read straight from the **git history of `conformance/conformance_status.csv`** at build time — one point per commit that changed it, including that correction.
 
 {{ chart(conformance, {
   "label": "Conformance score over time",

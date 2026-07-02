@@ -113,9 +113,16 @@ A `FileEntry` is invalidated when:
 
 - Its on-disk content changes (file-watcher event) AND `source_hash` changes
 - The editor sends a `didChange` notification for it
-- Any of its direct importers are invalidated (`crossModule` only)
+- A file it depends on changes in a way that affects its output (`crossModule` only)
 
-When invalidated: re-parse, re-resolve, re-check, update `source_hash` and `diagnostics`, re-publish.
+When invalidated, the file is re-analysed **through the salsa engine**
+([CHKARCH-INCREMENTAL-SALSA]), which re-runs only the queries whose inputs
+actually changed; `source_hash` and `diagnostics` update and the result is
+re-published. Cross-file dependency tracking is content-precise: the salsa
+queries record edges on the imported files' tracked text and export sets, so a
+body-only edit in a dependency backdates (importers' memos stay valid) while an
+export change recomputes exactly the affected importers — no file-granularity
+cascade walk.
 
 ### Open-File Priority {#ANALYSIS-INDEX-OPEN}
 
@@ -125,7 +132,12 @@ For an open file, the in-memory text (`didOpen`/`didChange`) is authoritative; f
 
 ## Import Graph {#ANALYSIS-GRAPH}
 
-The import graph is what distinguishes `crossModule` from `wholeModule`.
+The import graph serves the navigation handlers' **reverse lookups** ("who
+imports this file?") for cross-file references and rename
+([ANALYSIS-CROSSLSP-REFS] / [ANALYSIS-CROSSLSP-RENAME]). It plays no role in
+invalidation — that is the salsa engine's job ([ANALYSIS-INDEX-INVAL],
+[CHKARCH-INCREMENTAL-SALSA]), which tracks cross-file dependencies
+content-precisely rather than at file granularity.
 
 ### Structure {#ANALYSIS-GRAPH-STRUCT}
 
@@ -139,19 +151,7 @@ pub struct ImportGraph {
 
 ### Construction {#ANALYSIS-GRAPH-BUILD}
 
-`build_from_index()` walks `ImportInfo.resolved_path` for every file in the `WorkspaceIndex`, populating forward and reverse edges.
-
-### Topological Ordering {#ANALYSIS-GRAPH-TOPO}
-
-`topological_order()` uses Kahn's algorithm for imported-first ordering, so imported symbols are available before importers are checked.
-
-### Cycle Detection {#ANALYSIS-GRAPH-CYCLES}
-
-`detect_cycles()` uses DFS with white/gray/black coloring. Detected cycles produce an `ImportCycle` diagnostic and are broken for ordering — one edge is arbitrarily dropped.
-
-### Transitive Importers {#ANALYSIS-GRAPH-TRANS}
-
-`transitive_importers()` performs BFS over reverse edges, used for invalidation cascading: when a file changes, all transitive importers may need re-analysis.
+`build_from_index()` walks `ImportInfo.resolved_path` for every file in the `WorkspaceIndex`, populating forward and reverse edges. It is rebuilt after every workspace-wide re-analysis in `crossModule` mode.
 
 ---
 
@@ -173,12 +173,27 @@ pub struct ExternalSymbol {
 
 Each `ResolvedModule` carries `imported_symbols: HashMap<String, ExternalSymbol>` — symbols imported from other modules, resolved during the cross-module pass.
 
-### Two-Pass Population {#ANALYSIS-SYMBOLS-POP}
+### Population {#ANALYSIS-SYMBOLS-POP}
 
-`populate_cross_module_symbols()` in `cross_module.rs`:
+Population lives in the checker's memoized cross-module salsa queries
+(`crates/basilisk-checker/src/incremental.rs`, helpers in
+`crates/basilisk-checker/src/exports.rs`), which the LSP's engine runs in
+`crossModule` mode ([CHKARCH-INCREMENTAL-SALSA]):
 
-1. **Export extraction**: per file, `extract_exports()` collects public symbols (functions, classes, module-level variables) and builds signatures via `build_function_signature()`.
-2. **Import resolution**: per file's `ImportInfo`, look up the target's exports and populate `imported_symbols` in the importer's `ResolvedModule`.
+1. **Export extraction**: the `module_exports(file)` query parses a
+   workspace-tracked file's **current** (possibly in-memory) text and
+   `extract_exports()` collects its public symbols (functions, classes,
+   module-level variables), building signatures via
+   `build_function_signature()`. The result is memoized per file and — because
+   salsa backdates unchanged values — a body-only edit re-derives an equal
+   export set and leaves every importer's memo valid.
+2. **Import resolution**: the `cross_resolved_module(file)` query walks the
+   file's resolved imports and populates `imported_symbols`
+   (`populate_imported_symbols()`): workspace-tracked targets resolve through
+   `module_exports`; external `.pyi` stubs and PEP 561 `py.typed` packages are
+   parsed from disk on demand; non-`py.typed` packages are skipped (opt-in
+   only). A `from`-import binds only its named symbols; plain and star imports
+   publish the whole export set.
 
 ### Invalidation Cascading {#ANALYSIS-SYMBOLS-INVAL}
 
@@ -186,8 +201,22 @@ When a file changes — on disk (file watcher) or in the editor (`didChange`/`di
 
 1. Re-analyse the changed file.
 2. `exported_symbol_names()` compares old and new exports.
-3. If exports changed, re-resolve the workspace and re-check importers (`reresolve_imports_and_recheck`) so cross-module diagnostics refresh without a reload. Watcher path uses `reload_and_diff_exports`; open-file path uses `set_open_refresh_dependents` — the watcher's `reload_from_disk` skips open files, so editing an open module would otherwise leave dependents stale (GitHub #56).
-4. If exports unchanged, skip the cascade.
+3. If exports changed, re-analyse the workspace through the salsa engine
+   (`reresolve_imports_and_recheck`) so cross-module diagnostics refresh
+   without a reload: the engine is primed with every indexed file's current
+   text (open files contribute their in-memory buffers), and salsa recomputes
+   exactly the files whose dependencies changed — the rest are revalidated
+   memos. Only files whose diagnostics actually **changed** are republished
+   (an identical set is a client no-op; the edited/reloaded file itself always
+   republishes). Watcher path uses `reload_and_diff_exports`; open-file path
+   uses `set_open_refresh_dependents` — the watcher's `reload_from_disk` skips
+   open files, so editing an open module would otherwise leave dependents
+   stale (GitHub #56).
+4. If exports unchanged, skip the cascade. (For a **stub** dependency the
+   export diff still changes — `.pyi` files parse as Python — so an in-memory
+   edit to an open user stub refreshes its importers' `imports_module_attribute`
+   diagnostics through the same path, with the salsa query re-capturing the
+   stub API from the tracked text rather than stale disk.)
 
 ---
 
@@ -221,11 +250,11 @@ No workspace scan; the server waits for `didOpen` notifications.
 
 ### wholeModule Startup {#ANALYSIS-STARTUP-WHOLE}
 
-On `initialized`: all `.py`/`.pyi` files under workspace roots are collected (respecting `include`/`exclude`), analysed in parallel, diagnostics published. Progress via `window/workDoneProgress`.
+On `initialized`: the import search paths are built first (uv registry, workspace members, stub dirs), then all `.py`/`.pyi` files under workspace roots are collected (respecting `include`/`exclude`), the salsa engine is primed with every file's text, and each file is analysed **exactly once through the memoized queries** ([CHKARCH-INCREMENTAL-SALSA]) — the same memos every subsequent edit hits. Diagnostics are published for every file; open files (skipped by the scan — editor text is authoritative) are re-analysed through the engine afterwards so they converge with the scanned workspace. Progress via `window/workDoneProgress`.
 
 ### crossModule Startup {#ANALYSIS-STARTUP-CROSS}
 
-Same as `wholeModule` plus: build the import graph from `ImportInfo`, topologically sort files, and run `populate_cross_module_symbols()` to resolve inter-module references. Files whose diagnostics change are re-checked and re-published.
+Same as `wholeModule` — the scan's engine pass runs the cross-module queries ([ANALYSIS-SYMBOLS-POP]), so every file's `imported_symbols` reflect the other modules' exports — plus the import graph is built from `ImportInfo` for navigation reverse-lookups ([ANALYSIS-GRAPH]).
 
 ---
 

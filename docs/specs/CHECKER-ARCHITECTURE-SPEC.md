@@ -913,22 +913,184 @@ profiler uses for sample timestamps —
 
 ### Salsa Architecture {#CHKARCH-INCREMENTAL-SALSA}
 
-Basilisk uses the Salsa incremental computation framework (same as rust-analyzer).
+Basilisk uses the [Salsa](https://crates.io/crates/salsa) incremental computation
+framework (the same system powering rust-analyzer) for **in-session** incremental
+checking.
 
-- **Input queries**: source file contents, configuration, stub files
-- **Derived queries**: parsed ASTs, resolved names, type assignments, diagnostics
+- **Input queries**: a file's source text — `SourceFile::text`
+  (`crates/basilisk-db/src/db.rs`) — and the effective configuration —
+  `ConfigInput::value`, a `ConfigValue(BasiliskConfig)`
+  (`crates/basilisk-checker/src/incremental.rs`). The database
+  (`BasiliskDatabase`) and the shared `Db` trait live in `basilisk-db`, the
+  dependency-graph foundation, so the derived queries are defined in the crates
+  that own the work. `ConfigInput` lives in `basilisk-checker` (beside its only
+  consumer) so the salsa `Update` wrapper never reaches the salsa-free
+  `basilisk-config` leaf crate. The **resolution environment** is likewise a
+  tracked input — `SearchPathsInput::value`, an `ImportSearchPaths` (workspace
+  roots, `extraPaths`, stub dirs, venv site-packages, and the `uv.lock`-derived
+  `PackageRegistry`); `ImportSearchPaths` lives in `basilisk-checker` and derives
+  `salsa::Update` directly (its `Arc<PackageRegistry>` compares by value via
+  `PartialEq`, so no salsa dependency reaches `basilisk-uv`).
+- **Derived queries**: the per-file diagnostics
+  (`crates/basilisk-checker/src/incremental.rs`). `checked_file` runs `parse →
+  resolve → check_with_config`, keyed on `(file, config)` — the **pure**,
+  import-free pipeline. `checked_file_resolved` additionally runs
+  `resolve_module_imports` between resolve and check, keyed on `(file, config,
+  search_paths)` — the **full** pipeline the batch CLI runs. Two further
+  queries carry the cross-module view: `module_exports(file)` derives a
+  workspace file's exported symbols from its tracked text (its `PartialEq`
+  value enables **backdating** — a body-only edit re-derives an equal export
+  set and every importer's memo stays valid), and `cross_resolved_module` /
+  `checked_file_cross` layer `imported_symbols` population
+  (`crates/basilisk-checker/src/exports.rs`) over `resolved_module`, resolving
+  workspace-tracked imports through `module_exports` and external `.pyi` /
+  PEP 561 `py.typed` sources from disk. Granularity is **module-level**: each
+  pipeline is fused into one tracked query per file, matching the
+  `Module-level` granularity row in [CHKARCH-MATRIX]. Editing one file — or the
+  configuration, or the search paths — re-executes only the affected queries;
+  unrelated files are served from their memos.
 
-When a source file changes, only queries depending on the changed input recompute; Salsa tracks the dependency graph.
+The value type is the owned `CachedDiagnostic` (it satisfies salsa's `Update`
+bound), so the engine adds **no** salsa dependency to `basilisk-resolver` or
+`basilisk-stubs`.
+
+**Equivalence guarantee.** Each query is a pure memoization wrapper over the
+[check pipeline](#CHKARCH-ARCH-PIPELINE). For any file that parses and resolves,
+`file_diagnostics(db, file, config)` equals `check_with_config(&resolved, cfg)`
+byte-for-byte (and, with the default config, `check(&resolved)`);
+`file_diagnostics_resolved(db, file, config, search_paths, workspace)` equals
+`{ resolve_module_imports; check_with_config }` byte-for-byte — i.e. the batch
+CLI's `process_file` core — **when `workspace` (the `WorkspaceFiles` registry) is
+empty or every tracked file's `SourceFile` matches disk.** With a non-empty
+registry the user-stub re-capture intentionally reads a tracked `.pyi`'s
+in-memory text instead of disk, so it *diverges* from `process_file` for an
+edited-but-unsaved stub (correct editor behaviour, but no longer byte-identical
+to disk). Both equalities are asserted directly with an empty registry
+(`crates/basilisk-checker/tests/incremental_tests.rs`
+`checked_file_is_equivalent_to_direct_check` +
+`checked_file_honours_strict_annotations`;
+`incremental_resolved_tests.rs`
+`resolved_query_equivalent_to_direct_import_pipeline` +
+`resolved_query_applies_import_resolution`), so salsa memoization can never
+corrupt a result.
+
+**Cross-file invalidation + filesystem-impurity boundary.** `resolved_module`
+takes a `WorkspaceFiles` input (a path → `SourceFile` map) and, after
+resolution, records a **content edge on exactly the imports whose output
+depends on content**: workspace-tracked **user-stub `.pyi`** imports, whose
+member API is re-derived from the tracked text
+(`recapture_user_stub_from_source`) — so editing the stub's content updates
+the importer's `imports_module_attribute` diagnostics, an edge that changes
+*output*, not just triggers a re-run
+(`editing_a_user_stub_updates_the_importer_diagnostics` at the checker level;
+`editing_open_stub_refreshes_importer_via_salsa` proves it end-to-end through
+the LSP with the disk left stale). A non-stub import records **no** text edge
+— the importer's resolved module is identical for any content of the imported
+file (`editing_a_non_stub_imported_file_does_not_reparse_the_importer`), and a
+coarse text edge would re-parse every importer on any dependency keystroke.
+Sibling `.py` **type/symbol** sharing instead flows through
+`cross_resolved_module`: workspace imports depend on the imported file's
+`module_exports`, so an export edit updates the importers' diagnostics from
+tracked (possibly unsaved) content while a body-only edit backdates and
+re-checks nothing
+(`body_edit_backdates_exports_and_export_edit_propagates`,
+`crates/basilisk-checker/tests/incremental_cross_tests.rs`). What remains
+**untracked** (mirroring
+[CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)):
+`resolve_module_imports`' existence probes and the content of files *outside*
+the workspace (third-party packages, venv site-packages, external stubs) —
+those invalidate only on a re-set `SearchPathsInput` / `WorkspaceFiles`.
+
+**Input writes compare-before-set.** Salsa 0.27 treats *every* input `set` as
+a new revision — a same-value write still re-executes dependents (pinned by
+`crates/basilisk-checker/tests/salsa_set_semantics.rs`). The LSP engine
+therefore compares each input (source text, config, search paths) against the
+stored value and writes only on a real change; without the guard, syncing
+inputs on every analysis would silently discard the database's memos and turn
+every workspace sweep into a full recompute.
+
+**LSP adoption.** The engine is the LSP's analysis path once the workspace scan
+has built the search paths. `basilisk-lsp`'s `SalsaAnalysisEngine`
+(`salsa_engine.rs`) holds a persistent [`BasiliskDatabase`] plus the input
+handles (one `SourceFile` per file, one `ConfigInput` per root, one
+`SearchPathsInput`, one `WorkspaceFiles` registry), sets them to the current
+values on each analysis, and reads the resolved-module query (for navigation —
+hover / references / go-to-definition) and its diagnostics projection; in
+`crossModule` mode these are the cross-module variants (`cross_resolved_module`
+/ `file_diagnostics_cross`), elsewhere the plain CLI-parity pair.
+`WorkspaceIndex::analyse_and_resolve` routes the `didOpen`/`didChange` path
+through it, and `WorkspaceIndex::reresolve_imports_and_recheck` — the
+post-scan re-check, the config/`uv.lock` refresh, and the dependent refresh
+when an edited file's exports change — is a **salsa sweep**: it primes the
+engine with every indexed file's current text (open buffers included) and
+re-analyses each file through the memoized queries, so only files whose
+dependencies actually changed recompute. The pre-scan import-free path is
+unchanged. `ResolvedModule` (and its transitively-contained types) derive
+`PartialEq` so `Arc<ResolvedModule>` satisfies salsa's `Update` bound via the
+fallback, keeping `basilisk-resolver` salsa-free.
+
+**What the engine replaced, and what remains outside it.** The former LSP-side
+cross-module machinery is gone: `cross_module.rs` (two-pass
+`populate_cross_module_symbols`) and `resolve_workspace_imports` were retired
+in favour of the queries above, and `import_graph.rs` is reduced to the
+navigation handlers' reverse lookups ([ANALYSIS-GRAPH]) — invalidation no
+longer walks the graph. The startup scan itself analyses through the engine:
+search paths are built first, the engine is primed with every collected
+file's text, and each file runs the memoized queries exactly once
+([ANALYSIS-STARTUP-WHOLE]) — there is no separate pre-salsa analysis pass.
+Still outside salsa: the `FileEntry` index itself (the LSP-side store —
+`FileEntry.resolved` shares the salsa memo's `Arc<ResolvedModule>`, no
+duplication) and the no-search-paths degrade path (`recheck_all_files`, plus
+the per-file import-free fallback used before configuration is known).
+Engine `SourceFile`/registry bookkeeping is dropped on file deletion
+(`SalsaAnalysisEngine::remove`), though salsa 0.27 cannot reclaim an input's
+internal memo, so a deleted file's memo lingers until the database is dropped;
+the database's memory footprint scales with the workspace (every analysed
+file's inputs and memos stay resident for the session — the standard
+incremental-engine trade).
+
+**Scope — the CLI/conformance path is deliberately unchanged.** The batch CLI
+(`process_file`) still runs the direct pipeline, so this work **cannot affect the
+conformance score**. Routing the CLI (and the LSP's bulk scan) through the engine
+is future work — the CLI is the conformance path (must prove byte-for-byte parity
+first) and, being one-shot, reuses no memos. The engine is a public API
+(`basilisk_checker::{BasiliskDatabase, SourceFile, ConfigInput, ConfigValue,
+SearchPathsInput, WorkspaceFiles, ModuleExports, checked_file,
+file_diagnostics, resolved_module, module_exports, cross_resolved_module,
+checked_file_resolved, checked_file_cross, file_diagnostics_resolved,
+file_diagnostics_cross}`).
+
+Incremental behaviour is proven by `crates/basilisk-db/tests/db_tests.rs`
+(memoization, invalidation, cross-file isolation) and the checker tests above,
+plus `crates/basilisk-checker/tests/incremental_cross_tests.rs` (cross-module
+population semantics, PEP 561 gating, backdating, in-memory export
+propagation).
 
 ### Cancellation {#CHKARCH-INCREMENTAL-CANCEL}
 
-A new keystroke during an in-progress check cancels and restarts the computation with the new input.
+When a new keystroke arrives while a check is in progress, the in-flight
+computation must be abandoned rather than run to completion and waste work — this
+is what keeps an editor responsive under fast typing. Salsa provides this: a write
+raises the revision's cancellation flag, and the next query checkpoint unwinds
+with the `Cancelled` sentinel. Verified deterministically by
+`crates/basilisk-db/tests/db_tests.rs::cancellation_unwinds_in_flight_work`.
 
 ### Persistent Cache {#CHKARCH-INCREMENTAL-CACHE}
 
-Disk-backed cache between sessions: on startup Basilisk loads the cache and recomputes only files changed since last run, eliminating cold-start latency for repeat sessions.
+Cross-session persistence is the **content-addressed result cache**
+([CHKCACHE](CHECKER-CACHE-SPEC.md), `crates/basilisk-db/src/cache.rs`), not salsa:
+a fresh process loads cached diagnostics and recomputes only files whose recorded
+read-set changed on disk, eliminating cold-start cost. The two layers are
+complementary — salsa makes an *editing session* incremental; the result cache
+makes *repeat invocations* incremental — and a hit in either is sound by
+construction (salsa via tracked dependencies, the result cache by re-verifying
+every recorded file).
 
 ### Performance Targets {#CHKARCH-INCREMENTAL-PERF}
+
+These are design targets, not yet measured against the salsa path (the benchmark
+harness in [ROADMAP-NEXT-STEPS-PLAN](../plans/ROADMAP-NEXT-STEPS-PLAN.md) is the
+vehicle for validating them); they are not a claim of achieved numbers.
 
 | Scenario | Target |
 |---|---|

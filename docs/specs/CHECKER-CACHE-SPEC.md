@@ -37,12 +37,60 @@ config unfingerprintable), it is a MISS and the check runs in full.
 
 ### `CHKCACHE-LIMITS` — Documented v1 boundary {#CHKCACHE-LIMITS}
 
-The environment fingerprint (`CHKCACHE-INPUT-ENV`) hashes the search-path config
-and `uv.lock`. Installing/removing packages **directly into a virtualenv's
-site-packages without a `uv.lock` change** is not auto-detected in v1 — clear the
-cache (or omit `--cache`) after mutating the environment outside the lockfile.
-Source, config, lockfile, and version changes are always detected. This boundary
-is why v1 is opt-in (behind `--cache`).
+The environment fingerprint (`CHKCACHE-INPUT-ENV`) hashes the search-path
+configuration and `uv.lock`. Installing or removing packages **directly into a
+virtualenv's site-packages without a `uv.lock` change** is not auto-detected in
+v1. This is why the cache is **opt-in**: clear the cache (or omit `--cache`)
+after mutating the environment outside the lockfile. Source, config, lockfile,
+and version changes are always detected. This boundary is the reason v1 ships
+behind a flag rather than on by default.
+
+### `CHKCACHE-POSITIONING` — When this cache helps, and the Salsa endgame {#CHKCACHE-POSITIONING}
+
+This v1 cache is **correct everywhere but only *useful* in narrow conditions**,
+and the documentation must say so plainly.
+
+- **`CHKCACHE-POSITIONING-WATCHER` — a cache is only useful with invalidation on
+  edit.** A result cache earns its keep when something tells it *which* files
+  changed so unchanged work can be skipped. In a long-lived process that means a
+  **file watcher** that invalidates entries the moment a file is edited. v1 has
+  no watcher: it is a one-shot CLI cache that lazily re-verifies the recorded
+  read-set on the *next* lookup (re-reading and re-hashing every dependency).
+  That keeps it correct, but its value is confined to **repeated batch runs over
+  a mostly-unchanged tree** (CI re-runs, pre-commit, `basilisk check` loops). In
+  an interactive editor it is the wrong shape — the LSP already holds documents
+  in memory and is notified of edits, so a re-verify-on-read disk cache buys
+  little.
+
+- **`CHKCACHE-POSITIONING-SMART` — invalidation must be smart, not blanket.**
+  Re-checking every file because one changed defeats the purpose. Useful
+  invalidation is **dependency-aware**: an edit invalidates only the edited file
+  and its transitive importers (the reverse of the read-set this cache already
+  records), leaving everything else cached. v1 approximates this lazily and
+  per-file; it does not maintain the reverse dependency graph needed to
+  invalidate *eagerly* and *precisely* on a watcher event.
+
+- **`CHKCACHE-POSITIONING-SALSA` — Salsa is the better vehicle for *in-session*
+  invalidation.** Smart, demand-driven invalidation is exactly what a
+  query-memoization engine gives for free, and the in-session engine now exists
+  ([`CHKARCH-INCREMENTAL-SALSA`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA),
+  `crates/basilisk-db` + `basilisk-checker`'s `checked_file` query): `parse →
+  resolve → check` is a tracked query, and an edit re-executes only the affected
+  file's query, leaving every other file's memo intact. Granularity today is
+  **module-level** (the pipeline is fused into one tracked query per file); finer
+  per-function granularity is possible but not yet implemented. The read-set this
+  cache records by hand is the dependency graph Salsa tracks automatically.
+
+  The two layers are **complementary, not redundant**: this content-addressed
+  cache is the *cross-session* durable layer (a fresh process recomputes only
+  files whose read-set changed on disk), while Salsa is the *in-session* layer (a
+  live editing session recomputes only the file you touched). The remaining step
+  is to make the salsa database itself durable across sessions — at which point
+  this whole-file content-hash cache could be retired in its favour — but until
+  that lands, **this cache remains the cross-session mechanism** and is not
+  superseded.
+
+---
 
 ## `CHKCACHE-READSET` — Capturing the exact read-set {#CHKCACHE-READSET}
 

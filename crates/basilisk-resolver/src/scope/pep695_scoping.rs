@@ -19,7 +19,7 @@ pub enum Pep695ParamKind {
 }
 
 /// A single PEP 695 type parameter with its optional bound.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Pep695Param {
     /// The parameter name (e.g. `T`).
     pub name: String,
@@ -43,7 +43,7 @@ pub enum GenericDefKind {
 }
 
 /// A decorator applied to a generic definition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DecoratorRef {
     /// Simple names referenced anywhere in the decorator expression.
     pub refs: Vec<String>,
@@ -53,7 +53,7 @@ pub struct DecoratorRef {
 
 /// A `class` or `def` that declares a PEP 695 `[...]` type parameter list,
 /// plus the scope facts `generics_syntax_scoping` needs.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Pep695Def {
     /// Whether this is a class or a function.
     pub kind: GenericDefKind,
@@ -72,7 +72,7 @@ pub struct Pep695Def {
 }
 
 /// A PEP 695 `type Name[...] = rhs` alias statement, resolved from the AST.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Pep695AliasDef {
     /// The alias name.
     pub name: String,
@@ -96,7 +96,7 @@ pub struct Pep695AliasDef {
 }
 
 /// An attribute access `Name.attr` somewhere in the module (outside `type` RHS).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AttrAccess {
     /// The base name being accessed.
     pub base: String,
@@ -107,7 +107,7 @@ pub struct AttrAccess {
 }
 
 /// All PEP 695 scoping facts for a module, derived purely from the AST.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Pep695Scoping {
     /// Classes and functions that declare PEP 695 type parameters.
     pub defs: Vec<Pep695Def>,

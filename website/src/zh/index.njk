@@ -73,12 +73,12 @@ benchmarkStrings:
         </div>
 
         {% if conformance.hasData %}
-        <a href="/zh/docs/conformance/" class="hero__conformance">
+        <div class="hero__conformance">
           <span class="hero__conformance-score">{{ conformance.scorePct }}<span class="hero__conformance-pct">%</span></span>
           <span class="hero__conformance-text">
-            <strong>PEP&nbsp;符合性</strong> &mdash; 官方 <code>python/typing</code> 套件 {{ conformance.total }} 个测试中通过 {{ conformance.pass }} 个，对照提交 <code>{{ conformance.pinnedRefShort }}</code> 评分。<span class="hero__conformance-cta">我们如何衡量 &rarr;</span>
+            <strong>PEP&nbsp;符合性</strong> &mdash; 官方 <code>python/typing</code> 套件 {{ conformance.total }} 个测试中通过 {{ conformance.pass }} 个，对照 <code>python/typing</code> 仓库提交 <a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" class="hero__conformance-commit" title="python/typing@{{ conformance.pinnedRef }}" target="_blank" rel="noopener"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %}（{{ conformance.commitDate }}）{% endif %}评分。<a href="/zh/docs/conformance/" class="hero__conformance-cta">我们如何衡量 &rarr;</a>
           </span>
-        </a>
+        </div>
         {% endif %}
 
         <div class="hero__meta">
@@ -221,6 +221,7 @@ benchmarkStrings:
       <p class="feature-row__body">
         由<a href="https://github.com/python/typing/blob/main/conformance/results/results.html">官方 Python 类型符合性套件</a>评分，对照<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance">提交 <code>{{ conformance.pinnedRefShort }}</code></a>——我们所对标的确切套件版本——
         同一套公开的评分工具也为 Pyright、mypy 和 Pyrefly 打分，它们的当前得分见该结果表。
+        我们与该仓库步调一致：每次检查器构建与每次发布都会从 <code>python/typing@main</code> 重新拉取最新套件并要求满分，因此任何我们未通过的上游测试都会阻止合并与发布，直到我们符合为止。
         我们在真实二进制文件上运行它，启用每一条符合性规则、不禁用任何规则：{{ conformance.categoriesTotal }} 个类别中有 {{ conformance.categoriesPass100 }} 个达到 100%，误报 {{ conformance.fp }} 处、遗漏的必需错误 {{ conformance.missed }} 处。Basilisk 的可选规则在符合性评分中从不运行，因此无法虚增得分。<a href="/zh/docs/conformance/">我们如何衡量 &rarr;</a>
       </p>
     </div>

@@ -27,7 +27,7 @@ use super::{
 };
 
 /// The complete resolved view of a parsed module.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct ResolvedModule {
     /// All function definitions found at any nesting level.
     pub functions: Vec<FunctionInfo>,

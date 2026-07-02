@@ -558,11 +558,8 @@ fn collect_and_check(
     // Add include paths from WorkspaceConfig as search roots.
     let lsp_config = basilisk_lsp::config::load_config(&project_root);
     let registry = build_uv_registry(&roots);
-    let mut search_paths = basilisk_lsp::import_resolver::ImportSearchPaths::from_config(
-        &roots,
-        &lsp_config,
-        registry,
-    );
+    let mut search_paths =
+        basilisk_lsp::import_resolver::search_paths_from_config(&roots, &lsp_config, registry);
     // Ensure all roots are also in extra_paths for module resolution.
     search_paths.roots = roots;
     info!(

@@ -13,6 +13,8 @@ basilisk-common = { workspace = true }
 basilisk-checker  = { workspace = true, optional = true }
 basilisk-parser   = { workspace = true, optional = true }
 basilisk-resolver = { workspace = true, optional = true }
+basilisk-db       = { workspace = true, optional = true }
+salsa             = { workspace = true, optional = true }
 
 [features]
 default = []
@@ -20,6 +22,8 @@ default = []
 resolver = ["dep:basilisk-parser", "dep:basilisk-resolver"]
 # Enable checker-based helpers (Expected, assert_diagnostics) — implies resolver
 checker = ["resolver", "dep:basilisk-checker"]
+# Enable the salsa incremental-engine test database (EventDb)
+salsa = ["dep:salsa", "dep:basilisk-db"]
 
 [lints]
 workspace = true

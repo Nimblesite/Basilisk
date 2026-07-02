@@ -4,7 +4,7 @@
 use super::{rhs::RhsKind, span::Span};
 
 /// A module-level or class-body variable assignment.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VariableInfo {
     /// The variable name.
     pub name: String,
@@ -21,7 +21,7 @@ pub struct VariableInfo {
 }
 
 /// A class attribute (declared in the class body).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "Python attributes have many boolean flags"

@@ -15,6 +15,9 @@ mod resolver_helpers;
 #[cfg(feature = "checker")]
 mod checker_helpers;
 
+#[cfg(feature = "salsa")]
+pub mod salsa_db;
+
 pub use diagnostics::{assert_valid_range, extract_diagnostic};
 pub use lsp_stdio::LspStdioFixture;
 pub use semantic_tokens::{assert_valid_semantic_token_data, parse_semantic_tokens};
@@ -28,3 +31,6 @@ pub use resolver_helpers::resolve_src;
 
 #[cfg(feature = "checker")]
 pub use checker_helpers::{assert_diagnostics, Expected};
+
+#[cfg(feature = "salsa")]
+pub use salsa_db::EventDb;

@@ -227,7 +227,7 @@ async fn cross_module_class_import() -> TestResult<()> {
 
 // ---------------------------------------------------------------------------
 // Cross-module: circular import detection
-// Exercises [ANALYSIS-GRAPH-CYCLES] / [ANALYSIS-ERRORS] (detect, don't crash).
+// Exercises [ANALYSIS-ERRORS] (circular imports must not crash or hang).
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -964,4 +964,97 @@ async fn open_module_export_edit_refreshes_dependent_diagnostics() -> TestResult
 /// True iff the diagnostic reports `thing` as undefined/unresolved.
 fn is_thing_undefined(d: &serde_json::Value) -> bool {
     d["message"].as_str().unwrap_or("").contains("`thing`")
+}
+
+// ---------------------------------------------------------------------------
+// Cross-file incrementality, end-to-end through salsa: the dependent refresh
+// runs importers through the salsa engine, whose `resolved_module` query reads
+// the imported stub's tracked `SourceFile` text and re-captures its API
+// (`recapture_user_stub_from_source`). An in-memory edit to an OPEN user-stub
+// `.pyi` therefore updates its importer's diagnostics live — the disk stays
+// stale throughout. See [CHKARCH-INCREMENTAL-SALSA].
+// ---------------------------------------------------------------------------
+
+/// True iff the diagnostic is an `imports_module_attribute` error.
+fn is_module_attr_error(d: &serde_json::Value) -> bool {
+    d["code"].as_str() == Some("imports_module_attribute")
+}
+
+fn importer_has_attr_error(
+    diags: &std::collections::HashMap<String, serde_json::Value>,
+    uri: &str,
+) -> bool {
+    diags.get(uri).is_some_and(|d| {
+        d["params"]["diagnostics"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().any(is_module_attr_error))
+    })
+}
+
+#[tokio::test]
+async fn editing_open_stub_refreshes_importer_via_salsa() -> TestResult<()> {
+    // A user stub under `.basilisk/stubs/` (auto-added to stub-paths) declares
+    // only `foo`; `a.py` accesses `xmod.bar`, which is undeclared.
+    let (dir, root_uri) = setup_cross_module_workspace(&[
+        (".basilisk/stubs/xmod.pyi", "def foo() -> None: ...\n"),
+        (
+            "a.py",
+            "import xmod\n\ndef use() -> None:\n    xmod.bar()\n",
+        ),
+    ]);
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "crossModule").await?;
+
+    let a_uri = format!("{root_uri}/a.py");
+    let stub_uri = format!("{root_uri}/.basilisk/stubs/xmod.pyi");
+
+    // Precondition: the startup scan flags `xmod.bar` in a.py.
+    let startup = collect_all_diagnostics(&mut fixture).await;
+    assert!(
+        importer_has_attr_error(&startup, &a_uri),
+        "precondition: a.py must flag xmod.bar as an undeclared module attribute — got: {startup:#?}"
+    );
+
+    // Open the stub so it enters the salsa engine's tracked sources.
+    fixture
+        .did_open(&stub_uri, "def foo() -> None: ...\n")
+        .await?;
+    let _ = collect_all_diagnostics(&mut fixture).await;
+
+    // Edit the stub in-memory to declare `bar` (no save — disk stays stale).
+    fixture
+        .send_json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": { "uri": stub_uri, "version": 2 },
+                "contentChanges": [
+                    { "text": "def foo() -> None: ...\ndef bar() -> None: ...\n" }
+                ]
+            }
+        }))
+        .await?;
+
+    // The dependent refresh must re-publish a.py WITHOUT the attribute error:
+    // the importer is re-analysed through salsa, whose cross-file edge reads the
+    // stub's in-memory `SourceFile` text (now declaring `bar`) — the stale disk
+    // content must not win.
+    let after = collect_all_diagnostics(&mut fixture).await;
+    let a_after = after
+        .get(&a_uri)
+        .ok_or("a.py diagnostics not re-published after the in-memory stub edit")?;
+    let empty = vec![];
+    let diagnostics = a_after["params"]["diagnostics"]
+        .as_array()
+        .unwrap_or(&empty);
+    assert!(
+        !diagnostics.iter().any(is_module_attr_error),
+        "an in-memory edit to the OPEN stub must clear the importer's \
+         imports_module_attribute via the salsa cross-file edge (disk is stale) — got: \
+         {diagnostics:#?}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
 }
