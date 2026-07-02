@@ -81,6 +81,40 @@ pub struct FileSource {
     pub text: String,
 }
 
+/// One precomputed [`LineIndex`](basilisk_common::text::LineIndex) per source
+/// file, so a batch of diagnostics resolves its byte spans to `(line, col)` in
+/// O(log n) instead of rescanning the source from the top for every span.
+///
+/// Rendering a file with many diagnostics used to be O(diagnostics · length) —
+/// each `--> path:line:col` and each snippet rescanned the whole prefix. Both
+/// the text and JSON renderers now build this once and share it.
+pub(super) struct SourceIndexes<'a> {
+    entries: Vec<(&'a FileSource, basilisk_common::text::LineIndex)>,
+}
+
+impl<'a> SourceIndexes<'a> {
+    /// Build a line index for every source file up front (one O(n) pass each).
+    pub(super) fn new(sources: &'a [FileSource]) -> Self {
+        Self {
+            entries: sources
+                .iter()
+                .map(|source| (source, basilisk_common::text::LineIndex::new(&source.text)))
+                .collect(),
+        }
+    }
+
+    /// Source text plus its line index for the file `path` belongs to, if known.
+    ///
+    /// Linear scan over the file list, matching the renderers' prior lookup — the
+    /// win is in the per-span conversion, not this (files-per-run is small).
+    pub(super) fn for_path(&self, path: &str) -> Option<(&str, &basilisk_common::text::LineIndex)> {
+        self.entries
+            .iter()
+            .find(|(source, _)| source.path == path)
+            .map(|(source, index)| (source.text.as_str(), index))
+    }
+}
+
 #[cfg(test)]
 #[expect(
     clippy::indexing_slicing,

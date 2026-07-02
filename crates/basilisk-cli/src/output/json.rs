@@ -21,7 +21,7 @@ use serde::Serialize;
 
 use basilisk_checker::Diagnostic;
 
-use super::{text::byte_offset_to_line_col, FileSource};
+use super::FileSource;
 
 /// Serialisable form of a single diagnostic for JSON output.
 #[derive(Serialize)]
@@ -46,19 +46,16 @@ pub(super) struct JsonDiagnostic<'a> {
 
 /// Render all diagnostics as a JSON array to stdout.
 pub fn render_diagnostics_json(diagnostics: &[Diagnostic], sources: &[FileSource]) {
+    // One line index per source, reused for every diagnostic in that file — the
+    // span→line/col conversions become O(log n) instead of prefix rescans.
+    let indexes = super::SourceIndexes::new(sources);
     let items: Vec<JsonDiagnostic<'_>> = diagnostics
         .iter()
         .map(|d| {
-            let source = sources
-                .iter()
-                .find(|s| s.path == d.path)
-                .map(|s| s.text.as_str());
-            let (line, col) = source.map_or((1, 1), |src| {
-                byte_offset_to_line_col(src, d.span.start_usize())
-            });
-            let (end_line, end_col) = source.map_or((line, col + 1), |src| {
-                byte_offset_to_line_col(src, d.span.end_usize())
-            });
+            let index = indexes.for_path(&d.path).map(|(_, index)| index);
+            let (line, col) = index.map_or((1, 1), |index| index.line_col(d.span.start_usize()));
+            let (end_line, end_col) =
+                index.map_or((line, col + 1), |index| index.line_col(d.span.end_usize()));
             JsonDiagnostic {
                 code: d.code.code,
                 severity: match d.severity {
