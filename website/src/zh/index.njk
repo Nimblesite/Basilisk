@@ -73,12 +73,12 @@ benchmarkStrings:
         </div>
 
         {% if conformance.hasData %}
-        <a href="/zh/docs/conformance/" class="hero__conformance">
+        <div class="hero__conformance">
           <span class="hero__conformance-score">{{ conformance.scorePct }}<span class="hero__conformance-pct">%</span></span>
           <span class="hero__conformance-text">
-            <strong>PEP&nbsp;符合性</strong> &mdash; 官方 <code>python/typing</code> 套件 {{ conformance.total }} 个测试中通过 {{ conformance.pass }} 个，对照提交 <code>{{ conformance.pinnedRefShort }}</code> 评分。<span class="hero__conformance-cta">我们如何衡量 &rarr;</span>
+            <strong>PEP&nbsp;符合性</strong> &mdash; 官方 <code>python/typing</code> 套件 {{ conformance.total }} 个测试中通过 {{ conformance.pass }} 个，对照 <code>python/typing</code> 仓库提交 <a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" class="hero__conformance-commit" title="python/typing@{{ conformance.pinnedRef }}" target="_blank" rel="noopener"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %}（{{ conformance.commitDate }}）{% endif %}评分。<a href="/zh/docs/conformance/" class="hero__conformance-cta">我们如何衡量 &rarr;</a>
           </span>
-        </a>
+        </div>
         {% endif %}
 
         <div class="hero__meta">

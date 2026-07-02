@@ -61,12 +61,12 @@ benchmarkStrings:
         </div>
 
         {% if conformance.hasData %}
-        <a href="/docs/conformance/" class="hero__conformance">
+        <div class="hero__conformance">
           <span class="hero__conformance-score">{{ conformance.scorePct }}<span class="hero__conformance-pct">%</span></span>
           <span class="hero__conformance-text">
-            <strong>PEP&nbsp;conformance</strong> &mdash; {{ conformance.pass }} of {{ conformance.total }} tests in the official <code>python/typing</code> suite, graded against commit <code>{{ conformance.pinnedRefShort }}</code>. <span class="hero__conformance-cta">How we measure &rarr;</span>
+            <strong>PEP&nbsp;conformance</strong> &mdash; {{ conformance.pass }} of {{ conformance.total }} tests in the official <code>python/typing</code> suite, graded against <code>python/typing</code> commit <a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" class="hero__conformance-commit" title="python/typing@{{ conformance.pinnedRef }}" target="_blank" rel="noopener"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %} ({{ conformance.commitDate }}){% endif %}. <a href="/docs/conformance/" class="hero__conformance-cta">How we measure &rarr;</a>
           </span>
-        </a>
+        </div>
         {% endif %}
 
         <div class="hero__meta">
