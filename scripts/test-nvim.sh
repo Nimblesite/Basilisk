@@ -13,12 +13,19 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_ROOT/scripts/common.sh"
 cd "$REPO_ROOT"
 
-# Find or build the basilisk binary.
-BASILISK_BIN=$(find_basilisk_bin) || {
+# Find or build the basilisk binary. When no explicit binary is provided, build
+# a fresh non-coverage CLI so local `make ci` does not reuse test-rust's
+# coverage-instrumented target/ci artifact.
+if [[ -z "${BASILISK_BIN:-}" ]]; then
     header "Building basilisk binary"
-    cargo build --profile ci
+    cargo build --profile ci --bin basilisk
     BASILISK_BIN="$REPO_ROOT/target/ci/basilisk"
-}
+else
+    BASILISK_BIN=$(find_basilisk_bin) || {
+        echo -e "${RED}${BOLD}FATAL: configured basilisk binary not found.${RESET}"
+        exit 1
+    }
+fi
 if [[ ! -x "$BASILISK_BIN" ]]; then
     echo -e "${RED}${BOLD}FATAL: basilisk binary not found.${RESET}"
     exit 1
