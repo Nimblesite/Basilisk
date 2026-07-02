@@ -12,7 +12,13 @@ use tracing::debug;
 ///
 /// Implements [LSPUV-DETECTION-RESULT]: raw boolean signals plus the matched
 /// root — consumers derive paths from `root` themselves.
+///
+/// typeDiagram model: `models/uv_detection.td` (diagram `docs/models/uv_detection.svg`).
 #[derive(Debug, Clone)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one independent boolean per uv detection signal ([LSPUV-DETECTION-SIGNALS])"
+)]
 pub struct UvProjectInfo {
     /// Absolute path to the project root directory.
     pub root: PathBuf,

@@ -159,11 +159,11 @@ pub fn build_test_command(
 
 The `PackageRegistry` (built from `uv.lock`) enables test dependency diagnostics:
 
-| Condition | Diagnostic | Severity | Code Action |
-|-----------|-----------|----------|-------------|
-| pytest not in `uv.lock` | `Test runner \"pytest\" is not installed. Run \"uv add --dev pytest\" to install.` | Warning | `basilisk.uv.addDev` with `pytest` |
-| `pytest-cov` not in `uv.lock` (coverage requested) | `Coverage plugin \"pytest-cov\" is not installed.` | Info | `basilisk.uv.addDev` with `pytest-cov` |
-| Test imports unresolved package | Standard imports_unresolved with uv context (see [LSP-UV-INTEGRATION-SPEC.md §5](LSP-UV-INTEGRATION-SPEC.md)) | Error | `basilisk.uv.add` |
+| Condition | Diagnostic | Severity | Code | Code Action |
+|-----------|-----------|----------|------|-------------|
+| pytest not in `uv.lock` | `Test runner \"pytest\" is not installed. Run \"uv add --dev pytest\" to install.` | Warning | `BSK-W0015` | `basilisk.uv.addDev` with `pytest` |
+| `pytest-cov` not in `uv.lock` (coverage requested) | `Coverage plugin \"pytest-cov\" is not installed.` | Info | — | `basilisk.uv.addDev` with `pytest-cov` |
+| Test imports unresolved package | Standard imports_unresolved with uv context (see [LSP-UV-INTEGRATION-SPEC.md §5](LSP-UV-INTEGRATION-SPEC.md)) | Error | — | `basilisk.uv.add` |
 
 These diagnostics are only emitted in uv projects and respect the existing `basilisk.uv.enabled` setting.
 
