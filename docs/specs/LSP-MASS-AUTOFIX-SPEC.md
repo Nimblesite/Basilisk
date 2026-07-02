@@ -78,12 +78,14 @@ Exposed through:
 
 ### Conflict Resolution {#AUTOFIX-CONFLICTS}
 
-When multiple fixes target overlapping text ranges in the same file:
+When multiple fixes produce overlapping text edits in the same file (`collect_non_overlapping_edits`, `crates/basilisk-lsp/src/code_actions/mass_fix.rs`):
 
-1. Fixes are sorted by start position (ascending).
-2. If two fixes overlap, the **safer** fix wins. If same safety, the **earlier-registered** fix wins.
-3. The losing fix is skipped and reported as "skipped due to conflict".
-4. After applying all non-conflicting fixes, diagnostics are re-evaluated. Skipped fixes may become applicable on the next pass.
+1. Candidate edits are sorted by start position (line, then character), ascending.
+2. Edits are accepted greedily in that order; an edit whose range overlaps the previously accepted edit is skipped. Resolution is purely positional — safety is never compared at this stage. With the shipped fix set, Safe and Unsafe fixes cannot produce overlapping edits: all fixes except BSK-W0050's annotation removal are zero-width inserts targeting mutually exclusive constructs.
+3. Skipped edits are silently dropped from the batch — they are not applied and not itemised in the result.
+4. Re-evaluation happens through the normal check loop rather than an internal second pass: in the editor, applying the `WorkspaceEdit` triggers a re-check that re-publishes remaining diagnostics (and their fixes); on the CLI, `basilisk fix` is idempotent and a re-run applies any fix that became applicable.
+
+Safety scoping is the caller's concern, upstream of conflict resolution: the CLI filters to safe-only by default (`--unsafe` / `--rules` / `all` widen it), while the LSP fix-all commands currently operate on all fixable rules.
 
 ### Undo {#AUTOFIX-UNDO}
 

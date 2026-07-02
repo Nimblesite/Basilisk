@@ -862,7 +862,7 @@ async fn check_pytest_from_index(
         client
             .log_message(
                 MessageType::WARNING,
-                "Basilisk: pytest not found in uv.lock — use the quick fix to install it"
+                "Basilisk: test runner \"pytest\" is not installed — use the quick fix (uv add --dev pytest)"
                     .to_owned(),
             )
             .await;

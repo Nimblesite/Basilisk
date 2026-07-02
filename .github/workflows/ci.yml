@@ -184,7 +184,7 @@ jobs:
         with:
           cache-on-failure: true
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
 
@@ -266,7 +266,7 @@ jobs:
         with:
           cache-on-failure: true
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
 
@@ -279,10 +279,18 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@81ee9698f20724138a785d788c7567d40f14cd2d # cargo-llvm-cov
 
-      # The conformance suite is NOT cached: score.py pulls the latest
-      # python/typing@main on every run (resolves the tip and re-downloads the
-      # fixtures + calculator), so the gate always scores against the current
-      # upstream suite. GITHUB_TOKEN raises the API rate limit for that fetch.
+      # Only the conformance FIXTURES are fetched (the calculator
+      # conformance/upstream_main.py is committed). Cache the downloaded fixtures
+      # keyed on score.py, which holds the pinned ref (PINNED_TYPING_REF) — bumping
+      # the ref edits that file and busts the cache; score.py re-fetches whenever
+      # the stamped ref differs, so a stale prefix restore self-heals.
+      - name: Cache conformance fixtures
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: conformance/tests
+          key: conformance-suite-${{ hashFiles('conformance/score.py') }}
+          restore-keys: conformance-suite-
+
       - name: Run Rust tests with coverage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -321,7 +329,7 @@ jobs:
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
 
@@ -354,7 +362,7 @@ jobs:
       # so the pinned editor version is reused instead of re-downloaded; a
       # version bump (config/manifest change) busts the key and re-fetches.
       - name: Cache VS Code test build
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: vscode-extension/.vscode-test
           key: vscode-test-${{ runner.os }}-${{ hashFiles('vscode-extension/.vscode-test.mjs', 'vscode-extension/.vscode-test.js', 'vscode-extension/package.json') }}
@@ -428,7 +436,7 @@ jobs:
       - name: Install lld
         run: sudo apt-get update && sudo apt-get install -y lld
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
 
@@ -448,7 +456,7 @@ jobs:
       # Cache them so the clones become no-ops — test-nvim.sh skips any dir that
       # already exists. Bump the key suffix to force a refresh of the pins.
       - name: Cache Neovim test plugins
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             /tmp/plenary.nvim
@@ -528,7 +536,7 @@ jobs:
           save-if: ${{ env.RUN == 'true' && matrix.shard == '0/4' }}
 
       - if: env.RUN == 'true'
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
 
@@ -568,7 +576,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
 

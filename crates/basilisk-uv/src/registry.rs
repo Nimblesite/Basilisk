@@ -96,15 +96,15 @@ impl PackageRegistry {
         self.packages.contains_key(import_name)
     }
 
-    /// Search for a type-stub package (e.g. `types-requests` for `requests`).
+    /// Look up a `types_{name}` entry in the lock registry (e.g.
+    /// `types_requests` for `requests`).
     ///
-    /// Returns the import name of the stub package if found.
-    //
-    // Implements [LSPUV-DIAGNOSTICS-MISSING-STUBS] — the "a matching stub
-    // package exists in uv.lock" precondition for the BSK-E0152 typeshed
-    // suggestion. NOTE: only the `types_{name}` form is checked here; the
-    // spec also names the `{name}-stubs` form, which this does not detect.
-    // See conformance audit (DEVIATION).
+    /// Returns the import name of the stub package if present. This is a
+    /// plain registry lookup; the BSK-E0152 stub *suggestion* path
+    /// ([LSPUV-DIAGNOSTICS-MISSING-STUBS]) instead uses the bundled typeshed
+    /// index (`basilisk_stubs::typeshed_stub_distribution`), and installed
+    /// `{name}-stubs` packages are honoured at import-resolution time
+    /// ([STUBRES-PEP561] step 3) — never by name guessing here.
     #[must_use]
     pub fn find_stub_package(&self, name: &str) -> Option<String> {
         let stub_import = format!("types_{name}");
@@ -345,8 +345,10 @@ mod tests {
         assert!(registry.has_package("my_editable"));
     }
 
-    // [LSPUV-DIAGNOSTICS-MISSING-STUBS]: a `types-<pkg>` entry in uv.lock is
-    // discoverable as the matching stub package (keyed `types_<pkg>`).
+    // A `types-<pkg>` entry in uv.lock is discoverable as the matching stub
+    // package (keyed `types_<pkg>`). Registry lookup only — the BSK-E0152
+    // suggestion path ([LSPUV-DIAGNOSTICS-MISSING-STUBS]) uses the bundled
+    // typeshed index instead.
     #[test]
     fn find_stub_package_found() {
         let lock = LockFile {

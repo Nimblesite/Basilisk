@@ -647,6 +647,7 @@ The full set of codes the checker emits — generated from rule source by `scrip
 | `BSK-W0012` | Unused dependency |
 | `BSK-W0013` | Stale uv lock file |
 | `BSK-W0014` | Explicit `Any` annotation — prefer a concrete type (style nudge; split from `returns_compatibility`, see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)) |
+| `BSK-W0015` | Test runner `pytest` not installed in the uv project ([LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION](LSP-TEST-INTEGRATION-SPEC.md#LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION)) |
 | `BSK-W0040` | Lambda function missing type annotations |
 | `BSK-W0050` | Redundant type annotation warning |
 
