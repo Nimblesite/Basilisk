@@ -174,12 +174,17 @@ pub struct WorkspaceFiles {
 /// only the cheap `check_with_config` step.
 ///
 /// **Cross-file invalidation.** After resolution, the query reads the
-/// `SourceFile` text of every imported file the [`WorkspaceFiles`] input knows
-/// about, recording a salsa edge on each — so editing an imported file
-/// invalidates this importer's memo. Imported-file *existence* probes (and the
-/// content of files outside the workspace, e.g. third-party packages) remain
-/// untracked, mirroring the [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)
-/// boundary; those invalidate only on a re-set `SearchPathsInput`/`WorkspaceFiles`.
+/// `SourceFile` text of every **user-stub** import the [`WorkspaceFiles`]
+/// input tracks — the one import kind whose resolved-module output depends on
+/// the imported file's *content* (its member API is derived from the text) —
+/// so editing a tracked stub invalidates exactly its importers. All other
+/// content-dependence is exports-level and tracked by
+/// [`cross_resolved_module`]'s [`module_exports`] edges; recording raw text
+/// edges for those too would re-parse every importer on any dependency edit.
+/// Imported-file *existence* probes (and the content of files outside the
+/// workspace, e.g. third-party packages) remain untracked, mirroring the
+/// [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS) boundary; those
+/// invalidate only on a re-set `SearchPathsInput`/`WorkspaceFiles`.
 #[salsa::tracked(returns(ref))]
 pub fn resolved_module(
     db: &dyn Db,
@@ -200,14 +205,19 @@ pub fn resolved_module(
     ResolvedFile::Resolved(std::sync::Arc::new(resolved))
 }
 
-/// Record a salsa dependency on the content of every imported file the workspace
-/// tracks, and re-capture user-stub `.pyi` APIs from that in-memory content.
+/// Record a salsa dependency on the content of every **user-stub** import the
+/// workspace tracks, and re-capture those stubs' APIs from that in-memory
+/// content.
 ///
-/// Reading each imported file's `SourceFile` text records the cross-file edge
-/// (so editing it invalidates this importer). For a workspace-tracked user
-/// stub, the same text is re-parsed and its API overrides the disk-based one
-/// `resolve_module_imports` produced — so an edited-but-unsaved `.pyi` updates
-/// this importer's `imports_module_attribute` diagnostics.
+/// The text edge is deliberately narrow: a user-stub `.pyi` is the only import
+/// whose *resolved-module output* depends on the imported file's content (its
+/// member API is derived from the text, feeding `imports_module_attribute`) —
+/// so reading its `SourceFile` here means an edited-but-unsaved stub updates
+/// its importers. Every other import's content-dependence is exports-level and
+/// flows through the memoized [`module_exports`] edge in
+/// [`cross_resolved_module`]; recording raw text edges for those too would
+/// re-execute every importer's parse+resolve on any dependency keystroke,
+/// making a workspace sweep O(importers × parse) for no output change.
 fn register_import_dependencies(
     db: &dyn Db,
     resolved: &mut basilisk_resolver::ResolvedModule,
@@ -217,6 +227,9 @@ fn register_import_dependencies(
     let registry = workspace.files(db);
     let mut updates = Vec::new();
     for import in &resolved.imports {
+        if !crate::imports::is_user_stub_import(import, search_paths) {
+            continue;
+        }
         let Some(imported) = import
             .resolved_path
             .as_ref()
@@ -224,9 +237,9 @@ fn register_import_dependencies(
         else {
             continue;
         };
-        // Reading the imported file's text records the salsa edge...
+        // Reading the stub's text records the content edge...
         let text = imported.text(db);
-        // ...and, for a tracked user stub, re-derives its API from that text.
+        // ...and re-derives its API from that (possibly unsaved) text.
         if let Some(update) =
             crate::imports::recapture_user_stub_from_source(import, search_paths, text)
         {

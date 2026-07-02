@@ -101,6 +101,18 @@ pub fn recapture_user_stub_from_source(
     Some((import.module.clone(), build_stub_api(&stub, stub_path)))
 }
 
+/// Whether this import binds a user stub — i.e. its member API is re-derived
+/// from the stub's **content**, so an importer's output genuinely depends on
+/// that file's text. The incremental engine uses this to record a content edge
+/// for exactly these imports and no others ([CHKARCH-INCREMENTAL-SALSA]).
+#[must_use]
+pub fn is_user_stub_import(
+    import: &basilisk_resolver::ImportInfo,
+    search_paths: &ImportSearchPaths,
+) -> bool {
+    user_stub_path(import, search_paths).is_some()
+}
+
 /// The `.pyi` path this import binds as a user stub, if any: a single-segment
 /// plain `import X` resolved to a `.pyi` under a configured `stub-paths` dir
 /// (which includes the auto-added `.basilisk/stubs`). Other `.pyi` (typeshed,

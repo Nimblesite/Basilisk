@@ -323,11 +323,17 @@ fn config_edit_does_not_reresolve_module() {
     );
 }
 
-/// Content-precise cross-file invalidation: `resolved_module(A)` reads the
-/// `SourceFile` text of every file A imports (via `WorkspaceFiles`), so editing
-/// an imported file re-runs A's query — but editing an unrelated file does not.
+/// Cross-file invalidation is **exports-precise**, not text-coarse:
+/// `resolved_module(A)`'s own output does not depend on a non-stub imported
+/// file's content (only on its existence, via the search paths), so editing
+/// the imported `.py` must NOT re-execute A's parse+resolve — that would make
+/// every dependency keystroke re-parse all importers. Content-dependence flows
+/// through the exports-level `module_exports` edge in `cross_resolved_module`
+/// (proven output-changing in `incremental_cross_tests.rs`), and the one place
+/// a plain import's OUTPUT does depend on content — a user-stub `.pyi` API —
+/// keeps its text edge (`editing_a_user_stub_updates_the_importer_diagnostics`).
 #[test]
-fn editing_an_imported_file_invalidates_only_the_importer() {
+fn editing_a_non_stub_imported_file_does_not_reparse_the_importer() {
     let mut db = EventDb::default();
     let dir = make_tmp_dir("bsk_crossfile");
     let b_path = dir.join(format!("{PROBE}.py"));
@@ -369,13 +375,16 @@ fn editing_an_imported_file_invalidates_only_the_importer() {
         "editing a file the importer does not import must not re-run its query"
     );
 
-    // Editing the imported file B must re-run A.
+    // Editing the imported non-stub B must NOT re-run A's parse+resolve either:
+    // A's resolved module is identical for any content of B, and re-executing
+    // here is what would make a workspace sweep re-parse every importer.
     let _b_prev = b.set_text(&mut db).to("x = 2\n".to_owned());
     let _a_after = resolved_module(&db, a, search_paths, workspace);
     assert_eq!(
         db.executions_of("resolved_module"),
-        1,
-        "editing an imported file must re-run the importer's resolved_module query"
+        0,
+        "editing a non-stub imported file must not re-execute the importer's \
+         resolved_module — its content only matters at the exports level"
     );
 
     let _ = fs::remove_dir_all(&dir);

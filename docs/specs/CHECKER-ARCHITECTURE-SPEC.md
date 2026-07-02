@@ -974,20 +974,23 @@ to disk). Both equalities are asserted directly with an empty registry
 corrupt a result.
 
 **Cross-file invalidation + filesystem-impurity boundary.** `resolved_module`
-takes a `WorkspaceFiles` input (a path → `SourceFile` map) and, after resolution,
-reads the text of every imported file the workspace tracks — recording a salsa
-edge on each. So editing a tracked imported file re-runs exactly its importers'
-queries (`editing_an_imported_file_invalidates_only_the_importer`). For a
-workspace-tracked **user-stub `.pyi`**, the query re-derives the stub's API from
-that in-memory text (`recapture_user_stub_from_source`), so editing the stub's
-content updates the importer's `imports_module_attribute` diagnostics — a
-cross-file edge that changes *output*, not just triggers a re-run
+takes a `WorkspaceFiles` input (a path → `SourceFile` map) and, after
+resolution, records a **content edge on exactly the imports whose output
+depends on content**: workspace-tracked **user-stub `.pyi`** imports, whose
+member API is re-derived from the tracked text
+(`recapture_user_stub_from_source`) — so editing the stub's content updates
+the importer's `imports_module_attribute` diagnostics, an edge that changes
+*output*, not just triggers a re-run
 (`editing_a_user_stub_updates_the_importer_diagnostics` at the checker level;
 `editing_open_stub_refreshes_importer_via_salsa` proves it end-to-end through
-the LSP with the disk left stale). Sibling `.py` **type/symbol** sharing flows
-through `cross_resolved_module`: workspace imports depend on the imported
-file's `module_exports`, so an export edit updates the importers' diagnostics
-from tracked (possibly unsaved) content while a body-only edit backdates and
+the LSP with the disk left stale). A non-stub import records **no** text edge
+— the importer's resolved module is identical for any content of the imported
+file (`editing_a_non_stub_imported_file_does_not_reparse_the_importer`), and a
+coarse text edge would re-parse every importer on any dependency keystroke.
+Sibling `.py` **type/symbol** sharing instead flows through
+`cross_resolved_module`: workspace imports depend on the imported file's
+`module_exports`, so an export edit updates the importers' diagnostics from
+tracked (possibly unsaved) content while a body-only edit backdates and
 re-checks nothing
 (`body_edit_backdates_exports_and_export_edit_propagates`,
 `crates/basilisk-checker/tests/incremental_cross_tests.rs`). What remains
@@ -996,6 +999,14 @@ re-checks nothing
 `resolve_module_imports`' existence probes and the content of files *outside*
 the workspace (third-party packages, venv site-packages, external stubs) —
 those invalidate only on a re-set `SearchPathsInput` / `WorkspaceFiles`.
+
+**Input writes compare-before-set.** Salsa 0.27 treats *every* input `set` as
+a new revision — a same-value write still re-executes dependents (pinned by
+`crates/basilisk-checker/tests/salsa_set_semantics.rs`). The LSP engine
+therefore compares each input (source text, config, search paths) against the
+stored value and writes only on a real change; without the guard, syncing
+inputs on every analysis would silently discard the database's memos and turn
+every workspace sweep into a full recompute.
 
 **LSP adoption.** The engine is the LSP's analysis path once the workspace scan
 has built the search paths. `basilisk-lsp`'s `SalsaAnalysisEngine`

@@ -4,13 +4,16 @@
 //!
 //! Holds a persistent [`basilisk_checker::BasiliskDatabase`] plus the salsa
 //! **input** handles (one [`SourceFile`] per file, one [`ConfigInput`] per root,
-//! one [`SearchPathsInput`] for the workspace). On each analysis it sets those
+//! one [`SearchPathsInput`] for the workspace). On each analysis it syncs those
 //! inputs to the current values and reads the memoized queries
 //! ([`resolved_module`] for navigation, [`file_diagnostics_resolved`] for
 //! diagnostics), so re-analysing an unchanged file is served from the memo and a
 //! config-only edit re-runs only the cheap `check` step. Input handles are
-//! reused across calls (salsa memoization is identity-based) and salsa backdates
-//! a `set` to an unchanged value, so setting every input on every call is cheap.
+//! reused across calls (salsa memoization is identity-based), and every write
+//! **compares before setting**: salsa 0.27 treats a same-value `set` as a new
+//! revision that re-executes dependents (no equality shortcut — pinned by
+//! `salsa_set_semantics.rs` in `basilisk-checker`), so unconditional re-sets
+//! would silently discard the whole database's memos on every call.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -231,7 +234,11 @@ impl SalsaAnalysisEngine {
         )
     }
 
-    /// Get-or-create the [`SourceFile`] input for `path`, set to `text`.
+    /// Get-or-create the [`SourceFile`] input for `path`, synced to `text`.
+    ///
+    /// Writes only on a real change: salsa re-executes dependents of ANY `set`,
+    /// equal value or not, so an unconditional re-set here would invalidate the
+    /// file's whole query chain on every analysis.
     fn source_for(
         &self,
         db: &mut BasiliskDatabase,
@@ -242,7 +249,9 @@ impl SalsaAnalysisEngine {
         if let Some(existing) = self.sources.get(path) {
             let source = *existing;
             drop(existing);
-            let _ = source.set_text(db).to(text.to_owned());
+            if source.text(&*db) != text {
+                let _ = source.set_text(db).to(text.to_owned());
+            }
             source
         } else {
             let source = SourceFile::new(&*db, path_str.to_owned(), text.to_owned());
@@ -253,7 +262,10 @@ impl SalsaAnalysisEngine {
         }
     }
 
-    /// Get-or-create the [`ConfigInput`] for `root_key`, set to `config`.
+    /// Get-or-create the [`ConfigInput`] for `root_key`, synced to `config`.
+    ///
+    /// Compare-before-set: re-setting an unchanged config would re-run every
+    /// file's `check` step on every analysis (see [`Self::source_for`]).
     fn config_for(
         &self,
         db: &mut BasiliskDatabase,
@@ -263,7 +275,9 @@ impl SalsaAnalysisEngine {
         if let Some(existing) = self.config_inputs.get(root_key) {
             let input = *existing;
             drop(existing);
-            let _ = input.set_value(db).to(ConfigValue(config.clone()));
+            if input.value(&*db).0 != *config {
+                let _ = input.set_value(db).to(ConfigValue(config.clone()));
+            }
             input
         } else {
             let input = ConfigInput::new(&*db, ConfigValue(config.clone()));
@@ -272,7 +286,10 @@ impl SalsaAnalysisEngine {
         }
     }
 
-    /// Get-or-create the workspace [`SearchPathsInput`], set to `search_paths`.
+    /// Get-or-create the workspace [`SearchPathsInput`], synced to `search_paths`.
+    ///
+    /// Compare-before-set: re-setting unchanged search paths would re-resolve
+    /// every file's imports on every analysis (see [`Self::source_for`]).
     fn search_paths_for(
         &self,
         db: &mut BasiliskDatabase,
@@ -283,7 +300,9 @@ impl SalsaAnalysisEngine {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(input) = *guard {
-            let _ = input.set_value(db).to(search_paths.clone());
+            if input.value(&*db) != search_paths {
+                let _ = input.set_value(db).to(search_paths.clone());
+            }
             input
         } else {
             let input = SearchPathsInput::new(&*db, search_paths.clone());
