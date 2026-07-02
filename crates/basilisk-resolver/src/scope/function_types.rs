@@ -190,7 +190,8 @@ pub struct FunctionInfo {
     pub docstring: Option<String>,
     /// Type narrowing guards detected in this function body.
     ///
-    /// Collected during AST resolution for use by the checker's `NarrowingContext`.
-    /// See `CHECKER-TYPE-INFERENCE-SPEC.md` §7.
+    /// Collected during AST resolution for the planned checker narrowing
+    /// engine (NARROWPLAN Phase 1); currently unconsumed. See
+    /// `CHECKER-TYPE-INFERENCE-SPEC.md` §7.
     pub narrowing_guards: Vec<NarrowingGuard>,
 }

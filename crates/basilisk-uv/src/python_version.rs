@@ -33,11 +33,12 @@ pub fn read_python_version(root: &Path) -> Option<String> {
 /// checker's centralized default ([CHKARCH-VERSION-TARGET], issue #93).
 //
 // Implements [LSPUV-PYTHON-VERSION-RESOLUTION-ORDER] steps 2–4 of the spec's
-// 6-step cascade. The spec's step 1 (`basilisk.python` explicit override) and
-// step 6 (default 3.12) are owned by the consumers
+// 5-step cascade. Step 1 (explicit `python-version` in project config) and
+// step 5 (default 3.12) are owned by the consumers
 // (`basilisk_lsp::workspace`, CLI `main.rs`, and the checker's centralized
-// default). The spec's step 5 ("probe `python3 --version` in the venv") is NOT
-// implemented anywhere — see conformance audit (DEVIATION).
+// default). Venv probing (`python3 --version`) is deliberately out of scope
+// per the spec: resolution reads declared project metadata only, so the
+// target stays deterministic across machines and adds no subprocess spawn.
 #[must_use]
 pub fn resolve_target_python_version(root: &Path) -> Option<String> {
     read_python_version(root)

@@ -366,6 +366,9 @@ fn make_uv_add_dev_pytest_action(diag: &Diagnostic) -> CodeAction {
 /// Returns `None` when no stub distribution is known (the package ships inline
 /// `py.typed` types or no stubs exist), so we never offer a quick-fix that would
 /// fail to resolve on `PyPI` (e.g. the nonexistent `pydantic_ai-stubs`).
+///
+/// Implements [LSPUV-DIAGNOSTICS-MISSING-STUBS] — the `basilisk.uv.addDev`
+/// quick fix, gated on the bundled typeshed index.
 fn make_uv_add_stubs_action(diag: &Diagnostic, module: &str) -> Option<CodeAction> {
     let stubs_package = basilisk_stubs::typeshed_stub_distribution(module)?;
     Some(CodeAction {
@@ -705,11 +708,11 @@ mod tests {
     }
 
     #[test]
-    fn test_bsk_w0014_code_action_includes_uv_add_dev_pytest() {
+    fn pytest_not_found_code_action_includes_uv_add_dev_pytest() {
         let diag = make_diagnostic(
             DiagnosticSeverity::WARNING,
             crate::server::test_handlers::PYTEST_NOT_FOUND_CODE,
-            "pytest not found in uv.lock — use quick fix to install",
+            "Test runner \"pytest\" is not installed. Run \"uv add --dev pytest\" to install.",
             range_at((0, 0), (0, 0)),
         );
         let uri = Url::parse("file:///test_example.py").unwrap();

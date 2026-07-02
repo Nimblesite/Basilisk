@@ -9,7 +9,16 @@ use std::path::{Path, PathBuf};
 use tracing::debug;
 
 /// Information about a detected uv-managed project.
+///
+/// Implements [LSPUV-DETECTION-RESULT]: raw boolean signals plus the matched
+/// root — consumers derive paths from `root` themselves.
+///
+/// typeDiagram model: `models/uv_detection.td` (diagram `docs/models/uv_detection.svg`).
 #[derive(Debug, Clone)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one independent boolean per uv detection signal ([LSPUV-DETECTION-SIGNALS])"
+)]
 pub struct UvProjectInfo {
     /// Absolute path to the project root directory.
     pub root: PathBuf,
@@ -22,6 +31,11 @@ pub struct UvProjectInfo {
 
     /// Whether the virtual environment was created by uv.
     pub uv_managed_venv: bool,
+
+    /// Whether `.python-version` exists with no `poetry.lock`/`Pipfile.lock` —
+    /// the Medium-confidence signal (`uv init` writes `.python-version` before
+    /// the first sync creates `uv.lock`).
+    pub has_python_version: bool,
 }
 
 /// Scan workspace roots and return info for the first directory that looks like
@@ -31,27 +45,29 @@ pub struct UvProjectInfo {
 /// - A `uv.lock` file exists
 /// - `pyproject.toml` contains a `[tool.uv]` section
 /// - `.venv/pyvenv.cfg` contains a `uv = true` marker
+/// - `.python-version` exists with no `poetry.lock`/`Pipfile.lock`
 //
 // Implements [LSPARCH-UV-DETECT] — the startup detection step that gates building
 // the PackageRegistry (registry build/workspace-member discovery live in the LSP
 // server's build_uv_registry and basilisk-uv's registry/workspace modules).
 // Implements [LSPUV-DETECTION-SIGNALS] — filesystem-only signal check (no
 // subprocess), evaluated in spec order: uv.lock, then `[tool.uv]`, then
-// `.venv/pyvenv.cfg` `uv = true`. Note: the spec's fourth Medium-confidence
-// signal (`.python-version` present + no poetry/pipenv lock) is NOT checked
-// here — see the conformance audit (DEVIATION).
+// `.venv/pyvenv.cfg` `uv = true`, then the Medium-confidence `.python-version`
+// signal (guarded against poetry/pipenv projects).
 pub fn detect_uv_project(workspace_roots: &[PathBuf]) -> Option<UvProjectInfo> {
     for root in workspace_roots {
         let has_lockfile = root.join("uv.lock").is_file();
         let has_tool_uv = check_tool_uv_section(root);
         let uv_managed_venv = check_uv_managed_venv(root);
+        let has_python_version = check_python_version_signal(root);
 
-        if has_lockfile || has_tool_uv || uv_managed_venv {
+        if has_lockfile || has_tool_uv || uv_managed_venv || has_python_version {
             debug!(
                 root = %root.display(),
                 has_lockfile,
                 has_tool_uv,
                 uv_managed_venv,
+                has_python_version,
                 "detected uv project"
             );
 
@@ -60,6 +76,7 @@ pub fn detect_uv_project(workspace_roots: &[PathBuf]) -> Option<UvProjectInfo> {
                 has_lockfile,
                 has_tool_uv,
                 uv_managed_venv,
+                has_python_version,
             });
         }
     }
@@ -107,6 +124,17 @@ fn check_uv_managed_venv(root: &Path) -> bool {
                 .strip_prefix("uv")
                 .is_some_and(|rest| rest.trim_start().starts_with("= true"))
     })
+}
+
+/// Check whether `.python-version` exists with no competing lock file.
+//
+// Implements [LSPUV-DETECTION-SIGNALS] — the ".python-version + no other
+// manager" Medium-confidence signal. The poetry/pipenv lock guard keeps a
+// pyenv-managed poetry/pipenv project from being misread as a uv project.
+fn check_python_version_signal(root: &Path) -> bool {
+    root.join(".python-version").is_file()
+        && !root.join("poetry.lock").is_file()
+        && !root.join("Pipfile.lock").is_file()
 }
 
 // Tests for [LSPUV-DETECTION-SIGNALS]: each detection signal in isolation,
@@ -158,6 +186,36 @@ mod tests {
     }
 
     #[test]
+    fn detects_python_version_only() {
+        let dir = setup_dir();
+        std::fs::write(dir.path().join(".python-version"), "3.12\n").unwrap();
+
+        let info = detect_uv_project(&[dir.path().to_path_buf()]).unwrap();
+        assert!(info.has_python_version);
+        assert!(!info.has_lockfile);
+        assert!(!info.has_tool_uv);
+        assert!(!info.uv_managed_venv);
+    }
+
+    #[test]
+    fn python_version_with_poetry_lock_not_detected() {
+        let dir = setup_dir();
+        std::fs::write(dir.path().join(".python-version"), "3.12\n").unwrap();
+        std::fs::write(dir.path().join("poetry.lock"), "").unwrap();
+
+        assert!(detect_uv_project(&[dir.path().to_path_buf()]).is_none());
+    }
+
+    #[test]
+    fn python_version_with_pipfile_lock_not_detected() {
+        let dir = setup_dir();
+        std::fs::write(dir.path().join(".python-version"), "3.12\n").unwrap();
+        std::fs::write(dir.path().join("Pipfile.lock"), "{}").unwrap();
+
+        assert!(detect_uv_project(&[dir.path().to_path_buf()]).is_none());
+    }
+
+    #[test]
     fn returns_none_for_non_uv_project() {
         let dir = setup_dir();
         assert!(detect_uv_project(&[dir.path().to_path_buf()]).is_none());
@@ -193,10 +251,13 @@ mod tests {
         std::fs::create_dir_all(&venv_dir).unwrap();
         std::fs::write(venv_dir.join("pyvenv.cfg"), "uv = true\n").unwrap();
 
+        std::fs::write(dir.path().join(".python-version"), "3.12\n").unwrap();
+
         let info = detect_uv_project(&[dir.path().to_path_buf()]).unwrap();
         assert!(info.has_lockfile);
         assert!(info.has_tool_uv);
         assert!(info.uv_managed_venv);
+        assert!(info.has_python_version);
     }
 
     #[test]

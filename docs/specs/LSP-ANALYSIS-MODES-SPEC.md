@@ -76,10 +76,11 @@ Default: `"wholeModule"`. The user must explicitly opt down to `openFilesOnly`.
 
 Resolution order (highest wins):
 
-1. Editor workspace setting (`basilisk.analysisMode`)
-2. `analysisMode` in `basilisk.json`
-3. `analysisMode` in `[tool.basilisk]` section of `pyproject.toml`
-4. Hard default: `wholeModule`
+1. Editor workspace setting (`basilisk.analysisMode`) — delivered as `initializationOptions.analysisMode` at startup and re-applied at runtime via `workspace/didChangeConfiguration` (top-level `analysisMode` or nested `basilisk.analysisMode`). Editors that always forward a value (the VS Code extension and basilisk.nvim both send their `wholeModule` default) pin the mode from the editor side; clients that send no value (e.g. the Zed extension) fall through to the file tier.
+2. The first parseable config file in the first workspace root, checked in this order: `basilisk.json`, then `pyrightconfig.json` (pyright compatibility), then `pyproject.toml` — `[tool.basilisk]` or, failing that, `[tool.pyright]`. The winning file supplies the entire workspace config: precedence is first-file-wins, NOT per-field merging, so a `basilisk.json` that omits `analysisMode` resolves to the default even if `pyproject.toml` sets one (mirroring [pyright's own whole-file precedence](https://microsoft.github.io/pyright/#/configuration) of `pyrightconfig.json` over `pyproject.toml`).
+3. Hard default: `wholeModule`.
+
+Tier 1 and the fallback are resolved by `resolve_analysis_mode` (`crates/basilisk-lsp/src/workspace_analysis.rs`); the file tier is `load_config` (`crates/basilisk-lsp/src/config.rs`), which the CLI shares.
 
 ---
 
@@ -246,7 +247,7 @@ If the file is open, the event is ignored. Otherwise read from disk; if `source_
 
 ### Debouncing {#ANALYSIS-INCR-DEBOUNCE}
 
-File-watcher events MUST be debounced 150 ms to avoid thrashing during bulk saves. `didChange` events are NOT debounced — latency matters.
+File-watcher events are trailing-debounced 200 ms (`FILE_WATCHER_DEBOUNCE_MS`, `crates/basilisk-lsp/src/server/mod.rs`) to avoid thrashing during bulk saves: each `workspace/didChangeWatchedFiles` batch cancels any pending re-analysis task and schedules a fresh one, so a burst of events triggers work only once it settles. `didChange` events are NOT debounced — latency matters.
 
 ---
 

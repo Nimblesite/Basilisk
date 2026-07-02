@@ -172,10 +172,10 @@ z: str = 42         # imports_unresolved: int is not assignable to str
 
 ```python
 x = 1
-x += 2   # still int — calls __iadd__ or __add__, return type drives x's new type
+x += 2   # still int — the target keeps its existing type
 ```
 
-The type of `x` after `x op= rhs` is the return type of `type(x).__iadd__(rhs)` (or `__add__` if `__iadd__` is absent). If the return type differs from `x`'s current type, the narrowed type applies.
+Augmented assignment (`x op= rhs`) does not re-type the target: `x` keeps its previously declared or inferred type. Basilisk does not resolve `__iadd__`/`__add__` return types to compute a new type; retaining the existing type is conservative and emits no diagnostics on spec-valid code (the conformance gate holds at 100% pass / 0 false positives, self-measured by `conformance/score.py`). Operator return-type inference is roadmap work — see [NARROWPLAN-EXPR-INFERENCE-OPERATORS](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-EXPR-INFERENCE-OPERATORS). Augmented assignment IS analyzed for `Final`/`ReadOnly` reassignment violations and literal-semantics checks.
 
 ### Walrus Operator {#TYPEINF-VARS-WALRUS}
 
@@ -535,11 +535,10 @@ Truthiness narrowing removes falsy types from the union (`None`, `Literal[0]`, `
 
 ```python
 x: int | str = get_value()
-x = 42
-reveal_type(x)  # int — narrowed by assignment
+x = 42   # x keeps its declared type int | str
 ```
 
-After assignment, the variable's type is that of the assigned value (possibly narrower than the declared type).
+Basilisk does not narrow a variable's type on assignment: the variable retains its declared type. The flow-narrowing environment used for `assert_type` checking (`crates/basilisk-resolver/src/visitor/assert_narrow.rs`) narrows only on single-class `isinstance` guards, enum `is` comparisons, and `TypeGuard`/`TypeIs` calls; assignment statements do not update it. Assignment narrowing is roadmap work — see [NARROWPLAN-ENGINE-PATTERNS](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-ENGINE-PATTERNS) item 4.
 
 ### Pattern Matching Narrowing {#TYPEINF-NARROWING-MATCH}
 
@@ -609,8 +608,6 @@ Assertions narrow the type for all code after the `assert` statement (within the
 
 ### Dict Key Existence Narrowing {#TYPEINF-NARROWING-DICTKEY}
 
-`TypedDict` types narrow via key existence checks:
-
 ```python
 class Movie(TypedDict, total=False):
     title: str
@@ -618,8 +615,10 @@ class Movie(TypedDict, total=False):
 
 def f(m: Movie) -> None:
     if "title" in m:
-        reveal_type(m["title"])  # str — not str | undefined
+        m["title"]   # the TypedDict type is NOT narrowed by the `in` check
 ```
+
+Basilisk does not narrow `TypedDict` types via `"key" in td` checks; no `in`-comparison narrowing exists. Access checking for non-required keys is conservative, so no diagnostic depends on this narrowing — every `typeddicts_*` conformance file passes with zero false positives (self-measured, `conformance/conformance_status.csv`). Key-existence (`in`-guard) narrowing is roadmap work — see [NARROWPLAN](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md).
 
 ### Narrowing Scope Limitations {#TYPEINF-NARROWING-SCOPE}
 
@@ -712,13 +711,17 @@ class Dog(Animal): ...
 x: Animal = Dog()  # OK — Dog is a nominal subtype of Animal
 ```
 
-**MRO resolution** uses [C3 linearization](https://www.python.org/download/releases/2.3/mro/) (same as CPython). The MRO is computed per class and cached in `ResolvedModule`.
+**MRO resolution** is simplified: rules walk `ClassInfo.bases` transitively per class (no C3 linearization engine and no MRO cache in `ResolvedModule`); full C3 linearization remains future work ([NARROWPLAN-SUBTYPING-NOMINAL](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING-NOMINAL)).
 
-**Builtin type hierarchy** (hardcoded):
-- `bool` <: `int` <: `float` <: `complex`
-- `bytearray` <: `bytes` (for read contexts)
-- All classes <: `object`
-- `Never` <: everything (bottom type)
+**Builtin numeric tower.** The typing-spec promotions ([Special cases for float and complex](https://typing.python.org/en/latest/spec/special-types.html#special-cases-for-float-and-complex)) hold: `bool`/`int` are accepted where `float` is expected, and `bool`/`int`/`float` where `complex` is expected. Two layers implement this:
+
+- Annotation-text level (the conformance rules): `rules/shared.rs::is_numeric_subtype` encodes the full `bool <: int <: float <: complex` chain, mirrored by rule-local helpers (`narrowing_typeis`, `narrowing_typeis_2`, `overloads_evaluation`, `generics_typevartuple_callable`, `aliases_implicit`, `generics_syntax_scoping`).
+- `InferredType` level: the annotation parser folds `complex` into `Float` (`types_parsing.rs`: `"float" | "complex" => Float`), so the `int → float` and `int`/`float → complex` promotions hold by construction (`bool` acceptance lives at the text level). Accepted trade-off: a `complex`-typed value is not rejected where `float` is expected — the conformance suite does not exercise that direction.
+
+**Other builtin relations:**
+- All classes <: `object` (`object` parses to the `Any` escape hatch for assignment purposes).
+- `Never` <: everything (bottom type).
+- There is **no** `bytearray <: bytes` promotion: the [current typing spec](https://typing.python.org/en/latest/spec/special-types.html#special-cases-for-float-and-complex) defines promotions only for `float`/`complex` (the historical `bytes` shorthand was removed), and no conformance test requires it. `bytearray` parses to `Named("bytearray")` and is assignable essentially only to itself, `object`, and `Any`.
 
 ### Protocol Structural Subtyping {#TYPEINF-SUBTYPING-PROTOCOL}
 
@@ -832,30 +835,19 @@ g: Callable[[Dog], Animal]  # accepts Dog, returns Animal
 
 > **Authority**: [PEP 484 §Callable](https://peps.python.org/pep-0484/#callable), [Typing spec — Callables](https://typing.readthedocs.io/en/latest/spec/callables.html)
 
-### Implementation: `is_subtype_of()` {#TYPEINF-SUBTYPING-IMPL}
+### Implementation: `InferredType::is_assignable_to()` {#TYPEINF-SUBTYPING-IMPL}
 
-The current `is_assignable_to()` in `types.rs` handles primitives, containers, unions, optionals, and callables but falls back to name comparison for `Named` types. The full subtyping engine:
+Subtyping is decided by `InferredType::is_assignable_to(&self, other)` in `crates/basilisk-checker/src/types.rs` — a pure structural match over the `InferredType` enum, called on production paths by the compatibility rules (e.g. `rules/assignment_compatibility`, `rules/returns_compatibility`). It implements:
 
-```rust
-fn is_subtype_of(source: &ResolvedType, target: &ResolvedType, ctx: &SubtypeContext) -> bool {
-    match (source, target) {
-        // Nominal: check MRO
-        (Class(src), Class(tgt)) => ctx.mro_contains(src, tgt),
-        // Protocol: structural check
-        (_, Protocol(proto)) => ctx.satisfies_protocol(source, proto),
-        // Generic: variance-aware
-        (Generic(src_base, src_args), Generic(tgt_base, tgt_args)) =>
-            ctx.check_generic_subtype(src_base, src_args, tgt_base, tgt_args),
-        // TypedDict: field-by-field
-        (TypedDict(src), TypedDict(tgt)) => ctx.check_typeddict_compat(src, tgt),
-        // Callable: contravariant params, covariant return
-        (Callable(src), Callable(tgt)) => ctx.check_callable_subtype(src, tgt),
-        // ... other cases
-    }
-}
-```
+- `Any` / `Unknown` bidirectional compatibility and `Never` as bottom ([TYPEINF-SPECIAL-ANY](#TYPEINF-SPECIAL-ANY), [TYPEINF-SPECIAL-NEVER](#TYPEINF-SPECIAL-NEVER)).
+- Partial, literal-level numeric relations: `int` (and `Literal` ints/floats) <: `float`, `Literal[True/False]` <: `bool`/`int`, plus `Literal`/`LiteralString`/`str` relations ([TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL), [TYPEINF-SPECIAL-LITERALSTRING](#TYPEINF-SPECIAL-LITERALSTRING)). The full `bool <: int <: float <: complex` tower lives in the annotation-text-level helpers used by the conformance rules.
+- `Optional`/`Union` decomposition: `A | B <: C` iff both sides do; `A <: A | B` ([TYPEINF-SUBTYPING-UNION](#TYPEINF-SUBTYPING-UNION)).
+- Element-assignability (covariant) checks for `list`/`set`/`dict`; fixed-length, homogeneous `tuple[X, ...]`, and PEP 646 unpacked (`*tuple[...]`/`*Ts`) tuple matching ([TYPEINF-SUBTYPING-GENERIC](#TYPEINF-SUBTYPING-GENERIC), [TYPEINF-COLLECTIONS-TUPLES](#TYPEINF-COLLECTIONS-TUPLES)).
+- Callable contravariant parameters / covariant return, with `...` params gradual ([TYPEINF-SUBTYPING-CALLABLE](#TYPEINF-SUBTYPING-CALLABLE)); `TypeForm` covariance.
 
-`SubtypeContext` holds the MRO cache, protocol member tables, and generic variance info needed for recursive subtype checks.
+`Named` types (user classes and unparameterised imports) compare by base name before `[`: `Foo[int]` and `Foo[float]` are treated as compatible. This is deliberate — without whole-program generic variance analysis, stricter matching would emit false positives, and the conformance gate holds `max_false_positives` at zero.
+
+Nominal MRO walking and structural Protocol/TypedDict compatibility are NOT centralized here: they live in the per-conformance-area rule modules (`rules/protocols_*`, `rules/typeddicts_*`, and the class-bases-walking `is_subtype_of` helper in `rules/generics_basic_3/helpers.rs`). There is no shared `SubtypeContext` or MRO cache.
 
 ---
 
@@ -950,9 +942,9 @@ Inference-relevant conformance tests:
 
 Deliberate, distinctive behaviors of Basilisk's inference engine:
 
-### No Unresolved-Type Fallback {#TYPEINF-EXCEEDS-NOUNKNOWN}
+### Conservative `Unknown` Sentinel {#TYPEINF-EXCEEDS-NOUNKNOWN}
 
-Basilisk **never produces an unresolved/`Unknown` type** — every inferred type is either concrete or an error.
+When syntactic RHS inference cannot determine a type (call expressions, `type(...)` calls, arbitrary expressions, lambda return types — `infer_rhs` in `crates/basilisk-checker/src/inference.rs`), it produces the internal sentinel `InferredType::Unknown` (`crates/basilisk-checker/src/types.rs`). `Unknown` is deliberately conservative: `is_assignable_to` treats it as bidirectionally compatible, and rules that encounter it generally suppress their diagnostic rather than guess — an unprovable mismatch is not reported (precision over recall, per [CHKARCH-CONFORMANCE-MODE]). Two deliberate positive-match exceptions exist where an `Unknown`-typed value still fires E0014 (and the word `Unknown` appears in the message): recursive value-alias matching and `TypeForm` RHS validation in `rules/assignment_compatibility` — there, treating `Unknown` as a non-match keeps genuinely incompatible assignments firing. `Unknown` never substitutes for a *required* annotation: missing annotations remain errors (E0001/E0002, see [TYPEINF-REQUIRED](#TYPEINF-REQUIRED)) and `Any` is never inferred as a fallback ([TYPEINF-SPECIAL-ANY](#TYPEINF-SPECIAL-ANY)).
 
 ### Strict Container Inference Always On {#TYPEINF-EXCEEDS-CONTAINERS}
 
@@ -974,15 +966,15 @@ Every missing annotation is an error; silent inference of public-API types is no
 
 ## Implementation Notes {#TYPEINF-IMPL}
 
-The inference engine lives in the `basilisk-checker` crate, using [Salsa](https://github.com/salsa-rs/salsa) for incremental computation. Results are stored as Salsa query results, enabling **sub-10ms incremental re-inference** on single-file changes.
+The inference engine lives in the `basilisk-checker` crate as free functions and per-rule visitors, not named engine structs:
 
-Key components:
+- `src/inference.rs` — RHS expression inference (`infer_rhs`, [TYPEINF-ALGO])
+- `src/collection_inference.rs` — union-of-element-types container inference ([TYPEINF-COLLECTIONS])
+- `src/types.rs` — the `InferredType` model and `is_assignable_to` ([TYPEINF-SUBTYPING-IMPL](#TYPEINF-SUBTYPING-IMPL))
+- `src/types_parsing.rs` — annotation text → `InferredType`
+- Narrowing, overload resolution, and Literal handling are implemented inside the corresponding conformance rule modules (`rules/narrowing_typeguard.rs`, `rules/narrowing_typeis*.rs`, `rules/overloads_*.rs`, `rules/literals_*`).
 
-- **`InferenceEngine`** — top-level bidirectional inference driver
-- **`ConstraintSolver`** — TypeVar constraint collection and solving
-- **`NarrowingEngine`** — flow-sensitive narrowing via control-flow graph
-- **`OverloadResolver`** — 5-step overload resolution per conformance spec
-- **`LiteralFolder`** — Literal type widening/narrowing rules
+Incremental computation is currently a content-hash result cache in `basilisk-db` (`crates/basilisk-db`); the Salsa-backed database is planned Phase 2 work — see [CHKARCH-INCREMENTAL-SALSA](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA).
 
 ---
 

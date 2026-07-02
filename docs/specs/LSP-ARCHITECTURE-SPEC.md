@@ -175,27 +175,45 @@ Enforced by the toolbar contract tests in `vscode-extension/src/test/suite/activ
 
 | Notification | Direction | Params | Description |
 |-------------|-----------|--------|-------------|
-| `basilisk/moduleChanged` | Server → Client | `{module: ModuleNode}` | Sent when a module's symbol table changes after re-analysis. Debounced at 300ms. |
+| `basilisk/moduleChanged` | Server → Client | `{module: {name, path, kind, symbols}}` | Sent when a module's symbol table changes after re-analysis. Debounced at 300ms. Carries a partial `ModuleNode` — no folded health fields; clients refetch via `basilisk.workspaceModules` for rollups. |
 
 ### Data Model Types {#LSPARCH-DATAMODEL}
 
+The wire shapes below are the shipped contract, consumed field-for-field by the
+VS Code extension (`module-explorer.ts`), basilisk.nvim (`type_health.lua`), and
+the Zed slash commands. Source of truth: `crates/basilisk-lsp/src/server/activity_panel/`
+(`module_tree.rs`, `type_health.rs`, `helpers.rs`). Panel-rendering semantics live in
+[EXTACT-DATA-MODEL](EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-DATA-MODEL).
+
 ```typescript
-/** A node in the workspace module tree. */
+/**
+ * A module entry. `basilisk.workspaceModules` returns a FLAT list sorted by
+ * name; clients rebuild the package hierarchy from dotted names
+ * ([EXTACT-MODULES-TREE-STRUCTURE]).
+ */
 interface ModuleNode {
     name: string;              // Fully qualified module name (e.g. "mypackage.utils")
     path: string;              // Absolute filesystem path to the module file or __init__.py
-    kind: "package" | "module";
-    children: ModuleNode[];    // Sub-modules (non-empty only for packages)
-    symbols: SymbolNode[];     // Top-level symbols exported by this module
+    kind: "package" | "module";  // "package" iff the file is __init__.py/__init__.pyi
+    symbols: SymbolNode[];     // Top-level symbols in this module
+    // Folded per-module health rollup (single source: compute_file_health):
+    coveragePercent: number;   // annotated/total * 100, rounded; 100 when the module has no symbols
+    errors: number;            // 0 when type checking is disabled ([ANALYSIS-ENABLED], #119)
+    warnings: number;          // ditto
+    adopted: boolean;          // file is in adopted (errors-as-warnings) mode
 }
 
-/** A symbol within a module (function, class, or variable). */
+/** A symbol within a module. */
 interface SymbolNode {
     name: string;
-    kind: "function" | "class" | "variable";
-    type: string | null;       // Inferred or annotated type signature, null if unresolved
+    kind: "function" | "class" | "variable" | "constant";
+                               // "constant" = module var whose name chars are all
+                               //   uppercase/underscore (digit-bearing names emit "variable")
     line: number;              // 0-based line number of the definition
-    children: SymbolNode[];    // Nested symbols (e.g. methods inside a class)
+    annotated: boolean;        // functions: all params + return annotated (methods exclude
+                               //   self/cls); vars/attrs: annotation present; classes: always true
+    exported: boolean;         // reserved for __all__ tracking; currently always false
+    children?: SymbolNode[];   // present on class nodes only (methods + attributes, sorted by line)
 }
 
 /**
@@ -211,16 +229,30 @@ interface WorkspaceModulesResponse {
 /** Aggregate health statistics for a scope (workspace or single module). */
 interface HealthStats {
     totalSymbols: number;      // Total symbols in scope
-    typedSymbols: number;      // Symbols with a resolved type annotation
-    coveragePercent: number;   // (typedSymbols / totalSymbols) * 100, 0 when totalSymbols == 0
-    errorCount: number;        // Number of BSK-E* diagnostics
-    warningCount: number;      // Number of BSK-W* diagnostics
+    annotatedSymbols: number;  // Symbols counted as annotated (see SymbolNode.annotated)
+    coveragePercent: number;   // (annotatedSymbols / totalSymbols) * 100; 100 when
+                               //   totalSymbols == 0 (clients branch on totalFiles == 0
+                               //   for the empty state, #57)
+    errors: number;            // Number of BSK-E* diagnostics
+    warnings: number;          // Number of BSK-W* diagnostics
+    adoptedFiles: number;      // Files with >= 1 demoted diagnostic
+    totalFiles: number;        // In workspaceModules this counts ALL indexed files,
+                               //   regardless of the scope filter
 }
 
-/** Per-module health breakdown. */
+/**
+ * Per-module health breakdown (`TypeHealthResponse.modules` entry), sorted
+ * ascending by coveragePercent — worst first. Unlike `basilisk.workspaceModules`,
+ * typeHealth errors/warnings are NOT gated on type checking being enabled.
+ */
 interface ModuleHealth {
-    module: string;            // Fully qualified module name
-    stats: HealthStats;
+    name: string;              // Fully qualified module name
+    path: string;              // Absolute filesystem path
+    coveragePercent: number;
+    errors: number;
+    warnings: number;
+    adopted: boolean;
+    unannotated: string[];     // Names of unannotated symbols (quick-fix suggestions)
 }
 
 /** Response from `basilisk.typeHealth`. */
@@ -403,7 +435,7 @@ Whole-word text scan with word boundary checks, filtering strings/comments. Resp
 
 ### Rename Symbol (`textDocument/prepareRename` + `textDocument/rename`) {#LSPARCH-FEATURES-RENAME}
 
-Validates symbol is renameable, returns `WorkspaceEdit` with `TextEdit` for each occurrence. Single-file scope.
+`prepareRename` returns the identifier range + placeholder when the cursor is on a renameable symbol, `null` otherwise; the new name itself is validated in `rename` (`scope_tree::validate_rename`). `rename` returns a workspace-wide `WorkspaceEdit` built in two halves: (1) a scope-aware single-file core (`references::rename_symbol`) that renames every occurrence in the current file respecting lexical scoping (shadowed bindings untouched) and also updates keyword-argument call sites and docstring references when renaming a parameter, `self.attr` references when renaming a class attribute, and `__all__` entries when renaming a module-level symbol; (2) a cross-file half ([ANALYSIS-CROSSLSP-RENAME](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP-RENAME), [REFACTOR-RENAME](LSP-REFACTORING-SPEC.md#REFACTOR-RENAME)) that walks the import graph to also rename the symbol in every importer of the current file and — when the cursor symbol is itself imported — at its source-definition file. The cross-file half is gated on `crossModule` analysis; without it rename degrades gracefully to single-file.
 
 ### Completion (`textDocument/completion`) {#LSPARCH-FEATURES-COMPLETION}
 

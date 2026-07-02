@@ -369,15 +369,15 @@ impl tower_lsp::lsp_types::notification::Notification for CoverageResultNotifica
     const METHOD: &'static str = basilisk_common::coverage_notifications::COVERAGE_RESULT;
 }
 
-/// Diagnostic code for pytest not found in uv project.
-pub(crate) const PYTEST_NOT_FOUND_CODE: &str = "BSK-W0014";
+/// Diagnostic code for pytest not found in a uv project.
+///
+/// Dedicated to this diagnostic — `BSK-W0014` is the explicit-`Any` nudge rule
+/// and must not be reused here ([LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION]).
+pub(crate) const PYTEST_NOT_FOUND_CODE: &str = "BSK-W0015";
 
-// Implements [LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION] — "pytest not in uv.lock" Warning.
-// DEVIATION: the spec's table message is `Test runner "pytest" is not installed. Run "uv add --dev
-// pytest" to install.`; the message emitted below differs. The reused code is `BSK-W0014`, which
-// CLAUDE.md documents as the explicit-`Any` nudge rule — reusing that code for a test-dependency
-// warning is a cross-purpose overlap worth confirming.
-/// Build a `BSK-W0014` diagnostic for a test file missing pytest.
+// Implements [LSPTEST-UV-INTEGRATION-TEST-DEPENDENCY-VERIFICATION] — "pytest not in uv.lock" Warning
+// with the `basilisk.uv.addDev` quick fix (attached in code_actions).
+/// Build the pytest-missing diagnostic (`BSK-W0015`) for a uv test file.
 pub(super) fn make_pytest_not_found_diagnostic() -> Diagnostic {
     Diagnostic {
         range: Range {
@@ -394,7 +394,8 @@ pub(super) fn make_pytest_not_found_diagnostic() -> Diagnostic {
         code: Some(NumberOrString::String(PYTEST_NOT_FOUND_CODE.to_owned())),
         code_description: None,
         source: Some("basilisk".to_owned()),
-        message: "pytest not found in uv.lock — use quick fix to install".to_owned(),
+        message: "Test runner \"pytest\" is not installed. Run \"uv add --dev pytest\" to install."
+            .to_owned(),
         tags: None,
         related_information: None,
         data: None,
@@ -514,12 +515,18 @@ mod tests {
         );
         assert_eq!(diag.severity, Some(DiagnosticSeverity::WARNING));
         assert_eq!(diag.source.as_deref(), Some("basilisk"));
-        assert!(diag.message.contains("pytest"));
+        assert_eq!(
+            diag.message,
+            "Test runner \"pytest\" is not installed. Run \"uv add --dev pytest\" to install."
+        );
     }
 
     #[test]
-    fn pytest_not_found_code_constant() {
-        assert_eq!(PYTEST_NOT_FOUND_CODE, "BSK-W0014");
+    fn pytest_not_found_code_is_dedicated_not_explicit_any() {
+        // BSK-W0014 is the explicit-`Any` nudge rule; the pytest-missing
+        // diagnostic must use its own code, not collide with it.
+        assert_eq!(PYTEST_NOT_FOUND_CODE, "BSK-W0015");
+        assert_ne!(PYTEST_NOT_FOUND_CODE, "BSK-W0014");
     }
 
     #[test]

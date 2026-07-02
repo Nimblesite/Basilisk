@@ -283,7 +283,7 @@ pub(super) async fn execute_start_debug_session(
             .log_message(MessageType::ERROR, err.to_string())
             .await;
         return Err(tower_lsp::jsonrpc::Error {
-            code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32001),
+            code: tower_lsp::jsonrpc::ErrorCode::ServerError(err.jsonrpc_code()),
             message: err.to_string().into(),
             data: None,
         });
@@ -333,7 +333,7 @@ pub(super) async fn execute_start_debug_session(
                 .log_message(MessageType::ERROR, err.to_string())
                 .await;
             Err(tower_lsp::jsonrpc::Error {
-                code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32002),
+                code: tower_lsp::jsonrpc::ErrorCode::ServerError(err.jsonrpc_code()),
                 message: err.to_string().into(),
                 data: None,
             })
