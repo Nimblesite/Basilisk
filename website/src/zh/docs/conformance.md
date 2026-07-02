@@ -33,6 +33,8 @@ Basilisk 由**官方 `python/typing` 符合性套件**评分——也就是类�
 
 我们针对上次从 `main` 拉取的套件的确切提交评分——[`{{ conformance.pinnedRefShort }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance){% if conformance.commitDate %}，{{ conformance.commitDate }}{% endif %}——以完整哈希记录，因此即使 `main` 继续推进，此链接也始终固定指向我们所评分的确切文件。同样的工具与文件为所有人打分，因此这个数字在各检查器之间可比，也不是我们能朝有利方向调整的。
 
+这个记录在案的提交是一张凭据，而不是挡箭牌——我们与 `python/typing@main` **步调一致**。每次 `make test`、每次检查器的 CI 运行，以及每条发布流水线中的专门任务，都会重新解析 `main` 的*当前*最新提交，套件一旦更新就重新下载，并以固定在 **100% 通过、0 误报** 的门槛为真实二进制重新评分。一旦维护者新增或修改测试导致 Basilisk 不再通过，我们的 CI 与发布流程会立即失败：在检查器符合新套件之前，任何代码都无法合并、任何版本都无法发布。上面引用的提交——由评分器自己的报告自动写入每个页面，绝非手工键入——只是记录哪个最新版本得出了这个分数，方便你审计数字背后的确切文件。
+
 ## 一个文件如何评分
 
 整个算法就是套件 `main.py` 中的两个函数——`get_expected_errors`（读取 `# E` 注释）与 `diff_expected_errors`（与检查器输出比对）。文件**当且仅当**该差异为空时通过：

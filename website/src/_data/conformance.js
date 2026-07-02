@@ -228,6 +228,26 @@ export default function () {
     verified = sha256 != null && liveSha === sha256;
   }
 
+  // [CHKARCH-CONFORMANCE] Build-time guarantee, not convention: every page that
+  // quotes the score must also carry the exact python/typing commit it was
+  // graded against. A build with score data but no commit, or whose vendored
+  // calculator no longer matches the hash the report recorded, would render
+  // blank SHAs / numbers from a different calculator — FAIL it instead. A
+  // healthy tree always passes: score.py rewrites the report on every run.
+  if (!pinnedRef) {
+    throw new Error(
+      "conformance: conformance_status.csv has score data but conformance_report.json " +
+      "records no python/typing commit — run: python3 conformance/score.py",
+    );
+  }
+  if (!verified) {
+    throw new Error(
+      "conformance: conformance/upstream_main.py does not match the sha256 in " +
+      "conformance_report.json — the calculator and the report must move together; " +
+      "run: python3 conformance/score.py",
+    );
+  }
+
   const history = gitHistory();
   return {
     hasData: true,

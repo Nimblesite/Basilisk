@@ -221,6 +221,7 @@ benchmarkStrings:
       <p class="feature-row__body">
         由<a href="https://github.com/python/typing/blob/main/conformance/results/results.html">官方 Python 类型符合性套件</a>评分，对照<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance">提交 <code>{{ conformance.pinnedRefShort }}</code></a>——我们所对标的确切套件版本——
         同一套公开的评分工具也为 Pyright、mypy 和 Pyrefly 打分，它们的当前得分见该结果表。
+        我们与该仓库步调一致：每次检查器构建与每次发布都会从 <code>python/typing@main</code> 重新拉取最新套件并要求满分，因此任何我们未通过的上游测试都会阻止合并与发布，直到我们符合为止。
         我们在真实二进制文件上运行它，启用每一条符合性规则、不禁用任何规则：{{ conformance.categoriesTotal }} 个类别中有 {{ conformance.categoriesPass100 }} 个达到 100%，误报 {{ conformance.fp }} 处、遗漏的必需错误 {{ conformance.missed }} 处。Basilisk 的可选规则在符合性评分中从不运行，因此无法虚增得分。<a href="/zh/docs/conformance/">我们如何衡量 &rarr;</a>
       </p>
     </div>

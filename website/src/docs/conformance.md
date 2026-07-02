@@ -38,6 +38,8 @@ It works like this:
 
 We score against the exact commit of the suite we last pulled from `main` — [`{{ conformance.pinnedRefShort }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance){% if conformance.commitDate %}, {{ conformance.commitDate }}{% endif %} — recorded by its full hash so this link stays fixed at the exact files we graded, even as `main` moves on. The same tool and files grade everyone, so the number is comparable across checkers and not something we can tune in our favour.
 
+That recorded commit is a receipt, not a shield — we run in **lock step** with `python/typing@main`. Every `make test`, every CI run of the checker, and a dedicated job in every release pipeline re-resolves the *current* tip of `main`, re-downloads the suite whenever it has moved, and re-grades the real binary against a gate fixed at **100% pass, 0 false positives**. If the maintainers add a test or change one so that Basilisk no longer passes, our CI and release process break immediately: nothing merges and nothing ships until the checker conforms to the new suite. The commit quoted above — inserted into every page automatically from the scorer's own report, never typed by hand — simply records which tip earned the number, so you can audit the exact files behind it.
+
 ## How a file is scored
 
 The entire algorithm is two functions in the suite's `main.py` — `get_expected_errors` (reads the `# E` annotations) and `diff_expected_errors` (diffs them against the checker's output). A file passes **iff** that diff is empty:

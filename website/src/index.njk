@@ -213,6 +213,7 @@ benchmarkStrings:
         Scored by the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">official Python typing conformance suite</a>, graded against <a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance">commit <code>{{ conformance.pinnedRefShort }}</code></a> &mdash; the exact suite version we target &mdash;
         the same published harness that grades Pyright, mypy, and Pyrefly, whose
         current scores live in that results table.
+        And we stay in lock step with that repository: every checker build and every release re-pulls the latest suite from <code>python/typing@main</code> and requires a perfect score, so an upstream test we fail blocks merge and release until we conform.
         We run it on the real binary with every conformance rule enabled and nothing disabled: {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories pass at 100%, with {{ conformance.fp }} false positives and {{ conformance.missed }} missed required errors. Basilisk&rsquo;s opt-in rules never run during conformance, so they can&rsquo;t pad the number. <a href="/docs/conformance/">How we measure this &rarr;</a>
       </p>
     </div>
