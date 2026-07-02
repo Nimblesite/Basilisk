@@ -218,12 +218,15 @@ impl WorkspaceIndex {
 
         // Search paths are known: run the memoized salsa engine, which resolves
         // imports so third-party/workspace imports match the bulk scan and
-        // `basilisk check`. Implements [ANALYSIS-INCR-IMPORTS] via
-        // [CHKARCH-INCREMENTAL-SALSA].
+        // `basilisk check`. In cross-module mode the engine's cross queries also
+        // populate `imported_symbols` from the other tracked files' current
+        // content, so cross-file diagnostics and navigation stay live.
+        // Implements [ANALYSIS-INCR-IMPORTS] via [CHKARCH-INCREMENTAL-SALSA].
         let root_key = self.config_root_key(path);
-        let analysis = self
-            .salsa_engine
-            .analyse(path, text, config, &root_key, &search_paths);
+        let cross_module = matches!(self.mode, AnalysisMode::CrossModule);
+        let analysis =
+            self.salsa_engine
+                .analyse(path, text, config, &root_key, &search_paths, cross_module);
         let hash = fnv1a(text);
 
         // Parse failure: surface BSK-PARSE, no navigable module (matches the
@@ -390,46 +393,15 @@ impl WorkspaceIndex {
     ) -> Vec<tower_lsp::lsp_types::Diagnostic> {
         let path = uri.to_file_path().unwrap_or_default();
 
-        // Capture cross-module data from the previous entry before overwriting.
-        let prev_cross_module = self.files.get(&path).and_then(|prev| {
-            prev.resolved.as_ref().map(|r| {
-                (
-                    r.imported_symbols.clone(),
-                    r.imports
-                        .iter()
-                        .filter_map(|imp| {
-                            imp.resolved_path
-                                .as_ref()
-                                .map(|p| (imp.module.clone(), p.clone()))
-                        })
-                        .collect::<Vec<_>>(),
-                )
-            })
-        });
-
+        // The analysis is authoritative: once search paths are known, the salsa
+        // engine resolves imports and (in cross-module mode) populates
+        // `imported_symbols` from the tracked files' current content — there is
+        // no stale prior state to restore, and carrying one forward would keep
+        // suppressing diagnostics for imports the edit just removed.
         let (entry, lsp_diags) = self.analyse_and_resolve(text, &path);
         let mut entry = entry;
         entry.is_open = true;
         entry.version = version;
-
-        // Restore cross-module symbols and resolved import paths from the
-        // previous entry so that goto-definition and other cross-module
-        // features keep working after didOpen re-parses the file.
-        if let Some((prev_symbols, prev_resolved_paths)) = prev_cross_module {
-            if let Some(ref mut resolved_arc) = entry.resolved {
-                let resolved = Arc::make_mut(resolved_arc);
-                if resolved.imported_symbols.is_empty() {
-                    resolved.imported_symbols = prev_symbols;
-                }
-                for (module, resolved_path) in prev_resolved_paths {
-                    for imp in &mut resolved.imports {
-                        if imp.module == module && imp.resolved_path.is_none() {
-                            imp.resolved_path = Some(resolved_path.clone());
-                        }
-                    }
-                }
-            }
-        }
 
         let _ = self.files.insert(path, entry);
         lsp_diags
@@ -570,27 +542,57 @@ impl WorkspaceIndex {
             .collect()
     }
 
-    /// Re-resolve every indexed file's imports against the cached search paths,
-    /// then re-check all files.
+    /// Re-analyse every indexed file through the salsa engine and return fresh
+    /// LSP diagnostics keyed by URI.
     ///
-    /// Called when the package layout changes (e.g. a new module is created) so
-    /// that files importing the new module stop reporting `imports_unresolved` without an
-    /// LSP reload. When no search paths are cached yet this degrades to a plain
-    /// recheck. Implements [ANALYSIS-INCR-IMPORTS].
+    /// Called when the resolution environment changes — a new module is
+    /// created, an open dependency's exports change, `uv.lock`/config edits —
+    /// so stale cross-file state clears without an LSP reload. The engine is
+    /// primed with every indexed file's **current** text first (open files
+    /// contribute their in-memory buffers), so the cross-file salsa edges see
+    /// the whole workspace; each file is then re-analysed through the memoized
+    /// queries, and only files whose inputs actually changed recompute — the
+    /// rest are revalidated memos ([CHKARCH-INCREMENTAL-SALSA]). When no search
+    /// paths are cached yet (before the first scan), degrades to a plain
+    /// recheck. Implements [ANALYSIS-INCR-IMPORTS] / [ANALYSIS-SYMBOLS-INVAL].
     #[must_use]
     pub fn reresolve_imports_and_recheck(
         &self,
     ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
-        if let Some(search_paths) = self.search_paths_snapshot() {
-            crate::import_resolver::resolve_workspace_imports(self, &search_paths);
+        if self.search_paths_snapshot().is_none() {
+            return self.recheck_all_files();
         }
-        // Implements [ANALYSIS-SYMBOLS-INVAL] (GitHub #56): refresh dependents'
-        // imported symbols so symbol-level diagnostics don't go stale.
+        self.salsa_engine.prime(
+            self.files
+                .iter()
+                .map(|entry| (entry.key().clone(), entry.value().text.clone())),
+        );
+
+        let paths: Vec<PathBuf> = self.files.iter().map(|entry| entry.key().clone()).collect();
+        let mut results = Vec::new();
+        for path in paths {
+            let Some((text, version, is_open)) = self
+                .files
+                .get(&path)
+                .map(|entry| (entry.text.clone(), entry.version, entry.is_open))
+            else {
+                continue;
+            };
+            let (mut entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
+            entry.version = version;
+            entry.is_open = is_open;
+            let _ = self.files.insert(path.clone(), entry);
+            if let Some(uri) = path_to_uri(&path) {
+                results.push((uri, lsp_diags));
+            }
+        }
+
+        // The import graph serves navigation's reverse lookups (cross-file
+        // references / rename); invalidation itself is salsa's job now.
         if matches!(self.mode, AnalysisMode::CrossModule) {
-            crate::cross_module::populate_cross_module_symbols(self);
             self.build_import_graph();
         }
-        self.recheck_all_files()
+        results
     }
 
     /// Reload one file from disk, reporting whether its exported top-level
@@ -703,51 +705,6 @@ impl WorkspaceIndex {
         };
         *graph = ImportGraph::new();
         graph.build_from_index(self);
-    }
-
-    /// Re-analyse files that transitively depend on a changed file.
-    ///
-    /// Returns `(uri, diagnostics)` pairs for all files that were re-analysed
-    /// due to the change. The changed file itself is NOT included (it should
-    /// already have been re-analysed by the caller).
-    // Implements [ANALYSIS-INDEX-INVAL] for the crossModule cascade — re-checks
-    // every transitive importer (via [ANALYSIS-GRAPH-TRANS]) of the changed file.
-    #[must_use]
-    pub fn invalidate_dependents(
-        &self,
-        changed_path: &std::path::Path,
-    ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
-        let importers = {
-            let Ok(graph) = self.import_graph.lock() else {
-                return vec![];
-            };
-            graph.transitive_importers(changed_path)
-        };
-
-        let mut results = Vec::new();
-        for importer_path in importers {
-            // Re-analyse using the stored text (could be in-memory or from disk).
-            let text = {
-                let Some(entry) = self.files.get(&importer_path) else {
-                    continue;
-                };
-                entry.text.clone()
-            };
-
-            let (new_entry, lsp_diags) = self.analyse_and_resolve(&text, &importer_path);
-            let version = self.files.get(&importer_path).map_or(0, |e| e.version);
-            let is_open = self.files.get(&importer_path).is_some_and(|e| e.is_open);
-            let mut entry = new_entry;
-            entry.version = version;
-            entry.is_open = is_open;
-            let _ = self.files.insert(importer_path.clone(), entry);
-
-            if let Some(uri) = path_to_uri(&importer_path) {
-                results.push((uri, lsp_diags));
-            }
-        }
-
-        results
     }
 
     /// Map uv workspace members to LSP workspace folder URIs.
@@ -1389,11 +1346,9 @@ mod tests {
         let uri = make_uri(&format!("{}/app.py", dir.display()));
         let _ = idx.set_open(&uri, "import flask\n", 1);
 
-        // Resolve with registry that does NOT have flask.
+        // Resolve with registry that does NOT have flask: the flask import
+        // should be unresolved (E0010).
         rebuild_and_resolve_imports(&idx, &roots, &config);
-
-        // Re-check: flask import should be unresolved (E0010).
-        recheck_all(&idx);
         let diags_before = get_diagnostics(&idx, &uri);
         assert!(
             has_diag(&diags_before, "imports_unresolved", "flask"),
@@ -1407,7 +1362,6 @@ mod tests {
         std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
 
         rebuild_and_resolve_imports(&idx, &roots, &config);
-        recheck_all(&idx);
 
         // After adding flask to the registry, classify_unresolved should now
         // return NeedsSync (in registry but not on filesystem) instead of
@@ -1440,7 +1394,6 @@ mod tests {
 
         // Resolve with registry that HAS flask.
         rebuild_and_resolve_imports(&idx, &roots, &config);
-        recheck_all(&idx);
 
         // Now remove flask from the lock file.
         write_uv_lock(&dir, &[("requests", "2.31.0")]);
@@ -1448,7 +1401,6 @@ mod tests {
         std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
 
         rebuild_and_resolve_imports(&idx, &roots, &config);
-        recheck_all(&idx);
 
         let diags = get_diagnostics(&idx, &uri);
         assert!(
@@ -1497,8 +1449,8 @@ mod tests {
         let search_paths = crate::import_resolver::search_paths_from_config(
             &roots, &config, /*registry=*/ None,
         );
-        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
-        recheck_all(&idx);
+        idx.set_search_paths(search_paths);
+        let _ = idx.reresolve_imports_and_recheck();
 
         let diags = get_diagnostics(&idx, &uri);
         assert!(
@@ -1587,8 +1539,8 @@ mod tests {
         let search_paths = crate::import_resolver::search_paths_from_config(
             &roots, &config, /*registry=*/ None,
         );
-        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
-        recheck_all(&idx);
+        idx.set_search_paths(search_paths);
+        let _ = idx.reresolve_imports_and_recheck();
 
         // tests/helpers.py — imports agent_backend.db.models (via src/).
         let helpers_diags = get_diagnostics(&idx, &helpers_uri);
@@ -1819,9 +1771,9 @@ mod tests {
         Some(Arc::new(registry))
     }
 
-    /// Build the registry from `roots`, derive `ImportSearchPaths`, and run
-    /// `resolve_workspace_imports` against `idx`. Collapses the three-line
-    /// import-resolution dance that every workspace test repeats.
+    /// Build the registry from `roots`, derive `ImportSearchPaths`, cache them
+    /// on the index, and re-analyse the workspace through the salsa engine —
+    /// the same flow the LSP scan and config-watcher paths run.
     fn rebuild_and_resolve_imports(
         idx: &WorkspaceIndex,
         roots: &[std::path::PathBuf],
@@ -1830,18 +1782,8 @@ mod tests {
         let registry = build_registry_from_roots(roots);
         let search_paths =
             crate::import_resolver::search_paths_from_config(roots, config, registry);
-        crate::import_resolver::resolve_workspace_imports(idx, &search_paths);
-    }
-
-    /// Re-check all files in the workspace index and update their diagnostics.
-    fn recheck_all(index: &WorkspaceIndex) {
-        for mut entry in index.files.iter_mut() {
-            let Some(resolved) = &entry.resolved else {
-                continue;
-            };
-            let checker_diags = basilisk_checker::check(resolved);
-            entry.diagnostics = checker_diags;
-        }
+        idx.set_search_paths(search_paths);
+        let _ = idx.reresolve_imports_and_recheck();
     }
 
     /// Extract checker diagnostics for a given URI from the workspace index.

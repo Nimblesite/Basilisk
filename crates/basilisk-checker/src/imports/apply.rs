@@ -11,9 +11,9 @@ use super::ImportSearchPaths;
 /// Resolve every import in a single module against the search paths, in place.
 ///
 /// Sets each `ImportInfo`'s `resolution`, `resolved_path`, `unresolved_reason`,
-/// and uv package metadata. Shared by the whole-workspace scan
-/// (`resolve_workspace_imports`) and the incremental single-file analysis
-/// path so both agree on what resolves — preventing false `imports_unresolved` in the
+/// and uv package metadata. Shared by the CLI's batch pipeline and the salsa
+/// `resolved_module` query so both agree on what resolves — preventing false
+/// `imports_unresolved` in the
 /// editor for third-party imports that the CLI resolves.
 /// Implements [ANALYSIS-INCR-IMPORTS].
 pub fn resolve_module_imports(

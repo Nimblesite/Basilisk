@@ -35,7 +35,6 @@ pub mod color;
 pub mod completion;
 pub mod config;
 pub mod coverage;
-pub mod cross_module;
 pub mod debug;
 pub mod declaration;
 pub mod definition;

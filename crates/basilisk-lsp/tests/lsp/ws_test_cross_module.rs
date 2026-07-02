@@ -227,7 +227,7 @@ async fn cross_module_class_import() -> TestResult<()> {
 
 // ---------------------------------------------------------------------------
 // Cross-module: circular import detection
-// Exercises [ANALYSIS-GRAPH-CYCLES] / [ANALYSIS-ERRORS] (detect, don't crash).
+// Exercises [ANALYSIS-ERRORS] (circular imports must not crash or hang).
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -967,16 +967,12 @@ fn is_thing_undefined(d: &serde_json::Value) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// KNOWN LIMITATION (characterization test): the salsa cross-file recapture
-// (`recapture_user_stub_from_source`, proven at the checker level in
-// `incremental_resolved_tests::editing_a_user_stub_updates_the_importer_diagnostics`)
-// is NOT wired into the LSP's dependent-refresh. When a dependency changes, the
-// LSP refreshes importers via `set_open_refresh_dependents` →
-// `reresolve_imports_and_recheck`, a disk-based, non-salsa pass — so an
-// in-memory edit to an open user-stub `.pyi` does NOT update its importer.
-// This test PINS that current boundary: when cross-module analysis moves into the
-// salsa query, editing the stub should clear the importer's error and this
-// assertion must be flipped. See [CHKARCH-INCREMENTAL-SALSA].
+// Cross-file incrementality, end-to-end through salsa: the dependent refresh
+// runs importers through the salsa engine, whose `resolved_module` query reads
+// the imported stub's tracked `SourceFile` text and re-captures its API
+// (`recapture_user_stub_from_source`). An in-memory edit to an OPEN user-stub
+// `.pyi` therefore updates its importer's diagnostics live — the disk stays
+// stale throughout. See [CHKARCH-INCREMENTAL-SALSA].
 // ---------------------------------------------------------------------------
 
 /// True iff the diagnostic is an `imports_module_attribute` error.
@@ -996,7 +992,7 @@ fn importer_has_attr_error(
 }
 
 #[tokio::test]
-async fn editing_open_stub_does_not_yet_refresh_importer_via_salsa() -> TestResult<()> {
+async fn editing_open_stub_refreshes_importer_via_salsa() -> TestResult<()> {
     // A user stub under `.basilisk/stubs/` (auto-added to stub-paths) declares
     // only `foo`; `a.py` accesses `xmod.bar`, which is undeclared.
     let (dir, root_uri) = setup_cross_module_workspace(&[
@@ -1040,24 +1036,24 @@ async fn editing_open_stub_does_not_yet_refresh_importer_via_salsa() -> TestResu
         }))
         .await?;
 
-    // CURRENT BEHAVIOUR: the importer's error is NOT cleared by the in-memory
-    // stub edit — the dependent refresh is disk-based (stub still declares only
-    // `foo` on disk), and the salsa cross-file edge is bypassed. If `a.py` is
-    // re-published it still carries the error; if it is not re-published its prior
-    // erroring state stands. Either way the error is not cleared.
+    // The dependent refresh must re-publish a.py WITHOUT the attribute error:
+    // the importer is re-analysed through salsa, whose cross-file edge reads the
+    // stub's in-memory `SourceFile` text (now declaring `bar`) — the stale disk
+    // content must not win.
     let after = collect_all_diagnostics(&mut fixture).await;
-    if let Some(a_after) = after.get(&a_uri) {
-        let empty = vec![];
-        let diagnostics = a_after["params"]["diagnostics"]
-            .as_array()
-            .unwrap_or(&empty);
-        assert!(
-            diagnostics.iter().any(is_module_attr_error),
-            "KNOWN LIMITATION: an in-memory stub edit is not (yet) reflected in the importer via \
-             salsa — the dependent refresh reads disk. If this now clears, cross-file has been \
-             wired into the LSP and the test should assert the clear. Got: {diagnostics:#?}"
-        );
-    }
+    let a_after = after
+        .get(&a_uri)
+        .ok_or("a.py diagnostics not re-published after the in-memory stub edit")?;
+    let empty = vec![];
+    let diagnostics = a_after["params"]["diagnostics"]
+        .as_array()
+        .unwrap_or(&empty);
+    assert!(
+        !diagnostics.iter().any(is_module_attr_error),
+        "an in-memory edit to the OPEN stub must clear the importer's \
+         imports_module_attribute via the salsa cross-file edge (disk is stale) — got: \
+         {diagnostics:#?}"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
     Ok(())

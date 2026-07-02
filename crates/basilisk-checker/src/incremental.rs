@@ -238,6 +238,115 @@ fn register_import_dependencies(
     }
 }
 
+/// A module's exported top-level symbols — the value of the [`module_exports`]
+/// query.
+///
+/// `PartialEq` gives it salsa's `Update` via the fallback, and — more
+/// importantly — enables **backdating**: when an edit re-runs [`module_exports`]
+/// but the export set is unchanged (a function-body edit), salsa marks the
+/// result unchanged and every importer's [`cross_resolved_module`] memo stays
+/// valid without re-executing. Export-set edits are the only cross-file edits
+/// that propagate.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ModuleExports(pub Vec<(String, basilisk_resolver::scope::ExternalSymbol)>);
+
+/// Tracked query: the exported top-level symbols of one workspace file, from
+/// its tracked source text.
+///
+/// Runs its **own** parse + resolve (deliberately *not* [`resolved_module`]:
+/// exports need no import resolution, and depending on the full resolved module
+/// would make mutually-importing files a salsa cycle). A file that fails to
+/// parse or resolve exports nothing.
+#[salsa::tracked(returns(ref))]
+pub fn module_exports(db: &dyn Db, file: SourceFile) -> ModuleExports {
+    let Ok(parsed) = basilisk_parser::parse_source(file.text(db).clone(), file.path(db).clone())
+    else {
+        return ModuleExports::default();
+    };
+    let Ok(resolved) = basilisk_resolver::resolve(&parsed) else {
+        return ModuleExports::default();
+    };
+    let path = std::path::PathBuf::from(file.path(db));
+    ModuleExports(crate::exports::extract_exports(&resolved, &path))
+}
+
+/// Tracked query: the **cross-module** resolved view of one file —
+/// [`resolved_module`] plus `imported_symbols` populated from what its imports
+/// actually export.
+///
+/// Workspace-tracked imports resolve through the memoized [`module_exports`],
+/// which records a salsa edge **on the export set** rather than the raw text:
+/// a body-only edit to an imported file backdates to "unchanged exports" and
+/// this query's memo survives. Imports outside the workspace fall back to
+/// on-demand disk parsing of `.pyi` stubs and PEP 561 `py.typed` packages —
+/// untracked reads, mirroring the
+/// [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS) boundary (they
+/// refresh when the `SearchPathsInput`/`WorkspaceFiles` inputs are re-set).
+///
+/// This is deliberately a **separate query** from [`resolved_module`]: the
+/// plain query stays byte-for-byte equivalent to the CLI pipeline (which never
+/// populates `imported_symbols`), so the LSP's non-cross-module modes keep CLI
+/// parity, while cross-module mode opts into this richer view.
+#[salsa::tracked(returns(ref))]
+pub fn cross_resolved_module(
+    db: &dyn Db,
+    file: SourceFile,
+    search_paths: SearchPathsInput,
+    workspace: WorkspaceFiles,
+) -> ResolvedFile {
+    let base = resolved_module(db, file, search_paths, workspace);
+    let ResolvedFile::Resolved(module) = base else {
+        return base.clone();
+    };
+    let mut resolved = (**module).clone();
+    let registry = workspace.files(db);
+    crate::exports::populate_imported_symbols(&mut resolved, |path| {
+        registry
+            .0
+            .get(path)
+            .map(|imported| module_exports(db, *imported).0.as_slice())
+    });
+    ResolvedFile::Resolved(std::sync::Arc::new(resolved))
+}
+
+/// Tracked query: the **cross-module** diagnostics for one file — a thin
+/// `check_with_config` over [`cross_resolved_module`], so checker rules see the
+/// `imported_symbols` populated from other workspace files' current (in-memory)
+/// content.
+#[salsa::tracked(returns(ref))]
+pub fn checked_file_cross(
+    db: &dyn Db,
+    file: SourceFile,
+    config: ConfigInput,
+    search_paths: SearchPathsInput,
+    workspace: WorkspaceFiles,
+) -> Vec<CachedDiagnostic> {
+    let ResolvedFile::Resolved(resolved) = cross_resolved_module(db, file, search_paths, workspace)
+    else {
+        return Vec::new();
+    };
+    crate::check_with_config(resolved, &config.value(db).0)
+        .iter()
+        .map(CachedDiagnostic::from)
+        .collect()
+}
+
+/// Run [`checked_file_cross`] and materialise owned [`Diagnostic`]s.
+#[must_use]
+pub fn file_diagnostics_cross(
+    db: &dyn Db,
+    file: SourceFile,
+    config: ConfigInput,
+    search_paths: SearchPathsInput,
+    workspace: WorkspaceFiles,
+) -> Vec<Diagnostic> {
+    checked_file_cross(db, file, config, search_paths, workspace)
+        .iter()
+        .cloned()
+        .map(CachedDiagnostic::into_diagnostic)
+        .collect()
+}
+
 /// Tracked query: the **import-resolved** diagnostics for one file, memoized by
 /// salsa and keyed on the `(file, config, search_paths)` triple.
 ///

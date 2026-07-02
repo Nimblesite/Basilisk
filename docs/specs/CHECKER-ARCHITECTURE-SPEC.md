@@ -260,7 +260,7 @@ The `# type:` prefix keeps compatibility with tools that recognize `# type: igno
 
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
-Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->f6e2e58<!--/g:short-->`](https://github.com/python/typing/tree/f6e2e588880a057a939cee76c6c919aebd4db37c/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
+Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->c94dfce<!--/g:short-->`](https://github.com/python/typing/tree/c94dfceff0af70c6626a1f86bc8f979135ae4652/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
 
 #### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
@@ -935,11 +935,19 @@ checking.
   resolve → check_with_config`, keyed on `(file, config)` — the **pure**,
   import-free pipeline. `checked_file_resolved` additionally runs
   `resolve_module_imports` between resolve and check, keyed on `(file, config,
-  search_paths)` — the **full** pipeline the batch CLI runs. Granularity is
-  **module-level**: each pipeline is fused into one tracked query per file,
-  matching the `Module-level` granularity row in [CHKARCH-MATRIX]. Editing one
-  file — or the configuration, or the search paths — re-executes only the
-  affected queries; unrelated files are served from their memos.
+  search_paths)` — the **full** pipeline the batch CLI runs. Two further
+  queries carry the cross-module view: `module_exports(file)` derives a
+  workspace file's exported symbols from its tracked text (its `PartialEq`
+  value enables **backdating** — a body-only edit re-derives an equal export
+  set and every importer's memo stays valid), and `cross_resolved_module` /
+  `checked_file_cross` layer `imported_symbols` population
+  (`crates/basilisk-checker/src/exports.rs`) over `resolved_module`, resolving
+  workspace-tracked imports through `module_exports` and external `.pyi` /
+  PEP 561 `py.typed` sources from disk. Granularity is **module-level**: each
+  pipeline is fused into one tracked query per file, matching the
+  `Module-level` granularity row in [CHKARCH-MATRIX]. Editing one file — or the
+  configuration, or the search paths — re-executes only the affected queries;
+  unrelated files are served from their memos.
 
 The value type is the owned `CachedDiagnostic` (it satisfies salsa's `Update`
 bound), so the engine adds **no** salsa dependency to `basilisk-resolver` or
@@ -974,47 +982,57 @@ workspace-tracked **user-stub `.pyi`**, the query re-derives the stub's API from
 that in-memory text (`recapture_user_stub_from_source`), so editing the stub's
 content updates the importer's `imports_module_attribute` diagnostics — a
 cross-file edge that changes *output*, not just triggers a re-run
-(`editing_a_user_stub_updates_the_importer_diagnostics`). **This is proven at the
-checker level only — it is NOT yet live in the LSP.** The LSP populates
-`WorkspaceFiles` from its open documents, but when a dependency changes it
-refreshes importers through `set_open_refresh_dependents` →
-`reresolve_imports_and_recheck`, a disk-based non-salsa pass that bypasses the
-recapture; the characterization test
-`editing_open_stub_does_not_yet_refresh_importer_via_salsa` pins that boundary.
-What remains **untracked** (mirroring
+(`editing_a_user_stub_updates_the_importer_diagnostics` at the checker level;
+`editing_open_stub_refreshes_importer_via_salsa` proves it end-to-end through
+the LSP with the disk left stale). Sibling `.py` **type/symbol** sharing flows
+through `cross_resolved_module`: workspace imports depend on the imported
+file's `module_exports`, so an export edit updates the importers' diagnostics
+from tracked (possibly unsaved) content while a body-only edit backdates and
+re-checks nothing
+(`body_edit_backdates_exports_and_export_edit_propagates`,
+`crates/basilisk-checker/tests/incremental_cross_tests.rs`). What remains
+**untracked** (mirroring
 [CHKCACHE-LIMITS](CHECKER-CACHE-SPEC.md#CHKCACHE-LIMITS)):
-`resolve_module_imports`' existence probes and the content of files *outside* the
-workspace (third-party packages, venv site-packages) — those invalidate only on
-a re-set `SearchPathsInput` / `WorkspaceFiles`. Sibling `.py` **type** sharing
-still flows through the LSP's separate cross-module pass, not the query, so
-editing a dependency's signatures does not yet update its importers' type errors
-incrementally; moving that into the query is the remaining step.
+`resolve_module_imports`' existence probes and the content of files *outside*
+the workspace (third-party packages, venv site-packages, external stubs) —
+those invalidate only on a re-set `SearchPathsInput` / `WorkspaceFiles`.
 
-**LSP adoption.** The LSP now drives its **interactive single-file analysis**
-through the engine. `basilisk-lsp`'s `SalsaAnalysisEngine` (`salsa_engine.rs`)
-holds a persistent [`BasiliskDatabase`] plus the input handles (one `SourceFile`
-per file, one `ConfigInput` per root, one `SearchPathsInput`), sets them to the
-current values on each analysis, and reads [`resolved_module`] (for
-navigation — hover / references / go-to-definition) and
-[`file_diagnostics_resolved`] (for diagnostics). `WorkspaceIndex::analyse_and_resolve`
-routes the `didOpen`/`didChange` path through it once the workspace scan has
-populated the search paths; the pre-scan import-free path is unchanged. This is
-behaviour-preserving — the full LSP e2e suite stays green, and the path is
-genuinely exercised (instrumentation counted 61 engine hits in `ws_core_tests`).
-`ResolvedModule` (and its transitively-contained types) derive `PartialEq` so
-`Arc<ResolvedModule>` satisfies salsa's `Update` bound via the fallback, keeping
-`basilisk-resolver` salsa-free.
+**LSP adoption.** The engine is the LSP's analysis path once the workspace scan
+has built the search paths. `basilisk-lsp`'s `SalsaAnalysisEngine`
+(`salsa_engine.rs`) holds a persistent [`BasiliskDatabase`] plus the input
+handles (one `SourceFile` per file, one `ConfigInput` per root, one
+`SearchPathsInput`, one `WorkspaceFiles` registry), sets them to the current
+values on each analysis, and reads the resolved-module query (for navigation —
+hover / references / go-to-definition) and its diagnostics projection; in
+`crossModule` mode these are the cross-module variants (`cross_resolved_module`
+/ `file_diagnostics_cross`), elsewhere the plain CLI-parity pair.
+`WorkspaceIndex::analyse_and_resolve` routes the `didOpen`/`didChange` path
+through it, and `WorkspaceIndex::reresolve_imports_and_recheck` — the
+post-scan re-check, the config/`uv.lock` refresh, and the dependent refresh
+when an edited file's exports change — is a **salsa sweep**: it primes the
+engine with every indexed file's current text (open buffers included) and
+re-analyses each file through the memoized queries, so only files whose
+dependencies actually changed recompute. The pre-scan import-free path is
+unchanged. `ResolvedModule` (and its transitively-contained types) derive
+`PartialEq` so `Arc<ResolvedModule>` satisfies salsa's `Update` bound via the
+fallback, keeping `basilisk-resolver` salsa-free.
 
-**Honest scope — additive, not a replacement.** The engine runs *alongside* the
-LSP's existing machinery (the `FileEntry` index, `cross_module.rs`,
-`import_graph.rs`, and the non-salsa bulk scan / dependent-refresh), replacing
-none of it; `FileEntry.resolved` shares the salsa memo's `Arc<ResolvedModule>`
-(no duplication). Its incremental win over the existing per-file cache is
-therefore *situational* — config-only edits skip re-parse/resolve, and unaffected
-transitive importers become memo-hits — not a general speedup on single-file
-edits. Engine `SourceFile`/registry bookkeeping is dropped on file deletion
+**What the engine replaced, and what remains outside it.** The former LSP-side
+cross-module machinery is gone: `cross_module.rs` (two-pass
+`populate_cross_module_symbols`) and `resolve_workspace_imports` were retired
+in favour of the queries above, and `import_graph.rs` is reduced to the
+navigation handlers' reverse lookups ([ANALYSIS-GRAPH]) — invalidation no
+longer walks the graph. Still outside salsa: the initial `scan()` first pass
+(runs before search paths exist; its results are superseded by the sweep in
+the same startup sequence), the `FileEntry` index itself (the LSP-side store —
+`FileEntry.resolved` shares the salsa memo's `Arc<ResolvedModule>`, no
+duplication), and the no-search-paths degrade path (`recheck_all_files`).
+Engine `SourceFile`/registry bookkeeping is dropped on file deletion
 (`SalsaAnalysisEngine::remove`), though salsa 0.27 cannot reclaim an input's
-internal memo, so a deleted file's memo lingers until the database is dropped.
+internal memo, so a deleted file's memo lingers until the database is dropped;
+the database's memory footprint scales with the workspace (every analysed
+file's inputs and memos stay resident for the session — the standard
+incremental-engine trade).
 
 **Scope — the CLI/conformance path is deliberately unchanged.** The batch CLI
 (`process_file`) still runs the direct pipeline, so this work **cannot affect the
@@ -1022,11 +1040,16 @@ conformance score**. Routing the CLI (and the LSP's bulk scan) through the engin
 is future work — the CLI is the conformance path (must prove byte-for-byte parity
 first) and, being one-shot, reuses no memos. The engine is a public API
 (`basilisk_checker::{BasiliskDatabase, SourceFile, ConfigInput, ConfigValue,
-SearchPathsInput, checked_file, file_diagnostics, resolved_module,
-checked_file_resolved, file_diagnostics_resolved}`).
+SearchPathsInput, WorkspaceFiles, ModuleExports, checked_file,
+file_diagnostics, resolved_module, module_exports, cross_resolved_module,
+checked_file_resolved, checked_file_cross, file_diagnostics_resolved,
+file_diagnostics_cross}`).
 
 Incremental behaviour is proven by `crates/basilisk-db/tests/db_tests.rs`
-(memoization, invalidation, cross-file isolation) and the checker tests above.
+(memoization, invalidation, cross-file isolation) and the checker tests above,
+plus `crates/basilisk-checker/tests/incremental_cross_tests.rs` (cross-module
+population semantics, PEP 561 gating, backdating, in-memory export
+propagation).
 
 ### Cancellation {#CHKARCH-INCREMENTAL-CANCEL}
 
@@ -1403,7 +1426,7 @@ the reference checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are grade
   **down**. Per-file results are written to `conformance/conformance_status.csv`.
 - **Current score** — measured against `python/typing@main` at the exact graded
   commit recorded in `conformance_report.json`, currently
-  [`<!--g:short-->f6e2e58<!--/g:short-->`](https://github.com/python/typing/tree/f6e2e588880a057a939cee76c6c919aebd4db37c/conformance):
+  [`<!--g:short-->c94dfce<!--/g:short-->`](https://github.com/python/typing/tree/c94dfceff0af70c6626a1f86bc8f979135ae4652/conformance):
   **<!--g:pass-->141<!--/g:pass--> / <!--g:total-->141<!--/g:total--> = <!--g:score-->100.0%<!--/g:score-->**, **<!--g:fp-->0<!--/g:fp--> false positives**, **<!--g:missed-->0<!--/g:missed--> missed required errors**, with
   **<!--g:caught-->970<!--/g:caught-->** required errors caught. The binary runs in its default configuration — the
   PEP conformance set — and `score.py` deletes any `basilisk.json` first so nothing

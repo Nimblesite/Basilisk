@@ -425,7 +425,7 @@ async fn rescan_after_enable(server: &LspServer) {
             // each one (the gate is already back on, so publishing is correct).
             let guard = server.index.read().await;
             let Some(index) = guard.as_ref() else { return };
-            let results = recheck_with_cross_module_symbols(index);
+            let results = index.recheck_all_files();
             drop(guard);
             for (uri, diags) in results {
                 server.publish_diagnostics_if_enabled(uri, diags).await;
@@ -613,23 +613,22 @@ fn scan_resolve_and_check_with_roots(
         has_registry = search_paths.registry.is_some(),
         "built LSP import search paths"
     );
-    crate::import_resolver::resolve_workspace_imports(index, &search_paths);
     // Cache the search paths so incremental single-file re-checks (didOpen /
     // didChange) resolve third-party imports identically to this scan, instead
     // of resurrecting false imports_unresolved. Implements [ANALYSIS-INCR-IMPORTS].
     index.set_search_paths(search_paths);
 
-    // Re-check all files now that imports are resolved. The initial scan()
-    // generates diagnostics before workspace members are known, so imports_unresolved
-    // fires for imports that are actually resolvable via workspace members.
-    let diagnostics = if matches!(index.mode, AnalysisMode::CrossModule) {
-        crate::cross_module::populate_cross_module_symbols(index);
-        index.build_import_graph();
-        info!("cross-module symbol population complete");
-        recheck_with_cross_module_symbols(index)
-    } else {
-        recheck_with_cross_module_symbols(index)
-    };
+    // Re-analyse every scanned file through the salsa engine now that the
+    // search paths are known. The initial scan() generates diagnostics before
+    // workspace members are known, so imports_unresolved fires for imports that
+    // are actually resolvable — the sweep replaces those results with
+    // import-resolved (and, in crossModule mode, cross-module-populated)
+    // diagnostics, and primes the engine so subsequent edits are incremental.
+    // Implements [CHKARCH-INCREMENTAL-SALSA] adoption.
+    let diagnostics = index.reresolve_imports_and_recheck();
+    if matches!(index.mode, AnalysisMode::CrossModule) {
+        info!("cross-module analysis complete");
+    }
 
     // Recount errors after re-check (resolved imports reduce false E0010s).
     let final_error_count: usize = diagnostics
@@ -668,38 +667,6 @@ async fn clear_non_open_diagnostics(server: &LspServer) {
     for uri in to_clear {
         server.client.publish_diagnostics(uri, vec![], None).await;
     }
-}
-
-/// Re-check all workspace files using their current `ResolvedModule` (which now
-/// contains cross-module `imported_symbols`). Returns fresh LSP diagnostics.
-///
-/// This is called after `populate_cross_module_symbols()` so that checker rules
-/// can see imported symbols from other modules.
-fn recheck_with_cross_module_symbols(
-    index: &WorkspaceIndex,
-) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
-    let mut results = Vec::new();
-
-    for mut entry in index.files.iter_mut() {
-        let Some(resolved) = &entry.resolved else {
-            continue;
-        };
-
-        let file_config = index.config_for_file(entry.key());
-        let checker_diags = basilisk_checker::check_with_config(resolved, file_config);
-        let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
-            .iter()
-            .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
-            .collect();
-
-        entry.diagnostics = checker_diags;
-
-        if let Some(uri) = crate::workspace_scan::path_to_uri(entry.key()) {
-            results.push((uri, lsp_diags));
-        }
-    }
-
-    results
 }
 
 /// Detect a uv project and build a [`PackageRegistry`] from its lock file.
@@ -762,29 +729,15 @@ pub(super) async fn rebuild_registry_and_resolve(server: &LspServer) {
 
     let registry = build_uv_registry(&roots);
     let search_paths = crate::import_resolver::search_paths_from_config(&roots, &config, registry);
-    crate::import_resolver::resolve_workspace_imports(index, &search_paths);
     // Refresh the cached search paths so subsequent incremental re-checks pick
     // up the rebuilt registry / venv. Implements [ANALYSIS-INCR-IMPORTS].
     index.set_search_paths(search_paths);
     drop(roots);
 
-    // Re-check all files and publish updated diagnostics.
-    let results: Vec<_> = index
-        .files
-        .iter_mut()
-        .filter_map(|mut entry| {
-            let resolved = entry.resolved.as_ref()?;
-            let file_config = index.config_for_file(entry.key());
-            let checker_diags = basilisk_checker::check_with_config(resolved, file_config);
-            let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
-                .iter()
-                .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
-                .collect();
-            entry.diagnostics = checker_diags;
-            let uri = crate::workspace_scan::path_to_uri(entry.key())?;
-            Some((uri, lsp_diags))
-        })
-        .collect();
+    // Re-analyse all files through the salsa engine (the changed
+    // `SearchPathsInput` invalidates exactly the import-resolving queries) and
+    // publish updated diagnostics.
+    let results = index.reresolve_imports_and_recheck();
 
     drop(guard);
 

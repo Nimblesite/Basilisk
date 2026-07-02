@@ -18,8 +18,9 @@ use std::sync::{Arc, Mutex};
 
 use basilisk_checker::imports::ImportSearchPaths;
 use basilisk_checker::{
-    file_diagnostics_resolved, resolved_module, BasiliskDatabase, ConfigInput, ConfigValue,
-    Diagnostic, FileRegistry, ResolvedFile, SearchPathsInput, SourceFile, WorkspaceFiles,
+    cross_resolved_module, file_diagnostics_cross, file_diagnostics_resolved, resolved_module,
+    BasiliskDatabase, ConfigInput, ConfigValue, Diagnostic, FileRegistry, ResolvedFile,
+    SearchPathsInput, SourceFile, WorkspaceFiles,
 };
 use basilisk_config::BasiliskConfig;
 use dashmap::DashMap;
@@ -82,6 +83,12 @@ impl SalsaAnalysisEngine {
     /// against `search_paths`.
     ///
     /// `root_key` is the file's owning workspace root (the config-input key).
+    /// With `cross_module` set, analysis runs through the cross-module queries
+    /// ([`cross_resolved_module`] / [`file_diagnostics_cross`]): the resolved
+    /// module carries `imported_symbols` populated from the other tracked
+    /// files' **current** content, and editing an imported file's exports
+    /// invalidates exactly its importers. Without it, the plain queries keep
+    /// byte-for-byte CLI parity. [CHKARCH-INCREMENTAL-SALSA]
     pub(crate) fn analyse(
         &self,
         path: &Path,
@@ -89,6 +96,7 @@ impl SalsaAnalysisEngine {
         config: &BasiliskConfig,
         root_key: &Path,
         search_paths: &ImportSearchPaths,
+        cross_module: bool,
     ) -> EngineAnalysis {
         let path_str = path.to_string_lossy().into_owned();
 
@@ -104,7 +112,12 @@ impl SalsaAnalysisEngine {
 
         // One memoized parse+resolve, whose outcome distinguishes a parse error
         // (→ BSK-PARSE) from a resolve error (→ nothing) from a resolved module.
-        match resolved_module(&*db, source, search_paths_input, workspace) {
+        let outcome = if cross_module {
+            cross_resolved_module(&*db, source, search_paths_input, workspace)
+        } else {
+            resolved_module(&*db, source, search_paths_input, workspace)
+        };
+        match outcome {
             ResolvedFile::ParseError(message) => EngineAnalysis {
                 resolved: None,
                 diagnostics: Vec::new(),
@@ -117,19 +130,49 @@ impl SalsaAnalysisEngine {
             },
             ResolvedFile::Resolved(module) => {
                 let resolved = Some(Arc::clone(module));
-                let diagnostics = file_diagnostics_resolved(
-                    &*db,
-                    source,
-                    config_input,
-                    search_paths_input,
-                    workspace,
-                );
+                let diagnostics = if cross_module {
+                    file_diagnostics_cross(
+                        &*db,
+                        source,
+                        config_input,
+                        search_paths_input,
+                        workspace,
+                    )
+                } else {
+                    file_diagnostics_resolved(
+                        &*db,
+                        source,
+                        config_input,
+                        search_paths_input,
+                        workspace,
+                    )
+                };
                 EngineAnalysis {
                     resolved,
                     diagnostics,
                     parse_error: None,
                 }
             }
+        }
+    }
+
+    /// Bulk-register `files` as tracked `SourceFile` inputs ahead of a sweep.
+    ///
+    /// A workspace-wide re-analysis calls this once with every indexed file so
+    /// the registry is rebuilt a single time (the first subsequent [`Self::analyse`])
+    /// instead of once per newly-seen file — and so every cross-file edge sees
+    /// every workspace file from the very first query.
+    pub(crate) fn prime<I>(&self, files: I)
+    where
+        I: IntoIterator<Item = (PathBuf, String)>,
+    {
+        let mut db = self
+            .db
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for (path, text) in files {
+            let path_str = path.to_string_lossy().into_owned();
+            let _ = self.source_for(&mut db, &path, &path_str, &text);
         }
     }
 
@@ -275,7 +318,7 @@ mod tests {
         let path = Path::new("/tmp/bsk_engine_remove/a.py");
         let root = Path::new("/tmp/bsk_engine_remove");
 
-        let _ = engine.analyse(path, "x = 1\n", &config, root, &sp);
+        let _ = engine.analyse(path, "x = 1\n", &config, root, &sp, false);
         assert_eq!(
             engine.tracked_source_count(),
             1,

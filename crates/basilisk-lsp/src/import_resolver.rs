@@ -7,17 +7,16 @@
 //! `basilisk_checker::imports` so the memoized checker query can fold it in
 //! ([CHKARCH-INCREMENTAL-SALSA]); it is re-exported below so
 //! `basilisk_lsp::import_resolver::*` stays a stable path for the CLI and tests.
-//! This module keeps only the parts that depend on the LSP's `WorkspaceConfig`
-//! and `WorkspaceIndex`: building an [`ImportSearchPaths`] from config
-//! (`search_paths_from_config`), venv / site-packages discovery, and the
-//! whole-workspace scan (`resolve_workspace_imports`).
+//! This module keeps only the parts that depend on the LSP's
+//! `WorkspaceConfig`: building an [`ImportSearchPaths`] from config
+//! (`search_paths_from_config`) and venv / site-packages discovery. The
+//! whole-workspace re-analysis itself runs through the salsa engine
+//! (`WorkspaceIndex::reresolve_imports_and_recheck`).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use basilisk_uv::PackageRegistry;
-
-use crate::workspace::WorkspaceIndex;
 
 // The pure import engine, hoisted to basilisk-checker. Re-exported so existing
 // callers (`basilisk_lsp::import_resolver::X`) keep resolving unchanged.
@@ -190,21 +189,6 @@ fn find_venv_dir(roots: &[PathBuf], config: &crate::config::WorkspaceConfig) -> 
         }
     }
     None
-}
-
-/// Resolve imports for all files in the workspace index.
-///
-/// Iterates every file in the index, resolves each `ImportInfo`, and updates
-/// its `resolution`, `resolved_path`, and `package_dep_kind` fields in place.
-pub fn resolve_workspace_imports(index: &WorkspaceIndex, search_paths: &ImportSearchPaths) {
-    for mut entry in index.files.iter_mut() {
-        let Some(resolved_arc) = entry.value_mut().resolved.take() else {
-            continue;
-        };
-        let mut resolved = Arc::try_unwrap(resolved_arc).unwrap_or_else(|arc| (*arc).clone());
-        resolve_module_imports(&mut resolved, search_paths);
-        entry.value_mut().resolved = Some(Arc::new(resolved));
-    }
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────

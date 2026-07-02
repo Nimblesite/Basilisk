@@ -30,6 +30,7 @@ pub mod cached;
 pub mod collection_inference;
 pub mod context;
 pub mod diagnostic;
+pub mod exports;
 pub mod imports;
 pub mod incremental;
 pub mod inference;
@@ -43,9 +44,10 @@ pub mod types_parsing;
 pub use cached::CachedDiagnostic;
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};
 pub use incremental::{
-    checked_file, checked_file_resolved, file_diagnostics, file_diagnostics_resolved,
-    resolved_module, ConfigInput, ConfigValue, FileRegistry, ResolvedFile, SearchPathsInput,
-    WorkspaceFiles,
+    checked_file, checked_file_cross, checked_file_resolved, cross_resolved_module,
+    file_diagnostics, file_diagnostics_cross, file_diagnostics_resolved, module_exports,
+    resolved_module, ConfigInput, ConfigValue, FileRegistry, ModuleExports, ResolvedFile,
+    SearchPathsInput, WorkspaceFiles,
 };
 
 // Re-export the incremental-database handles so consumers can drive the
