@@ -184,7 +184,11 @@ fn diagnostic_owned(
 }
 
 /// A single diagnostic emitted by the checker.
-#[derive(Debug, Clone)]
+///
+/// `PartialEq` lets consumers detect "diagnostics unchanged" — the LSP's
+/// workspace sweep compares a file's fresh diagnostics against the stored ones
+/// and republishes only on a real change.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
     /// The error/warning code.
     pub code: ErrorCode,

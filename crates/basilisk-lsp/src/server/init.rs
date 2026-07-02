@@ -595,15 +595,13 @@ fn scan_resolve_and_check_with_roots(
     index: &WorkspaceIndex,
     roots: &[std::path::PathBuf],
 ) -> ScanResult {
-    let (_results, file_count, _initial_error_count) = index.scan();
-
-    // Resolve imports for all scanned files.
     let config = roots
         .first()
         .map(|r| crate::config::load_config(r))
         .unwrap_or_default();
 
-    // Detect uv project, build package registry and discover workspace members.
+    // Detect uv project, build package registry and discover workspace members
+    // BEFORE scanning, so the scan itself analyses with import resolution.
     let registry = build_uv_registry(roots);
     let search_paths = crate::import_resolver::search_paths_from_config(roots, &config, registry);
     info!(
@@ -618,15 +616,21 @@ fn scan_resolve_and_check_with_roots(
     // of resurrecting false imports_unresolved. Implements [ANALYSIS-INCR-IMPORTS].
     index.set_search_paths(search_paths);
 
-    // Re-analyse every scanned file through the salsa engine now that the
-    // search paths are known. The initial scan() generates diagnostics before
-    // workspace members are known, so imports_unresolved fires for imports that
-    // are actually resolvable — the sweep replaces those results with
-    // import-resolved (and, in crossModule mode, cross-module-populated)
-    // diagnostics, and primes the engine so subsequent edits are incremental.
-    // Implements [CHKARCH-INCREMENTAL-SALSA] adoption.
-    let diagnostics = index.reresolve_imports_and_recheck();
+    // One pass: the scan primes the salsa engine with the whole workspace and
+    // analyses each file exactly once through the memoized queries — imports
+    // resolved and, in crossModule mode, `imported_symbols` populated. Every
+    // later edit hits the memos this pass created. Implements
+    // [CHKARCH-INCREMENTAL-SALSA] adoption / [ANALYSIS-STARTUP-WHOLE].
+    let (mut diagnostics, file_count, _initial_error_count) = index.scan();
+
+    // Open files are skipped by the scan (editor text is authoritative), but
+    // their pre-scan diagnostics were computed without the search paths —
+    // re-analyse them through the engine so open editors converge too.
+    diagnostics.extend(index.refresh_open_files());
+
     if matches!(index.mode, AnalysisMode::CrossModule) {
+        // Reverse-edge lookups for cross-file references/rename.
+        index.build_import_graph();
         info!("cross-module analysis complete");
     }
 

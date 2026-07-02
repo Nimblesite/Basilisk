@@ -205,10 +205,12 @@ When a file changes — on disk (file watcher) or in the editor (`didChange`/`di
    without a reload: the engine is primed with every indexed file's current
    text (open files contribute their in-memory buffers), and salsa recomputes
    exactly the files whose dependencies changed — the rest are revalidated
-   memos. Watcher path uses `reload_and_diff_exports`; open-file path uses
-   `set_open_refresh_dependents` — the watcher's `reload_from_disk` skips open
-   files, so editing an open module would otherwise leave dependents stale
-   (GitHub #56).
+   memos. Only files whose diagnostics actually **changed** are republished
+   (an identical set is a client no-op; the edited/reloaded file itself always
+   republishes). Watcher path uses `reload_and_diff_exports`; open-file path
+   uses `set_open_refresh_dependents` — the watcher's `reload_from_disk` skips
+   open files, so editing an open module would otherwise leave dependents
+   stale (GitHub #56).
 4. If exports unchanged, skip the cascade. (For a **stub** dependency the
    export diff still changes — `.pyi` files parse as Python — so an in-memory
    edit to an open user stub refreshes its importers' `imports_module_attribute`
@@ -247,11 +249,11 @@ No workspace scan; the server waits for `didOpen` notifications.
 
 ### wholeModule Startup {#ANALYSIS-STARTUP-WHOLE}
 
-On `initialized`: all `.py`/`.pyi` files under workspace roots are collected (respecting `include`/`exclude`), analysed in parallel, diagnostics published. Progress via `window/workDoneProgress`.
+On `initialized`: the import search paths are built first (uv registry, workspace members, stub dirs), then all `.py`/`.pyi` files under workspace roots are collected (respecting `include`/`exclude`), the salsa engine is primed with every file's text, and each file is analysed **exactly once through the memoized queries** ([CHKARCH-INCREMENTAL-SALSA]) — the same memos every subsequent edit hits. Diagnostics are published for every file; open files (skipped by the scan — editor text is authoritative) are re-analysed through the engine afterwards so they converge with the scanned workspace. Progress via `window/workDoneProgress`.
 
 ### crossModule Startup {#ANALYSIS-STARTUP-CROSS}
 
-Same as `wholeModule` plus: the post-scan salsa sweep runs the cross-module queries ([ANALYSIS-SYMBOLS-POP]), so every file's `imported_symbols` reflect the other modules' exports, and the import graph is built from `ImportInfo` for navigation reverse-lookups ([ANALYSIS-GRAPH]). Fresh diagnostics are re-published for every file.
+Same as `wholeModule` — the scan's engine pass runs the cross-module queries ([ANALYSIS-SYMBOLS-POP]), so every file's `imported_symbols` reflect the other modules' exports — plus the import graph is built from `ImportInfo` for navigation reverse-lookups ([ANALYSIS-GRAPH]).
 
 ---
 

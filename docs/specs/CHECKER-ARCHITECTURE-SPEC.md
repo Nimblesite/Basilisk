@@ -1033,11 +1033,14 @@ cross-module machinery is gone: `cross_module.rs` (two-pass
 `populate_cross_module_symbols`) and `resolve_workspace_imports` were retired
 in favour of the queries above, and `import_graph.rs` is reduced to the
 navigation handlers' reverse lookups ([ANALYSIS-GRAPH]) — invalidation no
-longer walks the graph. Still outside salsa: the initial `scan()` first pass
-(runs before search paths exist; its results are superseded by the sweep in
-the same startup sequence), the `FileEntry` index itself (the LSP-side store —
+longer walks the graph. The startup scan itself analyses through the engine:
+search paths are built first, the engine is primed with every collected
+file's text, and each file runs the memoized queries exactly once
+([ANALYSIS-STARTUP-WHOLE]) — there is no separate pre-salsa analysis pass.
+Still outside salsa: the `FileEntry` index itself (the LSP-side store —
 `FileEntry.resolved` shares the salsa memo's `Arc<ResolvedModule>`, no
-duplication), and the no-search-paths degrade path (`recheck_all_files`).
+duplication) and the no-search-paths degrade path (`recheck_all_files`, plus
+the per-file import-free fallback used before configuration is known).
 Engine `SourceFile`/registry bookkeeping is dropped on file deletion
 (`SalsaAnalysisEngine::remove`), though salsa 0.27 cannot reclaim an input's
 internal memo, so a deleted file's memo lingers until the database is dropped;

@@ -428,7 +428,14 @@ impl WorkspaceIndex {
         if before.is_some_and(|prev| self.exported_symbol_names(&path) != prev) {
             // Exports changed: re-resolve + re-check so importers' stale symbol
             // diagnostics refresh without closing the file or reloading the server.
-            return self.reresolve_imports_and_recheck();
+            let mut results = self.reresolve_imports_and_recheck();
+            // The edited file must always republish after a didChange — the
+            // sweep's changed-only filter would skip it (set_open already
+            // stored its fresh diagnostics before the sweep compared).
+            if !results.iter().any(|(target, _)| target == uri) {
+                results.push((uri.clone(), own_diags));
+            }
+            return results;
         }
         vec![(uri.clone(), own_diags)]
     }
@@ -569,28 +576,53 @@ impl WorkspaceIndex {
         );
 
         let paths: Vec<PathBuf> = self.files.iter().map(|entry| entry.key().clone()).collect();
+        let results = self.reanalyse_paths(paths);
+
+        // The import graph serves navigation's reverse lookups (cross-file
+        // references / rename); invalidation itself is salsa's job now.
+        if matches!(self.mode, AnalysisMode::CrossModule) {
+            self.build_import_graph();
+        }
+        results
+    }
+
+    /// Re-analyse each indexed path through the salsa engine, preserving its
+    /// open-state, and return fresh LSP diagnostics for the files whose
+    /// checker diagnostics actually **changed**.
+    ///
+    /// Re-publishing an identical diagnostic set is a client no-op, so the
+    /// sweep skips it — the editor-visible result is the same without
+    /// O(workspace) publish traffic on every dependency change. Callers that
+    /// must republish regardless (the edited file after a `didChange`) append
+    /// their own entry.
+    fn reanalyse_paths(
+        &self,
+        paths: Vec<PathBuf>,
+    ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
         let mut results = Vec::new();
         for path in paths {
-            let Some((text, version, is_open)) = self
-                .files
-                .get(&path)
-                .map(|entry| (entry.text.clone(), entry.version, entry.is_open))
+            let Some((text, version, is_open, prev_diagnostics)) =
+                self.files.get(&path).map(|entry| {
+                    (
+                        entry.text.clone(),
+                        entry.version,
+                        entry.is_open,
+                        entry.diagnostics.clone(),
+                    )
+                })
             else {
                 continue;
             };
             let (mut entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
             entry.version = version;
             entry.is_open = is_open;
+            let changed = entry.diagnostics != prev_diagnostics;
             let _ = self.files.insert(path.clone(), entry);
-            if let Some(uri) = path_to_uri(&path) {
-                results.push((uri, lsp_diags));
+            if changed {
+                if let Some(uri) = path_to_uri(&path) {
+                    results.push((uri, lsp_diags));
+                }
             }
-        }
-
-        // The import graph serves navigation's reverse lookups (cross-file
-        // references / rename); invalidation itself is salsa's job now.
-        if matches!(self.mode, AnalysisMode::CrossModule) {
-            self.build_import_graph();
         }
         results
     }
@@ -624,10 +656,21 @@ impl WorkspaceIndex {
     /// Scan all workspace roots and populate the index.
     ///
     /// Returns a list of `(Uri, diagnostics)` pairs ready for publishing.
-    /// Files already open in the editor are skipped.
+    /// Files already open in the editor are skipped (their in-memory text is
+    /// authoritative and already analysed).
+    ///
+    /// When the import search paths are cached (the caller sets them before
+    /// scanning — see `scan_resolve_and_check_with_roots`), every file's text
+    /// is read up front and the salsa engine is **primed with the whole
+    /// workspace before the first analysis**, so cross-file edges see every
+    /// file from the first query and each file is parsed exactly once —
+    /// through the same memoized queries every later edit uses. Without search
+    /// paths (unit tests, pre-config scans) each file falls back to the
+    /// import-free direct pipeline, exactly as before.
     // Implements [ANALYSIS-STARTUP-WHOLE] — collects all `.py`/`.pyi` under the
     // roots (respecting include/exclude), analyses them, and returns diagnostics
-    // for every file. The crossModule extra pass is wired in server/init.rs.
+    // for every file — via [CHKARCH-INCREMENTAL-SALSA] once search paths exist.
+    // The crossModule import graph is wired in server/init.rs.
     #[must_use]
     pub fn scan(
         &self,
@@ -649,17 +692,33 @@ impl WorkspaceIndex {
         let deduped = deduplicate_by_stem(all_files);
         let file_count = deduped.len();
 
-        let results: Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> = deduped
+        // Read every closed file's text before analysing anything, so the
+        // engine can be primed with the complete workspace. Open files keep
+        // their in-memory text — already tracked by the engine.
+        let to_analyse: Vec<(PathBuf, String)> = deduped
             .into_iter()
             .filter_map(|path| {
-                // Skip files already open in the editor.
                 if self.files.get(&path).is_some_and(|e| e.is_open) {
                     return None;
                 }
                 let text = std::fs::read_to_string(&path).ok()?;
+                Some((path, text))
+            })
+            .collect();
+
+        if self.search_paths_snapshot().is_some() {
+            self.salsa_engine.prime(
+                to_analyse
+                    .iter()
+                    .map(|(path, text)| (path.clone(), text.clone())),
+            );
+        }
+
+        let results: Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> = to_analyse
+            .into_iter()
+            .filter_map(|(path, text)| {
                 let uri = path_to_uri(&path)?;
-                let (entry, lsp_diags) =
-                    analyse_with_config(&text, &path, self.config_for_file(&path));
+                let (entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
                 let _ = self.files.insert(path, entry);
                 Some((uri, lsp_diags))
             })
@@ -676,6 +735,24 @@ impl WorkspaceIndex {
             .sum();
 
         (results, file_count, error_count)
+    }
+
+    /// Re-analyse every OPEN file through the engine and return its fresh
+    /// diagnostics.
+    ///
+    /// The scan skips open files (editor text is authoritative), but their
+    /// pre-scan diagnostics were computed before the search paths existed —
+    /// without import resolution or cross-module symbols. Called once after
+    /// the startup scan so open editors converge with the scanned workspace.
+    #[must_use]
+    pub fn refresh_open_files(&self) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
+        let open_paths: Vec<PathBuf> = self
+            .files
+            .iter()
+            .filter(|entry| entry.value().is_open)
+            .map(|entry| entry.key().clone())
+            .collect();
+        self.reanalyse_paths(open_paths)
     }
 
     /// Collect all `(uri, resolved, text)` triples currently in the index,
@@ -1211,6 +1288,105 @@ mod tests {
         assert!(
             !scanned.iter().any(|u| u.contains("schema.pb.py")),
             "*.pb.py glob must exclude the file: {scanned:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// With search paths cached, the scan analyses THROUGH the salsa engine:
+    /// every scanned file becomes a tracked `SourceFile`, so cross-file edges
+    /// see the whole workspace and later edits hit the memos this pass primed.
+    /// Implements [CHKARCH-INCREMENTAL-SALSA] / [ANALYSIS-STARTUP-WHOLE].
+    #[test]
+    fn test_scan_with_search_paths_primes_the_engine() {
+        let dir = unique_tmp("bsk_scan_primes");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.py"), "x: int = 1\n").unwrap();
+        std::fs::write(dir.join("b.py"), "y: str = 'hi'\n").unwrap();
+
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        idx.set_search_paths(crate::import_resolver::ImportSearchPaths {
+            roots: vec![dir.clone()],
+            extra_paths: vec![],
+            stub_paths: vec![],
+            workspace_members: vec![],
+            site_packages: None,
+            registry: None,
+        });
+
+        let (results, file_count, _) = idx.scan();
+        assert_eq!(file_count, 2);
+        assert_eq!(results.len(), 2, "the scan publishes every scanned file");
+        assert_eq!(
+            idx.salsa_engine.tracked_source_count(),
+            2,
+            "the scan must analyse through the engine — every file tracked"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The workspace sweep republishes ONLY files whose diagnostics changed:
+    /// a sweep over an unchanged workspace publishes nothing (a client no-op
+    /// either way, without O(workspace) publish traffic), while a real change
+    /// still republishes the affected file.
+    #[test]
+    fn test_sweep_republishes_only_changed_diagnostics() {
+        let dir = unique_tmp("bsk_sweep_diff");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("clean.py"), "x: int = 1\n").unwrap();
+        let broken = dir.join("broken.py");
+        std::fs::write(&broken, "def f() -> int:\n    return 1\n").unwrap();
+
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        idx.set_search_paths(crate::import_resolver::ImportSearchPaths {
+            roots: vec![dir.clone()],
+            extra_paths: vec![],
+            stub_paths: vec![],
+            workspace_members: vec![],
+            site_packages: None,
+            registry: None,
+        });
+        let _ = idx.scan();
+
+        // Nothing changed since the scan: the sweep must publish nothing.
+        let unchanged = idx.reresolve_imports_and_recheck();
+        assert!(
+            unchanged.is_empty(),
+            "a sweep over an unchanged workspace must republish nothing, got: {:?}",
+            unchanged
+                .iter()
+                .map(|(u, _)| u.to_string())
+                .collect::<Vec<_>>()
+        );
+
+        // Change one file's stored text to something that changes diagnostics.
+        if let Some(mut entry) = idx.files.get_mut(&broken) {
+            entry.text = "def f() -> int:\n    return undefined_name\n".to_owned();
+        }
+        let changed = idx.reresolve_imports_and_recheck();
+        assert_eq!(
+            changed.len(),
+            1,
+            "only the changed file republishes, got: {:?}",
+            changed
+                .iter()
+                .map(|(u, _)| u.to_string())
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            changed
+                .first()
+                .is_some_and(|(uri, _)| uri.to_string().ends_with("broken.py")),
+            "the republished file is the changed one"
         );
 
         let _ = std::fs::remove_dir_all(&dir);

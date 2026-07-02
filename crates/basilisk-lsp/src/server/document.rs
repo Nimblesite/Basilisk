@@ -284,7 +284,16 @@ pub(super) async fn did_change_watched_files(
             for uri in &delete_targets {
                 index.forget_file(uri);
             }
-            index.reresolve_imports_and_recheck()
+            let mut sweep = index.reresolve_imports_and_recheck();
+            // The sweep republishes only files whose diagnostics changed; the
+            // reloaded files already stored their fresh diagnostics before it
+            // ran, so append their own publishes rather than losing them.
+            for (uri, diags) in reload_results {
+                if !sweep.iter().any(|(target, _)| *target == uri) {
+                    sweep.push((uri, diags));
+                }
+            }
+            sweep
         } else {
             reload_results
         };
