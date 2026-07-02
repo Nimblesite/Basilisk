@@ -45,6 +45,19 @@ pub struct FileEntry {
     pub is_open: bool,
 }
 
+/// Whether a workspace re-analysis publishes every file or only real changes.
+///
+/// `ChangedOnly` assumes the client's diagnostic state matches the server's
+/// store (steady-state sweeps); `Always` is for paths where the client may
+/// have diverged — post-scan open-file convergence, re-enable rescans.
+#[derive(Clone, Copy)]
+enum PublishPolicy {
+    /// Publish every re-analysed file.
+    Always,
+    /// Publish only files whose checker diagnostics differ from the stored ones.
+    ChangedOnly,
+}
+
 // ── WorkspaceIndex ───────────────────────────────────────────────────────────
 
 /// Process-scoped index of all analysed files.
@@ -576,7 +589,7 @@ impl WorkspaceIndex {
         );
 
         let paths: Vec<PathBuf> = self.files.iter().map(|entry| entry.key().clone()).collect();
-        let results = self.reanalyse_paths(paths);
+        let results = self.reanalyse_paths(paths, PublishPolicy::ChangedOnly);
 
         // The import graph serves navigation's reverse lookups (cross-file
         // references / rename); invalidation itself is salsa's job now.
@@ -587,17 +600,18 @@ impl WorkspaceIndex {
     }
 
     /// Re-analyse each indexed path through the salsa engine, preserving its
-    /// open-state, and return fresh LSP diagnostics for the files whose
-    /// checker diagnostics actually **changed**.
+    /// open-state, and return fresh LSP diagnostics per the publish policy.
     ///
-    /// Re-publishing an identical diagnostic set is a client no-op, so the
-    /// sweep skips it — the editor-visible result is the same without
-    /// O(workspace) publish traffic on every dependency change. Callers that
-    /// must republish regardless (the edited file after a `didChange`) append
-    /// their own entry.
+    /// [`PublishPolicy::ChangedOnly`] is valid ONLY when the client's
+    /// diagnostic state is known to match the server's store (a steady-state
+    /// sweep): re-publishing an identical set is then a client no-op, so
+    /// skipping it saves O(workspace) publish traffic. When the client may
+    /// have diverged (cleared on disable, pre-scan state), use
+    /// [`PublishPolicy::Always`].
     fn reanalyse_paths(
         &self,
         paths: Vec<PathBuf>,
+        policy: PublishPolicy,
     ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
         let mut results = Vec::new();
         for path in paths {
@@ -616,9 +630,12 @@ impl WorkspaceIndex {
             let (mut entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
             entry.version = version;
             entry.is_open = is_open;
-            let changed = entry.diagnostics != prev_diagnostics;
+            let publish = match policy {
+                PublishPolicy::Always => true,
+                PublishPolicy::ChangedOnly => entry.diagnostics != prev_diagnostics,
+            };
             let _ = self.files.insert(path.clone(), entry);
-            if changed {
+            if publish {
                 if let Some(uri) = path_to_uri(&path) {
                     results.push((uri, lsp_diags));
                 }
@@ -738,12 +755,15 @@ impl WorkspaceIndex {
     }
 
     /// Re-analyse every OPEN file through the engine and return its fresh
-    /// diagnostics.
+    /// diagnostics — **always**, even when they are unchanged.
     ///
     /// The scan skips open files (editor text is authoritative), but their
-    /// pre-scan diagnostics were computed before the search paths existed —
-    /// without import resolution or cross-module symbols. Called once after
-    /// the startup scan so open editors converge with the scanned workspace.
+    /// previous diagnostics were computed under different conditions (before
+    /// the search paths existed, or before type checking was re-enabled and
+    /// the client's diagnostics were cleared) — so the client's state may have
+    /// diverged from the server's store and a changed-only filter would leave
+    /// the editor stale. Called after the startup scan and mode/enable
+    /// rescans so open editors converge with the workspace.
     #[must_use]
     pub fn refresh_open_files(&self) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
         let open_paths: Vec<PathBuf> = self
@@ -752,7 +772,7 @@ impl WorkspaceIndex {
             .filter(|entry| entry.value().is_open)
             .map(|entry| entry.key().clone())
             .collect();
-        self.reanalyse_paths(open_paths)
+        self.reanalyse_paths(open_paths, PublishPolicy::Always)
     }
 
     /// Collect all `(uri, resolved, text)` triples currently in the index,
@@ -1325,6 +1345,54 @@ mod tests {
             idx.salsa_engine.tracked_source_count(),
             2,
             "the scan must analyse through the engine — every file tracked"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `refresh_open_files` must republish open files even when their
+    /// diagnostics are UNCHANGED: its consumers publish to a client whose
+    /// state may have diverged from the server's store — re-enabling type
+    /// checking cleared the client's diagnostics but not the stored entry, so
+    /// a changed-only filter here would leave the editor empty forever
+    /// (regression caught by the VSIX `basilisk.enabled` toggle e2e).
+    #[test]
+    fn test_refresh_open_files_republishes_unchanged_open_files() {
+        let dir = unique_tmp("bsk_refresh_open");
+        std::fs::create_dir_all(&dir).unwrap();
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            annotations_on(),
+        );
+        idx.set_search_paths(crate::import_resolver::ImportSearchPaths {
+            roots: vec![dir.clone()],
+            extra_paths: vec![],
+            stub_paths: vec![],
+            workspace_members: vec![],
+            site_packages: None,
+            registry: None,
+        });
+
+        // Open a file with a diagnostic; its fresh state is now stored.
+        let uri = Url::from_file_path(dir.join("open.py")).unwrap();
+        let opened = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
+        assert!(!opened.is_empty(), "precondition: the open file diagnoses");
+
+        // Nothing changed since — refresh must STILL return the open file,
+        // with its diagnostics, so the caller can repopulate the client.
+        let refreshed = idx.refresh_open_files();
+        assert!(
+            refreshed
+                .iter()
+                .any(|(target, diags)| target == &uri && !diags.is_empty()),
+            "refresh_open_files must republish an unchanged open file — the \
+             client's state may have been cleared (e.g. type-checking toggle); \
+             got: {:?}",
+            refreshed
+                .iter()
+                .map(|(u, d)| (u.to_string(), d.len()))
+                .collect::<Vec<_>>()
         );
 
         let _ = std::fs::remove_dir_all(&dir);
