@@ -45,7 +45,12 @@ fn tracked_workspace(
     dir: &Path,
     importer: (&str, &str),
     tracked: &[(&str, &str)],
-) -> (SourceFile, SearchPathsInput, WorkspaceFiles, Vec<SourceFile>) {
+) -> (
+    SourceFile,
+    SearchPathsInput,
+    WorkspaceFiles,
+    Vec<SourceFile>,
+) {
     let (importer_name, importer_src) = importer;
     let importer_path = dir.join(importer_name);
     fs::write(&importer_path, importer_src).unwrap();
@@ -258,7 +263,10 @@ fn body_edit_backdates_exports_and_export_edit_propagates() {
     let (a, sp, ws, tracked) = tracked_workspace(
         &db,
         &dir,
-        ("a.py", "import lib\n\ndef use() -> int:\n    return thing\n"),
+        (
+            "a.py",
+            "import lib\n\ndef use() -> int:\n    return thing\n",
+        ),
         &[("lib.py", "def thing() -> int:\n    return 1\n")],
     );
     let lib = *tracked.first().expect("lib.py is tracked");

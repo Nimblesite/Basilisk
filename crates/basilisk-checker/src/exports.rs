@@ -95,10 +95,7 @@ pub fn extract_exports(
 /// information instead of nothing. Returns an empty vec if the stub cannot be
 /// parsed. Implements [ANALYSIS-CROSSLSP].
 #[must_use]
-pub fn extract_stub_exports(
-    stub_path: &Path,
-    module_name: &str,
-) -> Vec<(String, ExternalSymbol)> {
+pub fn extract_stub_exports(stub_path: &Path, module_name: &str) -> Vec<(String, ExternalSymbol)> {
     // `.pyi` stubs (typeshed, `*-stubs`, user stubs) are hand-written, verified
     // types — Tier1. Source/tier only affect provenance via the Tier mapping.
     let Ok(stub) = basilisk_stubs::parse_pyi_file(
