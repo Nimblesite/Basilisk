@@ -18,6 +18,7 @@ import {
 } from "vscode-languageclient/node";
 import { effect } from "@preact/signals-core";
 import { Logger } from "./logger";
+import { createLspTraceChannel } from "./lsp-trace";
 import { type Store, type LspState } from "./store";
 
 /** Maximum LSP errors before shutting down the server. */
@@ -129,11 +130,7 @@ export function startLspClient(
 
   // [VSIX-OUTPUT-CHANNELS] "Basilisk LSP Trace" channel — surfaces LSP
   // communication when basilisk.trace.server is enabled.
-  // vscode-languageclient 10 requires `traceOutputChannel` to be a
-  // `LogOutputChannel` (created with `{ log: true }`).
-  const traceChannel = vscode.window.createOutputChannel("Basilisk LSP Trace", {
-    log: true,
-  });
+  const traceChannel = createLspTraceChannel();
   context.subscriptions.push(traceChannel);
 
   const clientOptions = buildClientOptions(outputChannel, traceChannel, updateStatusBar);

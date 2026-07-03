@@ -317,6 +317,13 @@ See [`LSP-ARCHITECTURE-SPEC.md` § LSPARCH-BINRES](LSP-ARCHITECTURE-SPEC.md#LSPA
 - `"Basilisk LSP Trace"` — LSP communication trace (when `basilisk.trace.server` is enabled)
 - File log sink: `/tmp/basilisk-debug-trace.log` for debug-level logging
 
+`basilisk.trace.server` is the one documented trace switch, so the trace
+channel is a config-driven adapter (`src/lsp-trace.ts`): vscode-languageclient
+10 only traces while the trace channel's own `logLevel` is `Trace` — a hidden
+per-channel VS Code gesture — so the adapter derives its `logLevel` from the
+setting and fires `onDidChangeLogLevel` on changes. A plain `LogOutputChannel`
+here left the channel permanently blank (GitHub #201).
+
 ---
 
 ## Binary Distribution {#VSIX-BINARY-DISTRIBUTION}
