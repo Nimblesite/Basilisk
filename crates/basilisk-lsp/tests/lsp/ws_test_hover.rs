@@ -209,6 +209,78 @@ async fn test_ws_hover_class_docstring() -> TestResult<()> {
     Ok(())
 }
 
+// Regression for #199: hovering a module-level constant (`PI: Final = 3.14`)
+// showed no hover popup at all. Mirrors the issue's repro
+// (upstream conformance `_qualifiers_final_annotation_2.py`) under the
+// conditions the editor is in when it reproduces: a real on-disk workspace
+// whose startup scan has completed, so the salsa (search-paths-known)
+// analysis path serves the hover — not the pre-scan fallback.
+#[tokio::test]
+async fn test_ws_hover_module_constant_with_final_annotation() -> TestResult<()> {
+    let dir = unique_temp_dir("bsk_ws_hover_final");
+    std::fs::create_dir_all(&dir)?;
+    let code = "\"\"\"\nUsed as part of the test for the typing.Final special form.\n\"\"\"\n\nfrom typing import Final\n\nPI: Final = 3.14\n";
+    std::fs::write(dir.join("qualifiers_final.py"), code)?;
+    // A second file with a guaranteed default-config diagnostic marks the
+    // startup scan's completion (a clean file may publish nothing).
+    std::fs::write(
+        dir.join("scan_marker.py"),
+        "def bad() -> int:\n    return \"s\"\n",
+    )?;
+
+    let root_uri = format!("file://{}", dir.display());
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "wholeModule").await?;
+
+    // Wait for the startup scan to publish the marker file's diagnostic —
+    // after this the workspace search paths are known and per-file analysis
+    // runs through the salsa engine.
+    let mut scan_done = false;
+    for _ in 0..20 {
+        let Some(msg) = fixture.recv().await else { break };
+        if msg.contains("\"method\":\"textDocument/publishDiagnostics\"")
+            && msg.contains("scan_marker.py")
+        {
+            scan_done = true;
+            break;
+        }
+    }
+    assert!(scan_done, "startup scan should publish for scan_marker.py");
+
+    // Open the constant's file like the editor does, then hover `PI` at its
+    // definition site (line 6, col 0 — "line 7" in the issue's 1-based repro).
+    let uri = format!("{root_uri}/qualifiers_final.py");
+    fixture.did_open(&uri, code).await?;
+    let _ = fixture.wait_for_diagnostics().await?;
+    let resp = fixture
+        .request(
+            320,
+            "textDocument/hover",
+            serde_json::json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": 6, "character": 0 }
+            }),
+        )
+        .await?
+        .ok_or("no response to textDocument/hover")?;
+
+    assert!(
+        resp.contains("(variable)"),
+        "module constant hover should contain (variable): {resp}"
+    );
+    assert!(
+        resp.contains("PI"),
+        "module constant hover should contain PI: {resp}"
+    );
+    assert!(
+        resp.contains("Final"),
+        "module constant hover should show its Final annotation: {resp}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
 // Regression for #200: hovering a function-local binding returned nothing
 // because the symbol lookup never searched `local_vars`/`local_unannotated_vars`.
 // Mirrors the VSIX "hover: local variable inside a function (squared)" check.
