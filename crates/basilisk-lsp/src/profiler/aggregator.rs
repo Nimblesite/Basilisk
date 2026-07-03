@@ -105,6 +105,31 @@ impl Default for HotspotConfig {
     }
 }
 
+/// Whether `filename` is interpreter/debugger scaffolding rather than code the
+/// user (or a library they call) wrote: the runpy/debugpy launcher spine that
+/// wraps every debug-launched program, pydevd tracer frames, and `<string>`
+/// (the injected cooperative sampler lives there). Anchored matching only —
+/// basename prefix or exact path segment, never a full-path substring — so a
+/// user file under `debugpy_utils/` is never mistaken for the debugger
+/// (mirrors the memory profiler's `_is_runtime_glue`, [PROFILE-MEMORY-FINAL]).
+fn is_runtime_scaffolding(filename: &str) -> bool {
+    if filename == "<string>" || filename == "<frozen runpy>" {
+        return true;
+    }
+    let normalized = filename.replace('\\', "/");
+    let basename = normalized.rsplit('/').next().unwrap_or(&normalized);
+    if basename == "runpy.py"
+        || basename.starts_with("pydevd")
+        || basename.starts_with("debugpy")
+        || basename.starts_with("_pydev")
+    {
+        return true;
+    }
+    normalized
+        .split('/')
+        .any(|segment| segment == "debugpy" || segment == "pydevd")
+}
+
 impl ProfileData {
     /// Ingest a set of stack traces from a single `get_stack_traces()` call.
     ///
@@ -115,6 +140,12 @@ impl ProfileData {
     /// frame, `self_samples` for the leaf (py-spy index 0); record the stack as
     /// frame indices (reversed to root-first for speedscope); then bump
     /// `total_samples` once per `get_stack_traces()` call.
+    ///
+    /// Implements [PROFILE-AGGREGATION-SCAFFOLD] — runpy/debugpy/pydevd
+    /// scaffolding frames are stripped before counting, so every export roots
+    /// at the user's code; a leaf tracer frame's overhead is attributed to the
+    /// user line it was tracing, and a machinery-only thread (debugger
+    /// housekeeping, the injected sampler) is dropped entirely.
     pub fn ingest_traces(
         &mut self,
         traces: &[py_spy::StackTrace],
@@ -123,6 +154,17 @@ impl ProfileData {
     ) {
         for trace in traces {
             if !trace.active && !include_idle {
+                continue;
+            }
+
+            // Strip scaffolding before ANY bookkeeping; a thread with nothing
+            // left is pure machinery and never registers.
+            let kept_frames: Vec<&py_spy::Frame> = trace
+                .frames
+                .iter()
+                .filter(|frame| !is_runtime_scaffolding(&frame.filename))
+                .collect();
+            if kept_frames.is_empty() {
                 continue;
             }
 
@@ -140,9 +182,9 @@ impl ProfileData {
             *self.thread_samples.entry(thread_id).or_insert(0) += 1;
 
             // Build frame index stack for speedscope (root-first).
-            let mut stack_indices = Vec::with_capacity(trace.frames.len());
+            let mut stack_indices = Vec::with_capacity(kept_frames.len());
 
-            for (frame_idx, frame) in trace.frames.iter().enumerate() {
+            for (frame_idx, frame) in kept_frames.into_iter().enumerate() {
                 // Increment line hits.
                 *self
                     .line_hits

@@ -54,15 +54,6 @@ pub enum DebugError {
     PythonNotFound(String),
 }
 
-impl DebugError {
-    /// Whether a fresh candidate port could plausibly fix this failure —
-    /// the port-collision TOCTOU surfaces as either a pre-flight
-    /// [`Self::PortTaken`] or the adapter exiting on a bind failure.
-    const fn is_port_retryable(&self) -> bool {
-        matches!(self, Self::PortTaken(_) | Self::AdapterExited(_))
-    }
-}
-
 impl fmt::Display for DebugError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -191,18 +182,26 @@ impl DebugSessionManager {
         python_path: &str,
         ports: impl IntoIterator<Item = u16> + Send,
     ) -> Result<(String, u16, String), DebugError> {
-        let mut last_port_failure: Option<DebugError> = None;
+        // On exhaustion, report the most diagnosable failure: an adapter that
+        // actually ran and died (it carries an exit status + stderr) beats a
+        // pre-flight "port was taken".
+        let mut last_adapter_exit: Option<DebugError> = None;
+        let mut last_port_taken: Option<DebugError> = None;
         for port in ports {
             match self.try_start_on_port(python_path, port).await {
                 Ok(ready) => return Ok(ready),
-                Err(err) if err.is_port_retryable() => {
-                    warn!(port, %err, "candidate port failed — retrying on a fresh port");
-                    last_port_failure = Some(err);
+                Err(err @ DebugError::AdapterExited(_)) => {
+                    warn!(port, %err, "adapter died on candidate port — retrying on a fresh one");
+                    last_adapter_exit = Some(err);
+                }
+                Err(err @ DebugError::PortTaken(_)) => {
+                    warn!(port, %err, "candidate port taken — retrying on a fresh one");
+                    last_port_taken = Some(err);
                 }
                 Err(err) => return Err(err),
             }
         }
-        Err(last_port_failure.unwrap_or_else(|| {
+        Err(last_adapter_exit.or(last_port_taken).unwrap_or_else(|| {
             DebugError::PortAllocation(std::io::Error::other("no candidate ports"))
         }))
     }

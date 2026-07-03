@@ -118,8 +118,11 @@ async fn exhausting_all_candidate_ports_reports_the_port_cause() {
 #[tokio::test]
 async fn an_adapter_exit_carries_its_stderr_in_the_cause() {
     let manager = DebugSessionManager::new();
+    // Several candidates: under a parallel test run any single fresh port can
+    // be stolen (pre-flight PortTaken); the exhaustion error must still be the
+    // adapter exit — the retry loop prefers the more diagnosable cause.
     let err = manager
-        .start_session_with_ports("/bin/sh", vec![free_port()])
+        .start_session_with_ports("/bin/sh", vec![free_port(), free_port(), free_port()])
         .await
         .expect_err("a shell posing as python must fail to start the adapter");
 

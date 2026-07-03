@@ -344,6 +344,16 @@ For each `get_stack_traces()` call:
    - Record the stack as frame indices for speedscope export
 2. Increment `total_samples`
 
+### Runtime-scaffolding filtering {#PROFILE-AGGREGATION-SCAFFOLD}
+
+A debug-launched program arrives wrapped in ~9 frames of launcher machinery (`_run_module_as_main → _run_code → debugpy <module> → main → run_file → run_path → _run_module_code → _run_code` before the user's `<module>`), which squashes the user's code into unreadable slivers at the bottom of every flame chart. `ingest_traces` strips that scaffolding at the single choke point every surface derives from, so the `.cpuprofile`, speedscope JSON, flamegraph SVG, hot lists, and diagnostics all root at the user's own code — the CPU-side mirror of the memory profiler's noise filtering ([#PROFILE-MEMORY-FINAL]).
+
+- **What is scaffolding:** `<string>` (the injected cooperative sampler lives there), `<frozen runpy>`, basename `runpy.py`, basenames starting `pydevd`/`debugpy`/`_pydev`, or an exact `debugpy`/`pydevd` path segment. **Anchored matching only** — never a full-path substring — so a user file under `debugpy_utils/` is never mistaken for the debugger.
+- **Leaf tracer frames:** a pydevd `trace_dispatch` leaf is stripped and its self-time attributed to the user line it was tracing, matching the cooperative sampler's leaf handling ([#PROFILE-COOPERATIVE]).
+- **Machinery-only threads** (debugger housekeeping, the injected sampler thread) are dropped entirely — they never register as threads, stacks, or hits.
+
+Covered by the `[PROFILE-AGGREGATION-SCAFFOLD]` tests in `profiler_tests.rs`.
+
 ### Hotspot Threshold {#PROFILE-AGGREGATION-THRESHOLD}
 
 Only lines/functions above a configurable threshold generate diagnostics:
