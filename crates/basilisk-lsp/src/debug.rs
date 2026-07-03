@@ -23,6 +23,14 @@ use tokio::time::{Duration, Instant};
 /// ceiling only ever applies to genuinely slow starts.
 const ADAPTER_BIND_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// How many candidate ports a session start tries before giving up. The
+/// port-collision TOCTOU is rare, so one collision on a fresh port is bad
+/// luck and two in a row means something is systematically wrong.
+const SPAWN_PORT_ATTEMPTS: usize = 3;
+
+/// How much of debugpy's trailing stderr an adapter-exit error carries.
+const STDERR_TAIL_CHARS: usize = 400;
+
 /// Errors that can occur during debug session management.
 // Implements [LSPDEBUG-ERRORS] — error variants and their user-facing messages
 // ("debugpy not found. Install it…", "No Python interpreter found. Checked…").
@@ -32,6 +40,8 @@ const ADAPTER_BIND_TIMEOUT: Duration = Duration::from_secs(30);
 pub enum DebugError {
     /// Failed to allocate a free TCP port.
     PortAllocation(std::io::Error),
+    /// A candidate port was stolen between allocation and spawn (TOCTOU).
+    PortTaken(u16),
     /// Failed to spawn the Python/debugpy process.
     SpawnFailed(std::io::Error),
     /// debugpy did not start accepting connections within the timeout.
@@ -44,10 +54,23 @@ pub enum DebugError {
     PythonNotFound(String),
 }
 
+impl DebugError {
+    /// Whether a fresh candidate port could plausibly fix this failure —
+    /// the port-collision TOCTOU surfaces as either a pre-flight
+    /// [`Self::PortTaken`] or the adapter exiting on a bind failure.
+    const fn is_port_retryable(&self) -> bool {
+        matches!(self, Self::PortTaken(_) | Self::AdapterExited(_))
+    }
+}
+
 impl fmt::Display for DebugError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::PortAllocation(err) => write!(f, "Failed to allocate TCP port: {err}"),
+            Self::PortTaken(port) => write!(
+                f,
+                "candidate port {port} was taken by another process before debugpy could bind it"
+            ),
             Self::SpawnFailed(err) => write!(f, "Failed to spawn debugpy: {err}"),
             Self::Timeout(port) => write!(
                 f,
@@ -85,6 +108,7 @@ impl DebugError {
             Self::DebugpyNotFound(_) => -32001,
             Self::PythonNotFound(_) => -32002,
             Self::PortAllocation(_)
+            | Self::PortTaken(_)
             | Self::SpawnFailed(_)
             | Self::Timeout(_)
             | Self::AdapterExited(_) => -32000,
@@ -140,25 +164,65 @@ impl DebugSessionManager {
         &self,
         python_path: &str,
     ) -> Result<(String, u16, String), DebugError> {
-        let port = find_free_port()?;
-        let session_id = generate_session_id();
+        // First candidate allocated eagerly so an allocator failure surfaces;
+        // the rest lazily, AFTER the previous attempt failed — a port picked
+        // upfront would itself be stale by the time it is tried.
+        let first = find_free_port()?;
+        let fallbacks = std::iter::from_fn(|| find_free_port().ok()).take(SPAWN_PORT_ATTEMPTS - 1);
+        self.start_session_with_ports(python_path, std::iter::once(first).chain(fallbacks))
+            .await
+    }
 
-        info!(python = python_path, port, session_id = %session_id, "spawning debugpy adapter");
-
-        let mut command = tokio::process::Command::new(python_path);
-        let _ = command
-            .args(["-m", "debugpy.adapter", "--port", &port.to_string()])
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true);
-        if let Some(pythonpath) = bundled_debugpy_pythonpath() {
-            let _ = command.env("PYTHONPATH", pythonpath);
+    /// Like [`Self::start_session`], but with caller-supplied candidate ports
+    /// (the seam the port-collision e2e drives; `debug_spawn.rs`).
+    ///
+    /// Free-port allocation is a TOCTOU — the allocator's listener is dropped
+    /// before debugpy rebinds the port, and anything on the machine can steal
+    /// it in between; debugpy then exits 1 without ever accepting connections.
+    /// Every port-shaped failure is retried on the next candidate; a non-port
+    /// failure (missing interpreter, timeout) is never retried or masked.
+    ///
+    /// # Errors
+    ///
+    /// Returns the non-port `DebugError` that aborted the attempt, or the last
+    /// port-shaped failure once every candidate is exhausted.
+    pub async fn start_session_with_ports(
+        &self,
+        python_path: &str,
+        ports: impl IntoIterator<Item = u16> + Send,
+    ) -> Result<(String, u16, String), DebugError> {
+        let mut last_port_failure: Option<DebugError> = None;
+        for port in ports {
+            match self.try_start_on_port(python_path, port).await {
+                Ok(ready) => return Ok(ready),
+                Err(err) if err.is_port_retryable() => {
+                    warn!(port, %err, "candidate port failed — retrying on a fresh port");
+                    last_port_failure = Some(err);
+                }
+                Err(err) => return Err(err),
+            }
         }
-        let mut child = command.spawn().map_err(|err| {
-            error!(python = python_path, %err, "failed to spawn debugpy");
-            DebugError::SpawnFailed(err)
-        })?;
+        Err(last_port_failure.unwrap_or_else(|| {
+            DebugError::PortAllocation(std::io::Error::other("no candidate ports"))
+        }))
+    }
+
+    /// One spawn attempt on one concrete port.
+    async fn try_start_on_port(
+        &self,
+        python_path: &str,
+        port: u16,
+    ) -> Result<(String, u16, String), DebugError> {
+        // Pre-flight: if the port was stolen since allocation, don't spawn a
+        // doomed adapter — and never mistake the thief's listener for a ready
+        // debugpy (the readiness probe alone cannot tell them apart).
+        if port_occupied(port) {
+            return Err(DebugError::PortTaken(port));
+        }
+
+        let session_id = generate_session_id();
+        info!(python = python_path, port, session_id = %session_id, "spawning debugpy adapter");
+        let mut child = spawn_adapter(python_path, port)?;
 
         // Wait for debugpy to bind its port; a crashed adapter fails fast.
         debug!(port, "waiting for debugpy to accept connections");
@@ -203,6 +267,25 @@ impl DebugSessionManager {
     }
 }
 
+/// Spawn `python -m debugpy.adapter --port <port>` with the bundled debugpy
+/// (when present) on `PYTHONPATH`, stderr piped for exit diagnosis.
+fn spawn_adapter(python_path: &str, port: u16) -> Result<Child, DebugError> {
+    let mut command = tokio::process::Command::new(python_path);
+    let _ = command
+        .args(["-m", "debugpy.adapter", "--port", &port.to_string()])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
+    if let Some(pythonpath) = bundled_debugpy_pythonpath() {
+        let _ = command.env("PYTHONPATH", pythonpath);
+    }
+    command.spawn().map_err(|err| {
+        error!(python = python_path, %err, "failed to spawn debugpy");
+        DebugError::SpawnFailed(err)
+    })
+}
+
 /// Find a free TCP port by binding to port 0.
 fn find_free_port() -> Result<u16, DebugError> {
     let listener = TcpListener::bind("127.0.0.1:0").map_err(DebugError::PortAllocation)?;
@@ -231,6 +314,21 @@ async fn wait_for_port_or_exit(
 ) -> Result<(), DebugError> {
     let start = Instant::now();
     loop {
+        // Exit check FIRST: a dead adapter plus an occupied port means someone
+        // ELSE holds the port — reporting "ready" would hand the editor's DAP
+        // client a stranger's socket.
+        if let Some(Ok(Some(status))) = child.as_deref_mut().map(Child::try_wait) {
+            error!(port, %status, "debugpy exited before binding its port");
+            let stderr_tail = match child {
+                Some(exited) => drain_stderr_tail(exited).await,
+                None => String::new(),
+            };
+            return Err(DebugError::AdapterExited(if stderr_tail.is_empty() {
+                status.to_string()
+            } else {
+                format!("{status}; stderr: {stderr_tail}")
+            }));
+        }
         if port_occupied(port) {
             debug!(
                 port,
@@ -239,16 +337,28 @@ async fn wait_for_port_or_exit(
             );
             return Ok(());
         }
-        if let Some(Ok(Some(status))) = child.as_deref_mut().map(Child::try_wait) {
-            error!(port, %status, "debugpy exited before binding its port");
-            return Err(DebugError::AdapterExited(status.to_string()));
-        }
         if start.elapsed() > timeout {
             error!(port, "debugpy did not bind within timeout");
             return Err(DebugError::Timeout(port));
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
+}
+
+/// The trailing stderr of an exited adapter, for a diagnosable failure cause
+/// (never a bare exit status — the #81 discipline). Bounded and best-effort.
+async fn drain_stderr_tail(child: &mut Child) -> String {
+    use tokio::io::AsyncReadExt;
+    let Some(mut stderr) = child.stderr.take() else {
+        return String::new();
+    };
+    let mut raw = Vec::new();
+    // The process has exited, so EOF is immediate; the timeout is a backstop.
+    let _ = tokio::time::timeout(Duration::from_millis(500), stderr.read_to_end(&mut raw)).await;
+    let text = String::from_utf8_lossy(&raw);
+    let trimmed = text.trim();
+    let skip = trimmed.chars().count().saturating_sub(STDERR_TAIL_CHARS);
+    trimmed.chars().skip(skip).collect()
 }
 
 /// Is something already listening on `port`? (Bind probe — never connects.)
