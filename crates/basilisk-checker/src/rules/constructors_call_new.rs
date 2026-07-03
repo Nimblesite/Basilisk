@@ -63,7 +63,7 @@ impl Rule for ConstructorCallNewMismatch {
         let method_map = super::shared::method_name_map(&module.functions);
 
         // Re-parse source to get AST for walking call expressions.
-        let Ok(parsed) = basilisk_parser::parse_source(source.clone(), path.clone()) else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 

@@ -90,8 +90,9 @@ impl LineIndex {
     pub fn line_col(&self, offset: usize) -> (usize, usize) {
         let clamped = offset.min(self.len);
         let line = self.line(clamped);
-        // `line >= 1`, so `line - 1` indexes the containing line's start.
-        let start = self.line_starts[line - 1];
+        // `line` is in `1..=line_starts.len()`, so `line - 1` is always in bounds;
+        // `get`/`unwrap_or` keeps the panic-free contract without an index.
+        let start = self.line_starts.get(line - 1).copied().unwrap_or(0);
         (line, clamped - start + 1)
     }
 
@@ -102,7 +103,11 @@ impl LineIndex {
     #[must_use]
     pub fn line_start(&self, offset: usize) -> usize {
         let clamped = offset.min(self.len);
-        self.line_starts[self.line(clamped) - 1]
+        // `line(..)` is in `1..=line_starts.len()`; the fallback is unreachable.
+        self.line_starts
+            .get(self.line(clamped) - 1)
+            .copied()
+            .unwrap_or(0)
     }
 
     /// Byte offset of the start of the 0-based `line_idx`-th line.
@@ -166,10 +171,11 @@ mod tests {
             // offsets are never produced by the parser and are excluded because
             // the single-shot `line_col` has a pre-existing panic on them, which
             // `LineIndex` sidesteps.)
-            let boundaries = source
-                .char_indices()
-                .map(|(idx, _)| idx)
-                .chain([source.len(), source.len() + 1, source.len() + 2]);
+            let boundaries = source.char_indices().map(|(idx, _)| idx).chain([
+                source.len(),
+                source.len() + 1,
+                source.len() + 2,
+            ]);
             for offset in boundaries {
                 let expected = line_col(source, offset);
                 let actual = index.line_col(offset);
@@ -177,7 +183,11 @@ mod tests {
                     actual, expected,
                     "mismatch at offset {offset} in {source:?}: index={actual:?} scan={expected:?}"
                 );
-                assert_eq!(index.line(offset), expected.0, "line() disagreed with line_col().0");
+                assert_eq!(
+                    index.line(offset),
+                    expected.0,
+                    "line() disagreed with line_col().0"
+                );
             }
         }
     }
@@ -191,7 +201,10 @@ mod tests {
         let index = LineIndex::new(source);
         for offset in 0..=source.len() + 1 {
             let (line, col) = index.line_col(offset);
-            assert!(line >= 1 && col >= 1, "offset {offset} gave ({line}, {col})");
+            assert!(
+                line >= 1 && col >= 1,
+                "offset {offset} gave ({line}, {col})"
+            );
         }
     }
 

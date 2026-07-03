@@ -39,20 +39,44 @@ pub(super) fn param_annotations<'a>(
     map
 }
 
+/// Byte positions of every `:` immediately followed by `\n` in `source`.
+///
+/// Precomputed once per file so [`function_body_range`] can binary-search for a
+/// function's signature-terminating colon instead of scanning from the `def` to
+/// the end of the file on every function (which made the pass O(functions · n)
+/// ≈ O(n²)). Positions are naturally ascending.
+pub(super) fn colon_newline_positions(source: &str) -> Vec<usize> {
+    source
+        .as_bytes()
+        .windows(2)
+        .enumerate()
+        .filter_map(|(idx, pair)| matches!(pair, [b':', b'\n']).then_some(idx))
+        .collect()
+}
+
 /// Locate the function body in the source by finding the `:` after the
 /// signature and returning everything from the next line to the end of
 /// the function (approximated by the next `def ` or `class ` at the same
 /// indentation, or end of file).
-pub(super) fn function_body_range(func: &FunctionInfo, source: &str) -> Option<(usize, usize)> {
+///
+/// `colon_newlines` is the file-wide index from [`colon_newline_positions`];
+/// the first entry at or after the `def` is the signature's terminating colon,
+/// giving byte-for-byte the same `body_start` as the previous `find(":\n")`.
+pub(super) fn function_body_range(
+    func: &FunctionInfo,
+    source: &str,
+    colon_newlines: &[usize],
+) -> Option<(usize, usize)> {
     // Start from the def keyword span.
     let def_start = usize::try_from(func.def_span.start).ok()?;
 
-    // Find the colon that ends the function signature.
-    let after_def = source.get(def_start..)?;
-    let colon_pos = after_def
-        .find(":\n")
-        .or_else(|| after_def.find("):\n").map(|p| p + 1))?;
-    let body_start = def_start + colon_pos + 1; // after ':'
+    // The signature-terminating colon is the first ":\n" at or after the def,
+    // found by binary search over the precomputed positions. If there is none
+    // (e.g. a single-line `def f(): ...` body, which has no ":\n"), there is no
+    // multi-line body to locate — the previous code scanned to end-of-file only
+    // to reach the same `None`, which is the O(n²) trap this avoids.
+    let &colon_abs = colon_newlines.get(colon_newlines.partition_point(|&pos| pos < def_start))?;
+    let body_start = colon_abs + 1; // after ':'
 
     // Determine the indentation of the `def` line.
     let line_start = source.get(..def_start)?.rfind('\n').map_or(0, |p| p + 1);

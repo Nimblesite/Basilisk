@@ -72,7 +72,7 @@ impl Rule for OverloadUnionExpansionFailure {
         }
 
         // Re-parse source to walk function bodies.
-        let Ok(parsed) = basilisk_parser::parse_source(source.clone(), path.clone()) else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 

@@ -245,6 +245,19 @@ jobs:
       - name: Run Zed extension unit tests
         run: cargo test --release --manifest-path basilisk-zed/Cargo.toml
 
+      # Gate the DISTRIBUTION render, not just the in-place build above. The
+      # release publishes a *standalone* tree produced by render-zed-mirror.sh
+      # (vendored basilisk-common, stamped version, own workspace root) — a path
+      # the `--manifest-path basilisk-zed/Cargo.toml` build never exercises.
+      # Render at a real version and compile it standalone so a
+      # render/vendoring/stamping/placeholder-guard regression fails HERE, on the
+      # PR, instead of tanking the release job ([ZED-MIRROR]).
+      - name: Render distribution mirror and build standalone
+        run: |
+          set -euo pipefail
+          scripts/render-zed-mirror.sh "${RUNNER_TEMP}/zed-mirror" 0.0.0-ci
+          ( cd "${RUNNER_TEMP}/zed-mirror" && cargo build --release --target wasm32-wasip2 )
+
   # ── Rust coverage + thresholds (runs in parallel) ──────────────────────────
   test-rust:
     name: Rust Tests & Coverage
@@ -280,10 +293,13 @@ jobs:
         uses: taiki-e/install-action@81ee9698f20724138a785d788c7567d40f14cd2d # cargo-llvm-cov
 
       # Only the conformance FIXTURES are fetched (the calculator
-      # conformance/upstream_main.py is committed). Cache the downloaded fixtures
-      # keyed on score.py, which holds the pinned ref (PINNED_TYPING_REF) — bumping
-      # the ref edits that file and busts the cache; score.py re-fetches whenever
-      # the stamped ref differs, so a stale prefix restore self-heals.
+      # conformance/upstream_main.py is committed). score.py tracks
+      # python/typing@main (UPSTREAM_REF = "main"): it resolves main's tip each
+      # run and re-fetches the fixtures whenever main has moved, recording the
+      # resolved commit in conformance/tests/.ref-sha. Cache the downloaded
+      # fixtures keyed on score.py's hash so editing the fetch logic busts the
+      # cache; a stale prefix restore self-heals because score.py re-fetches as
+      # soon as main's tip differs from the recorded ref.
       - name: Cache conformance fixtures
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
