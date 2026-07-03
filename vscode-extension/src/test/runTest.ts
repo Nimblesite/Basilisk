@@ -126,18 +126,15 @@ async function main(): Promise<void> {
         delete process.env.BASILISK_EXECUTABLE_PATH;
         delete process.env.BASILISK_BINARY_DIR;
 
-        // Create a temp workspace with empty binary settings so activation must
-        // prove the bundled VSIX path instead of a developer-machine override.
-        const tmpWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'basilisk-test-ws-'));
-        const vscodeDir = path.join(tmpWorkspace, '.vscode');
-        fs.mkdirSync(vscodeDir, { recursive: true });
-
-        const settings: Record<string, unknown> = {};
-        fs.writeFileSync(
-            path.join(vscodeDir, 'settings.json'),
-            JSON.stringify(settings, null, 2),
-            'utf8'
-        );
+        // Open the SAME workspace the CI runner (.vscode-test.mjs) opens. The
+        // diagnostics suites depend on its config — `basilisk.json` turns on
+        // the opt-in strict-annotation rules their fixtures trip, and
+        // `.vscode/settings.json` selects wholeModule analysis — while its
+        // settings carry no binary override, so activation still proves the
+        // bundled VSIX path. A bare temp workspace silently disarms every
+        // diagnostics assertion (no config → house rules off → zero
+        // diagnostics → timeouts).
+        const workspace = path.join(extensionDevelopmentPath, 'test-fixtures', 'workspace');
 
         await runTests({
             extensionDevelopmentPath,
@@ -146,12 +143,9 @@ async function main(): Promise<void> {
             launchArgs: [
                 '--disable-extensions',
                 '--user-data-dir', resolveUserDataDir(extensionDevelopmentPath),
-                tmpWorkspace,
+                workspace,
             ],
         });
-
-        // Clean up temp workspace.
-        fs.rmSync(tmpWorkspace, { recursive: true, force: true });
     } catch (err) {
         // eslint-disable-next-line no-console
         console.error('Failed to run tests', err);
