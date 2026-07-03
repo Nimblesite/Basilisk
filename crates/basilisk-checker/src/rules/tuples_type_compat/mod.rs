@@ -60,14 +60,14 @@ impl Rule for TupleStarredUnpackCompatibility {
     fn check(
         &self,
         module: &ResolvedModule,
-        _ctx: &super::CheckContext,
+        ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         let source = &module.source;
         let path = &module.path;
 
         check_module_level(source, path, diagnostics);
-        check_function_bodies(module, source, path, diagnostics);
+        check_function_bodies(module, &ctx.line_index, source, path, diagnostics);
     }
 }
 
@@ -129,6 +129,7 @@ fn check_module_level(source: &str, path: &str, diagnostics: &mut Vec<Diagnostic
 /// annotated local variables, using parameter types as the source type.
 fn check_function_bodies(
     module: &ResolvedModule,
+    index: &basilisk_common::text::LineIndex,
     source: &str,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
@@ -148,7 +149,7 @@ fn check_function_bodies(
         let mut local_annotations: Vec<(String, String)> = Vec::new();
 
         // Extract the function body source (lines indented past the `def`).
-        let body_lines = func_body_lines(source, func.def_span.start_usize());
+        let body_lines = func_body_lines(index, source, func.def_span.start_usize());
 
         for line_info in &body_lines {
             let trimmed = line_info.text.trim();

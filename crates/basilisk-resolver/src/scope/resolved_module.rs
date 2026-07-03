@@ -26,6 +26,44 @@ use super::{
     },
 };
 
+use std::sync::{Arc, OnceLock};
+
+use basilisk_parser::ParsedModule;
+
+/// A once-parsed AST for a resolved module, shared across all rules.
+///
+/// Dozens of checker rules need the raw `ruff` AST. Instead of each re-parsing
+/// the whole source (which made a file cost ~one full parse *per parsing rule*),
+/// the first rule to ask parses once and every later rule reuses the result
+/// through this [`OnceLock`]. The AST is a pure function of
+/// [`ResolvedModule::source`], so it never affects module equality — two modules
+/// are equal exactly when their real fields (source included) are.
+#[derive(Debug, Clone, Default)]
+pub struct LazyAst(OnceLock<Option<Arc<ParsedModule>>>);
+
+impl LazyAst {
+    /// Return the parsed AST for `source`/`path`, parsing and caching on first
+    /// call and returning the shared result thereafter. `None` iff parsing fails.
+    #[must_use]
+    pub fn get_or_parse(&self, source: &str, path: &str) -> Option<&ParsedModule> {
+        self.0
+            .get_or_init(|| {
+                basilisk_parser::parse_source(source.to_owned(), path.to_owned())
+                    .ok()
+                    .map(Arc::new)
+            })
+            .as_deref()
+    }
+}
+
+impl PartialEq for LazyAst {
+    /// The cached AST is derived from `source`, so it carries no independent
+    /// identity: module equality is decided entirely by the other fields.
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
 /// The complete resolved view of a parsed module.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ResolvedModule {
@@ -254,4 +292,8 @@ pub struct ResolvedModule {
     pub path: String,
     /// The original source text (forwarded from parser for span restoration).
     pub source: String,
+    /// Lazily-parsed AST shared by every rule that needs it (parsed at most once
+    /// per module rather than once per rule). Excluded from equality — see
+    /// [`LazyAst`].
+    pub lazy_ast: LazyAst,
 }

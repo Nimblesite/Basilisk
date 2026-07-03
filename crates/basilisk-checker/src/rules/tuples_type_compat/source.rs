@@ -168,34 +168,45 @@ pub(super) fn iter_source_lines(source: &str) -> Vec<LineInfo<'_>> {
 
 /// Extract source lines belonging to a function body (lines after the `def` line
 /// that are indented past the `def` line's own indentation).
-pub(super) fn func_body_lines(source: &str, def_offset: usize) -> Vec<LineInfo<'_>> {
-    // Find the line that contains `def_offset`.
+///
+/// Uses the shared line index to jump straight to the `def` line in O(log n),
+/// then scans only the body — rather than rescanning the whole source from
+/// offset 0 for every function, which made a file of F functions O(F · n) ≈
+/// O(n²). Byte offsets and the returned lines are identical to that scan.
+pub(super) fn func_body_lines<'a>(
+    index: &basilisk_common::text::LineIndex,
+    source: &'a str,
+    def_offset: usize,
+) -> Vec<LineInfo<'a>> {
+    let def_line = index.line(def_offset).saturating_sub(1); // 0-based def line
+    let def_start = index.line_start_of(def_line);
+    let Some(rest) = source.get(def_start..) else {
+        return Vec::new();
+    };
+
+    let mut lines = rest.split('\n');
+    // The first segment is the `def` line itself: capture its indentation, but
+    // do not emit it (the body is the lines that follow).
+    let Some(def_text) = lines.next() else {
+        return Vec::new();
+    };
+    let def_indent = def_text.len() - def_text.trim_start().len();
+
     let mut result = Vec::new();
-    let mut offset = 0;
-    let mut found_def = false;
-    let mut def_indent = 0usize;
-
-    for line in source.split('\n') {
-        let line_end = offset + line.len();
+    let mut offset = def_start + def_text.len() + 1;
+    for line in lines {
         let indent = line.len() - line.trim_start().len();
-
-        if found_def {
-            let trimmed = line.trim();
-            // Stop when we hit a non-blank, non-comment line at or before the def's indent.
-            if !trimmed.is_empty() && !trimmed.starts_with('#') && indent <= def_indent {
-                break;
-            }
-            result.push(LineInfo {
-                text: line,
-                indent,
-                offset,
-                source_offset: offset,
-            });
-        } else if offset <= def_offset && def_offset <= line_end {
-            found_def = true;
-            def_indent = indent;
+        let trimmed = line.trim();
+        // Stop when we hit a non-blank, non-comment line at or before the def's indent.
+        if !trimmed.is_empty() && !trimmed.starts_with('#') && indent <= def_indent {
+            break;
         }
-
+        result.push(LineInfo {
+            text: line,
+            indent,
+            offset,
+            source_offset: offset,
+        });
         offset += line.len() + 1;
     }
     result

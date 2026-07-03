@@ -248,5 +248,6 @@ fn build_resolved_module(
         pep695_scoping: pep695_scoping::collect_pep695_scoping(stmts, &module.source),
         path: module.path.clone(),
         source: module.source.clone(),
+        lazy_ast: super::scope::LazyAst::default(),
     }
 }

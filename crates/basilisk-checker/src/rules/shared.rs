@@ -108,13 +108,15 @@ pub(crate) fn span_for_line(source: &str, line_number: usize) -> Span {
 // Parsing
 // ---------------------------------------------------------------------------
 
-/// Parse the resolved module's source into an AST, returning `None` on parse failure.
+/// Return the resolved module's AST, parsing it once and sharing the result.
 ///
 /// Every `Rule::check` implementation needs the AST and silently bails on parse
-/// errors (those are reported separately as `BSK-E0000`). This collapses that
-/// boilerplate into a single line at the call site.
-pub(crate) fn parse_module(module: &ResolvedModule) -> Option<ParsedModule> {
-    basilisk_parser::parse_source(module.source.clone(), module.path.clone()).ok()
+/// errors (those are reported separately as `BSK-E0000`). Backed by the module's
+/// [`LazyAst`](basilisk_resolver::LazyAst) cache, so the first rule to ask parses
+/// the source and every later rule reuses it — a file is parsed once, not once
+/// per parsing rule.
+pub(crate) fn parse_module(module: &ResolvedModule) -> Option<&ParsedModule> {
+    module.lazy_ast.get_or_parse(&module.source, &module.path)
 }
 
 // ---------------------------------------------------------------------------

@@ -79,8 +79,10 @@ pub fn check_with_config(
     let inline_overrides = suppression::parse_source_overrides(&module.source);
     let source = &module.source;
     let file_path = std::path::Path::new(&module.path);
-    // [CHKARCH-VERSION-TARGET] every rule sees the configured target.
-    let ctx = context::CheckContext::from_config(config);
+    // [CHKARCH-VERSION-TARGET] every rule sees the configured target, plus a
+    // shared line index so offset→line lookups (here and in rules) stay O(log n)
+    // instead of rescanning the source per diagnostic / per function.
+    let ctx = context::CheckContext::from_config_with_source(config, source);
     let raw = rules::run_all(module, &ctx);
 
     // Build the set of symbol names imported from unresolved modules.
@@ -160,8 +162,14 @@ pub fn check_with_config(
                 }
             }
 
-            // 7. Inline source overrides (highest priority).
-            let diag_line = suppression::byte_offset_to_line_in_source(source, diag.span.start);
+            // 7. Inline source overrides (highest priority). The 0-based line is
+            //    the count of newlines before the span start — the shared line
+            //    index answers that in O(log n) instead of rescanning the prefix
+            //    for every diagnostic.
+            let diag_line = ctx
+                .line_index
+                .line(diag.span.start_usize())
+                .saturating_sub(1);
             suppression::apply_overrides_at_line(diag, diag_line, &inline_overrides)
         })
         .collect()

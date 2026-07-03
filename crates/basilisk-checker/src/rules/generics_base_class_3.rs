@@ -71,7 +71,7 @@ impl Rule for InvariantGenericArgMismatch {
         }
 
         // Step 3: Re-parse and walk function bodies for calls.
-        let Ok(parsed) = basilisk_parser::parse_source(source.clone(), path.clone()) else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 

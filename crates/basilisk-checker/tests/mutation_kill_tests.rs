@@ -1596,3 +1596,59 @@ class Movie(TypedDict):
     );
     Ok(())
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// context.rs from_config_with_source — shared line index must be built
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Kills the cargo-mutants `StructField` mutant that deletes the `line_index`
+/// field from `CheckContext::from_config_with_source` (context.rs:70).
+///
+/// That field is the per-check line index the suppression layer consults to
+/// place each diagnostic on its source line (`lib.rs`: `diag_line =
+/// ctx.line_index.line(span.start) - 1`). Deleting the field falls back to
+/// `..from_config(..)`, whose `LineIndex::default()` is empty and maps EVERY
+/// offset to line 1 → `diag_line = 0`, so a per-line `# type: ignore` on any
+/// line past the first stops matching its diagnostic and the diagnostic escapes.
+///
+/// The suppression *map* is parsed straight from the source (independent of the
+/// line index), so only the diagnostic's line placement moves under the mutant —
+/// exactly the asymmetry this exercises. Scoped to the already-scoped
+/// `check_vars` so the examine-re mutant selection is unchanged.
+#[mutation_safe(rule = "assignment_compatibility", fns = "check_vars")]
+#[test]
+fn mutant_context_line_index_places_inline_suppression() -> Result<(), Box<dyn std::error::Error>> {
+    // Lines 1-2 are clean; the only mismatch is on line 3, carrying an inline
+    // `# type: ignore` on that same line. A populated line index places the
+    // diagnostic on line 3 (`diag_line = 2`), matching the override → suppressed.
+    let suppressed = "a: int = 1\nb: int = 2\nc: int = \"wrong\"  # type: ignore\n";
+    let diagnostics = run(suppressed)?;
+    assert_eq!(
+        assignment_compatibility_count(&diagnostics),
+        0,
+        "line-3 `# type: ignore` must suppress the line-3 mismatch; a dropped \
+         line_index maps it to line 0 and lets it escape: {:?}",
+        diagnostics
+            .iter()
+            .filter(|d| d.code.code == "assignment_compatibility")
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
+    );
+
+    // Positive control: the identical mismatch WITHOUT the inline ignore must
+    // fire, proving the suppression above — not some unrelated reason — is what
+    // silences the diagnostic in the case that kills the mutant.
+    let unsuppressed = "a: int = 1\nb: int = 2\nc: int = \"wrong\"\n";
+    let diagnostics = run(unsuppressed)?;
+    assert_eq!(
+        assignment_compatibility_count(&diagnostics),
+        1,
+        "the line-3 mismatch must fire when it is not suppressed: {:?}",
+        diagnostics
+            .iter()
+            .filter(|d| d.code.code == "assignment_compatibility")
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}

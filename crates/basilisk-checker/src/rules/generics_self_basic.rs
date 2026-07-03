@@ -53,7 +53,7 @@ impl Rule for SelfTypeViolation {
         let source = &module.source;
         let path = &module.path;
 
-        let Ok(parsed) = basilisk_parser::parse_source(source.clone(), path.clone()) else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 

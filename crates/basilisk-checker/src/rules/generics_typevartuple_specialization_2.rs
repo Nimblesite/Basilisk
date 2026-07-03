@@ -71,7 +71,7 @@ impl Rule for TypeVarTupleSpecializationViolation {
             .collect();
 
         // Re-parse the AST so we can walk statements.
-        let Ok(parsed) = basilisk_parser::parse_source(source.clone(), path.clone()) else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 

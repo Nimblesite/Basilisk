@@ -75,8 +75,7 @@ impl Rule for ModuleAttributeUndefined {
         if module.imported_modules.is_empty() {
             return;
         }
-        let Ok(parsed) = basilisk_parser::parse_source(module.source.clone(), module.path.clone())
-        else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
         let mut visitor = AttrVisitor {
