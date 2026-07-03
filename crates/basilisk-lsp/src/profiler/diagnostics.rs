@@ -34,6 +34,12 @@ pub type DiagnosticsByUri = HashMap<Url, Vec<Diagnostic>>;
 pub fn generate_diagnostics(data: &ProfileData, config: &HotspotConfig) -> DiagnosticsByUri {
     let mut result: DiagnosticsByUri = HashMap::new();
 
+    // The "N of M samples" M is the same per-sample denominator the percentage
+    // divides by ([PROFILE-AGGREGATION-LOGIC], #251) — `total_samples` counts
+    // get_stack_traces() calls, so on a multi-threaded program it undercounts
+    // and the message could claim more hits than samples.
+    let sample_count = data.sample_count();
+
     // Hot lines → BSK-PROF-LINE diagnostics.
     let hot_lines = data.hot_lines(config);
     for line in &hot_lines {
@@ -48,11 +54,11 @@ pub fn generate_diagnostics(data: &ProfileData, config: &HotspotConfig) -> Diagn
             source: Some(SOURCE.to_owned()),
             message: format!(
                 "Hot line: {:.1}% CPU ({}/{} samples)",
-                line.percentage, line.samples, data.total_samples
+                line.percentage, line.samples, sample_count
             ),
             data: Some(serde_json::json!({
                 "samples": line.samples,
-                "totalSamples": data.total_samples,
+                "totalSamples": sample_count,
                 "percentage": line.percentage,
             })),
             ..Diagnostic::default()
@@ -142,6 +148,9 @@ mod tests {
             total_samples: 100,
             ..ProfileData::default()
         };
+        // The 100 samples the hand-built hits below are drawn from — percentages
+        // divide by the per-sample denominator ([PROFILE-AGGREGATION-LOGIC], #251).
+        let _ = data.thread_samples.insert(1, 100);
 
         // Hot line: /tmp/test.py:42 with 40 hits.
         let _ = data
@@ -291,6 +300,8 @@ mod tests {
             total_samples: 60_000,
             ..ProfileData::default()
         };
+        // The samples the hand-built hits below are drawn from (#251).
+        let _ = data.thread_samples.insert(1, 60_000);
 
         // Simulate 100 files, 50 hot lines each.
         for file_idx in 0..100_u32 {

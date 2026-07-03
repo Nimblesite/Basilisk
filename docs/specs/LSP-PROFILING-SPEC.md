@@ -341,10 +341,12 @@ For each `get_stack_traces()` call:
 
 1. For each thread's `StackTrace`:
    - Skip if `!trace.active && !config.include_idle`
-   - For each `Frame` in the stack: increment `line_hits` and `function_stats.total_samples`
+   - Increment `line_hits` once per **distinct** `(file, line)` and `function_stats.total_samples` once per **distinct** `(file, function)` in the stack — per *sample*, never per frame (#251): a recursive function occupies several stack levels of one sample but is still one sample, or its inclusive total outgrows the sample count and its reported percentage overflows 100%
    - The leaf frame (index 0) also gets `self_samples` incremented
-   - Record the stack as frame indices for speedscope export
+   - Record the stack as frame indices for speedscope export (all frames, recursion included — the flame chart keeps real stack shapes)
 2. Increment `total_samples`
+
+Hot-list percentages share one denominator: the number of aggregated traces (`Σ thread_samples`, equal to `Σ self_samples` since every kept trace has exactly one leaf). A hot line's percentage is "the share of samples touching this line", a hot function's total is "the share of samples where it appears anywhere on the stack" — both bounded by 100%.
 
 ### Runtime-scaffolding filtering {#PROFILE-AGGREGATION-SCAFFOLD}
 
