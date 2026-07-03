@@ -374,6 +374,96 @@ export async function getHoverText(
     return extractHoverText(hovers);
 }
 
+// ── Inlay-hint helpers ───────────────────────────────────────────────
+// Shared so any suite can assert that Basilisk surfaces inferred types
+// INLINE (via `textDocument/inlayHint`) without the user hovering. See
+// [LSPARCH-FEATURES-INLAYHINTS].
+
+/** Flatten a VS Code inlay hint's label (string or label-parts) into one string. */
+export function inlayHintLabel(hint: vscode.InlayHint): string {
+    return typeof hint.label === 'string'
+        ? hint.label
+        : hint.label.map((part) => part.value).join('');
+}
+
+/**
+ * Whitespace-insensitive inlay-hint label so assertions are immune to padding
+ * differences: `": int"` → `":int"`, `" -> str"` → `"->str"`, `"name="` stays.
+ * Splits on spaces (no regex — see CLAUDE.md) which is all these labels contain.
+ */
+export function normalizedInlayLabel(hint: vscode.InlayHint): string {
+    return inlayHintLabel(hint).split(' ').join('');
+}
+
+/** The full-document range for a provider request. */
+function fullDocumentRange(doc: vscode.TextDocument): vscode.Range {
+    const lastLine = doc.lineCount - 1;
+    return new vscode.Range(
+        new vscode.Position(0, 0),
+        new vscode.Position(lastLine, doc.lineAt(lastLine).text.length),
+    );
+}
+
+/**
+ * Poll the whole-document inlay-hint provider until `predicate` holds. Returns
+ * `[]` on timeout — never throws — so callers assert with a descriptive message
+ * rather than an opaque poll failure. Analysis is async, so the first request
+ * can legitimately be empty.
+ */
+async function pollInlayHints(
+    doc: vscode.TextDocument,
+    predicate: (hints: vscode.InlayHint[]) => boolean,
+    timeoutMs: number,
+): Promise<vscode.InlayHint[]> {
+    const range = fullDocumentRange(doc);
+    return pollUntilResult({
+        fn: async () => vscode.commands.executeCommand<vscode.InlayHint[]>(
+            'vscode.executeInlayHintProvider', doc.uri, range,
+        ).then((r) => r ?? [], () => [] as vscode.InlayHint[]),
+        predicate,
+        timeoutMs,
+    }).catch(() => [] as vscode.InlayHint[]);
+}
+
+/** Poll until at least `minCount` inlay hints materialise over the document. */
+export async function getInlayHints(
+    doc: vscode.TextDocument,
+    minCount: number,
+    timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS,
+): Promise<vscode.InlayHint[]> {
+    return pollInlayHints(doc, (r) => r.length >= minCount, timeoutMs);
+}
+
+/** Normalised inlay-hint labels present on `line` (0-based) of the document. */
+export function inlayLabelsOnLine(
+    hints: readonly vscode.InlayHint[],
+    line: number,
+): string[] {
+    return hints
+        .filter((hint) => hint.position.line === line)
+        .map(normalizedInlayLabel);
+}
+
+/** Arguments for {@link waitForInlayLabel}. */
+export interface InlayLabelWait {
+    doc: vscode.TextDocument;
+    line: number;
+    /** Normalised label to wait for, e.g. `":str"` (see {@link normalizedInlayLabel}). */
+    label: string;
+    timeoutMs?: number;
+}
+
+/**
+ * Poll the inlay-hint provider until a hint whose normalised label equals
+ * `label` appears on `line`. Returns the full hint list once satisfied, or `[]`
+ * on timeout. Used to assert that inline types stay CORRECT and LIVE after the
+ * document text changes.
+ */
+export async function waitForInlayLabel(opts: InlayLabelWait): Promise<vscode.InlayHint[]> {
+    const { doc, line, label, timeoutMs = DIAGNOSTIC_TIMEOUT_MS } = opts;
+    return pollInlayHints(doc, (r) => inlayLabelsOnLine(r, line).includes(label), timeoutMs);
+}
+
 /** Definition-family providers usable with {@link getNavLocations}. */
 export type NavProvider =
     | 'vscode.executeDefinitionProvider'
