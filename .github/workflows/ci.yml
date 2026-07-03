@@ -564,7 +564,11 @@ jobs:
         if: env.RUN == 'true'
         uses: taiki-e/install-action@59012be0884e296ca2da49b530610e72c49039ad # v2
         with:
-          tool: cargo-mutants
+          # Pin the exact version: cargo-mutants adds mutation operators between
+          # releases (e.g. the `StructField` deletion operator), so an unpinned
+          # tool silently changes the mutant pool and the baseline stops being
+          # reproducible. The committed baseline is measured against this version.
+          tool: cargo-mutants@27.1.0
 
       - name: Run mutation test shard
         if: env.RUN == 'true'
