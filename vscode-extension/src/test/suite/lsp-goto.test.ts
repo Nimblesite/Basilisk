@@ -125,6 +125,18 @@ suite('LSP Goto Hammer', () => {
         assertLands('parameter operand', locations, { uri, line: locate(SUBJECT_SOURCE, 'operand', 0).line });
     });
 
+    test('goto-def: module constant use inside a function resolves to its definition', async function () {
+        this.timeout(GOTO_TEST_TIMEOUT_MS);
+        // occurrence 1 = the `PI` use in `return PI * scale_factor` inside
+        // scaled_area (occurrence 0 is the module-level definition). Field
+        // report: cmd+click on this use did not navigate while other
+        // variables did.
+        const locations = await getNavLocations(
+            'vscode.executeDefinitionProvider', uri, locate(SUBJECT_SOURCE, 'PI', 1)
+        );
+        assertLands('module constant PI use', locations, { uri, line: locate(SUBJECT_SOURCE, 'PI', 0).line });
+    });
+
     test('goto-def: attribute use resolves to the attribute def', async function () {
         this.timeout(GOTO_TEST_TIMEOUT_MS);
         const locations = await getNavLocations(
