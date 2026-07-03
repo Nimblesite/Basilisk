@@ -38,6 +38,7 @@ import {
   setupLspTestSuite,
   teardownLspTestSuite,
   closeAllEditors,
+  waitForLspReady,
 } from "./test-helpers";
 
 /** How long the burner keeps spinning (covers the whole suite). */
@@ -598,6 +599,56 @@ suite("CPU profiling — real end-to-end", () => {
       await waitForDebugSessionEnd();
     }
     disposeFlamegraphPanel();
+  });
+
+  // The LSP runtime can be re-created within one extension session (store
+  // reset → a brand-new LanguageClient). The regression: the profiler's
+  // progress listener was registered once, on the first client only, so after
+  // a runtime re-creation the live sample counter silently died — the status
+  // bar sat on "Profiling..." with no data forever. The listener must follow
+  // the store's client signal ([PROFILE-NOTIFICATIONS-PROGRESS],
+  // [PROFILE-PROCESSES-REACTIVE]).
+  test("live progress survives an LSP client re-creation — the sample counter never goes silently dead", async function () {
+    if (process.platform === "win32") { this.skip(); }
+    this.timeout(120_000);
+    const store = getStore();
+    assert.ok(store, "store must be initialized");
+    const oldClient = store.client.value;
+    assert.ok(oldClient, "a running client must exist before the re-creation");
+
+    // Recreate the runtime: reset() → onReset → startRuntime → NEW LanguageClient.
+    store.reset();
+    await pollUntilResult({
+      fn: async () => store.client.value,
+      predicate: (client) => client !== undefined && client !== oldClient,
+      timeoutMs: 30_000,
+    });
+    await waitForLspReady();
+
+    try {
+      // One-click profile on the fresh runtime (cooperative on macOS, py-spy
+      // attach to the debuggee elsewhere — the same [PROFILE-PROCESSES-LAUNCH-FILE]
+      // routing users get).
+      const launched = await vscode.debug.startDebugging(
+        undefined,
+        buildProfileLaunchConfig("cpu", burnerPath),
+      );
+      assert.ok(launched, "the CPU launch must start on the re-created runtime");
+
+      // The live NON-ZERO sample counter must reach the status bar — with a
+      // dead listener this sits on "Profiling..." until the timeout.
+      await pollUntilResult({
+        fn: async () => profilerStatusText() ?? "",
+        predicate: (text) => /[1-9][\d.]* ?K? samples/.test(text),
+        timeoutMs: 30_000,
+      });
+
+      await vscode.commands.executeCommand("basilisk.profileStop");
+      assert.strictEqual(store.profiler.value.cpu, "idle", "stop must clear the session");
+    } finally {
+      await vscode.debug.stopDebugging();
+      await waitForDebugSessionEnd();
+    }
   });
 
   test("attaching to an exited process fails with a distinct, classified cause (#81)", async function () {

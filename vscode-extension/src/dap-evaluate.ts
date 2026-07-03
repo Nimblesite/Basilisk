@@ -18,7 +18,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import { Logger } from "./logger";
 import { ALL_THREADS, debugOutputCursor, debugOutputSince, stoppedThreadIds } from "./dap-output";
-import { POLL_INTERVAL_MS, STARTUP_TIMEOUT_MS } from "./timeouts";
+import { POLL_INTERVAL_MS, STARTUP_TIMEOUT_MS, WAIT_MS } from "./timeouts";
 
 /** The Basilisk debug adapter type. */
 const DEBUG_TYPE = "basilisk-debug";
@@ -170,12 +170,24 @@ export interface AcquiredFrame {
   readonly release: () => Promise<void>;
 }
 
+/** Backoff between transparent-pause attempts, letting the debuggee progress
+ *  out of interpreter/debugger bootstrap frames into user code. */
+const PAUSE_RETRY_BACKOFF_MS = 150;
+
 /**
  * Acquire an evaluable stopped frame, transparently pausing the debuggee
  * when it is running — IDE-grade memory snapshots must not demand a manual
  * breakpoint ([PROFILE-MEMORY-HOWTO]). When acquisition pauses the program,
  * `release` resumes it; when the user was already stopped at a breakpoint,
  * `release` is a no-op and their pause is preserved.
+ *
+ * A pause landing while the debuggee is still inside interpreter/debugger
+ * bootstrap (a launch is only milliseconds old) suspends it in frames
+ * `justMyCode` hides — `stackTrace` reports **zero frames**, and since the
+ * thread now sits parked there, it would stay unevaluable forever. So a
+ * transparent pause is a retry loop: pause, briefly wait for an evaluable
+ * frame, and when none appears resume and re-pause after a backoff — the
+ * program progresses into user code between attempts.
  */
 export async function acquireStoppedFrame(): Promise<AcquiredFrame | null> {
   const session = activeBasiliskSession();
@@ -187,14 +199,31 @@ export async function acquireStoppedFrame(): Promise<AcquiredFrame | null> {
     return { frameId: existing, release: async () => { await Promise.resolve(); } };
   }
 
-  if (!(await pauseDebuggee(session))) { return null; }
-  const frameId = await waitForStoppedFrame();
-  if (frameId === null) {
+  const deadline = Date.now() + STARTUP_TIMEOUT_MS;
+  for (let attempt = 1; Date.now() < deadline; attempt += 1) {
+    if (!(await pauseDebuggee(session))) { return null; }
+    const frameId = await waitForFrameUntil(Math.min(deadline, Date.now() + WAIT_MS));
+    if (frameId !== null) {
+      Logger.info(`[Memory] transparently paused the debuggee for evaluation (attempt ${attempt})`);
+      return { frameId, release: async () => resumeDebuggee(session) };
+    }
+    // Paused, but no evaluable frame (bootstrap / hidden frames): resume so
+    // the program can reach user code, then try again.
+    Logger.info(`[Memory] pause landed in non-user frames (attempt ${attempt}) — resuming to retry`);
     await resumeDebuggee(session);
-    return null;
+    await new Promise<void>((resolve) => setTimeout(resolve, PAUSE_RETRY_BACKOFF_MS));
   }
-  Logger.info("[Memory] transparently paused the debuggee for evaluation");
-  return { frameId, release: async () => resumeDebuggee(session) };
+  return null;
+}
+
+/** Poll for an evaluable stopped frame until `deadlineMs` (epoch), else null. */
+async function waitForFrameUntil(deadlineMs: number): Promise<number | null> {
+  while (Date.now() < deadlineMs) {
+    const frameId = await currentStoppedFrameId();
+    if (frameId !== null) { return frameId; }
+    await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  }
+  return null;
 }
 
 /** Ask debugpy to pause the first reported thread. */
@@ -229,13 +258,7 @@ async function resumeDebuggee(session: vscode.DebugSession): Promise<void> {
  * both of which wait for the `stopOnEntry` pause before evaluating.
  */
 export async function waitForStoppedFrame(): Promise<number | null> {
-  const deadline = Date.now() + STARTUP_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const frameId = await currentStoppedFrameId();
-    if (frameId !== null) { return frameId; }
-    await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-  }
-  return null;
+  return waitForFrameUntil(Date.now() + STARTUP_TIMEOUT_MS);
 }
 
 /** Top frameId of `threadId` if it is stopped, else null (running threads error). */

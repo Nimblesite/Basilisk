@@ -14,9 +14,13 @@
 
 import * as vscode from "vscode";
 import { effect } from "@preact/signals-core";
+import type { LanguageClient } from "vscode-languageclient/node";
 import type { Store } from "./store";
 import type { ProfilerActivity, ProfilerSession } from "./profiler-state";
 import { formatProfileDuration, formatSampleCount } from "./profiler-format";
+
+/** LSP notification carrying live profiling progress. */
+const PROFILER_PROGRESS_NOTIFICATION = "basilisk/profiler/progress";
 
 /** Status bar priority — slightly lower than the main Basilisk item. */
 const PROFILER_STATUS_BAR_PRIORITY = 99;
@@ -92,4 +96,46 @@ function renderStatusBar(item: vscode.StatusBarItem, session: ProfilerSession): 
 export function profilerStatusText(): string | undefined {
   if (renderedActivity === "idle") { return undefined; }
   return statusBarItem?.text;
+}
+
+/**
+ * Bind the `basilisk/profiler/progress` handler to whichever LanguageClient the
+ * store currently holds — reactively, so the live sample counter never goes
+ * silently dead. The runtime can be re-created within one session (store reset
+ * → a brand-new client), and a slow cold start can outlast any fixed timeout,
+ * so a one-shot registration is wrong ([PROFILE-NOTIFICATIONS-PROGRESS]).
+ *
+ * `onNotification` may be called before the client connects (the handler is
+ * queued), and vscode-languageclient replays it across restarts of the same
+ * instance — so registering once per client *instance* is sufficient.
+ */
+export function registerProgressListener(store: Store): vscode.Disposable {
+  let boundClient: LanguageClient | undefined;
+  let registration: vscode.Disposable | undefined;
+
+  const disposeEffect = effect(() => {
+    const client = store.client.value;
+    if (client === undefined || client === boundClient) { return; }
+    registration?.dispose();
+    boundClient = client;
+    registration = client.onNotification(PROFILER_PROGRESS_NOTIFICATION, (params: {
+      sessionId: string;
+      sampleCount: number;
+      duration: number;
+      topFunction: string;
+    }) => {
+      if (params.sessionId === store.profiler.value.cpuSessionId) {
+        store.profilerProgress(params.sampleCount, params.duration, params.topFunction);
+      }
+    });
+  });
+
+  return {
+    dispose() {
+      disposeEffect();
+      registration?.dispose();
+      registration = undefined;
+      boundClient = undefined;
+    },
+  };
 }

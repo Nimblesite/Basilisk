@@ -17,7 +17,6 @@ import { Logger } from "./logger";
 import type { Store } from "./store";
 import { evaluateInDebugSession, waitForStoppedFrame } from "./dap-evaluate";
 import { withUserProgress } from "./progress-ops";
-import { POLL_INTERVAL_MS, STARTUP_TIMEOUT_MS } from "./timeouts";
 import {
   applyProfileDecorations,
   disposeProfileDecorations,
@@ -25,7 +24,7 @@ import {
 } from "./profiler-decorations";
 import { disposeFlamegraphPanel, presentProfileResult } from "./profiler-flamegraph-html";
 import { shouldProfileOnLaunch, waitForDebuggeePid } from "./profiler-launch";
-import { bindProfilerStatusBar } from "./profiler-status";
+import { bindProfilerStatusBar, registerProgressListener } from "./profiler-status";
 
 // Re-exported so tests keep one import site for the profiler's public seams.
 export { profilerStatusText } from "./profiler-status";
@@ -45,9 +44,6 @@ const LSP_CMD = {
 
 /** Ack printed by the injected cooperative sampler ([PROFILE-COOPERATIVE]). */
 const COOPERATIVE_ACK = "__BASILISK_CPU_ACK__";
-
-/** LSP notification for profiling progress. */
-const PROFILER_PROGRESS_NOTIFICATION = "basilisk/profiler/progress";
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -69,10 +65,7 @@ let lastResult: ProfileResult | undefined;
  * Register profiler UI components. Called once during extension activation.
  * Returns disposables for cleanup.
  */
-export function registerProfiler(
-  context: vscode.ExtensionContext,
-  store: Store,
-): vscode.Disposable[] {
+export function registerProfiler(store: Store): vscode.Disposable[] {
   const disposables: vscode.Disposable[] = [];
 
   // Status bar item — renders reactively from the store's profiler signal
@@ -88,7 +81,7 @@ export function registerProfiler(
   );
 
   // Listen for profiler progress notifications from LSP.
-  registerProgressListener(store);
+  disposables.push(registerProgressListener(store));
 
   // Clear decorations when active editor changes (optional, re-applies on focus).
   disposables.push(
@@ -394,10 +387,18 @@ async function handleProfileSnapshot(store: Store): Promise<void> {
   }
 
   try {
-    const result = await client.sendRequest<ProfileResult | undefined>("workspace/executeCommand", {
-      command: LSP_CMD.snapshot,
-      arguments: [{ sessionId }],
-    });
+    // Snapshots also write the export artifacts \u2014 show the wait like every
+    // other profiling flow ([PROFILE-UX-PROGRESS]).
+    const result = await withUserProgress(
+      "Basilisk: Taking profile snapshot",
+      async (report) => {
+        report("Collecting samples so far\u2026");
+        return client.sendRequest<ProfileResult | undefined>("workspace/executeCommand", {
+          command: LSP_CMD.snapshot,
+          arguments: [{ sessionId }],
+        });
+      },
+    );
 
     if (result !== undefined && result !== null) {
       lastResult = result;
@@ -463,31 +464,6 @@ async function handleProfileAttachToDebug(store: Store): Promise<void> {
     Logger.error(`Profile attach-to-debug failed: ${msg}`);
     vscode.window.showErrorMessage(`Basilisk: ${msg}`);
   }
-}
-
-// ── Progress listener ─────────────────────────────────────────────────────
-
-function registerProgressListener(store: Store): void {
-  // Check periodically if the client is available and register the handler.
-  const interval = setInterval(() => {
-    const client = store.client.value;
-    if (client?.isRunning() === true) {
-      clearInterval(interval);
-      client.onNotification(PROFILER_PROGRESS_NOTIFICATION, (params: {
-        sessionId: string;
-        sampleCount: number;
-        duration: number;
-        topFunction: string;
-      }) => {
-        if (params.sessionId === store.profiler.value.cpuSessionId) {
-          store.profilerProgress(params.sampleCount, params.duration, params.topFunction);
-        }
-      });
-    }
-  }, POLL_INTERVAL_MS);
-
-  // Clean up interval if client never starts.
-  setTimeout(() => { clearInterval(interval); }, STARTUP_TIMEOUT_MS);
 }
 
 // ── Disposal ──────────────────────────────────────────────────────────────
