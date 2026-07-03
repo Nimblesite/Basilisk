@@ -313,6 +313,7 @@ fn export_stop_artifacts(
     crate::profiler::export::export_stop_artifacts(
         &result.data,
         &result.session_id,
+        result.pid,
         result.duration,
         result.sample_rate,
         format_str,

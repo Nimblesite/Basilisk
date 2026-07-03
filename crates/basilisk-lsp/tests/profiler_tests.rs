@@ -231,9 +231,15 @@ fn scaffolding_frames_are_stripped_from_every_surface() {
 
     // The exported stack (root-first) must START at the user's module — the
     // flame chart roots at the user's code, not nine rows down.
-    let stacks = data.thread_stacks.get(&1).expect("thread 1 must have stacks");
+    let stacks = data
+        .thread_stacks
+        .get(&1)
+        .expect("thread 1 must have stacks");
     let root_frame = &data.frames[stacks[0][0]];
-    assert_eq!(root_frame.name, "<module>", "the stack must root at the user's module");
+    assert_eq!(
+        root_frame.name, "<module>",
+        "the stack must root at the user's module"
+    );
     assert_eq!(root_frame.file, "/home/user/proj/cpu_hotspot.py");
     assert_eq!(stacks[0].len(), 3, "only the three user frames survive");
 
@@ -257,7 +263,11 @@ fn leaf_tracer_frames_attribute_to_the_traced_user_line() {
             1,
             true,
             vec![
-                ("trace_dispatch", "/site-packages/debugpy/_vendored/pydevd/pydevd.py", 120),
+                (
+                    "trace_dispatch",
+                    "/site-packages/debugpy/_vendored/pydevd/pydevd.py",
+                    120,
+                ),
                 ("user_leaf", "/home/user/proj/app.py", 7),
                 ("<module>", "/home/user/proj/app.py", 20),
             ],
@@ -276,7 +286,9 @@ fn leaf_tracer_frames_attribute_to_the_traced_user_line() {
         "the tracer's overhead must be attributed to the traced user leaf"
     );
     assert!(
-        !data.function_stats.contains_key("/site-packages/debugpy/_vendored/pydevd/pydevd.py"),
+        !data
+            .function_stats
+            .contains_key("/site-packages/debugpy/_vendored/pydevd/pydevd.py"),
         "pydevd tracer frames must not appear at all"
     );
 }
@@ -293,7 +305,11 @@ fn machinery_only_threads_are_dropped_entirely() {
                 7,
                 true,
                 vec![
-                    ("_do_wait_suspend", "/site-packages/debugpy/_vendored/pydevd/pydevd.py", 2000),
+                    (
+                        "_do_wait_suspend",
+                        "/site-packages/debugpy/_vendored/pydevd/pydevd.py",
+                        2000,
+                    ),
                     ("run", "/site-packages/debugpy/server/api.py", 50),
                 ],
             ),
@@ -338,11 +354,13 @@ fn user_paths_that_merely_contain_debugger_names_are_kept() {
     );
 
     assert!(
-        data.function_stats.contains_key("/home/user/debugpy_utils/app.py"),
+        data.function_stats
+            .contains_key("/home/user/debugpy_utils/app.py"),
         "a user dir merely named debugpy_utils must be kept"
     );
     assert!(
-        data.function_stats.contains_key("/home/user/proj/runpy_helpers.py"),
+        data.function_stats
+            .contains_key("/home/user/proj/runpy_helpers.py"),
         "a user module merely named runpy_helpers.py must be kept"
     );
 }
@@ -968,7 +986,7 @@ fn stop_artifacts_surface_export_errors_for_empty_session() {
     let dir = std::env::temp_dir();
 
     let artifacts =
-        export::export_stop_artifacts(&data, "stop-empty-001", 0.0, 100, "speedscope", &dir);
+        export::export_stop_artifacts(&data, "stop-empty-001", 0, 0.0, 100, "speedscope", &dir);
 
     assert!(
         artifacts.output_file.is_none(),
@@ -998,7 +1016,7 @@ fn stop_artifacts_export_all_formats_for_populated_session() {
     let dir = std::env::temp_dir();
 
     let artifacts =
-        export::export_stop_artifacts(&data, "stop-full-001", 5.0, 100, "speedscope", &dir);
+        export::export_stop_artifacts(&data, "stop-full-001", 77, 5.0, 100, "speedscope", &dir);
 
     assert!(
         artifacts.export_error.is_none(),
@@ -1041,7 +1059,7 @@ fn stop_artifacts_flamegraph_format_reuses_single_export() {
     let dir = std::env::temp_dir();
 
     let artifacts =
-        export::export_stop_artifacts(&data, "stop-fg-001", 5.0, 100, "flamegraph", &dir);
+        export::export_stop_artifacts(&data, "stop-fg-001", 78, 5.0, 100, "flamegraph", &dir);
 
     let output = artifacts
         .output_file

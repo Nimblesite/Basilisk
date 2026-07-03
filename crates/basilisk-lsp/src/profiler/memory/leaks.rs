@@ -61,12 +61,14 @@ pub struct SuspectedLeak {
 }
 
 /// History of a single allocation site across multiple diffs.
+///
+/// Only the consecutive-growth streak feeds the confidence ladder
+/// ([PROFILE-MEMORY-CONFIDENCE]); per-diff byte sizes come from the diff
+/// itself, so no byte total is accumulated here.
 #[derive(Debug, Clone, Default)]
 struct AllocationHistory {
     /// Number of consecutive diffs where this site grew.
     consecutive_growths: u32,
-    /// Total bytes grown across all observed diffs.
-    total_growth: i64,
 }
 
 /// Tracks allocation patterns across multiple diffs for leak scoring.
@@ -96,7 +98,6 @@ impl LeakTracker {
 
             let history = self.histories.entry(key).or_default();
             history.consecutive_growths += 1;
-            history.total_growth += growth.size_diff;
         }
 
         // Reset consecutive count for sites that didn't grow this time.

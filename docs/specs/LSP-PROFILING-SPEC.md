@@ -297,7 +297,7 @@ Both triggers of [#PROFILE-PROCESSES-LAUNCH-FILE] reach this guard: the explicit
 The out-of-the-box CPU path for **debug-launched** sessions. Modern macOS gates task ports behind signed, debugger-entitled callers (even root + py-spy gets `EPERM`), so for debugpy-launched sessions Basilisk samples **from inside the debuggee** instead of reading foreign memory:
 
 1. The launch config sets `stopOnEntry` (macOS only; [#PROFILE-PROCESSES-LAUNCH-FILE]).
-2. `basilisk.profiler.cooperativeScript` (leg 1) mints a sample-file path and returns a Python script; the editor evaluates it at the entry pause via the memory-profiling courier ([#PROFILE-MEMORY-HOWTO]), then resumes. The script starts a **daemon thread** that walks `sys._current_frames()` at the configured rate, appending one JSONL tick per sample (header first: `{"header":{"python":…,"pid":…}}`, then `{"ticks":[[threadId,active,frames…]]}` with leaf-first frames, matching py-spy). Leading debugpy/pydevd `sys.settrace` callback frames are stripped (tracer overhead attributed to the traced user line); threads whose remaining leaf sits in stdlib wait modules are marked idle.
+2. `basilisk.profiler.cooperativeScript` (leg 1) mints a sample-file path and returns a Python script; the editor evaluates it at the entry pause via the memory-profiling courier ([#PROFILE-MEMORY-HOWTO]), then resumes. The script starts a **daemon thread** that walks `sys._current_frames()` at the configured rate under **deadline pacing** (a plain `sleep(interval)` would add the stack-walk time to every period and silently under-sample), appending one JSONL tick per sample (header first: `{"header":{"python":…,"pid":…}}`, then `{"ticks":[[threadId,active,frames…]]}` with leaf-first frames, matching py-spy). Leading debugpy/pydevd `sys.settrace` callback frames are stripped with **anchored matching** — debugger basename prefix or exact `debugpy`/`pydevd` path segment, mirroring the Rust-side `is_runtime_scaffolding`, so a user path that merely *contains* those strings is never stripped — and tracer overhead is attributed to the traced user line. A thread is idle only when its remaining leaf's **exact basename** is a stdlib wait module (`threading.py`, `selectors.py`, `queue.py`, `socket.py`, `ssl.py`, `subprocess.py`): a suffix match would hide user files like `websocket.py` or `task_queue.py` from the profile entirely. Undecodable filenames (lone surrogates) are scrubbed before serialization — strict JSON parsers reject the escapes `json.dumps` would emit — and no exception inside the sampling loop may kill the session. The tailer only parses complete lines: a tick record cut mid-write by the debuggee's buffered writer is held until its newline lands, never parse-and-dropped as two garbage halves, and unparseable complete lines are dropped with a (once-per-session) warning. Covered by the real-python e2e suite (`python_e2e_tests.rs`), which executes the genuine injected script in `python3`.
 3. `basilisk.profiler.cooperativeAttach` (leg 2) tails the file as a standard `SamplerHandle` (`cooperative.rs`) — handshaking on the header like the elevated helper does on `attached` — and registers a normal session, so aggregation, hotspots, exports, diagnostics, and live progress ([#PROFILE-NOTIFICATIONS-PROGRESS]) are reused unchanged. Response matches `profiler.start`.
 4. Stop writes a `<file>.stop` sentinel; the injected thread exits, the tailer drains what was flushed (0.5 s flush cadence) and removes both files.
 
@@ -597,6 +597,8 @@ When the debug session terminates, `memory-profiler.ts`'s `onDidTerminateDebugSe
 
 The injected path is a JSON-encoded Python string literal (the cross-platform-safe pattern of [#PROFILE-COOPERATIVE]), so a Windows backslash or a quote in `TMPDIR` cannot break the script.
 
+The hook also runs on `SIGTERM`/`SIGINT` (the VS Code Stop button and Ctrl-C bypass `atexit`), and it **chains to the application's own signal handler**: the previous handler is captured at install time and invoked after the snapshot is written — a server that flushes state on SIGTERM keeps its graceful shutdown under memory tracking, never clobbered by the profiler. A `SIG_IGN` predecessor is honored (the signal stays ignored); with no predecessor the default disposition is restored and the signal re-raised so the process dies as intended. Covered by the `final_snapshot_signal_hook_chains_the_apps_own_handler` real-python e2e (`python_e2e_tests.rs`).
+
 **The snapshot is the user's program, as a real call tree.** Two choices in `snapshot_payload_fn` make the `.heapprofile` worth reading:
 
 1. **Noise filtering.** `tracemalloc` traces the *whole* process, so a naive snapshot is dominated by debugger allocations (pydevd/debugpy) and snapshot machinery (`tracemalloc`, `<frozen …>`, `<string>`). `filter_traces` drops any allocation whose **site** is one of those, then strips debugger/runtime frames from each kept stack — matching the anchored **basename** (e.g. `pydevd*`) or an exact **path segment** (`debugpy`/`pydevd`), never an unanchored substring (so `debugpy_utils/app.py` is never mistaken for the debugger). An allocation is dropped when only stdlib-proper frames survive; user code **and the libraries it calls** (site-/dist-packages) are kept.
@@ -676,6 +678,17 @@ Answers "what is holding on to this?" Force-directed layout with physics simulat
 | **High** | Consistent growth across 3+ consecutive snapshot diffs | Red, dashed |
 | **Medium** | Growth in 2 consecutive diffs, or >10 MB single-diff growth | Amber |
 | **Low** | Single-diff growth, small size, possible cache warmup | Gray |
+
+**Diffs report shrinks, not only growth.** The `diff_snapshot` script forwards
+every non-zero `size_diff` (tracemalloc's `compare_to` sorts by |size_diff|, so
+the head slice carries the biggest shrinks alongside the biggest growths);
+`parse_diff_output` splits them into `grown_allocations` / `freed_allocations`,
+making `totalFreed` / `netGrowth` real numbers instead of echoes of the growth
+total. Only grown sites feed the confidence ladder — a site that shrank (or
+stayed flat) resets its consecutive-growth streak, so a cache that provably
+releases memory never escalates as a one-way leak. Covered by the
+`diff_script_reports_shrinking_allocations` real-python e2e
+(`python_e2e_tests.rs`).
 
 ### Diagnostic Codes {#PROFILE-MEMORY-CODES}
 

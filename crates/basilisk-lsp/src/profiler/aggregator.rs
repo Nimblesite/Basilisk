@@ -568,7 +568,10 @@ mod tests {
         // line 101, so it reads exactly 100%.
         let hot_lines = data.hot_lines(&HotspotConfig::default());
         let call_site = hot_lines.iter().find(|l| l.line == 101);
-        assert!(call_site.is_some(), "the recursive call-site line must be reported");
+        assert!(
+            call_site.is_some(),
+            "the recursive call-site line must be reported"
+        );
         if let Some(line) = call_site {
             let delta = (line.percentage - 100.0).abs();
             assert!(

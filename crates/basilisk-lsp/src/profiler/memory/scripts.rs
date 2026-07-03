@@ -67,12 +67,22 @@ def _basilisk_write_exit_snapshot():
         os.replace(_tmp, _final)
     except Exception:
         pass
+_basilisk_prev_handlers = {{}}
 def _basilisk_signal_exit(_signum, _frame):
     # The VS Code Stop button terminates the debuggee with SIGTERM (SIGINT for
     # Ctrl-C), neither of which runs atexit (pyscript-2). Capture the final
-    # snapshot, then restore the default disposition and re-raise so the process
+    # snapshot, then CHAIN to the application's own handler — a server that
+    # flushes state on SIGTERM must keep working under memory tracking, never
+    # have its graceful shutdown clobbered by the profiler. With no prior
+    # handler, restore the default disposition and re-raise so the process
     # still dies as the signal intended. SIGKILL / os._exit stay unrecoverable.
     _basilisk_write_exit_snapshot()
+    _prev = _basilisk_prev_handlers.get(_signum)
+    if callable(_prev):
+        _prev(_signum, _frame)  # the app's handler decides how to die
+        return
+    if _prev is signal.SIG_IGN:
+        return  # the app chose to ignore this signal; honor that
     signal.signal(_signum, signal.SIG_DFL)
     os.kill(os.getpid(), _signum)
 tracemalloc.start({nframe})
@@ -80,6 +90,7 @@ gc.set_debug(gc.DEBUG_SAVEALL)
 atexit.register(_basilisk_write_exit_snapshot)
 for _sig in (signal.SIGTERM, signal.SIGINT):
     try:
+        _basilisk_prev_handlers[_sig] = signal.getsignal(_sig)
         signal.signal(_sig, _basilisk_signal_exit)
     except (ValueError, OSError):
         pass  # only settable on the main thread / supported signals
@@ -244,8 +255,12 @@ snapshot2 = tracemalloc.take_snapshot()
 if hasattr(tracemalloc, '_basilisk_prev_snapshot'):
     diff = snapshot2.compare_to(tracemalloc._basilisk_prev_snapshot, 'lineno')
     leaks = []
+    # compare_to sorts by ABS(size_diff), so the head slice already carries the
+    # biggest shrinks alongside the biggest growths. Both are reported: dropping
+    # negative diffs made totalFreed/netGrowth lies and read a cache that
+    # provably releases memory as a one-way leak.
     for stat in diff[:{max_stats}]:
-        if stat.size_diff > 0:
+        if stat.size_diff != 0:
             frame = stat.traceback[0]
             leaks.append({{
                 'file': frame.filename,

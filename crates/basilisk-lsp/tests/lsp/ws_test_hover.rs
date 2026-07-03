@@ -237,7 +237,9 @@ async fn test_ws_hover_module_constant_with_final_annotation() -> TestResult<()>
     // runs through the salsa engine.
     let mut scan_done = false;
     for _ in 0..20 {
-        let Some(msg) = fixture.recv().await else { break };
+        let Some(msg) = fixture.recv().await else {
+            break;
+        };
         if msg.contains("\"method\":\"textDocument/publishDiagnostics\"")
             && msg.contains("scan_marker.py")
         {
