@@ -176,6 +176,63 @@ function assertCpuProfileArtifact(cpuProfilePath: string | undefined, expectedFu
   }
 }
 
+/** Filenames that mark debugger/launcher scaffolding ([PROFILE-AGGREGATION-SCAFFOLD]). */
+const SCAFFOLDING_FILE_RE = /runpy|debugpy|pydevd|<string>/i;
+
+/**
+ * Assert every REAL artifact of a debug-launched profile roots at the user's
+ * code with zero launcher scaffolding — the hot lists, the speedscope JSON on
+ * disk, and the `.cpuprofile` call tree, whose root spine must reach the
+ * user's `<module>` immediately instead of nine rows of
+ * `_run_module_as_main`/`run_path`/debugpy frames
+ * ([PROFILE-AGGREGATION-SCAFFOLD]). No mocks: the inputs are the exact files
+ * a user opens.
+ */
+function assertArtifactsRootAtUserCode(result: ProfileResult, burnerPath: string): void {
+  for (const fn of result.hotFunctions) {
+    assert.ok(!SCAFFOLDING_FILE_RE.test(fn.file), `hotFunctions must carry no scaffolding, got ${fn.file}`);
+  }
+  for (const line of result.hotLines) {
+    assert.ok(!SCAFFOLDING_FILE_RE.test(line.file), `hotLines must carry no scaffolding, got ${line.file}`);
+  }
+
+  const speedscope = JSON.parse(fs.readFileSync(result.outputFile, "utf8")) as {
+    shared?: { frames?: { file?: string }[] };
+  };
+  for (const frame of speedscope.shared?.frames ?? []) {
+    assert.ok(
+      !SCAFFOLDING_FILE_RE.test(frame.file ?? ""),
+      `speedscope frames must carry no scaffolding, got ${String(frame.file)}`,
+    );
+  }
+
+  const cpuProfilePath = result.cpuProfilePath;
+  assert.ok(typeof cpuProfilePath === "string" && cpuProfilePath !== "", "cpuProfilePath returned");
+  const cpuprofile = JSON.parse(fs.readFileSync(cpuProfilePath, "utf8")) as {
+    nodes?: { id: number; callFrame?: { functionName?: string; url?: string }; children?: number[] }[];
+  };
+  const nodes = cpuprofile.nodes ?? [];
+  for (const node of nodes) {
+    assert.ok(
+      !SCAFFOLDING_FILE_RE.test(node.callFrame?.url ?? ""),
+      `.cpuprofile must carry no scaffolding nodes, got ${String(node.callFrame?.url)}`,
+    );
+  }
+  // The flame chart's first real row is the user's own module — the launcher
+  // spine is gone, so the user's code gets the full canvas.
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const root = nodes[0];
+  assert.ok(root !== undefined, ".cpuprofile must have a root node");
+  for (const childId of root.children ?? []) {
+    const child = byId.get(childId);
+    assert.strictEqual(
+      child?.callFrame?.url,
+      burnerPath,
+      `every top-level frame must be the user's file, got ${String(child?.callFrame?.url)}`,
+    );
+  }
+}
+
 function hasBurnerHotFunction(result: Pick<ProfileResult, "hotFunctions">, burnerPath: string): boolean {
   const expected = path.resolve(burnerPath);
   return result.hotFunctions.some((fn) => path.resolve(fn.file) === expected);
@@ -442,6 +499,10 @@ suite("CPU profiling — real end-to-end", () => {
       );
       assertCpuProfileArtifact(result.cpuProfilePath);
       assertHottestLineTier(result, burnerPath);
+      // The debug launch wraps the program in the runpy/debugpy spine; every
+      // real artifact of this run must root at the user's code with zero
+      // scaffolding ([PROFILE-AGGREGATION-SCAFFOLD]).
+      assertArtifactsRootAtUserCode(result, burnerPath);
     } finally {
       await vscode.debug.stopDebugging();
       await waitForDebugSessionEnd();
