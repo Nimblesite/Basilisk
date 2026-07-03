@@ -3,25 +3,25 @@
 # arch: arm64
 # os: Darwin 25.5.0
 # cores: 14
-# tools: basilisk=basilisk 0.0.0-dev+g63b336d2-dirty, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0, zuban=zuban 0.9.0
+# tools: basilisk=basilisk 0.0.0-dev+gc7d11042, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0, zuban=zuban 0.9.0
 # runs: 10 (hyperfine mean wall-clock, milliseconds)
-# generated: 2026-07-03T09:11:07+1000
+# generated: 2026-07-03T17:39:13+1000
 # note: <tool>_ms = COLD full-file CLI check from scratch. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. zuban is also cold-only but its mypy mode DOES reuse a ./.mypy_cache when present (no flag disables it), so we wipe ./.mypy_cache before every timed run to keep the measurement cold (cold==warm anyway on these single-file fixtures, ~31ms). mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures); zuban runs as `zuban mypy --strict` for the same reason (its default `zuban check` mode skips these strictness rules).
 fixture,basilisk_ms,basilisk-warm_ms,pyright_ms,mypy_ms,mypy-warm_ms,ty_ms,pyrefly_ms,zuban_ms
-e0001_missing_param,14.4,3.6,532.4,639.7,167.6,31.2,108.7,33.0
-e0002_missing_return,14.6,3.3,582.0,647.0,168.4,36.9,112.8,36.1
-e0010_unresolved_import,50.9,8.1,476.2,668.2,169.2,241.0,782.9,243.8
-e0011_explicit_any,14.7,3.8,519.5,624.6,166.4,31.2,110.1,30.4
-e0012_argument_type_mismatch,16.5,6.1,659.7,630.8,167.2,54.6,117.4,48.8
-e0014_assignment_incompatibility,12.3,8.0,602.9,600.8,169.4,50.5,113.3,32.0
-e0016_incompatible_override,52.1,3.9,649.8,637.8,167.2,54.1,117.1,31.2
-e0018_undefined_name,19.6,8.8,497.4,655.7,169.4,49.7,554.7,34.1
-e0022_unhashable_dict_key,16.2,8.9,541.5,640.5,165.6,38.3,104.6,31.4
-e0023_nonexhaustive_match,12.4,5.3,537.4,622.5,165.1,24.5,110.0,27.4
-e0026_typevar_single_constraint,21.5,7.9,744.5,604.6,167.9,39.2,109.0,32.6
-e0036_classvar_misuse,18.6,8.3,622.1,637.8,168.2,57.8,133.7,32.4
-e0038_typeddict_readonly_inheritance,93.1,4.7,682.5,604.3,167.3,37.0,119.2,25.8
-e0050_newtype_name_mismatch,14.4,8.4,738.3,658.2,167.8,45.8,119.3,36.0
-e0054_final_reassignment,7.8,4.5,473.4,590.4,170.0,27.6,99.4,23.3
-e0056_readonly_typeddict_mutation,39.9,5.0,633.2,600.3,166.2,41.3,109.2,25.7
-e0093_typeddict_invalid_key,37.7,4.8,626.9,599.7,166.2,36.1,108.0,26.5
+e0001_missing_param,12.4,3.5,530.6,634.6,167.8,30.6,110.5,32.0
+e0002_missing_return,15.5,4.0,580.4,632.9,166.0,35.8,112.9,38.0
+e0010_unresolved_import,50.3,8.3,477.4,668.3,166.1,245.9,782.9,243.8
+e0011_explicit_any,15.3,4.0,529.5,621.8,163.8,30.4,108.1,30.4
+e0012_argument_type_mismatch,16.5,6.1,667.6,624.0,165.7,53.9,114.0,48.4
+e0014_assignment_incompatibility,12.4,8.3,609.1,591.9,169.5,50.8,113.6,30.6
+e0016_incompatible_override,52.0,3.9,654.7,623.5,166.9,54.2,118.2,30.3
+e0018_undefined_name,19.1,8.4,492.8,641.2,168.7,48.9,548.5,34.5
+e0022_unhashable_dict_key,15.9,8.3,532.1,626.6,164.4,36.9,103.8,30.7
+e0023_nonexhaustive_match,12.6,5.7,540.5,612.7,164.8,23.1,109.1,26.7
+e0026_typevar_single_constraint,21.0,8.2,737.0,595.5,166.0,38.8,109.0,32.9
+e0036_classvar_misuse,19.0,8.0,615.9,623.7,166.4,56.2,131.7,31.6
+e0038_typeddict_readonly_inheritance,91.8,4.7,680.1,584.5,164.6,38.2,116.6,26.3
+e0050_newtype_name_mismatch,14.0,8.2,726.9,633.3,165.8,43.6,120.7,35.4
+e0054_final_reassignment,8.1,4.8,473.7,579.3,165.5,27.0,99.1,23.6
+e0056_readonly_typeddict_mutation,38.9,4.8,644.9,590.6,166.0,40.9,107.0,25.4
+e0093_typeddict_invalid_key,38.0,4.8,639.8,588.4,166.4,36.6,109.8,25.8
