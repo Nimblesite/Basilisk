@@ -7,24 +7,30 @@
  */
 
 // ── Brand palette CSS custom properties ──────────────────────────────────
+//
+// Heat/leak accents are brand-fixed (they read on light and dark), but every
+// surface/text color follows the active VS Code theme via the `--vscode-*`
+// variables the webview host injects — a light-theme user gets a light panel,
+// not a jarring hardcoded dark one. The hex fallbacks (the original brand dark
+// palette) only apply outside a VS Code webview (e2e HTML snapshots).
 
 export const PROFILER_CSS_VARS = `
     :root {
       --prof-critical: #e8500a;
       --prof-hot: #f97316;
       --prof-warm: #fbbf24;
-      --prof-cool: #4a5468;
-      --prof-idle: #1a1f2e;
+      --prof-cool: var(--vscode-descriptionForeground, #4a5468);
+      --prof-idle: var(--vscode-editorWidget-border, #1a1f2e);
       --prof-mem-critical: #c084fc;
       --prof-mem-hot: #a78bfa;
       --prof-mem-leak: #f87171;
       --prof-success: #34d399;
       --prof-info: #60a5fa;
-      --prof-bg: #0a0c12;
-      --prof-surface: #141820;
-      --prof-border: #1a1f2e;
-      --prof-text: #f0f2f7;
-      --prof-text-secondary: #8892a4;
+      --prof-bg: var(--vscode-editor-background, #0a0c12);
+      --prof-surface: var(--vscode-editorWidget-background, #141820);
+      --prof-border: var(--vscode-editorWidget-border, #1a1f2e);
+      --prof-text: var(--vscode-editor-foreground, #f0f2f7);
+      --prof-text-secondary: var(--vscode-descriptionForeground, #8892a4);
     }`;
 
 // ── Base reset and body styles ───────────────────────────────────────────
@@ -130,6 +136,9 @@ export function formatBytes(bytes: number): string {
 // ── Shared inline JS utilities ───────────────────────────────────────────
 
 export const PROFILER_JS_UTILS = `
+    function cssVar(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
     function formatBytes(bytes) {
       if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
       if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';

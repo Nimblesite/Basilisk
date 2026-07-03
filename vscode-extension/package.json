@@ -240,12 +240,6 @@
         "icon": "$(debug-alt)"
       },
       {
-        "command": "basilisk.profileDiff",
-        "title": "Basilisk: Compare Profile Results",
-        "category": "Basilisk",
-        "icon": "$(diff)"
-      },
-      {
         "command": "basilisk.memoryMenu",
         "title": "Basilisk: Memory…",
         "category": "Basilisk",
@@ -377,10 +371,6 @@
         },
         {
           "command": "basilisk.profileAttachToDebug",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.profileDiff",
           "when": "basilisk.profilingEnabled"
         },
         {

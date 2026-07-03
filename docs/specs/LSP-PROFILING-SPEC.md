@@ -397,7 +397,19 @@ Tests assert the full invariant set on every exported file (`profiler_tests.rs::
 
 ## Flamegraph SVG Export {#PROFILE-FLAMEGRAPH}
 
-Direct SVG output uses the `inferno` crate (Rust port of Brendan Gregg's FlameGraph): convert aggregated stacks to collapsed format and pipe through `inferno::flamegraph::from_lines()`.
+Direct SVG output uses the `inferno` crate (Rust port of Brendan Gregg's FlameGraph): convert aggregated stacks to collapsed format and pipe through `inferno::flamegraph::from_lines()`. The stop/snapshot response always carries the artifact as `flamegraphPath` regardless of the requested `format`.
+
+**The editor surfaces it — a profiler's results view must contain an actual flame graph.** The results webview (`profiler-flamegraph-html.ts`) inlines the SVG as a `data:` URI image at the top of the panel (its CSP admits `img-src data:` only), so the flame shape is visible immediately without running the SVG's embedded script. An **"Open Interactive Flame Graph"** button opens the file externally (`vscode.env.openExternal`), where inferno's own zoom/search interactivity works untouched. A missing, unreadable, or oversized (> 4 MB inline cap) SVG degrades gracefully: the hero section is omitted and the summary cards/tables still render — never a broken image.
+
+## Profiler Webview Host {#PROFILE-WEBVIEW-HOST}
+
+All profiler results panels (CPU results, memory dashboard, retention graph) are built on one shared host, `profiler-webview.ts`, which owns the primitives each panel would otherwise hand-roll:
+
+- **Singleton panel with a once-bound message handler.** `SingletonWebviewPanel` creates the panel on first show and only re-reveals + re-renders afterwards; the message handler is registered exactly once per panel instance. (Before this host, the memory dashboard and retention graph re-registered their handler on every open — with the autopilot re-rendering the dashboard on each pause, one row click navigated N times.)
+- **Nonce-gated CSP on every document.** `buildWebviewDocument` emits `default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-…'` with a fresh random nonce per render. No profiler webview may assemble its own `<html>` skeleton.
+- **Safe embedding of profiled-program data.** `embedJson` escapes `<` so frame names, allocation paths, type reprs, and leak reasons from the (possibly hostile) profiled program can never close the inline `<script>` early.
+- **Shared source navigation.** `handleSourceNavigation` routes the `navigateToSource` message every panel posts; panels layer their own message types on top.
+- **Theme-aware surfaces.** The shared palette (`profiler-styles.ts`) maps backgrounds, text, and borders to the editor's `--vscode-*` variables (with the brand dark palette as non-webview fallback), so panels follow light/dark/high-contrast themes; heat and leak accents stay brand-fixed. Canvas drawing reads the same variables at runtime via the shared `cssVar` helper.
 
 ## Native VS Code profile files {#PROFILE-NATIVE}
 

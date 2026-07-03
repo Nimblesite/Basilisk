@@ -152,6 +152,32 @@ function assertSpeedscopeArtifact(outputFile: string): void {
   assert.ok((speedscope.profiles?.length ?? 0) > 0, "speedscope must contain at least one profile");
 }
 
+// Implements [PROFILE-FLAMEGRAPH]. See docs/specs/LSP-PROFILING-SPEC.md#PROFILE-FLAMEGRAPH
+/**
+ * Assert the flame graph SVG artifact of a REAL profile exists, parses as SVG,
+ * and lands in the results webview as the inline hero — the full path from a
+ * live profile stop to the flame graph the user actually sees.
+ */
+function assertFlamegraphArtifact(result: ProfileResult): void {
+  const flamegraphPath = result.flamegraphPath;
+  assert.ok(
+    typeof flamegraphPath === "string" && flamegraphPath !== "",
+    "the stop response must carry flamegraphPath — the LSP always exports the SVG",
+  );
+  assert.ok(fs.existsSync(flamegraphPath), `flame graph SVG must be written to disk: ${flamegraphPath}`);
+  const svg = fs.readFileSync(flamegraphPath, "utf8");
+  assert.ok(svg.includes("<svg"), "the flame graph artifact must be a real SVG document");
+  const html = buildFlamegraphHtml(result);
+  assert.ok(
+    html.includes("data:image/svg+xml;base64,"),
+    "the results webview must embed the flame graph SVG as its hero",
+  );
+  assert.ok(
+    html.includes("openFlamegraphSvg"),
+    "the hero must offer opening the interactive SVG externally",
+  );
+}
+
 /** Assert the V8 `.cpuprofile` exists and opens as a valid call tree ([PROFILE-NATIVE]). */
 function assertCpuProfileArtifact(cpuProfilePath: string | undefined, expectedFunction?: string): void {
   assert.ok(typeof cpuProfilePath === "string" && cpuProfilePath !== "", "cpuProfilePath returned");
@@ -189,14 +215,24 @@ const SCAFFOLDING_FILE_RE = /runpy|debugpy|pydevd|<string>/i;
  * a user opens.
  */
 function assertArtifactsRootAtUserCode(result: ProfileResult, burnerPath: string): void {
+  assertHotListsCarryNoScaffolding(result);
+  assertSpeedscopeCarriesNoScaffolding(result.outputFile);
+  const cpuProfilePath = result.cpuProfilePath;
+  assert.ok(typeof cpuProfilePath === "string" && cpuProfilePath !== "", "cpuProfilePath returned");
+  assertCpuprofileRootsAtUserCode(cpuProfilePath, burnerPath);
+}
+
+function assertHotListsCarryNoScaffolding(result: ProfileResult): void {
   for (const fn of result.hotFunctions) {
     assert.ok(!SCAFFOLDING_FILE_RE.test(fn.file), `hotFunctions must carry no scaffolding, got ${fn.file}`);
   }
   for (const line of result.hotLines) {
     assert.ok(!SCAFFOLDING_FILE_RE.test(line.file), `hotLines must carry no scaffolding, got ${line.file}`);
   }
+}
 
-  const speedscope = JSON.parse(fs.readFileSync(result.outputFile, "utf8")) as {
+function assertSpeedscopeCarriesNoScaffolding(outputFile: string): void {
+  const speedscope = JSON.parse(fs.readFileSync(outputFile, "utf8")) as {
     shared?: { frames?: { file?: string }[] };
   };
   for (const frame of speedscope.shared?.frames ?? []) {
@@ -205,9 +241,9 @@ function assertArtifactsRootAtUserCode(result: ProfileResult, burnerPath: string
       `speedscope frames must carry no scaffolding, got ${String(frame.file)}`,
     );
   }
+}
 
-  const cpuProfilePath = result.cpuProfilePath;
-  assert.ok(typeof cpuProfilePath === "string" && cpuProfilePath !== "", "cpuProfilePath returned");
+function assertCpuprofileRootsAtUserCode(cpuProfilePath: string, burnerPath: string): void {
   const cpuprofile = JSON.parse(fs.readFileSync(cpuProfilePath, "utf8")) as {
     nodes?: { id: number; callFrame?: { functionName?: string; url?: string }; children?: number[] }[];
   };
@@ -380,6 +416,7 @@ suite("CPU profiling — real end-to-end", () => {
 
     assertSpeedscopeArtifact(result.outputFile);
     assertCpuProfileArtifact(result.cpuProfilePath, "hot_function");
+    assertFlamegraphArtifact(result);
     assertHottestLineTier(result, burnerPath);
   });
 
@@ -498,6 +535,7 @@ suite("CPU profiling — real end-to-end", () => {
         `burner.py must be attributed, got: ${hotFunctionSummary(result)}`,
       );
       assertCpuProfileArtifact(result.cpuProfilePath);
+      assertFlamegraphArtifact(result);
       assertHottestLineTier(result, burnerPath);
       // The debug launch wraps the program in the runpy/debugpy spine; every
       // real artifact of this run must root at the user's code with zero
