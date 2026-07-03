@@ -13,7 +13,7 @@ import * as vscode from "vscode";
 import { buildProfileLaunchConfig } from "../../process-launch";
 import { shouldProfileOnLaunch } from "../../profiler";
 import { PythonProcessesProvider } from "../../process-explorer";
-import { type Store } from "../../store";
+import { createStore } from "../../store";
 import {
   getPackageJsonCommands,
   getPackageJsonMenu,
@@ -173,9 +173,21 @@ suite("Python Processes — empty state honesty (#147)", () => {
   });
 });
 
-/** Build a provider over a fake store whose client behaves as given (#147 seam). */
+/**
+ * Build a provider over a REAL store whose LSP client behaves as given (#147
+ * seam). The provider is a pure projection of the store's `processes` Signal
+ * (#148), so the harness must go through the genuine store, not a stub bag.
+ */
 function providerWithClient(client: unknown): PythonProcessesProvider {
-  return new PythonProcessesProvider({ client: { value: client } } as unknown as Store);
+  const store = createStore();
+  if (client !== undefined) {
+    const fake = {
+      onDidChangeState: (): vscode.Disposable => ({ dispose: (): undefined => undefined }),
+      ...(client as object),
+    };
+    store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, fake as never);
+  }
+  return new PythonProcessesProvider(store);
 }
 
 suite("Python Processes — fetch-state drives the welcome (#147)", () => {

@@ -5,19 +5,23 @@
  * The headline fix for #62: instead of a raw PID input box, the user picks a
  * running Python process from this panel and starts CPU/memory profiling with
  * one click. The process list is owned by the LSP (`basilisk.profiler.processes`,
- * implemented over `sysinfo`); this module is pure UI — it fetches, sorts,
- * groups, filters, and renders, and wires inline actions back to the existing
- * `basilisk.profiler.start` flow with the selected PID.
+ * implemented over `sysinfo`) and fetched into the store's `processes` Signal by
+ * the store-side poll (process-poll.ts). This provider is a pure projection of
+ * that centralised state (#148): it holds no data or timer of its own — it
+ * sorts, groups, filters, and renders whatever the store says, re-rendering on
+ * each `processesRevision` bump exactly like the Modules panel
+ * ([EXTACT-REACTIVE-STATE]).
  */
 
 import * as vscode from "vscode";
 import { type Store } from "./store";
-import { Logger } from "./logger";
 import { registerLaunchCommands } from "./process-launch";
+import { bindProcessesContextKey, bindProcessPolling, fetchProcessesIntoStore } from "./process-poll";
 import { bindDebuggeeTracking, bindProcessPanelReactivity } from "./process-reactivity";
+import { subscribeRevision } from "./reactive-refresh";
 import { withViewProgress } from "./progress-ops";
+import type { ProcessPanelState } from "./processes-state";
 import {
-  GROUP_CYCLE,
   GROUP_LABEL,
   LaunchActionItem,
   MessageTreeItem,
@@ -25,39 +29,17 @@ import {
   ProcessGroupItem,
   ProcessTreeItem,
   SORT_COMPARATORS,
-  SORT_CYCLE,
   SORT_LABEL,
   type GroupMode,
   type ProcessInfo,
-  type SortMode,
   type TreeItem,
 } from "./process-explorer-rows";
 
 // The model and row presentation live in process-explorer-rows.ts (500-LOC
-// split); re-exported here so consumers keep one import site for the panel.
+// split), the reactive state in processes-state.ts (#148); re-exported here so
+// consumers keep one import site for the panel.
 export { type ProcessInfo } from "./process-explorer-rows";
-
-// ── LSP response types ───────────────────────────────────────────────────
-
-interface ProcessesResponse {
-  readonly processes: readonly ProcessInfo[];
-}
-
-/** LSP command name (must match basilisk-common constants). */
-const LSP_CMD = {
-  processes: "basilisk.profiler.processes",
-} as const;
-
-/**
- * The process-fetch lifecycle, published as the `basilisk.processesState` context
- * key so the empty-state welcome never lies: "No Python processes running" shows
- * only after a fetch actually succeeded (`loaded`), while a still-loading or
- * errored fetch says so honestly ([PROFILE-PROCESSES-PANEL], #147).
- */
-export type ProcessesState = "loading" | "loaded" | "error";
-
-/** Context key gating the Python Processes welcome states. */
-const PROCESSES_STATE_CONTEXT_KEY = "basilisk.processesState";
+export { type ProcessesFetchState as ProcessesState } from "./processes-state";
 
 /** How long the "sorted/grouped by …" status hint stays visible (ms). */
 const STATUS_HINT_MS = 2000;
@@ -69,22 +51,11 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
   public readonly onDidChangeTreeData = this.emitter.event;
 
   public readonly disposables: vscode.Disposable[] = [];
-  private processes: readonly ProcessInfo[] = [];
-  private fetched = false;
-  /** Fetch lifecycle, mirrored to the `basilisk.processesState` context key (#147). */
-  private fetchState: ProcessesState = "loading";
-  private sortMode: SortMode = "cpu";
-  private groupMode: GroupMode = "none";
-  private filterText = "";
-  /** PID currently being CPU-profiled, so its row renders a Stop affordance. */
-  private activeProfilingPid: number | undefined;
-  /** PID of the active Basilisk debuggee, the only row that can be memory-tracked. */
-  private activeDebuggeePid: number | undefined;
 
   constructor(private readonly store: Store) {}
 
+  /** Repaint from the store's current state (no fetch — pure projection, #148). */
   public refresh(): void {
-    this.fetched = false;
     this.emitter.fire(undefined);
   }
 
@@ -92,62 +63,32 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
    * The current process-fetch state — the e2e seam for [PROFILE-PROCESSES-PANEL]
    * empty-state honesty (#147), mirrored to the `basilisk.processesState` key.
    */
-  public get processesState(): ProcessesState {
-    return this.fetchState;
-  }
-
-  /** Record the fetch state and mirror it to the context key gating the welcome. */
-  private setProcessesState(state: ProcessesState): void {
-    this.fetchState = state;
-    void vscode.commands.executeCommand("setContext", PROCESSES_STATE_CONTEXT_KEY, state);
+  public get processesState(): ProcessPanelState["fetch"] {
+    return this.store.processes.value.fetch;
   }
 
   /**
-   * Mark which PID is being CPU-profiled ([PROFILE-PROCESSES-REACTIVE]). The
-   * reactive wiring calls this then `refresh()`, so the next render distinguishes
-   * the active row; pass `undefined` to clear.
-   */
-  public setActiveProfilingPid(pid: number | undefined): void {
-    this.activeProfilingPid = pid;
-  }
-
-  /**
-   * Mark which PID is the active Basilisk debuggee — the only row whose inline
-   * Track Memory action is shown, since tracemalloc can only target a process
-   * Basilisk launched ([PROFILE-MEMORY-HOWTO]). Pass `undefined` to clear.
-   */
-  public setActiveDebuggeePid(pid: number | undefined): void {
-    this.activeDebuggeePid = pid;
-  }
-
-  /**
-   * Fetch fresh process data, then repaint — awaitable, so the manual Refresh
+   * Fetch fresh process data into the store — awaitable, so the manual Refresh
    * command can run it under the view's progress bar ([PROFILE-UX-PROGRESS]).
-   * The silent timer-driven [`refresh`] stays untouched: a progress bar
-   * flashing every poll tick would be noise, not feedback.
+   * The resulting revision bump repaints every subscribed view; the silent
+   * store-side poll needs no progress bar (a flash every tick would be noise).
    */
   public async refreshNow(): Promise<void> {
-    await this.fetchProcesses();
-    this.emitter.fire(undefined);
+    await fetchProcessesIntoStore(this.store);
   }
 
   public cycleSortMode(): void {
-    const idx = SORT_CYCLE.indexOf(this.sortMode);
-    this.sortMode = SORT_CYCLE[(idx + 1) % SORT_CYCLE.length];
-    void vscode.window.setStatusBarMessage(`Python Processes sorted by ${SORT_LABEL[this.sortMode]}`, STATUS_HINT_MS);
-    this.emitter.fire(undefined);
+    const mode = this.store.cycleProcessSort();
+    void vscode.window.setStatusBarMessage(`Python Processes sorted by ${SORT_LABEL[mode]}`, STATUS_HINT_MS);
   }
 
   public cycleGroupMode(): void {
-    const idx = GROUP_CYCLE.indexOf(this.groupMode);
-    this.groupMode = GROUP_CYCLE[(idx + 1) % GROUP_CYCLE.length];
-    void vscode.window.setStatusBarMessage(`Python Processes grouped by ${GROUP_LABEL[this.groupMode]}`, STATUS_HINT_MS);
-    this.emitter.fire(undefined);
+    const mode = this.store.cycleProcessGroup();
+    void vscode.window.setStatusBarMessage(`Python Processes grouped by ${GROUP_LABEL[mode]}`, STATUS_HINT_MS);
   }
 
   public setFilter(text: string): void {
-    this.filterText = text.trim().toLowerCase();
-    this.emitter.fire(undefined);
+    this.store.setProcessFilter(text);
   }
 
   public dispose(): void {
@@ -159,13 +100,12 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
     return element;
   }
 
-  public async getChildren(element?: TreeItem): Promise<TreeItem[]> {
+  public getChildren(element?: TreeItem): TreeItem[] {
+    const state = this.store.processes.value;
     if (element instanceof ProcessGroupItem) {
       // Re-sort so non-debuggable rows sink to the bottom *within the group* too,
       // not just in the flat list ([PROFILE-PROCESSES-DISPLAY]).
-      return this.sortProcesses([...element.members]).map(
-        (proc) => new ProcessTreeItem(proc, this.activeProfilingPid, this.activeDebuggeePid),
-      );
+      return sortProcesses([...element.members], state).map((proc) => this.processRow(proc));
     }
     if (
       element instanceof ProcessTreeItem ||
@@ -175,29 +115,36 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
       return [];
     }
 
-    if (!this.fetched) {
-      await this.fetchProcesses();
-    }
-
     // With no processes at all, return [] so the empty/loading/error
     // `viewsWelcome` (which carries the big launch buttons) renders honestly.
-    if (this.processes.length === 0) {
+    if (state.list.length === 0) {
       return [];
     }
 
     // Processes exist → the welcome can't show, so pin the current-file launches
     // to the top as rows ([PROFILE-PROCESSES-LAUNCH-FILE]).
     const actions = this.launchActionRows();
-    const visible = this.sortProcesses(this.applyFilter(this.processes));
+    const visible = sortProcesses(applyFilter(state), state);
     if (visible.length === 0) {
       // The user's search filter hid every running process — keep the launches
       // and an honest placeholder rather than an empty list (procexp-2).
-      return [...actions, new MessageTreeItem(this.filteredEmptyLabel())];
+      return [...actions, new MessageTreeItem(filteredEmptyLabel(state))];
     }
-    const rows = this.groupMode === "none"
-      ? visible.map((proc) => new ProcessTreeItem(proc, this.activeProfilingPid, this.activeDebuggeePid))
-      : this.buildGroups(visible);
+    const rows = state.groupMode === "none"
+      ? visible.map((proc) => this.processRow(proc))
+      : buildGroups(visible, state.groupMode);
     return [...actions, ...rows];
+  }
+
+  /**
+   * Render one process row. The "this row is being profiled" marker derives
+   * straight from the store's profiler signal — never a provider field (#148) —
+   * and the active-debuggee marker from the centralised panel state.
+   */
+  private processRow(proc: ProcessInfo): ProcessTreeItem {
+    const session = this.store.profiler.value;
+    const profilingPid = session.cpu === "active" ? session.cpuPid : undefined;
+    return new ProcessTreeItem(proc, profilingPid, this.store.processes.value.activeDebuggeePid);
   }
 
   /**
@@ -217,86 +164,62 @@ export class PythonProcessesProvider implements vscode.TreeDataProvider<TreeItem
     return rows;
   }
 
-  /** Why the filtered view is empty though processes are running (procexp-2). */
-  private filteredEmptyLabel(): string {
-    return `No process matches "${this.filterText}" (${this.processes.length} running)`;
-  }
+}
 
-  /**
-   * Apply only the user's explicit search filter. Enumeration is zero-filter
-   * ([PROFILE-PROCESSES-SCOPE]); the panel never auto-hides a process.
-   */
-  private applyFilter(processes: readonly ProcessInfo[]): ProcessInfo[] {
-    if (this.filterText === "") { return [...processes]; }
-    return processes.filter((proc) => {
-      const haystack = `${proc.name} ${proc.script ?? ""} ${proc.pid}`.toLowerCase();
-      return haystack.includes(this.filterText);
-    });
-  }
+// ── Pure projection helpers (#148) ─────────────────────────────────────────
 
-  /**
-   * Sort by the active mode, but always sink non-`debuggable` rows to the bottom
-   * so the processes the user can act on stay on top ([PROFILE-PROCESSES-DISPLAY]).
-   */
-  private sortProcesses(processes: ProcessInfo[]): ProcessInfo[] {
-    const byMode = SORT_COMPARATORS[this.sortMode];
-    return processes.sort((a, b) => {
-      if (a.debuggable !== b.debuggable) { return a.debuggable ? -1 : 1; }
-      return byMode(a, b);
-    });
-  }
+/**
+ * Sort by the active mode, but always sink non-`debuggable` rows to the bottom
+ * so the processes the user can act on stay on top ([PROFILE-PROCESSES-DISPLAY]).
+ */
+function sortProcesses(processes: ProcessInfo[], state: ProcessPanelState): ProcessInfo[] {
+  const byMode = SORT_COMPARATORS[state.sortMode];
+  return processes.sort((a, b) => {
+    if (a.debuggable !== b.debuggable) { return a.debuggable ? -1 : 1; }
+    return byMode(a, b);
+  });
+}
 
-  private buildGroups(processes: readonly ProcessInfo[]): ProcessGroupItem[] {
-    const groups = new Map<string, ProcessInfo[]>();
-    for (const proc of processes) {
-      const key = this.groupKey(proc);
-      const bucket = groups.get(key);
-      if (bucket === undefined) {
-        groups.set(key, [proc]);
-      } else {
-        bucket.push(proc);
-      }
-    }
-    return [...groups.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([key, members]) => new ProcessGroupItem(key, members));
-  }
+/** Why the filtered view is empty though processes are running (procexp-2). */
+function filteredEmptyLabel(state: ProcessPanelState): string {
+  return `No process matches "${state.filterText}" (${state.list.length} running)`;
+}
 
-  private groupKey(proc: ProcessInfo): string {
-    switch (this.groupMode) {
-      case "version": return proc.pythonVersion ?? "Unknown version";
-      case "interpreter": return proc.interpreterPath ?? proc.name;
-      case "user": return proc.user ?? "Unknown user";
-      case "parent": return `Parent ${proc.ppid}`;
-      case "none": return "";
+/**
+ * Apply only the user's explicit search filter. Enumeration is zero-filter
+ * ([PROFILE-PROCESSES-SCOPE]); the panel never auto-hides a process.
+ */
+function applyFilter(state: ProcessPanelState): ProcessInfo[] {
+  if (state.filterText === "") { return [...state.list]; }
+  return state.list.filter((proc) => {
+    const haystack = `${proc.name} ${proc.script ?? ""} ${proc.pid}`.toLowerCase();
+    return haystack.includes(state.filterText);
+  });
+}
+
+function buildGroups(processes: readonly ProcessInfo[], groupMode: GroupMode): ProcessGroupItem[] {
+  const groups = new Map<string, ProcessInfo[]>();
+  for (const proc of processes) {
+    const key = groupKey(proc, groupMode);
+    const bucket = groups.get(key);
+    if (bucket === undefined) {
+      groups.set(key, [proc]);
+    } else {
+      bucket.push(proc);
     }
   }
+  return [...groups.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, members]) => new ProcessGroupItem(key, members));
+}
 
-  private async fetchProcesses(): Promise<void> {
-    const client = this.store.client.value;
-    if (!client?.isRunning()) {
-      // Can't fetch yet — stay honestly "loading"; the serverState welcome shows
-      // the connecting/stopped copy. Never assert "no processes" here (#147).
-      this.processes = [];
-      this.fetched = true;
-      this.setProcessesState("loading");
-      return;
-    }
-    try {
-      const result = await client.sendRequest<ProcessesResponse>(
-        "workspace/executeCommand",
-        { command: LSP_CMD.processes, arguments: [{}] },
-      );
-      this.processes = result?.processes ?? [];
-      this.fetched = true;
-      // Only now is an empty list a genuine "no processes" rather than a lie (#147).
-      this.setProcessesState("loaded");
-    } catch (err: unknown) {
-      Logger.error(`Python Processes fetch failed: ${err instanceof Error ? err.message : String(err)}`);
-      this.processes = [];
-      this.fetched = true;
-      this.setProcessesState("error");
-    }
+function groupKey(proc: ProcessInfo, groupMode: GroupMode): string {
+  switch (groupMode) {
+    case "version": return proc.pythonVersion ?? "Unknown version";
+    case "interpreter": return proc.interpreterPath ?? proc.name;
+    case "user": return proc.user ?? "Unknown user";
+    case "parent": return `Parent ${proc.ppid}`;
+    case "none": return "";
   }
 }
 
@@ -342,9 +265,6 @@ export class ProcessDecorationProvider implements vscode.FileDecorationProvider,
 
 // ── Registration ─────────────────────────────────────────────────────────
 
-/** Default poll interval (ms) when the setting is absent. */
-const DEFAULT_REFRESH_MS = 2000;
-
 /**
  * Register the Python Processes panel. Returns command disposables for
  * `singletonDisposables`; the tree view and provider go to subscriptions.
@@ -355,22 +275,23 @@ export function registerPythonProcesses(
 ): { provider: PythonProcessesProvider; disposables: vscode.Disposable[] } {
   const provider = new PythonProcessesProvider(store);
 
-  // Seed the welcome gate honestly: until the first fetch resolves the panel is
-  // "loading", never "no processes" ([PROFILE-PROCESSES-PANEL], #147).
-  void vscode.commands.executeCommand("setContext", PROCESSES_STATE_CONTEXT_KEY, "loading");
-
   const treeView = vscode.window.createTreeView("basilisk.pythonProcesses", {
     treeDataProvider: provider,
   });
   context.subscriptions.push(treeView, provider);
 
-  wireVisibilityRefresh(treeView, provider);
+  // The panel is a pure projection of centralised state (#148): the store-side
+  // poll feeds `store.processes` while the view is visible, the revision
+  // subscription repaints on every store change, and the context-key mirror
+  // keeps the welcome's loading/error/empty copy honest (#147).
+  provider.disposables.push(bindProcessPolling(store, treeView), bindProcessesContextKey(store));
+  subscribeRevision(store.processesRevision, provider);
   // React to the store's profiling state: live chrome, button-gating context
-  // keys, and the active-row marker ([PROFILE-PROCESSES-REACTIVE]).
+  // keys, and the active-row repaint ([PROFILE-PROCESSES-REACTIVE]).
   provider.disposables.push(bindProcessPanelReactivity(store, treeView, provider));
   // Reveal the inline Track Memory action only on the active debuggee row
   // ([PROFILE-PROCESSES-PANEL]) — memory tracking can't target external processes.
-  provider.disposables.push(bindDebuggeeTracking(store, provider));
+  provider.disposables.push(bindDebuggeeTracking(store));
   // Colour workspace rows green and non-debuggable rows grey ([PROFILE-PROCESSES-DISPLAY]).
   const decorations = new ProcessDecorationProvider(provider);
   provider.disposables.push(decorations, vscode.window.registerFileDecorationProvider(decorations));
@@ -410,32 +331,4 @@ export function registerPythonProcesses(
   ];
 
   return { provider, disposables };
-}
-
-/**
- * Auto-refresh the panel on a timer only while it is visible, so polling the
- * LSP stops when the user navigates away.
- */
-function wireVisibilityRefresh(
-  treeView: vscode.TreeView<TreeItem>,
-  provider: PythonProcessesProvider,
-): void {
-  let timer: ReturnType<typeof setInterval> | undefined;
-
-  function start(): void {
-    if (timer !== undefined) { return; }
-    const intervalMs = vscode.workspace
-      .getConfiguration("basilisk")
-      .get<number>("profiler.processRefreshMs", DEFAULT_REFRESH_MS);
-    timer = setInterval(() => { provider.refresh(); }, intervalMs);
-  }
-  function stop(): void {
-    if (timer !== undefined) { clearInterval(timer); timer = undefined; }
-  }
-
-  provider.disposables.push(
-    treeView.onDidChangeVisibility((e) => { if (e.visible) { start(); } else { stop(); } }),
-    { dispose: stop },
-  );
-  if (treeView.visible) { start(); }
 }
