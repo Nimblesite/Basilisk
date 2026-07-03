@@ -1617,8 +1617,7 @@ class Movie(TypedDict):
 /// `check_vars` so the examine-re mutant selection is unchanged.
 #[mutation_safe(rule = "assignment_compatibility", fns = "check_vars")]
 #[test]
-fn mutant_context_line_index_places_inline_suppression(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_context_line_index_places_inline_suppression() -> Result<(), Box<dyn std::error::Error>> {
     // Lines 1-2 are clean; the only mismatch is on line 3, carrying an inline
     // `# type: ignore` on that same line. A populated line index places the
     // diagnostic on line 3 (`diag_line = 2`), matching the override → suppressed.
