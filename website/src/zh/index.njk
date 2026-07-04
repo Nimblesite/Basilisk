@@ -4,32 +4,6 @@ title: "Basilisk — 开源、符合 PEP 规范的 Python 类型检查与语言�
 description: "用 Rust 构建的开源 Python 类型检查工具与语言服务器：符合 PEP 规范的类型检查、自动补全、重构、调试与性能分析，兼容 VS Code、Cursor、Windsurf、Zed 和 Neovim。"
 lang: zh
 permalink: /zh/
-# 共享基准测试宏（_includes/benchmark-section.njk）的可翻译文案。
-# 数字来自 _data/benchmarks.js（受 git 跟踪的 CSV）；此处仅放文案。
-benchmarkStrings:
-  label: "性能基准测试"
-  heading: "这是起点。<br>我们正在逼近 Pyrefly。"
-  subhead: "这些是今天的数据——由 <code>make bench</code> 生成并提交到代码库，因此它们会随着我们的优化而变化。Basilisk 在我们基准测试的每条规则上都已胜过 Pyright；我们的目标是达到 Pyrefly 级别的吞吐量。这些是端到端测量的<em>冷启动</em>全文件运行；热增量重检只重新分析你改动的文件及其导入方，因此做的工作更少。"
-  ruleHeader: "规则"
-  versionsLabel: "测试版本"
-  names:
-    e0001_missing_param: "缺少参数类型"
-    e0002_missing_return: "缺少返回类型"
-    e0010_unresolved_import: "无法解析的导入"
-    e0012_argument_type_mismatch: "参数类型不匹配"
-    e0014_assignment_incompatibility: "赋值类型不兼容"
-    e0016_incompatible_override: "不兼容的方法覆盖"
-    e0022_unhashable_dict_key: "不可哈希的字典键"
-    e0023_nonexhaustive_match: "非穷举的 match"
-    e0026_typevar_single_constraint: "TypeVar 单一约束"
-    e0054_final_reassignment: "Final 重新赋值"
-  metaPre: "平均挂钟时间，基于 "
-  metaMid: " 次 hyperfine 运行；越低越好，✓ = 最快。测量于 "
-  metaCpuOpen: "（"
-  metaOsSep: "，"
-  metaCoresClose: " 核心），生成于 "
-  metaDateClose: "。来源："
-  metaEnd: " —— 由 <code>make bench</code> 重新生成。"
 ---
 
 <script src="/assets/js/demo.js" defer></script>
@@ -72,15 +46,6 @@ benchmarkStrings:
           </a>
         </div>
 
-        {% if conformance.hasData %}
-        <div class="hero__conformance">
-          <span class="hero__conformance-score">{{ conformance.scorePct }}<span class="hero__conformance-pct">%</span></span>
-          <span class="hero__conformance-text">
-            <strong>PEP&nbsp;符合性</strong> &mdash; 官方 <code>python/typing</code> 套件 {{ conformance.total }} 个测试中通过 {{ conformance.pass }} 个，对照 <code>python/typing</code> 仓库提交 <a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" class="hero__conformance-commit" title="python/typing@{{ conformance.pinnedRef }}" target="_blank" rel="noopener"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %}（{{ conformance.commitDate }}）{% endif %}评分。<a href="/zh/docs/conformance/" class="hero__conformance-cta">我们如何衡量 &rarr;</a>
-          </span>
-        </div>
-        {% endif %}
-
         <div class="hero__meta">
           <span>完整 <strong>LSP</strong></span>
           <span>用 <strong>Rust</strong> 构建</span>
@@ -99,39 +64,34 @@ benchmarkStrings:
       </div>
 
     </div>
-  </div>
-</section>
 
-<!-- ═══════════════════════════════════════════════════
-     STAT BAND — PEP 符合性 + 基准速度，两个核心证据在同一面板。
-     所有数字均来自真实数据（conformance.js + benchmarks.js），绝不手写。
-═══════════════════════════════════════════════════ -->
-<section class="stat-band">
-  <div class="container">
-    <div class="stat-band__grid">
+    <!-- 证据面板 — PEP 符合性 + 冷启动检查速度，两个核心证据置于满屏 HERO 内部，
+         让首屏同时呈现承诺与证据。所有数字均来自真实数据（conformance.js +
+         benchmarks.js，来自已提交的 CSV），绝不手写，不会漂移。 -->
+    {% if conformance.hasData or benchmarks.hasData %}
+    <div class="hero__proof">
+      {% if conformance.hasData %}
       <div class="stat-card">
         <span class="stat-card__num">{{ conformance.scorePct }}<span class="stat-card__unit">%</span></span>
         <span class="stat-card__label">PEP&nbsp;符合性</span>
-        <span class="stat-card__sub">{{ conformance.pass }}/{{ conformance.total }} 项测试 &middot; {{ conformance.fp }} 处误报</span>
+        <span class="stat-card__sub">官方 <code>python/typing</code> 套件 {{ conformance.total }} 项测试中通过 {{ conformance.pass }} 项 &middot; {{ conformance.fp }} 处误报，对照 <code>python/typing</code>@<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" title="python/typing@{{ conformance.pinnedRef }}" target="_blank" rel="noopener"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %}（{{ conformance.commitDate }}）{% endif %}评分</span>
       </div>
-      {% if benchmarks.vsPyright %}
+      {% endif %}
+      {% if benchmarks.hasData and benchmarks.toolMedians.ms.basilisk %}
       <div class="stat-card">
-        <span class="stat-card__num">{{ benchmarks.vsPyright.medianFactor }}<span class="stat-card__unit">×</span></span>
-        <span class="stat-card__label">快过 Pyright</span>
-        <span class="stat-card__sub">中位数 &middot; 最高 {{ benchmarks.vsPyright.maxFactor }}× &middot; 冷启动全文件</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-card__num">{{ benchmarks.vsPyright.basiliskMedianMs }}<span class="stat-card__unit">ms</span></span>
-        <span class="stat-card__label">典型全文件检查</span>
-        <span class="stat-card__sub">对比 Pyright 的 {{ benchmarks.vsPyright.pyrightMedianMs }} ms &middot; {{ benchmarks.vsPyright.total }} 条规则</span>
+        <span class="stat-card__num">{{ benchmarks.toolMedians.ms.basilisk }}<span class="stat-card__unit">&nbsp;ms</span></span>
+        <span class="stat-card__label">冷启动全文件检查</span>
+        <span class="stat-card__sub">基准规则中位数，实测最快 &middot; 对比 Pyright {{ benchmarks.toolMedians.ms.pyright }} &middot; mypy {{ benchmarks.toolMedians.ms.mypy }} &middot; ty {{ benchmarks.toolMedians.ms.ty }} &middot; Pyrefly {{ benchmarks.toolMedians.ms.pyrefly }}&nbsp;ms</span>
       </div>
       {% endif %}
     </div>
-    <p class="stat-band__cta">
-      由 <code>make bench</code> 自测并提交到代码库。
-      <a href="/docs/benchmarks/">完整基准测试与方法 &rarr;</a>
+    <p class="hero__proof-cta">
+      对照官方 <code>python/typing</code> 套件与已提交的基准 CSV 自测。
       <a href="/zh/docs/conformance/">我们如何衡量符合性 &rarr;</a>
+      <a href="/docs/benchmarks/">完整基准测试与方法 &rarr;</a>
     </p>
+    {% endif %}
+
   </div>
 </section>
 
@@ -170,6 +130,16 @@ benchmarkStrings:
             <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">已公开</a></td>
             <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">已公开</a></td>
           </tr>
+          {% if benchmarks.toolMedians %}
+          <tr>
+            <td>冷启动全文件检查 <a href="/docs/benchmarks/" style="color:var(--color-text-muted);font-size:0.75rem">（中位数）</a></td>
+            <td class="col-basilisk check-yes">{{ benchmarks.toolMedians.text.basilisk }}</td>
+            <td>{{ benchmarks.toolMedians.text.pyright }}</td>
+            <td>{{ benchmarks.toolMedians.text.mypy }}</td>
+            <td>{{ benchmarks.toolMedians.text.ty }}</td>
+            <td>{{ benchmarks.toolMedians.text.pyrefly }}</td>
+          </tr>
+          {% endif %}
           <tr>
             <td>实现语言</td>
             <td class="col-basilisk">Rust</td>

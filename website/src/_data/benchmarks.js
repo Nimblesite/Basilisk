@@ -117,7 +117,28 @@ function median(nums) {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-// Headline "how much faster than Pyright" stats for the homepage stat band.
+// Per-checker median cold full-file time, for the "how it compares" speed row.
+// Every checker's own median over the fixtures it reported, so the comparison is
+// each tool against the same bench harness. Warm/cache variants are excluded —
+// this is the cold, from-scratch number. Self-measured, reproducible with
+// `make bench`; never hand-typed, so the table can't drift from the CSV.
+function computeToolMedians(rows, tools) {
+  const ms = {};
+  const text = {};
+  for (const tool of tools) {
+    if (tool.endsWith("-warm")) continue;
+    const vals = rows.map((r) => r.values[tool]).filter((v) => v != null && v > 0);
+    ms[tool] = vals.length ? Math.round(median(vals)) : null;
+    text[tool] = ms[tool] == null ? "—" : `${ms[tool]} ms`;
+  }
+  const ranked = Object.entries(ms).filter(([, v]) => v != null);
+  const fastest = ranked.length
+    ? ranked.reduce((best, entry) => (entry[1] < best[1] ? entry : best))[0]
+    : null;
+  return { ms, text, fastest };
+}
+
+// Headline "how much faster than Pyright" stats for the benchmarks docs page.
 // Computed from the SAME parsed CSV the table renders, so the punchy numbers can
 // never drift from the measured data. Cold-vs-cold (both tools measured cold);
 // self-measured, reproducible with `make bench` — never a hand-typed figure.
@@ -164,6 +185,7 @@ export default function () {
     available: files.map((f) => f.replace(/\.csv$/, "")),
     primary: primary.replace(/\.csv$/, ""),
     ...parsed,
+    toolMedians: computeToolMedians(parsed.rows, parsed.tools),
     vsPyright: computeVsPyright(parsed.rows),
     hasData: parsed.rows.length > 0,
   };
