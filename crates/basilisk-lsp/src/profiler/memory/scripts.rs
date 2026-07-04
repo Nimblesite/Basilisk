@@ -121,6 +121,12 @@ print('__BASILISK_MEM_OK__')
 /// reads the file back and posts its contents to `*.ingest` unchanged
 /// ([PROFILE-MEMORY-COURIER]). Local debugging only — the editor and debuggee
 /// share a filesystem, exactly as the cooperative CPU sampler assumes.
+///
+/// The printed marker is split (`'__BASILISK_MEM_' + 'FILE__'`) so the full
+/// marker never appears verbatim in the script SOURCE: pydevd quotes the
+/// source in its diagnostics (e.g. the evaluation-timeout warning), and a
+/// quoted-source line containing the real marker would poison the editor's
+/// output scan (pyscript-6).
 fn emit_via_file_helper() -> &'static str {
     r"
 def _basilisk_emit(_payload):
@@ -128,20 +134,33 @@ def _basilisk_emit(_payload):
     _fd, _path = tempfile.mkstemp(prefix='basilisk_mem_', suffix='.txt')
     with os.fdopen(_fd, 'w') as _f:
         _f.write(_payload)
-    print('__BASILISK_MEM_FILE__' + _path)
+    print('__BASILISK_MEM_' + 'FILE__' + _path)
 "
 }
 
-/// Python `def _basilisk_snapshot_payload(_max_stats)` returning the
-/// `__BASILISK_MEM__ + json` snapshot payload string from the current
-/// `tracemalloc` state (top allocations with full call stacks, current/peak
-/// memory, gc stats).
+/// Python helpers building the `__BASILISK_MEM__ + json` snapshot payload:
+/// `_basilisk_capture_state()` (the C-fast freeze), `_basilisk_grouped_stats`
+/// (per-traceback aggregation), `_basilisk_snapshot_payload_from(_state, n)`
+/// (the heavy render), and `_basilisk_snapshot_payload(n)` combining them.
 ///
 /// Single source of truth for the snapshot payload, embedded by both the
 /// evaluate-path snapshot ([`take_snapshot`]) and the at-exit final snapshot
 /// ([`start_tracemalloc`]'s `atexit` hook), so both emit a byte-identical
 /// payload the same `basilisk.memory.ingest` parser dispatches. Defined as a
 /// plain `&'static str` (no `format!`) so the dict-literal braces stay literal.
+///
+/// Capture and render are SPLIT because they live under different budgets
+/// (pyscript-6, the "did not finish after 3.00 seconds" bug): capture is the
+/// C-level `tracemalloc.take_snapshot()` copy that must happen at pause time
+/// and is fast at any heap size, while the render walks every trace in pure
+/// Python (~µs per trace — SECONDS on multi-million-trace heaps) and therefore
+/// runs on a worker thread in the evaluate path, never inside the paused DAP
+/// `evaluate` (pydevd warns after `PYDEVD_WARN_EVALUATION_TIMEOUT` = 3 s).
+/// The grouping walks the snapshot's raw trace list and merges by traceback
+/// (id-keyed for speed — the C tracer interns traceback tuples — then merged
+/// by tuple equality so correctness never depends on that interning), which
+/// measures ~3× faster than the stdlib's `statistics('traceback')` pass; the
+/// stdlib pass remains as the fallback if the raw layout ever changes.
 ///
 /// Two deliberate choices make the resulting `.heapprofile` worth reading
 /// ([PROFILE-MEMORY-FINAL]):
@@ -153,13 +172,74 @@ def _basilisk_emit(_payload):
 ///    so a user path like `debugpy_utils/app.py` is never mistaken for the
 ///    debugger (pyscript-1); the top-N is taken over the survivors, not the raw
 ///    allocations, so debugger noise can't crowd the user out.
-/// 2. `statistics('traceback')` keeps each allocation's full call stack (the
-///    `take_snapshot(25)` depth), root→leaf, with the debugger/runtime glue
-///    stripped — so the editor builds a real call tree, not a flat list.
-fn snapshot_payload_fn() -> &'static str {
+/// 2. Full call stacks are kept per allocation (the `take_snapshot(25)` depth),
+///    root→leaf, with the debugger/runtime glue stripped — so the editor builds
+///    a real call tree, not a flat list.
+fn snapshot_payload_fn() -> String {
+    format!("{}{}", capture_and_group_fns(), render_payload_fns())
+}
+
+/// The capture + grouping halves of [`snapshot_payload_fn`] (see its docs).
+fn capture_and_group_fns() -> &'static str {
     r"
-def _basilisk_snapshot_payload(_max_stats):
-    import tracemalloc, json, gc, sysconfig, os
+def _basilisk_capture_state():
+    # The C-fast freeze of everything the payload reports, taken at the moment
+    # the user asked (the paused evaluate); rendering happens later (pyscript-6).
+    import tracemalloc, gc
+    _snapshot = tracemalloc.take_snapshot()
+    _current, _peak = tracemalloc.get_traced_memory()
+    return {
+        'snapshot': _snapshot,
+        'current': _current,
+        'peak': _peak,
+        'gcCounts': list(gc.get_count()),
+        'gcObjects': len(gc.get_objects()),
+    }
+def _basilisk_grouped_stats(_snapshot):
+    # [(size, count, frames_root_to_leaf), ...] — the same grouping as the
+    # stdlib's statistics('traceback'), ~3x faster: one lean pass over the raw
+    # trace list keyed by traceback id (the C tracer interns the tuples), then
+    # a tiny per-GROUP merge by tuple equality so the result is exact even if
+    # some build did not intern. Raw frames come most-recent-first; reverse
+    # per group (cheap) so callers see root->leaf.
+    try:
+        _acc = {}
+        _get = _acc.get
+        for _t in _snapshot.traces._traces:
+            _tb = _t[2]
+            _k = id(_tb)
+            _g = _get(_k)
+            if _g is None:
+                _acc[_k] = [_t[1], 1, _tb]
+            else:
+                _g[0] += _t[1]
+                _g[1] += 1
+        _merged = {}
+        for _entry in _acc.values():
+            _g = _merged.get(_entry[2])
+            if _g is None:
+                _merged[_entry[2]] = _entry
+            else:
+                _g[0] += _entry[0]
+                _g[1] += _entry[1]
+        _groups = [(_g[0], _g[1], list(reversed(_g[2]))) for _g in _merged.values()]
+    except Exception:
+        # Raw-layout drift on some future interpreter: fall back to the stdlib
+        # pass — slower, but still correct and still off the paused evaluate.
+        _groups = [
+            (_s.size, _s.count, [(_f.filename, _f.lineno) for _f in _s.traceback])
+            for _s in _snapshot.statistics('traceback')
+        ]
+    _groups.sort(key=lambda _g: _g[0], reverse=True)
+    return _groups
+"
+}
+
+/// The render + combiner halves of [`snapshot_payload_fn`] (see its docs).
+fn render_payload_fns() -> &'static str {
+    r"
+def _basilisk_snapshot_payload_from(_state, _max_stats):
+    import json, sysconfig, os
     _stdlib = sysconfig.get_paths().get('stdlib') or ''
     def _is_runtime_glue(_fn):
         # Anchored basename match (never a full-path substring, so a user file/dir
@@ -181,23 +261,21 @@ def _basilisk_snapshot_payload(_max_stats):
     # pyscript-1). Filter in the loop with the anchored helper instead, and keep
     # the top _max_stats SURVIVORS by size (iterate the size-sorted stats and
     # stop at the cap) so debugger noise can't crowd the user out of the top-N.
-    stats = tracemalloc.take_snapshot().statistics('traceback')
     top_stats = []
-    for stat in stats:
+    for _size, _count, _all_frames in _basilisk_grouped_stats(_state['snapshot']):
         if len(top_stats) >= _max_stats:
             break
         # The allocation SITE (leaf) decides: an anchored debugger/runtime-glue or
         # synthetic leaf is the debugger's own allocation — drop the whole stat.
-        _site = stat.traceback[-1].filename
+        _site = _all_frames[-1][0]
         if _is_runtime_glue(_site) or _site.startswith('<'):
             continue
         frames = []
         has_user = False
-        for _f in stat.traceback:
-            _fn = _f.filename
+        for _fn, _lineno in _all_frames:
             if _is_runtime_glue(_fn) or _fn.startswith('<'):
                 continue
-            frames.append({'file': _fn, 'line': _f.lineno})
+            frames.append({'file': _fn, 'line': _lineno})
             if not _is_stdlib_only(_fn):
                 has_user = True
         # Drop pure stdlib/runtime noise (no user or library frame survives).
@@ -207,34 +285,92 @@ def _basilisk_snapshot_payload(_max_stats):
         top_stats.append({
             'file': _leaf['file'],
             'line': _leaf['line'],
-            'size': stat.size,
-            'count': stat.count,
+            'size': _size,
+            'count': _count,
             'traceback': frames,
         })
-    current, peak = tracemalloc.get_traced_memory()
     return '__BASILISK_MEM__' + json.dumps({
-        'current': current,
-        'peak': peak,
+        'current': _state['current'],
+        'peak': _state['peak'],
         'stats': top_stats,
-        'gcCounts': list(gc.get_count()),
-        'gcObjects': len(gc.get_objects()),
+        'gcCounts': _state['gcCounts'],
+        'gcObjects': _state['gcObjects'],
     })
+def _basilisk_snapshot_payload(_max_stats):
+    return _basilisk_snapshot_payload_from(_basilisk_capture_state(), _max_stats)
+"
+}
+
+/// Python helper spawning the payload-rendering worker thread and printing the
+/// reserved courier-file path.
+///
+/// Shared by [`take_snapshot`] and [`diff_snapshot`] (pyscript-6): the evaluate
+/// hands the worker an already-frozen capture plus a zero-argument render
+/// closure, reserves the courier path with `mkstemp` (an EMPTY file — the
+/// editor treats empty as "worker still rendering" and polls), spawns the
+/// worker, and prints the path immediately so the DAP `evaluate` returns well
+/// inside pydevd's 3-second warning budget. Worker discipline:
+/// - `pydev_do_not_trace` is pydevd's documented opt-out, so the worker keeps
+///   running (and is never line-traced) even while every debuggee thread sits
+///   suspended at the user's breakpoint; `sys.settrace(None)` inside the
+///   worker sheds any trace function `threading.settrace` installed anyway.
+/// - `daemon` is explicitly False: the spawning (pydevd evaluate) thread is a
+///   daemon, and inheriting that would let interpreter shutdown kill a
+///   half-written payload; non-daemon means `threading._shutdown` joins the
+///   worker so the file always lands.
+/// - The write is atomic (sibling `.part` + `os.replace`), so the editor's
+///   poll sees either an empty reservation or the whole payload, never a
+///   truncation. A render failure writes the error text instead — marker-less
+///   on purpose, so ingest fails fast and honestly rather than timing out.
+/// - The printed marker is split (`'__BASILISK_MEM_' + 'FILE__'`) so the full
+///   marker never appears verbatim in the script SOURCE: pydevd quotes the
+///   source in its diagnostics, and a quoted-source line containing the real
+///   marker would poison the editor's output scan (the corrupted-courier
+///   failure behind the original bug report).
+fn spawn_render_worker_helper() -> &'static str {
+    r"
+def _basilisk_spawn_render(_render):
+    import tempfile, os, sys, threading
+    _fd, _path = tempfile.mkstemp(prefix='basilisk_mem_', suffix='.txt')
+    os.close(_fd)
+    def _basilisk_work():
+        sys.settrace(None)
+        try:
+            _payload = _render()
+        except Exception as _exc:
+            _payload = 'basilisk render worker failed: ' + repr(_exc)
+        _tmp = _path + '.part'
+        with open(_tmp, 'w') as _f:
+            _f.write(_payload)
+        os.replace(_tmp, _path)
+    _t = threading.Thread(target=_basilisk_work, name='basilisk-mem-render')
+    _t.pydev_do_not_trace = True
+    _t.daemon = False
+    _t.start()
+    print('__BASILISK_MEM_' + 'FILE__' + _path)
 "
 }
 
 /// Script to take a memory snapshot and return allocation data as JSON.
 ///
-/// Returns top allocations by line, current/peak memory, gc stats.
-/// The payload is the `__BASILISK_MEM__` marker handed back via a temp file
-/// ([`emit_via_file_helper`]) so a large snapshot is never truncated.
+/// Returns top allocations by line, current/peak memory, gc stats. The
+/// evaluate-blocking portion is only the C-level capture (pyscript-6): the
+/// per-trace render runs on a worker thread ([`spawn_render_worker_helper`])
+/// that writes the `__BASILISK_MEM__` payload to the courier file the editor
+/// polls ([PROFILE-MEMORY-COURIER]) — so a multi-million-trace heap can no
+/// longer stall the paused `evaluate` past pydevd's 3-second warning budget.
 #[must_use]
 pub fn take_snapshot(max_stats: usize) -> String {
-    let emit = emit_via_file_helper();
     let payload_fn = snapshot_payload_fn();
+    let spawn = spawn_render_worker_helper();
     format!(
         r"
-{emit}{payload_fn}
-_basilisk_emit(_basilisk_snapshot_payload({max_stats}))
+{payload_fn}{spawn}
+_basilisk_state = _basilisk_capture_state()
+# Early-bind the captured state as a default argument: a follow-up snapshot
+# reassigns the module-level name, and a late-binding closure would make a
+# still-running worker render the WRONG (newer) capture.
+_basilisk_spawn_render(lambda _s=_basilisk_state: _basilisk_snapshot_payload_from(_s, {max_stats}))
 "
     )
 }
@@ -243,46 +379,84 @@ _basilisk_emit(_basilisk_snapshot_payload({max_stats}))
 ///
 /// Takes a fresh snapshot and compares against the previous one.
 /// Returns growth data prefixed with `__BASILISK_MEM_DIFF__`.
+///
+/// Like [`take_snapshot`], the evaluate-blocking portion is only the C-level
+/// capture (pyscript-6): `Snapshot.compare_to` runs the stdlib's pure-Python
+/// statistics pass over BOTH snapshots (the slowest script of all — measured
+/// ~18 s at 4 M traces), so the comparison is a fast per-leaf-site grouping of
+/// each snapshot's raw traces on the render worker (stdlib `compare_to` stays
+/// as the fallback), and the baseline swap happens at evaluate time so
+/// back-to-back diffs stay correctly ordered.
 #[must_use]
 pub fn diff_snapshot(max_stats: usize) -> String {
-    let emit = emit_via_file_helper();
+    let spawn = spawn_render_worker_helper();
     format!(
         r"
 import tracemalloc, json
-{emit}
-snapshot2 = tracemalloc.take_snapshot()
-# Compare against the stored previous snapshot
-if hasattr(tracemalloc, '_basilisk_prev_snapshot'):
-    diff = snapshot2.compare_to(tracemalloc._basilisk_prev_snapshot, 'lineno')
+{spawn}
+def _basilisk_lineno_stats(_snapshot):
+    # {{(file, line): [size, count]}} keyed by each trace's LEAF frame — the
+    # stdlib statistics('lineno') grouping, one lean pass over the raw traces.
+    try:
+        _acc = {{}}
+        _get = _acc.get
+        for _t in _snapshot.traces._traces:
+            _k = _t[2][0]
+            _g = _get(_k)
+            if _g is None:
+                _acc[_k] = [_t[1], 1]
+            else:
+                _g[0] += _t[1]
+                _g[1] += 1
+        return _acc
+    except Exception:
+        return {{
+            (_s.traceback[0].filename, _s.traceback[0].lineno): [_s.size, _s.count]
+            for _s in _snapshot.statistics('lineno')
+        }}
+def _basilisk_render_diff(_prev, _snap, _current, _peak, _max_stats):
+    if _prev is None:
+        return '__BASILISK_MEM_DIFF__' + json.dumps({{'error': 'no previous snapshot'}})
+    _old = _basilisk_lineno_stats(_prev)
+    _new = _basilisk_lineno_stats(_snap)
     leaks = []
-    # compare_to sorts by ABS(size_diff), so the head slice already carries the
-    # biggest shrinks alongside the biggest growths. Both are reported: dropping
-    # negative diffs made totalFreed/netGrowth lies and read a cache that
-    # provably releases memory as a one-way leak.
-    for stat in diff[:{max_stats}]:
-        if stat.size_diff != 0:
-            frame = stat.traceback[0]
+    for _k in set(_old) | set(_new):
+        _new_size, _new_count = _new.get(_k, (0, 0))
+        _old_size, _old_count = _old.get(_k, (0, 0))
+        _size_diff = _new_size - _old_size
+        if _size_diff != 0:
             leaks.append({{
-                'file': frame.filename,
-                'line': frame.lineno,
-                'sizeDiff': stat.size_diff,
-                'countDiff': stat.count_diff,
-                'size': stat.size,
-                'count': stat.count,
-                'traceback': [{{'file': f.filename, 'line': f.lineno}} for f in stat.traceback]
+                'file': _k[0],
+                'line': _k[1],
+                'sizeDiff': _size_diff,
+                'countDiff': _new_count - _old_count,
+                'size': _new_size,
+                'count': _new_count,
+                'traceback': [{{'file': _k[0], 'line': _k[1]}}]
             }})
-    current, peak = tracemalloc.get_traced_memory()
-    result = {{
+    # Sort by ABS(size_diff) — compare_to's order — so the head slice carries
+    # the biggest shrinks alongside the biggest growths. Both are reported:
+    # dropping negative diffs made totalFreed/netGrowth lies and read a cache
+    # that provably releases memory as a one-way leak.
+    leaks.sort(key=lambda _l: abs(_l['sizeDiff']), reverse=True)
+    del leaks[_max_stats:]
+    return '__BASILISK_MEM_DIFF__' + json.dumps({{
         'leaks': leaks,
-        'current': current,
-        'peak': peak,
-    }}
-    _basilisk_emit('__BASILISK_MEM_DIFF__' + json.dumps(result))
-else:
-    _basilisk_emit('__BASILISK_MEM_DIFF__' + json.dumps({{'error': 'no previous snapshot'}}))
-
-# Store this snapshot as the previous one for the next diff
-tracemalloc._basilisk_prev_snapshot = snapshot2
+        'current': _current,
+        'peak': _peak,
+    }})
+_basilisk_snap2 = tracemalloc.take_snapshot()
+_basilisk_prev = getattr(tracemalloc, '_basilisk_prev_snapshot', None)
+# Store this snapshot as the previous one for the next diff — at EVALUATE time,
+# so a follow-up diff always compares against this capture even if this render
+# worker is still running when the next request lands.
+tracemalloc._basilisk_prev_snapshot = _basilisk_snap2
+_basilisk_current, _basilisk_peak = tracemalloc.get_traced_memory()
+# Early-bind everything as default arguments: a follow-up diff reassigns these
+# module-level names, and a late-binding closure would make a still-running
+# worker compare the WRONG (newer) snapshots.
+_basilisk_spawn_render(lambda _p=_basilisk_prev, _s=_basilisk_snap2, _c=_basilisk_current, _k=_basilisk_peak:
+    _basilisk_render_diff(_p, _s, _c, _k, {max_stats}))
 "
     )
 }
@@ -631,7 +805,61 @@ mod tests {
         // through and applied to the SURVIVORS (top-N after filtering), not a raw
         // pre-slice — so debugger noise can't crowd the user out (pyscript-1).
         assert!(script.contains("len(top_stats) >= _max_stats"));
-        assert!(script.contains("_basilisk_snapshot_payload(500)"));
+        // Early-bound default arg (`_s=_basilisk_state`): a late-binding closure
+        // would let a follow-up snapshot's reassignment leak into a still-running
+        // worker's render.
+        assert!(
+            script.contains("lambda _s=_basilisk_state: _basilisk_snapshot_payload_from(_s, 500)")
+        );
+    }
+
+    #[test]
+    fn evaluate_scripts_render_off_the_paused_evaluate() {
+        // pyscript-6 — the "did not finish after 3.00 seconds" bug: the paused
+        // DAP evaluate may only run the C-fast capture; the per-trace pure-Python
+        // render (seconds on multi-million-trace heaps, past pydevd's 3 s
+        // PYDEVD_WARN_EVALUATION_TIMEOUT) must run on a worker thread that
+        // writes the courier file. Lock in the whole worker discipline for both
+        // evaluate-path scripts (snapshot and diff).
+        for script in [take_snapshot(100), diff_snapshot(100)] {
+            assert!(
+                script.contains("_basilisk_spawn_render("),
+                "the render must be handed to the worker spawner: {script}"
+            );
+            // pydevd's documented opt-out: the worker keeps running (untraced)
+            // even while every debuggee thread is suspended at a breakpoint.
+            assert!(
+                script.contains("_t.pydev_do_not_trace = True"),
+                "the worker must opt out of pydevd tracing/suspension: {script}"
+            );
+            // The spawning pydevd evaluate thread is a daemon; inheriting that
+            // would let interpreter shutdown kill a half-written payload.
+            assert!(
+                script.contains("_t.daemon = False"),
+                "the worker must be non-daemon so shutdown joins it: {script}"
+            );
+            // Shed any trace fn threading.settrace installed despite the opt-out.
+            assert!(
+                script.contains("sys.settrace(None)"),
+                "the worker must shed debugger line-tracing: {script}"
+            );
+            // Atomic hand-off: the editor's poll must never see a truncation.
+            assert!(
+                script.contains("os.replace(_tmp, _path)"),
+                "the payload write must be atomic (sibling .part + os.replace): {script}"
+            );
+        }
+        // The data is FROZEN at evaluate time — the snapshot captures state
+        // before spawning, and the diff swaps the baseline at evaluate time so
+        // back-to-back diffs stay ordered even with a render still in flight.
+        assert!(
+            take_snapshot(100).contains("_basilisk_state = _basilisk_capture_state()"),
+            "the snapshot must capture at evaluate time, not in the worker"
+        );
+        assert!(
+            diff_snapshot(100).contains("tracemalloc._basilisk_prev_snapshot = _basilisk_snap2"),
+            "the diff must swap the baseline at evaluate time, not in the worker"
+        );
     }
 
     #[test]
@@ -672,9 +900,10 @@ mod tests {
             !script.contains("'pydevd' in _fn"),
             "debugger detection must NOT use an unanchored full-path substring match: {script}"
         );
-        // The leaf (allocation site) decides whether a stat is the debugger's own.
+        // The leaf (allocation site) decides whether a stat is the debugger's own
+        // (grouped frames are root->leaf, so the site is the LAST frame's file).
         assert!(
-            script.contains("_site = stat.traceback[-1].filename"),
+            script.contains("_site = _all_frames[-1][0]"),
             "the allocation site (leaf) must gate the debugger drop: {script}"
         );
         // Pure debugger/runtime stacks (no user or library frame) are dropped.
@@ -689,7 +918,8 @@ mod tests {
         // debugpy truncates a single `print()` (~20KB), so large tracemalloc
         // payloads must be written to a temp file and only the PATH printed
         // ([PROFILE-MEMORY-COURIER]). Every JSON-emitting script must route
-        // through the file emitter and must NOT print the JSON directly.
+        // through a file hand-off (the sync emitter or the render worker) and
+        // must NOT print the JSON directly.
         for script in [
             take_snapshot(100),
             diff_snapshot(100),
@@ -697,13 +927,22 @@ mod tests {
             objects_by_type("dict", 50),
             gc_collect(),
         ] {
+            // The marker is printed SPLIT ('__BASILISK_MEM_' + 'FILE__') so the
+            // assembled marker never appears verbatim in the script source:
+            // pydevd quotes source in its diagnostics, and a quoted-source line
+            // carrying the real marker would poison the editor's output scan
+            // (pyscript-6 — the corrupted-courier half of the stall bug).
             assert!(
-                script.contains("__BASILISK_MEM_FILE__"),
-                "script must emit the file-handoff marker: {script}"
+                script.contains("print('__BASILISK_MEM_' + 'FILE__' + _path)"),
+                "script must print the (split) file-handoff marker: {script}"
             );
             assert!(
-                script.contains("_basilisk_emit("),
-                "script must route its payload through the file emitter: {script}"
+                !script.contains("__BASILISK_MEM_FILE__"),
+                "the assembled file marker must never appear in script source: {script}"
+            );
+            assert!(
+                script.contains("_basilisk_emit(") || script.contains("_basilisk_spawn_render("),
+                "script must route its payload through a file hand-off: {script}"
             );
             // The only direct print is the short file-path line; no JSON marker
             // may be printed (that is what truncates).

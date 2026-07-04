@@ -27,6 +27,7 @@ import { execFileSync } from 'child_process';
 import { findBasiliskBinary } from './test-helpers';
 import { getStore } from '../../extension';
 import { currentStoppedFrameId, evaluateInDebugSession } from '../../dap-evaluate';
+import { debugOutputCursor, debugOutputSince } from '../../dap-output';
 import { applyDebugConfigDefaults } from '../../debug-adapter';
 
 const EXTENSION_ID = 'Nimblesite.basilisk';
@@ -142,6 +143,21 @@ const TYPE_VARIETY_START_LINE = 98;
 
 /** Line: `p = Point(3, 4)` in class_instance(). */
 const CLASS_INSTANCE_START_LINE = 119;
+
+// ── Large-heap memory evaluation-budget fixture (written at test time) ───────
+
+/** Line `anchor_start = 1` in the generated bigheap_main.py (tracemalloc start). */
+const BIGHEAP_START_LINE = 4;
+/** Line `anchor_ready = len(keep)` in bigheap_main.py (snapshot point). */
+const BIGHEAP_READY_LINE = 6;
+/** Overall budget for the large-heap snapshot test (heap build + round-trip). */
+const LARGE_HEAP_MEM_TIMEOUT_MS = 90_000;
+/** Wait for the traced ~600k-item heap build between the two breakpoints. */
+const HEAP_BUILD_STOP_TIMEOUT_MS = 45_000;
+/** pydevd's default PYDEVD_WARN_EVALUATION_TIMEOUT (seconds). */
+const PYDEVD_WARN_TIMEOUT_SECS = 3;
+/** The stable core of pydevd's evaluation-stall warning text. */
+const PYDEVD_STALL_WARNING = 'did not finish after';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1744,6 +1760,116 @@ suite('Debug Integration E2E Tests', () => {
         assert.ok(
             typeof result.currentMemory === 'number' && result.currentMemory > 0,
             `tracemalloc should report tracked memory, got ${String(result.currentMemory)}`
+        );
+
+        await stopActiveDebugSession();
+    });
+
+    // ────────────────────────────────────────────────────────────────────────
+    // 25. Memory snapshot on a LARGE heap must not stall the paused evaluate:
+    //     pydevd warns after PYDEVD_WARN_EVALUATION_TIMEOUT (3 s) with a wall
+    //     of timeout text in the debug console — the user-reported "take a
+    //     snapshot → did not finish after 3.00 seconds" bug. The snapshot
+    //     round-trip must both succeed AND never trip that warning.
+    //     [LSPPROF] PROFILE-MEMORY-HOWTO
+    // ────────────────────────────────────────────────────────────────────────
+
+    test('large-heap memory snapshot does not trip the pydevd evaluation stall warning', async function () {
+        this.timeout(LARGE_HEAP_MEM_TIMEOUT_MS);
+
+        // A helper module with NO breakpoints builds the heap, so pydevd's
+        // line-tracing of breakpoint files doesn't dominate the build; the
+        // ~600k-item comprehension yields ~3M live tracemalloc traces.
+        const heapHelper = path.join(tmpDir, 'bigheap_build.py');
+        const heapMain = path.join(tmpDir, 'bigheap_main.py');
+        fs.writeFileSync(heapHelper, [
+            '"""Builds a large traced heap (~3M tracemalloc traces)."""',
+            'HEAP_ITEMS = 600000',
+            '',
+            '',
+            'def build():',
+            '    return [(str(i), [i]) for i in range(HEAP_ITEMS)]',
+            '',
+        ].join('\n'));
+        fs.writeFileSync(heapMain, [
+            '"""Large-heap fixture for the memory evaluation-budget regression."""',
+            'import bigheap_build',
+            '',
+            'anchor_start = 1',                 // line 4: BP A — inject tracemalloc
+            'keep = bigheap_build.build()',     // line 5: heap built while traced
+            'anchor_ready = len(keep)',         // line 6: BP B — take the snapshot
+            'print(anchor_ready)',
+            '',
+        ].join('\n'));
+
+        clearAllBreakpoints();
+        setBreakpoints(heapMain, [BIGHEAP_START_LINE, BIGHEAP_READY_LINE]);
+        const sessionPromise = waitForDebugSessionStart();
+        const stoppedPromise = waitForStop();
+        const started = await vscode.debug.startDebugging(undefined, {
+            name: 'Basilisk Big Heap Memory Test',
+            type: 'basilisk-debug',
+            request: 'launch',
+            program: heapMain,
+            python: pythonPath,
+            stopOnEntry: false,
+            justMyCode: true,
+            console: 'internalConsole',
+        });
+        assert.ok(started, 'debug session should start');
+        const session = await sessionPromise;
+        const threadId = await stoppedPromise;
+
+        // BP A: start tracemalloc in the live debuggee (the real start leg).
+        const frameA = await currentStoppedFrameId();
+        assert.ok(frameA !== null, 'should resolve a frame at the start anchor');
+        const start = await vscode.commands.executeCommand<{ memorySessionId?: string; script?: string }>(
+            'basilisk.memory.start',
+            { tracebackDepth: 25 }
+        );
+        assert.ok(start.memorySessionId !== undefined && start.script !== undefined, 'start leg should mint a session + script');
+        await evaluateInDebugSession(start.script, frameA);
+
+        // Run to BP B — the big heap is built under tracemalloc on the way.
+        // waitForStop() would resolve early (debugpy answers stackTrace even
+        // for a RUNNING thread with a sampled frame), so poll the tracker-gated
+        // currentStoppedFrameId until the breakpoint genuinely lands.
+        await continueExecution(session, threadId);
+        let frameB: number | null = null;
+        const buildDeadline = Date.now() + HEAP_BUILD_STOP_TIMEOUT_MS;
+        while (frameB === null && Date.now() < buildDeadline) {
+            frameB = await currentStoppedFrameId();
+            if (frameB === null) {
+                await new Promise<void>((resolve) => setTimeout(resolve, STOP_POLL_INTERVAL_MS));
+            }
+        }
+        assert.ok(frameB !== null, 'should resolve a frame at the ready anchor');
+
+        // BP B: take the snapshot exactly as the command path does, and watch
+        // the debug console for pydevd's evaluation-stall warning.
+        const consoleCursor = debugOutputCursor(session.id);
+        const snapCmd = await vscode.commands.executeCommand<{ script?: string }>(
+            'basilisk.memory.snapshot',
+            { memorySessionId: start.memorySessionId }
+        );
+        assert.ok(snapCmd.script !== undefined, 'snapshot leg should return a script');
+        const output = await evaluateInDebugSession(snapCmd.script, frameB);
+        assert.ok(output !== null, 'evaluate should return the snapshot output');
+        const result = await vscode.commands.executeCommand<{ kind?: string; currentMemory?: number }>(
+            'basilisk.memory.ingest',
+            { memorySessionId: start.memorySessionId, output }
+        );
+
+        assert.strictEqual(result.kind, 'snapshot', 'the large-heap snapshot must still ingest');
+        assert.ok(
+            typeof result.currentMemory === 'number' && result.currentMemory > 50_000_000,
+            `the ~600k-item heap must be measured, got ${String(result.currentMemory)}`
+        );
+        const consoleOut = debugOutputSince(session.id, consoleCursor);
+        assert.ok(
+            !consoleOut.includes(PYDEVD_STALL_WARNING),
+            `the snapshot evaluate stalled past pydevd's ${String(PYDEVD_WARN_TIMEOUT_SECS)}s budget — the debug console got the ` +
+            `user-visible timeout wall of text:\n${consoleOut.slice(0, 800)}`
         );
 
         await stopActiveDebugSession();

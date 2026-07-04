@@ -35,6 +35,14 @@ const FILE_PAYLOAD_MARKER = "__BASILISK_MEM_FILE__";
 const MARKER_WAIT_MS = 4000;
 /** Poll interval while waiting for marker output. */
 const MARKER_POLL_MS = 25;
+/** How long to wait for the debuggee's render worker to fill the payload file.
+ *  The snapshot/diff evaluate returns as soon as the C-level capture is done
+ *  (so it never stalls past pydevd's 3 s evaluation budget); the per-trace
+ *  aggregation happens on a debuggee worker thread and can take a while on
+ *  multi-million-trace heaps ([PROFILE-MEMORY-COURIER]). */
+const FILE_PAYLOAD_WAIT_MS = 60_000;
+/** Poll interval while the payload file is still an empty reservation. */
+const FILE_PAYLOAD_POLL_MS = 100;
 
 /** Return the active Basilisk debug session, or undefined. */
 function activeBasiliskSession(): vscode.DebugSession | undefined {
@@ -84,19 +92,39 @@ export async function evaluateInDebugSession(
  * ([PROFILE-MEMORY-COURIER]). When that marker is present, read the file (the
  * real `__BASILISK_MEM*__ + json` payload), delete it, and return its contents.
  * Anything else (CPU acks, small OK markers) passes through untouched.
+ *
+ * The snapshot/diff scripts print the path while a debuggee worker thread is
+ * still rendering the payload (that render is seconds of pure Python on big
+ * heaps — running it inside the evaluate stalled the debugger past pydevd's
+ * 3 s budget, the original bug): the reserved file exists but is EMPTY until
+ * the worker atomically `os.replace`s the whole payload in. So an empty file
+ * means "still rendering" and is polled; any non-empty content is complete by
+ * construction. A missing file is still an immediate, honest failure.
  */
 export async function resolveMarkerFilePayload(out: string): Promise<string> {
   const at = out.indexOf(FILE_PAYLOAD_MARKER);
   if (at === -1) { return out; }
   const path = out.slice(at + FILE_PAYLOAD_MARKER.length).split(/\r?\n/, 1)[0]?.trim() ?? "";
   if (path === "") { return out; }
-  try {
-    const contents = await fs.promises.readFile(path, "utf8");
-    await fs.promises.unlink(path).catch(() => undefined);
-    return contents;
-  } catch (err: unknown) {
-    Logger.warn(`[Memory] could not read payload file: ${err instanceof Error ? err.message : String(err)}`);
-    return out;
+  const deadline = Date.now() + FILE_PAYLOAD_WAIT_MS;
+  for (;;) {
+    let contents: string;
+    try {
+      contents = await fs.promises.readFile(path, "utf8");
+    } catch (err: unknown) {
+      Logger.warn(`[Memory] could not read payload file: ${err instanceof Error ? err.message : String(err)}`);
+      return out;
+    }
+    if (contents.length > 0) {
+      await fs.promises.unlink(path).catch(() => undefined);
+      return contents;
+    }
+    if (Date.now() >= deadline) {
+      Logger.warn(`[Memory] payload file stayed empty for ${FILE_PAYLOAD_WAIT_MS}ms: ${path}`);
+      await fs.promises.unlink(path).catch(() => undefined);
+      return out;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, FILE_PAYLOAD_POLL_MS));
   }
 }
 
