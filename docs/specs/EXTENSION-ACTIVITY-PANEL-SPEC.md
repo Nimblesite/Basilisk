@@ -395,15 +395,19 @@ At-a-glance view of how well-typed the codebase is.
 
 ### Tree Structure {#EXTACT-HEALTH-TREE-STRUCTURE}
 
+Tallies follow [count style](#EXTACT-MODULES-COUNT-STYLE) — coloured glyphs
+`🔴 n` (errors) / `🟠 n` (warnings), **never** `nE nW`; a zero for a severity is
+omitted, never shown as `🔴 0`:
+
 ```
-Workspace Health: 73% typed  [========---] 14E 23W
+Workspace Health: 73% typed  [========---] 🔴 14  🟠 23
 -------------------------------------------------
-  [pass]  myapp/models/user.py        100%    0E  0W
-  [pass]  myapp/models/base.py        100%    0E  0W
-  [pass]  myapp/api/auth.py            95%    0E  1W
-  [warn]  myapp/api/routes.py          68%    2E  3W
-  [warn]  myapp/utils.py               54%    1E  0W    [adopted]
-  [fail]  myapp/legacy/importer.py     12%   11E 19W    [adopted]
+  [pass]  myapp/models/user.py        100%
+  [pass]  myapp/models/base.py        100%
+  [pass]  myapp/api/auth.py            95%          🟠 1
+  [warn]  myapp/api/routes.py          68%    🔴 2  🟠 3
+  [warn]  myapp/utils.py               54%    🔴 1        [adopted]
+  [fail]  myapp/legacy/importer.py     12%   🔴 11 🟠 19  [adopted]
 ```
 
 ### Tree Item Properties {#EXTACT-HEALTH-ITEM-PROPERTIES}
@@ -411,7 +415,7 @@ Workspace Health: 73% typed  [========---] 14E 23W
 | Property | Value |
 |----------|-------|
 | Label | Module path (relative to workspace root) |
-| Description | Coverage %, error/warning counts |
+| Description | Coverage %, then the diagnostic tally in [count style](#EXTACT-MODULES-COUNT-STYLE) (`🔴 n` errors / `🟠 n` warnings — **never** `nE nW`) |
 | Icon | Green (>=90%), yellow (50-89%), red (<50%) |
 | Tooltip | "23 of 31 symbols annotated. 2 errors, 3 warnings." |
 | Decoration | `[adopted]` badge if file is in adoption mode |
