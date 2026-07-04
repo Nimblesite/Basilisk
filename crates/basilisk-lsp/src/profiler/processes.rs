@@ -239,7 +239,14 @@ fn build_process_info(
     let debuggee_program = debugpy_debuggee_program(cmd);
     let is_debuggee = debuggee_program.is_some();
     let is_machinery = !is_debuggee && is_debugger_infrastructure(cmd);
-    let script = debuggee_program.or_else(|| extract_script(cmd));
+    // Machinery carries NO script: its positional is the launcher/adapter
+    // plumbing path, not user code — labelling the row with it (and wiring
+    // click-to-open into the bundled debugpy) misleads (#268).
+    let script = if is_machinery {
+        None
+    } else {
+        debuggee_program.or_else(|| extract_script(cmd))
+    };
     // Workspace membership drives the green row only — never inclusion.
     let in_workspace = process_in_workspace(
         process.cwd(),
