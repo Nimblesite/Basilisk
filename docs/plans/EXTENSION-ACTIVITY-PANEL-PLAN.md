@@ -139,13 +139,17 @@ A toggle returns to the panel ONLY when both are true:
       assert `vscode.executeInlayHintProvider` returns no parameter hints; repeat
       for `variableTypes`.
 
-### Ruff Integration {#EXTACT-PLAN-RUFF-TOGGLE}
-- [ ] When `ruff.enabled` is false: skip ruff-backed code actions / formatting /
-      organize-imports in `code_actions/` and `formatting.rs`, and do not advertise
-      `basilisk.organizeImports` as an available action for the document.
-- [ ] Honor `ruff.executablePath` instead of resolving `ruff` from PATH.
-- [ ] VSIX test: toggle `ruff.enabled` off, assert organize-imports code action is
-      absent / formatting is a no-op.
+### Formatter Engine {#EXTACT-PLAN-FORMATTER-TOGGLE}
+The external `ruff` binary is jettisoned — there is no `ruff.enabled`/`ruff.executablePath`
+to honor. Formatting is the Ruff formatter embedded in the Basilisk binary, in-process
+([LSPFMT-DECISION](../specs/LSP-FORMATTING-SPEC.md#LSPFMT-DECISION)). The only setting is
+the `basilisk.formatter` engine selector ([LSPFMT-CONFIG](../specs/LSP-FORMATTING-SPEC.md#LSPFMT-CONFIG)).
+- [ ] When `basilisk.formatter` is `"none"`: do not advertise `documentFormattingProvider`
+      / `documentRangeFormattingProvider` in `formatting.rs` / `server/init.rs`, so no
+      Basilisk formatter appears in any editor. (Native import hygiene stays available —
+      it is not gated by this flag.)
+- [ ] VSIX test: set `basilisk.formatter` to `"none"`, assert formatting is not offered;
+      set it back to `"ruff"`, assert formatting works with no `ruff` binary installed.
 
 ### Test Explorer {#EXTACT-PLAN-TEST-EXPLORER-TOGGLE}
 - [ ] `testExplorer.enabled` currently only gates auto-discovery-on-save. Make it

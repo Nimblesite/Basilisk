@@ -31,13 +31,6 @@ function readInlayHints(cfg: vscode.WorkspaceConfiguration): Record<string, unkn
   };
 }
 
-function readRuffSettings(cfg: vscode.WorkspaceConfiguration): Record<string, unknown> {
-  return {
-    enabled: cfg.get<boolean>("ruff.enabled") ?? true,
-    executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
-  };
-}
-
 function readUvSettings(cfg: vscode.WorkspaceConfiguration): Record<string, unknown> {
   return {
     enabled: cfg.get<boolean>("uv.enabled") ?? true,
@@ -70,7 +63,6 @@ function readTestExplorerSettings(cfg: vscode.WorkspaceConfiguration): Record<st
 // config source ([ANALYSIS-CONFIG-PRI]), and forwarded to the server.
 export function readBasiliskSettings(): Record<string, unknown> {
   const cfg = vscode.workspace.getConfiguration("basilisk");
-  const ruff = readRuffSettings(cfg);
   // The "Type Checking" toggle (`basilisk.enabled`) MUST reach the server — the
   // LSP is authoritative for diagnostics, so it clears/suppresses them when the
   // toggle is off. Omitting it here left the toggle a cosmetic no-op (GitHub
@@ -85,9 +77,9 @@ export function readBasiliskSettings(): Record<string, unknown> {
       python: cfg.get<string>("python") ?? "",
       analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
       inlayHints: readInlayHints(cfg),
-      ruff,
+      formatter: cfg.get<string>("formatter") ?? "ruff",
     },
-    ruff,
+    formatter: cfg.get<string>("formatter") ?? "ruff",
     uv: readUvSettings(cfg),
     testExplorer: readTestExplorerSettings(cfg),
   };

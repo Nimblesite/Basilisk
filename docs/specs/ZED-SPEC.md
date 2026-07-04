@@ -168,9 +168,10 @@ impl zed::Extension for BasiliskExtension {
                     "parameterNames": true,
                     "variableTypes": true
                 },
-                "ruff": {
-                    "enabled": true
-                }
+                // Formatter engine: "ruff" (Ruff formatter embedded in the
+                // Basilisk binary, in-process — no external ruff binary) or
+                // "none". [LSPFMT-CONFIG]
+                "formatter": "ruff"
             }
         })))
     }
@@ -357,10 +358,9 @@ The mirror version equals the monorepo tag (`v1.2.3` → `1.2.3`); the binary [Z
           "parameterNames": true,
           "variableTypes": true
         },
-        "ruff": {
-          "enabled": true,
-          "executablePath": "/path/to/ruff"
-        }
+        // Formatter engine: "ruff" (embedded Ruff formatter, in-process — no
+        // external ruff binary) or "none". [LSPFMT-CONFIG]
+        "formatter": "ruff"
       }
     }
   },

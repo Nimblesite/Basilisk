@@ -275,16 +275,16 @@ suite("Basilisk Activity Panel E2E Tests", function () {
 
   test("toggleFeature command can toggle a boolean setting", async function () {
     const cfg = vscode.workspace.getConfiguration("basilisk");
-    const original = cfg.get<boolean>("ruff.enabled") ?? true;
+    const original = cfg.get<boolean>("uv.enabled") ?? true;
 
-    await vscode.commands.executeCommand("basilisk.toggleFeature", "basilisk.ruff.enabled", !original);
+    await vscode.commands.executeCommand("basilisk.toggleFeature", "basilisk.uv.enabled", !original);
 
-    const updated = vscode.workspace.getConfiguration("basilisk").get<boolean>("ruff.enabled");
+    const updated = vscode.workspace.getConfiguration("basilisk").get<boolean>("uv.enabled");
     assert.strictEqual(updated, !original, "toggleFeature should flip the setting value");
 
     // Restore original value.
     await vscode.workspace.getConfiguration().update(
-      "basilisk.ruff.enabled",
+      "basilisk.uv.enabled",
       undefined,
       vscode.ConfigurationTarget.Workspace,
     );

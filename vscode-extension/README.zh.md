@@ -153,8 +153,7 @@ Basilisk 以单个 Rust 二进制文件的形式发布。无需 Python 运行时
 | `basilisk.trace.server` | `"off"` | LSP 跟踪级别：`off`、`messages`、`verbose` |
 | `basilisk.inlayHints.parameterNames` | `true` | 保留项 —— 提示始终显示；服务器尚未读取此项 |
 | `basilisk.inlayHints.variableTypes` | `true` | 保留项 —— 提示始终显示；服务器尚未读取此项 |
-| `basilisk.ruff.enabled` | `true` | 保留项 —— Ruff 始终开启；服务器尚未读取此项 |
-| `basilisk.ruff.executablePath` | `"ruff"` | 保留项 —— 服务器从 PATH 解析 ruff；尚未读取此项 |
+| `basilisk.formatter` | `"ruff"` | 格式化引擎 —— `"ruff"` 使用内嵌于 Basilisk 二进制文件中的 Ruff 格式化器（进程内运行；无需任何外部 `ruff` 二进制文件），`"none"` 则禁用格式化 |
 
 ---
 

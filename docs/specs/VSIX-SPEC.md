@@ -122,13 +122,9 @@ client.start();
         "type": "boolean", "default": true,
         "description": "Show inferred type hints for unannotated variables."
     },
-    "basilisk.ruff.enabled": {
-        "type": "boolean", "default": true,
-        "description": "Enable Ruff integration for formatting and import organization."
-    },
-    "basilisk.ruff.executablePath": {
-        "type": "string", "default": "ruff",
-        "description": "Path to the ruff binary."
+    "basilisk.formatter": {
+        "type": "string", "enum": ["ruff", "none"], "default": "ruff",
+        "description": "Formatter engine: 'ruff' (embedded Ruff formatter, in-process, no separate install) or 'none'. Replaces basilisk.ruff.* — see LSP-FORMATTING-SPEC.md#LSPFMT-CONFIG."
     },
     "basilisk.trace.server": {
         "type": "string",

@@ -186,25 +186,33 @@ suite('Basilisk Extension E2E Tests', () => {
         );
     });
 
-    test('Extension contributes basilisk.ruff.enabled setting', () => {
+    // The formatter is the Ruff engine embedded in the Basilisk binary — there is
+    // no external `ruff` binary, so there is no `ruff.executablePath`. The only
+    // formatter setting is the engine selector. [LSPFMT-CONFIG]
+    test('Extension contributes basilisk.formatter setting defaulting to "ruff"', () => {
         const cfg = vscode.workspace.getConfiguration('basilisk');
-        const inspected = cfg.inspect<boolean>('ruff.enabled');
-        assert.ok(inspected, 'basilisk.ruff.enabled should be a contributed setting');
-        assert.strictEqual(
-            inspected.defaultValue,
-            true,
-            'Default ruff.enabled should be true'
-        );
-    });
-
-    test('Extension contributes basilisk.ruff.executablePath setting', () => {
-        const cfg = vscode.workspace.getConfiguration('basilisk');
-        const inspected = cfg.inspect<string>('ruff.executablePath');
-        assert.ok(inspected, 'basilisk.ruff.executablePath should be a contributed setting');
+        const inspected = cfg.inspect<string>('formatter');
+        assert.ok(inspected, 'basilisk.formatter should be a contributed setting');
         assert.strictEqual(
             inspected.defaultValue,
             'ruff',
-            'Default ruff.executablePath should be "ruff"'
+            'Default formatter should be the embedded Ruff engine ("ruff")'
+        );
+    });
+
+    test('Extension does NOT contribute any basilisk.ruff.* setting', () => {
+        // The external ruff binary is jettisoned; a ruff path/toggle would be a
+        // dead, misleading setting. [LSPFMT-DECISION]
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        assert.strictEqual(
+            cfg.inspect('ruff.enabled')?.defaultValue,
+            undefined,
+            'basilisk.ruff.enabled must not exist'
+        );
+        assert.strictEqual(
+            cfg.inspect('ruff.executablePath')?.defaultValue,
+            undefined,
+            'basilisk.ruff.executablePath must not exist'
         );
     });
 
