@@ -111,6 +111,32 @@ function parseCsv(text) {
   return { meta, tools, rows };
 }
 
+function median(nums) {
+  const s = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+// Headline "how much faster than Pyright" stats for the homepage stat band.
+// Computed from the SAME parsed CSV the table renders, so the punchy numbers can
+// never drift from the measured data. Cold-vs-cold (both tools measured cold);
+// self-measured, reproducible with `make bench` — never a hand-typed figure.
+function computeVsPyright(rows) {
+  const pairs = rows
+    .map((r) => ({ b: r.values.basilisk, p: r.values.pyright }))
+    .filter((x) => x.b != null && x.p != null && x.b > 0 && x.p > 0);
+  if (!pairs.length) return null;
+  const factors = pairs.map((x) => x.p / x.b);
+  return {
+    maxFactor: Math.round(Math.max(...factors)),
+    medianFactor: Math.round(median(factors)),
+    basiliskMedianMs: Math.round(median(pairs.map((x) => x.b))),
+    pyrightMedianMs: Math.round(median(pairs.map((x) => x.p))),
+    beats: pairs.filter((x) => x.b < x.p).length,
+    total: pairs.length,
+  };
+}
+
 function pickPrimary(files) {
   const env = process.env.BASILISK_BENCH_PRIMARY;
   if (env && files.includes(`${env}.csv`)) return `${env}.csv`;
@@ -138,6 +164,7 @@ export default function () {
     available: files.map((f) => f.replace(/\.csv$/, "")),
     primary: primary.replace(/\.csv$/, ""),
     ...parsed,
+    vsPyright: computeVsPyright(parsed.rows),
     hasData: parsed.rows.length > 0,
   };
 }

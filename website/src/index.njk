@@ -78,12 +78,50 @@ benchmarkStrings:
         </div>
       </div>
 
-      <!-- Product screenshot — Basilisk running in VS Code -->
+      <!-- Product video — Basilisk renaming a symbol across a project in VS Code.
+           Autoplays muted/inline on load (browser autoplay policy needs muted). -->
       <div class="hero__code">
-        <img src="/assets/images/vscode-diagnostics.png" alt="Basilisk flagging type errors live in VS Code — inline diagnostics with the Problems panel listing each missing annotation" class="hero__shot" loading="lazy">
+        <video class="hero__shot" autoplay muted loop playsinline preload="auto" aria-label="Basilisk performing a project-wide rename refactor in VS Code — every reference to the symbol updates live as it is renamed">
+          <source src="/assets/images/rename.mp4" type="video/mp4">
+        </video>
       </div>
 
     </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════
+     STAT BAND — the two headline proofs (PEP conformance +
+     benchmark speed) on ONE panel. Every number is rendered
+     from real data (conformance.js + benchmarks.js from the
+     committed CSV) — never hand-typed, so it can't drift.
+═══════════════════════════════════════════════════ -->
+<section class="stat-band">
+  <div class="container">
+    <div class="stat-band__grid">
+      <div class="stat-card">
+        <span class="stat-card__num">{{ conformance.scorePct }}<span class="stat-card__unit">%</span></span>
+        <span class="stat-card__label">PEP&nbsp;conformance</span>
+        <span class="stat-card__sub">{{ conformance.pass }}/{{ conformance.total }} tests &middot; {{ conformance.fp }} false positives</span>
+      </div>
+      {% if benchmarks.vsPyright %}
+      <div class="stat-card">
+        <span class="stat-card__num">{{ benchmarks.vsPyright.medianFactor }}<span class="stat-card__unit">×</span></span>
+        <span class="stat-card__label">faster than Pyright</span>
+        <span class="stat-card__sub">median &middot; up to {{ benchmarks.vsPyright.maxFactor }}× &middot; cold full-file</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card__num">{{ benchmarks.vsPyright.basiliskMedianMs }}<span class="stat-card__unit">ms</span></span>
+        <span class="stat-card__label">typical full-file check</span>
+        <span class="stat-card__sub">vs Pyright&rsquo;s {{ benchmarks.vsPyright.pyrightMedianMs }} ms &middot; {{ benchmarks.vsPyright.total }} rules</span>
+      </div>
+      {% endif %}
+    </div>
+    <p class="stat-band__cta">
+      Self-measured with <code>make bench</code>, committed to the repo.
+      <a href="/docs/benchmarks/">Full benchmarks &amp; methodology &rarr;</a>
+      <a href="/docs/conformance/">How we measure conformance &rarr;</a>
+    </p>
   </div>
 </section>
 
@@ -175,12 +213,6 @@ benchmarkStrings:
     </div>
   </div>
 </section>
-
-<!-- ═══════════════════════════════════════════════
-     BENCHMARKING TABLE — self-measured, reproducible
-═══════════════════════════════════════════════ -->
-{% import "benchmark-section.njk" as benchmark %}
-{{ benchmark.section(benchmarks, benchmarkStrings) }}
 
 <!-- ═══════════════════════════════════════════════════════
      FEATURES — alternating split rows

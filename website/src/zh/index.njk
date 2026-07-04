@@ -90,12 +90,48 @@ benchmarkStrings:
         </div>
       </div>
 
-      <!-- Product screenshot — Basilisk running in VS Code -->
+      <!-- Product video — Basilisk renaming a symbol across a project in VS Code.
+           Autoplays muted/inline on load (browser autoplay policy needs muted). -->
       <div class="hero__code">
-        <img src="/assets/images/vscode-diagnostics.png" alt="Basilisk 在 VS Code 中实时标记类型错误 —— 内联诊断，并在“问题”面板中列出每处缺失的类型注解" class="hero__shot" loading="lazy">
+        <video class="hero__shot" autoplay muted loop playsinline preload="auto" aria-label="Basilisk 在 VS Code 中执行项目级重命名重构 —— 重命名符号时，对它的每一处引用都会实时更新">
+          <source src="/assets/images/rename.mp4" type="video/mp4">
+        </video>
       </div>
 
     </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════
+     STAT BAND — PEP 符合性 + 基准速度，两个核心证据在同一面板。
+     所有数字均来自真实数据（conformance.js + benchmarks.js），绝不手写。
+═══════════════════════════════════════════════════ -->
+<section class="stat-band">
+  <div class="container">
+    <div class="stat-band__grid">
+      <div class="stat-card">
+        <span class="stat-card__num">{{ conformance.scorePct }}<span class="stat-card__unit">%</span></span>
+        <span class="stat-card__label">PEP&nbsp;符合性</span>
+        <span class="stat-card__sub">{{ conformance.pass }}/{{ conformance.total }} 项测试 &middot; {{ conformance.fp }} 处误报</span>
+      </div>
+      {% if benchmarks.vsPyright %}
+      <div class="stat-card">
+        <span class="stat-card__num">{{ benchmarks.vsPyright.medianFactor }}<span class="stat-card__unit">×</span></span>
+        <span class="stat-card__label">快过 Pyright</span>
+        <span class="stat-card__sub">中位数 &middot; 最高 {{ benchmarks.vsPyright.maxFactor }}× &middot; 冷启动全文件</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card__num">{{ benchmarks.vsPyright.basiliskMedianMs }}<span class="stat-card__unit">ms</span></span>
+        <span class="stat-card__label">典型全文件检查</span>
+        <span class="stat-card__sub">对比 Pyright 的 {{ benchmarks.vsPyright.pyrightMedianMs }} ms &middot; {{ benchmarks.vsPyright.total }} 条规则</span>
+      </div>
+      {% endif %}
+    </div>
+    <p class="stat-band__cta">
+      由 <code>make bench</code> 自测并提交到代码库。
+      <a href="/docs/benchmarks/">完整基准测试与方法 &rarr;</a>
+      <a href="/zh/docs/conformance/">我们如何衡量符合性 &rarr;</a>
+    </p>
   </div>
 </section>
 
@@ -187,12 +223,6 @@ benchmarkStrings:
     </div>
   </div>
 </section>
-
-<!-- ═══════════════════════════════════════════════
-     BENCHMARKING TABLE — 自测、可复现
-═══════════════════════════════════════════════ -->
-{% import "benchmark-section.njk" as benchmark %}
-{{ benchmark.section(benchmarks, benchmarkStrings) }}
 
 <!-- ═══════════════════════════════════════════════════════
      FEATURES — alternating split rows

@@ -513,11 +513,9 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
    HERO — Split layout: big text left, code right
 ══════════════════════════════════════════════════════════ */
 .hero {
-  min-height: 100vh;
-  min-height: 100dvh;
   display: flex;
   align-items: center;
-  padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12);
+  padding: calc(var(--header-height) + var(--space-14)) 0 var(--space-16);
   border-bottom: 1px solid var(--color-border);
 }
 /* Hero uses the SAME centred 1280px container as every section below it, so its
@@ -531,8 +529,8 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 .hero__split {
   display: grid;
-  grid-template-columns: 1fr 1.1fr;
-  gap: var(--space-12);
+  grid-template-columns: 1fr 1.2fr;
+  gap: var(--space-10);
   align-items: center;
 }
 
@@ -547,9 +545,9 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 
 .hero__headline {
-  font-size: clamp(3rem, 5.5vw, 5rem);
+  font-size: clamp(2.5rem, 4vw, 3.75rem);
   font-weight: 700;
-  line-height: 1.0;
+  line-height: 1.05;
   letter-spacing: -0.04em;
   color: var(--color-text-primary);
   margin-bottom: var(--space-6);
@@ -639,6 +637,44 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   border: 1px solid var(--color-border-bright);
   border-radius: var(--radius-md);
   box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.7);
+}
+
+/* ══ Headline stat band — PEP conformance + benchmark speed on ONE centred
+   panel, big enough to punch. Numbers render from real data (see index.njk). ══ */
+.stat-band { padding: var(--space-16) 0; border-bottom: 1px solid var(--color-border); }
+.stat-band__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-6);
+}
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+}
+.stat-card__num {
+  font-size: clamp(3rem, 6vw, 5rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--color-text-primary);
+}
+.stat-card__unit { color: var(--color-primary); }
+.stat-card__label { font-size: 1.0625rem; font-weight: 600; color: var(--color-text-primary); }
+.stat-card__sub { font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.4; }
+.stat-band__cta { margin-top: var(--space-6); text-align: center; font-size: 0.875rem; color: var(--color-text-muted); }
+.stat-band__cta a { color: var(--color-primary); margin-left: var(--space-4); white-space: nowrap; }
+.stat-band__cta code { font-family: var(--font-mono); font-size: 0.9em; color: var(--color-code-type); }
+
+@media (max-width: 760px) {
+  .stat-band__grid { grid-template-columns: 1fr; }
+  .stat-band__cta a { display: inline-block; margin: var(--space-1) var(--space-3) 0 0; }
 }
 
 @media (max-width: 900px) {
