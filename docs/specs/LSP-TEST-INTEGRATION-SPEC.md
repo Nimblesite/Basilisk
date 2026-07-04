@@ -8,7 +8,7 @@
 
 ## Architecture {#LSPTEST-ARCHITECTURE}
 
-Same subprocess-delegation pattern as formatting (Ruff) and debugging (debugpy):
+Same subprocess-delegation pattern as debugging (debugpy) — note formatting is now **in-process** via the embedded Ruff crate, not a subprocess ([LSPFMT-ENGINE](LSP-FORMATTING-SPEC.md#LSPFMT-ENGINE)):
 
 1. **Discovery** — parse test files from AST via `basilisk-parser` (no import/execution)
 2. **Execution** — delegate to a `pytest` subprocess (or `unittest` runner), using `uv run` when a uv project is detected

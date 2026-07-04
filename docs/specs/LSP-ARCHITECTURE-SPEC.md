@@ -13,7 +13,7 @@ Design principle: the LSP drives functionality. IDE extensions react to LSP sign
 
 ## System Architecture {#LSPARCH-SYSTEM}
 
-Three editor frontends share one binary. The binary embeds the LSP server and the type-checking pipeline (parser → resolver → checker), and shells out to external tools (`ruff`, `debugpy`, `uv`) on demand.
+Three editor frontends share one binary. The binary embeds the LSP server, the type-checking pipeline (parser → resolver → checker), the Ruff formatter crate, and native import-hygiene fixers ([LSPFMT-DECISION](LSP-FORMATTING-SPEC.md#LSPFMT-DECISION)); it shells out to external tools (`debugpy`, `uv`) on demand. The `ruff` CLI is **not** spawned — formatting and import cleanup are in-process.
 
 ```mermaid
 flowchart TB
@@ -39,7 +39,6 @@ flowchart TB
 
     subgraph Subprocs["External subprocesses"]
         direction LR
-        Ruff["ruff"]
         Debugpy["debugpy"]
         UvBin["uv"]
         Py["python3"]
@@ -55,7 +54,6 @@ flowchart TB
     Zed <-->|"TCP DAP"| Debugpy
     Nvim <-->|"TCP DAP"| Debugpy
 
-    LSP -.->|spawn| Ruff
     LSP -.->|spawn| Debugpy
     LSP -.->|spawn| UvBin
     LSP -.->|spawn| Py
@@ -109,8 +107,7 @@ These settings are sent to the LSP server via `workspace/configuration` under th
 | `basilisk.analysisMode` | `enum` | `"wholeModule"` | `openFilesOnly` / `wholeModule` / `crossModule` |
 | `basilisk.inlayHints.parameterNames` | `boolean` | `true` | Show parameter name hints at call sites |
 | `basilisk.inlayHints.variableTypes` | `boolean` | `true` | Show inferred type hints for unannotated variables |
-| `basilisk.ruff.enabled` | `boolean` | `true` | Enable Ruff integration (formatting + import org) |
-| `basilisk.ruff.executablePath` | `string` | `"ruff"` | Path to the ruff binary |
+| `basilisk.formatter` | `enum` | `"ruff"` | Formatter engine: `"ruff"` (embedded, default) or `"none"`. Future `"basilisk"`. See [LSPFMT-CONFIG](LSP-FORMATTING-SPEC.md#LSPFMT-CONFIG). Replaces the removed `basilisk.ruff.*` settings — there is no `ruff` binary to point at. |
 | `basilisk.debugger.enabled` | `boolean` | `true` | Enable debugger |
 | `basilisk.debugger.typeChecking` | `boolean` | `false` | Enable type assertion breakpoints |
 | `basilisk.debugger.debugpyPath` | `string` | `"debugpy"` | Path to debugpy module |
@@ -152,7 +149,7 @@ Enforced by the toolbar contract tests in `vscode-extension/src/test/suite/activ
 
 | Command | Arguments | Response | Description |
 |---------|-----------|----------|-------------|
-| `basilisk.organizeImports` | `{uri}` | `TextEdit[]` | Run Ruff import organization |
+| `basilisk.organizeImports` | `{uri}` | `TextEdit[]` | Native import organization ([LSPFMT-IMPORTS](LSP-FORMATTING-SPEC.md#LSPFMT-IMPORTS)) |
 | `basilisk.startDebugSession` | `{uri, pythonPath?}` | `{host, port, sessionId}` | Spawn debugpy, return connection info |
 | `basilisk.stopDebugSession` | `{sessionId}` | `{}` | Terminate debug session |
 | `basilisk.profiler.start` | `{pid?}` | `{sessionId}` | Start profiling (active process or PID) |
@@ -327,7 +324,7 @@ crates/basilisk-lsp/src/
   inlay_hints.rs     — inferred types, parameter names, return types
   semantic_tokens.rs — token classification
   code_actions.rs    — quick fixes (E0001-E0003, suppress, organize imports)
-  formatting.rs      — Ruff delegation
+  formatting.rs      — embedded Ruff formatter, in-process ([LSPFMT-ENGINE])
   highlight.rs       — document highlight (symbol occurrences)
   call_hierarchy.rs  — incoming/outgoing call navigation
   type_hierarchy.rs  — supertype/subtype navigation
@@ -453,7 +450,7 @@ Whole-word text scan with word boundary checks, filtering strings/comments. Resp
 | BSK-E0002 | Add return annotation | Insert `-> None` |
 | BSK-E0003 | Add variable annotation | Insert `: <inferred_type>` |
 | (any) | Suppress with `# type: ignore` | Append comment to line |
-| (source) | Organize imports | Delegate to `ruff check --select I --fix` |
+| (source) | Organize imports | Native import organizer ([LSPFMT-IMPORTS](LSP-FORMATTING-SPEC.md#LSPFMT-IMPORTS)) |
 
 | imports_unresolved (uv) | Add dependency | `uv add <package>` via `basilisk.uv.add` command |
 | BSK-E0152 (uv) | Install type stubs | `uv add --dev types-<package>` via `basilisk.uv.addDev` command |
@@ -464,7 +461,7 @@ Register `codeActionKinds`: `[QUICKFIX, SOURCE_ORGANIZE_IMPORTS, REFACTOR]`
 
 ### Execute Command (`workspace/executeCommand`) {#LSPARCH-FEATURES-EXECCMD}
 
-- `basilisk.organizeImports` — run Ruff import organization on a document
+- `basilisk.organizeImports` — native import organization on a document ([LSPFMT-IMPORTS](LSP-FORMATTING-SPEC.md#LSPFMT-IMPORTS))
 
 ### Inlay Hints (`textDocument/inlayHint`) {#LSPARCH-FEATURES-INLAYHINTS}
 
@@ -498,9 +495,9 @@ Highlight all occurrences of symbol under cursor. Definition = WRITE, usages = R
 
 Ctrl+T symbol search across all open documents. Aggregates from DashMap, filters by query.
 
-### Format Document (`textDocument/formatting`) {#LSPARCH-FEATURES-FORMAT}
+### Format Document (`textDocument/formatting` + `rangeFormatting`) {#LSPARCH-FEATURES-FORMAT}
 
-Spawn `ruff format --stdin-filename <path> -` with document text on stdin. Return single `TextEdit` replacing entire document.
+Format in-process via the **embedded Ruff formatter crate** — no `ruff` subprocess. Whole-document formatting returns a single `TextEdit`; range formatting (`textDocument/rangeFormatting`) formats the selection. Engine, config, provenance, capabilities, and the `basilisk.formatter` flag are specified in **[LSPFMT](LSP-FORMATTING-SPEC.md#LSPFMT)** ([LSPFMT-ENGINE](LSP-FORMATTING-SPEC.md#LSPFMT-ENGINE), [LSPFMT-CAPABILITIES](LSP-FORMATTING-SPEC.md#LSPFMT-CAPABILITIES)).
 
 ### Folding Ranges (`textDocument/foldingRange`) {#LSPARCH-FEATURES-FOLDING}
 

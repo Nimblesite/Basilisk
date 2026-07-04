@@ -26,17 +26,29 @@ permissions:
 
 jobs:
   # ── Change-scope gate ──────────────────────────────────────────────────────
-  # Website + benchmark assets are static-site data that deploy via
-  # deploy-pages.yml and never enter the Rust toolchain. A PR touching ONLY them
-  # has no reason to run the (long, expensive) Rust/extension/mutation matrix, so
-  # this job classifies the diff and every heavy job below gates on `code`. A job
-  # skipped via `if:` reports as success, so required status checks stay green on
-  # a docs-only PR. Website-only PRs instead get the fast `website` build check.
+  # Classify the diff and run ONLY the jobs whose inputs actually changed. A job
+  # skipped via `if:` reports as success, so required status checks stay green
+  # whatever the scope. The flags:
+  #   core    — the Rust the `basilisk` binary is built from (crates, Cargo.*,
+  #             conformance, scripts, root configs). Runs the full Rust matrix
+  #             AND all three editor extensions, because each one executes that
+  #             binary, so a checker/LSP change can change their behaviour.
+  #   vscode  — vscode-extension/** only → the VS Code job (+ shipwright gate).
+  #   nvim    — basilisk.nvim/** only → the Neovim job.
+  #   zed     — basilisk-zed/** only → the Zed job.
+  #   website — static-site sources → the fast site build check (deploy-pages.yml
+  #             does the real deploy post-merge; this catches breakage pre-merge).
+  #   code    — union of core|vscode|nvim|zed, for whole-repo jobs (lint/deslop).
+  # A PR touching ONLY docs/website/CI-YAML starts no code job at all.
   changes:
     name: Detect change scope
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
+      core: ${{ steps.classify.outputs.core }}
+      vscode: ${{ steps.classify.outputs.vscode }}
+      nvim: ${{ steps.classify.outputs.nvim }}
+      zed: ${{ steps.classify.outputs.zed }}
       code: ${{ steps.classify.outputs.code }}
       website: ${{ steps.classify.outputs.website }}
     steps:
@@ -57,15 +69,24 @@ jobs:
           # heavy matrix would only burn minutes on a bump we discard. CI runs
           # once, on the consolidation PR. ([GITHUB-DEPENDABOT])
           if [ "$ACTOR" = "dependabot[bot]" ]; then
-            echo "code=false"    >> "$GITHUB_OUTPUT"
-            echo "website=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "core=false"
+              echo "vscode=false"
+              echo "nvim=false"
+              echo "zed=false"
+              echo "code=false"
+              echo "website=false"
+            } >> "$GITHUB_OUTPUT"
             echo "Dependabot PR — skipping Rust/extension matrix and website build."
             exit 0
           fi
           base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
           changed="$(git diff --name-only "$base" "$HEAD_SHA")"
           echo "Changed files:"; printf '%s\n' "$changed"
-          code=false
+          core=false
+          vscode=false
+          nvim=false
+          zed=false
           website=false
           while IFS= read -r f; do
             [ -z "$f" ] && continue
@@ -81,23 +102,41 @@ jobs:
               # them re-runs the website job's stamp drift guard.
               README.md|README.zh.md|docs/specs/CHECKER-ARCHITECTURE-SPEC.md) website=true ;;
             esac
-            # `code` gates the heavy Rust/extension/mutation matrix. Everything
-            # that never reaches the Rust toolchain is excluded: the whole site,
-            # ALL benchmark tooling (run.sh, fixtures, CSVs), docs/markdown, and
-            # CI/workflow YAML itself (changing orchestration doesn't change Rust
-            # — the edited workflow already runs on this very PR). Touch anything
-            # else (crates, Cargo.*, scripts, extensions) and the matrix runs.
+            # Route each changed path to the NARROWEST code scope that needs it.
+            # Pure docs / static site / benchmark tooling / CI YAML never reach a
+            # code toolchain and start no code job (changing orchestration does
+            # not change Rust — the edited workflow already runs on this very PR).
+            # Each editor-extension tree triggers ONLY its own job. Everything
+            # else — crates, Cargo.*, conformance, scripts, root configs — is the
+            # core Rust the `basilisk` binary is built from; it re-runs the whole
+            # Rust matrix AND all three editor extensions, because each one
+            # executes that binary and a checker/LSP change alters its behaviour.
             case "$f" in
               website/*|benchmarks/*|docs/*|.github/*|*.md) ;;
-              *) code=true ;;
+              vscode-extension/*) vscode=true ;;
+              basilisk.nvim/*)    nvim=true ;;
+              basilisk-zed/*)     zed=true ;;
+              *)                  core=true ;;
             esac
           done <<< "$changed"
           # An empty diff (e.g. re-run on a merged ref) defaults to full CI.
-          [ -z "$changed" ] && code=true
-          echo "code=$code"       >> "$GITHUB_OUTPUT"
-          echo "website=$website" >> "$GITHUB_OUTPUT"
-          echo "Run Rust/extension matrix (code): $code"
-          echo "Run website build check (website): $website"
+          [ -z "$changed" ] && core=true
+          # `code` is the union for whole-repo jobs (lint runs clippy + eslint +
+          # the repo-wide deslop gate, so any code change must run it).
+          code=false
+          if [ "$core" = true ] || [ "$vscode" = true ] || \
+             [ "$nvim" = true ] || [ "$zed" = true ]; then
+            code=true
+          fi
+          {
+            echo "core=$core"
+            echo "vscode=$vscode"
+            echo "nvim=$nvim"
+            echo "zed=$zed"
+            echo "code=$code"
+            echo "website=$website"
+          } >> "$GITHUB_OUTPUT"
+          echo "Scope — core:$core vscode:$vscode nvim:$nvim zed:$zed code:$code website:$website"
 
   # ── Website build check (only when site/benchmark files change) ─────────────
   # Mirrors deploy-pages.yml's build so a broken template/data file is caught
@@ -216,7 +255,9 @@ jobs:
   zed:
     name: Zed Extension
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Its own tree, or any core change — the distribution mirror vendors
+    # basilisk-common, so a core crate change must re-render + rebuild it.
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.zed == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -262,7 +303,7 @@ jobs:
   test-rust:
     name: Rust Tests & Coverage
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.core == 'true'
     # llvm-cov instruments and compiles the whole workspace before running every
     # target — CPU-bound, so it rides BIG_RUNNER too (see the mutation job for
     # the opt-in contract). Falls back to the standard runner when unset.
@@ -326,7 +367,9 @@ jobs:
   test-vscode:
     name: VS Code Extension
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Its own tree, or any core change — the e2e suite builds + runs the real
+    # release binary, so a checker/LSP change alters what this suite exercises.
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.vscode == 'true'
     runs-on: ubuntu-24.04
     # TIMEOUT EXCEPTION: VS Code extension e2e tests launch a full VS Code instance via xvfb, requiring ~25 min
     timeout-minutes: 35
@@ -390,7 +433,9 @@ jobs:
   verify-binaries:
     name: Shipwright Binary Gate
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Core builds the binaries this gate version-checks; vscode-extension owns
+    # the shipwright manifest + package.json version it verifies against them.
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.vscode == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -437,7 +482,9 @@ jobs:
   test-nvim:
     name: Neovim Extension
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Its own tree, or any core change — the e2e harness drives the real binary
+    # over LSP/DAP, so a checker/LSP change alters what this suite exercises.
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.nvim == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -495,22 +542,22 @@ jobs:
     # collapses the matrix to the literal, unexpanded "… ${{ matrix.label }}", so
     # the four required contexts never report and branch protection blocks the PR
     # forever. Instead the matrix always expands and every step is gated on
-    # `code`: when a PR is site/docs/config-only the steps no-op and each shard
+    # `core`: when a PR touches no core Rust the steps no-op and each shard
     # reports success in seconds, satisfying the required checks at ~zero cost.
     env:
-      RUN: ${{ needs.changes.outputs.code }}
+      RUN: ${{ needs.changes.outputs.core }}
     # Big-runner opt-in via a single org/repo Actions variable. Set BIG_RUNNER to
     # the label of the Nimblesite GitHub-hosted larger runner to route the real,
     # CPU-bound mutation work onto it; leave it unset and the job falls back to
     # the standard hosted runner so CI never breaks on a missing label. The
     # variable is the single source of truth — change the machine in one place.
     #
-    # The `code` guard keeps the larger runner off no-op shards: this job has no
+    # The `core` guard keeps the larger runner off no-op shards: this job has no
     # job-level `if` (the four shards must always report as required checks), so
-    # on a docs/config-only PR every shard still starts but every step no-ops.
+    # on a non-core PR every shard still starts but every step no-ops.
     # Only bill BIG_RUNNER when there is actually Rust to mutate; otherwise these
     # seconds-long no-ops run on the standard runner.
-    runs-on: ${{ (needs.changes.outputs.code == 'true' && vars.BIG_RUNNER) || 'ubuntu-24.04' }}
+    runs-on: ${{ (needs.changes.outputs.core == 'true' && vars.BIG_RUNNER) || 'ubuntu-24.04' }}
     # cargo-mutants rebuilds + reruns the test suite once per mutant, so it is
     # heavily CPU-bound — the primary reason BIG_RUNNER exists. The 20-minute
     # budget was calibrated for an 8-core larger runner; the standard hosted
@@ -591,7 +638,7 @@ jobs:
     name: Mutation Testing
     runs-on: ubuntu-24.04
     needs: [changes, mutation-test-shard]
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.core == 'true'
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -625,7 +672,7 @@ jobs:
   build:
     name: Build
     needs: [changes, test-rust, test-vscode, test-nvim, zed, mutation-test, verify-binaries]
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

@@ -780,15 +780,11 @@
           "default": true,
           "description": "Reserved: variable-type inlay hints are always shown. The language server does not yet read this setting (see EXTENSION-ACTIVITY-PANEL-PLAN.md)."
         },
-        "basilisk.ruff.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Reserved: Ruff integration is always on. The language server does not yet read this setting (see EXTENSION-ACTIVITY-PANEL-PLAN.md)."
-        },
-        "basilisk.ruff.executablePath": {
+        "basilisk.formatter": {
           "type": "string",
+          "enum": ["ruff", "none"],
           "default": "ruff",
-          "description": "Reserved: the language server resolves ruff from PATH and does not yet read this setting (see EXTENSION-ACTIVITY-PANEL-PLAN.md)."
+          "description": "Formatter engine. 'ruff' uses the Ruff formatter embedded in the Basilisk binary (in-process — no external ruff binary is ever required or spawned); 'none' disables formatting. See LSP-FORMATTING-SPEC.md#LSPFMT-CONFIG."
         },
         "basilisk.uv.enabled": {
           "type": "boolean",
