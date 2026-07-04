@@ -50,9 +50,7 @@ return {
           parameterNames = true,
           variableTypes = true,
         },
-        ruff = {
-          enabled = true,
-        },
+        formatter = "ruff",
         uv = {
           enabled = true,
         },

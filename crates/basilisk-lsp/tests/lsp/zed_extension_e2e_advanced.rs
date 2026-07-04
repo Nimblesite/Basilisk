@@ -244,7 +244,7 @@ fn test_zed_find_references() -> TestResult<()> {
 
 // ── Formatting ──────────────────────────────────────────────────────────────
 
-/// Formatting must work (delegated to Ruff).
+/// Formatting must work via the embedded Ruff formatter ([LSPFMT-ENGINE]).
 #[test]
 fn test_zed_formatting() -> TestResult<()> {
     let mut fixture = ZedLspFixture::new()?;
@@ -265,10 +265,15 @@ fn test_zed_formatting() -> TestResult<()> {
         }),
     )?;
 
-    // Must return a result (even if null when Ruff isn't available).
     assert!(
         format_result.get("id").is_some(),
         "formatting must return a response: {format_result}"
+    );
+    // The engine is embedded in the binary — badly formatted code MUST come
+    // back Ruff-formatted, never a silent null (#254).
+    assert!(
+        format_result.to_string().contains("def foo(x: int) -> int:"),
+        "formatting must produce ruff-format output: {format_result}"
     );
 
     Ok(())

@@ -16,9 +16,10 @@ describe("basilisk.config", function()
       assert.is_true(config.defaults.inlay_hints.variable_types)
     end)
 
-    it("has ruff enabled by default", function()
-      assert.is_true(config.defaults.ruff.enabled)
-      assert.are.equal("ruff", config.defaults.ruff.executable_path)
+    it("uses the embedded ruff formatter by default", function()
+      -- [LSPFMT-CONFIG]: "ruff" = the formatter embedded in the basilisk
+      -- binary; no external ruff executable setting exists any more.
+      assert.are.equal("ruff", config.defaults.formatter)
     end)
 
     it("has debugger enabled by default", function()
@@ -59,7 +60,7 @@ describe("basilisk.config", function()
     it("returns defaults when no opts given", function()
       local resolved = config.resolve()
       assert.are.equal("wholeModule", resolved.analysis_mode)
-      assert.is_true(resolved.ruff.enabled)
+      assert.are.equal("ruff", resolved.formatter)
     end)
 
     it("returns defaults when empty opts given", function()
@@ -70,12 +71,12 @@ describe("basilisk.config", function()
     it("merges user opts over defaults", function()
       local resolved = config.resolve({
         analysis_mode = "openFilesOnly",
-        ruff = { enabled = false },
+        formatter = "none",
       })
       assert.are.equal("openFilesOnly", resolved.analysis_mode)
-      assert.is_false(resolved.ruff.enabled)
+      assert.are.equal("none", resolved.formatter)
       -- Other defaults preserved.
-      assert.are.equal("ruff", resolved.ruff.executable_path)
+      assert.is_true(resolved.debugger.enabled)
     end)
 
     it("deep merges nested tables", function()

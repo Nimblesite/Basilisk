@@ -14,8 +14,8 @@ mod navigation;
 
 pub(super) use features::{
     code_action, code_lens, color_presentation, completion, completion_resolve, document_color,
-    folding_range, formatting, hover, inlay_hint, selection_range, semantic_tokens_full,
-    signature_help,
+    folding_range, formatting, hover, inlay_hint, range_formatting, selection_range,
+    semantic_tokens_full, signature_help,
 };
 
 pub(super) use file_operations::will_rename_files;

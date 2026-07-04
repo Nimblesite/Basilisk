@@ -71,6 +71,24 @@ pub(super) async fn initialize(
         *server.type_checking_enabled.write().await = enabled;
     }
 
+    // Resolve the formatter engine ([LSPFMT-CONFIG]): the editor setting
+    // (initializationOptions `formatter`, e.g. VS Code's `basilisk.formatter`)
+    // wins over config files; the default is the embedded Ruff engine.
+    let formatter = params
+        .initialization_options
+        .as_ref()
+        .and_then(parse_formatter)
+        .unwrap_or_else(|| {
+            roots
+                .first()
+                .map(|r| crate::config::load_config(r).formatter)
+                .unwrap_or_default()
+        });
+    let formatting_enabled = formatter != crate::config::FormatterEngine::Disabled;
+    server
+        .formatting_enabled
+        .store(formatting_enabled, std::sync::atomic::Ordering::Relaxed);
+
     // Store workspace roots for later use by import resolution.
     (*server.workspace_roots.write().await).clone_from(&roots);
 
@@ -89,14 +107,32 @@ pub(super) async fn initialize(
     Ok(InitializeResult {
         server_info: Some(ServerInfo {
             name: "basilisk".to_owned(),
-            version: Some(env!("CARGO_PKG_VERSION").to_owned()),
+            // [LSPFMT-PROVENANCE]: every client surfaces which Ruff formatter
+            // is embedded, alongside the binary version.
+            version: Some(format!(
+                "{} (Ruff formatter {})",
+                env!("CARGO_PKG_VERSION"),
+                crate::formatting::EMBEDDED_RUFF_FORMATTER_VERSION
+            )),
         }),
-        capabilities: build_capabilities(),
+        capabilities: build_capabilities(formatting_enabled),
     })
 }
 
+/// Read the `formatter` engine from `initializationOptions` ([LSPFMT-CONFIG]).
+fn parse_formatter(value: &serde_json::Value) -> Option<crate::config::FormatterEngine> {
+    value
+        .get("formatter")
+        .or_else(|| value.get("basilisk").and_then(|b| b.get("formatter")))
+        .and_then(serde_json::Value::as_str)
+        .map(crate::config::FormatterEngine::parse)
+}
+
 /// Build the full `ServerCapabilities` for the `initialize` response.
-fn build_capabilities() -> ServerCapabilities {
+///
+/// Formatting capabilities are advertised only while the formatter engine is
+/// enabled ([LSPFMT-CAPABILITIES], [LSPFMT-CONFIG]).
+fn build_capabilities(formatting_enabled: bool) -> ServerCapabilities {
     ServerCapabilities {
         text_document_sync: Some(TextDocumentSyncCapability::Kind(
             TextDocumentSyncKind::INCREMENTAL,
@@ -125,7 +161,8 @@ fn build_capabilities() -> ServerCapabilities {
         declaration_provider: Some(DeclarationCapability::Simple(true)),
         definition_provider: Some(OneOf::Left(true)),
         type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
-        document_formatting_provider: Some(OneOf::Left(true)),
+        document_formatting_provider: formatting_enabled.then_some(OneOf::Left(true)),
+        document_range_formatting_provider: formatting_enabled.then_some(OneOf::Left(true)),
         document_highlight_provider: Some(OneOf::Left(true)),
         document_symbol_provider: Some(OneOf::Left(true)),
         folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),

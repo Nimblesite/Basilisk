@@ -98,10 +98,8 @@ All options with defaults: >lua
       parameter_names = true,        -- show param name hints at call sites
       variable_types = true,         -- show inferred type hints
     },
-    ruff = {
-      enabled = true,                -- enable Ruff integration
-      executable_path = "ruff",      -- Ruff binary path
-    },
+    formatter = "ruff",              -- "ruff" (embedded in the basilisk
+                                     -- binary, no install) or "none"
     debugger = {
       enabled = true,                -- enable debugger
       type_checking = false,         -- type assertion breakpoints

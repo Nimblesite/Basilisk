@@ -89,7 +89,7 @@ describe("basilisk.info", function()
     it("shows integration statuses", function()
       local config = config_mod.resolve()
       info.show(config)
-      local found_ruff = false
+      local found_formatter = false
       local found_uv = false
       for _, win in ipairs(vim.api.nvim_list_wins()) do
         local win_config = vim.api.nvim_win_get_config(win)
@@ -97,13 +97,13 @@ describe("basilisk.info", function()
           local buf = vim.api.nvim_win_get_buf(win)
           local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
           for _, line in ipairs(lines) do
-            if line:find("Ruff") then found_ruff = true end
+            if line:find("Formatter") then found_formatter = true end
             if line:find("uv") then found_uv = true end
           end
           break
         end
       end
-      assert.is_true(found_ruff, "should show Ruff status")
+      assert.is_true(found_formatter, "should show Formatter status")
       assert.is_true(found_uv, "should show uv status")
     end)
 

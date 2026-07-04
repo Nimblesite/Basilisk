@@ -34,6 +34,47 @@ impl AnalysisMode {
     }
 }
 
+/// Formatter engine selection ([LSPFMT-CONFIG]).
+///
+/// `"ruff"` (default) is the Ruff formatter embedded in the binary
+/// ([LSPFMT-ENGINE]); `"none"` disables formatting entirely — the server
+/// does not advertise formatting capabilities. `"basilisk"` is reserved for
+/// a future native formatter and currently behaves like the default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FormatterEngine {
+    /// The embedded Ruff formatter (default).
+    #[default]
+    Ruff,
+    /// Formatting disabled; no formatting capabilities are advertised.
+    Disabled,
+}
+
+impl FormatterEngine {
+    /// Parse from the `basilisk.formatter` setting values.
+    #[must_use]
+    pub fn parse(s: &str) -> Self {
+        match s {
+            "none" => Self::Disabled,
+            _ => Self::Ruff,
+        }
+    }
+}
+
+/// Style options for the embedded Ruff formatter, read from the project's
+/// `[tool.ruff]` / `[tool.ruff.format]` sections in `pyproject.toml`
+/// ([LSPFMT-ENGINE]). `None`/`false` fields keep Ruff's own defaults.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FormatStyle {
+    /// `[tool.ruff] line-length` (Ruff default: 88).
+    pub line_length: Option<u16>,
+    /// `[tool.ruff.format] quote-style`: `"double"`, `"single"`, `"preserve"`.
+    pub quote_style: Option<String>,
+    /// `[tool.ruff.format] indent-style`: `"space"` or `"tab"`.
+    pub indent_style: Option<String>,
+    /// `[tool.ruff.format] skip-magic-trailing-comma`.
+    pub skip_magic_trailing_comma: bool,
+}
+
 /// Workspace configuration derived from config files.
 #[derive(Debug, Clone)]
 pub struct WorkspaceConfig {
@@ -59,6 +100,11 @@ pub struct WorkspaceConfig {
     pub analysis_mode: AnalysisMode,
     /// Additional directories to search for `.pyi` stub files.
     pub stub_paths: Vec<PathBuf>,
+    /// Formatter engine ([LSPFMT-CONFIG]). Editor settings (VS Code's
+    /// `basilisk.formatter` via initializationOptions) override this.
+    pub formatter: FormatterEngine,
+    /// Style options for the embedded Ruff formatter ([LSPFMT-ENGINE]).
+    pub format_style: FormatStyle,
 }
 
 impl Default for WorkspaceConfig {
@@ -74,6 +120,8 @@ impl Default for WorkspaceConfig {
             venv: None,
             analysis_mode: AnalysisMode::WholeModule,
             stub_paths: Vec::new(),
+            formatter: FormatterEngine::Ruff,
+            format_style: FormatStyle::default(),
         }
     }
 }
@@ -98,7 +146,49 @@ pub fn load_config(root: &Path) -> WorkspaceConfig {
         .into_iter()
         .map(|p| if p.is_absolute() { p } else { root.join(p) })
         .collect();
+    // Formatter style always comes from `[tool.ruff]` in pyproject.toml,
+    // independent of which file supplied the checker config ([LSPFMT-ENGINE]).
+    cfg.format_style = load_format_style(root);
     cfg
+}
+
+/// Read `[tool.ruff]` / `[tool.ruff.format]` style options from
+/// `pyproject.toml` so the embedded formatter's output matches what the
+/// user's own `ruff format` would produce ([LSPFMT-ENGINE]).
+#[must_use]
+pub fn load_format_style(root: &Path) -> FormatStyle {
+    let Ok(content) = std::fs::read_to_string(root.join("pyproject.toml")) else {
+        return FormatStyle::default();
+    };
+    let Ok(table) = content.parse::<toml::Table>() else {
+        return FormatStyle::default();
+    };
+    let Some(ruff) = table.get("tool").and_then(|t| t.get("ruff")) else {
+        return FormatStyle::default();
+    };
+
+    let mut style = FormatStyle {
+        line_length: ruff
+            .get("line-length")
+            .and_then(toml::Value::as_integer)
+            .and_then(|v| u16::try_from(v).ok()),
+        ..FormatStyle::default()
+    };
+    if let Some(format) = ruff.get("format") {
+        style.quote_style = format
+            .get("quote-style")
+            .and_then(toml::Value::as_str)
+            .map(str::to_owned);
+        style.indent_style = format
+            .get("indent-style")
+            .and_then(toml::Value::as_str)
+            .map(str::to_owned);
+        style.skip_magic_trailing_comma = format
+            .get("skip-magic-trailing-comma")
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(false);
+    }
+    style
 }
 
 /// Parse the config file without post-processing the resulting paths.
@@ -178,6 +268,9 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
     if let Some(v) = obj.get("analysisMode").and_then(|v| v.as_str()) {
         cfg.analysis_mode = AnalysisMode::parse(v);
     }
+    if let Some(v) = obj.get("formatter").and_then(|v| v.as_str()) {
+        cfg.formatter = FormatterEngine::parse(v);
+    }
     if let Some(arr) = obj
         .get("stubPaths")
         .or_else(|| obj.get("stub-paths"))
@@ -242,6 +335,9 @@ fn load_pyproject_config(path: &Path) -> Option<WorkspaceConfig> {
                 }
                 "analysisMode" | "analysis_mode" => {
                     cfg.analysis_mode = AnalysisMode::parse(value);
+                }
+                "formatter" => {
+                    cfg.formatter = FormatterEngine::parse(value);
                 }
                 "stubPaths" | "stub_paths" | "stub-paths" => {
                     // Simple single-value handling; array parsing requires TOML crate.
