@@ -431,13 +431,25 @@ function registerTabTracking(context: vscode.ExtensionContext, store: Store): vo
       const currentUris = collectOpenPythonUris();
 
       const mode = vscode.workspace.getConfiguration("basilisk").get<string>("analysisMode") ?? "wholeModule";
-      if (mode === "openFilesOnly") {
-        for (const uriStr of knownOpenUris) {
-          if (!currentUris.has(uriStr)) {
-            void lspClient.sendNotification("textDocument/didClose", {
-              textDocument: { uri: vscode.Uri.parse(uriStr).toString() },
-            });
-          }
+      for (const uriStr of knownOpenUris) {
+        if (currentUris.has(uriStr)) {
+          continue;
+        }
+        const uri = vscode.Uri.parse(uriStr);
+        // Implements the tab-close clause of [ANALYSIS-PUBLISH]
+        // (docs/specs/LSP-ANALYSIS-MODES-SPEC.md). VS Code disposes closed
+        // documents lazily, so the language client's own didClose can lag a
+        // tab close by an unbounded amount. Send a synthetic didClose
+        // whenever the server would clear diagnostics on close: every file in
+        // openFilesOnly, and out-of-workspace files in the whole-workspace
+        // modes — otherwise their stale diagnostics linger in the Problems
+        // panel (GitHub #264). In-workspace files in wholeModule/crossModule
+        // keep their diagnostics by design.
+        const inWorkspace = vscode.workspace.getWorkspaceFolder(uri) !== undefined;
+        if (mode === "openFilesOnly" || !inWorkspace) {
+          void lspClient.sendNotification("textDocument/didClose", {
+            textDocument: { uri: uri.toString() },
+          });
         }
       }
 

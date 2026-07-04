@@ -38,6 +38,9 @@ const MULTI_CYCLE_COUNT = 3;
 /** Brief settle time after restart. */
 const RESTART_SETTLE_MS = 500;
 
+/** Budget for a replaced LSP client to stop after store.reset() (#264). */
+const ZOMBIE_STOP_TIMEOUT_MS = 5_000;
+
 /** Poll interval for waiting on command availability. */
 
 /**
@@ -385,6 +388,48 @@ suite('Command Registration (VS Code API Compliance)', () => {
             await ext.activate();
         }
         await pollUntilReady(WAIT_MS);
+    });
+
+    // ----------------------------------------------------------------
+    // 10b. store.reset() must stop the replaced LSP client (GitHub #264)
+    //
+    //     reset() drops the client reference and onReset starts a NEW
+    //     LanguageClient. If the old client is never stopped it stays a
+    //     live zombie: it keeps forwarding didOpen/didClose to its own
+    //     server and publishing into its own diagnostics collection,
+    //     which VS Code merges into getDiagnostics() — late zombie
+    //     republishes then resurrect diagnostics the real server
+    //     cleared (the flaky openFilesOnly diagnostics-clear failure).
+    // ----------------------------------------------------------------
+    test('store.reset() stops the replaced LSP client — no zombie publisher (#264)', async function () {
+        const store = getStore();
+        assert.ok(store, 'Store should be available');
+        await pollUntilReady(WAIT_MS);
+
+        const oldClient = store.client.value;
+        assert.ok(oldClient, 'a running LSP client should exist before reset');
+        assert.strictEqual(oldClient.isRunning(), true, 'old client should be running before reset');
+
+        store.reset();
+
+        // The onReset hook must bring up a replacement client.
+        await pollUntilReady(WAIT_MS);
+        const newClient = store.client.value;
+        assert.ok(newClient, 'reset() must start a replacement client');
+        assert.notStrictEqual(newClient, oldClient, 'reset() must create a new client instance');
+
+        // The replaced client must stop; a still-running one is a zombie
+        // publisher (GitHub #264).
+        const deadline = Date.now() + ZOMBIE_STOP_TIMEOUT_MS;
+        while (oldClient.isRunning() && Date.now() < deadline) {
+            await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        }
+        assert.strictEqual(
+            oldClient.isRunning(),
+            false,
+            'store.reset() must stop the replaced LSP client — a running one keeps ' +
+            'publishing stale diagnostics from its own collection (GitHub #264)'
+        );
     });
 
     // ----------------------------------------------------------------

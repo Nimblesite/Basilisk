@@ -480,6 +480,20 @@ export function createStore(onReset?: () => void): Store {
       return awaitLspReady(signals, timeoutMs);
     },
     reset(): void {
+      // Stop the client being replaced BEFORE resetSignals drops the
+      // reference. A reset that only forgets the client leaves it fully
+      // alive — a zombie that keeps forwarding didOpen/didClose to its own
+      // server process and publishing into its own diagnostics collection,
+      // which VS Code merges into getDiagnostics(). Its late republishes
+      // then resurrect diagnostics the real server already cleared
+      // (GitHub #264). dispose() also tears the collection down; skip it
+      // when a stop is already in flight (the deactivate() path).
+      const dyingClient = signals.client.value;
+      if (dyingClient?.isRunning() === true) {
+        dyingClient.dispose().catch((err: unknown) => {
+          Logger.warn(`Failed to dispose replaced LSP client: ${String(err)}`);
+        });
+      }
       disposeAllCommands(signals);
       resetSignals(signals);
       onReset?.();

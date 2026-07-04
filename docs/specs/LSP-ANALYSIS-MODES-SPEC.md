@@ -290,6 +290,46 @@ File-watcher events are trailing-debounced 200 ms (`FILE_WATCHER_DEBOUNCE_MS`, `
 
 On **delete**, publish empty diagnostics to clear the error panel. On runtime mode switch, clear all diagnostics, re-analyse, re-publish.
 
+Publication must reflect the index state at **publish time**, not at compute
+time (GitHub #264):
+
+- **Scans never block the message loop.** Every workspace scan (startup, mode
+  switch, re-enable, workspace-folder change) runs in a spawned task
+  (`run_workspace_scan`) — a scan computed inside a notification handler
+  starves every other message, including the `didClose` whose clear the editor
+  is waiting on, for the scan's full duration.
+- **Stale scan results are dropped.** Before publishing each scan entry, the
+  server re-checks the index: a file removed mid-scan (closed in
+  `openFilesOnly`, or an out-of-workspace file closed in any mode) is skipped —
+  republishing its snapshot would resurrect diagnostics `didClose` already
+  cleared, with nothing left to ever clear them. After a mid-scan switch to
+  `openFilesOnly`, only open files publish (`publish_scan_results` /
+  `scan_entry_still_current`).
+- **Mode switches never queue an index write.** `WorkspaceIndex::set_mode` is
+  interior-mutable and applied through a READ guard. A mode-flip writer queued
+  behind a running scan's read guard would make tokio's fair `RwLock` block
+  every subsequent reader, saturating tower-lsp's bounded handler slots and
+  stalling the entire message loop — the `didClose` clear then arrives seconds
+  late (the original flaky-clear failure).
+- **Tab close sends a synthetic `didClose`** for every file the server would
+  clear on close: all files in `openFilesOnly`, and out-of-workspace files in
+  the whole-workspace modes. VS Code disposes closed documents lazily, so the
+  language client's own `didClose` can lag a tab close unboundedly
+  (`registerTabTracking` in `vscode-extension/src/lsp-client.ts`). In-workspace
+  files in `wholeModule`/`crossModule` keep their diagnostics per the table
+  above.
+- **Exactly one publisher.** `store.reset()` MUST stop (dispose) the
+  LanguageClient it replaces before starting a new one. A forgotten-but-alive
+  client is a zombie publisher: it keeps forwarding `didOpen`/`didClose` to
+  its own server process and publishing into its own diagnostics collection —
+  VS Code merges collections, so the zombie's late republishes resurrect
+  diagnostics the real server already cleared (the observed root cause of the
+  flaky openFilesOnly clear, GitHub #264).
+
+Covered end-to-end by the `#264` regression test in
+`vscode-extension/src/test/suite/lsp-analysis-mode.test.ts` (file closed
+mid-scan must stay cleared).
+
 ---
 
 ## Type Checking Toggle {#ANALYSIS-ENABLED}

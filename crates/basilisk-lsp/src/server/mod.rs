@@ -30,7 +30,15 @@ macro_rules! diaglog {
             .append(true)
             .open("/tmp/basilisk-diag.log")
         {
-            let _ = writeln!(f, $($arg)*);
+            // Millisecond timestamp + pid, and a single write per line so
+            // concurrent handlers (and concurrent server processes in tests)
+            // cannot shred each other's lines mid-string.
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0);
+            let line = format!($($arg)*);
+            let _ = writeln!(f, "[{timestamp} p{}] {line}", std::process::id());
         }
     }};
 }
@@ -242,7 +250,12 @@ pub(super) async fn publish_diagnostics_gated(
     uri: Url,
     diags: Vec<Diagnostic>,
 ) {
-    if *enabled.read().await {
+    let is_enabled = *enabled.read().await;
+    diaglog!(
+        "[DIAG] publish n={} enabled={is_enabled} uri={uri}",
+        diags.len()
+    );
+    if is_enabled {
         client.publish_diagnostics(uri, diags, None).await;
     }
 }
