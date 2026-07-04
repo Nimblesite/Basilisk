@@ -442,6 +442,23 @@
           "when": "basilisk.debugging && basilisk.profilingEnabled"
         }
       ],
+      "debug/toolBar": [
+        {
+          "command": "basilisk.memorySnapshot",
+          "when": "debugType == basilisk-debug && basilisk.memoryTracking && basilisk.profilingEnabled",
+          "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.memoryDiff",
+          "when": "debugType == basilisk-debug && basilisk.memoryTracking && basilisk.profilingEnabled",
+          "group": "navigation@2"
+        },
+        {
+          "command": "basilisk.memoryStop",
+          "when": "debugType == basilisk-debug && basilisk.memoryTracking && basilisk.profilingEnabled",
+          "group": "navigation@3"
+        }
+      ],
       "view/title": [
         {
           "command": "basilisk.refreshModuleExplorer",
@@ -494,9 +511,19 @@
           "group": "navigation@1"
         },
         {
-          "command": "basilisk.memoryStop",
+          "command": "basilisk.memorySnapshot",
+          "when": "view == basilisk.pythonProcesses && basilisk.memoryTracking",
+          "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.memoryDiff",
           "when": "view == basilisk.pythonProcesses && basilisk.memoryTracking",
           "group": "navigation@2"
+        },
+        {
+          "command": "basilisk.memoryStop",
+          "when": "view == basilisk.pythonProcesses && basilisk.memoryTracking",
+          "group": "navigation@3"
         },
         {
           "command": "basilisk.refreshProcesses",

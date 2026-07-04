@@ -13,6 +13,7 @@
  * This module handles only the client-side visualization.
  */
 
+import * as vscode from "vscode";
 import { Logger } from "./logger";
 import type { MemoryAllocation } from "./memory-decorations";
 import {
@@ -29,6 +30,7 @@ import {
   embedJson,
   handleSourceNavigation,
   SingletonWebviewPanel,
+  type WebviewMessage,
 } from "./profiler-webview";
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -80,8 +82,31 @@ export interface MemoryDiffData {
 // dashboard (the autopilot re-renders it on every pause) never stacks a second
 // navigation handler ([PROFILE-WEBVIEW-HOST]).
 const memoryDashboardPanel = new SingletonWebviewPanel("basilisk.memoryDashboard", (msg) => {
-  handleSourceNavigation(msg);
+  if (!handleMemoryDashboardMessage(msg)) {
+    handleSourceNavigation(msg);
+  }
 });
+
+/** The dashboard action buttons' message → command routing ([PROFILE-MEMORY-DISCOVERY]). */
+const DASHBOARD_ACTION_COMMANDS: Readonly<Record<string, string>> = {
+  takeSnapshot: "basilisk.memorySnapshot",
+  compareSnapshots: "basilisk.memoryDiff",
+};
+
+/**
+ * Route a dashboard action-button message to its real memory command, so the
+ * dashboard's "take more snapshots" advice is a button, not homework
+ * ([PROFILE-MEMORY-DISCOVERY], #263). Returns whether the message was one of
+ * the dashboard's actions (source-navigation clicks fall through).
+ */
+export function handleMemoryDashboardMessage(msg: WebviewMessage): boolean {
+  const command = DASHBOARD_ACTION_COMMANDS[msg.type];
+  if (command === undefined) {
+    return false;
+  }
+  void vscode.commands.executeCommand(command);
+  return true;
+}
 
 // ── Public API ────────────────────────────────────────────────────────────
 
@@ -135,6 +160,10 @@ function buildDashboardHeadCss(): string {
 function buildDashboardBodyHtml(): string {
   return `
   <h1><span class="accent">BASILISK</span> MEMORY</h1>
+  <div class="toggle-row">
+    <button class="toggle-btn" id="btn-take-snapshot">Take Snapshot</button>
+    <button class="toggle-btn" id="btn-compare">Compare Snapshots</button>
+  </div>
   ${buildSummaryCardsHtml()}
   <h2>Memory Timeline</h2>
   <div class="timeline-container">
@@ -180,6 +209,7 @@ function buildDashboardScriptTag(
     ${buildSummaryScript()}
     ${buildTimelineScript()}
     ${buildToggleScript()}
+    ${buildActionsScript()}
     ${buildAllocScript()}
     ${buildLeakScript()}
     renderTimeline(); renderAllocs(); renderLeaks();
@@ -366,6 +396,21 @@ function buildToggleScript(): string {
       document.getElementById('btn-cpu').className='toggle-btn active-cpu';
       document.getElementById('btn-mem').className='toggle-btn';
       renderAllocs();
+    });`;
+}
+
+/**
+ * The action buttons post their command back to the extension — the empty
+ * states say "take more snapshots", so the dashboard must let the user do it
+ * right there ([PROFILE-MEMORY-DISCOVERY], #263).
+ */
+function buildActionsScript(): string {
+  return `
+    document.getElementById('btn-take-snapshot').addEventListener('click',()=>{
+      vscode.postMessage({type:'takeSnapshot'});
+    });
+    document.getElementById('btn-compare').addEventListener('click',()=>{
+      vscode.postMessage({type:'compareSnapshots'});
     });`;
 }
 

@@ -122,15 +122,32 @@ function memoryCommandDisposables(store: Store): vscode.Disposable[] {
   ];
 }
 
+/**
+ * Show a toast whose named action is offered as a button — a message must
+ * never demand an action it doesn't offer ([PROFILE-MEMORY-DISCOVERY], #263).
+ * Fire-and-forget: a sticky notification must not block the flow.
+ */
+function showActionableToast(message: string, action: string, command: string): void {
+  void vscode.window.showInformationMessage(message, action).then((choice) => {
+    if (choice === action) {
+      void vscode.commands.executeCommand(command);
+    }
+  });
+}
+
 /** The `basilisk.memoryStart` body: start tracking, then narrate what comes next. */
 async function runMemoryStartCommand(store: Store, report: (message: string) => void): Promise<void> {
   if (await handleMemoryStart(store, report)) {
     // With the autopilot on ([PROFILE-MEMORY-AUTOPILOT]), the user just sets
     // breakpoints and presses Continue — each pause is captured automatically;
     // and even a breakpoint-free run captures a final snapshot at exit
-    // ([PROFILE-MEMORY-FINAL]) — so this is never a dead end.
-    void vscode.window.showInformationMessage(
+    // ([PROFILE-MEMORY-FINAL]) — so this is never a dead end. The moment of
+    // disorientation is right here (the user just landed in the Debug view),
+    // so the toast carries the action ([PROFILE-MEMORY-DISCOVERY], #263).
+    showActionableToast(
       "Basilisk: Memory tracking started. Press Continue to auto-capture each pause, or let the program finish for an automatic final snapshot.",
+      "Take Snapshot",
+      "basilisk.memorySnapshot",
     );
   }
 }
@@ -149,10 +166,17 @@ function runMemoryStopCommand(store: Store): void {
     pendingSnapshotCleanup.set(debugSessionId, finalSnapshotFile);
   }
   handleMemoryStop(store);
-  void vscode.window.showInformationMessage(
-    hadSnapshot
-      ? "Basilisk: Memory tracking stopped."
-      : "Basilisk: Memory tracking stopped — no snapshot was taken. Take a snapshot while paused, or let the program finish, to inspect allocations.",
+  if (hadSnapshot) {
+    void vscode.window.showInformationMessage("Basilisk: Memory tracking stopped.");
+    return;
+  }
+  // The toast tells the user to take a snapshot — it must offer the way there
+  // (the quick-pick action menu), never point at an invisible palette
+  // ([PROFILE-MEMORY-DISCOVERY], #263).
+  showActionableToast(
+    "Basilisk: Memory tracking stopped — no snapshot was taken. Take a snapshot while paused, or let the program finish, to inspect allocations.",
+    "Memory Actions…",
+    "basilisk.memoryMenu",
   );
 }
 
