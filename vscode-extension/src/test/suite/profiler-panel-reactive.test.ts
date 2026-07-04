@@ -100,7 +100,9 @@ suite("Python Processes panel — reactive button gating (manifest)", () => {
     for (const entry of panelMenu("view/item/context").filter((e) => e.command === "basilisk.memoryTrackProcess")) {
       assertWhenHas(entry, "basilisk.memoryTrackProcess", "viewItem == pythonProcessDebuggee");
     }
-    // The CPU Profile action, by contrast, stays available on every process row.
+    // The CPU Profile action, by contrast, stays available on every attachable
+    // row — blocked (🚫) rows opt out via `blockedPythonProcess`, which the
+    // `/^pythonProcess/` clause deliberately does not match (#266).
     const profile = panelMenu("view/item/context").find(
       (e) => e.command === "basilisk.profileProcess" && (e.group ?? "").startsWith("inline"),
     );

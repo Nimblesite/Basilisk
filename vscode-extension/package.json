@@ -579,12 +579,12 @@
         },
         {
           "command": "basilisk.copyProcessPid",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^(pythonProcess|blockedPythonProcess)/",
           "group": "9_copy@1"
         },
         {
           "command": "basilisk.revealProcessScript",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^(pythonProcess|blockedPythonProcess)/",
           "group": "9_copy@2"
         }
       ]

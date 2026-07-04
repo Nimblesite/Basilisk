@@ -740,3 +740,51 @@ suite("Python Processes Panel — inline action target (issue #79)", () => {
     );
   });
 });
+
+// A row the panel itself marks 🚫 (non-debuggable) must never offer the Profile
+// CPU action: package.json reveals it via `viewItem =~ /^pythonProcess/`, and the
+// command handler is the last line of defence against a stale/raced row (#266).
+suite("Python Processes Panel — blocked rows never offer Profile CPU (#266)", () => {
+  const BLOCKED_MACHINERY: ProcessInfo = {
+    pid: 400, ppid: 100, name: "python3.13", interpreterPath: "/usr/bin/python3.13",
+    script: null, pythonVersion: "3.13.7", cpuPercent: 0, memoryBytes: 5 * MB,
+    runtimeSecs: 60, user: "alice", requiresElevation: true,
+    inWorkspace: false, launcher: null, debuggable: false, undebuggableReason: "debugger machinery",
+  };
+  let provider: PythonProcessesProvider;
+  teardown(() => { provider.dispose(); });
+
+  test("a non-debuggable row's contextValue opts out of the /^pythonProcess/ menu clauses", async () => {
+    provider = await loadedProvider(storeWith([...STUB_PROCESSES, BLOCKED_MACHINERY]));
+    const rows = processRows(await provider.getChildren());
+    const blocked = rows.find((row) => pidOf(row) === 400);
+    assert.ok(blocked !== undefined, "the machinery row must still be listed (zero-filter)");
+    const ctx = blocked.contextValue ?? "";
+    // package.json's clause is `viewItem =~ /^pythonProcess/` — an anchored
+    // prefix match, i.e. exactly a startsWith check.
+    assert.ok(
+      !ctx.startsWith("pythonProcess"),
+      "package.json reveals Profile CPU on `viewItem =~ /^pythonProcess/`, so a row the panel " +
+        `already marks 🚫 "Can't profile" must not match it; got contextValue: ${ctx}`,
+    );
+  });
+
+  test("invoking Profile CPU on a blocked row refuses instead of attaching", async () => {
+    const requests: RecordedRequest[] = [];
+    const store = storeWith([...STUB_PROCESSES, BLOCKED_MACHINERY], requests);
+    provider = await loadedProvider(store);
+    const rows = processRows(await provider.getChildren());
+    const blocked = rows.find((row) => pidOf(row) === 400);
+    assert.ok(blocked !== undefined, "the machinery row must exist");
+
+    const actions = createProcessRowActions(store, { selection: [blocked] });
+    await actions.profileProcess(blocked);
+
+    assert.strictEqual(
+      profilerStarts(requests).length,
+      0,
+      "a row flagged \"Can't profile\" must never send basilisk.profiler.start — " +
+        "the attach is known to fail (#266)",
+    );
+  });
+});

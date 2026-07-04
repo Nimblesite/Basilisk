@@ -235,10 +235,15 @@ function rowDescription(process: ProcessInfo, profilingThis: boolean): string {
 
 /**
  * The row's contextValue, which selects its package.json affordances:
- * `pythonProcessProfiling` (Stop), `pythonProcessDebuggee` (Track Memory enabled),
- * `pythonProcessElevated` (lock), or plain `pythonProcess`.
+ * `blockedPythonProcess` (no Profile/Track actions — the panel already says
+ * "Can't profile", so the menus must not offer an attach that is known to fail,
+ * #266), `pythonProcessProfiling` (Stop), `pythonProcessDebuggee` (Track Memory
+ * enabled), `pythonProcessElevated` (lock), or plain `pythonProcess`. The
+ * profiling clauses match `/^pythonProcess/`, which `blockedPythonProcess`
+ * deliberately does not.
  */
 function rowContextValue(process: ProcessInfo, profilingThis: boolean, memoryTrackable: boolean): string {
+  if (!process.debuggable) { return "blockedPythonProcess"; }
   if (profilingThis) { return "pythonProcessProfiling"; }
   if (memoryTrackable) { return "pythonProcessDebuggee"; }
   return process.requiresElevation ? "pythonProcessElevated" : "pythonProcess";

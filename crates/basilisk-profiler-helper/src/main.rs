@@ -147,18 +147,24 @@ fn attach_pyspy(
     Ok((spy, version))
 }
 
-/// Whether the target PID is alive (signal-0 probe via `kill`).
+/// Whether the target PID is alive — running, not just existing.
 ///
 /// Implements [PROFILE-HELPER-PROTOCOL-ERRORS].
 /// Refines attach-failure classification (issue #81): py-spy reports the same
 /// "Failed to open process" for a dead target and for a live one the helper
-/// lacks privileges to read — the user needs to know which.
+/// lacks privileges to read — the user needs to know which. A `kill -0` probe
+/// is not enough: it succeeds for a **zombie** (exited, unreaped) process,
+/// which dressed a stale-panel-row attach up as a permissions failure (#267).
+/// `ps -o stat=` distinguishes the two — no output means gone, a `Z…` state
+/// means exited.
 fn target_alive(pid: u32) -> bool {
-    std::process::Command::new("kill")
-        .args(["-0", &pid.to_string()])
-        .status()
-        .map(|status| status.success())
-        .is_ok_and(|alive| alive)
+    std::process::Command::new("ps")
+        .args(["-o", "stat=", "-p", &pid.to_string()])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        .is_some_and(|stat| !stat.is_empty() && !stat.starts_with('Z'))
 }
 
 /// Classify an attach failure, refining ambiguous "cannot open" errors with a
@@ -301,4 +307,77 @@ async fn send_message(
     write_message(writer, msg)
         .await
         .map_err(|err| format!("write failed: {err}"))
+}
+
+// Tests for [PROFILE-HELPER-PROTOCOL-ERRORS] — attach-failure classification.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// py-spy's ambiguous "cannot open" attach failure.
+    const CANNOT_OPEN: &str = "py-spy attach failed: Failed to open process - check if it is running.";
+
+    /// Poll `ps` until `pid` reports the zombie state (`Z…`), or time out.
+    fn wait_until_zombie(pid: u32) -> Result<(), String> {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            let output = std::process::Command::new("ps")
+                .args(["-o", "stat=", "-p", &pid.to_string()])
+                .output()
+                .map_err(|err| format!("ps failed: {err}"))?;
+            let stat = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+            if stat.starts_with('Z') {
+                return Ok(());
+            }
+            if std::time::Instant::now() > deadline {
+                return Err(format!("PID {pid} never became a zombie (stat: {stat:?})"));
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// A dead-but-unreaped (zombie) target must classify as `ProcessNotFound`,
+    /// not `PermissionDenied` (#267): `kill -0` succeeds for a zombie, so the
+    /// liveness refinement of issue #81 dressed a stale-panel-row attach
+    /// failure up as a permissions problem the user cannot act on.
+    /// [PROFILE-HELPER-PROTOCOL-ERRORS]
+    #[test]
+    fn zombie_target_classifies_as_process_not_found() -> Result<(), String> {
+        // Spawn a process that exits immediately and deliberately do NOT reap
+        // it yet — as its parent, we keep it a zombie until `wait` below.
+        let mut child = std::process::Command::new("true")
+            .spawn()
+            .map_err(|err| format!("spawn: {err}"))?;
+        let pid = child.id();
+        let became_zombie = wait_until_zombie(pid);
+        let kind = classify_helper_attach_error(pid, CANNOT_OPEN);
+        // Reap before asserting so a failure never leaks the zombie.
+        let _ = child.wait();
+        became_zombie?;
+        assert_eq!(
+            kind,
+            AttachErrorKind::ProcessNotFound,
+            "a zombie target is gone, not a permissions failure (#267)"
+        );
+        Ok(())
+    }
+
+    /// The refinement itself must survive the zombie fix: a genuinely LIVE
+    /// target that py-spy cannot open is still a permissions problem (#81).
+    #[test]
+    fn live_target_still_refines_to_permission_denied() -> Result<(), String> {
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .map_err(|err| format!("spawn: {err}"))?;
+        let kind = classify_helper_attach_error(child.id(), CANNOT_OPEN);
+        let _ = child.kill();
+        let _ = child.wait();
+        assert_eq!(
+            kind,
+            AttachErrorKind::PermissionDenied,
+            "a live-but-unopenable target stays a permissions failure (#81)"
+        );
+        Ok(())
+    }
 }
