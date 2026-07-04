@@ -151,8 +151,7 @@ All rules are **on by default**. There is no way to relax them globally.
 | `basilisk.trace.server` | `"off"` | LSP trace level: `off`, `messages`, `verbose` |
 | `basilisk.inlayHints.parameterNames` | `true` | Reserved — hints are always shown; the server does not yet read this |
 | `basilisk.inlayHints.variableTypes` | `true` | Reserved — hints are always shown; the server does not yet read this |
-| `basilisk.ruff.enabled` | `true` | Reserved — Ruff is always on; the server does not yet read this |
-| `basilisk.ruff.executablePath` | `"ruff"` | Reserved — server resolves ruff from PATH; not yet read |
+| `basilisk.formatter` | `"ruff"` | Formatter engine — `"ruff"` uses the Ruff formatter embedded in the Basilisk binary (in-process; no external `ruff` binary is ever required), `"none"` disables formatting |
 
 ---
 

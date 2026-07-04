@@ -32,8 +32,8 @@ Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` d
 | Ownership analysis | No | No | No | No | No | No | **Yes** |
 | Immutability enforcement | No | No | No | No | No | No | **Yes** |
 | Implicit coercion detection | No | No | No | No | No | No | **Yes** |
-| Linting | No | No | No | No | No | **Yes** | Delegates to Ruff |
-| Formatting | No | No | No | No | No | **Yes** | Delegates to Ruff |
+| Linting | No | No | No | No | No | **Yes** | Native import hygiene ([LSPFMT-IMPORTS](LSP-FORMATTING-SPEC.md#LSPFMT-IMPORTS)) |
+| Formatting | No | No | No | No | No | **Yes** | Embeds Ruff formatter ([LSPFMT-ENGINE](LSP-FORMATTING-SPEC.md#LSPFMT-ENGINE)) |
 | Plugin system | No | Python hooks | Planned | No | No | No | **WASM plugins** |
 | Auto-stub generation | No | stubgen (basic) | No | Inference | No | No | **Tiered stubs** |
 | CI output (SARIF/JUnit) | Limited | No | No | No | No | No | **SARIF + JUnit** |
@@ -56,8 +56,8 @@ Depend on established open-source tools rather than reimplementing them.
 
 | Dependency | Purpose | License | Rationale |
 |---|---|---|---|
-| **Ruff** (`ruff` CLI) | Linting + formatting | MIT | Best-in-class. 700+ rules. We don't recreate lint or format. |
-| **`ruff_python_parser`** | Python AST parsing | MIT | Battle-tested Rust crate. Powers Ruff. Evaluate as our parser. |
+| **`ruff_python_formatter`** | Code formatting | MIT | Embedded in-process — the formatter is Ruff's, no `ruff` CLI. Pinned to the same rev as the parser ([LSPFMT-ENGINE](LSP-FORMATTING-SPEC.md#LSPFMT-ENGINE)). |
+| **`ruff_python_parser`** | Python AST parsing | MIT | Battle-tested Rust crate. Powers Ruff. Our parser. |
 | **typeshed** | Standard library type stubs | Apache-2.0 | Community standard. We bundle it and extend it. |
 | **Salsa** | Incremental computation framework | Apache-2.0/MIT | Powers rust-analyzer. Proven at scale. |
 | **`lsp-server`** / **`tower-lsp`** | LSP implementation | MIT | Standard Rust LSP crates. |
@@ -76,7 +76,7 @@ Depend on established open-source tools rather than reimplementing them.
 
 | Tool | Interop Strategy |
 |---|---|
-| **Ruff** | Basilisk invokes `ruff check` and `ruff format` as subprocesses or links the Ruff crates directly. Configuration unified in `pyproject.toml`. |
+| **Ruff** | Basilisk **embeds** the `ruff_python_formatter` crate in-process for formatting and reimplements import hygiene natively — the `ruff` CLI is never spawned ([LSPFMT-DECISION](LSP-FORMATTING-SPEC.md#LSPFMT-DECISION)). Configuration unified in `pyproject.toml` (`[tool.ruff.format]`). |
 | **typeshed** | Bundled copy of typeshed stubs, updated with each Basilisk release. Users can override with custom stubs. |
 | **mypy config** | `basilisk migrate --from mypy` reads `mypy.ini` / `setup.cfg` and produces `[tool.basilisk]` config. |
 | **Pyright config** | `basilisk migrate --from pyright` reads `pyrightconfig.json` and produces `[tool.basilisk]` config. |

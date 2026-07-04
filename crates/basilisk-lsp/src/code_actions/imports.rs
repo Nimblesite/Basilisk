@@ -23,6 +23,13 @@ use super::TMP_COUNTER;
 /// - ruff exits with code >= 2 (internal error)
 /// - the file is unchanged (no fixes apply)
 /// - tmp-file I/O fails
+///
+/// CRITICAL TODO ([LSPFMT-DECISION], [LSPFMT-IMPORTS] — docs/specs/LSP-FORMATTING-SPEC.md):
+/// Jettison this `ruff check` subprocess. Reimplement the three import fixers
+/// (organize `I`, expand-wildcard `F403`, split-multi-import `E401`) **natively
+/// on the Ruff AST we already own** — no temp file, no PATH lookup, no silent
+/// no-op when ruff is absent. Acceptance bar: behavior parity with the Ruff
+/// fixers, regression-tested against representative fixtures.
 fn run_ruff_fix(source: &str, select_code: &str, tmp_prefix: &str) -> Option<String> {
     let id = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let tmp_path = std::env::temp_dir().join(format!("{tmp_prefix}_{id}.py"));

@@ -551,7 +551,7 @@ See [EXTENSION-ACTIVITY-PANEL-PLAN.md](../plans/EXTENSION-ACTIVITY-PANEL-PLAN.md
 | uv Integration | `basilisk.uv.enabled` | No server code reads it — the toggle never disabled uv integration (a no-op affordance). Removed per GitHub #190; uv commands stay in the palette / code actions and the read-only "uv" Server Info row still reports uv status |
 | Inlay Hints (Params) | `basilisk.inlayHints.parameterNames` | Server emits hints unconditionally; setting dropped |
 | Inlay Hints (Types) | `basilisk.inlayHints.variableTypes` | Server emits hints unconditionally; setting dropped |
-| Ruff Integration | `basilisk.ruff.enabled` | Server runs ruff unconditionally; setting dropped |
+| Ruff Integration | `basilisk.ruff.enabled` / `basilisk.ruff.executablePath` | Dropped — no `ruff` binary; formatting is the embedded Ruff crate. Replaced by the functional `basilisk.formatter` flag ([LSPFMT-CONFIG](LSP-FORMATTING-SPEC.md#LSPFMT-CONFIG)), not a dashboard toggle |
 | Test Explorer | `basilisk.testExplorer.enabled` | Only gates auto-discovery-on-save; does not disable the explorer |
 | Debugger | `basilisk.debugger.enabled` | Setting was never even declared; debugging is always registered |
 | AI Suggestions | `basilisk.aiTyping.enabled` | No provider implemented; nothing reads the setting |

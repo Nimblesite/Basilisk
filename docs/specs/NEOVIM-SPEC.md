@@ -81,10 +81,9 @@ vim.lsp.config('basilisk', {
         parameterNames = config.inlay_hints.parameter_names,
         variableTypes = config.inlay_hints.variable_types,
       },
-      ruff = {
-        enabled = config.ruff.enabled,
-        executablePath = config.ruff.executable_path,
-      },
+      -- Formatter engine: "ruff" (Ruff formatter embedded in the Basilisk
+      -- binary, in-process — no external ruff binary) or "none". [LSPFMT-CONFIG]
+      formatter = config.formatter,
     }
   }
 })
