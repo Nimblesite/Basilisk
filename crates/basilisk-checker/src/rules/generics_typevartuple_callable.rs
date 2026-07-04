@@ -49,7 +49,7 @@ impl Rule for TypeVarTupleCallableMismatch {
         let path = &module.path;
 
         // Step 1: Re-parse source to walk module-level call expressions.
-        let Ok(parsed) = basilisk_parser::parse_source(source.clone(), path.clone()) else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 

@@ -110,7 +110,7 @@ impl Rule for NoMatchingOverload {
 
         // Scan the source for module-level subscript expressions: `varname[literal]`
         // We parse the source with basilisk_parser to get the AST, then walk it.
-        let Ok(parsed) = basilisk_parser::parse_source(source.clone(), path.clone()) else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 

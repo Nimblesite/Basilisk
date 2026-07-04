@@ -204,6 +204,7 @@ dependencies = [
 name = "basilisk-checker"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
+ "basilisk-common",
  "basilisk-config",
  "basilisk-db",
  "basilisk-parser",

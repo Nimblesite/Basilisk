@@ -30,7 +30,7 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule};
 use crate::diagnostic::Diagnostic;
 
 use super::literals_literalstring_helpers::{
-    emit_container_call_str_error, emit_fstring_literal_string_error,
+    colon_newline_positions, emit_container_call_str_error, emit_fstring_literal_string_error,
     emit_invariant_container_mismatch, emit_literal_value_mismatch, extract_fstring_names,
     extract_literal_string_value, function_body_range, is_invariant_container, is_plain_str_type,
     is_simple_identifier, param_annotations, parse_annotated_assigns, parse_simple_call,
@@ -52,8 +52,11 @@ impl Rule for LiteralStringAssignment {
         let source = &module.source;
         let path = &module.path;
 
+        // Index every ":\n" once so each function's body range is a binary
+        // search rather than a scan to end-of-file (O(n²) → O(n + f·log n)).
+        let colon_newlines = colon_newline_positions(source);
         for func in &module.functions {
-            check_function_body(func, source, path, diagnostics);
+            check_function_body(func, source, &colon_newlines, path, diagnostics);
         }
     }
 }
@@ -63,10 +66,11 @@ impl Rule for LiteralStringAssignment {
 fn check_function_body(
     func: &FunctionInfo,
     source: &str,
+    colon_newlines: &[usize],
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let Some((body_start, body_end)) = function_body_range(func, source) else {
+    let Some((body_start, body_end)) = function_body_range(func, source, colon_newlines) else {
         return;
     };
     let Some(body) = source.get(body_start..body_end) else {

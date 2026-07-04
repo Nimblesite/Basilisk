@@ -83,7 +83,7 @@ impl Rule for SelfTypeAttributeIncompatible {
 
         // Step 2: Parse the source to build parent-child class relationships
         // (handles subscripted bases like `LinkedList[int]`).
-        let Ok(parsed) = basilisk_parser::parse_source(source.clone(), path.clone()) else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 

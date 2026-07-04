@@ -81,6 +81,40 @@ pub struct FileSource {
     pub text: String,
 }
 
+/// One precomputed [`LineIndex`](basilisk_common::text::LineIndex) per source
+/// file, so a batch of diagnostics resolves its byte spans to `(line, col)` in
+/// O(log n) instead of rescanning the source from the top for every span.
+///
+/// Rendering a file with many diagnostics used to be O(diagnostics · length) —
+/// each `--> path:line:col` and each snippet rescanned the whole prefix. Both
+/// the text and JSON renderers now build this once and share it.
+pub(super) struct SourceIndexes<'a> {
+    entries: Vec<(&'a FileSource, basilisk_common::text::LineIndex)>,
+}
+
+impl<'a> SourceIndexes<'a> {
+    /// Build a line index for every source file up front (one O(n) pass each).
+    pub(super) fn new(sources: &'a [FileSource]) -> Self {
+        Self {
+            entries: sources
+                .iter()
+                .map(|source| (source, basilisk_common::text::LineIndex::new(&source.text)))
+                .collect(),
+        }
+    }
+
+    /// Source text plus its line index for the file `path` belongs to, if known.
+    ///
+    /// Linear scan over the file list, matching the renderers' prior lookup — the
+    /// win is in the per-span conversion, not this (files-per-run is small).
+    pub(super) fn for_path(&self, path: &str) -> Option<(&str, &basilisk_common::text::LineIndex)> {
+        self.entries
+            .iter()
+            .find(|(source, _)| source.path == path)
+            .map(|(source, index)| (source.text.as_str(), index))
+    }
+}
+
 #[cfg(test)]
 #[expect(
     clippy::indexing_slicing,
@@ -94,6 +128,22 @@ mod tests {
     use basilisk_checker::Diagnostic;
     use basilisk_checker::{ErrorCode, Severity};
     use basilisk_resolver::Span;
+
+    /// Format one diagnostic against a fresh line index for `text`.
+    ///
+    /// The production renderer builds the index once per file and threads
+    /// `(text, &LineIndex)` into `format_one`; this wrapper rebuilds it per call
+    /// so the focused formatting tests stay terse.
+    fn render_one(diag: &Diagnostic, text: &str) -> String {
+        let index = basilisk_common::text::LineIndex::new(text);
+        format_one(diag, Some((text, &index)))
+    }
+
+    /// Format a snippet for a span against a fresh line index for `text`.
+    fn render_snippet(text: &str, start: usize, end: usize, severity: Severity) -> String {
+        let index = basilisk_common::text::LineIndex::new(text);
+        format_snippet(text, &index, start, end, severity)
+    }
 
     // ── ANSI escape sequences produced by the `colored` crate ────────────────
 
@@ -172,7 +222,7 @@ mod tests {
     fn format_one_error_header_is_bold_red() {
         force_colors();
         let diag = make_diag(Some("help"), Some("note"));
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             out.contains(&format!("{BOLD_RED}error{RESET}")),
             "error label must be bold red, got:\n{out}"
@@ -183,7 +233,7 @@ mod tests {
     fn format_one_error_code_is_bold() {
         force_colors();
         let diag = make_diag(None, None);
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             out.contains(&format!("{BOLD}[BSK-E0001]{RESET}")),
             "error code must be bold, got:\n{out}"
@@ -194,7 +244,7 @@ mod tests {
     fn format_one_message_is_bold() {
         force_colors();
         let diag = make_diag(None, None);
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             out.contains(&format!("{BOLD}missing annotation for `x`{RESET}")),
             "message must be bold, got:\n{out}"
@@ -205,7 +255,7 @@ mod tests {
     fn format_one_arrow_is_bold_blue() {
         force_colors();
         let diag = make_diag(None, None);
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             out.contains(&format!("{BOLD_BLUE}-->{RESET}")),
             "arrow must be bold blue, got:\n{out}"
@@ -216,7 +266,7 @@ mod tests {
     fn format_one_help_label_is_bold_cyan() {
         force_colors();
         let diag = make_diag(Some("add a type"), None);
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             out.contains(&format!("{BOLD_CYAN}help{RESET}")),
             "help label must be bold cyan, got:\n{out}"
@@ -227,7 +277,7 @@ mod tests {
     fn format_one_note_label_is_bold_cyan() {
         force_colors();
         let diag = make_diag(None, Some("all params need types"));
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             out.contains(&format!("{BOLD_CYAN}note{RESET}")),
             "note label must be bold cyan, got:\n{out}"
@@ -238,7 +288,7 @@ mod tests {
     fn format_one_see_label_is_bold_cyan() {
         force_colors();
         let diag = make_diag(None, None);
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             out.contains(&format!("{BOLD_CYAN}see{RESET}")),
             "see label must be bold cyan, got:\n{out}"
@@ -249,7 +299,7 @@ mod tests {
     fn format_one_equals_sign_is_bold_blue() {
         force_colors();
         let diag = make_diag(Some("help"), None);
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             out.contains(&format!("{BOLD_BLUE}={RESET}")),
             "equals sign must be bold blue, got:\n{out}"
@@ -260,7 +310,7 @@ mod tests {
     fn format_one_warning_header_is_bold_yellow() {
         force_colors();
         let diag = make_diag_with_severity(Severity::Warning, None, None);
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             out.contains(&format!("{BOLD_YELLOW}warning{RESET}")),
             "warning label must be bold yellow, got:\n{out}"
@@ -271,7 +321,7 @@ mod tests {
     fn format_one_info_header_is_bold_blue() {
         force_colors();
         let diag = make_diag_with_severity(Severity::Info, None, None);
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             out.contains(&format!("{BOLD_BLUE}info{RESET}")),
             "info label must be bold blue, got:\n{out}"
@@ -282,7 +332,7 @@ mod tests {
     fn format_one_safety_violation_header_is_bold_red() {
         force_colors();
         let diag = make_diag_with_severity(Severity::SafetyViolation, None, None);
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             out.contains(&format!("{BOLD_RED}safety violation{RESET}")),
             "safety violation label must be bold red, got:\n{out}"
@@ -309,7 +359,7 @@ mod tests {
     fn format_one_without_help_omits_help_line() {
         force_colors();
         let diag = make_diag(None, Some("note text"));
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             !out.contains("help"),
             "must omit help line when help is None"
@@ -321,7 +371,7 @@ mod tests {
     fn format_one_without_note_omits_note_line() {
         force_colors();
         let diag = make_diag(Some("help text"), None);
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(out.contains("help text"), "must include help text");
         assert!(
             !out.contains("note"),
@@ -333,7 +383,7 @@ mod tests {
     fn format_one_without_help_or_note() {
         force_colors();
         let diag = make_diag(None, None);
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(!out.contains("help"), "must omit help when None");
         assert!(!out.contains("note"), "must omit note when None");
         // Still must contain the see URL.
@@ -347,7 +397,7 @@ mod tests {
     /// All `format_snippet_*_is_*` tests share this fixture.
     fn snippet_sample(severity: Severity) -> String {
         force_colors();
-        format_snippet("def foo(x): pass", 8, 9, severity)
+        render_snippet("def foo(x): pass", 8, 9, severity)
     }
 
     fn assert_contains_colour(out: &str, expected: &str, label: &str) {
@@ -401,14 +451,14 @@ mod tests {
     fn format_snippet_multi_char_underline_length() {
         force_colors();
         // span covers "foo" at bytes 4..7 → 3 carets
-        let out = format_snippet("def foo(x): pass", 4, 7, Severity::Error);
+        let out = render_snippet("def foo(x): pass", 4, 7, Severity::Error);
         assert_contains_colour(&out, &format!("{BOLD_RED}^^^{RESET}"), "3-caret underline");
     }
 
     #[test]
     fn format_snippet_contains_source_line() {
         force_colors();
-        let out = format_snippet("def foo(x): pass", 8, 9, Severity::Error);
+        let out = render_snippet("def foo(x): pass", 8, 9, Severity::Error);
         assert!(
             out.contains("def foo(x): pass"),
             "snippet must contain the source line, got:\n{out}"
@@ -419,7 +469,7 @@ mod tests {
     fn format_snippet_on_second_line() {
         force_colors();
         let source = "def foo(): pass\ndef bar(x): pass";
-        let out = format_snippet(source, 20, 23, Severity::Error);
+        let out = render_snippet(source, 20, 23, Severity::Error);
         // Line 2 contains "def bar(x): pass", line number should be 2.
         assert!(
             out.contains(&format!("{BOLD_BLUE}2{RESET}")),
@@ -437,7 +487,7 @@ mod tests {
     fn format_one_contains_file_location() {
         force_colors();
         let diag = make_diag(None, None);
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             out.contains("test.py:1:9"),
             "must contain file:line:col location, got:\n{out}"
@@ -448,7 +498,7 @@ mod tests {
     fn format_one_contains_source_snippet() {
         force_colors();
         let diag = make_diag(None, None);
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             out.contains("def foo(x): pass"),
             "must contain source snippet, got:\n{out}"
@@ -459,7 +509,7 @@ mod tests {
     fn format_one_contains_docs_url() {
         force_colors();
         let diag = make_diag(None, None);
-        let out = format_one(&diag, Some("def foo(x): pass"));
+        let out = render_one(&diag, "def foo(x): pass");
         assert!(
             out.contains("https://www.basilisk-python.dev/errors/BSK-E0001"),
             "must contain docs URL, got:\n{out}"
@@ -766,7 +816,7 @@ mod tests {
     fn format_snippet_line_start_skips_newline() {
         force_colors();
         let source = "hello\nworld";
-        let out = format_snippet(source, 8, 10, Severity::Error);
+        let out = render_snippet(source, 8, 10, Severity::Error);
         // Must contain "world" (the source line), not "\nworld".
         assert!(
             out.contains("world"),
@@ -785,7 +835,7 @@ mod tests {
     fn format_snippet_col_start_no_overflow() {
         force_colors();
         let source = "abcdef\nghijkl";
-        let out = format_snippet(source, 9, 12, Severity::Error);
+        let out = render_snippet(source, 9, 12, Severity::Error);
         // Must contain the source line.
         assert!(out.contains("ghijkl"), "must contain source line");
         // Underline must be 3 carets for "ijk".
@@ -802,7 +852,7 @@ mod tests {
     fn format_snippet_col_end_no_overflow() {
         force_colors();
         let source = "abcdef\nghijkl";
-        let out = format_snippet(source, 12, 14, Severity::Error);
+        let out = render_snippet(source, 12, 14, Severity::Error);
         assert!(out.contains("ghijkl"), "must contain source line");
         assert!(
             out.contains(&format!("{BOLD_RED}^{RESET}")),

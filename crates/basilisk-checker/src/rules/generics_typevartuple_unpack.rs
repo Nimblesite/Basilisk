@@ -71,7 +71,7 @@ impl Rule for TypeVarTupleUnpackViolation {
             return;
         }
 
-        let Ok(parsed) = basilisk_parser::parse_source(source.clone(), path.clone()) else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 

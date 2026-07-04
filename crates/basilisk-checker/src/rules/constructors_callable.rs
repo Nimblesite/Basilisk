@@ -54,7 +54,7 @@ impl Rule for ConstructorCallableMisuse {
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         let source = &module.source;
-        let Ok(parsed) = basilisk_parser::parse_source(source.clone(), module.path.clone()) else {
+        let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 

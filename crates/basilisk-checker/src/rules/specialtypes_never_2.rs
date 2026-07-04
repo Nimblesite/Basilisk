@@ -53,12 +53,82 @@ impl Rule for NeverTypeCompatibility {
         let covariant_tvars: Vec<&str> =
             basilisk_resolver::collect_names_where(&module.typevar_calls, |tv| tv.is_covariant);
 
+        // Parse candidate annotated assignments (`var: annotation = rhs`) once
+        // for the whole file. Previously each function rescanned the entire
+        // source, making this O(functions · lines) ≈ O(n²); the candidates are
+        // source-position-independent, so one pass feeds every function.
+        let assign_lines = collect_assign_lines(source);
+
         // Check function bodies for annotated local assignments and return stmts.
         for func in &module.functions {
-            check_local_assignments(func, source, path, diagnostics);
+            check_local_assignments(func, source, path, &assign_lines, diagnostics);
             check_return_stmts(func, source, path, &covariant_tvars, module, diagnostics);
         }
     }
+}
+
+/// One source line that parses as `var_name: annotation = rhs_name`, with the
+/// byte offset of the line start. Collected once per file so the per-function
+/// `Never` check matches against it without rescanning the source.
+struct AssignLine<'a> {
+    /// The original (un-trimmed) line text — used to locate `var_name` for the span.
+    line: &'a str,
+    /// Byte offset of the start of this line in the source.
+    line_offset: usize,
+    /// The trimmed left-hand-side variable name.
+    var_name: &'a str,
+    /// The trimmed annotation text (e.g. `list[int]`).
+    annotation: &'a str,
+    /// The trimmed right-hand-side identifier (a candidate parameter reference).
+    rhs_name: &'a str,
+}
+
+/// Parse a single line as `var_name: annotation = rhs_name`, returning the
+/// trimmed components when it matches the shape the `Never` check looks for.
+///
+/// Mirrors the original per-line filter exactly: both `": "` and `" = "` must be
+/// present, and the LHS name and RHS (after stripping a trailing comment) must be
+/// simple identifiers.
+fn parse_assign_line(line: &str) -> Option<(&str, &str, &str)> {
+    let trimmed = line.trim();
+    if !trimmed.contains(": ") || !trimmed.contains(" = ") {
+        return None;
+    }
+    let (var_name, rest) = trimmed.split_once(": ")?;
+    let var_name = var_name.trim();
+    if !is_simple_identifier(var_name) {
+        return None;
+    }
+    let (annotation, rhs_part) = rest.split_once(" = ")?;
+    let annotation = annotation.trim();
+    // Strip trailing comments from the RHS before checking it is a plain name.
+    let rhs_name = rhs_part.split('#').next().unwrap_or(rhs_part).trim();
+    if !is_simple_identifier(rhs_name) {
+        return None;
+    }
+    Some((var_name, annotation, rhs_name))
+}
+
+/// Scan the source once, collecting every line that parses as an annotated
+/// assignment. Line offsets accumulate exactly as the previous per-line
+/// `line_byte_offset` did (`+= line.len() + 1` over [`str::lines`]), so emitted
+/// spans are byte-for-byte identical.
+fn collect_assign_lines(source: &str) -> Vec<AssignLine<'_>> {
+    let mut result = Vec::new();
+    let mut offset = 0usize;
+    for line in source.lines() {
+        if let Some((var_name, annotation, rhs_name)) = parse_assign_line(line) {
+            result.push(AssignLine {
+                line,
+                line_offset: offset,
+                var_name,
+                annotation,
+                rhs_name,
+            });
+        }
+        offset += line.len() + 1;
+    }
+    result
 }
 
 /// Scan source lines for annotated local variable assignments where the RHS is
@@ -68,6 +138,7 @@ fn check_local_assignments(
     func: &FunctionInfo,
     source: &str,
     path: &str,
+    assign_lines: &[AssignLine<'_>],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     // Build a list of (parameter_name, annotation_text) pairs.
@@ -85,41 +156,12 @@ fn check_local_assignments(
         return;
     }
 
-    // Scan source lines for annotated assignments.
-    for (idx, line) in source.lines().enumerate() {
-        let trimmed = line.trim();
-
-        // Quick pre-filter: must contain both `: ` and ` = `.
-        if !trimmed.contains(": ") || !trimmed.contains(" = ") {
-            continue;
-        }
-
-        // Parse: `var_name: annotation = rhs_name`
-        let Some((var_name, rest)) = trimmed.split_once(": ") else {
-            continue;
-        };
-        let var_name = var_name.trim();
-
-        if !is_simple_identifier(var_name) {
-            continue;
-        }
-
-        let Some((annotation, rhs_part)) = rest.split_once(" = ") else {
-            continue;
-        };
-        let annotation = annotation.trim();
-
-        // Strip trailing comments from the RHS.
-        let rhs_name = rhs_part.split('#').next().unwrap_or(rhs_part).trim();
-
-        // RHS must be a simple identifier (a parameter reference).
-        if !is_simple_identifier(rhs_name) {
-            continue;
-        }
-
+    // Match each precomputed annotated assignment against this function's params.
+    for candidate in assign_lines {
         // Look up the RHS name among the function's parameters.
-        let Some((_, param_annotation)) =
-            param_annotations.iter().find(|(name, _)| *name == rhs_name)
+        let Some((_, param_annotation)) = param_annotations
+            .iter()
+            .find(|(name, _)| *name == candidate.rhs_name)
         else {
             continue;
         };
@@ -127,10 +169,10 @@ fn check_local_assignments(
         // Check for invariant Never mismatch.
         // E.g. annotation = "list[int]", param_annotation = "list[Never]"
         if let (Some(target_inner), Some(source_inner)) = (
-            extract_generic_inner(annotation),
+            extract_generic_inner(candidate.annotation),
             extract_generic_inner(param_annotation),
         ) {
-            let target_base = extract_generic_base(annotation);
+            let target_base = extract_generic_base(candidate.annotation);
             let source_base = extract_generic_base(param_annotation);
 
             if target_base == source_base
@@ -138,18 +180,18 @@ fn check_local_assignments(
                 && target_inner != "Never"
                 && target_inner != "Any"
             {
-                let line_offset = line_byte_offset(source, idx);
-                let name_start_in_line = line.find(var_name).unwrap_or(0);
-                let span_start = u32::try_from(line_offset + name_start_in_line).unwrap_or(0);
-                let span_end = span_start + u32::try_from(var_name.len()).unwrap_or(0);
+                let name_start_in_line = candidate.line.find(candidate.var_name).unwrap_or(0);
+                let span_start =
+                    u32::try_from(candidate.line_offset + name_start_in_line).unwrap_or(0);
+                let span_end = span_start + u32::try_from(candidate.var_name.len()).unwrap_or(0);
 
                 diagnostics.push(make_assignment_diagnostic(
                     Span {
                         start: span_start,
                         end: span_end,
                     },
-                    var_name,
-                    annotation,
+                    candidate.var_name,
+                    candidate.annotation,
                     param_annotation,
                     path,
                 ));
@@ -287,18 +329,6 @@ fn strip_call_parens(text: &str) -> &str {
 /// Check if a string looks like a simple Python identifier.
 fn is_simple_identifier(text: &str) -> bool {
     basilisk_resolver::is_simple_ascii_python_identifier(text)
-}
-
-/// Get the byte offset of the start of line number `line_idx` (0-indexed).
-fn line_byte_offset(source: &str, line_idx: usize) -> usize {
-    let mut offset = 0;
-    for (i, line) in source.lines().enumerate() {
-        if i == line_idx {
-            return offset;
-        }
-        offset += line.len() + 1; // +1 for '\n'
-    }
-    offset
 }
 
 fn make_assignment_diagnostic(
