@@ -599,6 +599,9 @@ impl ProfileDataExt for ProfileData {
         use basilisk_lsp::profiler::aggregator::{FrameKey, FunctionStats, SpeedscopeFrame};
 
         self.total_samples += 1;
+        // [PROFILE-AGGREGATION-LOGIC]: percentages divide by sample_count() =
+        // sum of per-thread samples, so the mock must record its thread too.
+        *self.thread_samples.entry(1).or_insert(0) += 1;
 
         for (idx, (name, file, line)) in frames.iter().enumerate() {
             *self

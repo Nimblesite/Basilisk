@@ -316,13 +316,32 @@ Contract (GitHub #65 / #119):
   diagnostics cleared on disable come back.
 - **At startup:** a client that initializes with `enabled = false` gets **no**
   diagnostics from the initial workspace scan.
+- **Grading surfaces are gated too** (the v0.25.0 showstopper reopen of #119):
+  `basilisk.workspaceModules` and `basilisk.typeHealth` MUST NOT serve grading
+  while disabled. Every payload stamps `typeCheckingEnabled`; when `false`, the
+  grading fields (`coveragePercent`, `errors`, `warnings`, `adopted`, symbol
+  totals) are **omitted** — never zeroed — so no client can render a
+  `"NN% typed"` header, coverage-tinted (red) rows, or tally badges from a
+  stale shape. The module list itself stays as a navigation surface, and
+  `typeHealth` serves an empty `modules` list. Clients render an explicit
+  `"Type checking disabled"` header state ([EXTACT-MODULES-HEADER]).
+- **Panel refresh on transition:** flipping the toggle repaints the panel
+  immediately in both directions — the clear/re-publish above fires the
+  client's diagnostics listener, which bumps `analysisRevision`
+  ([EXTACT-REACTIVE-STATE]) even in a diagnostics-free workspace, because
+  clearing publishes an (empty) set for every indexed URI.
 
 Implemented in `crates/basilisk-lsp/src/server/init.rs`
-(`apply_type_checking_toggle`, `clear_all_diagnostics`, `rescan_after_enable`)
-and the gated publish paths in `crates/basilisk-lsp/src/server/document.rs`;
-forwarded by `readBasiliskSettings()` in `vscode-extension/src/lsp-client.ts`.
+(`apply_type_checking_toggle`, `clear_all_diagnostics`, `rescan_after_enable`),
+the gated publish paths in `crates/basilisk-lsp/src/server/document.rs`, and the
+gated panel builders in `crates/basilisk-lsp/src/server/activity_panel/`
+(`build_module_tree`, `build_type_health`); forwarded by
+`readBasiliskSettings()` in `vscode-extension/src/lsp-client.ts`; rendered by
+`workspaceHealthMessage` / `workspaceHealthBadge` / `ModuleTreeItem` in
+`vscode-extension/src/module-explorer.ts`.
 Exercised by `ws_test_type_checking_toggle.rs` (real LSP) and
-`type-checking-toggle.test.ts` (real VS Code window).
+`type-checking-toggle.test.ts` (real VS Code window — diagnostics clearing,
+panel-payload gating, header/row neutrality, and zero-diagnostics refresh).
 
 ---
 

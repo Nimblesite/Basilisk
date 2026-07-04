@@ -111,12 +111,15 @@ interface ModuleNode {
      */
     diagnostics: DiagnosticNode[];
     // --- Folded type-health rollup (single source of truth; see Type Health) ---
+    // ABSENT while Type Checking is disabled ([ANALYSIS-ENABLED], #119): the
+    // server OMITS the grading fields (never zeroes them), so a disabled
+    // workspace cannot render "% typed" headers or coverage-tinted rows.
     /** annotatedSymbols / totalSymbols * 100 over this module's symbols */
-    coveragePercent: number;
-    errors: number;
-    warnings: number;
+    coveragePercent?: number;
+    errors?: number;
+    warnings?: number;
     /** true if the file is in adopted (errors-as-warnings) mode */
-    adopted: boolean;
+    adopted?: boolean;
 }
 
 interface DiagnosticNode {
@@ -151,18 +154,26 @@ interface SymbolNode {
 interface TypeHealthResponse {
     /** Overall workspace stats */
     workspace: HealthStats;
-    /** Per-module breakdown */
+    /** Per-module breakdown — EMPTY while Type Checking is disabled ([ANALYSIS-ENABLED], #119). */
     modules: ModuleHealth[];
 }
 
 interface HealthStats {
-    totalSymbols: number;
-    annotatedSymbols: number;
+    /**
+     * The Type Checking toggle state, stamped into every payload
+     * ([ANALYSIS-ENABLED], #119). When false, all grading fields below are
+     * OMITTED and clients render "Type checking disabled" — no "% typed",
+     * no badge, no tinted rows.
+     */
+    typeCheckingEnabled?: boolean;
+    totalSymbols?: number;
+    annotatedSymbols?: number;
     /** annotatedSymbols / totalSymbols * 100 */
-    coveragePercent: number;
-    errors: number;
-    warnings: number;
-    adoptedFiles: number;
+    coveragePercent?: number;
+    errors?: number;
+    warnings?: number;
+    adoptedFiles?: number;
+    /** Always present — distinguishes an empty workspace even while disabled. */
     totalFiles: number;
 }
 
@@ -247,6 +258,7 @@ The workspace-wide summary renders in the tree view's **native chrome**, not a s
 - **`treeView.message`**: `"73% typed · 🔴 14  🟠 23"` (coverage + diagnostic tally in [count style](#EXTACT-MODULES-COUNT-STYLE) — no `E`/`W`; `message` is plain text, so the coloured glyphs carry severity).
 - **`treeView.badge`**: numeric — the count of outstanding diagnostics (errors + warnings); hidden when zero.
 - **Empty workspace** (`totalFiles == 0`): the message reads `"No Python files found"` — never a misleading `100%` for 0/0 symbols, and no badge (preserves the issue #57 guarantee in the merged panel).
+- **Type Checking disabled** (`typeCheckingEnabled == false` in the payload, [ANALYSIS-ENABLED], #119): the message reads `"Type checking disabled"` — never `"NN% typed"` — with no badge, no coverage bars/tints on rows, and no per-module tallies. The server omits all grading fields while disabled, so this state is structural, not a client-side hide.
 
 ### Tree Structure {#EXTACT-MODULES-TREE-STRUCTURE}
 

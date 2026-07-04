@@ -37,21 +37,26 @@ interface ModuleNode {
   readonly symbols: readonly SymbolNode[];
   // Health rollup folded into each module by basilisk.workspaceModules
   // [EXTACT-MODULES] — coverage %, diagnostic counts, and adoption state, so the
-  // merged panel needs no separate basilisk.typeHealth round-trip.
-  readonly coveragePercent: number;
-  readonly errors: number;
-  readonly warnings: number;
-  readonly adopted: boolean;
+  // merged panel needs no separate basilisk.typeHealth round-trip. ABSENT while
+  // Type Checking is disabled ([ANALYSIS-ENABLED], #119): the server omits all
+  // grading, so there is nothing to render as "% typed" or a red tint.
+  readonly coveragePercent?: number;
+  readonly errors?: number;
+  readonly warnings?: number;
+  readonly adopted?: boolean;
 }
 
 /** Workspace-wide health rollup carried alongside the module list. */
 interface HealthStats {
-  readonly totalSymbols: number;
-  readonly annotatedSymbols: number;
-  readonly coveragePercent: number;
-  readonly errors: number;
-  readonly warnings: number;
-  readonly adoptedFiles: number;
+  // The Type Checking toggle state stamped by the server ([ANALYSIS-ENABLED],
+  // #119). `false` means the grading fields below are absent by construction.
+  readonly typeCheckingEnabled?: boolean;
+  readonly totalSymbols?: number;
+  readonly annotatedSymbols?: number;
+  readonly coveragePercent?: number;
+  readonly errors?: number;
+  readonly warnings?: number;
+  readonly adoptedFiles?: number;
   readonly totalFiles: number;
 }
 
@@ -106,9 +111,12 @@ export class ModuleTreeItem extends vscode.TreeItem {
     );
     // Tint the namespace/file icon by coverage so a module's type health is
     // visible at a glance [EXTACT-MODULES]; the per-symbol "untyped" decoration
-    // is the drill-down.
+    // is the drill-down. No coverage (Type Checking disabled, #119) → no tint.
     const codicon = module.kind === "package" ? "symbol-namespace" : "symbol-file";
-    this.iconPath = new vscode.ThemeIcon(codicon, coverageColor(module.coveragePercent));
+    const tint = module.coveragePercent !== undefined
+      ? coverageColor(module.coveragePercent)
+      : undefined;
+    this.iconPath = new vscode.ThemeIcon(codicon, tint);
     this.contextValue = "module";
     this.description = moduleDescription(module);
     this.tooltip = moduleTooltip(module);
@@ -214,6 +222,8 @@ const COVERAGE_BAR_WIDTH = 10;
 const COVERAGE_GOOD_THRESHOLD = 90;
 /** Coverage threshold for "warning" (yellow); below it is red. */
 const COVERAGE_WARN_THRESHOLD = 50;
+/** Neutral coverage for ungraded rows (Type Checking disabled, #119). */
+const FULL_COVERAGE_PERCENT = 100;
 
 /** Render a coverage progress bar using Unicode block characters. */
 function coverageBar(percent: number): string {
@@ -233,11 +243,12 @@ function coverageColor(percent: number): vscode.ThemeColor {
 // "never `2E 3W`"; this renders `nE nW`. See the audit deviation for this section.
 /** Module row description: coverage bar + % + error/warning counts + adopted badge. */
 function moduleDescription(module: ModuleNode): string {
-  const issues: string[] = [];
-  if (module.errors > 0) { issues.push(`${module.errors}E`); }
-  if (module.warnings > 0) { issues.push(`${module.warnings}W`); }
-  const issueStr = issues.length > 0 ? ` — ${issues.join(" ")}` : "";
-  const badge = module.adopted ? " [adopted]" : "";
+  // Type Checking disabled (#119): the server serves no grading, so the row is
+  // a plain navigation entry — no bar, no percentage, no tallies.
+  if (module.coveragePercent === undefined) { return ""; }
+  const issueTally = diagnosticTally(module.errors ?? 0, module.warnings ?? 0);
+  const issueStr = issueTally === "" ? "" : ` — ${issueTally}`;
+  const badge = module.adopted === true ? " [adopted]" : "";
   return `${coverageBar(module.coveragePercent)} ${module.coveragePercent}%${issueStr}${badge}`;
 }
 
@@ -246,10 +257,10 @@ function moduleTooltip(module: ModuleNode): string {
   return [
     module.name,
     module.path,
-    `Coverage: ${module.coveragePercent}%`,
-    `Errors: ${module.errors}`,
-    `Warnings: ${module.warnings}`,
-    module.adopted ? "Status: Adopted (errors demoted to warnings)" : "",
+    module.coveragePercent !== undefined ? `Coverage: ${module.coveragePercent}%` : "",
+    module.errors !== undefined ? `Errors: ${module.errors}` : "",
+    module.warnings !== undefined ? `Warnings: ${module.warnings}` : "",
+    module.adopted === true ? "Status: Adopted (errors demoted to warnings)" : "",
   ].filter(Boolean).join("\n");
 }
 
@@ -269,7 +280,10 @@ function diagnosticTally(errors: number, warnings: number): string {
 function packageIconColor(node: PackageTreeNode): vscode.ThemeColor | undefined {
   if (node.errors > 0) { return new vscode.ThemeColor("list.errorForeground"); }
   if (node.warnings > 0) { return new vscode.ThemeColor("list.warningForeground"); }
-  return node.module !== undefined ? coverageColor(node.module.coveragePercent) : undefined;
+  // No coverage served (Type Checking disabled, #119) → untinted, like a folder.
+  return node.module?.coveragePercent !== undefined
+    ? coverageColor(node.module.coveragePercent)
+    : undefined;
 }
 
 /**
@@ -278,9 +292,8 @@ function packageIconColor(node: PackageTreeNode): vscode.ThemeColor | undefined 
  * its own coverage bar.
  */
 function packageDescription(node: PackageTreeNode): string {
-  const own = node.module !== undefined
-    ? `${coverageBar(node.module.coveragePercent)} ${node.module.coveragePercent}%`
-    : "";
+  const coverage = node.module?.coveragePercent;
+  const own = coverage !== undefined ? `${coverageBar(coverage)} ${coverage}%` : "";
   return [own, diagnosticTally(node.errors, node.warnings)].filter(Boolean).join(" — ");
 }
 
@@ -288,10 +301,11 @@ function packageDescription(node: PackageTreeNode): string {
 function packageTooltip(node: PackageTreeNode): string {
   const errs = `${node.errors} error${node.errors === 1 ? "" : "s"}`;
   const warns = `${node.warnings} warning${node.warnings === 1 ? "" : "s"}`;
+  const coverage = node.module?.coveragePercent;
   return [
     node.fullName,
     node.module?.path,
-    node.module !== undefined ? `Coverage: ${node.module.coveragePercent}%` : "",
+    coverage !== undefined ? `Coverage: ${coverage}%` : "",
     `Subtree: ${errs}, ${warns}`,
   ].filter(Boolean).join("\n");
 }
@@ -308,23 +322,29 @@ function packageTooltip(node: PackageTreeNode): string {
  */
 export function workspaceHealthMessage(stats: HealthStats | undefined): string {
   if (stats === undefined) { return ""; }
+  // Type Checking off ([ANALYSIS-ENABLED], #119): the panel must state that
+  // plainly instead of grading the workspace — no "% typed", no tallies.
+  if (stats.typeCheckingEnabled === false) { return "Type checking disabled"; }
   if (stats.totalFiles === 0) { return "No Python files found"; }
-  const issues: string[] = [];
-  if (stats.errors > 0) { issues.push(`${stats.errors}E`); }
-  if (stats.warnings > 0) { issues.push(`${stats.warnings}W`); }
-  const issueStr = issues.length > 0 ? ` · ${issues.join(" ")}` : "";
-  return `${stats.coveragePercent}% typed${issueStr}`;
+  const issueTally = diagnosticTally(stats.errors ?? 0, stats.warnings ?? 0);
+  const issueStr = issueTally === "" ? "" : ` · ${issueTally}`;
+  return `${stats.coveragePercent ?? FULL_COVERAGE_PERCENT}% typed${issueStr}`;
 }
 
 // Implements [EXTACT-MODULES-HEADER] `treeView.badge`: numeric count of
 // outstanding diagnostics, hidden when zero or on an empty workspace.
-/** Numeric view badge: outstanding diagnostics (errors + warnings), or none. */
+/** Numeric view badge: outstanding diagnostics (errors + warnings), or none.
+ *  No badge while Type Checking is disabled ([ANALYSIS-ENABLED], #119). */
 export function workspaceHealthBadge(stats: HealthStats | undefined): vscode.ViewBadge | undefined {
-  if (stats === undefined || stats.totalFiles === 0) { return undefined; }
-  const count = stats.errors + stats.warnings;
+  if (stats === undefined || stats.typeCheckingEnabled === false || stats.totalFiles === 0) {
+    return undefined;
+  }
+  const errors = stats.errors ?? 0;
+  const warnings = stats.warnings ?? 0;
+  const count = errors + warnings;
   if (count === 0) { return undefined; }
-  const errs = `${stats.errors} error${stats.errors === 1 ? "" : "s"}`;
-  const warns = `${stats.warnings} warning${stats.warnings === 1 ? "" : "s"}`;
+  const errs = `${errors} error${errors === 1 ? "" : "s"}`;
+  const warns = `${warnings} warning${warnings === 1 ? "" : "s"}`;
   return { value: count, tooltip: `${errs}, ${warns}` };
 }
 
@@ -544,8 +564,11 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     switch (this.sortMode) {
       case "name": return modules.sort((a, b) => a.name.localeCompare(b.name));
       case "path": return modules.sort((a, b) => a.path.localeCompare(b.path));
-      // Ascending coverage surfaces the least-typed modules first.
-      case "coverage": return modules.sort((a, b) => a.coveragePercent - b.coveragePercent);
+      // Ascending coverage surfaces the least-typed modules first; ungraded
+      // rows (Type Checking disabled, #119) sort as neutral 100.
+      case "coverage": return modules.sort(
+        (a, b) => (a.coveragePercent ?? FULL_COVERAGE_PERCENT) - (b.coveragePercent ?? FULL_COVERAGE_PERCENT),
+      );
     }
   }
 

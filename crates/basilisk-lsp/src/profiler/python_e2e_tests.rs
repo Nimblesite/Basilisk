@@ -1,7 +1,7 @@
 //! Implements [PROFILE-COOPERATIVE] / [PROFILE-MEMORY-FINAL] e2e tests that
 //! execute the REAL injected Python scripts in a real `python3` — the scripts
 //! the editor evaluates inside a debuggee. Synthetic `py_spy::StackTrace`
-//! tests (scenario_tests.rs) cannot catch bugs in the Python source itself:
+//! tests (`scenario_tests.rs`) cannot catch bugs in the Python source itself:
 //! misclassification, handler clobbering, or wire anomalies only show up when
 //! the genuine script runs against a genuine interpreter, the way profiling a
 //! real GitHub project does.
@@ -96,7 +96,7 @@ fn sample_hostile_workload(tag: &str, filenames: &[&str]) -> Vec<(String, bool)>
 
     let spin_files = filenames
         .iter()
-        .map(|f| format!("{:?}", f))
+        .map(|f| format!("{f:?}"))
         .collect::<Vec<_>>()
         .join(", ");
     let driver_src = format!(
@@ -323,7 +323,7 @@ fn diff_script_reports_shrinking_allocations() {
     std::fs::write(&diff, diff_snapshot(50)).expect("write diff script");
 
     let driver_src = format!(
-        r#"
+        r"
 import gc, tracemalloc
 tracemalloc.start(5)
 big = [bytes(4096) for _ in range(2000)]  # ~8 MB retained
@@ -331,7 +331,7 @@ exec(open({baseline:?}).read())
 del big
 gc.collect()
 exec(open({diff:?}).read())
-"#,
+",
         baseline = baseline.display().to_string(),
         diff = diff.display().to_string(),
     );

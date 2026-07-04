@@ -78,6 +78,8 @@ pub(super) async fn execute_workspace_modules(
 ///
 /// Computes type coverage statistics (annotated vs unannotated symbols),
 /// error/warning counts, and adoption state for each file in the workspace.
+/// Gated on the Type Checking toggle like `basilisk.workspaceModules`
+/// ([ANALYSIS-ENABLED], #119): while disabled it serves no grading.
 pub(super) async fn execute_type_health(
     server: &LspServer,
     _args: &[serde_json::Value],
@@ -86,8 +88,16 @@ pub(super) async fn execute_type_health(
     let project_root = roots.first().cloned();
     drop(roots);
 
+    let type_checking_enabled = server.is_type_checking_enabled().await;
+
     let result: Option<serde_json::Value> = server
-        .with_index(|idx| Some(build_type_health(idx, project_root.as_deref())))
+        .with_index(|idx| {
+            Some(build_type_health(
+                idx,
+                project_root.as_deref(),
+                type_checking_enabled,
+            ))
+        })
         .await;
 
     let result = result.unwrap_or_else(|| {
