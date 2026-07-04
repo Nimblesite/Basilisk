@@ -53,6 +53,27 @@ header "Running tests with coverage instrumentation"
 cargo llvm-cov clean --workspace
 eval "$(cargo llvm-cov show-env --export-prefix)"
 
+# macOS coverage-collection fix. cargo-llvm-cov's default `LLVM_PROFILE_FILE`
+# uses the `%Nm` ONLINE-MERGE pattern: every instrumented process merges its
+# counters into a shared pool of N files via mmap + POSIX advisory file locking.
+# On Darwin that merge path corrupts under the heavy concurrent writes of
+# `cargo test --all-targets` — processes leave truncated / bad-header `.profraw`
+# files, and a single bad header makes `llvm-profdata merge` abort the ENTIRE
+# report ("no profile can be merged"), collapsing every crate's coverage to ~0.
+# It is also aggravated by the LSP/profiler e2e suites, which SIGKILL their
+# instrumented `basilisk` child (see basilisk-lsp/tests/common/mod.rs) mid-merge.
+#
+# Linux (where CI runs) does not exhibit this, so we scope the workaround to
+# macOS to avoid perturbing the green Linux ratchet. Replace the merge pool with
+# ONE plain, independently written profile per process (`%p`, no `%m`): no shared
+# pool, no lock contention, no mmap-merge corruption — and a SIGKILLed child
+# simply skips its atexit write, leaving no file to poison the merge rather than
+# a corrupt one. `cargo llvm-cov report` globs every `*.profraw` in the target
+# dir regardless of filename, so dropping `%m` does not affect discovery.
+if [[ "$OSTYPE" == darwin* ]]; then
+    export LLVM_PROFILE_FILE="${CARGO_LLVM_COV_TARGET_DIR:-$REPO_ROOT/target}/Basilisk-%p.profraw"
+fi
+
 set +e
 cargo test --profile ci --workspace --exclude basilisk-compiler --all-targets
 TESTS_EXIT=$?
