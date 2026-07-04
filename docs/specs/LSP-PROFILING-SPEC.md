@@ -200,7 +200,7 @@ Each entry in the `processes[]` response:
 | `ppid` | number | Parent pid (`0` if unknown) — enables "group by parent" |
 | `name` | string | Process name, e.g. `python3.12` |
 | `interpreterPath` | string \| null | Resolved interpreter executable path |
-| `script` | string \| null | Best-effort target script (first positional arg) |
+| `script` | string \| null | Best-effort target script (first positional arg). `null` for `-c`/`-m` invocations: those end the interpreter's option list, so everything after them is the command's/module's own argv — a flag value like the adapter's `--port 50581` must never be mislabelled a script (#268) |
 | `pythonVersion` | string \| null | e.g. `3.12.13`; `null` ⇒ render `—` |
 | `cpuPercent` | number | Instantaneous CPU% (may exceed 100 across cores) |
 | `memoryBytes` | number | Resident memory in bytes |
