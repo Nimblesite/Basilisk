@@ -87,40 +87,100 @@ benchmarkStrings:
   </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════
-     PROBLEM — blunt text, no cards
-═══════════════════════════════════════════════════════ -->
-<section class="problem">
+<!-- ═══════════════════════════════════════════════════
+     COMPARISON TABLE — every competitor claim carries an
+     inline link to the authoritative source that makes it.
+═══════════════════════════════════════════════════ -->
+<section class="comparison-section">
   <div class="container">
-    <p class="problem__label">The problem</p>
-    <div class="problem__grid">
+    <p class="section-label">How it compares</p>
+    <h2 class="section-heading">Everything you expect.<br>Fully open source.</h2>
+    <p class="section-subhead">
+      A feature-complete, open-source language server &mdash;
+      with stricter type checking and no proprietary lock-in.
+      Every competitor claim below links to that tool&rsquo;s own docs.
+    </p>
 
-      <div class="problem__statement">
-        Python&rsquo;s default tooling is locked inside one proprietary VS Code extension. Python deserves a fully open-source language server that does <em>everything</em> &mdash; in <em>every</em> editor.
-      </div>
-
-      <ul class="problem__bullets">
-        <li>
-          <span class="problem__num">01</span>
-          <span><strong>The most-used Python tooling is locked to one editor.</strong> The most popular Python extension is proprietary, and its richest features don&rsquo;t leave VS Code. Basilisk is MIT/Apache-2.0 and runs the same everywhere &mdash; VS Code, Cursor, Windsurf, Zed, Neovim &mdash; so the editor is your choice, not a constraint.</span>
-        </li>
-        <li>
-          <span class="problem__num">02</span>
-          <span><strong>Pyright is only a type checker.</strong> No autocomplete, no hover, no refactoring &mdash; not without Pylance wrapping it. Basilisk is a complete LSP: diagnostics, completions, go-to-definition, inlay hints, and more.</span>
-        </li>
-        <li>
-          <span class="problem__num">03</span>
-          <span><strong>Every type checker defaults to permissive.</strong> You get real checking only where you add <code>--strict</code>. Basilisk checks to the Python typing spec out of the box &mdash; and lets you turn strictness up from there.</span>
-        </li>
-        <li>
-          <span class="problem__num">04</span>
-          <span><strong>Node.js is not a Python dependency.</strong> Pyright requires Node.js. Basilisk is a single Rust binary &mdash; no runtime, no npm, instant startup.</span>
-        </li>
-      </ul>
-
+    <div class="table-wrapper">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th class="col-basilisk">Basilisk</th>
+            <th><a href="https://github.com/microsoft/pyright" target="_blank" rel="noopener">Pyright</a></th>
+            <th><a href="https://github.com/python/mypy" target="_blank" rel="noopener">mypy</a></th>
+            <th><a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener">ty</a></th>
+            <th><a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener">Pyrefly</a></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>PEP conformance <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a></td>
+            <td class="col-basilisk">{{ conformance.scorePct }}% <em style="font-size:0.75rem;color:var(--color-text-muted)">({{ conformance.pass }}/{{ conformance.total }})</em></td>
+            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">published</a></td>
+            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">published</a></td>
+            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">published</a></td>
+            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">published</a></td>
+          </tr>
+          <tr>
+            <td>Implementation</td>
+            <td class="col-basilisk">Rust</td>
+            <td><a href="https://github.com/microsoft/pyright/tree/main/packages/pyright-internal/src" target="_blank" rel="noopener"><span class="cell-warn">TypeScript</span></a></td>
+            <td><a href="https://github.com/python/mypy" target="_blank" rel="noopener"><span class="cell-warn">Python/C</span></a></td>
+            <td><a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener">Rust</a></td>
+            <td><a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener">Rust</a></td>
+          </tr>
+          <tr>
+            <td>Runtime required</td>
+            <td class="col-basilisk check-yes">None</td>
+            <td><a href="https://raw.githubusercontent.com/microsoft/pyright/main/docs/installation.md" target="_blank" rel="noopener"><span class="cell-warn">Node.js</span></a></td>
+            <td><a href="https://mypy.readthedocs.io/en/stable/getting_started.html" target="_blank" rel="noopener"><span class="cell-warn">Python</span></a></td>
+            <td><a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener" class="check-yes">None</a></td>
+            <td><a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener" class="check-yes">None</a></td>
+          </tr>
+          <tr>
+            <td>Full LSP (completions, hover, goto)</td>
+            <td class="col-basilisk check-yes">&#10003;</td>
+            <td><a href="https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance" target="_blank" rel="noopener"><span class="cell-warn">via Pylance</span></a></td>
+            <td><a href="https://github.com/python/mypy" target="_blank" rel="noopener" class="check-no">&mdash;</a></td>
+            <td><a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener" class="check-yes">&#10003;</a></td>
+            <td><a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener" class="check-yes">&#10003;</a></td>
+          </tr>
+          <tr>
+            <td>Integrated debugger <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup2;</a></td>
+            <td class="col-basilisk check-yes">&#10003;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+            <td class="check-no">&mdash;</td>
+          </tr>
+          <tr>
+            <td>Official editor extensions</td>
+            <td class="col-basilisk">VS Code, Cursor, Zed, Neovim <em style="font-size:0.75rem;color:var(--color-text-muted)">(JetBrains soon)</em></td>
+            <td><a href="https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance" target="_blank" rel="noopener"><span class="cell-warn">Pylance (proprietary)</span></a></td>
+            <td class="check-no">&mdash;</td>
+            <td><a href="https://github.com/astral-sh/ty-vscode" target="_blank" rel="noopener">VS Code</a></td>
+            <td><a href="https://marketplace.visualstudio.com/items?itemName=meta.pyrefly" target="_blank" rel="noopener">VS Code</a></td>
+          </tr>
+          <tr>
+            <td>License</td>
+            <td class="col-basilisk">MIT</td>
+            <td><a href="https://github.com/microsoft/pyright/blob/main/LICENSE.txt" target="_blank" rel="noopener">MIT</a></td>
+            <td><a href="https://github.com/python/mypy/blob/master/LICENSE" target="_blank" rel="noopener">MIT</a></td>
+            <td><a href="https://github.com/astral-sh/ty/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a></td>
+            <td><a href="https://github.com/facebook/pyrefly/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </section>
+
+<!-- ═══════════════════════════════════════════════
+     BENCHMARKING TABLE — self-measured, reproducible
+═══════════════════════════════════════════════ -->
+{% import "benchmark-section.njk" as benchmark %}
+{{ benchmark.section(benchmarks, benchmarkStrings) }}
 
 <!-- ═══════════════════════════════════════════════════════
      FEATURES — alternating split rows
@@ -221,25 +281,7 @@ benchmarkStrings:
 
   <div class="feature-row">
     <div class="feature-row__visual">
-      <div class="code-window" style="width:100%;max-width:400px">
-        <div class="code-window__chrome">
-          <span class="code-window__dot code-window__dot--close"></span>
-          <span class="code-window__dot code-window__dot--min"></span>
-          <span class="code-window__dot code-window__dot--expand"></span>
-          <span class="code-window__filename">Basilisk Output</span>
-        </div>
-        <div class="code-window__body">
-<pre><span class="tok-cmt">[Basilisk Debug]</span> createDebugAdapterDescriptor
-  type=<span class="tok-type">basilisk-debug</span>, request=<span class="tok-str">launch</span>
-
-<span class="tok-cmt">[Basilisk Debug]</span> Requesting LSP to spawn
-  debugpy (python: <span class="tok-fn">auto-detect</span>)...
-
-<span class="tok-cmt">[Basilisk Debug]</span> LSP spawned debugpy &rarr;
-  connecting DAP client to
-  <span class="tok-type">localhost</span>:<span class="tok-num">57356</span></pre>
-        </div>
-      </div>
+      <img src="/assets/images/debug.png" alt="Basilisk step-through debugging in VS Code — paused at a breakpoint in debug_demo.py with the Variables, Watch, and Call Stack panels populated and the debug toolbar active" class="feature-shot" loading="lazy">
     </div>
     <div class="feature-row__text">
       <p class="feature-row__num">05 &mdash; Integrated debugging</p>
@@ -287,280 +329,6 @@ benchmarkStrings:
 
 </section>
 
-<!-- ═══════════════════════════════════════════════════
-     COMPARISON TABLE
-═══════════════════════════════════════════════════ -->
-<section class="comparison-section">
-  <div class="container">
-    <p class="section-label">How it compares</p>
-    <h2 class="section-heading">Everything you expect.<br>Fully open source.</h2>
-    <p class="section-subhead">
-      A feature-complete, open-source language server &mdash;
-      with stricter type checking and no proprietary lock-in.
-    </p>
-
-    <div class="table-wrapper">
-      <table class="comparison-table">
-        <thead>
-          <tr>
-            <th>Feature</th>
-            <th class="col-basilisk">Basilisk</th>
-            <th>Pyright</th>
-            <th>mypy</th>
-            <th>ty</th>
-            <th>Pyrefly</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Enrichment fixes (auto-add types)</td>
-            <td class="col-basilisk check-yes">&#10003;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-          </tr>
-          <tr>
-            <td>PEP conformance <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a></td>
-            <td class="col-basilisk">{{ conformance.scorePct }}% <em style="font-size:0.75rem;color:var(--color-text-muted)">({{ conformance.pass }}/{{ conformance.total }})</em></td>
-            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html">published</a></td>
-            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html">published</a></td>
-            <td>alpha</td>
-            <td><a href="https://github.com/python/typing/blob/main/conformance/results/results.html">published</a></td>
-          </tr>
-          <tr>
-            <td>Implementation</td>
-            <td class="col-basilisk">Rust</td>
-            <td><span class="cell-warn">TypeScript</span></td>
-            <td><span class="cell-warn">Python/C</span></td>
-            <td>Rust</td>
-            <td>Rust</td>
-          </tr>
-          <tr>
-            <td>Runtime required</td>
-            <td class="col-basilisk check-yes">None</td>
-            <td><span class="cell-warn">Node.js</span></td>
-            <td><span class="cell-warn">Python</span></td>
-            <td class="check-yes">None</td>
-            <td class="check-yes">None</td>
-          </tr>
-          <tr>
-            <td>Plugin system</td>
-            <td class="col-basilisk"><span class="check-partial">WASM (planned)</span></td>
-            <td class="check-no">&mdash;</td>
-            <td><span class="check-partial">Python hooks</span></td>
-            <td><span class="check-partial">Planned</span></td>
-            <td class="check-no">&mdash;</td>
-          </tr>
-          <tr>
-            <td>Full LSP (completions, hover, goto)</td>
-            <td class="col-basilisk check-yes">&#10003;</td>
-            <td><span class="cell-warn">Pylance only</span></td>
-            <td class="check-no">&mdash;</td>
-            <td><span class="check-partial">Basic</span></td>
-            <td><span class="check-partial">Basic</span></td>
-          </tr>
-          <tr>
-            <td>Integrated debugger</td>
-            <td class="col-basilisk check-yes">&#10003;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-            <td class="check-no">&mdash;</td>
-          </tr>
-          <tr>
-            <td>Editor extensions</td>
-            <td class="col-basilisk">VS Code, Cursor, Zed, Neovim <em style="font-size:0.75rem;color:var(--color-text-muted)">(JetBrains soon)</em></td>
-            <td><span class="cell-warn">Proprietary (Pylance)</span></td>
-            <td class="check-no">&mdash;</td>
-            <td>VS Code</td>
-            <td>VS Code</td>
-          </tr>
-          <tr>
-            <td>License</td>
-            <td class="col-basilisk">MIT</td>
-            <td>MIT</td>
-            <td>MIT</td>
-            <td>MIT</td>
-            <td>MIT</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════
-     BENCHMARKING TABLE
-═══════════════════════════════════════════════ -->
-{% import "benchmark-section.njk" as benchmark %}
-{{ benchmark.section(benchmarks, benchmarkStrings) }}
-
-<!-- ═══════════════════════════════════════════════
-     INTERACTIVE DEMO
-═══════════════════════════════════════════════ -->
-<section class="demo-section">
-  <div class="container">
-    <p class="section-label">Real diagnostics</p>
-    <h2 class="section-heading">Basilisk in 30 seconds</h2>
-    <p class="section-subhead">
-      Real error codes. Every fix suggested inline. rustc-style output.
-    </p>
-
-    <div style="max-width:860px">
-      <div class="demo-tabs">
-        <button class="demo-tab active" data-tab="tab-missing">Missing types</button>
-        <button class="demo-tab" data-tab="tab-typesafety">Type safety</button>
-        <button class="demo-tab" data-tab="tab-clean">Clean code</button>
-      </div>
-      <div class="demo-wrapper">
-
-        <div class="demo-panel active" data-panel="tab-missing">
-          <div class="code-window">
-            <div class="code-window__chrome">
-              <span class="code-window__dot code-window__dot--close"></span>
-              <span class="code-window__dot code-window__dot--min"></span>
-              <span class="code-window__dot code-window__dot--expand"></span>
-              <span class="code-window__filename">api.py</span>
-            </div>
-            <div class="code-window__body">
-<pre><span class="tok-kw">from</span> <span class="tok-fn">typing</span> <span class="tok-kw">import</span> Any
-
-<span class="tok-kw">def</span> <span class="tok-fn">fetch_user</span>(user_id):          <span class="tok-cmt">  # BSK-E0001, BSK-E0002</span>
-    <span class="tok-kw">return</span> database.query(user_id)
-
-<span class="tok-kw">def</span> <span class="tok-fn">save_record</span>(data: Any) <span class="tok-kw">-></span> <span class="tok-type">bool</span>:  <span class="tok-cmt"> # returns_compatibility (warning)</span>
-    <span class="tok-kw">return</span> <span class="tok-kw">True</span></pre>
-            </div>
-          </div>
-          <div class="diagnostic-block">
-<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0001</span><span class="diag-bar">]: </span><span class="diag-msg">Missing parameter type annotation for `user_id`</span>
-<span class="diag-bar">  --> </span><span class="diag-path">api.py:3:16</span>
-<span class="diag-bar">   |</span>
-<span class="diag-bar"> 3 | </span><span class="diag-src">def fetch_user(user_id):</span>
-<span class="diag-bar">   |                </span><span class="diag-caret">^^^^^^^</span>
-<span class="diag-bar">   = </span><span class="diag-help">help: Add a type annotation: `user_id: &lt;type&gt;`</span>
-
-<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">BSK-E0002</span><span class="diag-bar">]: </span><span class="diag-msg">Missing return type annotation for function `fetch_user`</span>
-<span class="diag-bar">  --> </span><span class="diag-path">api.py:3:5</span>
-<span class="diag-bar">   = </span><span class="diag-help">help: Add a return type: `def fetch_user(...) -> &lt;type&gt;:`</span>
-
-<span class="diag-prefix" style="color:var(--color-warning)">warning</span><span class="diag-bar">[</span><span class="diag-code">returns_compatibility</span><span class="diag-bar">]: </span><span class="diag-msg">Parameter `data` is annotated `Any` — prefer a concrete type</span>
-<span class="diag-bar">  --> </span><span class="diag-path">api.py:6:17</span>
-<span class="diag-bar">   |</span>
-<span class="diag-bar"> 6 | </span><span class="diag-src">def save_record(data: Any) -> bool:</span>
-<span class="diag-bar">   |                 </span><span class="diag-caret">^^^^</span>
-<span class="diag-bar">   = </span><span class="diag-help">help: Replace `Any` on `data` with the actual expected type</span>
-<span class="diag-bar">   = </span><span class="diag-see">see: https://www.basilisk-python.dev/errors/returns_compatibility</span>
-          </div>
-        </div>
-
-        <div class="demo-panel" data-panel="tab-typesafety">
-          <div class="code-window">
-            <div class="code-window__chrome">
-              <span class="code-window__dot code-window__dot--close"></span>
-              <span class="code-window__dot code-window__dot--min"></span>
-              <span class="code-window__dot code-window__dot--expand"></span>
-              <span class="code-window__filename">totals.py</span>
-            </div>
-            <div class="code-window__body">
-<pre><span class="tok-kw">def</span> <span class="tok-fn">get_count</span>(rows<span class="tok-type">: list[int]</span>) <span class="tok-kw">-></span> <span class="tok-type">int</span>:
-<span class="code-error-line">    <span class="tok-kw">return</span> <span class="tok-str">"many"</span>  <span class="tok-cmt"># returns_compatibility_2: str is not int</span>
-</span>
-<span class="tok-kw">def</span> <span class="tok-fn">greet</span>(name<span class="tok-type">: str</span>) <span class="tok-kw">-></span> <span class="tok-type">str</span>:
-    <span class="tok-kw">return</span> <span class="tok-str">f"Hello, {name}"</span>
-
-<span class="code-error-line">greet(<span class="tok-num">42</span>)  <span class="tok-cmt"># calls_argument_type: int is not str</span></span></pre>
-            </div>
-          </div>
-          <div class="diagnostic-block">
-<span class="diag-prefix">error</span><span class="diag-bar">[</span><span class="diag-code">returns_compatibility_2</span><span class="diag-bar">]: </span><span class="diag-msg">Return type mismatch</span>
-<span class="diag-bar">  --> </span><span class="diag-path">totals.py:2:12</span>
-<span class="diag-bar">   |</span>
-<span class="diag-bar"> 2 | </span><span class="diag-src">    return "many"</span>
-<span class="diag-bar">   |            </span><span class="diag-caret">^^^^^^</span> <span class="diag-note">`str` is not assignable to declared return type `int`</span>
-<span class="diag-bar">   |</span>
-<span class="diag-bar">   = </span><span class="diag-help">help: return an `int`, or change the return annotation to `str`</span>
-<span class="diag-bar">   = </span><span class="diag-see">see: https://www.basilisk-python.dev/docs/rules/type-safety/#returns_compatibility_2</span>
-          </div>
-        </div>
-
-        <div class="demo-panel" data-panel="tab-clean">
-          <div class="code-window">
-            <div class="code-window__chrome">
-              <span class="code-window__dot code-window__dot--close"></span>
-              <span class="code-window__dot code-window__dot--min"></span>
-              <span class="code-window__dot code-window__dot--expand"></span>
-              <span class="code-window__filename">service.py</span>
-            </div>
-            <div class="code-window__body">
-<pre><span class="tok-kw">from</span> <span class="tok-fn">dataclasses</span> <span class="tok-kw">import</span> dataclass
-
-<span class="tok-dec">@dataclass</span>(frozen=<span class="tok-fn">True</span>)
-<span class="tok-kw">class</span> <span class="tok-fn">Config</span>:
-    host<span class="tok-type">: str</span>
-    port<span class="tok-type">: int</span>
-    debug<span class="tok-type">: bool</span> <span class="tok-kw">=</span> <span class="tok-fn">False</span>
-
-<span class="tok-kw">def</span> <span class="tok-fn">create_config</span>(
-    host<span class="tok-type">: str</span>,
-    port<span class="tok-type">: int</span>,
-) <span class="tok-kw">-></span> <span class="tok-type">Config</span>:
-    <span class="tok-kw">return</span> Config(host<span class="tok-kw">=</span>host, port<span class="tok-kw">=</span>port)</pre>
-            </div>
-          </div>
-          <div class="diagnostic-block diagnostic-block--success">
-<span class="diag-prefix" style="color:var(--color-success)">All checked. No issues found.</span>
-<span class="diag-note">Checked 1 file &mdash; 0 errors, 0 warnings in 4ms.</span>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════
-     EDITORS — supported editor integrations
-═══════════════════════════════════════════════════════ -->
-<section class="features">
-  <div class="feature-row">
-    <div class="feature-row__text">
-      <p class="feature-row__num">07 &mdash; Every editor</p>
-      <h2 class="feature-row__title">Beautiful Python.<br>Whatever you use.</h2>
-      <p class="feature-row__body">
-        The same language server, the same diagnostics, the same fixes &mdash;
-        in VS Code today, plus first-class Zed and Neovim extensions. Cursor and
-        Windsurf (via Open VSX) are coming very soon; JetBrains (IntelliJ / PyCharm) is on the way. The goal
-        is a great Python experience even if you never open VS Code.
-      </p>
-    </div>
-    <div class="feature-row__visual">
-      <div class="code-window" style="width:100%;max-width:400px">
-        <div class="code-window__chrome">
-          <span class="code-window__dot code-window__dot--close"></span>
-          <span class="code-window__dot code-window__dot--min"></span>
-          <span class="code-window__dot code-window__dot--expand"></span>
-          <span class="code-window__filename">Editor support</span>
-        </div>
-        <div class="code-window__body">
-<pre><span class="tok-cmt"># VS Code &mdash; Marketplace</span>
-Install from the <span class="tok-str">Marketplace</span>
-<span class="tok-cmt"># Cursor / Windsurf &mdash; Open VSX (coming very soon)</span>
-
-<span class="tok-cmt"># Neovim</span>
-<span class="tok-fn">require</span>(<span class="tok-str">"basilisk"</span>).setup()
-
-<span class="tok-cmt"># Zed</span>
-Install from <span class="tok-str">Extensions</span>
-
-<span class="tok-cmt"># JetBrains — coming soon</span></pre>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
 <!-- ═══════════════════════════════════════════════════════
      CTA — horizontal split, no glowing card
 ═══════════════════════════════════════════════════════ -->
@@ -593,6 +361,8 @@ Install from <span class="tok-str">Extensions</span>
     <h3 class="citations-heading">Sources</h3>
     <ol class="citations-list">
       <li>Competitor PEP-conformance scores are published in the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">official python/typing conformance results</a>, which lists each tool&rsquo;s current score and version. We link the live table rather than restate a figure, because those scores change as the tools improve.</li>
+      <li>Integrated debugger: Basilisk brokers debugpy through the language server (press F5). None of <a href="https://github.com/microsoft/pyright" target="_blank" rel="noopener">Pyright</a>, <a href="https://github.com/python/mypy" target="_blank" rel="noopener">mypy</a>, <a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener">ty</a>, or <a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener">Pyrefly</a> documents an integrated debugger &mdash; each self-describes as a type checker and/or language server in its own repository (linked).</li>
+      <li>Implementation, runtime, LSP scope, editor extensions and license for each competitor link inline to that project&rsquo;s own repository, docs, or marketplace listing: Pyright&rsquo;s language features ship via the proprietary <a href="https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance" target="_blank" rel="noopener">Pylance</a> extension; <a href="https://github.com/python/mypy" target="_blank" rel="noopener">mypy</a> is a static type checker (no first-party language server); <a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener">ty</a> and <a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener">Pyrefly</a> are each a type checker and language server with an official VS Code extension.</li>
       <li>Pyrefly throughput (1.85M LOC/sec) from <a href="https://pyrefly.org/" target="_blank" rel="noopener">pyrefly.org</a> (measured on 166-core Meta infrastructure).</li>
       <li>Performance-benchmark table: mean wall-clock over {{ benchmarks.meta.runsCount }} hyperfine runs of each tool&rsquo;s CLI against large single-rule fixtures, measured on {{ benchmarks.meta.cpu }} ({{ benchmarks.meta.os }}, {{ benchmarks.meta.arch }}, {{ benchmarks.meta.cores }} cores) on {{ benchmarks.meta.generated }}. Tool versions: {% for t in benchmarks.meta.toolVersions %}{{ t.tool }} {{ t.version }}{% if not loop.last %}, {% endif %}{% endfor %}. Source <code>benchmarks/status/{{ benchmarks.primary }}.csv</code>; reproduce with <code>make bench</code>. These are cold full-file runs and do not reflect warm incremental (LSP) performance.</li>
     </ol>

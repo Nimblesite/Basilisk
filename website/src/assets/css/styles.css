@@ -520,12 +520,13 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12);
   border-bottom: 1px solid var(--color-border);
 }
-/* Hero spans most of the viewport width with a generous side gutter; content is
-   vertically centred so the hero fills the viewport height. */
+/* Hero uses the SAME centred 1280px container as every section below it, so its
+   left edge lines up with the comparison/benchmark tables and the whole page
+   reads as one centred column instead of a wide hero over narrow sections. */
 .hero > .container {
   width: 100%;
-  max-width: 2200px;
-  padding-inline: clamp(var(--space-6), 3vw, var(--space-12));
+  max-width: var(--max-width);
+  margin-inline: auto;
 }
 
 .hero__split {
@@ -628,6 +629,16 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   border: 1px solid var(--color-border-bright);
   border-radius: var(--radius-lg);
   box-shadow: 0 30px 70px -25px rgba(0, 0, 0, 0.65);
+}
+
+/* Real product screenshot inside a feature-row visual (e.g. step-through debugging) */
+.feature-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border-bright);
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.7);
 }
 
 @media (max-width: 900px) {

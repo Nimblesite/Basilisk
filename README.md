@@ -11,7 +11,7 @@
   Complete language server, type checker, debugger, and profiler — strict by default.<br>
   VS Code, Cursor &amp; Windsurf (Open VSX) &bull; Zed &bull; Neovim. Built in <strong>Rust</strong> — single binary, no runtime.
 </p>
-
+![alt text](image.png)
 <p align="center">
   <a href="https://www.basilisk-python.dev">Website</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/installation/">Install</a> &nbsp;&bull;&nbsp;
