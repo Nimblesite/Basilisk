@@ -105,16 +105,26 @@ impl Default for HotspotConfig {
     }
 }
 
-/// Whether `filename` is interpreter/debugger scaffolding rather than code the
+/// Whether a frame is interpreter/debugger scaffolding rather than code the
 /// user (or a library they call) wrote: the runpy/debugpy launcher spine that
-/// wraps every debug-launched program, pydevd tracer frames, and `<string>`
-/// (the injected cooperative sampler lives there). Anchored matching only —
-/// basename prefix or exact path segment, never a full-path substring — so a
-/// user file under `debugpy_utils/` is never mistaken for the debugger
-/// (mirrors the memory profiler's `_is_runtime_glue`, [PROFILE-MEMORY-FINAL]).
-fn is_runtime_scaffolding(filename: &str) -> bool {
-    if filename == "<string>" || filename == "<frozen runpy>" {
+/// wraps every debug-launched program, pydevd tracer frames, and the injected
+/// cooperative sampler's own frames. Anchored matching only — basename prefix
+/// or exact path segment, never a full-path substring — so a user file under
+/// `debugpy_utils/` is never mistaken for the debugger (mirrors the memory
+/// profiler's `_is_runtime_glue`, [PROFILE-MEMORY-FINAL]).
+///
+/// `<string>` is matched on the FUNCTION, not the filename: `python -c`,
+/// `exec`, `eval`, and the REPL all run legitimate user code with
+/// `co_filename == "<string>"`, so only the sampler's `__basilisk*`/`_basilisk*`
+/// frames there are scaffolding. Blanket-stripping every `<string>` frame
+/// discarded real user samples — a `python -c` workload profiled to zero
+/// (#251 follow-up).
+fn is_runtime_scaffolding(filename: &str, function: &str) -> bool {
+    if filename == "<frozen runpy>" {
         return true;
+    }
+    if filename == "<string>" {
+        return function.starts_with("__basilisk") || function.starts_with("_basilisk");
     }
     let normalized = filename.replace('\\', "/");
     let basename = normalized.rsplit('/').next().unwrap_or(&normalized);
@@ -165,7 +175,7 @@ impl ProfileData {
             let kept_frames: Vec<&py_spy::Frame> = trace
                 .frames
                 .iter()
-                .filter(|frame| !is_runtime_scaffolding(&frame.filename))
+                .filter(|frame| !is_runtime_scaffolding(&frame.filename, &frame.name))
                 .collect();
             if kept_frames.is_empty() {
                 continue;

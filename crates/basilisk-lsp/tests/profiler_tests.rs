@@ -366,6 +366,43 @@ fn user_paths_that_merely_contain_debugger_names_are_kept() {
 }
 
 #[test]
+fn user_code_in_string_pseudofile_is_kept() {
+    // Regression: `python -c "..."`, `exec`, `eval`, and the REPL all run user
+    // code whose `co_filename` is `<string>`. Only the injected cooperative
+    // sampler's own `__basilisk*`/`_basilisk*` frames are scaffolding — blanket
+    // stripping every `<string>` frame discarded real user samples, so a
+    // `python3 -c` workload profiled zero samples (the `real_pyspy_*` suite
+    // failed on Linux CI, where py-spy can attach; macOS skips it under SIP).
+    let mut data = ProfileData::default();
+    data.ingest_traces(
+        &[make_trace(
+            1,
+            true,
+            vec![
+                ("hot_function", "<string>", 4),
+                ("<module>", "<string>", 20),
+            ],
+        )],
+        0.01,
+        false,
+    );
+
+    assert!(
+        data.thread_samples.contains_key(&1),
+        "a thread running `python -c` user code must be counted"
+    );
+    let hot = data
+        .function_stats
+        .get("<string>")
+        .and_then(|by_fn| by_fn.get("hot_function"))
+        .expect("user function in <string> must keep its stats");
+    assert_eq!(
+        hot.self_samples, 1,
+        "the `<string>` user leaf keeps its self sample"
+    );
+}
+
+#[test]
 fn profile_data_aggregation_with_synthetic_traces() {
     let mut data = ProfileData::default();
     let traces = vec![
