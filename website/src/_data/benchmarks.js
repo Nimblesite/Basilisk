@@ -111,6 +111,53 @@ function parseCsv(text) {
   return { meta, tools, rows };
 }
 
+function median(nums) {
+  const s = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+// Per-checker median cold full-file time, for the "how it compares" speed row.
+// Every checker's own median over the fixtures it reported, so the comparison is
+// each tool against the same bench harness. Warm/cache variants are excluded —
+// this is the cold, from-scratch number. Self-measured, reproducible with
+// `make bench`; never hand-typed, so the table can't drift from the CSV.
+function computeToolMedians(rows, tools) {
+  const ms = {};
+  const text = {};
+  for (const tool of tools) {
+    if (tool.endsWith("-warm")) continue;
+    const vals = rows.map((r) => r.values[tool]).filter((v) => v != null && v > 0);
+    ms[tool] = vals.length ? Math.round(median(vals)) : null;
+    text[tool] = ms[tool] == null ? "—" : `${ms[tool]} ms`;
+  }
+  const ranked = Object.entries(ms).filter(([, v]) => v != null);
+  const fastest = ranked.length
+    ? ranked.reduce((best, entry) => (entry[1] < best[1] ? entry : best))[0]
+    : null;
+  return { ms, text, fastest };
+}
+
+// Headline "how much faster than Pyright" stats for the benchmarks docs page.
+// Computed from the SAME parsed CSV the table renders, so the punchy numbers can
+// never drift from the measured data. Cold-vs-cold (both tools measured cold);
+// self-measured, reproducible with `make bench` — never a hand-typed figure.
+function computeVsPyright(rows) {
+  const pairs = rows
+    .map((r) => ({ b: r.values.basilisk, p: r.values.pyright }))
+    .filter((x) => x.b != null && x.p != null && x.b > 0 && x.p > 0);
+  if (!pairs.length) return null;
+  const factors = pairs.map((x) => x.p / x.b);
+  return {
+    maxFactor: Math.round(Math.max(...factors)),
+    medianFactor: Math.round(median(factors)),
+    basiliskMedianMs: Math.round(median(pairs.map((x) => x.b))),
+    pyrightMedianMs: Math.round(median(pairs.map((x) => x.p))),
+    beats: pairs.filter((x) => x.b < x.p).length,
+    total: pairs.length,
+  };
+}
+
 function pickPrimary(files) {
   const env = process.env.BASILISK_BENCH_PRIMARY;
   if (env && files.includes(`${env}.csv`)) return `${env}.csv`;
@@ -138,6 +185,8 @@ export default function () {
     available: files.map((f) => f.replace(/\.csv$/, "")),
     primary: primary.replace(/\.csv$/, ""),
     ...parsed,
+    toolMedians: computeToolMedians(parsed.rows, parsed.tools),
+    vsPyright: computeVsPyright(parsed.rows),
     hasData: parsed.rows.length > 0,
   };
 }

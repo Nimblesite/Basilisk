@@ -10,9 +10,9 @@ lang: zh
 
 每个 Basilisk 诊断都有一个 `BSK-EXXXX`（错误）或 `BSK-WXXXX`（警告）格式的唯一代码。
 
-规则默认全部启用。您可以通过编辑器或 `pyproject.toml`，按文件或路径将单个规则调低——严格是默认值，而不是牢笼。
+PEP 类型规范规则默认启用；Basilisk 自有的可选风格规则默认关闭，需手动开启。您可以通过编辑器或 `pyproject.toml`，按文件或路径将任意规则调高或调低——严格是默认值，而不是牢笼。
 
-Basilisk 内置 **155 个诊断代码**（150 个错误，5 个警告），覆盖完整的 Python 类型表面（泛型、协议、dataclass、TypedDict、重载、字面量、枚举等），由[官方 Python 类型符合性套件](https://github.com/python/typing/blob/main/conformance/results/results.html)评分（当前符合率 **{{ conformance.scorePct }}%**，{{ conformance.pass }} / {{ conformance.total }}（错误加警告，最严格）；目标 100% —— [我们如何衡量](/zh/docs/conformance/)）。下面记录了两个基础组；完整集合由检查器强制执行。
+Basilisk 内置 **{{ ruleStats.pep }} 条 PEP 类型规范规则**——由[官方 Python 类型符合性套件](https://github.com/python/typing/blob/main/conformance/results/results.html)评分（当前符合率 **{{ conformance.scorePct }}%**，{{ conformance.pass }} / {{ conformance.total }}（错误加警告，最严格）；目标 100% —— [我们如何衡量](/zh/docs/conformance/)）——外加 **{{ ruleStats.optIn }} 条可选的风格规则**，默认关闭，且不计入该符合率评分。两者合计 **{{ ruleStats.total }} 个诊断代码**（{{ ruleStats.errors }} 个错误，{{ ruleStats.warnings }} 个警告），覆盖完整的 Python 类型表面（泛型、协议、dataclass、TypedDict、重载、字面量、枚举等）。下面记录了两个基础组；完整集合由检查器强制执行。
 
 | 组 | 代码 | 描述 |
 |---|---|---|

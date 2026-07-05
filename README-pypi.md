@@ -1,0 +1,39 @@
+# Basilisk
+
+**Basilisk** is a strict-by-default Python type checker and LSP, written in Rust.
+
+- Website: <https://www.basilisk-python.dev>
+- Source: <https://github.com/Nimblesite/Basilisk>
+
+This package (`basilisk-python`) bundles the native `basilisk` binary as a
+Python wheel so it can be installed with `pip`/`uv`. It is the **same binary**
+distributed via GitHub Releases, Homebrew and Scoop — the wheel is a convenience
+for Python-managed environments, not a separate build.
+
+> The distribution is named `basilisk-python` because the name `basilisk` was
+> already taken on PyPI. The installed command is still `basilisk`.
+
+## Install
+
+```bash
+pip install basilisk-python
+# or
+uv tool install basilisk-python
+```
+
+## Use
+
+```bash
+basilisk check path/to/your_code.py
+basilisk --version
+```
+
+Machine-readable output for tooling:
+
+```bash
+basilisk check path/to/your_code.py --output json --color never
+```
+
+## License
+
+MIT
