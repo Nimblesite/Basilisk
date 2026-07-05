@@ -5,9 +5,9 @@ r2 = g2("x2", 2)
 def g3(a: int, b: int) -> int: return a + b
 r3 = g3("x3", 3)
 def g4(a: int, b: int) -> int: return a + b
-r4 = g4("x4", 4)
+r4 = g4("x4", 4)  # type: ignore[calls_argument_type]
 def g5(a: int, b: int) -> int: return a + b
-r5 = g5("x5", 5)
+r5 = g5("x5", 5)  # type: ignore[calls_argument_type]
 def g6(a: int, b: int) -> int: return a + b
 r6 = g6("x6", 6)
 def g7(a: int, b: int) -> int: return a + b

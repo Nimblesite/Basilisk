@@ -20,7 +20,7 @@ class TestCoerceField:
     def test_str_to_int(self) -> None:
         assert coerce_field("42", int) == 42
 
-    def test_int_to_str(self) -> None:
+    def test_int_to_str_renamed(self) -> None:
         assert coerce_field(42, str) == "42"
 
     def test_str_to_float(self) -> None:
