@@ -2,7 +2,7 @@
 layout: layouts/docs.njk
 title: "How Basilisk Measures PEP Conformance"
 description: "How Basilisk's PEP conformance score is measured with the official python/typing conformance suite — what the suite is, how scoring works, how the wheel-installed CLI is submitted upstream, and why we score with every rule enabled and never disable one."
-keywords: pep conformance, python typing conformance suite, basilisk conformance score, type checker scoring, python/typing calculator
+keywords: pep conformance, python typing conformance suite, basilisk conformance score, type checker scoring, python/typing harness
 date: 2026-06-23
 dateModified: 2026-06-24
 author: The Basilisk Project
@@ -32,7 +32,7 @@ The [Python typing specification](https://typing.python.org/en/latest/spec/) def
 
 We score against the exact commit of the suite we last pulled from `main` — [`{{ conformance.pinnedRefShort }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance){% if conformance.commitDate %}, {{ conformance.commitDate }}{% endif %} — recorded by its full hash, so the link stays fixed at the exact files we graded.
 
-That pin never goes stale: we run in **lock step** with `python/typing@main`. Every `make test`, every CI run of the checker, and a dedicated release job re-resolve the *current* tip, re-download the suite when it has moved, and re-grade the binary at **100% pass, 0 false positives** — an upstream test we fail blocks merge and release until the checker conforms. The commit is inserted into every page automatically from the scorer's report, never typed by hand.
+That pin never goes stale: we run in **lock step** with `python/typing@main`. Every `make test`, every CI run of the checker, and a dedicated release job re-resolve the *current* tip, re-download the suite when it has moved, and re-grade the binary at **100% pass, 0 false positives** — an upstream test we fail blocks merge and release until the checker conforms. The commit is inserted into every page automatically from the conformance report, never typed by hand.
 
 ## How a file is scored
 

@@ -2,7 +2,7 @@
 layout: layouts/docs.njk
 title: "Basilisk 如何衡量 PEP 符合性"
 description: "Basilisk 的 PEP 符合性得分如何用官方 python/typing 符合性套件衡量——套件是什么、评分如何进行、如何用 wheel 安装的 CLI 提交上游，以及为何我们在每条规则都启用的情况下评分、从不关闭任何一条。"
-keywords: pep 符合性, python 类型符合性套件, basilisk 符合性得分, 类型检查器评分, python/typing 计算器
+keywords: pep 符合性, python 类型符合性套件, basilisk 符合性得分, 类型检查器评分, python/typing harness
 lang: zh
 ---
 {% from "conformance-chart.njk" import chart %}
@@ -27,7 +27,7 @@ Basilisk 由**官方 `python/typing` 符合性套件**评分——也就是类�
 
 我们针对上次从 `main` 拉取的套件的确切提交评分——[`{{ conformance.pinnedRefShort }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance){% if conformance.commitDate %}，{{ conformance.commitDate }}{% endif %}——以完整哈希记录，链接始终固定指向我们所评分的确切文件。
 
-这个固定提交不会过期：我们与 `python/typing@main` **步调一致**。每次 `make test`、每次检查器的 CI 运行以及发布流水线中的专门任务，都会重新解析 `main` 的*当前*最新提交，套件有更新就重新下载，并以 **100% 通过、0 误报** 重新评分——任何我们未通过的上游测试都会阻止合并与发布，直到检查器符合为止。该提交由评分器的报告自动写入每个页面，绝非手工键入。
+这个固定提交不会过期：我们与 `python/typing@main` **步调一致**。每次 `make test`、每次检查器的 CI 运行以及发布流水线中的专门任务，都会重新解析 `main` 的*当前*最新提交，套件有更新就重新下载，并以 **100% 通过、0 误报** 重新评分——任何我们未通过的上游测试都会阻止合并与发布，直到检查器符合为止。该提交由符合性报告自动写入每个页面，绝非手工键入。
 
 ## 一个文件如何评分
 
