@@ -58,7 +58,9 @@ OPT_IN = re.compile(r"fn opt_in_spec\b[^{]*\{\s*Some\(")
 # are the checker's own `OptInSpec.tags` — e.g. `strictness` marks the rules that
 # make annotations mandatory beyond the spec. Non-greedy up to the first `tags:`
 # inside the single opt_in_spec body; `TAG` pulls each quoted entry out.
-OPT_IN_TAGS = re.compile(r"fn opt_in_spec\b[^{]*\{\s*Some\([\s\S]*?tags:\s*&\[([^\]]*)\]")
+OPT_IN_TAGS = re.compile(
+    r"fn opt_in_spec\b[^{]*\{\s*Some\([\s\S]*?tags:\s*&\[([^\]]*)\]"
+)
 TAG = re.compile(r'"([^"]+)"')
 
 # Coarse groups for filtering/badging on the website. Errors outside the two

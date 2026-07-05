@@ -20,7 +20,7 @@ from pathlib import Path
 
 UPSTREAM = "https://github.com/python/typing.git"
 
-BASILISK_ADAPTER = '''\
+BASILISK_ADAPTER = """\
 class BasiliskTypeChecker(TypeChecker):
     @property
     def name(self) -> str:
@@ -88,7 +88,7 @@ class BasiliskTypeChecker(TypeChecker):
             _, lineno, _, _ = line.split(":", maxsplit=3)
             line_to_errors.setdefault(int(lineno), []).append(line)
         return line_to_errors
-'''
+"""
 
 
 def run_cmd(
@@ -161,7 +161,17 @@ def install_local_wheel(conformance_dir: Path, wheel: Path) -> None:
     python = conformance_dir / ".venv" / "bin" / "python"
     if sys.platform == "win32":
         python = conformance_dir / ".venv" / "Scripts" / "python.exe"
-    run_cmd(["uv", "pip", "install", "--python", str(python), "--force-reinstall", str(wheel)])
+    run_cmd(
+        [
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            str(python),
+            "--force-reinstall",
+            str(wheel),
+        ]
+    )
 
 
 def verify_basilisk_on_path(conformance_dir: Path) -> None:
@@ -172,7 +182,9 @@ def verify_basilisk_on_path(conformance_dir: Path) -> None:
         "print(path); "
         "print(subprocess.check_output(['basilisk', '--version'], text=True).strip())"
     )
-    run_cmd(["uv", "run", "--python", "3.12", "python", "-c", command], cwd=conformance_dir)
+    run_cmd(
+        ["uv", "run", "--python", "3.12", "python", "-c", command], cwd=conformance_dir
+    )
 
 
 def write_proof(conformance_dir: Path, output: str) -> None:
@@ -182,7 +194,16 @@ def write_proof(conformance_dir: Path, output: str) -> None:
 
 
 def run_harness(conformance_dir: Path, *, verbose: bool, write_log: bool) -> None:
-    cmd = ["uv", "run", "--python", "3.12", "python", "src/main.py", "--only-run", "basilisk"]
+    cmd = [
+        "uv",
+        "run",
+        "--python",
+        "3.12",
+        "python",
+        "src/main.py",
+        "--only-run",
+        "basilisk",
+    ]
     if verbose:
         cmd.append("--verbose")
     print("+", " ".join(cmd))
@@ -202,7 +223,11 @@ def run_harness(conformance_dir: Path, *, verbose: bool, write_log: bool) -> Non
 
 def prepare(args: argparse.Namespace) -> Path:
     ensure_tool("uv")
-    root = require_typing_checkout(args.typing_repo) if args.typing_repo else clone_checkout(args.ref, args.keep_temp)
+    root = (
+        require_typing_checkout(args.typing_repo)
+        if args.typing_repo
+        else clone_checkout(args.ref, args.keep_temp)
+    )
     conformance_dir = root / "conformance"
 
     patch_type_checker(conformance_dir / "src" / "type_checker.py")
@@ -226,7 +251,10 @@ def prepare(args: argparse.Namespace) -> Path:
 
     verify_basilisk_on_path(conformance_dir)
     run_harness(conformance_dir, verbose=args.verbose, write_log=args.write_proof)
-    run_cmd(["uv", "run", "--python", "3.12", "python", "src/main.py", "--report-only"], cwd=conformance_dir)
+    run_cmd(
+        ["uv", "run", "--python", "3.12", "python", "src/main.py", "--report-only"],
+        cwd=conformance_dir,
+    )
     if args.wheel:
         patch_pyproject(conformance_dir / "pyproject.toml")
         print(
@@ -255,16 +283,34 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         type=Path,
         help="Existing python/typing checkout to patch. Defaults to a fresh temp clone.",
     )
-    parser.add_argument("--ref", default="main", help="python/typing ref to clone when --typing-repo is omitted.")
+    parser.add_argument(
+        "--ref",
+        default="main",
+        help="python/typing ref to clone when --typing-repo is omitted.",
+    )
     parser.add_argument(
         "--wheel",
         type=Path,
         help="Local basilisk-python wheel to force-install after uv sync. Omit to use PyPI.",
     )
-    parser.add_argument("--no-run", action="store_true", help="Patch files only; do not run uv or the harness.")
-    parser.add_argument("--verbose", action="store_true", help="Pass --verbose to upstream conformance harness.")
-    parser.add_argument("--write-proof", action="store_true", help="Write harness output to results/basilisk-proof.txt.")
-    parser.add_argument("--keep-temp", action="store_true", help="Print and keep the temp clone path.")
+    parser.add_argument(
+        "--no-run",
+        action="store_true",
+        help="Patch files only; do not run uv or the harness.",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Pass --verbose to upstream conformance harness.",
+    )
+    parser.add_argument(
+        "--write-proof",
+        action="store_true",
+        help="Write harness output to results/basilisk-proof.txt.",
+    )
+    parser.add_argument(
+        "--keep-temp", action="store_true", help="Print and keep the temp clone path."
+    )
     return parser.parse_args(argv)
 
 

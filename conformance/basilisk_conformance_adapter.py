@@ -103,7 +103,9 @@ class BasiliskTypeChecker(TypeChecker):
             if not line.strip():
                 continue
             if line.count(":") < 3:
-                raise AssertionError(f"Failed to parse Basilisk diagnostic line: {line!r}")
+                raise AssertionError(
+                    f"Failed to parse Basilisk diagnostic line: {line!r}"
+                )
             _, lineno, _col, _rest = line.split(":", maxsplit=3)
             line_to_errors.setdefault(int(lineno), []).append(line)
         return line_to_errors

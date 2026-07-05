@@ -69,13 +69,18 @@ def parse_opts(argv: list[str]) -> dict:
 def main(argv: list[str]) -> int:
     opts = parse_opts(argv)
     if opts["dir"] is None:
-        print("usage: assert_wheel_conformance.py <results/basilisk dir>", file=sys.stderr)
+        print(
+            "usage: assert_wheel_conformance.py <results/basilisk dir>", file=sys.stderr
+        )
         return 2
 
     results_dir = Path(opts["dir"])
     tomls = sorted(p for p in results_dir.glob("*.toml") if p.name != "version.toml")
     if not tomls:
-        print(f"✗ no result .toml files in {results_dir} — harness did not run", file=sys.stderr)
+        print(
+            f"✗ no result .toml files in {results_dir} — harness did not run",
+            file=sys.stderr,
+        )
         return 1
 
     failures: list[str] = []
@@ -93,7 +98,9 @@ def main(argv: list[str]) -> int:
         if automated == "Pass" and not diff:
             passed += 1
         else:
-            first = diff.splitlines()[0] if diff else f"conformance_automated={automated}"
+            first = (
+                diff.splitlines()[0] if diff else f"conformance_automated={automated}"
+            )
             failures.append(f"{toml_path.name}: {first}")
 
     total = len(tomls)
@@ -115,7 +122,10 @@ def main(argv: list[str]) -> int:
 
     ok = True
     if total < opts["min_files"]:
-        print(f"✗ only {total} files graded (< {opts['min_files']}) — run looks broken", file=sys.stderr)
+        print(
+            f"✗ only {total} files graded (< {opts['min_files']}) — run looks broken",
+            file=sys.stderr,
+        )
         ok = False
     if pct < opts["threshold"]:
         ok = False
@@ -124,9 +134,14 @@ def main(argv: list[str]) -> int:
             print(f"    FAIL {line}", file=sys.stderr)
     if false_positives > opts["max_fp"]:
         ok = False
-        print(f"✗ {false_positives} false positives > {opts['max_fp']} ceiling", file=sys.stderr)
+        print(
+            f"✗ {false_positives} false positives > {opts['max_fp']} ceiling",
+            file=sys.stderr,
+        )
     if ok:
-        print(f"✓ wheel passes {passed}/{total} ({pct}%), {false_positives} false positives — gate PASS")
+        print(
+            f"✓ wheel passes {passed}/{total} ({pct}%), {false_positives} false positives — gate PASS"
+        )
     return 0 if ok else 1
 
 
