@@ -54,6 +54,8 @@ fn build_large_profile() -> ProfileData {
         let _ = data
             .thread_names
             .insert(thread_id, format!("Thread-{thread_id}"));
+        // The per-thread sample count percentages divide by (#251).
+        let _ = data.thread_samples.insert(thread_id, 15_000);
     }
 
     // 100 files with 50 hot lines each + function stats.

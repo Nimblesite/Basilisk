@@ -44,6 +44,12 @@ export interface ProfileResult {
   /** Path to the V8 `.cpuprofile` for VS Code's built-in profile viewer. */
   cpuProfilePath?: string;
   /**
+   * Path to the self-contained interactive flame graph SVG the LSP always
+   * attempts to export ([PROFILE-FLAMEGRAPH]). Embedded as the hero of the
+   * results webview and openable externally for full zoom/search.
+   */
+  flamegraphPath?: string;
+  /**
    * Why an export was refused or failed ([PROFILE-SPEEDSCOPE-VALIDATE]) — e.g.
    * a zero-sample run. Surfaced to the user; never silent (#145).
    */

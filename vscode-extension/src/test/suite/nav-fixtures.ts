@@ -54,4 +54,8 @@ export const SUBJECT_SOURCE = [
     'helper_fn()',                                         // 22
     'instance: HelperClass = HelperClass()',              // 23
     '',                                                    // 24
+    'def scaled_area(scale_factor: int) -> float:',        // 25
+    '    """Multiply the module constant by a factor."""', // 26
+    '    return PI * scale_factor',                        // 27
+    '',                                                    // 28
 ].join('\n');

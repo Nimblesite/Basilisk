@@ -5,9 +5,23 @@
  * Renders the force-directed object-retention graph (`gc.get_referrers()` walk
  * parsed by the LSP) in a Canvas 2D webview. Extracted from `memory-profiler.ts`
  * so that module stays focused on command routing and the courier round-trip.
+ *
+ * Panel lifecycle, CSP, and safe data embedding come from the shared webview
+ * host ([PROFILE-WEBVIEW-HOST], profiler-webview.ts) — node `repr`/type strings
+ * come from the profiled program and must never escape the inline script.
  */
 
-import * as vscode from "vscode";
+import {
+  PROFILER_CSS_VARS,
+  PROFILER_CSS_RESET,
+  PROFILER_JS_UTILS,
+} from "./profiler-styles";
+import {
+  buildWebviewDocument,
+  embedJson,
+  handleSourceNavigation,
+  SingletonWebviewPanel,
+} from "./profiler-webview";
 
 /** Reference-graph result returned by `basilisk.memory.ingest` (kind `refs`). */
 export interface ReferenceGraphResult {
@@ -38,73 +52,28 @@ interface RefGraphEdge {
   label: string;
 }
 
-let refGraphPanel: vscode.WebviewPanel | undefined;
+const refGraphPanel = new SingletonWebviewPanel("basilisk.refGraph", (msg) => {
+  handleSourceNavigation(msg);
+});
 
 /** Open (or reveal) the retention-graph webview for a parsed reference graph. */
 export function openRefGraphWebview(result: ReferenceGraphResult): void {
-  if (refGraphPanel !== undefined) {
-    refGraphPanel.reveal(vscode.ViewColumn.Beside);
-  } else {
-    refGraphPanel = vscode.window.createWebviewPanel(
-      "basilisk.refGraph",
-      `Retention Graph — ${result.targetType}`,
-      vscode.ViewColumn.Beside,
-      { enableScripts: true, retainContextWhenHidden: true },
-    );
-    refGraphPanel.onDidDispose(() => {
-      refGraphPanel = undefined;
-    });
-  }
-
-  refGraphPanel.webview.html = buildRefGraphHtml(result);
-
-  refGraphPanel.webview.onDidReceiveMessage(
-    (msg: { type: string; file?: string; line?: number }) => {
-      if (
-        msg.type === "navigateToSource" &&
-        msg.file !== undefined &&
-        msg.line !== undefined
-      ) {
-        const uri = vscode.Uri.file(msg.file);
-        const position = new vscode.Position(msg.line - 1, 0);
-        void vscode.window.showTextDocument(uri, {
-          selection: new vscode.Range(position, position),
-          viewColumn: vscode.ViewColumn.One,
-        });
-      }
-    },
-  );
+  refGraphPanel.show(`Retention Graph — ${result.targetType}`, buildRefGraphHtml(result));
 }
 
 /** Dispose the reference-graph webview, if open. */
 export function disposeRefGraph(): void {
-  if (refGraphPanel !== undefined) {
-    refGraphPanel.dispose();
-    refGraphPanel = undefined;
-  }
+  refGraphPanel.dispose();
 }
 
 function buildRefGraphCss(): string {
-  return `
-    :root {
-      --mem-critical: #c084fc;
-      --mem-hot: #a78bfa;
-      --mem-leak: #f87171;
-      --mem-freed: #34d399;
-      --mem-info: #60a5fa;
-      --bg: #0a0c12;
-      --surface: #141820;
-      --border: #1a1f2e;
-      --text: #f0f2f7;
-      --text-secondary: #8892a4;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: var(--bg); color: var(--text); font-family: 'Space Grotesk', sans-serif; padding: 16px; }
+  return `${PROFILER_CSS_VARS}${PROFILER_CSS_RESET}
+    body { padding: 16px; }
     h1 { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
-    h1 .accent { color: var(--mem-critical); }
+    h1 .accent { color: var(--prof-mem-critical); }
     .retention-path {
-      background: var(--surface);
-      border: 1px solid var(--border);
+      background: var(--prof-surface);
+      border: 1px solid var(--prof-border);
       border-radius: 8px;
       padding: 12px 16px;
       margin-bottom: 16px;
@@ -114,21 +83,21 @@ function buildRefGraphCss(): string {
     }
     .retention-path .label {
       font-size: 11px;
-      color: var(--text-secondary);
+      color: var(--prof-text-secondary);
       text-transform: uppercase;
       letter-spacing: 0.05em;
       margin-bottom: 6px;
     }
-    .retention-path .step { color: var(--mem-info); }
-    .retention-path .target { color: var(--mem-critical); font-weight: 600; }
-    canvas { display: block; border-radius: 8px; background: var(--surface); }
+    .retention-path .step { color: var(--prof-info); }
+    .retention-path .target { color: var(--prof-mem-critical); font-weight: 600; }
+    canvas { display: block; width: 100%; border-radius: 8px; background: var(--prof-surface); }
     .legend {
       display: flex; gap: 16px; margin-top: 12px; font-size: 11px;
-      color: var(--text-secondary);
+      color: var(--prof-text-secondary);
     }
     .legend-item { display: flex; align-items: center; gap: 4px; }
     .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
-    .no-data { text-align: center; padding: 60px; color: var(--text-secondary); }`;
+    .no-data { text-align: center; padding: 60px; color: var(--prof-text-secondary); }`;
 }
 
 function buildRetentionPathHtml(retentionPath: string[]): string {
@@ -144,7 +113,6 @@ function buildRetentionPathHtml(retentionPath: string[]): string {
 
 function buildRefGraphScriptInit(nodesJson: string, edgesJson: string, cyclesJson: string): string {
   return `
-    const vscode = acquireVsCodeApi();
     const nodes = ${nodesJson};
     const edges = ${edgesJson};
     const cycles = ${cyclesJson};
@@ -158,7 +126,9 @@ function buildRefGraphScriptInit(nodesJson: string, edgesJson: string, cyclesJso
     } else {
       const canvas = document.getElementById('graph');
       const ctx = canvas.getContext('2d');
-      const W = canvas.width, H = canvas.height;
+      // Fill the panel width so the graph is not letterboxed into 800px.
+      const W = canvas.width = Math.max(800, canvas.parentElement ? canvas.clientWidth : 800);
+      const H = canvas.height;
       const cycleNodeIds = new Set(cycles.flat());
       const nodeMap = new Map();
       nodes.forEach((n, i) => {
@@ -205,13 +175,14 @@ function buildRefGraphScriptInit(nodesJson: string, edgesJson: string, cyclesJso
 
 function buildRefGraphScriptDraw(): string {
   return `
-      ctx.strokeStyle = 'rgba(136, 146, 164, 0.3)';
+      const edgeColor = 'rgba(136, 146, 164, 0.3)';
+      ctx.strokeStyle = edgeColor;
       ctx.lineWidth = 1;
       for (const edge of edges) {
         const a = nodeMap.get(edge.from), b = nodeMap.get(edge.to);
         if (!a || !b) continue;
         const isCycleEdge = cycleNodeIds.has(edge.from) && cycleNodeIds.has(edge.to);
-        ctx.strokeStyle = isCycleEdge ? '#f87171' : 'rgba(136, 146, 164, 0.3)';
+        ctx.strokeStyle = isCycleEdge ? '#f87171' : edgeColor;
         ctx.lineWidth = isCycleEdge ? 2 : 1;
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
@@ -219,7 +190,7 @@ function buildRefGraphScriptDraw(): string {
         ctx.stroke();
         if (edge.label) {
           const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-          ctx.fillStyle = '#8892a4';
+          ctx.fillStyle = cssVar('--prof-text-secondary');
           ctx.font = '9px monospace';
           ctx.fillText(edge.label, mx + 4, my - 4);
         }
@@ -237,55 +208,48 @@ function buildRefGraphScriptDraw(): string {
         ctx.strokeStyle = color;
         ctx.lineWidth = n.isTarget ? 3 : 1.5;
         ctx.stroke();
-        ctx.fillStyle = '#f0f2f7';
+        ctx.fillStyle = cssVar('--prof-text');
         ctx.font = '10px monospace';
         ctx.textAlign = 'center';
         ctx.fillText(n.type, n.x, n.y + n.radius + 14);
-        ctx.fillStyle = '#8892a4';
+        ctx.fillStyle = cssVar('--prof-text-secondary');
         ctx.font = '9px monospace';
         ctx.fillText(formatBytes(n.size), n.x, n.y + n.radius + 26);
       }
-    }
-    function formatBytes(bytes) {
-      if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
-      if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
-      if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
-      return bytes + ' B';
     }`;
 }
 
 function buildRefGraphScript(nodesJson: string, edgesJson: string, cyclesJson: string): string {
-  return buildRefGraphScriptInit(nodesJson, edgesJson, cyclesJson) +
+  return PROFILER_JS_UTILS +
+    buildRefGraphScriptInit(nodesJson, edgesJson, cyclesJson) +
     buildRefGraphScriptDraw();
 }
 
-function buildRefGraphHtml(result: ReferenceGraphResult): string {
-  const nodesJson = JSON.stringify(result.graph?.nodes ?? []);
-  const edgesJson = JSON.stringify(result.graph?.edges ?? []);
-  const cyclesJson = JSON.stringify(result.graph?.cycles ?? []);
+/** Build the complete retention-graph HTML (exported as an e2e seam). */
+export function buildRefGraphHtml(result: ReferenceGraphResult): string {
+  // Node types/reprs and edge labels are profiled-program data — embed them so
+  // they can never close the inline <script> ([PROFILE-WEBVIEW-HOST]).
+  const nodesJson = embedJson(result.graph?.nodes ?? []);
+  const edgesJson = embedJson(result.graph?.edges ?? []);
+  const cyclesJson = embedJson(result.graph?.cycles ?? []);
   const retentionPath = result.graph?.retentionPath ?? [];
   const escapedType = escapeHtml(result.targetType);
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Retention Graph — ${escapedType}</title>
-  <style>${buildRefGraphCss()}</style>
-</head>
-<body>
+  return buildWebviewDocument({
+    title: `Retention Graph — ${escapedType}`,
+    css: buildRefGraphCss(),
+    body: `
   <h1><span class="accent">◉</span> Retention Graph — <span class="accent">${escapedType}</span></h1>
   ${buildRetentionPathHtml(retentionPath)}
   <canvas id="graph" width="800" height="500"></canvas>
   <div class="legend">
-    <div class="legend-item"><div class="legend-dot" style="background: var(--mem-critical)"></div> Target object</div>
-    <div class="legend-item"><div class="legend-dot" style="background: var(--mem-info)"></div> Root retainer</div>
-    <div class="legend-item"><div class="legend-dot" style="background: var(--text-secondary)"></div> Intermediate</div>
-    <div class="legend-item"><div class="legend-dot" style="background: var(--mem-leak)"></div> Cycle member</div>
-  </div>
-  <script>${buildRefGraphScript(nodesJson, edgesJson, cyclesJson)}</script>
-</body>
-</html>`;
+    <div class="legend-item"><div class="legend-dot" style="background: var(--prof-mem-critical)"></div> Target object</div>
+    <div class="legend-item"><div class="legend-dot" style="background: var(--prof-info)"></div> Root retainer</div>
+    <div class="legend-item"><div class="legend-dot" style="background: var(--prof-text-secondary)"></div> Intermediate</div>
+    <div class="legend-item"><div class="legend-dot" style="background: var(--prof-mem-leak)"></div> Cycle member</div>
+  </div>`,
+    script: buildRefGraphScript(nodesJson, edgesJson, cyclesJson),
+  });
 }
 
 function escapeHtml(text: string): string {

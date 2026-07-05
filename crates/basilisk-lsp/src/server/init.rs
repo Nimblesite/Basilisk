@@ -71,6 +71,24 @@ pub(super) async fn initialize(
         *server.type_checking_enabled.write().await = enabled;
     }
 
+    // Resolve the formatter engine ([LSPFMT-CONFIG]): the editor setting
+    // (initializationOptions `formatter`, e.g. VS Code's `basilisk.formatter`)
+    // wins over config files; the default is the embedded Ruff engine.
+    let formatter = params
+        .initialization_options
+        .as_ref()
+        .and_then(parse_formatter)
+        .unwrap_or_else(|| {
+            roots
+                .first()
+                .map(|r| crate::config::load_config(r).formatter)
+                .unwrap_or_default()
+        });
+    let formatting_enabled = formatter != crate::config::FormatterEngine::Disabled;
+    server
+        .formatting_enabled
+        .store(formatting_enabled, std::sync::atomic::Ordering::Relaxed);
+
     // Store workspace roots for later use by import resolution.
     (*server.workspace_roots.write().await).clone_from(&roots);
 
@@ -89,14 +107,32 @@ pub(super) async fn initialize(
     Ok(InitializeResult {
         server_info: Some(ServerInfo {
             name: "basilisk".to_owned(),
-            version: Some(env!("CARGO_PKG_VERSION").to_owned()),
+            // [LSPFMT-PROVENANCE]: every client surfaces which Ruff formatter
+            // is embedded, alongside the binary version.
+            version: Some(format!(
+                "{} (Ruff formatter {})",
+                env!("CARGO_PKG_VERSION"),
+                crate::formatting::EMBEDDED_RUFF_FORMATTER_VERSION
+            )),
         }),
-        capabilities: build_capabilities(),
+        capabilities: build_capabilities(formatting_enabled),
     })
 }
 
+/// Read the `formatter` engine from `initializationOptions` ([LSPFMT-CONFIG]).
+fn parse_formatter(value: &serde_json::Value) -> Option<crate::config::FormatterEngine> {
+    value
+        .get("formatter")
+        .or_else(|| value.get("basilisk").and_then(|b| b.get("formatter")))
+        .and_then(serde_json::Value::as_str)
+        .map(crate::config::FormatterEngine::parse)
+}
+
 /// Build the full `ServerCapabilities` for the `initialize` response.
-fn build_capabilities() -> ServerCapabilities {
+///
+/// Formatting capabilities are advertised only while the formatter engine is
+/// enabled ([LSPFMT-CAPABILITIES], [LSPFMT-CONFIG]).
+fn build_capabilities(formatting_enabled: bool) -> ServerCapabilities {
     ServerCapabilities {
         text_document_sync: Some(TextDocumentSyncCapability::Kind(
             TextDocumentSyncKind::INCREMENTAL,
@@ -125,7 +161,8 @@ fn build_capabilities() -> ServerCapabilities {
         declaration_provider: Some(DeclarationCapability::Simple(true)),
         definition_provider: Some(OneOf::Left(true)),
         type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
-        document_formatting_provider: Some(OneOf::Left(true)),
+        document_formatting_provider: formatting_enabled.then_some(OneOf::Left(true)),
+        document_range_formatting_provider: formatting_enabled.then_some(OneOf::Left(true)),
         document_highlight_provider: Some(OneOf::Left(true)),
         document_symbol_provider: Some(OneOf::Left(true)),
         folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
@@ -204,7 +241,7 @@ pub(super) async fn initialized(server: &LspServer) {
     // message loop is not blocked while the workspace scan runs.
     let mode = {
         let guard = server.index.read().await;
-        guard.as_ref().map(|idx| idx.mode)
+        guard.as_ref().map(WorkspaceIndex::mode)
     };
 
     let Some(mode) = mode else { return };
@@ -230,35 +267,7 @@ pub(super) async fn initialized(server: &LspServer) {
             // respond to requests (documentSymbol, etc.) while scanning.
             // tower-lsp v0.20 processes messages sequentially — blocking here
             // prevents ALL request handling until the scan completes.
-            let scan_client = server.client.clone();
-            let scan_index = Arc::clone(&server.index);
-            // Clone the toggle so the spawned scan suppresses publication when a
-            // client started with type checking off. Implements [ANALYSIS-ENABLED].
-            let scan_enabled = Arc::clone(&server.type_checking_enabled);
-            let scan_roots = {
-                let roots = server.workspace_roots.read().await;
-                roots.clone()
-            };
-            drop(tokio::spawn(async move {
-                let guard = scan_index.read().await;
-                if let Some(index) = guard.as_ref() {
-                    let scan_result = scan_resolve_and_check_with_roots(index, &scan_roots);
-                    drop(guard);
-                    for (uri, diags) in scan_result.diagnostics {
-                        super::publish_diagnostics_gated(&scan_client, &scan_enabled, uri, diags)
-                            .await;
-                    }
-                    scan_client
-                        .log_message(
-                            MessageType::INFO,
-                            format!(
-                                "Basilisk: workspace scan complete — {} files, {} error(s)",
-                                scan_result.file_count, scan_result.error_count
-                            ),
-                        )
-                        .await;
-                }
-            }));
+            run_workspace_scan(server, mode).await;
         }
     }
 
@@ -301,30 +310,28 @@ pub(super) async fn did_change_configuration(
         return;
     };
 
-    // Check whether the mode actually changed — skip the expensive write
-    // lock + workspace scan if it hasn't.  The background scan spawned by
-    // `initialized()` holds a READ lock on the index; acquiring a WRITE
-    // lock here would block the entire message loop until that scan
-    // finishes, preventing `textDocument/didOpen` and other requests from
-    // being processed.
-    let current_mode = {
+    // Check-and-set through a READ guard only ([ANALYSIS-PUBLISH], GitHub
+    // #264): `WorkspaceIndex::set_mode` is interior-mutable, so a mode flip
+    // never queues a WRITE behind a long-running scan's read guard — a queued
+    // writer makes tokio's fair `RwLock` block every subsequent reader, which
+    // saturates tower-lsp's bounded handler slots and stalls the whole
+    // message loop (delaying `didClose` clears past any test/UX budget).
+    let changed = {
         let guard = server.index.read().await;
-        guard.as_ref().map(|idx| idx.mode)
+        guard.as_ref().is_some_and(|index| {
+            let changed = index.mode() != new_mode;
+            if changed {
+                index.set_mode(new_mode);
+            }
+            changed
+        })
     };
-    if current_mode == Some(new_mode) {
+    if !changed {
         info!(
             ?new_mode,
             "did_change_configuration: mode unchanged, skipping scan"
         );
         return;
-    }
-
-    // Update the mode on the index.
-    {
-        let mut guard = server.index.write().await;
-        if let Some(index) = guard.as_mut() {
-            index.mode = new_mode;
-        }
     }
 
     server
@@ -412,7 +419,7 @@ async fn clear_all_diagnostics(server: &LspServer) {
 async fn rescan_after_enable(server: &LspServer) {
     let mode = {
         let guard = server.index.read().await;
-        guard.as_ref().map(|idx| idx.mode)
+        guard.as_ref().map(WorkspaceIndex::mode)
     };
     let Some(mode) = mode else { return };
 
@@ -478,7 +485,7 @@ pub(super) async fn did_change_workspace_folders(
         let guard = server.index.read().await;
         guard
             .as_ref()
-            .map_or(AnalysisMode::OpenFilesOnly, |idx| idx.mode)
+            .map_or(AnalysisMode::OpenFilesOnly, WorkspaceIndex::mode)
     };
 
     let checker_config = updated_roots
@@ -544,28 +551,80 @@ async fn register_file_watchers(client: &Client) {
     }
 }
 
-/// Scan the whole workspace and publish diagnostics for all files.
+/// Scan the whole workspace in a background task and publish diagnostics.
+///
+/// The scan is ALWAYS spawned: tower-lsp drives every handler on one
+/// cooperative task, so a scan computed inside a notification handler starves
+/// all other messages — including the `textDocument/didClose` whose clear the
+/// editor is waiting on — for the scan's full duration (GitHub #264).
 async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
-    let guard = server.index.read().await;
-    let Some(index) = guard.as_ref() else { return };
-    let scan_result = scan_resolve_and_check(server, index).await;
-    drop(guard);
+    let scan_roots = server.workspace_roots.read().await.clone();
+    let scan_index = Arc::clone(&server.index);
+    let scan_client = server.client.clone();
+    // Clone the toggle so the spawned scan suppresses publication when type
+    // checking is off. Implements [ANALYSIS-ENABLED].
+    let scan_enabled = Arc::clone(&server.type_checking_enabled);
+    drop(tokio::spawn(async move {
+        let ScanResult {
+            diagnostics,
+            file_count,
+            error_count,
+        } = {
+            let guard = scan_index.read().await;
+            let Some(index) = guard.as_ref() else { return };
+            scan_resolve_and_check_with_roots(index, &scan_roots)
+        };
+        publish_scan_results(&scan_index, &scan_client, &scan_enabled, diagnostics).await;
+        scan_client
+            .log_message(
+                MessageType::INFO,
+                format!(
+                    "Basilisk: workspace scan complete — {file_count} files, {error_count} error(s)"
+                ),
+            )
+            .await;
+    }));
+}
 
-    // Respect the Type Checking toggle ([ANALYSIS-ENABLED]): suppress publication
-    // when disabled instead of flooding the editor with scan diagnostics.
-    for (uri, diags) in scan_result.diagnostics {
-        server.publish_diagnostics_if_enabled(uri, diags).await;
+// Implements [ANALYSIS-PUBLISH] — scan results must reflect the index state at
+// publish time, not at compute time.
+/// Publish scan results, skipping entries that went stale while the scan ran.
+///
+/// A file closed mid-scan was removed from the index by `did_close`, which
+/// also cleared its diagnostics — republishing the scan's snapshot would
+/// resurrect them with nothing left to ever clear them (GitHub #264). And
+/// after a mid-scan flip to `openFilesOnly`, only open files may publish.
+async fn publish_scan_results(
+    index: &RwLock<Option<WorkspaceIndex>>,
+    client: &Client,
+    enabled: &RwLock<bool>,
+    diagnostics: Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)>,
+) {
+    for (uri, diags) in diagnostics {
+        let still_current = {
+            let guard = index.read().await;
+            guard
+                .as_ref()
+                .is_some_and(|idx| scan_entry_still_current(idx, &uri))
+        };
+        if still_current {
+            super::publish_diagnostics_gated(client, enabled, uri, diags).await;
+        } else {
+            super::diaglog!("[DIAG] scan publish SKIPPED (stale) uri={uri}");
+        }
     }
-    server
-        .client
-        .log_message(
-            MessageType::INFO,
-            format!(
-                "Basilisk: workspace scan complete — {} files, {} error(s)",
-                scan_result.file_count, scan_result.error_count
-            ),
-        )
-        .await;
+}
+
+/// Whether a scan result computed for `uri` still reflects the index state:
+/// the file is still tracked, and — under `openFilesOnly` — still open.
+fn scan_entry_still_current(index: &WorkspaceIndex, uri: &Url) -> bool {
+    let Ok(path) = uri.to_file_path() else {
+        return false;
+    };
+    match index.files.get(&path) {
+        None => false,
+        Some(entry) => !matches!(index.mode(), AnalysisMode::OpenFilesOnly) || entry.is_open,
+    }
 }
 
 /// Result of a full workspace scan with import resolution and optional cross-module
@@ -579,18 +638,9 @@ struct ScanResult {
 /// Scan workspace files, resolve imports, and optionally run cross-module symbol
 /// population. Returns diagnostics ready to publish.
 ///
-/// This is the single source of truth for the scan+resolve+crossmod pipeline,
-/// used by both `initialized()` and `run_workspace_scan()`.
-async fn scan_resolve_and_check(server: &LspServer, index: &WorkspaceIndex) -> ScanResult {
-    let roots = server.workspace_roots.read().await;
-    let result = scan_resolve_and_check_with_roots(index, &roots);
-    drop(roots);
-    result
-}
-
-/// Core scan logic that takes roots directly instead of `&LspServer`.
-///
-/// This allows the scan to run in a spawned task with cloned data.
+/// This is the single source of truth for the scan+resolve+crossmod pipeline —
+/// every scan goes through `run_workspace_scan`'s spawned task, which calls
+/// this with cloned data so it can run off the message loop.
 fn scan_resolve_and_check_with_roots(
     index: &WorkspaceIndex,
     roots: &[std::path::PathBuf],
@@ -628,7 +678,7 @@ fn scan_resolve_and_check_with_roots(
     // re-analyse them through the engine so open editors converge too.
     diagnostics.extend(index.refresh_open_files());
 
-    if matches!(index.mode, AnalysisMode::CrossModule) {
+    if matches!(index.mode(), AnalysisMode::CrossModule) {
         // Reverse-edge lookups for cross-file references/rename.
         index.build_import_graph();
         info!("cross-module analysis complete");
@@ -669,6 +719,7 @@ async fn clear_non_open_diagnostics(server: &LspServer) {
         .collect();
     drop(guard);
     for uri in to_clear {
+        super::diaglog!("[DIAG] clear_non_open publish n=0 uri={uri}");
         server.client.publish_diagnostics(uri, vec![], None).await;
     }
 }

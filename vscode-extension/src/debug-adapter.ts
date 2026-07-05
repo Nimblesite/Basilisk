@@ -8,7 +8,13 @@ import * as net from "net";
 import { type LanguageClient } from "vscode-languageclient/node";
 import { Logger } from "./logger";
 import { DapTcpProxy } from "./dap-proxy";
-import { appendDebugOutput, clearDebugOutput, trackSuspensionEvent } from "./dap-output";
+import {
+  appendDebugOutput,
+  clearDebugOutput,
+  trackResumeRequest,
+  trackResumeResponse,
+  trackSuspensionEvent,
+} from "./dap-output";
 
 /** Max number of variables to log inline before switching to a count summary. */
 const MAX_INLINE_VARS = 10;
@@ -155,6 +161,10 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
     const msg = message as { type?: string; command?: string; seq?: number; arguments?: unknown };
     if (msg.type === "request") {
       Logger.debug(`[DAP ${this.sessionId}] --> ${msg.command} #${msg.seq} ${summarizeArgs(msg.arguments)}`);
+      // Resume bookkeeping: a successful continue/step RESPONSE implies the
+      // thread runs (the `continued` event is optional per the DAP spec), so
+      // in-flight resume requests are remembered here and matched below.
+      trackResumeRequest(this.fullSessionId, message);
     }
   }
 
@@ -170,6 +180,10 @@ class BasiliskDebugAdapterTracker implements vscode.DebugAdapterTracker {
       } else {
         Logger.warn(text);
       }
+      // A successful resume response clears the stopped bookkeeping NOW —
+      // waiting for the optional `continued` event leaves a stale window
+      // where couriers evaluate against a sampled frame of a running thread.
+      trackResumeResponse(this.fullSessionId, message);
     } else if (msg.type === "event") {
       this.handleEvent(msg.event, msg.body);
     }

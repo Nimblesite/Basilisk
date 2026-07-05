@@ -1,65 +1,20 @@
-//! Implements [LSPARCH-FEATURES-CODEACTIONS]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-CODEACTIONS
+//! Implements [LSPARCH-FEATURES-CODEACTIONS] and [LSPFMT-IMPORTS].
+//! See docs/specs/LSP-FORMATTING-SPEC.md#LSPFMT-IMPORTS
 //!
 //! Import-related code actions.
 //!
-//! Provides: organize imports (ruff), expand wildcard imports, convert import
-//! style, and add `__all__` declaration.
+//! Provides: organize imports, expand wildcard imports, split multiple
+//! imports, and add `__all__` declaration. The first three run **natively in
+//! the binary** on the Ruff AST ([`crate::import_hygiene`]) — no `ruff`
+//! subprocess, no PATH lookup, no silent no-op when ruff is absent (#261).
 
 use std::collections::HashMap;
-use std::process::Stdio;
-use std::sync::atomic::Ordering;
 
 use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit, Url};
 
-use super::TMP_COUNTER;
+use super::full_document_range;
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
-
-/// Run `ruff check --select <code> --fix --quiet` on `source` via a temp file
-/// and return the rewritten source if ruff applied changes.
-///
-/// Returns `None` when:
-/// - ruff is not installed (exec fails)
-/// - ruff exits with code >= 2 (internal error)
-/// - the file is unchanged (no fixes apply)
-/// - tmp-file I/O fails
-///
-/// CRITICAL TODO ([LSPFMT-DECISION], [LSPFMT-IMPORTS] — docs/specs/LSP-FORMATTING-SPEC.md):
-/// Jettison this `ruff check` subprocess. Reimplement the three import fixers
-/// (organize `I`, expand-wildcard `F403`, split-multi-import `E401`) **natively
-/// on the Ruff AST we already own** — no temp file, no PATH lookup, no silent
-/// no-op when ruff is absent. Acceptance bar: behavior parity with the Ruff
-/// fixers, regression-tested against representative fixtures.
-fn run_ruff_fix(source: &str, select_code: &str, tmp_prefix: &str) -> Option<String> {
-    let id = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let tmp_path = std::env::temp_dir().join(format!("{tmp_prefix}_{id}.py"));
-
-    std::fs::write(&tmp_path, source).ok()?;
-
-    let status = std::process::Command::new("ruff")
-        .args(["check", "--select", select_code, "--fix", "--quiet"])
-        .arg(&tmp_path)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .ok()?;
-
-    // ruff exits 0 (no changes) or 1 (applied fixes); both are success.
-    // Exit ≥ 2 means an internal error — skip in that case.
-    if !matches!(status.code(), Some(0 | 1)) {
-        let _ = std::fs::remove_file(&tmp_path);
-        return None;
-    }
-
-    let new_source = std::fs::read_to_string(&tmp_path).ok()?;
-    let _ = std::fs::remove_file(&tmp_path);
-
-    if new_source == source {
-        return None;
-    }
-
-    Some(new_source)
-}
 
 /// Build a [`CodeAction`] that replaces the entire document with `new_text`.
 fn full_file_replacement_action(
@@ -81,57 +36,57 @@ fn full_file_replacement_action(
     super::code_action_with_changes(title.to_owned(), kind, changes, is_preferred)
 }
 
-// ── Organize imports via ruff ─────────────────────────────────────────────────
+// ── Organize imports (native, isort semantics) ────────────────────────────────
 
-/// Run `ruff check --select I --fix` on the document source and return a
-/// full-file replacement [`CodeAction`], or `None` if ruff is not installed or
-/// the source is already sorted.
+/// Sort the document's leading import block with isort semantics and return a
+/// full-file replacement [`CodeAction`], or `None` if the source is already
+/// organized. Runs in-process on the Ruff AST ([LSPFMT-IMPORTS]).
 pub(crate) fn organize_imports(uri: &Url, source: &str) -> Option<CodeAction> {
-    let new_source = run_ruff_fix(source, "I", "basilisk_org")?;
+    let new_source = crate::import_hygiene::organize_source(source, None)?;
     Some(full_file_replacement_action(
         uri,
         source,
         new_source,
-        "Organize imports (ruff)",
+        "Organize imports",
         CodeActionKind::SOURCE_ORGANIZE_IMPORTS,
         true,
     ))
 }
 
-// ── Expand wildcard imports via ruff ──────────────────────────────────────────
+// ── Expand wildcard imports (native) ──────────────────────────────────────────
 
-/// Run `ruff check --select F403 --fix` on the document source to expand
-/// wildcard imports, or `None` if ruff is not installed or no wildcards exist.
+/// Replace `from X import *` with explicit imports of the names the file
+/// uses, or `None` if there is no unambiguous wildcard to expand
+/// ([LSPFMT-IMPORTS]).
 pub(crate) fn expand_wildcard_imports(uri: &Url, source: &str) -> Option<CodeAction> {
     if !source.contains("import *") {
         return None;
     }
-    let new_source = run_ruff_fix(source, "F403", "basilisk_wild")?;
+    let new_source = crate::import_hygiene::expand_wildcard_source(source)?;
     Some(full_file_replacement_action(
         uri,
         source,
         new_source,
-        "Expand wildcard imports (ruff)",
+        "Expand wildcard imports",
         CodeActionKind::QUICKFIX,
         false,
     ))
 }
 
-// ── Convert import style via ruff ─────────────────────────────────────────────
+// ── Split multiple imports on one line (native) ───────────────────────────────
 
-/// Run `ruff check --select E401 --fix` to convert between `import X` and
-/// `from X import Y` styles, or `None` if ruff is not installed or no
-/// changes are needed.
+/// Split `import a, b` statements into one import per module (Ruff E401 fix
+/// parity), or `None` if no statement needs splitting ([LSPFMT-IMPORTS]).
 pub(crate) fn convert_import_style(uri: &Url, source: &str) -> Option<CodeAction> {
     if !source.contains("import ") {
         return None;
     }
-    let new_source = run_ruff_fix(source, "E401", "basilisk_conv")?;
+    let new_source = crate::import_hygiene::split_multi_imports(source)?;
     Some(full_file_replacement_action(
         uri,
         source,
         new_source,
-        "Fix multiple imports on one line (ruff E401)",
+        "Split multiple imports on one line",
         CodeActionKind::QUICKFIX,
         false,
     ))
@@ -219,23 +174,4 @@ fn collect_public_names(source: &str) -> Vec<&str> {
         }
     }
     public_names
-}
-
-// ── Shared helper ─────────────────────────────────────────────────────────────
-
-/// Compute the LSP range covering the entire document.
-pub(super) fn full_document_range(source: &str) -> Range {
-    let line_count = u32::try_from(source.lines().count()).unwrap_or(u32::MAX);
-    let last_line_char_count = source.lines().last().map_or(0, |l| l.chars().count());
-    let last_line_len = u32::try_from(last_line_char_count).unwrap_or(u32::MAX);
-    Range {
-        start: Position {
-            line: 0,
-            character: 0,
-        },
-        end: Position {
-            line: line_count,
-            character: last_line_len,
-        },
-    }
 }

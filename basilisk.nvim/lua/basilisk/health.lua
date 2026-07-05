@@ -9,7 +9,8 @@ local M = {}
 
 --- Implements [NVIM-HEALTH-CHECK] — :checkhealth basilisk reports Neovim version,
 --- the basilisk binary + version, Python, and the optional debugpy/nvim-dap/
---- nvim-dap-ui/ruff integrations (plus uv and a config summary).
+--- nvim-dap-ui integrations (plus uv and a config summary). Formatting is
+--- embedded in the binary — no external ruff probe ([LSPFMT-DECISION]).
 function M.check()
   vim.health.start("basilisk.nvim")
 
@@ -76,14 +77,8 @@ function M.check()
     vim.health.info("nvim-dap-ui not installed (optional, for debug UI)")
   end
 
-  -- ruff (optional).
-  local ruff = vim.fn.exepath("ruff")
-  if ruff ~= "" then
-    local ruff_ver = vim.trim(vim.fn.system({ ruff, "--version" }))
-    vim.health.ok("ruff found: " .. ruff .. " (" .. ruff_ver .. ")")
-  else
-    vim.health.info("ruff not found (optional, for formatting)")
-  end
+  -- Formatting needs no external tool: the Ruff formatter is embedded in the
+  -- basilisk binary ([LSPFMT-DECISION]), so there is no ruff probe here.
 
   -- uv (optional).
   local uv = vim.fn.exepath("uv")
@@ -100,7 +95,7 @@ function M.check()
   if basilisk_ok and basilisk.config then
     local cfg = basilisk.config
     vim.health.ok("Analysis mode: " .. cfg.analysis_mode)
-    vim.health.ok("Ruff: " .. (cfg.ruff.enabled and "enabled" or "disabled"))
+    vim.health.ok("Formatter: " .. cfg.formatter)
     vim.health.ok("Debugger: " .. (cfg.debugger.enabled and "enabled" or "disabled"))
     vim.health.ok("Test explorer: " .. (cfg.test_explorer.enabled and "enabled" or "disabled"))
     vim.health.ok("uv integration: " .. (cfg.uv.enabled and "enabled" or "disabled"))

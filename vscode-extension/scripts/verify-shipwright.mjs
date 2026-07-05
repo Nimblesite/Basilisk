@@ -39,8 +39,18 @@ function parseVersionJson(binary) {
 
 function verifyBinary(binary, expectedName, expectedVersion) {
   const plain = execFileSync(binary, ["--version"], { encoding: "utf8", timeout: 5000 }).trim();
-  if (plain !== `${expectedName} ${expectedVersion}`) {
+  // Line 1 is the Shipwright contract: `<component-id> <semver>`, exactly.
+  // Later lines list embedded engines (e.g. `Ruff formatter: 0.15.17`,
+  // [LSPFMT-PROVENANCE]) and must keep the strict `<label>: <value>` shape —
+  // the machine contract stays single-line-parseable.
+  const [contractLine, ...engineLines] = plain.split("\n");
+  if (contractLine !== `${expectedName} ${expectedVersion}`) {
     throw new Error(`${binary} plain version mismatch: ${plain}`);
+  }
+  for (const line of engineLines) {
+    if (!/^[A-Za-z][A-Za-z0-9 _-]*: \S+$/.test(line)) {
+      throw new Error(`${binary} malformed engine line in --version output: ${line}`);
+    }
   }
 
   const data = parseVersionJson(binary);

@@ -34,6 +34,8 @@ mod benchmarks;
 #[cfg(test)]
 mod pipeline_tests;
 #[cfg(test)]
+mod python_e2e_tests;
+#[cfg(test)]
 mod scenario_tests;
 
 use std::collections::HashMap;
@@ -169,6 +171,8 @@ pub struct StartResult {
 pub struct StopResult {
     /// Session ID.
     pub session_id: String,
+    /// The profiled process — names the exported artifacts.
+    pub pid: u32,
     /// Duration in seconds.
     pub duration: f64,
     /// Total samples collected.
@@ -325,6 +329,7 @@ impl ProfileSessionManager {
 
         Ok(StopResult {
             session_id: session_id.to_owned(),
+            pid: session.pid,
             duration,
             total_samples: session.data.total_samples,
             data: session.data,
@@ -361,6 +366,7 @@ impl ProfileSessionManager {
 
         Ok(StopResult {
             session_id: session_id.to_owned(),
+            pid: session.pid,
             duration,
             total_samples: session.data.total_samples,
             data: session.data.clone(),

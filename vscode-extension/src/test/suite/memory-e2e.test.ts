@@ -14,7 +14,8 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { currentStoppedFrameId } from "../../dap-evaluate";
-import { activeMemorySession } from "../../memory-profiler";
+import { activeMemorySession, memoryStatusText } from "../../memory-profiler";
+import { getStore } from "../../extension";
 import {
   SESSION_WAIT_MS,
   POLL_MS,
@@ -348,6 +349,78 @@ async function trackedRunSurvivesUnrelatedSessionEnd(): Promise<void> {
   });
 }
 
+/**
+ * Walk the memory status bar through its whole lifecycle on a real session:
+ * hidden with no debug session, the idle affordance while debugging, the
+ * starting spinner while a start is in flight, the tracking readout while
+ * live, and hidden again after the session ends — no stale state on screen
+ * ([PROFILE-UX-PROGRESS], [PROFILE-PROCESSES-REACTIVE]).
+ */
+async function statusBarFollowsMemoryLifecycle(): Promise<void> {
+  vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+  assert.strictEqual(
+    memoryStatusText(),
+    undefined,
+    "the memory status bar must be hidden with no debug session",
+  );
+
+  const busyFixture = path.resolve(__dirname, "../../src/test/fixtures/memory_busy.py");
+  const started = await vscode.debug.startDebugging(undefined, {
+    name: "Memory status bar E2E",
+    type: "basilisk-debug",
+    request: "launch",
+    program: busyFixture,
+    stopOnEntry: false,
+    justMyCode: true,
+    console: "internalConsole",
+  });
+  assert.ok(started, "the debug session must launch");
+
+  // Debugging, not yet tracking: the one-click start affordance.
+  await pollUntilResult({
+    fn: async () => memoryStatusText() ?? "",
+    predicate: (text) => text.includes("Memory") && !text.includes("tracking"),
+    timeoutMs: SESSION_WAIT_MS,
+    intervalMs: POLL_MS,
+  });
+
+  // A start in flight is never silent: the store's "starting" state renders
+  // the spinner through the real reactive effect ([PROFILE-UX-PROGRESS]).
+  const store = getStore();
+  assert.ok(store, "store must be initialized");
+  store.memoryTrackingStarting();
+  assert.ok(
+    memoryStatusText()?.includes("$(loading~spin)") === true,
+    `a start in flight must show the spinner, got: ${String(memoryStatusText())}`,
+  );
+  store.memoryTrackingStopped();
+
+  // Live tracking: the eye + tracking readout.
+  await vscode.commands.executeCommand("basilisk.memoryStart");
+  assert.ok(activeMemorySession() !== undefined, "tracking must start");
+  assert.ok(
+    memoryStatusText()?.includes("Memory: tracking") === true,
+    `live tracking must show in the status bar, got: ${String(memoryStatusText())}`,
+  );
+
+  // Stopped while still debugging: back to the start affordance.
+  await vscode.commands.executeCommand("basilisk.memoryStop");
+  assert.ok(
+    memoryStatusText()?.includes("Memory") === true &&
+      memoryStatusText()?.includes("tracking") === false,
+    `stopping must return the idle affordance, got: ${String(memoryStatusText())}`,
+  );
+
+  await vscode.debug.stopDebugging();
+  await waitForSessionEnd();
+  await pollUntilResult({
+    fn: async () => memoryStatusText(),
+    predicate: (text) => text === undefined,
+    timeoutMs: SESSION_WAIT_MS,
+    intervalMs: POLL_MS,
+  });
+}
+
 /** Assert the diff's user-facing surface: leak suspicion + leak decorations. */
 function assertLeakSurface(diff: MemoryDiffResult & IngestResult): void {
   assert.ok(diff.totalGrowth > 0, "allocating a chunk between pauses must register growth");
@@ -476,6 +549,11 @@ suite("Memory profiling — real end-to-end", () => {
     // (no chart / trace / report). The run must instead capture a final snapshot
     // as the program exits and finalise it into a result the user can see.
     await runTrackMemoryToCompletionAndAssertResult();
+  });
+
+  test("the memory status bar follows the whole session lifecycle — never stale, never silent", async function () {
+    this.timeout(90_000);
+    await statusBarFollowsMemoryLifecycle();
   });
 
   test("an unrelated debug session ending does not tear down live memory tracking (#146)", async function () {

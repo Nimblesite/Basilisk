@@ -8,10 +8,10 @@ use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CodeActionOrCommand, CodeActionParams, CodeActionResponse, CodeLens, CodeLensParams,
     ColorInformation, ColorPresentation, ColorPresentationParams, CompletionItem, CompletionParams,
-    CompletionResponse, Diagnostic, DocumentColorParams, DocumentFormattingParams, FoldingRange,
-    FoldingRangeParams, Hover, HoverParams, InlayHint, InlayHintParams, NumberOrString,
-    SelectionRange, SelectionRangeParams, SemanticTokens, SemanticTokensParams,
-    SemanticTokensResult, SignatureHelpParams, TextEdit,
+    CompletionResponse, Diagnostic, DocumentColorParams, DocumentFormattingParams,
+    DocumentRangeFormattingParams, FoldingRange, FoldingRangeParams, Hover, HoverParams, InlayHint,
+    InlayHintParams, NumberOrString, SelectionRange, SelectionRangeParams, SemanticTokens,
+    SemanticTokensParams, SemanticTokensResult, SignatureHelpParams, TextEdit,
 };
 
 use crate::{
@@ -318,18 +318,38 @@ pub(in crate::server) async fn completion_resolve(
 }
 
 /// Handle `textDocument/formatting`.
-// Implements [LSPARCH-FEATURES-FORMAT] — delegate to `ruff format`, return whole-document TextEdit.
+// Implements [LSPARCH-FEATURES-FORMAT] / [LSPFMT-ENGINE] — embedded Ruff
+// formatter in-process, whole-document TextEdit. No `ruff` subprocess (#254).
 pub(in crate::server) async fn formatting(
     server: &LspServer,
     params: DocumentFormattingParams,
 ) -> LspResult<Option<Vec<TextEdit>>> {
+    if !server.is_formatting_enabled() {
+        return Ok(None);
+    }
     let uri = params.text_document.uri;
     let Some(text) = server.with_index(|idx| idx.get_text(&uri)).await else {
         return Ok(None);
     };
-    let file_path = uri.to_file_path().unwrap_or_default();
-    let path_str = file_path.to_string_lossy().into_owned();
-    Ok(formatting::format_document(&text, &path_str))
+    let style = server.format_style().await;
+    Ok(formatting::format_document(&text, &style))
+}
+
+/// Handle `textDocument/rangeFormatting` (Format Selection).
+// Implements [LSPFMT-CAPABILITIES] — same embedded engine as whole-document.
+pub(in crate::server) async fn range_formatting(
+    server: &LspServer,
+    params: DocumentRangeFormattingParams,
+) -> LspResult<Option<Vec<TextEdit>>> {
+    if !server.is_formatting_enabled() {
+        return Ok(None);
+    }
+    let uri = params.text_document.uri;
+    let Some(text) = server.with_index(|idx| idx.get_text(&uri)).await else {
+        return Ok(None);
+    };
+    let style = server.format_style().await;
+    Ok(formatting::format_selection(&text, params.range, &style))
 }
 
 /// Handle `textDocument/foldingRange`.

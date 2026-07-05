@@ -10,8 +10,9 @@
  *      plus the aggregate `.profilerBusy` and `.profiling` / `.memoryTracking` /
  *      `.profilerStarting`) that hide the matching "Run & Profile" launch and
  *      reveal the Stop affordances in package.json;
- *   3. the provider's "which row is being profiled" marker, so that row swaps
- *      its inline Profile button for a Stop button.
+ *   3. a tree repaint, so the actively-profiled row swaps its inline Profile
+ *      button for a Stop button (the marker itself derives from the store's
+ *      profiler signal inside the provider — no pushed field, #148).
  *
  * The message/badge update on every change (cheap), but the context keys and
  * the tree rebuild only fire when the *gating* state changes — a per-second
@@ -50,7 +51,6 @@ export function bindProcessPanelReactivity(
     if (gate !== lastGate) {
       lastGate = gate;
       applyContextKeys(session);
-      provider.setActiveProfilingPid(session.cpu === "active" ? session.cpuPid : undefined);
       provider.refresh();
     }
   });
@@ -63,23 +63,20 @@ export function bindProcessPanelReactivity(
 }
 
 /**
- * Keep the panel's "which row is the active debuggee" marker in sync, so only
+ * Keep the store's "which PID is the active debuggee" marker in sync, so only
  * that row exposes the inline Track Memory action ([PROFILE-PROCESSES-PANEL]).
  * Memory tracking rides the DAP courier ([PROFILE-MEMORY-HOWTO]), so it can only
  * ever target the process of the active `basilisk-debug` session — never an
  * external process in the list. The debuggee changes when the active session
  * changes or when the DAP `process` event resolves its PID into the store's
- * `sessionIdToPid` map, so react to both.
+ * `sessionIdToPid` map, so react to both. Writing the store signal bumps
+ * `processesRevision`, which repaints every subscribed panel (#148).
  */
-export function bindDebuggeeTracking(
-  store: Store,
-  provider: PythonProcessesProvider,
-): vscode.Disposable {
+export function bindDebuggeeTracking(store: Store): vscode.Disposable {
   function update(): void {
     const session = vscode.debug.activeDebugSession;
     const pid = session?.type === "basilisk-debug" ? store.getDebuggeeProcessId(session.id) : undefined;
-    provider.setActiveDebuggeePid(pid);
-    provider.refresh();
+    store.setActiveDebuggeePid(pid);
   }
   const disposeEffect = effect(() => {
     void store.sessionIdToPid.value; // re-run when a debuggee PID resolves/clears

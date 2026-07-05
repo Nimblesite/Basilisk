@@ -16,10 +16,26 @@ use super::helpers::{coverage_percent, module_name_from_path};
 /// unannotated names), sorted worst-first (ascending coverage) per
 /// [EXTACT-HEALTH-TOOLBAR]'s default. This is the shared surface for editors
 /// without a unified panel (Zed `/health`, Neovim `:BasiliskHealth`).
+///
+/// With type checking disabled ([ANALYSIS-ENABLED], GitHub #119) this serves NO
+/// grading at all — an empty module list and a neutral workspace stamped
+/// `typeCheckingEnabled: false` — mirroring the `basilisk.workspaceModules` gate
+/// so no editor surface can grade code while the user has switched checking off.
 pub(crate) fn build_type_health(
     idx: &WorkspaceIndex,
     project_root: Option<&Path>,
+    type_checking_enabled: bool,
 ) -> serde_json::Value {
+    if !type_checking_enabled {
+        return serde_json::json!({
+            "workspace": {
+                "typeCheckingEnabled": false,
+                "totalFiles": idx.files.len(),
+            },
+            "modules": [],
+        });
+    }
+
     let adoption_store =
         project_root.and_then(|root| basilisk_config::AdoptionStore::load(root).ok());
 
@@ -86,6 +102,7 @@ pub(crate) fn build_type_health(
 
     serde_json::json!({
         "workspace": {
+            "typeCheckingEnabled": true,
             "totalSymbols": total_symbols,
             "annotatedSymbols": total_annotated,
             "coveragePercent": workspace_coverage,
@@ -326,7 +343,7 @@ mod tests {
         let uri_partial = make_uri("/workspace/partial.py");
         let _ = idx.set_open(&uri_partial, "a: int = 1\nb = 2\n", 1);
 
-        let health = build_type_health(&idx, Some(&root));
+        let health = build_type_health(&idx, Some(&root), true);
 
         // Workspace-level stats.
         let ws = health.get("workspace").unwrap();
@@ -370,7 +387,7 @@ mod tests {
         let uri_full = make_uri("/workspace/full.py");
         let _ = idx.set_open(&uri_full, "x: int = 1\n", 1);
 
-        let health = build_type_health(&idx, Some(&root));
+        let health = build_type_health(&idx, Some(&root), true);
         let modules = health.get("modules").and_then(|v| v.as_array()).unwrap();
 
         // Modules should be sorted ascending by coveragePercent.
@@ -395,7 +412,7 @@ mod tests {
         let uri = make_uri("/workspace/errs.py");
         let _ = idx.set_open(&uri, "def foo(x: int):\n    return x\n", 1);
 
-        let health = build_type_health(&idx, Some(&root));
+        let health = build_type_health(&idx, Some(&root), true);
         let ws = health.get("workspace").unwrap();
 
         // The checker should produce at least one error or warning for the
@@ -405,6 +422,43 @@ mod tests {
         assert!(
             errors + warnings > 0,
             "expected at least one diagnostic for missing return annotation"
+        );
+    }
+
+    // [ANALYSIS-ENABLED] (GitHub #119): basilisk.typeHealth is gated exactly like
+    // workspaceModules — while disabled it serves no per-module grading and a
+    // neutral workspace stamped with the toggle state.
+    #[test]
+    fn test_disabled_toggle_serves_no_type_health_grading() {
+        let root = PathBuf::from("/workspace");
+        let idx = make_index_with_roots(vec![root.clone()]);
+        let uri = make_uri("/workspace/errs.py");
+        let _ = idx.set_open(&uri, "def foo(x: int):\n    return x\n", 1);
+
+        let health = build_type_health(&idx, Some(&root), false);
+
+        let modules = health.get("modules").and_then(|v| v.as_array()).unwrap();
+        assert!(
+            modules.is_empty(),
+            "disabled toggle must serve no per-module grading, got {modules:?}"
+        );
+        let ws = health.get("workspace").unwrap();
+        assert_eq!(
+            ws.get("typeCheckingEnabled")
+                .and_then(serde_json::Value::as_bool),
+            Some(false),
+            "workspace must carry typeCheckingEnabled=false, got {ws}"
+        );
+        for field in ["coveragePercent", "errors", "warnings", "totalSymbols"] {
+            assert!(
+                ws.get(field).is_none(),
+                "disabled toggle must omit workspace grading field '{field}', got {ws}"
+            );
+        }
+        assert_eq!(
+            ws.get("totalFiles").and_then(serde_json::Value::as_u64),
+            Some(1),
+            "file count stays so clients can still distinguish an empty workspace"
         );
     }
 

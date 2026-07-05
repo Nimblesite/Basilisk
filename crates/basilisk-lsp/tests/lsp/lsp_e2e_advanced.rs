@@ -244,7 +244,7 @@ def greet(name: str) -> str:
     Ok(())
 }
 
-// ── Document Formatting (via Ruff) ───────────────────────────────────────────
+// ── Document Formatting (embedded Ruff formatter, [LSPFMT-ENGINE]) ───────────
 
 #[test]
 fn test_lsp_formatting() -> TestResult<()> {
@@ -270,6 +270,12 @@ fn test_lsp_formatting() -> TestResult<()> {
     .ok_or("no formatting response")?;
 
     assert!(resp.contains("\"result\""), "should have a result: {resp}");
+    // The embedded engine is always present — badly formatted code MUST
+    // produce the Ruff-formatted output, never a silent null (#254).
+    assert!(
+        resp.contains("def greet(name: str) -> str:"),
+        "formatting must produce ruff-format output: {resp}"
+    );
     Ok(())
 }
 

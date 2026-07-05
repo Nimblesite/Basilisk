@@ -30,7 +30,15 @@ macro_rules! diaglog {
             .append(true)
             .open("/tmp/basilisk-diag.log")
         {
-            let _ = writeln!(f, $($arg)*);
+            // Millisecond timestamp + pid, and a single write per line so
+            // concurrent handlers (and concurrent server processes in tests)
+            // cannot shred each other's lines mid-string.
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0);
+            let line = format!($($arg)*);
+            let _ = writeln!(f, "[{timestamp} p{}] {line}", std::process::id());
         }
     }};
 }
@@ -46,15 +54,16 @@ use tower_lsp::lsp_types::{
     CompletionResponse, Diagnostic, DidChangeConfigurationParams, DidChangeTextDocumentParams,
     DidChangeWatchedFilesParams, DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams,
     DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentColorParams,
-    DocumentFormattingParams, DocumentHighlight, DocumentHighlightParams, DocumentSymbolParams,
-    DocumentSymbolResponse, ExecuteCommandParams, FoldingRange, FoldingRangeParams,
-    GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams, InitializeParams,
-    InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location, Position,
-    PrepareRenameResponse, ReferenceParams, RenameFilesParams, RenameParams, SelectionRange,
-    SelectionRangeParams, SemanticTokensParams, SemanticTokensResult, SignatureHelpParams,
-    SymbolInformation, TextDocumentPositionParams, TextEdit, TypeHierarchyItem,
-    TypeHierarchyPrepareParams, TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, Url,
-    WorkspaceEdit, WorkspaceSymbolParams,
+    DocumentFormattingParams, DocumentHighlight, DocumentHighlightParams,
+    DocumentRangeFormattingParams, DocumentSymbolParams, DocumentSymbolResponse,
+    ExecuteCommandParams, FoldingRange, FoldingRangeParams, GotoDefinitionParams,
+    GotoDefinitionResponse, Hover, HoverParams, InitializeParams, InitializeResult,
+    InitializedParams, InlayHint, InlayHintParams, Location, Position, PrepareRenameResponse,
+    ReferenceParams, RenameFilesParams, RenameParams, SelectionRange, SelectionRangeParams,
+    SemanticTokensParams, SemanticTokensResult, SignatureHelpParams, SymbolInformation,
+    TextDocumentPositionParams, TextEdit, TypeHierarchyItem, TypeHierarchyPrepareParams,
+    TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, Url, WorkspaceEdit,
+    WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
 
@@ -138,6 +147,11 @@ pub struct LspServer {
     // (file-watcher, startup scan) can read it after the handler returns.
     /// Whether type checking (diagnostic publication) is enabled.
     pub(super) type_checking_enabled: Arc<RwLock<bool>>,
+    // Implements [LSPFMT-CONFIG] (`basilisk.formatter`): when the client or
+    // config selects `"none"`, formatting capabilities are not advertised and
+    // the handlers answer `None` even if a client calls them anyway.
+    /// Whether formatting (whole-document and range) is enabled.
+    pub(super) formatting_enabled: std::sync::atomic::AtomicBool,
 }
 
 impl std::fmt::Debug for LspServer {
@@ -163,7 +177,27 @@ impl LspServer {
             // Type checking is on by default; the client opts out via
             // `basilisk.enabled = false`. Implements [ANALYSIS-ENABLED].
             type_checking_enabled: Arc::new(RwLock::new(true)),
+            // Formatting is on by default (`basilisk.formatter = "ruff"`);
+            // `initialize` flips this off for `"none"`. [LSPFMT-CONFIG]
+            formatting_enabled: std::sync::atomic::AtomicBool::new(true),
         }
+    }
+
+    /// Whether formatting is enabled ([LSPFMT-CONFIG]).
+    pub(super) fn is_formatting_enabled(&self) -> bool {
+        self.formatting_enabled
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// The workspace's formatter style options ([LSPFMT-ENGINE]), read from
+    /// the first workspace root's `pyproject.toml`.
+    pub(super) async fn format_style(&self) -> crate::config::FormatStyle {
+        self.workspace_roots
+            .read()
+            .await
+            .first()
+            .map(|root| crate::config::load_format_style(root))
+            .unwrap_or_default()
     }
 
     /// Whether type checking (diagnostic publication) is currently enabled.
@@ -242,7 +276,12 @@ pub(super) async fn publish_diagnostics_gated(
     uri: Url,
     diags: Vec<Diagnostic>,
 ) {
-    if *enabled.read().await {
+    let is_enabled = *enabled.read().await;
+    diaglog!(
+        "[DIAG] publish n={} enabled={is_enabled} uri={uri}",
+        diags.len()
+    );
+    if is_enabled {
         client.publish_diagnostics(uri, diags, None).await;
     }
 }
@@ -403,6 +442,13 @@ impl tower_lsp::LanguageServer for LspServer {
         params: DocumentFormattingParams,
     ) -> LspResult<Option<Vec<TextEdit>>> {
         handlers::formatting(self, params).await
+    }
+
+    async fn range_formatting(
+        &self,
+        params: DocumentRangeFormattingParams,
+    ) -> LspResult<Option<Vec<TextEdit>>> {
+        handlers::range_formatting(self, params).await
     }
 
     async fn folding_range(

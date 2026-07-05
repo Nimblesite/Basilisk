@@ -63,6 +63,18 @@ function storeWith(processes: readonly ProcessInfo[], requests?: RecordedRequest
   return store;
 }
 
+
+/**
+ * Build a provider over `store` and pull the process table into the store
+ * through the real store-side fetch path — getChildren() is a pure projection
+ * of centralised state and never fetches on its own (#148).
+ */
+async function loadedProvider(store: Store): Promise<PythonProcessesProvider> {
+  const provider = new PythonProcessesProvider(store);
+  await provider.refreshNow();
+  return provider;
+}
+
 /** The `basilisk.profiler.start` requests among the recorded ones. */
 function profilerStarts(requests: readonly RecordedRequest[]): RecordedRequest[] {
   return requests.filter((req) => req.command === "basilisk.profiler.start");
@@ -131,13 +143,13 @@ suite("Python Processes Panel", () => {
   });
 
   test("lists every process sorted by CPU descending by default", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider = await loadedProvider(storeWith(STUB_PROCESSES));
     const rows = processRows(await provider.getChildren());
     assert.deepStrictEqual(rows.map(pidOf), [200, 100, 300], "CPU 42 > 5 > 1");
   });
 
   test("each row carries its PID so inline Profile starts with no input box", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider = await loadedProvider(storeWith(STUB_PROCESSES));
     const rows = processRows(await provider.getChildren());
     for (const row of rows) {
       assert.strictEqual(typeof pidOf(row), "number", "row must carry a numeric pid for the command arg");
@@ -151,7 +163,7 @@ suite("Python Processes Panel", () => {
   });
 
   test("rows needing elevation get a distinct contextValue for the lock affordance", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider = await loadedProvider(storeWith(STUB_PROCESSES));
     const rows = await provider.getChildren();
     const elevated = rows.find((r) => pidOf(r) === 200);
     const normal = rows.find((r) => pidOf(r) === 100);
@@ -160,14 +172,14 @@ suite("Python Processes Panel", () => {
   });
 
   test("sort by memory orders rows by resident size descending", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider = await loadedProvider(storeWith(STUB_PROCESSES));
     provider.cycleSortMode(); // cpu → memory
     const rows = processRows(await provider.getChildren());
     assert.deepStrictEqual(rows.map(pidOf), [300, 100, 200], "memory 99 > 50 > 10 MB");
   });
 
   test("group by Python version buckets processes under collapsible headers", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider = await loadedProvider(storeWith(STUB_PROCESSES));
     provider.cycleGroupMode(); // none → version
     const groups = processRows(await provider.getChildren());
     assert.deepStrictEqual(
@@ -184,7 +196,7 @@ suite("Python Processes Panel", () => {
   });
 
   test("filter narrows rows by name, script, or PID substring", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider = await loadedProvider(storeWith(STUB_PROCESSES));
     provider.setFilter("worker");
     let rows = processRows(await provider.getChildren());
     assert.deepStrictEqual(rows.map(pidOf), [200], "only worker.py matches");
@@ -199,7 +211,7 @@ suite("Python Processes Panel", () => {
   // tree must NOT be empty — it must say processes are running but filtered
   // (the pinned launch rows stay too).
   test("a filter that hides every running process shows an honest placeholder, not 'no processes' (procexp-2)", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider = await loadedProvider(storeWith(STUB_PROCESSES));
     provider.setFilter("nonexistent-zzz");
     const nonAction = processRows(await provider.getChildren());
     assert.strictEqual(nonAction.length, 1, "must return a placeholder row, not an empty list that triggers the welcome");
@@ -212,7 +224,7 @@ suite("Python Processes Panel", () => {
   });
 
   test("group members expose the full member set for the count badge", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider = await loadedProvider(storeWith(STUB_PROCESSES));
     provider.cycleGroupMode();
     const groups = await provider.getChildren();
     const eleven = groups.find((g) => labelText(g) === "3.11.7");
@@ -232,7 +244,7 @@ suite("Python Processes Panel — inline launch actions (#79)", () => {
   });
 
   test("rows keep a stable id across refreshes so inline buttons survive the auto-refresh", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider = await loadedProvider(storeWith(STUB_PROCESSES));
     const before = await provider.getChildren();
     provider.refresh();
     const after = await provider.getChildren();
@@ -251,7 +263,7 @@ suite("Python Processes Panel — inline launch actions (#79)", () => {
   test("inline Profile CPU invoked without an argument profiles the selected row", async () => {
     const requests: RecordedRequest[] = [];
     const store = storeWith(STUB_PROCESSES, requests);
-    provider = new PythonProcessesProvider(store);
+    provider = await loadedProvider(store);
     const rows = await provider.getChildren();
     const selectedRow = rows.find((row) => pidOf(row) === 200);
     assert.ok(selectedRow !== undefined, "PID 200 row must exist");
@@ -272,7 +284,7 @@ suite("Python Processes Panel — inline launch actions (#79)", () => {
   test("an explicitly passed row wins over a different selection", async () => {
     const requests: RecordedRequest[] = [];
     const store = storeWith(STUB_PROCESSES, requests);
-    provider = new PythonProcessesProvider(store);
+    provider = await loadedProvider(store);
     const rows = await provider.getChildren();
     const clicked = rows.find((row) => pidOf(row) === 300);
     const selected = rows.find((row) => pidOf(row) === 200);
@@ -289,7 +301,7 @@ suite("Python Processes Panel — inline launch actions (#79)", () => {
   test("with no item and no selection, nothing is profiled", async () => {
     const requests: RecordedRequest[] = [];
     const store = storeWith(STUB_PROCESSES, requests);
-    provider = new PythonProcessesProvider(store);
+    provider = await loadedProvider(store);
     await provider.getChildren();
 
     const actions = createProcessRowActions(store, { selection: [] });
@@ -316,7 +328,7 @@ suite("Python Processes Panel — Track Memory routing", () => {
     const executed: string[] = [];
     const store = storeWith(STUB_PROCESSES, requests);
     arrange(store);
-    const rows = await new PythonProcessesProvider(store).getChildren();
+    const rows = await (await loadedProvider(store)).getChildren();
     const selectedRow = rows.find((row) => pidOf(row) === 100);
     assert.ok(selectedRow !== undefined, "PID 100 row must exist");
 
@@ -382,7 +394,7 @@ suite("Python Processes Panel — zero-filter display cues", () => {
   teardown(() => { provider.dispose(); });
 
   test("launchers are always listed and carry a framework chip (zero filters)", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider = await loadedProvider(storeWith(STUB_PROCESSES));
     const rows = await provider.getChildren();
     const uvicorn = rows.find((r) => pidOf(r) === 300);
     assert.ok(uvicorn, "the uvicorn launcher must always be listed — nothing is hidden");
@@ -393,7 +405,7 @@ suite("Python Processes Panel — zero-filter display cues", () => {
   });
 
   test("a workspace process resolves to a green decoration; an outside one does not", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider = await loadedProvider(storeWith(STUB_PROCESSES));
     const decorations = new ProcessDecorationProvider(provider);
     try {
       const rows = await provider.getChildren();
@@ -427,7 +439,7 @@ suite("Python Processes Panel — zero-filter display cues", () => {
 
   test("a non-debuggable process is 🚫-marked, greyed, and sorted to the bottom", async () => {
     // MACHINERY has the highest CPU (99%) but must still sink below the others.
-    provider = new PythonProcessesProvider(storeWith([MACHINERY, ...STUB_PROCESSES]));
+    provider = await loadedProvider(storeWith([MACHINERY, ...STUB_PROCESSES]));
     const decorations = new ProcessDecorationProvider(provider);
     try {
       const rows = await provider.getChildren();
@@ -466,8 +478,9 @@ suite("Python Processes Panel — display cues: icons, precedence, tooltip, grou
 
   test("each process state renders its own info icon (R4)", async () => {
     const plain: ProcessInfo = { ...STUB_PROCESSES[0], pid: 111, inWorkspace: false };
-    provider = new PythonProcessesProvider(storeWith([MACHINERY, plain, ...STUB_PROCESSES]));
-    provider.setActiveProfilingPid(100); // mark PID 100 as actively profiled
+    const store = storeWith([MACHINERY, plain, ...STUB_PROCESSES]);
+    store.profilerActive(100, "sess-cpu"); // mark PID 100 as actively profiled (store-derived, #148)
+    provider = await loadedProvider(store);
     const rows = await provider.getChildren();
     const icons = new Map(rows.map((r) => [pidOf(r), iconId(r)]));
     assert.strictEqual(icons.get(100), "flame", "the actively-profiled row shows the flame");
@@ -479,7 +492,7 @@ suite("Python Processes Panel — display cues: icons, precedence, tooltip, grou
 
   test("greying wins over green for a non-debuggable workspace process (R5 > R6)", async () => {
     const wsMachinery: ProcessInfo = { ...MACHINERY, inWorkspace: true };
-    provider = new PythonProcessesProvider(storeWith([wsMachinery]));
+    provider = await loadedProvider(storeWith([wsMachinery]));
     const decorations = new ProcessDecorationProvider(provider);
     try {
       const row = processRows(await provider.getChildren()).find((r) => pidOf(r) === 900);
@@ -504,7 +517,7 @@ suite("Python Processes Panel — display cues: icons, precedence, tooltip, grou
       runtimeSecs: 65, user: "carol", requiresElevation: false,
       inWorkspace: true, launcher: "gunicorn", debuggable: true, undebuggableReason: null,
     };
-    provider = new PythonProcessesProvider(storeWith([rich]));
+    provider = await loadedProvider(storeWith([rich]));
     const row = processRows(await provider.getChildren()).find((r) => pidOf(r) === 555);
     assert.ok(row, "the process row must exist");
     const tip = tooltipText(row);
@@ -518,7 +531,7 @@ suite("Python Processes Panel — display cues: icons, precedence, tooltip, grou
 
   test("when grouped, a non-debuggable process sinks within its group (R5)", async () => {
     const machinery: ProcessInfo = { ...MACHINERY, pythonVersion: "3.12.1" }; // shares 100 & 300's group
-    provider = new PythonProcessesProvider(storeWith([machinery, ...STUB_PROCESSES]));
+    provider = await loadedProvider(storeWith([machinery, ...STUB_PROCESSES]));
     provider.cycleGroupMode(); // none → version
     const groups = await provider.getChildren();
     const twelve = groups.find((g) => labelText(g) === "3.12.1");
@@ -545,7 +558,7 @@ suite("Python Processes Panel — pinned launch buttons", () => {
   }
 
   test("the current-file launches are pinned above the process rows even when a process is listed", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
+    provider = await loadedProvider(storeWith(STUB_PROCESSES));
     const rows = await provider.getChildren();
     assert.deepStrictEqual(
       commandsOf(rows),
@@ -558,7 +571,7 @@ suite("Python Processes Panel — pinned launch buttons", () => {
 
   test("a busy metric hides ITS launch row but leaves the other (both: CPU during memory, memory during CPU)", async () => {
     const store = storeWith(STUB_PROCESSES);
-    provider = new PythonProcessesProvider(store);
+    provider = await loadedProvider(store);
 
     store.profilerActive(4242, "sess-cpu"); // CPU busy
     assert.deepStrictEqual(
@@ -578,7 +591,7 @@ suite("Python Processes Panel — pinned launch buttons", () => {
   });
 
   test("with no processes the tree is empty so the viewsWelcome big buttons render", async () => {
-    provider = new PythonProcessesProvider(storeWith([]));
+    provider = await loadedProvider(storeWith([]));
     assert.deepStrictEqual(
       await provider.getChildren(),
       [],
@@ -595,8 +608,9 @@ suite("Python Processes Panel — Track Memory is debuggee-only", () => {
   teardown(() => { provider.dispose(); });
 
   test("only the active-debuggee row carries the Track-Memory-enabling contextValue", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
-    provider.setActiveDebuggeePid(100); // PID 100 is the active debuggee
+    const store = storeWith(STUB_PROCESSES);
+    store.setActiveDebuggeePid(100); // PID 100 is the active debuggee (centralised, #148)
+    provider = await loadedProvider(store);
     const rows = processRows(await provider.getChildren());
     function ctxOf(pid: number): string | undefined {
       return rows.find((r) => pidOf(r) === pid)?.contextValue;
@@ -607,8 +621,9 @@ suite("Python Processes Panel — Track Memory is debuggee-only", () => {
   });
 
   test("non-debuggee rows warn that memory tracking is unavailable here; the debuggee does not", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
-    provider.setActiveDebuggeePid(100);
+    const store = storeWith(STUB_PROCESSES);
+    store.setActiveDebuggeePid(100);
+    provider = await loadedProvider(store);
     const rows = processRows(await provider.getChildren());
     const debuggee = rows.find((r) => pidOf(r) === 100);
     const external = rows.find((r) => pidOf(r) === 300);
@@ -624,8 +639,9 @@ suite("Python Processes Panel — Track Memory is debuggee-only", () => {
   });
 
   test("with no active debuggee, no row enables Track Memory", async () => {
-    provider = new PythonProcessesProvider(storeWith(STUB_PROCESSES));
-    provider.setActiveDebuggeePid(undefined);
+    const store = storeWith(STUB_PROCESSES);
+    store.setActiveDebuggeePid(undefined);
+    provider = await loadedProvider(store);
     const rows = processRows(await provider.getChildren());
     assert.ok(
       !rows.some((r) => r.contextValue === "pythonProcessDebuggee"),
@@ -663,7 +679,7 @@ suite("Python Processes Panel — inline action target (issue #79)", () => {
   test("undefined item falls back to the tree selection and profiles that PID — without warning", async () => {
     const requests: RecordedRequest[] = [];
     const store = storeWith(STUB_PROCESSES, requests);
-    const provider = new PythonProcessesProvider(store);
+    const provider = await loadedProvider(store);
     try {
       const rows = await provider.getChildren();
       const selected = rows.find((row) => pidOf(row) === 100);
@@ -686,7 +702,7 @@ suite("Python Processes Panel — inline action target (issue #79)", () => {
     const executed: string[] = [];
     const store = storeWith(STUB_PROCESSES, requests);
     store.setDebuggeeProcessId("session-1", 200);
-    const provider = new PythonProcessesProvider(store);
+    const provider = await loadedProvider(store);
     try {
       const rows = await provider.getChildren();
       const selected = rows.find((row) => pidOf(row) === 200);
@@ -721,6 +737,54 @@ suite("Python Processes Panel — inline action target (issue #79)", () => {
       profilerStarts(requests).length,
       0,
       "must not start profiling without a target",
+    );
+  });
+});
+
+// A row the panel itself marks 🚫 (non-debuggable) must never offer the Profile
+// CPU action: package.json reveals it via `viewItem =~ /^pythonProcess/`, and the
+// command handler is the last line of defence against a stale/raced row (#266).
+suite("Python Processes Panel — blocked rows never offer Profile CPU (#266)", () => {
+  const BLOCKED_MACHINERY: ProcessInfo = {
+    pid: 400, ppid: 100, name: "python3.13", interpreterPath: "/usr/bin/python3.13",
+    script: null, pythonVersion: "3.13.7", cpuPercent: 0, memoryBytes: 5 * MB,
+    runtimeSecs: 60, user: "alice", requiresElevation: true,
+    inWorkspace: false, launcher: null, debuggable: false, undebuggableReason: "debugger machinery",
+  };
+  let provider: PythonProcessesProvider;
+  teardown(() => { provider.dispose(); });
+
+  test("a non-debuggable row's contextValue opts out of the /^pythonProcess/ menu clauses", async () => {
+    provider = await loadedProvider(storeWith([...STUB_PROCESSES, BLOCKED_MACHINERY]));
+    const rows = processRows(await provider.getChildren());
+    const blocked = rows.find((row) => pidOf(row) === 400);
+    assert.ok(blocked !== undefined, "the machinery row must still be listed (zero-filter)");
+    const ctx = blocked.contextValue ?? "";
+    // package.json's clause is `viewItem =~ /^pythonProcess/` — an anchored
+    // prefix match, i.e. exactly a startsWith check.
+    assert.ok(
+      !ctx.startsWith("pythonProcess"),
+      "package.json reveals Profile CPU on `viewItem =~ /^pythonProcess/`, so a row the panel " +
+        `already marks 🚫 "Can't profile" must not match it; got contextValue: ${ctx}`,
+    );
+  });
+
+  test("invoking Profile CPU on a blocked row refuses instead of attaching", async () => {
+    const requests: RecordedRequest[] = [];
+    const store = storeWith([...STUB_PROCESSES, BLOCKED_MACHINERY], requests);
+    provider = await loadedProvider(store);
+    const rows = processRows(await provider.getChildren());
+    const blocked = rows.find((row) => pidOf(row) === 400);
+    assert.ok(blocked !== undefined, "the machinery row must exist");
+
+    const actions = createProcessRowActions(store, { selection: [blocked] });
+    await actions.profileProcess(blocked);
+
+    assert.strictEqual(
+      profilerStarts(requests).length,
+      0,
+      "a row flagged \"Can't profile\" must never send basilisk.profiler.start — " +
+        "the attach is known to fail (#266)",
     );
   });
 });

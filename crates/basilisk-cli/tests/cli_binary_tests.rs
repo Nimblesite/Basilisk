@@ -110,10 +110,13 @@ fn run_check_staged_with_args(
 fn version_plain_matches_shipwright_contract() -> Result<(), Box<dyn std::error::Error>> {
     let out = binary().arg("--version").output()?;
     assert_eq!(out.status.code(), Some(0), "--version must exit 0");
+    // Line 1 is the Shipwright contract; line 2 lists the embedded formatter
+    // engine ([LSPFMT-PROVENANCE]).
     assert_eq!(
         stdout(&out).trim(),
-        concat!("basilisk ", env!("CARGO_PKG_VERSION")),
-        "--version must emit '<component-id> <semver>'"
+        concat!("basilisk ", env!("CARGO_PKG_VERSION"), "\nRuff formatter: ").to_owned()
+            + basilisk_lsp::formatting::EMBEDDED_RUFF_FORMATTER_VERSION,
+        "--version must emit '<component-id> <semver>' then the embedded engine line"
     );
     assert!(
         out.stderr.is_empty(),

@@ -1,19 +1,35 @@
 // Implements [LSPPROF]. See docs/specs/LSP-PROFILING-SPEC.md#LSPPROF
 /**
- * Flamegraph webview for the Basilisk profiler.
+ * CPU profile results webview for the Basilisk profiler.
  *
- * Owns the results panel end to end: the complete HTML document (CSS
- * styling, summary cards, function/line tables, count-up animations) and
- * the webview panel that hosts it, including click-to-source navigation.
+ * Owns the results panel end to end: the interactive flame graph hero (the
+ * inferno SVG the LSP exports on every stop, [PROFILE-FLAMEGRAPH]), summary
+ * cards, hot function/line tables with click-to-source navigation, and the
+ * completion-toast fallback flow that never dead-ends the user (#145).
  *
- * Extracted from profiler.ts to satisfy the 500 LOC file limit.
+ * Panel lifecycle, CSP, and safe data embedding come from the shared webview
+ * host ([PROFILE-WEBVIEW-HOST], profiler-webview.ts).
  */
 
-import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import * as vscode from "vscode";
 import { Logger } from "./logger";
 import type { ProfileResult } from "./profiler-decorations";
-import { PROFILER_JS_UTILS } from "./profiler-styles";
+import {
+  PROFILER_CSS_VARS,
+  PROFILER_CSS_RESET,
+  PROFILER_CSS_CARDS,
+  PROFILER_CSS_TABLE,
+  PROFILER_CSS_HEADING,
+  PROFILER_JS_UTILS,
+} from "./profiler-styles";
+import {
+  buildWebviewDocument,
+  embedJson,
+  handleSourceNavigation,
+  SingletonWebviewPanel,
+  type WebviewMessage,
+} from "./profiler-webview";
 
 // Implements [PROFILE-NATIVE-FALLBACK]. See docs/specs/LSP-PROFILING-SPEC.md#PROFILE-NATIVE-FALLBACK
 // ── Result presentation (#145) ─────────────────────────────────────────────
@@ -22,8 +38,11 @@ import { PROFILER_JS_UTILS } from "./profiler-styles";
 const OPEN_FLAME_CHART = "Open Flame Chart";
 const REVEAL_TRACE = "Reveal Trace File";
 
-/** Entropy (bytes) for the per-render webview CSP nonce. */
-const CSP_NONCE_BYTES = 16;
+/**
+ * Largest flame graph SVG embedded inline as a data URI (bytes). Anything
+ * bigger still opens externally via the panel button; it is just not inlined.
+ */
+const MAX_INLINE_SVG_BYTES = 4_194_304;
 
 // Implements [PROFILE-SHORT-PROGRAM]. See docs/specs/LSP-PROFILING-SPEC.md#PROFILE-SHORT-PROGRAM
 /**
@@ -51,7 +70,7 @@ export function profileHasNoUsableData(
  * *relies* on it: that viewer can refuse to render (unavailable in the host, or
  * a profile it rejects) and `vscode.open` does not reject when it does. So the
  * completion notification always offers an "Open Flame Chart" action onto the
- * self-contained flamegraph webview (plus "Reveal Trace File") — the user is
+ * self-contained results webview (plus "Reveal Trace File") — the user is
  * never stranded on "the editor could not be opened".
  */
 export async function presentProfileResult(result: ProfileResult): Promise<void> {
@@ -142,7 +161,7 @@ export async function openNativeProfileViewerBeside(
 
 /**
  * Open the native `.cpuprofile` viewer beside the source, falling back to the
- * self-contained flamegraph webview.
+ * self-contained results webview.
  */
 async function openNativeViewerOrFallback(result: ProfileResult): Promise<void> {
   await openNativeProfileViewerBeside(result.cpuProfilePath ?? "", () => {
@@ -169,46 +188,26 @@ async function offerProfileResultActions(result: ProfileResult): Promise<void> {
 
 // ── Webview panel ─────────────────────────────────────────────────────────
 
-let flamegraphPanel: vscode.WebviewPanel | undefined;
-
-/** Open (or reveal) the flamegraph results panel beside the source. */
-export function openFlamegraphWebview(result: ProfileResult): void {
-  if (flamegraphPanel !== undefined) {
-    flamegraphPanel.reveal(vscode.ViewColumn.Beside);
-  } else {
-    flamegraphPanel = vscode.window.createWebviewPanel(
-      "basilisk.flamegraph",
-      "Basilisk Profiler",
-      vscode.ViewColumn.Beside,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: [],
-      },
-    );
-    flamegraphPanel.onDidDispose(() => {
-      flamegraphPanel = undefined;
-    });
-    // Register the message handler ONCE — re-opening reveals the same panel, so
-    // re-registering on every call would fire each action N times.
-    flamegraphPanel.webview.onDidReceiveMessage(handleFlamegraphMessage);
+/** Route a message posted from the results webview. */
+function handleFlamegraphMessage(msg: WebviewMessage): void {
+  if (handleSourceNavigation(msg)) {
+    return;
   }
-
-  flamegraphPanel.webview.html = buildFlamegraphHtml(result);
+  if (msg.type === "openSpeedscope" && msg.file !== undefined && msg.file !== "") {
+    void openSpeedscopeImport(msg.file);
+  } else if (msg.type === "openFlamegraphSvg" && msg.file !== undefined && msg.file !== "") {
+    // The inferno SVG carries its own zoom/search interactivity, which the
+    // CSP-locked webview intentionally does not run — open it externally where
+    // its script works ([PROFILE-FLAMEGRAPH]).
+    void vscode.env.openExternal(vscode.Uri.file(msg.file));
+  }
 }
 
-/** Route a message posted from the flamegraph webview. */
-function handleFlamegraphMessage(msg: { type: string; file?: string; line?: number }): void {
-  if (msg.type === "navigateToSource" && msg.file !== undefined && msg.line !== undefined) {
-    const uri = vscode.Uri.file(msg.file);
-    const position = new vscode.Position(msg.line - 1, 0);
-    void vscode.window.showTextDocument(uri, {
-      selection: new vscode.Range(position, position),
-      viewColumn: vscode.ViewColumn.One,
-    });
-  } else if (msg.type === "openSpeedscope" && msg.file !== undefined && msg.file !== "") {
-    void openSpeedscopeImport(msg.file);
-  }
+const flamegraphPanel = new SingletonWebviewPanel("basilisk.flamegraph", handleFlamegraphMessage);
+
+/** Open (or reveal) the profile results panel beside the source. */
+export function openFlamegraphWebview(result: ProfileResult): void {
+  flamegraphPanel.show("Basilisk Profiler", buildFlamegraphHtml(result));
 }
 
 /**
@@ -226,124 +225,91 @@ async function openSpeedscopeImport(file: string): Promise<void> {
 }
 
 /**
- * Test seam: is the self-contained flamegraph results panel currently open?
- * Lets the run→profile→view e2e assert the user reaches a working flame chart
- * rather than dead-ending on the built-in viewer's error ([PROFILE-NATIVE]).
+ * Test seam: is the self-contained results panel currently open? Lets the
+ * run→profile→view e2e assert the user reaches a working flame chart rather
+ * than dead-ending on the built-in viewer's error ([PROFILE-NATIVE]).
  */
 export function flamegraphPanelOpen(): boolean {
-  return flamegraphPanel !== undefined;
+  return flamegraphPanel.isOpen();
 }
 
 /** Close and forget the panel (extension teardown). */
 export function disposeFlamegraphPanel(): void {
-  if (flamegraphPanel !== undefined) {
-    flamegraphPanel.dispose();
-    flamegraphPanel = undefined;
+  flamegraphPanel.dispose();
+}
+
+// ── Flame graph hero ([PROFILE-FLAMEGRAPH]) ───────────────────────────────
+
+/**
+ * Inline the LSP-exported flame graph SVG as a `data:` URI so the CSP-locked
+ * webview (`img-src data:`) can render it without running its embedded script.
+ * Returns undefined when there is no SVG, it cannot be read, or it is too large
+ * to inline — the panel then simply omits the hero (the tables still work).
+ */
+export function loadFlamegraphSvgDataUri(flamegraphPath: string | undefined): string | undefined {
+  if (flamegraphPath === undefined || flamegraphPath === "") {
+    return undefined;
+  }
+  try {
+    const svg = readFileSync(flamegraphPath);
+    if (svg.byteLength === 0 || svg.byteLength > MAX_INLINE_SVG_BYTES) {
+      return undefined;
+    }
+    return `data:image/svg+xml;base64,${svg.toString("base64")}`;
+  } catch (err: unknown) {
+    Logger.warn(
+      `Flame graph SVG could not be inlined (${err instanceof Error ? err.message : String(err)})`,
+    );
+    return undefined;
   }
 }
 
-/** Build the CSS for the flamegraph webview. */
-function flamegraphCssVars(): string {
+/** The flame graph hero markup, or an empty string when no SVG is available. */
+function flamegraphHeroHtml(svgDataUri: string | undefined): string {
+  if (svgDataUri === undefined) {
+    return "";
+  }
   return `
-    :root {
-      --prof-critical: #e8500a;
-      --prof-hot: #f97316;
-      --prof-warm: #fbbf24;
-      --prof-cool: #4a5468;
-      --prof-idle: #1a1f2e;
-      --prof-bg: #0a0c12;
-      --prof-surface: #141820;
-      --prof-border: #1a1f2e;
-      --prof-text: #f0f2f7;
-      --prof-text-secondary: #8892a4;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: var(--prof-bg);
-      color: var(--prof-text);
-      font-family: 'Space Grotesk', -apple-system, sans-serif;
-      padding: 16px;
-    }
-    h1 {
-      font-size: 18px; font-weight: 600; margin-bottom: 16px;
-      display: flex; align-items: center; gap: 8px;
-    }
-    h1 .accent { color: var(--prof-critical); }`;
+  <h2>Flame Graph</h2>
+  <div class="flame-hero">
+    <img id="flame-svg" alt="CPU flame graph" src="${svgDataUri}">
+    <button class="action-link" id="open-flame-svg" title="Open the interactive flame graph (zoom and search) in your default viewer">
+      Open Interactive Flame Graph
+    </button>
+  </div>`;
 }
 
-function flamegraphCssComponents(): string {
-  return `
-    .fn-table { width: 100%; border-collapse: collapse; }
-    .fn-table th {
-      text-align: left; font-size: 11px;
-      color: var(--prof-text-secondary);
-      text-transform: uppercase; letter-spacing: 0.05em;
-      padding: 6px 8px;
-      border-bottom: 1px solid var(--prof-border);
-    }
-    .fn-table td {
-      padding: 8px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 13px;
-      border-bottom: 1px solid var(--prof-border);
-      cursor: pointer;
-    }
-    .fn-table tr:hover td { background: var(--prof-surface); }
-    .bar-cell { position: relative; width: 200px; }
-    .bar { height: 20px; border-radius: 3px; transition: width 200ms ease; }
+// ── Document assembly ─────────────────────────────────────────────────────
+
+/** Flamegraph-specific CSS on top of the shared profiler design system. */
+function flamegraphCss(): string {
+  return `${PROFILER_CSS_VARS}${PROFILER_CSS_RESET}
+    body { padding: 16px; }
+    h1 .accent { color: var(--prof-critical); }
+    ${PROFILER_CSS_HEADING}${PROFILER_CSS_CARDS}${PROFILER_CSS_TABLE}
+    .data-table .pct { font-weight: 500; min-width: 56px; text-align: right; }
     .bar.critical { background: var(--prof-critical); }
     .bar.hot { background: var(--prof-hot); }
     .bar.warm { background: var(--prof-warm); }
     .bar.cool { background: var(--prof-cool); }
-    .pct { font-weight: 500; min-width: 56px; text-align: right; }
     .file-link { color: var(--prof-text-secondary); font-size: 12px; }
     .file-link:hover { color: var(--prof-text); text-decoration: underline; }
-    .speedscope-link {
-      display: inline-block; margin-top: 16px; padding: 8px 16px;
+    .flame-hero {
       background: var(--prof-surface); border: 1px solid var(--prof-border);
+      border-radius: 8px; padding: 12px; margin-bottom: 8px;
+    }
+    .flame-hero img { display: block; width: 100%; height: auto; border-radius: 4px; }
+    .action-link {
+      display: inline-block; margin-top: 12px; padding: 8px 16px;
+      background: var(--prof-bg); border: 1px solid var(--prof-border);
       border-radius: 6px; color: var(--prof-text);
-      text-decoration: none; font-size: 13px; cursor: pointer;
+      font-size: 13px; cursor: pointer; font-family: inherit;
     }
-    .speedscope-link:hover { border-color: var(--prof-critical); color: var(--prof-critical); }`;
+    .action-link:hover { border-color: var(--prof-critical); color: var(--prof-critical); }`;
 }
 
-function flamegraphCss(): string {
-  return `${flamegraphCssVars()}
-    .summary-cards {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-    .card {
-      background: var(--prof-surface);
-      border: 1px solid var(--prof-border);
-      border-radius: 8px;
-      padding: 12px 16px;
-      min-width: 120px;
-    }
-    .card .label {
-      font-size: 11px;
-      color: var(--prof-text-secondary);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .card .value {
-      font-size: 24px;
-      font-weight: 600;
-      font-family: 'JetBrains Mono', monospace;
-      margin-top: 4px;
-    }
-    h2 {
-      font-size: 14px; font-weight: 600;
-      color: var(--prof-text-secondary);
-      text-transform: uppercase; letter-spacing: 0.05em;
-      margin: 16px 0 8px;
-    }${flamegraphCssComponents()}`;
-}
-
-/** Build the body HTML with summary cards and tables. */
-function flamegraphBody(): string {
+/** Build the body HTML with the flame graph hero, summary cards and tables. */
+function flamegraphBody(svgDataUri: string | undefined): string {
   return `
   <h1><span class="accent">BASILISK</span> PROFILER</h1>
   <div class="summary-cards">
@@ -351,41 +317,30 @@ function flamegraphBody(): string {
     <div class="card"><div class="label">Duration</div><div class="value" id="duration">0s</div></div>
     <div class="card"><div class="label">Functions</div><div class="value" id="fn-count">0</div></div>
     <div class="card"><div class="label">Hot Lines</div><div class="value" id="line-count">0</div></div>
-  </div>
+  </div>${flamegraphHeroHtml(svgDataUri)}
   <h2>Hot Functions</h2>
-  <table class="fn-table">
+  <table class="data-table">
     <thead><tr><th>Function</th><th>Location</th><th>Total %</th><th>Self %</th><th></th></tr></thead>
     <tbody id="fn-body"></tbody>
   </table>
   <h2>Hot Lines</h2>
-  <table class="fn-table">
+  <table class="data-table">
     <thead><tr><th>Location</th><th>%</th><th>Samples</th><th></th></tr></thead>
     <tbody id="line-body"></tbody>
   </table>
   <div id="speedscope-section"></div>`;
 }
 
-/**
- * Serialize a value for embedding inside an inline `<script>`. `JSON.stringify`
- * does not escape `<`, so a profiled frame name/path containing `</script>`
- * would close the script element early; `<` keeps it an opaque JS string.
- */
-function embedJson(value: unknown): string {
-  return JSON.stringify(value).split("<").join("\\u003c");
-}
-
-/** Build the script initialization and helpers for the flamegraph webview. */
+/** Build the script initialization and helpers for the results webview. */
 function flamegraphScriptInit(result: ProfileResult): string {
-  const hotFunctionsJson = embedJson(result.hotFunctions);
-  const hotLinesJson = embedJson(result.hotLines);
-
   return `
     const vscode = acquireVsCodeApi();
-    const hotFunctions = ${hotFunctionsJson};
-    const hotLines = ${hotLinesJson};
+    const hotFunctions = ${embedJson(result.hotFunctions)};
+    const hotLines = ${embedJson(result.hotLines)};
     const totalSamples = ${result.totalSamples};
     const duration = ${result.duration};
     const outputFile = ${embedJson(result.outputFile)};
+    const flamegraphFile = ${embedJson(result.flamegraphPath ?? "")};
     function animateValue(el, target, suffix) {
       const start = 0;
       const stepTime = Math.max(10, Math.floor(400 / target));
@@ -400,6 +355,10 @@ function flamegraphScriptInit(result: ProfileResult): string {
     document.getElementById('duration').textContent = duration < 60 ? duration.toFixed(1) + 's' : (duration / 60).toFixed(1) + 'm';
     document.getElementById('fn-count').textContent = String(hotFunctions.length);
     document.getElementById('line-count').textContent = String(hotLines.length);
+    const openSvgButton = document.getElementById('open-flame-svg');
+    if (openSvgButton) {
+      openSvgButton.onclick = () => vscode.postMessage({ type: 'openFlamegraphSvg', file: flamegraphFile });
+    }
     function heatClass(pct) {
       if (pct >= 20) return 'critical';
       if (pct >= 10) return 'hot';
@@ -441,8 +400,8 @@ function flamegraphScriptRender(): string {
     }
     if (outputFile) {
       const section = document.getElementById('speedscope-section');
-      const link = document.createElement('div');
-      link.className = 'speedscope-link';
+      const link = document.createElement('button');
+      link.className = 'action-link';
       link.textContent = 'Open in Speedscope (external)';
       link.title = 'Reveal the trace and open speedscope.app to drag it in';
       link.onclick = () => {
@@ -452,24 +411,13 @@ function flamegraphScriptRender(): string {
     }`;
 }
 
-/** Build the complete flamegraph HTML for the profiler webview panel. */
+/** Build the complete results-panel HTML for the profiler webview. */
 export function buildFlamegraphHtml(result: ProfileResult): string {
-  // A per-render nonce gates the (self-generated) inline script: even if a
-  // profiled program's frame name/path slipped an escape, the browser refuses
-  // to run any inline <script> without this nonce, and `default-src 'none'`
-  // blocks loading any external resource the webview never needs ([PROFILE-NATIVE-FALLBACK]).
-  const nonce = randomBytes(CSP_NONCE_BYTES).toString("base64");
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Basilisk Profiler</title>
-  <style>${flamegraphCss()}</style>
-</head>
-<body>${flamegraphBody()}
-  <script nonce="${nonce}">${PROFILER_JS_UTILS}${flamegraphScriptInit(result)}${flamegraphScriptRender()}</script>
-</body>
-</html>`;
+  const svgDataUri = loadFlamegraphSvgDataUri(result.flamegraphPath);
+  return buildWebviewDocument({
+    title: "Basilisk Profiler",
+    css: flamegraphCss(),
+    body: flamegraphBody(svgDataUri),
+    script: `${PROFILER_JS_UTILS}${flamegraphScriptInit(result)}${flamegraphScriptRender()}`,
+  });
 }

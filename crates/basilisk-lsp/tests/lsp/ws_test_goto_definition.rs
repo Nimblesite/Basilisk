@@ -226,6 +226,42 @@ async fn test_ws_goto_definition_variable() -> TestResult<()> {
 }
 
 #[tokio::test]
+async fn test_ws_goto_definition_module_var_use_inside_function() -> TestResult<()> {
+    // Field report (follow-up to #199): cmd+click on a module-level constant
+    // used inside a function body must jump to the module-level definition,
+    // exactly like parameter and local-variable uses do.
+    let code = "\"\"\"doc\"\"\"\n\nfrom typing import Final\n\nPI: Final = 3.14\n\n\ndef scaled(factor: int) -> float:\n    result = PI * factor\n    return result\n";
+    let (_fixture, resp) = open_and_request(
+        "file:///ws_goto_module_const_use.py",
+        code,
+        961,
+        "textDocument/definition",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///ws_goto_module_const_use.py" },
+            // Line 8: `    result = PI * factor` — the `PI` use at chars 13..15.
+            "position": { "line": 8, "character": 13 }
+        }),
+    )
+    .await?;
+
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    assert!(
+        parsed["result"] != serde_json::Value::Null,
+        "goto-def on a module-constant use must resolve: {resp}"
+    );
+    let start = &parsed["result"]["range"]["start"];
+    assert_eq!(
+        start["line"], 4,
+        "PI's definition is on line 4 (`PI: Final = 3.14`): {resp}"
+    );
+    assert_eq!(
+        start["character"], 0,
+        "PI's definition starts at char 0: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_ws_goto_definition_parameter_use() -> TestResult<()> {
     // Regression for the goto hammer "parameter use resolves to the parameter"
     // (#200): a use of a function parameter must resolve to the parameter's

@@ -13,10 +13,9 @@
  */
 
 import * as vscode from "vscode";
-import { effect } from "@preact/signals-core";
 import { Logger } from "./logger";
 import type { Store } from "./store";
-import { isProfilingUiEnabled } from "./profiling-ui";
+import { bindMemoryStatusBar } from "./memory-status";
 import { acquireStoppedFrame, evaluateInDebugSession, waitForStoppedFrame } from "./dap-evaluate";
 import { withUserProgress } from "./progress-ops";
 import type { MemoryIngestResult } from "./memory-dashboard-mapping";
@@ -39,13 +38,15 @@ import {
 } from "./memory-capture";
 import { pickReferenceType, walkReferences } from "./memory-ref-picker";
 
+// Re-exported so tests keep one import site for the memory profiler's seams.
+export { memoryStatusText } from "./memory-status";
+
 // ── State ─────────────────────────────────────────────────────────────────
 //
 // Memory-tracking session state lives in the store as a reactive signal
 // ([PROFILE-PROCESSES-REACTIVE]); `boundStore` is the handle this module reads
 // it through (and the e2e seam reads it through `activeMemorySession`).
 
-let memoryStatusBarItem: vscode.StatusBarItem | undefined;
 let boundStore: Store | undefined;
 /**
  * Final-snapshot files awaiting cleanup, keyed by debug-session id. When the
@@ -55,8 +56,6 @@ let boundStore: Store | undefined;
  * ([PROFILE-MEMORY-FINAL]).
  */
 const pendingSnapshotCleanup = new Map<string, string>();
-/** [PROFILE-UI-GATE] Whether the (imperative) memory indicator may be shown. */
-let memoryUiEnabled = false;
 
 // ── Registration ──────────────────────────────────────────────────────────
 
@@ -65,37 +64,13 @@ export function registerMemoryProfiler(
   context: vscode.ExtensionContext,
   store: Store,
 ): vscode.Disposable[] {
-  /** Status bar priority — lower than main Basilisk item. */
-  const MEMORY_STATUS_BAR_PRIORITY = 98;
-
   boundStore = store;
-  memoryStatusBarItem = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Left,
-    MEMORY_STATUS_BAR_PRIORITY,
-  );
-  // Click the status-bar item to open the memory action menu (no palette needed).
-  memoryStatusBarItem.command = "basilisk.memoryMenu";
-
-  // The memory indicator follows the store's tracking state reactively
-  // ([PROFILE-PROCESSES-REACTIVE]); the debug-session listeners below cover the
-  // "debugging but not yet tracking" state, which is not a store signal.
-  const disposeMemoryEffect = effect(() => {
-    void store.profiler.value.memory;
-    refreshMemoryStatusBar(store);
-  });
-
-  const disposables: vscode.Disposable[] = [
-    memoryStatusBarItem,
-    { dispose: disposeMemoryEffect },
+  return [
+    // The memory status-bar item — its whole lifecycle (idle affordance,
+    // starting spinner, tracking readout) lives in memory-status.ts.
+    ...bindMemoryStatusBar(context, store),
     ...memoryCommandDisposables(store),
   ];
-
-  // [PROFILE-UI-GATE] The memory indicator is the one profiling surface no `when`
-  // clause can reach, so it shares the single switch in code: shown under test,
-  // hidden for shipped users (see refreshMemoryStatusBar).
-  memoryUiEnabled = isProfilingUiEnabled(context);
-  refreshMemoryStatusBar(store);
-  return disposables;
 }
 
 /** The memory command registrations and debug-session listeners. */
@@ -110,10 +85,8 @@ function memoryCommandDisposables(store: Store): vscode.Disposable[] {
     vscode.commands.registerCommand("basilisk.memoryGcCollect", async () => handleMemoryGcCollect(store)),
     vscode.commands.registerCommand("basilisk.memoryStop", () => { runMemoryStopCommand(store); }),
     vscode.commands.registerCommand("basilisk.memoryReferences", async () => handleMemoryReferences(store)),
-    // Show/hide the memory status-bar entry as Basilisk debug sessions come and go.
-    vscode.debug.onDidChangeActiveDebugSession(() => { refreshMemoryStatusBar(store); }),
+    // The status-bar show/hide on session changes is bound in memory-status.ts.
     vscode.debug.onDidStartDebugSession((session) => {
-      refreshMemoryStatusBar(store);
       // "Run & Track Memory (Current File)" (#82): the launch stopped on
       // entry; inject tracemalloc there, then resume the program.
       if (session.type === "basilisk-debug" && session.configuration.memoryTrackOnLaunch === true) {
@@ -145,9 +118,21 @@ function memoryCommandDisposables(store: Store): vscode.Disposable[] {
         pendingSnapshotCleanup.delete(session.id);
         void readFinalSnapshot(orphan); // reads + unlinks; the payload is discarded
       }
-      refreshMemoryStatusBar(store);
     }),
   ];
+}
+
+/**
+ * Show a toast whose named action is offered as a button — a message must
+ * never demand an action it doesn't offer ([PROFILE-MEMORY-DISCOVERY], #263).
+ * Fire-and-forget: a sticky notification must not block the flow.
+ */
+function showActionableToast(message: string, action: string, command: string): void {
+  void vscode.window.showInformationMessage(message, action).then((choice) => {
+    if (choice === action) {
+      void vscode.commands.executeCommand(command);
+    }
+  });
 }
 
 /** The `basilisk.memoryStart` body: start tracking, then narrate what comes next. */
@@ -156,9 +141,13 @@ async function runMemoryStartCommand(store: Store, report: (message: string) => 
     // With the autopilot on ([PROFILE-MEMORY-AUTOPILOT]), the user just sets
     // breakpoints and presses Continue — each pause is captured automatically;
     // and even a breakpoint-free run captures a final snapshot at exit
-    // ([PROFILE-MEMORY-FINAL]) — so this is never a dead end.
-    void vscode.window.showInformationMessage(
+    // ([PROFILE-MEMORY-FINAL]) — so this is never a dead end. The moment of
+    // disorientation is right here (the user just landed in the Debug view),
+    // so the toast carries the action ([PROFILE-MEMORY-DISCOVERY], #263).
+    showActionableToast(
       "Basilisk: Memory tracking started. Press Continue to auto-capture each pause, or let the program finish for an automatic final snapshot.",
+      "Take Snapshot",
+      "basilisk.memorySnapshot",
     );
   }
 }
@@ -177,10 +166,17 @@ function runMemoryStopCommand(store: Store): void {
     pendingSnapshotCleanup.set(debugSessionId, finalSnapshotFile);
   }
   handleMemoryStop(store);
-  void vscode.window.showInformationMessage(
-    hadSnapshot
-      ? "Basilisk: Memory tracking stopped."
-      : "Basilisk: Memory tracking stopped — no snapshot was taken. Take a snapshot while paused, or let the program finish, to inspect allocations.",
+  if (hadSnapshot) {
+    void vscode.window.showInformationMessage("Basilisk: Memory tracking stopped.");
+    return;
+  }
+  // The toast tells the user to take a snapshot — it must offer the way there
+  // (the quick-pick action menu), never point at an invisible palette
+  // ([PROFILE-MEMORY-DISCOVERY], #263).
+  showActionableToast(
+    "Basilisk: Memory tracking stopped — no snapshot was taken. Take a snapshot while paused, or let the program finish, to inspect allocations.",
+    "Memory Actions…",
+    "basilisk.memoryMenu",
   );
 }
 
@@ -457,32 +453,3 @@ async function handleMemoryReferences(store: Store): Promise<void> {
   await walkReferences(store, typeName.trim());
 }
 
-// ── Status bar ────────────────────────────────────────────────────────────
-
-/**
- * Show the memory status-bar entry whenever a Basilisk debug session is active
- * (or tracking is on) and click it to open the action menu. Hidden otherwise.
- */
-function refreshMemoryStatusBar(store: Store): void {
-  if (memoryStatusBarItem === undefined) { return; }
-  // [PROFILE-UI-GATE] Same switch as the declarative surfaces, applied in code.
-  if (!memoryUiEnabled) { memoryStatusBarItem.hide(); return; }
-
-  const debugging = vscode.debug.activeDebugSession?.type === "basilisk-debug";
-  const tracking = store.profiler.value.memory === "active";
-  if (!debugging && !tracking) {
-    memoryStatusBarItem.hide();
-    return;
-  }
-
-  if (tracking) {
-    memoryStatusBarItem.text = "$(eye) Memory: tracking";
-    memoryStatusBarItem.tooltip = "Basilisk: memory tracking active — click for snapshot/compare/stop";
-    memoryStatusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
-  } else {
-    memoryStatusBarItem.text = "$(database) Memory";
-    memoryStatusBarItem.tooltip = "Basilisk: click to start memory tracking (briefly pauses the program)";
-    memoryStatusBarItem.backgroundColor = undefined;
-  }
-  memoryStatusBarItem.show();
-}

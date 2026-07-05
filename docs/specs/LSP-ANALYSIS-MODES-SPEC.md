@@ -290,6 +290,46 @@ File-watcher events are trailing-debounced 200 ms (`FILE_WATCHER_DEBOUNCE_MS`, `
 
 On **delete**, publish empty diagnostics to clear the error panel. On runtime mode switch, clear all diagnostics, re-analyse, re-publish.
 
+Publication must reflect the index state at **publish time**, not at compute
+time (GitHub #264):
+
+- **Scans never block the message loop.** Every workspace scan (startup, mode
+  switch, re-enable, workspace-folder change) runs in a spawned task
+  (`run_workspace_scan`) — a scan computed inside a notification handler
+  starves every other message, including the `didClose` whose clear the editor
+  is waiting on, for the scan's full duration.
+- **Stale scan results are dropped.** Before publishing each scan entry, the
+  server re-checks the index: a file removed mid-scan (closed in
+  `openFilesOnly`, or an out-of-workspace file closed in any mode) is skipped —
+  republishing its snapshot would resurrect diagnostics `didClose` already
+  cleared, with nothing left to ever clear them. After a mid-scan switch to
+  `openFilesOnly`, only open files publish (`publish_scan_results` /
+  `scan_entry_still_current`).
+- **Mode switches never queue an index write.** `WorkspaceIndex::set_mode` is
+  interior-mutable and applied through a READ guard. A mode-flip writer queued
+  behind a running scan's read guard would make tokio's fair `RwLock` block
+  every subsequent reader, saturating tower-lsp's bounded handler slots and
+  stalling the entire message loop — the `didClose` clear then arrives seconds
+  late (the original flaky-clear failure).
+- **Tab close sends a synthetic `didClose`** for every file the server would
+  clear on close: all files in `openFilesOnly`, and out-of-workspace files in
+  the whole-workspace modes. VS Code disposes closed documents lazily, so the
+  language client's own `didClose` can lag a tab close unboundedly
+  (`registerTabTracking` in `vscode-extension/src/lsp-client.ts`). In-workspace
+  files in `wholeModule`/`crossModule` keep their diagnostics per the table
+  above.
+- **Exactly one publisher.** `store.reset()` MUST stop (dispose) the
+  LanguageClient it replaces before starting a new one. A forgotten-but-alive
+  client is a zombie publisher: it keeps forwarding `didOpen`/`didClose` to
+  its own server process and publishing into its own diagnostics collection —
+  VS Code merges collections, so the zombie's late republishes resurrect
+  diagnostics the real server already cleared (the observed root cause of the
+  flaky openFilesOnly clear, GitHub #264).
+
+Covered end-to-end by the `#264` regression test in
+`vscode-extension/src/test/suite/lsp-analysis-mode.test.ts` (file closed
+mid-scan must stay cleared).
+
 ---
 
 ## Type Checking Toggle {#ANALYSIS-ENABLED}
@@ -316,13 +356,32 @@ Contract (GitHub #65 / #119):
   diagnostics cleared on disable come back.
 - **At startup:** a client that initializes with `enabled = false` gets **no**
   diagnostics from the initial workspace scan.
+- **Grading surfaces are gated too** (the v0.25.0 showstopper reopen of #119):
+  `basilisk.workspaceModules` and `basilisk.typeHealth` MUST NOT serve grading
+  while disabled. Every payload stamps `typeCheckingEnabled`; when `false`, the
+  grading fields (`coveragePercent`, `errors`, `warnings`, `adopted`, symbol
+  totals) are **omitted** — never zeroed — so no client can render a
+  `"NN% typed"` header, coverage-tinted (red) rows, or tally badges from a
+  stale shape. The module list itself stays as a navigation surface, and
+  `typeHealth` serves an empty `modules` list. Clients render an explicit
+  `"Type checking disabled"` header state ([EXTACT-MODULES-HEADER]).
+- **Panel refresh on transition:** flipping the toggle repaints the panel
+  immediately in both directions — the clear/re-publish above fires the
+  client's diagnostics listener, which bumps `analysisRevision`
+  ([EXTACT-REACTIVE-STATE]) even in a diagnostics-free workspace, because
+  clearing publishes an (empty) set for every indexed URI.
 
 Implemented in `crates/basilisk-lsp/src/server/init.rs`
-(`apply_type_checking_toggle`, `clear_all_diagnostics`, `rescan_after_enable`)
-and the gated publish paths in `crates/basilisk-lsp/src/server/document.rs`;
-forwarded by `readBasiliskSettings()` in `vscode-extension/src/lsp-client.ts`.
+(`apply_type_checking_toggle`, `clear_all_diagnostics`, `rescan_after_enable`),
+the gated publish paths in `crates/basilisk-lsp/src/server/document.rs`, and the
+gated panel builders in `crates/basilisk-lsp/src/server/activity_panel/`
+(`build_module_tree`, `build_type_health`); forwarded by
+`readBasiliskSettings()` in `vscode-extension/src/lsp-client.ts`; rendered by
+`workspaceHealthMessage` / `workspaceHealthBadge` / `ModuleTreeItem` in
+`vscode-extension/src/module-explorer.ts`.
 Exercised by `ws_test_type_checking_toggle.rs` (real LSP) and
-`type-checking-toggle.test.ts` (real VS Code window).
+`type-checking-toggle.test.ts` (real VS Code window — diagnostics clearing,
+panel-payload gating, header/row neutrality, and zero-diagnostics refresh).
 
 ---
 

@@ -239,7 +239,14 @@ fn build_process_info(
     let debuggee_program = debugpy_debuggee_program(cmd);
     let is_debuggee = debuggee_program.is_some();
     let is_machinery = !is_debuggee && is_debugger_infrastructure(cmd);
-    let script = debuggee_program.or_else(|| extract_script(cmd));
+    // Machinery carries NO script: its positional is the launcher/adapter
+    // plumbing path, not user code — labelling the row with it (and wiring
+    // click-to-open into the bundled debugpy) misleads (#268).
+    let script = if is_machinery {
+        None
+    } else {
+        debuggee_program.or_else(|| extract_script(cmd))
+    };
     // Workspace membership drives the green row only — never inclusion.
     let in_workspace = process_in_workspace(
         process.cwd(),
@@ -416,6 +423,11 @@ fn is_python_interpreter(basename: &str) -> bool {
 
 /// Best-effort target script: the first positional argument after the
 /// interpreter, skipping flags and the values of value-taking flags.
+///
+/// `-c <code>` and `-m <module>` END the interpreter's own option list — every
+/// following token is the command's/module's argv, so such an invocation has
+/// no script at all. Scanning past them mislabelled the debugpy adapter's
+/// `--port 50581` value as the script (#268).
 fn extract_script(cmd: &[OsString]) -> Option<String> {
     let mut skip_next = false;
     for arg in cmd.iter().skip(1) {
@@ -425,7 +437,10 @@ fn extract_script(cmd: &[OsString]) -> Option<String> {
             continue;
         }
         if token.starts_with('-') {
-            if matches!(token.as_ref(), "-c" | "-m" | "-W" | "-X") {
+            if matches!(token.as_ref(), "-c" | "-m") {
+                return None;
+            }
+            if matches!(token.as_ref(), "-W" | "-X") {
                 skip_next = true;
             }
             continue;
@@ -709,6 +724,42 @@ mod tests {
             OsString::from("print(1)"),
         ];
         assert_eq!(extract_script(&dash_c), None);
+    }
+
+    #[test]
+    fn module_invocation_never_reports_a_flag_value_as_the_script() {
+        // The exact argv of the debugpy adapter VS Code spawns (#268): the
+        // panel rendered "Python — 50581", labelling the adapter's TCP port as
+        // if it were the target script (and click-to-open then targeted a file
+        // literally named `50581`). After `-m <module>` the interpreter's own
+        // option list is over — every following token belongs to the module —
+        // so a module invocation has no script at all.
+        let adapter = vec![
+            OsString::from("/usr/bin/python3"),
+            OsString::from("-m"),
+            OsString::from("debugpy.adapter"),
+            OsString::from("--port"),
+            OsString::from("50581"),
+        ];
+        assert_eq!(
+            extract_script(&adapter),
+            None,
+            "a flag value after `-m <module>` must never be labelled the script (#268)"
+        );
+
+        // Same rule for `-c`: trailing tokens are the command's argv
+        // (`sys.argv[1:]`), not a script.
+        let dash_c_with_args = vec![
+            OsString::from("python3"),
+            OsString::from("-c"),
+            OsString::from("import sys; print(sys.argv)"),
+            OsString::from("50581"),
+        ];
+        assert_eq!(
+            extract_script(&dash_c_with_args),
+            None,
+            "arguments after `-c <code>` must never be labelled the script (#268)"
+        );
     }
 
     #[test]

@@ -227,19 +227,12 @@ async fn test_ws_code_action_suppress_inserts_at_end_of_line() -> TestResult<()>
 
 #[tokio::test]
 async fn test_ws_code_action_organize_imports() -> TestResult<()> {
-    // Skip if ruff is not installed.
-    if std::process::Command::new("ruff")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
-        return Ok(());
-    }
-
+    // Import hygiene is native ([LSPFMT-IMPORTS]) — no ruff binary required,
+    // so the action MUST appear for unsorted imports. Issue #261.
     let mut fixture = WsTestFixture::new().await?;
     let _ = fixture.initialize().await?;
 
-    // Deliberately unsorted imports — ruff should reorder them.
+    // Deliberately unsorted imports — json must move before os.
     let code = "import os\nimport sys\nfrom typing import Optional\nimport json\n\nx: int = 1\n";
     fixture.did_open("file:///ca_org.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await?;
@@ -256,37 +249,25 @@ async fn test_ws_code_action_organize_imports() -> TestResult<()> {
         )
         .await?;
 
-    // The organize-imports action may or may not fire depending on whether
-    // the given imports are already sorted by ruff. Just check that when it
-    // does appear, it carries the correct kind.
-    if let Some(resp_str) = resp {
-        if resp_str.contains("Organize imports") {
-            assert!(
-                resp_str.contains("source.organizeImports"),
-                "organize imports action should have organizeImports kind: {resp_str}"
-            );
-        }
-    }
+    let resp_str = resp.ok_or("no codeAction response")?;
+    assert!(
+        resp_str.contains("Organize imports"),
+        "organize-imports action must be offered for unsorted imports: {resp_str}"
+    );
+    assert!(
+        resp_str.contains("source.organizeImports"),
+        "organize imports action should have organizeImports kind: {resp_str}"
+    );
     Ok(())
 }
 
 #[tokio::test]
 async fn test_ws_code_action_organize_imports_fixes_order() -> TestResult<()> {
-    // Skip if ruff is not installed.
-    if std::process::Command::new("ruff")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
-        return Ok(());
-    }
-
+    // Native organize ([LSPFMT-IMPORTS]) must sort with isort semantics:
+    // `from __future__` first, one blank line, then stdlib. Issue #261.
     let mut fixture = WsTestFixture::new().await?;
     let _ = fixture.initialize().await?;
 
-    // sys must come before os alphabetically; ruff will sort to: import os / import sys
-    // (actually ruff keeps stdlib imports in the order they appear unless --fix-only is used)
-    // Use a clear case: `from __future__` must be first.
     let code = "import os\nfrom __future__ import annotations\n\nx: int = 1\n";
     fixture.did_open("file:///ca_org2.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await?;
@@ -303,19 +284,21 @@ async fn test_ws_code_action_organize_imports_fixes_order() -> TestResult<()> {
         )
         .await?;
 
-    if let Some(resp_str) = resp {
-        if resp_str.contains("Organize imports") {
-            // The reordered source should put `from __future__` first.
-            assert!(
-                resp_str.contains("from __future__ import annotations"),
-                "organized source should contain the moved import: {resp_str}"
-            );
-            assert!(
-                resp_str.contains("source.organizeImports"),
-                "action kind must be organizeImports: {resp_str}"
-            );
-        }
-    }
+    let resp_str = resp.ok_or("no codeAction response")?;
+    assert!(
+        resp_str.contains("Organize imports"),
+        "organize-imports action must be offered when __future__ is not first: {resp_str}"
+    );
+    // The reordered source puts `from __future__` first, then a blank line,
+    // then the stdlib import (JSON-escaped newlines in the raw response).
+    assert!(
+        resp_str.contains("from __future__ import annotations\\n\\nimport os"),
+        "organized source must move __future__ first with a section break: {resp_str}"
+    );
+    assert!(
+        resp_str.contains("source.organizeImports"),
+        "action kind must be organizeImports: {resp_str}"
+    );
     Ok(())
 }
 

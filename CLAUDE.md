@@ -207,7 +207,7 @@ Strict-by-default Python type checker and comprehensive LSP built in **Rust**. O
 
 - **Parser**: `ruff_python_parser` (MIT, same as Ruff)
 - **Incremental**: Salsa framework — sub-10ms incremental checks
-- **Linting/formatting**: Ruff CLI subprocess — not reimplemented
+- **Formatting**: `ruff_python_formatter` crate embedded in-process ([LSPFMT-ENGINE]); import hygiene reimplemented natively on the Ruff AST ([LSPFMT-IMPORTS]). The `ruff` CLI is NOT a runtime dependency — never spawn it.
 - **Parallelism**: Rayon (work-stealing, file-level)
 - **No Pyright/mypy/Node.js** — zero TypeScript or Python runtime
 
