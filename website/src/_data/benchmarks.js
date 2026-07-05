@@ -158,7 +158,19 @@ function computeVsPyright(rows) {
   };
 }
 
+// How many tool columns in a CSV carry at least one real measurement. A machine
+// that only ran basilisk scores 1; a full competitor sweep scores every tool.
+// Used to keep an incomplete CSV from ever becoming the site's primary and
+// rendering a benchmark table full of empty competitor columns.
+function toolCoverage(file) {
+  const parsed = parseCsv(readFileSync(join(STATUS_DIR, file), "utf-8"));
+  if (!parsed) return -1;
+  return parsed.tools.filter((t) => parsed.rows.some((r) => r.values[t] != null))
+    .length;
+}
+
 function pickPrimary(files) {
+  // Explicit overrides win, in order: env var, then a committed .primary pin.
   const env = process.env.BASILISK_BENCH_PRIMARY;
   if (env && files.includes(`${env}.csv`)) return `${env}.csv`;
   const primaryFile = join(STATUS_DIR, ".primary");
@@ -166,8 +178,16 @@ function pickPrimary(files) {
     const slug = readFileSync(primaryFile, "utf-8").trim();
     if (files.includes(`${slug}.csv`)) return `${slug}.csv`;
   }
-  const gha = files.find((f) => f.startsWith("gha-"));
-  return gha || files[0];
+  // Automatic fallback: NEVER let an incomplete CSV (e.g. a machine that only
+  // ran basilisk) win and drop competitor columns. Rank by tool coverage first,
+  // then stable CI hardware (gha-*), then alphabetical for determinism.
+  const coverage = new Map(files.map((f) => [f, toolCoverage(f)]));
+  return [...files].sort(
+    (a, b) =>
+      coverage.get(b) - coverage.get(a) ||
+      (a.startsWith("gha-") ? 0 : 1) - (b.startsWith("gha-") ? 0 : 1) ||
+      a.localeCompare(b),
+  )[0];
 }
 
 export default function () {
