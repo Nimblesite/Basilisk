@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import { runTests } from '@vscode/test-electron';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 /**
  * VS Code listens on a Unix socket inside the user-data dir; macOS caps
@@ -44,10 +44,12 @@ function findSystemVSCodeElectron(): string | undefined {
         }
     }
 
-    // Try resolving from the `code` CLI shim.
+    // Try resolving from the `code` CLI shim. execFileSync (no shell) keeps
+    // PATH-derived values out of shell parsing — CodeQL
+    // js/shell-command-injection-from-environment.
     try {
-        const codePath = execSync('which code', { encoding: 'utf8' }).trim();
-        const realPath = execSync(`realpath "${codePath}"`, { encoding: 'utf8' }).trim();
+        const codePath = execFileSync('which', ['code'], { encoding: 'utf8' }).trim();
+        const realPath = fs.realpathSync(codePath);
         // realPath is like /Applications/Visual Studio Code.app/Contents/Resources/app/bin/code
         const appRoot = realPath.replace(/\/Contents\/Resources\/app\/bin\/code$/, '');
         const electron = path.join(appRoot, 'Contents/MacOS/Electron');
@@ -94,14 +96,17 @@ function syncShipwrightManifest(extensionDevelopmentPath: string): void {
  * (debugging, memory profiling) run against the real layout.
  */
 function stageBundledRuntime(extensionDevelopmentPath: string, binaryDir: string): void {
-    execSync(`node scripts/stage-runtime.mjs ${JSON.stringify(binaryDir)}`, {
+    // execFileSync passes binaryDir (derived from BASILISK_EXECUTABLE_PATH)
+    // as an argv entry — no shell, so no expansion of `$(...)`/backticks from
+    // the environment (CodeQL js/indirect-command-line-injection).
+    execFileSync('node', ['scripts/stage-runtime.mjs', binaryDir], {
         cwd: extensionDevelopmentPath,
         stdio: 'inherit',
     });
     const debugpyDir = path.join(extensionDevelopmentPath, 'bundled', 'debugpy');
     const vendored = fs.existsSync(debugpyDir) && fs.readdirSync(debugpyDir).length > 0;
     if (!vendored) {
-        execSync('node scripts/vendor-debugpy.mjs', {
+        execFileSync('node', ['scripts/vendor-debugpy.mjs'], {
             cwd: extensionDevelopmentPath,
             stdio: 'inherit',
         });
