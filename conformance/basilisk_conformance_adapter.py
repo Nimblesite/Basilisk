@@ -1,4 +1,5 @@
 # Basilisk adapter for the REAL python/typing conformance harness.
+# ruff: noqa: F821
 #
 # This is the SAME per-checker adapter shape upstream ships for pyright, mypy,
 # ty, pyrefly, zuban and pycroscope. The wheel-conformance CI/release gate
@@ -65,20 +66,29 @@ class BasiliskTypeChecker(TypeChecker):
                     "never",
                 ],
                 stdout=PIPE,
+                stderr=PIPE,
                 text=True,
                 encoding="utf-8",
             )
-            try:
-                diagnostics = json.loads(proc.stdout) if proc.stdout.strip() else []
-            except json.JSONDecodeError:
-                diagnostics = []
+            if proc.returncode not in (0, 1):
+                raise CalledProcessError(
+                    proc.returncode,
+                    "basilisk check",
+                    output=proc.stdout,
+                    stderr=proc.stderr,
+                )
+            if not proc.stdout.strip():
+                raise ValueError(f"basilisk produced empty JSON output for {test_file}")
+            diagnostics = json.loads(proc.stdout)
+            if not isinstance(diagnostics, list):
+                raise TypeError(f"basilisk JSON output is not a list for {test_file}")
             for diagnostic in diagnostics:
                 file_name = Path(diagnostic.get("path", test_file)).name
                 line_number = diagnostic.get("line", 0)
                 col_number = diagnostic.get("col", 0)
-                severity = diagnostic.get("severity", "error")
-                message = diagnostic.get("message", "")
-                code = diagnostic.get("code", "")
+                severity = str(diagnostic.get("severity", "error")).replace("\n", " ")
+                message = str(diagnostic.get("message", "")).replace("\n", " ")
+                code = str(diagnostic.get("code", "")).replace("\n", " ")
                 line_text = (
                     f"{file_name}:{line_number}:{col_number}: "
                     f"{severity}: {message} [{code}]\n"
@@ -90,12 +100,11 @@ class BasiliskTypeChecker(TypeChecker):
         # aliases_implicit.py:115:5: error: Invalid type expression ... [annotations_forward_refs]
         line_to_errors: dict[int, list[str]] = {}
         for line in output:
+            if not line.strip():
+                continue
             if line.count(":") < 3:
-                continue
-            _, lineno, _col, rest = line.split(":", maxsplit=3)
-            kind = rest.strip().split(":", 1)[0].strip()
-            if kind not in ("error", "warning"):
-                continue
+                raise AssertionError(f"Failed to parse Basilisk diagnostic line: {line!r}")
+            _, lineno, _col, _rest = line.split(":", maxsplit=3)
             line_to_errors.setdefault(int(lineno), []).append(line)
         return line_to_errors
 

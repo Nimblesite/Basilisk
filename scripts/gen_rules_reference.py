@@ -47,6 +47,19 @@ HEADER = re.compile(r"//!\s*(BSK-[EW]\d{4}|`[a-z0-9_]+`):\s*(.*)")
 DOC = re.compile(r"//!\s?(.*)")
 DOCS_URL = re.compile(r'docs_url:\s*"([^"]+)"')
 SPEC_REF = re.compile(r"^Implements ")
+# A rule is Basilisk-original (off by default, opt-in only) iff it overrides
+# `opt_in_spec` to return `Some(..)`; core PEP-conformance rules leave it `None`.
+# This reads the checker's real provenance signal (`Rule::opt_in_spec`, the single
+# source of rule provenance per [CHKTAG-PROVENANCE]) — never the cosmetic `BSK-`
+# code prefix, which [CHKTAG-BSK-PREFIX] declares semantically meaningless.
+# `[^{]*` stops at the body brace, so a `Some(` in another fn can't false-match.
+OPT_IN = re.compile(r"fn opt_in_spec\b[^{]*\{\s*Some\(")
+# The free-form tags an opt-in rule declares (`tags: &["strictness", ..]`). These
+# are the checker's own `OptInSpec.tags` — e.g. `strictness` marks the rules that
+# make annotations mandatory beyond the spec. Non-greedy up to the first `tags:`
+# inside the single opt_in_spec body; `TAG` pulls each quoted entry out.
+OPT_IN_TAGS = re.compile(r"fn opt_in_spec\b[^{]*\{\s*Some\([\s\S]*?tags:\s*&\[([^\]]*)\]")
+TAG = re.compile(r'"([^"]+)"')
 
 # Coarse groups for filtering/badging on the website. Errors outside the two
 # foundational ranges are all part of the broader type-system surface.
@@ -162,6 +175,11 @@ def extract() -> list[dict]:
         text = path.read_text(encoding="utf-8")
         lines = text.splitlines()
         file_docs_url = DOCS_URL.search(text)
+        # Provenance and opt-in tags from the rule's own opt_in_spec, not its
+        # code prefix. Core PEP rules carry no opt-in tags (empty list).
+        provenance = "basilisk" if OPT_IN.search(text) else "pep"
+        tags_match = OPT_IN_TAGS.search(text)
+        tags = TAG.findall(tags_match.group(1)) if tags_match else []
         for i, line in enumerate(lines):
             m = HEADER.match(line.strip())
             if not m:
@@ -187,6 +205,8 @@ def extract() -> list[dict]:
             records[code] = {
                 "code": code,
                 "severity": severity_for(code),
+                "provenance": provenance,
+                "tags": tags,
                 "summary": clean(summary),
                 "summaryHtml": inline_html(clean(summary)),
                 "body": parse_body(body_lines),
@@ -218,8 +238,11 @@ def main() -> int:
         out.write_text(json.dumps(records, indent=2) + "\n", encoding="utf-8")
         errors = sum(r["severity"] == "error" for r in records)
         warnings = len(records) - errors
+        opt_in = sum(r["provenance"] == "basilisk" for r in records)
+        pep = len(records) - opt_in
         print(
-            f"Wrote {len(records)} codes ({errors} errors, {warnings} warnings) -> {out}"
+            f"Wrote {len(records)} codes ({errors} errors, {warnings} warnings; "
+            f"{pep} PEP-conformance, {opt_in} opt-in) -> {out}"
         )
         return 0
     if "--check" in sys.argv:

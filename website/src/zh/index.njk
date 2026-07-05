@@ -222,8 +222,9 @@ permalink: /zh/
     </div>
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">{{ ruleStats.total }}</span>
-        <span class="stat-block__label">条规则，皆可配置</span>
+        <span class="stat-block__number">{{ ruleStats.pep }}</span>
+        <span class="stat-block__label">条 PEP 类型规范规则，默认启用</span>
+        <span class="stat-block__sub">另有 {{ ruleStats.optIn }} 条可选的 Basilisk 风格规则 &mdash; 默认关闭，与符合性评分相互独立</span>
       </div>
     </div>
   </div>

@@ -114,7 +114,7 @@ All rules are on by default. There is no way to relax them globally.
 | `generics_base_class` | Duplicate `TypeVar` in a `Generic[...]` base |
 | `typeddicts_class_syntax` | Method defined inside a `TypedDict` class |
 
-These are the most common rules. Basilisk ships **155 diagnostic codes** in total (150 errors, 5 warnings) — see the [complete diagnostic reference](https://www.basilisk-python.dev/docs/rules/) (generated from the checker source by `scripts/gen_rules_reference.py`).
+These are the most common rules. Basilisk ships **148 PEP typing-spec rules** — the set the conformance suite grades — plus **13 opt-in house-style rules** that stay off by default and never count toward that score: **161 diagnostic codes** in total (155 errors, 6 warnings). See the [complete diagnostic reference](https://www.basilisk-python.dev/docs/rules/) (generated from the checker source by `scripts/gen_rules_reference.py`).
 
 ---
 

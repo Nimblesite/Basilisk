@@ -15,9 +15,9 @@ eleventyNavigation:
 
 Every Basilisk diagnostic has a unique code in the format `BSK-EXXXX` (error) or `BSK-WXXXX` (warning).
 
-Rules are enabled by default. You can dial individual rules down per-file or per-path from your editor or `pyproject.toml` — strict is the default, not a cage.
+The PEP typing-spec rules run by default; Basilisk's own opt-in house-style rules stay off until you switch them on. Dial any rule up or down per-file or per-path from your editor or `pyproject.toml` — strict is the default, not a cage.
 
-Basilisk ships **{{ ruleStats.total }} diagnostic codes** ({{ ruleStats.errors }} errors, {{ ruleStats.warnings }} warnings) spanning the full Python typing surface — generics, protocols, dataclasses, TypedDicts, overloads, literals, enums, and more — and is scored by the [official Python typing conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) (currently **{{ conformance.scorePct }}%**, {{ conformance.pass }} / {{ conformance.total }} (errors+warnings, strictest); target 100% — [how we measure](/docs/conformance/)). The two foundational groups have worked examples:
+Basilisk ships **{{ ruleStats.pep }} PEP typing-spec rules** — the set the [official Python typing conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) grades (currently **{{ conformance.scorePct }}%**, {{ conformance.pass }} / {{ conformance.total }} (errors+warnings, strictest); target 100% — [how we measure](/docs/conformance/)) — plus **{{ ruleStats.optIn }} opt-in house-style rules** that are off by default and never counted toward that score. Together, **{{ ruleStats.total }} diagnostic codes** ({{ ruleStats.errors }} errors, {{ ruleStats.warnings }} warnings) span the full Python typing surface — generics, protocols, dataclasses, TypedDicts, overloads, literals, enums, and more. The two foundational groups have worked examples:
 
 | Group | Codes | Description |
 |---|---|---|

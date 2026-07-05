@@ -117,7 +117,7 @@ def greet(name: str) -> str:
 | `generics_base_class` | `Generic[...]` 基类中存在重复的 `TypeVar` |
 | `typeddicts_class_syntax` | 在 `TypedDict` 类内部定义了方法 |
 
-以上是最常见的规则。Basilisk 总共提供 **155 个诊断代码**（150 个错误、5 个警告）—— 参见[完整诊断参考](https://www.basilisk-python.dev/zh/docs/rules/)（由 `scripts/gen_rules_reference.py` 从检查器源码生成）。
+以上是最常见的规则。Basilisk 提供 **148 条 PEP 类型规范规则**（由符合性套件评分），外加 **13 条默认关闭的可选风格规则**，二者互不相干：总共 **161 个诊断代码**（155 个错误、6 个警告）—— 参见[完整诊断参考](https://www.basilisk-python.dev/zh/docs/rules/)（由 `scripts/gen_rules_reference.py` 从检查器源码生成）。
 
 ---
 
