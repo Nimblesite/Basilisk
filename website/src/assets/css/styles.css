@@ -512,27 +512,40 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 /* ══════════════════════════════════════════════════════════
    HERO — Split layout: big text left, code right
 ══════════════════════════════════════════════════════════ */
+/* The sticky 60px header already sits in-flow above the hero, so the hero only
+   needs a little breathing room to clear it — NOT another header-height of
+   padding (that double-counted the header and pushed the fold past the viewport,
+   clipping the product panel). The fold is OWNED by .hero__split below, which is
+   sized to fill exactly one screen; the proof band flows just beneath it. */
 .hero {
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12);
+  padding: var(--space-8) 0 var(--space-16);
   border-bottom: 1px solid var(--color-border);
 }
-/* Hero spans most of the viewport width with a generous side gutter; content is
-   vertically centred so the hero fills the viewport height. */
+/* Hero uses the SAME centred 1280px container as every section below it, so its
+   left edge lines up with the comparison/benchmark tables and the whole page
+   reads as one centred column instead of a wide hero over narrow sections. It
+   stacks the split (text + video) above the proof band as one vertical column. */
 .hero > .container {
   width: 100%;
-  max-width: 2200px;
-  padding-inline: clamp(var(--space-6), 3vw, var(--space-12));
+  max-width: var(--max-width);
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
 }
 
+/* The split OWNS the fold: min-height fills one viewport (minus the sticky
+   header and the hero's own top/bottom breathing room), so the promise + the
+   product video always sit fully above the fold and the proof band peeks in
+   just below it. Columns are centre-aligned so the landscape video keeps its
+   EXACT aspect ratio (see .hero__code) instead of being stretched to match the
+   taller text column. */
 .hero__split {
   display: grid;
-  grid-template-columns: 1fr 1.1fr;
-  gap: var(--space-12);
+  grid-template-columns: 1fr 1.2fr;
+  gap: var(--space-10);
   align-items: center;
+  min-height: calc(100vh - var(--header-height) - var(--space-16));
 }
 
 .hero__kicker {
@@ -546,9 +559,9 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 
 .hero__headline {
-  font-size: clamp(3rem, 5.5vw, 5rem);
+  font-size: clamp(2.5rem, 4vw, 3.75rem);
   font-weight: 700;
-  line-height: 1.0;
+  line-height: 1.05;
   letter-spacing: -0.04em;
   color: var(--color-text-primary);
   margin-bottom: var(--space-6);
@@ -580,65 +593,84 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .hero__meta span { display: flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 .hero__meta strong { color: var(--color-text-secondary); font-weight: 500; }
 
-/* Front-and-centre PEP conformance badge — the headline metric, tied to the
-   exact python/typing commit we graded against. The CTA link stretches over
-   the whole card (::after overlay); the commit link sits above it (z-index)
-   and jumps straight to the graded python/typing tree on GitHub. */
-.hero__conformance {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-4);
-  margin: var(--space-5) 0 var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  transition: border-color 0.15s ease;
+/* Code side of hero — the panel hugs the product video at its EXACT native
+   aspect ratio: the video is a plain responsive block (width 100%, height auto),
+   so the frame is exactly as tall as the video is wide ÷ its ratio. Nothing is
+   cropped and there is no letterbox — the border wraps the footage edge-to-edge
+   like a framed screen. The aspect-ratio hint reserves the box before the
+   video's metadata loads, so there is no layout shift. */
+.hero__code {
+  align-self: center;
+  overflow: hidden;
+  border: 1px solid var(--color-border-bright);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+  box-shadow: 0 30px 70px -25px rgba(0, 0, 0, 0.65);
 }
-.hero__conformance:hover { border-color: var(--color-primary); }
-.hero__conformance-commit {
-  position: relative;
-  z-index: 1;
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
-}
-.hero__conformance-commit:hover code { color: var(--color-primary); }
-.hero__conformance-score {
-  font-size: clamp(2rem, 4vw, 2.75rem);
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  color: var(--color-text-primary);
-}
-.hero__conformance-pct { color: var(--color-primary); }
-.hero__conformance-text { font-size: 0.8125rem; line-height: 1.4; color: var(--color-text-muted); }
-.hero__conformance-text strong { color: var(--color-text-secondary); font-weight: 600; }
-.hero__conformance-text code { color: var(--color-text-secondary); }
-.hero__conformance-cta { color: var(--color-primary); white-space: nowrap; }
-.hero__conformance-cta::after { content: ""; position: absolute; inset: 0; }
-
-/* Code side of hero */
-.hero__code { position: relative; }
-
-/* Product screenshot in hero — shown whole at its natural aspect, NEVER cropped */
 .hero__shot {
   display: block;
   width: 100%;
   height: auto;
+  aspect-ratio: 3152 / 2042; /* rename.mp4 native size — locks ratio, prevents CLS */
+}
+
+/* Real product screenshot inside a feature-row visual (e.g. step-through debugging) */
+.feature-shot {
+  display: block;
+  width: 100%;
+  height: auto;
   border: 1px solid var(--color-border-bright);
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.7);
+}
+
+/* ══ Hero proof band — PEP conformance + cold-check speed, the two headline
+   proofs, side by side INSIDE the full-height hero (see index.njk). Reuses
+   .stat-card so there is ONE card style, not two. Numbers render from real data. ══ */
+.hero__proof {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+}
+.hero__proof-cta { text-align: center; font-size: 0.875rem; color: var(--color-text-muted); }
+.hero__proof-cta a { color: var(--color-primary); margin-left: var(--space-4); white-space: nowrap; }
+.hero__proof-cta code { font-family: var(--font-mono); font-size: 0.9em; color: var(--color-code-type); }
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-5);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 30px 70px -25px rgba(0, 0, 0, 0.65);
+  background: var(--color-bg-secondary);
+}
+.stat-card__num {
+  font-size: clamp(2.75rem, 4.5vw, 4rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--color-text-primary);
+}
+.stat-card__unit { color: var(--color-primary); }
+.stat-card__label { font-size: 1.0625rem; font-weight: 600; color: var(--color-text-primary); }
+.stat-card__sub { font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.4; }
+
+@media (max-width: 760px) {
+  .hero__proof { grid-template-columns: 1fr; }
+  .hero__proof-cta a { display: inline-block; margin: var(--space-1) var(--space-3) 0 0; }
 }
 
 @media (max-width: 900px) {
-  .hero { min-height: 0; }
-  .hero__split { grid-template-columns: 1fr; }
+  /* Stacked: the split no longer fills a fold — text over video, natural flow. */
+  .hero__split { grid-template-columns: 1fr; min-height: 0; }
   .hero__split > * { min-width: 0; }
   .hero__subheadline { max-width: none; }
   .hero__meta { gap: var(--space-3) var(--space-4); }
 }
 @media (max-width: 640px) {
-  .hero { padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12); }
+  .hero { padding: var(--space-6) 0 var(--space-12); }
   .hero__cta-group { flex-direction: column; align-items: flex-start; }
 }
 
@@ -832,7 +864,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 
 .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--color-border-bright); border-radius: var(--radius-lg); }
-.comparison-table { width: 100%; min-width: 680px; border-collapse: separate; border-spacing: 0; font-size: 0.875rem; }
+.comparison-table { width: 100%; min-width: 900px; border-collapse: separate; border-spacing: 0; font-size: 0.875rem; }
 .comparison-table thead { background: var(--color-bg-tertiary); }
 .comparison-table thead th { padding: var(--space-4) var(--space-5); text-align: center; font-weight: 600; color: var(--color-text-secondary); border-bottom: 1px solid var(--color-border-bright); white-space: nowrap; }
 .comparison-table thead th:first-child { text-align: left; color: var(--color-text-muted); font-weight: 400; }
