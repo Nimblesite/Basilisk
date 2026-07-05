@@ -91,6 +91,15 @@ const SCRIPT_TEMPLATE: &str = r#"def __basilisk_cpu_start():
                 code = frame.f_code
                 frames.append([clean(code.co_filename), frame.f_lineno, clean(code.co_name)])
                 frame = frame.f_back
+            # Drop `<string>` machinery frames. The cooperative sampler only
+            # runs in a debug-launched session, where the program is always a
+            # real file (`program: <path>`), so a `<string>` frame is never the
+            # user's code — it is this injected script's own frames or a
+            # pydevd/frame-eval exec wrapper (which appears on CI under line
+            # tracing). The py-spy attach path CAN legitimately profile
+            # `python -c` user code in `<string>`, so that path keeps it — that
+            # filtering lives in the Rust aggregator, not here.
+            frames = [f for f in frames if f[0] != "<string>"]
             # Attribute tracer overhead to the user code being traced: the
             # sys.settrace callbacks (pydevd/debugpy) sit on TOP of the user
             # frame, so drop leading debugger frames instead of discarding
