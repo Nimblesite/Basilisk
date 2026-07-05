@@ -512,14 +512,13 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 /* ══════════════════════════════════════════════════════════
    HERO — Split layout: big text left, code right
 ══════════════════════════════════════════════════════════ */
-/* The hero fills the whole viewport (min-height: 100vh) and flex-centres its
-   content, so the fold is ONE full-height panel: promise + product video +
-   proof, nothing else showing above it. */
+/* The sticky 60px header already sits in-flow above the hero, so the hero only
+   needs a little breathing room to clear it — NOT another header-height of
+   padding (that double-counted the header and pushed the fold past the viewport,
+   clipping the product panel). The fold is OWNED by .hero__split below, which is
+   sized to fill exactly one screen; the proof band flows just beneath it. */
 .hero {
-  display: flex;
-  align-items: center;
-  min-height: 100vh;
-  padding: calc(var(--header-height) + var(--space-10)) 0 var(--space-10);
+  padding: var(--space-8) 0 var(--space-16);
   border-bottom: 1px solid var(--color-border);
 }
 /* Hero uses the SAME centred 1280px container as every section below it, so its
@@ -532,19 +531,22 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   margin-inline: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--space-12);
 }
 
-/* Both columns share one row height (align-items: stretch), so the video panel
-   grows to exactly match the text column — even proportions, no dead gap under
-   the shorter side. The text stays vertically centred within that shared height. */
+/* The split OWNS the fold: min-height fills one viewport (minus the sticky
+   header and the hero's own top/bottom breathing room), so the promise + the
+   product video always sit fully above the fold and the proof band peeks in
+   just below it. Columns are centre-aligned so the landscape video keeps its
+   EXACT aspect ratio (see .hero__code) instead of being stretched to match the
+   taller text column. */
 .hero__split {
   display: grid;
-  grid-template-columns: 1fr 1.15fr;
+  grid-template-columns: 1fr 1.2fr;
   gap: var(--space-10);
-  align-items: stretch;
+  align-items: center;
+  min-height: calc(100vh - var(--header-height) - var(--space-16));
 }
-.hero__text { align-self: center; }
 
 .hero__kicker {
   font-family: var(--font-mono);
@@ -591,14 +593,14 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .hero__meta span { display: flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 .hero__meta strong { color: var(--color-text-secondary); font-weight: 500; }
 
-/* Code side of hero — the panel stretches to the shared row height (see
-   .hero__split) and the video is absolutely pinned to fill it edge-to-edge
-   (object-fit: cover). No letterbox, no dead space: the video ALWAYS fills the
-   panel vertically and horizontally; the wide axis is cropped, not padded. */
+/* Code side of hero — the panel hugs the product video at its EXACT native
+   aspect ratio: the video is a plain responsive block (width 100%, height auto),
+   so the frame is exactly as tall as the video is wide ÷ its ratio. Nothing is
+   cropped and there is no letterbox — the border wraps the footage edge-to-edge
+   like a framed screen. The aspect-ratio hint reserves the box before the
+   video's metadata loads, so there is no layout shift. */
 .hero__code {
-  position: relative;
-  align-self: stretch;
-  min-height: 460px;
+  align-self: center;
   overflow: hidden;
   border: 1px solid var(--color-border-bright);
   border-radius: var(--radius-lg);
@@ -606,12 +608,10 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   box-shadow: 0 30px 70px -25px rgba(0, 0, 0, 0.65);
 }
 .hero__shot {
-  position: absolute;
-  inset: 0;
+  display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
+  height: auto;
+  aspect-ratio: 3152 / 2042; /* rename.mp4 native size — locks ratio, prevents CLS */
 }
 
 /* Real product screenshot inside a feature-row visual (e.g. step-through debugging) */
@@ -663,14 +663,14 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 
 @media (max-width: 900px) {
-  .hero { min-height: 0; }
-  .hero__split { grid-template-columns: 1fr; }
+  /* Stacked: the split no longer fills a fold — text over video, natural flow. */
+  .hero__split { grid-template-columns: 1fr; min-height: 0; }
   .hero__split > * { min-width: 0; }
   .hero__subheadline { max-width: none; }
   .hero__meta { gap: var(--space-3) var(--space-4); }
 }
 @media (max-width: 640px) {
-  .hero { padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12); }
+  .hero { padding: var(--space-6) 0 var(--space-12); }
   .hero__cta-group { flex-direction: column; align-items: flex-start; }
 }
 
