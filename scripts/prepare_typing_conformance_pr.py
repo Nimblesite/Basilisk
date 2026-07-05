@@ -19,76 +19,23 @@ from pathlib import Path
 
 
 UPSTREAM = "https://github.com/python/typing.git"
+ADAPTER_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "conformance"
+    / "basilisk_conformance_adapter.py"
+)
+STRICT_ADAPTER_MARKER = (
+    "TYPE_CHECKERS = tuple(TYPE_CHECKERS) + (BasiliskTypeChecker(),)"
+)
 
-BASILISK_ADAPTER = """\
-class BasiliskTypeChecker(TypeChecker):
-    @property
-    def name(self) -> str:
-        return "basilisk"
 
-    def install(self) -> bool:
-        if shutil.which("basilisk") is None:
-            print(
-                "Unable to run basilisk. Install conformance dependencies with "
-                "'uv sync' from the conformance directory."
-            )
-            return False
-        try:
-            self.get_version()
-            return True
-        except (CalledProcessError, FileNotFoundError):
-            print(
-                "Unable to run basilisk. Install conformance dependencies with "
-                "'uv sync' from the conformance directory."
-            )
-            return False
-
-    def get_version(self) -> str:
-        proc = run(["basilisk", "--version"], check=True, stdout=PIPE, text=True)
-        return proc.stdout.strip()
-
-    def run_tests(self, test_files: Sequence[str]) -> dict[str, str]:
-        proc = run(
-            ["basilisk", "check", ".", "--output", "json", "--color", "never"],
-            stdout=PIPE,
-            stderr=PIPE,
-            text=True,
-            encoding="utf-8",
-        )
-        if proc.returncode not in (0, 1):
-            raise CalledProcessError(
-                proc.returncode,
-                "basilisk check",
-                output=proc.stdout,
-                stderr=proc.stderr,
-            )
-
-        diagnostics = json.loads(proc.stdout or "[]")
-        results_dict: dict[str, str] = {}
-        for diagnostic in diagnostics:
-            file_name = Path(diagnostic["path"]).name
-            line_number = diagnostic["line"]
-            col_number = diagnostic["col"]
-            severity = diagnostic["severity"]
-            message = diagnostic["message"]
-            code = diagnostic["code"]
-            line_text = (
-                f"{file_name}:{line_number}:{col_number} - "
-                f"{severity}: {message} ({code})\\n"
-            )
-            results_dict[file_name] = results_dict.get(file_name, "") + line_text
-        return results_dict
-
-    def parse_errors(self, output: Sequence[str]) -> dict[int, list[str]]:
-        line_to_errors: dict[int, list[str]] = {}
-        for line in output:
-            if not line.strip():
-                continue
-            assert line.count(":") >= 3, f"Failed to parse line: {line!r}"
-            _, lineno, _, _ = line.split(":", maxsplit=3)
-            line_to_errors.setdefault(int(lineno), []).append(line)
-        return line_to_errors
-"""
+def basilisk_adapter_source() -> str:
+    try:
+        return ADAPTER_PATH.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise SystemExit(
+            f"cannot read Basilisk adapter source: {ADAPTER_PATH}"
+        ) from exc
 
 
 def run_cmd(
@@ -126,20 +73,18 @@ def require_typing_checkout(path: Path) -> Path:
 
 def patch_type_checker(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
-    if "class BasiliskTypeChecker(TypeChecker):" not in source:
-        marker = "\n\nclass MypyTypeChecker(TypeChecker):"
-        if marker not in source:
-            raise SystemExit(f"cannot find insertion point in {path}")
-        source = source.replace(marker, "\n\n" + BASILISK_ADAPTER + marker, 1)
+    if STRICT_ADAPTER_MARKER in source:
+        return
+    if "class BasiliskTypeChecker(TypeChecker):" in source:
+        raise SystemExit(
+            f"{path} already contains a Basilisk adapter; use a clean checkout "
+            "or remove the stale adapter before preparing the submission"
+        )
+    if "TYPE_CHECKERS: Sequence[TypeChecker] = (" not in source:
+        raise SystemExit(f"cannot find TYPE_CHECKERS tuple in {path}")
 
-    entry = "    BasiliskTypeChecker(),\n"
-    tuple_marker = "TYPE_CHECKERS: Sequence[TypeChecker] = (\n"
-    if entry not in source:
-        if tuple_marker not in source:
-            raise SystemExit(f"cannot find TYPE_CHECKERS tuple in {path}")
-        source = source.replace(tuple_marker, tuple_marker + entry, 1)
-
-    path.write_text(source, encoding="utf-8")
+    adapter = basilisk_adapter_source()
+    path.write_text(f"{source.rstrip()}\n\n{adapter}\n", encoding="utf-8")
 
 
 def patch_pyproject(path: Path) -> None:
