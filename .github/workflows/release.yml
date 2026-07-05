@@ -791,3 +791,155 @@ jobs:
           fi
           git commit -m "basilisk ${BASILISK_VERSION}"
           git push
+
+  # ── PyPI ──────────────────────────────────────────────────────────────────
+  # Ship the SAME `basilisk` binary as a pip-installable wheel (`basilisk-python`
+  # on PyPI; the console script stays `basilisk`). This is what lets the
+  # python/typing conformance suite — which installs every checker through a
+  # `uv`/pip environment — pull Basilisk the way it pulls ty, pyrefly and zuban.
+  # See pyproject.toml ([tool.maturin] bindings = "bin").
+  pypi-wheels:
+    name: Build PyPI wheel - ${{ matrix.platform }}
+    # Gate wheel builds on the existing binary conformance job: never build a
+    # wheel of a non-conformant binary. Independent of the `build` matrix — the
+    # release archives feed Homebrew/Scoop/VSIX; these wheels feed PyPI.
+    needs: conformance
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            manylinux: auto
+          - platform: linux-arm64
+            target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            manylinux: auto
+          - platform: darwin-arm64
+            target: aarch64-apple-darwin
+            os: macos-15
+            manylinux: "off"
+          - platform: win32-x64
+            target: x86_64-pc-windows-msvc
+            os: windows-latest
+            manylinux: "off"
+          - platform: win32-arm64
+            target: aarch64-pc-windows-msvc
+            os: windows-latest
+            manylinux: "off"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # Stamp the workspace version so the wheel version (maturin reads it from
+      # Cargo.toml via `dynamic = ["version"]` in pyproject.toml) matches the tag.
+      - name: Stamp release version
+        shell: bash
+        run: scripts/stamp-version.sh
+
+      # `bindings = "bin"` packages the compiled `basilisk` executable into a
+      # binary-only wheel (no Python extension module). Linux builds inside a
+      # manylinux container for broad glibc compatibility; macOS/Windows build
+      # natively or cross-compile for arm64.
+      - name: Build wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --out dist
+          sccache: "true"
+
+      # Transient in-run hand-off to publish-pypi (PyPI is the permanent store).
+      # retention-days: 1 (the floor) keeps wheels out of billed storage
+      # ([GITHUB-NO-ARTIFACTS]).
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pypi-wheel-${{ matrix.platform }}
+          path: dist/*.whl
+          retention-days: 1
+
+  # Prove the ACTUAL shipped wheel — pip-installed — scores 100% via the REAL,
+  # unmodified python/typing harness (its own `src/main.py`, not our fast local
+  # scorer). This complements conformance/score.py (which grades the compiled
+  # binary): score.py stays the sha-pinned dev/CI fast path; this gate guarantees
+  # the released install path is conformant. See [CHKARCH-CONFORMANCE].
+  conformance-wheel:
+    name: Conformance gate — pip-installed wheel vs python/typing@main (real harness)
+    needs: pypi-wheels
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Download linux-x64 wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: pypi-wheel-linux-x64
+          path: wheelhouse
+
+      - name: Install the wheel + harness deps (proves install + exposes `basilisk`)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install wheelhouse/*.whl jinja2 markdown tomlkit
+          # Fails the job immediately if the wheel did not put `basilisk` on PATH.
+          basilisk --version
+
+      - name: Clone python/typing@main (real fixtures + harness + calculator)
+        shell: bash
+        run: git clone --depth 1 https://github.com/python/typing typing-upstream
+
+      - name: Inject the Basilisk adapter (suite ships every other checker; add ours)
+        shell: bash
+        run: cat conformance/basilisk_conformance_adapter.py >> typing-upstream/conformance/src/type_checker.py
+
+      - name: Run the REAL upstream harness against the installed wheel
+        working-directory: typing-upstream/conformance
+        shell: bash
+        # `basilisk` resolves to the pip-installed wheel on PATH (BASILISK_BIN unset).
+        run: python src/main.py --only-run basilisk
+
+      - name: Assert the wheel scores 100% / zero false positives
+        shell: bash
+        run: python conformance/assert_wheel_conformance.py typing-upstream/conformance/results/basilisk
+
+  publish-pypi:
+    name: Publish wheels to PyPI
+    # Only publish once the wheels built AND the shipped wheel passed the real
+    # upstream harness AND the GitHub release exists.
+    needs: [pypi-wheels, conformance-wheel, release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: startsWith(github.ref, 'refs/tags/')
+    # Trusted Publishing (OIDC): configure a PyPI publisher for
+    # owner=Nimblesite, repo=Basilisk, workflow=release.yml, environment=pypi.
+    # No API token is stored — id-token below mints a short-lived OIDC token PyPI
+    # verifies. For the very first release, add a PyPI "pending publisher" first.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/basilisk-python/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download platform wheels
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          pattern: pypi-wheel-*
+          merge-multiple: true
+
+      # Binary-only wheels for the supported platforms — no sdist: the crate has
+      # many workspace path-deps, so a standalone source build off PyPI isn't
+      # viable; unsupported targets install via GitHub Releases / Homebrew / Scoop.
+      - name: Publish to PyPI (Trusted Publishing)
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        with:
+          packages-dir: dist

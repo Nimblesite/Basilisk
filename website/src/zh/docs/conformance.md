@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "Basilisk 如何衡量 PEP 符合性"
-description: "Basilisk 的 PEP 符合性得分如何用官方 python/typing 符合性套件衡量——套件是什么、评分如何进行、我们运行的字节级一致且 sha256 固定的计算器，以及为何我们在每条规则都启用的情况下评分、从不关闭任何一条。"
+description: "Basilisk 的 PEP 符合性得分如何用官方 python/typing 符合性套件衡量——套件是什么、评分如何进行、如何用 wheel 安装的 CLI 提交上游，以及为何我们在每条规则都启用的情况下评分、从不关闭任何一条。"
 keywords: pep 符合性, python 类型符合性套件, basilisk 符合性得分, 类型检查器评分, python/typing 计算器
 lang: zh
 ---
@@ -9,7 +9,7 @@ lang: zh
 
 # 我们如何衡量 PEP 符合性
 
-Basilisk 由**官方 `python/typing` 符合性套件**评分——也就是类型社区用来为 pyright、mypy、pyrefly、ty 等打分的同一套测试与评分工具。我们在每次改动时，对真实的 `basilisk` 二进制文件原样运行该工具。
+Basilisk 由**官方 `python/typing` 符合性套件**评分——也就是类型社区用来为 pyright、mypy、pyrefly、ty 等打分的同一套测试与评分工具。发布证明通过 wheel 安装的 `basilisk` 命令原样运行该工具，也就是用户从 PyPI 得到的同一个入口。
 
 目前的结果是 **{{ conformance.scorePct }}%**——{{ conformance.total }} 个测试文件中 **{{ conformance.pass }}** 个通过，捕获 {{ conformance.caught }} 个必需错误，**{{ conformance.fp }} 处误报**、**{{ conformance.missed }} 处遗漏的必需错误**。{{ conformance.categoriesTotal }} 个类别中有 {{ conformance.categoriesPass100 }} 个达到 100%，并由棘轮门禁防止其回退。
 
@@ -17,8 +17,8 @@ Basilisk 由**官方 `python/typing` 符合性套件**评分——也就是类�
   <a href="https://typing.python.org/en/latest/spec/" target="_blank" rel="noopener">Python 类型规范 ↗</a>
   <a href="https://github.com/python/typing/blob/main/conformance/README.md" target="_blank" rel="noopener">符合性套件与 README ↗</a>
   <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">已发布结果 ↗</a>
-  <a href="https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py" target="_blank" rel="noopener">我们的评分器 score.py ↗</a>
-  <a href="https://github.com/Nimblesite/Basilisk/blob/main/conformance/upstream_main.py" target="_blank" rel="noopener">内置计算器 ↗</a>
+  <a href="https://github.com/Nimblesite/Basilisk/blob/main/scripts/prepare_typing_conformance_pr.py" target="_blank" rel="noopener">提交脚本 ↗</a>
+  <a href="https://github.com/Nimblesite/Basilisk/blob/main/docs/typing-conformance-pr.md" target="_blank" rel="noopener">PR 流程 ↗</a>
 </p>
 
 ## 符合性套件是什么
@@ -31,38 +31,34 @@ Basilisk 由**官方 `python/typing` 符合性套件**评分——也就是类�
 
 ## 一个文件如何评分
 
-整个算法就是套件 `main.py` 中的两个函数——`get_expected_errors`（读取 `# E` 注释）与 `diff_expected_errors`（与检查器输出比对）。文件**当且仅当**该差异为空时通过（`upstream_main.py:185`：`"Fail" if errors_diff.strip() else "Pass"`）：每个必需错误都被报告，且没有诊断落在未标记的行上。我们计入检查器发出的**每一个**诊断——错误*和*警告，不排除任何代码——因此一处误报就会让整个文件失败。
+官方 harness 会读取套件中的 `# E` 注释，运行检查器适配器，并比对期望诊断与实际诊断。文件只有在这个差异为空时才通过：每个必需错误都被报告，且没有诊断落在未标记的行上。我们计入检查器发出的**每一个**诊断——错误*和*警告，不排除任何代码——因此一处误报就会让整个文件失败。
 
 ## 我们如何在不分叉的情况下运行它
 
-套件的 `main.py` 一次性为所有已知检查器打分，无法调用我们的二进制文件。因此，正如套件为 pyright 和 mypy 所做的那样，[`score.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py) 加一个薄薄的**适配器**，复用套件自己的评分：
+上游套件只会为其 `type_checker.py` 中注册的检查器评分。发布与提交证明使用 [`scripts/prepare_typing_conformance_pr.py`](https://github.com/Nimblesite/Basilisk/blob/main/scripts/prepare_typing_conformance_pr.py) 修补一个全新的 `python/typing` checkout，内容正是上游 PR 需要的形态：
 
-1. **适配器**——运行 `basilisk check --output json`，把结果整理成套件函数期望的 `{line: [errors]}` 字典。
-2. **计算器**——从一份字节级一致的套件 `main.py` committed 副本中导入 `get_expected_errors` 与 `diff_expected_errors` 并原样调用——不含任何自己的评分逻辑。
-3. **门禁**——将结果与 `coverage-thresholds.json` 比较，任何回归都让 CI 失败。
+1. **适配器**——注入 `BasiliskTypeChecker`，运行 `basilisk check . --output json --color never`，并把所有非空诊断交给上游解析器。
+2. **Wheel 安装**——加入 `basilisk-python` 依赖，刷新 `uv.lock`，并确认 `basilisk --version` 来自 `python/typing` 虚拟环境。
+3. **Harness**——运行 `uv run --python 3.12 python src/main.py --only-run basilisk`，再运行 `--report-only`，生成上游的 `results/basilisk/*.toml` 与 `results.html`。
 
-内置计算器经 **sha256 固定**：`score.py` 每次运行都重新哈希它，若有漂移则拒绝评分；本网站在构建时也会再次重新哈希：
-
-{% if conformance.verified %}
-<p><span class="conf-verified">✓ 构建时已校验 —— conformance/upstream_main.py 为 {{ conformance.upstreamBytes }} 字节，sha256 {{ conformance.sha256Short }}…，与固定值一致</span></p>
-{% endif %}
+这才是提交路径。旧的 Basilisk 本地评分器只是开发快捷检查；它不是发布或上游符合性 PR 的事实来源。
 
 ## 得分衡量什么——又从不运行什么
 
-我们完全按真实用户的运行方式为二进制文件评分：**默认配置**，即**核心 PEP 符合性规则集**——别无其他。评分之前，`score.py` 会从测试夹具目录中*删除*任何 `basilisk.json`，因此配置文件既无法静音某条符合性规则，也无法悄悄开启额外规则。为抬高数字而关闭某条符合性规则是被禁止的——删除或注销它同样被禁止。
+我们完全按真实用户从 wheel 运行 CLI 的方式评分：**默认配置**，即**核心 PEP 符合性规则集**——别无其他。发布与提交门禁在干净的 `python/typing` checkout 中通过 wheel 安装的 `basilisk` 命令运行，因此仓库本地配置既无法静音某条符合性规则，也无法悄悄开启额外规则。为抬高数字而关闭某条符合性规则是被禁止的——删除或注销它同样被禁止。
 
 Basilisk 的**可选规则**（要求注解、冗余注解、缺失 `@override`、显式 `Any`）在评分中从不运行；全新安装一条都不会启用。开启它们只会*拉低*得分而非抬高：规范将未注解的值视为*推断*而非错误，因此"要求注解"会在符合规范的代码上触发，计为一处**误报**。"比规范更严格"与"符合规范"是不同的目标——这个得分只衡量后者。
 
 ## 得分如何变化
 
-这个数字并非一直被诚实地衡量，我们宁愿坦白说明也不愿掩盖。早期的一个仓库内脚本曾通过**把若干诊断代码排除在差异比对之外、且完全不计入误报**来抬高数字；我们弃用了它，改用官方 `python/typing` 计算器，对真实的默认二进制文件原样运行。下面的图表在构建时直接读取 **`conformance/conformance_status.csv` 的 git 历史**——每个改动该文件的提交对应一个点，包括那次更正。
+这个数字并非一直被诚实地衡量，我们宁愿坦白说明也不愿掩盖。早期的一个仓库内脚本曾通过**把若干诊断代码排除在差异比对之外、且完全不计入误报**来抬高数字；我们弃用了它，改用官方 `python/typing` 评分语义，对真实的默认 CLI 运行。下面的图表在构建时直接读取 **`conformance/conformance_status.csv` 的 git 历史**——每个改动该文件的提交对应一个点，包括那次更正。
 
 {{ chart(conformance, {
   "label": "符合性得分随时间变化",
-  "heading": "从仓库内脚本到官方计算器",
+  "heading": "从仓库内脚本到官方 harness",
   "prevLegend": "早期仓库内脚本——排除代码、忽略误报（并非官方衡量方式）",
-  "officialLegend": "官方 <code>python/typing</code> 计算器，对真实默认二进制文件运行",
-  "dropNote": "早期的点来自一个排除诊断代码、且不计入误报的仓库内脚本；之后的点使用官方 <code>python/typing</code> 计算器、对真实默认二进制文件运行。今天的官方数字是 <strong>" + conformance.chart.current.score + "%</strong>——是衡量变诚实了，而非检查器变差了。",
+  "officialLegend": "官方 <code>python/typing</code> harness，对真实默认 CLI 运行",
+  "dropNote": "早期的点来自一个排除诊断代码、且不计入误报的仓库内脚本；之后的点使用官方 <code>python/typing</code> 评分语义、对真实默认 CLI 运行。今天的官方数字是 <strong>" + conformance.chart.current.score + "%</strong>——是衡量变诚实了，而非检查器变差了。",
   "caption": "每个点都是对 <code>conformance/conformance_status.csv</code> 的真实提交，每次构建重新计算。悬停某点可查看其日期、提交、得分与误报数。"
 }) }}
 
@@ -84,9 +80,12 @@ Basilisk 的**可选规则**（要求注解、冗余注解、缺失 `@override`�
 ## 自己复现
 
 ```bash
-# 构建二进制、获取（被 git 忽略的）测试夹具、对其运行官方 python/typing
-# 计算器、写出 conformance_status.csv，并强制执行 coverage-thresholds.json 中的棘轮门禁。
-make conformance
+# 在 Basilisk checkout 中修补 python/typing checkout，从 basilisk-python
+# wheel 安装 basilisk，运行真实上游 harness，并写出证明日志。
+python3 scripts/prepare_typing_conformance_pr.py \
+  --typing-repo ../typing \
+  --verbose \
+  --write-proof
 ```
 
-这一切都在两个文件里：[`conformance/score.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py)（我们的适配器与门禁）和 [`conformance/upstream_main.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/upstream_main.py)（套件的计算器，committed 且经 sha256 固定）。完整的注解规则见 [python/typing 符合性 README](https://github.com/python/typing/blob/main/conformance/README.md)。
+提交流程位于 [`scripts/prepare_typing_conformance_pr.py`](https://github.com/Nimblesite/Basilisk/blob/main/scripts/prepare_typing_conformance_pr.py)，上游 PR 应包含的文件记录在 [`docs/typing-conformance-pr.md`](https://github.com/Nimblesite/Basilisk/blob/main/docs/typing-conformance-pr.md)。完整的注解规则见 [python/typing 符合性 README](https://github.com/python/typing/blob/main/conformance/README.md)。
