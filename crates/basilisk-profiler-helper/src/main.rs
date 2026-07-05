@@ -315,7 +315,8 @@ mod tests {
     use super::*;
 
     /// py-spy's ambiguous "cannot open" attach failure.
-    const CANNOT_OPEN: &str = "py-spy attach failed: Failed to open process - check if it is running.";
+    const CANNOT_OPEN: &str =
+        "py-spy attach failed: Failed to open process - check if it is running.";
 
     /// Poll `ps` until `pid` reports the zombie state (`Z…`), or time out.
     fn wait_until_zombie(pid: u32) -> Result<(), String> {

@@ -272,7 +272,9 @@ fn test_zed_formatting() -> TestResult<()> {
     // The engine is embedded in the binary — badly formatted code MUST come
     // back Ruff-formatted, never a silent null (#254).
     assert!(
-        format_result.to_string().contains("def foo(x: int) -> int:"),
+        format_result
+            .to_string()
+            .contains("def foo(x: int) -> int:"),
         "formatting must produce ruff-format output: {format_result}"
     );
 
