@@ -211,19 +211,20 @@ permalink: /zh/
   <div class="feature-row">
     <div class="feature-row__text">
       <p class="feature-row__num">01 &mdash; 符合规范优先</p>
-      <h2 class="feature-row__title">默认符合规范。<br>严格程度随心调整。</h2>
+      <h2 class="feature-row__title">{{ conformance.scorePct }}% 符合类型规范。<br>锚定到确切的提交。</h2>
       <p class="feature-row__body">
-        Basilisk 开箱即按 Python 类型规范检查——与官方符合性套件评分所用的规则相同。
-        更严格的检查来自 Basilisk 自身，且完全可选：要求每个参数和返回值都有注解、
-        标记冗余注解、提示 <code>@override</code>。规范将未注解的代码视为<em>推断</em>类型而非错误，
-        因此这些检查默认关闭——当你需要超出规范的检查时，再通过配置按文件或路径开启。
-        一键"补全"修复还能自动为您添加缺失的类型。
+        由官方 <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">python/typing 符合性套件</a>评分——同一套公开工具也为
+        Pyright、mypy 和 Pyrefly 打分——在真实二进制文件上运行，启用每一条符合性规则、不禁用任何规则：
+        {{ conformance.categoriesTotal }} 个类别中有 {{ conformance.categoriesPass100 }} 个达到 100%，误报 {{ conformance.fp }} 处、遗漏的必需错误 {{ conformance.missed }} 处。
+        每次发布都会从 <code>python/typing@main</code> 重新拉取套件并要求满分才能发布，因此该数字可复现——
+        绝非手工填写——且始终对照下方所示的确切提交评分。
       </p>
     </div>
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">{{ ruleStats.total }}</span>
-        <span class="stat-block__label">条规则，皆可配置</span>
+        <span class="stat-block__number">{{ conformance.scorePct }}<span class="stat-block__unit">%</span></span>
+        <span class="stat-block__label">PEP 符合性得分</span>
+        <span class="stat-block__sub">对照 <code>python/typing</code>@<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" title="python/typing@{{ conformance.pinnedRef }}"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %}（{{ conformance.commitDate }}）{% endif %}评分 &mdash; 每次发布自动更新</span>
       </div>
     </div>
   </div>
@@ -280,18 +281,20 @@ permalink: /zh/
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">{{ conformance.scorePct }}<span class="stat-block__unit">%</span></span>
-        <span class="stat-block__label">PEP 符合性得分</span>
+        <span class="stat-block__number">{{ ruleStats.strictness }}</span>
+        <span class="stat-block__label">条让类型成为强制的可选规则</span>
+        <span class="stat-block__sub">属于 {{ ruleStats.optIn }} 条可选规则 &mdash; 默认关闭，从不计入符合性评分</span>
       </div>
     </div>
     <div class="feature-row__text">
-      <p class="feature-row__num">04 &mdash; PEP 符合性</p>
-      <h2 class="feature-row__title">{{ conformance.total }} 个测试中 {{ conformance.pass }} 个通过（{{ conformance.scorePct }}%）。<br>每条符合性规则均已启用。</h2>
+      <p class="feature-row__num">04 &mdash; 超越规范</p>
+      <h2 class="feature-row__title">规范让类型可有可无。<br>这些规则让它成为强制。</h2>
       <p class="feature-row__body">
-        由<a href="https://github.com/python/typing/blob/main/conformance/results/results.html">官方 Python 类型符合性套件</a>评分，对照<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance">提交 <code>{{ conformance.pinnedRefShort }}</code></a>——我们所对标的确切套件版本——
-        同一套公开的评分工具也为 Pyright、mypy 和 Pyrefly 打分，它们的当前得分见该结果表。
-        我们与该仓库步调一致：每次检查器构建与每次发布都会从 <code>python/typing@main</code> 重新拉取最新套件并要求满分，因此任何我们未通过的上游测试都会阻止合并与发布，直到我们符合为止。
-        我们在真实二进制文件上运行它，启用每一条符合性规则、不禁用任何规则：{{ conformance.categoriesTotal }} 个类别中有 {{ conformance.categoriesPass100 }} 个达到 100%，误报 {{ conformance.fp }} 处、遗漏的必需错误 {{ conformance.missed }} 处。Basilisk 的可选规则在符合性评分中从不运行，因此无法虚增得分。<a href="/zh/docs/conformance/">我们如何衡量 &rarr;</a>
+        类型规范将未注解的代码视为<em>推断</em>类型而非错误。Basilisk 的 {{ ruleStats.strictness }} 条可选严格规则拒绝如此：
+        要求每个参数、返回值、变量、<code>*args</code>/<code>**kwargs</code> 和类属性都有类型注解，
+        要求重写方法带 <code>@override</code>，拒绝隐式与显式的 <code>Any</code>，并标记未注解的 lambda。
+        每一条都默认关闭——可从编辑器或 <code>pyproject.toml</code> 按文件或路径开启，一键"补全"修复还能自动为您添加缺失的类型。
+        它们在符合性评分中从不运行，因此无法虚增得分。<a href="/zh/docs/rules/">查看规则 &rarr;</a>
       </p>
     </div>
   </div>

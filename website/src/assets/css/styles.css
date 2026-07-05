@@ -828,6 +828,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 .stat-block__unit { color: var(--color-primary); }
 .stat-block__label { font-size: 0.875rem; color: var(--color-text-muted); margin-top: var(--space-2); display: block; letter-spacing: 0.02em; }
+.stat-block__sub { font-size: 0.75rem; color: var(--color-text-muted); opacity: 0.72; margin-top: var(--space-2); display: block; max-width: 22rem; margin-inline: auto; line-height: 1.5; }
 
 /* ══════════════════════════════════════════════════════════
    COMPARISON TABLE

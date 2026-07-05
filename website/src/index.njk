@@ -212,21 +212,21 @@ permalink: /
   <div class="feature-row">
     <div class="feature-row__text">
       <p class="feature-row__num">01 &mdash; Conformance first</p>
-      <h2 class="feature-row__title">Conformant by default.<br>Strict to taste.</h2>
+      <h2 class="feature-row__title">{{ conformance.scorePct }}% to the typing spec.<br>Pinned to the exact commit.</h2>
       <p class="feature-row__body">
-        Basilisk checks to the Python typing spec out of the box &mdash; the same rules the
-        official conformance suite grades. Stricter checks are Basilisk&rsquo;s own and entirely
-        opt-in: require an annotation on every parameter and return, flag redundant annotations,
-        nudge for <code>@override</code>. The spec treats unannotated code as <em>inferred</em>,
-        not an error, so these stay off by default &mdash; switch them on through config, per-file
-        or per-path, when you want more than the spec. And one-click enrichment fixes add the
-        missing types <em>for</em> you.
+        Scored by the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">python/typing conformance suite</a> &mdash; the same published
+        harness that grades Pyright, mypy, and Pyrefly &mdash; run on the real binary with every
+        conformance rule enabled and nothing disabled: {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories at 100%,
+        {{ conformance.fp }} false positives, {{ conformance.missed }} missed required errors. Every release re-pulls the suite from
+        <code>python/typing@main</code> and requires a perfect score to ship, so the number is
+        reproducible &mdash; never hand-typed &mdash; and always graded against the exact commit shown below.
       </p>
     </div>
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">{{ ruleStats.total }}</span>
-        <span class="stat-block__label">rules, every one configurable</span>
+        <span class="stat-block__number">{{ conformance.scorePct }}<span class="stat-block__unit">%</span></span>
+        <span class="stat-block__label">PEP conformance score</span>
+        <span class="stat-block__sub">graded against <code>python/typing</code>@<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" title="python/typing@{{ conformance.pinnedRef }}"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %} ({{ conformance.commitDate }}){% endif %} &mdash; re-pinned every release</span>
       </div>
     </div>
   </div>
@@ -284,19 +284,23 @@ permalink: /
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">{{ conformance.scorePct }}<span class="stat-block__unit">%</span></span>
-        <span class="stat-block__label">PEP conformance score</span>
+        <span class="stat-block__number">{{ ruleStats.strictness }}</span>
+        <span class="stat-block__label">opt-in rules that make typing mandatory</span>
+        <span class="stat-block__sub">part of {{ ruleStats.optIn }} opt-in rules &mdash; off by default, never scored for conformance</span>
       </div>
     </div>
     <div class="feature-row__text">
-      <p class="feature-row__num">04 &mdash; PEP conformance</p>
-      <h2 class="feature-row__title">{{ conformance.pass }} of {{ conformance.total }} tests passing ({{ conformance.scorePct }}%).<br>Every conformance rule enabled.</h2>
+      <p class="feature-row__num">04 &mdash; Beyond the spec</p>
+      <h2 class="feature-row__title">The spec makes types optional.<br>These make them mandatory.</h2>
       <p class="feature-row__body">
-        Scored by the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">official Python typing conformance suite</a>, graded against <a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance">commit <code>{{ conformance.pinnedRefShort }}</code></a> &mdash; the exact suite version we target &mdash;
-        the same published harness that grades Pyright, mypy, and Pyrefly, whose
-        current scores live in that results table.
-        And we stay in lock step with that repository: every checker build and every release re-pulls the latest suite from <code>python/typing@main</code> and requires a perfect score, so an upstream test we fail blocks merge and release until we conform.
-        We run it on the real binary with every conformance rule enabled and nothing disabled: {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories pass at 100%, with {{ conformance.fp }} false positives and {{ conformance.missed }} missed required errors. Basilisk&rsquo;s opt-in rules never run during conformance, so they can&rsquo;t pad the number. <a href="/docs/conformance/">How we measure this &rarr;</a>
+        The typing spec treats unannotated code as <em>inferred</em>, not an error. Basilisk&rsquo;s
+        {{ ruleStats.strictness }} opt-in strictness rules refuse that: they require a type on every parameter,
+        return, variable, <code>*args</code>/<code>**kwargs</code>, and class attribute, demand
+        <code>@override</code> on overrides, reject implicit and explicit <code>Any</code>, and flag
+        unannotated lambdas. Every one is off by default &mdash; switch them on per-file or per-path
+        from your editor or <code>pyproject.toml</code>, and one-click enrichment fixes add the missing
+        types <em>for</em> you. They never run during conformance, so they can&rsquo;t pad that score.
+        <a href="/docs/rules/">See the rules &rarr;</a>
       </p>
     </div>
   </div>

@@ -1,0 +1,55 @@
+# PyPI packaging for the `basilisk` type checker.
+#
+# This wraps the SAME native `basilisk` binary that ships via GitHub Releases,
+# Homebrew and Scoop into a Python wheel, so `pip install basilisk-python`
+# lands the executable on PATH. It exists so tools that manage type checkers
+# through Python environments — notably the `python/typing` conformance suite,
+# which installs every checker with `uv sync` — can pull Basilisk the same way
+# they pull ty, pyrefly and zuban (all Rust binaries shipped as wheels).
+#
+# The distribution name is `basilisk-python` because `basilisk` is already
+# taken on PyPI; the installed console script is still `basilisk`.
+#
+# Version is single-sourced from the Cargo workspace (`dynamic = ["version"]`
+# reads `crates/basilisk-cli/Cargo.toml`), which `scripts/stamp-version.sh`
+# stamps at release time alongside every other versioned artifact — so the
+# wheel version, the binary's `--version`, and the GitHub Release tag can never
+# drift apart.
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "basilisk-python"
+description = "Basilisk — a strict-by-default Python type checker and LSP, written in Rust."
+readme = "README-pypi.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Nimblesite", email = "cftools@nimblesite.co" }]
+dynamic = ["version"]
+keywords = ["type-checker", "typing", "static-analysis", "lsp", "pep", "python"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Rust",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://www.basilisk-python.dev"
+Repository = "https://github.com/Nimblesite/Basilisk"
+Documentation = "https://www.basilisk-python.dev/docs/"
+Changelog = "https://github.com/Nimblesite/Basilisk/releases"
+
+# `bindings = "bin"` packages the compiled `basilisk` executable (from the
+# basilisk-cli crate) into the wheel's scripts directory — a binary-only wheel
+# with no Python extension module, so it works on any CPython/PyPy 3.x.
+[tool.maturin]
+bindings = "bin"
+manifest-path = "crates/basilisk-cli/Cargo.toml"
+strip = true

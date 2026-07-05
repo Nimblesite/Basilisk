@@ -2,6 +2,10 @@
   {
     "code": "BSK-E0001",
     "severity": "error",
+    "provenance": "basilisk",
+    "tags": [
+      "strictness"
+    ],
     "summary": "Missing parameter type annotation",
     "summaryHtml": "Missing parameter type annotation",
     "body": [],
@@ -11,6 +15,10 @@
   {
     "code": "BSK-E0002",
     "severity": "error",
+    "provenance": "basilisk",
+    "tags": [
+      "strictness"
+    ],
     "summary": "Missing return type annotation",
     "summaryHtml": "Missing return type annotation",
     "body": [],
@@ -20,6 +28,10 @@
   {
     "code": "BSK-E0003",
     "severity": "error",
+    "provenance": "basilisk",
+    "tags": [
+      "strictness"
+    ],
     "summary": "Missing variable type annotation",
     "summaryHtml": "Missing variable type annotation",
     "body": [
@@ -34,6 +46,10 @@
   {
     "code": "BSK-E0004",
     "severity": "error",
+    "provenance": "basilisk",
+    "tags": [
+      "strictness"
+    ],
     "summary": "Missing `*args` / `**kwargs` type annotation",
     "summaryHtml": "Missing <code>*args</code> / <code>**kwargs</code> type annotation",
     "body": [
@@ -48,6 +64,10 @@
   {
     "code": "BSK-E0005",
     "severity": "error",
+    "provenance": "basilisk",
+    "tags": [
+      "strictness"
+    ],
     "summary": "Missing class attribute type annotation",
     "summaryHtml": "Missing class attribute type annotation",
     "body": [
@@ -66,6 +86,10 @@
   {
     "code": "BSK-E0025",
     "severity": "error",
+    "provenance": "basilisk",
+    "tags": [
+      "strictness"
+    ],
     "summary": "Missing `@override` decorator",
     "summaryHtml": "Missing <code>@override</code> decorator",
     "body": [
@@ -92,6 +116,10 @@
   {
     "code": "BSK-E0152",
     "severity": "error",
+    "provenance": "basilisk",
+    "tags": [
+      "stubs"
+    ],
     "summary": "Missing type stubs for installed package",
     "summaryHtml": "Missing type stubs for installed package",
     "body": [
@@ -111,6 +139,11 @@
   {
     "code": "BSK-W0011",
     "severity": "warning",
+    "provenance": "basilisk",
+    "tags": [
+      "dependencies",
+      "imports"
+    ],
     "summary": "Undeclared dependency import",
     "summaryHtml": "Undeclared dependency import",
     "body": [
@@ -134,6 +167,10 @@
   {
     "code": "BSK-W0012",
     "severity": "warning",
+    "provenance": "basilisk",
+    "tags": [
+      "dependencies"
+    ],
     "summary": "Unused dependency",
     "summaryHtml": "Unused dependency",
     "body": [
@@ -152,6 +189,10 @@
   {
     "code": "BSK-W0013",
     "severity": "warning",
+    "provenance": "basilisk",
+    "tags": [
+      "dependencies"
+    ],
     "summary": "Stale uv lock file",
     "summaryHtml": "Stale uv lock file",
     "body": [
@@ -170,6 +211,11 @@
   {
     "code": "BSK-W0014",
     "severity": "warning",
+    "provenance": "basilisk",
+    "tags": [
+      "style",
+      "strictness"
+    ],
     "summary": "Explicit `Any` annotation",
     "summaryHtml": "Explicit <code>Any</code> annotation",
     "body": [
@@ -193,6 +239,10 @@
   {
     "code": "BSK-W0040",
     "severity": "warning",
+    "provenance": "basilisk",
+    "tags": [
+      "strictness"
+    ],
     "summary": "Lambda function missing type annotations",
     "summaryHtml": "Lambda function missing type annotations",
     "body": [
@@ -212,6 +262,11 @@
   {
     "code": "BSK-W0050",
     "severity": "warning",
+    "provenance": "basilisk",
+    "tags": [
+      "redundancy",
+      "style"
+    ],
     "summary": "Redundant type annotation warning",
     "summaryHtml": "Redundant type annotation warning",
     "body": [
@@ -231,6 +286,8 @@
   {
     "code": "aliases_implicit",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid right-hand side for a `TypeAlias` annotation",
     "summaryHtml": "Invalid right-hand side for a <code>TypeAlias</code> annotation",
     "body": [
@@ -254,6 +311,8 @@
   {
     "code": "aliases_newtype",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid `NewType(...)` call",
     "summaryHtml": "Invalid <code>NewType(...)</code> call",
     "body": [
@@ -277,6 +336,8 @@
   {
     "code": "aliases_recursive",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Cyclical type alias reference",
     "summaryHtml": "Cyclical type alias reference",
     "body": [
@@ -296,6 +357,8 @@
   {
     "code": "aliases_type_statement",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid RHS in a PEP 695 `type X = rhs` statement",
     "summaryHtml": "Invalid RHS in a PEP 695 <code>type X = rhs</code> statement",
     "body": [
@@ -315,6 +378,8 @@
   {
     "code": "aliases_typealiastype",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid `TypeAliasType(...)` call",
     "summaryHtml": "Invalid <code>TypeAliasType(...)</code> call",
     "body": [
@@ -350,6 +415,8 @@
   {
     "code": "annotations_forward_refs",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid type expression in annotation",
     "summaryHtml": "Invalid type expression in annotation",
     "body": [
@@ -381,6 +448,8 @@
   {
     "code": "annotations_generators",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Generator return type and yield type violations",
     "summaryHtml": "Generator return type and yield type violations",
     "body": [
@@ -408,6 +477,8 @@
   {
     "code": "annotations_generators_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Generator yield/send/return type mismatch",
     "summaryHtml": "Generator yield/send/return type mismatch",
     "body": [
@@ -427,6 +498,8 @@
   {
     "code": "annotations_typeexpr",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid type form \u2014 numeric literal used as type annotation",
     "summaryHtml": "Invalid type form \u2014 numeric literal used as type annotation",
     "body": [
@@ -446,6 +519,8 @@
   {
     "code": "assignment_compatibility",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Assignment type incompatibility (literal mismatches)",
     "summaryHtml": "Assignment type incompatibility (literal mismatches)",
     "body": [
@@ -469,6 +544,8 @@
   {
     "code": "callables_annotation",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid type argument count or form",
     "summaryHtml": "Invalid type argument count or form",
     "body": [
@@ -491,6 +568,8 @@
   {
     "code": "callables_kwargs",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Unpack[`TypedDict`] kwargs violations",
     "summaryHtml": "UnpackTypedDict kwargs violations",
     "body": [
@@ -505,6 +584,8 @@
   {
     "code": "callables_protocol",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Callable call-site arity and argument validation",
     "summaryHtml": "Callable call-site arity and argument validation",
     "body": [
@@ -519,6 +600,8 @@
   {
     "code": "callables_protocol_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Callable and Protocol assignment compatibility",
     "summaryHtml": "Callable and Protocol assignment compatibility",
     "body": [
@@ -533,6 +616,8 @@
   {
     "code": "callables_subtyping",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Callable subtyping violations (covariance / contravariance)",
     "summaryHtml": "Callable subtyping violations (covariance / contravariance)",
     "body": [
@@ -560,6 +645,8 @@
   {
     "code": "calls_argument_count",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Too few arguments in a function call",
     "summaryHtml": "Too few arguments in a function call",
     "body": [
@@ -583,6 +670,8 @@
   {
     "code": "calls_argument_type",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Argument type mismatch at a call site",
     "summaryHtml": "Argument type mismatch at a call site",
     "body": [
@@ -602,6 +691,8 @@
   {
     "code": "classes_classvar",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`ClassVar` used in an invalid context",
     "summaryHtml": "<code>ClassVar</code> used in an invalid context",
     "body": [
@@ -641,6 +732,8 @@
   {
     "code": "classes_override",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Incompatible method override",
     "summaryHtml": "Incompatible method override",
     "body": [
@@ -664,6 +757,8 @@
   {
     "code": "classes_override_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Incompatible class attribute override",
     "summaryHtml": "Incompatible class attribute override",
     "body": [
@@ -683,6 +778,8 @@
   {
     "code": "classes_override_3",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`@override` on a method with no matching ancestor method",
     "summaryHtml": "<code>@override</code> on a method with no matching ancestor method",
     "body": [
@@ -706,6 +803,8 @@
   {
     "code": "constructors_call_init",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Constructor call errors via `__init__` method",
     "summaryHtml": "Constructor call errors via <code>__init__</code> method",
     "body": [
@@ -740,6 +839,8 @@
   {
     "code": "constructors_call_new",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Constructor call type mismatch with specialized generic class",
     "summaryHtml": "Constructor call type mismatch with specialized generic class",
     "body": [
@@ -771,6 +872,8 @@
   {
     "code": "constructors_call_type",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid constructor call via `type[T]` parameter",
     "summaryHtml": "Invalid constructor call via <code>typeT</code> parameter",
     "body": [
@@ -797,6 +900,8 @@
   {
     "code": "constructors_callable",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid call to a constructor-derived callable",
     "summaryHtml": "Invalid call to a constructor-derived callable",
     "body": [
@@ -833,6 +938,8 @@
   {
     "code": "dataclasses_frozen",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Assignment to attribute of a frozen dataclass instance, or invalid frozen/non-frozen dataclass inheritance",
     "summaryHtml": "Assignment to attribute of a frozen dataclass instance, or invalid frozen/non-frozen dataclass inheritance",
     "body": [
@@ -852,6 +959,8 @@
   {
     "code": "dataclasses_hash",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Non-hashable dataclass assigned to a `Hashable`-annotated variable",
     "summaryHtml": "Non-hashable dataclass assigned to a <code>Hashable</code>-annotated variable",
     "body": [
@@ -875,6 +984,8 @@
   {
     "code": "dataclasses_inheritance",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Dataclass field without a default after a field with a default",
     "summaryHtml": "Dataclass field without a default after a field with a default",
     "body": [
@@ -894,6 +1005,8 @@
   {
     "code": "dataclasses_kwonly",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Dataclass constructor argument violations",
     "summaryHtml": "Dataclass constructor argument violations",
     "body": [
@@ -913,6 +1026,8 @@
   {
     "code": "dataclasses_match_args",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Access to `__match_args__` on a dataclass with `match_args=False`",
     "summaryHtml": "Access to <code>__match_args__</code> on a dataclass with <code>match_args=False</code>",
     "body": [
@@ -932,6 +1047,8 @@
   {
     "code": "dataclasses_order",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid ordering comparison of dataclass instances",
     "summaryHtml": "Invalid ordering comparison of dataclass instances",
     "body": [
@@ -955,6 +1072,8 @@
   {
     "code": "dataclasses_postinit",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`InitVar` field validation in dataclasses",
     "summaryHtml": "<code>InitVar</code> field validation in dataclasses",
     "body": [
@@ -982,6 +1101,8 @@
   {
     "code": "dataclasses_slots",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Dataclass slots violations",
     "summaryHtml": "Dataclass slots violations",
     "body": [
@@ -1001,6 +1122,8 @@
   {
     "code": "dataclasses_transform_class",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`dataclass_transform` violations when the transform is applied via a base class",
     "summaryHtml": "<code>dataclass_transform</code> violations when the transform is applied via a base class",
     "body": [
@@ -1024,6 +1147,8 @@
   {
     "code": "dataclasses_transform_meta",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`dataclass_transform` metaclass violations",
     "summaryHtml": "<code>dataclass_transform</code> metaclass violations",
     "body": [
@@ -1047,6 +1172,8 @@
   {
     "code": "dataclasses_usage",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Type mismatch between a dataclass `field(default_factory=\u2026)` and the field's declared type annotation",
     "summaryHtml": "Type mismatch between a dataclass <code>field(default_factory=\u2026)</code> and the field&#x27;s declared type annotation",
     "body": [
@@ -1066,6 +1193,8 @@
   {
     "code": "dict_key_hashable",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Unhashable type used as a dict key",
     "summaryHtml": "Unhashable type used as a dict key",
     "body": [
@@ -1085,6 +1214,8 @@
   {
     "code": "directives_assert_type",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid `assert_type()` call",
     "summaryHtml": "Invalid <code>assert_type()</code> call",
     "body": [
@@ -1103,6 +1234,8 @@
   {
     "code": "directives_assert_type_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`assert_type()` type mismatch",
     "summaryHtml": "<code>assert_type()</code> type mismatch",
     "body": [
@@ -1122,6 +1255,8 @@
   {
     "code": "directives_cast",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid `cast()` call",
     "summaryHtml": "Invalid <code>cast()</code> call",
     "body": [
@@ -1140,6 +1275,8 @@
   {
     "code": "directives_deprecated",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Use of deprecated class, function, or method",
     "summaryHtml": "Use of deprecated class, function, or method",
     "body": [
@@ -1159,6 +1296,8 @@
   {
     "code": "directives_disjoint_base",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "PEP 800 disjoint bases",
     "summaryHtml": "PEP 800 disjoint bases",
     "body": [
@@ -1182,6 +1321,8 @@
   {
     "code": "directives_reveal_type",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid `reveal_type()` call",
     "summaryHtml": "Invalid <code>reveal_type()</code> call",
     "body": [
@@ -1200,6 +1341,8 @@
   {
     "code": "directives_version_platform",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Variable defined only in dead version/platform branch",
     "summaryHtml": "Variable defined only in dead version/platform branch",
     "body": [
@@ -1219,6 +1362,8 @@
   {
     "code": "enums_behaviors",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid Enum subclassing",
     "summaryHtml": "Invalid Enum subclassing",
     "body": [
@@ -1238,6 +1383,8 @@
   {
     "code": "enums_definition",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "access to an enum member that does not exist for the target",
     "summaryHtml": "access to an enum member that does not exist for the target",
     "body": [
@@ -1261,6 +1408,8 @@
   {
     "code": "enums_expansion",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`assert_type` with `Literal[Enum.MEMBER]` on enum-typed param",
     "summaryHtml": "<code>assert_type</code> with <code>LiteralEnum.MEMBER</code> on enum-typed param",
     "body": [
@@ -1280,6 +1429,8 @@
   {
     "code": "enums_member_values",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Enum member value incompatible with `_value_` type annotation",
     "summaryHtml": "Enum member value incompatible with <code>_value_</code> type annotation",
     "body": [
@@ -1299,6 +1450,8 @@
   {
     "code": "enums_members",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Enum member annotated with an explicit type",
     "summaryHtml": "Enum member annotated with an explicit type",
     "body": [
@@ -1322,6 +1475,8 @@
   {
     "code": "enums_members_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Non-member referenced in `Literal[EnumClass.X]` annotation",
     "summaryHtml": "Non-member referenced in <code>LiteralEnumClass.X</code> annotation",
     "body": [
@@ -1341,6 +1496,8 @@
   {
     "code": "generics_base_class",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Duplicate `TypeVar` in a `Generic[...]` base",
     "summaryHtml": "Duplicate <code>TypeVar</code> in a <code>Generic...</code> base",
     "body": [
@@ -1355,6 +1512,8 @@
   {
     "code": "generics_base_class_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Inconsistent `TypeVar` ordering across base classes",
     "summaryHtml": "Inconsistent <code>TypeVar</code> ordering across base classes",
     "body": [
@@ -1378,6 +1537,8 @@
   {
     "code": "generics_base_class_3",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invariant generic type mismatch at call site",
     "summaryHtml": "Invariant generic type mismatch at call site",
     "body": [
@@ -1397,6 +1558,8 @@
   {
     "code": "generics_basic",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`TypeVar` declared with exactly one constraint",
     "summaryHtml": "<code>TypeVar</code> declared with exactly one constraint",
     "body": [
@@ -1411,6 +1574,8 @@
   {
     "code": "generics_basic_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Non-TypeVar argument in `Generic[...]` or `Protocol[...]`",
     "summaryHtml": "Non-TypeVar argument in <code>Generic...</code> or <code>Protocol...</code>",
     "body": [
@@ -1430,6 +1595,8 @@
   {
     "code": "generics_basic_3",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Generic type argument violations",
     "summaryHtml": "Generic type argument violations",
     "body": [
@@ -1456,6 +1623,8 @@
   {
     "code": "generics_defaults",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Non-default `TypeVar` follows a default `TypeVar` in `Generic[...]`",
     "summaryHtml": "Non-default <code>TypeVar</code> follows a default <code>TypeVar</code> in <code>Generic...</code>",
     "body": [
@@ -1478,6 +1647,8 @@
   {
     "code": "generics_defaults_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Incompatible `TypeVar` bound or constraint with its default",
     "summaryHtml": "Incompatible <code>TypeVar</code> bound or constraint with its default",
     "body": [
@@ -1505,6 +1676,8 @@
   {
     "code": "generics_defaults_referential",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid `TypeVar` default referencing another `TypeVar`",
     "summaryHtml": "Invalid <code>TypeVar</code> default referencing another <code>TypeVar</code>",
     "body": [
@@ -1528,6 +1701,8 @@
   {
     "code": "generics_defaults_referential_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "```TypeVar``` default referential violations",
     "summaryHtml": "``<code>TypeVar</code>`` default referential violations",
     "body": [
@@ -1551,6 +1726,8 @@
   {
     "code": "generics_defaults_specialization",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Wrong number of type arguments to a generic class or type alias",
     "summaryHtml": "Wrong number of type arguments to a generic class or type alias",
     "body": [
@@ -1578,6 +1755,8 @@
   {
     "code": "generics_scoping",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Unbound type variable in scope",
     "summaryHtml": "Unbound type variable in scope",
     "body": [
@@ -1601,6 +1780,8 @@
   {
     "code": "generics_self_attributes",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Incompatible type for `Self`-typed attribute",
     "summaryHtml": "Incompatible type for <code>Self</code>-typed attribute",
     "body": [
@@ -1624,6 +1805,8 @@
   {
     "code": "generics_self_basic",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`Self` type violations in generics",
     "summaryHtml": "<code>Self</code> type violations in generics",
     "body": [
@@ -1651,6 +1834,8 @@
   {
     "code": "generics_self_protocols",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Protocol `Self`-return conformance violation",
     "summaryHtml": "Protocol <code>Self</code>-return conformance violation",
     "body": [
@@ -1670,6 +1855,8 @@
   {
     "code": "generics_self_usage",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`Self` type used in an invalid location",
     "summaryHtml": "<code>Self</code> type used in an invalid location",
     "body": [
@@ -1701,6 +1888,8 @@
   {
     "code": "generics_syntax_compatibility",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "PEP 695 type parameter syntax mixed with traditional `TypeVars`",
     "summaryHtml": "PEP 695 type parameter syntax mixed with traditional <code>TypeVars</code>",
     "body": [
@@ -1720,6 +1909,8 @@
   {
     "code": "generics_syntax_declarations",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid PEP 695 type parameter bound or constraint",
     "summaryHtml": "Invalid PEP 695 type parameter bound or constraint",
     "body": [
@@ -1739,6 +1930,8 @@
   {
     "code": "generics_syntax_declarations_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid attribute access on bounded type variable",
     "summaryHtml": "Invalid attribute access on bounded type variable",
     "body": [
@@ -1758,6 +1951,8 @@
   {
     "code": "generics_syntax_scoping",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "PEP 695 generic type parameter scoping violations",
     "summaryHtml": "PEP 695 generic type parameter scoping violations",
     "body": [
@@ -1785,6 +1980,8 @@
   {
     "code": "generics_type_erasure",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Access to instance attribute on a class object",
     "summaryHtml": "Access to instance attribute on a class object",
     "body": [
@@ -1804,6 +2001,8 @@
   {
     "code": "generics_typevartuple_args",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`TypeVarTuple` argument count mismatch",
     "summaryHtml": "<code>TypeVarTuple</code> argument count mismatch",
     "body": [
@@ -1823,6 +2022,8 @@
   {
     "code": "generics_typevartuple_basic",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid `TypeVar` / `TypeVarTuple` / `ParamSpec` keyword argument combination",
     "summaryHtml": "Invalid <code>TypeVar</code> / <code>TypeVarTuple</code> / <code>ParamSpec</code> keyword argument combination",
     "body": [
@@ -1846,6 +2047,8 @@
   {
     "code": "generics_typevartuple_basic_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`TypeVarTuple` must be unpacked with `*` operator",
     "summaryHtml": "<code>TypeVarTuple</code> must be unpacked with <code>*</code> operator",
     "body": [
@@ -1865,6 +2068,8 @@
   {
     "code": "generics_typevartuple_basic_3",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`TypeVarTuple` variance/bounds/constraints violation",
     "summaryHtml": "<code>TypeVarTuple</code> variance/bounds/constraints violation",
     "body": [
@@ -1884,6 +2089,8 @@
   {
     "code": "generics_typevartuple_callable",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`TypeVarTuple` callable/tuple argument mismatch",
     "summaryHtml": "<code>TypeVarTuple</code> callable/tuple argument mismatch",
     "body": [
@@ -1903,6 +2110,8 @@
   {
     "code": "generics_typevartuple_specialization",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Multiple `TypeVarTuple` unpacks in generic or tuple type",
     "summaryHtml": "Multiple <code>TypeVarTuple</code> unpacks in generic or tuple type",
     "body": [
@@ -1922,6 +2131,8 @@
   {
     "code": "generics_typevartuple_specialization_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid `TypeVarTuple` specialization of generic alias",
     "summaryHtml": "Invalid <code>TypeVarTuple</code> specialization of generic alias",
     "body": [
@@ -1954,6 +2165,8 @@
   {
     "code": "generics_typevartuple_unpack",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`TypeVarTuple` unpack minimum type argument violation",
     "summaryHtml": "<code>TypeVarTuple</code> unpack minimum type argument violation",
     "body": [
@@ -1973,6 +2186,8 @@
   {
     "code": "generics_upper_bound",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`TypeVar` upper bound violation at call site",
     "summaryHtml": "<code>TypeVar</code> upper bound violation at call site",
     "body": [
@@ -1992,6 +2207,8 @@
   {
     "code": "generics_upper_bound_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`TypeVar` bound violation at call site",
     "summaryHtml": "<code>TypeVar</code> bound violation at call site",
     "body": [
@@ -2011,6 +2228,8 @@
   {
     "code": "generics_variance",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Variance incompatibility in base class parameterisation",
     "summaryHtml": "Variance incompatibility in base class parameterisation",
     "body": [
@@ -2030,6 +2249,8 @@
   {
     "code": "generics_variance_inference",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`TypeVar` scoping violation",
     "summaryHtml": "<code>TypeVar</code> scoping violation",
     "body": [
@@ -2052,6 +2273,8 @@
   {
     "code": "historical_positional",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Historical positional-only parameter violations",
     "summaryHtml": "Historical positional-only parameter violations",
     "body": [
@@ -2083,6 +2306,8 @@
   {
     "code": "imports_module_attribute",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Access to a module attribute the local stub does not declare",
     "summaryHtml": "Access to a module attribute the local stub does not declare",
     "body": [
@@ -2110,6 +2335,8 @@
   {
     "code": "imports_unresolved",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Unresolved import",
     "summaryHtml": "Unresolved import",
     "body": [
@@ -2124,6 +2351,8 @@
   {
     "code": "literals_literalstring",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`LiteralString` and `Literal` assignment incompatibilities",
     "summaryHtml": "<code>LiteralString</code> and <code>Literal</code> assignment incompatibilities",
     "body": [
@@ -2151,6 +2380,8 @@
   {
     "code": "literals_parameterizations",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid `Literal` parameterization",
     "summaryHtml": "Invalid <code>Literal</code> parameterization",
     "body": [
@@ -2169,6 +2400,8 @@
   {
     "code": "literals_parameterizations_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`Literal[\"EnumClass.MEMBER\"]` (string) used where `Literal[EnumClass.MEMBER]` (enum member reference) is required",
     "summaryHtml": "<code>Literal&quot;EnumClass.MEMBER&quot;</code> (string) used where <code>LiteralEnumClass.MEMBER</code> (enum member reference) is required",
     "body": [
@@ -2188,6 +2421,8 @@
   {
     "code": "literals_semantics",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Augmented assignment widens `Literal` type",
     "summaryHtml": "Augmented assignment widens <code>Literal</code> type",
     "body": [
@@ -2207,6 +2442,8 @@
   {
     "code": "literals_semantics_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Literal value assignment incompatibility",
     "summaryHtml": "Literal value assignment incompatibility",
     "body": [
@@ -2234,6 +2471,8 @@
   {
     "code": "match_exhaustiveness",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Non-exhaustive `match` statement",
     "summaryHtml": "Non-exhaustive <code>match</code> statement",
     "body": [
@@ -2252,6 +2491,8 @@
   {
     "code": "namedtuples_define_class",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`NamedTuple` class definition errors",
     "summaryHtml": "<code>NamedTuple</code> class definition errors",
     "body": [
@@ -2282,6 +2523,8 @@
   {
     "code": "namedtuples_define_functional",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid argument in a `NamedTuple` constructor call",
     "summaryHtml": "Invalid argument in a <code>NamedTuple</code> constructor call",
     "body": [
@@ -2309,6 +2552,8 @@
   {
     "code": "namedtuples_type_compat",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`NamedTuple`-to-tuple type incompatibility",
     "summaryHtml": "<code>NamedTuple</code>-to-tuple type incompatibility",
     "body": [
@@ -2332,6 +2577,8 @@
   {
     "code": "namedtuples_usage",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`NamedTuple` usage violations",
     "summaryHtml": "<code>NamedTuple</code> usage violations",
     "body": [
@@ -2355,6 +2602,8 @@
   {
     "code": "names_unbound",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Unbound variable on some code paths",
     "summaryHtml": "Unbound variable on some code paths",
     "body": [
@@ -2374,6 +2623,8 @@
   {
     "code": "names_undefined",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Undefined variable used in a return statement",
     "summaryHtml": "Undefined variable used in a return statement",
     "body": [
@@ -2393,6 +2644,8 @@
   {
     "code": "narrowing_typeguard",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`TypeGuard` or `TypeIs` on method with no narrowing parameter",
     "summaryHtml": "<code>TypeGuard</code> or <code>TypeIs</code> on method with no narrowing parameter",
     "body": [
@@ -2407,6 +2660,8 @@
   {
     "code": "narrowing_typeis",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "TypeGuard/TypeIs return type incompatibility in callable arguments",
     "summaryHtml": "TypeGuard/TypeIs return type incompatibility in callable arguments",
     "body": [
@@ -2426,6 +2681,8 @@
   {
     "code": "narrowing_typeis_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`TypeIs` narrows to a type inconsistent with the input type",
     "summaryHtml": "<code>TypeIs</code> narrows to a type inconsistent with the input type",
     "body": [
@@ -2440,6 +2697,8 @@
   {
     "code": "overloads_basic",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "No matching overload for subscript indexing",
     "summaryHtml": "No matching overload for subscript indexing",
     "body": [
@@ -2459,6 +2718,8 @@
   {
     "code": "overloads_consistency",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Overlapping `@overload` signatures",
     "summaryHtml": "Overlapping <code>@overload</code> signatures",
     "body": [
@@ -2477,6 +2738,8 @@
   {
     "code": "overloads_consistency_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Inconsistent decorators across an overloaded method",
     "summaryHtml": "Inconsistent decorators across an overloaded method",
     "body": [
@@ -2495,6 +2758,8 @@
   {
     "code": "overloads_consistency_3",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Overload implementation is inconsistent with its signatures",
     "summaryHtml": "Overload implementation is inconsistent with its signatures",
     "body": [
@@ -2513,6 +2778,8 @@
   {
     "code": "overloads_definitions",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Missing `@overload` implementation",
     "summaryHtml": "Missing <code>@overload</code> implementation",
     "body": [
@@ -2531,6 +2798,8 @@
   {
     "code": "overloads_evaluation",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Overload union expansion failure",
     "summaryHtml": "Overload union expansion failure",
     "body": [
@@ -2550,6 +2819,8 @@
   {
     "code": "protocols_class_objects",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Protocol class used where `type[Proto]` is expected",
     "summaryHtml": "Protocol class used where <code>typeProto</code> is expected",
     "body": [
@@ -2573,6 +2844,8 @@
   {
     "code": "protocols_class_objects_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Protocol class object violations",
     "summaryHtml": "Protocol class object violations",
     "body": [
@@ -2600,6 +2873,8 @@
   {
     "code": "protocols_definition",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Protocol method sets self-attributes not declared in the Protocol",
     "summaryHtml": "Protocol method sets self-attributes not declared in the Protocol",
     "body": [
@@ -2623,6 +2898,8 @@
   {
     "code": "protocols_definition_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Protocol conformance violation in annotated assignment",
     "summaryHtml": "Protocol conformance violation in annotated assignment",
     "body": [
@@ -2654,6 +2931,8 @@
   {
     "code": "protocols_explicit",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Direct instantiation of a Protocol class",
     "summaryHtml": "Direct instantiation of a Protocol class",
     "body": [
@@ -2673,6 +2952,8 @@
   {
     "code": "protocols_explicit_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Calling `super().method()` on an abstract method with no default implementation",
     "summaryHtml": "Calling <code>super().method()</code> on an abstract method with no default implementation",
     "body": [
@@ -2692,6 +2973,8 @@
   {
     "code": "protocols_explicit_3",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`super()` call on abstract protocol method with no default implementation",
     "summaryHtml": "<code>super()</code> call on abstract protocol method with no default implementation",
     "body": [
@@ -2711,6 +2994,8 @@
   {
     "code": "protocols_generic",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Generic protocol violations",
     "summaryHtml": "Generic protocol violations",
     "body": [
@@ -2746,6 +3031,8 @@
   {
     "code": "protocols_merging",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Non-Protocol base class in a Protocol definition",
     "summaryHtml": "Non-Protocol base class in a Protocol definition",
     "body": [
@@ -2765,6 +3052,8 @@
   {
     "code": "protocols_modules",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Module assigned to incompatible protocol type",
     "summaryHtml": "Module assigned to incompatible protocol type",
     "body": [
@@ -2792,6 +3081,8 @@
   {
     "code": "protocols_runtime_checkable",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Protocol `isinstance`/`issubclass` violations",
     "summaryHtml": "Protocol <code>isinstance</code>/<code>issubclass</code> violations",
     "body": [
@@ -2811,6 +3102,8 @@
   {
     "code": "protocols_runtime_checkable_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Protocol `isinstance`/`issubclass` violations",
     "summaryHtml": "Protocol <code>isinstance</code>/<code>issubclass</code> violations",
     "body": [
@@ -2830,6 +3123,8 @@
   {
     "code": "protocols_subtyping",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Protocol attribute tuple element type mismatch",
     "summaryHtml": "Protocol attribute tuple element type mismatch",
     "body": [
@@ -2849,6 +3144,8 @@
   {
     "code": "protocols_variance",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Protocol variance violation",
     "summaryHtml": "Protocol variance violation",
     "body": [
@@ -2871,6 +3168,8 @@
   {
     "code": "protocols_variance_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Protocol `TypeVar` variance mismatch",
     "summaryHtml": "Protocol <code>TypeVar</code> variance mismatch",
     "body": [
@@ -2894,6 +3193,8 @@
   {
     "code": "qualifiers_annotated",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid first argument to `Annotated[...]`",
     "summaryHtml": "Invalid first argument to <code>Annotated...</code>",
     "body": [
@@ -2921,6 +3222,8 @@
   {
     "code": "qualifiers_annotated_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`Annotated[...]` requires at least two arguments",
     "summaryHtml": "<code>Annotated...</code> requires at least two arguments",
     "body": [
@@ -2940,6 +3243,8 @@
   {
     "code": "qualifiers_final_annotation",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`Final` used in an invalid position",
     "summaryHtml": "<code>Final</code> used in an invalid position",
     "body": [
@@ -2971,6 +3276,8 @@
   {
     "code": "qualifiers_final_annotation_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`Final` type qualifier annotation violations",
     "summaryHtml": "<code>Final</code> type qualifier annotation violations",
     "body": [
@@ -3021,6 +3328,8 @@
   {
     "code": "qualifiers_final_decorator",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`@final` decorator violations",
     "summaryHtml": "<code>@final</code> decorator violations",
     "body": [
@@ -3047,6 +3356,8 @@
   {
     "code": "returns_compatibility",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Return type mismatch",
     "summaryHtml": "Return type mismatch",
     "body": [
@@ -3066,6 +3377,8 @@
   {
     "code": "returns_compatibility_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Return type mismatch \u2014 inferred return type incompatible with annotation",
     "summaryHtml": "Return type mismatch \u2014 inferred return type incompatible with annotation",
     "body": [
@@ -3080,6 +3393,8 @@
   {
     "code": "specialtypes_never",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`-> NoReturn` / `-> Never` function can fall through",
     "summaryHtml": "<code>-&gt; NoReturn</code> / <code>-&gt; Never</code> function can fall through",
     "body": [
@@ -3115,6 +3430,8 @@
   {
     "code": "specialtypes_never_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`Never` type compatibility violations",
     "summaryHtml": "<code>Never</code> type compatibility violations",
     "body": [
@@ -3138,6 +3455,8 @@
   {
     "code": "specialtypes_promotions",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Access to an `int`-only attribute on a `float`-typed parameter",
     "summaryHtml": "Access to an <code>int</code>-only attribute on a <code>float</code>-typed parameter",
     "body": [
@@ -3161,6 +3480,8 @@
   {
     "code": "specialtypes_type",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid `type[X]` usage violations",
     "summaryHtml": "Invalid <code>typeX</code> usage violations",
     "body": [
@@ -3191,6 +3512,8 @@
   {
     "code": "tuples_index",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Tuple index out of bounds",
     "summaryHtml": "Tuple index out of bounds",
     "body": [
@@ -3210,6 +3533,8 @@
   {
     "code": "tuples_index_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Tuple index out of range",
     "summaryHtml": "Tuple index out of range",
     "body": [
@@ -3229,6 +3554,8 @@
   {
     "code": "tuples_type_compat",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Tuple starred-unpack type compatibility violation",
     "summaryHtml": "Tuple starred-unpack type compatibility violation",
     "body": [
@@ -3264,6 +3591,8 @@
   {
     "code": "tuples_type_form",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Multiple unbounded tuple components in a single tuple type",
     "summaryHtml": "Multiple unbounded tuple components in a single tuple type",
     "body": [
@@ -3287,6 +3616,8 @@
   {
     "code": "tuples_type_form_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid tuple type syntax",
     "summaryHtml": "Invalid tuple type syntax",
     "body": [
@@ -3310,6 +3641,8 @@
   {
     "code": "typeddicts_alt_syntax",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid `TypedDict(...)` functional-syntax call",
     "summaryHtml": "Invalid <code>TypedDict(...)</code> functional-syntax call",
     "body": [
@@ -3328,6 +3661,8 @@
   {
     "code": "typeddicts_class_syntax",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Method defined inside a `TypedDict` class",
     "summaryHtml": "Method defined inside a <code>TypedDict</code> class",
     "body": [
@@ -3342,6 +3677,8 @@
   {
     "code": "typeddicts_class_syntax_2",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid keyword argument in `TypedDict` class definition",
     "summaryHtml": "Invalid keyword argument in <code>TypedDict</code> class definition",
     "body": [
@@ -3360,6 +3697,8 @@
   {
     "code": "typeddicts_extra_items",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`TypedDict` `extra_items` / `closed` (PEP 728) violations",
     "summaryHtml": "<code>TypedDict</code> <code>extra_items</code> / <code>closed</code> (PEP 728) violations",
     "body": [
@@ -3374,6 +3713,8 @@
   {
     "code": "typeddicts_inheritance",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid `TypedDict` inheritance",
     "summaryHtml": "Invalid <code>TypedDict</code> inheritance",
     "body": [
@@ -3400,6 +3741,8 @@
   {
     "code": "typeddicts_operations",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Invalid key or value type in `TypedDict` assignment",
     "summaryHtml": "Invalid key or value type in <code>TypedDict</code> assignment",
     "body": [
@@ -3423,6 +3766,8 @@
   {
     "code": "typeddicts_readonly",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "Mutation of `ReadOnly` `TypedDict` fields",
     "summaryHtml": "Mutation of <code>ReadOnly</code> <code>TypedDict</code> fields",
     "body": [
@@ -3442,6 +3787,8 @@
   {
     "code": "typeddicts_required",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`Required` / `NotRequired` used in an invalid context",
     "summaryHtml": "<code>Required</code> / <code>NotRequired</code> used in an invalid context",
     "body": [
@@ -3473,6 +3820,8 @@
   {
     "code": "typeddicts_usage",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "`TypedDict` runtime violation",
     "summaryHtml": "<code>TypedDict</code> runtime violation",
     "body": [
@@ -3496,6 +3845,8 @@
   {
     "code": "version_target_syntax",
     "severity": "error",
+    "provenance": "pep",
+    "tags": [],
     "summary": "PEP 695 syntax used below the configured target version",
     "summaryHtml": "PEP 695 syntax used below the configured target version",
     "body": [
