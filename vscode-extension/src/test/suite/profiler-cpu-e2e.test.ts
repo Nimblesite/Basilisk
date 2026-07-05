@@ -725,17 +725,28 @@ suite("CPU profiling — real end-to-end", () => {
     await waitForLspReady();
 
     try {
-      // One-click profile on the fresh runtime (cooperative on macOS, py-spy
-      // attach to the debuggee elsewhere — the same [PROFILE-PROCESSES-LAUNCH-FILE]
-      // routing users get).
-      const launched = await vscode.debug.startDebugging(
-        undefined,
-        buildProfileLaunchConfig("cpu", burnerPath),
-      );
-      assert.ok(launched, "the CPU launch must start on the re-created runtime");
+      // Profile on the fresh runtime through each platform's PROVEN-reliable
+      // path — the same ones the sibling journeys use — so this test isolates
+      // the thing under test (does the progress listener survive re-creation?)
+      // instead of also depending on the debug-launch auto-profile chain, which
+      // headless Linux CI does not deliver status-bar samples through: the
+      // cooperative sampler on macOS (see the #82 journey), the panel py-spy
+      // attach on Linux (see the "panel one-click flow" journey).
+      if (process.platform === "darwin") {
+        const launched = await vscode.debug.startDebugging(
+          undefined,
+          buildProfileLaunchConfig("cpu", burnerPath),
+        );
+        assert.ok(launched, "the CPU launch must start on the re-created runtime");
+      } else {
+        const pid = burner?.pid;
+        assert.ok(pid !== undefined && pid > 0, "burner must be running");
+        await startProfilingForPid(store, pid, "default");
+      }
 
-      // The live NON-ZERO sample counter must reach the status bar — with a
-      // dead listener this sits on "Profiling..." until the timeout.
+      // The live NON-ZERO sample counter must reach the status bar on the
+      // re-created client — proving the progress listener rebound to the NEW
+      // LanguageClient. A dead listener leaves this empty until the timeout.
       await pollUntilResult({
         fn: async () => profilerStatusText() ?? "",
         predicate: (text) => /[1-9][\d.]* ?K? samples/.test(text),
@@ -745,8 +756,14 @@ suite("CPU profiling — real end-to-end", () => {
       await vscode.commands.executeCommand("basilisk.profileStop");
       assert.strictEqual(store.profiler.value.cpu, "idle", "stop must clear the session");
     } finally {
-      await vscode.debug.stopDebugging();
-      await waitForDebugSessionEnd();
+      // Best-effort teardown for whichever path ran.
+      if (store.profiler.value.cpu !== "idle") {
+        await vscode.commands.executeCommand("basilisk.profileStop").then(undefined, () => undefined);
+      }
+      if (vscode.debug.activeDebugSession !== undefined) {
+        await vscode.debug.stopDebugging();
+        await waitForDebugSessionEnd();
+      }
     }
   });
 
