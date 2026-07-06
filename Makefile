@@ -177,6 +177,14 @@ bench:
 	@cargo build --release --bin basilisk
 	@bash benchmarks/run.sh
 
+## smoke-micropython: Real-world smoke test for typeshed-path
+## [STUBRES-CUSTOM-TYPESHED] — points the checker at a pinned, unmodified
+## micropython-stdlib-stubs release and asserts MicroPython stdlib resolves
+## while CPython-only modules fall through per canonicality. Downloads one
+## wheel from PyPI (network); intentionally outside the blocking CI matrix.
+smoke-micropython:
+	@python3 scripts/smoke_micropython_typeshed.py
+
 ## reinstall-vsix: Clean rebuild + reinstall a host-targeted VSIX. Builds the
 ## EXACT package the release.yml `vsix` job ships (via the shared _release_vsix
 ## recipe) and rebuilds every binary from a clean tree.
