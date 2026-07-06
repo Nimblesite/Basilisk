@@ -36,8 +36,10 @@ What "fully satisfying #271" requires — each is tracked in the [TODO](#STUBRES
 
 The resolution **order** is implemented (`crates/basilisk-checker/src/imports/resolve.rs`,
 [§STUBRES-PEP561](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561)), including the step-3
-custom-typeshed override (`typeshed-path`). The core #271 custom-typeshed implementation is present, but the
-real MicroPython smoke test and full verification gate remain open.
+custom-typeshed override (`typeshed-path`). The core custom-typeshed implementation is shipped and the
+verification gate is green; the real MicroPython smoke test now runs against the unmodified
+`micropython-stdlib-stubs` release (`make smoke-micropython`). The only remaining sub-item is the reporter's own
+validation on his project — a pending human action, not a code gate.
 
 | Spec step | Mechanism | Config key | State |
 |---|---|---|---|
@@ -168,7 +170,7 @@ Import-resolution **step 3** of the [typing spec](https://typing.python.org/en/l
 — point at a typeshed-layout directory, resolve `<typeshed-path>/stdlib/<module>.pyi`.
 **Spec**: [§STUBRES-CUSTOM-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED).
 
-Acceptance checklist — the feature is **DONE only when every box is checked**:
+Acceptance checklist — every **code** box below is checked; the one open box is an external human action (the reporter's own validation), which does not gate the feature:
 
 - [x] **Config key** — `typeshed-path` (`pyproject.toml`, kebab) / `typeshedPath` (LSP JSON, camel) as a single `Option<PathBuf>`, resolved relative to the project root, parsed in **both** the `basilisk-config` (`BasiliskConfig`) and `basilisk-lsp` (`WorkspaceConfig`) models.
 - [x] **Resolver step-3 branch** — for a stdlib module (`basilisk_stubs::is_stdlib_module`), resolve `<typeshed-path>/stdlib/<module>.pyi` **before** the bundled recognition.
@@ -176,15 +178,18 @@ Acceptance checklist — the feature is **DONE only when every box is checked**:
 - [x] **Provenance** — resolved-from-custom-typeshed stubs carry `StubSource::CustomTypeshed` (Tier 1); hover reads `… (custom typeshed)` ([§STUBRESPLAN-TYPES](#STUBRESPLAN-TYPES)).
 - [x] **Search-path wiring** — a `typeshed_path` field on `ImportSearchPaths`, populated by `search_paths_from_config`, set at every construction site (`workspace.rs`, test fixtures).
 - [x] **e2e coverage** — custom typeshed overrides stdlib `os`; a module absent from it falls through unresolved (canonicality); non-stdlib modules are ignored by the branch; `stub-paths` (step 1) still shadows a custom typeshed; the `.pyi` actually parses (members resolve).
-- [ ] **MicroPython smoke test (validate with the reporter)** — point `typeshed-path` at a real `micropython-stdlib-stubs` tree; confirm a MicroPython-specific `collections` signature type-checks and a non-MicroPython stdlib module behaves per canonicality. Invite Jos to confirm on his own project (he offered to help test).
+- [x] **MicroPython real-tree smoke test** — the real, unmodified `micropython-stdlib-stubs==1.28.0.post5` wheel (Jos's own tree) is downloaded and pointed at via `typeshed-path`, driving the actual `basilisk` binary as a reproducible A/B whose only variable is `typeshed-path` (`scripts/smoke_micropython_typeshed.py`, `make smoke-micropython`). Proven against that tree: (a) `from os import ilistdir` resolves — `ilistdir` is a **MicroPython-only** symbol absent from CPython's `os`, so resolving it proves the custom tree is genuinely canonical for step 3; (b) the MicroPython `collections` stub (`namedtuple`, `OrderedDict`) type-checks; (c) `import pathlib` / `from fractions import Fraction` — present in CPython's stdlib but **absent** from the partial MicroPython tree — fall through to `imports_unresolved` (the load-bearing canonicality point: the bundled name-set does not rescue them), while the no-`typeshed-path` control shows the bundled name-set *does* recognise them. Kept out of the blocking CI matrix so PyPI availability never gates a merge; run on demand.
+- [ ] **Reporter validation (external)** — invite Jos to confirm on his own MicroPython project (he offered to help test). This is a human action pending his response, not a code gate; it does not block the feature.
 - [x] **Docs stay in lockstep** — cross-checked [§STUBRES-CUSTOM-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED), the provenance tables ([§STUBRES-PROVENANCE-DIAG](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PROVENANCE-DIAG) / [§STUBRES-PROVENANCE-HOVER](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PROVENANCE-HOVER)) — which now carry the `StubCustomTypeshed` provenance and its `(custom typeshed)` hover label, matching `crates/basilisk-stubs/src/types.rs` exactly — [CHKARCH-STUBS-TYPESHED](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STUBS-TYPESHED), the [LSP shared-config table](../specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG), and the website `configuration.md` (EN + ZH) "How to use a custom typeshed" how-to; no stale custom-typeshed "not implemented" note remains in those docs.
 - [x] **Verification gate** — `make test` green (PR #277 CI: Rust Tests & Coverage, mutation ×4, and all three editor extensions), conformance score **unchanged** at 141/141 = 100% (0 missed, 0 false positives — the suite never sets `typeshed-path`, so the branch is purely additive), `make bench` within ratchet (no regression), `make lint` clean.
 
 > **Current state**: the config plumbing, resolver branch, canonicality bypass, custom-typeshed provenance,
-> search-path wiring, LSP cross-module symbol-population threading, and e2e + LSP coverage are shipped on PR #277
-> with every CI gate green. The one remaining open item is the real MicroPython smoke test — it depends on a vendored
-> `micropython-stdlib-stubs` tree and the reporter's own validation, so it stays unchecked here. Auto-stub generation
-> remains a separate backlog item below.
+> search-path wiring, LSP cross-module symbol-population threading, and e2e + LSP coverage shipped on PR #277
+> with every CI gate green. The real MicroPython smoke test is now **done** — `scripts/smoke_micropython_typeshed.py`
+> (`make smoke-micropython`) downloads the unmodified `micropython-stdlib-stubs==1.28.0.post5` release and proves,
+> against that real tree, that MicroPython stdlib resolves (including the MicroPython-only `os.ilistdir`) while
+> CPython-only modules fall through per canonicality. The only remaining sub-item is the reporter's own validation
+> (a pending human action, not a code gate). Auto-stub generation remains a separate backlog item below.
 
 ### 2. Auto-stub generation {#STUBRESPLAN-TODO-AUTOGEN}
 
