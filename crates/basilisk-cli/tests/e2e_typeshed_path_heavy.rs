@@ -25,10 +25,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 fn unique_dir(prefix: &str) -> PathBuf {
     static CTR: AtomicU64 = AtomicU64::new(0);
     let n = CTR.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!(
-        "bsk_ts_heavy_{prefix}_{}_{n}",
-        std::process::id()
-    ));
+    let dir =
+        std::env::temp_dir().join(format!("bsk_ts_heavy_{prefix}_{}_{n}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("create temp dir");
     dir
 }
@@ -171,7 +169,10 @@ fn typeshed_path_full_lifecycle_through_pyproject() {
     seed_typeshed(
         &dir,
         "ts",
-        &[("fractions.pyi", "class Fraction:\n    def __init__(self, a: int, b: int) -> None: ...\n")],
+        &[(
+            "fractions.pyi",
+            "class Fraction:\n    def __init__(self, a: int, b: int) -> None: ...\n",
+        )],
     );
     assert_clean(&check(&dir), &["fractions", "imports_unresolved"]);
 

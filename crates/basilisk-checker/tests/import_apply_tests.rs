@@ -420,10 +420,9 @@ fn custom_typeshed_does_not_taint_user_stubs_outside_its_stdlib() {
         "user stub must resolve outside the custom typeshed's stdlib/, got {cowsay_path:?}"
     );
 
-    let no_workspace =
-        |_: &std::path::Path| -> Option<&'static [(String, basilisk_resolver::scope::ExternalSymbol)]> {
-            None
-        };
+    let no_workspace = |_: &std::path::Path| -> Option<
+        &'static [(String, basilisk_resolver::scope::ExternalSymbol)],
+    > { None };
 
     // Even WITH the custom typeshed configured, a stub outside its stdlib/ is a
     // plain Tier-1 stub: provenance tracks the on-disk source, not merely whether

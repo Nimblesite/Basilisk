@@ -77,7 +77,7 @@ Additional directories to search for `.pyi` stub files. These sit at the **head*
 
 Path to a directory containing a custom or modified version of typeshed's standard-library stubs. When set, this directory becomes the **canonical source for standard-library types** — step 3 of the [typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering), which states that type checkers "SHOULD use this as the canonical source for standard-library types in this step." Basilisk resolves stdlib modules against it in preference to the bundled typeshed; a stdlib module absent from the directory falls through to the remaining resolution steps.
 
-The directory must follow typeshed's layout — standard-library stubs live under a top-level `stdlib/` subdirectory, so Basilisk resolves each module as `<typeshed-path>/stdlib/<module>.pyi`. A clone of the [python/typeshed](https://github.com/python/typeshed) repository, or any directory you already use as Pyright's `typeshedPath` or mypy's `custom_typeshed_dir`, works unchanged. Relative paths resolve against the project root.
+The directory must follow typeshed's layout — standard-library stubs live under a top-level `stdlib/` subdirectory, so Basilisk resolves each module as `<typeshed-path>/stdlib/<module>.pyi`. A clone of the [python/typeshed](https://github.com/python/typeshed) repository, or any directory you already use as Pyright's [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) or mypy's [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html), works unchanged. Relative paths resolve against the project root.
 
 Use this to type-check against an alternative standard library — for example MicroPython's [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs), whose `os`, `time`, and `machine` signatures differ from CPython. Symbols resolved from the custom typeshed hover with a `(custom typeshed)` tag — distinct from the bundled typeshed's `(typeshed)` — so you can confirm the override is active and know a MicroPython signature is never misreported as CPython's.
 
@@ -141,7 +141,7 @@ vendor/typeshed/
     └── ...
 ```
 
-Any directory you already use as Pyright's `typeshedPath` or mypy's `custom_typeshed_dir` consumes this same layout, so it works with Basilisk unchanged.
+Any directory you already use as Pyright's [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) or mypy's [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html) consumes this same layout, so it works with Basilisk unchanged.
 
 ### 2a. Point at a forked or newer typeshed
 
@@ -172,7 +172,15 @@ Because `micropython-stdlib-stubs` is a **partial** stdlib, a module it does not
 
 ### 3. Configure it in your editor (LSP)
 
-The same setting is `typeshedPath` (camelCase) in editor JSON. In VS Code `settings.json`:
+The same setting is `typeshedPath` (camelCase) in JSON config. In a standalone **`basilisk.json`** at the project root, the key is bare:
+
+```json
+{
+  "typeshedPath": "vendor/typeshed"
+}
+```
+
+In VS Code's `settings.json` it is namespaced under `basilisk.`:
 
 ```json
 {
@@ -180,7 +188,7 @@ The same setting is `typeshedPath` (camelCase) in editor JSON. In VS Code `setti
 }
 ```
 
-`typeshed-path` (in `pyproject.toml`) and `basilisk.typeshedPath` (in LSP/editor JSON) are the **same** setting in the two casings.
+`typeshed-path` (in `pyproject.toml`), `typeshedPath` (in `basilisk.json` / an editor's LSP config), and `basilisk.typeshedPath` (in VS Code `settings.json`) are all the **same** setting.
 
 ### 4. Confirm it took effect — hover provenance
 

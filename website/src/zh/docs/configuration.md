@@ -72,7 +72,7 @@ rules."imports_unresolved" = "warning"
 
 指向包含 typeshed 标准库存根的自定义或修改版本的目录路径。设置后，该目录将成为**标准库类型的规范来源**——[typing 规范的导入解析顺序](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)中的第 3 步，该规范指出类型检查器"SHOULD use this as the canonical source for standard-library types in this step"（应将其用作此步骤中标准库类型的规范来源）。Basilisk 优先针对它解析标准库模块，而不是捆绑的 typeshed；目录中缺失的标准库模块将继续进入后续的解析步骤。
 
-该目录必须遵循 typeshed 的布局——标准库存根位于顶层 `stdlib/` 子目录下，因此 Basilisk 将每个模块解析为 `<typeshed-path>/stdlib/<module>.pyi`。[python/typeshed](https://github.com/python/typeshed) 仓库的克隆，或任何你已用作 Pyright 的 `typeshedPath` 或 mypy 的 `custom_typeshed_dir` 的目录，都可原样使用。相对路径相对于项目根目录解析。
+该目录必须遵循 typeshed 的布局——标准库存根位于顶层 `stdlib/` 子目录下，因此 Basilisk 将每个模块解析为 `<typeshed-path>/stdlib/<module>.pyi`。[python/typeshed](https://github.com/python/typeshed) 仓库的克隆，或任何你已用作 Pyright 的 [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) 或 mypy 的 [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html) 的目录，都可原样使用。相对路径相对于项目根目录解析。
 
 使用此选项可针对替代标准库进行类型检查——例如 MicroPython 的 [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs)，其 `os`、`time` 和 `machine` 签名与 CPython 不同。从自定义 typeshed 解析的符号在悬停时会带有 `(custom typeshed)` 标记——区别于捆绑 typeshed 的 `(typeshed)`——因此你可以确认覆盖已生效，并确保 MicroPython 的签名绝不会被误报为 CPython 的签名。
 
@@ -136,7 +136,7 @@ vendor/typeshed/
     └── ...
 ```
 
-任何你已用作 Pyright 的 `typeshedPath` 或 mypy 的 `custom_typeshed_dir` 的目录都采用同样的布局，因此可与 Basilisk 原样配合使用。
+任何你已用作 Pyright 的 [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) 或 mypy 的 [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html) 的目录都采用同样的布局，因此可与 Basilisk 原样配合使用。
 
 ### 2a. 指向分叉或更新的 typeshed
 
@@ -167,7 +167,15 @@ typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
 
 ### 3. 在编辑器中配置（LSP）
 
-在编辑器 JSON 中，同一设置为 `typeshedPath`（驼峰式）。在 VS Code 的 `settings.json` 中：
+在 JSON 配置中，同一设置为 `typeshedPath`（驼峰式）。在项目根目录的独立 **`basilisk.json`** 中，键名不带前缀：
+
+```json
+{
+  "typeshedPath": "vendor/typeshed"
+}
+```
+
+在 VS Code 的 `settings.json` 中，则以 `basilisk.` 命名空间为前缀：
 
 ```json
 {
@@ -175,7 +183,7 @@ typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
 }
 ```
 
-`typeshed-path`（在 `pyproject.toml` 中）与 `basilisk.typeshedPath`（在 LSP/编辑器 JSON 中）是同一设置的两种大小写写法。
+`typeshed-path`（在 `pyproject.toml` 中）、`typeshedPath`（在 `basilisk.json` 或编辑器 LSP 配置中）与 `basilisk.typeshedPath`（在 VS Code 的 `settings.json` 中）都是同一设置。
 
 ### 4. 确认已生效——悬停溯源
 
