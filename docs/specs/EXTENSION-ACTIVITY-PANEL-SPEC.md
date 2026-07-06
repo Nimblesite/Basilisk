@@ -350,7 +350,7 @@ their owning module** and are **never** dumped bare at the tree root (the #149
 | Copy Import Path | Module or symbol — copies `from myapp.api.auth import AuthProvider` |
 | Copy Qualified Name | Any symbol — copies `myapp.api.auth.AuthProvider` |
 | Organize Imports | Module |
-| Fix All | Module |
+| Fix All (Safe) | Module |
 
 ### Toolbar Actions {#EXTACT-MODULES-TOOLBAR}
 
@@ -361,7 +361,7 @@ their owning module** and are **never** dumped bare at the tree root (the #149
 | Filter | Toggle filter input to search modules/symbols by name |
 | Toggle View | Switch between tree (nested folder/package hierarchy, default) and flat (every module as one sortable row) |
 | Sort | Picker of three labelled modes — **Module Name**, **Path**, **Type Coverage** — with the active mode checked (no blind cycle, issue #189). Coverage sorts ascending (least-typed first), the default. Flat view only; gated on `basilisk.moduleExplorerView == 'flat'` so it is hidden (not a silent no-op) in tree view (issue #151). |
-| Fix All | Run `basilisk.fixWorkspace`. Promoted from the info panel (issue #103); `when`-gated on `basilisk.serverState == 'running'` **and** the `config.basilisk.experimental.fixAll` flag (default off, issue #113). |
+| Fix All (Safe) | Run `basilisk.fixWorkspace` (Safe fixes only — the [AUTOFIX-CLASSIFY] default tier). Promoted from the info panel (issue #103); `when`-gated on `basilisk.serverState == 'running'` **and** the `config.basilisk.experimental.fixAll` flag (default off, issue #113). |
 | Organize Imports | Run `basilisk.organizeImports`. Same promotion + gating. |
 | Restart Server | Run `basilisk.restartServer`. Same promotion + gating. |
 
@@ -458,7 +458,7 @@ The top-level item is a summary row showing workspace-wide stats:
 | Open File | Open at line 1 |
 | Adopt File | Errors -> warnings for this file |
 | Un-adopt File | Restore full errors |
-| Fix All in File | Run autofix |
+| Fix All (Safe) in File | Run autofix (Safe fixes only) |
 | Add Missing Annotations | AI-powered (future) |
 
 ### Refresh Strategy {#EXTACT-HEALTH-REFRESH}
@@ -588,7 +588,7 @@ action now lives on a surface that can gate it properly:
 
 | Action | Where it lives now | Gating |
 |--------|--------------------|--------|
-| Fix All in Workspace (`basilisk.fixWorkspace`) | Modules panel toolbar button | `view == basilisk.moduleExplorer && basilisk.serverState == 'running'` |
+| Fix All (Safe) in Workspace (`basilisk.fixWorkspace`) | Modules panel toolbar button | `view == basilisk.moduleExplorer && basilisk.serverState == 'running'` |
 | Organize Imports (`basilisk.organizeImports`) | Modules panel toolbar button | same |
 | Restart Server (`basilisk.restartServer`) | Modules panel toolbar button | same |
 | Show Output (`basilisk.showOutput`) | Status bar item click action | always (client-registered) |
