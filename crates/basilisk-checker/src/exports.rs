@@ -264,7 +264,7 @@ fn stub_source_for(resolved_path: &Path, custom_typeshed: Option<&Path>) -> Stub
 /// `custom_typeshed` is the configured `typeshed-path`, if any: a
 /// stub resolved from its `stdlib/` subtree is tagged
 /// [`StubSource::CustomTypeshed`] so hover reads `(custom typeshed)` and a
-/// MicroPython signature is never reported as the bundled CPython one
+/// `MicroPython` signature is never reported as the bundled `CPython` one
 /// ([STUBRES-CUSTOM-TYPESHED]). Pass `None` for the default bundled typeshed.
 pub fn populate_imported_symbols<'a, F>(
     resolved: &mut basilisk_resolver::ResolvedModule,
@@ -288,28 +288,27 @@ pub fn populate_imported_symbols<'a, F>(
 
         // Prefer workspace exports; otherwise parse an external `.pyi` stub
         // or an inline-typed `py.typed` package (PEP 561 opt-in only).
-        let target_exports: &[(String, ExternalSymbol)] =
-            if let Some(exports) = workspace_exports(resolved_path) {
-                exports
-            } else if resolved_path.extension().is_some_and(|ext| ext == "pyi") {
-                // Classify the stub's provenance: a `.pyi` under the configured
-                // custom typeshed's `stdlib/` is CustomTypeshed
-                // ([STUBRES-CUSTOM-TYPESHED]); every other stub is StubPackage/Tier1.
-                let stub_source = stub_source_for(resolved_path, custom_typeshed);
-                external_cache
-                    .entry(resolved_path.clone())
-                    .or_insert_with(|| {
-                        extract_stub_exports(resolved_path, &import.module, stub_source)
-                    })
-            } else if resolved_path.extension().is_some_and(|ext| ext == "py")
-                && basilisk_stubs::has_py_typed_marker(resolved_path)
-            {
-                external_cache
-                    .entry(resolved_path.clone())
-                    .or_insert_with(|| extract_py_typed_exports(resolved_path))
-            } else {
-                continue;
-            };
+        let target_exports: &[(String, ExternalSymbol)] = if let Some(exports) =
+            workspace_exports(resolved_path)
+        {
+            exports
+        } else if resolved_path.extension().is_some_and(|ext| ext == "pyi") {
+            // Classify the stub's provenance: a `.pyi` under the configured
+            // custom typeshed's `stdlib/` is CustomTypeshed
+            // ([STUBRES-CUSTOM-TYPESHED]); every other stub is StubPackage/Tier1.
+            let stub_source = stub_source_for(resolved_path, custom_typeshed);
+            external_cache
+                .entry(resolved_path.clone())
+                .or_insert_with(|| extract_stub_exports(resolved_path, &import.module, stub_source))
+        } else if resolved_path.extension().is_some_and(|ext| ext == "py")
+            && basilisk_stubs::has_py_typed_marker(resolved_path)
+        {
+            external_cache
+                .entry(resolved_path.clone())
+                .or_insert_with(|| extract_py_typed_exports(resolved_path))
+        } else {
+            continue;
+        };
 
         // Discriminate on `kind`, not `names.is_empty()`: a plain `import foo
         // as f` carries its alias in `names`, but the alias binds the module

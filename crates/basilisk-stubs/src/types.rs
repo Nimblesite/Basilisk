@@ -46,8 +46,8 @@ pub enum StubSource {
     /// Custom/modified typeshed from the `typeshed-path` config — typing-spec
     /// import-resolution **step 3 override**, *the canonical source for
     /// standard-library types* when configured. The distinct provenance keeps
-    /// hover honest (e.g. a MicroPython `os.uname` is never misreported as the
-    /// bundled CPython signature). See [STUBRES-CUSTOM-TYPESHED].
+    /// hover honest (e.g. a `MicroPython` `os.uname` is never misreported as the
+    /// bundled `CPython` signature). See [STUBRES-CUSTOM-TYPESHED].
     CustomTypeshed,
 }
 
@@ -78,8 +78,8 @@ pub enum TypeProvenance {
     /// From typeshed or hand-written, verified stubs.
     StubTier1,
     /// From a custom/modified typeshed (`typeshed-path`) — Tier-1 trust, but
-    /// distinct provenance so hover reads `(custom typeshed)` and a MicroPython
-    /// signature is never misreported as the bundled CPython one.
+    /// distinct provenance so hover reads `(custom typeshed)` and a `MicroPython`
+    /// signature is never misreported as the bundled `CPython` one.
     /// See [STUBRES-CUSTOM-TYPESHED].
     StubCustomTypeshed,
     /// From auto-generated, community-reviewed stubs.

@@ -124,6 +124,20 @@ fn custom_typeshed_overrides_stdlib_and_parses() {
         typeshed_path: Some(ts.clone()),
     };
 
+    assert_eq!(paths.typeshed_path.as_deref(), Some(ts.as_path()));
+    assert!(
+        stdlib.join("os.pyi").is_file(),
+        "precondition: custom typeshed supplies os.pyi"
+    );
+    assert!(
+        !stdlib.join("fractions.pyi").exists(),
+        "precondition: custom typeshed deliberately omits fractions.pyi"
+    );
+    assert!(
+        basilisk_stubs::is_stdlib_module("fractions"),
+        "precondition: fractions is a stdlib module, not an arbitrary miss"
+    );
+
     let result = resolve_module("os", &paths).expect("custom typeshed resolves `os`");
     assert_eq!(result.resolution, ImportResolution::StubPyi);
     assert!(result.path.starts_with(&stdlib));

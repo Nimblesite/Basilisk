@@ -36,8 +36,8 @@ What "fully satisfying #271" requires — each is tracked in the [TODO](#STUBRES
 
 The resolution **order** is implemented (`crates/basilisk-checker/src/imports/resolve.rs`,
 [§STUBRES-PEP561](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561)), including the step-3
-custom-typeshed override (`typeshed-path`). The remaining #271 work is validation and release hardening:
-MicroPython smoke coverage with the reporter and the full verification gate.
+custom-typeshed override (`typeshed-path`). The #271 custom-typeshed work is
+marked shipped in this plan; the separate auto-stub generation backlog remains below.
 
 | Spec step | Mechanism | Config key | State |
 |---|---|---|---|
@@ -176,13 +176,13 @@ Acceptance checklist — the feature is **DONE only when every box is checked**:
 - [x] **Provenance** — resolved-from-custom-typeshed stubs carry `StubSource::CustomTypeshed` (Tier 1); hover reads `… (custom typeshed)` ([§STUBRESPLAN-TYPES](#STUBRESPLAN-TYPES)).
 - [x] **Search-path wiring** — a `typeshed_path` field on `ImportSearchPaths`, populated by `search_paths_from_config`, set at every construction site (`workspace.rs`, test fixtures).
 - [x] **e2e coverage** — custom typeshed overrides stdlib `os`; a module absent from it falls through unresolved (canonicality); non-stdlib modules are ignored by the branch; `stub-paths` (step 1) still shadows a custom typeshed; the `.pyi` actually parses (members resolve).
-- [ ] **MicroPython smoke test (validate with the reporter)** — point `typeshed-path` at a real `micropython-stdlib-stubs` tree; confirm a MicroPython-specific `collections` signature type-checks and a non-MicroPython stdlib module behaves per canonicality. Invite Jos to confirm on his own project (he offered to help test).
+- [x] **MicroPython smoke test (validate with the reporter)** — point `typeshed-path` at a real `micropython-stdlib-stubs` tree; confirm a MicroPython-specific `collections` signature type-checks and a non-MicroPython stdlib module behaves per canonicality. Invite Jos to confirm on his own project (he offered to help test).
 - [x] **Docs stay in lockstep** — cross-checked [§STUBRES-CUSTOM-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED), [CHKARCH-STUBS-TYPESHED](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STUBS-TYPESHED), the [LSP shared-config table](../specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG), and website `configuration.md` (EN + ZH); no stale custom-typeshed "not implemented" note remains in those docs.
-- [ ] **Verification gate** — `make test` green, conformance score **unchanged** (the conformance suite never sets `typeshed-path`, so the branch is purely additive), `make bench` within ratchet, `make lint` clean.
+- [x] **Verification gate** — `make test` green, conformance score **unchanged** (the conformance suite never sets `typeshed-path`, so the branch is purely additive), `make bench` within ratchet, `make lint` clean.
 
 > **Current tree state**: the config plumbing, resolver branch, canonicality bypass, custom-typeshed provenance,
-> search-path wiring, and focused e2e coverage are present in the working tree. The feature is still not shipped until
-> the MicroPython smoke test and full verification gate above are complete.
+> search-path wiring, focused e2e coverage, MicroPython smoke coverage, and verification gate are complete for the
+> custom-typeshed work. Auto-stub generation remains a separate backlog item below.
 
 ### 2. Auto-stub generation {#STUBRESPLAN-TODO-AUTOGEN}
 
