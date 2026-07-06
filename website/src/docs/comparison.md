@@ -29,6 +29,7 @@ Before comparing features and performance, there is one question that decides wh
 | zuban | {{ conformanceOfficial.byId.zuban.pct }}% |
 | Pyrefly | {{ conformanceOfficial.byId.pyrefly.pct }}% |
 | Pyright | {{ conformanceOfficial.byId.pyright.pct }}% |
+| pycroscope | {{ conformanceOfficial.byId.pycroscope.pct }}% |
 | ty | {{ conformanceOfficial.byId.ty.pct }}% |
 | mypy | {{ conformanceOfficial.byId.mypy.pct }}% |
 

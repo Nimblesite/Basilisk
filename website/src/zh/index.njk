@@ -123,6 +123,7 @@ permalink: /zh/
             <th><a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener">ty</a></th>
             <th><a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener">Pyrefly</a></th>
             <th><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener">zuban</a></th>
+            <th><a href="https://github.com/JelleZijlstra/pycroscope" target="_blank" rel="noopener">pycroscope</a></th>
           </tr>
         </thead>
         <tbody>
@@ -134,6 +135,7 @@ permalink: /zh/
             <td><a href="{{ conformanceOfficial.byId.ty.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.ty.pct }}%</a></td>
             <td><a href="{{ conformanceOfficial.byId.pyrefly.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.pyrefly.pct }}%</a></td>
             <td><a href="{{ conformanceOfficial.byId.zuban.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.zuban.pct }}%</a></td>
+            <td><a href="{{ conformanceOfficial.byId.pycroscope.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.pycroscope.pct }}%</a></td>
           </tr>
           {% if benchmarks.toolMedians %}
           <tr>
@@ -144,6 +146,7 @@ permalink: /zh/
             <td>{{ benchmarks.toolMedians.text.ty }}</td>
             <td>{{ benchmarks.toolMedians.text.pyrefly }}</td>
             <td>{{ benchmarks.toolMedians.text.zuban or "—" }}</td>
+            <td>—</td>
           </tr>
           {% endif %}
           <tr>
@@ -154,6 +157,7 @@ permalink: /zh/
             <td><a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener">Rust</a></td>
             <td><a href="https://engineering.fb.com/2025/05/15/developer-tools/open-sourcing-pyrefly-a-faster-python-type-checker-written-in-rust/" target="_blank" rel="noopener">Rust</a></td>
             <td><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener">Rust</a></td>
+            <td><a href="https://github.com/JelleZijlstra/pycroscope" target="_blank" rel="noopener"><span class="cell-warn">Python</span></a></td>
           </tr>
           <tr>
             <td>需要运行时</td>
@@ -163,6 +167,7 @@ permalink: /zh/
             <td><a href="https://docs.astral.sh/ty/installation/" target="_blank" rel="noopener" class="check-yes">无</a></td>
             <td><a href="https://engineering.fb.com/2025/05/15/developer-tools/open-sourcing-pyrefly-a-faster-python-type-checker-written-in-rust/" target="_blank" rel="noopener" class="check-yes">无</a></td>
             <td><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener" class="check-yes">无</a></td>
+            <td><a href="https://github.com/JelleZijlstra/pycroscope" target="_blank" rel="noopener"><span class="cell-warn">Python</span></a></td>
           </tr>
           <tr>
             <td>完整 LSP（补全、悬停、跳转）</td>
@@ -172,10 +177,12 @@ permalink: /zh/
             <td><a href="https://github.com/astral-sh/ty" target="_blank" rel="noopener" class="check-yes">&#10003;</a></td>
             <td><a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener" class="check-yes">&#10003;</a></td>
             <td><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener" class="check-yes">&#10003;</a></td>
+            <td class="check-no">&mdash;</td>
           </tr>
           <tr>
             <td>集成调试器 <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup2;</a></td>
             <td class="col-basilisk check-yes">&#10003;</td>
+            <td class="check-no">&mdash;</td>
             <td class="check-no">&mdash;</td>
             <td class="check-no">&mdash;</td>
             <td class="check-no">&mdash;</td>
@@ -190,6 +197,7 @@ permalink: /zh/
             <td><a href="https://docs.astral.sh/ty/editors/" target="_blank" rel="noopener">VS Code、PyCharm、Neovim</a></td>
             <td><a href="https://github.com/facebook/pyrefly" target="_blank" rel="noopener">VS Code、Neovim、Zed</a></td>
             <td><a href="https://marketplace.visualstudio.com/items?itemName=zuban.zubanls" target="_blank" rel="noopener">VS Code (ZubanLS)</a></td>
+            <td class="check-no">&mdash;</td>
           </tr>
           <tr>
             <td>许可证</td>
@@ -199,6 +207,7 @@ permalink: /zh/
             <td><a href="https://github.com/astral-sh/ty/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a></td>
             <td><a href="https://github.com/facebook/pyrefly/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a></td>
             <td><a href="https://github.com/zubanls/zuban" target="_blank" rel="noopener"><span class="cell-warn">AGPL-3.0 / 商业</span></a></td>
+            <td><a href="https://github.com/JelleZijlstra/pycroscope" target="_blank" rel="noopener">Apache-2.0</a></td>
           </tr>
         </tbody>
       </table>

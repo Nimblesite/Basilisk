@@ -1,8 +1,20 @@
-Basilisk for VS Code — Third-Party Notices
-==========================================
+Basilisk — Third-Party Notices
+===============================
 
-This extension packages (VSIX) the following third-party components. Each is
-used in accordance with its respective license.
+This software incorporates components from the following open-source projects.
+Each component is used in accordance with its respective license. Basilisk is
+grateful to their authors and maintainers.
+
+Every dependency in Basilisk's build graph is permissively licensed
+(MIT, Apache-2.0, BSD, Zlib, Unicode, or a dual/tri combination thereof). The
+only file-level copyleft components are `inferno` (CDDL-1.0) and `colored`
+(MPL-2.0), both linked unmodified as published crates and listed below. There
+is no GPL/AGPL/LGPL-only code in the distribution.
+
+The most significant incorporated components are listed below. This is a
+curated list of the notable projects; the complete, machine-generated set of
+every transitive dependency and its license is reproducible from the workspace
+`Cargo.lock` (`cargo license`).
 
 -------------------------------------------------------------------------------
 
@@ -11,10 +23,21 @@ Author:  Astral Software Inc. (Charles Marsh and the Ruff contributors)
 Pin:     rev 7c645a9a1be8258b9f9e005208a55a0b7e8e18f0 (== release 0.15.17)
 License: MIT
 
-The `basilisk` language-server binary shipped in this VSIX is built on the Ruff
-project by Astral: it embeds Ruff's parser, AST, and formatter crates
-(consumed as Cargo dependencies — no Ruff source is copied). This is the
-component Basilisk relies on most heavily.
+Basilisk is built on the Ruff project by Astral. The `basilisk` binary embeds
+the following crates from the Ruff workspace — declared directly in Cargo.toml
+and pulled in transitively — pinned to a single immutable git rev:
+
+  ruff_python_parser     ruff_python_ast        ruff_text_size
+  ruff_python_formatter  ruff_formatter         ruff_python_stdlib
+  ruff_python_trivia     ruff_source_file       ruff_annotate_snippets
+  ruff_cache             ruff_db                ruff_diagnostics
+  ruff_macros            ruff_memory_usage      ruff_notebook
+
+The parser and AST power every stage of the pipeline; the formatter engine
+([LSPFMT-ENGINE]) and the stdlib-module table for import sorting
+([LSPFMT-IMPORTS]) are the same crates Ruff ships. The external `ruff` CLI is
+never spawned — these crates are linked in-process. No Ruff source is copied
+into this repository; it is consumed only as a Cargo dependency.
 
   MIT License
 
@@ -38,64 +61,157 @@ component Basilisk relies on most heavily.
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
 
-The binary embeds further third-party components (typeshed and the rest of the
-Rust dependency tree); these are enumerated in full in the top-level
-`../NOTICES` file. All are permissively licensed.
+Ruff's own LICENSE file additionally lists the externally maintained libraries
+Ruff derives from; see https://github.com/astral-sh/ruff/blob/main/LICENSE for
+the complete text.
 
 -------------------------------------------------------------------------------
 
-debugpy  —  https://github.com/microsoft/debugpy
-Author:  Microsoft Corporation
-License: MIT
+typeshed  —  https://github.com/python/typeshed
+Author:  The typeshed contributors
+License: Apache-2.0
 
-The Python debug adapter, bundled unmodified under `bundled/debugpy/` and used
-by the extension's debugging integration.
+Basilisk derives two data tables from typeshed's git tree, compiled into the
+binary as perfect-hash maps by `crates/basilisk-stubs/build.rs`:
 
-  Copyright (c) Microsoft Corporation
+  - the standard-library top-level module names (from typeshed's
+    `stdlib/VERSIONS`), used to recognise stdlib imports; and
+  - the import-root → stub-distribution index (from typeshed's `stubs/<DIST>/`
+    directories), used to offer `uv add --dev types-<dist>` quick fixes
+    (BSK-E0152) — see `data/typeshed_stub_distributions.tsv`.
 
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
+typeshed is also the Tier-1 baseline for standard-library stubs
+([CHKARCH-STUBS-TYPESHED]); users may replace it wholesale via the
+`typeshed-path` config.
 
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-
-debugpy's own third-party notices are preserved at
-`bundled/debugpy/debugpy/ThirdPartyNotices.txt`.
+typeshed is distributed under the Apache License, Version 2.0. The full license
+text is available at: https://www.apache.org/licenses/LICENSE-2.0 and in
+typeshed's repository at https://github.com/python/typeshed/blob/main/LICENSE
 
 -------------------------------------------------------------------------------
 
-vscode-languageclient  —  https://github.com/microsoft/vscode-languageserver-node
-Author:  Microsoft Corporation
-License: MIT
+Salsa  —  https://github.com/salsa-rs/salsa
+License: MIT OR Apache-2.0
 
-The Language Server Protocol client library that connects the extension to the
-`basilisk` server.
+The incremental, demand-driven query engine that powers Basilisk's sub-10ms
+re-checks ([CHKARCH-INCREMENTAL-SALSA]); the same framework underpins
+rust-analyzer.
 
-Licensed under the MIT License. See https://opensource.org/licenses/MIT for
-the full license text.
+Licensed under the MIT License or the Apache License, Version 2.0, at your
+option. See https://opensource.org/licenses/MIT and
+https://www.apache.org/licenses/LICENSE-2.0 for the full license texts.
 
 -------------------------------------------------------------------------------
 
-@preact/signals-core  —  https://github.com/preactjs/signals
-Author:  The Preact Authors
+Rayon  —  https://github.com/rayon-rs/rayon
+License: MIT OR Apache-2.0
+
+Work-stealing data parallelism for file-level checking.
+
+Licensed under the MIT License or the Apache License, Version 2.0, at your
+option. See https://opensource.org/licenses/MIT and
+https://www.apache.org/licenses/LICENSE-2.0 for the full license texts.
+
+-------------------------------------------------------------------------------
+
+tower-lsp  —  https://github.com/ebkalderon/tower-lsp
+License: MIT OR Apache-2.0
+
+The Language Server Protocol scaffolding for the LSP server.
+
+Licensed under the MIT License or the Apache License, Version 2.0, at your
+option. See https://opensource.org/licenses/MIT and
+https://www.apache.org/licenses/LICENSE-2.0 for the full license texts.
+
+-------------------------------------------------------------------------------
+
+clap (Command Line Argument Parser)
+Source:  https://github.com/clap-rs/clap (v4.x)
+License: MIT OR Apache-2.0
+
+Copyright (c) 2015-2022 Kevin K. <kbknapp@gmail.com> and clap contributors
+
+Licensed under the MIT License or the Apache License, Version 2.0, at your
+option. See https://opensource.org/licenses/MIT and
+https://www.apache.org/licenses/LICENSE-2.0 for the full license texts.
+
+-------------------------------------------------------------------------------
+
+thiserror
+Source:  https://github.com/dtolnay/thiserror (v2.0)
+License: MIT OR Apache-2.0
+
+Copyright (c) 2019 David Tolnay <dtolnay@gmail.com>
+
+Licensed under the MIT License or the Apache License, Version 2.0, at your
+option. See https://opensource.org/licenses/MIT and
+https://www.apache.org/licenses/LICENSE-2.0 for the full license texts.
+
+-------------------------------------------------------------------------------
+
+walkdir
+Source:  https://github.com/BurntSushi/walkdir (v2.5)
+License: MIT OR Unlicense
+
+Copyright (c) 2015 Andrew Gallant
+
+Licensed under the MIT License or the Unlicense, at your option.
+See https://opensource.org/licenses/MIT and https://unlicense.org for the
+full license texts.
+
+-------------------------------------------------------------------------------
+
+serde  —  https://github.com/serde-rs/serde
+License: MIT OR Apache-2.0
+
+Serialization framework, with serde_json and toml, used for configuration and
+protocol messages.
+
+Licensed under the MIT License or the Apache License, Version 2.0, at your
+option. See https://opensource.org/licenses/MIT and
+https://www.apache.org/licenses/LICENSE-2.0 for the full license texts.
+
+-------------------------------------------------------------------------------
+
+tracing  —  https://github.com/tokio-rs/tracing
 License: MIT
 
-Reactive state primitives used by the extension UI.
+Copyright (c) 2019 Tokio Contributors
 
-Licensed under the MIT License. See https://opensource.org/licenses/MIT for
-the full license text.
+Structured, level-based diagnostics logging.
+See https://opensource.org/licenses/MIT for the full license text.
+
+-------------------------------------------------------------------------------
+
+inferno
+Source:        https://github.com/jonhoo/inferno (v0.12)
+License:       CDDL-1.0
+Modifications: NONE. Used unmodified as a Cargo dependency.
+
+This software contains the `inferno` crate, distributed under the Common
+Development and Distribution License, Version 1.0 (CDDL-1.0). The full
+text of the CDDL-1.0 is available at:
+https://opensource.org/licenses/CDDL-1.0
+
+Source code for `inferno` is available unmodified at the URL above. No
+modifications have been made by Basilisk; we link against the unmodified
+upstream crate as published on crates.io.
+
+-------------------------------------------------------------------------------
+
+colored
+Source:        https://github.com/colored-rs/colored (v3.x)
+License:       MPL-2.0
+Modifications: NONE. Used unmodified as a Cargo dependency.
+
+This software contains the `colored` crate, distributed under the Mozilla
+Public License, Version 2.0 (MPL-2.0). The full text of the MPL-2.0 is
+available at:
+https://www.mozilla.org/en-US/MPL/2.0/
+
+Source code for `colored` is available unmodified at the URL above. No
+modifications have been made by Basilisk; we link against the unmodified
+upstream crate as published on crates.io.
 
 -------------------------------------------------------------------------------
 </content>
