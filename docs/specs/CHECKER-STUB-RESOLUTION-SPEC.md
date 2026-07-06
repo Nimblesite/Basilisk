@@ -82,6 +82,16 @@ Normative behaviour:
   *prepends* extra stub directories at the head of the path and can shadow
   individual modules; `typeshed-path` (step 3) *replaces the vendored stdlib
   typeshed wholesale* as the canonical standard-library source.
+- The directory is a typeshed-layout tree: stdlib stubs live under `stdlib/`, so
+  Basilisk resolves `<typeshed-path>/stdlib/<module>.pyi`. This matches the
+  on-disk shape Pyright's
+  [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) and
+  mypy's
+  [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html)
+  consume (both point at a clone of the
+  [typeshed repository](https://github.com/python/typeshed)), so an existing
+  `typeshedPath` directory works with Basilisk unchanged — and Basilisk reuses
+  Pyright's exact `typeshedPath` spelling for the LSP JSON key.
 
 This is how a project teaches Basilisk an embedded or alternative Python's
 standard library — e.g. MicroPython's

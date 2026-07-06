@@ -67,6 +67,7 @@ There are exactly **7 standard targets — don't add others.** `make test` runs 
 - `allow(clippy = ...)` is NEVER permitted.
 - Keep dependencies and versions in sync across `.github/workflows/ci.yml` and `.devcontainer/Dockerfile` at all times.
 - Ignore compiler code (except clippy fixes).
+- Use [typeDiagram markup](https://typediagram.dev/docs/language-reference.html) to define models in the specs. Generate the ADTs using the [typeDiagram code generator](https://typediagram.dev/docs/cli.html) pointing at the markup.
 - Don't use Git unless asked.
 - Treat legacy code as code to be removed — there is no legacy code in this codebase.
 - Avoid regex — use the proper parsing mechanism, usually ruff.
