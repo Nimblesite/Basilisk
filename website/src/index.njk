@@ -1,7 +1,7 @@
 ---
 layout: layouts/base.njk
-title: "Basilisk — Open-Source, PEP-Conformant Python Language Server"
-description: "Open-source Python language server in Rust — PEP-conformant type checking, autocomplete, refactoring, debugging & profiling in VS Code, Cursor, Zed & Neovim."
+title: "Basilisk — The Only 100% PEP-Conformant Python Language Server"
+description: "The only Python type checker with a perfect 100% score on the official python/typing conformance suite. Open-source language server in Rust — type checking, autocomplete, refactoring, debugging & profiling in VS Code, Cursor, Zed & Neovim."
 permalink: /
 ---
 
@@ -27,7 +27,9 @@ permalink: /
           Autocomplete, go-to-definition, hover info, refactoring,
           diagnostics, integrated debugging &mdash; everything you rely on,
           without the proprietary lock-in. In VS Code, Cursor, Zed, and Neovim
-          &mdash; wherever you write Python. Conformant to the typing spec, strict to taste. Built in Rust.
+          &mdash; wherever you write Python. The only type checker with a perfect
+          {{ conformanceOfficial.basilisk.pct }}% score on the official
+          <code>python/typing</code> conformance suite &mdash; strict to taste, built in Rust.
         </p>
 
         <div class="hero__cta-group">
@@ -74,8 +76,8 @@ permalink: /
       {% if conformance.hasData %}
       <div class="stat-card">
         <span class="stat-card__num">{{ conformance.scorePct }}<span class="stat-card__unit">%</span></span>
-        <span class="stat-card__label">PEP&nbsp;conformance</span>
-        <span class="stat-card__sub">{{ conformance.pass }} of {{ conformance.total }} tests in the official <code>python/typing</code> suite &middot; {{ conformance.fp }} false positives, graded against <code>python/typing</code>@<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" title="python/typing@{{ conformance.pinnedRef }}" target="_blank" rel="noopener"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %} ({{ conformance.commitDate }}){% endif %}</span>
+        <span class="stat-card__label">PEP&nbsp;conformance &mdash; only checker at a perfect score</span>
+        <span class="stat-card__sub">{{ conformance.pass }} of {{ conformance.total }} tests in the official <code>python/typing</code> suite &middot; the <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">only tool on the board at {{ conformanceOfficial.basilisk.pct }}%</a> &middot; {{ conformance.fp }} false positives, graded against <code>python/typing</code>@<a href="https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance" title="python/typing@{{ conformance.pinnedRef }}" target="_blank" rel="noopener"><code>{{ conformance.pinnedRefShort }}</code></a>{% if conformance.commitDate %} ({{ conformance.commitDate }}){% endif %}</span>
       </div>
       {% endif %}
       {% if benchmarks.hasData and benchmarks.toolMedians.ms.basilisk %}
