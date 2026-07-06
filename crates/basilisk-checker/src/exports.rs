@@ -96,7 +96,7 @@ pub fn extract_exports(
 /// parsed. Implements [ANALYSIS-CROSSLSP].
 ///
 /// `source` records **where** the stub came from so provenance stays honest: a
-/// stub resolved from a custom typeshed (`typeshed-path`, issue #271) carries
+/// stub resolved from a custom typeshed (`typeshed-path`) carries
 /// [`TypeProvenance::StubCustomTypeshed`] and hover reads `(custom typeshed)`,
 /// while `*-stubs`/user stubs stay [`TypeProvenance::StubTier1`]
 /// ([STUBRES-CUSTOM-TYPESHED]). All `.pyi` stubs are hand-written, verified
@@ -235,7 +235,7 @@ fn build_function_signature(func: &basilisk_resolver::scope::FunctionInfo, sourc
 /// Classify an external `.pyi` stub's [`StubSource`] from its on-disk location.
 ///
 /// A stub under the configured custom typeshed's `stdlib/` subtree is
-/// [`StubSource::CustomTypeshed`] (issue #271); every other external stub
+/// [`StubSource::CustomTypeshed`] ([STUBRES-CUSTOM-TYPESHED]); every other stub
 /// (`*-stubs` packages, on-demand typeshed) is [`StubSource::StubPackage`].
 /// Provenance flows from here to hover via [`TypeProvenance`].
 fn stub_source_for(resolved_path: &Path, custom_typeshed: Option<&Path>) -> StubSource {
@@ -261,7 +261,7 @@ fn stub_source_for(resolved_path: &Path, custom_typeshed: Option<&Path>) -> Stub
 /// now-undefined references, leaving dependents green after an export edit
 /// (GitHub #56).
 ///
-/// `custom_typeshed` is the configured `typeshed-path` (issue #271), if any: a
+/// `custom_typeshed` is the configured `typeshed-path`, if any: a
 /// stub resolved from its `stdlib/` subtree is tagged
 /// [`StubSource::CustomTypeshed`] so hover reads `(custom typeshed)` and a
 /// MicroPython signature is never reported as the bundled CPython one
@@ -293,8 +293,8 @@ pub fn populate_imported_symbols<'a, F>(
                 exports
             } else if resolved_path.extension().is_some_and(|ext| ext == "pyi") {
                 // Classify the stub's provenance: a `.pyi` under the configured
-                // custom typeshed's `stdlib/` is CustomTypeshed (#271); every
-                // other external stub stays StubPackage/Tier1.
+                // custom typeshed's `stdlib/` is CustomTypeshed
+                // ([STUBRES-CUSTOM-TYPESHED]); every other stub is StubPackage/Tier1.
                 let stub_source = stub_source_for(resolved_path, custom_typeshed);
                 external_cache
                     .entry(resolved_path.clone())

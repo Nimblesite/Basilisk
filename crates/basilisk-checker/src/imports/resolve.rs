@@ -40,7 +40,7 @@ pub fn classify_unresolved(
 /// Whether the **bundled** (name-only) stdlib recognition should rescue an
 /// otherwise-unresolved import — typing-spec import-resolution step 3.
 ///
-/// When a custom typeshed is configured (`typeshed-path`, issue #271) that
+/// When a custom typeshed is configured (`typeshed-path`) that
 /// directory is *the canonical source for standard-library types*
 /// ([STUBRES-CUSTOM-TYPESHED]): a stdlib module absent from its `stdlib/` subtree
 /// must fall through to `imports_unresolved` rather than be silently rescued by

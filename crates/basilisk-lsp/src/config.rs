@@ -442,7 +442,7 @@ mod tests {
         .unwrap();
 
         // A relative `typeshed-path` resolves against the workspace root, like
-        // `stub-paths` (issue #271 / [STUBRES-CUSTOM-TYPESHED]).
+        // `stub-paths` ([STUBRES-CUSTOM-TYPESHED]).
         let cfg = load_config(&dir);
         assert_eq!(cfg.typeshed_path, Some(dir.join("typeshed-mp")));
 

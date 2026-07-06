@@ -45,11 +45,9 @@ pub enum StubSource {
     Typeshed,
     /// Custom/modified typeshed from the `typeshed-path` config — typing-spec
     /// import-resolution **step 3 override**, *the canonical source for
-    /// standard-library types* when configured. Requested in
-    /// [issue #271](https://github.com/Nimblesite/Basilisk/issues/271); the
-    /// distinct provenance keeps hover honest (e.g. a MicroPython `os.uname`
-    /// is never misreported as the bundled CPython signature).
-    /// See [STUBRES-CUSTOM-TYPESHED].
+    /// standard-library types* when configured. The distinct provenance keeps
+    /// hover honest (e.g. a MicroPython `os.uname` is never misreported as the
+    /// bundled CPython signature). See [STUBRES-CUSTOM-TYPESHED].
     CustomTypeshed,
 }
 
@@ -79,9 +77,9 @@ pub enum TypeProvenance {
     Source,
     /// From typeshed or hand-written, verified stubs.
     StubTier1,
-    /// From a custom/modified typeshed (`typeshed-path`, issue #271) — Tier-1
-    /// trust, but distinct provenance so hover reads `(custom typeshed)` and a
-    /// MicroPython signature is never misreported as the bundled CPython one.
+    /// From a custom/modified typeshed (`typeshed-path`) — Tier-1 trust, but
+    /// distinct provenance so hover reads `(custom typeshed)` and a MicroPython
+    /// signature is never misreported as the bundled CPython one.
     /// See [STUBRES-CUSTOM-TYPESHED].
     StubCustomTypeshed,
     /// From auto-generated, community-reviewed stubs.
@@ -96,7 +94,8 @@ impl From<(&StubSource, &StubTier)> for TypeProvenance {
     fn from((source, tier): (&StubSource, &StubTier)) -> Self {
         match (source, tier) {
             // A custom typeshed keeps Tier-1 trust but its own provenance, so
-            // hover can distinguish it from the bundled typeshed ([#271]).
+            // hover can distinguish it from the bundled typeshed
+            // ([STUBRES-CUSTOM-TYPESHED]).
             (&StubSource::CustomTypeshed, &StubTier::Tier1) => Self::StubCustomTypeshed,
             (_, &StubTier::Tier1) => Self::StubTier1,
             (_, &StubTier::Tier2) => Self::StubTier2,

@@ -5,8 +5,7 @@
 # markup (hand-rolling the ADTs is forbidden); the Rust wrapper only adds derives,
 # doc comments and the From/hover_label impls (behaviour, not the DTO).
 # CustomTypeshed / StubCustomTypeshed are the step-3 `typeshed-path` override
-# requested in issue #271 (the canonical stdlib source); see
-# CHECKER-STUB-RESOLUTION-PLAN.md#STUBRESPLAN-TODO.
+# (the canonical stdlib source); see spec section STUBRES-CUSTOM-TYPESHED.
 # pyi_path is a std::path::PathBuf in Rust; modelled as String (opaque) here.
 # Regenerate the diagram: typediagram models/stub_resolution.td > docs/models/stub_resolution.svg
 # Generate the Rust ADTs:  typediagram --to rust models/stub_resolution.td
@@ -37,7 +36,7 @@ union StubTier {
 # Checker-side provenance projected from (StubSource, StubTier): what a tracked
 # type's information is worth, driving cascade suppression + hover labels.
 # StubCustomTypeshed keeps Tier-1 trust but its own identity so a custom
-# typeshed (#271) never masquerades as the bundled one.
+# typeshed never masquerades as the bundled one (STUBRES-CUSTOM-TYPESHED).
 union TypeProvenance {
   Source
   StubTier1

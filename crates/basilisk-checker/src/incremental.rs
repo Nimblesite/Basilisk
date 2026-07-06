@@ -313,12 +313,19 @@ pub fn cross_resolved_module(
     };
     let mut resolved = (**module).clone();
     let registry = workspace.files(db);
-    crate::exports::populate_imported_symbols(&mut resolved, |path| {
-        registry
-            .0
-            .get(path)
-            .map(|imported| module_exports(db, *imported).0.as_slice())
-    });
+    // Reading `search_paths.value(db)` registers the salsa dependency edge, so a
+    // changed `typeshed-path` re-runs this query and re-tags stub provenance.
+    let custom_typeshed = search_paths.value(db).typeshed_path.as_deref();
+    crate::exports::populate_imported_symbols(
+        &mut resolved,
+        |path| {
+            registry
+                .0
+                .get(path)
+                .map(|imported| module_exports(db, *imported).0.as_slice())
+        },
+        custom_typeshed,
+    );
     ResolvedFile::Resolved(std::sync::Arc::new(resolved))
 }
 
