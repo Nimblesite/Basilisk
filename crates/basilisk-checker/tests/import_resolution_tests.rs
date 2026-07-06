@@ -1,5 +1,5 @@
 //! Tests for [ANALYSIS-CROSSLSP-IMPORT]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP-IMPORT
-#![allow(clippy::allow_attributes, clippy::unwrap_used, missing_docs)]
+#![allow(clippy::allow_attributes, clippy::unwrap_used, clippy::expect_used, missing_docs)]
 //! Filesystem path-resolution tests for `basilisk_checker::imports` (relocated
 //! from `basilisk-lsp`; behaviour-identical — they only touch the public API).
 

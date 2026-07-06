@@ -18,6 +18,16 @@ pub struct CheckContext {
     pub target_version: (u32, u32),
     /// Target platform (`"linux"`, `"darwin"`, `"win32"`), if configured.
     pub target_platform: Option<String>,
+    /// Whether a custom typeshed (`typeshed-path`) is configured.
+    ///
+    /// When set, that directory is the canonical source for standard-library
+    /// types ([STUBRES-CUSTOM-TYPESHED]): the bundled name-only stdlib set no
+    /// longer rescues a module absent from it, so rules that suppress on stdlib
+    /// membership must gate on
+    /// [`crate::imports::bundled_stdlib_recognized`] instead of calling
+    /// `is_stdlib_module` directly. Threaded here so every rule reads the same
+    /// canonicality decision the resolver already applied.
+    pub custom_typeshed_configured: bool,
     /// Line-start index over the module source, built once per check.
     ///
     /// Rules that need to map a byte offset to a line — or locate a function
@@ -34,6 +44,7 @@ impl Default for CheckContext {
         Self {
             target_version: DEFAULT_TARGET_VERSION,
             target_platform: None,
+            custom_typeshed_configured: false,
             line_index: basilisk_common::text::LineIndex::default(),
         }
     }
@@ -58,6 +69,7 @@ impl CheckContext {
                 .and_then(parse_target_version)
                 .unwrap_or(DEFAULT_TARGET_VERSION),
             target_platform: config.python_platform.clone(),
+            custom_typeshed_configured: config.typeshed_path.is_some(),
             line_index: basilisk_common::text::LineIndex::default(),
         }
     }

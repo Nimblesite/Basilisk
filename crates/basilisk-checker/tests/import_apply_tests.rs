@@ -1,5 +1,11 @@
 //! Tests for [ANALYSIS-INCR-IMPORTS]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-INCR-IMPORTS
-#![allow(clippy::allow_attributes, clippy::unwrap_used, missing_docs)]
+#![allow(
+    clippy::allow_attributes,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    missing_docs
+)]
 //! `resolve_module_imports` application tests for `basilisk_checker::imports`
 //! (relocated from `basilisk-lsp`; behaviour-identical — public API only).
 
@@ -318,7 +324,7 @@ fn custom_typeshed_resolves_present_and_fails_absent_stdlib() {
 /// Exports pulled from a custom-typeshed stub carry `StubCustomTypeshed`
 /// provenance (hover reads "(custom typeshed)"); the SAME stub read without a
 /// custom typeshed configured is a plain Tier-1 stub. Provenance must track the
-/// source, never masquerade a MicroPython signature as bundled CPython.
+/// source, never masquerade a `MicroPython` signature as bundled `CPython`.
 #[test]
 fn custom_typeshed_stub_exports_carry_custom_provenance() {
     use basilisk_checker::exports::populate_imported_symbols;

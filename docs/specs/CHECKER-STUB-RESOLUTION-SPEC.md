@@ -204,11 +204,12 @@ Types carry metadata about where their type information came from:
 
 ```rust
 pub enum TypeProvenance {
-    Source,      // from source code annotations or inference
-    StubTier1,   // from typeshed, hand-written stubs
-    StubTier2,   // from auto-generated, community-reviewed stubs
-    StubTier3,   // from best-effort auto-generated stubs
-    Untyped,     // no type information available
+    Source,             // from source code annotations or inference
+    StubTier1,          // from typeshed, hand-written stubs
+    StubCustomTypeshed, // from a custom/modified typeshed (`typeshed-path`); Tier-1 trust, distinct provenance
+    StubTier2,          // from auto-generated, community-reviewed stubs
+    StubTier3,          // from best-effort auto-generated stubs
+    Untyped,            // no type information available
 }
 
 pub struct TrackedType {
@@ -222,10 +223,11 @@ pub struct TrackedType {
 | Provenance | imports_unresolved | Downstream type errors | LSP hover | Code Action |
 |------------|-----------|----------------------|-----------|-------------|
 | Source | not fired | normal errors | shows inferred type | — |
-| StubTier1 | not fired | normal errors | shows stub type | — |
-| StubTier2 | not fired | normal errors | shows type + "(auto-generated stub)" | — |
-| StubTier3 | downgraded to info | warnings only | shows type + "(best-effort, may be inaccurate)" | — |
-| Untyped | error (default) | **suppressed** | shows "Unknown (no stubs)" | one-click install (typeshed) or create-local stub via LSP |
+| StubTier1 | not fired | normal errors | shows stub type + "(typeshed)" | — |
+| StubCustomTypeshed | not fired | normal errors | shows stub type + "(custom typeshed)" | — |
+| StubTier2 | not fired | normal errors | shows type + "(community stub)" | — |
+| StubTier3 | downgraded to info | warnings only | shows type + "(best-effort stub, may be inaccurate)" | — |
+| Untyped | error (default) | **suppressed** | shows type + "(no type stubs available)" | one-click install (typeshed) or create-local stub via LSP |
 
 When provenance is `Untyped`, one diagnostic at the import site replaces cascading use-site errors:
 
@@ -303,7 +305,9 @@ strict create-local skeleton.
 |-----------|---------------|
 | Untyped import | `fastmcp (no type stubs available)` |
 | Tier 3 stub symbol | `FastMCP (best-effort stub, may be inaccurate)` |
+| Tier 2 stub symbol | `pandas.read_csv(...) (community stub)` |
 | typeshed symbol | `os.path.join (typeshed)` |
+| custom-typeshed stdlib symbol | `os.uname (custom typeshed)` |
 | Tier 1 stub symbol | `requests.get(...) -> Response` (no annotation — trusted) |
 
 > **uv enrichment** (future): In uv projects, import hovers additionally show package version, direct/transitive classification, and stub package status from the `PackageRegistry`. See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-HOVER](LSP-UV-INTEGRATION-SPEC.md#LSPUV-HOVER).

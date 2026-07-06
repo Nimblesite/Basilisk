@@ -48,10 +48,6 @@ fn search_paths(
     }
 }
 
-// ---------------------------------------------------------------------------
-// .pyi preference over .py through import resolver
-// ---------------------------------------------------------------------------
-
 #[test]
 fn resolver_prefers_pyi_stub_over_py_source() {
     let dir = unique_tmp("e2e_stub_pyi_pref");
@@ -70,10 +66,6 @@ fn resolver_prefers_pyi_stub_over_py_source() {
 
     let _ = fs::remove_dir_all(&dir);
 }
-
-// ---------------------------------------------------------------------------
-// User stub-paths take highest priority
-// ---------------------------------------------------------------------------
 
 #[test]
 fn user_stub_paths_take_priority_over_source() {
@@ -96,11 +88,6 @@ fn user_stub_paths_take_priority_over_source() {
     let _ = fs::remove_dir_all(&root);
     let _ = fs::remove_dir_all(&stubs);
 }
-
-// ---------------------------------------------------------------------------
-// Custom typeshed override (typing-spec import-resolution step 3)
-// [STUBRES-CUSTOM-TYPESHED]
-// ---------------------------------------------------------------------------
 
 #[test]
 fn custom_typeshed_overrides_stdlib_and_parses() {
@@ -193,10 +180,6 @@ fn custom_typeshed_overrides_stdlib_and_parses() {
     let _ = fs::remove_dir_all(&ts);
     let _ = fs::remove_dir_all(&shadow);
 }
-
-// ---------------------------------------------------------------------------
-// PEP 561 stub-only packages (-stubs)
-// ---------------------------------------------------------------------------
 
 #[test]
 fn stub_package_resolved_before_inline_typed() {
@@ -291,10 +274,6 @@ fn stub_package_submodule_resolution() {
     let _ = fs::remove_dir_all(&sp);
 }
 
-// ---------------------------------------------------------------------------
-// py.typed marker detection
-// ---------------------------------------------------------------------------
-
 #[test]
 fn py_typed_marker_detected() {
     let sp = unique_tmp("e2e_stub_pytyped");
@@ -322,10 +301,6 @@ fn has_stub_package_detected() {
 
     let _ = fs::remove_dir_all(&sp);
 }
-
-// ---------------------------------------------------------------------------
-// .pyi file parsing end-to-end
-// ---------------------------------------------------------------------------
 
 #[test]
 fn parse_pyi_file_from_disk() {
@@ -435,10 +410,6 @@ class Dog(Animal):
     assert_eq!(dog.attributes.len(), 1);
     assert_eq!(dog.methods.len(), 1);
 }
-
-// ---------------------------------------------------------------------------
-// Full round-trip: stub file on disk → resolver → parsed stub
-// ---------------------------------------------------------------------------
 
 #[test]
 fn full_roundtrip_resolve_then_parse_stub() {

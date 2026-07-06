@@ -106,7 +106,7 @@ These settings are sent to the LSP server via `workspace/configuration` under th
 | `basilisk.enabled` | `boolean` | `true` | Enable/disable type checker |
 | `basilisk.analysisMode` | `enum` | `"wholeModule"` | `openFilesOnly` / `wholeModule` / `crossModule` |
 | `basilisk.stubPaths` | `string[]` | `[]` | Extra `.pyi` stub directories at the head of the import search path (resolution step 1). See [STUBRES-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CONFIG). |
-| `basilisk.typeshedPath` | `string` | `""` (bundled) | Custom/modified typeshed directory; the canonical source for standard-library types (resolution step 3). See [STUBRES-CUSTOM-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED). |
+| `basilisk.typeshedPath` | `string` | `""` (bundled) | LSP JSON spelling of `typeshed-path`; custom/modified typeshed directory and canonical source for standard-library types (resolution step 3). See [STUBRES-CUSTOM-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED). |
 | `basilisk.inlayHints.parameterNames` | `boolean` | `true` | Show parameter name hints at call sites |
 | `basilisk.inlayHints.variableTypes` | `boolean` | `true` | Show inferred type hints for unannotated variables |
 | `basilisk.formatter` | `enum` | `"ruff"` | Formatter engine: `"ruff"` (embedded, default) or `"none"`. Future `"basilisk"`. See [LSPFMT-CONFIG](LSP-FORMATTING-SPEC.md#LSPFMT-CONFIG). Replaces the removed `basilisk.ruff.*` settings — there is no `ruff` binary to point at. |
