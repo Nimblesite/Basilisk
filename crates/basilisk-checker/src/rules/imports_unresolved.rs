@@ -266,16 +266,14 @@ mod tests {
     /// Regression guard for the second suppression site the resolver fix missed.
     #[test]
     fn custom_typeshed_surfaces_absent_stdlib() {
-        let diags = run_check_custom_typeshed(make_import(
-            "fractions",
-            Some(UnresolvedReason::Unknown),
-        ));
+        let mut diags =
+            run_check_custom_typeshed(make_import("fractions", Some(UnresolvedReason::Unknown)));
         assert_eq!(
             diags.len(),
             1,
             "absent stdlib module must be reported under a custom typeshed"
         );
-        assert_eq!(diags[0].code.code, "imports_unresolved");
+        assert_eq!(diags.remove(0).code.code, "imports_unresolved");
     }
 
     /// A stdlib module the custom typeshed *does* supply resolves to a `.pyi`, so

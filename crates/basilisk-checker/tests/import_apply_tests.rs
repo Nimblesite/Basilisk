@@ -271,7 +271,11 @@ fn custom_typeshed_resolves_present_and_fails_absent_stdlib() {
     // `os` present in the custom stdlib, `fractions` deliberately absent.
     let typeshed = make_custom_typeshed(&[("os.pyi", "def uname() -> str: ...\n")]);
     let imp = |m: &basilisk_resolver::ResolvedModule, name: &str| {
-        m.imports.iter().find(|i| i.module == name).cloned().unwrap()
+        m.imports
+            .iter()
+            .find(|i| i.module == name)
+            .cloned()
+            .unwrap()
     };
 
     // (1) WITHOUT a custom typeshed: nothing resolves on disk, but the bundled
@@ -345,10 +349,9 @@ fn custom_typeshed_stub_exports_carry_custom_provenance() {
         .starts_with(typeshed.join("stdlib")));
 
     // No workspace exports — force the on-demand `.pyi` path in populate.
-    let no_workspace =
-        |_: &std::path::Path| -> Option<&'static [(String, basilisk_resolver::scope::ExternalSymbol)]> {
-            None
-        };
+    let no_workspace = |_: &std::path::Path| -> Option<
+        &'static [(String, basilisk_resolver::scope::ExternalSymbol)],
+    > { None };
 
     // WITH the custom typeshed: the stub's `uname` export is CustomTypeshed.
     let mut with_custom = resolved.clone();
@@ -369,10 +372,70 @@ fn custom_typeshed_stub_exports_carry_custom_provenance() {
     let mut without_custom = resolved.clone();
     populate_imported_symbols(&mut without_custom, no_workspace, None);
     assert_eq!(
-        without_custom.imported_symbols.get("uname").unwrap().provenance,
+        without_custom
+            .imported_symbols
+            .get("uname")
+            .unwrap()
+            .provenance,
         Some(TypeProvenance::StubTier1),
         "the same stub read without a custom typeshed is a plain Tier-1 stub"
     );
 
     let _ = fs::remove_dir_all(&typeshed);
+}
+
+/// The `custom_typeshed` argument alone must NOT stamp `StubCustomTypeshed`
+/// provenance: a stub resolved from OUTSIDE the typeshed's `stdlib/` subtree
+/// (here a user stub from `stub-paths`) stays a plain Tier-1 stub even while a
+/// custom typeshed is configured. Only files under `<typeshed>/stdlib/` are the
+/// custom typeshed's own ([STUBRES-CUSTOM-TYPESHED]). This pins the path gate in
+/// `stub_source_for` — a mutant that ignores the path and always returns
+/// `CustomTypeshed` when a typeshed is configured is caught here.
+#[test]
+fn custom_typeshed_does_not_taint_user_stubs_outside_its_stdlib() {
+    use basilisk_checker::exports::populate_imported_symbols;
+    use basilisk_stubs::TypeProvenance;
+
+    // A configured custom typeshed (its stdlib/ ships os.pyi)…
+    let typeshed = make_custom_typeshed(&[("os.pyi", "def uname() -> str: ...\n")]);
+    // …and a SEPARATE user-stub dir, entirely outside the typeshed tree.
+    let stub_dir = make_tmp_dir("bsk_user_stub_outside_ts");
+    fs::write(
+        stub_dir.join("cowsay.pyi"),
+        "def tux(text: str) -> None: ...\n",
+    )
+    .unwrap();
+
+    let mut resolved = module_with_plain_import("cowsay");
+    let mut paths = make_search_paths(vec![]);
+    paths.stub_paths = vec![stub_dir.clone()];
+    paths.typeshed_path = Some(typeshed.clone());
+    resolve_module_imports(&mut resolved, &paths);
+
+    // Precondition: `cowsay` resolved to the user stub, NOT under the typeshed.
+    let cowsay_path = resolved.imports[0].resolved_path.as_ref().unwrap();
+    assert!(cowsay_path.ends_with("cowsay.pyi"));
+    assert!(
+        !cowsay_path.starts_with(typeshed.join("stdlib")),
+        "user stub must resolve outside the custom typeshed's stdlib/, got {cowsay_path:?}"
+    );
+
+    let no_workspace =
+        |_: &std::path::Path| -> Option<&'static [(String, basilisk_resolver::scope::ExternalSymbol)]> {
+            None
+        };
+
+    // Even WITH the custom typeshed configured, a stub outside its stdlib/ is a
+    // plain Tier-1 stub: provenance tracks the on-disk source, not merely whether
+    // a custom typeshed exists.
+    populate_imported_symbols(&mut resolved, no_workspace, Some(&typeshed));
+    assert_eq!(
+        resolved.imported_symbols.get("tux").unwrap().provenance,
+        Some(TypeProvenance::StubTier1),
+        "a user stub outside <typeshed>/stdlib/ must stay StubTier1 even with a \
+         custom typeshed configured [STUBRES-CUSTOM-TYPESHED]"
+    );
+
+    let _ = fs::remove_dir_all(&typeshed);
+    let _ = fs::remove_dir_all(&stub_dir);
 }

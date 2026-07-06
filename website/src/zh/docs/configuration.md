@@ -89,10 +89,108 @@ rules."imports_unresolved" = "warning"
 ### `exclude`
 
 **类型：** `string[]`
-**默认值：** `["**/node_modules/**", "**/__pycache__/**"]`
-**示例：** `["**/migrations/**", "**/generated/**"]`
+**默认值：**
 
-要从分析中排除的 Glob 模式。在 `include` 之后应用。使用 `**` 进行递归匹配。
+```toml
+exclude = [
+    "__pycache__", "node_modules", "venv", ".venv", "env", ".env",
+    ".tox", ".mypy_cache", ".ruff_cache", ".pytest_cache",
+    "site-packages", "__pypackages__", "build", "dist", ".eggs",
+    "bundled", "_vendored",
+]
+```
+
+**示例：** `["py-gen", "**/generated/**", "*.pb.py"]`
+
+用于跳过路径的 gitignore 风格 glob 模式。隐藏目录（名称以 `.` 开头）无论此设置如何都始终会被跳过。
+
+> **`exclude` 会_替换_默认值——而不是在其基础上追加。** 一旦你设置了 `exclude`，上面的内置列表便不再生效。请将你仍需要的任何默认值与自己的模式一并重新列出，否则它们会被重新分析。
+
+模式语法，针对每个相对于项目根目录的路径进行匹配：
+
+| 模式 | 匹配 |
+| --- | --- |
+| `build` | **裸名称**——在**任意**深度处的该目录或文件段 |
+| `**/generated/**` | `**`——零个或多个目录段（任意位置的 `generated` 目录） |
+| `*.pb.py` | `*`——单个段内任意长度的字符（文件 glob） |
+| `gen?.py` | `?`——段内恰好一个字符 |
+| `src/generated` | **锚定**模式（包含 `/`）——该路径或其任意祖先目录，及其子树 |
+
+Basilisk 在发现文件的所有场景中都遵循相同的模式：LSP 工作区扫描、`basilisk check` / `fix` / `adopt` CLI，以及你打开或编辑文件时编辑器的逐文件检查——因此在 CLI 上被排除的文件在编辑器中同样静默。规范语义请参见架构规范中的 `CHKARCH-CONFIG-EXCLUDE`。
+
+---
+
+## 如何使用自定义 typeshed
+
+`typeshed-path` 会将 Basilisk 捆绑的标准库存根替换为你自己的副本。当你面向标准库与 CPython 不同的替代 Python（MicroPython、打过补丁的 CPython、厂商 SDK），或需要比 Basilisk 发行版内置版本更新或分叉的 typeshed 时，就可以使用它。
+
+### 1. 按 typeshed 的方式组织目录
+
+将 `typeshed-path` 指向 typeshed 布局目录的**根**。标准库存根必须位于顶层 `stdlib/` 子目录下，与 [python/typeshed](https://github.com/python/typeshed) 仓库完全一致——Basilisk 将每个模块解析为 `<typeshed-path>/stdlib/<module>.pyi`：
+
+```
+vendor/typeshed/
+└── stdlib/
+    ├── os.pyi
+    ├── time.pyi
+    └── ...
+```
+
+任何你已用作 Pyright 的 `typeshedPath` 或 mypy 的 `custom_typeshed_dir` 的目录都采用同样的布局，因此可与 Basilisk 原样配合使用。
+
+### 2a. 指向分叉或更新的 typeshed
+
+克隆 typeshed 仓库（或你的分叉），然后将 `typeshed-path` 指向该克隆，并修补你需要的 `.pyi` 文件：
+
+```sh
+git clone https://github.com/python/typeshed vendor/typeshed
+```
+
+```toml
+[tool.basilisk]
+typeshed-path = "vendor/typeshed"
+```
+
+现在 Basilisk 会针对 `vendor/typeshed/stdlib/` 而不是其捆绑副本对标准库进行类型检查。
+
+### 2b. 指向 MicroPython 的标准库
+
+MicroPython 的标准库与 CPython 存在差异——`os`、`time` 和 `machine` 的签名各不相同。安装 [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs)（一份带有 MicroPython 特定改动的 typeshed 布局标准库副本）并将其指向它：
+
+```toml
+[tool.basilisk]
+python-version = "3.12"
+typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
+```
+
+由于 `micropython-stdlib-stubs` 是**部分**标准库，它未包含的模块（例如开发板上并不存在的 `tkinter`）**不会**由捆绑的 CPython 存根来兜底——自定义 typeshed 是第 3 步的规范来源，因此该导入会被报告为无法解析。对于嵌入式目标而言，这才是诚实的结果。
+
+### 3. 在编辑器中配置（LSP）
+
+在编辑器 JSON 中，同一设置为 `typeshedPath`（驼峰式）。在 VS Code 的 `settings.json` 中：
+
+```json
+{
+  "basilisk.typeshedPath": "vendor/typeshed"
+}
+```
+
+`typeshed-path`（在 `pyproject.toml` 中）与 `basilisk.typeshedPath`（在 LSP/编辑器 JSON 中）是同一设置的两种大小写写法。
+
+### 4. 确认已生效——悬停溯源
+
+从自定义 typeshed 解析的符号在悬停时会带有 `(custom typeshed)` 标记，区别于捆绑 typeshed 的 `(typeshed)` 标记。将鼠标悬停在导入的标准库符号上：看到 `(custom typeshed)` 即可确认覆盖已生效，且该签名来自你的目录——MicroPython 的 `os.uname` 绝不会被误报为 CPython 的。
+
+### `typeshed-path` 与 `stub-paths` 的区别
+
+它们解决不同的问题，并且可以组合使用：
+
+| | `stub-paths`（第 1 步） | `typeshed-path`（第 3 步） |
+| --- | --- | --- |
+| 作用 | 在搜索路径最前端*前置*额外的 `.pyi` 目录 | *整体替换*捆绑的标准库 typeshed |
+| 范围 | 可遮蔽任意单个模块，无论标准库还是第三方 | 整个标准库的规范来源 |
+| 典型用途 | 修补某个损坏的存根；为内部库提供存根 | 面向替代或分叉的标准库（MicroPython、更新的 typeshed） |
+| 优先级 | 更高——`stub-paths` 中的模块仍会遮蔽自定义 typeshed | 位于 `stub-paths` 之下、已安装包之上 |
 
 ---
 
