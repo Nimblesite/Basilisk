@@ -60,7 +60,19 @@ rules."imports_unresolved" = "warning"
 **默认值：** `[]`
 **示例：** `["stubs/", "typings/"]`
 
-用于搜索 `.pyi` 存根文件的额外目录。在捆绑的 typeshed 存根之前按顺序搜索。对于内部库的自定义存根很有用。
+用于搜索 `.pyi` 存根文件的额外目录。它们位于导入搜索路径的**最前端**——[typing 规范的导入解析顺序](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)中的第 1 步——因此可以修补或遮蔽任何后续模块，无论是标准库还是第三方。对于内部库的自定义存根很有用。
+
+### `typeshed-path`
+
+**类型：** `string`
+**默认值：** _（未设置——使用捆绑的 typeshed）_
+**示例：** `"typeshed-micropython"`
+
+指向包含 typeshed 标准库存根的自定义或修改版本的目录路径。设置后，该目录将成为**标准库类型的规范来源**——[typing 规范的导入解析顺序](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)中的第 3 步，该规范指出类型检查器"SHOULD use this as the canonical source for standard-library types in this step"（应将其用作此步骤中标准库类型的规范来源）。Basilisk 优先针对它解析标准库模块，而不是捆绑的 typeshed；目录中缺失的标准库模块将继续进入后续的解析步骤。
+
+使用此选项可针对替代标准库进行类型检查——例如 MicroPython 的 [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs)，其 `os`、`time` 和 `machine` 签名与 CPython 不同。相对路径相对于项目根目录解析。
+
+`stub-paths` *前置*额外的存根目录；`typeshed-path` 则*整体替换*捆绑的标准库。二者相互独立，可以组合使用。
 
 ### `include`
 

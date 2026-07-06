@@ -1874,6 +1874,7 @@ mod tests {
             stub_paths: vec![],
             workspace_members: vec![],
             site_packages: Some(site_packages.clone()),
+            typeshed_path: None,
             registry: None,
         });
 

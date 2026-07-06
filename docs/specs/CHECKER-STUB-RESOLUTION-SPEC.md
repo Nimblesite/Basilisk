@@ -83,8 +83,8 @@ Normative behaviour:
   individual modules; `typeshed-path` (step 3) *replaces the vendored stdlib
   typeshed wholesale* as the canonical standard-library source.
 
-This is the mechanism embedded- and alternative-Python toolchains use to teach
-Basilisk a dialect's standard library — e.g. MicroPython's
+This is how a project teaches Basilisk an embedded or alternative Python's
+standard library — e.g. MicroPython's
 [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs),
 whose `os`, `time`, and `machine` signatures diverge from CPython typeshed
 ([issue #271](https://github.com/Nimblesite/Basilisk/issues/271)).

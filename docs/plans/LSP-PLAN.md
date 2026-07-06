@@ -208,8 +208,13 @@ History: last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#18
 - [ ] Virtual environment auto-detection
 - [ ] Configuration `extends` — base configuration inheritance
 - [ ] Extra module search paths — `extraPaths`
-- [ ] Custom typeshed path — `typeshedPath`
-- [ ] Custom stub path — `stubPath`
+- [x] **Custom stub path (`stub-paths` / `stubPaths`)** — import-resolution **step 1** of the [typing spec](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering): *"Stubs or Python source manually put in the beginning of the path. Type checkers SHOULD provide this to allow the user complete control of which stubs to use, and to patch broken stubs or inline types from packages."* — DONE, shipped as the `stub-paths` config key (task 7.5); `.pyi` directories are prepended at the head of the search path in `resolve.rs`.
+- [ ] **Custom typeshed path (`typeshed-path` / `typeshedPath`)** — import-resolution **step 3** of the [typing spec](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering): *"Typeshed stubs for the standard library. These will usually be vendored by type checkers, but type checkers SHOULD provide an option for users to provide a path to a directory containing a custom or modified version of typeshed; if this option is provided, type checkers SHOULD use this as the canonical source for standard-library types in this step."* Requested in [#271](https://github.com/Nimblesite/Basilisk/issues/271) (type-check against MicroPython's stdlib stubs). Spec: [STUBRES-CUSTOM-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED). Sub-tasks:
+  - [ ] Config key `typeshed-path` (TOML) / `typeshedPath` (LSP JSON) as a single `Option<PathBuf>` relative to the project root — parsed in both the `basilisk-config` and `basilisk-lsp` config models.
+  - [ ] Resolver step-3 branch: for stdlib modules, resolve `<typeshed-path>/stdlib/<module>.pyi` ahead of the bundled name-only recognition; fall through to steps 4–5 when the module is absent.
+  - [ ] Thread `typeshed_path` onto `ImportSearchPaths` via `search_paths_from_config`.
+  - [ ] e2e coverage: custom typeshed overrides stdlib `os`; a module absent from it falls through; non-stdlib modules are ignored; `stub-paths` (step 1) still shadows a custom typeshed.
+  - [ ] Verification gate: `make test` green, conformance score unchanged (the suite never sets `typeshed-path`, so the branch is additive), `make bench` within ratchet.
 - [ ] Namespace package support
 - [ ] Persistent index caching — cache workspace index to disk
 - [ ] Multi-root workspace support (requires Phase 8)
