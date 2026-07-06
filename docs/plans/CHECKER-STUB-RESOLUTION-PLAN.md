@@ -57,7 +57,7 @@ in **typeDiagram** markup — source of truth [`models/stub_resolution.td`](../.
 [`docs/models/stub_resolution.svg`](../models/stub_resolution.svg), and the Rust ADTs are generated from it
 (`typediagram --to rust models/stub_resolution.td`):
 
-```td
+```typeDiagram
 alias PathBuf = String
 
 type StubResolution {
