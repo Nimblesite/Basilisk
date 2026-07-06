@@ -30,7 +30,7 @@ use basilisk_lsp::import_resolver::{
     has_stub_package, is_inline_typed_package, resolve_module, ImportSearchPaths,
 };
 use basilisk_resolver::scope::ImportResolution;
-use basilisk_stubs::types::{StubSource, StubTier};
+use basilisk_stubs::types::{StubSource, StubTier, TypeProvenance};
 use basilisk_stubs::{parse_pyi_file, parse_pyi_source};
 
 static TEST_CTR: AtomicU64 = AtomicU64::new(0);
@@ -137,16 +137,56 @@ fn custom_typeshed_overrides_stdlib_and_parses() {
     assert_eq!(result.resolution, ImportResolution::StubPyi);
     assert!(result.path.starts_with(&stdlib));
 
-    // Parse the resolved stub end-to-end and confirm the custom signatures win.
-    let module = parse_pyi_file(&result.path, "os", StubSource::Typeshed, StubTier::Tier1)
-        .expect("parse custom os.pyi");
+    let module = parse_pyi_file(
+        &result.path,
+        "os",
+        StubSource::CustomTypeshed,
+        StubTier::Tier1,
+    )
+    .expect("parse custom os.pyi");
+    assert_eq!(module.source, StubSource::CustomTypeshed);
+    assert_eq!(module.tier, StubTier::Tier1);
+    assert_eq!(
+        TypeProvenance::from((&module.source, &module.tier)),
+        TypeProvenance::StubCustomTypeshed
+    );
     assert!(module.functions.contains_key("uname"));
     assert!(
         module.functions.contains_key("dupterm"),
         "custom MicroPython-only symbol must be visible after override"
     );
 
+    assert!(
+        resolve_module("fractions", &paths).is_none(),
+        "stdlib modules absent from a custom typeshed must fall through unresolved"
+    );
+
+    fs::write(
+        stdlib.join("requests.pyi"),
+        "def get(url: str) -> bytes: ...\n",
+    )
+    .unwrap();
+    assert!(
+        resolve_module("requests", &paths).is_none(),
+        "typeshed-path must not resolve non-stdlib modules"
+    );
+
+    let shadow = unique_tmp("e2e_typeshed_shadow_stubs");
+    fs::create_dir_all(&shadow).unwrap();
+    fs::write(shadow.join("os.pyi"), "def getcwd() -> str: ...\n").unwrap();
+    let shadow_paths = ImportSearchPaths {
+        stub_paths: vec![shadow.clone()],
+        ..paths.clone()
+    };
+    let shadowed = resolve_module("os", &shadow_paths).expect("stub-path os resolves");
+    assert!(
+        shadowed.path.starts_with(&shadow),
+        "stub-paths must shadow custom typeshed, got: {:?}",
+        shadowed.path
+    );
+
     let _ = fs::remove_dir_all(&ts);
+    let _ = fs::remove_dir_all(&shadow);
 }
 
 // ---------------------------------------------------------------------------
