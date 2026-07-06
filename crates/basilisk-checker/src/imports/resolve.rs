@@ -37,13 +37,16 @@ pub fn classify_unresolved(
     UnresolvedReason::NotInstalled
 }
 
-/// Resolve an absolute import following PEP 561 resolution order.
+/// Resolve an absolute import following the typing spec's import-resolution
+/// ordering ([STUBRES-PEP561]). Steps, in order:
 ///
-/// 1. **User stubs** — `.pyi` files in `stub-paths` directories
+/// 1. **Manual stubs** — `.pyi` files in `stub-paths` directories (head of path)
 /// 2. **User source** — `.py`/`.pyi` files in workspace roots and `extraPaths`
-/// 3. **Stub-only packages** — installed `foopkg-stubs` in site-packages
-/// 4. **Inline-typed packages** — installed packages with `py.typed` marker
-/// 5. **Bundled typeshed** — handled externally via `basilisk_stubs::is_stdlib_module()`
+/// 3. **Standard-library typeshed** — a custom `typeshed-path/stdlib/` tree when
+///    configured ([STUBRES-CUSTOM-TYPESHED]); otherwise stdlib names are
+///    recognised downstream via `basilisk_stubs::is_stdlib_module()`
+/// 4. **Stub-only packages** — installed `foopkg-stubs` in site-packages
+/// 5. **Inline-typed packages** — installed packages with a `py.typed` marker
 #[must_use]
 pub fn resolve_module(
     module_name: &str,
@@ -68,13 +71,27 @@ pub fn resolve_module(
         }
     }
 
-    // 3+4. Site-packages: stub-only packages (-stubs), then inline-typed (py.typed), then plain
+    // 3. Standard-library typeshed — typing-spec import-resolution step 3.
+    //    A configured custom typeshed directory is the canonical source for
+    //    standard-library types: resolve stdlib modules against its `stdlib/`
+    //    subtree in preference to the bundled (name-only) recognition applied
+    //    downstream. [STUBRES-CUSTOM-TYPESHED]
+    if let Some(typeshed) = &search_paths.typeshed_path {
+        if basilisk_stubs::is_stdlib_module(module_name) {
+            let stdlib_dir = typeshed.join("stdlib");
+            if let Some(resolved) = try_resolve_stub_only(module_name, &stdlib_dir) {
+                return Some(resolved);
+            }
+        }
+    }
+
+    // 4+5. Site-packages: stub-only packages (-stubs), then inline-typed (py.typed), then plain
     if let Some(sp) = &search_paths.site_packages {
-        // 3. Check for `<module>-stubs` package first
+        // 4. Check for `<module>-stubs` package first
         if let Some(resolved) = try_resolve_stub_package(module_name, sp) {
             return Some(resolved);
         }
-        // 4. Check for inline-typed packages (py.typed marker) and plain packages
+        // 5. Check for inline-typed packages (py.typed marker) and plain packages
         if let Some(resolved) = try_resolve_in_dir(module_name, sp) {
             return Some(resolved);
         }

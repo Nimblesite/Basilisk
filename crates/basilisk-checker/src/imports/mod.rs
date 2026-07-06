@@ -62,4 +62,10 @@ pub struct ImportSearchPaths {
     pub site_packages: Option<PathBuf>,
     /// Package registry from uv lock file, if available.
     pub registry: Option<Arc<PackageRegistry>>,
+    /// Custom typeshed directory (`typeshed-path` config). When set, its
+    /// `stdlib/` subtree is the **canonical source for standard-library types**
+    /// — typing-spec import-resolution step 3
+    /// ([STUBRES-CUSTOM-TYPESHED](../../../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
+    /// `None` keeps the name-only bundled-stdlib recognition.
+    pub typeshed_path: Option<PathBuf>,
 }

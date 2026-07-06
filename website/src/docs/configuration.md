@@ -31,6 +31,7 @@ That's all you need. Basilisk finds Python files from the current directory and 
 python-version = "3.12"
 python-platform = "All"
 stub-paths = ["stubs/"]
+typeshed-path = "typeshed-micropython"   # optional: replace the bundled stdlib typeshed
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
 
@@ -64,7 +65,19 @@ Target platform. Affects platform-specific type stubs and conditional imports.
 **Default:** `[]`
 **Example:** `["stubs/", "typings/"]`
 
-Additional directories to search for `.pyi` stub files. Searched in order before the bundled typeshed stubs. Useful for custom stubs for internal libraries.
+Additional directories to search for `.pyi` stub files. These sit at the **head** of the import search path — step 1 of the [typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering) — so they can patch or shadow any later module, standard-library or third-party. Useful for custom stubs for internal libraries.
+
+### `typeshed-path`
+
+**Type:** `string`
+**Default:** _(unset — the bundled typeshed is used)_
+**Example:** `"typeshed-micropython"`
+
+Path to a directory containing a custom or modified version of typeshed's standard-library stubs. When set, this directory becomes the **canonical source for standard-library types** — step 3 of the [typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering), which states that type checkers "SHOULD use this as the canonical source for standard-library types in this step." Basilisk resolves stdlib modules against it in preference to the bundled typeshed; a stdlib module absent from the directory falls through to the remaining resolution steps.
+
+Use this to type-check against an alternative standard library — for example MicroPython's [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs), whose `os`, `time`, and `machine` signatures differ from CPython. Relative paths resolve against the project root.
+
+`stub-paths` *prepends* extra stub directories; `typeshed-path` *replaces* the vendored standard library wholesale. They are independent and can be combined.
 
 ### `include`
 

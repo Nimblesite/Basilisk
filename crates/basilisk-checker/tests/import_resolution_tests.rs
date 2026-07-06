@@ -139,6 +139,7 @@ fn test_extra_paths_searched() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
+        typeshed_path: None,
     };
     let result = resolve_module("libmod", &paths).unwrap();
     assert!(result.path.ends_with("libmod.py"));
@@ -160,6 +161,7 @@ fn test_site_packages_searched() {
         workspace_members: vec![],
         site_packages: Some(sp.clone()),
         registry: None,
+        typeshed_path: None,
     };
     let result = resolve_module("requests", &paths).unwrap();
     assert!(result.path.ends_with("requests.py"));
@@ -182,6 +184,7 @@ fn test_workspace_root_takes_priority() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
+        typeshed_path: None,
     };
     let result = resolve_module("dup", &paths).unwrap();
     assert!(result.path.starts_with(&root));
@@ -302,6 +305,7 @@ fn test_stub_paths_searched_before_roots() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
+        typeshed_path: None,
     };
     let result = resolve_module("mymod", &paths).unwrap();
     // Stub-path .pyi should win over root .py
@@ -325,6 +329,7 @@ fn test_stub_paths_only_pyi() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
+        typeshed_path: None,
     };
     let result = resolve_module("mymod", &paths);
     assert!(
@@ -332,6 +337,135 @@ fn test_stub_paths_only_pyi() {
         "stub-paths should only resolve .pyi files"
     );
 
+    let _ = fs::remove_dir_all(&stubs);
+}
+
+// ── Custom typeshed override (typing-spec import-resolution step 3) ──
+// [STUBRES-CUSTOM-TYPESHED] docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED
+
+#[test]
+fn test_typeshed_path_overrides_stdlib_module() {
+    // A custom typeshed dir supplies `stdlib/os.pyi`; `import os` must resolve
+    // to it as the canonical stdlib source (spec step 3), not the name-only
+    // bundled recognition (which resolves stdlib to no file at all).
+    let typeshed = make_tmp_dir("bsk_ir_typeshed");
+    let stdlib = typeshed.join("stdlib");
+    fs::create_dir_all(&stdlib).unwrap();
+    fs::write(stdlib.join("os.pyi"), "def uname() -> str: ...\n").unwrap();
+
+    let paths = ImportSearchPaths {
+        roots: vec![],
+        extra_paths: vec![],
+        stub_paths: vec![],
+        workspace_members: vec![],
+        site_packages: None,
+        registry: None,
+        typeshed_path: Some(typeshed.clone()),
+    };
+    let result = resolve_module("os", &paths).expect("custom typeshed should resolve `os`");
+    assert_eq!(result.resolution, ImportResolution::StubPyi);
+    assert!(
+        result.path.starts_with(&stdlib),
+        "expected resolution under the custom typeshed stdlib dir, got {:?}",
+        result.path
+    );
+
+    let _ = fs::remove_dir_all(&typeshed);
+}
+
+#[test]
+fn test_typeshed_path_resolves_stdlib_package() {
+    // Package-form stdlib module: `stdlib/os/__init__.pyi`.
+    let typeshed = make_tmp_dir("bsk_ir_typeshed_pkg");
+    let os_pkg = typeshed.join("stdlib").join("os");
+    fs::create_dir_all(&os_pkg).unwrap();
+    fs::write(os_pkg.join("__init__.pyi"), "def uname() -> str: ...\n").unwrap();
+
+    let paths = ImportSearchPaths {
+        roots: vec![],
+        extra_paths: vec![],
+        stub_paths: vec![],
+        workspace_members: vec![],
+        site_packages: None,
+        registry: None,
+        typeshed_path: Some(typeshed.clone()),
+    };
+    let result = resolve_module("os", &paths).expect("custom typeshed should resolve `os` package");
+    assert_eq!(result.resolution, ImportResolution::StubPyi);
+    assert!(result.path.ends_with("__init__.pyi"));
+
+    let _ = fs::remove_dir_all(&typeshed);
+}
+
+#[test]
+fn test_no_typeshed_path_leaves_stdlib_unresolved_to_file() {
+    // Without a custom typeshed, stdlib modules resolve to no file — the bundled
+    // recognition is name-only (`is_stdlib_module`), applied downstream.
+    let paths = ImportSearchPaths {
+        roots: vec![],
+        extra_paths: vec![],
+        stub_paths: vec![],
+        workspace_members: vec![],
+        site_packages: None,
+        registry: None,
+        typeshed_path: None,
+    };
+    assert!(resolve_module("os", &paths).is_none());
+}
+
+#[test]
+fn test_typeshed_path_ignores_non_stdlib_modules() {
+    // `typeshed-path` is the canonical *standard-library* source only; a
+    // non-stdlib name present in the dir must not resolve through it.
+    let typeshed = make_tmp_dir("bsk_ir_typeshed_nonstd");
+    let stdlib = typeshed.join("stdlib");
+    fs::create_dir_all(&stdlib).unwrap();
+    fs::write(stdlib.join("requests.pyi"), "def get() -> None: ...\n").unwrap();
+
+    let paths = ImportSearchPaths {
+        roots: vec![],
+        extra_paths: vec![],
+        stub_paths: vec![],
+        workspace_members: vec![],
+        site_packages: None,
+        registry: None,
+        typeshed_path: Some(typeshed.clone()),
+    };
+    assert!(
+        resolve_module("requests", &paths).is_none(),
+        "typeshed-path must not resolve non-stdlib modules"
+    );
+
+    let _ = fs::remove_dir_all(&typeshed);
+}
+
+#[test]
+fn test_stub_paths_shadow_custom_typeshed() {
+    // Spec step 1 (stub-paths) sits at the head of the path and must win over
+    // step 3 (typeshed-path) for the same stdlib module.
+    let typeshed = make_tmp_dir("bsk_ir_typeshed_shadow_ts");
+    let stdlib = typeshed.join("stdlib");
+    fs::create_dir_all(&stdlib).unwrap();
+    fs::write(stdlib.join("os.pyi"), "def uname() -> str: ...\n").unwrap();
+    let stubs = make_tmp_dir("bsk_ir_typeshed_shadow_stubs");
+    fs::write(stubs.join("os.pyi"), "def getcwd() -> str: ...\n").unwrap();
+
+    let paths = ImportSearchPaths {
+        roots: vec![],
+        extra_paths: vec![],
+        stub_paths: vec![stubs.clone()],
+        workspace_members: vec![],
+        site_packages: None,
+        registry: None,
+        typeshed_path: Some(typeshed.clone()),
+    };
+    let result = resolve_module("os", &paths).unwrap();
+    assert!(
+        result.path.starts_with(&stubs),
+        "stub-paths (step 1) must shadow typeshed-path (step 3)"
+    );
+
+    let _ = fs::remove_dir_all(&typeshed);
     let _ = fs::remove_dir_all(&stubs);
 }
 
@@ -350,6 +484,7 @@ fn test_stub_package_resolution() {
         workspace_members: vec![],
         site_packages: Some(sp.clone()),
         registry: None,
+        typeshed_path: None,
     };
     let result = resolve_module("requests", &paths).unwrap();
     assert_eq!(result.resolution, ImportResolution::StubPyi);
@@ -372,6 +507,7 @@ fn test_stub_package_submodule() {
         workspace_members: vec![],
         site_packages: Some(sp.clone()),
         registry: None,
+        typeshed_path: None,
     };
     let result = resolve_module("requests.api", &paths).unwrap();
     assert_eq!(result.resolution, ImportResolution::StubPyi);

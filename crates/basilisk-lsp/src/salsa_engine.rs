@@ -324,6 +324,7 @@ mod tests {
             workspace_members: vec![],
             site_packages: None,
             registry: None,
+            typeshed_path: None,
         }
     }
 
