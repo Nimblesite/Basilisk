@@ -1364,6 +1364,7 @@ mod tests {
             workspace_members: vec![],
             site_packages: None,
             registry: None,
+            typeshed_path: None,
         });
 
         let (results, file_count, _) = idx.scan();
@@ -1400,6 +1401,7 @@ mod tests {
             workspace_members: vec![],
             site_packages: None,
             registry: None,
+            typeshed_path: None,
         });
 
         // Open a file with a diagnostic; its fresh state is now stored.
@@ -1450,6 +1452,7 @@ mod tests {
             workspace_members: vec![],
             site_packages: None,
             registry: None,
+            typeshed_path: None,
         });
         let _ = idx.scan();
 

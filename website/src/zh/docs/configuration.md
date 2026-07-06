@@ -26,6 +26,7 @@ python-version = "3.12"
 python-version = "3.12"
 python-platform = "All"
 stub-paths = ["stubs/"]
+typeshed-path = "typeshed-micropython"   # 可选：替换捆绑的标准库 typeshed
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
 

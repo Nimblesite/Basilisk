@@ -53,6 +53,7 @@ fn search_paths(
         workspace_members: vec![],
         site_packages,
         registry: None,
+        typeshed_path: None,
     }
 }
 
@@ -103,6 +104,49 @@ fn user_stub_paths_take_priority_over_source() {
 
     let _ = fs::remove_dir_all(&root);
     let _ = fs::remove_dir_all(&stubs);
+}
+
+// ---------------------------------------------------------------------------
+// Custom typeshed override (typing-spec import-resolution step 3)
+// [STUBRES-CUSTOM-TYPESHED]
+// ---------------------------------------------------------------------------
+
+#[test]
+fn custom_typeshed_overrides_stdlib_and_parses() {
+    let ts = unique_tmp("e2e_typeshed");
+    let stdlib = ts.join("stdlib");
+    fs::create_dir_all(&stdlib).unwrap();
+    // A MicroPython-flavoured `os` whose surface differs from CPython typeshed.
+    fs::write(
+        stdlib.join("os.pyi"),
+        "def uname() -> str: ...\ndef dupterm(stream: object) -> None: ...\n",
+    )
+    .unwrap();
+
+    let paths = ImportSearchPaths {
+        roots: vec![],
+        extra_paths: vec![],
+        stub_paths: vec![],
+        workspace_members: vec![],
+        site_packages: None,
+        registry: None,
+        typeshed_path: Some(ts.clone()),
+    };
+
+    let result = resolve_module("os", &paths).expect("custom typeshed resolves `os`");
+    assert_eq!(result.resolution, ImportResolution::StubPyi);
+    assert!(result.path.starts_with(&stdlib));
+
+    // Parse the resolved stub end-to-end and confirm the custom signatures win.
+    let module = parse_pyi_file(&result.path, "os", StubSource::Typeshed, StubTier::Tier1)
+        .expect("parse custom os.pyi");
+    assert!(module.functions.contains_key("uname"));
+    assert!(
+        module.functions.contains_key("dupterm"),
+        "custom MicroPython-only symbol must be visible after override"
+    );
+
+    let _ = fs::remove_dir_all(&ts);
 }
 
 // ---------------------------------------------------------------------------

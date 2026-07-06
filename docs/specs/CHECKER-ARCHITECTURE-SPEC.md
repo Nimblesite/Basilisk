@@ -77,7 +77,7 @@ Depend on established open-source tools rather than reimplementing them.
 | Tool | Interop Strategy |
 |---|---|
 | **Ruff** | Basilisk **embeds** the `ruff_python_formatter` crate in-process for formatting and reimplements import hygiene natively — the `ruff` CLI is never spawned ([LSPFMT-DECISION](LSP-FORMATTING-SPEC.md#LSPFMT-DECISION)). Configuration unified in `pyproject.toml` (`[tool.ruff.format]`). |
-| **typeshed** | Bundled copy of typeshed stubs, updated with each Basilisk release. Users can override with custom stubs. |
+| **typeshed** | Bundled copy of typeshed stubs, updated with each Basilisk release. Users MAY prepend extra stubs via `stub-paths` (resolution step 1) or replace the bundled stdlib typeshed wholesale via `typeshed-path` (resolution step 3), per the typing-spec import-resolution ordering — see [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561). |
 | **mypy config** | `basilisk migrate --from mypy` reads `mypy.ini` / `setup.cfg` and produces `[tool.basilisk]` config. |
 | **Pyright config** | `basilisk migrate --from pyright` reads `pyrightconfig.json` and produces `[tool.basilisk]` config. |
 | **PEP 561** | Full support for `py.typed` packages, inline type annotations, and stub-only packages. |
@@ -1220,7 +1220,18 @@ Stub generation engine with three modes:
 
 ### typeshed Compatibility {#CHKARCH-STUBS-TYPESHED}
 
-Basilisk bundles typeshed as the Tier 1 baseline for standard library stubs; users override via `stubPaths` configuration.
+Basilisk bundles typeshed as the Tier 1 baseline for standard-library stubs
+(import-resolution step 3 — [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561)).
+Per the typing spec, "type checkers SHOULD provide an option for users to
+provide a path to a directory containing a custom or modified version of
+typeshed; if this option is provided, type checkers SHOULD use this as the
+canonical source for standard-library types in this step"
+([import resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)).
+Basilisk therefore honours `typeshed-path` to replace the bundled stdlib
+typeshed wholesale as the canonical stdlib source, distinct from `stub-paths`
+(resolution step 1), which *prepends* additional `.pyi` stub directories. The
+canonical resolution order and override semantics live in
+[STUBRES-CUSTOM-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED).
 
 ---
 
@@ -1260,7 +1271,8 @@ All configuration lives in `pyproject.toml`:
 [tool.basilisk]
 python-version = "3.12"
 python-platform = "All"          # Default: check for all platforms
-stub-paths = ["stubs/"]
+stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub dirs
+# typeshed-path = "typeshed-x"   # resolution step 3: replace the bundled stdlib typeshed
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**"]
 
