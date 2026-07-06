@@ -25,16 +25,30 @@ pub struct StubResolution {
 }
 
 /// Where a module's type information originated.
+///
+/// Source of truth: the typeDiagram model [`models/stub_resolution.td`] →
+/// [`docs/models/stub_resolution.svg`]; keep the two in lockstep
+/// (`typediagram --to rust models/stub_resolution.td`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StubSource {
-    /// User-provided `.pyi` files from `stub-paths` config directories.
+    /// User-provided `.pyi` files from `stub-paths` config directories
+    /// (typing-spec import-resolution step 1).
     UserStub,
-    /// Installed `foopkg-stubs` package (e.g. `types-requests`).
+    /// Installed `foopkg-stubs` package, e.g. `types-requests`
+    /// (typing-spec import-resolution step 4).
     StubPackage,
-    /// Installed package with `py.typed` marker (PEP 561 inline types).
+    /// Installed package with `py.typed` marker, PEP 561 inline types
+    /// (typing-spec import-resolution step 5).
     InlineTyped,
-    /// Bundled typeshed (compiled into the binary).
+    /// Bundled typeshed (compiled into the binary) — typing-spec
+    /// import-resolution step 3, the vendored default.
     Typeshed,
+    /// Custom/modified typeshed from the `typeshed-path` config — typing-spec
+    /// import-resolution **step 3 override**, *the canonical source for
+    /// standard-library types* when configured. The distinct provenance keeps
+    /// hover honest (e.g. a `MicroPython` `os.uname` is never misreported as the
+    /// bundled `CPython` signature). See [STUBRES-CUSTOM-TYPESHED].
+    CustomTypeshed,
 }
 
 /// Quality tier of type information.
@@ -63,6 +77,11 @@ pub enum TypeProvenance {
     Source,
     /// From typeshed or hand-written, verified stubs.
     StubTier1,
+    /// From a custom/modified typeshed (`typeshed-path`) — Tier-1 trust, but
+    /// distinct provenance so hover reads `(custom typeshed)` and a `MicroPython`
+    /// signature is never misreported as the bundled `CPython` one.
+    /// See [STUBRES-CUSTOM-TYPESHED].
+    StubCustomTypeshed,
     /// From auto-generated, community-reviewed stubs.
     StubTier2,
     /// From best-effort auto-generated stubs (`basilisk stubs generate`).
@@ -74,6 +93,10 @@ pub enum TypeProvenance {
 impl From<(&StubSource, &StubTier)> for TypeProvenance {
     fn from((source, tier): (&StubSource, &StubTier)) -> Self {
         match (source, tier) {
+            // A custom typeshed keeps Tier-1 trust but its own provenance, so
+            // hover can distinguish it from the bundled typeshed
+            // ([STUBRES-CUSTOM-TYPESHED]).
+            (&StubSource::CustomTypeshed, &StubTier::Tier1) => Self::StubCustomTypeshed,
             (_, &StubTier::Tier1) => Self::StubTier1,
             (_, &StubTier::Tier2) => Self::StubTier2,
             (_, &StubTier::Tier3) => Self::StubTier3,
@@ -91,6 +114,7 @@ impl TypeProvenance {
         match self {
             Self::Source => None,
             Self::StubTier1 => Some("(typeshed)"),
+            Self::StubCustomTypeshed => Some("(custom typeshed)"),
             Self::StubTier2 => Some("(community stub)"),
             Self::StubTier3 => Some("(best-effort stub, may be inaccurate)"),
             Self::Untyped => Some("(no type stubs available)"),

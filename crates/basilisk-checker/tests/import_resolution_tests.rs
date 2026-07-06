@@ -1,5 +1,10 @@
 //! Tests for [ANALYSIS-CROSSLSP-IMPORT]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP-IMPORT
-#![allow(clippy::allow_attributes, clippy::unwrap_used, missing_docs)]
+#![allow(
+    clippy::allow_attributes,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    missing_docs
+)]
 //! Filesystem path-resolution tests for `basilisk_checker::imports` (relocated
 //! from `basilisk-lsp`; behaviour-identical — they only touch the public API).
 
@@ -139,6 +144,7 @@ fn test_extra_paths_searched() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
+        typeshed_path: None,
     };
     let result = resolve_module("libmod", &paths).unwrap();
     assert!(result.path.ends_with("libmod.py"));
@@ -160,6 +166,7 @@ fn test_site_packages_searched() {
         workspace_members: vec![],
         site_packages: Some(sp.clone()),
         registry: None,
+        typeshed_path: None,
     };
     let result = resolve_module("requests", &paths).unwrap();
     assert!(result.path.ends_with("requests.py"));
@@ -182,6 +189,7 @@ fn test_workspace_root_takes_priority() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
+        typeshed_path: None,
     };
     let result = resolve_module("dup", &paths).unwrap();
     assert!(result.path.starts_with(&root));
@@ -302,6 +310,7 @@ fn test_stub_paths_searched_before_roots() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
+        typeshed_path: None,
     };
     let result = resolve_module("mymod", &paths).unwrap();
     // Stub-path .pyi should win over root .py
@@ -325,6 +334,7 @@ fn test_stub_paths_only_pyi() {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
+        typeshed_path: None,
     };
     let result = resolve_module("mymod", &paths);
     assert!(
@@ -350,6 +360,7 @@ fn test_stub_package_resolution() {
         workspace_members: vec![],
         site_packages: Some(sp.clone()),
         registry: None,
+        typeshed_path: None,
     };
     let result = resolve_module("requests", &paths).unwrap();
     assert_eq!(result.resolution, ImportResolution::StubPyi);
@@ -372,6 +383,7 @@ fn test_stub_package_submodule() {
         workspace_members: vec![],
         site_packages: Some(sp.clone()),
         registry: None,
+        typeshed_path: None,
     };
     let result = resolve_module("requests.api", &paths).unwrap();
     assert_eq!(result.resolution, ImportResolution::StubPyi);

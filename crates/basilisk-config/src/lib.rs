@@ -107,6 +107,7 @@ mod tests {
                 "default excludes must contain __pycache__"
             );
             assert!(cfg.stub_paths.is_empty());
+            assert!(cfg.typeshed_path.is_none());
             assert!(cfg.rules.is_empty());
             assert!(cfg.per_module_overrides.is_empty());
             assert!(cfg.per_path_overrides.is_empty());
@@ -122,6 +123,7 @@ mod tests {
                 r#"
 [tool.basilisk]
 stub-paths = ["stubs/", "typings/"]
+typeshed-path = "typeshed-mp"
 
 [tool.basilisk.rules]
 "imports_unresolved" = "warning"
@@ -139,6 +141,10 @@ disabled = ["imports_unresolved", "BSK-E0001"]
             )],
             |cfg| {
                 assert_eq!(cfg.stub_paths.len(), 2);
+                assert_eq!(
+                    cfg.typeshed_path,
+                    Some(std::path::PathBuf::from("typeshed-mp"))
+                );
                 assert_eq!(cfg.rules.len(), 2);
                 assert_eq!(
                     cfg.rules.get("imports_unresolved").copied(),
@@ -163,6 +169,7 @@ disabled = ["imports_unresolved", "BSK-E0001"]
                 "basilisk.json",
                 r#"{
                 "stubPaths": ["stubs/"],
+                "typeshedPath": "ts-json",
                 "rules": {
                     "imports_unresolved": "info"
                 },
@@ -173,6 +180,7 @@ disabled = ["imports_unresolved", "BSK-E0001"]
             )],
             |cfg| {
                 assert_eq!(cfg.stub_paths.len(), 1);
+                assert_eq!(cfg.typeshed_path, Some(std::path::PathBuf::from("ts-json")));
                 assert_eq!(
                     cfg.rules.get("imports_unresolved").copied(),
                     Some(RuleSeverity::Info)

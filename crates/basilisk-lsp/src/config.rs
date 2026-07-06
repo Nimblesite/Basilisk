@@ -100,6 +100,12 @@ pub struct WorkspaceConfig {
     pub analysis_mode: AnalysisMode,
     /// Additional directories to search for `.pyi` stub files.
     pub stub_paths: Vec<PathBuf>,
+    /// Custom typeshed directory (`typeshed-path`) whose `stdlib/` subtree is
+    /// the canonical source for standard-library types, overriding the bundled
+    /// typeshed (typing-spec import-resolution step 3 —
+    /// [STUBRES-CUSTOM-TYPESHED](../../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
+    /// `None` uses the bundled typeshed.
+    pub typeshed_path: Option<PathBuf>,
     /// Formatter engine ([LSPFMT-CONFIG]). Editor settings (VS Code's
     /// `basilisk.formatter` via initializationOptions) override this.
     pub formatter: FormatterEngine,
@@ -120,6 +126,7 @@ impl Default for WorkspaceConfig {
             venv: None,
             analysis_mode: AnalysisMode::WholeModule,
             stub_paths: Vec::new(),
+            typeshed_path: None,
             formatter: FormatterEngine::Ruff,
             format_style: FormatStyle::default(),
         }
@@ -135,9 +142,9 @@ impl Default for WorkspaceConfig {
 ///
 /// Returns `Default` if no config file is found.
 ///
-/// Relative `stub-paths` are resolved against `root` so that a bare
-/// `stub-paths = ["stubs"]` points at `<root>/stubs` regardless of the
-/// process's current working directory (issue #173).
+/// Relative `stub-paths` and `typeshed-path` are resolved against `root` so
+/// that a bare `stub-paths = ["stubs"]` points at `<root>/stubs` regardless of
+/// the process's current working directory (issue #173).
 #[must_use]
 pub fn load_config(root: &Path) -> WorkspaceConfig {
     let mut cfg = load_config_raw(root);
@@ -146,6 +153,9 @@ pub fn load_config(root: &Path) -> WorkspaceConfig {
         .into_iter()
         .map(|p| if p.is_absolute() { p } else { root.join(p) })
         .collect();
+    cfg.typeshed_path = cfg
+        .typeshed_path
+        .map(|p| if p.is_absolute() { p } else { root.join(p) });
     // Formatter style always comes from `[tool.ruff]` in pyproject.toml,
     // independent of which file supplied the checker config ([LSPFMT-ENGINE]).
     cfg.format_style = load_format_style(root);
@@ -214,11 +224,13 @@ fn load_config_raw(root: &Path) -> WorkspaceConfig {
     if pyproject.is_file() {
         if let Some(mut cfg) = load_pyproject_config(&pyproject) {
             // `load_pyproject_config` is a line scanner that cannot parse TOML
-            // arrays, so `stub-paths = ["stubs", "typings"]` was silently
-            // dropped (issue #173). Delegate that one field to the canonical
-            // toml-crate parser in `basilisk-config`, which reads the same
-            // `[tool.basilisk]` section correctly.
-            cfg.stub_paths = basilisk_config::load_basilisk_config(root).stub_paths;
+            // arrays (and mishandles inline comments), so `stub-paths` was
+            // silently dropped (issue #173). Delegate the path fields to the
+            // canonical toml-crate parser in `basilisk-config`, which reads the
+            // same `[tool.basilisk]` section correctly.
+            let bcfg = basilisk_config::load_basilisk_config(root);
+            cfg.stub_paths = bcfg.stub_paths;
+            cfg.typeshed_path = bcfg.typeshed_path;
             return cfg;
         }
     }
@@ -277,6 +289,13 @@ fn load_json_config(path: &Path) -> Option<WorkspaceConfig> {
         .and_then(|v| v.as_array())
     {
         cfg.stub_paths = json_path_list(arr);
+    }
+    if let Some(v) = obj
+        .get("typeshedPath")
+        .or_else(|| obj.get("typeshed-path"))
+        .and_then(|v| v.as_str())
+    {
+        cfg.typeshed_path = Some(PathBuf::from(v));
     }
 
     Some(cfg)
@@ -343,6 +362,9 @@ fn load_pyproject_config(path: &Path) -> Option<WorkspaceConfig> {
                     // Simple single-value handling; array parsing requires TOML crate.
                     cfg.stub_paths.push(PathBuf::from(value));
                 }
+                "typeshedPath" | "typeshed_path" | "typeshed-path" => {
+                    cfg.typeshed_path = Some(PathBuf::from(value));
+                }
                 _ => {}
             }
         }
@@ -366,6 +388,7 @@ mod tests {
         assert!(cfg.strict);
         assert!(cfg.include.is_empty());
         assert!(cfg.exclude.is_empty());
+        assert!(cfg.typeshed_path.is_none());
     }
 
     #[test]
@@ -405,6 +428,37 @@ mod tests {
         let cfg = load_config(&dir);
         assert_eq!(cfg.python_version.as_deref(), Some("3.12"));
         assert!(cfg.strict);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_load_typeshed_path_from_pyproject_relative() {
+        let dir = std::env::temp_dir().join("basilisk_cfg_typeshed_toml");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            "[tool.basilisk]\ntypeshed-path = \"typeshed-mp\"\n",
+        )
+        .unwrap();
+
+        // A relative `typeshed-path` resolves against the workspace root, like
+        // `stub-paths` ([STUBRES-CUSTOM-TYPESHED]).
+        let cfg = load_config(&dir);
+        assert_eq!(cfg.typeshed_path, Some(dir.join("typeshed-mp")));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_load_typeshed_path_from_json() {
+        let dir = std::env::temp_dir().join("basilisk_cfg_typeshed_json");
+        std::fs::create_dir_all(&dir).unwrap();
+        let config_path = dir.join("basilisk.json");
+        std::fs::write(&config_path, r#"{ "typeshedPath": "ts" }"#).unwrap();
+
+        let cfg = load_json_config(&config_path).unwrap();
+        assert_eq!(cfg.typeshed_path, Some(PathBuf::from("ts")));
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

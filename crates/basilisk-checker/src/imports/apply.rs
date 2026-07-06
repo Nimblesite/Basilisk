@@ -36,8 +36,14 @@ pub fn resolve_module_imports(
         if let Some(r) = result {
             import.resolution = r.resolution;
             import.resolved_path = Some(r.path);
-        } else if !basilisk_stubs::is_stdlib_module(&import.module) {
+        } else if !super::bundled_stdlib_recognized(
+            &import.module,
+            search_paths.typeshed_path.is_some(),
+        ) {
             // Classify why the import is unresolved for actionable diagnostics.
+            // When a custom typeshed is configured it is canonical for step 3, so
+            // the bundled name-set no longer rescues a module absent from it —
+            // the import falls through to an unresolved reason ([STUBRES-CUSTOM-TYPESHED]).
             import.unresolved_reason = Some(classify_unresolved(&import.module, search_paths));
         }
 

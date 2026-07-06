@@ -31,6 +31,13 @@ pub struct BasiliskConfig {
     /// Additional directories to search for `.pyi` stubs.
     pub stub_paths: Vec<PathBuf>,
 
+    /// Custom typeshed directory whose `stdlib/` subtree overrides the bundled
+    /// standard-library stubs as the canonical source for stdlib types
+    /// (typing-spec import-resolution step 3 —
+    /// [STUBRES-CUSTOM-TYPESHED](../../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
+    /// `None` keeps the bundled typeshed.
+    pub typeshed_path: Option<PathBuf>,
+
     /// Global rule severity overrides.
     ///
     /// Maps rule codes (e.g. `"imports_unresolved"`) to severity levels.
@@ -108,6 +115,7 @@ impl Default for BasiliskConfig {
                 .collect(),
             include: Vec::new(),
             stub_paths: Vec::new(),
+            typeshed_path: None,
             rules: HashMap::new(),
             per_module_overrides: HashMap::new(),
             per_path_overrides: HashMap::new(),
@@ -198,6 +206,11 @@ pub fn load_from_json(path: &Path) -> Option<BasiliskConfig> {
             .iter()
             .filter_map(|v| v.as_str().map(PathBuf::from))
             .collect();
+    }
+
+    // typeshed-path / typeshedPath
+    if let Some(val) = alias_get(obj, "typeshedPath", "typeshed-path").and_then(|v| v.as_str()) {
+        cfg.typeshed_path = Some(PathBuf::from(val));
     }
 
     // rules
@@ -305,6 +318,11 @@ pub fn load_from_pyproject(path: &Path) -> Option<BasiliskConfig> {
             .iter()
             .filter_map(|v| v.as_str().map(PathBuf::from))
             .collect();
+    }
+
+    // typeshed-path
+    if let Some(val) = basilisk.get("typeshed-path").and_then(|v| v.as_str()) {
+        cfg.typeshed_path = Some(PathBuf::from(val));
     }
 
     // rules

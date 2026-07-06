@@ -78,12 +78,18 @@ function parseCsv(text) {
   meta.toolVersions = parseToolVersions(meta.tools);
 
   const cols = dataLines[0].split(",");
-  const tools = cols.slice(1).map((c) => c.replace(/_ms$/, ""));
+  const allTools = cols.slice(1).map((c) => c.replace(/_ms$/, ""));
+  // The per-rule table is a COLD-check comparison of type checkers, so the
+  // warm-cache variants (…-warm) are excluded from `tools` (and thus the table
+  // columns and the fastest mark) — they aren't separate checkers and would
+  // crowd the real ones off the page. Their raw numbers stay in `values` (and
+  // the committed CSV); only the rendered comparison drops them.
+  const tools = allTools.filter((t) => !t.endsWith("-warm"));
   const rows = dataLines.slice(1).map((line) => {
     const parts = line.split(",");
     const stem = parts[0];
     const values = {};
-    tools.forEach((t, i) => {
+    allTools.forEach((t, i) => {
       const v = parts[i + 1];
       values[t] = v === undefined || v === "" ? null : parseFloat(v);
     });
@@ -158,7 +164,19 @@ function computeVsPyright(rows) {
   };
 }
 
+// How many tool columns in a CSV carry at least one real measurement. A machine
+// that only ran basilisk scores 1; a full competitor sweep scores every tool.
+// Used to keep an incomplete CSV from ever becoming the site's primary and
+// rendering a benchmark table full of empty competitor columns.
+function toolCoverage(file) {
+  const parsed = parseCsv(readFileSync(join(STATUS_DIR, file), "utf-8"));
+  if (!parsed) return -1;
+  return parsed.tools.filter((t) => parsed.rows.some((r) => r.values[t] != null))
+    .length;
+}
+
 function pickPrimary(files) {
+  // Explicit overrides win, in order: env var, then a committed .primary pin.
   const env = process.env.BASILISK_BENCH_PRIMARY;
   if (env && files.includes(`${env}.csv`)) return `${env}.csv`;
   const primaryFile = join(STATUS_DIR, ".primary");
@@ -166,8 +184,16 @@ function pickPrimary(files) {
     const slug = readFileSync(primaryFile, "utf-8").trim();
     if (files.includes(`${slug}.csv`)) return `${slug}.csv`;
   }
-  const gha = files.find((f) => f.startsWith("gha-"));
-  return gha || files[0];
+  // Automatic fallback: NEVER let an incomplete CSV (e.g. a machine that only
+  // ran basilisk) win and drop competitor columns. Rank by tool coverage first,
+  // then stable CI hardware (gha-*), then alphabetical for determinism.
+  const coverage = new Map(files.map((f) => [f, toolCoverage(f)]));
+  return [...files].sort(
+    (a, b) =>
+      coverage.get(b) - coverage.get(a) ||
+      (a.startsWith("gha-") ? 0 : 1) - (b.startsWith("gha-") ? 0 : 1) ||
+      a.localeCompare(b),
+  )[0];
 }
 
 export default function () {

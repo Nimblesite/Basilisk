@@ -109,10 +109,6 @@ pub fn lookup_builtin(name: &str) -> Option<&'static str> {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::unwrap_used,
-    reason = "test-only: unwrap acceptable in unit tests"
-)]
 mod tests {
     use super::*;
 
@@ -220,20 +216,59 @@ mod tests {
             TypeProvenance::from((&StubSource::InlineTyped, &StubTier::Tier3)),
             TypeProvenance::StubTier3
         );
+        // A custom typeshed (`typeshed-path`) keeps Tier-1 trust but its OWN
+        // provenance so hover can distinguish it from the bundled typeshed
+        // ([STUBRES-CUSTOM-TYPESHED]). Only the `(CustomTypeshed,
+        // Tier1)` pair special-cases — every other tier for the same source falls
+        // through to the generic tier mapping, never to `StubCustomTypeshed`.
+        assert_eq!(
+            TypeProvenance::from((&StubSource::CustomTypeshed, &StubTier::Tier1)),
+            TypeProvenance::StubCustomTypeshed,
+            "a custom-typeshed Tier-1 stub must map to StubCustomTypeshed"
+        );
+        assert_eq!(
+            TypeProvenance::from((&StubSource::CustomTypeshed, &StubTier::Tier2)),
+            TypeProvenance::StubTier2,
+            "only Tier1 special-cases custom typeshed; Tier2 stays StubTier2"
+        );
+        assert_eq!(
+            TypeProvenance::from((&StubSource::CustomTypeshed, &StubTier::Tier3)),
+            TypeProvenance::StubTier3,
+            "only Tier1 special-cases custom typeshed; Tier3 stays StubTier3"
+        );
     }
 
     #[test]
     fn type_provenance_hover_labels() {
         use types::TypeProvenance;
 
+        // Exact labels — every provenance renders a distinct suffix, so a mutant
+        // that swaps a match arm or edits a string is caught. `(custom typeshed)`
+        // is deliberately distinct from `(typeshed)` so a MicroPython signature is
+        // never misreported as the bundled CPython one ([STUBRES-CUSTOM-TYPESHED]).
         assert_eq!(TypeProvenance::Source.hover_label(), None);
-        assert!(TypeProvenance::StubTier1
-            .hover_label()
-            .unwrap()
-            .contains("typeshed"));
-        assert!(TypeProvenance::Untyped
-            .hover_label()
-            .unwrap()
-            .contains("no type stubs"));
+        assert_eq!(TypeProvenance::StubTier1.hover_label(), Some("(typeshed)"));
+        assert_eq!(
+            TypeProvenance::StubCustomTypeshed.hover_label(),
+            Some("(custom typeshed)")
+        );
+        assert_eq!(
+            TypeProvenance::StubTier2.hover_label(),
+            Some("(community stub)")
+        );
+        assert_eq!(
+            TypeProvenance::StubTier3.hover_label(),
+            Some("(best-effort stub, may be inaccurate)")
+        );
+        assert_eq!(
+            TypeProvenance::Untyped.hover_label(),
+            Some("(no type stubs available)")
+        );
+        // `(custom typeshed)` must NOT be confused with the bundled `(typeshed)`:
+        // the two labels are different strings even though one contains the other.
+        assert_ne!(
+            TypeProvenance::StubCustomTypeshed.hover_label(),
+            TypeProvenance::StubTier1.hover_label()
+        );
     }
 }

@@ -9,16 +9,7 @@
     unused_results,
     dead_code
 )]
-//! E2E tests for `.pyi` stub file resolution through the full pipeline.
-//!
-//! These tests verify that stub files are correctly discovered and parsed
-//! when the import resolver encounters them. They exercise:
-//!
-//! - PEP 561 stub resolution order (user stubs → source → stub packages)
-//! - `.pyi` preference over `.py`
-//! - Stub package discovery (`foopkg-stubs/`)
-//! - `py.typed` marker detection
-//! - `.pyi` file parsing via `basilisk_stubs::parse_pyi_source`
+//! E2E tests for `.pyi` stub resolution through the resolver and parser.
 
 mod common;
 
@@ -30,7 +21,7 @@ use basilisk_lsp::import_resolver::{
     has_stub_package, is_inline_typed_package, resolve_module, ImportSearchPaths,
 };
 use basilisk_resolver::scope::ImportResolution;
-use basilisk_stubs::types::{StubSource, StubTier};
+use basilisk_stubs::types::{StubSource, StubTier, TypeProvenance};
 use basilisk_stubs::{parse_pyi_file, parse_pyi_source};
 
 static TEST_CTR: AtomicU64 = AtomicU64::new(0);
@@ -53,12 +44,9 @@ fn search_paths(
         workspace_members: vec![],
         site_packages,
         registry: None,
+        typeshed_path: None,
     }
 }
-
-// ---------------------------------------------------------------------------
-// .pyi preference over .py through import resolver
-// ---------------------------------------------------------------------------
 
 #[test]
 fn resolver_prefers_pyi_stub_over_py_source() {
@@ -78,10 +66,6 @@ fn resolver_prefers_pyi_stub_over_py_source() {
 
     let _ = fs::remove_dir_all(&dir);
 }
-
-// ---------------------------------------------------------------------------
-// User stub-paths take highest priority
-// ---------------------------------------------------------------------------
 
 #[test]
 fn user_stub_paths_take_priority_over_source() {
@@ -105,9 +89,97 @@ fn user_stub_paths_take_priority_over_source() {
     let _ = fs::remove_dir_all(&stubs);
 }
 
-// ---------------------------------------------------------------------------
-// PEP 561 stub-only packages (-stubs)
-// ---------------------------------------------------------------------------
+#[test]
+fn custom_typeshed_overrides_stdlib_and_parses() {
+    let ts = unique_tmp("e2e_typeshed");
+    let stdlib = ts.join("stdlib");
+    fs::create_dir_all(&stdlib).unwrap();
+    // A MicroPython-flavoured `os` whose surface differs from CPython typeshed.
+    fs::write(
+        stdlib.join("os.pyi"),
+        "def uname() -> str: ...\ndef dupterm(stream: object) -> None: ...\n",
+    )
+    .unwrap();
+
+    let paths = ImportSearchPaths {
+        roots: vec![],
+        extra_paths: vec![],
+        stub_paths: vec![],
+        workspace_members: vec![],
+        site_packages: None,
+        registry: None,
+        typeshed_path: Some(ts.clone()),
+    };
+
+    assert_eq!(paths.typeshed_path.as_deref(), Some(ts.as_path()));
+    assert!(
+        stdlib.join("os.pyi").is_file(),
+        "precondition: custom typeshed supplies os.pyi"
+    );
+    assert!(
+        !stdlib.join("fractions.pyi").exists(),
+        "precondition: custom typeshed deliberately omits fractions.pyi"
+    );
+    assert!(
+        basilisk_stubs::is_stdlib_module("fractions"),
+        "precondition: fractions is a stdlib module, not an arbitrary miss"
+    );
+
+    let result = resolve_module("os", &paths).expect("custom typeshed resolves `os`");
+    assert_eq!(result.resolution, ImportResolution::StubPyi);
+    assert!(result.path.starts_with(&stdlib));
+
+    let module = parse_pyi_file(
+        &result.path,
+        "os",
+        StubSource::CustomTypeshed,
+        StubTier::Tier1,
+    )
+    .expect("parse custom os.pyi");
+    assert_eq!(module.source, StubSource::CustomTypeshed);
+    assert_eq!(module.tier, StubTier::Tier1);
+    assert_eq!(
+        TypeProvenance::from((&module.source, &module.tier)),
+        TypeProvenance::StubCustomTypeshed
+    );
+    assert!(module.functions.contains_key("uname"));
+    assert!(
+        module.functions.contains_key("dupterm"),
+        "custom MicroPython-only symbol must be visible after override"
+    );
+
+    assert!(
+        resolve_module("fractions", &paths).is_none(),
+        "stdlib modules absent from a custom typeshed must fall through unresolved"
+    );
+
+    fs::write(
+        stdlib.join("requests.pyi"),
+        "def get(url: str) -> bytes: ...\n",
+    )
+    .unwrap();
+    assert!(
+        resolve_module("requests", &paths).is_none(),
+        "typeshed-path must not resolve non-stdlib modules"
+    );
+
+    let shadow = unique_tmp("e2e_typeshed_shadow_stubs");
+    fs::create_dir_all(&shadow).unwrap();
+    fs::write(shadow.join("os.pyi"), "def getcwd() -> str: ...\n").unwrap();
+    let shadow_paths = ImportSearchPaths {
+        stub_paths: vec![shadow.clone()],
+        ..paths.clone()
+    };
+    let shadowed = resolve_module("os", &shadow_paths).expect("stub-path os resolves");
+    assert!(
+        shadowed.path.starts_with(&shadow),
+        "stub-paths must shadow custom typeshed, got: {:?}",
+        shadowed.path
+    );
+
+    let _ = fs::remove_dir_all(&ts);
+    let _ = fs::remove_dir_all(&shadow);
+}
 
 #[test]
 fn stub_package_resolved_before_inline_typed() {
@@ -115,7 +187,6 @@ fn stub_package_resolved_before_inline_typed() {
     let sp = unique_tmp("e2e_stub_pep561_sp");
     fs::create_dir_all(&root).unwrap();
 
-    // Create requests-stubs package
     let stubs_dir = sp.join("requests-stubs");
     fs::create_dir_all(&stubs_dir).unwrap();
     fs::write(
@@ -124,7 +195,6 @@ fn stub_package_resolved_before_inline_typed() {
     )
     .unwrap();
 
-    // Also create inline-typed requests package
     let inline_dir = sp.join("requests");
     fs::create_dir_all(&inline_dir).unwrap();
     fs::write(inline_dir.join("py.typed"), "").unwrap();
@@ -132,7 +202,6 @@ fn stub_package_resolved_before_inline_typed() {
 
     let paths = search_paths(vec![root.clone()], vec![], Some(sp.clone()));
     let result = resolve_module("requests", &paths).expect("should resolve requests");
-    // Stub package should win over inline-typed
     assert_eq!(result.resolution, ImportResolution::StubPyi);
     assert!(
         result.path.to_string_lossy().contains("requests-stubs"),
@@ -144,18 +213,10 @@ fn stub_package_resolved_before_inline_typed() {
     let _ = fs::remove_dir_all(&sp);
 }
 
-/// Reproduces issue: "I can't get it to pick up stubs and the auto-fix doesn't
-/// fix anything." The BSK-E0152 quick-fix runs `uv add --dev types-<pkg>`, which
-/// drops a `<pkg>-stubs/` package into site-packages. E0152 fires only while the
-/// import resolves to `SourcePy`; after the stub package is installed the import
-/// MUST resolve to `StubPyi` so the warning clears. This exercises that exact
-/// before/after transition deterministically (no network / no uv).
 #[test]
 fn autofix_stub_install_flips_source_resolution_to_stub() {
     let sp = unique_tmp("e2e_stub_autofix_flip");
 
-    // BEFORE the auto-fix: `requests` is installed without inline types and
-    // without a stub package → resolves to plain source (E0152 fires here).
     let pkg = sp.join("requests");
     fs::create_dir_all(&pkg).unwrap();
     fs::write(pkg.join("__init__.py"), "def get(url): pass\n").unwrap();
@@ -168,7 +229,6 @@ fn autofix_stub_install_flips_source_resolution_to_stub() {
         "precondition: plain site-packages package resolves to SourcePy (E0152 fires)"
     );
 
-    // AFTER the auto-fix: `uv add --dev types-requests` installs `requests-stubs/`.
     let stubs_dir = sp.join("requests-stubs");
     fs::create_dir_all(&stubs_dir).unwrap();
     fs::write(
@@ -214,10 +274,6 @@ fn stub_package_submodule_resolution() {
     let _ = fs::remove_dir_all(&sp);
 }
 
-// ---------------------------------------------------------------------------
-// py.typed marker detection
-// ---------------------------------------------------------------------------
-
 #[test]
 fn py_typed_marker_detected() {
     let sp = unique_tmp("e2e_stub_pytyped");
@@ -245,10 +301,6 @@ fn has_stub_package_detected() {
 
     let _ = fs::remove_dir_all(&sp);
 }
-
-// ---------------------------------------------------------------------------
-// .pyi file parsing end-to-end
-// ---------------------------------------------------------------------------
 
 #[test]
 fn parse_pyi_file_from_disk() {
@@ -358,10 +410,6 @@ class Dog(Animal):
     assert_eq!(dog.attributes.len(), 1);
     assert_eq!(dog.methods.len(), 1);
 }
-
-// ---------------------------------------------------------------------------
-// Full round-trip: stub file on disk → resolver → parsed stub
-// ---------------------------------------------------------------------------
 
 #[test]
 fn full_roundtrip_resolve_then_parse_stub() {
