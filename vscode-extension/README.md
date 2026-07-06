@@ -204,6 +204,10 @@ To make this extension use a CLI you installed separately, set `basilisk.executa
 
 This is the VS Code extension for the [Basilisk](https://github.com/Nimblesite/Basilisk) project. Basilisk also supports [Neovim](https://github.com/Nimblesite/Basilisk/tree/main/basilisk.nvim) and [Zed](https://github.com/Nimblesite/Basilisk/tree/main/basilisk-zed).
 
+## Acknowledgments
+
+Built on [Ruff](https://github.com/astral-sh/ruff) by [Astral](https://astral.sh/) (MIT) and [typeshed](https://github.com/python/typeshed) (Apache-2.0); bundles [debugpy](https://github.com/microsoft/debugpy) (Microsoft, MIT). Full notices: [NOTICES](NOTICES).
+
 ## License
 
 MIT.

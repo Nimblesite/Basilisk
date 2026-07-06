@@ -128,12 +128,12 @@ permalink: /zh/
         <tbody>
           <tr>
             <td>PEP 符合性 <a href="#citations" style="color:var(--color-text-muted);font-size:0.75rem">&sup1;</a></td>
-            <td class="col-basilisk">{{ conformance.scorePct }}% <em style="font-size:0.75rem;color:var(--color-text-muted)">({{ conformance.pass }}/{{ conformance.total }}，自测)</em></td>
-            <td><a href="https://github.com/python/typing/tree/main/conformance/results/pyright" target="_blank" rel="noopener">已公开</a></td>
-            <td><a href="https://github.com/python/typing/tree/main/conformance/results/mypy" target="_blank" rel="noopener">已公开</a></td>
-            <td><a href="https://github.com/python/typing/tree/main/conformance/results/ty" target="_blank" rel="noopener">已公开</a></td>
-            <td><a href="https://github.com/python/typing/tree/main/conformance/results/pyrefly" target="_blank" rel="noopener">已公开</a></td>
-            <td><a href="https://github.com/python/typing/tree/main/conformance/results/zuban" target="_blank" rel="noopener">已公开</a></td>
+            <td class="col-basilisk check-yes">{{ conformanceOfficial.byId.basilisk.pct }}% <em style="font-size:0.75rem;color:var(--color-text-muted)">({{ conformanceOfficial.byId.basilisk.passLabel }}/{{ conformanceOfficial.byId.basilisk.total }})</em></td>
+            <td><a href="{{ conformanceOfficial.byId.pyright.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.pyright.pct }}%</a></td>
+            <td><a href="{{ conformanceOfficial.byId.mypy.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.mypy.pct }}%</a></td>
+            <td><a href="{{ conformanceOfficial.byId.ty.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.ty.pct }}%</a></td>
+            <td><a href="{{ conformanceOfficial.byId.pyrefly.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.pyrefly.pct }}%</a></td>
+            <td><a href="{{ conformanceOfficial.byId.zuban.resultsUrl }}" target="_blank" rel="noopener">{{ conformanceOfficial.byId.zuban.pct }}%</a></td>
           </tr>
           {% if benchmarks.toolMedians %}
           <tr>

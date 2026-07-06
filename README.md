@@ -237,6 +237,22 @@ conformance/security audits, IDE feature parity, sharpening the AI instructions)
 
 ---
 
+## Acknowledgments
+
+Basilisk builds on the open-source community — with thanks to:
+
+- **[Astral](https://astral.sh/)** — [Ruff](https://github.com/astral-sh/ruff), whose parser, AST, and formatter crates Basilisk embeds (MIT). The foundation we rely on most.
+- **[typeshed](https://github.com/python/typeshed)** — standard-library type stubs (Apache-2.0).
+- **[Salsa](https://github.com/salsa-rs/salsa)** — incremental query engine.
+- **[Rayon](https://github.com/rayon-rs/rayon)** — data parallelism.
+- **[tower-lsp](https://github.com/ebkalderon/tower-lsp)** — LSP scaffolding.
+- **[debugpy](https://github.com/microsoft/debugpy)** — debug adapter (bundled in the VS Code extension).
+- The [`python/typing`](https://github.com/python/typing) conformance suite.
+
+Full component list and licenses: [NOTICES](NOTICES). All dependencies are permissively licensed.
+
+---
+
 ## License
 
 MIT.

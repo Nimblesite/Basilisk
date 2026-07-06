@@ -1,101 +1,101 @@
-Basilisk — Third-Party Notices
-===============================
+Basilisk for VS Code — Third-Party Notices
+==========================================
 
-This software incorporates components from the following open-source projects.
-Each component is used in accordance with its respective license.
+This extension packages (VSIX) the following third-party components. Each is
+used in accordance with its respective license.
 
 -------------------------------------------------------------------------------
 
-ruff_python_parser, ruff_python_ast, ruff_text_size
-Source:  https://github.com/astral-sh/ruff (tag 0.12.12)
+Ruff  —  https://github.com/astral-sh/ruff
+Author:  Astral Software Inc. (Charles Marsh and the Ruff contributors)
+Pin:     rev 7c645a9a1be8258b9f9e005208a55a0b7e8e18f0 (== release 0.15.17)
 License: MIT
 
-Copyright (c) 2022 Astral Software Inc.
+The `basilisk` language-server binary shipped in this VSIX is built on the Ruff
+project by Astral: it embeds Ruff's parser, AST, and formatter crates
+(consumed as Cargo dependencies — no Ruff source is copied). This is the
+component Basilisk relies on most heavily.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+  MIT License
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+  Copyright (c) 2022 Charles Marsh
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
 
--------------------------------------------------------------------------------
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
 
-clap (Command Line Argument Parser)
-Source:  https://github.com/clap-rs/clap (v4.5)
-License: MIT OR Apache-2.0
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
 
-Copyright (c) 2015-2022 Kevin K. <kbknapp@gmail.com> and clap contributors
-
-Licensed under the MIT License or the Apache License, Version 2.0, at your
-option. See https://opensource.org/licenses/MIT and
-https://www.apache.org/licenses/LICENSE-2.0 for the full license texts.
-
--------------------------------------------------------------------------------
-
-thiserror
-Source:  https://github.com/dtolnay/thiserror (v2.0)
-License: MIT OR Apache-2.0
-
-Copyright (c) 2019 David Tolnay <dtolnay@gmail.com>
-
-Licensed under the MIT License or the Apache License, Version 2.0, at your
-option. See https://opensource.org/licenses/MIT and
-https://www.apache.org/licenses/LICENSE-2.0 for the full license texts.
+The binary embeds further third-party components (typeshed and the rest of the
+Rust dependency tree); these are enumerated in full in the top-level
+`../NOTICES` file. All are permissively licensed.
 
 -------------------------------------------------------------------------------
 
-walkdir
-Source:  https://github.com/BurntSushi/walkdir (v2.5)
-License: MIT OR Unlicense
+debugpy  —  https://github.com/microsoft/debugpy
+Author:  Microsoft Corporation
+License: MIT
 
-Copyright (c) 2015 Andrew Gallant
+The Python debug adapter, bundled unmodified under `bundled/debugpy/` and used
+by the extension's debugging integration.
 
-Licensed under the MIT License or the Unlicense, at your option.
-See https://opensource.org/licenses/MIT and https://unlicense.org for the
-full license texts.
+  Copyright (c) Microsoft Corporation
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+debugpy's own third-party notices are preserved at
+`bundled/debugpy/debugpy/ThirdPartyNotices.txt`.
+
+-------------------------------------------------------------------------------
+
+vscode-languageclient  —  https://github.com/microsoft/vscode-languageserver-node
+Author:  Microsoft Corporation
+License: MIT
+
+The Language Server Protocol client library that connects the extension to the
+`basilisk` server.
+
+Licensed under the MIT License. See https://opensource.org/licenses/MIT for
+the full license text.
 
 -------------------------------------------------------------------------------
 
-inferno
-Source:        https://github.com/jonhoo/inferno (v0.12)
-License:       CDDL-1.0
-Modifications: NONE. Used unmodified as a Cargo dependency.
+@preact/signals-core  —  https://github.com/preactjs/signals
+Author:  The Preact Authors
+License: MIT
 
-This software contains the `inferno` crate, distributed under the Common
-Development and Distribution License, Version 1.0 (CDDL-1.0). The full
-text of the CDDL-1.0 is available at:
-https://opensource.org/licenses/CDDL-1.0
+Reactive state primitives used by the extension UI.
 
-Source code for `inferno` is available unmodified at the URL above. No
-modifications have been made by Basilisk; we link against the unmodified
-upstream crate as published on crates.io.
+Licensed under the MIT License. See https://opensource.org/licenses/MIT for
+the full license text.
 
 -------------------------------------------------------------------------------
-
-colored
-Source:        https://github.com/colored-rs/colored (v3.x)
-License:       MPL-2.0
-Modifications: NONE. Used unmodified as a Cargo dependency.
-
-This software contains the `colored` crate, distributed under the Mozilla
-Public License, Version 2.0 (MPL-2.0). The full text of the MPL-2.0 is
-available at:
-https://www.mozilla.org/en-US/MPL/2.0/
-
-Source code for `colored` is available unmodified at the URL above. No
-modifications have been made by Basilisk; we link against the unmodified
-upstream crate as published on crates.io.
-
--------------------------------------------------------------------------------
+</content>
