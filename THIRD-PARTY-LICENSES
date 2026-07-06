@@ -6,9 +6,11 @@ Implements [LSPFMT-PROVENANCE] (docs/specs/LSP-FORMATTING-SPEC.md).
 Ruff
 ----
 
-The `basilisk` binary embeds the following crates from the Ruff project
+The `basilisk` binary embeds crates from the Ruff project by Astral
 (https://github.com/astral-sh/ruff), pinned in `Cargo.toml` to a single
-immutable rev (see the workspace `[workspace.dependencies]` section):
+immutable rev — 7c645a9a1be8258b9f9e005208a55a0b7e8e18f0, which is release
+0.15.17 (see the workspace `[workspace.dependencies]` section). The crates
+declared directly are:
 
   - ruff_python_parser     (Python parser)
   - ruff_python_ast        (Python AST)
@@ -16,6 +18,14 @@ immutable rev (see the workspace `[workspace.dependencies]` section):
   - ruff_python_formatter  (the embedded formatter engine — [LSPFMT-ENGINE])
   - ruff_formatter         (formatter infrastructure)
   - ruff_python_stdlib     (stdlib module / builtins tables)
+
+These pull in further crates from the same Ruff workspace transitively
+(ruff_python_trivia, ruff_source_file, ruff_annotate_snippets, ruff_cache,
+ruff_db, ruff_diagnostics, ruff_macros, ruff_memory_usage, ruff_notebook) —
+15 `ruff_*` crates in total, all from the one rev above and all under the same
+MIT license. No Ruff source is copied into this repository; the crates are
+consumed only as Cargo dependencies. The complete third-party notice list,
+including non-Ruff components, lives in the top-level `NOTICES` file.
 
 Ruff is distributed under the MIT license:
 

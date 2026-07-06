@@ -8,6 +8,7 @@
 
 <p align="center">
   <strong>The open-source Python language server.</strong><br>
+  The only Python type checker with a perfect 100% score on the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> conformance results</a>.<br>
   Complete language server, type checker, debugger, and profiler — strict by default.<br>
   VS Code, Cursor &amp; Windsurf (Open VSX) &bull; Zed &bull; Neovim. Built in <strong>Rust</strong> — single binary, no runtime.
 </p>
@@ -23,8 +24,8 @@
 
 <p align="center">
   <a href="https://www.basilisk-python.dev/docs/conformance/"><strong><!--g:score-->100.0%<!--/g:score--> PEP conformance</strong></a> &mdash; <!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> tests in the official
-  <a href="https://github.com/python/typing/tree/c94dfceff0af70c6626a1f86bc8f979135ae4652/conformance"><code>python/typing</code></a>
-  conformance suite (commit <code><!--g:short-->c94dfce<!--/g:short--></code>), scored on the wheel-installed CLI in its default config by the real upstream harness.
+  <a href="https://github.com/python/typing/tree/f05162592e5688026cad9f2995050d87485f70db/conformance"><code>python/typing</code></a>
+  conformance suite (commit <code><!--g:short-->f051625<!--/g:short--></code>), scored on the wheel-installed CLI in its default config by the real upstream harness.
   We target <code>python/typing@main</code> and ratchet the score up only.
 </p>
 
@@ -234,6 +235,22 @@ Basilisk is built by a human + AI partnership, with the work split on purpose. S
 [CONTRIBUTING.md](CONTRIBUTING.md) — **For Humans** (testing, code-quality review,
 conformance/security audits, IDE feature parity, sharpening the AI instructions) and
 **For AI** (the technical execution, under the standing rules in [CLAUDE.md](CLAUDE.md)).
+
+---
+
+## Acknowledgments
+
+Basilisk builds on the open-source community — with thanks to:
+
+- **[Astral](https://astral.sh/)** — [Ruff](https://github.com/astral-sh/ruff), whose parser, AST, and formatter crates Basilisk embeds (MIT). The foundation we rely on most.
+- **[typeshed](https://github.com/python/typeshed)** — standard-library type stubs (Apache-2.0).
+- **[Salsa](https://github.com/salsa-rs/salsa)** — incremental query engine.
+- **[Rayon](https://github.com/rayon-rs/rayon)** — data parallelism.
+- **[tower-lsp](https://github.com/ebkalderon/tower-lsp)** — LSP scaffolding.
+- **[debugpy](https://github.com/microsoft/debugpy)** — debug adapter (bundled in the VS Code extension).
+- The [`python/typing`](https://github.com/python/typing) conformance suite.
+
+Full component list and licenses: [NOTICES](NOTICES). All dependencies are permissively licensed.
 
 ---
 

@@ -10,6 +10,7 @@
 
 <p align="center">
   <strong>开源的 Python 语言服务器。</strong><br>
+  唯一在官方 <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> 符合性结果</a>中取得满分 100% 的 Python 类型检查器。<br>
   完整的语言服务器、类型检查器、调试器与性能分析器 —— 默认严格。<br>
   VS Code、Cursor 与 Windsurf（Open VSX）&bull; Zed &bull; Neovim。使用 <strong>Rust</strong> 构建 —— 单一二进制文件，无需运行时。
 </p>
@@ -25,8 +26,8 @@
 
 <p align="center">
   <a href="https://www.basilisk-python.dev/zh/docs/conformance/"><strong>PEP 符合性 <!--g:score-->100.0%<!--/g:score--></strong></a> &mdash; 官方
-  <a href="https://github.com/python/typing/tree/c94dfceff0af70c6626a1f86bc8f979135ae4652/conformance"><code>python/typing</code></a>
-  符合性套件 <!--g:total-->141<!--/g:total--> 个测试中通过 <!--g:pass-->141<!--/g:pass--> 个（提交 <code><!--g:short-->c94dfce<!--/g:short--></code>），由
+  <a href="https://github.com/python/typing/tree/f05162592e5688026cad9f2995050d87485f70db/conformance"><code>python/typing</code></a>
+  符合性套件 <!--g:total-->141<!--/g:total--> 个测试中通过 <!--g:pass-->141<!--/g:pass--> 个（提交 <code><!--g:short-->f051625<!--/g:short--></code>），由
   <a href="https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py"><code>conformance/score.py</code></a>
   在默认配置下对真实二进制文件评分。我们对标 <code>python/typing@main</code>，得分只升不降。
 </p>
@@ -237,6 +238,22 @@ Basilisk 由人类与 AI 的协作打造，并有意地划分了各自的工作�
 [CONTRIBUTING.md](CONTRIBUTING.md) —— **For Humans**（测试、代码质量审查、
 一致性/安全审计、IDE 功能对等、打磨 AI 指令）以及
 **For AI**（在 [CLAUDE.md](CLAUDE.md) 既定规则下的技术执行）。
+
+---
+
+## 致谢
+
+Basilisk 建立在开源社区之上 —— 特别感谢：
+
+- **[Astral](https://astral.sh/)** —— [Ruff](https://github.com/astral-sh/ruff)，Basilisk 嵌入了其解析器、AST 与格式化器 crate（MIT）。我们最倚重的基础。
+- **[typeshed](https://github.com/python/typeshed)** —— 标准库类型存根（Apache-2.0）。
+- **[Salsa](https://github.com/salsa-rs/salsa)** —— 增量查询引擎。
+- **[Rayon](https://github.com/rayon-rs/rayon)** —— 数据并行。
+- **[tower-lsp](https://github.com/ebkalderon/tower-lsp)** —— LSP 脚手架。
+- **[debugpy](https://github.com/microsoft/debugpy)** —— 调试适配器（捆绑于 VS Code 扩展）。
+- [`python/typing`](https://github.com/python/typing) 一致性测试套件。
+
+完整的组件与许可证列表见 [NOTICES](NOTICES)。所有依赖均采用宽松许可证。
 
 ---
 
