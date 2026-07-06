@@ -97,7 +97,7 @@ This is how a project teaches Basilisk an embedded or alternative Python's
 standard library — e.g. MicroPython's
 [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs),
 whose `os`, `time`, and `machine` signatures diverge from CPython typeshed
-([issue #271](https://github.com/Nimblesite/Basilisk/issues/271)).
+([§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED)).
 
 ### Resolution flow {#STUBRES-RESOLUTION-FLOW}
 
@@ -130,8 +130,13 @@ flowchart TB
 
 ## Stub Discovery Engine {#STUBRES-ENGINE}
 
-`basilisk-stubs` provides stub resolution. The data model is defined in
-[typeDiagram](https://typediagram.dev) markup — source of truth
+`basilisk-stubs` provides stub resolution.
+
+### Type model {#STUBRES-TYPE-MODEL}
+
+The resolver returns a `StubResolution` tagged with **where** the type info came
+from (`StubSource`) and **how much to trust it** (`StubTier`). The data model is
+defined in [typeDiagram](https://typediagram.dev) markup — source of truth
 [`models/stub_resolution.td`](../../models/stub_resolution.td), rendered to
 [`docs/models/stub_resolution.svg`](../models/stub_resolution.svg). The Rust
 ADTs in `crates/basilisk-stubs/src/types.rs` are generated from it

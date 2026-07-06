@@ -52,45 +52,9 @@ MicroPython smoke coverage with the reporter and the full verification gate.
 
 ## Type model {#STUBRESPLAN-TYPES}
 
-The resolver returns a `StubResolution` tagged with **where** the type info came from (`StubSource`) and **how much to
-trust it** (`StubTier`), [§STUBRES-ENGINE](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE). The model is defined
-in **typeDiagram** markup — source of truth [`models/stub_resolution.td`](../../models/stub_resolution.td), rendered to
-[`docs/models/stub_resolution.svg`](../models/stub_resolution.svg), and the Rust ADTs are generated from it
-(`typediagram --to rust models/stub_resolution.td`):
-
-```typeDiagram
-alias PathBuf = String
-
-type StubResolution {
-  module: String
-  source: StubSource
-  pyi_path: Option<PathBuf>
-  tier: StubTier
-}
-
-union StubSource {
-  UserStub
-  StubPackage
-  InlineTyped
-  Typeshed
-  CustomTypeshed
-}
-
-union StubTier {
-  Tier1
-  Tier2
-  Tier3
-}
-```
-
-`StubSource` → resolution step: `UserStub` = step 1 (`stub-paths`); `CustomTypeshed` = step 3 (`typeshed-path`, **new**
-for [#271](https://github.com/Nimblesite/Basilisk/issues/271)); `Typeshed` = step 3 (bundled); `StubPackage` = step 4
-(`foopkg-stubs`); `InlineTyped` = step 5 (`py.typed`).
-
-**Design decision this plan pins down**: a stub resolved from `typeshed-path` gets its own provenance —
-`StubSource::CustomTypeshed`, still `StubTier::Tier1` (hand-written, trusted) — so hover can read
-`os.uname (custom typeshed)` and never misreport a MicroPython signature as CPython's bundled one. Adding the variant
-(vs. reusing `Typeshed`) keeps provenance honest and is a one-variant enum change plus its match arms.
+The normative stub-resolution type model now lives in the spec:
+[§STUBRES-TYPE-MODEL](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPE-MODEL).
+Keep this anchor as the plan-side pointer for implementation notes and checklist references.
 
 ---
 
