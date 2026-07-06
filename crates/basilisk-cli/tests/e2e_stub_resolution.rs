@@ -9,16 +9,7 @@
     unused_results,
     dead_code
 )]
-//! E2E tests for `.pyi` stub file resolution through the full pipeline.
-//!
-//! These tests verify that stub files are correctly discovered and parsed
-//! when the import resolver encounters them. They exercise:
-//!
-//! - PEP 561 stub resolution order (user stubs → source → stub packages)
-//! - `.pyi` preference over `.py`
-//! - Stub package discovery (`foopkg-stubs/`)
-//! - `py.typed` marker detection
-//! - `.pyi` file parsing via `basilisk_stubs::parse_pyi_source`
+//! E2E tests for `.pyi` stub resolution through the resolver and parser.
 
 mod common;
 
@@ -199,7 +190,6 @@ fn stub_package_resolved_before_inline_typed() {
     let sp = unique_tmp("e2e_stub_pep561_sp");
     fs::create_dir_all(&root).unwrap();
 
-    // Create requests-stubs package
     let stubs_dir = sp.join("requests-stubs");
     fs::create_dir_all(&stubs_dir).unwrap();
     fs::write(
@@ -208,7 +198,6 @@ fn stub_package_resolved_before_inline_typed() {
     )
     .unwrap();
 
-    // Also create inline-typed requests package
     let inline_dir = sp.join("requests");
     fs::create_dir_all(&inline_dir).unwrap();
     fs::write(inline_dir.join("py.typed"), "").unwrap();
@@ -216,7 +205,6 @@ fn stub_package_resolved_before_inline_typed() {
 
     let paths = search_paths(vec![root.clone()], vec![], Some(sp.clone()));
     let result = resolve_module("requests", &paths).expect("should resolve requests");
-    // Stub package should win over inline-typed
     assert_eq!(result.resolution, ImportResolution::StubPyi);
     assert!(
         result.path.to_string_lossy().contains("requests-stubs"),
@@ -228,18 +216,10 @@ fn stub_package_resolved_before_inline_typed() {
     let _ = fs::remove_dir_all(&sp);
 }
 
-/// Reproduces issue: "I can't get it to pick up stubs and the auto-fix doesn't
-/// fix anything." The BSK-E0152 quick-fix runs `uv add --dev types-<pkg>`, which
-/// drops a `<pkg>-stubs/` package into site-packages. E0152 fires only while the
-/// import resolves to `SourcePy`; after the stub package is installed the import
-/// MUST resolve to `StubPyi` so the warning clears. This exercises that exact
-/// before/after transition deterministically (no network / no uv).
 #[test]
 fn autofix_stub_install_flips_source_resolution_to_stub() {
     let sp = unique_tmp("e2e_stub_autofix_flip");
 
-    // BEFORE the auto-fix: `requests` is installed without inline types and
-    // without a stub package → resolves to plain source (E0152 fires here).
     let pkg = sp.join("requests");
     fs::create_dir_all(&pkg).unwrap();
     fs::write(pkg.join("__init__.py"), "def get(url): pass\n").unwrap();
@@ -252,7 +232,6 @@ fn autofix_stub_install_flips_source_resolution_to_stub() {
         "precondition: plain site-packages package resolves to SourcePy (E0152 fires)"
     );
 
-    // AFTER the auto-fix: `uv add --dev types-requests` installs `requests-stubs/`.
     let stubs_dir = sp.join("requests-stubs");
     fs::create_dir_all(&stubs_dir).unwrap();
     fs::write(

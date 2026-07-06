@@ -37,6 +37,25 @@ pub fn classify_unresolved(
     UnresolvedReason::NotInstalled
 }
 
+/// Whether the **bundled** (name-only) stdlib recognition should rescue an
+/// otherwise-unresolved import — typing-spec import-resolution step 3.
+///
+/// When a custom typeshed is configured (`typeshed-path`, issue #271) that
+/// directory is *the canonical source for standard-library types*
+/// ([STUBRES-CUSTOM-TYPESHED]): a stdlib module absent from its `stdlib/` subtree
+/// must fall through to `imports_unresolved` rather than be silently rescued by
+/// the vendored `phf` name-set. Callers therefore gate every bundled-stdlib
+/// suppression on this helper instead of calling `is_stdlib_module` directly, so
+/// canonicality is enforced in exactly one place.
+///
+/// With no custom typeshed this is identical to
+/// [`basilisk_stubs::is_stdlib_module`], so the conformance path (which never
+/// sets `typeshed-path`) is unaffected — the branch is purely additive.
+#[must_use]
+pub fn bundled_stdlib_recognized(module_name: &str, custom_typeshed_configured: bool) -> bool {
+    !custom_typeshed_configured && basilisk_stubs::is_stdlib_module(module_name)
+}
+
 /// Resolve an absolute import following the typing spec's import-resolution
 /// ordering ([STUBRES-PEP561]). Steps, in order:
 ///

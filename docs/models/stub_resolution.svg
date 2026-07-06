@@ -1,78 +1,100 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 463" width="488" height="463" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 690 463" width="690" height="463" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
 <defs>
   <marker id="td-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
     <path d="M0,0 L10,5 L0,10 z" fill="#5b6068"/>
   </marker>
 </defs>
-<rect x="0" y="0" width="488" height="463" fill="none"/>
+<rect x="0" y="0" width="690" height="463" fill="none"/>
 <g data-decl="PathBuf" data-kind="alias">
-  <rect x="310" y="182" width="126" height="56" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
-  <rect x="310" y="182" width="126" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
-  <rect x="310" y="210.2" width="126" height="6" fill="#eef1f5" stroke="none"/>
-  <line x1="310" y1="216.2" x2="436" y2="216.2" stroke="#3b3f46" stroke-width="1"/>
-  <rect x="310" y="182" width="4" height="56" rx="2" ry="2" fill="#0a7a5e"/>
-  <text x="320" y="203.65" fill="#1a1d22" font-weight="600">alias PathBuf</text>
+  <rect x="512" y="182" width="126" height="56" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="512" y="182" width="126" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="512" y="210.2" width="126" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="512" y1="216.2" x2="638" y2="216.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="512" y="182" width="4" height="56" rx="2" ry="2" fill="#0a7a5e"/>
+  <text x="522" y="203.65" fill="#1a1d22" font-weight="600">alias PathBuf</text>
   
-  <line x1="310" y1="216.2" x2="436" y2="216.2" stroke="#dadde2" stroke-width="1"/>
-<text x="320" y="231.35" fill="#1a1d22">= String</text>
+  <line x1="512" y1="216.2" x2="638" y2="216.2" stroke="#dadde2" stroke-width="1"/>
+<text x="522" y="231.35" fill="#1a1d22">= String</text>
 </g>
 <g data-decl="StubResolution" data-kind="record">
-  <rect x="29" y="138" width="219" height="120" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
-  <rect x="29" y="138" width="219" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
-  <rect x="29" y="166.2" width="219" height="6" fill="#eef1f5" stroke="none"/>
-  <line x1="29" y1="172.2" x2="248" y2="172.2" stroke="#3b3f46" stroke-width="1"/>
-  <rect x="29" y="138" width="4" height="120" rx="2" ry="2" fill="#1f6feb"/>
-  <text x="39" y="159.65" fill="#1a1d22" font-weight="600">StubResolution</text>
+  <rect x="231" y="138" width="219" height="120" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="231" y="138" width="219" height="34.2" rx="6" ry="6" fill="#eef1f5" stroke="none"/>
+  <rect x="231" y="166.2" width="219" height="6" fill="#eef1f5" stroke="none"/>
+  <line x1="231" y1="172.2" x2="450" y2="172.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="231" y="138" width="4" height="120" rx="2" ry="2" fill="#1f6feb"/>
+  <text x="241" y="159.65" fill="#1a1d22" font-weight="600">StubResolution</text>
   
-  <line x1="29" y1="172.2" x2="248" y2="172.2" stroke="#dadde2" stroke-width="1"/>
-<text x="39" y="187.35" fill="#1a1d22">module: String</text>
-<line x1="29" y1="193.4" x2="248" y2="193.4" stroke="#dadde2" stroke-width="1"/>
-<text x="39" y="208.55" fill="#1a1d22">source: StubSource</text>
-<line x1="29" y1="214.60000000000002" x2="248" y2="214.60000000000002" stroke="#dadde2" stroke-width="1"/>
-<text x="39" y="229.75000000000003" fill="#1a1d22">pyi_path: Option&lt;PathBuf&gt;</text>
-<line x1="29" y1="235.8" x2="248" y2="235.8" stroke="#dadde2" stroke-width="1"/>
-<text x="39" y="250.95000000000002" fill="#1a1d22">tier: StubTier</text>
+  <line x1="231" y1="172.2" x2="450" y2="172.2" stroke="#dadde2" stroke-width="1"/>
+<text x="241" y="187.35" fill="#1a1d22">module: String</text>
+<line x1="231" y1="193.4" x2="450" y2="193.4" stroke="#dadde2" stroke-width="1"/>
+<text x="241" y="208.55" fill="#1a1d22">source: StubSource</text>
+<line x1="231" y1="214.60000000000002" x2="450" y2="214.60000000000002" stroke="#dadde2" stroke-width="1"/>
+<text x="241" y="229.75000000000003" fill="#1a1d22">pyi_path: Option&lt;PathBuf&gt;</text>
+<line x1="231" y1="235.8" x2="450" y2="235.8" stroke="#dadde2" stroke-width="1"/>
+<text x="241" y="250.95000000000002" fill="#1a1d22">tier: StubTier</text>
 </g>
 <g data-decl="StubSource" data-kind="union">
-  <rect x="310" y="278" width="149" height="157" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
-  <rect x="310" y="278" width="149" height="50.2" rx="6" ry="6" fill="#f3eefa" stroke="none"/>
-  <rect x="310" y="322.2" width="149" height="6" fill="#f3eefa" stroke="none"/>
-  <line x1="310" y1="328.2" x2="459" y2="328.2" stroke="#3b3f46" stroke-width="1"/>
-  <rect x="310" y="278" width="4" height="157" rx="2" ry="2" fill="#7a4cc7"/>
-  <text x="320" y="299.65000000000003" fill="#1a1d22" font-weight="600">union StubSource</text>
-  <text x="384.5" y="322.8" fill="#7a4cc7" font-size="9" font-weight="700" text-anchor="middle" font-style="italic" letter-spacing="0.08em">ONE OF</text>
-  <line x1="310" y1="328.2" x2="459" y2="328.2" stroke="#dadde2" stroke-width="1"/>
-  <line x1="310" y1="328.2" x2="459" y2="328.2" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
-<text x="320" y="343.35" fill="#1a1d22">◇ UserStub</text>
-<line x1="310" y1="349.4" x2="459" y2="349.4" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
-<text x="320" y="364.55" fill="#1a1d22">◇ StubPackage</text>
-<line x1="310" y1="370.6" x2="459" y2="370.6" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
-<text x="320" y="385.75000000000006" fill="#1a1d22">◇ InlineTyped</text>
-<line x1="310" y1="391.8" x2="459" y2="391.8" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
-<text x="320" y="406.95000000000005" fill="#1a1d22">◇ Typeshed</text>
-<line x1="310" y1="413" x2="459" y2="413" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
-<text x="320" y="428.15000000000003" fill="#1a1d22">◇ CustomTypeshed</text>
+  <rect x="512" y="278" width="149" height="157" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="512" y="278" width="149" height="50.2" rx="6" ry="6" fill="#f3eefa" stroke="none"/>
+  <rect x="512" y="322.2" width="149" height="6" fill="#f3eefa" stroke="none"/>
+  <line x1="512" y1="328.2" x2="661" y2="328.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="512" y="278" width="4" height="157" rx="2" ry="2" fill="#7a4cc7"/>
+  <text x="522" y="299.65000000000003" fill="#1a1d22" font-weight="600">union StubSource</text>
+  <text x="586.5" y="322.8" fill="#7a4cc7" font-size="9" font-weight="700" text-anchor="middle" font-style="italic" letter-spacing="0.08em">ONE OF</text>
+  <line x1="512" y1="328.2" x2="661" y2="328.2" stroke="#dadde2" stroke-width="1"/>
+  <line x1="512" y1="328.2" x2="661" y2="328.2" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="522" y="343.35" fill="#1a1d22">◇ UserStub</text>
+<line x1="512" y1="349.4" x2="661" y2="349.4" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="522" y="364.55" fill="#1a1d22">◇ StubPackage</text>
+<line x1="512" y1="370.6" x2="661" y2="370.6" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="522" y="385.75000000000006" fill="#1a1d22">◇ InlineTyped</text>
+<line x1="512" y1="391.8" x2="661" y2="391.8" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="522" y="406.95000000000005" fill="#1a1d22">◇ Typeshed</text>
+<line x1="512" y1="413" x2="661" y2="413" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="522" y="428.15000000000003" fill="#1a1d22">◇ CustomTypeshed</text>
 </g>
 <g data-decl="StubTier" data-kind="union">
-  <rect x="310" y="28" width="134" height="114" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
-  <rect x="310" y="28" width="134" height="50.2" rx="6" ry="6" fill="#f3eefa" stroke="none"/>
-  <rect x="310" y="72.2" width="134" height="6" fill="#f3eefa" stroke="none"/>
-  <line x1="310" y1="78.2" x2="444" y2="78.2" stroke="#3b3f46" stroke-width="1"/>
-  <rect x="310" y="28" width="4" height="114" rx="2" ry="2" fill="#7a4cc7"/>
-  <text x="320" y="49.65" fill="#1a1d22" font-weight="600">union StubTier</text>
-  <text x="377" y="72.8" fill="#7a4cc7" font-size="9" font-weight="700" text-anchor="middle" font-style="italic" letter-spacing="0.08em">ONE OF</text>
-  <line x1="310" y1="78.2" x2="444" y2="78.2" stroke="#dadde2" stroke-width="1"/>
-  <line x1="310" y1="78.2" x2="444" y2="78.2" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
-<text x="320" y="93.35" fill="#1a1d22">◇ Tier1</text>
-<line x1="310" y1="99.4" x2="444" y2="99.4" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
-<text x="320" y="114.55" fill="#1a1d22">◇ Tier2</text>
-<line x1="310" y1="120.60000000000001" x2="444" y2="120.60000000000001" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
-<text x="320" y="135.75000000000003" fill="#1a1d22">◇ Tier3</text>
+  <rect x="512" y="28" width="134" height="114" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="512" y="28" width="134" height="50.2" rx="6" ry="6" fill="#f3eefa" stroke="none"/>
+  <rect x="512" y="72.2" width="134" height="6" fill="#f3eefa" stroke="none"/>
+  <line x1="512" y1="78.2" x2="646" y2="78.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="512" y="28" width="4" height="114" rx="2" ry="2" fill="#7a4cc7"/>
+  <text x="522" y="49.65" fill="#1a1d22" font-weight="600">union StubTier</text>
+  <text x="579" y="72.8" fill="#7a4cc7" font-size="9" font-weight="700" text-anchor="middle" font-style="italic" letter-spacing="0.08em">ONE OF</text>
+  <line x1="512" y1="78.2" x2="646" y2="78.2" stroke="#dadde2" stroke-width="1"/>
+  <line x1="512" y1="78.2" x2="646" y2="78.2" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="522" y="93.35" fill="#1a1d22">◇ Tier1</text>
+<line x1="512" y1="99.4" x2="646" y2="99.4" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="522" y="114.55" fill="#1a1d22">◇ Tier2</text>
+<line x1="512" y1="120.60000000000001" x2="646" y2="120.60000000000001" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="522" y="135.75000000000003" fill="#1a1d22">◇ Tier3</text>
 </g>
-<polyline points="249,234 259,234 259,357 309,357" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
-<text x="259" y="291.5" fill="#3b3f46" font-size="11" text-anchor="middle">source</text>
-<polyline points="249,210 309,210" fill="none" stroke="#5b6068" stroke-width="1" marker-end="url(#td-arrow)" stroke-dasharray="3 3"/>
-<text x="279" y="206" fill="#3b3f46" font-size="11" text-anchor="middle">pyi_path</text>
-<polyline points="249,186 259,186 259,85 309,85" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
-<text x="259" y="131.5" fill="#3b3f46" font-size="11" text-anchor="middle">tier</text>
+<g data-decl="TypeProvenance" data-kind="union">
+  <rect x="29" y="28" width="180" height="178" rx="6" ry="6" fill="#ffffff" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="29" y="28" width="180" height="50.2" rx="6" ry="6" fill="#f3eefa" stroke="none"/>
+  <rect x="29" y="72.2" width="180" height="6" fill="#f3eefa" stroke="none"/>
+  <line x1="29" y1="78.2" x2="209" y2="78.2" stroke="#3b3f46" stroke-width="1"/>
+  <rect x="29" y="28" width="4" height="178" rx="2" ry="2" fill="#7a4cc7"/>
+  <text x="39" y="49.65" fill="#1a1d22" font-weight="600">union TypeProvenance</text>
+  <text x="119" y="72.8" fill="#7a4cc7" font-size="9" font-weight="700" text-anchor="middle" font-style="italic" letter-spacing="0.08em">ONE OF</text>
+  <line x1="29" y1="78.2" x2="209" y2="78.2" stroke="#dadde2" stroke-width="1"/>
+  <line x1="29" y1="78.2" x2="209" y2="78.2" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="39" y="93.35" fill="#1a1d22">◇ Source</text>
+<line x1="29" y1="99.4" x2="209" y2="99.4" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="39" y="114.55" fill="#1a1d22">◇ StubTier1</text>
+<line x1="29" y1="120.60000000000001" x2="209" y2="120.60000000000001" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="39" y="135.75000000000003" fill="#1a1d22">◇ StubCustomTypeshed</text>
+<line x1="29" y1="141.8" x2="209" y2="141.8" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="39" y="156.95000000000002" fill="#1a1d22">◇ StubTier2</text>
+<line x1="29" y1="163" x2="209" y2="163" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="39" y="178.15" fill="#1a1d22">◇ StubTier3</text>
+<line x1="29" y1="184.2" x2="209" y2="184.2" stroke="#dadde2" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="39" y="199.35" fill="#1a1d22">◇ Untyped</text>
+</g>
+<polyline points="451,234 461,234 461,357 511,357" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="461" y="291.5" fill="#3b3f46" font-size="11" text-anchor="middle">source</text>
+<polyline points="451,210 511,210" fill="none" stroke="#5b6068" stroke-width="1" marker-end="url(#td-arrow)" stroke-dasharray="3 3"/>
+<text x="481" y="206" fill="#3b3f46" font-size="11" text-anchor="middle">pyi_path</text>
+<polyline points="451,186 461,186 461,85 511,85" fill="none" stroke="#5b6068" stroke-width="1.5" marker-end="url(#td-arrow)" />
+<text x="461" y="131.5" fill="#3b3f46" font-size="11" text-anchor="middle">tier</text>
 </svg>

@@ -35,14 +35,15 @@ What "fully satisfying #271" requires — each is tracked in the [TODO](#STUBRES
 ## Status {#STUBRESPLAN-STATUS}
 
 The resolution **order** is implemented (`crates/basilisk-checker/src/imports/resolve.rs`,
-[§STUBRES-PEP561](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561)). The one spec step Basilisk does
-**not** yet honour is the **step-3 custom-typeshed override** (`typeshed-path`).
+[§STUBRES-PEP561](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561)), including the step-3
+custom-typeshed override (`typeshed-path`). The remaining #271 work is validation and release hardening:
+MicroPython smoke coverage with the reporter and the full verification gate.
 
 | Spec step | Mechanism | Config key | State |
 |---|---|---|---|
 | 1 — manual stubs at head of path | `.pyi` dirs prepended in `resolve.rs` | `stub-paths` / `stubPaths` | **DONE** |
 | 2 — user code | workspace roots / `include` | roots, `include` | **DONE** |
-| 3 — stdlib typeshed | bundled name-set recognition; **custom override** | `typeshed-path` / `typeshedPath` | override **TODO** ([#271](https://github.com/Nimblesite/Basilisk/issues/271)) |
+| 3 — stdlib typeshed | bundled name-set recognition; **custom override** | `typeshed-path` / `typeshedPath` | override **IMPLEMENTED**, validation pending ([#271](https://github.com/Nimblesite/Basilisk/issues/271)) |
 | 4 — stub-only packages | `foopkg-stubs` discovery in site-packages | (auto) | **DONE** |
 | 5 — `py.typed` packages | `py.typed` marker detection | (auto) | **DONE** |
 | 6 — vendored third-party stubs | intentionally empty (resolution vendors none) | — | **N/A by design** |
@@ -205,19 +206,19 @@ Import-resolution **step 3** of the [typing spec](https://typing.python.org/en/l
 
 Acceptance checklist — the feature is **DONE only when every box is checked**:
 
-- [ ] **Config key** — `typeshed-path` (`pyproject.toml`, kebab) / `typeshedPath` (LSP JSON, camel) as a single `Option<PathBuf>`, resolved relative to the project root, parsed in **both** the `basilisk-config` (`BasiliskConfig`) and `basilisk-lsp` (`WorkspaceConfig`) models.
-- [ ] **Resolver step-3 branch** — for a stdlib module (`basilisk_stubs::is_stdlib_module`), resolve `<typeshed-path>/stdlib/<module>.pyi` **before** the bundled recognition.
-- [ ] **Canonicality / resolution-order fix** ([§STUBRESPLAN-RESOLUTION-ORDER](#STUBRESPLAN-RESOLUTION-ORDER)) — when `typeshed-path` is set, **bypass the bundled `is_stdlib_module` name-suppression** so a module absent from the custom typeshed falls through to steps 4–5 and, failing those, to `imports_unresolved`. The custom directory is canonical for step 3; the vendored name-set does not rescue it. **This is the load-bearing task Jos flagged.**
-- [ ] **Provenance** — resolved-from-custom-typeshed stubs carry `StubSource::CustomTypeshed` (Tier 1); hover reads `… (custom typeshed)` ([§STUBRESPLAN-TYPES](#STUBRESPLAN-TYPES)).
-- [ ] **Search-path wiring** — a `typeshed_path` field on `ImportSearchPaths`, populated by `search_paths_from_config`, set at every construction site (`workspace.rs`, test fixtures).
-- [ ] **e2e coverage** — custom typeshed overrides stdlib `os`; a module absent from it falls through unresolved (canonicality); non-stdlib modules are ignored by the branch; `stub-paths` (step 1) still shadows a custom typeshed; the `.pyi` actually parses (members resolve).
+- [x] **Config key** — `typeshed-path` (`pyproject.toml`, kebab) / `typeshedPath` (LSP JSON, camel) as a single `Option<PathBuf>`, resolved relative to the project root, parsed in **both** the `basilisk-config` (`BasiliskConfig`) and `basilisk-lsp` (`WorkspaceConfig`) models.
+- [x] **Resolver step-3 branch** — for a stdlib module (`basilisk_stubs::is_stdlib_module`), resolve `<typeshed-path>/stdlib/<module>.pyi` **before** the bundled recognition.
+- [x] **Canonicality / resolution-order fix** ([§STUBRESPLAN-RESOLUTION-ORDER](#STUBRESPLAN-RESOLUTION-ORDER)) — when `typeshed-path` is set, **bypass the bundled `is_stdlib_module` name-suppression** so a module absent from the custom typeshed falls through to steps 4–5 and, failing those, to `imports_unresolved`. The custom directory is canonical for step 3; the vendored name-set does not rescue it. **This is the load-bearing task Jos flagged.**
+- [x] **Provenance** — resolved-from-custom-typeshed stubs carry `StubSource::CustomTypeshed` (Tier 1); hover reads `… (custom typeshed)` ([§STUBRESPLAN-TYPES](#STUBRESPLAN-TYPES)).
+- [x] **Search-path wiring** — a `typeshed_path` field on `ImportSearchPaths`, populated by `search_paths_from_config`, set at every construction site (`workspace.rs`, test fixtures).
+- [x] **e2e coverage** — custom typeshed overrides stdlib `os`; a module absent from it falls through unresolved (canonicality); non-stdlib modules are ignored by the branch; `stub-paths` (step 1) still shadows a custom typeshed; the `.pyi` actually parses (members resolve).
 - [ ] **MicroPython smoke test (validate with the reporter)** — point `typeshed-path` at a real `micropython-stdlib-stubs` tree; confirm a MicroPython-specific `collections` signature type-checks and a non-MicroPython stdlib module behaves per canonicality. Invite Jos to confirm on his own project (he offered to help test).
-- [ ] **Docs stay in lockstep** — [§STUBRES-CUSTOM-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED), [CHKARCH-STUBS-TYPESHED](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STUBS-TYPESHED), the [LSP shared-config table](../specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG), and website `configuration.md` (EN + ZH) already describe the behaviour; flip any "not implemented" note when shipping.
+- [x] **Docs stay in lockstep** — cross-checked [§STUBRES-CUSTOM-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED), [CHKARCH-STUBS-TYPESHED](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STUBS-TYPESHED), the [LSP shared-config table](../specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG), and website `configuration.md` (EN + ZH); no stale custom-typeshed "not implemented" note remains in those docs.
 - [ ] **Verification gate** — `make test` green, conformance score **unchanged** (the conformance suite never sets `typeshed-path`, so the branch is purely additive), `make bench` within ratchet, `make lint` clean.
 
-> **Current tree state**: a draft of the config plumbing + resolver branch + tests exists uncommitted in the working
-> tree (written before this plan was split out). It does **not** yet include the canonicality / provenance work above,
-> has **not** cleared the verification gate, and is **not** shipped — treat the checklist as the acceptance bar.
+> **Current tree state**: the config plumbing, resolver branch, canonicality bypass, custom-typeshed provenance,
+> search-path wiring, and focused e2e coverage are present in the working tree. The feature is still not shipped until
+> the MicroPython smoke test and full verification gate above are complete.
 
 ### 2. Auto-stub generation {#STUBRESPLAN-TODO-AUTOGEN}
 

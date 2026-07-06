@@ -94,20 +94,25 @@ pub fn extract_exports(
 /// stub (typeshed, `*-stubs` packages, or user stubs) carry real type
 /// information instead of nothing. Returns an empty vec if the stub cannot be
 /// parsed. Implements [ANALYSIS-CROSSLSP].
+///
+/// `source` records **where** the stub came from so provenance stays honest: a
+/// stub resolved from a custom typeshed (`typeshed-path`, issue #271) carries
+/// [`TypeProvenance::StubCustomTypeshed`] and hover reads `(custom typeshed)`,
+/// while `*-stubs`/user stubs stay [`TypeProvenance::StubTier1`]
+/// ([STUBRES-CUSTOM-TYPESHED]). All `.pyi` stubs are hand-written, verified
+/// types — Tier1 — so the tier is fixed and only the source varies.
 #[must_use]
-pub fn extract_stub_exports(stub_path: &Path, module_name: &str) -> Vec<(String, ExternalSymbol)> {
-    // `.pyi` stubs (typeshed, `*-stubs`, user stubs) are hand-written, verified
-    // types — Tier1. Source/tier only affect provenance via the Tier mapping.
-    let Ok(stub) = basilisk_stubs::parse_pyi_file(
-        stub_path,
-        module_name,
-        StubSource::StubPackage,
-        StubTier::Tier1,
-    ) else {
+pub fn extract_stub_exports(
+    stub_path: &Path,
+    module_name: &str,
+    source: StubSource,
+) -> Vec<(String, ExternalSymbol)> {
+    let Ok(stub) = basilisk_stubs::parse_pyi_file(stub_path, module_name, source, StubTier::Tier1)
+    else {
         return Vec::new();
     };
 
-    let provenance = Some(TypeProvenance::StubTier1);
+    let provenance = Some(TypeProvenance::from((&source, &StubTier::Tier1)));
     let mut exports = Vec::new();
 
     for func in stub.functions.values() {
@@ -227,6 +232,21 @@ fn build_function_signature(func: &basilisk_resolver::scope::FunctionInfo, sourc
     sig
 }
 
+/// Classify an external `.pyi` stub's [`StubSource`] from its on-disk location.
+///
+/// A stub under the configured custom typeshed's `stdlib/` subtree is
+/// [`StubSource::CustomTypeshed`] (issue #271); every other external stub
+/// (`*-stubs` packages, on-demand typeshed) is [`StubSource::StubPackage`].
+/// Provenance flows from here to hover via [`TypeProvenance`].
+fn stub_source_for(resolved_path: &Path, custom_typeshed: Option<&Path>) -> StubSource {
+    match custom_typeshed {
+        Some(typeshed) if resolved_path.starts_with(typeshed.join("stdlib")) => {
+            StubSource::CustomTypeshed
+        }
+        _ => StubSource::StubPackage,
+    }
+}
+
 /// Repopulate `resolved.imported_symbols` from its resolved imports.
 ///
 /// `workspace_exports` supplies the exports of a **workspace-tracked** file
@@ -240,9 +260,16 @@ fn build_function_signature(func: &basilisk_resolver::scope::FunctionInfo, sourc
 /// from importers — without this the old name lingers and keeps suppressing its
 /// now-undefined references, leaving dependents green after an export edit
 /// (GitHub #56).
+///
+/// `custom_typeshed` is the configured `typeshed-path` (issue #271), if any: a
+/// stub resolved from its `stdlib/` subtree is tagged
+/// [`StubSource::CustomTypeshed`] so hover reads `(custom typeshed)` and a
+/// MicroPython signature is never reported as the bundled CPython one
+/// ([STUBRES-CUSTOM-TYPESHED]). Pass `None` for the default bundled typeshed.
 pub fn populate_imported_symbols<'a, F>(
     resolved: &mut basilisk_resolver::ResolvedModule,
     mut workspace_exports: F,
+    custom_typeshed: Option<&Path>,
 ) where
     F: FnMut(&Path) -> Option<&'a [(String, ExternalSymbol)]>,
 {
@@ -265,9 +292,15 @@ pub fn populate_imported_symbols<'a, F>(
             if let Some(exports) = workspace_exports(resolved_path) {
                 exports
             } else if resolved_path.extension().is_some_and(|ext| ext == "pyi") {
+                // Classify the stub's provenance: a `.pyi` under the configured
+                // custom typeshed's `stdlib/` is CustomTypeshed (#271); every
+                // other external stub stays StubPackage/Tier1.
+                let stub_source = stub_source_for(resolved_path, custom_typeshed);
                 external_cache
                     .entry(resolved_path.clone())
-                    .or_insert_with(|| extract_stub_exports(resolved_path, &import.module))
+                    .or_insert_with(|| {
+                        extract_stub_exports(resolved_path, &import.module, stub_source)
+                    })
             } else if resolved_path.extension().is_some_and(|ext| ext == "py")
                 && basilisk_stubs::has_py_typed_marker(resolved_path)
             {
