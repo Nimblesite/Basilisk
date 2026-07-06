@@ -178,11 +178,13 @@ Acceptance checklist — the feature is **DONE only when every box is checked**:
 - [x] **e2e coverage** — custom typeshed overrides stdlib `os`; a module absent from it falls through unresolved (canonicality); non-stdlib modules are ignored by the branch; `stub-paths` (step 1) still shadows a custom typeshed; the `.pyi` actually parses (members resolve).
 - [ ] **MicroPython smoke test (validate with the reporter)** — point `typeshed-path` at a real `micropython-stdlib-stubs` tree; confirm a MicroPython-specific `collections` signature type-checks and a non-MicroPython stdlib module behaves per canonicality. Invite Jos to confirm on his own project (he offered to help test).
 - [x] **Docs stay in lockstep** — cross-checked [§STUBRES-CUSTOM-TYPESHED](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED), the provenance tables ([§STUBRES-PROVENANCE-DIAG](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PROVENANCE-DIAG) / [§STUBRES-PROVENANCE-HOVER](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PROVENANCE-HOVER)) — which now carry the `StubCustomTypeshed` provenance and its `(custom typeshed)` hover label, matching `crates/basilisk-stubs/src/types.rs` exactly — [CHKARCH-STUBS-TYPESHED](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STUBS-TYPESHED), the [LSP shared-config table](../specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG), and the website `configuration.md` (EN + ZH) "How to use a custom typeshed" how-to; no stale custom-typeshed "not implemented" note remains in those docs.
-- [ ] **Verification gate** — `make test` green, conformance score **unchanged** (the conformance suite never sets `typeshed-path`, so the branch is purely additive), `make bench` within ratchet, `make lint` clean.
+- [x] **Verification gate** — `make test` green (PR #277 CI: Rust Tests & Coverage, mutation ×4, and all three editor extensions), conformance score **unchanged** at 141/141 = 100% (0 missed, 0 false positives — the suite never sets `typeshed-path`, so the branch is purely additive), `make bench` within ratchet (no regression), `make lint` clean.
 
-> **Current tree state**: the config plumbing, resolver branch, canonicality bypass, custom-typeshed provenance,
-> search-path wiring, and focused e2e coverage are present in the working tree. The real MicroPython smoke test and
-> full verification gate are still open. Auto-stub generation remains a separate backlog item below.
+> **Current state**: the config plumbing, resolver branch, canonicality bypass, custom-typeshed provenance,
+> search-path wiring, LSP cross-module symbol-population threading, and e2e + LSP coverage are shipped on PR #277
+> with every CI gate green. The one remaining open item is the real MicroPython smoke test — it depends on a vendored
+> `micropython-stdlib-stubs` tree and the reporter's own validation, so it stays unchecked here. Auto-stub generation
+> remains a separate backlog item below.
 
 ### 2. Auto-stub generation {#STUBRESPLAN-TODO-AUTOGEN}
 
