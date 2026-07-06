@@ -60,6 +60,26 @@ const SCRIPT_TEMPLATE: &str = r#"def __basilisk_cpu_start():
     stop_path = path + ".stop"
     wait_files = ("threading.py", "selectors.py", "queue.py", "socket.py", "ssl.py", "subprocess.py")
 
+    def base(name):
+        return name.replace("\\", "/").rsplit("/", 1)[-1]
+
+    def is_debugger(name):
+        # ANCHORED matching only, mirroring the Rust-side
+        # is_runtime_scaffolding: debugger basename prefix or an exact
+        # debugpy/pydevd path segment — never a full-path substring, so a
+        # user file under my_pydevd_tools/ is never mistaken for the tracer.
+        norm = name.replace("\\", "/")
+        if base(norm).startswith(("pydevd", "debugpy", "_pydev")):
+            return True
+        return "/debugpy/" in norm or "/pydevd/" in norm
+
+    def clean(text):
+        # An undecodable filesystem name reaches co_filename as lone
+        # surrogates; json.dumps escapes them, but strict JSON parsers
+        # (the Rust tailer) reject those escapes — one weird path would
+        # silently poison every tick its thread appears in. Scrub instead.
+        return text if text.isascii() else text.encode("utf-8", "replace").decode("utf-8")
+
     def snap(me):
         ticks = []
         for tid, top in sys._current_frames().items():
@@ -69,38 +89,59 @@ const SCRIPT_TEMPLATE: &str = r#"def __basilisk_cpu_start():
             frame = top
             while frame is not None and len(frames) < 128:
                 code = frame.f_code
-                frames.append([code.co_filename, frame.f_lineno, code.co_name])
+                frames.append([clean(code.co_filename), frame.f_lineno, clean(code.co_name)])
                 frame = frame.f_back
+            # Drop `<string>` machinery frames. The cooperative sampler only
+            # runs in a debug-launched session, where the program is always a
+            # real file (`program: <path>`), so a `<string>` frame is never the
+            # user's code — it is this injected script's own frames or a
+            # pydevd/frame-eval exec wrapper (which appears on CI under line
+            # tracing). The py-spy attach path CAN legitimately profile
+            # `python -c` user code in `<string>`, so that path keeps it — that
+            # filtering lives in the Rust aggregator, not here.
+            frames = [f for f in frames if f[0] != "<string>"]
             # Attribute tracer overhead to the user code being traced: the
             # sys.settrace callbacks (pydevd/debugpy) sit on TOP of the user
             # frame, so drop leading debugger frames instead of discarding
             # the sample — otherwise traced hot code is starved.
-            while frames and (
-                "pydevd" in frames[0][0]
-                or "debugpy" in frames[0][0]
-                or "_pydev" in frames[0][0]
-            ):
+            while frames and is_debugger(frames[0][0]):
                 frames.pop(0)
             if not frames:
                 continue
-            active = not frames[0][0].endswith(wait_files)
+            # Idle means the leaf is parked in a stdlib wait module. Match the
+            # BASENAME exactly — a suffix match reads user files like
+            # websocket.py or task_queue.py as waiters and hides their threads
+            # from the profile entirely.
+            active = base(frames[0][0]) not in wait_files
             ticks.append([tid, active, frames])
         return ticks
 
     def run():
         me = threading.get_ident()
-        with open(path, "a") as out:
+        with open(path, "a", encoding="utf-8") as out:
             header = {"python": "%d.%d.%d" % sys.version_info[:3], "pid": os.getpid()}
             out.write(json.dumps({"header": header}) + "\n")
             out.flush()
             last_flush = time.monotonic()
+            next_tick = time.monotonic()
             while not os.path.exists(stop_path):
-                out.write(json.dumps({"ticks": snap(me)}) + "\n")
+                try:
+                    out.write(json.dumps({"ticks": snap(me)}) + "\n")
+                except Exception:
+                    pass  # one bad sample must never kill the whole session
                 now = time.monotonic()
                 if now - last_flush >= 0.5:
                     out.flush()
                     last_flush = now
-                time.sleep(interval)
+                # Deadline pacing: plain sleep(interval) adds the stack-walk
+                # time to every period, silently under-sampling below the
+                # configured rate (and overstating each sample's weight).
+                next_tick += interval
+                delay = next_tick - time.monotonic()
+                if delay > 0:
+                    time.sleep(delay)
+                else:
+                    next_tick = time.monotonic()
             out.flush()
 
     threading.Thread(target=run, name="basilisk-cpu-sampler", daemon=True).start()
@@ -224,13 +265,13 @@ fn tail_loop(
 
     let mut line = String::new();
     let mut drain_deadline: Option<Instant> = None;
+    let mut warned_bad_line = false;
     loop {
         if stop_flag.load(Ordering::SeqCst) && drain_deadline.is_none() {
             // Tell the injected thread to exit, then drain what it flushed.
             let _ = std::fs::write(stop_sentinel(sample_file), b"stop");
             drain_deadline = Some(Instant::now() + STOP_DRAIN_GRACE);
         }
-        line.clear();
         match reader.read_line(&mut line) {
             Ok(0) => {
                 if drain_deadline.is_some_and(|deadline| Instant::now() >= deadline) {
@@ -239,14 +280,34 @@ fn tail_loop(
                 std::thread::sleep(TAIL_POLL_INTERVAL);
             }
             Ok(_) => {
-                if let Ok(tick) = serde_json::from_str::<TickLine>(&line) {
-                    let batch = SampleBatch {
-                        traces: to_pyspy_traces(pid, tick_to_wire(tick.ticks)),
-                    };
-                    if sample_tx.blocking_send(batch).is_err() {
-                        break;
+                if !line.ends_with('\n') {
+                    // The debuggee's buffered writer flushed mid-record (an
+                    // 8 KB text buffer fills inside a big tick under many
+                    // threads / deep stacks). Parsing now would silently drop
+                    // the sample as two garbage halves — keep the fragment and
+                    // let the next read_line append the rest.
+                    std::thread::sleep(TAIL_POLL_INTERVAL);
+                    continue;
+                }
+                match serde_json::from_str::<TickLine>(&line) {
+                    Ok(tick) => {
+                        let batch = SampleBatch {
+                            traces: to_pyspy_traces(pid, tick_to_wire(tick.ticks)),
+                        };
+                        if sample_tx.blocking_send(batch).is_err() {
+                            break;
+                        }
+                    }
+                    Err(err) => {
+                        // Dropped data is never silent — but one warning is
+                        // diagnosis, per-tick warnings are log spam.
+                        if !warned_bad_line {
+                            warned_bad_line = true;
+                            warn!(%err, "dropping unparseable cooperative sample line(s)");
+                        }
                     }
                 }
+                line.clear();
             }
             Err(err) => {
                 warn!(%err, "cooperative sample file read failed");

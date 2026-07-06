@@ -133,7 +133,7 @@ mod tests {
         let (idx, root) = build_large_workspace(1000);
 
         let start = Instant::now();
-        let health = build_type_health(&idx, Some(&root));
+        let health = build_type_health(&idx, Some(&root), true);
         let elapsed = start.elapsed();
 
         let target_ms = 50 * TIMING_MULTIPLIER;

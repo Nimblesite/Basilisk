@@ -11,9 +11,6 @@ local M = {}
 ---@field parameter_names boolean
 ---@field variable_types boolean
 
----@class BasiliskRuff
----@field enabled boolean
----@field executable_path string
 
 ---@class BasiliskDebugger
 ---@field enabled boolean
@@ -51,7 +48,7 @@ local M = {}
 ---@field python? string
 ---@field trace_server "off"|"messages"|"verbose"
 ---@field inlay_hints BasiliskInlayHints
----@field ruff BasiliskRuff
+---@field formatter "ruff"|"none"
 ---@field debugger BasiliskDebugger
 ---@field test_explorer BasiliskTestExplorer
 ---@field uv BasiliskUv
@@ -74,10 +71,9 @@ M.defaults = {
     parameter_names = true,
     variable_types = true,
   },
-  ruff = {
-    enabled = true,
-    executable_path = "ruff",
-  },
+  -- Formatter engine ([LSPFMT-CONFIG]): "ruff" is the Ruff formatter embedded
+  -- in the basilisk binary (no external ruff needed); "none" disables it.
+  formatter = "ruff",
   debugger = {
     enabled = true,
     type_checking = false,

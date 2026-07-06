@@ -72,7 +72,13 @@ pub struct WorkspaceIndex {
     /// File path → analysis state.
     pub files: DashMap<PathBuf, FileEntry>,
     /// Analysis mode controlling which files are analysed.
-    pub mode: AnalysisMode,
+    ///
+    /// Interior-mutable so a runtime mode switch needs only a READ guard on
+    /// the index: a mode-flip WRITE queued behind a long-running scan's read
+    /// guard turns tokio's fair `RwLock` into a barrier for every subsequent
+    /// reader — and with tower-lsp's bounded handler concurrency that stalls
+    /// the whole message loop, starving `didClose` clears (GitHub #264).
+    mode: std::sync::RwLock<AnalysisMode>,
     /// Import dependency graph for cross-module invalidation.
     ///
     /// Built during workspace scan in `crossModule` mode.
@@ -112,7 +118,7 @@ impl std::fmt::Debug for WorkspaceIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WorkspaceIndex")
             .field("roots", &self.roots)
-            .field("mode", &self.mode)
+            .field("mode", &self.mode())
             .field("file_count", &self.files.len())
             .finish_non_exhaustive()
     }
@@ -130,7 +136,7 @@ impl WorkspaceIndex {
         Self {
             roots,
             files: DashMap::new(),
-            mode,
+            mode: std::sync::RwLock::new(mode),
             import_graph: std::sync::Mutex::new(ImportGraph::new()),
             registry: None,
             root_configs,
@@ -138,6 +144,28 @@ impl WorkspaceIndex {
             search_paths: std::sync::RwLock::new(None),
             salsa_engine: crate::salsa_engine::SalsaAnalysisEngine::default(),
         }
+    }
+
+    /// The current analysis mode.
+    ///
+    /// Poisoning is unrecoverable only for non-atomic state; `AnalysisMode` is
+    /// `Copy`, so a poisoned guard still holds a valid value — recover it.
+    #[must_use]
+    pub fn mode(&self) -> AnalysisMode {
+        *self
+            .mode
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Switch the analysis mode at runtime (`didChangeConfiguration`).
+    ///
+    /// Takes `&self` deliberately — see the `mode` field docs (GitHub #264).
+    pub fn set_mode(&self, mode: AnalysisMode) {
+        *self
+            .mode
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = mode;
     }
 
     /// Load each root's `BasiliskConfig` from its `pyproject.toml` /
@@ -236,7 +264,7 @@ impl WorkspaceIndex {
         // content, so cross-file diagnostics and navigation stay live.
         // Implements [ANALYSIS-INCR-IMPORTS] via [CHKARCH-INCREMENTAL-SALSA].
         let root_key = self.config_root_key(path);
-        let cross_module = matches!(self.mode, AnalysisMode::CrossModule);
+        let cross_module = matches!(self.mode(), AnalysisMode::CrossModule);
         let analysis =
             self.salsa_engine
                 .analyse(path, text, config, &root_key, &search_paths, cross_module);
@@ -435,7 +463,7 @@ impl WorkspaceIndex {
         version: i32,
     ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
         let path = uri.to_file_path().unwrap_or_default();
-        let track_exports = matches!(self.mode, AnalysisMode::CrossModule);
+        let track_exports = matches!(self.mode(), AnalysisMode::CrossModule);
         let before = track_exports.then(|| self.exported_symbol_names(&path));
         let own_diags = self.set_open(uri, text, version);
         if before.is_some_and(|prev| self.exported_symbol_names(&path) != prev) {
@@ -593,7 +621,7 @@ impl WorkspaceIndex {
 
         // The import graph serves navigation's reverse lookups (cross-file
         // references / rename); invalidation itself is salsa's job now.
-        if matches!(self.mode, AnalysisMode::CrossModule) {
+        if matches!(self.mode(), AnalysisMode::CrossModule) {
             self.build_import_graph();
         }
         results

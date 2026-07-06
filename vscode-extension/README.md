@@ -60,7 +60,7 @@ Press F5 to debug Python. Basilisk spawns debugpy and brokers the DAP connection
 
 ### Integrated profiling
 
-Profile Python code with py-spy directly from the editor. View heatmaps and identify bottlenecks without leaving VS Code.
+Sample CPU and track memory directly from the editor — run & profile the current file, attach to a running process from the Python Processes panel, or profile the active debug session. Results land as an inline heat map on your source, a flame graph, and a memory dashboard with leak detection. (Sampling uses py-spy on Linux/Windows and an injected in-process sampler on macOS; memory tracking uses tracemalloc via the debugger.)
 
 ### Activity panel
 

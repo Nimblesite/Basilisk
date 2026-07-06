@@ -187,7 +187,7 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
   singletonDisposables.push(...processesResult.disposables);
 
   // Profiler UI — status bar, commands, decorations, flamegraph webview.
-  const profilerDisposables = registerProfiler(context, s);
+  const profilerDisposables = registerProfiler(s);
   singletonDisposables.push(...profilerDisposables);
 
   // Memory profiler UI — commands, reference graph webview, memory dashboard.

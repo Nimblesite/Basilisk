@@ -70,6 +70,12 @@ suite('LSP Hover Hammer', () => {
         assertHover('module constant PI', text, ['PI', 'Final']);
     });
 
+    test('hover: module constant use inside a function (PI in scaled_area)', async function () {
+        this.timeout(HOVER_TEST_TIMEOUT_MS);
+        const text = await getHoverText(uri, locate(SUBJECT_SOURCE, 'PI', 1));
+        assertHover('module constant PI use', text, ['PI', 'Final']);
+    });
+
     test('hover: module-level plain variable (counter)', async function () {
         this.timeout(HOVER_TEST_TIMEOUT_MS);
         const text = await getHoverText(uri, locate(SUBJECT_SOURCE, 'counter'));

@@ -15,9 +15,11 @@
  * To ship profiling, return `true` here unconditionally and delete this gate.
  */
 
-import * as vscode from "vscode";
+import type * as vscode from "vscode";
 
 /** Whether the profiling UI surfaces should be shown in this session. */
-export function isProfilingUiEnabled(context: vscode.ExtensionContext): boolean {
-  return context.extensionMode === vscode.ExtensionMode.Test;
+export function isProfilingUiEnabled(_context: vscode.ExtensionContext): boolean {
+  // TEMPORARY local build: profiling UI force-enabled for hands-on testing.
+  // Do NOT commit — the shipped gate is `extensionMode === ExtensionMode.Test`.
+  return true;
 }

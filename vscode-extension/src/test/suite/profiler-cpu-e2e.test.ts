@@ -38,6 +38,7 @@ import {
   setupLspTestSuite,
   teardownLspTestSuite,
   closeAllEditors,
+  waitForLspReady,
 } from "./test-helpers";
 
 /** How long the burner keeps spinning (covers the whole suite). */
@@ -151,6 +152,32 @@ function assertSpeedscopeArtifact(outputFile: string): void {
   assert.ok((speedscope.profiles?.length ?? 0) > 0, "speedscope must contain at least one profile");
 }
 
+// Implements [PROFILE-FLAMEGRAPH]. See docs/specs/LSP-PROFILING-SPEC.md#PROFILE-FLAMEGRAPH
+/**
+ * Assert the flame graph SVG artifact of a REAL profile exists, parses as SVG,
+ * and lands in the results webview as the inline hero — the full path from a
+ * live profile stop to the flame graph the user actually sees.
+ */
+function assertFlamegraphArtifact(result: ProfileResult): void {
+  const flamegraphPath = result.flamegraphPath;
+  assert.ok(
+    typeof flamegraphPath === "string" && flamegraphPath !== "",
+    "the stop response must carry flamegraphPath — the LSP always exports the SVG",
+  );
+  assert.ok(fs.existsSync(flamegraphPath), `flame graph SVG must be written to disk: ${flamegraphPath}`);
+  const svg = fs.readFileSync(flamegraphPath, "utf8");
+  assert.ok(svg.includes("<svg"), "the flame graph artifact must be a real SVG document");
+  const html = buildFlamegraphHtml(result);
+  assert.ok(
+    html.includes("data:image/svg+xml;base64,"),
+    "the results webview must embed the flame graph SVG as its hero",
+  );
+  assert.ok(
+    html.includes("openFlamegraphSvg"),
+    "the hero must offer opening the interactive SVG externally",
+  );
+}
+
 /** Assert the V8 `.cpuprofile` exists and opens as a valid call tree ([PROFILE-NATIVE]). */
 function assertCpuProfileArtifact(cpuProfilePath: string | undefined, expectedFunction?: string): void {
   assert.ok(typeof cpuProfilePath === "string" && cpuProfilePath !== "", "cpuProfilePath returned");
@@ -171,6 +198,73 @@ function assertCpuProfileArtifact(cpuProfilePath: string | undefined, expectedFu
     assert.ok(
       cpuprofile.nodes?.some((node) => node.callFrame?.functionName === expectedFunction),
       `.cpuprofile call tree must include ${expectedFunction}`,
+    );
+  }
+}
+
+/** Filenames that mark debugger/launcher scaffolding ([PROFILE-AGGREGATION-SCAFFOLD]). */
+const SCAFFOLDING_FILE_RE = /runpy|debugpy|pydevd|<string>/i;
+
+/**
+ * Assert every REAL artifact of a debug-launched profile roots at the user's
+ * code with zero launcher scaffolding — the hot lists, the speedscope JSON on
+ * disk, and the `.cpuprofile` call tree, whose root spine must reach the
+ * user's `<module>` immediately instead of nine rows of
+ * `_run_module_as_main`/`run_path`/debugpy frames
+ * ([PROFILE-AGGREGATION-SCAFFOLD]). No mocks: the inputs are the exact files
+ * a user opens.
+ */
+function assertArtifactsRootAtUserCode(result: ProfileResult, burnerPath: string): void {
+  assertHotListsCarryNoScaffolding(result);
+  assertSpeedscopeCarriesNoScaffolding(result.outputFile);
+  const cpuProfilePath = result.cpuProfilePath;
+  assert.ok(typeof cpuProfilePath === "string" && cpuProfilePath !== "", "cpuProfilePath returned");
+  assertCpuprofileRootsAtUserCode(cpuProfilePath, burnerPath);
+}
+
+function assertHotListsCarryNoScaffolding(result: ProfileResult): void {
+  for (const fn of result.hotFunctions) {
+    assert.ok(!SCAFFOLDING_FILE_RE.test(fn.file), `hotFunctions must carry no scaffolding, got ${fn.file}`);
+  }
+  for (const line of result.hotLines) {
+    assert.ok(!SCAFFOLDING_FILE_RE.test(line.file), `hotLines must carry no scaffolding, got ${line.file}`);
+  }
+}
+
+function assertSpeedscopeCarriesNoScaffolding(outputFile: string): void {
+  const speedscope = JSON.parse(fs.readFileSync(outputFile, "utf8")) as {
+    shared?: { frames?: { file?: string }[] };
+  };
+  for (const frame of speedscope.shared?.frames ?? []) {
+    assert.ok(
+      !SCAFFOLDING_FILE_RE.test(frame.file ?? ""),
+      `speedscope frames must carry no scaffolding, got ${String(frame.file)}`,
+    );
+  }
+}
+
+function assertCpuprofileRootsAtUserCode(cpuProfilePath: string, burnerPath: string): void {
+  const cpuprofile = JSON.parse(fs.readFileSync(cpuProfilePath, "utf8")) as {
+    nodes?: { id: number; callFrame?: { functionName?: string; url?: string }; children?: number[] }[];
+  };
+  const nodes = cpuprofile.nodes ?? [];
+  for (const node of nodes) {
+    assert.ok(
+      !SCAFFOLDING_FILE_RE.test(node.callFrame?.url ?? ""),
+      `.cpuprofile must carry no scaffolding nodes, got ${String(node.callFrame?.url)}`,
+    );
+  }
+  // The flame chart's first real row is the user's own module — the launcher
+  // spine is gone, so the user's code gets the full canvas.
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const root = nodes[0];
+  assert.ok(root !== undefined, ".cpuprofile must have a root node");
+  for (const childId of root.children ?? []) {
+    const child = byId.get(childId);
+    assert.strictEqual(
+      child?.callFrame?.url,
+      burnerPath,
+      `every top-level frame must be the user's file, got ${String(child?.callFrame?.url)}`,
     );
   }
 }
@@ -322,6 +416,7 @@ suite("CPU profiling — real end-to-end", () => {
 
     assertSpeedscopeArtifact(result.outputFile);
     assertCpuProfileArtifact(result.cpuProfilePath, "hot_function");
+    assertFlamegraphArtifact(result);
     assertHottestLineTier(result, burnerPath);
   });
 
@@ -440,7 +535,12 @@ suite("CPU profiling — real end-to-end", () => {
         `burner.py must be attributed, got: ${hotFunctionSummary(result)}`,
       );
       assertCpuProfileArtifact(result.cpuProfilePath);
+      assertFlamegraphArtifact(result);
       assertHottestLineTier(result, burnerPath);
+      // The debug launch wraps the program in the runpy/debugpy spine; every
+      // real artifact of this run must root at the user's code with zero
+      // scaffolding ([PROFILE-AGGREGATION-SCAFFOLD]).
+      assertArtifactsRootAtUserCode(result, burnerPath);
     } finally {
       await vscode.debug.stopDebugging();
       await waitForDebugSessionEnd();
@@ -598,6 +698,73 @@ suite("CPU profiling — real end-to-end", () => {
       await waitForDebugSessionEnd();
     }
     disposeFlamegraphPanel();
+  });
+
+  // The LSP runtime can be re-created within one extension session (store
+  // reset → a brand-new LanguageClient). The regression: the profiler's
+  // progress listener was registered once, on the first client only, so after
+  // a runtime re-creation the live sample counter silently died — the status
+  // bar sat on "Profiling..." with no data forever. The listener must follow
+  // the store's client signal ([PROFILE-NOTIFICATIONS-PROGRESS],
+  // [PROFILE-PROCESSES-REACTIVE]).
+  test("live progress survives an LSP client re-creation — the sample counter never goes silently dead", async function () {
+    if (process.platform === "win32") { this.skip(); }
+    this.timeout(120_000);
+    const store = getStore();
+    assert.ok(store, "store must be initialized");
+    const oldClient = store.client.value;
+    assert.ok(oldClient, "a running client must exist before the re-creation");
+
+    // Recreate the runtime: reset() → onReset → startRuntime → NEW LanguageClient.
+    store.reset();
+    await pollUntilResult({
+      fn: async () => store.client.value,
+      predicate: (client) => client !== undefined && client !== oldClient,
+      timeoutMs: 30_000,
+    });
+    await waitForLspReady();
+
+    try {
+      // Profile on the fresh runtime through each platform's PROVEN-reliable
+      // path — the same ones the sibling journeys use — so this test isolates
+      // the thing under test (does the progress listener survive re-creation?)
+      // instead of also depending on the debug-launch auto-profile chain, which
+      // headless Linux CI does not deliver status-bar samples through: the
+      // cooperative sampler on macOS (see the #82 journey), the panel py-spy
+      // attach on Linux (see the "panel one-click flow" journey).
+      if (process.platform === "darwin") {
+        const launched = await vscode.debug.startDebugging(
+          undefined,
+          buildProfileLaunchConfig("cpu", burnerPath),
+        );
+        assert.ok(launched, "the CPU launch must start on the re-created runtime");
+      } else {
+        const pid = burner?.pid;
+        assert.ok(pid !== undefined && pid > 0, "burner must be running");
+        await startProfilingForPid(store, pid, "default");
+      }
+
+      // The live NON-ZERO sample counter must reach the status bar on the
+      // re-created client — proving the progress listener rebound to the NEW
+      // LanguageClient. A dead listener leaves this empty until the timeout.
+      await pollUntilResult({
+        fn: async () => profilerStatusText() ?? "",
+        predicate: (text) => /[1-9][\d.]* ?K? samples/.test(text),
+        timeoutMs: 30_000,
+      });
+
+      await vscode.commands.executeCommand("basilisk.profileStop");
+      assert.strictEqual(store.profiler.value.cpu, "idle", "stop must clear the session");
+    } finally {
+      // Best-effort teardown for whichever path ran.
+      if (store.profiler.value.cpu !== "idle") {
+        await vscode.commands.executeCommand("basilisk.profileStop").then(undefined, () => undefined);
+      }
+      if (vscode.debug.activeDebugSession !== undefined) {
+        await vscode.debug.stopDebugging();
+        await waitForDebugSessionEnd();
+      }
+    }
   });
 
   test("attaching to an exited process fails with a distinct, classified cause (#81)", async function () {

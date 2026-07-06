@@ -60,7 +60,7 @@ Import hygiene ([LSPFMT-IMPORTS]) is native and always available as code actions
 The server advertises formatting as LSP capabilities, so all four consumers get them from one change:
 
 - `documentFormattingProvider` — whole-document (existing).
-- `documentRangeFormattingProvider` — Format Selection (**new**; currently missing, so "Format Selection" is a no-op in every editor).
+- `documentRangeFormattingProvider` — Format Selection (shares the embedded engine; Ruff widens the selection to whole logical lines).
 - `documentOnTypeFormattingProvider` — format-as-you-type (future, optional).
 
 All are attributed to the single identity **"Basilisk"** (`serverInfo.name`); VS Code shows the extension `displayName`, Zed/Neovim show the server id. There is no per-provider display name in LSP or VS Code — the Ruff engine is disclosed via [LSPFMT-PROVENANCE], never a picker label. When `basilisk.formatter` is `"none"`, none of these are advertised.

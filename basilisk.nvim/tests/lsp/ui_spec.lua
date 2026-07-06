@@ -216,8 +216,9 @@ describe("basilisk UI interactions with real LSP", function()
     helpers.wait_for_server_ready(buf)
 
     local ok = pcall(vim.lsp.buf.format, { bufnr = buf, timeout_ms = 5000 })
-    -- May fail if ruff is not installed — that's acceptable.
-    -- The important thing is the LSP handles the request.
+    -- The Ruff formatter is embedded in the binary ([LSPFMT-ENGINE]);
+    -- formatting must succeed with no external ruff installed (#254).
+    assert.is_true(ok, "vim.lsp.buf.format must succeed")
   end)
 
   -- vim.lsp.buf.document_symbol() with real LSP

@@ -30,10 +30,7 @@ local function build_settings(config)
         parameterNames = config.inlay_hints.parameter_names,
         variableTypes = config.inlay_hints.variable_types,
       },
-      ruff = {
-        enabled = config.ruff.enabled,
-        executablePath = config.ruff.executable_path,
-      },
+      formatter = config.formatter,
       debugger = {
         enabled = config.debugger.enabled,
         typeChecking = config.debugger.type_checking,

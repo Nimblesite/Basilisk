@@ -57,6 +57,15 @@ function ensureSelection(item: ProcessRowItem | undefined): item is ProcessRowIt
 /** Start CPU profiling the given process row — no input box (the #62 fix). */
 async function profileProcess(store: Store, item: ProcessRowItem | undefined): Promise<void> {
   if (!ensureSelection(item)) { return; }
+  // The blocked contextValue hides the menu actions, but a click can race the
+  // panel's auto-refresh (or arrive via the palette) — never attempt an attach
+  // the panel already knows will fail; explain why instead (#266).
+  if (!item.process.debuggable) {
+    vscode.window.showWarningMessage(
+      `Basilisk: Can't profile PID ${item.process.pid} — ${item.process.undebuggableReason ?? "the profiler cannot attach to it"}.`,
+    );
+    return;
+  }
   const preset = vscode.workspace.getConfiguration("basilisk").get<string>("profiler.preset", "default");
   await startProfilingForPid(store, item.process.pid, preset);
 }

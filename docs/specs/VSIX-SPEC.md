@@ -239,7 +239,7 @@ The `basilisk-debug` debugger is **factory-based** (no `program`/`runtime` in th
 
 ### Debug Adapter Proxy (VS Code Implementation) {#VSIX-PYTHON-DEBUGGER-DAP-PROXY}
 
-The proxy (`vscode-extension/src/dap-proxy.ts`) implements `vscode.DebugAdapter` via `DebugAdapterInlineImplementation`, fixing four debugpy quirks:
+The proxy (`vscode-extension/src/dap-proxy.ts`) implements `vscode.DebugAdapter` via `DebugAdapterInlineImplementation`, fixing five debugpy quirks:
 
 **Quirk 1 — stepOut lands before assignment**: after `stepOut`, debugpy stops at the call-site line *before* the return value is assigned. The proxy detects the `stepOut` response → first `stopped` event sequence and injects an automatic `next`, swallowing the intermediate stop.
 
@@ -248,6 +248,8 @@ The proxy (`vscode-extension/src/dap-proxy.ts`) implements `vscode.DebugAdapter`
 **Quirk 3 — single-connection slot protection**: `debugpy.adapter --port` accepts exactly one TCP connection. The proxy's bind-based `isPortAlive` check (attempt to bind, `EADDRINUSE` = alive) is non-destructive. In attach mode, if the port is dead, the factory respawns debugpy via the LSP.
 
 **Quirk 4 — session termination timing**: VS Code's `activeDebugSession` may not be cleared when `onDidTerminateDebugSession` fires. The proxy sends `exited` before `terminated`, with a minimal delay.
+
+**Quirk 5 — dropped `terminate` response**: when the debuggee exits as a result of a `terminate` request, debugpy can emit `exited`/`terminated` and close the socket without ever answering the request — VS Code then rejects `stopDebugging()` with "Canceled". The proxy tracks the pending `terminate`, answers it itself once the debuggee is provably gone (the `terminated` event, or socket death), and swallows debugpy's late duplicate — the same guarantee the disconnect/attach shims provide.
 
 ### DAP Features {#VSIX-PYTHON-DEBUGGER-DAP-FEATURES}
 
@@ -310,6 +312,13 @@ See [`LSP-ARCHITECTURE-SPEC.md` § LSPARCH-BINRES](LSP-ARCHITECTURE-SPEC.md#LSPA
 - `"Basilisk"` — main output channel for server messages
 - `"Basilisk LSP Trace"` — LSP communication trace (when `basilisk.trace.server` is enabled)
 - File log sink: `/tmp/basilisk-debug-trace.log` for debug-level logging
+
+`basilisk.trace.server` is the one documented trace switch, so the trace
+channel is a config-driven adapter (`src/lsp-trace.ts`): vscode-languageclient
+10 only traces while the trace channel's own `logLevel` is `Trace` — a hidden
+per-channel VS Code gesture — so the adapter derives its `logLevel` from the
+setting and fires `onDidChangeLogLevel` on changes. A plain `LogOutputChannel`
+here left the channel permanently blank (GitHub #201).
 
 ---
 

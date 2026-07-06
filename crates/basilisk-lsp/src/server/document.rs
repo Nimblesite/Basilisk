@@ -125,7 +125,7 @@ pub(super) async fn did_close(server: &LspServer, params: DidCloseTextDocumentPa
         server.publish_diagnostics_if_enabled(uri, vec![]).await;
         return;
     };
-    let mode = index.mode;
+    let mode = index.mode();
     let roots_debug: Vec<_> = index
         .roots
         .iter()
@@ -187,7 +187,7 @@ pub(super) async fn did_change_watched_files(
     {
         let guard = server.index.read().await;
         let Some(index) = guard.as_ref() else { return };
-        if index.mode == AnalysisMode::OpenFilesOnly {
+        if index.mode() == AnalysisMode::OpenFilesOnly {
             return; // File-watcher events are irrelevant in openFilesOnly mode.
         }
     }
@@ -265,7 +265,7 @@ pub(super) async fn did_change_watched_files(
         // cross-module mode an export change must refresh dependents' stale
         // symbol diagnostics. Implements [ANALYSIS-SYMBOLS-INVAL] (GitHub #56).
         let mut exports_changed = false;
-        let cross_module = matches!(index.mode, crate::config::AnalysisMode::CrossModule);
+        let cross_module = matches!(index.mode(), crate::config::AnalysisMode::CrossModule);
         let reload_results: Vec<_> = reload_targets
             .iter()
             .filter_map(|uri| {

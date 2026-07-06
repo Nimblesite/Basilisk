@@ -122,9 +122,6 @@ export class DapTcpProxy {
   /** Cache of source file lines for structural line detection. */
   private readonly sourceCache = new Map<string, string[]>();
 
-  /** Track whether we're in attach mode for special handling. */
-  private isAttachMode = false;
-
   /**
    * Whether this session was launched for profiling (`profileOnLaunch`). When
    * set, the proxy neutralises user breakpoints so the run completes instead of
@@ -147,6 +144,17 @@ export class DapTcpProxy {
 
   /** Track whether we forwarded disconnect to debugpy after already responding to VS Code. */
   private sawDisconnectForwarded = false;
+
+  /**
+   * Track the client's pending `terminate` request. debugpy can drop the
+   * response when the debuggee exits as a result (events `exited`/`terminated`
+   * arrive, the socket closes, no response) — VS Code then rejects
+   * `stopDebugging()` with "Canceled". The proxy answers it itself on
+   * termination and swallows debugpy's late duplicate, mirroring the
+   * disconnect/attach shims.
+   */
+  private pendingTerminateSeq: number | undefined;
+  private terminateAnswered = false;
 
   constructor(
     private readonly debugpyHost: string,
@@ -327,6 +335,11 @@ export class DapTcpProxy {
       return;
     }
 
+    if (msg.type === "request" && msg.command === "terminate") {
+      this.pendingTerminateSeq = msg.seq;
+      this.terminateAnswered = false;
+    }
+
     if (msg.type === "request" && msg.command === "stepOut") {
       this.pendingStepOutSeq = msg.seq;
       this.stepOutThreadId = msg.arguments?.threadId as number | undefined;
@@ -345,9 +358,7 @@ export class DapTcpProxy {
     // ([PROFILE-LAUNCH-NOSTOP], #145).
     this.maybeRecordProfilingLaunch(msg);
 
-    // Detect attach mode.
     if (msg.type === "request" && msg.command === "attach") {
-      this.isAttachMode = true;
       this.pendingAttachSeq = msg.seq;
       // Set a timeout: if debugpy doesn't respond within 3s, fake a response.
       this.attachResponseTimer = setTimeout(() => {
@@ -527,7 +538,40 @@ export class DapTcpProxy {
       this.sawDisconnectForwarded = false;
       return true;
     }
+    if (msg.type === "response" && msg.command === "terminate") {
+      if (this.terminateAnswered) {
+        Logger.debug("[DAP Proxy] swallowed duplicate terminate response");
+        return true;
+      }
+      // debugpy answered it itself — nothing for the proxy to guarantee.
+      this.pendingTerminateSeq = undefined;
+    }
     return false;
+  }
+
+  // Implements [VSIX-PYTHON-DEBUGGER-DAP-PROXY] Quirk 5 — dropped terminate
+  // response: debugpy can close the socket without answering `terminate` when
+  // the debuggee exits as a result, leaving VS Code to reject stopDebugging()
+  // with "Canceled".
+  /**
+   * Answer the client's pending `terminate` request when debugpy never will —
+   * the debuggee is gone (terminated event or socket death), so the request
+   * has succeeded in every way that matters. Without this, VS Code cancels
+   * the request when the connection closes and `stopDebugging()` rejects.
+   */
+  private answerPendingTerminate(): void {
+    if (this.pendingTerminateSeq === undefined) {return;}
+    Logger.info("[DAP Proxy] answering pending terminate (debuggee gone)");
+    this.terminateAnswered = true;
+    this.sendToClient({
+      type: "response",
+      command: "terminate",
+      request_seq: this.pendingTerminateSeq,
+      seq: 0,
+      success: true,
+      body: {},
+    });
+    this.pendingTerminateSeq = undefined;
   }
 
   // ── Attach and termination handling ────────────────────────────────
@@ -573,6 +617,7 @@ export class DapTcpProxy {
       }
       this.sawTerminatedEvent = true;
       this.sendToClient(msg);
+      this.answerPendingTerminate();
       return true;
     }
 
@@ -590,6 +635,7 @@ export class DapTcpProxy {
       this.sawTerminatedEvent = true;
       this.sendToClient({ type: "event", event: "terminated", seq: 0, body: {} });
     }
+    this.answerPendingTerminate();
     this.closeClientConnection();
   }
 

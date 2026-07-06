@@ -58,7 +58,7 @@ local function render_info(config)
   lines[#lines + 1] = "  Mode:       " .. config.analysis_mode
   lines[#lines + 1] = "  Restarts:   " .. tostring(lsp_mod.get_restart_count())
   lines[#lines + 1] = ""
-  lines[#lines + 1] = "  Ruff:       " .. (config.ruff.enabled and "enabled" or "disabled")
+  lines[#lines + 1] = "  Formatter:  " .. config.formatter
   lines[#lines + 1] = "  Debugger:   " .. (config.debugger.enabled and "enabled" or "disabled")
   lines[#lines + 1] = "  Tests:      " .. (config.test_explorer.enabled and "enabled" or "disabled")
   lines[#lines + 1] = "  uv:         " .. (config.uv.enabled and "enabled" or "disabled")

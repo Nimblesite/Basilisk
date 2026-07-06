@@ -18,6 +18,7 @@ import {
 } from "vscode-languageclient/node";
 import { effect } from "@preact/signals-core";
 import { Logger } from "./logger";
+import { createLspTraceChannel } from "./lsp-trace";
 import { type Store, type LspState } from "./store";
 
 /** Maximum LSP errors before shutting down the server. */
@@ -121,11 +122,7 @@ export function startLspClient(
 
   // [VSIX-OUTPUT-CHANNELS] "Basilisk LSP Trace" channel — surfaces LSP
   // communication when basilisk.trace.server is enabled.
-  // vscode-languageclient 10 requires `traceOutputChannel` to be a
-  // `LogOutputChannel` (created with `{ log: true }`).
-  const traceChannel = vscode.window.createOutputChannel("Basilisk LSP Trace", {
-    log: true,
-  });
+  const traceChannel = createLspTraceChannel();
   context.subscriptions.push(traceChannel);
 
   const clientOptions = buildClientOptions(outputChannel, traceChannel, updateStatusBar);
@@ -426,13 +423,25 @@ function registerTabTracking(context: vscode.ExtensionContext, store: Store): vo
       const currentUris = collectOpenPythonUris();
 
       const mode = vscode.workspace.getConfiguration("basilisk").get<string>("analysisMode") ?? "wholeModule";
-      if (mode === "openFilesOnly") {
-        for (const uriStr of knownOpenUris) {
-          if (!currentUris.has(uriStr)) {
-            void lspClient.sendNotification("textDocument/didClose", {
-              textDocument: { uri: vscode.Uri.parse(uriStr).toString() },
-            });
-          }
+      for (const uriStr of knownOpenUris) {
+        if (currentUris.has(uriStr)) {
+          continue;
+        }
+        const uri = vscode.Uri.parse(uriStr);
+        // Implements the tab-close clause of [ANALYSIS-PUBLISH]
+        // (docs/specs/LSP-ANALYSIS-MODES-SPEC.md). VS Code disposes closed
+        // documents lazily, so the language client's own didClose can lag a
+        // tab close by an unbounded amount. Send a synthetic didClose
+        // whenever the server would clear diagnostics on close: every file in
+        // openFilesOnly, and out-of-workspace files in the whole-workspace
+        // modes — otherwise their stale diagnostics linger in the Problems
+        // panel (GitHub #264). In-workspace files in wholeModule/crossModule
+        // keep their diagnostics by design.
+        const inWorkspace = vscode.workspace.getWorkspaceFolder(uri) !== undefined;
+        if (mode === "openFilesOnly" || !inWorkspace) {
+          void lspClient.sendNotification("textDocument/didClose", {
+            textDocument: { uri: uri.toString() },
+          });
         }
       }
 

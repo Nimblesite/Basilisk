@@ -177,6 +177,231 @@ fn profile_data_default_is_empty() {
 }
 
 // Exercises [PROFILE-AGGREGATION-STRUCTS]
+// ── Runtime-scaffolding filtering ([PROFILE-AGGREGATION-SCAFFOLD]) ─────────
+//
+// A debug-launched profile arrives wrapped in ~9 frames of runpy/debugpy
+// launcher machinery, squashing the user's code into unreadable slivers at
+// the bottom of every flame chart. The aggregator strips that scaffolding at
+// ingest — the single choke point — so the .cpuprofile, speedscope JSON,
+// flamegraph, and hot lists all start at the user's own code, mirroring the
+// memory profiler's noise filtering ([PROFILE-MEMORY-FINAL]).
+
+/// The leaf-first stack a real "Run & Profile CPU" launch produces: user code
+/// on top, then the user module, then the runpy/debugpy bootstrap spine.
+fn debug_launch_stack() -> Vec<(&'static str, &'static str, i32)> {
+    vec![
+        ("blazing_hot", "/home/user/proj/cpu_hotspot.py", 16),
+        ("main", "/home/user/proj/cpu_hotspot.py", 35),
+        ("<module>", "/home/user/proj/cpu_hotspot.py", 41),
+        ("_run_code", "/usr/lib/python3.13/runpy.py", 88),
+        ("_run_module_code", "/usr/lib/python3.13/runpy.py", 97),
+        ("run_path", "/usr/lib/python3.13/runpy.py", 291),
+        ("run_file", "/site-packages/debugpy/server/cli.py", 300),
+        ("main", "/site-packages/debugpy/server/cli.py", 430),
+        ("<module>", "/site-packages/debugpy/__main__.py", 39),
+        ("_run_code", "<frozen runpy>", 88),
+        ("_run_module_as_main", "<frozen runpy>", 198),
+    ]
+}
+
+#[test]
+fn scaffolding_frames_are_stripped_from_every_surface() {
+    let mut data = ProfileData::default();
+    data.ingest_traces(&[make_trace(1, true, debug_launch_stack())], 0.01, false);
+
+    for file in data.line_hits.keys() {
+        assert!(
+            !file.contains("runpy") && !file.contains("debugpy"),
+            "line_hits must carry no bootstrap files, got: {file}"
+        );
+    }
+    for file in data.function_stats.keys() {
+        assert!(
+            !file.contains("runpy") && !file.contains("debugpy"),
+            "function_stats must carry no bootstrap files, got: {file}"
+        );
+    }
+    for frame in &data.frames {
+        assert!(
+            !frame.file.contains("runpy") && !frame.file.contains("debugpy"),
+            "speedscope frames must carry no bootstrap files, got: {}",
+            frame.file
+        );
+    }
+
+    // The exported stack (root-first) must START at the user's module — the
+    // flame chart roots at the user's code, not nine rows down.
+    let stacks = data
+        .thread_stacks
+        .get(&1)
+        .expect("thread 1 must have stacks");
+    let root_frame = &data.frames[stacks[0][0]];
+    assert_eq!(
+        root_frame.name, "<module>",
+        "the stack must root at the user's module"
+    );
+    assert_eq!(root_frame.file, "/home/user/proj/cpu_hotspot.py");
+    assert_eq!(stacks[0].len(), 3, "only the three user frames survive");
+
+    // Attribution is untouched: the user leaf keeps its self sample.
+    let hot = data
+        .function_stats
+        .get("/home/user/proj/cpu_hotspot.py")
+        .and_then(|by_fn| by_fn.get("blazing_hot"))
+        .expect("blazing_hot must keep its stats");
+    assert_eq!(hot.self_samples, 1, "the user leaf keeps its self sample");
+}
+
+#[test]
+fn leaf_tracer_frames_attribute_to_the_traced_user_line() {
+    // Under debugpy line-tracing, pydevd's trace_dispatch can own the leaf;
+    // its overhead belongs to the user line it was tracing — exactly what the
+    // cooperative sampler does ([PROFILE-COOPERATIVE]).
+    let mut data = ProfileData::default();
+    data.ingest_traces(
+        &[make_trace(
+            1,
+            true,
+            vec![
+                (
+                    "trace_dispatch",
+                    "/site-packages/debugpy/_vendored/pydevd/pydevd.py",
+                    120,
+                ),
+                ("user_leaf", "/home/user/proj/app.py", 7),
+                ("<module>", "/home/user/proj/app.py", 20),
+            ],
+        )],
+        0.01,
+        false,
+    );
+
+    let leaf = data
+        .function_stats
+        .get("/home/user/proj/app.py")
+        .and_then(|by_fn| by_fn.get("user_leaf"))
+        .expect("user_leaf must have stats");
+    assert_eq!(
+        leaf.self_samples, 1,
+        "the tracer's overhead must be attributed to the traced user leaf"
+    );
+    assert!(
+        !data
+            .function_stats
+            .contains_key("/site-packages/debugpy/_vendored/pydevd/pydevd.py"),
+        "pydevd tracer frames must not appear at all"
+    );
+}
+
+#[test]
+fn machinery_only_threads_are_dropped_entirely() {
+    // The debugger's own housekeeping threads (and the injected cooperative
+    // sampler thread, which lives in <string>) are pure machinery — they must
+    // not register as threads, stacks, or hits.
+    let mut data = ProfileData::default();
+    data.ingest_traces(
+        &[
+            make_trace(
+                7,
+                true,
+                vec![
+                    (
+                        "_do_wait_suspend",
+                        "/site-packages/debugpy/_vendored/pydevd/pydevd.py",
+                        2000,
+                    ),
+                    ("run", "/site-packages/debugpy/server/api.py", 50),
+                ],
+            ),
+            make_trace(8, true, vec![("_basilisk_sample_loop", "<string>", 12)]),
+            make_trace(1, true, vec![("user_fn", "/home/user/proj/app.py", 3)]),
+        ],
+        0.01,
+        false,
+    );
+
+    assert!(
+        !data.thread_samples.contains_key(&7) && !data.thread_stacks.contains_key(&7),
+        "a debugger housekeeping thread must be dropped"
+    );
+    assert!(
+        !data.thread_samples.contains_key(&8) && !data.thread_stacks.contains_key(&8),
+        "the injected sampler's own thread must be dropped"
+    );
+    assert!(
+        data.thread_samples.contains_key(&1),
+        "the user thread must still be counted"
+    );
+}
+
+#[test]
+fn user_paths_that_merely_contain_debugger_names_are_kept() {
+    // Anchored matching only: a user file under debugpy_utils/ (or a module
+    // named runpy_helpers.py) is the user's code, never the debugger's.
+    let mut data = ProfileData::default();
+    data.ingest_traces(
+        &[make_trace(
+            1,
+            true,
+            vec![
+                ("helper", "/home/user/debugpy_utils/app.py", 4),
+                ("run", "/home/user/proj/runpy_helpers.py", 9),
+                ("<module>", "/home/user/proj/main.py", 30),
+            ],
+        )],
+        0.01,
+        false,
+    );
+
+    assert!(
+        data.function_stats
+            .contains_key("/home/user/debugpy_utils/app.py"),
+        "a user dir merely named debugpy_utils must be kept"
+    );
+    assert!(
+        data.function_stats
+            .contains_key("/home/user/proj/runpy_helpers.py"),
+        "a user module merely named runpy_helpers.py must be kept"
+    );
+}
+
+#[test]
+fn user_code_in_string_pseudofile_is_kept() {
+    // Regression: `python -c "..."`, `exec`, `eval`, and the REPL all run user
+    // code whose `co_filename` is `<string>`. Only the injected cooperative
+    // sampler's own `__basilisk*`/`_basilisk*` frames are scaffolding — blanket
+    // stripping every `<string>` frame discarded real user samples, so a
+    // `python3 -c` workload profiled zero samples (the `real_pyspy_*` suite
+    // failed on Linux CI, where py-spy can attach; macOS skips it under SIP).
+    let mut data = ProfileData::default();
+    data.ingest_traces(
+        &[make_trace(
+            1,
+            true,
+            vec![
+                ("hot_function", "<string>", 4),
+                ("<module>", "<string>", 20),
+            ],
+        )],
+        0.01,
+        false,
+    );
+
+    assert!(
+        data.thread_samples.contains_key(&1),
+        "a thread running `python -c` user code must be counted"
+    );
+    let hot = data
+        .function_stats
+        .get("<string>")
+        .and_then(|by_fn| by_fn.get("hot_function"))
+        .expect("user function in <string> must keep its stats");
+    assert_eq!(
+        hot.self_samples, 1,
+        "the `<string>` user leaf keeps its self sample"
+    );
+}
+
 #[test]
 fn profile_data_aggregation_with_synthetic_traces() {
     let mut data = ProfileData::default();
@@ -798,7 +1023,7 @@ fn stop_artifacts_surface_export_errors_for_empty_session() {
     let dir = std::env::temp_dir();
 
     let artifacts =
-        export::export_stop_artifacts(&data, "stop-empty-001", 0.0, 100, "speedscope", &dir);
+        export::export_stop_artifacts(&data, "stop-empty-001", 0, 0.0, 100, "speedscope", &dir);
 
     assert!(
         artifacts.output_file.is_none(),
@@ -828,7 +1053,7 @@ fn stop_artifacts_export_all_formats_for_populated_session() {
     let dir = std::env::temp_dir();
 
     let artifacts =
-        export::export_stop_artifacts(&data, "stop-full-001", 5.0, 100, "speedscope", &dir);
+        export::export_stop_artifacts(&data, "stop-full-001", 77, 5.0, 100, "speedscope", &dir);
 
     assert!(
         artifacts.export_error.is_none(),
@@ -871,7 +1096,7 @@ fn stop_artifacts_flamegraph_format_reuses_single_export() {
     let dir = std::env::temp_dir();
 
     let artifacts =
-        export::export_stop_artifacts(&data, "stop-fg-001", 5.0, 100, "flamegraph", &dir);
+        export::export_stop_artifacts(&data, "stop-fg-001", 78, 5.0, 100, "flamegraph", &dir);
 
     let output = artifacts
         .output_file

@@ -275,7 +275,9 @@ describe("basilisk LSP integration", function()
     }, buf)
 
     assert.is_nil(err, "formatting request should not error")
-    -- Result may be nil if ruff is not installed — acceptable.
+    -- The Ruff formatter is embedded in the binary ([LSPFMT-ENGINE]) — badly
+    -- formatted code must yield edits, never a silent nil (#254).
+    assert.is_not_nil(result, "embedded formatter must return edits")
   end)
 
   -- Core LSP: Inlay Hints

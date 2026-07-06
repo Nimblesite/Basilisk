@@ -169,7 +169,22 @@ fn handle_version(args: &[String]) -> bool {
         },
     };
     match dispatch(args, &mut std::io::stdout(), &spec) {
-        Ok(handled) => handled,
+        Ok(handled) => {
+            // [LSPFMT-PROVENANCE]: the human-readable `--version` also lists
+            // the embedded formatter engine. The `--json` payload stays a
+            // pure Shipwright contract, so machine consumers are unaffected.
+            if handled && !args.iter().any(|a| a == "--json") {
+                let _ = std::io::Write::write_all(
+                    &mut std::io::stdout(),
+                    format!(
+                        "Ruff formatter: {}\n",
+                        basilisk_lsp::formatting::EMBEDDED_RUFF_FORMATTER_VERSION
+                    )
+                    .as_bytes(),
+                );
+            }
+            handled
+        }
         Err(err) => {
             let _ = std::io::Write::write_all(
                 &mut std::io::stderr(),

@@ -43,6 +43,7 @@ pub mod formatting;
 pub mod highlight;
 pub mod hover;
 pub mod import_graph;
+pub mod import_hygiene;
 pub mod import_resolver;
 pub mod inlay_hints;
 pub mod profiler;

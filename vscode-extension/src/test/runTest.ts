@@ -2,10 +2,29 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import * as crypto from 'crypto';
 import { runTests } from '@vscode/test-electron';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
-const EXECUTABLE_MODE = 0o755;
+/**
+ * VS Code listens on a Unix socket inside the user-data dir; macOS caps
+ * AF_UNIX socket paths at 104 bytes ("IPC handle longer than 103 chars").
+ * Deep checkouts (e.g. git worktrees) overflow that and the electron main
+ * process dies with `listen EINVAL`, so fall back to a short per-checkout
+ * dir under tmp — the same policy as .vscode-test.mjs.
+ */
+function resolveUserDataDir(extensionDevelopmentPath: string): string {
+    const defaultDir = path.join(extensionDevelopmentPath, '.vscode-test', 'user-data');
+    if (defaultDir.length <= 80) {
+        return defaultDir;
+    }
+    const checkoutHash = crypto
+        .createHash('sha256')
+        .update(extensionDevelopmentPath)
+        .digest('hex')
+        .slice(0, 8);
+    return path.join(os.tmpdir(), `bsk-vsct-${checkoutHash}`);
+}
 
 /**
  * Find the system VS Code Electron binary on macOS.
@@ -25,10 +44,12 @@ function findSystemVSCodeElectron(): string | undefined {
         }
     }
 
-    // Try resolving from the `code` CLI shim.
+    // Try resolving from the `code` CLI shim. execFileSync (no shell) keeps
+    // PATH-derived values out of shell parsing — CodeQL
+    // js/shell-command-injection-from-environment.
     try {
-        const codePath = execSync('which code', { encoding: 'utf8' }).trim();
-        const realPath = execSync(`realpath "${codePath}"`, { encoding: 'utf8' }).trim();
+        const codePath = execFileSync('which', ['code'], { encoding: 'utf8' }).trim();
+        const realPath = fs.realpathSync(codePath);
         // realPath is like /Applications/Visual Studio Code.app/Contents/Resources/app/bin/code
         const appRoot = realPath.replace(/\/Contents\/Resources\/app\/bin\/code$/, '');
         const electron = path.join(appRoot, 'Contents/MacOS/Electron');
@@ -56,15 +77,6 @@ function findBinary(): string | undefined {
     return undefined;
 }
 
-function detectShipwrightPlatform(): string {
-    if (process.platform === 'darwin' && process.arch === 'arm64') { return 'darwin-arm64'; }
-    if (process.platform === 'linux' && process.arch === 'arm64') { return 'linux-arm64'; }
-    if (process.platform === 'linux') { return 'linux-x64'; }
-    if (process.platform === 'win32' && process.arch === 'arm64') { return 'win32-arm64'; }
-    if (process.platform === 'win32') { return 'win32-x64'; }
-    throw new Error(`Unsupported VSIX test platform: ${process.platform}-${process.arch}`);
-}
-
 function syncShipwrightManifest(extensionDevelopmentPath: string): void {
     const repoRoot = path.resolve(extensionDevelopmentPath, '..');
     const source = path.join(repoRoot, 'shipwright.json');
@@ -75,15 +87,29 @@ function syncShipwrightManifest(extensionDevelopmentPath: string): void {
     fs.copyFileSync(source, target);
 }
 
-function stageBundledBinary(extensionDevelopmentPath: string, binary: string): void {
-    const binRoot = path.join(extensionDevelopmentPath, 'bin');
-    const targetDir = path.join(binRoot, detectShipwrightPlatform());
-    fs.rmSync(binRoot, { recursive: true, force: true });
-    fs.mkdirSync(targetDir, { recursive: true });
-    const target = path.join(targetDir, path.basename(binary));
-    fs.copyFileSync(binary, target);
-    if (process.platform !== 'win32') {
-        fs.chmodSync(target, EXECUTABLE_MODE);
+/**
+ * Stage the runtime binaries through the ONE canonical staging script
+ * (`scripts/stage-runtime.mjs`) — the same path `_test_vsix` and the release
+ * packager use, so this debug runner can never validate a different bundle
+ * shape than what ships ([VSIX-PACKAGING-PARITY], #71). Also vendors the
+ * debugpy asset when it is not already present, so bundle-dependent journeys
+ * (debugging, memory profiling) run against the real layout.
+ */
+function stageBundledRuntime(extensionDevelopmentPath: string, binaryDir: string): void {
+    // execFileSync passes binaryDir (derived from BASILISK_EXECUTABLE_PATH)
+    // as an argv entry — no shell, so no expansion of `$(...)`/backticks from
+    // the environment (CodeQL js/indirect-command-line-injection).
+    execFileSync('node', ['scripts/stage-runtime.mjs', binaryDir], {
+        cwd: extensionDevelopmentPath,
+        stdio: 'inherit',
+    });
+    const debugpyDir = path.join(extensionDevelopmentPath, 'bundled', 'debugpy');
+    const vendored = fs.existsSync(debugpyDir) && fs.readdirSync(debugpyDir).length > 0;
+    if (!vendored) {
+        execFileSync('node', ['scripts/vendor-debugpy.mjs'], {
+            cwd: extensionDevelopmentPath,
+            stdio: 'inherit',
+        });
     }
 }
 
@@ -96,35 +122,35 @@ async function main(): Promise<void> {
 
         const debugBinary = process.env.BASILISK_EXECUTABLE_PATH ?? findBinary();
         if (debugBinary === undefined || debugBinary === '') {
-            throw new Error('Basilisk binary not found. Build with: cargo build -p basilisk-cli');
+            throw new Error(
+                'Basilisk binary not found. Build with: cargo build -p basilisk-cli -p basilisk-profiler-helper'
+            );
         }
         syncShipwrightManifest(extensionDevelopmentPath);
-        stageBundledBinary(extensionDevelopmentPath, debugBinary);
+        stageBundledRuntime(extensionDevelopmentPath, path.dirname(debugBinary));
         delete process.env.BASILISK_EXECUTABLE_PATH;
         delete process.env.BASILISK_BINARY_DIR;
 
-        // Create a temp workspace with empty binary settings so activation must
-        // prove the bundled VSIX path instead of a developer-machine override.
-        const tmpWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'basilisk-test-ws-'));
-        const vscodeDir = path.join(tmpWorkspace, '.vscode');
-        fs.mkdirSync(vscodeDir, { recursive: true });
-
-        const settings: Record<string, unknown> = {};
-        fs.writeFileSync(
-            path.join(vscodeDir, 'settings.json'),
-            JSON.stringify(settings, null, 2),
-            'utf8'
-        );
+        // Open the SAME workspace the CI runner (.vscode-test.mjs) opens. The
+        // diagnostics suites depend on its config — `basilisk.json` turns on
+        // the opt-in strict-annotation rules their fixtures trip, and
+        // `.vscode/settings.json` selects wholeModule analysis — while its
+        // settings carry no binary override, so activation still proves the
+        // bundled VSIX path. A bare temp workspace silently disarms every
+        // diagnostics assertion (no config → house rules off → zero
+        // diagnostics → timeouts).
+        const workspace = path.join(extensionDevelopmentPath, 'test-fixtures', 'workspace');
 
         await runTests({
             extensionDevelopmentPath,
             extensionTestsPath,
             ...(systemElectron !== undefined ? { vscodeExecutablePath: systemElectron } : {}),
-            launchArgs: ['--disable-extensions', tmpWorkspace],
+            launchArgs: [
+                '--disable-extensions',
+                '--user-data-dir', resolveUserDataDir(extensionDevelopmentPath),
+                workspace,
+            ],
         });
-
-        // Clean up temp workspace.
-        fs.rmSync(tmpWorkspace, { recursive: true, force: true });
     } catch (err) {
         // eslint-disable-next-line no-console
         console.error('Failed to run tests', err);

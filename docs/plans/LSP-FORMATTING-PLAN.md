@@ -2,23 +2,23 @@
 
 Implements [LSPFMT](../specs/LSP-FORMATTING-SPEC.md#LSPFMT). Goal: jettison the `ruff` CLI, embed the Ruff formatter crate in-process, reimplement import hygiene natively, and make the formatter's Ruff provenance/version visible everywhere. Ratchets and CLAUDE.md rules apply throughout (coverage/mutation up, benches down, no `unwrap`/`panic`, structured logging).
 
-## Phase 1 — Embed the Ruff formatter ([LSPFMT-ENGINE], [LSPFMT-CAPABILITIES])
+## Phase 1 — Embed the Ruff formatter ([LSPFMT-ENGINE], [LSPFMT-CAPABILITIES]) — **DONE** (#254)
 
-1. Spike: add `ruff_python_formatter` to `Cargo.toml` at the **same pinned rev** as `ruff_python_parser` (`7c645a9…`), confirm it builds, and confirm the entry point/options type (`format_module_source`-style API). Measure binary-size delta.
-2. Rewrite `crates/basilisk-lsp/src/formatting.rs` to call the crate in-process — **delete the `Command::new("ruff")` subprocess entirely**. The `ruff` binary is no longer a dependency of any kind. Failing test first: formatting produces correct output on a machine with **no `ruff` binary installed at all** (proving the subprocess is gone, replacing today's silent-`None` no-op).
-3. Feed `[tool.ruff.format]` options (line length, quote/indent style, magic trailing comma) from `WorkspaceConfig` into the engine; add the fields to `WorkspaceConfig` (`crates/basilisk-lsp/src/config.rs`) and the loaders (`pyproject.toml`).
-4. Advertise `document_range_formatting_provider` in `crates/basilisk-lsp/src/server/init.rs` and add a `rangeFormatting` handler (`features.rs`). Whole-doc + range share the engine. (On-type is a later, optional follow-up.)
+1. ~~Spike~~ `ruff_python_formatter` + `ruff_formatter` + `ruff_python_stdlib` added at the same pinned rev; `format_module_source`/`format_range` confirmed.
+2. ~~Rewrite~~ `crates/basilisk-lsp/src/formatting.rs` calls the crate in-process; the `Command::new("ruff")` subprocess is deleted. Failing-test-first e2e: `crates/basilisk-cli/tests/e2e_lsp_no_ruff.rs` drives the real binary over LSP stdio with an empty `PATH`. A live parity e2e (`ws_test_formatting.rs`) asserts byte-identical output vs `ruff format` where the binary exists.
+3. ~~Options~~ `FormatStyle` on `WorkspaceConfig` (`config.rs::load_format_style`) reads `[tool.ruff] line-length` + `[tool.ruff.format]` quote/indent style and magic trailing comma from `pyproject.toml`.
+4. ~~Capabilities~~ `document_range_formatting_provider` advertised; `range_formatting` handler added; whole-doc + range share the engine. (On-type remains a later, optional follow-up.)
 
-## Phase 2 — Native import hygiene ([LSPFMT-IMPORTS])
+## Phase 2 — Native import hygiene ([LSPFMT-IMPORTS]) — **DONE** (#261)
 
-1. Reimplement the three fixers on the Ruff AST in `crates/basilisk-lsp/src/code_actions/imports.rs`: organize (isort semantics), expand-wildcard, split-multi-import. Delete `run_ruff_fix` and the temp-file/`ruff check` path.
-2. Parity tests vs. the Ruff fixers on representative fixtures (the existing `ws_test_code_actions.rs` `ruff`-gated tests become unconditional — native, always available).
+1. ~~Reimplement~~ The three fixers live in `crates/basilisk-lsp/src/import_hygiene/` (organize with isort semantics in `sort.rs`, expand-wildcard in `wildcard.rs`, split-multi-import in `mod.rs`); `run_ruff_fix` and the temp-file/`ruff check` path are deleted. Note: ruff has **no** F403 autofix, so expand-wildcard's behavior is defined natively (names used but never bound, minus builtins).
+2. ~~Parity tests~~ Fixer semantics were pinned against real `ruff check --fix` probes (0.15.17); the `ws_test_code_actions.rs` tests are unconditional and assert affirmatively; `e2e_lsp_no_ruff.rs` asserts exact organized output with no `ruff` on PATH.
 
-## Phase 3 — Config & provenance ([LSPFMT-CONFIG], [LSPFMT-PROVENANCE])
+## Phase 3 — Config & provenance ([LSPFMT-CONFIG], [LSPFMT-PROVENANCE]) — **DONE**
 
-1. Add the `basilisk.formatter` enum (`"ruff"` default / `"none"`; reserve `"basilisk"`). **Done for VS Code:** the two `basilisk.ruff.*` settings and the `readRuffSettings()` plumbing (`vscode-extension/src/lsp-client.ts`) are already deleted and replaced by `basilisk.formatter` in `package.json`, both READMEs, and the forwarded `initializationOptions`. Remaining: wire the flag through `WorkspaceConfig` (Rust), Zed config, and `basilisk.nvim` defaults so the server honours `"none"`.
-2. Expose the embedded Ruff formatter version: compile-time constant from the pinned rev → `basilisk --version`, LSP `serverInfo.version`, and an Output-channel log line on each format.
-3. Ship Ruff's MIT license in `THIRD-PARTY-LICENSES`/NOTICE (already owed for the parser crates).
+1. ~~Flag~~ `basilisk.formatter` honoured server-side: `FormatterEngine` on `WorkspaceConfig` (`basilisk.json` `"formatter"`, pyproject `formatter =`), overridden by `initializationOptions.formatter` (VS Code forwards it). `"none"` suppresses the formatting capabilities and the handlers answer null. Zed/Neovim reach it via `basilisk.json` in the workspace.
+2. ~~Version~~ `EMBEDDED_RUFF_FORMATTER_VERSION` derived at compile time (`crates/basilisk-lsp/build.rs` verifies the declared rev→version pair against `Cargo.lock` — drift fails the build) → plain `basilisk --version` engine line (the `--json` Shipwright contract is unchanged), LSP `serverInfo.version`, and a `tracing` log line on each format.
+3. ~~License~~ Ruff's MIT license shipped in `THIRD-PARTY-LICENSES` (covers parser + formatter + stdlib crates).
 
 ## Phase 4 — Release-notes exposure ([LSPFMT-RELEASE-NOTES])
 

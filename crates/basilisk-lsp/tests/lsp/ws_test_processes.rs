@@ -69,6 +69,36 @@ fn spawn_fake_debuggee(workspace: &std::path::Path) -> Option<(ProcessGuard, Str
     }
 }
 
+/// Spawn a process whose argv mimics the bundled-debugpy **launcher** —
+/// `python <…>/debugpy/launcher <port> -- <program>`, the machinery process VS
+/// Code's debugger runs beside the debuggee. Its entry path contains
+/// `/debugpy/` but its basename is `launcher`, so it is infrastructure, not a
+/// debuggee. Implements the #268 regression case for
+/// [PROFILE-PROCESSES-MODEL]: machinery must carry NO script label.
+fn spawn_fake_launcher() -> Option<ProcessGuard> {
+    let entry = unique_temp_dir("bsk_fake_launcher").join("debugpy");
+    std::fs::create_dir_all(&entry).ok()?;
+    let launcher = entry.join("launcher");
+    std::fs::write(
+        &launcher,
+        "import time, sys\nprint('READY', flush=True)\ntime.sleep(60)\n",
+    )
+    .ok()?;
+
+    let mut command = Command::new(python_path());
+    let _ = command
+        .arg(&launcher)
+        .arg("50589")
+        .arg("--")
+        .arg("/nonexistent/myscript.py")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    let child = command.spawn().ok()?;
+
+    let mut guard = ProcessGuard::new(child);
+    wait_for_ready(&mut guard).then_some(guard)
+}
+
 /// As [`spawn_idle_python`], but runs the interpreter with `dir` as its working
 /// directory — the signal workspace scoping ([PROFILE-PROCESSES-SCOPE]) keys on.
 fn spawn_idle_python_in(dir: Option<&std::path::Path>) -> Option<ProcessGuard> {
@@ -341,5 +371,45 @@ async fn test_ws_profiler_processes_surfaces_debug_launched_script() -> TestResu
 
     drop(debuggee);
     let _ = std::fs::remove_dir_all(&ws);
+    Ok(())
+}
+
+/// Implements [PROFILE-PROCESSES-MODEL] (#268 follow-up): debugger machinery
+/// carries NO `script`. The bundled-debugpy launcher's first positional is its
+/// own plumbing path inside the extension install — labelling the row with it
+/// ("Python — launcher") and wiring the panel's click-to-open into debugger
+/// internals misleads; the row is 🚫 machinery, full stop.
+#[tokio::test]
+async fn test_ws_profiler_processes_machinery_rows_carry_no_script() -> TestResult<()> {
+    let Some(launcher) = spawn_fake_launcher() else {
+        eprintln!("SKIP: python3 not available for machinery-script e2e");
+        return Ok(());
+    };
+    let pid = u64::from(launcher.id());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = fixture.initialize().await?;
+
+    let processes = fetch_processes(&mut fixture, 740).await?;
+    let entry = processes
+        .iter()
+        .find(|p| p.get("pid").and_then(serde_json::Value::as_u64) == Some(pid))
+        .unwrap_or_else(|| {
+            panic!("the launcher machinery (pid {pid}) must still be listed: {processes:?}")
+        });
+
+    // Marked machinery (regression guard for the classification itself)…
+    assert_eq!(
+        entry.get("debuggable").and_then(serde_json::Value::as_bool),
+        Some(false),
+        "the launcher must be flagged non-debuggable machinery: {entry:?}"
+    );
+    // …and carrying no script: plumbing paths are not user code (#268).
+    assert!(
+        entry.get("script").is_some_and(serde_json::Value::is_null),
+        "machinery must report script = null, never its plumbing path: {entry:?}"
+    );
+
+    drop(launcher);
     Ok(())
 }

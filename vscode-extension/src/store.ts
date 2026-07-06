@@ -21,7 +21,7 @@ import * as vscode from "vscode";
 import { Logger, type LogSink } from "./logger";
 import { createServerCommandHandler } from "./lsp-client";
 import type { Result } from "./result";
-import { POLL_INTERVAL_MS, WAIT_MS } from "./timeouts";
+import { WAIT_MS } from "./timeouts";
 import {
   createProfilerActions,
   isProfilerBusy,
@@ -31,9 +31,22 @@ import {
   type ProfilerActions,
   type ProfilerSession,
 } from "./profiler-state";
+import {
+  createProcessPanelActions,
+  IDLE_PROCESS_PANEL,
+  type ProcessPanelActions,
+  type ProcessPanelState,
+} from "./processes-state";
+import {
+  awaitLspReady,
+  createReadyHandle,
+  resolveLspReady,
+  type LspState,
+  type ReadyHandle,
+} from "./store-ready";
 
-/** LSP lifecycle states exposed to consumers. */
-export type LspState = "idle" | "starting" | "running" | "stopped";
+// Re-exported so consumers keep importing the LSP lifecycle type from the store.
+export { type LspState } from "./store-ready";
 
 /** Runtime binary selected by Shipwright during activation. */
 export interface RuntimeResolution {
@@ -43,13 +56,7 @@ export interface RuntimeResolution {
   readonly version: string | undefined;
 }
 
-/** Lifecycle promise handle for LSP client ready signaling. */
-interface ReadyHandle {
-  promise: Promise<void>;
-  resolve: () => void;
-}
-
-export interface Store extends ProfilerActions {
+export interface Store extends ProfilerActions, ProcessPanelActions {
   // Read-only signals — consumers can .value but cannot assign.
   readonly client: ReadonlySignal<LanguageClient | undefined>;
   readonly serverCommands: ReadonlySignal<ReadonlySet<string>>;
@@ -82,6 +89,19 @@ export interface Store extends ProfilerActions {
   readonly cpuBusy: ReadonlySignal<boolean>;
   /** True while the memory leg is starting or running (gates memory starts only). */
   readonly memoryBusy: ReadonlySignal<boolean>;
+  /**
+   * Centralised Python Processes panel state (#148): the fetched list, the
+   * fetch lifecycle behind the welcome's honesty (#147), the sort/group/filter
+   * view modes, and the active debuggee. Fed by the store-side poll
+   * (process-poll.ts); the panel renders it as a pure projection.
+   */
+  readonly processes: ReadonlySignal<ProcessPanelState>;
+  /**
+   * Monotonic process-panel change counter ([EXTACT-REACTIVE-STATE]) — the
+   * signal the panel subscribes to via `subscribeRevision`, mirroring how the
+   * Modules panel keys off `analysisRevision`.
+   */
+  readonly processesRevision: ReadonlySignal<number>;
 
   // Read-only access to the ready handle (for whenReady callers).
   readonly lspReadyPromise: ReadonlySignal<Promise<void> | undefined>;
@@ -118,6 +138,7 @@ interface StoreSignals {
   runtimeResolution: Signal<RuntimeResolution | undefined>;
   sessionIdToPid: Signal<Map<string, number>>;
   profiler: Signal<ProfilerSession>;
+  processes: Signal<ProcessPanelState>;
   readyHandle: Signal<ReadyHandle | undefined>;
   analysisRevision: Signal<number>;
   /** Trailing-debounce timer for diagnostics-driven analysisRevision bumps. */
@@ -168,26 +189,6 @@ function syncServerCommands(signals: StoreSignals): void {
     }
   }
   signals.serverCommands.value = next;
-}
-
-/** Resolve the ready handle and clear it.
- *  Resolution MUST be async (next tick) so callers' .then() handlers
- *  are attached before the promise settles. */
-function resolveLspReady(signals: StoreSignals): void {
-  const handle = signals.readyHandle.value;
-  if (handle !== undefined) {
-    signals.readyHandle.value = undefined;
-    setTimeout(handle.resolve, 0);
-  }
-}
-
-/** Create a fresh ready handle for this start cycle. */
-function createReadyHandle(signals: StoreSignals): ReadyHandle {
-  let resolve: (() => void) | undefined;
-  const promise = new Promise<void>((r) => { resolve = r; });
-  const handle: ReadyHandle = { promise, resolve: resolve as () => void };
-  signals.readyHandle.value = handle;
-  return handle;
 }
 
 interface CommandRegistration {
@@ -336,51 +337,6 @@ function bindClientStateListener(
   });
 }
 
-/** Wait for the LSP ready handle with a timeout, returning Result. */
-async function awaitLspReady(signals: StoreSignals, timeoutMs: number): Promise<Result<LanguageClient>> {
-  // Fast path: client already running.
-  const client = signals.client.value;
-  if (client?.isRunning() === true) {
-    return { ok: true, value: client };
-  }
-  // Also check our own state signal (catches post-restart where isRunning()
-  // lags behind the onDidChangeState callback that set lspState = "running").
-  if (signals.lspState.value === "running" && client !== undefined) {
-    return { ok: true, value: client };
-  }
-
-  const existing = signals.readyHandle.value;
-  const ready = existing !== undefined ? existing.promise : createReadyHandle(signals).promise;
-
-  // Poll for the client becoming ready via both isRunning() and our own
-  // lspState signal. The double check catches cases where the readyHandle
-  // was resolved before this function was called (e.g. after a deactivate/
-  // activate cycle where the state listener already fired).
-  const poll = new Promise<"poll">((resolve) => {
-    const interval = setInterval(() => {
-      const c = signals.client.value;
-      if (c?.isRunning() === true || (signals.lspState.value === "running" && c !== undefined)) {
-        clearInterval(interval);
-        resolve("poll");
-      }
-    }, POLL_INTERVAL_MS);
-    setTimeout(() => { clearInterval(interval); }, timeoutMs);
-  });
-
-  const timeout = new Promise<"timeout">((resolve) => {
-    setTimeout(() => { resolve("timeout"); }, timeoutMs);
-  });
-  const outcome = await Promise.race([ready.then(() => "ready" as const), poll, timeout]);
-  if (outcome === "timeout") {
-    return { ok: false, error: new Error(`LSP client did not reach Running state within ${timeoutMs}ms`) };
-  }
-  const resolved = signals.client.value;
-  if (resolved === undefined) {
-    return { ok: false, error: new Error("LSP client resolved but is undefined") };
-  }
-  return { ok: true, value: resolved };
-}
-
 /** Reset all signals to their initial values. */
 function resetSignals(signals: StoreSignals): void {
   // Per-session client state — cleared on every reset.
@@ -392,6 +348,7 @@ function resetSignals(signals: StoreSignals): void {
   signals.runtimeResolution.value = undefined;
   signals.sessionIdToPid.value = new Map();
   signals.profiler.value = IDLE_PROFILER_SESSION;
+  signals.processes.value = IDLE_PROCESS_PANEL;
   signals.readyHandle.value = undefined;
   // outputChannel and logSink are stable logging infrastructure created once by
   // initLogging (and owned by context.subscriptions) — they are deliberately
@@ -403,6 +360,27 @@ function resetSignals(signals: StoreSignals): void {
   // which the server's stderr readline (which the client never tears down)
   // drains a final line into the disposed channel and throws
   // "Channel has been closed".
+}
+
+/** Plain-value setters for logging/runtime infrastructure — extracted to keep createStore small. */
+function infrastructureSetters(signals: StoreSignals): Pick<
+  Store,
+  "setStatusBarItem" | "setOutputChannel" | "setLogSink" | "setRuntimeResolution"
+> {
+  return {
+    setStatusBarItem(item: vscode.StatusBarItem): void {
+      signals.statusBarItem.value = item;
+    },
+    setOutputChannel(ch: vscode.LogOutputChannel): void {
+      signals.outputChannel.value = ch;
+    },
+    setLogSink(sink: LogSink): void {
+      signals.logSink.value = sink;
+    },
+    setRuntimeResolution(resolution: RuntimeResolution): void {
+      signals.runtimeResolution.value = resolution;
+    },
+  };
 }
 
 /** Debuggee PID actions (copy-on-write Map) — extracted to keep createStore small. */
@@ -443,6 +421,7 @@ function createStoreSignals(): StoreSignals {
     runtimeResolution: signal<RuntimeResolution | undefined>(undefined),
     sessionIdToPid: signal<Map<string, number>>(new Map()),
     profiler: signal<ProfilerSession>(IDLE_PROFILER_SESSION),
+    processes: signal<ProcessPanelState>(IDLE_PROCESS_PANEL),
     readyHandle: signal<ReadyHandle | undefined>(undefined),
     analysisRevision: signal<number>(0),
     diagnosticsDebounce: undefined,
@@ -473,10 +452,13 @@ export function createStore(onReset?: () => void): Store {
     profilerBusy,
     cpuBusy: computed(() => isCpuBusy(signals.profiler.value)),
     memoryBusy: computed(() => isMemoryBusy(signals.profiler.value)),
+    processes: signals.processes,
+    processesRevision: computed(() => signals.processes.value.revision),
     lspReadyPromise,
     isServerReady,
     analysisRevision: signals.analysisRevision,
     ...createProfilerActions(signals.profiler),
+    ...createProcessPanelActions(signals.processes),
 
     setClient(context: vscode.ExtensionContext, c: LanguageClient): void {
       signals.client.value = c;
@@ -486,18 +468,7 @@ export function createStore(onReset?: () => void): Store {
     bumpAnalysisRevision(): void {
       bumpAnalysisRevision(signals);
     },
-    setStatusBarItem(item: vscode.StatusBarItem): void {
-      signals.statusBarItem.value = item;
-    },
-    setOutputChannel(ch: vscode.LogOutputChannel): void {
-      signals.outputChannel.value = ch;
-    },
-    setLogSink(sink: LogSink): void {
-      signals.logSink.value = sink;
-    },
-    setRuntimeResolution(resolution: RuntimeResolution): void {
-      signals.runtimeResolution.value = resolution;
-    },
+    ...infrastructureSetters(signals),
     ...debuggeePidActions(signals),
     isClientCommandRegistered(id: string): boolean {
       return signals.clientCommands.value.has(id);
@@ -509,6 +480,20 @@ export function createStore(onReset?: () => void): Store {
       return awaitLspReady(signals, timeoutMs);
     },
     reset(): void {
+      // Stop the client being replaced BEFORE resetSignals drops the
+      // reference. A reset that only forgets the client leaves it fully
+      // alive — a zombie that keeps forwarding didOpen/didClose to its own
+      // server process and publishing into its own diagnostics collection,
+      // which VS Code merges into getDiagnostics(). Its late republishes
+      // then resurrect diagnostics the real server already cleared
+      // (GitHub #264). dispose() also tears the collection down; skip it
+      // when a stop is already in flight (the deactivate() path).
+      const dyingClient = signals.client.value;
+      if (dyingClient?.isRunning() === true) {
+        dyingClient.dispose().catch((err: unknown) => {
+          Logger.warn(`Failed to dispose replaced LSP client: ${String(err)}`);
+        });
+      }
       disposeAllCommands(signals);
       resetSignals(signals);
       onReset?.();

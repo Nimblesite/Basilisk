@@ -3,11 +3,10 @@
 //! Code Actions handler: quick fixes for diagnostics.
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicU64;
 
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, CodeActionOrCommand, Command, Diagnostic, NumberOrString, Range,
-    TextEdit, Url, WorkspaceEdit,
+    CodeAction, CodeActionKind, CodeActionOrCommand, Command, Diagnostic, NumberOrString, Position,
+    Range, TextEdit, Url, WorkspaceEdit,
 };
 
 mod fixes;
@@ -17,8 +16,22 @@ pub(crate) mod refactor;
 mod stubs;
 mod suppress;
 
-/// Monotonic counter for unique temp-file names.
-pub(super) static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+/// Compute the LSP range covering the entire document.
+pub(crate) fn full_document_range(source: &str) -> Range {
+    let line_count = u32::try_from(source.lines().count()).unwrap_or(u32::MAX);
+    let last_line_char_count = source.lines().last().map_or(0, |l| l.chars().count());
+    let last_line_len = u32::try_from(last_line_char_count).unwrap_or(u32::MAX);
+    Range {
+        start: Position {
+            line: 0,
+            character: 0,
+        },
+        end: Position {
+            line: line_count,
+            character: last_line_len,
+        },
+    }
+}
 
 /// Return the 0-based line number after the last import statement.
 pub(super) fn last_import_line(source: &str) -> u32 {
