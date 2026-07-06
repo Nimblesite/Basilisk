@@ -153,12 +153,18 @@ fn typeshed_path_full_lifecycle_through_pyproject() {
     );
     let out2 = check(&dir);
     assert_flags_unresolved(&out2, "fractions", &["os", "uname"]);
+    let out2_text = stdout_of(&out2);
     assert_eq!(
-        stdout_of(&out2).matches("imports_unresolved").count(),
-        // exactly one diagnostic line references the code (single unresolved import)
+        // Count the bracketed diagnostic HEADER, emitted exactly once per
+        // diagnostic. The bare code `imports_unresolved` also appears in the
+        // `see:` docs URL, so a raw substring count would double-report.
+        out2_text.matches("error[imports_unresolved]").count(),
         1,
-        "exactly one import (`fractions`) must be unresolved; stdout: {}",
-        stdout_of(&out2)
+        "exactly one import (`fractions`) must be unresolved; stdout: {out2_text}"
+    );
+    assert!(
+        out2_text.contains("Found 1 diagnostic (1 error)."),
+        "the summary must report exactly one diagnostic; stdout: {out2_text}"
     );
 
     // ── Interaction 3: supply `fractions.pyi` in the custom typeshed → clean. ──
