@@ -72,7 +72,7 @@ Additional directories to search for `.pyi` stub files. These sit at the **head*
 **Type:** `string`
 **Default:** _(unset — the bundled typeshed is used)_
 **Example:** `"typeshed-micropython"`
-**LSP JSON key:** `basilisk.typeshedPath`
+**LSP JSON key:** `typeshedPath` (VS Code `settings.json`: `basilisk.typeshedPath`)
 **Spec:** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
 
 Path to a directory containing a custom or modified version of typeshed's standard-library stubs. When set, this directory becomes the **canonical source for standard-library types** — step 3 of the [typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering), which states that type checkers "SHOULD use this as the canonical source for standard-library types in this step." Basilisk resolves stdlib modules against it in preference to the bundled typeshed; a stdlib module absent from the directory falls through to the remaining resolution steps.

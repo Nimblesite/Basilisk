@@ -67,7 +67,7 @@ rules."imports_unresolved" = "warning"
 **类型：** `string`
 **默认值：** _（未设置——使用捆绑的 typeshed）_
 **示例：** `"typeshed-micropython"`
-**LSP JSON 键：** `basilisk.typeshedPath`
+**LSP JSON 键：** `typeshedPath`（VS Code `settings.json`：`basilisk.typeshedPath`）
 **规范：** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
 
 指向包含 typeshed 标准库存根的自定义或修改版本的目录路径。设置后，该目录将成为**标准库类型的规范来源**——[typing 规范的导入解析顺序](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)中的第 3 步，该规范指出类型检查器"SHOULD use this as the canonical source for standard-library types in this step"（应将其用作此步骤中标准库类型的规范来源）。Basilisk 优先针对它解析标准库模块，而不是捆绑的 typeshed；目录中缺失的标准库模块将继续进入后续的解析步骤。

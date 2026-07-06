@@ -99,7 +99,9 @@ fn custom_typeshed_config_flag_reaches_imports_unresolved() -> Result<(), Box<dy
          {typeshed_diags:?}"
     );
     assert!(
-        typeshed_diags.iter().any(|d| d.message.contains("fractions")),
+        typeshed_diags
+            .iter()
+            .any(|d| d.message.contains("fractions")),
         "the diagnostic must name the unresolved module: {typeshed_diags:?}"
     );
 
