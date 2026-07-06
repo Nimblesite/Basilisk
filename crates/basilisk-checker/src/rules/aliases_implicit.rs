@@ -274,7 +274,7 @@ fn collect_runtime_var_names(module: &ResolvedModule) -> std::collections::HashS
             | RhsKind::Dict(_)
             | RhsKind::Set(_)
             | RhsKind::Tuple(_) => true,
-            RhsKind::CallExpr | RhsKind::TypeCall => {
+            RhsKind::CallExpr | RhsKind::KnownCall(_) | RhsKind::TypeCall => {
                 // Check if the RHS text looks like a runtime expression
                 var.rhs_span
                     .and_then(|sp| slice_span(source, sp))

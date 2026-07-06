@@ -291,10 +291,45 @@ pub(super) fn classify_rhs(expr: &Expr) -> RhsKind {
         Expr::Tuple(tup) => RhsKind::Tuple(tup.elts.iter().map(classify_rhs).collect()),
         Expr::List(list) if list.elts.is_empty() => RhsKind::EmptyList,
         Expr::Dict(dict) if dict.items.is_empty() => RhsKind::EmptyDict,
-        Expr::Call(_) => RhsKind::CallExpr,
+        Expr::Call(call) => classify_call(call),
         Expr::Lambda(_) => RhsKind::Lambda,
         _ => RhsKind::Other,
     }
+}
+
+/// Classify a call expression. Most calls have unknown result kinds
+/// ([`RhsKind::CallExpr`]), but `<dict-literal>.get(key, default)` resolves
+/// to the common kind of the dict's values and the default when they all
+/// agree (#253 — feeds inferred-type display in hover and inlay hints).
+fn classify_call(call: &ruff_python_ast::ExprCall) -> RhsKind {
+    dict_get_result_kind(call).map_or(RhsKind::CallExpr, |kind| {
+        RhsKind::KnownCall(Box::new(kind))
+    })
+}
+
+/// Result kind of a two-argument `.get(key, default)` on a dict literal, when
+/// every value kind and the default's kind agree. The one-argument form is
+/// excluded: it returns `value | None`, which has no single kind.
+fn dict_get_result_kind(call: &ruff_python_ast::ExprCall) -> Option<RhsKind> {
+    let Expr::Attribute(attr) = call.func.as_ref() else {
+        return None;
+    };
+    if attr.attr.as_str() != "get"
+        || call.arguments.args.len() != 2
+        || !call.arguments.keywords.is_empty()
+    {
+        return None;
+    }
+    let RhsKind::Dict(pairs) = classify_rhs(&attr.value) else {
+        return None;
+    };
+    let default_kind = classify_rhs(call.arguments.args.get(1)?);
+    let mut value_kinds = pairs
+        .into_iter()
+        .map(|(_, value)| value)
+        .chain(std::iter::once(default_kind));
+    let first = value_kinds.next()?;
+    value_kinds.all(|kind| kind == first).then_some(first)
 }
 
 // ---------------------------------------------------------------------------

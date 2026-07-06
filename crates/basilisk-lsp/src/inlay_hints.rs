@@ -5,7 +5,7 @@
 use basilisk_resolver::{ResolvedModule, VariableInfo};
 use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintLabel};
 
-use crate::util::{byte_offset_to_position, rhs_type_display};
+use crate::util::{byte_offset_to_position, infer_return_type_display, rhs_type_display};
 
 /// Compute inlay hints for a resolved module.
 #[must_use]
@@ -115,7 +115,7 @@ fn function_return_type_hints(resolved: &ResolvedModule, source: &str, hints: &m
             continue;
         }
 
-        let inferred = infer_return_type(func);
+        let inferred = infer_return_type_display(func);
         if inferred.is_empty() {
             continue;
         }
@@ -138,32 +138,6 @@ fn function_return_type_hints(resolved: &ResolvedModule, source: &str, hints: &m
             data: None,
         });
     }
-}
-
-/// Infer the return type of a function from its `return` statements.
-///
-/// Returns an empty string when the type cannot be determined.
-fn infer_return_type(func: &basilisk_resolver::FunctionInfo) -> &'static str {
-    if func.return_stmts.is_empty() {
-        return "None";
-    }
-
-    // Collect the display names for every return statement.
-    let mut common_type: Option<&'static str> = None;
-    for ret in &func.return_stmts {
-        let display = rhs_type_display(&ret.rhs_kind);
-        // If any return has an uninferrable type, bail out.
-        if display.is_empty() {
-            return "";
-        }
-        match common_type {
-            None => common_type = Some(display),
-            Some(prev) if prev == display => {}
-            Some(_) => return "", // mixed return types — cannot infer
-        }
-    }
-
-    common_type.unwrap_or("None")
 }
 
 /// Find the byte offset of the closing `)` of the parameter list starting

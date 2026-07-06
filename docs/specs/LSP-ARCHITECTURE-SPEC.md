@@ -393,6 +393,12 @@ Type signature for any symbol, with diagnostics secondary:
 | Parameter | `(parameter) name: Type` |
 | Attribute | `(property) ClassName.name: Type` |
 
+Unannotated functions still surface types (#253): the return type is inferred
+from the body's `return` statements (shared with inlay hints via
+`infer_return_type_display`; no reachable `return` infers `None`, mixed or
+uninferrable returns render nothing), and unannotated parameters render
+`: Unknown` — never blank — except the implicit `self`/`cls` receiver.
+
 ### Go to Definition (`textDocument/definition`) {#LSPARCH-FEATURES-DEFINITION}
 
 Ctrl+Click / F12 on a symbol jumps to its definition.
