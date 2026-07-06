@@ -36,7 +36,7 @@ pub fn search_paths_from_config(
     config: &crate::config::WorkspaceConfig,
     registry: Option<Arc<PackageRegistry>>,
 ) -> ImportSearchPaths {
-    let site_packages = resolve_site_packages(roots, config);
+    let site_packages = resolve_site_packages(roots, config, registry.is_some());
 
     // Include user-configured stub paths + auto-generated stub cache dirs.
     let mut stub_paths = config.stub_paths.clone();
@@ -60,19 +60,27 @@ pub fn search_paths_from_config(
     }
 }
 
-/// Detect site-packages directory from venv config, then fall back to
-/// `python3 -c "import sys; ..."` subprocess for system Python discovery.
+/// Detect site-packages directory from venv config, then — for unlocked
+/// projects only — fall back to `python3 -c "import sys; ..."` subprocess
+/// discovery of the ambient interpreter.
 ///
 /// Reads the `VIRTUAL_ENV` environment variable as the highest-priority
 /// override — `source .venv/bin/activate` (and CI scripts that install
 /// dependencies into a venv outside the workspace tree) set this to the
 /// active venv root.
+///
+/// `uv_locked` implements the [LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND] resolution
+/// contract (issue #252): a uv-locked project resolves third-party imports
+/// against its lock and its own (or explicitly activated) venv only — never
+/// the ambient interpreter's site-packages, which would make diagnostics
+/// depend on what the host machine happens to have installed globally.
 fn resolve_site_packages(
     roots: &[PathBuf],
     config: &crate::config::WorkspaceConfig,
+    uv_locked: bool,
 ) -> Option<PathBuf> {
     let virtual_env = std::env::var_os("VIRTUAL_ENV").map(PathBuf::from);
-    resolve_site_packages_with_env(roots, config, virtual_env.as_deref())
+    resolve_site_packages_with_env(roots, config, virtual_env.as_deref(), uv_locked)
 }
 
 /// `resolve_site_packages` with the `VIRTUAL_ENV` value injected.
@@ -83,9 +91,11 @@ fn resolve_site_packages_with_env(
     roots: &[PathBuf],
     config: &crate::config::WorkspaceConfig,
     virtual_env: Option<&Path>,
+    uv_locked: bool,
 ) -> Option<PathBuf> {
     // 1. Honour an active venv signalled by `VIRTUAL_ENV` — the standard
-    //    Python convention. Issue #25.
+    //    Python convention. Issue #25. This is explicit user intent, so it
+    //    applies to locked and unlocked projects alike.
     if let Some(venv) = virtual_env {
         if venv.is_dir() {
             if let Some(sp) = site_packages_in_dir(venv) {
@@ -97,7 +107,14 @@ fn resolve_site_packages_with_env(
     if let Some(sp) = resolve_venv_site_packages(roots, config) {
         return Some(sp);
     }
-    // 3. Fall back to Python subprocess discovery.
+    // 3. Fall back to ambient-interpreter discovery — but never for a
+    //    uv-locked project ([LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND], issue #252):
+    //    the lock is the source of truth, and inheriting the host
+    //    interpreter's site-packages makes import resolution non-deterministic
+    //    across machines.
+    if uv_locked {
+        return None;
+    }
     detect_python_site_packages()
 }
 
@@ -262,7 +279,9 @@ mod tests {
         fs::create_dir_all(&sp).unwrap();
 
         let config = crate::config::WorkspaceConfig::default();
-        let result = resolve_site_packages(std::slice::from_ref(&dir), &config);
+        // Locked: in-tree venv discovery must survive the issue #252 contract
+        // (only the ambient-interpreter fallback is gated off).
+        let result = resolve_site_packages(std::slice::from_ref(&dir), &config, true);
         assert!(result.is_some());
         assert!(result.unwrap().ends_with("site-packages"));
 
@@ -284,8 +303,14 @@ mod tests {
         let workspace = make_tmp_dir("bsk_ir_workspace_no_venv");
 
         let config = crate::config::WorkspaceConfig::default();
-        let result =
-            resolve_site_packages_with_env(std::slice::from_ref(&workspace), &config, Some(&venv));
+        // Locked: an explicitly activated VIRTUAL_ENV is user intent and must
+        // be honoured even under the issue #252 lock-only contract.
+        let result = resolve_site_packages_with_env(
+            std::slice::from_ref(&workspace),
+            &config,
+            Some(&venv),
+            true,
+        );
 
         assert!(
             result.is_some(),
@@ -319,8 +344,12 @@ mod tests {
 
         let bogus = std::path::PathBuf::from("/definitely/does/not/exist");
         let config = crate::config::WorkspaceConfig::default();
-        let result =
-            resolve_site_packages_with_env(std::slice::from_ref(&workspace), &config, Some(&bogus));
+        let result = resolve_site_packages_with_env(
+            std::slice::from_ref(&workspace),
+            &config,
+            Some(&bogus),
+            true,
+        );
 
         assert!(
             result.is_some(),
