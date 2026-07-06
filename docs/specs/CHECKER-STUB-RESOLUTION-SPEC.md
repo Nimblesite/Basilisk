@@ -103,29 +103,51 @@ whose `os`, `time`, and `machine` signatures diverge from CPython typeshed
 
 ## Stub Discovery Engine {#STUBRES-ENGINE}
 
-`basilisk-stubs` provides stub resolution:
+`basilisk-stubs` provides stub resolution. The data model is defined in
+[typeDiagram](https://typediagram.dev) markup — source of truth
+[`models/stub_resolution.td`](../../models/stub_resolution.td), rendered to
+[`docs/models/stub_resolution.svg`](../models/stub_resolution.svg). The Rust
+ADTs in `crates/basilisk-stubs/src/types.rs` are generated from it
+(`typediagram --to rust models/stub_resolution.td`):
 
-```rust
-pub struct StubResolution {
-    pub module: String,
-    pub source: StubSource,
-    pub pyi_path: Option<PathBuf>,
-    pub tier: StubTier,
+```td
+alias PathBuf = String
+
+type StubResolution {
+  module: String
+  source: StubSource
+  pyi_path: Option<PathBuf>
+  tier: StubTier
 }
 
-pub enum StubSource {
-    UserStub,       // from stub-paths config
-    StubPackage,    // from foopkg-stubs
-    InlineTyped,    // from py.typed marker
-    Typeshed,       // bundled
+union StubSource {
+  UserStub
+  StubPackage
+  InlineTyped
+  Typeshed
+  CustomTypeshed
 }
 
-pub enum StubTier {
-    Tier1,  // hand-written, verified (typeshed, official stubs)
-    Tier2,  // auto-generated, community-reviewed
-    Tier3,  // best-effort inference (auto-generated)
+union StubTier {
+  Tier1
+  Tier2
+  Tier3
 }
 ```
+
+`StubSource` records which resolution step ([§STUBRES-PEP561](#STUBRES-PEP561)) supplied the stub:
+
+| Variant | Resolution step | Meaning |
+|---|---|---|
+| `UserStub` | 1 | `.pyi` from a `stub-paths` directory (head of path) |
+| `CustomTypeshed` | 3 | stdlib stub from a `typeshed-path` override ([§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED)) |
+| `Typeshed` | 3 | bundled typeshed (compiled into the binary) |
+| `StubPackage` | 4 | installed `foopkg-stubs` package |
+| `InlineTyped` | 5 | installed package with a `py.typed` marker |
+
+A `CustomTypeshed` stub is `Tier1` (hand-written, trusted) and hovers as
+`… (custom typeshed)`, so a MicroPython signature is never misreported as the
+bundled CPython one.
 
 ### typeshed Bundling {#STUBRES-TYPESHED}
 

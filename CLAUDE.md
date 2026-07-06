@@ -41,45 +41,31 @@ The spec-ID web is the fabric of this repository and is non-negotiable:
 
 - [Python type system spec](https://typing.python.org/en/latest/spec/index.html)
 - [Pyrefly](https://pyrefly.org/en/docs/) | [Pyright](https://microsoft.github.io/pyright/#/) — reference implementations to compare against; NEVER copy from their code.
-- [Conformance results](https://github.com/python/typing/blob/main/conformance/results/results.html) — being listed here is the goal ([background](https://sinon.github.io/future-python-type-checkers/#zuban-from-david-halter)).
+- [Conformance results](https://github.com/python/typing/blob/main/conformance/results/results.html) — being listed here is the goal 
 
-# Build Commands
-
-Cross-platform GNU Make. On Windows: `choco install make` or use the one in Git for Windows.
-
-```bash
-make build   # compile everything
-make test    # FAIL-FAST tests + coverage + threshold (ONLY test entry point)
-make lint    # all linters/analyzers (no formatting)
-make fmt     # format in place
-make clean   # remove build artifacts
-make ci      # lint + test + build (full CI simulation)
-make setup   # post-create dev environment setup
-```
-
-There are exactly **7 standard targets — don't add others.** `make test` runs the test runner with its fail-fast flag, collects coverage, asserts measured >= threshold from `coverage-thresholds.json`, and exits non-zero on any failure; to debug a single test, invoke the runner directly (not a Makefile target). `make fmt` formats in place, `make lint` is read-only analysis, `make test` runs tests with coverage — three targets, no overlap.
+Refer to the Makefile for build scripts
 
 # Rules
 
 - **Top priority: reduce duplication.** Run `deslop:find-similar` BEFORE writing new code and `deslop:top-offenders` after changing code. Always merge duplicates and keep it DRY.
 - Aggressively hoist shared code into shared crates/modules/packages.
 - Centralize all global state: each app has a single global-state file, and NO state lives outside it. All mutable state uses Signals for reactivity — no stale state on screen.
-- `allow(clippy = ...)` is NEVER permitted.
 - Keep dependencies and versions in sync across `.github/workflows/ci.yml` and `.devcontainer/Dockerfile` at all times.
-- Ignore compiler code (except clippy fixes).
 - Use [typeDiagram markup](https://typediagram.dev/docs/language-reference.html) to define models in the specs. Generate the ADTs using the [typeDiagram code generator](https://typediagram.dev/docs/cli.html) pointing at the markup.
 - Don't use Git unless asked.
 - Treat legacy code as code to be removed — there is no legacy code in this codebase.
-- Avoid regex — use the proper parsing mechanism, usually ruff.
+- Avoid regex to parse anything, use ruff.
 - Keep files under 500 LOC; break up larger files. Move files rather than copying them.
 - Use your judgment — do NOT stop to ask the user questions.
 - NEVER kill a VS Code process (including in the browser) — it disrupts active debugging and test sessions.
+- Bug Fix Process: [fix bug skill](.claude/skills/fix-bug/SKILL.md)
 
 ## Documentation Honesty — No Unsubstantiated Claims
 
 Trust is the product; a fabricated or contradictory figure destroys it. This applies **everywhere** — specs, plans, README, website, marketing, and code comments.
 
 - **Every empirical or comparative claim about the outside world** (stats, adoption, competitor capability/performance/conformance numbers, market facts, attributed quotes) MUST carry an inline link to the authoritative source that actually makes that claim. Link the URL or delete the claim — NEVER invent or approximate one. A value that drifts (a competitor's pinned conformance %, a download size) links to its live source, never a frozen figure.
+
 - **Self-measured, reproducible metrics are exempt** (e.g. our own conformance score from the unmodified `python/typing` scorer in CI) — but state how they're measured and don't compare them against numbers from a different methodology.
 
 ## Git & Branch Discipline
@@ -91,24 +77,12 @@ Git is off-limits unless you are explicitly asked. When git IS used:
 - **Work on exactly ONE branch.** Reuse the existing feature branch; never open a second. If multiple feature branches exist, merge them into one immediately before any other work.
 - **Worktrees are forbidden** — never run `git worktree`.
 
-Auto-memory is OFF (`.claude/settings.json` → `"autoMemoryEnabled": false`). Every durable rule goes through a reviewed PR to this file — never auto-captured memory.
-
 ## Testing
-
-We aim for 100% test coverage and a high mutation score at all times — focus on assertions, not just coverage. Only coarse e2e tests; no unit tests.
 
 - NEVER delete a failing test, remove a failure-causing assertion, reduce assertiveness, or ignore tests. Broken or missing functionality gets MORE failing tests, never fewer.
 - Mutation score only increases. Widen scope over time by adding `#[mutation_safe]` tests over more rules/functions. The gate ([CHKARCH-TESTING-MUTATION-RATCHET], baseline `mutation_testing/mutation_scores.json`) fails CI if the viable mutant pool shrinks, caught drops, missed/timeout rise, or kill rate drops.
 - `make test` is FAIL-FAST — it stops at the first failure. NEVER use `--no-fail-fast`; it saves CI minutes.
 - `make test` always computes and enforces coverage. The threshold lives in `coverage-thresholds.json` at the repo root — not env vars, not GH repo variables, not CI YAML. Below threshold fails the pipeline. Ratchet only.
-
-### Bug Fix Process
-
-1. Write a test that fails because of the bug.
-2. Run it — confirm it fails because of the bug.
-3. Repeat until it's failing for the right reason.
-4. Fix the bug (do NOT change the test).
-5. Run it — confirm it passes.
 
 ### IDE Extension Testing
 
@@ -166,22 +140,6 @@ Register before starting work.
 - Name classes after what the element IS, not what section it's in.
 - Avoid common LLM-default colors (e.g. purple) — use RNG and color wheels.
 
-## Generating CLI Screenshots (real `basilisk check` output)
-
-Marketing/doc screenshots of CLI output must be **real output of the actual binary**, never hand-typed code fences or synthetic renders (those drift and are usually inaccurate). Canonical location: `website/src/assets/images/` (referenced as `/assets/images/<name>.png`). Rule screenshots are named after the code (`e0001.png` … `e0025.png`); the homepage demo pair is `cli-demo.png` (errors) + `cli-clean.png` (pass).
-
-These are generated **automatically** — no manual Terminal.app / `screencapture` / ImageMagick. From `website/`:
-
-```bash
-npm run screenshots                       # regenerate every image
-node screenshots/generate.mjs e0001 e0012 # a subset by name
-BASILISK_BIN=../target/release/basilisk npm run screenshots  # pin the binary
-```
-
-`screenshots/generate.mjs` runs the real `basilisk check --color always` on each snippet in `screenshots/shots.mjs` (in a throwaway, neutrally-named temp dir so paths read `e0001.py:1:13` with no PII), **asserts the documented diagnostic actually fires** (the snippet→code pairing lives in the manifest, so a checker change can't silently ship a misleading image), then renders the genuine colored output in a faithful macOS Terminal window via Playwright. See `[WEBSITE-SCREENSHOTS]` (`docs/specs/WEBSITE-SCREENSHOTS-SPEC.md`).
-
-To add or change a screenshot, edit `screenshots/shots.mjs` (snippet + expected code) and rerun — never craft images by hand. Committed PNGs are regenerated locally when CLI output changes; CI only verifies they render (`website/tests/e2e/screenshots.spec.ts`, `[WEBSITE-SCREENSHOTS-VERIFY]`), never captures, per `[GITHUB-NO-ARTIFACTS]`. After regenerating, rebuild (`npm run build`) and confirm the images copy to `_site/assets/images/`. VSIX integration tests capture their own editor screenshots to the gitignored `vscode-extension/.screenshots/` (never committed, never a CI artifact).
-
 ## Per-diagnostic error pages (`/errors/BSK-XXXX/`)
 
 Every diagnostic the CLI prints ends with `see: https://www.basilisk-python.dev/errors/BSK-XXXX` (the `docs_url` on each rule's `ErrorCode`). Those pages are **generated for all codes** from the checker source — see `[WEBSITE-ERROR-PAGES]` (`docs/specs/WEBSITE-ERROR-PAGES-SPEC.md`). The single source is `website/src/_data/rules.json`, produced by:
@@ -192,15 +150,6 @@ python3 scripts/gen_rules_reference.py --data   # writes website/src/_data/rules
 
 It extracts the `//! BSK-XXXX:` summary + doc-comment body (prose and ```python examples) from each `crates/basilisk-checker/src/rules/*.rs`. **After adding or renaming a rule, rerun it** — CI fails otherwise: the website job regenerates and `diff`s `rules.json` (`[WEBSITE-ERROR-PAGES-DRIFT]`), and rule-source edits are classified as website changes so the guard runs. The same data drives the `/docs/rules/` table and counts (no hand-maintained code lists). Pages render via `website/src/errors/error.njk`; a worked-example screenshot appears automatically for any code present in `screenshots/shots.mjs`.
 
-## VS Code editor screenshots (`vscode-*.png`)
-
-Real screenshots of the extension running in VS Code (diagnostics, hover, quick-fix, activity panel) are captured automatically — see `[VSIX-EDITOR-SCREENSHOTS]` (`docs/specs/VSIX-EDITOR-SCREENSHOTS-SPEC.md`). From `vscode-extension/`, after `cargo build -p basilisk-cli -p basilisk-profiler-helper`:
-
-```bash
-npm run screenshots:editor
-```
-
-This stages the binary into the dev extension, copies `shipwright.json` (gitignored dev artifacts), launches the **headed** "Editor screenshots" suite with `BASILISK_SCREENSHOTS=1`, and a dependency-free CDP sidecar (`screenshot-watcher.mjs`, Node's built-in WebSocket — no Playwright) captures the window to `website/src/assets/images/vscode-*.png`. The suite is a no-op without the env flag, so normal `npm test` never opens these windows. To add one, add a `test(...)` that makes the feature visible and calls `takeWindowScreenshot(...)`. As with the CLI shots, PNGs are committed and regenerated locally; CI only verifies they render (`website/tests/e2e/screenshots.spec.ts`), per `[GITHUB-NO-ARTIFACTS]`.
 
 # Architecture
 
