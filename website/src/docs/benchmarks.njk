@@ -47,17 +47,18 @@ benchmarkStrings:
   Python files that stress one diagnostic each &mdash; so the comparison is like-for-like.
 </p>
 
-<h3>Cold vs. warm</h3>
+<h3>Cold, not warm</h3>
 
 <p>
-  The main <code>&lt;tool&gt;</code> column is a <strong>cold</strong> full-file check from scratch: the
-  time to start the tool and check the file with no prior state. Only Basilisk and mypy also have a
-  <code>-warm</code> column, because they are the only two that keep a real cross-run cache
-  (<code>basilisk-warm</code> = a <code>--cache</code> result-cache hit; <code>mypy-warm</code> = an
-  incremental <code>.mypy_cache</code> hit, with cold mypy measured under <code>--no-incremental</code>).
-  Pyright, ty and Pyrefly keep no cross-run result cache &mdash; a repeat run is a cold run &mdash; so
-  they are measured cold-only. zuban is cold-only too, but its mypy mode reuses a <code>./.mypy_cache</code>
-  when present, so we delete that cache before each timed run to keep the measurement honestly cold.
+  Every column above is a <strong>cold</strong> full-file check from scratch &mdash; the time to start
+  the tool and check the file with no prior state &mdash; so the comparison is like-for-like. That is
+  the honest worst case, not the warm incremental latency you feel while editing. Basilisk and mypy are
+  the only two tools here that keep a real cross-run cache (Basilisk a <code>--cache</code> result-cache,
+  mypy an incremental <code>.mypy_cache</code>), so their warm re-check is faster again; mypy&rsquo;s cold
+  number is therefore measured under <code>--no-incremental</code>. Pyright, ty and Pyrefly keep no
+  cross-run result cache &mdash; a repeat run is a cold run &mdash; and zuban&rsquo;s mypy mode reuses a
+  <code>./.mypy_cache</code> when present, so we delete that cache before each timed run. Every number
+  above is honestly cold.
 </p>
 
 <h3>Fair strictness</h3>

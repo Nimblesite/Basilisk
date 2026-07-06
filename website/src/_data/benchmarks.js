@@ -78,12 +78,18 @@ function parseCsv(text) {
   meta.toolVersions = parseToolVersions(meta.tools);
 
   const cols = dataLines[0].split(",");
-  const tools = cols.slice(1).map((c) => c.replace(/_ms$/, ""));
+  const allTools = cols.slice(1).map((c) => c.replace(/_ms$/, ""));
+  // The per-rule table is a COLD-check comparison of type checkers, so the
+  // warm-cache variants (…-warm) are excluded from `tools` (and thus the table
+  // columns and the fastest mark) — they aren't separate checkers and would
+  // crowd the real ones off the page. Their raw numbers stay in `values` (and
+  // the committed CSV); only the rendered comparison drops them.
+  const tools = allTools.filter((t) => !t.endsWith("-warm"));
   const rows = dataLines.slice(1).map((line) => {
     const parts = line.split(",");
     const stem = parts[0];
     const values = {};
-    tools.forEach((t, i) => {
+    allTools.forEach((t, i) => {
       const v = parts[i + 1];
       values[t] = v === undefined || v === "" ? null : parseFloat(v);
     });
