@@ -239,8 +239,6 @@ function coverageColor(percent: number): vscode.ThemeColor {
 }
 
 // [EXTACT-MODULES-COUNT-STYLE] is the diagnostic-tally surface for module rows.
-// NOTE (conformance): the spec mandates coloured glyphs `🔴 n` / `🟠 n` here and
-// "never `2E 3W`"; this renders `nE nW`. See the audit deviation for this section.
 /** Module row description: coverage bar + % + error/warning counts + adopted badge. */
 function moduleDescription(module: ModuleNode): string {
   // Type Checking disabled (#119): the server serves no grading, so the row is
@@ -264,11 +262,12 @@ function moduleTooltip(module: ModuleNode): string {
   ].filter(Boolean).join("\n");
 }
 
-/** Implements [EXTACT-MODULES-COUNT-STYLE]: `nE nW`, or "" when clean. */
+/** Implements [EXTACT-MODULES-COUNT-STYLE]: coloured glyphs `🔴 n` (errors) /
+ *  `🟠 n` (warnings) — never `nE nW`; a zero severity is omitted, or "" when clean. */
 function diagnosticTally(errors: number, warnings: number): string {
   const issues: string[] = [];
-  if (errors > 0) { issues.push(`${errors}E`); }
-  if (warnings > 0) { issues.push(`${warnings}W`); }
+  if (errors > 0) { issues.push(`🔴 ${errors}`); }
+  if (warnings > 0) { issues.push(`🟠 ${warnings}`); }
   return issues.join(" ");
 }
 
@@ -287,9 +286,9 @@ function packageIconColor(node: PackageTreeNode): vscode.ThemeColor | undefined 
 }
 
 /**
- * Folder/package row description: the subtree's rolled-up `nE nW` so problems
- * are visible without drilling in (#149). A package (`__init__.py`) also keeps
- * its own coverage bar.
+ * Folder/package row description: the subtree's rolled-up count-style tally
+ * ([EXTACT-MODULES-COUNT-STYLE]) so problems are visible without drilling in
+ * (#149). A package (`__init__.py`) also keeps its own coverage bar.
  */
 function packageDescription(node: PackageTreeNode): string {
   const coverage = node.module?.coveragePercent;
@@ -318,7 +317,6 @@ function packageTooltip(node: PackageTreeNode): string {
  * Implements [EXTACT-MODULES-HEADER] (`treeView.message`: "73% typed · …").
  * [EXTACT-HEALTH-HEADER] An empty workspace (no Python files) renders an explicit
  * "No Python files found" — never a misleading 100% for 0/0 symbols (#57).
- * NOTE (conformance): the spec's tally uses `🔴 n` / `🟠 n` glyphs, not `nE nW`.
  */
 export function workspaceHealthMessage(stats: HealthStats | undefined): string {
   if (stats === undefined) { return ""; }
