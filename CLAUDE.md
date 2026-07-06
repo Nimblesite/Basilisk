@@ -161,8 +161,6 @@ Strict-by-default Python type checker and comprehensive LSP built in **Rust**. O
 - **Parallelism**: Rayon (work-stealing, file-level)
 - **No Pyright/mypy/Node.js** — zero TypeScript or Python runtime
 
-Diagnostic codes: `BSK-E####` / `BSK-W####`. See `docs/specs/CHECKER-ARCHITECTURE-SPEC.md` ([CHKARCH]) for full architecture, diagnostic ranges, and conformance scoring.
-
 ## Migration to `lspkit`
 
 The cross-cutting LSP scaffolding in this repo (tower-lsp setup, workspace index, file watcher + debouncer, diagnostics publication, capability builder, config loader) is being distilled into the generic `lspkit-*` workspace, maintained in the private repository [`Nimblesite/lsp_toolkit`](https://github.com/Nimblesite/lsp_toolkit).
@@ -181,5 +179,3 @@ Mapping (current → toolkit crate):
 | `crates/basilisk-lsp/src/server/mod.rs:61,64` debounce constants + file-watcher loop | `lspkit-live::watcher::FileWatcher` + `lspkit-live::scheduler::spawn` |
 | `crates/basilisk-lsp/src/config.rs:35–100` `WorkspaceConfig` loader | `lspkit-config::load_from_ancestor` (consumer supplies the file name + struct) |
 | `crates/basilisk-lsp/tests/lsp/ws_test_common.rs` E2E fixture | (not yet in toolkit; harness crate is a v0.1 follow-up) |
-
-Code in this repo is **not** being removed — it stays canonical until the toolkit matures. This note exists so future work reuses `lspkit` for new servers and avoids widening this repo's scaffolding.

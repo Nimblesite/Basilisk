@@ -99,6 +99,33 @@ standard library — e.g. MicroPython's
 whose `os`, `time`, and `machine` signatures diverge from CPython typeshed
 ([issue #271](https://github.com/Nimblesite/Basilisk/issues/271)).
 
+### Resolution flow {#STUBRES-RESOLUTION-FLOW}
+
+The full order, including the canonicality rule: when `typeshed-path` is set, a
+stdlib module absent from it MUST NOT be rescued by the bundled
+`is_stdlib_module` name-set — the custom directory is canonical for step 3, so an
+absent module falls through to steps 4–5 and, failing those, to
+`imports_unresolved`.
+
+```mermaid
+flowchart TB
+    A["import X"] --> B{"stub-paths<br/>(step 1)?"}
+    B -- hit --> Z["Resolved (UserStub)"]
+    B -- miss --> C{"user code<br/>(step 2)?"}
+    C -- hit --> Z2["Resolved (Source)"]
+    C -- miss --> D{"typeshed-path set?"}
+    D -- yes --> E{"&lt;typeshed-path&gt;/stdlib/X.pyi?"}
+    E -- hit --> Z3["Resolved (CustomTypeshed)"]
+    E -- miss --> G["skip bundled name-set<br/>(custom typeshed is canonical)"]
+    D -- no --> F{"bundled stdlib name?"}
+    F -- yes --> Z4["Recognised (Typeshed)"]
+    F -- miss --> G2["steps 4–5"]
+    G --> G2
+    G2 --> H{"site-packages<br/>(steps 4–5)?"}
+    H -- hit --> Z5["Resolved (StubPackage / InlineTyped)"]
+    H -- miss --> U["Unknown → imports_unresolved"]
+```
+
 ---
 
 ## Stub Discovery Engine {#STUBRES-ENGINE}

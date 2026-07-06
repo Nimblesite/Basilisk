@@ -171,24 +171,8 @@ branch" implementation hits:
    be an error, not a CPython pass. Absent-from-custom-typeshed falls through steps 4–5 and, with the bundled name-set
    bypassed, ends at `Unknown` / `imports_unresolved` — the honest answer.
 
-```mermaid
-flowchart TB
-    A["import X"] --> B{"stub-paths<br/>(step 1)?"}
-    B -- hit --> Z["Resolved (UserStub)"]
-    B -- miss --> C{"user code<br/>(step 2)?"}
-    C -- hit --> Z2["Resolved (Source)"]
-    C -- miss --> D{"typeshed-path set?"}
-    D -- yes --> E{"&lt;typeshed-path&gt;/stdlib/X.pyi?"}
-    E -- hit --> Z3["Resolved (CustomTypeshed)"]
-    E -- miss --> G["skip bundled name-set<br/>(custom typeshed is canonical)"]
-    D -- no --> F{"bundled stdlib name?"}
-    F -- yes --> Z4["Recognised (Typeshed)"]
-    F -- miss --> G2["steps 4–5"]
-    G --> G2
-    G2 --> H{"site-packages<br/>(steps 4–5)?"}
-    H -- hit --> Z5["Resolved (StubPackage / InlineTyped)"]
-    H -- miss --> U["Unknown → imports_unresolved"]
-```
+The full resolution flow — including this canonicality branch — is diagrammed in the spec:
+[§STUBRES-RESOLUTION-FLOW](../specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-RESOLUTION-FLOW).
 
 ---
 
