@@ -4,7 +4,7 @@ title: "Configuration Reference — pyproject.toml Settings"
 description: "Complete reference for all Basilisk configuration options in pyproject.toml. Severity overrides, per-path rules, inline suppressions, and Ruff integration."
 keywords: basilisk, configuration, pyproject.toml, settings
 date: 2026-02-28
-dateModified: 2026-03-31
+dateModified: 2026-07-06
 author: The Basilisk Project
 eleventyNavigation:
   key: Configuration
@@ -31,6 +31,7 @@ That's all you need. Basilisk finds Python files from the current directory and 
 python-version = "3.12"
 python-platform = "All"
 stub-paths = ["stubs/"]
+typeshed-path = "typeshed-micropython"   # optional: replace the bundled stdlib typeshed
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**", "**/generated/**"]
 
@@ -64,7 +65,23 @@ Target platform. Affects platform-specific type stubs and conditional imports.
 **Default:** `[]`
 **Example:** `["stubs/", "typings/"]`
 
-Additional directories to search for `.pyi` stub files. Searched in order before the bundled typeshed stubs. Useful for custom stubs for internal libraries.
+Additional directories to search for `.pyi` stub files. These sit at the **head** of the import search path — step 1 of the [typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering) — so they can patch or shadow any later module, standard-library or third-party. Useful for custom stubs for internal libraries.
+
+### `typeshed-path`
+
+**Type:** `string`
+**Default:** _(unset — the bundled typeshed is used)_
+**Example:** `"typeshed-micropython"`
+**LSP JSON key:** `typeshedPath` (VS Code `settings.json`: `basilisk.typeshedPath`)
+**Spec:** [`STUBRES-CUSTOM-TYPESHED`](https://github.com/Nimblesite/Basilisk/blob/main/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)
+
+Path to a directory containing a custom or modified version of typeshed's standard-library stubs. When set, this directory becomes the **canonical source for standard-library types** — step 3 of the [typing spec's import-resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering), which states that type checkers "SHOULD use this as the canonical source for standard-library types in this step." Basilisk resolves stdlib modules against it in preference to the bundled typeshed; a stdlib module absent from the directory falls through to the remaining resolution steps.
+
+The directory must follow typeshed's layout — standard-library stubs live under a top-level `stdlib/` subdirectory, so Basilisk resolves each module as `<typeshed-path>/stdlib/<module>.pyi`. A clone of the [python/typeshed](https://github.com/python/typeshed) repository, or any directory you already use as Pyright's [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) or mypy's [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html), works unchanged. Relative paths resolve against the project root.
+
+Use this to type-check against an alternative standard library — for example MicroPython's [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs), whose `os`, `time`, and `machine` signatures differ from CPython. Symbols resolved from the custom typeshed hover with a `(custom typeshed)` tag — distinct from the bundled typeshed's `(typeshed)` — so you can confirm the override is active and know a MicroPython signature is never misreported as CPython's.
+
+`stub-paths` *prepends* extra stub directories; `typeshed-path` *replaces* the vendored standard library wholesale. They are independent and can be combined. See [How to use a custom typeshed](#how-to-use-a-custom-typeshed) below for a step-by-step walkthrough.
 
 ### `include`
 
@@ -105,6 +122,88 @@ Pattern syntax, matched against each path relative to the project root:
 | `src/generated` | an **anchored** pattern (contains `/`) — the path or any ancestor dir, plus its subtree |
 
 The same patterns are honoured everywhere Basilisk discovers files: the LSP workspace scan, the `basilisk check` / `fix` / `adopt` CLI, and the editor's per-file checks when you open or edit a file — so a file excluded on the CLI is also silent in the editor. See `CHKARCH-CONFIG-EXCLUDE` in the architecture spec for the canonical semantics.
+
+---
+
+## How to use a custom typeshed
+
+`typeshed-path` swaps the standard-library stubs Basilisk bundles for your own copy. Reach for it when you target an alternative Python whose standard library differs from CPython (MicroPython, a patched CPython, a vendor SDK), or when you need a newer or forked typeshed than the one baked into your Basilisk release.
+
+### 1. Lay the directory out like typeshed
+
+Point `typeshed-path` at the **root** of a typeshed-layout directory. Standard-library stubs must sit under a top-level `stdlib/` subdirectory, exactly as in the [python/typeshed](https://github.com/python/typeshed) repository — Basilisk resolves each module as `<typeshed-path>/stdlib/<module>.pyi`:
+
+```
+vendor/typeshed/
+└── stdlib/
+    ├── os.pyi
+    ├── time.pyi
+    └── ...
+```
+
+Any directory you already use as Pyright's [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) or mypy's [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html) consumes this same layout, so it works with Basilisk unchanged.
+
+### 2a. Point at a forked or newer typeshed
+
+Clone the typeshed repo (or your fork of it), then point `typeshed-path` at the clone and patch the `.pyi` files you need:
+
+```sh
+git clone https://github.com/python/typeshed vendor/typeshed
+```
+
+```toml
+[tool.basilisk]
+typeshed-path = "vendor/typeshed"
+```
+
+Basilisk now type-checks the standard library against `vendor/typeshed/stdlib/` instead of its bundled copy.
+
+### 2b. Point at MicroPython's standard library
+
+MicroPython's stdlib diverges from CPython — `os`, `time`, and `machine` carry different signatures. Install [`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs) (a typeshed-layout copy of the stdlib with MicroPython-specific edits) and point at it:
+
+```toml
+[tool.basilisk]
+python-version = "3.12"
+typeshed-path = ".venv/lib/python3.12/site-packages/micropython_stdlib_stubs"
+```
+
+Because `micropython-stdlib-stubs` is a **partial** stdlib, a module it does not ship (e.g. `tkinter`, which does not exist on a board) is **not** rescued by the bundled CPython stub — the custom typeshed is the canonical source for step 3, so the import is reported as unresolved. That is the honest answer for an embedded target.
+
+### 3. Configure it in your editor (LSP)
+
+The same setting is `typeshedPath` (camelCase) in JSON config. In a standalone **`basilisk.json`** at the project root, the key is bare:
+
+```json
+{
+  "typeshedPath": "vendor/typeshed"
+}
+```
+
+In VS Code's `settings.json` it is namespaced under `basilisk.`:
+
+```json
+{
+  "basilisk.typeshedPath": "vendor/typeshed"
+}
+```
+
+`typeshed-path` (in `pyproject.toml`), `typeshedPath` (in `basilisk.json` / an editor's LSP config), and `basilisk.typeshedPath` (in VS Code `settings.json`) are all the **same** setting.
+
+### 4. Confirm it took effect — hover provenance
+
+Symbols resolved from a custom typeshed hover with a `(custom typeshed)` tag, distinct from the bundled typeshed's `(typeshed)` tag. Hover over an imported stdlib symbol: seeing `(custom typeshed)` confirms the override is active and that the signature came from your directory — a MicroPython `os.uname` is never misreported as CPython's.
+
+### `typeshed-path` vs `stub-paths`
+
+They solve different problems and can be combined:
+
+| | `stub-paths` (step 1) | `typeshed-path` (step 3) |
+| --- | --- | --- |
+| Role | *Prepends* extra `.pyi` directories at the head of the search path | *Replaces* the bundled standard-library typeshed wholesale |
+| Scope | Can shadow any single module, stdlib or third-party | Canonical source for the entire standard library |
+| Typical use | Patch one broken stub; stubs for an internal library | Target an alternative or forked stdlib (MicroPython, a newer typeshed) |
+| Precedence | Wins — a `stub-paths` module still shadows the custom typeshed | Sits below `stub-paths`, above installed packages |
 
 ---
 

@@ -1,12 +1,20 @@
 //! Tests for [ANALYSIS-INCR-IMPORTS]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-INCR-IMPORTS
-#![allow(clippy::allow_attributes, clippy::unwrap_used, missing_docs)]
+#![allow(
+    clippy::allow_attributes,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    missing_docs
+)]
 //! `resolve_module_imports` application tests for `basilisk_checker::imports`
 //! (relocated from `basilisk-lsp`; behaviour-identical — public API only).
 
 use std::fs;
 use std::sync::Arc;
 
-use basilisk_checker::imports::{classify_unresolved, resolve_module_imports, ImportSearchPaths};
+use basilisk_checker::imports::{
+    bundled_stdlib_recognized, classify_unresolved, resolve_module_imports, ImportSearchPaths,
+};
 use basilisk_resolver::scope::{ImportResolution, PackageDepKind, UnresolvedReason};
 use basilisk_uv::PackageRegistry;
 
@@ -208,4 +216,225 @@ fn resolve_module_imports_classifies_and_enriches_unresolved() {
     let os_import = import("os");
     assert_eq!(os_import.unresolved_reason, None);
     assert_eq!(os_import.package_dep_kind, None);
+}
+
+// --------------------------------------------------------------------------
+// Custom-typeshed canonicality ([STUBRES-CUSTOM-TYPESHED]).
+//
+// A configured `typeshed-path` is *the canonical source for standard-library
+// types* (typing-spec import-resolution step 3). The load-bearing consequence
+// for a PARTIAL custom typeshed (e.g. micropython-stubs, which ships only a
+// subset of the stdlib): a stdlib module ABSENT from it must NOT be silently
+// rescued by the bundled `phf` name-set — it has to fall through to
+// `imports_unresolved`, exactly as it would for any other missing module.
+// These tests pin that behaviour end-to-end through the real apply pipeline.
+// --------------------------------------------------------------------------
+
+/// Build a throwaway custom-typeshed directory whose `stdlib/` subtree contains
+/// the given `.pyi` files. Returns the typeshed root (pass it as `typeshed_path`).
+fn make_custom_typeshed(stdlib_files: &[(&str, &str)]) -> std::path::PathBuf {
+    let root = make_tmp_dir("bsk_custom_typeshed");
+    let stdlib = root.join("stdlib");
+    fs::create_dir_all(&stdlib).unwrap();
+    for (name, body) in stdlib_files {
+        fs::write(stdlib.join(name), body).unwrap();
+    }
+    root
+}
+
+/// `bundled_stdlib_recognized` is the single gate that enforces canonicality:
+/// it must recognise stdlib names ONLY while no custom typeshed is configured.
+#[test]
+fn bundled_stdlib_recognized_is_suppressed_by_a_custom_typeshed() {
+    // Sanity: both are genuine stdlib modules in the bundled name-set.
+    assert!(basilisk_stubs::is_stdlib_module("os"));
+    assert!(basilisk_stubs::is_stdlib_module("fractions"));
+
+    // No custom typeshed → the bundled name-set rescues stdlib modules.
+    assert!(bundled_stdlib_recognized("os", false));
+    assert!(bundled_stdlib_recognized("fractions", false));
+    // A non-stdlib name is never rescued, custom typeshed or not.
+    assert!(!bundled_stdlib_recognized("requests", false));
+    assert!(!bundled_stdlib_recognized("requests", true));
+    // A custom typeshed is canonical for step 3 → the bundled name-set is
+    // bypassed entirely, so even real stdlib names are no longer rescued here;
+    // they must resolve from the typeshed's stdlib/ subtree or fall through.
+    assert!(!bundled_stdlib_recognized("os", true));
+    assert!(!bundled_stdlib_recognized("fractions", true));
+}
+
+/// Through the full `resolve_module_imports` pipeline: a custom typeshed makes a
+/// present stdlib module resolve from its `stdlib/` subtree, and — the crux —
+/// flips an ABSENT stdlib module from "silently rescued" to "unresolved".
+#[test]
+fn custom_typeshed_resolves_present_and_fails_absent_stdlib() {
+    // `os` present in the custom stdlib, `fractions` deliberately absent.
+    let typeshed = make_custom_typeshed(&[("os.pyi", "def uname() -> str: ...\n")]);
+    let imp = |m: &basilisk_resolver::ResolvedModule, name: &str| {
+        m.imports
+            .iter()
+            .find(|i| i.module == name)
+            .cloned()
+            .unwrap()
+    };
+
+    // (1) WITHOUT a custom typeshed: nothing resolves on disk, but the bundled
+    // name-set rescues BOTH stdlib modules, so neither carries a reason.
+    let mut without = module_with_plain_imports(&["os", "fractions"]);
+    resolve_module_imports(&mut without, &make_search_paths(vec![]));
+    assert_eq!(imp(&without, "os").resolution, ImportResolution::Unresolved);
+    assert_eq!(imp(&without, "os").unresolved_reason, None);
+    assert_eq!(
+        imp(&without, "fractions").unresolved_reason,
+        None,
+        "without a custom typeshed the bundled name-set rescues stdlib modules"
+    );
+
+    // (2) WITH the custom typeshed configured:
+    let mut with = module_with_plain_imports(&["os", "fractions"]);
+    let mut paths = make_search_paths(vec![]);
+    paths.typeshed_path = Some(typeshed.clone());
+    resolve_module_imports(&mut with, &paths);
+
+    // `os` resolves to the custom typeshed's own stub — the canonical source.
+    let os_import = imp(&with, "os");
+    assert_ne!(
+        os_import.resolution,
+        ImportResolution::Unresolved,
+        "os is present in the custom typeshed stdlib/ and must resolve"
+    );
+    let os_path = os_import.resolved_path.as_ref().unwrap();
+    assert!(
+        os_path.starts_with(typeshed.join("stdlib")),
+        "os must resolve under the custom typeshed's stdlib/, got {os_path:?}"
+    );
+    assert!(os_path.ends_with("os.pyi"));
+    assert_eq!(os_import.unresolved_reason, None);
+
+    // `fractions` is absent from the custom typeshed. Because the typeshed is
+    // canonical for step 3, the bundled name-set no longer rescues it: it falls
+    // through to unresolved WITH a reason. This is the whole point of the fix.
+    let fractions = imp(&with, "fractions");
+    assert_eq!(fractions.resolution, ImportResolution::Unresolved);
+    assert!(
+        fractions.unresolved_reason.is_some(),
+        "a stdlib module absent from a custom typeshed must fall through to \
+         unresolved, not be rescued by the bundled name-set [STUBRES-CUSTOM-TYPESHED]"
+    );
+
+    let _ = fs::remove_dir_all(&typeshed);
+}
+
+/// Exports pulled from a custom-typeshed stub carry `StubCustomTypeshed`
+/// provenance (hover reads "(custom typeshed)"); the SAME stub read without a
+/// custom typeshed configured is a plain Tier-1 stub. Provenance must track the
+/// source, never masquerade a `MicroPython` signature as bundled `CPython`.
+#[test]
+fn custom_typeshed_stub_exports_carry_custom_provenance() {
+    use basilisk_checker::exports::populate_imported_symbols;
+    use basilisk_stubs::TypeProvenance;
+
+    let typeshed = make_custom_typeshed(&[("os.pyi", "def uname() -> str: ...\n")]);
+
+    // Resolve `import os` against the custom typeshed so the import's
+    // resolved_path points at <typeshed>/stdlib/os.pyi.
+    let mut resolved = module_with_plain_import("os");
+    let mut paths = make_search_paths(vec![]);
+    paths.typeshed_path = Some(typeshed.clone());
+    resolve_module_imports(&mut resolved, &paths);
+    assert!(resolved.imports[0]
+        .resolved_path
+        .as_ref()
+        .unwrap()
+        .starts_with(typeshed.join("stdlib")));
+
+    // No workspace exports — force the on-demand `.pyi` path in populate.
+    let no_workspace = |_: &std::path::Path| -> Option<
+        &'static [(String, basilisk_resolver::scope::ExternalSymbol)],
+    > { None };
+
+    // WITH the custom typeshed: the stub's `uname` export is CustomTypeshed.
+    let mut with_custom = resolved.clone();
+    populate_imported_symbols(&mut with_custom, no_workspace, Some(&typeshed));
+    let uname = with_custom
+        .imported_symbols
+        .get("uname")
+        .expect("plain `import os` must expose the stub's `uname` export");
+    assert_eq!(
+        uname.provenance,
+        Some(TypeProvenance::StubCustomTypeshed),
+        "a stub under the custom typeshed stdlib/ must carry StubCustomTypeshed \
+         provenance so hover reads \"(custom typeshed)\" [STUBRES-CUSTOM-TYPESHED]"
+    );
+
+    // WITHOUT the custom typeshed argument (same file on disk): a plain Tier-1
+    // stub. Only the `custom_typeshed` argument decides provenance.
+    let mut without_custom = resolved.clone();
+    populate_imported_symbols(&mut without_custom, no_workspace, None);
+    assert_eq!(
+        without_custom
+            .imported_symbols
+            .get("uname")
+            .unwrap()
+            .provenance,
+        Some(TypeProvenance::StubTier1),
+        "the same stub read without a custom typeshed is a plain Tier-1 stub"
+    );
+
+    let _ = fs::remove_dir_all(&typeshed);
+}
+
+/// The `custom_typeshed` argument alone must NOT stamp `StubCustomTypeshed`
+/// provenance: a stub resolved from OUTSIDE the typeshed's `stdlib/` subtree
+/// (here a user stub from `stub-paths`) stays a plain Tier-1 stub even while a
+/// custom typeshed is configured. Only files under `<typeshed>/stdlib/` are the
+/// custom typeshed's own ([STUBRES-CUSTOM-TYPESHED]). This pins the path gate in
+/// `stub_source_for` — a mutant that ignores the path and always returns
+/// `CustomTypeshed` when a typeshed is configured is caught here.
+#[test]
+fn custom_typeshed_does_not_taint_user_stubs_outside_its_stdlib() {
+    use basilisk_checker::exports::populate_imported_symbols;
+    use basilisk_stubs::TypeProvenance;
+
+    // A configured custom typeshed (its stdlib/ ships os.pyi)…
+    let typeshed = make_custom_typeshed(&[("os.pyi", "def uname() -> str: ...\n")]);
+    // …and a SEPARATE user-stub dir, entirely outside the typeshed tree.
+    let stub_dir = make_tmp_dir("bsk_user_stub_outside_ts");
+    fs::write(
+        stub_dir.join("cowsay.pyi"),
+        "def tux(text: str) -> None: ...\n",
+    )
+    .unwrap();
+
+    let mut resolved = module_with_plain_import("cowsay");
+    let mut paths = make_search_paths(vec![]);
+    paths.stub_paths = vec![stub_dir.clone()];
+    paths.typeshed_path = Some(typeshed.clone());
+    resolve_module_imports(&mut resolved, &paths);
+
+    // Precondition: `cowsay` resolved to the user stub, NOT under the typeshed.
+    let cowsay_path = resolved.imports[0].resolved_path.as_ref().unwrap();
+    assert!(cowsay_path.ends_with("cowsay.pyi"));
+    assert!(
+        !cowsay_path.starts_with(typeshed.join("stdlib")),
+        "user stub must resolve outside the custom typeshed's stdlib/, got {cowsay_path:?}"
+    );
+
+    let no_workspace = |_: &std::path::Path| -> Option<
+        &'static [(String, basilisk_resolver::scope::ExternalSymbol)],
+    > { None };
+
+    // Even WITH the custom typeshed configured, a stub outside its stdlib/ is a
+    // plain Tier-1 stub: provenance tracks the on-disk source, not merely whether
+    // a custom typeshed exists.
+    populate_imported_symbols(&mut resolved, no_workspace, Some(&typeshed));
+    assert_eq!(
+        resolved.imported_symbols.get("tux").unwrap().provenance,
+        Some(TypeProvenance::StubTier1),
+        "a user stub outside <typeshed>/stdlib/ must stay StubTier1 even with a \
+         custom typeshed configured [STUBRES-CUSTOM-TYPESHED]"
+    );
+
+    let _ = fs::remove_dir_all(&typeshed);
+    let _ = fs::remove_dir_all(&stub_dir);
 }

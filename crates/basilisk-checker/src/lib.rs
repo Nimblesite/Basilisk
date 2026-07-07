@@ -92,8 +92,15 @@ pub fn check_with_config(
         .imports
         .iter()
         .filter(|i| {
+            // A configured custom typeshed is canonical for step 3, so the
+            // bundled name-set no longer treats an absent stdlib module as typed
+            // ([STUBRES-CUSTOM-TYPESHED]); its imported names then participate in
+            // cascade suppression like any other unresolved import.
             i.resolution == basilisk_resolver::scope::ImportResolution::Unresolved
-                && !basilisk_stubs::is_stdlib_module(&i.module)
+                && !crate::imports::bundled_stdlib_recognized(
+                    &i.module,
+                    config.typeshed_path.is_some(),
+                )
         })
         .flat_map(|i| i.names.iter().cloned())
         .collect();

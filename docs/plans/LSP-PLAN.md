@@ -28,6 +28,8 @@ History: last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#18
 | 7.6 | Third-party type stubs — typeshed bundling, `py.typed` marker detection (PEP 561) | Medium | DONE — `phf` stdlib module set, `py.typed` detection, stub package discovery |
 | 7.7 | Config file reading — `pyproject.toml`, `basilisk.json` | Medium | DONE — `basilisk-config` crate with per-module/per-path overrides |
 
+> Stub resolution (tasks 7.5 / 7.6) and its remaining work — the custom-typeshed override, auto-stub generation — now have a dedicated plan: [CHECKER-STUB-RESOLUTION-PLAN.md](CHECKER-STUB-RESOLUTION-PLAN.md).
+
 ### Task 7.4 — Salsa incremental engine: status at a glance {#LSPPLAN-SALSA-STATUS}
 
 > Spec: [CHKARCH-INCREMENTAL-SALSA](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA). The engine is built, proven correct, and **drives the LSP's analysis** — interactive edits (didOpen/didChange) and every workspace-wide re-analysis (post-scan re-check, config/`uv.lock` refresh, dependent refresh), cross-module symbol population included. The CLI conformance path (`basilisk check` → `process_file`) is deliberately unchanged, so this cannot affect the conformance score.
@@ -208,14 +210,12 @@ History: last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#18
 - [ ] Virtual environment auto-detection
 - [ ] Configuration `extends` — base configuration inheritance
 - [ ] Extra module search paths — `extraPaths`
-- [ ] Custom typeshed path — `typeshedPath`
-- [ ] Custom stub path — `stubPath`
+- **Stub resolution & custom typeshed** (`stub-paths`, `typeshed-path`, auto-stub generation) — moved to its own focused plan: [CHECKER-STUB-RESOLUTION-PLAN.md](CHECKER-STUB-RESOLUTION-PLAN.md). Headline open item: the step-3 custom-typeshed override for [#271](https://github.com/Nimblesite/Basilisk/issues/271).
 - [ ] Namespace package support
 - [ ] Persistent index caching — cache workspace index to disk
 - [ ] Multi-root workspace support (requires Phase 8)
 - [ ] Module-level auto-import index with depth control (requires Phase 8)
 - [ ] Workspace-wide diagnostics — diagnose all files, not just open ones (partially done via whole-module analysis)
-- [ ] Automatic type stub generation — CLI `--createstub`
 - [ ] Type completeness verification — CLI `--verifytypes`
 - [ ] Library code analysis fallback — `useLibraryCodeForTypes`
 - [ ] Watch mode — `--watch` with incremental updates

@@ -57,6 +57,7 @@ pub fn search_paths_from_config(
         stub_paths,
         site_packages,
         registry,
+        typeshed_path: config.typeshed_path.clone(),
     }
 }
 

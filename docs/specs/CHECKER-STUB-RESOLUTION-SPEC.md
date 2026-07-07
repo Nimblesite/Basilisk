@@ -5,46 +5,181 @@
 
 ---
 
-## PEP 561 Resolution Order {#STUBRES-PEP561}
+## Import Resolution Order {#STUBRES-PEP561}
 
-Following [PEP 561](https://peps.python.org/pep-0561/), the resolution order is:
+Basilisk MUST resolve modules that carry type information in the exact order
+mandated by the Python typing specification —
+[Distributing type information → Import resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)
+(the normative successor to [PEP 561](https://peps.python.org/pep-0561/)). The
+specification states that a type checker "SHOULD resolve modules containing type
+information" in this order (quoted verbatim):
 
-1. **User stubs** — `.pyi` files in `stub-paths` config directories
-2. **User source** — `.py` files in the project
-3. **Stub-only packages** — installed `foopkg-stubs` packages (e.g. `types-requests`)
-4. **Inline-typed packages** — installed packages with `py.typed` marker
-5. **Bundled typeshed** — stdlib stubs compiled into the binary from `basilisk-stubs`
-6. **No stubs found** — type resolves to `Unknown`, imports_unresolved fires
+> 1. Stubs or Python source manually put in the beginning of the path. Type
+>    checkers SHOULD provide this to allow the user complete control of which
+>    stubs to use, and to patch broken stubs or inline types from packages.
+> 2. User code - the files the type checker is running on.
+> 3. Typeshed stubs for the standard library. These will usually be vendored by
+>    type checkers, but type checkers SHOULD provide an option for users to
+>    provide a path to a directory containing a custom or modified version of
+>    typeshed; if this option is provided, type checkers SHOULD use this as the
+>    canonical source for standard-library types in this step.
+> 4. Stub packages - these packages SHOULD supersede any installed inline
+>    package. They can be found in directories named `foopkg-stubs` for package
+>    `foopkg`.
+> 5. Packages with a `py.typed` marker file - if there is nothing overriding the
+>    installed package, _and_ it opts into type checking, the types bundled with
+>    the package SHOULD be used (be they in `.pyi` type stub files or inline in
+>    `.py` files).
+> 6. If the type checker chooses to additionally vendor any third-party stubs
+>    (from typeshed or elsewhere), these SHOULD come last in the module
+>    resolution order.
 
-> **uv fast path**: In uv projects, steps 3–4 are accelerated by the `PackageRegistry` parsed from `uv.lock`. The registry knows every installed package and whether a companion stub package exists — no site-packages directory walk needed. See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-LOCK-REGISTRY](LSP-UV-INTEGRATION-SPEC.md#LSPUV-LOCK-REGISTRY).
+Each numbered step maps onto a Basilisk mechanism:
+
+| Spec step | Basilisk mechanism | Config key |
+|---|---|---|
+| 1 — manual stubs at head of path | User `.pyi` stubs in `stub-paths` directories, plus the auto-discovered `.basilisk/stubs/` cache ([§STUBRES-CREATE-LOCAL](#STUBRES-CREATE-LOCAL)). They sit at the head of the path and MAY shadow any later module, stdlib or third-party. | `stub-paths` |
+| 2 — user code | Workspace `.py` source under the configured roots / `include`. | roots, `include` |
+| 3 — stdlib typeshed | The typeshed standard-library stubs bundled into `basilisk-stubs` ([§STUBRES-TYPESHED](#STUBRES-TYPESHED)), **overridable** by a custom typeshed directory ([§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED)). | `typeshed-path` |
+| 4 — stub-only packages | Installed `foopkg-stubs` / typeshed `types-foopkg` distributions, discovered in site-packages. They supersede an inline-typed install of the same package. | (auto) |
+| 5 — `py.typed` packages | Installed packages shipping a `py.typed` marker (stubs in `.pyi` or inline in `.py`). | (auto) |
+| 6 — vendored third-party stubs | Basilisk vendors **no** third-party stubs for resolution; the bundled typeshed *distribution index* drives only the "install stubs" quick fix ([§STUBRES-CODEACTIONS](#STUBRES-CODEACTIONS)), never module resolution — nothing occupies this last slot. | — |
+
+A module that matches no step resolves to `Unknown` and `imports_unresolved`
+fires ([§STUBRES-PROVENANCE-DIAG](#STUBRES-PROVENANCE-DIAG)).
+
+> **uv fast path**: In uv projects, steps 4–5 are accelerated by the `PackageRegistry` parsed from `uv.lock`. The registry knows every installed package and whether a companion stub package exists — no site-packages directory walk needed. See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-LOCK-REGISTRY](LSP-UV-INTEGRATION-SPEC.md#LSPUV-LOCK-REGISTRY).
+
+### Custom typeshed override {#STUBRES-CUSTOM-TYPESHED}
+
+Step 3 of the resolution order requires that "type checkers SHOULD provide an
+option for users to provide a path to a directory containing a custom or
+modified version of typeshed; if this option is provided, type checkers SHOULD
+use this as the canonical source for standard-library types in this step"
+([typing spec, import resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)).
+
+Basilisk satisfies this with `typeshed-path` (`pyproject.toml`; LSP JSON:
+`typeshedPath`) — a single path to the root of a typeshed-layout directory that
+supplies standard-library stubs:
+
+```toml
+[tool.basilisk]
+typeshed-path = "typeshed-micropython"   # stdlib/*.pyi replacing the bundled typeshed
+```
+
+Normative behaviour:
+
+- When `typeshed-path` is set, that directory is the **canonical source for
+  standard-library types** (spec step 3): Basilisk MUST resolve stdlib modules
+  against it and MUST NOT consult the bundled typeshed for any stdlib module the
+  custom directory supplies.
+- A stdlib module absent from the custom directory falls through to the later
+  resolution steps exactly as an absent bundled stub would — the override
+  *replaces* the bundled stdlib typeshed, it does not truncate resolution.
+- A relative `typeshed-path` is resolved against the workspace root, mirroring
+  `stub-paths`.
+- `typeshed-path` is distinct from `stub-paths`: `stub-paths` (step 1)
+  *prepends* extra stub directories at the head of the path and can shadow
+  individual modules; `typeshed-path` (step 3) *replaces the vendored stdlib
+  typeshed wholesale* as the canonical standard-library source.
+- The directory is a typeshed-layout tree: stdlib stubs live under `stdlib/`, so
+  Basilisk resolves `<typeshed-path>/stdlib/<module>.pyi`. This matches the
+  on-disk shape Pyright's
+  [`typeshedPath`](https://microsoft.github.io/pyright/#/configuration) and
+  mypy's
+  [`custom_typeshed_dir`](https://mypy.readthedocs.io/en/stable/config_file.html)
+  consume (both point at a clone of the
+  [typeshed repository](https://github.com/python/typeshed)), so an existing
+  `typeshedPath` directory works with Basilisk unchanged — and Basilisk reuses
+  Pyright's exact `typeshedPath` spelling for the LSP JSON key.
+
+This is how a project teaches Basilisk an embedded or alternative Python's
+standard library — e.g. MicroPython's
+[`micropython-stdlib-stubs`](https://github.com/Josverl/micropython-stubs),
+whose `os`, `time`, and `machine` signatures diverge from CPython typeshed
+([§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED)).
+
+### Resolution flow {#STUBRES-RESOLUTION-FLOW}
+
+The full order, including the canonicality rule: when `typeshed-path` is set, a
+stdlib module absent from it MUST NOT be rescued by the bundled
+`is_stdlib_module` name-set — the custom directory is canonical for step 3, so an
+absent module falls through to steps 4–5 and, failing those, to
+`imports_unresolved`.
+
+```mermaid
+flowchart TB
+    A["import X"] --> B{"stub-paths<br/>(step 1)?"}
+    B -- hit --> Z["Resolved (UserStub)"]
+    B -- miss --> C{"user code<br/>(step 2)?"}
+    C -- hit --> Z2["Resolved (Source)"]
+    C -- miss --> D{"typeshed-path set?"}
+    D -- yes --> E{"&lt;typeshed-path&gt;/stdlib/X.pyi?"}
+    E -- hit --> Z3["Resolved (CustomTypeshed)"]
+    E -- miss --> G["skip bundled name-set<br/>(custom typeshed is canonical)"]
+    D -- no --> F{"bundled stdlib name?"}
+    F -- yes --> Z4["Recognised (Typeshed)"]
+    F -- miss --> G2["steps 4–5"]
+    G --> G2
+    G2 --> H{"site-packages<br/>(steps 4–5)?"}
+    H -- hit --> Z5["Resolved (StubPackage / InlineTyped)"]
+    H -- miss --> U["Unknown → imports_unresolved"]
+```
 
 ---
 
 ## Stub Discovery Engine {#STUBRES-ENGINE}
 
-`basilisk-stubs` provides stub resolution:
+`basilisk-stubs` provides stub resolution.
 
-```rust
-pub struct StubResolution {
-    pub module: String,
-    pub source: StubSource,
-    pub pyi_path: Option<PathBuf>,
-    pub tier: StubTier,
+### Type model {#STUBRES-TYPE-MODEL}
+
+The resolver returns a `StubResolution` tagged with **where** the type info came
+from (`StubSource`) and **how much to trust it** (`StubTier`). The data model is
+defined in [typeDiagram](https://typediagram.dev) markup — source of truth
+[`models/stub_resolution.td`](../../models/stub_resolution.td), rendered to
+[`docs/models/stub_resolution.svg`](../models/stub_resolution.svg). The Rust
+ADTs in `crates/basilisk-stubs/src/types.rs` are generated from it
+(`typediagram --to rust models/stub_resolution.td`):
+
+```td
+alias PathBuf = String
+
+type StubResolution {
+  module: String
+  source: StubSource
+  pyi_path: Option<PathBuf>
+  tier: StubTier
 }
 
-pub enum StubSource {
-    UserStub,       // from stub-paths config
-    StubPackage,    // from foopkg-stubs
-    InlineTyped,    // from py.typed marker
-    Typeshed,       // bundled
+union StubSource {
+  UserStub
+  StubPackage
+  InlineTyped
+  Typeshed
+  CustomTypeshed
 }
 
-pub enum StubTier {
-    Tier1,  // hand-written, verified (typeshed, official stubs)
-    Tier2,  // auto-generated, community-reviewed
-    Tier3,  // best-effort inference (auto-generated)
+union StubTier {
+  Tier1
+  Tier2
+  Tier3
 }
 ```
+
+`StubSource` records which resolution step ([§STUBRES-PEP561](#STUBRES-PEP561)) supplied the stub:
+
+| Variant | Resolution step | Meaning |
+|---|---|---|
+| `UserStub` | 1 | `.pyi` from a `stub-paths` directory (head of path) |
+| `CustomTypeshed` | 3 | stdlib stub from a `typeshed-path` override ([§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED)) |
+| `Typeshed` | 3 | bundled typeshed (compiled into the binary) |
+| `StubPackage` | 4 | installed `foopkg-stubs` package |
+| `InlineTyped` | 5 | installed package with a `py.typed` marker |
+
+A `CustomTypeshed` stub is `Tier1` (hand-written, trusted) and hovers as
+`… (custom typeshed)`, so a MicroPython signature is never misreported as the
+bundled CPython one.
 
 ### typeshed Bundling {#STUBRES-TYPESHED}
 
@@ -69,11 +204,12 @@ Types carry metadata about where their type information came from:
 
 ```rust
 pub enum TypeProvenance {
-    Source,      // from source code annotations or inference
-    StubTier1,   // from typeshed, hand-written stubs
-    StubTier2,   // from auto-generated, community-reviewed stubs
-    StubTier3,   // from best-effort auto-generated stubs
-    Untyped,     // no type information available
+    Source,             // from source code annotations or inference
+    StubTier1,          // from typeshed, hand-written stubs
+    StubCustomTypeshed, // from a custom/modified typeshed (`typeshed-path`); Tier-1 trust, distinct provenance
+    StubTier2,          // from auto-generated, community-reviewed stubs
+    StubTier3,          // from best-effort auto-generated stubs
+    Untyped,            // no type information available
 }
 
 pub struct TrackedType {
@@ -87,10 +223,11 @@ pub struct TrackedType {
 | Provenance | imports_unresolved | Downstream type errors | LSP hover | Code Action |
 |------------|-----------|----------------------|-----------|-------------|
 | Source | not fired | normal errors | shows inferred type | — |
-| StubTier1 | not fired | normal errors | shows stub type | — |
-| StubTier2 | not fired | normal errors | shows type + "(auto-generated stub)" | — |
-| StubTier3 | downgraded to info | warnings only | shows type + "(best-effort, may be inaccurate)" | — |
-| Untyped | error (default) | **suppressed** | shows "Unknown (no stubs)" | one-click install (typeshed) or create-local stub via LSP |
+| StubTier1 | not fired | normal errors | shows stub type + "(typeshed)" | — |
+| StubCustomTypeshed | not fired | normal errors | shows stub type + "(custom typeshed)" | — |
+| StubTier2 | not fired | normal errors | shows type + "(community stub)" | — |
+| StubTier3 | downgraded to info | warnings only | shows type + "(best-effort stub, may be inaccurate)" | — |
+| Untyped | error (default) | **suppressed** | shows type + "(no type stubs available)" | one-click install (typeshed) or create-local stub via LSP |
 
 When provenance is `Untyped`, one diagnostic at the import site replaces cascading use-site errors:
 
@@ -168,7 +305,9 @@ strict create-local skeleton.
 |-----------|---------------|
 | Untyped import | `fastmcp (no type stubs available)` |
 | Tier 3 stub symbol | `FastMCP (best-effort stub, may be inaccurate)` |
+| Tier 2 stub symbol | `pandas.read_csv(...) (community stub)` |
 | typeshed symbol | `os.path.join (typeshed)` |
+| custom-typeshed stdlib symbol | `os.uname (custom typeshed)` |
 | Tier 1 stub symbol | `requests.get(...) -> Response` (no annotation — trusted) |
 
 > **uv enrichment** (future): In uv projects, import hovers additionally show package version, direct/transitive classification, and stub package status from the `PackageRegistry`. See [LSP-UV-INTEGRATION-SPEC.md §LSPUV-HOVER](LSP-UV-INTEGRATION-SPEC.md#LSPUV-HOVER).
@@ -207,13 +346,18 @@ from result import Result, Ok, Err
 
 | Setting Key | Type | Default | Description |
 |------------|------|---------|-------------|
-| `basilisk.stubPaths` | `string[]` | `[]` | Additional directories to search for `.pyi` stubs |
+| `basilisk.stubPaths` | `string[]` | `[]` | Additional directories to search for `.pyi` stubs (resolution step 1 — [§STUBRES-PEP561](#STUBRES-PEP561)) |
+| `basilisk.typeshedPath` | `string` | _(bundled)_ | Path to a custom/modified typeshed directory that becomes the canonical source for standard-library types (resolution step 3 — [§STUBRES-CUSTOM-TYPESHED](#STUBRES-CUSTOM-TYPESHED)) |
+
+Both keys accept the `pyproject.toml` kebab-case (`stub-paths`, `typeshed-path`)
+and the LSP JSON camelCase (`stubPaths`, `typeshedPath`) spellings.
 
 `pyproject.toml` configuration:
 
 ```toml
 [tool.basilisk]
 stub-paths = ["stubs/"]
+typeshed-path = "typeshed-micropython"   # optional: override the bundled stdlib typeshed
 
 [tool.basilisk.rules]
 "imports_unresolved" = "warning"

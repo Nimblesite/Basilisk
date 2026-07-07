@@ -49,6 +49,7 @@ pub fn make_search_paths(roots: Vec<PathBuf>) -> ImportSearchPaths {
         workspace_members: vec![],
         site_packages: None,
         registry: None,
+        typeshed_path: None,
     }
 }
 

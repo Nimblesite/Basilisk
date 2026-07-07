@@ -77,7 +77,7 @@ Depend on established open-source tools rather than reimplementing them.
 | Tool | Interop Strategy |
 |---|---|
 | **Ruff** | Basilisk **embeds** the `ruff_python_formatter` crate in-process for formatting and reimplements import hygiene natively — the `ruff` CLI is never spawned ([LSPFMT-DECISION](LSP-FORMATTING-SPEC.md#LSPFMT-DECISION)). Configuration unified in `pyproject.toml` (`[tool.ruff.format]`). |
-| **typeshed** | Bundled copy of typeshed stubs, updated with each Basilisk release. Users can override with custom stubs. |
+| **typeshed** | Bundled copy of typeshed stubs, updated with each Basilisk release. Users MAY prepend extra stubs via `stub-paths` (resolution step 1) or replace the bundled stdlib typeshed wholesale via `typeshed-path` (resolution step 3), per the typing-spec import-resolution ordering — see [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561). |
 | **mypy config** | `basilisk migrate --from mypy` reads `mypy.ini` / `setup.cfg` and produces `[tool.basilisk]` config. |
 | **Pyright config** | `basilisk migrate --from pyright` reads `pyrightconfig.json` and produces `[tool.basilisk]` config. |
 | **PEP 561** | Full support for `py.typed` packages, inline type annotations, and stub-only packages. |
@@ -260,7 +260,7 @@ The `# type:` prefix keeps compatibility with tools that recognize `# type: igno
 
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
-Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->c94dfce<!--/g:short-->`](https://github.com/python/typing/tree/c94dfceff0af70c6626a1f86bc8f979135ae4652/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
+Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->f051625<!--/g:short-->`](https://github.com/python/typing/tree/f05162592e5688026cad9f2995050d87485f70db/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
 
 #### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
@@ -1227,7 +1227,18 @@ Stub generation engine with three modes:
 
 ### typeshed Compatibility {#CHKARCH-STUBS-TYPESHED}
 
-Basilisk bundles typeshed as the Tier 1 baseline for standard library stubs; users override via `stubPaths` configuration.
+Basilisk bundles typeshed as the Tier 1 baseline for standard-library stubs
+(import-resolution step 3 — [STUBRES-PEP561](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-PEP561)).
+Per the typing spec, "type checkers SHOULD provide an option for users to
+provide a path to a directory containing a custom or modified version of
+typeshed; if this option is provided, type checkers SHOULD use this as the
+canonical source for standard-library types in this step"
+([import resolution ordering](https://typing.python.org/en/latest/spec/distributing.html#import-resolution-ordering)).
+Basilisk therefore honours `typeshed-path` to replace the bundled stdlib
+typeshed wholesale as the canonical stdlib source, distinct from `stub-paths`
+(resolution step 1), which *prepends* additional `.pyi` stub directories. The
+canonical resolution order and override semantics live in
+[STUBRES-CUSTOM-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED).
 
 ---
 
@@ -1267,7 +1278,8 @@ All configuration lives in `pyproject.toml`:
 [tool.basilisk]
 python-version = "3.12"
 python-platform = "All"          # Default: check for all platforms
-stub-paths = ["stubs/"]
+stub-paths = ["stubs/"]          # resolution step 1: prepend extra .pyi stub dirs
+# typeshed-path = "typeshed-x"   # resolution step 3: replace the bundled stdlib typeshed
 include = ["src/", "tests/"]
 exclude = ["**/migrations/**"]
 
@@ -1448,7 +1460,7 @@ the reference checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are grade
   **down**. Per-file results are written to `conformance/conformance_status.csv`.
 - **Current score** — measured against `python/typing@main` at the exact graded
   commit recorded in `conformance_report.json`, currently
-  [`<!--g:short-->c94dfce<!--/g:short-->`](https://github.com/python/typing/tree/c94dfceff0af70c6626a1f86bc8f979135ae4652/conformance):
+  [`<!--g:short-->f051625<!--/g:short-->`](https://github.com/python/typing/tree/f05162592e5688026cad9f2995050d87485f70db/conformance):
   **<!--g:pass-->141<!--/g:pass--> / <!--g:total-->141<!--/g:total--> = <!--g:score-->100.0%<!--/g:score-->**, **<!--g:fp-->0<!--/g:fp--> false positives**, **<!--g:missed-->0<!--/g:missed--> missed required errors**, with
   **<!--g:caught-->970<!--/g:caught-->** required errors caught. The binary runs in its default configuration — the
   PEP conformance set — and `score.py` deletes any `basilisk.json` first so nothing

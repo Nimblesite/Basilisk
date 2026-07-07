@@ -9,6 +9,7 @@ This crate provides **type information for the Python standard library and popul
 ## Key concepts
 
 - **Typeshed integration** — bundles stubs from the official [typeshed](https://github.com/python/typeshed) repository.
+- **Custom typeshed override** — the `typeshed-path` config points Basilisk at a custom or forked typeshed whose `stdlib/` becomes the canonical standard-library source (resolution step 3). Its stubs carry `CustomTypeshed` provenance, so hover reads `(custom typeshed)` — distinct from the bundled `(typeshed)` — and a MicroPython signature is never misreported as CPython's ([STUBRES-CUSTOM-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
 - **Offline-first** — no network requests needed. All stubs are compiled into the binary.
 - **PHF lookup** — uses perfect hash functions for fast module-to-stub resolution.
 - **Stub priority** — inline type annotations > bundled stubs > inferred types.

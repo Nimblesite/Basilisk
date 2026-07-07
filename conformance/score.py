@@ -165,13 +165,42 @@ def _gh_headers() -> dict:
     return headers
 
 
+def _urlopen_retry(target: object, *, timeout: int, retries: int = 8) -> bytes:
+    """`urlopen(target).read()` with exponential backoff on HTTP 429 / 5xx.
+
+    Refreshing the suite fires ~150 requests at raw.githubusercontent.com in a
+    burst, and GitHub's shared-runner-IP rate limit answers 429 partway through.
+    Retrying each request with backoff absorbs a transient throttle so the CI
+    score is reliable. This hardens ONLY how bytes are fetched — it changes
+    nothing about how files are scored (the official calculator is untouched).
+    """
+    import time
+    import urllib.error
+    import urllib.request
+
+    delay = 1.0
+    last: Exception = RuntimeError("no request attempted")
+    for _ in range(retries):
+        try:
+            with urllib.request.urlopen(target, timeout=timeout) as resp:  # noqa: S310
+                return resp.read()
+        except urllib.error.HTTPError as exc:  # noqa: PERF203 — retry transient codes only
+            last = exc
+            if exc.code not in (429, 500, 502, 503, 504):
+                raise
+        except urllib.error.URLError as exc:
+            last = exc
+        time.sleep(delay)
+        delay = min(delay * 2, 20.0)
+    raise last
+
+
 def resolve_upstream_commit() -> dict:
     """Resolve the current `python/typing@main` tip to its commit metadata."""
     import urllib.request
 
     req = urllib.request.Request(COMMITS_API, headers=_gh_headers())
-    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 (pinned https)
-        data = json.loads(resp.read())
+    data = json.loads(_urlopen_retry(req, timeout=30))
     sha = data["sha"]
     date = data.get("commit", {}).get("committer", {}).get("date", "")[:10]
     return {"sha": sha, "short": sha[:7], "date": date}
@@ -183,13 +212,20 @@ def download_fixtures(conf_dir: Path, sha: str) -> int:
     Fetches BOTH the `.py` tests AND the `.pyi` support stubs they import (e.g.
     `qualifiers_final_decorator.py` imports `_qualifiers_final_decorator`). Only
     non-`_` `.py`/`.pyi` files are SCORED (see `score()`); the rest are inputs.
+
+    The download is ATOMIC: fixtures land in a sibling staging dir and are
+    swapped into `conf_dir` only once EVERY file has arrived. A 429 (or any
+    error) partway through therefore leaves the existing cached fixtures intact
+    instead of purging them into a partial set that would later score as a false
+    regression.
     """
+    import shutil
+    import tempfile
     import urllib.request
 
     listing = f"{CONTENTS_API}?ref={sha}"
     req = urllib.request.Request(listing, headers=_gh_headers())
-    with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310
-        entries = json.loads(resp.read())
+    entries = json.loads(_urlopen_retry(req, timeout=60))
     fixtures = [
         e
         for e in entries
@@ -199,20 +235,28 @@ def download_fixtures(conf_dir: Path, sha: str) -> int:
         raise RuntimeError(f"no .py/.pyi fixtures at {listing}")
 
     conf_dir.mkdir(parents=True, exist_ok=True)
-    for stale in (*conf_dir.glob("*.py"), *conf_dir.glob("*.pyi")):
-        stale.unlink()
-    for entry in fixtures:
-        with urllib.request.urlopen(entry["download_url"], timeout=60) as resp:  # noqa: S310
-            (conf_dir / entry["name"]).write_bytes(resp.read())
+    # Stage inside `conf_dir` (a dotfile subdir): same filesystem, so the per-file
+    # swap below is an atomic rename, and it stays within the git-ignored fixtures
+    # tree — `score()` globs `*.py`/`*.pyi` files, never this subdirectory.
+    staging = Path(tempfile.mkdtemp(prefix=".fixtures-", dir=conf_dir))
+    try:
+        for entry in fixtures:
+            (staging / entry["name"]).write_bytes(
+                _urlopen_retry(entry["download_url"], timeout=60)
+            )
+        # Every fixture landed — swap atomically: drop the old set, move new in.
+        for stale in (*conf_dir.glob("*.py"), *conf_dir.glob("*.pyi")):
+            stale.unlink()
+        for staged in staging.iterdir():
+            staged.replace(conf_dir / staged.name)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     return len(fixtures)
 
 
 def download_calculator(sha: str) -> None:
     """Refresh the vendored calculator from `conformance/src/main.py` at `sha`."""
-    import urllib.request
-
-    with urllib.request.urlopen(RAW_MAIN_AT.format(sha=sha), timeout=30) as resp:  # noqa: S310
-        UPSTREAM_MAIN.write_bytes(resp.read())
+    UPSTREAM_MAIN.write_bytes(_urlopen_retry(RAW_MAIN_AT.format(sha=sha), timeout=30))
 
 
 def fetch_upstream(conf_dir: Path) -> dict:

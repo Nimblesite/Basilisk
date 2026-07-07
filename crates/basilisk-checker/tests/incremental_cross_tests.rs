@@ -201,6 +201,85 @@ fn external_pyi_stub_symbols_carry_tier1_provenance() {
     let _ = fs::remove_dir_all(&dir);
 }
 
+/// [STUBRES-CUSTOM-TYPESHED] — the LSP-threading proof the checker crate can pin
+/// deterministically: a `typeshed-path` carried on the **`SearchPathsInput`**
+/// must flow all the way through the real salsa query `cross_resolved_module`
+/// into the imported symbol's provenance, so hover reads `(custom typeshed)`.
+///
+/// This exercises the exact wire the LSP uses — `cross_resolved_module` reading
+/// `search_paths.value(db).typeshed_path` and passing it to
+/// `populate_imported_symbols` (`incremental.rs`). `import_apply_tests.rs`
+/// already covers `resolve → populate` when the typeshed is handed in by hand;
+/// THIS covers the salsa query pulling it off the input itself. A mutant that
+/// drops the threading there (passes `None`) silently downgrades provenance to
+/// `StubTier1` — resolution is unchanged, so only a provenance assertion driven
+/// through the query catches it. That mutant dies on the `StubCustomTypeshed`
+/// assertion below.
+#[test]
+fn custom_typeshed_provenance_threads_through_cross_query() {
+    let db = EventDb::default();
+    let dir = make_tmp_dir("bsk_cross_custom_ts");
+    // A custom typeshed laid out as `<typeshed>/stdlib/<module>.pyi` — os only.
+    let typeshed = dir.join("ts");
+    let stdlib = typeshed.join("stdlib");
+    fs::create_dir_all(&stdlib).unwrap();
+    fs::write(stdlib.join("os.pyi"), "def uname() -> str: ...\n").unwrap();
+
+    let a = SourceFile::new(
+        &db,
+        dir.join("a.py").to_string_lossy().into_owned(),
+        "from os import uname\n\nname: str = uname()\n".to_owned(),
+    );
+    // The ONLY thing that makes `os` a custom-typeshed stub: typeshed_path on the
+    // SearchPathsInput. No stub_paths, no site-packages, no workspace files.
+    let mut sp_value = make_search_paths(vec![dir.clone()]);
+    sp_value.typeshed_path = Some(typeshed.clone());
+    let sp = SearchPathsInput::new(&db, sp_value);
+    let ws = WorkspaceFiles::new(&db, FileRegistry::default());
+
+    let module = cross_module_of(&db, a, sp, ws);
+    let uname = module
+        .imported_symbols
+        .get("uname")
+        .expect("`from os import uname` must populate `uname` from the custom typeshed");
+
+    // The import resolved to a stub UNDER the custom typeshed's stdlib/ — the
+    // precondition for CustomTypeshed classification.
+    assert!(
+        uname.source_path.starts_with(typeshed.join("stdlib")),
+        "the symbol must originate under <typeshed>/stdlib/, got {:?}",
+        uname.source_path
+    );
+    assert_eq!(uname.kind, ExternalSymbolKind::Function);
+    assert_eq!(
+        uname.type_annotation.as_deref(),
+        Some("str"),
+        "the custom typeshed's `uname` return type must be read from the stub"
+    );
+
+    // THE threading proof: the query pulled typeshed_path off the input and
+    // handed it to populate, so provenance is CustomTypeshed — NOT bundled Tier1.
+    assert_eq!(
+        uname.provenance,
+        Some(TypeProvenance::StubCustomTypeshed),
+        "a config-carried typeshed-path must thread through cross_resolved_module \
+         into StubCustomTypeshed provenance [STUBRES-CUSTOM-TYPESHED]"
+    );
+    assert_ne!(
+        uname.provenance,
+        Some(TypeProvenance::StubTier1),
+        "custom-typeshed provenance must not be downgraded to the bundled Tier1"
+    );
+    // …and that provenance renders the user-visible hover label distinctly.
+    assert_eq!(
+        uname.provenance.and_then(TypeProvenance::hover_label),
+        Some("(custom typeshed)"),
+        "hover for a custom-typeshed symbol must read '(custom typeshed)'"
+    );
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
 /// A third-party `.py` package with a PEP 561 `py.typed` marker has its inline
 /// types consumed; a package WITHOUT the marker must be skipped (opt-in only).
 #[test]

@@ -9,6 +9,7 @@ This crate handles all **configuration discovery and parsing**. It reads project
 ## Key concepts
 
 - **Per-path overrides** — disable specific rules or override their severity for matching path globs (e.g. legacy directories).
+- **Import-resolution overrides** — `stub-paths` prepends user stub directories (resolution step 1); `typeshed-path` replaces the vendored standard-library typeshed wholesale as the canonical step-3 source ([STUBRES-CUSTOM-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED)).
 - **Migration support** — reads existing `pyrightconfig.json` and `mypy.ini` to ease adoption.
 - **Analysis modes** — configures workspace-level analysis behavior (single-file, workspace, etc.).
 
