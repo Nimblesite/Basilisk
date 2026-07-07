@@ -8,7 +8,6 @@ use crate::scope::{Pep695BoundViolation, Pep695BoundViolationKind, Span, TypeVar
 
 use super::class_info_ext::expr_simple_name;
 use super::core::text_range_to_span;
-use super::typeddict::expr_is_parameterized;
 
 pub(super) fn typevar_like_callee(expr: &Expr) -> Option<&str> {
     let Expr::Call(call) = expr else { return None };
@@ -39,6 +38,7 @@ pub(super) fn typevar_call_info_from(
     name: String,
     callee: &str,
     call: &ruff_python_ast::ExprCall,
+    known_typevars: &[TypeVarCallInfo],
 ) -> TypeVarCallInfo {
     use ruff_text_size::Ranged as _;
     let positional_args = call.arguments.args.len();
@@ -54,14 +54,14 @@ pub(super) fn typevar_call_info_from(
     };
     let has_default = find_kw("default").is_some();
     let has_bound = find_kw("bound").is_some();
-    let has_parameterized_bound =
-        find_kw("bound").is_some_and(|kw| expr_is_parameterized(&kw.value));
+    let has_parameterized_bound = find_kw("bound")
+        .is_some_and(|kw| expr_parameterized_by_typevar(&kw.value, known_typevars));
     let has_parameterized_constraint = call
         .arguments
         .args
         .iter()
         .skip(1)
-        .any(expr_is_parameterized);
+        .any(|arg| expr_parameterized_by_typevar(arg, known_typevars));
     let is_covariant = kw_is_true("covariant");
     let is_contravariant = kw_is_true("contravariant");
     let has_infer_variance = kw_is_true("infer_variance");
@@ -105,6 +105,55 @@ pub(super) fn typevar_call_info_from(
     }
 }
 
+/// Returns `true` when `expr` is a generic type expression parameterized by a
+/// type variable (e.g. `list[T]`).
+///
+/// PEP 484 permits fully-concrete generic bounds and constraints such as
+/// `Callable[..., Any]` or `dict[str, int]`; only type arguments that
+/// reference a type variable make the bound/constraint invalid.
+fn expr_parameterized_by_typevar(expr: &Expr, known_typevars: &[TypeVarCallInfo]) -> bool {
+    match expr {
+        Expr::Subscript(sub) => expr_contains_typevar_ref(&sub.slice, known_typevars),
+        Expr::BinOp(bin) => {
+            expr_parameterized_by_typevar(&bin.left, known_typevars)
+                || expr_parameterized_by_typevar(&bin.right, known_typevars)
+        }
+        Expr::Tuple(tup) => tup
+            .elts
+            .iter()
+            .any(|elt| expr_parameterized_by_typevar(elt, known_typevars)),
+        _ => false,
+    }
+}
+
+/// Returns `true` when a type-argument expression references a type variable:
+/// either a `TypeVar` declared earlier in the module, or a name matching the
+/// single-letter uppercase convention (`T`, `S`, ...).
+fn expr_contains_typevar_ref(expr: &Expr, known_typevars: &[TypeVarCallInfo]) -> bool {
+    match expr {
+        Expr::Name(name) => {
+            known_typevars.iter().any(|tv| tv.name == name.id.as_str())
+                || is_typevar_like_name(name.id.as_str())
+        }
+        Expr::Subscript(sub) => expr_contains_typevar_ref(&sub.slice, known_typevars),
+        Expr::Starred(starred) => expr_contains_typevar_ref(&starred.value, known_typevars),
+        Expr::BinOp(bin) => {
+            expr_contains_typevar_ref(&bin.left, known_typevars)
+                || expr_contains_typevar_ref(&bin.right, known_typevars)
+        }
+        Expr::Tuple(tup) => tup
+            .elts
+            .iter()
+            .any(|elt| expr_contains_typevar_ref(elt, known_typevars)),
+        // `Callable[[X, Y], Z]` argument lists.
+        Expr::List(list) => list
+            .elts
+            .iter()
+            .any(|elt| expr_contains_typevar_ref(elt, known_typevars)),
+        _ => false,
+    }
+}
+
 pub(super) fn collect_typevar_calls(stmts: &[Stmt]) -> Vec<TypeVarCallInfo> {
     let mut out = Vec::new();
     collect_typevar_calls_from_stmts(stmts, &mut out);
@@ -124,7 +173,8 @@ pub(super) fn collect_typevar_calls_from_stmts(stmts: &[Stmt], out: &mut Vec<Typ
                 let Some(name) = node.targets.first().and_then(expr_simple_name) else {
                     continue;
                 };
-                out.push(typevar_call_info_from(name, callee, call));
+                let info = typevar_call_info_from(name, callee, call, out);
+                out.push(info);
             }
             Stmt::AnnAssign(node) => {
                 let Some(val) = node.value.as_deref() else {
@@ -137,7 +187,8 @@ pub(super) fn collect_typevar_calls_from_stmts(stmts: &[Stmt], out: &mut Vec<Typ
                 let Some(name) = expr_simple_name(&node.target) else {
                     continue;
                 };
-                out.push(typevar_call_info_from(name, callee, call));
+                let info = typevar_call_info_from(name, callee, call, out);
+                out.push(info);
             }
             // Also search inside class bodies (TypeVars declared as class attributes).
             Stmt::ClassDef(cls) => {

@@ -47,6 +47,40 @@ T = TypeVar("T")
 }
 
 #[test]
+fn concrete_generic_bound_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression test for issue #283: `Callable[..., Any]` contains no type
+    // variables, so it is a valid PEP 484 bound — no diagnostic.
+    let source = r#"
+from typing import Any, Callable, TypeVar
+CallableT = TypeVar("CallableT", bound=Callable[..., Any])
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"generics_basic"),
+        "bound not parameterized by a type variable should not fire, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
+fn typevar_parameterized_bound_fires() -> Result<(), Box<dyn std::error::Error>> {
+    // PEP 484: a bound parameterized by a type variable (`list[T]`) is invalid.
+    let source = r#"
+from typing import TypeVar
+T = TypeVar("T")
+U = TypeVar("U", bound=list[T])
+"#;
+    let diags = run(source)?;
+    assert!(
+        codes(&diags).contains(&"generics_basic"),
+        "bound parameterized by a type variable should fire, got: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
+#[test]
 fn name_mismatch_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
