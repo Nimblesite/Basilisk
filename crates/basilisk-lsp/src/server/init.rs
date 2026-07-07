@@ -249,6 +249,11 @@ pub(super) async fn initialized(server: &LspServer) {
     match mode {
         // Implements [ANALYSIS-STARTUP-OPEN]
         AnalysisMode::OpenFilesOnly => {
+            // No workspace scan runs in this mode, so zero-file rollups are
+            // already final ([EXTACT-MODULES-HEADER-LOADING], GitHub #144).
+            server
+                .initial_scan_complete
+                .store(true, std::sync::atomic::Ordering::Relaxed);
             server
                 .client
                 .log_message(
@@ -564,6 +569,7 @@ async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
     // Clone the toggle so the spawned scan suppresses publication when type
     // checking is off. Implements [ANALYSIS-ENABLED].
     let scan_enabled = Arc::clone(&server.type_checking_enabled);
+    let scan_complete = Arc::clone(&server.initial_scan_complete);
     drop(tokio::spawn(async move {
         let ScanResult {
             diagnostics,
@@ -575,6 +581,18 @@ async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
             scan_resolve_and_check_with_roots(index, &scan_roots)
         };
         publish_scan_results(&scan_index, &scan_client, &scan_enabled, diagnostics).await;
+        // Zero-file rollups are trustworthy from here on. Flip the flag BEFORE
+        // notifying, so a refetch triggered by the notification reads
+        // `scanComplete: true`. The notification is what settles the client's
+        // loading state even when the scan published nothing — a genuinely
+        // empty workspace produces no diagnostics events at all
+        // ([EXTACT-MODULES-HEADER-LOADING], GitHub #144).
+        scan_complete.store(true, std::sync::atomic::Ordering::Relaxed);
+        scan_client
+            .send_notification::<super::activity_panel::ScanCompleteNotification>(
+                serde_json::json!({ "totalFiles": file_count }),
+            )
+            .await;
         scan_client
             .log_message(
                 MessageType::INFO,

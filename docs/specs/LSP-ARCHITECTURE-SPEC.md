@@ -173,6 +173,7 @@ Enforced by the toolbar contract tests in `vscode-extension/src/test/suite/activ
 | Notification | Direction | Params | Description |
 |-------------|-----------|--------|-------------|
 | `basilisk/moduleChanged` | Server → Client | `{module: {name, path, kind, symbols}}` | Sent when a module's symbol table changes after re-analysis. Debounced at 300ms. Carries a partial `ModuleNode` — no folded health fields; clients refetch via `basilisk.workspaceModules` for rollups. |
+| `basilisk/scanComplete` | Server → Client | `{totalFiles: number}` | Sent when a workspace scan (startup or after an analysis-mode/config change) finishes. Settles panel loading states even when the scan published nothing — a genuinely empty workspace produces no diagnostics events ([EXTACT-MODULES-HEADER-LOADING](EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-MODULES-HEADER), GitHub #144). |
 
 ### Data Model Types {#LSPARCH-DATAMODEL}
 
@@ -235,6 +236,11 @@ interface HealthStats {
     adoptedFiles: number;      // Files with >= 1 demoted diagnostic
     totalFiles: number;        // In workspaceModules this counts ALL indexed files,
                                //   regardless of the scope filter
+    scanComplete?: boolean;    // workspaceModules only: whether the initial
+                               //   workspace scan finished. totalFiles == 0 is a
+                               //   real empty workspace ONLY when true; otherwise
+                               //   clients render a loading state
+                               //   ([EXTACT-MODULES-HEADER-LOADING], GitHub #144)
 }
 
 /**

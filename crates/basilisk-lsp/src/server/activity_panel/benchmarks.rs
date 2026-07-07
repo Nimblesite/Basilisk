@@ -89,7 +89,7 @@ mod tests {
         let (idx, root) = build_large_workspace(1000);
 
         let start = Instant::now();
-        let result = build_module_tree(&idx, "", Some(&root), true);
+        let result = build_module_tree(&idx, "", Some(&root), true, true);
         let elapsed = start.elapsed();
 
         let target_ms = 100 * TIMING_MULTIPLIER;

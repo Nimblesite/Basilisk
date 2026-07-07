@@ -47,6 +47,12 @@ pub(super) async fn execute_workspace_modules(
     // diagnostics ([ANALYSIS-ENABLED], GitHub #119).
     let type_checking_enabled = server.is_type_checking_enabled().await;
 
+    // Whether a zero-file rollup is final ("no Python files") or merely "not
+    // scanned yet" ([EXTACT-MODULES-HEADER-LOADING], GitHub #144).
+    let scan_complete = server
+        .initial_scan_complete
+        .load(std::sync::atomic::Ordering::Relaxed);
+
     let tree = server
         .with_index(|idx| {
             Some(build_module_tree(
@@ -54,6 +60,7 @@ pub(super) async fn execute_workspace_modules(
                 scope,
                 project_root.as_deref(),
                 type_checking_enabled,
+                scan_complete,
             ))
         })
         .await;
@@ -123,6 +130,22 @@ pub(crate) struct ModuleChangedNotification;
 impl tower_lsp::lsp_types::notification::Notification for ModuleChangedNotification {
     type Params = serde_json::Value;
     const METHOD: &'static str = basilisk_common::notifications::MODULE_CHANGED;
+}
+
+// Implements [LSPARCH-NOTIFS]
+/// Notification type for `basilisk/scanComplete`.
+///
+/// Implements [EXTACT-LSP-COMMANDS-SCAN-COMPLETE] — the server->client
+/// notification that a workspace scan finished. Panels showing the loading
+/// state refetch on receipt; required because a genuinely empty workspace
+/// publishes no diagnostics, so nothing else would ever settle the loading
+/// message into the honest empty-state
+/// ([EXTACT-MODULES-HEADER-LOADING], GitHub #144).
+pub(crate) struct ScanCompleteNotification;
+
+impl tower_lsp::lsp_types::notification::Notification for ScanCompleteNotification {
+    type Params = serde_json::Value;
+    const METHOD: &'static str = basilisk_common::notifications::SCAN_COMPLETE;
 }
 
 /// Send a debounced `basilisk/moduleChanged` notification for a file that was

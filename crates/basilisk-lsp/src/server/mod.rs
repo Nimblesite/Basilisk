@@ -152,6 +152,13 @@ pub struct LspServer {
     // the handlers answer `None` even if a client calls them anyway.
     /// Whether formatting (whole-document and range) is enabled.
     pub(super) formatting_enabled: std::sync::atomic::AtomicBool,
+    // Implements [EXTACT-MODULES-HEADER-LOADING] (GitHub #144): clients must be
+    // able to tell "not scanned yet" apart from "genuinely zero Python files",
+    // so the server tracks whether a workspace scan has finished and stamps it
+    // into every `basilisk.workspaceModules` rollup. Shared as an `Arc` so the
+    // spawned scan task can flip it after the handler returns.
+    /// Whether the initial workspace scan has completed.
+    pub(super) initial_scan_complete: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl std::fmt::Debug for LspServer {
@@ -180,6 +187,9 @@ impl LspServer {
             // Formatting is on by default (`basilisk.formatter = "ruff"`);
             // `initialize` flips this off for `"none"`. [LSPFMT-CONFIG]
             formatting_enabled: std::sync::atomic::AtomicBool::new(true),
+            // No scan has run yet: zero-file rollups are NOT trustworthy until
+            // the first scan completes. [EXTACT-MODULES-HEADER-LOADING], #144.
+            initial_scan_complete: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 

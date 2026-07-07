@@ -398,6 +398,10 @@ pub mod release {
 pub mod notifications {
     /// Notification sent when a module's symbol table changes after re-analysis.
     pub const MODULE_CHANGED: &str = "basilisk/moduleChanged";
+    /// Notification sent when a workspace scan finishes, so panels can settle
+    /// their loading state even when the scan published nothing
+    /// ([EXTACT-MODULES-HEADER-LOADING], GitHub #144).
+    pub const SCAN_COMPLETE: &str = "basilisk/scanComplete";
     /// Periodic profiling progress update during active sessions.
     pub const PROFILER_PROGRESS: &str = "basilisk/profiler/progress";
     /// Memory timeline data from auto-snapshot mode.

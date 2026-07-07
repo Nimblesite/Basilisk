@@ -669,6 +669,10 @@ suite("Modules panel health chrome [EXTACT-MODULES-HEADER]", function () {
     warnings: 0,
     adoptedFiles: 0,
     totalFiles: 0,
+    // The #57 empty-state is only rendered once the initial scan finished;
+    // an unfinished scan shows the loading state instead
+    // ([EXTACT-MODULES-HEADER-LOADING], #144).
+    scanComplete: true,
   };
 
   const measuredStats = {
