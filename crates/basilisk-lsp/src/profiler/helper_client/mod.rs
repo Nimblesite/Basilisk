@@ -253,9 +253,17 @@ async fn handshake(
         rate: Some(rate),
         native: Some(native),
     };
-    write_message(&mut writer, &attach).await.map_err(|err| {
-        SamplerError::AttachFailed(format!("failed to send attach command: {err}"))
-    })?;
+    if let Err(err) = write_message(&mut writer, &attach).await {
+        // A send failure (e.g. EPIPE) means the helper hung up mid-handshake —
+        // it died before confirming attach, so reap it and surface its exit
+        // status and stderr exactly like the EOF path below (issue #81).
+        let diagnosis = helper_exit_diagnosis(child).await;
+        let message = format!("failed to send attach command: {err} ({diagnosis})");
+        return Err(match classify_attach_error(&message) {
+            AttachErrorKind::PermissionDenied => SamplerError::PermissionDenied(message),
+            _ => SamplerError::AttachFailed(message),
+        });
+    }
 
     let python_version =
         match timeout(HANDSHAKE_TIMEOUT, read_message::<_, Message>(&mut reader)).await {

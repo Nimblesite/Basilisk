@@ -302,9 +302,7 @@ pub(super) fn classify_rhs(expr: &Expr) -> RhsKind {
 /// to the common kind of the dict's values and the default when they all
 /// agree (#253 — feeds inferred-type display in hover and inlay hints).
 fn classify_call(call: &ruff_python_ast::ExprCall) -> RhsKind {
-    dict_get_result_kind(call).map_or(RhsKind::CallExpr, |kind| {
-        RhsKind::KnownCall(Box::new(kind))
-    })
+    dict_get_result_kind(call).map_or(RhsKind::CallExpr, |kind| RhsKind::KnownCall(Box::new(kind)))
 }
 
 /// Result kind of a two-argument `.get(key, default)` on a dict literal, when

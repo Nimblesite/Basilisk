@@ -660,9 +660,7 @@ fn test_lsp_fix_all_defaults_to_safe_fixes_only() -> TestResult<()> {
         .as_array()
         .ok_or("fix-all action should carry edits")?;
     assert!(
-        edits
-            .iter()
-            .all(|e| e["newText"].as_str() != Some(": Any")),
+        edits.iter().all(|e| e["newText"].as_str() != Some(": Any")),
         "source.fixAll must not apply the Unsafe BSK-E0003 `: Any` insertion: {resp}"
     );
     assert_eq!(

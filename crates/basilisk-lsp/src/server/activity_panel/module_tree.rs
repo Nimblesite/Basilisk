@@ -119,7 +119,12 @@ pub(crate) fn build_module_tree(
         a_name.cmp(b_name)
     });
 
-    let workspace = workspace_rollup(&totals, idx.files.len(), type_checking_enabled, scan_complete);
+    let workspace = workspace_rollup(
+        &totals,
+        idx.files.len(),
+        type_checking_enabled,
+        scan_complete,
+    );
 
     WorkspaceModulesResult { modules, workspace }
 }

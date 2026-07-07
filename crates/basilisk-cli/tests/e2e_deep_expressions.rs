@@ -63,8 +63,7 @@ fn workspace_scan_survives_deeply_chained_binary_expression() {
     // The startup scan analyses generated.py. Before the fix the server
     // process died right here with a stack overflow, so stdout closed and no
     // scan-complete notification ever arrived.
-    let scan_complete =
-        lsp.wait_for_notification("basilisk/scanComplete", Duration::from_mins(2));
+    let scan_complete = lsp.wait_for_notification("basilisk/scanComplete", Duration::from_mins(2));
     assert_eq!(
         scan_complete["params"]["totalFiles"].as_u64(),
         Some(1),
