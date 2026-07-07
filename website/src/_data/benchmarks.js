@@ -114,7 +114,7 @@ function parseCsv(text) {
       })),
     };
   });
-  return { meta, tools, rows };
+  return { meta, tools, allTools, rows };
 }
 
 function median(nums) {
@@ -162,6 +162,56 @@ function computeVsPyright(rows) {
     beats: pairs.filter((x) => x.b < x.p).length,
     total: pairs.length,
   };
+}
+
+// Warm re-check comparison: each tool's FASTEST achievable repeat-check.
+//
+// Only two tools here keep a real cross-run result cache, so only they have a
+// separate warm number: basilisk (`--cache`) and mypy (incremental
+// `.mypy_cache`); those are the `<tool>-warm` columns in the CSV. Pyright, ty,
+// Pyrefly and zuban keep no cross-run result cache (empirically: no cache
+// artifacts, no cache flag, a repeat run is just a warm-binary cold run), so
+// their best achievable repeat-check IS their cold number — shown here for
+// reference, flagged `cached: false`, never a fabricated warm figure.
+//
+// Reuses the already-parsed `values` (warm columns included), so this table can
+// never drift from the CSV. The fastest ✓ ranks each tool at its best case.
+function computeWarm(rows, allTools) {
+  const warmSet = new Set(allTools.filter((t) => t.endsWith("-warm")));
+  const baseTools = allTools.filter((t) => !t.endsWith("-warm"));
+  // For each base tool, prefer its `-warm` column when one exists.
+  const columns = baseTools
+    .map((tool) => ({
+      tool,
+      key: warmSet.has(`${tool}-warm`) ? `${tool}-warm` : tool,
+      cached: warmSet.has(`${tool}-warm`),
+    }))
+    .filter((c) => rows.some((r) => r.values[c.key] != null));
+  // Only worth a table if at least one column is a genuine warm cache.
+  if (!columns.some((c) => c.cached)) return { hasData: false, columns: [], rows: [] };
+
+  const warmRows = rows.map((r) => {
+    const vals = {};
+    columns.forEach((c) => (vals[c.tool] = r.values[c.key]));
+    const present = columns.filter((c) => vals[c.tool] != null).map((c) => c.tool);
+    const fastest = present.reduce(
+      (best, t) => (best == null || vals[t] < vals[best] ? t : best),
+      null,
+    );
+    return {
+      fixture: r.fixture,
+      code: r.code,
+      name: r.name,
+      cells: columns.map((c) => ({
+        tool: c.tool,
+        cached: c.cached,
+        ms: vals[c.tool],
+        text: vals[c.tool] == null ? "—" : `${Math.round(vals[c.tool])} ms`,
+        fastest: c.tool === fastest,
+      })),
+    };
+  });
+  return { hasData: warmRows.length > 0, columns, rows: warmRows };
 }
 
 // How many tool columns in a CSV carry at least one real measurement. A machine
@@ -213,6 +263,7 @@ export default function () {
     ...parsed,
     toolMedians: computeToolMedians(parsed.rows, parsed.tools),
     vsPyright: computeVsPyright(parsed.rows),
+    warm: computeWarm(parsed.rows, parsed.allTools),
     hasData: parsed.rows.length > 0,
   };
 }

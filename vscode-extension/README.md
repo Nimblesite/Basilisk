@@ -31,6 +31,23 @@
 
 ---
 
+## The fastest checker, too
+
+Perfect conformance, and the fastest checker we&rsquo;ve measured &mdash; on every rule, checked cold from scratch:
+
+| Type checker | Median cold check |
+| --- | --- |
+| ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
+| zuban | <!--g:benchZuban-->27<!--/g:benchZuban--> ms |
+| ty | <!--g:benchTy-->37<!--/g:benchTy--> ms |
+| Pyrefly | <!--g:benchPyrefly-->145<!--/g:benchPyrefly--> ms |
+| Pyright | <!--g:benchPyright-->558<!--/g:benchPyright--> ms |
+| mypy | <!--g:benchMypy-->582<!--/g:benchMypy--> ms |
+
+Median cold full-file check across <!--g:benchCount-->29<!--/g:benchCount--> single-rule stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better; inside the editor a warm re-check is faster again. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing is hand-typed &mdash; **run `make bench` on your own hardware; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
+
+---
+
 <p align="center">
   <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in VS Code" width="900">
 </p>
@@ -101,56 +118,9 @@ Basilisk ships as one Rust binary. No Python runtime, no Node.js, no pip, no npm
 
 ---
 
-## Diagnostic rules
+## Strict by default, and it teaches
 
-All rules are **on by default**. There is no way to relax them globally.
-
-### Annotation rules
-
-| Code | What it catches |
-|------|----------------|
-| `BSK-E0001` | Parameter has no type annotation |
-| `BSK-E0002` | Function missing return type |
-| `BSK-E0003` | Variable missing type annotation |
-| `BSK-E0004` | `*args` / `**kwargs` not annotated |
-| `BSK-E0005` | Class attribute not annotated |
-
-### Type correctness
-
-| Code | What it catches |
-|------|----------------|
-| `imports_unresolved` | Import from untyped module |
-| `returns_compatibility` | Explicit `Any` annotation (warning) |
-| `calls_argument_type` | Argument type mismatch |
-| `returns_compatibility_2` | Return type mismatch |
-| `assignment_compatibility` | Assignment type mismatch |
-| `callables_annotation` | Wrong number of type arguments |
-| `classes_override` | Incompatible method override |
-| `classes_override_2` | Incompatible class variable override |
-| `names_undefined` | Undefined name |
-| `names_unbound` | Used before assignment |
-| `overloads_definitions` | `@overload` missing implementation |
-| `overloads_consistency` | Overlapping `@overload` signatures |
-| `dict_key_hashable` | Unhashable dict key |
-| `match_exhaustiveness` | Non-exhaustive `match` |
-| `annotations_typeexpr` | Invalid type expression |
-| `BSK-E0025` | Missing `@override` decorator |
-
----
-
-## How it compares
-
-| | Basilisk | Pyright | mypy |
-|---|:---:|:---:|:---:|
-| **Official [`python/typing`](https://github.com/python/typing/blob/main/conformance/results/results.html) conformance** | **100%** | 96.8% | 77.3% |
-| **Strict by default** | Yes | No | No |
-| **Written in** | Rust | TypeScript | Python |
-| **Runtime needed** | None | Node.js | Python |
-| **Ownership analysis** | Yes | No | No |
-| **Single binary** | Yes | No | No |
-| **Incremental speed** | <10ms | ~50ms | ~200ms |
-
-Conformance figures are read straight from the [official `python/typing` results table](https://github.com/python/typing/blob/main/conformance/results/results.html); speed figures are our own benchmarks.
+Every rule is **on by default** — there is no way to relax them globally. Every diagnostic is rustc-style, with a `help`, a `note`, and a link to a per-rule explainer, so a red squiggle always tells you *why*. Basilisk is strict-by-default and 100% conformant; other checkers default to permissive. See the [full diagnostic reference](https://www.basilisk-python.dev/docs/rules/) and the live [`python/typing` results page](https://github.com/python/typing/blob/main/conformance/results/results.html).
 
 ---
 

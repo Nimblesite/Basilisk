@@ -31,6 +31,28 @@
 
 ---
 
+## The only 100% checker &mdash; and the fastest
+
+Basilisk is the **only** Python type checker with a perfect score on the official
+[`python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html):
+**<!--g:score-->100.0%<!--/g:score-->** (<!--g:pass-->141<!--/g:pass-->/<!--g:total-->141<!--/g:total--> files, <!--g:caught-->970<!--/g:caught--> required errors caught, <!--g:fp-->0<!--/g:fp--> false positives),
+measured by the real upstream harness on the wheel-installed CLI in its default config.
+
+And it is the **fastest checker we&rsquo;ve measured** &mdash; on every rule, checked cold from scratch:
+
+| Type checker | Median cold check |
+| --- | --- |
+| ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
+| zuban | <!--g:benchZuban-->27<!--/g:benchZuban--> ms |
+| ty | <!--g:benchTy-->37<!--/g:benchTy--> ms |
+| Pyrefly | <!--g:benchPyrefly-->145<!--/g:benchPyrefly--> ms |
+| Pyright | <!--g:benchPyright-->558<!--/g:benchPyright--> ms |
+| mypy | <!--g:benchMypy-->582<!--/g:benchMypy--> ms |
+
+Median cold full-file check across <!--g:benchCount-->29<!--/g:benchCount--> single-rule stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better. Basilisk&rsquo;s warm re-check drops to ~<!--g:benchWarm-->5<!--/g:benchWarm--> ms. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
+
+---
+
 <p align="center">
   <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
 </p>
@@ -77,142 +99,14 @@ def greet(name: str) -> str:
 
 ---
 
-## Rules
+## Editors
 
-All rules are on by default. There is no way to relax them globally.
+One extension, the whole workflow: strict-by-default diagnostics, autocomplete, hover, go-to-definition, refactoring code actions, debugging, and profiling. No Node.js or Python runtime &mdash; a single Rust binary drives it all.
 
-### Annotation rules (E0001-E0005)
+- **VS Code, Cursor &amp; Windsurf** &mdash; install from [Open VSX](https://open-vsx.org/)
+- **Zed** &bull; **Neovim 0.10+**
 
-| Code | Triggers when |
-|------|---------------|
-| `BSK-E0001` | Function parameter has no type annotation |
-| `BSK-E0002` | Function is missing a return type annotation |
-| `BSK-E0003` | Variable assignment has no type annotation |
-| `BSK-E0004` | `*args` or `**kwargs` has no type annotation |
-| `BSK-E0005` | Class attribute has no type annotation |
-
-### Type correctness (E0010-E0029)
-
-| Code | Triggers when |
-|------|---------------|
-| `imports_unresolved` | Import cannot be resolved |
-| `returns_compatibility` | Explicit `Any` annotation (emitted as a warning), or a return type mismatch |
-| `calls_argument_type` | Argument type does not match parameter type |
-| `returns_compatibility_2` | Return type does not match declared return type |
-| `assignment_compatibility` | Assignment type does not match declared variable type |
-| `callables_annotation` | Wrong number of type arguments (e.g. `list[int, str]`) |
-| `classes_override` | Method override has incompatible signature |
-| `classes_override_2` | Class variable override has incompatible type |
-| `names_undefined` | Reference to an undefined name |
-| `names_unbound` | Variable used before it is assigned |
-| `overloads_definitions` | `@overload` group has no non-decorated implementation |
-| `overloads_consistency` | Two `@overload` signatures overlap |
-| `dict_key_hashable` | Dict key type is not hashable |
-| `match_exhaustiveness` | `match` statement is not exhaustive |
-| `annotations_typeexpr` | Type expression is not valid (e.g. a numeric literal used as a type) |
-| `BSK-E0025` | Override method is missing the `@override` decorator |
-| `generics_basic` | `TypeVar` declared with a single constraint |
-| `generics_base_class` | Duplicate `TypeVar` in a `Generic[...]` base |
-| `typeddicts_class_syntax` | Method defined inside a `TypedDict` class |
-
-These are the most common rules. Basilisk ships **148 PEP typing-spec rules** — the set the conformance suite grades — plus **13 opt-in house-style rules** that stay off by default and never count toward that score: **161 diagnostic codes** in total (155 errors, 6 warnings). See the [complete diagnostic reference](https://www.basilisk-python.dev/docs/rules/) (generated from the checker source by `scripts/gen_rules_reference.py`).
-
----
-
-## Refactoring
-
-Basilisk ships a suite of refactoring code actions — available via the lightbulb (code actions) menu in VS Code, Cursor, and Windsurf (via Open VSX), plus Zed and Neovim. No extra extensions required.
-
-| Action | Kind | What it does |
-|--------|------|-------------|
-| **Extract variable** | `refactor.extract` | Extract expression into a named variable |
-| **Extract variable (replace all)** | `refactor.extract` | Replace all identical occurrences |
-| **Extract constant** | `refactor.extract` | Extract to module-level `SCREAMING_SNAKE` constant |
-| **Extract function** | `refactor.extract` | Extract selected statements into a new function |
-| **Inline variable** | `refactor.inline` | Replace variable with its value, delete assignment |
-| **Inline function** | `refactor.inline` | Replace call with function body (single-expression) |
-| **Move to new file** | `refactor.move` | Move class/function to a new file, leave import behind |
-| **Move to existing file** | `refactor.move` | Move class/function to a chosen file via command |
-| **Rename symbol** | — | Scope-aware rename with keyword arg, `self.attr`, docstring, and `__all__` updates |
-| **Remove parameter** | `refactor.rewrite` | Remove parameter from function + all call sites |
-| **Add parameter** | `refactor.rewrite` | Add `new_param=None` to function signature |
-| **Sort parameters** | `refactor.rewrite` | Alphabetically sort parameters (keeps `self`/`cls` first) |
-| **Implement abstract methods** | `refactor.rewrite` | Generate method stubs for abstract base class |
-| **Convert Union/Optional** | `refactor.rewrite` | `Union[X, Y]` ↔ `X \| Y`, `Optional[X]` ↔ `X \| None` |
-| **Convert constructs** | `refactor.rewrite` | f-string ↔ `.format()`, `dict()` ↔ `{}`, `list()` ↔ `[]`, ternary ↔ if/else, NamedTuple class ↔ functional |
-
-Extract function detects async functions, methods (`self`/`cls`), and rejects selections containing `yield`, `break`, or `continue`.
-
----
-
-## Output format
-
-Diagnostics use rustc-style output:
-
-```
-error[BSK-E0001]: Missing parameter type annotation for `data`
-  --> src/utils.py:14:13
-   |
-14 | def process(data):
-   |             ^^^^
-   |
-   = help: Add a type annotation: `data: <type>`
-   = note: In Basilisk, all function parameters require explicit types
-   = see: https://www.basilisk-python.dev/errors/BSK-E0001
-```
-
-| Exit code | Meaning |
-|-----------|---------|
-| `0` | Clean — no errors |
-| `1` | Type errors found |
-| `3` | Internal error |
-
----
-
-## Architecture
-
-Basilisk is a Cargo workspace. Each crate owns one layer of the analysis pipeline.
-
-> **Pipeline:** source text &rarr; parser &rarr; AST &rarr; resolver &rarr; scopes &rarr; checker &rarr; diagnostics
->
-> **Incremental:** `basilisk-db` caches ASTs and resolved modules by content hash so only changed files re-run the pipeline.
-
-### Analysis pipeline
-
-| Crate | What it does | Status |
-|-------|-------------|--------|
-| [basilisk-parser](crates/basilisk-parser/) | Wraps `ruff_python_parser` to parse `.py` source into a typed AST | Done |
-| [basilisk-resolver](crates/basilisk-resolver/) | Name resolution and scope analysis — catches undefined names and use-before-assignment | Done |
-| [basilisk-checker](crates/basilisk-checker/) | Core type checker — implements all E0001-E0025 rules | Done |
-| [basilisk-cli](crates/basilisk-cli/) | The `basilisk` binary — wires the full pipeline together | Done |
-
-### LSP and infrastructure
-
-| Crate | What it does | Status |
-|-------|-------------|--------|
-| [basilisk-lsp](crates/basilisk-lsp/) | LSP server — diagnostics, hover, go-to-def, code actions, refactoring, debugging | Working |
-| [basilisk-db](crates/basilisk-db/) | Salsa-based incremental computation for <10ms latency | Working |
-| [basilisk-config](crates/basilisk-config/) | Configuration parsing (`pyproject.toml`, `basilisk.json`) | Done |
-| [basilisk-stubs](crates/basilisk-stubs/) | Bundled type stubs (typeshed) — no internet needed | Working |
-| [basilisk-uv](crates/basilisk-uv/) | uv package manager integration for the LSP | Working |
-| [basilisk-common](crates/basilisk-common/) | Shared constants and types — zero deps, WASM-compatible | Done |
-| [basilisk-test-utils](crates/basilisk-test-utils/) | Shared E2E test helpers | Done |
-
-### Future capabilities
-
-| Crate | What it does | Status |
-|-------|-------------|--------|
-| [basilisk-mojo](crates/basilisk-mojo/) | Mojo-inspired ownership/immutability analysis (`Borrowed`, `InOut`, `Owned`) | Phase 4 |
-| [basilisk-compiler](crates/basilisk-compiler/) | Compiles typed Python to native code | Future |
-| [basilisk-plugin](crates/basilisk-plugin/) | WASM plugin host for Django, Pydantic, SQLAlchemy type extensions | Phase 5 |
-
-### Editor extensions
-
-| Extension | Editor | Status |
-|-----------|--------|--------|
-| [vscode-extension](vscode-extension/) | VS Code | Working |
-| [basilisk.nvim](basilisk.nvim/) | Neovim 0.10+ | Working |
-| [basilisk-zed](basilisk-zed/) | Zed | Phase 2 |
+Every diagnostic teaches: rustc-style output with a `help`, a `note`, and a link to a per-rule explainer. See the [full diagnostic reference](https://www.basilisk-python.dev/docs/rules/) and the [install guide](https://www.basilisk-python.dev/docs/installation/).
 
 ---
 

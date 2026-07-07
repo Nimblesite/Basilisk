@@ -31,6 +31,23 @@
 
 ---
 
+## 而且是最快的检查器
+
+满分一致性，同时也是我们测试过最快的检查器 —— 每条规则，均为从零冷启动检查：
+
+| 类型检查器 | 冷启动检查中位数 |
+| --- | --- |
+| ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
+| zuban | <!--g:benchZuban-->27<!--/g:benchZuban--> ms |
+| ty | <!--g:benchTy-->37<!--/g:benchTy--> ms |
+| Pyrefly | <!--g:benchPyrefly-->145<!--/g:benchPyrefly--> ms |
+| Pyright | <!--g:benchPyright-->558<!--/g:benchPyright--> ms |
+| mypy | <!--g:benchMypy-->582<!--/g:benchMypy--> ms |
+
+在 <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> 上，跨 <!--g:benchCount-->29<!--/g:benchCount--> 个单规则压力测试样本的冷启动全文件检查中位数 —— 数值越低越好；在编辑器内热重检查更快。每个数字均由 [`hyperfine`](https://github.com/sharkdp/hyperfine) 生成并按机器提交，没有一个是手写的 —— **在你自己的硬件上运行 `make bench`，欢迎社区独立复核。** [完整基准测试与方法论 &rarr;](https://www.basilisk-python.dev/zh/docs/benchmarks/)
+
+---
+
 <p align="center">
   <img src="images/screenshot.png" alt="Basilisk 实战 —— 在 VS Code 中进行类型检查、诊断与重构" width="900">
 </p>
@@ -101,56 +118,9 @@ Basilisk 以单个 Rust 二进制文件的形式发布。无需 Python 运行时
 
 ---
 
-## 诊断规则
+## 默认严格，并且会教你
 
-所有规则**默认开启**。无法在全局范围内放宽它们。
-
-### 标注规则
-
-| Code | 检测内容 |
-|------|----------------|
-| `BSK-E0001` | 参数没有类型标注 |
-| `BSK-E0002` | 函数缺少返回类型 |
-| `BSK-E0003` | 变量缺少类型标注 |
-| `BSK-E0004` | `*args` / `**kwargs` 未标注 |
-| `BSK-E0005` | 类属性未标注 |
-
-### 类型正确性
-
-| Code | 检测内容 |
-|------|----------------|
-| `imports_unresolved` | 从未标注类型的模块导入 |
-| `returns_compatibility` | 显式 `Any` 标注（警告） |
-| `calls_argument_type` | 参数类型不匹配 |
-| `returns_compatibility_2` | 返回类型不匹配 |
-| `assignment_compatibility` | 赋值类型不匹配 |
-| `callables_annotation` | 类型参数数量错误 |
-| `classes_override` | 不兼容的方法重写 |
-| `classes_override_2` | 不兼容的类变量重写 |
-| `names_undefined` | 未定义的名称 |
-| `names_unbound` | 在赋值前使用 |
-| `overloads_definitions` | `@overload` 缺少实现 |
-| `overloads_consistency` | 重叠的 `@overload` 签名 |
-| `dict_key_hashable` | 不可哈希的字典键 |
-| `match_exhaustiveness` | 非穷尽的 `match` |
-| `annotations_typeexpr` | 无效的类型表达式 |
-| `BSK-E0025` | 缺少 `@override` 装饰器 |
-
----
-
-## 横向对比
-
-| | Basilisk | Pyright | mypy |
-|---|:---:|:---:|:---:|
-| **官方 [`python/typing`](https://github.com/python/typing/blob/main/conformance/results/results.html) 一致性** | **100%** | 96.8% | 77.3% |
-| **默认严格** | 是 | 否 | 否 |
-| **编写语言** | Rust | TypeScript | Python |
-| **所需运行时** | 无 | Node.js | Python |
-| **所有权分析** | 是 | 否 | 否 |
-| **单一二进制文件** | 是 | 否 | 否 |
-| **增量速度** | <10ms | ~50ms | ~200ms |
-
-一致性数据直接读取自[官方 `python/typing` 结果表](https://github.com/python/typing/blob/main/conformance/results/results.html)；速度数据为我们自己的基准测试结果。
+每条规则都**默认开启** —— 无法在全局范围内放宽。每条诊断都是 rustc 风格，附带 `help`、`note` 以及指向每条规则详解页的链接，因此一条红色波浪线总能告诉你*原因*。Basilisk 默认严格且 100% 一致；其他检查器默认宽松。参见[完整诊断参考](https://www.basilisk-python.dev/zh/docs/rules/)与实时的 [`python/typing` 结果页面](https://github.com/python/typing/blob/main/conformance/results/results.html)。
 
 ---
 

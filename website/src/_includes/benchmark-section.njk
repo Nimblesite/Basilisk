@@ -45,3 +45,32 @@
     <p class="bench-meta">{{ t.metaPre | safe }}{{ b.meta.runsCount }}{{ t.metaMid | safe }}<strong>{{ b.meta.cpu }}</strong>{{ t.metaCpuOpen | safe }}{{ b.meta.os }}{{ t.metaOsSep | safe }}{{ b.meta.cores }}{{ t.metaCoresClose | safe }}{{ b.meta.generated }}{{ t.metaDateClose | safe }}<code>benchmarks/status/{{ b.primary }}.csv</code>{{ t.metaEnd | safe }}</p>
     {% endif %}
 {% endmacro %}
+
+{# Warm re-check table: every tool at its FASTEST achievable repeat-check.
+   Tools with a real cross-run cache (basilisk `--cache`, mypy incremental
+   `.mypy_cache`) show their warm number, tagged `t.warmTag`; tools with no
+   cross-run cache show their cold time — their true best case — tagged
+   `t.noCacheTag`. `b.warm` comes from computeWarm in _data/benchmarks.js, the
+   same parsed CSV as the cold table, so the two can never disagree. #}
+{% macro warmTable(b, t) %}
+    {% if b.warm.hasData %}
+    <div class="table-wrapper">
+      <table class="benchmark-table">
+        <thead>
+          <tr>
+            <th>{{ t.ruleHeader }}</th>
+            {% for col in b.warm.columns %}<th{% if col.tool == 'basilisk' %} class="col-basilisk"{% endif %}>{{ col.tool }} <span class="bench-cache-tag">{{ t.warmTag if col.cached else t.noCacheTag }}</span></th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in b.warm.rows %}
+          <tr>
+            <td>{{ row.code }} {{ t.names[row.fixture] if t.names and t.names[row.fixture] else row.name }}</td>
+            {% for cell in row.cells %}<td{% if cell.tool == 'basilisk' %} class="col-basilisk"{% endif %}>{{ cell.text }}{% if cell.fastest %} ✓{% endif %}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+{% endmacro %}
