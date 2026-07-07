@@ -90,7 +90,7 @@ export default function (eleventyConfig) {
       name: "Basilisk",
       url: "https://www.basilisk-python.dev",
       description:
-        "Open-source, strict-by-default Python language server built in Rust. Type checking, autocomplete, refactoring, debugging, and profiling — in VS Code, Cursor, Zed, and Neovim.",
+        "The only Python type checker with a perfect 100% score on the official python/typing conformance results. Open-source, strict-by-default language server built in Rust — type checking, autocomplete, refactoring, debugging, and profiling in VS Code, Cursor, Zed, and Neovim.",
       author: "The Basilisk Project",
       themeColor: "#e8500a",
       stylesheet: "/assets/css/styles.css",

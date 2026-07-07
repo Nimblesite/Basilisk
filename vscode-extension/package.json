@@ -1,7 +1,7 @@
 {
   "name": "basilisk",
   "displayName": "Basilisk",
-  "description": "Complete Python language server — the open-source replacement for Pylance. Type checking, completions, go-to-definition, and more. Built in Rust.",
+  "description": "The only Python type checker with a perfect 100% score on the official python/typing conformance results. Open-source Pylance replacement — complete language server with type checking, completions, go-to-definition, refactoring, debugging & profiling. Built in Rust.",
   "version": "0.0.0-PLACEHOLDER",
   "publisher": "Nimblesite",
   "license": "MIT",
@@ -38,7 +38,9 @@
     "go to definition",
     "rust",
     "basilisk",
-    "lsp"
+    "lsp",
+    "pep conformance",
+    "conformance"
   ],
   "activationEvents": [
     "onLanguage:python",

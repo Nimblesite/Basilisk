@@ -1,8 +1,13 @@
 # Basilisk
 
-**Basilisk** is a strict-by-default Python type checker and LSP, written in Rust.
+**Basilisk is the only Python type checker with a perfect 100% score** on the
+[official `python/typing` conformance results](https://github.com/python/typing/blob/main/conformance/results/results.html) —
+published on the Python typing repository's own leaderboard, ahead of Pyright,
+mypy, Pyrefly and ty. It is a strict-by-default type checker and complete
+language server, written in Rust.
 
 - Website: <https://www.basilisk-python.dev>
+- Conformance: <https://www.basilisk-python.dev/docs/conformance/>
 - Source: <https://github.com/Nimblesite/Basilisk>
 
 This package (`basilisk-python`) bundles the native `basilisk` binary as a

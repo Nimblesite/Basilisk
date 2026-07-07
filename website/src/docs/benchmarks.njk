@@ -12,6 +12,8 @@ eleventyNavigation:
 permalink: /docs/benchmarks/
 benchmarkStrings:
   ruleHeader: "Rule"
+  warmTag: "(warm)"
+  noCacheTag: "(no cache)"
   versionsLabel: "Versions benchmarked"
   metaPre: "Mean wall-clock over "
   metaMid: " hyperfine runs; lower is better, ✓ = fastest. Measured on "
@@ -38,6 +40,31 @@ benchmarkStrings:
 {% import "benchmark-section.njk" as benchmark %}
 {{ benchmark.table(benchmarks, benchmarkStrings) }}
 
+{%- if benchmarks.warm.hasData %}
+<h2 id="warm-recheck">Warm re-check &mdash; fastest repeat-check</h2>
+
+<p>
+  The table above is cold. This one is its opposite: each tool at its
+  <strong>fastest achievable repeat-check</strong> of an unchanged file. Only two tools
+  here keep a real cross-run result cache, so only two have a genuinely faster warm number
+  &mdash; <strong>Basilisk</strong> (its <code>--cache</code> result-cache) and
+  <strong>mypy</strong> (its incremental <code>.mypy_cache</code>). Those columns are tagged
+  <em>(warm)</em>.
+</p>
+
+<p>
+  Pyright, ty and Pyrefly keep <strong>no</strong> cross-run result cache &mdash; they write no
+  cache artifacts, expose no cache flag, and a repeat run is no faster than the first beyond
+  process/OS warm-up &mdash; and zuban&rsquo;s mypy mode only reuses a <code>.mypy_cache</code>
+  that measures the same as cold on these single-file checks. For those tools the honest best
+  case <em>is</em> their cold time, shown here tagged <em>(no cache)</em> rather than a fabricated
+  warm figure. The ✓ still marks the fastest cell, so you can see that Basilisk&rsquo;s warm
+  re-check leads even against every other tool&rsquo;s best case.
+</p>
+
+{{ benchmark.warmTable(benchmarks, benchmarkStrings) }}
+{%- endif %}
+
 <h2>Methodology</h2>
 
 <p>
@@ -50,15 +77,16 @@ benchmarkStrings:
 <h3>Cold, not warm</h3>
 
 <p>
-  Every column above is a <strong>cold</strong> full-file check from scratch &mdash; the time to start
+  The main table is a <strong>cold</strong> full-file check from scratch &mdash; the time to start
   the tool and check the file with no prior state &mdash; so the comparison is like-for-like. That is
   the honest worst case, not the warm incremental latency you feel while editing. Basilisk and mypy are
   the only two tools here that keep a real cross-run cache (Basilisk a <code>--cache</code> result-cache,
-  mypy an incremental <code>.mypy_cache</code>), so their warm re-check is faster again; mypy&rsquo;s cold
-  number is therefore measured under <code>--no-incremental</code>. Pyright, ty and Pyrefly keep no
-  cross-run result cache &mdash; a repeat run is a cold run &mdash; and zuban&rsquo;s mypy mode reuses a
+  mypy an incremental <code>.mypy_cache</code>), so their warm re-check is faster again &mdash; that is
+  what the <a href="#warm-recheck">warm re-check table</a> shows; mypy&rsquo;s cold number is therefore
+  measured under <code>--no-incremental</code>. Pyright, ty and Pyrefly keep no cross-run result cache
+  &mdash; a repeat run is a cold run &mdash; and zuban&rsquo;s mypy mode reuses a
   <code>./.mypy_cache</code> when present, so we delete that cache before each timed run. Every number
-  above is honestly cold.
+  in the main table is honestly cold.
 </p>
 
 <h3>Fair strictness</h3>

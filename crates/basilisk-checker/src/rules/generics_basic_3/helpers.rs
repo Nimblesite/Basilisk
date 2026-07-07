@@ -168,6 +168,74 @@ impl ModuleContext {
 }
 
 // ---------------------------------------------------------------------------
+// Scope context
+// ---------------------------------------------------------------------------
+
+/// A lookup scope: function-local variable/mapping types overlaid on the
+/// module context. Locals shadow module entries; nothing is copied, so
+/// building one per function is O(parameters), not O(module).
+pub(super) struct ScopeContext<'a> {
+    module: &'a ModuleContext,
+    /// Parameter/local types for the current function: name -> annotation text.
+    local_types: HashMap<String, String>,
+    /// Mapping-typed locals: name -> (`key_type_text`, `value_type_text`).
+    local_mappings: HashMap<String, (String, String)>,
+}
+
+impl<'a> ScopeContext<'a> {
+    /// Module-level scope: no locals. `HashMap::new()` does not allocate.
+    pub(super) fn module_scope(module: &'a ModuleContext) -> Self {
+        Self {
+            module,
+            local_types: HashMap::new(),
+            local_mappings: HashMap::new(),
+        }
+    }
+
+    /// Function scope: the function's annotated parameters shadow module vars.
+    pub(super) fn function_scope(module: &'a ModuleContext, func: &ast::StmtFunctionDef) -> Self {
+        let mut local_types = HashMap::new();
+        let mut local_mappings = HashMap::new();
+        for param in func
+            .parameters
+            .args
+            .iter()
+            .chain(func.parameters.posonlyargs.iter())
+        {
+            if let Some(ann) = &param.parameter.annotation {
+                let ann_text = ann_str(ann);
+                if let Some(pair) = resolve_mapping_annotation(&ann_text, &module.class_bases) {
+                    let _ = local_mappings.insert(param.parameter.name.to_string(), pair);
+                }
+                let _ = local_types.insert(param.parameter.name.to_string(), ann_text);
+            }
+        }
+        Self {
+            module,
+            local_types,
+            local_mappings,
+        }
+    }
+
+    pub(super) fn module(&self) -> &'a ModuleContext {
+        self.module
+    }
+
+    fn var_type(&self, name: &str) -> Option<&str> {
+        self.local_types
+            .get(name)
+            .or_else(|| self.module.var_types.get(name))
+            .map(String::as_str)
+    }
+
+    fn mapping_var(&self, name: &str) -> Option<&(String, String)> {
+        self.local_mappings
+            .get(name)
+            .or_else(|| self.module.mapping_vars.get(name))
+    }
+}
+
+// ---------------------------------------------------------------------------
 // TypeVar constraint parsing
 // ---------------------------------------------------------------------------
 
@@ -332,10 +400,11 @@ pub(super) fn resolve_mapping_annotation(
 /// Check a single call expression for constrained-`TypeVar` group mismatches.
 pub(super) fn check_call(
     call: &ast::ExprCall,
-    ctx: &ModuleContext,
+    scope: &ScopeContext<'_>,
     path: &str,
     diag: &mut Vec<Diagnostic>,
 ) {
+    let ctx = scope.module();
     let Some(callee_name) = expr_name(&call.func) else {
         return;
     };
@@ -352,7 +421,7 @@ pub(super) fn check_call(
         let Some(constrained_tv) = ctx.constrained_tvars.get(tv_name) else {
             continue;
         };
-        let Some(arg_type_str) = infer_arg_type(arg, &ctx.var_types) else {
+        let Some(arg_type_str) = infer_arg_type(arg, scope) else {
             continue;
         };
         if arg_type_str == "Any" {
@@ -401,14 +470,14 @@ pub(super) fn check_call(
 /// Check a subscript expression for `Mapping` key type mismatches.
 pub(super) fn check_subscript(
     sub: &ast::ExprSubscript,
-    ctx: &ModuleContext,
+    scope: &ScopeContext<'_>,
     path: &str,
     diag: &mut Vec<Diagnostic>,
 ) {
     let Some(obj_name) = expr_name(&sub.value) else {
         return;
     };
-    let Some((key_ty, _val_ty)) = ctx.mapping_vars.get(obj_name) else {
+    let Some((key_ty, _val_ty)) = scope.mapping_var(obj_name) else {
         return;
     };
     let Some(idx_ty) = infer_expr_literal_type(&sub.slice) else {
@@ -475,10 +544,10 @@ pub(super) fn check_class_def(cls: &ast::StmtClassDef, path: &str, diag: &mut Ve
 // Type inference helpers
 // ---------------------------------------------------------------------------
 
-/// Infer the type text of an argument expression, using the variable type map.
-fn infer_arg_type<'a>(arg: &'a Expr, var_types: &'a HashMap<String, String>) -> Option<String> {
+/// Infer the type text of an argument expression, using the scope's type maps.
+fn infer_arg_type(arg: &Expr, scope: &ScopeContext<'_>) -> Option<String> {
     match arg {
-        Expr::Name(n) => var_types.get(n.id.as_str()).cloned(),
+        Expr::Name(n) => scope.var_type(n.id.as_str()).map(str::to_owned),
         _ => infer_expr_literal_type(arg).map(str::to_owned),
     }
 }

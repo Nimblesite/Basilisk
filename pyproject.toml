@@ -21,7 +21,7 @@ build-backend = "maturin"
 
 [project]
 name = "basilisk-python"
-description = "Basilisk — a strict-by-default Python type checker and LSP, written in Rust."
+description = "Basilisk — the only Python type checker with a perfect 100% score on the official python/typing conformance results (https://github.com/python/typing/blob/main/conformance/results/results.html). A strict-by-default type checker and language server, written in Rust."
 readme = "README-pypi.md"
 requires-python = ">=3.8"
 license = "MIT"

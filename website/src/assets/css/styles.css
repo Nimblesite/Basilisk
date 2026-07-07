@@ -204,15 +204,30 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 @media (max-width: 768px) {
   .mobile-menu-toggle { display: flex; }
-  .nav { padding: 0 var(--space-4); }
+  /* [WEBSITE-MOBILE-DOCS-NAV] Let the header grow to hold the open menu in
+     normal flow rather than floating it as an absolute overlay. On docs pages
+     the same hamburger also opens the in-flow `.sidebar` submenu; an overlaid
+     nav-links dropdown would sit on top of it and clip its first items. */
+  .site-header { height: auto; min-height: var(--header-height); }
+  .nav {
+    padding: 0 var(--space-4);
+    height: auto;
+    min-height: var(--header-height);
+    flex-wrap: wrap;
+  }
+  .nav-actions { order: 2; }
   .nav-links {
-    position: absolute;
-    top: var(--header-height);
-    left: 0; right: 0;
+    /* Override the techdoc layout.css overlay (`position: absolute; top: 100%`)
+       — without an explicit reset it keeps floating over the docs sidebar. */
+    position: static;
+    inset: auto;
+    order: 3;
+    flex-basis: 100%;
     flex-direction: column;
     align-items: stretch;
     background: var(--color-bg-secondary);
-    border-bottom: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border);
+    margin: 0 calc(-1 * var(--space-4));
     padding: var(--space-4) var(--space-6);
     gap: var(--space-1);
     display: none;
@@ -973,6 +988,9 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 .bench-meta { margin-top: var(--space-4); font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.6; }
 .bench-meta code { font-family: var(--font-mono); font-size: 0.9em; color: var(--color-text-secondary); }
+/* Warm re-check table: distinguish a real cross-run cache "(warm)" from a
+   tool with no cache "(no cache)" whose best case equals its cold time. */
+.bench-cache-tag { display: inline-block; font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.02em; color: var(--color-text-muted); white-space: nowrap; }
 .benchmark-table { width: 100%; min-width: 680px; border-collapse: separate; border-spacing: 0; font-size: 0.875rem; }
 .benchmark-table thead { background: var(--color-bg-tertiary); }
 .benchmark-table thead th { padding: var(--space-4) var(--space-5); text-align: center; font-weight: 600; color: var(--color-text-secondary); border-bottom: 1px solid var(--color-border-bright); white-space: nowrap; }
@@ -1171,6 +1189,17 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   background: var(--color-primary);
   vertical-align: middle;
   min-width: 2px;
+}
+/* The Basilisk row on the official-leaderboard table — the whole point of the
+   page, so it gets a primary-tinted highlight in both themes. */
+.conf-row-basilisk {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.conf-row-basilisk td { font-weight: 600; }
+.conf-note {
+  margin-top: var(--space-3);
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
 }
 .conf-verified {
   display: inline-flex;

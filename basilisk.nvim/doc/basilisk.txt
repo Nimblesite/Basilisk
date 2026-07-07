@@ -27,6 +27,11 @@ CONTENTS                                                    *basilisk-contents*
 Basilisk is a strict-by-default Python type checker built in Rust. This plugin
 provides a first-class Neovim integration via the built-in LSP client.
 
+Basilisk is the only Python type checker with a perfect 100% score on the
+official python/typing conformance results — published on the Python typing
+repository's own leaderboard, ahead of Pyright, mypy, Pyrefly and ty. See:
+https://github.com/python/typing/blob/main/conformance/results/results.html
+
 Features:
 - Zero-config setup: works out of the box
 - All 21 LSP features native via Neovim 0.10+

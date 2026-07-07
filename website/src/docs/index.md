@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
-title: "Basilisk: Open-Source Python Language Server"
-description: "Get started with Basilisk, the open-source, PEP-conformant Python language server built in Rust. Type checking, refactoring, debugging, and profiling docs."
+title: "Basilisk: The Only 100% PEP-Conformant Python Language Server"
+description: "Get started with Basilisk — the only Python type checker with a perfect 100% score on the official python/typing conformance results. Open-source language server in Rust: type checking, refactoring, debugging, and profiling."
 keywords: basilisk, python, language server, lsp, type checker, vs code, cursor, zed, neovim, strict, rust
 date: 2026-02-28
 dateModified: 2026-03-31
@@ -14,6 +14,8 @@ eleventyNavigation:
 # Introduction
 
 Basilisk is a **complete, open-source Python language server**. Everything you rely on a modern Python extension for — autocomplete, go-to-definition, hover information, refactoring, diagnostics, integrated debugging, profiling — Basilisk does too, fully open source and conformant to the Python typing spec by default.
+
+It is also the **only Python type checker with a perfect 100% score** on the [official `python/typing` conformance results]({{ conformanceOfficial.snapshot.source }}) — published on the Python typing repository's own leaderboard, ahead of Pyright, mypy, Pyrefly and ty. See [how we measure it](/docs/conformance/).
 
 It is not just a type checker. It is a feature-complete LSP with first-class extensions for **VS Code**, **Zed**, and **Neovim** — plus any other editor that speaks the Language Server Protocol. **Cursor** and **Windsurf** (via Open VSX) are coming very soon, and JetBrains is on the way. No proprietary extension, no Node.js — a single Rust binary, the same experience in every editor.
 

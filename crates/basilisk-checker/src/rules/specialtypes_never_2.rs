@@ -24,6 +24,8 @@
 //!     return ClassC[Never]()  # E0070 — ClassC is invariant
 //! ```
 
+use std::collections::HashMap;
+
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
@@ -59,9 +61,23 @@ impl Rule for NeverTypeCompatibility {
         // source-position-independent, so one pass feeds every function.
         let assign_lines = collect_assign_lines(source);
 
+        // Index candidates by RHS name: each function only inspects the lines
+        // whose RHS is one of its own parameters, instead of every line.
+        let mut assign_by_rhs: HashMap<&str, Vec<usize>> = HashMap::new();
+        for (idx, cand) in assign_lines.iter().enumerate() {
+            assign_by_rhs.entry(cand.rhs_name).or_default().push(idx);
+        }
+
         // Check function bodies for annotated local assignments and return stmts.
         for func in &module.functions {
-            check_local_assignments(func, source, path, &assign_lines, diagnostics);
+            check_local_assignments(
+                func,
+                source,
+                path,
+                &assign_lines,
+                &assign_by_rhs,
+                diagnostics,
+            );
             check_return_stmts(func, source, path, &covariant_tvars, module, diagnostics);
         }
     }
@@ -81,6 +97,10 @@ struct AssignLine<'a> {
     annotation: &'a str,
     /// The trimmed right-hand-side identifier (a candidate parameter reference).
     rhs_name: &'a str,
+    /// [`extract_generic_base`] of `annotation`, precomputed once per line.
+    ann_base: &'a str,
+    /// [`extract_generic_inner`] of `annotation`, precomputed once per line.
+    ann_inner: Option<&'a str>,
 }
 
 /// Parse a single line as `var_name: annotation = rhs_name`, returning the
@@ -124,6 +144,8 @@ fn collect_assign_lines(source: &str) -> Vec<AssignLine<'_>> {
                 var_name,
                 annotation,
                 rhs_name,
+                ann_base: extract_generic_base(annotation),
+                ann_inner: extract_generic_inner(annotation),
             });
         }
         offset += line.len() + 1;
@@ -139,64 +161,69 @@ fn check_local_assignments(
     source: &str,
     path: &str,
     assign_lines: &[AssignLine<'_>],
+    assign_by_rhs: &HashMap<&str, Vec<usize>>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // Build a list of (parameter_name, annotation_text) pairs.
-    let param_annotations: Vec<(&str, &str)> = func
-        .parameters
-        .iter()
-        .filter_map(|param| {
-            let ann_span = param.annotation_span?;
-            let ann_text = slice_span(source, ann_span)?;
-            Some((param.name.as_str(), ann_text.trim()))
-        })
-        .collect();
+    // Gather violations per parameter via the RHS-name index, then emit in
+    // line order (matching the previous candidate-major scan). Parameter names
+    // are unique, so each candidate still pairs with at most one parameter.
+    let mut matches: Vec<(usize, &str)> = Vec::new();
 
-    if param_annotations.is_empty() {
-        return;
-    }
-
-    // Match each precomputed annotated assignment against this function's params.
-    for candidate in assign_lines {
-        // Look up the RHS name among the function's parameters.
-        let Some((_, param_annotation)) = param_annotations
-            .iter()
-            .find(|(name, _)| *name == candidate.rhs_name)
-        else {
+    for param in &func.parameters {
+        let Some(ann_span) = param.annotation_span else {
             continue;
         };
+        let Some(ann_text) = slice_span(source, ann_span) else {
+            continue;
+        };
+        let param_annotation = ann_text.trim();
+        let Some(indices) = assign_by_rhs.get(param.name.as_str()) else {
+            continue;
+        };
+        // Only a `Container[Never]` parameter can produce a violation.
+        let Some(source_inner) = extract_generic_inner(param_annotation) else {
+            continue;
+        };
+        if source_inner != "Never" {
+            continue;
+        }
+        let source_base = extract_generic_base(param_annotation);
 
-        // Check for invariant Never mismatch.
-        // E.g. annotation = "list[int]", param_annotation = "list[Never]"
-        if let (Some(target_inner), Some(source_inner)) = (
-            extract_generic_inner(candidate.annotation),
-            extract_generic_inner(param_annotation),
-        ) {
-            let target_base = extract_generic_base(candidate.annotation);
-            let source_base = extract_generic_base(param_annotation);
-
-            if target_base == source_base
-                && source_inner == "Never"
-                && target_inner != "Never"
-                && target_inner != "Any"
+        for &idx in indices {
+            let Some(candidate) = assign_lines.get(idx) else {
+                continue;
+            };
+            // Check for invariant Never mismatch.
+            // E.g. annotation = "list[int]", param_annotation = "list[Never]"
+            let Some(target_inner) = candidate.ann_inner else {
+                continue;
+            };
+            if candidate.ann_base == source_base && target_inner != "Never" && target_inner != "Any"
             {
-                let name_start_in_line = candidate.line.find(candidate.var_name).unwrap_or(0);
-                let span_start =
-                    u32::try_from(candidate.line_offset + name_start_in_line).unwrap_or(0);
-                let span_end = span_start + u32::try_from(candidate.var_name.len()).unwrap_or(0);
-
-                diagnostics.push(make_assignment_diagnostic(
-                    Span {
-                        start: span_start,
-                        end: span_end,
-                    },
-                    candidate.var_name,
-                    candidate.annotation,
-                    param_annotation,
-                    path,
-                ));
+                matches.push((idx, param_annotation));
             }
         }
+    }
+
+    matches.sort_unstable_by_key(|&(idx, _)| idx);
+    for (idx, param_annotation) in matches {
+        let Some(candidate) = assign_lines.get(idx) else {
+            continue;
+        };
+        let name_start_in_line = candidate.line.find(candidate.var_name).unwrap_or(0);
+        let span_start = u32::try_from(candidate.line_offset + name_start_in_line).unwrap_or(0);
+        let span_end = span_start + u32::try_from(candidate.var_name.len()).unwrap_or(0);
+
+        diagnostics.push(make_assignment_diagnostic(
+            Span {
+                start: span_start,
+                end: span_end,
+            },
+            candidate.var_name,
+            candidate.annotation,
+            param_annotation,
+            path,
+        ));
     }
 }
 

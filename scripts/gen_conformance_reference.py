@@ -23,17 +23,29 @@ Usage:
 from __future__ import annotations
 
 import json
+import math
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORT = ROOT / "website" / "src" / "_data" / "conformance_report.json"
+BENCH_STATUS_DIR = ROOT / "benchmarks" / "status"
 TARGETS = (
     ROOT / "README.md",
     ROOT / "README.zh.md",
     ROOT / "docs" / "specs" / "CHECKER-ARCHITECTURE-SPEC.md",
+    # The VS Code marketplace READMEs boast the same score — keep them in lock
+    # step so the published listing can never quote a stale number.
+    ROOT / "vscode-extension" / "README.md",
+    ROOT / "vscode-extension" / "README.zh.md",
 )
+
+# The checkers whose median cold time the README bench table quotes. Key is the
+# CSV `<tool>_ms` column; the sentinel name is `bench<Capitalized>` (e.g.
+# `benchBasilisk`), stamped inline in the table cell so it never breaks the
+# markdown table the way a standalone comment line would.
+BENCH_TOOLS = ("basilisk", "pyright", "mypy", "ty", "pyrefly", "zuban")
 
 MARKER_RE = re.compile(r"<!--g:(?P<name>[A-Za-z]+)-->.*?<!--/g:(?P=name)-->", re.S)
 TREE_SHA_RE = re.compile(
@@ -54,6 +66,85 @@ def values(report: dict) -> dict[str, str]:
         "caught": str(score["caught"]),
         "short": upstream["shortSha"],
     }
+
+
+def _median_ms(nums: list[float]) -> int | None:
+    """Median of `nums`, rounded half-up to match the website's JS `Math.round`."""
+    ordered = sorted(nums)
+    n = len(ordered)
+    if n == 0:
+        return None
+    mid = n // 2
+    val = ordered[mid] if n % 2 else (ordered[mid - 1] + ordered[mid]) / 2
+    return math.floor(val + 0.5)
+
+
+def _primary_bench_csv() -> Path | None:
+    """The benchmark CSV the site treats as primary: the `.primary` pin first,
+    then the alphabetically-first machine — matching `_data/benchmarks.js`."""
+    pin = BENCH_STATUS_DIR / ".primary"
+    if pin.exists():
+        csv = BENCH_STATUS_DIR / f"{pin.read_text(encoding='utf-8').strip()}.csv"
+        if csv.exists():
+            return csv
+    csvs = sorted(BENCH_STATUS_DIR.glob("*.csv"))
+    return csvs[0] if csvs else None
+
+
+def bench_values() -> dict[str, str]:
+    """Median cold check per tool + machine/count, read from the primary bench
+    CSV so the README table can never be a hand-typed figure. Empty when no CSV
+    exists (the markers are then left untouched, exactly like a missing score)."""
+    csv = _primary_bench_csv()
+    if csv is None:
+        return {}
+    cpu, header, rows = "", None, []
+    for raw in csv.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            body = line[1:].strip()
+            if body.startswith("cpu:"):
+                cpu = body.split(":", 1)[1].strip()
+            continue
+        parts = line.split(",")
+        if header is None:
+            header = parts
+        else:
+            rows.append(parts)
+    if not header or not rows:
+        return {}
+
+    col = {
+        name[:-3] if name.endswith("_ms") else name: i for i, name in enumerate(header)
+    }
+
+    def median_for(tool: str) -> int | None:
+        i = col.get(tool)
+        if i is None:
+            return None
+        nums = []
+        for r in rows:
+            if i < len(r) and r[i]:
+                try:
+                    nums.append(float(r[i]))
+                except ValueError:
+                    pass
+        return _median_ms(nums)
+
+    vals: dict[str, str] = {}
+    for tool in BENCH_TOOLS:
+        m = median_for(tool)
+        if m is not None:
+            vals[f"bench{tool.capitalize()}"] = str(m)
+    warm = median_for("basilisk-warm")
+    if warm is not None:
+        vals["benchWarm"] = str(warm)
+    if cpu:
+        vals["benchMachine"] = cpu
+    vals["benchCount"] = str(len(rows))
+    return vals
 
 
 def stamp(text: str, vals: dict[str, str]) -> str:
@@ -82,6 +173,7 @@ def main(argv: list[str]) -> int:
     report = json.loads(REPORT.read_text(encoding="utf-8"))
     vals = values(report)
     vals["sha"] = report["upstream"]["sha"]  # full sha for the tree URLs only
+    vals.update(bench_values())  # median cold check per tool, from the primary CSV
 
     stale: list[Path] = []
     for path in TARGETS:

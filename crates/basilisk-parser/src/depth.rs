@@ -193,3 +193,102 @@ pub(crate) fn check_nesting(source: &str) -> Result<(), &'static str> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    //! Cross-references [CHKARCH-ARCH-PARSEDEPTH]. Direct unit tests of the
+    //! pre-parse nesting guard — the crate-private branches (indent cap, dedent,
+    //! bracket enter/exit, chain breakers) that end-to-end `parse_source` tests
+    //! in `tests/parse_tests.rs` do not all reach.
+    use super::*;
+
+    /// `u32` → `usize` without an `as` cast (the crate denies `as_conversions`).
+    /// `u32` always fits `usize` on supported targets, so the fallback is inert.
+    fn us(n: u32) -> usize {
+        usize::try_from(n).unwrap_or(usize::MAX)
+    }
+
+    #[test]
+    fn accepts_ordinary_source_within_all_limits() {
+        assert_eq!(check_nesting("x = 1 + 2 * (3 - 4)\n"), Ok(()));
+    }
+
+    #[test]
+    fn accepts_bracket_depth_at_the_limit() {
+        // 200 simultaneously-open brackets is accepted; the matching closers
+        // exercise the `Rpar`/`exit_bracket` path too.
+        let opens = "(".repeat(us(MAX_BRACKET_DEPTH));
+        let closes = ")".repeat(us(MAX_BRACKET_DEPTH));
+        assert_eq!(check_nesting(&format!("x = {opens}0{closes}\n")), Ok(()));
+    }
+
+    #[test]
+    fn rejects_bracket_depth_past_the_limit() {
+        let opens = "(".repeat(us(MAX_BRACKET_DEPTH) + 1);
+        assert_eq!(check_nesting(&opens), Err(TOO_MANY_BRACKETS));
+    }
+
+    #[test]
+    fn rejects_excessive_indentation() {
+        // 100 increasing indentation levels — the 100th trips MAX_INDENT_DEPTH.
+        let mut src = String::new();
+        for level in 0..=(us(MAX_INDENT_DEPTH)) {
+            src.push_str(&"    ".repeat(level));
+            src.push_str("if True:\n");
+        }
+        src.push_str(&"    ".repeat(us(MAX_INDENT_DEPTH) + 1));
+        src.push_str("pass\n");
+        assert_eq!(check_nesting(&src), Err(TOO_MANY_INDENTS));
+    }
+
+    #[test]
+    fn dedent_decrements_the_indentation_count() {
+        // Indent in, dedent out, indent again: never exceeds the cap, so the
+        // `Dedent` arm must decrement (otherwise the second block would trip it).
+        let src = "if a:\n    pass\nif b:\n    pass\n";
+        assert_eq!(check_nesting(src), Ok(()));
+    }
+
+    #[test]
+    fn rejects_deep_operator_chain() {
+        let chain = "1 + ".repeat(us(MAX_EXPR_OPERATORS) + 1);
+        assert_eq!(
+            check_nesting(&format!("x = {chain}1\n")),
+            Err(TOO_DEEP_EXPRESSION)
+        );
+    }
+
+    #[test]
+    fn brackets_reset_and_resume_the_operator_chain() {
+        // enter_bracket saves the outer count; exit_bracket resumes it, so the
+        // inner call's operators do not spill into the module-level chain.
+        assert_eq!(check_nesting("x = 1 + f(a + b + c) + 1\n"), Ok(()));
+    }
+
+    #[test]
+    fn unbalanced_closer_resumes_at_zero() {
+        // A stray closer pops an empty stack (`unwrap_or(0)`); the guard stays
+        // Ok — the real syntax error is the parser's to report later.
+        assert_eq!(check_nesting("x = 1 + 1)\n"), Ok(()));
+    }
+
+    #[test]
+    fn chain_breakers_reset_accumulated_depth() {
+        // `;`, `,`, `=` and the logical newline each start a fresh expression,
+        // so a run split across them never accumulates toward the cap.
+        assert_eq!(
+            check_nesting("a = 1 + 1; b = 1 + 1, 1 + 1\nc = 1 + 1\n"),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn counts_the_spread_of_depth_building_operators() {
+        // Touch a variety of `builds_ast_depth` kinds (arith, bitwise, shifts,
+        // attribute, unary, ternary) without exceeding the cap.
+        assert_eq!(
+            check_nesting("y = -a.b + c * d / e % f & g | h ^ ~i << j >> k if a else b\n"),
+            Ok(())
+        );
+    }
+}
