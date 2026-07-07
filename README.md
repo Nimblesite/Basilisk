@@ -29,14 +29,16 @@
   We target <code>python/typing@main</code> and ratchet the score up only.
 </p>
 
----
-
 ## The only 100% checker &mdash; and the fastest
 
 Basilisk is the **only** Python type checker with a perfect score on the official
 [`python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html):
 **<!--g:score-->100.0%<!--/g:score-->** (<!--g:pass-->141<!--/g:pass-->/<!--g:total-->141<!--/g:total--> files, <!--g:caught-->970<!--/g:caught--> required errors caught, <!--g:fp-->0<!--/g:fp--> false positives),
 measured by the real upstream harness on the wheel-installed CLI in its default config.
+
+<p align="center">
+  <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
+</p>
 
 And it is the **fastest checker we&rsquo;ve measured** &mdash; on every rule, checked cold from scratch:
 
@@ -51,11 +53,7 @@ And it is the **fastest checker we&rsquo;ve measured** &mdash; on every rule, ch
 
 Median cold full-file check across <!--g:benchCount-->29<!--/g:benchCount--> single-rule stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better. Basilisk&rsquo;s warm re-check drops to ~<!--g:benchWarm-->5<!--/g:benchWarm--> ms. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 
----
 
-<p align="center">
-  <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
-</p>
 
 ## Try it
 
@@ -68,36 +66,7 @@ basilisk check examples/mixed.py  # some errors, some clean
 basilisk check examples/          # all three at once
 ```
 
----
 
-## Quick example
-
-<table>
-<tr>
-<th>Basilisk rejects this</th>
-<th>Fixed</th>
-</tr>
-<tr>
-<td>
-
-```python
-def greet(name):
-    return "Hello " + name
-```
-
-</td>
-<td>
-
-```python
-def greet(name: str) -> str:
-    return "Hello " + name
-```
-
-</td>
-</tr>
-</table>
-
----
 
 ## Editors
 
@@ -108,7 +77,7 @@ One extension, the whole workflow: strict-by-default diagnostics, autocomplete, 
 
 Every diagnostic teaches: rustc-style output with a `help`, a `note`, and a link to a per-rule explainer. See the [full diagnostic reference](https://www.basilisk-python.dev/docs/rules/) and the [install guide](https://www.basilisk-python.dev/docs/installation/).
 
----
+
 
 ## Development
 
@@ -121,8 +90,6 @@ cargo fmt            # format
 
 Rust 1.87+ required.
 
----
-
 ## Contributing
 
 Basilisk is built by a human + AI partnership, with the work split on purpose. See
@@ -130,7 +97,6 @@ Basilisk is built by a human + AI partnership, with the work split on purpose. S
 conformance/security audits, IDE feature parity, sharpening the AI instructions) and
 **For AI** (the technical execution, under the standing rules in [CLAUDE.md](CLAUDE.md)).
 
----
 
 ## Acknowledgments
 
@@ -146,7 +112,7 @@ Basilisk builds on the open-source community — with thanks to:
 
 Full component list and licenses: [NOTICES](NOTICES). All dependencies are permissively licensed.
 
----
+
 
 ## License
 

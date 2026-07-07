@@ -238,10 +238,11 @@ jobs:
           ruff format --check --exclude '*/fixtures/*' .
 
       # Install the deslop duplication-gate CLI BEFORE `make lint` runs it
-      # ([CI-DESLOP]). The pinned version + platform asset mapping live in
-      # scripts/install-deslop.sh (single source of truth, shared with
-      # scripts/setup.sh); it verifies the SHA-256 and appends the install dir
-      # to $GITHUB_PATH so the next step sees the binary.
+      # ([CI-DESLOP]). deslop is UNPINNED: scripts/install-deslop.sh (single
+      # source of truth, shared with scripts/setup.sh) resolves and installs the
+      # LATEST release every run, so the CLI never falls behind the engine the
+      # editor's LSP/MCP panel runs. It verifies the SHA-256 and appends the
+      # install dir to $GITHUB_PATH so the next step sees the binary.
       - name: Install deslop
         run: scripts/install-deslop.sh "$HOME/.local/bin"
 
