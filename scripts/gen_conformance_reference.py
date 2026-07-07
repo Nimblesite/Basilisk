@@ -116,7 +116,9 @@ def bench_values() -> dict[str, str]:
     if not header or not rows:
         return {}
 
-    col = {name[:-3] if name.endswith("_ms") else name: i for i, name in enumerate(header)}
+    col = {
+        name[:-3] if name.endswith("_ms") else name: i for i, name in enumerate(header)
+    }
 
     def median_for(tool: str) -> int | None:
         i = col.get(tool)

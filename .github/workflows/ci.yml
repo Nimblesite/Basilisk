@@ -238,13 +238,12 @@ jobs:
           ruff format --check --exclude '*/fixtures/*' .
 
       # Install the deslop duplication-gate CLI BEFORE `make lint` runs it
-      # ([CI-DESLOP]). deslop is UNPINNED: scripts/install-deslop.sh (single
-      # source of truth, shared with scripts/setup.sh) resolves and installs the
-      # LATEST release every run, so the CLI never falls behind the engine the
-      # editor's LSP/MCP panel runs. It verifies the SHA-256 and appends the
-      # install dir to $GITHUB_PATH so the next step sees the binary.
+      # ([CI-DESLOP]). deslop is UNPINNED: scripts/install-deslop.sh (shared with
+      # scripts/setup.sh) `brew install`s the latest release from nimblesite/tap
+      # so the CLI never falls behind the engine the editor's LSP/MCP panel runs,
+      # and appends the brew bin to $GITHUB_PATH so the next step sees it.
       - name: Install deslop
-        run: scripts/install-deslop.sh "$HOME/.local/bin"
+        run: scripts/install-deslop.sh
 
       # `make lint` runs clippy, eslint, AND the deslop duplication gate. The
       # threshold lives in committed .deslop.toml — ratcheted DOWN only, never
