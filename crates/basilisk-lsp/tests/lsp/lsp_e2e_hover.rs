@@ -140,6 +140,52 @@ fn test_lsp_hover_function_exact_signature() -> TestResult<()> {
     Ok(())
 }
 
+/// Regression for #253: hovering an unannotated function must surface
+/// inferred types — the return type inferred from the body's `return`
+/// statements, and `Unknown` for parameters whose type cannot be inferred —
+/// instead of a bare, type-less signature.
+#[test]
+fn test_lsp_hover_unannotated_function_shows_inferred_types() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    let _ = fixture.initialize()?;
+
+    // Repro from #253 (mutation_testing/mutants_report.py:78): every dict
+    // value and the `.get` default are `str`, so the return type is `str`.
+    let code = "def extracted_function(missed, caught, unviable, timeout, summary):\n    return {\n        \"MissedMutant\": \"missed\",\n        \"CaughtMutant\": \"caught\",\n        \"Unviable\": \"unviable\",\n        \"Timeout\": \"timeout\",\n        \"Success\": \"success\",\n    }.get(summary, \"unknown\")\n";
+    fixture.did_open("file:///hover_unannotated.py", code)?;
+    let _ = fixture.wait_for_diagnostics();
+
+    // Hover on "extracted_function" (line 0, character 8).
+    let resp = send_request(
+        &mut fixture,
+        210,
+        "textDocument/hover",
+        serde_json::json!({
+            "textDocument": { "uri": "file:///hover_unannotated.py" },
+            "position": { "line": 0, "character": 8 }
+        }),
+    )?
+    .ok_or("no hover response")?;
+
+    assert!(
+        resp.contains("(function)"),
+        "hover should show '(function)' prefix: {resp}"
+    );
+    assert!(
+        resp.contains("def extracted_function"),
+        "hover should show 'def extracted_function': {resp}"
+    );
+    assert!(
+        resp.contains("missed: Unknown"),
+        "unannotated parameter should render an inferred/Unknown type, not blank: {resp}"
+    );
+    assert!(
+        resp.contains("-> str"),
+        "hover should show the inferred return type '-> str': {resp}"
+    );
+    Ok(())
+}
+
 #[test]
 fn test_lsp_hover_from_call_site() -> TestResult<()> {
     let mut fixture = LspTestFixture::new()?;

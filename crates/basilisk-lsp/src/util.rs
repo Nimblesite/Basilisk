@@ -265,6 +265,10 @@ fn format_function_signature(func: &FunctionInfo, source: &str) -> String {
         sig.push_str(&param.name);
         if let Some(ann) = annotation_text(param.annotation_span, source) {
             let _ = write!(sig, ": {ann}");
+        } else if !is_implicit_receiver(func, idx, param) {
+            // #253: an unannotated parameter renders its inferred type —
+            // `Unknown` until parameter inference exists — never blank.
+            sig.push_str(": Unknown");
         }
     }
     if let Some(ref va) = func.vararg {
@@ -288,7 +292,13 @@ fn format_function_signature(func: &FunctionInfo, source: &str) -> String {
     sig.push(')');
 
     match func.return_annotation {
-        ReturnAnnotationKind::Missing => {}
+        ReturnAnnotationKind::Missing => {
+            // #253: no annotation — infer from the body's `return` statements.
+            let inferred = infer_return_type_display(func);
+            if !inferred.is_empty() {
+                let _ = write!(sig, " -> {inferred}");
+            }
+        }
         ReturnAnnotationKind::NoneType => sig.push_str(" -> None"),
         ReturnAnnotationKind::Any => sig.push_str(" -> Any"),
         _ => {
@@ -299,6 +309,12 @@ fn format_function_signature(func: &FunctionInfo, source: &str) -> String {
     }
 
     sig
+}
+
+/// `true` for the implicit `self`/`cls` receiver of a method — it carries an
+/// implicit type, so it never renders an `Unknown` annotation.
+fn is_implicit_receiver(func: &FunctionInfo, idx: usize, param: &ParameterInfo) -> bool {
+    idx == 0 && func.class_name.is_some() && (param.name == "self" || param.name == "cls")
 }
 
 fn format_class_signature(class: &ClassInfo) -> String {
@@ -383,8 +399,36 @@ pub(crate) fn rhs_type_display(rhs: &basilisk_resolver::RhsKind) -> &'static str
         RhsKind::EmptyDict | RhsKind::Dict(_) => "dict",
         RhsKind::Set(_) => "set",
         RhsKind::Tuple(_) => "tuple",
+        RhsKind::KnownCall(result) => rhs_type_display(result),
         _ => "",
     }
+}
+
+/// Infer a display type for a function's return from its `return` statements.
+///
+/// Shared by hover (#253) and inlay hints. Returns an empty string when the
+/// type cannot be determined.
+pub(crate) fn infer_return_type_display(func: &basilisk_resolver::FunctionInfo) -> &'static str {
+    if func.return_stmts.is_empty() {
+        return "None";
+    }
+
+    // Collect the display names for every return statement.
+    let mut common_type: Option<&'static str> = None;
+    for ret in &func.return_stmts {
+        let display = rhs_type_display(&ret.rhs_kind);
+        // If any return has an uninferrable type, bail out.
+        if display.is_empty() {
+            return "";
+        }
+        match common_type {
+            None => common_type = Some(display),
+            Some(prev) if prev == display => {}
+            Some(_) => return "", // mixed return types — cannot infer
+        }
+    }
+
+    common_type.unwrap_or("None")
 }
 
 // ── Position conversion ──────────────────────────────────────────────────────

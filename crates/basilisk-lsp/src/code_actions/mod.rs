@@ -95,7 +95,7 @@ pub(super) fn quickfix_action(
 
 // Re-export pub(crate) items that the server module calls directly.
 pub(crate) use imports::organize_imports;
-pub(crate) use mass_fix::{fix_all_by_rule, fix_all_in_file, fix_all_quickfix};
+pub(crate) use mass_fix::{fix_all_by_rule, fix_all_quickfix, fix_filtered_in_file};
 
 /// Generate code actions for the given diagnostics and cursor range.
 ///

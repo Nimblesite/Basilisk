@@ -311,8 +311,8 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
       const app = roots.find((row) => labelOf(row) === "app");
       assert.ok(app instanceof PackageTreeItem, "'app' is a package container");
       const appDesc = String(app.description);
-      assert.ok(appDesc.includes("10E"), `'app' must roll up all descendant errors (9+1), got: ${appDesc}`);
-      assert.ok(appDesc.includes("2W"), `'app' must roll up descendant warnings, got: ${appDesc}`);
+      assert.ok(appDesc.includes("🔴 10"), `'app' must roll up all descendant errors (9+1), got: ${appDesc}`);
+      assert.ok(appDesc.includes("🟠 2"), `'app' must roll up descendant warnings, got: ${appDesc}`);
       assert.strictEqual(app.node.errors, 10, "rolled-up error count on the node");
       assert.strictEqual(app.node.warnings, 2, "rolled-up warning count on the node");
 
@@ -321,7 +321,7 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
       const api = appChildren.find((row) => labelOf(row) === "api");
       assert.ok(api instanceof PackageTreeItem, "'api' is a synthesised folder");
       assert.ok(
-        String(api.description).includes("9E"),
+        String(api.description).includes("🔴 9"),
         `'api' folder must surface auth's 9 errors without drilling in, got: ${String(api.description)}`,
       );
 
@@ -329,7 +329,7 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
       const util = roots.find((row) => labelOf(row) === "util");
       assert.ok(util instanceof ModuleTreeItem, "'util' is a clean leaf module");
       assert.ok(
-        !String(util.description).includes("E") && !String(util.description).includes("W"),
+        !String(util.description).includes("🔴") && !String(util.description).includes("🟠"),
         `clean module must show no error/warning tally, got: ${String(util.description)}`,
       );
     } finally {

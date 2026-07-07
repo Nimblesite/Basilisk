@@ -618,6 +618,85 @@ fn test_lsp_fix_file_command() -> TestResult<()> {
     Ok(())
 }
 
+// Regression for issue #245 [AUTOFIX-CLASSIFY] / [AUTOFIX-MASS-VSCODE]: every
+// LSP fix-all surface must apply Safe fixes only by default. The Unsafe
+// BSK-E0003 fix (insert `: Any` on an unannotated variable) may only be
+// applied by the explicit all-tier command variants (`basilisk.fixFileAll` /
+// `basilisk.fixWorkspaceAll`), mirroring the CLI's safe-only default.
+#[test]
+fn test_lsp_fix_all_defaults_to_safe_fixes_only() -> TestResult<()> {
+    let mut fixture = LspTestFixture::new()?;
+    let _ = fixture.initialize()?;
+
+    // Line 0: redundant annotation → BSK-W0050 (Safe fix: remove `: int`).
+    // Line 1: unannotated `None` variable → BSK-E0003 (Unsafe fix: insert `: Any`).
+    let uri = "file:///safe_default.py";
+    let code = "x: int = 42\ny = None\n";
+    fixture.did_open(uri, code)?;
+    let _ = fixture
+        .wait_for_diagnostics()
+        .ok_or("no diagnostics published")?;
+
+    // Surface 1: the `source.fixAll` code action must include only Safe fixes.
+    let resp = send_request(
+        &mut fixture,
+        300,
+        "textDocument/codeAction",
+        serde_json::json!({
+            "textDocument": { "uri": uri },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 2, "character": 0 }
+            },
+            "context": {
+                "diagnostics": [],
+                "only": ["source.fixAll"]
+            }
+        }),
+    )?
+    .ok_or("no fix-all code action response")?;
+    let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+    let edits = parsed["result"][0]["edit"]["changes"][uri]
+        .as_array()
+        .ok_or("fix-all action should carry edits")?;
+    assert!(
+        edits.iter().all(|e| e["newText"].as_str() != Some(": Any")),
+        "source.fixAll must not apply the Unsafe BSK-E0003 `: Any` insertion: {resp}"
+    );
+    assert_eq!(
+        edits.len(),
+        1,
+        "source.fixAll should include exactly the Safe BSK-W0050 fix: {resp}"
+    );
+
+    // Surfaces 2–3: the plain commands (keybinding / context menu / toolbar)
+    // are Safe-only by default; the spec-promised all-tier variants
+    // ([AUTOFIX-MASS-VSCODE]) exist and widen to the Unsafe BSK-E0003 fix.
+    let expectations: [(&str, u64); 4] = [
+        ("basilisk.fixFile", 1),
+        ("basilisk.fixWorkspace", 1),
+        ("basilisk.fixFileAll", 2),
+        ("basilisk.fixWorkspaceAll", 2),
+    ];
+    for ((command, expected_fixed), request_id) in expectations.into_iter().zip(301_u64..) {
+        let resp = send_request(
+            &mut fixture,
+            request_id,
+            "workspace/executeCommand",
+            serde_json::json!({ "command": command, "arguments": [uri] }),
+        )?
+        .ok_or("no executeCommand response")?;
+        let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+        assert_eq!(
+            parsed["result"]["fixed"].as_u64(),
+            Some(expected_fixed),
+            "{command} must fix exactly {expected_fixed} issue(s) — Safe fixes \
+             only by default, every fixable rule for the `All` variants: {resp}"
+        );
+    }
+    Ok(())
+}
+
 // ── Fix All by Rule ─────────────────────────────────────────────────────────
 
 #[test]

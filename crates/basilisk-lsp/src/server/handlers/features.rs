@@ -106,7 +106,14 @@ pub(in crate::server) async fn code_action(
                     .iter()
                     .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &text))
                     .collect();
-                let action = code_actions::fix_all_in_file(&uri, &lsp_diags, &text)?;
+                // Implements [AUTOFIX-CLASSIFY] — the default tier is Safe
+                // fixes only; Unsafe fixes need the explicit all-tier commands.
+                let action = code_actions::fix_filtered_in_file(
+                    &uri,
+                    &lsp_diags,
+                    &text,
+                    code_actions::mass_fix::SAFE_FIXABLE_RULES,
+                )?;
                 Some(vec![tower_lsp::lsp_types::CodeActionOrCommand::CodeAction(
                     action,
                 )])

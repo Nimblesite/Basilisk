@@ -1686,6 +1686,41 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    // Regression for issue #252, exercises the [LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND]
+    // resolution contract (`import_resolver::resolve_site_packages_with_env`):
+    // the two lockfile E0010 tests above were not hermetic — a uv-locked
+    // project with no venv fell back to the ambient `python3` interpreter's
+    // site-packages, so `import flask` resolved on any machine whose first
+    // ambient site-packages dir carried flask and the "expected
+    // imports_unresolved" assertions failed. The contract: a uv-locked project
+    // resolves third-party imports against its lock and its own (or explicitly
+    // activated) venv ONLY — never the ambient interpreter.
+    #[test]
+    fn test_locked_project_ignores_ambient_interpreter_site_packages() {
+        let dir = unique_tmp("bsk_uv_no_ambient");
+        std::fs::create_dir_all(&dir).unwrap();
+        create_uv_project(&dir, &[("requests", "2.31.0")]);
+
+        let roots = vec![dir.clone()];
+        let config = crate::config::load_config(&dir);
+        let registry = build_registry_from_roots(&roots);
+        assert!(registry.is_some(), "temp uv project must yield a registry");
+
+        // The temp project is uv-locked and has NO venv of its own, and no
+        // VIRTUAL_ENV is injected: site-packages must stay unset instead of
+        // being probed from whatever `python3` happens to be on PATH.
+        let search_paths =
+            crate::import_resolver::search_paths_from_config(&roots, &config, registry);
+        assert!(
+            search_paths.site_packages.is_none(),
+            "uv-locked project without a venv must not inherit the ambient \
+             interpreter's site-packages (issue #252), got: {:?}",
+            search_paths.site_packages
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     // ── Issue #22: sibling-module imports in script directories ─────────────
     //
     // `import configure_agent_backend` from `scripts/configure_agent_backend_test.py`
