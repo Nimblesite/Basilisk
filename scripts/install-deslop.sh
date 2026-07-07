@@ -8,6 +8,19 @@
 # which ships Homebrew) so both grab deslop fresh at its latest release.
 set -euo pipefail
 
+# CI runs steps with `bash --noprofile --norc`, which skips the profile scripts
+# that put Homebrew on PATH. Load `brew` from its known install locations —
+# /home/linuxbrew on GitHub's ubuntu runners, /opt/homebrew (Apple Silicon) or
+# /usr/local (Intel) on macOS — so `brew` resolves in CI and local shells alike.
+if ! command -v brew >/dev/null; then
+    for brew_bin in /home/linuxbrew/.linuxbrew/bin/brew /opt/homebrew/bin/brew /usr/local/bin/brew; do
+        if [[ -x "$brew_bin" ]]; then
+            eval "$("$brew_bin" shellenv)"
+            break
+        fi
+    done
+fi
+
 command -v brew >/dev/null || {
     echo "deslop needs Homebrew — https://brew.sh (or grab a binary: https://github.com/Nimblesite/Deslop/releases)" >&2
     exit 1
