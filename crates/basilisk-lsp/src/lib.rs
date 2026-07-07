@@ -48,6 +48,7 @@ pub mod import_resolver;
 pub mod inlay_hints;
 pub mod profiler;
 pub mod references;
+pub mod runtime;
 pub mod salsa_engine;
 pub mod scope_tree;
 pub mod selection;

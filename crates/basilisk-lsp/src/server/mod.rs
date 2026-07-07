@@ -547,16 +547,19 @@ impl tower_lsp::LanguageServer for LspServer {
 
 /// Start the LSP server.
 ///
+/// Runs on analysis-sized stacks ([LSPARCH-ARCH-STACK]): recursive AST
+/// visitors overflow default thread stacks on deeply chained expressions in
+/// generated code, aborting the whole server (GitHub #278).
+///
 /// # Errors
 ///
 /// Returns an `io::Error` if the Tokio runtime fails to initialize.
 pub fn run_server() -> std::io::Result<()> {
-    let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(async {
+    crate::runtime::block_on_with_analysis_stack("basilisk-lsp-stdio", || async {
         let stdin = tokio::io::stdin();
         let stdout = tokio::io::stdout();
         let (service, socket) = LspService::new(LspServer::new);
         Server::new(stdin, stdout, socket).serve(service).await;
-    });
-    Ok(())
+        Ok(())
+    })
 }

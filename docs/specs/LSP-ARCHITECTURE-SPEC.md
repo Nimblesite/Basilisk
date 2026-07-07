@@ -353,6 +353,38 @@ struct DocumentState {
 
 Update `resolved` on `did_change`/`did_open`; reuse the cached result for all feature handlers.
 
+### Runtime Stack Sizing {#LSPARCH-ARCH-STACK}
+
+Every thread that can run analysis has a **64 MiB stack** — the `block_on`
+thread and all tokio workers alike (`crates/basilisk-lsp/src/runtime.rs`).
+
+The resolver and checker walk the AST recursively. The parser caps
+parenthesis and indentation nesting, but a long binary-operator chain
+(`total = 1 + 1 + …`, typical of generated code) parses fine and yields an
+arbitrarily deep left-nested `BinOp` tree; on a default ~2 MiB tokio worker
+stack the workspace scan overflowed and aborted the whole server, which the
+editor then restarted into the same file — a crash loop (GitHub #278,
+`0xC00000FD` / `thread 'tokio-rt-worker' has overflowed its stack`).
+
+- Production entry points (stdio `run_server`, WebSocket
+  `run_server_ws_blocking`) MUST build their runtime via
+  `runtime::block_on_with_analysis_stack` — never a bare `Runtime::new()`.
+  tower-lsp polls handler futures on both the `block_on` thread and runtime
+  workers, so both need analysis-sized stacks.
+- The CLI has the same exposure on the process main thread (~8 MiB on
+  macOS/Linux, only ~1 MiB on Windows): its command dispatch runs via
+  `runtime::run_with_analysis_stack`, the synchronous counterpart.
+- Depth beyond what any stack can absorb is rejected linearly *before*
+  parsing by the operator-chain limit in [CHKARCH-ARCH-PARSEDEPTH]
+  (`docs/specs/CHECKER-ARCHITECTURE-SPEC.md`) — the two mechanisms together
+  make analysis un-crashable: big stacks for every legitimate file, a clean
+  `BSK-PARSE` rejection for pathological ones.
+- E2E-tested against the real binary in
+  `crates/basilisk-cli/tests/e2e_deep_expressions.rs`: a workspace whose one
+  file is a 10,000-term chain must survive the startup scan **and** the file
+  being opened; `basilisk check` must analyse 30,000 terms cleanly and skip
+  300,000 with a warning instead of crashing.
+
 ---
 
 ## LSP Features {#LSPARCH-FEATURES}

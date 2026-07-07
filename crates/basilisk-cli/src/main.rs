@@ -221,7 +221,27 @@ fn main() -> ExitCode {
 
     let cli = Cli::parse();
 
-    let exit_code: u8 = match cli.command {
+    // Command dispatch runs on an analysis-sized stack: `check`/`fix`/`adopt`
+    // walk the AST recursively and overflow the default main-thread stack
+    // (~8 MiB on macOS/Linux, ~1 MiB on Windows) on deeply chained
+    // expressions in generated code. Implements [LSPARCH-ARCH-STACK]
+    // (GitHub #278).
+    let exit_code =
+        match basilisk_lsp::runtime::run_with_analysis_stack("basilisk-cli", move || {
+            run_command(cli.command)
+        }) {
+            Ok(code) => code,
+            Err(err) => {
+                error!(%err, "analysis thread failed");
+                1
+            }
+        };
+    ExitCode::from(exit_code)
+}
+
+/// Dispatch the parsed subcommand. Returns the process exit code.
+fn run_command(command: Command) -> u8 {
+    match command {
         Command::Check {
             paths,
             output,
@@ -268,9 +288,7 @@ fn main() -> ExitCode {
             },
         },
         Command::Stubs { action } => run_stubs(action),
-    };
-
-    ExitCode::from(exit_code)
+    }
 }
 
 /// Run the stubs subcommand.

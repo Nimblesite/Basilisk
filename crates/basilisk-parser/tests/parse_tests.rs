@@ -172,3 +172,106 @@ fn sequential_indents_do_not_accumulate() {
         "many shallow sibling blocks must not accumulate indentation depth"
     );
 }
+
+// --- Operator-chain boundary (pins MAX_EXPR_OPERATORS = 50_000, GitHub #278) ---
+
+/// An `n`-operator `1 + 1 + …` chain (`n + 1` terms).
+fn plus_chain(operators: usize) -> String {
+    format!("x = {}1\n", "1 + ".repeat(operators))
+}
+
+#[test]
+fn operator_chain_at_limit_parses() {
+    // Exactly 50,000 chained operators is accepted. Parsing (and dropping) the
+    // resulting 50,000-deep BinOp tree needs an analysis-sized stack — exactly
+    // how every production entry point runs it ([LSPARCH-ARCH-STACK]) — so the
+    // test provides one rather than gambling on the harness thread.
+    let handle = std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(|| parse_source(plus_chain(50_000), "ok.py".to_owned()).is_ok())
+        .expect("spawn analysis-stack thread");
+    assert!(
+        handle.join().expect("analysis-stack thread panicked"),
+        "a 50,000-operator chain is at the limit and must parse"
+    );
+}
+
+#[test]
+fn operator_chain_one_over_limit_reports_message() {
+    // The 50,001st chained operator is rejected — linearly, before the parser
+    // ever builds the deep AST, so no big stack is needed here.
+    match parse_source(plus_chain(50_001), "deep.py".to_owned()) {
+        Err(ParseError::Syntax { message, .. }) => assert!(
+            message.contains("expression too deeply nested"),
+            "operator-chain rejection should explain itself, got: {message}"
+        ),
+        other => panic!("expected ParseError::Syntax at 50,001 operators, got {other:?}"),
+    }
+}
+
+#[test]
+fn flat_operators_and_commas_do_not_accumulate_chain_depth() {
+    // 60,000 `+` tokens overall, but commas break every chain at length one —
+    // a giant flat literal is legitimate generated code. Only passes if the
+    // chain-break arm resets: deleting it would falsely reject this file.
+    let source = format!("x = [{}]\n", "1 + 1, ".repeat(60_000));
+    assert!(
+        parse_source(source, "ok.py".to_owned()).is_ok(),
+        "flat comma-separated sums must not accumulate chain depth"
+    );
+}
+
+#[test]
+fn nested_brackets_isolate_operator_chains() {
+    // Two 30,000-operator chains — one parenthesised inside the other's line —
+    // total 60,001 operators, but each bracket level stays under the limit.
+    // Only passes if entering a bracket pushes a fresh counter and closing it
+    // restores the outer one.
+    let inner = format!("({}1)", "1 + ".repeat(30_000));
+    let source = format!("x = {}{inner}\n", "1 + ".repeat(30_000));
+    let handle = std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(move || parse_source(source, "ok.py".to_owned()).is_ok())
+        .expect("spawn analysis-stack thread");
+    assert!(
+        handle.join().expect("analysis-stack thread panicked"),
+        "bracketed sub-chains must not leak depth into the enclosing chain"
+    );
+}
+
+#[test]
+fn unbalanced_closer_does_not_disarm_the_chain_guard() {
+    // A stray `)` (a syntax error ruff reports — but only if the guard lets
+    // the source through) must not corrupt the module-level chain counter:
+    // an over-limit chain after it is still rejected by the guard first.
+    let source = format!(") \n{}", plus_chain(50_001));
+    match parse_source(source, "deep.py".to_owned()) {
+        Err(ParseError::Syntax { message, .. }) => assert!(
+            message.contains("expression too deeply nested"),
+            "the guard must survive unbalanced closers, got: {message}"
+        ),
+        other => panic!("expected the depth guard to reject, got {other:?}"),
+    }
+}
+
+#[test]
+fn deep_unbracketed_constructs_are_rejected_not_crashed() {
+    // Every un-bracketed depth-building construct must hit the guard: unary
+    // runs, attribute chains, ternary nests, and lambda nests all build one
+    // AST level per token with zero bracket nesting.
+    let cases = [
+        format!("z = {}1\n", "-".repeat(60_000)),
+        format!("a = 1\nx = a{}\n", ".real".repeat(60_000)),
+        format!("y = {}1\n", "1 if True else ".repeat(60_000)),
+        format!("f = {}1\n", "lambda: ".repeat(60_000)),
+    ];
+    for source in cases {
+        assert!(
+            matches!(
+                parse_source(source, "deep.py".to_owned()),
+                Err(ParseError::Syntax { .. })
+            ),
+            "un-bracketed deep constructs must be rejected, not crash the visitors"
+        );
+    }
+}
