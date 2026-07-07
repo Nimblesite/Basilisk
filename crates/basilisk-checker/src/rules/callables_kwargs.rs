@@ -36,7 +36,7 @@ impl Rule for UnpackKwargsViolation {
             return;
         };
         let ctx = KwargsContext::from_ast(&parsed.ast.body);
-        check_stmts_recursive(&parsed.ast.body, &ctx, &module.path, diagnostics);
+        check_stmts_recursive(&parsed.ast.body, &ctx, None, &module.path, diagnostics);
     }
 }
 
@@ -57,71 +57,69 @@ struct UnpackFuncInfo {
     td_extra_items: bool,
 }
 
+/// A `TypedDict` definition: all keys (including inherited) + PEP 728 flag.
+struct TypedDictInfo {
+    keys: Vec<String>,
+    extra_items: bool,
+}
+
+/// Immutable module-level facts, collected once per module. Never cloned during
+/// traversal — per-scope state lives in the [`VarScope`] chain instead.
 struct KwargsContext {
-    typeddict_keys: Vec<(String, Vec<String>, bool)>,
+    /// `TypedDict` name → definition. First definition wins on name collisions,
+    /// matching the previous first-match linear lookup.
+    typeddicts: HashMap<String, TypedDictInfo>,
     typevar_names: Vec<String>,
     /// Functions with Unpack kwargs: name → info.
     unpack_funcs: HashMap<String, UnpackFuncInfo>,
-    /// Variable annotations: name → annotation text.
-    var_annotations: HashMap<String, String>,
+}
+
+/// Per-scope variable annotations, chained to the enclosing scope. Lookups walk
+/// outward so inner scopes shadow outer ones without copying any map — this
+/// keeps traversal O(statements), not O(statements × module size).
+struct VarScope<'a> {
+    parent: Option<&'a VarScope<'a>>,
+    /// Variable annotations in this scope: name → annotation text.
+    vars: HashMap<String, String>,
+}
+
+impl VarScope<'_> {
+    fn lookup(&self, name: &str) -> Option<&str> {
+        self.vars
+            .get(name)
+            .map(String::as_str)
+            .or_else(|| self.parent.and_then(|p| p.lookup(name)))
+    }
 }
 
 impl KwargsContext {
     fn from_ast(stmts: &[Stmt]) -> Self {
-        let mut typeddict_keys: Vec<(String, Vec<String>, bool)> = Vec::new();
+        let mut typeddicts: HashMap<String, TypedDictInfo> = HashMap::new();
         let mut typevar_names = Vec::new();
         let mut unpack_funcs = HashMap::new();
-        let mut var_annotations = HashMap::new();
         for stmt in stmts {
             match stmt {
                 Stmt::ClassDef(cls) => {
-                    collect_typeddict(cls, &mut typeddict_keys);
+                    collect_typeddict(cls, &mut typeddicts);
                 }
                 Stmt::Assign(assign) => {
                     collect_typevar(assign, &mut typevar_names);
                 }
                 Stmt::FunctionDef(func) => {
-                    collect_unpack_func(func, &typeddict_keys, &mut unpack_funcs);
-                }
-                Stmt::AnnAssign(ann) => {
-                    collect_var_annotation(ann, &mut var_annotations);
+                    collect_unpack_func(func, &typeddicts, &mut unpack_funcs);
                 }
                 _ => {}
             }
         }
         Self {
-            typeddict_keys,
+            typeddicts,
             typevar_names,
             unpack_funcs,
-            var_annotations,
         }
-    }
-
-    /// Clone context and add local annotations/variable types from a statement block.
-    fn clone_with_locals(&self, stmts: &[Stmt]) -> Self {
-        let mut ctx = Self {
-            typeddict_keys: self.typeddict_keys.clone(),
-            typevar_names: self.typevar_names.clone(),
-            unpack_funcs: self.unpack_funcs.clone(),
-            var_annotations: self.var_annotations.clone(),
-        };
-        for stmt in stmts {
-            if let Stmt::AnnAssign(ann) = stmt {
-                if let Some(name) = expr_name(&ann.target) {
-                    let _ = ctx
-                        .var_annotations
-                        .insert(name.to_owned(), ann_str(&ann.annotation));
-                }
-            }
-        }
-        ctx
     }
 
     fn get_td_keys(&self, name: &str) -> Option<&[String]> {
-        self.typeddict_keys
-            .iter()
-            .find(|(n, _, _)| n == name)
-            .map(|(_, k, _)| k.as_slice())
+        self.typeddicts.get(name).map(|td| td.keys.as_slice())
     }
 
     fn is_typevar(&self, name: &str) -> bool {
@@ -133,11 +131,8 @@ impl KwargsContext {
 // Context collection helpers
 // ---------------------------------------------------------------------------
 
-fn collect_typeddict(
-    cls: &ast::StmtClassDef,
-    typeddict_keys: &mut Vec<(String, Vec<String>, bool)>,
-) {
-    if !is_typeddict(cls, typeddict_keys) {
+fn collect_typeddict(cls: &ast::StmtClassDef, typeddicts: &mut HashMap<String, TypedDictInfo>) {
+    if !is_typeddict(cls, typeddicts) {
         return;
     }
     let keys: Vec<String> = cls
@@ -151,24 +146,28 @@ fn collect_typeddict(
             }
         })
         .collect();
-    let mut all_keys = collect_base_td_keys(cls, typeddict_keys);
+    let mut all_keys = collect_base_td_keys(cls, typeddicts);
     all_keys.extend(keys);
-    let has_extra_items = typeddict_has_extra_items(cls, typeddict_keys);
-    typeddict_keys.push((cls.name.to_string(), all_keys, has_extra_items));
+    let has_extra_items = typeddict_has_extra_items(cls, typeddicts);
+    // First definition wins, matching the previous first-match linear lookup.
+    let _ = typeddicts
+        .entry(cls.name.to_string())
+        .or_insert(TypedDictInfo {
+            keys: all_keys,
+            extra_items: has_extra_items,
+        });
 }
 
 fn collect_base_td_keys(
     cls: &ast::StmtClassDef,
-    typeddict_keys: &[(String, Vec<String>, bool)],
+    typeddicts: &HashMap<String, TypedDictInfo>,
 ) -> Vec<String> {
     let mut result = Vec::new();
     if let Some(args) = &cls.arguments {
         for base in &args.args {
             if let Expr::Name(n) = base {
-                if let Some((_, bkeys, _)) =
-                    typeddict_keys.iter().find(|(n2, _, _)| n2 == n.id.as_str())
-                {
-                    result.extend(bkeys.iter().cloned());
+                if let Some(td) = typeddicts.get(n.id.as_str()) {
+                    result.extend(td.keys.iter().cloned());
                 }
             }
         }
@@ -189,7 +188,7 @@ fn collect_typevar(assign: &ast::StmtAssign, typevar_names: &mut Vec<String>) {
 
 fn collect_unpack_func(
     func: &ast::StmtFunctionDef,
-    typeddict_keys: &[(String, Vec<String>, bool)],
+    typeddicts: &HashMap<String, TypedDictInfo>,
     unpack_funcs: &mut HashMap<String, UnpackFuncInfo>,
 ) {
     let Some(kwarg) = &func.parameters.kwarg else {
@@ -201,25 +200,17 @@ fn collect_unpack_func(
     let Some(unpack_type) = extract_unpack_arg(annotation) else {
         return;
     };
-    if let Some((_, keys, has_extra_items)) =
-        typeddict_keys.iter().find(|(n, _, _)| n == unpack_type)
-    {
+    if let Some(td) = typeddicts.get(unpack_type) {
         let positional_count = func.parameters.posonlyargs.len() + func.parameters.args.len();
         let _ = unpack_funcs.insert(
             func.name.to_string(),
             UnpackFuncInfo {
                 td_name: unpack_type.to_owned(),
-                td_keys: keys.clone(),
+                td_keys: td.keys.clone(),
                 positional_count,
-                td_extra_items: *has_extra_items,
+                td_extra_items: td.extra_items,
             },
         );
-    }
-}
-
-fn collect_var_annotation(ann: &ast::StmtAnnAssign, var_annotations: &mut HashMap<String, String>) {
-    if let Some(name) = expr_name(&ann.target) {
-        let _ = var_annotations.insert(name.to_owned(), ann_str(&ann.annotation));
     }
 }
 
@@ -230,29 +221,38 @@ fn collect_var_annotation(ann: &ast::StmtAnnAssign, var_annotations: &mut HashMa
 fn check_stmts_recursive(
     stmts: &[Stmt],
     ctx: &KwargsContext,
+    parent: Option<&VarScope<'_>>,
     path: &str,
     diag: &mut Vec<Diagnostic>,
 ) {
-    // Collect local annotations and variable types for this scope
-    let mut local_ctx = ctx.clone_with_locals(stmts);
+    // Collect this block's annotated variables up front (hoisted, as before);
+    // assignments add entries as the walk reaches them.
+    let mut scope = VarScope {
+        parent,
+        vars: HashMap::new(),
+    };
+    for stmt in stmts {
+        if let Stmt::AnnAssign(ann) = stmt {
+            if let Some(name) = expr_name(&ann.target) {
+                let _ = scope.vars.insert(name.to_owned(), ann_str(&ann.annotation));
+            }
+        }
+    }
     for stmt in stmts {
         match stmt {
             Stmt::FunctionDef(func) => {
-                check_function_def(func, &local_ctx, path, diag);
-                check_stmts_recursive(&func.body, &local_ctx, path, diag);
+                check_function_def(func, ctx, path, diag);
+                check_stmts_recursive(&func.body, ctx, Some(&scope), path, diag);
             }
-            Stmt::ClassDef(cls) => check_stmts_recursive(&cls.body, &local_ctx, path, diag),
-            Stmt::Expr(expr_stmt) => check_call_in_expr(&expr_stmt.value, &local_ctx, path, diag),
+            Stmt::ClassDef(cls) => {
+                check_stmts_recursive(&cls.body, ctx, Some(&scope), path, diag);
+            }
+            Stmt::Expr(expr_stmt) => {
+                check_call_in_expr(&expr_stmt.value, ctx, &scope, path, diag);
+            }
             Stmt::Assign(assign) => {
-                collect_local_var_type(assign, &mut local_ctx);
-                check_call_in_expr(&assign.value, &local_ctx, path, diag);
-            }
-            Stmt::AnnAssign(ann) => {
-                if let Some(name) = expr_name(&ann.target) {
-                    let _ = local_ctx
-                        .var_annotations
-                        .insert(name.to_owned(), ann_str(&ann.annotation));
-                }
+                collect_local_var_type(assign, ctx, &mut scope);
+                check_call_in_expr(&assign.value, ctx, &scope, path, diag);
             }
             _ => {}
         }
@@ -260,7 +260,7 @@ fn check_stmts_recursive(
 }
 
 /// Track variable types from assignments like `td2 = TD2(v1=2, v3="4")`.
-fn collect_local_var_type(assign: &ast::StmtAssign, ctx: &mut KwargsContext) {
+fn collect_local_var_type(assign: &ast::StmtAssign, ctx: &KwargsContext, scope: &mut VarScope<'_>) {
     if assign.targets.len() != 1 {
         return;
     }
@@ -270,10 +270,8 @@ fn collect_local_var_type(assign: &ast::StmtAssign, ctx: &mut KwargsContext) {
     // If RHS is a call to a known TypedDict constructor, track the variable type
     if let Expr::Call(call) = assign.value.as_ref() {
         if let Some(callee) = expr_name(&call.func) {
-            if ctx.typeddict_keys.iter().any(|(n, _, _)| n == callee) {
-                let _ = ctx
-                    .var_annotations
-                    .insert(var_name.to_owned(), callee.to_owned());
+            if ctx.typeddicts.contains_key(callee) {
+                let _ = scope.vars.insert(var_name.to_owned(), callee.to_owned());
             }
         }
     }
@@ -347,7 +345,13 @@ fn check_param_overlap(
 // Call-site checks
 // ---------------------------------------------------------------------------
 
-fn check_call_in_expr(expr: &Expr, ctx: &KwargsContext, path: &str, diag: &mut Vec<Diagnostic>) {
+fn check_call_in_expr(
+    expr: &Expr,
+    ctx: &KwargsContext,
+    scope: &VarScope<'_>,
+    path: &str,
+    diag: &mut Vec<Diagnostic>,
+) {
     let Expr::Call(call) = expr else {
         return;
     };
@@ -361,8 +365,8 @@ fn check_call_in_expr(expr: &Expr, ctx: &KwargsContext, path: &str, diag: &mut V
     check_positional_args(call, info, func_name, path, diag, call_span);
     check_missing_required(call, info, func_name, ctx, path, diag, call_span);
     check_extra_keywords(call, info, func_name, path, diag, call_span);
-    check_dict_spread(call, info, func_name, ctx, path, diag, call_span);
-    check_duplicate_keywords(call, func_name, ctx, path, diag, call_span);
+    check_dict_spread(call, info, func_name, scope, path, diag, call_span);
+    check_duplicate_keywords(call, func_name, ctx, scope, path, diag, call_span);
 }
 
 /// Positional args beyond the explicit params are not allowed with Unpack kwargs.
@@ -460,7 +464,7 @@ fn check_dict_spread(
     call: &ast::ExprCall,
     info: &UnpackFuncInfo,
     func_name: &str,
-    ctx: &KwargsContext,
+    scope: &VarScope<'_>,
     path: &str,
     diag: &mut Vec<Diagnostic>,
     span: Span,
@@ -473,7 +477,7 @@ fn check_dict_spread(
         let Some(var_name) = expr_name(&kw.value) else {
             continue;
         };
-        if let Some(ann) = ctx.var_annotations.get(var_name) {
+        if let Some(ann) = scope.lookup(var_name) {
             if ann.starts_with("dict[") || ann == "dict" {
                 diag.push(error_diagnostic_owned(
                     CODE.clone(),
@@ -496,6 +500,7 @@ fn check_duplicate_keywords(
     call: &ast::ExprCall,
     func_name: &str,
     ctx: &KwargsContext,
+    scope: &VarScope<'_>,
     path: &str,
     diag: &mut Vec<Diagnostic>,
     span: Span,
@@ -516,7 +521,7 @@ fn check_duplicate_keywords(
         let Some(var_name) = expr_name(&kw.value) else {
             continue;
         };
-        let spread_keys = resolve_spread_keys(var_name, ctx);
+        let spread_keys = resolve_spread_keys(var_name, ctx, scope);
         for ek in &explicit_kw_names {
             if spread_keys.iter().any(|sk| sk == ek) {
                 diag.push(error_diagnostic_owned(
@@ -536,9 +541,13 @@ fn check_duplicate_keywords(
 }
 
 /// Resolve the keys a spread variable would provide.
-fn resolve_spread_keys<'a>(var_name: &str, ctx: &'a KwargsContext) -> Vec<&'a str> {
+fn resolve_spread_keys<'a>(
+    var_name: &str,
+    ctx: &'a KwargsContext,
+    scope: &VarScope<'_>,
+) -> Vec<&'a str> {
     // Check if the variable's annotation type is a known TypedDict
-    if let Some(ann) = ctx.var_annotations.get(var_name) {
+    if let Some(ann) = scope.lookup(var_name) {
         if let Some(keys) = ctx.get_td_keys(ann) {
             return keys.iter().map(String::as_str).collect();
         }
@@ -562,12 +571,12 @@ fn has_required_td_keys(td_name: &str, ctx: &KwargsContext) -> bool {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn is_typeddict(cls: &ast::StmtClassDef, known_tds: &[(String, Vec<String>, bool)]) -> bool {
+fn is_typeddict(cls: &ast::StmtClassDef, known_tds: &HashMap<String, TypedDictInfo>) -> bool {
     cls.arguments.as_ref().is_some_and(|args| {
         args.args.iter().any(|a| {
             if let Expr::Name(n) = a {
                 let name = n.id.as_str();
-                name == "TypedDict" || known_tds.iter().any(|(td, _, _)| td == name)
+                name == "TypedDict" || known_tds.contains_key(name)
             } else {
                 false
             }
@@ -599,7 +608,7 @@ fn mk_span(range: ruff_text_size::TextRange) -> Span {
 /// inherits it from a base `TypedDict` (PEP 728).
 fn typeddict_has_extra_items(
     cls: &ast::StmtClassDef,
-    typeddict_keys: &[(String, Vec<String>, bool)],
+    typeddicts: &HashMap<String, TypedDictInfo>,
 ) -> bool {
     let Some(args) = &cls.arguments else {
         return false;
@@ -612,9 +621,7 @@ fn typeddict_has_extra_items(
         || args.args.iter().any(|base| {
             matches!(
                 base,
-                Expr::Name(n) if typeddict_keys
-                    .iter()
-                    .any(|(name, _, has)| name == n.id.as_str() && *has)
+                Expr::Name(n) if typeddicts.get(n.id.as_str()).is_some_and(|td| td.extra_items)
             )
         })
 }

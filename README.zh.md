@@ -26,8 +26,8 @@
 
 <p align="center">
   <a href="https://www.basilisk-python.dev/zh/docs/conformance/"><strong>PEP 符合性 <!--g:score-->100.0%<!--/g:score--></strong></a> &mdash; 官方
-  <a href="https://github.com/python/typing/tree/f05162592e5688026cad9f2995050d87485f70db/conformance"><code>python/typing</code></a>
-  符合性套件 <!--g:total-->141<!--/g:total--> 个测试中通过 <!--g:pass-->141<!--/g:pass--> 个（提交 <code><!--g:short-->f051625<!--/g:short--></code>），由
+  <a href="https://github.com/python/typing/tree/f4f2952f3ac94d7af819c5c71b60a50a100370e0/conformance"><code>python/typing</code></a>
+  符合性套件 <!--g:total-->141<!--/g:total--> 个测试中通过 <!--g:pass-->141<!--/g:pass--> 个（提交 <code><!--g:short-->f4f2952<!--/g:short--></code>），由
   <a href="https://github.com/Nimblesite/Basilisk/blob/main/conformance/score.py"><code>conformance/score.py</code></a>
   在默认配置下对真实二进制文件评分。我们对标 <code>python/typing@main</code>，得分只升不降。
 </p>

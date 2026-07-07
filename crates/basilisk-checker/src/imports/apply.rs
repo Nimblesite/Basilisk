@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use basilisk_resolver::scope::{ImportKind, ImportedModuleApi, PackageDepKind};
 
-use super::resolve::{classify_unresolved, resolve_module_with_importer};
+use super::resolve::{classify_unresolved, resolve_module_with_importer_cached, FsCache};
 use super::ImportSearchPaths;
 
 /// Resolve every import in a single module against the search paths, in place.
@@ -23,6 +23,11 @@ pub fn resolve_module_imports(
     // The file's own path, used to search its directory for sibling modules.
     let importing_file = PathBuf::from(&resolved.path);
 
+    // One directory-listing cache for the whole loop: every import of this
+    // file probes the same search directories, so read each dir once instead
+    // of `stat`-ing every candidate path per import.
+    let fs = FsCache::new();
+
     // Member APIs captured during the loop, inserted after it ends — we cannot
     // borrow `resolved.imported_modules` while iterating `resolved.imports`.
     let mut captured: Vec<(String, ImportedModuleApi)> = Vec::new();
@@ -30,7 +35,12 @@ pub fn resolve_module_imports(
     for import in &mut resolved.imports {
         let result = match import.kind {
             ImportKind::Plain | ImportKind::From | ImportKind::Star => {
-                resolve_module_with_importer(&import.module, search_paths, Some(&importing_file))
+                resolve_module_with_importer_cached(
+                    &import.module,
+                    search_paths,
+                    Some(&importing_file),
+                    &fs,
+                )
             }
         };
         if let Some(r) = result {

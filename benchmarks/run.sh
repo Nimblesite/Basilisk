@@ -402,7 +402,9 @@ for FILE in "${FIXTURES[@]}"; do
     name="${TOOL_NAMES[$i]}"
     CMD="${TOOL_CMDS[$i]//\{\}/$FPATH}"
     case "${name%-warm}" in
-      basilisk) n=$($CMD 2>/dev/null | grep -cE "error\[BSK" || true) ;;
+      # Conformance rules use their rule name as the code (error[typeddicts_inheritance]);
+      # house rules use BSK-XXXX (error[BSK-E0001]) — match any error[...] diagnostic.
+      basilisk) n=$($CMD 2>/dev/null | grep -cE "^error\[" || true) ;;
       pyright)  n=$($CMD 2>/dev/null | grep -cE " - error:" || true) ;;
       mypy)     n=$($CMD 2>/dev/null | grep -cE ": error:" || true) ;;
       ty)       n=$($CMD 2>/dev/null | grep -cE "error\[|error:" || true) ;;

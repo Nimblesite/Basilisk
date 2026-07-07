@@ -3,8 +3,8 @@
   "upstream": {
     "repo": "python/typing",
     "ref": "main",
-    "sha": "f05162592e5688026cad9f2995050d87485f70db",
-    "shortSha": "f051625",
+    "sha": "f4f2952f3ac94d7af819c5c71b60a50a100370e0",
+    "shortSha": "f4f2952",
     "commitDate": "2026-07-06",
     "stale": false
   },

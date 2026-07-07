@@ -36,7 +36,7 @@ use basilisk_resolver::ResolvedModule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
-use crate::rules::shared::{is_numeric_subtype, split_top_level_commas};
+use crate::rules::shared::{identifiers_followed_by, is_numeric_subtype, split_top_level_commas};
 
 use super::generics_defaults_referential_2_helpers::{
     find_matching_bracket, literal_type_mismatch, parse_typevar_info_from_source,
@@ -413,24 +413,38 @@ fn check_subscripted_class_calls(
         .filter_map(|f| f.class_name.as_deref().map(|cn| (cn, f)))
         .collect();
 
-    for (line_idx, line) in module.source.lines().enumerate() {
+    // Running byte offset so diagnostics never re-scan the file for spans.
+    let mut byte_offset: u32 = 0;
+    for line in module.source.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with('#') || trimmed.is_empty() {
-            continue;
+        if !trimmed.starts_with('#') && !trimmed.is_empty() {
+            // Tokenise the line once: each identifier immediately followed by
+            // `[` is a candidate subscripted class. One hash lookup per token
+            // replaces a formatted substring search per known class per line.
+            let mut handled: HashSet<&str> = HashSet::new();
+            for (ident, bracket_pos) in identifiers_followed_by(trimmed, '[') {
+                let Some(class_info) = class_map.get(ident) else {
+                    continue;
+                };
+                // Match the previous first-occurrence-per-class semantics.
+                if !handled.insert(ident) {
+                    continue;
+                }
+                check_subscripted_class_on_line(
+                    module,
+                    info_map,
+                    diagnostics,
+                    &init_map,
+                    byte_offset,
+                    line,
+                    trimmed,
+                    bracket_pos,
+                    ident,
+                    class_info,
+                );
+            }
         }
-        for (class_name, class_info) in &class_map {
-            check_subscripted_class_on_line(
-                module,
-                info_map,
-                diagnostics,
-                &init_map,
-                line_idx,
-                line,
-                trimmed,
-                class_name,
-                class_info,
-            );
-        }
+        byte_offset += u32::try_from(line.len()).unwrap_or(u32::MAX) + 1;
     }
 }
 
@@ -444,20 +458,17 @@ fn check_subscripted_class_on_line(
     info_map: &HashMap<&str, &TypeVarInfo>,
     diagnostics: &mut Vec<Diagnostic>,
     init_map: &HashMap<&str, &basilisk_resolver::FunctionInfo>,
-    line_idx: usize,
+    line_start: u32,
     line: &str,
     trimmed: &str,
-    class_name: &&str,
+    after_bracket_pos: usize,
+    class_name: &str,
     class_info: &basilisk_resolver::ClassInfo,
 ) {
     if class_info.generic_params.is_empty() {
         return;
     }
-    let pattern = format!("{class_name}[");
-    let Some(start) = trimmed.find(&pattern) else {
-        return;
-    };
-    let after_name = &trimmed[start + pattern.len()..];
+    let after_name = &trimmed[after_bracket_pos..];
     let Some(bracket_end) = find_matching_bracket(after_name, '[', ']') else {
         return;
     };
@@ -500,15 +511,7 @@ fn check_subscripted_class_on_line(
             .get(ann_text)
             .map_or(ann_text, String::as_str);
         if let Some(mismatch) = literal_type_mismatch(call_arg, resolved_type) {
-            let byte_offset: u32 = u32::try_from(
-                module
-                    .source
-                    .lines()
-                    .take(line_idx)
-                    .map(|l| l.len() + 1)
-                    .sum::<usize>(),
-            )
-            .unwrap_or(u32::MAX);
+            let byte_offset = line_start;
             let line_len = u32::try_from(line.len()).unwrap_or(u32::MAX);
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
