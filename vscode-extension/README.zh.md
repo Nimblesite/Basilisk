@@ -10,6 +10,7 @@
 
 <p align="center">
   <strong>面向 VS Code 的开源 Pylance 替代品。</strong><br>
+  唯一在官方 <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> 一致性测试结果</a>中取得满分 <strong><!--g:score-->100.0%<!--/g:score--></strong> 的 Python 类型检查器 —— 榜单上唯一达到 100% 的工具。<br>
   完整的语言服务器：诊断、自动补全、悬停信息、跳转到定义、<br>
   重构、调试、性能分析。默认严格。使用 Rust 构建。
 </p>
@@ -18,7 +19,14 @@
   <a href="https://www.basilisk-python.dev">官网</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/zh/docs/quick-start/">快速开始</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/zh/docs/rules/">规则</a> &nbsp;&bull;&nbsp;
+  <a href="https://www.basilisk-python.dev/zh/docs/conformance/">一致性</a> &nbsp;&bull;&nbsp;
   <a href="https://github.com/Nimblesite/Basilisk">GitHub</a>
+</p>
+
+---
+
+<p align="center">
+  <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><strong><!--g:score-->100.0%<!--/g:score--> PEP 一致性</strong></a> —— 官方 <a href="https://github.com/python/typing/tree/main/conformance"><code>python/typing</code></a> 一致性测试套件 <!--g:total-->141<!--/g:total--> 个测试文件中通过 <!--g:pass-->141<!--/g:pass--> 个。Basilisk <strong>已发布在官方 <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">python/typing 结果页面</a></strong>上 —— 也是该页面上唯一取得满分的检查器。测试基于通过 wheel 安装的 CLI，在其默认配置下由官方上游工具评分。
 </p>
 
 ---
@@ -30,6 +38,8 @@
 ## Basilisk 的功能
 
 Basilisk 是一个**完整的 Python 语言服务器和 VS Code 扩展**，可替代 Pylance 和 Pyright。它不仅仅是一个类型检查器 —— 还提供自动补全、跳转到定义、悬停信息、代码操作、重构、集成调试和性能分析。全部完全开源。
+
+而且它是**最符合规范的类型检查器**：Basilisk 是唯一在[官方 `python/typing` 一致性测试结果](https://github.com/python/typing/blob/main/conformance/results/results.html)中取得满分 **100%** 的工具 —— 就发布在 Python typing 仓库的排行榜上，领先于 Pyright、mypy、Pyrefly、ty 以及其他所有检查器。
 
 其他类型检查器默认采取宽松策略，寄希望于你主动选择严格模式。Basilisk **从一开始就严格**，并始终保持严格。如果你的代码没有类型标注，那就是一个错误 —— 正如上面的截图所示。
 
@@ -132,12 +142,15 @@ Basilisk 以单个 Rust 二进制文件的形式发布。无需 Python 运行时
 
 | | Basilisk | Pyright | mypy |
 |---|:---:|:---:|:---:|
+| **官方 [`python/typing`](https://github.com/python/typing/blob/main/conformance/results/results.html) 一致性** | **100%** | 96.8% | 77.3% |
 | **默认严格** | 是 | 否 | 否 |
 | **编写语言** | Rust | TypeScript | Python |
 | **所需运行时** | 无 | Node.js | Python |
-| **增量速度** | <10ms | ~50ms | ~200ms |
 | **所有权分析** | 是 | 否 | 否 |
 | **单一二进制文件** | 是 | 否 | 否 |
+| **增量速度** | <10ms | ~50ms | ~200ms |
+
+一致性数据直接读取自[官方 `python/typing` 结果表](https://github.com/python/typing/blob/main/conformance/results/results.html)；速度数据为我们自己的基准测试结果。
 
 ---
 

@@ -6,6 +6,7 @@
 
 <p align="center">
   <strong>The open-source Pylance replacement for VS Code.</strong><br>
+  The only Python type checker with a perfect <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><strong><!--g:score-->100.0%<!--/g:score--> score</strong> on the official <code>python/typing</code> conformance results</a> — the sole tool on the board at 100%.<br>
   Complete language server: diagnostics, autocomplete, hover, go-to-definition,<br>
   refactoring, debugging, profiling. Strict by default. Built in Rust.
 </p>
@@ -14,10 +15,19 @@
   <a href="https://www.basilisk-python.dev">Website</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/quick-start/">Quick Start</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/rules/">Rules</a> &nbsp;&bull;&nbsp;
+  <a href="https://www.basilisk-python.dev/docs/conformance/">Conformance</a> &nbsp;&bull;&nbsp;
   <a href="https://github.com/Nimblesite/Basilisk">GitHub</a>
 </p>
 
 <p align="center"><strong>English</strong> · <a href="README.zh.md">简体中文</a></p>
+
+---
+
+<p align="center">
+  <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><strong><!--g:score-->100.0%<!--/g:score--> PEP conformance</strong></a> — <!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> tests in the official
+  <a href="https://github.com/python/typing/tree/main/conformance"><code>python/typing</code></a>
+  conformance suite. Basilisk is <strong>published on the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">python/typing results page</a></strong> — and is the only checker there with a perfect score. Scored on the wheel-installed CLI in its default config by the real upstream harness.
+</p>
 
 ---
 
@@ -28,6 +38,8 @@
 ## What Basilisk does
 
 Basilisk is a **complete Python language server and VS Code extension** that replaces Pylance and Pyright. It is not just a type checker — it provides autocomplete, go-to-definition, hover, code actions, refactoring, integrated debugging, and profiling. All fully open source.
+
+And it is the **most spec-conformant type checker there is**: Basilisk is the only tool with a perfect **100%** score on the [official `python/typing` conformance results](https://github.com/python/typing/blob/main/conformance/results/results.html) — published right there on the Python typing repository's leaderboard, ahead of Pyright, mypy, Pyrefly, ty, and every other checker.
 
 Other type checkers default to permissive and hope you opt into strictness. Basilisk **starts strict** and stays strict. If your code isn't typed, it's an error — exactly as the screenshot above shows.
 
@@ -130,12 +142,15 @@ All rules are **on by default**. There is no way to relax them globally.
 
 | | Basilisk | Pyright | mypy |
 |---|:---:|:---:|:---:|
+| **Official [`python/typing`](https://github.com/python/typing/blob/main/conformance/results/results.html) conformance** | **100%** | 96.8% | 77.3% |
 | **Strict by default** | Yes | No | No |
 | **Written in** | Rust | TypeScript | Python |
 | **Runtime needed** | None | Node.js | Python |
-| **Incremental speed** | <10ms | ~50ms | ~200ms |
 | **Ownership analysis** | Yes | No | No |
 | **Single binary** | Yes | No | No |
+| **Incremental speed** | <10ms | ~50ms | ~200ms |
+
+Conformance figures are read straight from the [official `python/typing` results table](https://github.com/python/typing/blob/main/conformance/results/results.html); speed figures are our own benchmarks.
 
 ---
 

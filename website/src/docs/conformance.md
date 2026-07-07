@@ -1,10 +1,10 @@
 ---
 layout: layouts/docs.njk
-title: "How Basilisk Measures PEP Conformance"
-description: "How Basilisk's PEP conformance score is measured with the official python/typing conformance suite — what the suite is, how scoring works, how the wheel-installed CLI is submitted upstream, and why we score with every rule enabled and never disable one."
-keywords: pep conformance, python typing conformance suite, basilisk conformance score, type checker scoring, python/typing harness
+title: "Basilisk Scores 100% on the Official Python Typing Conformance Suite"
+description: "Basilisk is the only Python type checker with a perfect 100% score — published on the official python/typing conformance results page, ahead of Pyright, mypy, Pyrefly and ty. Here's the proof and how it's measured."
+keywords: pep conformance, python typing conformance results, 100% conformant type checker, basilisk conformance score, python/typing results
 date: 2026-06-23
-dateModified: 2026-06-24
+dateModified: 2026-07-07
 author: The Basilisk Project
 eleventyNavigation:
   key: Conformance
@@ -12,51 +12,62 @@ eleventyNavigation:
 ---
 {% from "conformance-chart.njk" import chart %}
 
-# How we measure PEP conformance
+# Basilisk scores a perfect 100%
 
-Basilisk is scored by the **official `python/typing` conformance suite** — the same test suite and scoring tool the typing community uses to grade pyright, mypy, pyrefly, ty, and others. Release proof runs that tool unmodified through a wheel-installed `basilisk` command, the same entry point users get from PyPI.
-
-Today that gives **{{ conformance.scorePct }}%** — **{{ conformance.pass }} of {{ conformance.total }}** test files passing, {{ conformance.caught }} required errors caught, with **{{ conformance.fp }} false positives** and **{{ conformance.missed }} missed required errors**. {{ conformance.categoriesPass100 }} of {{ conformance.categoriesTotal }} categories pass at 100%, and the ratchet gate keeps it from regressing.
+Basilisk is the **only Python type checker with a perfect {{ conformanceOfficial.byId.basilisk.pct }}% score** on the [**official `python/typing` conformance results**](https://github.com/python/typing/blob/main/conformance/results/results.html) — and it is **published right there on the Python typing repository's own results page**, graded on the same single run as every other checker.
 
 <p class="conf-links">
+  <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener"><strong>Official python/typing results ↗</strong></a>
+  <a href="{{ conformanceOfficial.snapshot.prUrl }}" target="_blank" rel="noopener">The PR that added us ↗</a>
   <a href="https://typing.python.org/en/latest/spec/" target="_blank" rel="noopener">Python typing spec ↗</a>
-  <a href="https://github.com/python/typing/blob/main/conformance/README.md" target="_blank" rel="noopener">Conformance suite &amp; README ↗</a>
-  <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">Published results ↗</a>
-  <a href="https://github.com/Nimblesite/Basilisk/blob/main/scripts/prepare_typing_conformance_pr.py" target="_blank" rel="noopener">Submission script ↗</a>
-  <a href="https://github.com/Nimblesite/Basilisk/blob/main/docs/typing-conformance-pr.md" target="_blank" rel="noopener">PR workflow ↗</a>
+  <a href="https://github.com/python/typing/blob/main/conformance/README.md" target="_blank" rel="noopener">Conformance README ↗</a>
 </p>
 
-## What the conformance suite is
+## The official leaderboard
 
-The [Python typing specification](https://typing.python.org/en/latest/spec/) defines how the type system should behave — generics, protocols, `TypedDict`, overloads, and the rest. To keep it honest, the typing community maintains a **conformance test suite** beside it in the [`python/typing`](https://github.com/python/typing/tree/main/conformance) repository: ordinary Python modules that mark, with `# E` comments, every line where a conforming checker **must** report an error. A scoring tool diffs a checker's output against those annotations, and the maintainers publish the [results table](https://github.com/python/typing/blob/main/conformance/results/results.html) for every major checker.
+Every score below comes from **one identical run** of the [official `python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) — the same suite and scorer the typing community uses to grade every checker. Basilisk tops it, and is the **only tool on the board at a perfect score**.
 
-We score against the exact commit of the suite we last pulled from `main` — [`{{ conformance.pinnedRefShort }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance){% if conformance.commitDate %}, {{ conformance.commitDate }}{% endif %} — recorded by its full hash, so the link stays fixed at the exact files we graded.
+<div class="table-wrapper">
+<table>
+<thead><tr><th>Tool</th><th>Backer</th><th>Official conformance</th></tr></thead>
+<tbody>
+{%- for t in conformanceOfficial.ranked %}
+<tr{% if t.id == "basilisk" %} class="conf-row-basilisk"{% endif %}>
+  <td>{% if t.id == "basilisk" %}<strong>Basilisk</strong>{% else %}{{ t.name }}{% endif %}</td>
+  <td>{{ t.org or "independent" }}</td>
+  <td><a href="{{ t.resultsUrl }}" target="_blank" rel="noopener">{% if t.id == "basilisk" %}<strong>{{ t.pct }}% ({{ t.passLabel }}/{{ t.total }})</strong>{% else %}{{ t.pct }}%{% endif %}</a></td>
+</tr>
+{%- endfor %}
+</tbody>
+</table>
+</div>
 
-That pin never goes stale: we run in **lock step** with `python/typing@main`. Every `make test`, every CI run of the checker, and a dedicated release job re-resolve the *current* tip, re-download the suite when it has moved, and re-grade the binary at **100% pass, 0 false positives** — an upstream test we fail blocks merge and release until the checker conforms. The commit is inserted into every page automatically from the conformance report, never typed by hand.
+<p class="conf-note">Snapshot of <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">results.html</a> at <a href="{{ conformanceOfficial.snapshot.prUrl }}" target="_blank" rel="noopener">python/typing@<code>{{ conformanceOfficial.snapshot.sha }}</code></a> ({{ conformanceOfficial.snapshot.dateLabel }}). These figures drift as the other tools improve, so every cell links to that tool's <strong>live</strong> results folder — check the current number yourself.</p>
 
-## How a file is scored
+## How it's measured
 
-The official harness reads the suite's `# E` annotations, runs the checker adapter, and diffs expected diagnostics against observed diagnostics. A file passes only when that diff is empty: every required error reported, nothing reported on an unmarked line. We count **every** diagnostic the checker emits — errors *and* warnings, no codes excluded — so a single false positive fails the whole file.
+We don't score ourselves against our own yardstick. The number above is produced by the **official `python/typing` harness**, run unmodified against the **wheel-installed `basilisk` command** — exactly the CLI you get from PyPI, in its **default configuration**, with **every PEP conformance rule on and nothing else configured**. A file passes only when the harness's diff is empty: every required error reported, and **nothing** reported on a line the suite doesn't mark. We count every diagnostic the checker emits — errors *and* warnings — so a single false positive fails the whole file.
 
-## How we run it without forking it
+Today that is **{{ conformance.scorePct }}%** — **{{ conformance.pass }} of {{ conformance.total }}** test files passing, {{ conformance.caught }} required errors caught, **{{ conformance.fp }} false positives**, **{{ conformance.missed }} missed errors**. We run in lock step with `python/typing@main` (graded at [`{{ conformance.pinnedRefShort }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance){% if conformance.commitDate %}, {{ conformance.commitDate }}{% endif %}); a ratchet gate keeps the score from ever regressing, and an upstream test we fail blocks merge and release.
 
-The upstream suite grades only the checkers registered in its own `type_checker.py`. For release and submission proof, [`scripts/prepare_typing_conformance_pr.py`](https://github.com/Nimblesite/Basilisk/blob/main/scripts/prepare_typing_conformance_pr.py) patches a fresh `python/typing` checkout exactly the way an upstream PR needs it:
+Basilisk's **opt-in house-style rules** (require-annotation, redundant-annotation, missing-`@override`, explicit-`Any`) never run during scoring — a fresh install runs none of them, and enabling them would only *lower* the score, since the spec treats an unannotated value as *inferred*, not an error. "Stricter than the spec" and "conformant to the spec" are different goals; this score measures only the second.
 
-1. **Adapter** — injects `BasiliskTypeChecker`, which runs `basilisk check . --output json --color never` and passes all nonblank diagnostics to the upstream parser.
-2. **Wheel install** — adds the `basilisk-python` dependency, refreshes `uv.lock`, and verifies that `basilisk --version` resolves from the `python/typing` virtual environment.
-3. **Harness** — runs `uv run --python 3.12 python src/main.py --only-run basilisk`, then `--report-only`, producing the upstream `results/basilisk/*.toml` files and `results.html`.
+### Reproduce it yourself
 
-That is the path used for submission. The old Basilisk-local scorer is only a development shortcut; it is not the source of truth for publishing or for an upstream conformance PR.
+```bash
+# Patch a python/typing checkout, install basilisk from the wheel, run the
+# real upstream harness, and write a proof log.
+python3 scripts/prepare_typing_conformance_pr.py \
+  --typing-repo ../typing \
+  --verbose \
+  --write-proof
+```
 
-## What the score measures — and what it never runs
+The submission workflow lives in [`scripts/prepare_typing_conformance_pr.py`](https://github.com/Nimblesite/Basilisk/blob/main/scripts/prepare_typing_conformance_pr.py); the expected upstream PR files are documented in [`docs/typing-conformance-pr.md`](https://github.com/Nimblesite/Basilisk/blob/main/docs/typing-conformance-pr.md).
 
-We score the CLI exactly as a real user runs it from the wheel: the **default configuration**, which enables the **core PEP conformance set** — nothing more. The release/submission gate runs in a clean `python/typing` checkout through the wheel-installed `basilisk` command, so no repo-local config can silence a conformance rule or quietly switch extra rules on. Disabling a conformance rule to lift the number is forbidden — and so is deleting or unregistering it.
+## How the score got honest
 
-Basilisk's **opt-in rules** (require-annotation, redundant-annotation, missing-`@override`, explicit-`Any`) never run during scoring; a fresh install runs none of them. Enabling them would *lower* the score, not raise it: the spec treats an unannotated value as *inferred*, not an error, so require-annotation fires on spec-valid code and counts as a **false positive**. "Stricter than the spec" and "conformant to the spec" are different goals — this score measures only the second.
-
-## How the score changed
-
-The score wasn't always measured honestly, and we'd rather say so plainly than paper over it. An earlier in-repo script inflated the figure by **excluding some diagnostic codes from the diff and not counting false positives at all**; we threw it out and adopted the official `python/typing` scoring semantics, run on the real default CLI. The chart below is read straight from the **git history of `conformance/conformance_status.csv`** at build time — one point per commit that changed it, including that correction.
+We'd rather say this plainly than paper over it. An earlier in-repo script inflated the figure by **excluding some diagnostic codes from the diff and not counting false positives at all**. We threw it out and adopted the official `python/typing` scoring semantics on the real default CLI. The chart is read straight from the **git history of `conformance/conformance_status.csv`** at build time — one point per commit that changed it, including that correction.
 
 {{ chart(conformance, {
   "label": "Conformance score over time",
@@ -81,16 +92,4 @@ Read live from `conformance/conformance_status.csv` at build time:
 </tbody>
 </table>
 </div>
-
-## Reproduce it yourself
-
-```bash
-# In a Basilisk checkout, patch a python/typing checkout, install basilisk from
-# the basilisk-python wheel, run the real upstream harness, and write a proof log.
-python3 scripts/prepare_typing_conformance_pr.py \
-  --typing-repo ../typing \
-  --verbose \
-  --write-proof
-```
-
-The submission workflow lives in [`scripts/prepare_typing_conformance_pr.py`](https://github.com/Nimblesite/Basilisk/blob/main/scripts/prepare_typing_conformance_pr.py), with the expected upstream PR files documented in [`docs/typing-conformance-pr.md`](https://github.com/Nimblesite/Basilisk/blob/main/docs/typing-conformance-pr.md). The full annotation rules are in the [python/typing conformance README](https://github.com/python/typing/blob/main/conformance/README.md).
+</content>

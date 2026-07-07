@@ -1,7 +1,7 @@
 ---
 layout: layouts/base.njk
-title: "Basilisk — 开源、符合 PEP 规范的 Python 类型检查与语言服务器"
-description: "用 Rust 构建的开源 Python 类型检查工具与语言服务器：符合 PEP 规范的类型检查、自动补全、重构、调试与性能分析，兼容 VS Code、Cursor、Windsurf、Zed 和 Neovim。"
+title: "Basilisk —— 唯一在官方 python/typing 一致性结果中取得满分 100% 的 Python 语言服务器"
+description: "唯一在官方 python/typing 一致性测试结果中取得满分 100% 的 Python 类型检查器。用 Rust 构建的开源语言服务器：类型检查、自动补全、重构、调试与性能分析，兼容 VS Code、Cursor、Windsurf、Zed 和 Neovim。"
 lang: zh
 permalink: /zh/
 ---
@@ -28,7 +28,9 @@ permalink: /zh/
           类型检查、自动补全、跳转到定义、悬停信息、重构、
           诊断、调试与性能分析——您依赖的一切，
           无专有锁定。支持 VS Code、Cursor、Windsurf、Zed 和 Neovim
-          ——无论您在哪里编写 Python。默认符合类型规范，严格程度随心调整。用 Rust 构建。
+          ——无论您在哪里编写 Python。唯一在官方
+          <code>python/typing</code> 一致性测试套件中取得满分
+          {{ conformanceOfficial.basilisk.pct }}% 的类型检查器——严格程度随心调整，用 Rust 构建。
         </p>
 
         <div class="hero__cta-group">

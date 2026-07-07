@@ -1172,6 +1172,17 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   vertical-align: middle;
   min-width: 2px;
 }
+/* The Basilisk row on the official-leaderboard table — the whole point of the
+   page, so it gets a primary-tinted highlight in both themes. */
+.conf-row-basilisk {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.conf-row-basilisk td { font-weight: 600; }
+.conf-note {
+  margin-top: var(--space-3);
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
 .conf-verified {
   display: inline-flex;
   align-items: center;

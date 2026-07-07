@@ -33,6 +33,10 @@ TARGETS = (
     ROOT / "README.md",
     ROOT / "README.zh.md",
     ROOT / "docs" / "specs" / "CHECKER-ARCHITECTURE-SPEC.md",
+    # The VS Code marketplace READMEs boast the same score — keep them in lock
+    # step so the published listing can never quote a stale number.
+    ROOT / "vscode-extension" / "README.md",
+    ROOT / "vscode-extension" / "README.zh.md",
 )
 
 MARKER_RE = re.compile(r"<!--g:(?P<name>[A-Za-z]+)-->.*?<!--/g:(?P=name)-->", re.S)
