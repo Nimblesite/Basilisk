@@ -148,8 +148,16 @@ async fn a_missing_interpreter_fails_fast_without_port_retries() {
         return;
     };
     let manager = DebugSessionManager::new();
+    // Several candidates: under a parallel test run any single fresh port can be
+    // stolen between allocation and the pre-flight bind (the TOCTOU this file
+    // documents), surfacing PortTaken before the spawn is ever attempted. Spawn
+    // failure is terminal while PortTaken retries, so extra candidates guarantee
+    // we reach the spawn stage and observe the interpreter-missing cause.
     let err = manager
-        .start_session_with_ports(&format!("{python}-definitely-missing"), vec![free_port()])
+        .start_session_with_ports(
+            &format!("{python}-definitely-missing"),
+            vec![free_port(), free_port(), free_port()],
+        )
         .await
         .expect_err("a missing interpreter must fail");
     assert!(

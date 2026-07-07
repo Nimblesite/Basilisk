@@ -1,106 +1,12 @@
 //! Implements [ANALYSIS-CROSSLSP-IMPORT]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP-IMPORT
 //! Filesystem path resolution: `module_name` + [`ImportSearchPaths`] → a file.
 
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use basilisk_resolver::scope::{ImportResolution, UnresolvedReason};
 
+use super::fs_cache::FsCache;
 use super::{ImportSearchPaths, ResolvedImport};
-
-// ---------------------------------------------------------------------------
-// Directory-listing cache
-// ---------------------------------------------------------------------------
-
-/// One directory's entries, read once: file names and subdirectory names
-/// (symlinks resolved to their target kind, matching `Path::is_file`/`is_dir`).
-struct DirListing {
-    files: HashSet<OsString>,
-    dirs: HashSet<OsString>,
-}
-
-/// Per-resolution-pass cache of directory listings.
-///
-/// Resolving one module name probes up to ~9 candidate paths per search
-/// directory with `stat`; a module with many imports repeats those probes for
-/// every import. Reading each directory ONCE and answering probes from a hash
-/// set turns O(imports × candidates) syscalls into O(distinct directories)
-/// `read_dir` calls. The cache lives for a single resolution pass (one call
-/// into the public API, or one [`super::resolve_module_imports`] loop), so it
-/// can never serve stale entries across checks.
-pub(crate) struct FsCache {
-    listings: RefCell<HashMap<PathBuf, Option<DirListing>>>,
-}
-
-impl FsCache {
-    pub(crate) fn new() -> Self {
-        Self {
-            listings: RefCell::new(HashMap::new()),
-        }
-    }
-
-    /// `Path::is_file(dir/name)` answered from the cached listing of `dir`.
-    fn is_file(&self, path: &Path) -> bool {
-        self.probe(path, |listing, name| listing.files.contains(name))
-    }
-
-    /// `Path::is_dir(dir/name)` answered from the cached listing of `dir`.
-    fn is_dir(&self, path: &Path) -> bool {
-        self.probe(path, |listing, name| listing.dirs.contains(name))
-    }
-
-    fn probe(&self, path: &Path, hit: impl Fn(&DirListing, &std::ffi::OsStr) -> bool) -> bool {
-        let (Some(parent), Some(name)) = (path.parent(), path.file_name()) else {
-            return false;
-        };
-        // A bare relative path ("foo.py") has the empty path as parent; read
-        // the current directory, as `Path::is_file` would have.
-        let parent = if parent.as_os_str().is_empty() {
-            Path::new(".")
-        } else {
-            parent
-        };
-        let mut listings = self.listings.borrow_mut();
-        // Fast path: no allocation when the listing is already cached.
-        if let Some(listing) = listings.get(parent) {
-            return listing.as_ref().is_some_and(|l| hit(l, name));
-        }
-        let listing = read_listing(parent);
-        let found = listing.as_ref().is_some_and(|l| hit(l, name));
-        let _ = listings.insert(parent.to_path_buf(), listing);
-        found
-    }
-}
-
-/// Read a directory into a [`DirListing`], or `None` when unreadable/absent.
-/// Symlinked entries are classified by their target (follow semantics), so
-/// lookups agree with what `Path::is_file`/`is_dir` would have returned.
-fn read_listing(dir: &Path) -> Option<DirListing> {
-    let entries = std::fs::read_dir(dir).ok()?;
-    let mut files = HashSet::new();
-    let mut dirs = HashSet::new();
-    for entry in entries.flatten() {
-        let Ok(file_type) = entry.file_type() else {
-            continue;
-        };
-        let resolved_is_dir = if file_type.is_symlink() {
-            match std::fs::metadata(entry.path()) {
-                Ok(meta) => meta.is_dir(),
-                Err(_) => continue, // broken symlink: neither file nor dir
-            }
-        } else {
-            file_type.is_dir()
-        };
-        if resolved_is_dir {
-            let _ = dirs.insert(entry.file_name());
-        } else {
-            let _ = files.insert(entry.file_name());
-        }
-    }
-    Some(DirListing { files, dirs })
-}
 
 // Implements [LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND] — the registry-driven
 // classifier (NotInDeps / NeedsSync / NotInstalled) that makes "module not found"

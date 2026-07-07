@@ -5,7 +5,8 @@ use std::path::PathBuf;
 
 use basilisk_resolver::scope::{ImportKind, ImportedModuleApi, PackageDepKind};
 
-use super::resolve::{classify_unresolved, resolve_module_with_importer_cached, FsCache};
+use super::fs_cache::FsCache;
+use super::resolve::{classify_unresolved, resolve_module_with_importer_cached};
 use super::ImportSearchPaths;
 
 /// Resolve every import in a single module against the search paths, in place.

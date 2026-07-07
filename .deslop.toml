@@ -7,9 +7,9 @@
 # exceeds the value below.
 # Docs: https://deslop.live/docs/for-ai/
 [threshold]
-# Measured repo-wide duplication at stamp time: 22.71%. Ceiling set just above to
+# Measured repo-wide duplication at stamp time: 12.5%. Ceiling set just above to
 # absorb cross-runner float jitter. Ratchet DOWN as duplication is reduced.
-max_duplication_percent = 12.8
+max_duplication_percent = 12.6
 
 [defaults]
 # `exclude` drops files during discovery so they are never analysed and never

@@ -22,6 +22,7 @@ use basilisk_resolver::scope::ImportResolution;
 use basilisk_uv::PackageRegistry;
 
 mod apply;
+mod fs_cache;
 mod resolve;
 
 pub use apply::{is_user_stub_import, recapture_user_stub_from_source, resolve_module_imports};

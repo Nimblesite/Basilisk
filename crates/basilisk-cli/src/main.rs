@@ -1302,4 +1302,156 @@ mod tests {
         );
         Ok(())
     }
+
+    // ── stubs subcommand ─────────────────────────────────────────────────────
+    //
+    // The `basilisk stubs` subsystem (run_stubs → run_stubs_generate /
+    // run_stubs_status, cache_stub, find_package_source) is exercised in-process
+    // here. Driving it directly — rather than through a spawned binary — keeps
+    // its coverage independent of subprocess profile merging, which is unreliable
+    // across platforms. Implements [STUBRES-AUTOGEN] on the CLI surface.
+
+    /// `run_stubs_generate` with no packages and `--all` off must error (exit 1)
+    /// after running the mode/cache prologue. Exercises the empty-packages guard
+    /// and the hybrid mode arm.
+    #[test]
+    fn run_stubs_generate_no_packages_returns_one() {
+        assert_eq!(
+            run_stubs_generate(&[], false, StubGenModeArg::Hybrid, "python3"),
+            1,
+            "no packages must return 1"
+        );
+    }
+
+    /// `run_stubs_generate` with `--all` is not yet implemented and must return 1
+    /// before touching any package. Exercises the `all` guard and the runtime
+    /// mode arm.
+    #[test]
+    fn run_stubs_generate_all_flag_returns_one() {
+        assert_eq!(
+            run_stubs_generate(
+                &["requests".to_owned()],
+                true,
+                StubGenModeArg::Runtime,
+                "python3"
+            ),
+            1,
+            "--all is unimplemented and must return 1"
+        );
+    }
+
+    /// `run_stubs_generate` in AST mode for a package with no discoverable source
+    /// must report the missing-source error and return 1. Exercises the
+    /// `None if Ast` branch, the AST mode arm, and the per-package error tally.
+    #[test]
+    fn run_stubs_generate_ast_missing_source_returns_one() {
+        assert_eq!(
+            run_stubs_generate(
+                &["basilisk_no_such_pkg_ast".to_owned()],
+                false,
+                StubGenModeArg::Ast,
+                "python3"
+            ),
+            1,
+            "AST mode with no source must return 1"
+        );
+    }
+
+    /// `run_stubs_generate` in hybrid mode for an uninstalled package falls back
+    /// to runtime generation, which fails, returning 1. Exercises the non-AST
+    /// `None` fallback branch and the runtime-generation error path.
+    #[test]
+    fn run_stubs_generate_hybrid_uninstalled_returns_one() {
+        assert_eq!(
+            run_stubs_generate(
+                &["basilisk_no_such_pkg_hybrid".to_owned()],
+                false,
+                StubGenModeArg::Hybrid,
+                "python3"
+            ),
+            1,
+            "hybrid mode for an uninstalled package must return 1"
+        );
+    }
+
+    /// `find_package_source` returns `None` for a package that cannot be imported
+    /// (the querying subprocess exits non-zero).
+    #[test]
+    fn find_package_source_returns_none_for_unknown_package() {
+        let result = find_package_source(
+            "basilisk_definitely_not_installed_pkg",
+            std::path::Path::new("python3"),
+        );
+        assert!(result.is_none(), "unknown package must resolve to None");
+    }
+
+    /// `cache_stub` writes the stub and returns `true` on success.
+    #[test]
+    fn cache_stub_writes_and_returns_true() -> Result<(), Box<dyn std::error::Error>> {
+        use basilisk_stubs::generate::{GeneratedStub, StubGenMode};
+        let dir = unique_project_dir("basilisk_cli_cache_stub_ok");
+        std::fs::create_dir_all(&dir)?;
+        let stub = GeneratedStub {
+            module_name: "widget".to_owned(),
+            pyi_content: "def f() -> int: ...\n".to_owned(),
+            mode: StubGenMode::Hybrid,
+        };
+        let ok = cache_stub(&dir, "widget", &stub);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(ok, "cache_stub must succeed writing to a writable dir");
+        Ok(())
+    }
+
+    /// `cache_stub` returns `false` when the cache directory cannot be created
+    /// because a regular file sits where a parent directory is required.
+    #[test]
+    fn cache_stub_returns_false_when_dir_uncreatable() -> Result<(), Box<dyn std::error::Error>> {
+        use basilisk_stubs::generate::{GeneratedStub, StubGenMode};
+        let base = unique_project_dir("basilisk_cli_cache_stub_fail");
+        std::fs::create_dir_all(&base)?;
+        // A regular file where a directory component is required downstream.
+        let blocker = base.join("blocker");
+        std::fs::write(&blocker, b"not a dir")?;
+        let stub = GeneratedStub {
+            module_name: "widget".to_owned(),
+            pyi_content: "x: int\n".to_owned(),
+            mode: StubGenMode::Ast,
+        };
+        // cache_dir nested under the regular file → `create_dir_all` must fail.
+        let ok = cache_stub(&blocker.join("nested"), "widget", &stub);
+        let _ = std::fs::remove_dir_all(&base);
+        assert!(
+            !ok,
+            "cache_stub must return false when the cache dir is uncreatable"
+        );
+        Ok(())
+    }
+
+    /// `run_stubs(Status)` always reports without error (exit 0), whether or not
+    /// any stubs are cached. Exercises the `Status` dispatch arm.
+    #[test]
+    fn run_stubs_status_returns_zero() {
+        assert_eq!(
+            run_stubs(StubAction::Status),
+            0,
+            "stubs status must return 0"
+        );
+    }
+
+    /// `run_stubs(Generate { .. })` dispatches to generation; with no packages it
+    /// returns 1. Exercises the `Generate` dispatch arm end to end.
+    #[test]
+    fn run_stubs_generate_dispatch_no_packages_returns_one() {
+        let action = StubAction::Generate {
+            packages: Vec::new(),
+            all: false,
+            mode: StubGenModeArg::Ast,
+            python: "python3".to_owned(),
+        };
+        assert_eq!(
+            run_stubs(action),
+            1,
+            "generate with no packages must return 1"
+        );
+    }
 }
