@@ -315,6 +315,14 @@ function bindClientStateListener(
         lspClient.onNotification("basilisk/moduleChanged", () => {
           bumpAnalysisRevision(signals);
         }),
+        // Implements the client side of [EXTACT-LSP-COMMANDS-SCAN-COMPLETE]
+        // (#144): the workspace scan finishing must repaint panels even when
+        // it published nothing (a genuinely empty workspace produces no
+        // diagnostics events), so the loading state can settle into the
+        // honest empty-state.
+        lspClient.onNotification("basilisk/scanComplete", () => {
+          bumpAnalysisRevision(signals);
+        }),
       );
       resolveLspReady(signals);
       // Initial analysis becomes available once the server runs.

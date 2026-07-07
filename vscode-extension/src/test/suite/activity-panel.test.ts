@@ -669,6 +669,10 @@ suite("Modules panel health chrome [EXTACT-MODULES-HEADER]", function () {
     warnings: 0,
     adoptedFiles: 0,
     totalFiles: 0,
+    // The #57 empty-state is only rendered once the initial scan finished;
+    // an unfinished scan shows the loading state instead
+    // ([EXTACT-MODULES-HEADER-LOADING], #144).
+    scanComplete: true,
   };
 
   const measuredStats = {
@@ -711,7 +715,7 @@ suite("Modules panel health chrome [EXTACT-MODULES-HEADER]", function () {
     const message = workspaceHealthMessage(measuredStats);
     assert.ok(message.includes("85%"), `expected the coverage percentage, got: "${message}"`);
     assert.ok(
-      message.includes("2E") && message.includes("3W"),
+      message.includes("🔴 2") && message.includes("🟠 3"),
       `expected error/warning tallies, got: "${message}"`,
     );
   });
@@ -739,9 +743,34 @@ suite("Modules panel health chrome [EXTACT-MODULES-HEADER]", function () {
     assert.ok(description.includes("85%"), `expected the coverage percentage, got: "${description}"`);
     assert.ok(description.includes("█"), `expected a coverage bar, got: "${description}"`);
     assert.ok(
-      description.includes("2E") && description.includes("3W"),
+      description.includes("🔴 2") && description.includes("🟠 3"),
       `expected error/warning tallies, got: "${description}"`,
     );
+  });
+
+  // Regression for issue #236 [EXTACT-MODULES-COUNT-STYLE]: inline tallies on
+  // every plain-text surface (header message, module row description) must
+  // render the coloured Unicode glyphs `🔴 n` (errors) / `🟠 n` (warnings) —
+  // never the lettered `nE nW` form the spec forbids.
+  test("tallies render count-style glyphs 🔴 n / 🟠 n, never nE nW letters (#236)", function () {
+    const row = new ModuleTreeItem({
+      name: "myapp.api", path: "/ws/myapp/api.py", kind: "module", symbols: [],
+      coveragePercent: 85, errors: 2, warnings: 3, adopted: false,
+    });
+    const surfaces = [
+      ["header", workspaceHealthMessage(measuredStats)],
+      ["module row", String(row.description)],
+    ] as const;
+    for (const [surface, text] of surfaces) {
+      assert.ok(
+        text.includes("🔴 2") && text.includes("🟠 3"),
+        `${surface} tally must use the 🔴 n / 🟠 n glyph style, got: "${text}"`,
+      );
+      assert.ok(
+        !text.includes("2E") && !text.includes("3W"),
+        `${surface} tally must never use nE nW letters, got: "${text}"`,
+      );
+    }
   });
 
   // Tests [EXTACT-MODULES-MODULE-ROW] — the row's `[adopted]` badge.

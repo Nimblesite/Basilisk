@@ -32,7 +32,7 @@ struct DirListing {
 ///   on-disk name, so `import Foo` will not resolve to `foo.py` even on a
 ///   case-insensitive filesystem (APFS/NTFS), where a per-path `Path::is_file`
 ///   would have matched. This is intended: Python import resolution is
-///   case-sensitive (as is CPython on a case-sensitive FS, and Pyright), so a
+///   case-sensitive (as is `CPython` on a case-sensitive FS, and Pyright), so a
 ///   case-mismatched import is a real portability bug worth surfacing rather
 ///   than masking on one platform.
 /// * **A search directory must be READABLE.** Listing needs read permission on

@@ -23,10 +23,18 @@ pub mod commands {
     pub const STOP_DEBUG_SESSION: &str = "basilisk.stopDebugSession";
     /// Disable a diagnostic rule in the project configuration (`pyproject.toml`).
     pub const DISABLE_RULE: &str = "basilisk.disableRule";
-    /// Fix all auto-fixable diagnostics in the current file (safe fixes only).
+    /// Fix all auto-fixable diagnostics in the current file (safe fixes only,
+    /// the [AUTOFIX-CLASSIFY] default tier).
     pub const FIX_FILE: &str = "basilisk.fixFile";
-    /// Fix all auto-fixable diagnostics across the entire workspace.
+    /// Fix all auto-fixable diagnostics in the current file, including Unsafe
+    /// fixes — the explicit all-tier variant promised by [AUTOFIX-MASS-VSCODE].
+    pub const FIX_FILE_ALL: &str = "basilisk.fixFileAll";
+    /// Fix all auto-fixable diagnostics across the entire workspace (safe
+    /// fixes only, the [AUTOFIX-CLASSIFY] default tier).
     pub const FIX_WORKSPACE: &str = "basilisk.fixWorkspace";
+    /// Fix all auto-fixable diagnostics across the entire workspace, including
+    /// Unsafe fixes — the explicit all-tier variant of [AUTOFIX-MASS-VSCODE].
+    pub const FIX_WORKSPACE_ALL: &str = "basilisk.fixWorkspaceAll";
     /// Adopt the current file — autofix + demote remaining errors to warnings.
     pub const ADOPT_FILE: &str = "basilisk.adoptFile";
     /// Adopt all files in the workspace.
@@ -122,7 +130,9 @@ pub mod commands {
         STOP_DEBUG_SESSION,
         DISABLE_RULE,
         FIX_FILE,
+        FIX_FILE_ALL,
         FIX_WORKSPACE,
+        FIX_WORKSPACE_ALL,
         ADOPT_FILE,
         ADOPT_WORKSPACE,
         UNADOPT_FILE,
@@ -388,6 +398,10 @@ pub mod release {
 pub mod notifications {
     /// Notification sent when a module's symbol table changes after re-analysis.
     pub const MODULE_CHANGED: &str = "basilisk/moduleChanged";
+    /// Notification sent when a workspace scan finishes, so panels can settle
+    /// their loading state even when the scan published nothing
+    /// ([EXTACT-MODULES-HEADER-LOADING], GitHub #144).
+    pub const SCAN_COMPLETE: &str = "basilisk/scanComplete";
     /// Periodic profiling progress update during active sessions.
     pub const PROFILER_PROGRESS: &str = "basilisk/profiler/progress";
     /// Memory timeline data from auto-snapshot mode.

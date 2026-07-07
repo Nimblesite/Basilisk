@@ -30,6 +30,12 @@ pub enum RhsKind {
     NoneValue,
     /// A function or constructor call — return type may be unknown.
     CallExpr,
+    /// A call expression whose result kind is statically known — e.g.
+    /// `{...}.get(key, default)` on a dict literal whose value kinds and the
+    /// default's kind all agree. Carries the resulting kind. Feeds
+    /// inferred-type *display* (hover, inlay hints) for #253; the checker
+    /// treats it exactly like [`RhsKind::CallExpr`].
+    KnownCall(Box<RhsKind>),
     /// A `type(X)` call — returns a class object (e.g. `type(None)` → `NoneType`).
     TypeCall,
     /// A lambda expression (`lambda x: x + 1`).

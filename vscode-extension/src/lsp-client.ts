@@ -255,12 +255,14 @@ function buildClientOptions(
 
 // Implements the client wiring of [EXTACT-HEALTH-CONTEXT-MENU] (Fix All in File /
 // Adopt File / Un-adopt File), the file-scoped half of [AUTOFIX-MASS-VSCODE]
-// (`basilisk.fixFile`), and [AUTOFIX-ADOPTION-VSCODE] (`basilisk.adoptFile` /
-// `basilisk.unadoptFile`) — these server-advertised, file-scoped commands get the
-// active editor's URI injected so they act on the right file.
+// (`basilisk.fixFile` Safe tier / `basilisk.fixFileAll` all tier), and
+// [AUTOFIX-ADOPTION-VSCODE] (`basilisk.adoptFile` / `basilisk.unadoptFile`) —
+// these server-advertised, file-scoped commands get the active editor's URI
+// injected so they act on the right file.
 /** Commands that need the active editor URI injected as the first arg. */
 const EDITOR_URI_COMMANDS = new Set([
   "basilisk.fixFile",
+  "basilisk.fixFileAll",
   "basilisk.adoptFile",
   "basilisk.unadoptFile",
 ]);

@@ -69,11 +69,12 @@ pub enum FixSource {
 Exposed through:
 
 1. **Code Actions** — on a diagnostic, the lightbulb shows "Fix this", "Fix all in file (safe)", "Fix all in file (all)".
-2. **Command Palette**:
-   - `Basilisk: Fix All (Safe) in File`
-   - `Basilisk: Fix All in File`
-   - `Basilisk: Fix All (Safe) in Workspace`
-   - `Basilisk: Fix All in Workspace`
+2. **Command Palette** (the plain command IDs are the Safe default tier; the
+   `*All` variants widen to Unsafe fixes, mirroring the CLI's `--unsafe`):
+   - `Basilisk: Fix All (Safe) in File` (`basilisk.fixFile`)
+   - `Basilisk: Fix All in File` (`basilisk.fixFileAll`)
+   - `Basilisk: Fix All (Safe) in Workspace` (`basilisk.fixWorkspace`)
+   - `Basilisk: Fix All in Workspace` (`basilisk.fixWorkspaceAll`)
 3. **CLI** — `basilisk fix [--unsafe] [path]`
 
 ### Conflict Resolution {#AUTOFIX-CONFLICTS}
@@ -85,7 +86,7 @@ When multiple fixes produce overlapping text edits in the same file (`collect_no
 3. Skipped edits are silently dropped from the batch — they are not applied and not itemised in the result.
 4. Re-evaluation happens through the normal check loop rather than an internal second pass: in the editor, applying the `WorkspaceEdit` triggers a re-check that re-publishes remaining diagnostics (and their fixes); on the CLI, `basilisk fix` is idempotent and a re-run applies any fix that became applicable.
 
-Safety scoping is the caller's concern, upstream of conflict resolution: the CLI filters to safe-only by default (`--unsafe` / `--rules` / `all` widen it), while the LSP fix-all commands currently operate on all fixable rules.
+Safety scoping is the caller's concern, upstream of conflict resolution: the CLI filters to safe-only by default (`--unsafe` / `--rules` / `all` widen it), and the LSP surfaces do the same — the `source.fixAll` code action, `basilisk.fixFile`, and `basilisk.fixWorkspace` apply `SAFE_FIXABLE_RULES` only, while the explicit `basilisk.fixFileAll` / `basilisk.fixWorkspaceAll` variants widen to `ALL_FIXABLE_RULES`.
 
 ### Undo {#AUTOFIX-UNDO}
 

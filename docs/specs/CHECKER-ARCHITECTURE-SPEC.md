@@ -837,21 +837,28 @@ point into `ruff_python_parser`) runs a nesting-depth guard **before** parsing:
   matching CPython's `MAXLEVEL`; message is CPython's verbatim `too many nested parentheses`.
 - Rejects **indentation** deeper than **99 levels**, matching CPython's `MAXINDENT`;
   message is verbatim `too many levels of indentation`.
+- Rejects **operator chains** longer than **50 000** depth-building tokens in one
+  uninterrupted expression context (per bracket level; reset at `,` `;` `=` and
+  logical newlines); message `expression too deeply nested`. A flat token stream
+  can still build an arbitrarily deep AST — `total = 1 + 1 + …` in generated code
+  nests one `BinOp` per term with zero bracket nesting, and the recursive visitors
+  abort even the 64 MiB analysis stacks of [LSPARCH-ARCH-STACK] at ~150 000 levels
+  (GitHub #278, the LSP crash-restart loop). Counted tokens are the ones that
+  deepen the tree (binary/unary operators, `.`, ternary `if`/`else`, `lambda`);
+  flat-by-construction operators (`and`/`or` → one `BoolOp` list, chained
+  comparisons → one `Compare` list, `,` → one tuple/call node) are deliberately
+  exempt so giant flat generated literals stay analysable.
 
-Both limits sit well below the ~4 000 overflow floor and above any real source
-(~15 brackets / ~10 indents), so the guard is crash-proof without false positives.
+All limits sit well below their overflow floors and above any real source
+(~15 brackets / ~10 indents / chains measured safe past 100 000 on the analysis
+stacks), so the guard is crash-proof without false positives.
 Rejection surfaces as `ParseError::Syntax` (`BSK-PARSE` in the LSP).
 
-**Known residual:** an extremely long *un-bracketed* expression (a 30 000-term
-`1+1+...` chain, deeply nested ternary/`lambda`) parses in ruff but yields an AST
-deep enough to overflow later recursive traversal. CPython bounds this only at its
-*parser* C-stack guard, not the tokenizer; a complete fix needs iterative
-traversal/teardown. Such input does not occur in real or generated code (deep
-generated data is bracketed, covered above).
-
 Implemented in `crates/basilisk-parser/src/depth.rs` and `…/src/lib.rs`
-(`parse_source`); tests in `crates/basilisk-parser/tests/parse_tests.rs` and the
-propagation test in `crates/basilisk-checker/tests/checker_tests.rs`.
+(`parse_source`); boundary tests in `crates/basilisk-parser/tests/parse_tests.rs`,
+the propagation test in `crates/basilisk-checker/tests/checker_tests.rs`, and the
+real-binary crash-safety tests in
+`crates/basilisk-cli/tests/e2e_deep_expressions.rs`.
 
 ### Rust Crate Structure {#CHKARCH-ARCH-CRATES}
 

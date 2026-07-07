@@ -61,6 +61,7 @@ pub(crate) fn build_module_tree(
     scope: &str,
     project_root: Option<&Path>,
     type_checking_enabled: bool,
+    scan_complete: bool,
 ) -> WorkspaceModulesResult {
     let adoption_store = if type_checking_enabled {
         project_root.and_then(|root| basilisk_config::AdoptionStore::load(root).ok())
@@ -118,7 +119,12 @@ pub(crate) fn build_module_tree(
         a_name.cmp(b_name)
     });
 
-    let workspace = workspace_rollup(&totals, idx.files.len(), type_checking_enabled);
+    let workspace = workspace_rollup(
+        &totals,
+        idx.files.len(),
+        type_checking_enabled,
+        scan_complete,
+    );
 
     WorkspaceModulesResult { modules, workspace }
 }
@@ -148,16 +154,20 @@ fn attach_grading(node: &mut serde_json::Value, health: &super::type_health::Fil
 
 /// The `workspace` `HealthStats` summary. Every payload declares the toggle
 /// state; the grading rollup is only present while type checking is enabled
-/// ([ANALYSIS-ENABLED], #119).
+/// ([ANALYSIS-ENABLED], #119). Every payload also declares `scanComplete`, so
+/// a client can tell a genuinely empty workspace apart from one whose initial
+/// scan hasn't finished ([EXTACT-MODULES-HEADER-LOADING], GitHub #144).
 fn workspace_rollup(
     totals: &HealthTotals,
     total_files: usize,
     type_checking_enabled: bool,
+    scan_complete: bool,
 ) -> serde_json::Value {
     if !type_checking_enabled {
         return serde_json::json!({
             "typeCheckingEnabled": false,
             "totalFiles": total_files,
+            "scanComplete": scan_complete,
         });
     }
     serde_json::json!({
@@ -169,6 +179,7 @@ fn workspace_rollup(
         "warnings": totals.warnings,
         "adoptedFiles": totals.adopted,
         "totalFiles": total_files,
+        "scanComplete": scan_complete,
     })
 }
 
@@ -330,7 +341,7 @@ mod tests {
         let _ = idx.set_open(&uri_a, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_b, "y: str = 'hi'\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true);
+        let tree = build_module_tree(&idx, "", Some(&root), true, true);
         assert_eq!(tree.modules.len(), 2, "expected 2 modules in the tree");
 
         let names: Vec<&str> = tree
@@ -358,7 +369,7 @@ mod tests {
         let uri = make_uri("/workspace/pkg/__init__.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true);
+        let tree = build_module_tree(&idx, "", Some(&root), true, true);
         assert_eq!(tree.modules.len(), 1);
         let kind = tree.modules[0]
             .get("kind")
@@ -374,7 +385,7 @@ mod tests {
         let uri = make_uri("/workspace/mod.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true);
+        let tree = build_module_tree(&idx, "", Some(&root), true, true);
         assert_eq!(tree.modules.len(), 1);
         let kind = tree.modules[0]
             .get("kind")
@@ -392,7 +403,7 @@ mod tests {
         let _ = idx.set_open(&uri_a, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_b, "y: int = 2\n", 1);
 
-        let tree = build_module_tree(&idx, "pkg", Some(&root), true);
+        let tree = build_module_tree(&idx, "pkg", Some(&root), true, true);
         assert_eq!(tree.modules.len(), 1, "scope filter should keep only pkg.a");
         let name = tree.modules[0]
             .get("name")
@@ -413,7 +424,7 @@ mod tests {
         let uri = make_uri("/workspace/untyped.py");
         let _ = idx.set_open(&uri, "def bare(a):\n    return a\n\nb = 2\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), false);
+        let tree = build_module_tree(&idx, "", Some(&root), false, true);
 
         assert_eq!(tree.modules.len(), 1, "module list stays for navigation");
         let module = &tree.modules[0];
@@ -453,7 +464,7 @@ mod tests {
         let uri = make_uri("/workspace/mod.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true);
+        let tree = build_module_tree(&idx, "", Some(&root), true, true);
         assert_eq!(
             tree.workspace
                 .get("typeCheckingEnabled")
@@ -477,7 +488,7 @@ mod tests {
         let _ = idx.set_open(&uri_full, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_partial, "a: int = 1\nb = 2\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root), true);
+        let tree = build_module_tree(&idx, "", Some(&root), true, true);
 
         // Every module node carries its folded health fields.
         for module in &tree.modules {

@@ -144,6 +144,17 @@ Planned (not yet version-gated):
 
 ### 5.1 Actionable "Module Not Found" (imports_unresolved) {#LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND}
 
+**Resolution contract — lock-only, never ambient (issue #252).** For a
+uv-locked project (a `PackageRegistry` exists), third-party imports resolve
+against the lock and the project's own venv (in-tree discovery or an
+explicitly activated `VIRTUAL_ENV`, issue #25) **only**. Basilisk never falls
+back to the ambient interpreter's site-packages (`python3` `sys.path` probe)
+for a locked project: a dependency missing from the lock must diagnose
+identically on every machine, regardless of what the host Python happens to
+have installed globally. Projects without a lock keep the ambient fallback as
+a convenience (`crates/basilisk-lsp/src/import_resolver.rs`,
+`resolve_site_packages_with_env`).
+
 With uv integration, imports_unresolved becomes context-aware:
 
 | Scenario | Diagnostic Message | Code Action |

@@ -129,11 +129,22 @@
       },
       {
         "command": "basilisk.fixFile",
+        "title": "Basilisk: Fix All (Safe) in File",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.fixFileAll",
         "title": "Basilisk: Fix All in File",
         "category": "Basilisk"
       },
       {
         "command": "basilisk.fixWorkspace",
+        "title": "Basilisk: Fix All (Safe) in Workspace",
+        "category": "Basilisk",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "basilisk.fixWorkspaceAll",
         "title": "Basilisk: Fix All in Workspace",
         "category": "Basilisk",
         "icon": "$(wand)"

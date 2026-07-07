@@ -58,6 +58,10 @@ interface HealthStats {
   readonly warnings?: number;
   readonly adoptedFiles?: number;
   readonly totalFiles: number;
+  // Whether the server's initial workspace scan has finished. A zero-file
+  // rollup only means "empty workspace" when this is true; before that it
+  // means "not scanned yet" ([EXTACT-MODULES-HEADER-LOADING], #144).
+  readonly scanComplete?: boolean;
 }
 
 interface WorkspaceModulesResponse {
@@ -239,8 +243,6 @@ function coverageColor(percent: number): vscode.ThemeColor {
 }
 
 // [EXTACT-MODULES-COUNT-STYLE] is the diagnostic-tally surface for module rows.
-// NOTE (conformance): the spec mandates coloured glyphs `🔴 n` / `🟠 n` here and
-// "never `2E 3W`"; this renders `nE nW`. See the audit deviation for this section.
 /** Module row description: coverage bar + % + error/warning counts + adopted badge. */
 function moduleDescription(module: ModuleNode): string {
   // Type Checking disabled (#119): the server serves no grading, so the row is
@@ -264,11 +266,12 @@ function moduleTooltip(module: ModuleNode): string {
   ].filter(Boolean).join("\n");
 }
 
-/** Implements [EXTACT-MODULES-COUNT-STYLE]: `nE nW`, or "" when clean. */
+/** Implements [EXTACT-MODULES-COUNT-STYLE]: coloured glyphs `🔴 n` (errors) /
+ *  `🟠 n` (warnings) — never `nE nW`; a zero severity is omitted, or "" when clean. */
 function diagnosticTally(errors: number, warnings: number): string {
   const issues: string[] = [];
-  if (errors > 0) { issues.push(`${errors}E`); }
-  if (warnings > 0) { issues.push(`${warnings}W`); }
+  if (errors > 0) { issues.push(`🔴 ${errors}`); }
+  if (warnings > 0) { issues.push(`🟠 ${warnings}`); }
   return issues.join(" ");
 }
 
@@ -287,9 +290,9 @@ function packageIconColor(node: PackageTreeNode): vscode.ThemeColor | undefined 
 }
 
 /**
- * Folder/package row description: the subtree's rolled-up `nE nW` so problems
- * are visible without drilling in (#149). A package (`__init__.py`) also keeps
- * its own coverage bar.
+ * Folder/package row description: the subtree's rolled-up count-style tally
+ * ([EXTACT-MODULES-COUNT-STYLE]) so problems are visible without drilling in
+ * (#149). A package (`__init__.py`) also keeps its own coverage bar.
  */
 function packageDescription(node: PackageTreeNode): string {
   const coverage = node.module?.coveragePercent;
@@ -312,20 +315,32 @@ function packageTooltip(node: PackageTreeNode): string {
 
 // ── Workspace health chrome [EXTACT-MODULES-HEADER] ──────────────────────
 
+/** Loading affordance while the analyzer starts up or its initial workspace
+ *  scan is still running ([EXTACT-MODULES-HEADER-LOADING], #144). */
+const ANALYZING_MESSAGE = "Analyzing workspace…";
+
 /**
  * Workspace summary rendered into the tree view's native `message` chrome.
  *
  * Implements [EXTACT-MODULES-HEADER] (`treeView.message`: "73% typed · …").
  * [EXTACT-HEALTH-HEADER] An empty workspace (no Python files) renders an explicit
  * "No Python files found" — never a misleading 100% for 0/0 symbols (#57).
- * NOTE (conformance): the spec's tally uses `🔴 n` / `🟠 n` glyphs, not `nE nW`.
+ * [EXTACT-MODULES-HEADER-LOADING] That empty-state is gated on the server's
+ * initial scan having finished: before then (or before any stats are fetched
+ * at all) the panel shows a loading message, never a false "zero files" (#144).
  */
 export function workspaceHealthMessage(stats: HealthStats | undefined): string {
-  if (stats === undefined) { return ""; }
+  // No stats yet: the server is idle/starting, or the first fetch hasn't
+  // answered. Never render a terminal state from nothing (#144).
+  if (stats === undefined) { return ANALYZING_MESSAGE; }
   // Type Checking off ([ANALYSIS-ENABLED], #119): the panel must state that
   // plainly instead of grading the workspace — no "% typed", no tallies.
   if (stats.typeCheckingEnabled === false) { return "Type checking disabled"; }
-  if (stats.totalFiles === 0) { return "No Python files found"; }
+  if (stats.totalFiles === 0) {
+    // Zero files is only the honest empty-state once the scan finished;
+    // mid-scan it just means "not scanned yet" (#144).
+    return stats.scanComplete === true ? "No Python files found" : ANALYZING_MESSAGE;
+  }
   const issueTally = diagnosticTally(stats.errors ?? 0, stats.warnings ?? 0);
   const issueStr = issueTally === "" ? "" : ` · ${issueTally}`;
   return `${stats.coveragePercent ?? FULL_COVERAGE_PERCENT}% typed${issueStr}`;

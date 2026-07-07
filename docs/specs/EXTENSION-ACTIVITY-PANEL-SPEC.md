@@ -65,6 +65,21 @@ Server pushes updated module data after re-analysis.
 - **Params**: `{ module: ModuleNode }` — the changed module's updated tree
 - **Trigger**: After file save triggers re-analysis
 
+### `basilisk/scanComplete` {#EXTACT-LSP-COMMANDS-SCAN-COMPLETE}
+
+Server signals that a workspace scan has finished, so panels showing the
+loading state ([EXTACT-MODULES-HEADER-LOADING](#EXTACT-MODULES-HEADER)) refetch
+and can trust a zero-file rollup. This notification is required — not an
+optimisation: a genuinely empty workspace publishes no diagnostics and sends no
+`basilisk/moduleChanged`, so without it nothing would ever settle the loading
+message into the honest `"No Python files found"` empty-state (issue #144).
+
+- **Direction**: Server -> Client (notification)
+- **Params**: `{ totalFiles: number }` — files discovered by the scan
+- **Trigger**: When the workspace scan spawned at `initialized` (or after an
+  analysis-mode/config change) completes; clients bump their analysis revision
+  on receipt ([EXTACT-REACTIVE-STATE])
+
 ### `basilisk/typeHealth` {#EXTACT-LSP-COMMANDS-TYPE-HEALTH}
 
 Returns type coverage and diagnostic health for the workspace, computed
@@ -175,6 +190,16 @@ interface HealthStats {
     adoptedFiles?: number;
     /** Always present — distinguishes an empty workspace even while disabled. */
     totalFiles: number;
+    /**
+     * Whether the server's initial workspace scan has finished
+     * ([EXTACT-MODULES-HEADER-LOADING], issue #144). `totalFiles: 0` is only a
+     * real empty workspace when this is true; before that it means "not
+     * scanned yet" and clients MUST render a loading state instead of any
+     * zero-file message. Stamped into every `basilisk.workspaceModules`
+     * payload; absent (e.g. `basilisk.typeHealth`) reads as "unknown", which
+     * clients treat as not complete.
+     */
+    scanComplete?: boolean;
 }
 
 interface ModuleHealth {
@@ -257,7 +282,8 @@ The workspace-wide summary renders in the tree view's **native chrome**, not a s
 
 - **`treeView.message`**: `"73% typed · 🔴 14  🟠 23"` (coverage + diagnostic tally in [count style](#EXTACT-MODULES-COUNT-STYLE) — no `E`/`W`; `message` is plain text, so the coloured glyphs carry severity).
 - **`treeView.badge`**: numeric — the count of outstanding diagnostics (errors + warnings); hidden when zero.
-- **Empty workspace** (`totalFiles == 0`): the message reads `"No Python files found"` — never a misleading `100%` for 0/0 symbols, and no badge (preserves the issue #57 guarantee in the merged panel).
+- **Loading state** `[EXTACT-MODULES-HEADER-LOADING]` (issue #144): while the analyzer is starting up or its initial workspace scan is incomplete — no `HealthStats` fetched yet, or `totalFiles == 0` without `scanComplete == true` — the message reads `"Analyzing workspace…"` and no badge shows. The panel must NEVER claim `"No Python files found"` before the scan has actually finished. The state is derived from centralised store signals through the standard revision subscription ([EXTACT-REACTIVE-STATE]) — no panel-local readiness flag, no polling; the `basilisk/scanComplete` notification ([EXTACT-LSP-COMMANDS-SCAN-COMPLETE](#EXTACT-LSP-COMMANDS-SCAN-COMPLETE)) settles it even when the scan published nothing.
+- **Empty workspace** (`totalFiles == 0` with `scanComplete == true`): the message reads `"No Python files found"` — never a misleading `100%` for 0/0 symbols, and no badge (preserves the issue #57 guarantee in the merged panel).
 - **Type Checking disabled** (`typeCheckingEnabled == false` in the payload, [ANALYSIS-ENABLED], #119): the message reads `"Type checking disabled"` — never `"NN% typed"` — with no badge, no coverage bars/tints on rows, and no per-module tallies. The server omits all grading fields while disabled, so this state is structural, not a client-side hide.
 
 ### Tree Structure {#EXTACT-MODULES-TREE-STRUCTURE}
@@ -310,7 +336,8 @@ name into path segments and threading it into a node trie
   modules, each alphabetical by segment. The flat-view sort picker does not
   apply in tree view ([EXTACT-MODULES-TOOLBAR](#EXTACT-MODULES-TOOLBAR)).
 - **Diagnostics roll up onto containers.** Each folder/package row shows the
-  total `nE nW` rolled up across its whole subtree and tints its icon red (any
+  total in [count style](#EXTACT-MODULES-COUNT-STYLE) (`🔴 n  🟠 n`) rolled up
+  across its whole subtree and tints its icon red (any
   descendant error) / yellow (any descendant warning), so a branch hiding errors
   is visible at a glance without expanding it. Coverage % stays per-module (the
   flat list carries no per-module symbol counts to weight a folder rollup).
@@ -349,7 +376,7 @@ their owning module** and are **never** dumped bare at the tree root (the #149
 | Copy Import Path | Module or symbol — copies `from myapp.api.auth import AuthProvider` |
 | Copy Qualified Name | Any symbol — copies `myapp.api.auth.AuthProvider` |
 | Organize Imports | Module |
-| Fix All | Module |
+| Fix All (Safe) | Module |
 
 ### Toolbar Actions {#EXTACT-MODULES-TOOLBAR}
 
@@ -360,7 +387,7 @@ their owning module** and are **never** dumped bare at the tree root (the #149
 | Filter | Toggle filter input to search modules/symbols by name |
 | Toggle View | Switch between tree (nested folder/package hierarchy, default) and flat (every module as one sortable row) |
 | Sort | Picker of three labelled modes — **Module Name**, **Path**, **Type Coverage** — with the active mode checked (no blind cycle, issue #189). Coverage sorts ascending (least-typed first), the default. Flat view only; gated on `basilisk.moduleExplorerView == 'flat'` so it is hidden (not a silent no-op) in tree view (issue #151). |
-| Fix All | Run `basilisk.fixWorkspace`. Promoted from the info panel (issue #103); `when`-gated on `basilisk.serverState == 'running'` **and** the `config.basilisk.experimental.fixAll` flag (default off, issue #113). |
+| Fix All (Safe) | Run `basilisk.fixWorkspace` (Safe fixes only — the [AUTOFIX-CLASSIFY] default tier). Promoted from the info panel (issue #103); `when`-gated on `basilisk.serverState == 'running'` **and** the `config.basilisk.experimental.fixAll` flag (default off, issue #113). |
 | Organize Imports | Run `basilisk.organizeImports`. Same promotion + gating. |
 | Restart Server | Run `basilisk.restartServer`. Same promotion + gating. |
 
@@ -457,7 +484,7 @@ The top-level item is a summary row showing workspace-wide stats:
 | Open File | Open at line 1 |
 | Adopt File | Errors -> warnings for this file |
 | Un-adopt File | Restore full errors |
-| Fix All in File | Run autofix |
+| Fix All (Safe) in File | Run autofix (Safe fixes only) |
 | Add Missing Annotations | AI-powered (future) |
 
 ### Refresh Strategy {#EXTACT-HEALTH-REFRESH}
@@ -587,7 +614,7 @@ action now lives on a surface that can gate it properly:
 
 | Action | Where it lives now | Gating |
 |--------|--------------------|--------|
-| Fix All in Workspace (`basilisk.fixWorkspace`) | Modules panel toolbar button | `view == basilisk.moduleExplorer && basilisk.serverState == 'running'` |
+| Fix All (Safe) in Workspace (`basilisk.fixWorkspace`) | Modules panel toolbar button | `view == basilisk.moduleExplorer && basilisk.serverState == 'running'` |
 | Organize Imports (`basilisk.organizeImports`) | Modules panel toolbar button | same |
 | Restart Server (`basilisk.restartServer`) | Modules panel toolbar button | same |
 | Show Output (`basilisk.showOutput`) | Status bar item click action | always (client-registered) |
