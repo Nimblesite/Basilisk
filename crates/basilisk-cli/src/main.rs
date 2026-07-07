@@ -1403,6 +1403,26 @@ mod tests {
         assert!(result.is_none(), "unknown package must resolve to None");
     }
 
+    /// `find_package_source` resolves an installed stdlib **package** to its
+    /// `__init__.py` — exercising the success path (subprocess ok, dir parse,
+    /// `__init__.py` exists). `json` is a package in every supported `CPython`.
+    #[test]
+    fn find_package_source_resolves_stdlib_package() {
+        let result = find_package_source("json", std::path::Path::new("python3"));
+        // Skip silently only if no usable interpreter is on PATH; otherwise the
+        // success branch must resolve `json/__init__.py`.
+        if std::process::Command::new("python3")
+            .arg("--version")
+            .output()
+            .is_ok()
+        {
+            assert!(
+                result.is_some_and(|p| p.ends_with("__init__.py")),
+                "the `json` stdlib package must resolve to its __init__.py"
+            );
+        }
+    }
+
     /// `cache_stub` writes the stub and returns `true` on success.
     #[test]
     fn cache_stub_writes_and_returns_true() -> Result<(), Box<dyn std::error::Error>> {
@@ -1470,6 +1490,136 @@ mod tests {
             run_stubs(action),
             1,
             "generate with no packages must return 1"
+        );
+    }
+
+    // ── run_command dispatch ─────────────────────────────────────────────────
+    //
+    // `run_command` is the parsed-subcommand dispatcher `main` delegates to on
+    // the analysis stack. Driving each arm in-process — rather than only through
+    // the spawned binary — keeps the dispatch covered independently of
+    // subprocess profile merging. The `Lsp` arm is excluded on purpose: it
+    // blocks on a running server.
+
+    /// A temp project holding one clean, fully-annotated module. Returns the
+    /// directory (to clean up) and the module's path.
+    fn clean_project(
+        prefix: &str,
+    ) -> Result<(std::path::PathBuf, String), Box<dyn std::error::Error>> {
+        let dir = unique_project_dir(prefix);
+        std::fs::create_dir_all(&dir)?;
+        let py = dir.join("m.py");
+        std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
+        let path = py.to_string_lossy().into_owned();
+        Ok((dir, path))
+    }
+
+    /// `run_command(Check)` (text) on clean code returns 0 and applies colour mode.
+    #[test]
+    fn run_command_check_text_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let (dir, py) = clean_project("rc_check_text")?;
+        let code = run_command(Command::Check {
+            paths: vec![py],
+            output: OutputFormat::Text,
+            color: ColorMode::Never,
+            cache: false,
+            cache_dir: None,
+            cache_stats: false,
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(code, 0, "clean check (text) must return 0");
+        Ok(())
+    }
+
+    /// `run_command(Check)` (json) on clean code returns 0.
+    #[test]
+    fn run_command_check_json_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let (dir, py) = clean_project("rc_check_json")?;
+        let code = run_command(Command::Check {
+            paths: vec![py],
+            output: OutputFormat::Json,
+            color: ColorMode::Always,
+            cache: false,
+            cache_dir: None,
+            cache_stats: false,
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(code, 0, "clean check (json) must return 0");
+        Ok(())
+    }
+
+    /// `run_command(Check)` with the opt-in cache + stats exercises the cache
+    /// context build, the cached check path, and the stats report.
+    #[test]
+    fn run_command_check_with_cache_and_stats_returns_zero(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (dir, py) = clean_project("rc_check_cache")?;
+        let cache_dir = dir.join("cache");
+        let code = run_command(Command::Check {
+            paths: vec![py],
+            output: OutputFormat::Text,
+            color: ColorMode::Auto,
+            cache: true,
+            cache_dir: Some(cache_dir),
+            cache_stats: true,
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(code, 0, "cached clean check must return 0");
+        Ok(())
+    }
+
+    /// `run_command(Fix)` on clean code returns 0 (nothing to fix).
+    #[test]
+    fn run_command_fix_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let (dir, py) = clean_project("rc_fix")?;
+        let code = run_command(Command::Fix {
+            paths: vec![py],
+            r#unsafe: false,
+            rules: Vec::new(),
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(code, 0, "fixing clean code must return 0");
+        Ok(())
+    }
+
+    /// `run_command(Adopt)` and `run_command(Adopt { status })` both succeed on a
+    /// clean project — exercising both the adopt and the status dispatch branch.
+    #[test]
+    fn run_command_adopt_and_status_return_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let (dir, py) = clean_project("rc_adopt")?;
+        let adopt = run_command(Command::Adopt {
+            paths: vec![py.clone()],
+            status: false,
+        });
+        let status = run_command(Command::Adopt {
+            paths: vec![py],
+            status: true,
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(adopt, 0, "adopting clean code must return 0");
+        assert_eq!(status, 0, "adopt --status must return 0");
+        Ok(())
+    }
+
+    /// `run_command(Unadopt)` on a clean project returns 0.
+    #[test]
+    fn run_command_unadopt_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let (dir, py) = clean_project("rc_unadopt")?;
+        let code = run_command(Command::Unadopt { paths: vec![py] });
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(code, 0, "unadopt on a clean project must return 0");
+        Ok(())
+    }
+
+    /// `run_command(Stubs { Status })` reports without error.
+    #[test]
+    fn run_command_stubs_status_returns_zero() {
+        assert_eq!(
+            run_command(Command::Stubs {
+                action: StubAction::Status,
+            }),
+            0,
+            "stubs status via run_command must return 0"
         );
     }
 }
