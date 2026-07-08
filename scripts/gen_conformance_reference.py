@@ -80,8 +80,10 @@ def _median_ms(nums: list[float]) -> int | None:
 
 
 def _primary_bench_csv() -> Path | None:
-    """The benchmark CSV the site treats as primary: the `.primary` pin first,
-    then the alphabetically-first machine — matching `_data/benchmarks.js`."""
+    """The benchmark CSV the README quotes: the `.primary` pin first, then the
+    alphabetically-first machine. (`_data/benchmarks.js` additionally honors
+    $BASILISK_BENCH_PRIMARY and ranks unpinned CSVs by tool coverage; with the
+    committed `.primary` pin — the normal state — both resolve identically.)"""
     pin = BENCH_STATUS_DIR / ".primary"
     if pin.exists():
         csv = BENCH_STATUS_DIR / f"{pin.read_text(encoding='utf-8').strip()}.csv"

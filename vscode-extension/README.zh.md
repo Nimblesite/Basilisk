@@ -43,11 +43,11 @@ Basilisk 是**唯一**在官方
 | 类型检查器 | 冷启动检查中位数 |
 | --- | --- |
 | ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
-| zuban | <!--g:benchZuban-->26<!--/g:benchZuban--> ms |
+| zuban | <!--g:benchZuban-->27<!--/g:benchZuban--> ms |
 | ty | <!--g:benchTy-->37<!--/g:benchTy--> ms |
-| Pyrefly | <!--g:benchPyrefly-->142<!--/g:benchPyrefly--> ms |
-| Pyright | <!--g:benchPyright-->570<!--/g:benchPyright--> ms |
-| mypy | <!--g:benchMypy-->573<!--/g:benchMypy--> ms |
+| Pyrefly | <!--g:benchPyrefly-->145<!--/g:benchPyrefly--> ms |
+| Pyright | <!--g:benchPyright-->568<!--/g:benchPyright--> ms |
+| mypy | <!--g:benchMypy-->588<!--/g:benchMypy--> ms |
 
 在 <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> 上，跨 <!--g:benchCount-->26<!--/g:benchCount--> 个单一类型构造压力测试样本的冷启动全文件检查中位数 —— 数值越低越好；在编辑器内热重检查更快。每个数字均由 [`hyperfine`](https://github.com/sharkdp/hyperfine) 生成并按机器提交，没有一个是手写的。**克隆仓库，在你自己的硬件上运行 `make bench`，并把 CSV 发给我们 —— 欢迎社区独立复核。** [完整基准测试与方法论（英文）&rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 
@@ -55,7 +55,7 @@ Basilisk 是**唯一**在官方
 
 一个扩展替代 Pylance，覆盖完整工作流 —— 无需 Node.js、Python 运行时、pip 或 npm。由单一内置 Rust 二进制文件驱动一切：
 
-- **默认严格的诊断** —— 边输入边内联显示，低于 10ms 的增量分析（Salsa，与 rust-analyzer 同源）
+- **默认严格的诊断** —— 边输入边内联显示，基于 Salsa 的增量分析（与 rust-analyzer 同源）
 - **自动补全、悬停信息、跳转到定义、查找引用、重命名**
 - **重构代码操作** —— 提取、内联、移动符号、整理导入
 - **集成调试** —— 按 F5 通过内置 debugpy 调试；无需额外扩展

@@ -759,7 +759,7 @@ The qualifier rules are enforced across four codes:
   subclasses (field-level checking belongs to E0093).
 
 Conformance: flips `typeddicts_readonly_inheritance.py`. Benchmark fixture:
-`benchmarks/fixtures/e0038_typeddict_readonly_inheritance.py`.
+`benchmarks/fixtures/typeddict_readonly_inheritance.py`.
 
 #### Planned analyses {#CHKARCH-DIAG-PLANNED}
 
@@ -1392,7 +1392,14 @@ Every error has at least one associated code action:
 
 ### Benchmarks {#CHKARCH-PERF-BENCHMARKS}
 
-Benchmark suite against real-world codebases — **PyTorch** (~600K LOC), **Django** (~250K LOC), **FastAPI** (~30K LOC), **Python standard library** (~500K LOC) — with comparison baselines Pyright, ty, Pyrefly, Zuban.
+The suite that exists today is `benchmarks/` — single-construct typing-spec
+stress fixtures timed cold across Basilisk, Pyright, mypy, ty, Pyrefly, and
+zuban by `benchmarks/run.sh` ([CHKARCH-TESTING-BENCH-RATCHET]).
+
+**Planned, not yet built:** a real-world-codebase suite — **PyTorch** (~600K
+LOC), **Django** (~250K LOC), **FastAPI** (~30K LOC), **Python standard
+library** (~500K LOC) — with the same comparison baselines. This paragraph is
+a design target, not a claim of existing measurement.
 
 ---
 

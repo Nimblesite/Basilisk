@@ -83,7 +83,7 @@ permalink: /zh/
       <div class="stat-card">
         <span class="stat-card__num">{{ benchmarks.toolMedians.ms.basilisk }}<span class="stat-card__unit">&nbsp;ms</span></span>
         <span class="stat-card__label">冷启动全文件检查</span>
-        <span class="stat-card__sub">基准用例中位数，实测最快 &middot; 对比 Pyright {{ benchmarks.toolMedians.ms.pyright }} &middot; mypy {{ benchmarks.toolMedians.ms.mypy }} &middot; ty {{ benchmarks.toolMedians.ms.ty }} &middot; Pyrefly {{ benchmarks.toolMedians.ms.pyrefly }}{% if benchmarks.toolMedians.ms.zuban %} &middot; zuban {{ benchmarks.toolMedians.ms.zuban }}{% endif %}&nbsp;ms</span>
+        <span class="stat-card__sub">基准用例中位数{% if benchmarks.toolMedians.fastest == 'basilisk' %}，实测最快{% endif %} &middot; 对比 Pyright {{ benchmarks.toolMedians.ms.pyright }} &middot; mypy {{ benchmarks.toolMedians.ms.mypy }} &middot; ty {{ benchmarks.toolMedians.ms.ty }} &middot; Pyrefly {{ benchmarks.toolMedians.ms.pyrefly }}{% if benchmarks.toolMedians.ms.zuban %} &middot; zuban {{ benchmarks.toolMedians.ms.zuban }}{% endif %}&nbsp;ms</span>
       </div>
       {% endif %}
     </div>
@@ -262,8 +262,8 @@ permalink: /zh/
       <p class="feature-row__num">02 &mdash; 实测，而非承诺</p>
       {% if benchmarks.toolMedians.fastest == 'basilisk' %}<h2 class="feature-row__title">我们基准测试过的<br>最快检查器。</h2>{% else %}<h2 class="feature-row__title">快过 Pyright。<br>我们基准测试的每个用例。</h2>{% endif %}
       <p class="feature-row__body">
-        每次发布都运行 <code>make bench</code>——用 hyperfine 在相同的固定用例上对 Pyright、
-        mypy、ty、Pyrefly 和 zuban 测量挂钟时间，数据提交到代码库。
+        数据来自 <code>make bench</code>——用 hyperfine 在相同的固定用例上对 Pyright、
+        mypy、ty、Pyrefly 和 zuban 测量挂钟时间，原始 CSV 提交到代码库，网站渲染的正是最后一次实测提交的数据。
         {% if benchmarks.toolMedians.fastest == 'basilisk' %}在冷启动全文件检查上，Basilisk 快过我们测量的每一款工具——中位数 {{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms，比 Pyright 最高快 {{ benchmarks.vsPyright.maxFactor }}&times;。{% else %}在我们基准测试的用例上，Basilisk 的冷启动全文件检查全面胜过 Pyright。{% endif %}
         而且由于重检是增量的——只重新分析被编辑的文件及其导入方——热编辑做的工作更少。<a href="/docs/benchmarks/">查看基准测试方法 &rarr;</a>
       </p>

@@ -84,7 +84,7 @@ permalink: /
       <div class="stat-card">
         <span class="stat-card__num">{{ benchmarks.toolMedians.ms.basilisk }}<span class="stat-card__unit">&nbsp;ms</span></span>
         <span class="stat-card__label">Cold full-file check</span>
-        <span class="stat-card__sub">Median across benchmarked constructs, fastest measured &middot; vs Pyright {{ benchmarks.toolMedians.ms.pyright }} &middot; mypy {{ benchmarks.toolMedians.ms.mypy }} &middot; ty {{ benchmarks.toolMedians.ms.ty }} &middot; Pyrefly {{ benchmarks.toolMedians.ms.pyrefly }}{% if benchmarks.toolMedians.ms.zuban %} &middot; zuban {{ benchmarks.toolMedians.ms.zuban }}{% endif %}&nbsp;ms</span>
+        <span class="stat-card__sub">Median across benchmarked constructs{% if benchmarks.toolMedians.fastest == 'basilisk' %}, fastest measured{% endif %} &middot; vs Pyright {{ benchmarks.toolMedians.ms.pyright }} &middot; mypy {{ benchmarks.toolMedians.ms.mypy }} &middot; ty {{ benchmarks.toolMedians.ms.ty }} &middot; Pyrefly {{ benchmarks.toolMedians.ms.pyrefly }}{% if benchmarks.toolMedians.ms.zuban %} &middot; zuban {{ benchmarks.toolMedians.ms.zuban }}{% endif %}&nbsp;ms</span>
       </div>
       {% endif %}
     </div>
@@ -266,8 +266,9 @@ permalink: /
       <p class="feature-row__num">02 &mdash; Measured, not promised</p>
       {% if benchmarks.toolMedians.fastest == 'basilisk' %}<h2 class="feature-row__title">The fastest checker<br>we&rsquo;ve benchmarked.</h2>{% else %}<h2 class="feature-row__title">Faster than Pyright.<br>Every construct we benchmark.</h2>{% endif %}
       <p class="feature-row__body">
-        Every release runs <code>make bench</code> &mdash; hyperfine wall-clock against Pyright,
-        mypy, ty, Pyrefly, and zuban on identical fixtures, with the numbers committed to the repo.
+        The numbers come from <code>make bench</code> &mdash; hyperfine wall-clock against Pyright,
+        mypy, ty, Pyrefly, and zuban on identical fixtures &mdash; and the raw CSV is committed to
+        the repo, so the site renders exactly what was last measured.
         {% if benchmarks.toolMedians.fastest == 'basilisk' %}Basilisk posts the fastest cold full-file check of every tool we measured &mdash; a
         {{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms median, up to {{ benchmarks.vsPyright.maxFactor }}&times; faster than Pyright.{% else %}On the constructs we benchmark, Basilisk&rsquo;s cold full-file checks beat Pyright outright.{% endif %}
         And because re-checks are incremental &mdash; only the edited file and its importers are

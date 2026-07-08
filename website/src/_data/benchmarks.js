@@ -5,8 +5,9 @@
 // are always whatever was last measured + committed — never hand-typed.
 //
 // Primary machine selection (what the website shows):
-//   1. $BASILISK_BENCH_PRIMARY (slug)         2. benchmarks/status/.primary file
-//   3. first `gha-*` file (stable CI hardware) 4. first CSV alphabetically
+//   1. $BASILISK_BENCH_PRIMARY (slug)   2. benchmarks/status/.primary file
+//   3. otherwise rank by tool coverage (a CSV missing competitor columns must
+//      never win), then prefer `gha-*` (stable CI hardware), then alphabetical
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -237,16 +238,16 @@ function computeOutliers(rows, tools) {
   return out.sort((a, b) => b.factor - a.factor);
 }
 
-// Warm re-check comparison: each tool's FASTEST achievable repeat-check,
-// collapsed to a per-tool median (same one-row-per-tool shape as the cold
-// table). Only two tools keep a real cross-run result cache, so only they
-// have a separate warm number: basilisk (`--cache`) and mypy (incremental
-// `.mypy_cache`) — the `<tool>-warm` CSV columns. Pyright, ty, Pyrefly and
-// zuban keep no cross-run result cache (empirically: no cache artifacts, no
-// cache flag, a repeat run is just a warm-binary cold run), so their best
-// achievable repeat-check IS their cold median — flagged `cached: false`,
-// never a fabricated warm figure. Reuses the already-parsed `values`, so this
-// table can never drift from the CSV.
+// Warm re-check comparison, collapsed to a per-tool median (same
+// one-row-per-tool shape as the cold table). Only two tools have a measured
+// warm number: basilisk (`--cache`) and mypy (incremental `.mypy_cache`) —
+// the `<tool>-warm` CSV columns. Pyright, ty and Pyrefly keep no cross-run
+// result cache (empirically: no cache artifacts, no cache flag, a repeat run
+// is just a warm-binary cold run); zuban's mypy mode DOES reuse a
+// `.mypy_cache`, but the harness wipes it and measures zuban cold-only. All
+// four are flagged `cached: false` and show their cold median — never a
+// fabricated warm figure. Reuses the already-parsed `values`, so this table
+// can never drift from the CSV.
 function computeWarm(rows, allTools) {
   const warmSet = new Set(allTools.filter((t) => t.endsWith("-warm")));
   const baseTools = allTools.filter((t) => !t.endsWith("-warm"));

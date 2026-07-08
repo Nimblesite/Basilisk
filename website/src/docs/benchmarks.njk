@@ -22,7 +22,7 @@ benchmarkStrings:
   warmHeader: "Best repeat-check (median)"
   cacheHeader: "How"
   warmTag: "warm result-cache hit"
-  noCacheTag: "no cross-run cache — a repeat run is a cold run"
+  noCacheTag: "measured cold-only — its cold median is shown"
   outlierVsMedian: "its own median"
   versionsLabel: "Versions benchmarked"
   metaPre: "Mean wall-clock over "
@@ -42,8 +42,9 @@ benchmarkStrings:
   faster than Pyright (up to <strong>{{ benchmarks.vsPyright.maxFactor }}&times;</strong>) &mdash;
   a typical <strong>{{ benchmarks.vsPyright.basiliskMedianMs }}&nbsp;ms</strong> against Pyright&rsquo;s
   {{ benchmarks.vsPyright.pyrightMedianMs }}&nbsp;ms. These are self-measured, reproducible numbers:
-  every release runs <code>make bench</code> and commits the raw CSV, so this page is exactly
-  what was last measured &mdash; never a hand-typed figure.
+  <code>make bench</code> regenerates them and the raw CSV is committed per machine, so this page
+  renders exactly what was last measured and committed &mdash; never a hand-typed figure. The exact
+  build, tool versions, and measurement date are shown beneath the table.
 </p>
 {%- endif %}
 
@@ -102,9 +103,11 @@ benchmarkStrings:
 <p>
   Pyright, ty and Pyrefly keep <strong>no</strong> cross-run result cache &mdash; they write no
   cache artifacts, expose no cache flag, and a repeat run is no faster than the first beyond
-  process/OS warm-up &mdash; and zuban&rsquo;s mypy mode only reuses a <code>.mypy_cache</code>
-  that measures the same as cold on these single-file checks. For those tools the honest best
-  case <em>is</em> their cold median, labelled as such rather than a fabricated warm figure.
+  process/OS warm-up &mdash; so their cold median <em>is</em> their best case. zuban&rsquo;s mypy
+  mode <em>does</em> reuse a <code>.mypy_cache</code> when one is present, but the harness
+  deliberately wipes it before every timed run to keep the cold table honest, and we publish no
+  warm zuban figure because none is measured &mdash; its row shows its cold median, labelled as
+  such rather than a fabricated warm number.
 </p>
 
 {{ benchmark.warmTable(benchmarks, benchmarkStrings) }}
@@ -123,13 +126,14 @@ benchmarkStrings:
 
 <p>
   Fixtures intentionally contain type errors, so tools exit non-zero by design &mdash; which means the
-  harness must ignore exit codes while timing. To stop that from ever recording a <em>crash</em> as a
-  fast run, a preflight pass first runs every tool on every fixture un-timed: a tool that fails to
-  analyze a file (exit &ge; 2 &mdash; a parse abort or internal error) is excluded from that
-  fixture&rsquo;s timing and its CSV cell stays blank. The same pass counts the diagnostics each tool
-  reports per fixture and writes them to the CSV (<code>&lt;tool&gt;_diags</code> columns) &mdash; that
-  is what the <em>Reports diagnostics on</em> column summarises, so a run that analyzed a file but
-  flagged nothing is visible in the published data, not hidden behind a fast time.
+  harness must ignore exit codes while timing. To stop that from recording a <em>crash</em> as a
+  fast run, a preflight pass first runs each tool&rsquo;s cold command on every fixture un-timed: a
+  tool that fails to analyze a file (exit &ge; 2 &mdash; a parse abort or internal error) is excluded
+  from that fixture&rsquo;s timing, together with its warm variant, and its CSV cell stays blank. The
+  same pass counts the error diagnostics each tool reports per fixture and writes them to the CSV
+  (<code>&lt;tool&gt;_diags</code> columns) &mdash; that is what the <em>Reports diagnostics on</em>
+  column summarises, so a run that analyzed a file but flagged nothing is visible in the published
+  data, not hidden behind a fast time.
 </p>
 
 <h3>Cold, not warm</h3>
@@ -150,11 +154,14 @@ benchmarkStrings:
 <h3>Fair strictness</h3>
 
 <p>
-  mypy runs with <code>--strict</code> and zuban runs as <code>zuban mypy --strict</code>, because the
-  fixtures exercise strict-mode analysis &mdash; without it those tools report &ldquo;no issues&rdquo; on
-  the strictness fixtures and would not be doing comparable work. Basilisk, Pyright, ty and Pyrefly are
-  run in their default checking mode. The fixtures are plain typing-spec Python with no
-  checker-specific directives, so every tool analyzes the identical workload.
+  mypy runs as <code>mypy --strict --no-incremental --no-error-summary</code> and zuban as
+  <code>zuban mypy --strict --no-error-summary</code>, because the fixtures exercise strict-mode
+  analysis &mdash; without <code>--strict</code> those tools report &ldquo;no issues&rdquo; on the
+  strictness fixtures and would not be doing comparable work. No other flags: in particular no
+  <code>--ignore-missing-imports</code>, so failed-import analysis stays part of every tool&rsquo;s
+  workload. Basilisk, Pyright, ty and Pyrefly run in their default checking mode. The fixtures are
+  plain typing-spec Python with no checker-specific directives, so every tool analyzes the identical
+  workload.
 </p>
 
 <h3>What this does and doesn&rsquo;t show</h3>
