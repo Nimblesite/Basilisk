@@ -149,8 +149,7 @@ fn scan_source_lines(source: &str, ctx: &ScanContext<'_>, diagnostics: &mut Vec<
             let leading_ws = u32::try_from(line.len() - line.trim_start().len()).unwrap_or(0);
             let line_start = byte_offset + leading_ws;
 
-            check_subscript_class_attr_assign(trimmed, line_start, ctx, diagnostics);
-            check_standalone_class_attr(trimmed, line_start, ctx, diagnostics);
+            check_class_attr_patterns(trimmed, line_start, ctx, diagnostics);
             check_type_call_attr(trimmed, line_start, ctx, diagnostics);
         }
 
@@ -159,48 +158,133 @@ fn scan_source_lines(source: &str, ctx: &ScanContext<'_>, diagnostics: &mut Vec<
     }
 }
 
-/// Detect `ClassName[...].attr = value` patterns (subscript assignment).
-fn check_subscript_class_attr_assign(
+/// Dispatch the `ClassName.attr` / `ClassName[...].attr` line patterns on the
+/// line's leading identifier. Only the class whose name IS that identifier can
+/// match a prefix pattern, so one hash lookup replaces a scan over every known
+/// class (which formatted two candidate prefixes per class per line).
+fn check_class_attr_patterns(
     trimmed: &str,
     line_start: u32,
     ctx: &ScanContext<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    for (&class_name, attrs) in ctx.class_instance_attrs {
-        let prefix = format!("{class_name}[");
-        if !trimmed.starts_with(&prefix) {
-            continue;
-        }
+    let ident_end = trimmed
+        .char_indices()
+        .find(|(_, ch)| !ch.is_alphanumeric() && *ch != '_')
+        .map_or(trimmed.len(), |(idx, _)| idx);
+    if ident_end == 0 {
+        return;
+    }
+    let Some((&class_name, attrs)) = ctx
+        .class_instance_attrs
+        .get_key_value(&trimmed[..ident_end])
+    else {
+        return;
+    };
+    check_subscript_class_attr_assign(
+        trimmed,
+        ident_end,
+        class_name,
+        attrs,
+        line_start,
+        ctx,
+        diagnostics,
+    );
+    check_standalone_class_attr(
+        trimmed,
+        ident_end,
+        class_name,
+        attrs,
+        line_start,
+        ctx,
+        diagnostics,
+    );
+}
 
-        let rest = &trimmed[prefix.len()..];
-        let Some(close_pos) = find_matching_bracket(rest) else {
-            continue;
-        };
+/// Detect `ClassName[...].attr = value` patterns (subscript assignment).
+fn check_subscript_class_attr_assign(
+    trimmed: &str,
+    ident_end: usize,
+    class_name: &str,
+    attrs: &HashSet<&str>,
+    line_start: u32,
+    ctx: &ScanContext<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    // `ClassName[` prefix: the identifier followed immediately by `[`.
+    let after_ident = &trimmed[ident_end..];
+    if !after_ident.starts_with('[') {
+        return;
+    }
 
-        let after_close = &rest[close_pos + 1..];
-        if !after_close.starts_with('.') {
-            continue;
-        }
+    let rest = &after_ident[1..];
+    let Some(close_pos) = find_matching_bracket(rest) else {
+        return;
+    };
 
-        let after_dot = &after_close[1..];
+    let after_close = &rest[close_pos + 1..];
+    if !after_close.starts_with('.') {
+        return;
+    }
+
+    let after_dot = &after_close[1..];
+    let attr_name = after_dot
+        .split(|ch: char| ch.is_whitespace() || ch == '=')
+        .next()
+        .unwrap_or("");
+
+    if attr_name.is_empty() {
+        return;
+    }
+
+    // Must be an assignment (has `=` but not `==` after attr).
+    let after_attr = after_dot[attr_name.len()..].trim_start();
+    if !after_attr.starts_with('=') || after_attr.starts_with("==") {
+        return;
+    }
+
+    if attrs.contains(attr_name) {
+        let expr_len =
+            u32::try_from(ident_end + 1 + close_pos + 1 + 1 + attr_name.len()).unwrap_or(0);
+        diagnostics.push(make_diagnostic(
+            class_name,
+            attr_name,
+            Span {
+                start: line_start,
+                end: line_start + expr_len,
+            },
+            ctx.path,
+        ));
+    }
+}
+
+/// Detect standalone `ClassName.attr` or `ClassName[...].attr` expressions.
+fn check_standalone_class_attr(
+    trimmed: &str,
+    ident_end: usize,
+    class_name: &str,
+    attrs: &HashSet<&str>,
+    line_start: u32,
+    ctx: &ScanContext<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let stmt = trimmed.split('#').next().unwrap_or(trimmed).trim();
+    // The identifier contains no `#` or whitespace, so it survives the strip.
+    let after_ident = &stmt[ident_end..];
+
+    // Pattern 1: `ClassName.attr` (standalone, no assignment or call)
+    if let Some(after_dot) = after_ident.strip_prefix('.') {
         let attr_name = after_dot
-            .split(|ch: char| ch.is_whitespace() || ch == '=')
+            .split(|ch: char| !ch.is_alphanumeric() && ch != '_')
             .next()
             .unwrap_or("");
-
-        if attr_name.is_empty() {
-            continue;
-        }
-
-        // Must be an assignment (has `=` but not `==` after attr).
-        let after_attr = after_dot[attr_name.len()..].trim_start();
-        if !after_attr.starts_with('=') || after_attr.starts_with("==") {
-            continue;
-        }
-
-        if attrs.contains(attr_name) {
-            let expr_len =
-                u32::try_from(prefix.len() + close_pos + 1 + 1 + attr_name.len()).unwrap_or(0);
+        let remainder = after_dot[attr_name.len()..].trim();
+        if !attr_name.is_empty()
+            && attrs.contains(attr_name)
+            && remainder.is_empty()
+            && !is_assignment_target(trimmed, ident_end + 1 + attr_name.len())
+        {
+            let expr_len = u32::try_from(ident_end + 1 + attr_name.len()).unwrap_or(0);
             diagnostics.push(make_diagnostic(
                 class_name,
                 attr_name,
@@ -211,78 +295,36 @@ fn check_subscript_class_attr_assign(
                 ctx.path,
             ));
         }
+        return;
     }
-}
 
-/// Detect standalone `ClassName.attr` or `ClassName[...].attr` expressions.
-fn check_standalone_class_attr(
-    trimmed: &str,
-    line_start: u32,
-    ctx: &ScanContext<'_>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    let stmt = trimmed.split('#').next().unwrap_or(trimmed).trim();
-
-    for (&class_name, attrs) in ctx.class_instance_attrs {
-        // Pattern 1: `ClassName.attr` (standalone, no assignment or call)
-        let dot_prefix = format!("{class_name}.");
-        if stmt.starts_with(&dot_prefix) {
-            let after_dot = &stmt[dot_prefix.len()..];
-            let attr_name = after_dot
-                .split(|ch: char| !ch.is_alphanumeric() && ch != '_')
-                .next()
-                .unwrap_or("");
-            let remainder = after_dot[attr_name.len()..].trim();
-            if !attr_name.is_empty()
-                && attrs.contains(attr_name)
-                && remainder.is_empty()
-                && !is_assignment_target(trimmed, &dot_prefix, attr_name)
-            {
-                let expr_len = u32::try_from(dot_prefix.len() + attr_name.len()).unwrap_or(0);
-                diagnostics.push(make_diagnostic(
-                    class_name,
-                    attr_name,
-                    Span {
-                        start: line_start,
-                        end: line_start + expr_len,
-                    },
-                    ctx.path,
-                ));
-            }
-            continue;
+    // Pattern 2: `ClassName[...].attr` (standalone, no assignment)
+    if let Some(rest) = after_ident.strip_prefix('[') {
+        let Some(close_pos) = find_matching_bracket(rest) else {
+            return;
+        };
+        let after_close = &rest[close_pos + 1..];
+        if !after_close.starts_with('.') {
+            return;
         }
-
-        // Pattern 2: `ClassName[...].attr` (standalone, no assignment)
-        let bracket_prefix = format!("{class_name}[");
-        if stmt.starts_with(&bracket_prefix) {
-            let rest = &stmt[bracket_prefix.len()..];
-            let Some(close_pos) = find_matching_bracket(rest) else {
-                continue;
-            };
-            let after_close = &rest[close_pos + 1..];
-            if !after_close.starts_with('.') {
-                continue;
-            }
-            let after_dot = &after_close[1..];
-            let attr_name = after_dot
-                .split(|ch: char| !ch.is_alphanumeric() && ch != '_')
-                .next()
-                .unwrap_or("");
-            let remainder = after_dot[attr_name.len()..].trim();
-            if !attr_name.is_empty() && attrs.contains(attr_name) && remainder.is_empty() {
-                let expr_len =
-                    u32::try_from(bracket_prefix.len() + close_pos + 1 + 1 + attr_name.len())
-                        .unwrap_or(0);
-                diagnostics.push(make_diagnostic(
-                    class_name,
-                    attr_name,
-                    Span {
-                        start: line_start,
-                        end: line_start + expr_len,
-                    },
-                    ctx.path,
-                ));
-            }
+        let after_dot = &after_close[1..];
+        let attr_name = after_dot
+            .split(|ch: char| !ch.is_alphanumeric() && ch != '_')
+            .next()
+            .unwrap_or("");
+        let remainder = after_dot[attr_name.len()..].trim();
+        if !attr_name.is_empty() && attrs.contains(attr_name) && remainder.is_empty() {
+            let expr_len =
+                u32::try_from(ident_end + 1 + close_pos + 1 + 1 + attr_name.len()).unwrap_or(0);
+            diagnostics.push(make_diagnostic(
+                class_name,
+                attr_name,
+                Span {
+                    start: line_start,
+                    end: line_start + expr_len,
+                },
+                ctx.path,
+            ));
         }
     }
 }
@@ -361,9 +403,9 @@ fn find_matching_bracket(text: &str) -> Option<usize> {
     None
 }
 
-/// Returns `true` when the trimmed line is an assignment to `ClassName.attr`.
-fn is_assignment_target(trimmed: &str, dot_prefix: &str, attr_name: &str) -> bool {
-    let target_len = dot_prefix.len() + attr_name.len();
+/// Returns `true` when the trimmed line is an assignment to `ClassName.attr`
+/// (`target_len` = byte length of the `ClassName.attr` target expression).
+fn is_assignment_target(trimmed: &str, target_len: usize) -> bool {
     if trimmed.len() <= target_len {
         return false;
     }

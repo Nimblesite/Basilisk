@@ -5,8 +5,9 @@
 // are always whatever was last measured + committed — never hand-typed.
 //
 // Primary machine selection (what the website shows):
-//   1. $BASILISK_BENCH_PRIMARY (slug)         2. benchmarks/status/.primary file
-//   3. first `gha-*` file (stable CI hardware) 4. first CSV alphabetically
+//   1. $BASILISK_BENCH_PRIMARY (slug)   2. benchmarks/status/.primary file
+//   3. otherwise rank by tool coverage (a CSV missing competitor columns must
+//      never win), then prefer `gha-*` (stable CI hardware), then alphabetical
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -16,14 +17,28 @@ const STATUS_DIR = join(__dirname, "../../../benchmarks/status");
 
 const titleCase = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-// "e0002_missing_return" -> { code: "E0002", name: "Missing return" }
-// `code` is language-neutral; `name` is the English fallback. The benchmark
-// table macro is shared across locales — non-English pages pass a translated
-// name map keyed by `fixture`, falling back to this English `name`.
-function codeAndName(stem) {
-  const [code, ...rest] = stem.split("_");
-  const name = rest.join(" ").replace(/\b\w/, (c) => c.toUpperCase());
-  return { code: code.toUpperCase(), name: name.trim() };
+// A benchmark fixture's filename IS the typing-spec construct it stresses, so
+// the human-readable row label is derived straight from the stem — never a
+// tool-specific error code. "typeddict_key_access" -> "TypedDict key access".
+// Sentence case, with a small map that preserves the casing of typing-spec
+// proper nouns; no hand-maintained per-fixture list, so the label can never
+// drift from the fixture set. The benchmark table macro is shared across
+// locales — non-English pages pass a translated name map keyed by `fixture`,
+// falling back to this English `name`.
+const CONSTRUCT_ACRONYMS = {
+  typeddict: "TypedDict",
+  typevar: "TypeVar",
+  typevars: "TypeVars",
+  typeis: "TypeIs",
+  newtype: "NewType",
+  classvar: "ClassVar",
+};
+function fixtureName(stem) {
+  const label = stem
+    .split("_")
+    .map((word) => CONSTRUCT_ACRONYMS[word] || word)
+    .join(" ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 // Parse the CSV `# tools:` header into [{ tool, version }] for the methodology
@@ -77,44 +92,32 @@ function parseCsv(text) {
   meta.runsCount = runsMatch ? runsMatch[0] : null;
   meta.toolVersions = parseToolVersions(meta.tools);
 
-  const cols = dataLines[0].split(",");
-  const allTools = cols.slice(1).map((c) => c.replace(/_ms$/, ""));
-  // The per-rule table is a COLD-check comparison of type checkers, so the
-  // warm-cache variants (…-warm) are excluded from `tools` (and thus the table
-  // columns and the fastest mark) — they aren't separate checkers and would
-  // crowd the real ones off the page. Their raw numbers stay in `values` (and
-  // the committed CSV); only the rendered comparison drops them.
+  // Column layout: `fixture`, one `<tool>_ms` per timed tool, then one
+  // `<tool>_diags` per base tool (how many diagnostics the tool reported on
+  // that fixture — the harness preflight writes it so a do-nothing run is
+  // visible next to its time). A blank `_ms` cell means the tool FAILED to
+  // analyze that fixture (exit >= 2) and the harness excluded it from timing.
+  const msIdx = new Map();
+  const diagIdx = new Map();
+  dataLines[0].split(",").forEach((c, i) => {
+    if (c.endsWith("_ms")) msIdx.set(c.slice(0, -"_ms".length), i);
+    else if (c.endsWith("_diags")) diagIdx.set(c.slice(0, -"_diags".length), i);
+  });
+  const allTools = [...msIdx.keys()];
+  // Cold comparison only: warm-cache variants (…-warm) aren't separate
+  // checkers; their numbers stay in `values` for computeWarm.
   const tools = allTools.filter((t) => !t.endsWith("-warm"));
   const rows = dataLines.slice(1).map((line) => {
     const parts = line.split(",");
-    const stem = parts[0];
+    const num = (i) =>
+      i == null || parts[i] === undefined || parts[i] === "" ? null : parseFloat(parts[i]);
     const values = {};
-    allTools.forEach((t, i) => {
-      const v = parts[i + 1];
-      values[t] = v === undefined || v === "" ? null : parseFloat(v);
-    });
-    const present = tools.filter((t) => values[t] != null);
-    const fastest = present.reduce(
-      (best, t) => (best == null || values[t] < values[best] ? t : best),
-      null,
-    );
-    const { code, name } = codeAndName(stem);
-    return {
-      fixture: stem,
-      code,
-      name,
-      label: `${code} ${name}`.trim(),
-      values,
-      fastest,
-      cells: tools.map((t) => ({
-        tool: t,
-        ms: values[t],
-        text: values[t] == null ? "—" : `${Math.round(values[t])} ms`,
-        fastest: t === fastest,
-      })),
-    };
+    for (const [t, i] of msIdx) values[t] = num(i);
+    const diags = {};
+    for (const [t, i] of diagIdx) diags[t] = num(i);
+    return { fixture: parts[0], name: fixtureName(parts[0]), values, diags };
   });
-  return { meta, tools, rows };
+  return { meta, tools, allTools, rows };
 }
 
 function median(nums) {
@@ -161,6 +164,115 @@ function computeVsPyright(rows) {
     pyrightMedianMs: Math.round(median(pairs.map((x) => x.p))),
     beats: pairs.filter((x) => x.b < x.p).length,
     total: pairs.length,
+  };
+}
+
+// Per-tool distribution of the cold check across the fixture corpus. The
+// published cold table is ONE ROW PER TOOL (median + fastest/slowest fixture),
+// never a fixture × tool grid: for the heavier tools a cold single-file check
+// is dominated by fixed startup + stub-loading cost, so a full grid would
+// repeat each tool's baseline once per fixture and imply per-construct
+// precision that doesn't exist (computeOutliers surfaces the departures that
+// ARE real). `zeroDiag` counts fixtures where the tool ran but reported no
+// diagnostics — published so a do-nothing run is visible next to its time.
+// `missing` counts fixtures with no timing at all (tool not installed on that
+// machine, or excluded by the harness preflight after failing to analyze).
+function computeToolStats(rows, tools) {
+  const stats = tools
+    .map((tool) => {
+      const measured = rows
+        .map((r) => ({
+          ms: r.values[tool],
+          fixture: r.fixture,
+          name: r.name,
+          diags: r.diags[tool] ?? null,
+        }))
+        .filter((e) => e.ms != null && e.ms > 0);
+      if (!measured.length) return null;
+      const byMs = [...measured].sort((a, b) => a.ms - b.ms);
+      const [min, max] = [byMs[0], byMs[byMs.length - 1]];
+      const med = Math.round(median(measured.map((e) => e.ms)));
+      const withDiags = measured.filter((e) => e.diags != null);
+      return {
+        tool,
+        medianMs: med,
+        medianText: `${med} ms`,
+        min: { fixture: min.fixture, name: min.name, text: `${Math.round(min.ms)} ms` },
+        max: { fixture: max.fixture, name: max.name, text: `${Math.round(max.ms)} ms` },
+        measured: measured.length,
+        missing: rows.length - measured.length,
+        diagCounted: withDiags.length,
+        zeroDiag: withDiags.filter((e) => e.diags === 0).length,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.medianMs - b.medianMs);
+  return stats.map((s, i) => ({ ...s, fastest: i === 0 }));
+}
+
+// The per-construct signal that IS real: fixtures where a tool departs from
+// its own median by at least 2× (failed-import resolution, dataclass
+// synthesis, …). Below that threshold a per-fixture difference is within the
+// noise of the tool's fixed startup cost, so it is never published per-fixture.
+function computeOutliers(rows, tools) {
+  const out = [];
+  for (const tool of tools) {
+    const vals = rows.map((r) => r.values[tool]).filter((v) => v != null && v > 0);
+    if (vals.length < 3) continue;
+    const med = median(vals);
+    if (med <= 0) continue;
+    for (const r of rows) {
+      const ms = r.values[tool];
+      if (ms != null && ms >= med * 2) {
+        out.push({
+          tool,
+          fixture: r.fixture,
+          name: r.name,
+          ms: Math.round(ms),
+          medianMs: Math.round(med),
+          factor: Math.round((ms / med) * 10) / 10,
+        });
+      }
+    }
+  }
+  return out.sort((a, b) => b.factor - a.factor);
+}
+
+// Warm re-check comparison, collapsed to a per-tool median (same
+// one-row-per-tool shape as the cold table). Only two tools have a measured
+// warm number: basilisk (`--cache`) and mypy (incremental `.mypy_cache`) —
+// the `<tool>-warm` CSV columns. Pyright, ty and Pyrefly keep no cross-run
+// result cache (empirically: no cache artifacts, no cache flag, a repeat run
+// is just a warm-binary cold run); zuban's mypy mode DOES reuse a
+// `.mypy_cache`, but the harness wipes it and measures zuban cold-only. All
+// four are flagged `cached: false` and show their cold median — never a
+// fabricated warm figure. Reuses the already-parsed `values`, so this table
+// can never drift from the CSV.
+function computeWarm(rows, allTools) {
+  const warmSet = new Set(allTools.filter((t) => t.endsWith("-warm")));
+  const baseTools = allTools.filter((t) => !t.endsWith("-warm"));
+  // For each base tool, prefer its `-warm` column when one exists.
+  const columns = baseTools
+    .map((tool) => ({
+      tool,
+      key: warmSet.has(`${tool}-warm`) ? `${tool}-warm` : tool,
+      cached: warmSet.has(`${tool}-warm`),
+    }))
+    .filter((c) => rows.some((r) => r.values[c.key] != null));
+  // Only worth a table if at least one column is a genuine warm cache.
+  if (!columns.some((c) => c.cached)) return { hasData: false, columns: [] };
+
+  const stats = columns
+    .map((c) => {
+      const vals = rows.map((r) => r.values[c.key]).filter((v) => v != null && v > 0);
+      const med = vals.length ? Math.round(median(vals)) : null;
+      return { tool: c.tool, cached: c.cached, medianMs: med };
+    })
+    .filter((c) => c.medianMs != null)
+    .sort((a, b) => a.medianMs - b.medianMs);
+  return {
+    hasData: stats.length > 0,
+    columns: stats.map((c, i) => ({ ...c, text: `${c.medianMs} ms`, fastest: i === 0 })),
   };
 }
 
@@ -212,7 +324,10 @@ export default function () {
     primary: primary.replace(/\.csv$/, ""),
     ...parsed,
     toolMedians: computeToolMedians(parsed.rows, parsed.tools),
+    toolStats: computeToolStats(parsed.rows, parsed.tools),
+    outliers: computeOutliers(parsed.rows, parsed.tools),
     vsPyright: computeVsPyright(parsed.rows),
+    warm: computeWarm(parsed.rows, parsed.allTools),
     hasData: parsed.rows.length > 0,
   };
 }

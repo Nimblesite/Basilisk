@@ -105,6 +105,10 @@ pub fn check_with_config(
         .flat_map(|i| i.names.iter().cloned())
         .collect();
 
+    // Diagnostic-independent, so computed once: scanning every import per
+    // emitted `imports_unresolved` diagnostic made import-heavy files O(n²).
+    let suppress_e0010 = should_suppress_e0010_for_module(module, config);
+
     raw.into_iter()
         .filter_map(|mut diag| {
             let code = diag.code.code;
@@ -126,7 +130,7 @@ pub fn check_with_config(
             }
 
             // 2. Per-module: suppress imports_unresolved for modules with ignore-missing-stubs.
-            if code == "imports_unresolved" && should_suppress_e0010_for_module(module, config) {
+            if code == "imports_unresolved" && suppress_e0010 {
                 return None;
             }
 

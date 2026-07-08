@@ -10,6 +10,8 @@ lang: zh
 
 Basilisk 是一个**完整的开源 Python 语言服务器**。您依赖现代 Python 扩展提供的一切——自动补全、跳转到定义、悬停信息、重构、诊断、集成调试、性能分析——Basilisk 全部提供，完全开源，默认符合 Python 类型规范。
 
+它也是**唯一在[官方 `python/typing` 一致性测试结果]({{ conformanceOfficial.snapshot.source }})中取得满分 100%** 的 Python 类型检查器——就发布在 Python typing 仓库自己的排行榜上，领先于 Pyright、mypy、Pyrefly 和 ty。参见[我们如何衡量](/zh/docs/conformance/)。
+
 它不仅仅是一个类型检查器。它是一个功能完整的 LSP，为 **VS Code**、**Zed** 和 **Neovim** 提供一流扩展——以及任何支持语言服务器协议的其他编辑器。**Cursor** 和 **Windsurf**（通过 Open VSX）即将推出，JetBrains（IntelliJ / PyCharm）也在路上。无专有扩展。无 Node.js。单个 Rust 二进制文件，在每款编辑器中提供相同的体验。
 
 ## Basilisk 解决的问题

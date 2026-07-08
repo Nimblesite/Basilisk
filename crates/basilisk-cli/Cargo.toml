@@ -1,6 +1,6 @@
 [package]
 name        = "basilisk-cli"
-description = "Command-line interface for Basilisk"
+description = "Basilisk CLI — the only Python type checker with a perfect 100% score on the official python/typing conformance results (https://github.com/python/typing/blob/main/conformance/results/results.html). Strict-by-default checker and language server, built in Rust."
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true

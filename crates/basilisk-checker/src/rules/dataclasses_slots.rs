@@ -286,15 +286,17 @@ fn check_instance_slots_access(
     for (line_idx, line) in source.lines().enumerate() {
         let trimmed = line.trim();
 
-        // Look for pattern: `ClassName(...)._slots__`
-        for &class_name in non_slots_dataclasses {
-            let pattern = format!("{class_name}(");
-            let Some(call_pos) = trimmed.find(&pattern) else {
+        // Look for pattern: `ClassName(...)._slots__` — dispatch each
+        // `identifier(` token through the set instead of substring-searching
+        // the line once per known dataclass.
+        for (ident, after_open_pos) in crate::rules::shared::identifiers_followed_by(trimmed, '(') {
+            let Some(&class_name) = non_slots_dataclasses.get(ident) else {
                 continue;
             };
+            let call_pos = after_open_pos - ident.len() - 1;
 
             // Find closing paren after the call.
-            let Some(after_open) = trimmed.get(call_pos + pattern.len()..) else {
+            let Some(after_open) = trimmed.get(after_open_pos..) else {
                 continue;
             };
             let Some(close_paren) = find_matching_paren(after_open) else {
@@ -311,7 +313,7 @@ fn check_instance_slots_access(
                 };
                 let col_offset = line.len() - trimmed.len();
                 let byte_start = line_start + col_offset + call_pos;
-                let byte_end = byte_start + pattern.len() + close_paren + 1 + ".__slots__".len();
+                let byte_end = byte_start + ident.len() + 1 + close_paren + 1 + ".__slots__".len();
                 let Some(span_start) = u32::try_from(byte_start).ok() else {
                     continue;
                 };

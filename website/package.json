@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Documentation website for Basilisk — strict-by-default Python type checker",
+  "description": "Documentation website for Basilisk — the only Python type checker with a perfect 100% score on the official python/typing conformance results",
   "scripts": {
     "build": "eleventy",
     "start": "eleventy --serve --watch",

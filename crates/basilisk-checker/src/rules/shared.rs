@@ -575,3 +575,45 @@ pub(crate) fn is_unverifiable_return_type(ty: &InferredType) -> bool {
         _ => false,
     }
 }
+
+// ---------------------------------------------------------------------------
+// Line tokenisation
+// ---------------------------------------------------------------------------
+
+/// Yield `(identifier, index_after_delimiter)` for every identifier token in
+/// `line` that is immediately followed by `delim` (e.g. `[` for subscripts,
+/// `(` for calls).
+///
+/// Rules that scan source lines for `ClassName[...]` / `ClassName(...)`
+/// patterns use this to dispatch each line's tokens through a hash lookup —
+/// O(tokens) per line — instead of running a formatted substring search per
+/// known class per line, which is O(classes × line length) and dominated
+/// whole-file checks on class-heavy modules.
+pub(crate) fn identifiers_followed_by(
+    line: &str,
+    delim: char,
+) -> impl Iterator<Item = (&str, usize)> + '_ {
+    let mut chars = line.char_indices().peekable();
+    std::iter::from_fn(move || {
+        while let Some((start, ch)) = chars.next() {
+            if !(ch.is_alphanumeric() || ch == '_') {
+                continue;
+            }
+            let mut end = start + ch.len_utf8();
+            while let Some(&(idx, next)) = chars.peek() {
+                if next.is_alphanumeric() || next == '_' {
+                    let _ = chars.next();
+                    end = idx + next.len_utf8();
+                } else {
+                    break;
+                }
+            }
+            if let Some(&(idx, next)) = chars.peek() {
+                if next == delim {
+                    return Some((&line[start..end], idx + next.len_utf8()));
+                }
+            }
+        }
+        None
+    })
+}

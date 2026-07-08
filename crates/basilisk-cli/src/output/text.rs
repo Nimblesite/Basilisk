@@ -24,16 +24,23 @@ use super::FileSource;
 ///
 /// Returns the count of error-severity diagnostics.
 pub fn render_diagnostics(diagnostics: &[Diagnostic], sources: &[FileSource]) -> usize {
+    use std::io::Write;
+
     // Precompute one line index per source; every diagnostic then converts its
     // span to line/col in O(log n) instead of rescanning the source prefix.
     let indexes = super::SourceIndexes::new(sources);
-    diagnostics
+    // Buffer the whole render: stdout is line-buffered, so unbuffered printing
+    // costs one write syscall per output line — thousands on error-dense files.
+    let mut out = std::io::BufWriter::new(std::io::stdout().lock());
+    let count = diagnostics
         .iter()
         .inspect(|d| {
-            print!("{}", format_one(d, indexes.for_path(&d.path)));
+            let _ = write!(out, "{}", format_one(d, indexes.for_path(&d.path)));
         })
         .filter(|d| d.severity == Severity::Error)
-        .count()
+        .count();
+    let _ = out.flush();
+    count
 }
 
 /// Apply the appropriate colour to a severity label.

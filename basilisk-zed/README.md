@@ -4,6 +4,8 @@
 
 Zed editor extension for Basilisk — WASM-based Python type checking and language server integration.
 
+Basilisk is the **only Python type checker with a perfect 100% score** on the [official `python/typing` conformance results](https://github.com/python/typing/blob/main/conformance/results/results.html) — published on the Python typing repository's own leaderboard, ahead of Pyright, mypy, Pyrefly and ty.
+
 <p align="center">
   <img src="images/zed-screenshot.png" alt="Basilisk in the Zed editor — Python type checking and diagnostics inline" width="900">
 </p>
