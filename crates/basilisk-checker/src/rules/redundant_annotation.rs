@@ -313,16 +313,12 @@ fn transitively_inherits(
     all_classes: &[basilisk_resolver::ClassInfo],
     is_marker_base: &dyn Fn(&str) -> bool,
 ) -> bool {
-    for base in &class.bases {
-        let stripped = base.split('[').next().unwrap_or(base.as_str());
-        if is_marker_base(stripped) {
-            return true;
-        }
-        for other in all_classes {
-            if other.name == stripped && transitively_inherits(other, all_classes, is_marker_base) {
-                return true;
-            }
-        }
-    }
-    false
+    super::shared::any_base_name_matches(
+        class,
+        &|base| {
+            let stripped = base.split('[').next().unwrap_or(base);
+            all_classes.iter().find(|other| other.name == stripped)
+        },
+        &|base| is_marker_base(base.split('[').next().unwrap_or(base)),
+    )
 }

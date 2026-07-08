@@ -69,7 +69,7 @@
         {
           "id": "basilisk.pythonProcesses",
           "name": "Python Processes",
-          "when": "basilisk.hasWorkspace && basilisk.profilingEnabled"
+          "when": "basilisk.hasWorkspace"
         },
         {
           "id": "basilisk.info",
@@ -253,6 +253,12 @@
         "icon": "$(debug-alt)"
       },
       {
+        "command": "basilisk.profileShowResults",
+        "title": "Basilisk: Show Profile Results",
+        "category": "Basilisk",
+        "icon": "$(flame)"
+      },
+      {
         "command": "basilisk.memoryMenu",
         "title": "Basilisk: Memory…",
         "category": "Basilisk",
@@ -371,46 +377,6 @@
           "when": "false"
         },
         {
-          "command": "basilisk.profileStart",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.profileStop",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.profileSnapshot",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.profileAttachToDebug",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.profileCurrentFileCpu",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.trackMemoryCurrentFile",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.refreshProcesses",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.sortProcesses",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.groupProcesses",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.filterProcesses",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
           "command": "basilisk.profileProcess",
           "when": "false"
         },
@@ -428,47 +394,47 @@
         },
         {
           "command": "basilisk.memoryMenu",
-          "when": "basilisk.debugging && basilisk.profilingEnabled"
+          "when": "basilisk.debugging"
         },
         {
           "command": "basilisk.memoryStart",
-          "when": "basilisk.debugging && basilisk.profilingEnabled"
+          "when": "basilisk.debugging"
         },
         {
           "command": "basilisk.memorySnapshot",
-          "when": "basilisk.debugging && basilisk.profilingEnabled"
+          "when": "basilisk.debugging"
         },
         {
           "command": "basilisk.memoryDiff",
-          "when": "basilisk.debugging && basilisk.profilingEnabled"
+          "when": "basilisk.debugging"
         },
         {
           "command": "basilisk.memoryGcCollect",
-          "when": "basilisk.debugging && basilisk.profilingEnabled"
+          "when": "basilisk.debugging"
         },
         {
           "command": "basilisk.memoryReferences",
-          "when": "basilisk.debugging && basilisk.profilingEnabled"
+          "when": "basilisk.debugging"
         },
         {
           "command": "basilisk.memoryStop",
-          "when": "basilisk.debugging && basilisk.profilingEnabled"
+          "when": "basilisk.debugging"
         }
       ],
       "debug/toolBar": [
         {
           "command": "basilisk.memorySnapshot",
-          "when": "debugType == basilisk-debug && basilisk.memoryTracking && basilisk.profilingEnabled",
+          "when": "debugType == basilisk-debug && basilisk.memoryTracking",
           "group": "navigation@1"
         },
         {
           "command": "basilisk.memoryDiff",
-          "when": "debugType == basilisk-debug && basilisk.memoryTracking && basilisk.profilingEnabled",
+          "when": "debugType == basilisk-debug && basilisk.memoryTracking",
           "group": "navigation@2"
         },
         {
           "command": "basilisk.memoryStop",
-          "when": "debugType == basilisk-debug && basilisk.memoryTracking && basilisk.profilingEnabled",
+          "when": "debugType == basilisk-debug && basilisk.memoryTracking",
           "group": "navigation@3"
         }
       ],
@@ -613,13 +579,13 @@
         "command": "basilisk.profileStart",
         "key": "ctrl+shift+p ctrl+shift+s",
         "mac": "cmd+shift+p cmd+shift+s",
-        "when": "editorLangId == python && basilisk.profilingEnabled"
+        "when": "editorLangId == python"
       },
       {
         "command": "basilisk.profileStop",
         "key": "ctrl+shift+p ctrl+shift+x",
         "mac": "cmd+shift+p cmd+shift+x",
-        "when": "basilisk.profiling && basilisk.profilingEnabled"
+        "when": "basilisk.profiling"
       }
     ],
     "breakpoints": [

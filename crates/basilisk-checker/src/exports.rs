@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use basilisk_resolver::scope::{ExternalSymbol, ExternalSymbolKind, ImportKind};
+use basilisk_resolver::scope::{ExternalMethod, ExternalSymbol, ExternalSymbolKind, ImportKind};
 use basilisk_resolver::Span;
 use basilisk_stubs::types::{StubFunction, StubSource, StubTier};
 use basilisk_stubs::TypeProvenance;
@@ -45,11 +45,24 @@ pub fn extract_exports(
                 source_span: func.name_span,
                 signature: Some(signature),
                 provenance: Some(TypeProvenance::Source),
+                methods: Vec::new(),
             },
         ));
     }
 
     for class in &resolved.classes {
+        // Keep the class's methods so importers can hover inherited member
+        // access (GitHub #287). `resolved.functions` holds methods too, tagged
+        // with their enclosing class name.
+        let methods = resolved
+            .functions
+            .iter()
+            .filter(|func| func.class_name.as_deref() == Some(class.name.as_str()))
+            .map(|func| ExternalMethod {
+                name: func.name.clone(),
+                signature: build_function_signature(func, &resolved.source),
+            })
+            .collect();
         exports.push((
             class.name.clone(),
             ExternalSymbol {
@@ -60,6 +73,7 @@ pub fn extract_exports(
                 source_span: class.name_span,
                 signature: Some(format!("class {}", class.name)),
                 provenance: Some(TypeProvenance::Source),
+                methods,
             },
         ));
     }
@@ -80,6 +94,7 @@ pub fn extract_exports(
                 source_span: var.name_span,
                 signature: None,
                 provenance: Some(TypeProvenance::Source),
+                methods: Vec::new(),
             },
         ));
     }
@@ -126,11 +141,22 @@ pub fn extract_stub_exports(
                 source_span: Span::new(0, 0),
                 signature: Some(build_stub_signature(func)),
                 provenance,
+                methods: Vec::new(),
             },
         ));
     }
 
     for class in stub.classes.values() {
+        // Keep the stub class's methods so importers can hover inherited
+        // member access (GitHub #287).
+        let methods = class
+            .methods
+            .iter()
+            .map(|method| ExternalMethod {
+                name: method.name.clone(),
+                signature: build_stub_signature(method),
+            })
+            .collect();
         exports.push((
             class.name.clone(),
             ExternalSymbol {
@@ -141,6 +167,7 @@ pub fn extract_stub_exports(
                 source_span: Span::new(0, 0),
                 signature: Some(format!("class {}", class.name)),
                 provenance,
+                methods,
             },
         ));
     }
@@ -156,6 +183,7 @@ pub fn extract_stub_exports(
                 source_span: Span::new(0, 0),
                 signature: None,
                 provenance,
+                methods: Vec::new(),
             },
         ));
     }

@@ -12,7 +12,6 @@ use crate::scope::{
 use super::annotations::strip_annotated_wrapper;
 use super::class_info_ext::expr_simple_name;
 use super::core::{check_td_stmts, text_range_to_span};
-use super::final_readonly::TYPING_FORMS;
 use super::typeddict_ext::{expr_literal_type_name, typeddict_field_type_compatible};
 
 pub(super) fn collect_typeddict_calls(stmts: &[Stmt]) -> Vec<TypedDictCallInfo> {
@@ -84,28 +83,6 @@ pub(super) fn collect_typeddict_calls(stmts: &[Stmt]) -> Vec<TypedDictCallInfo> 
         });
     }
     out
-}
-
-/// Collect module-level `NewType(...)` call sites.
-///
-/// Matches assignments of the form `Name = NewType("Name", BaseType)`.
-pub(super) fn expr_is_parameterized(expr: &Expr) -> bool {
-    match expr {
-        Expr::Subscript(sub) => {
-            // Skip well-known typing forms: Literal["x"], Optional[T], etc.
-            let base_name = expr_simple_name(&sub.value);
-            if base_name
-                .as_deref()
-                .is_some_and(|n| TYPING_FORMS.contains(&n))
-            {
-                return false;
-            }
-            true
-        }
-        Expr::BinOp(bin) => expr_is_parameterized(&bin.left) || expr_is_parameterized(&bin.right),
-        Expr::Tuple(tup) => tup.elts.iter().any(expr_is_parameterized),
-        _ => false,
-    }
 }
 
 /// Extracts the name from a PEP 695 `TypeParam` (`TypeVar`, `TypeVarTuple`, or `ParamSpec`).

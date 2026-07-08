@@ -69,13 +69,8 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
 /// We need transitive lookup because `class Child(TypedDictBase):` is also a
 /// `TypedDict` even though `is_typed_dict` is only set on direct `TypedDict` inheritors.
 fn is_in_typed_dict_hierarchy(cls: &ClassInfo, class_map: &HashMap<&str, &ClassInfo>) -> bool {
-    if cls.is_typed_dict {
-        return true;
-    }
-    cls.bases.iter().any(|base| {
-        class_map
-            .get(base.as_str())
-            .is_some_and(|b| is_in_typed_dict_hierarchy(b, class_map))
+    super::shared::class_or_base_matches(cls, &|name| class_map.get(name).copied(), &|candidate| {
+        candidate.is_typed_dict
     })
 }
 

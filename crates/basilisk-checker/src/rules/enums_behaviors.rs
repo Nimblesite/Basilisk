@@ -29,15 +29,13 @@ const CODE: ErrorCode = ErrorCode {
 
 /// Returns `true` when this class is an enum class (directly or transitively).
 fn is_enum_class(name: &str, class_map: &HashMap<&str, &ClassInfo>) -> bool {
-    let Some(cls) = class_map.get(name) else {
-        return false;
-    };
-    if cls.is_enum {
-        return true;
-    }
-    cls.bases
-        .iter()
-        .any(|b| is_enum_class(b.as_str(), class_map))
+    class_map.get(name).copied().is_some_and(|cls| {
+        super::shared::class_or_base_matches(
+            cls,
+            &|base| class_map.get(base).copied(),
+            &|candidate| candidate.is_enum,
+        )
+    })
 }
 
 /// Returns `true` when an enum class has any declared members (non-method attributes).

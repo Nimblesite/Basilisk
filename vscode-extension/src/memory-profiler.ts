@@ -60,15 +60,12 @@ const pendingSnapshotCleanup = new Map<string, string>();
 // ── Registration ──────────────────────────────────────────────────────────
 
 /** Register memory profiler commands and UI components. */
-export function registerMemoryProfiler(
-  context: vscode.ExtensionContext,
-  store: Store,
-): vscode.Disposable[] {
+export function registerMemoryProfiler(store: Store): vscode.Disposable[] {
   boundStore = store;
   return [
     // The memory status-bar item — its whole lifecycle (idle affordance,
     // starting spinner, tracking readout) lives in memory-status.ts.
-    ...bindMemoryStatusBar(context, store),
+    ...bindMemoryStatusBar(store),
     ...memoryCommandDisposables(store),
   ];
 }
@@ -347,7 +344,7 @@ async function handleMemoryStart(
 async function handleMemorySnapshot(store: Store): Promise<void> {
   const result = await runMemoryScript(store, LSP_MEM_CMD.snapshot);
   if (result?.kind === "snapshot") {
-    presentSnapshot(result, { openNativeViewer: true });
+    presentSnapshot(result, { openResultsView: true });
   }
 }
 
@@ -395,7 +392,7 @@ async function finalizeMemorySessionOnEnd(store: Store): Promise<void> {
       arguments: [{ memorySessionId, output }],
     });
     if (result?.kind === "snapshot") {
-      presentSnapshot(result, { openNativeViewer: true });
+      presentSnapshot(result, { openResultsView: true });
       void vscode.window.showInformationMessage(
         "Basilisk: Captured a final memory snapshot at exit — opened the allocation view.",
       );

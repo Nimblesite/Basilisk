@@ -50,29 +50,47 @@ pub(super) struct GenericAlias {
     def_text: String,
 }
 
-/// Alias-resolution context: legacy `Union` aliases plus generic
-/// (`TypeVar`-parameterised) aliases, both keyed by lowercase base name.
+/// Alias-resolution context: legacy value aliases (`Union` or concrete
+/// container bodies) plus generic (`TypeVar`-parameterised) aliases, both
+/// keyed by lowercase base name.
 pub(super) struct AliasCtx<'a> {
     pub(super) union: &'a HashMap<String, InferredType>,
     pub(super) generic: &'a HashMap<String, GenericAlias>,
 }
 
-/// Collect module-level value-style type aliases whose definition is a `Union`.
+/// Collect module-level value-style type aliases: `Union` definitions plus
+/// concrete structural containers.
 ///
-/// These are legacy aliases written as `Name = Union[...]` or `Name = a | b | …`
-/// (no annotation). Restricting to `Union` definitions deliberately excludes
-/// generic (`list[...]`-bodied) aliases, which [`collect_generic_aliases`]
-/// handles instead.
-pub(super) fn collect_union_aliases(module: &ResolvedModule) -> HashMap<String, InferredType> {
+/// These are legacy aliases written without annotation, e.g. `Name = Union[...]`,
+/// `Name = a | b | …`, or `Name = dict[tuple[str, str], str]`. Container-bodied
+/// definitions that reference a module `TypeVar` are deliberately excluded —
+/// [`collect_generic_aliases`] handles those with `TypeVar` substitution.
+pub(super) fn collect_value_aliases(module: &ResolvedModule) -> HashMap<String, InferredType> {
+    let typevars: HashSet<String> = module
+        .typevar_calls
+        .iter()
+        .map(|tv| tv.name.to_ascii_lowercase())
+        .collect();
     let mut aliases = HashMap::new();
     for var in &module.module_vars {
         if var.has_annotation {
             continue;
         }
-        let Some(def) = alias_definition(var, &module.source) else {
+        let Some(text) = alias_rhs_text(var, &module.source) else {
             continue;
         };
-        if matches!(def, InferredType::Union(_)) {
+        let def = InferredType::from_annotation(text.trim());
+        let include = match def {
+            InferredType::Union(_) => true,
+            InferredType::Dict(..)
+            | InferredType::List(_)
+            | InferredType::Set(_)
+            | InferredType::Tuple(_) => {
+                free_typevars(&text.to_ascii_lowercase(), &typevars).is_empty()
+            }
+            _ => false,
+        };
+        if include {
             let _ = aliases.insert(var.name.to_ascii_lowercase(), def);
         }
     }
@@ -175,13 +193,6 @@ pub(super) fn alias_value_assignable(
         return Some(match_named_target(value, declared_name, ctx, 0));
     }
     None
-}
-
-/// Parse a variable's RHS source text into the alias definition type.
-fn alias_definition(var: &VariableInfo, source: &str) -> Option<InferredType> {
-    Some(InferredType::from_annotation(
-        alias_rhs_text(var, source)?.trim(),
-    ))
 }
 
 /// The trimmed RHS source text of an alias assignment, if non-empty.

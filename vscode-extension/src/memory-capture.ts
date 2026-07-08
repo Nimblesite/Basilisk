@@ -26,7 +26,6 @@ import { withUserProgress } from "./progress-ops";
 import {
   toDashboardDiff,
   toDashboardSnapshot,
-  asString,
   asNumber,
   type MemoryIngestResult,
 } from "./memory-dashboard-mapping";
@@ -41,8 +40,6 @@ import {
   type MemoryDiffResult,
   type MemorySnapshotResult,
 } from "./memory-decorations";
-import { openNativeProfileViewerBeside } from "./profiler-flamegraph-html";
-
 // ── LSP command ids ─────────────────────────────────────────────────────────
 
 /** The `basilisk.memory.*` LSP command names (one round-trip leg each). */
@@ -256,15 +253,15 @@ export async function runMemoryScript(
 
 /**
  * Land a snapshot result: paint the purple allocation track, append a timeline
- * point, and retain it for a later "Compare". With `openNativeViewer`, open the
- * V8 `.heapprofile` in the built-in viewer (the manual "Take Memory Snapshot"
- * affordance), falling back to the Basilisk dashboard; without it (the autopilot's
- * quiet per-pass capture) only the decorations + timeline update — the diff step
- * surfaces the dashboard.
+ * point, and retain it for a later "Compare". With `openResultsView` (the
+ * manual "Take Memory Snapshot" affordance), open the Basilisk memory dashboard
+ * — the raw V8 `.heapprofile` stays one click away on its own button
+ * ([PROFILE-NATIVE]). Without it (the autopilot's quiet per-pass capture) only
+ * the decorations + timeline update — the diff step surfaces the dashboard.
  */
 export function presentSnapshot(
   result: MemoryIngestResult,
-  options: { openNativeViewer: boolean },
+  options: { openResultsView: boolean },
 ): void {
   applyMemoryDecorations(result as unknown as MemorySnapshotResult);
   const dashboard = toDashboardSnapshot(result);
@@ -272,10 +269,8 @@ export function presentSnapshot(
   dashboard.timeline = [...captureTimeline];
   lastDashboardSnapshot = dashboard;
   Logger.info(`Memory snapshot: ${dashboard.currentMemory} bytes current`);
-  if (options.openNativeViewer) {
-    void openNativeProfileViewerBeside(asString(result.heapProfilePath), () => {
-      openMemoryDashboard(dashboard);
-    });
+  if (options.openResultsView) {
+    openMemoryDashboard(dashboard);
   }
 }
 
@@ -317,7 +312,7 @@ export async function captureSnapshotAndDiff(
       store, command: LSP_MEM_CMD.snapshot, extraArgs: {}, report, quiet: true,
     });
     if (snapshotResult?.kind === "snapshot") {
-      presentSnapshot(snapshotResult, { openNativeViewer: false });
+      presentSnapshot(snapshotResult, { openResultsView: false });
     }
     const diffResult = await runMemoryOperation({
       store, command: LSP_MEM_CMD.diff, extraArgs: {}, report, quiet: true,

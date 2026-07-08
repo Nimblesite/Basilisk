@@ -33,6 +33,7 @@ fn hover_on_custom_typeshed_symbol_shows_custom_annotation() -> Result<(), Strin
             source_span: Span::new(0, 0),
             signature: Some("def uname() -> str".to_owned()),
             provenance: Some(basilisk_stubs::TypeProvenance::StubCustomTypeshed),
+            methods: Vec::new(),
         },
     );
 

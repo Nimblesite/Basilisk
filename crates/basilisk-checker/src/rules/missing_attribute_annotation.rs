@@ -129,14 +129,18 @@ fn parent_has_annotated_attr(
     class: &ClassInfo,
     all_classes: &[ClassInfo],
 ) -> bool {
+    let resolve = |base: &str| all_classes.iter().find(|candidate| candidate.name == base);
+    let declares_annotated = |candidate: &ClassInfo| {
+        candidate
+            .attributes
+            .iter()
+            .any(|a| a.name == attr_name && a.has_annotation)
+    };
+    // Only ancestors count — the class's own (unannotated) declaration is the
+    // one under scrutiny, so the walk starts from each base.
     class.bases.iter().any(|base_name| {
-        all_classes.iter().any(|candidate| {
-            candidate.name == *base_name
-                && (candidate
-                    .attributes
-                    .iter()
-                    .any(|a| a.name == attr_name && a.has_annotation)
-                    || parent_has_annotated_attr(attr_name, candidate, all_classes))
+        resolve(base_name).is_some_and(|candidate| {
+            super::shared::class_or_base_matches(candidate, &resolve, &declares_annotated)
         })
     })
 }

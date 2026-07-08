@@ -215,18 +215,29 @@ pub(super) fn resolve_inherited_settings<'a>(
     module: &'a ResolvedModule,
     direct_settings: &HashMap<&'a str, TransformClassSettings>,
 ) -> Option<TransformClassSettings> {
+    let mut visited = std::collections::HashSet::new();
+    settings_walk(cls_name, module, direct_settings, &mut visited)
+}
+
+/// Recursive body of [`resolve_inherited_settings`]; `visited` breaks
+/// base-name cycles (GitHub #278).
+fn settings_walk<'a>(
+    cls_name: &'a str,
+    module: &'a ResolvedModule,
+    direct_settings: &HashMap<&'a str, TransformClassSettings>,
+    visited: &mut std::collections::HashSet<&'a str>,
+) -> Option<TransformClassSettings> {
+    if !visited.insert(cls_name) {
+        return None;
+    }
     if let Some(s) = direct_settings.get(cls_name) {
         return Some(s.clone());
     }
 
     let cls = module.classes.iter().find(|c| c.name == cls_name)?;
-    for base in &cls.bases {
-        if let Some(s) = resolve_inherited_settings(base, module, direct_settings) {
-            return Some(s);
-        }
-    }
-
-    None
+    cls.bases
+        .iter()
+        .find_map(|base| settings_walk(base, module, direct_settings, visited))
 }
 
 /// Return the byte offset of the start of a 1-based line.
