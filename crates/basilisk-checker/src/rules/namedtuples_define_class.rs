@@ -252,16 +252,13 @@ fn collect_base_namedtuple_fields<'a>(
 
 /// Check if a class transitively inherits from `NamedTuple`.
 fn is_transitive_namedtuple(class: &ClassInfo, class_map: &HashMap<&str, &ClassInfo>) -> bool {
-    for base_name in &class.bases {
-        let stripped = base_name.split('[').next().unwrap_or_default();
-        if stripped == "NamedTuple" {
-            return true;
-        }
-        if let Some(base_class) = class_map.get(stripped) {
-            if is_transitive_namedtuple(base_class, class_map) {
-                return true;
-            }
-        }
-    }
-    false
+    super::shared::any_base_name_matches(
+        class,
+        &|base| {
+            class_map
+                .get(base.split('[').next().unwrap_or_default())
+                .copied()
+        },
+        &|base| base.split('[').next().unwrap_or_default() == "NamedTuple",
+    )
 }

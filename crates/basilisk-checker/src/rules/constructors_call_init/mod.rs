@@ -762,12 +762,27 @@ fn collect_dataclass_fields<'a>(
     class_map: &HashMap<&str, &'a basilisk_resolver::ClassInfo>,
     fields: &mut std::collections::HashSet<&'a str>,
 ) {
+    let mut visited = std::collections::HashSet::new();
+    let _ = visited.insert(class_info.name.as_str());
+    dataclass_fields_walk(class_info, class_map, fields, &mut visited);
+}
+
+/// Recursive body of [`collect_dataclass_fields`]; `visited` breaks base-name
+/// cycles (GitHub #278).
+fn dataclass_fields_walk<'a>(
+    class_info: &'a basilisk_resolver::ClassInfo,
+    class_map: &HashMap<&str, &'a basilisk_resolver::ClassInfo>,
+    fields: &mut std::collections::HashSet<&'a str>,
+    visited: &mut std::collections::HashSet<&'a str>,
+) {
     for attr in &class_info.attributes {
         let _ = fields.insert(attr.name.as_str());
     }
     for base_name in &class_info.bases {
-        if let Some(base_info) = class_map.get(base_name.as_str()) {
-            collect_dataclass_fields(base_info, class_map, fields);
+        if visited.insert(base_name.as_str()) {
+            if let Some(base_info) = class_map.get(base_name.as_str()) {
+                dataclass_fields_walk(base_info, class_map, fields, visited);
+            }
         }
     }
 }

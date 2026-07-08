@@ -190,13 +190,27 @@ pub(super) fn is_namedtuple_class(
     class_info: &ClassInfo,
     class_map: &HashMap<&str, &ClassInfo>,
 ) -> bool {
+    let mut visited = std::collections::HashSet::new();
+    let _ = visited.insert(class_info.name.as_str());
+    namedtuple_walk(class_info, class_map, &mut visited)
+}
+
+/// Recursive body of [`is_namedtuple_class`]; `visited` breaks base-name
+/// cycles (GitHub #278).
+fn namedtuple_walk<'a>(
+    class_info: &'a ClassInfo,
+    class_map: &HashMap<&str, &'a ClassInfo>,
+    visited: &mut std::collections::HashSet<&'a str>,
+) -> bool {
     for base_name in all_base_names(class_info) {
         if base_name == "NamedTuple" {
             return true;
         }
-        if let Some(base_class) = class_map.get(base_name) {
-            if is_namedtuple_class(base_class, class_map) {
-                return true;
+        if visited.insert(base_name) {
+            if let Some(base_class) = class_map.get(base_name) {
+                if namedtuple_walk(base_class, class_map, visited) {
+                    return true;
+                }
             }
         }
     }
@@ -214,6 +228,18 @@ pub(super) fn is_namedtuple_class(
 pub(super) fn namedtuple_fields<'a>(
     class_info: &'a ClassInfo,
     class_map: &HashMap<&str, &'a ClassInfo>,
+) -> Vec<&'a basilisk_resolver::AttributeInfo> {
+    let mut visited = std::collections::HashSet::new();
+    let _ = visited.insert(class_info.name.as_str());
+    namedtuple_fields_walk(class_info, class_map, &mut visited)
+}
+
+/// Recursive body of [`namedtuple_fields`]; `visited` breaks base-name cycles
+/// (GitHub #278).
+fn namedtuple_fields_walk<'a>(
+    class_info: &'a ClassInfo,
+    class_map: &HashMap<&str, &'a ClassInfo>,
+    visited: &mut std::collections::HashSet<&'a str>,
 ) -> Vec<&'a basilisk_resolver::AttributeInfo> {
     let own_annotated = || {
         class_info
@@ -234,8 +260,8 @@ pub(super) fn namedtuple_fields<'a>(
     // Subclass of another `NamedTuple` class: inherit that base's fields only.
     for base_name in all_base_names(class_info) {
         if let Some(base_class) = class_map.get(base_name) {
-            if is_namedtuple_class(base_class, class_map) {
-                return namedtuple_fields(base_class, class_map);
+            if is_namedtuple_class(base_class, class_map) && visited.insert(base_name) {
+                return namedtuple_fields_walk(base_class, class_map, visited);
             }
         }
     }

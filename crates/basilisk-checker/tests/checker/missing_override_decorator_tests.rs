@@ -124,6 +124,32 @@ fn fires_on_3_12_target() {
     );
 }
 
+// Issue #278: `class Client(httpx.Client)` records the base under its
+// attribute name `Client`, which collides with the class's own name — the
+// class map then resolves the "base" back to the class itself. The
+// transitive-Protocol walk must not recurse forever on that self-referential
+// chain (stack overflow, SIGABRT crash loop in the LSP), and the class must
+// not be treated as overriding its own methods.
+
+#[test]
+fn self_named_external_base_does_not_overflow_or_fire() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+import httpx
+
+class Client(httpx.Client):
+    def request(self) -> None:
+        pass
+";
+    let diags = run_with_config(source, &annotation_rules_config())?;
+    assert!(
+        !codes(&diags).contains(&"BSK-E0025"),
+        "a class is not an override of itself; base-name collision with an \
+         external attribute base must not fire BSK-E0025: {:?}",
+        codes(&diags)
+    );
+    Ok(())
+}
+
 #[test]
 fn protocol_class_exempt() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
