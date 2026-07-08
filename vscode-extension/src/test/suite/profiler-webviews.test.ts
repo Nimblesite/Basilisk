@@ -50,6 +50,7 @@ function dashboardSnapshot(overrides: Partial<MemoryDashboardSnapshot> = {}): Me
         gcCounts: [700, 12, 3],
         topAllocations: [{ file: '/app/main.py', line: 10, size: 4096, count: 8 }],
         timeline: [],
+        heapProfilePath: '',
         ...overrides,
     };
 }
@@ -92,6 +93,43 @@ suite('Profiler webviews — shared host hardening', () => {
         );
         assert.ok(html.includes('escapeHtml(basename(a.file))'), 'allocation paths must be escaped before innerHTML');
         assert.ok(html.includes('escapeHtml(lk.reason)'), 'leak reasons must be escaped before innerHTML');
+    });
+
+    // [PROFILE-NATIVE] The dashboard is the landing view for memory results;
+    // the raw V8 .heapprofile opens on demand from its own button, and no
+    // button is rendered when no trace was written.
+    test('the dashboard offers the raw heap profile via a button only when one exists', () => {
+        const withTrace = buildMemoryDashboardHtml(
+            dashboardSnapshot({ heapProfilePath: '/tmp/basilisk-mem-1.heapprofile' }),
+        );
+        assert.ok(
+            withTrace.includes('Open Heap Profile in VS Code Viewer'),
+            'the dashboard must offer opening the native .heapprofile viewer',
+        );
+        assert.ok(
+            withTrace.includes('openHeapProfile'),
+            'the heap-profile button must post a message the extension handles',
+        );
+        assert.ok(
+            withTrace.includes('Open in Speedscope (external)'),
+            'the dashboard must offer the speedscope deep link (speedscope imports .heapprofile)',
+        );
+        assert.ok(
+            withTrace.includes('openSpeedscope'),
+            'the speedscope button must post a message the extension handles',
+        );
+
+        // The action script always references the ids defensively; only the
+        // BUTTON ELEMENTS (their visible labels) must be absent without a trace.
+        const withoutTrace = buildMemoryDashboardHtml(dashboardSnapshot());
+        assert.ok(
+            !withoutTrace.includes('Open Heap Profile in VS Code Viewer'),
+            'no heap-profile button may render when no .heapprofile was written',
+        );
+        assert.ok(
+            !withoutTrace.includes('Open in Speedscope (external)'),
+            'no speedscope button may render when no .heapprofile was written',
+        );
     });
 
     test('retention graph HTML is CSP-locked and hostile type names/reprs cannot escape', () => {

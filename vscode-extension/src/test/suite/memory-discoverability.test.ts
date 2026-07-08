@@ -95,6 +95,7 @@ function dashboardSnapshot(): MemoryDashboardSnapshot {
     gcCounts: [700, 12, 3],
     topAllocations: [{ file: "/app/main.py", line: 10, size: 4096, count: 8 }],
     timeline: [],
+    heapProfilePath: "",
   };
 }
 

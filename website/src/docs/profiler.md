@@ -67,7 +67,7 @@ Stopping a session opens the **Basilisk Profiler** panel beside your source:
 - **Flame graph** — with an **Open Interactive Flame Graph** button for the zoom-and-search SVG
 - **Hot functions / hot lines tables** — click any row to jump to the source line
 - **Open Trace in VS Code Viewer** — opens the raw trace in VS Code's built-in profile viewer (the same flame chart and bottom-up tables used for [Node.js profiling](https://code.visualstudio.com/docs/nodejs/profiling))
-- **Open in Speedscope (external)** — reveals the trace file and opens [speedscope.app](https://www.speedscope.app) so you can drag it in
+- **Open in Speedscope (external)** — opens [speedscope.app](https://www.speedscope.app) with the profile loaded automatically (served over a private localhost URL; a companion toast offers the file for manual drag-in if your browser blocks localhost fetches)
 
 Closed the panel? **Basilisk: Show Profile Results** re-opens it for the most recent profile.
 
@@ -103,7 +103,7 @@ While tracking, **Snapshot / Compare / Stop buttons sit directly on the debug to
 
 ### Snapshots and leak detection
 
-- **Basilisk: Take Memory Snapshot** — records the current allocation state, paints per-line allocation decorations, and opens the native `.heapprofile` view (falling back to the Basilisk memory dashboard).
+- **Basilisk: Take Memory Snapshot** — records the current allocation state, paints per-line allocation decorations, and opens the Basilisk memory dashboard; the raw V8 `.heapprofile` is one click away via the dashboard's **Open Heap Profile in VS Code Viewer** and **Open in Speedscope (external)** buttons (speedscope imports heap profiles too).
 - **Basilisk: Compare Memory Snapshots** — diffs the latest two snapshots and emits leak diagnostics on the allocating lines.
 - **Autopilot** — with `basilisk.profiler.autoSnapshotOnPause` (on by default), every debugger pause quietly captures a snapshot, and the diff surfaces when there's something to show. `basilisk.profiler.autoSnapshot` adds interval-based capture for long runs.
 

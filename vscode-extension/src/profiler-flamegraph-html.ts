@@ -15,6 +15,7 @@
 import { readFileSync } from "node:fs";
 import * as vscode from "vscode";
 import { Logger } from "./logger";
+import { serveProfileForBrowser } from "./profile-server";
 import type { ProfileResult } from "./profiler-decorations";
 import {
   PROFILER_CSS_VARS,
@@ -134,14 +135,14 @@ function traceFileFor(result: ProfileResult): string {
 
 /**
  * Open a generated profile artifact in VS Code's built-in viewer beside the
- * source, falling back to an in-extension view when no file was produced OR when
- * the built-in viewer's open throws (unavailable in the host, or a file it
- * rejects). Opening beside keeps the profiled file (and its inline decorations)
- * visible. Shared by the CPU (`.cpuprofile`) and memory (`.heapprofile`) paths
- * so the open-beside-else-fall-back primitive lives once and both get the same
- * robustness (dry-1).
+ * source, falling back when no file was produced OR when the built-in viewer's
+ * open throws (unavailable in the host, or a file it rejects). Opening beside
+ * keeps the profiled file (and its inline decorations) visible. The CPU
+ * (`.cpuprofile`) and memory (`.heapprofile`) paths share it through
+ * `openNativeTraceViewer` so the open-beside-else-fall-back primitive lives
+ * once (dry-1).
  */
-export async function openNativeProfileViewerBeside(
+async function openNativeProfileViewerBeside(
   filePath: string,
   fallback: () => void,
 ): Promise<void> {
@@ -163,12 +164,13 @@ export async function openNativeProfileViewerBeside(
 }
 
 /**
- * Open the V8 trace in VS Code's built-in viewer on demand — the user asked for
- * it explicitly (toast action or panel button), so a viewer that cannot open
- * (unavailable in the host, or no `.cpuprofile` produced) is said out loud and
- * the trace file is revealed instead; an explicit request never fails silently.
+ * Open a V8 trace (`.cpuprofile` / `.heapprofile`) in VS Code's built-in viewer
+ * on demand — the user asked for it explicitly (toast action, results-panel
+ * button, or memory-dashboard button), so a viewer that cannot open
+ * (unavailable in the host, or no trace produced) is said out loud and the
+ * trace file is revealed instead; an explicit request never fails silently.
  */
-async function openNativeTraceViewer(cpuProfilePath: string, traceFile: string): Promise<void> {
+export async function openNativeTraceViewer(cpuProfilePath: string, traceFile: string): Promise<void> {
   await openNativeProfileViewerBeside(cpuProfilePath, () => {
     void vscode.window.showWarningMessage(
       "Basilisk: VS Code's built-in trace viewer could not open the profile — revealing the trace file instead.",
@@ -226,16 +228,51 @@ export function openFlamegraphWebview(result: ProfileResult): void {
 
 /**
  * "Open in Speedscope": speedscope.app is served over https and cannot read
- * `file://` URLs, so a `#profileURL=file://…` deep link always fails with
- * "Something went wrong" ([PROFILE-VIEWER-DELIVERY]). Instead reveal the
- * speedscope JSON and open the app so the user can drag-and-drop it in.
+ * `file://` URLs — but browsers treat loopback as a potentially-trustworthy
+ * origin, so the profile is served from the extension's 127.0.0.1 server and
+ * the deep link loads it automatically ([PROFILE-VIEWER-DELIVERY]). The value
+ * is left unencoded on purpose: it contains only `:` and `/` (legal raw in a
+ * fragment), and percent-encoding it invites `vscode.Uri` re-encoding mangling.
+ * A browser without the loopback mixed-content exemption still shows
+ * speedscope's error page, so a toast always offers the drag-and-drop path;
+ * a failure to serve falls back to that path directly.
+ *
+ * Shared by the CPU results panel (speedscope JSON) and the memory dashboard
+ * (V8 `.heapprofile` — a format speedscope also imports).
  */
-async function openSpeedscopeImport(file: string): Promise<void> {
-  await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(file));
-  await vscode.env.openExternal(vscode.Uri.parse("https://www.speedscope.app/"));
-  vscode.window.showInformationMessage(
-    `Basilisk: Drag the revealed file into speedscope.app to view it — ${file}`,
+export async function openSpeedscopeImport(file: string): Promise<void> {
+  try {
+    const localUrl = await serveProfileForBrowser(file);
+    await vscode.env.openExternal(
+      vscode.Uri.parse(`https://www.speedscope.app/#profileURL=${localUrl}`),
+    );
+    void offerSpeedscopeFallback(file);
+  } catch (err: unknown) {
+    Logger.warn(
+      `Profile loopback serving failed (${err instanceof Error ? err.message : String(err)}); ` +
+        "falling back to manual speedscope import",
+    );
+    await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(file));
+    await vscode.env.openExternal(vscode.Uri.parse("https://www.speedscope.app/"));
+    vscode.window.showInformationMessage(
+      `Basilisk: Drag the revealed file into speedscope.app to view it — ${file}`,
+    );
+  }
+}
+
+/**
+ * The always-works escape hatch behind the speedscope deep link: fire-and-forget
+ * toast (sticky with a button — must not block) whose action reveals the JSON
+ * for manual drag-and-drop import.
+ */
+async function offerSpeedscopeFallback(file: string): Promise<void> {
+  const choice = await vscode.window.showInformationMessage(
+    "Basilisk: Opened in speedscope.app — if the profile doesn't load, drag the trace file in.",
+    "Reveal Trace File",
   );
+  if (choice === "Reveal Trace File") {
+    await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(file));
+  }
 }
 
 /**
@@ -429,7 +466,7 @@ function flamegraphScriptRender(): string {
       const link = document.createElement('button');
       link.className = 'action-link';
       link.textContent = 'Open in Speedscope (external)';
-      link.title = 'Reveal the trace and open speedscope.app to drag it in';
+      link.title = 'Open speedscope.app with the profile loaded automatically';
       link.onclick = () => {
         vscode.postMessage({ type: 'openSpeedscope', file: outputFile });
       };

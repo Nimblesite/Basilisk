@@ -62,7 +62,7 @@ Basilisk 性能分析器结合了两个互补的引擎：
 - **火焰图** — 附带 **Open Interactive Flame Graph** 按钮，打开可缩放搜索的 SVG
 - **热点函数 / 热点行表格** — 点击任意行跳转到源代码
 - **Open Trace in VS Code Viewer** — 在 VS Code 内置分析查看器中打开原始跟踪（与 [Node.js 分析](https://code.visualstudio.com/docs/nodejs/profiling)相同的火焰图和自底向上表格）
-- **Open in Speedscope (external)** — 显示跟踪文件并打开 [speedscope.app](https://www.speedscope.app)，将文件拖入即可查看
+- **Open in Speedscope (external)** — 打开 [speedscope.app](https://www.speedscope.app) 并自动加载分析结果（通过私有 localhost URL 提供；如果浏览器阻止 localhost 请求，配套提示框会提供文件供手动拖入）
 
 关闭了面板？**Basilisk: Show Profile Results** 会重新打开最近一次分析的结果。
 
@@ -98,7 +98,7 @@ Basilisk 性能分析器结合了两个互补的引擎：
 
 ### 快照与泄漏检测
 
-- **Basilisk: Take Memory Snapshot** — 记录当前分配状态，绘制逐行分配装饰，并打开原生 `.heapprofile` 视图（不可用时回退到 Basilisk 内存仪表盘）。
+- **Basilisk: Take Memory Snapshot** — 记录当前分配状态，绘制逐行分配装饰，并打开 Basilisk 内存仪表盘；原始 V8 `.heapprofile` 通过仪表盘的 **Open Heap Profile in VS Code Viewer** 和 **Open in Speedscope (external)** 按钮一键打开（speedscope 也支持导入堆分析文件）。
 - **Basilisk: Compare Memory Snapshots** — 对比最近两个快照，并在分配行上发出泄漏诊断。
 - **自动驾驶** — 启用 `basilisk.profiler.autoSnapshotOnPause`（默认开启）后，每次调试器暂停都会静默捕获快照，有值得展示的内容时才显示对比结果。`basilisk.profiler.autoSnapshot` 为长时间运行增加按间隔捕获。
 

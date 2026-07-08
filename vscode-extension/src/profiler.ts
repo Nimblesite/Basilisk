@@ -27,6 +27,7 @@ import {
   openFlamegraphWebview,
   presentProfileResult,
 } from "./profiler-flamegraph-html";
+import { disposeProfileServer } from "./profile-server";
 import { shouldProfileOnLaunch, waitForDebuggeePid } from "./profiler-launch";
 import { bindProfilerStatusBar, registerProgressListener } from "./profiler-status";
 
@@ -505,5 +506,6 @@ async function handleProfileAttachToDebug(store: Store): Promise<void> {
 export function disposeProfiler(): void {
   disposeProfileDecorations();
   disposeFlamegraphPanel();
+  disposeProfileServer();
   lastResult = undefined;
 }
