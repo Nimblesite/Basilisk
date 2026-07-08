@@ -860,6 +860,40 @@ mod tests {
         );
     }
 
+    /// Strip ANSI escape sequences (`ESC [ ... m`) so column positions can be
+    /// measured on the plain text.
+    fn strip_ansi(text: &str) -> String {
+        let mut out = String::new();
+        let mut chars = text.chars();
+        while let Some(c) = chars.next() {
+            if c == '\x1b' {
+                for next in chars.by_ref() {
+                    if next == 'm' {
+                        break;
+                    }
+                }
+            } else {
+                out.push(c);
+            }
+        }
+        out
+    }
+
+    /// Issue #279: every gutter row must place its `|` in the same column as
+    /// the source row's `|`, otherwise the caret underline renders shifted
+    /// relative to the source text. Span 8..9 covers `x`, so the caret must
+    /// sit exactly beneath it.
+    #[test]
+    fn format_snippet_gutter_pipes_align_with_source_row() {
+        force_colors();
+        let out = strip_ansi(&render_snippet("def foo(x): pass", 8, 9, Severity::Error));
+        assert_eq!(
+            out,
+            "  |\n1 | def foo(x): pass\n  |         ^\n  |\n",
+            "gutter rows must align with the source row (issue #279)"
+        );
+    }
+
     /// Verify `format_snippet` produces correct underline length.
     #[test]
     fn format_snippet_arithmetic_properties() {

@@ -146,13 +146,13 @@ pub(super) fn format_snippet(
     let underline = color_severity(severity, &"^".repeat(underline_len));
 
     let mut out = String::new();
-    let _ = writeln!(out, "{pad}   {pipe}");
+    let _ = writeln!(out, "{pad} {pipe}");
     let _ = writeln!(out, "{line_num_str} {pipe} {line_text}");
     let _ = writeln!(
         out,
-        "{pad}   {pipe} {spaces}{underline}",
+        "{pad} {pipe} {spaces}{underline}",
         spaces = " ".repeat(col_start),
     );
-    let _ = writeln!(out, "{pad}   {pipe}");
+    let _ = writeln!(out, "{pad} {pipe}");
     out
 }
