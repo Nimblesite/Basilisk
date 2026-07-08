@@ -10,7 +10,11 @@ use std::collections::HashMap;
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
 /// Returns `true` when a function is in a "stub context" — a context where
-/// annotation enforcement (E0001, E0002, E0004) should be skipped.
+/// annotation enforcement (BSK-E0001, BSK-E0002, BSK-E0004) should be skipped.
+///
+/// Implements the exemption side of [TYPEINF-FUNC-PARAMS] / [TYPEINF-FUNC-OVERLOADS]:
+/// Protocol/abstract/stub bodies legitimately omit annotations, but `@overload`
+/// variants are explicitly NOT exempt (their signatures drive resolution).
 ///
 /// A stub context is any of:
 /// - A non-`@overload` function whose body is a pure stub (only `...`, `pass`,
@@ -54,7 +58,7 @@ pub(crate) fn is_no_type_check(func: &FunctionInfo) -> bool {
 /// Returns `true` when a class is an Enum subclass.
 ///
 /// Enum members are unannotated by design — their type is `Literal[EnumClass.member]`,
-/// synthesised by the Enum metaclass.  Firing E0005 on them is a false positive.
+/// synthesised by the Enum metaclass.  Firing BSK-E0005 on them is a false positive.
 pub(crate) fn is_enum_class(class: &ClassInfo) -> bool {
     class.bases.iter().any(|b| {
         matches!(
@@ -68,14 +72,19 @@ pub(crate) fn is_enum_class(class: &ClassInfo) -> bool {
 ///
 /// Protocol attributes are interface specifications, not concrete class variables.
 /// Unannotated names in a Protocol body are structural members, not bugs.
+///
+/// Implements the gating predicate for [TYPEINF-SUBTYPING-PROTOCOL] — identifies
+/// the structural-subtyping target class. The member-by-member conformance check
+/// itself lives in the out-of-scope `protocols_subtyping` rule (see the map).
 pub(crate) fn is_protocol_class(class: &ClassInfo) -> bool {
     class.bases.iter().any(|b| b == "Protocol")
 }
 
-/// Returns `true` when a class directly inherits from `NamedTuple`.
+/// Returns `true` when a class is a `NamedTuple` subclass.
 ///
-/// `NamedTuple` classes use un-annotated attributes as class variables (not
-/// fields), so they should not require type annotations on those attributes.
+/// `NamedTuple` fields are declared as bare annotations and synthesised into a
+/// tuple by the metaclass, so strict attribute-annotation enforcement must be
+/// suspended for them.
 pub(crate) fn is_namedtuple_class(class: &ClassInfo) -> bool {
     class.bases.iter().any(|b| b == "NamedTuple")
 }
@@ -91,34 +100,33 @@ pub(crate) fn inherits_dataclass_transform(
     class: &ClassInfo,
     class_map: &HashMap<&str, &ClassInfo>,
 ) -> bool {
-    fn is_transform_decorated(class: &ClassInfo, class_map: &HashMap<&str, &ClassInfo>) -> bool {
-        class
-            .decorator_spans
-            .iter()
-            .any(|(name, _)| name == "dataclass_transform")
-            || class.bases.iter().any(|base| {
-                class_map
-                    .get(base.split('[').next().unwrap_or(base))
-                    .is_some_and(|b| is_transform_decorated(b, class_map))
-            })
-    }
-
-    let metaclass_is_transform = class.metaclass_name.as_deref().is_some_and(|meta| {
-        class_map
-            .get(meta)
-            .is_some_and(|m| is_transform_decorated(m, class_map))
-    });
-    if metaclass_is_transform {
-        return true;
-    }
-
-    class.bases.iter().any(|base| {
+    let resolve = |base: &str| {
         class_map
             .get(base.split('[').next().unwrap_or(base))
-            .is_some_and(|b| {
-                is_transform_decorated(b, class_map) || inherits_dataclass_transform(b, class_map)
+            .copied()
+    };
+    let directly_decorated = |c: &ClassInfo| {
+        c.decorator_spans
+            .iter()
+            .any(|(name, _)| name == "dataclass_transform")
+    };
+    let metaclass_is_transform = |c: &ClassInfo| {
+        c.metaclass_name.as_deref().is_some_and(|meta| {
+            class_map.get(meta).is_some_and(|m| {
+                super::shared::class_or_base_matches(m, &resolve, &directly_decorated)
             })
-    })
+        })
+    };
+
+    // A transform metaclass on this class or any transitive base…
+    super::shared::class_or_base_matches(class, &resolve, &metaclass_is_transform)
+        // …or a directly-decorated transitive base. The class's OWN decorator
+        // is the decorator-function form and intentionally does not count.
+        || class.bases.iter().any(|base| {
+            resolve(base).is_some_and(|b| {
+                super::shared::class_or_base_matches(b, &resolve, &directly_decorated)
+            })
+        })
 }
 
 // ---------------------------------------------------------------------------

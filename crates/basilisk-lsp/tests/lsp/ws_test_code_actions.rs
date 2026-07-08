@@ -15,11 +15,11 @@ async fn test_ws_code_action_missing_param_annotation() -> TestResult<()> {
 
     assert!(
         resp.contains(": Any"),
-        "E0001 action should insert ': Any': {resp}"
+        "BSK-E0001 action should insert ': Any': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "E0001 action should be quickfix: {resp}"
+        "BSK-E0001 action should be quickfix: {resp}"
     );
 
     // Hardened: parse and verify code action structure
@@ -90,11 +90,11 @@ async fn test_ws_code_action_missing_return_annotation() -> TestResult<()> {
 
     assert!(
         resp.contains("-> None"),
-        "E0002 action should insert '-> None': {resp}"
+        "BSK-E0002 action should insert '-> None': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "E0002 action should be quickfix: {resp}"
+        "BSK-E0002 action should be quickfix: {resp}"
     );
     Ok(())
 }
@@ -111,11 +111,11 @@ async fn test_ws_code_action_missing_variable_annotation_empty_list() -> TestRes
 
     assert!(
         resp.contains("list[Any]"),
-        "E0003 (empty list) action should insert 'list[Any]': {resp}"
+        "BSK-E0003 (empty list) action should insert 'list[Any]': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "E0003 action should be quickfix: {resp}"
+        "BSK-E0003 action should be quickfix: {resp}"
     );
     Ok(())
 }
@@ -132,11 +132,11 @@ async fn test_ws_code_action_missing_variable_annotation_empty_dict() -> TestRes
 
     assert!(
         resp.contains("dict[str, Any]"),
-        "E0003 (empty dict) action should insert 'dict[str, Any]': {resp}"
+        "BSK-E0003 (empty dict) action should insert 'dict[str, Any]': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "E0003 action should be quickfix: {resp}"
+        "BSK-E0003 action should be quickfix: {resp}"
     );
     Ok(())
 }
@@ -153,11 +153,11 @@ async fn test_ws_code_action_missing_variable_annotation_none() -> TestResult<()
 
     assert!(
         resp.contains(": Any"),
-        "E0003 (None) action should insert ': Any': {resp}"
+        "BSK-E0003 (None) action should insert ': Any': {resp}"
     );
     assert!(
         resp.contains("quickfix"),
-        "E0003 action should be quickfix: {resp}"
+        "BSK-E0003 action should be quickfix: {resp}"
     );
     Ok(())
 }
@@ -227,19 +227,12 @@ async fn test_ws_code_action_suppress_inserts_at_end_of_line() -> TestResult<()>
 
 #[tokio::test]
 async fn test_ws_code_action_organize_imports() -> TestResult<()> {
-    // Skip if ruff is not installed.
-    if std::process::Command::new("ruff")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
-        return Ok(());
-    }
-
+    // Import hygiene is native ([LSPFMT-IMPORTS]) — no ruff binary required,
+    // so the action MUST appear for unsorted imports. Issue #261.
     let mut fixture = WsTestFixture::new().await?;
     let _ = fixture.initialize().await?;
 
-    // Deliberately unsorted imports — ruff should reorder them.
+    // Deliberately unsorted imports — json must move before os.
     let code = "import os\nimport sys\nfrom typing import Optional\nimport json\n\nx: int = 1\n";
     fixture.did_open("file:///ca_org.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await?;
@@ -256,37 +249,25 @@ async fn test_ws_code_action_organize_imports() -> TestResult<()> {
         )
         .await?;
 
-    // The organize-imports action may or may not fire depending on whether
-    // the given imports are already sorted by ruff. Just check that when it
-    // does appear, it carries the correct kind.
-    if let Some(resp_str) = resp {
-        if resp_str.contains("Organize imports") {
-            assert!(
-                resp_str.contains("source.organizeImports"),
-                "organize imports action should have organizeImports kind: {resp_str}"
-            );
-        }
-    }
+    let resp_str = resp.ok_or("no codeAction response")?;
+    assert!(
+        resp_str.contains("Organize imports"),
+        "organize-imports action must be offered for unsorted imports: {resp_str}"
+    );
+    assert!(
+        resp_str.contains("source.organizeImports"),
+        "organize imports action should have organizeImports kind: {resp_str}"
+    );
     Ok(())
 }
 
 #[tokio::test]
 async fn test_ws_code_action_organize_imports_fixes_order() -> TestResult<()> {
-    // Skip if ruff is not installed.
-    if std::process::Command::new("ruff")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
-        return Ok(());
-    }
-
+    // Native organize ([LSPFMT-IMPORTS]) must sort with isort semantics:
+    // `from __future__` first, one blank line, then stdlib. Issue #261.
     let mut fixture = WsTestFixture::new().await?;
     let _ = fixture.initialize().await?;
 
-    // sys must come before os alphabetically; ruff will sort to: import os / import sys
-    // (actually ruff keeps stdlib imports in the order they appear unless --fix-only is used)
-    // Use a clear case: `from __future__` must be first.
     let code = "import os\nfrom __future__ import annotations\n\nx: int = 1\n";
     fixture.did_open("file:///ca_org2.py", code).await?;
     let _ = fixture.wait_for_diagnostics().await?;
@@ -303,19 +284,21 @@ async fn test_ws_code_action_organize_imports_fixes_order() -> TestResult<()> {
         )
         .await?;
 
-    if let Some(resp_str) = resp {
-        if resp_str.contains("Organize imports") {
-            // The reordered source should put `from __future__` first.
-            assert!(
-                resp_str.contains("from __future__ import annotations"),
-                "organized source should contain the moved import: {resp_str}"
-            );
-            assert!(
-                resp_str.contains("source.organizeImports"),
-                "action kind must be organizeImports: {resp_str}"
-            );
-        }
-    }
+    let resp_str = resp.ok_or("no codeAction response")?;
+    assert!(
+        resp_str.contains("Organize imports"),
+        "organize-imports action must be offered when __future__ is not first: {resp_str}"
+    );
+    // The reordered source puts `from __future__` first, then a blank line,
+    // then the stdlib import (JSON-escaped newlines in the raw response).
+    assert!(
+        resp_str.contains("from __future__ import annotations\\n\\nimport os"),
+        "organized source must move __future__ first with a section break: {resp_str}"
+    );
+    assert!(
+        resp_str.contains("source.organizeImports"),
+        "action kind must be organizeImports: {resp_str}"
+    );
     Ok(())
 }
 
@@ -324,7 +307,7 @@ async fn test_ws_code_action_e0003_all_variants() -> TestResult<()> {
     let mut fixture = WsTestFixture::new().await?;
     let _ = fixture.initialize().await?;
 
-    // All three E0003 variants in one file: empty list, empty dict, None
+    // All three BSK-E0003 variants in one file: empty list, empty dict, None
     let code = "items = []\nmapping = {}\nvalue = None\n";
     fixture
         .did_open("file:///ws_edge_ca_e0003.py", code)
@@ -337,18 +320,18 @@ async fn test_ws_code_action_e0003_all_variants() -> TestResult<()> {
         .as_array()
         .ok_or("expected diagnostics array")?;
 
-    // Verify all three E0003 diagnostics are present.
+    // Verify all three BSK-E0003 diagnostics are present.
     let e0003_diags: Vec<&serde_json::Value> = diagnostics
         .iter()
         .filter(|d| d["code"].as_str() == Some("BSK-E0003"))
         .collect();
     assert!(
         e0003_diags.len() >= 3,
-        "should have at least 3 E0003 diagnostics (list, dict, None), got {}: {diag_msg}",
+        "should have at least 3 BSK-E0003 diagnostics (list, dict, None), got {}: {diag_msg}",
         e0003_diags.len()
     );
 
-    // Request code actions for each E0003 diagnostic.
+    // Request code actions for each BSK-E0003 diagnostic.
     for (idx, target_diag) in e0003_diags.iter().enumerate() {
         let action_id = 410 + idx as u64;
         let resp = fixture
@@ -362,11 +345,13 @@ async fn test_ws_code_action_e0003_all_variants() -> TestResult<()> {
                 }),
             )
             .await?
-            .ok_or(format!("no code action response for E0003 variant {idx}"))?;
+            .ok_or(format!(
+                "no code action response for BSK-E0003 variant {idx}"
+            ))?;
 
         assert!(
             resp.contains("quickfix"),
-            "E0003 code action variant {idx} should be quickfix: {resp}"
+            "BSK-E0003 code action variant {idx} should be quickfix: {resp}"
         );
     }
     Ok(())

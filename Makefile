@@ -170,12 +170,20 @@ conformance:
 	@cargo build -p basilisk-cli --bin basilisk
 	@python3 conformance/score.py --bin target/debug/basilisk $(if $(filter 1,$(FETCH)),--fetch,)
 
-## bench: Benchmark Basilisk vs pyright/mypy/ty/pyrefly on the fixture suite.
+## bench: Benchmark Basilisk vs pyright/mypy/ty/pyrefly/zuban on the fixture suite.
 ## Requires hyperfine; competitor tools are skipped if not installed.
 ## Writes per-fixture JSON + a summary to benchmarks/results/.
 bench:
 	@cargo build --release --bin basilisk
 	@bash benchmarks/run.sh
+
+## smoke-micropython: Real-world smoke test for typeshed-path
+## [STUBRES-CUSTOM-TYPESHED] — points the checker at a pinned, unmodified
+## micropython-stdlib-stubs release and asserts MicroPython stdlib resolves
+## while CPython-only modules fall through per canonicality. Downloads one
+## wheel from PyPI (network); intentionally outside the blocking CI matrix.
+smoke-micropython:
+	@python3 scripts/smoke_micropython_typeshed.py
 
 ## reinstall-vsix: Clean rebuild + reinstall a host-targeted VSIX. Builds the
 ## EXACT package the release.yml `vsix` job ships (via the shared _release_vsix

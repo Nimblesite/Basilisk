@@ -5,10 +5,10 @@ use super::common::*;
 // Covers: e0070, e0072, e0074, e0075, e0076, e0079, e0081, e0082, e0095, e0102,
 //         e0107, e0110, e0111, e0112, e0113, e0114, e0119, e0120, e0121, e0122
 
-// --- E0070: Never type compatibility ---
+// --- Never type compatibility ---
 
 #[test]
-fn e0070_never_return_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn never_return_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Never, NoReturn
 
@@ -28,7 +28,7 @@ y: str = g()
 }
 
 #[test]
-fn e0070_never_in_union() -> Result<(), Box<dyn std::error::Error>> {
+fn never_in_union() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Never, Union
 
@@ -41,7 +41,7 @@ y: int | Never = 42
 }
 
 #[test]
-fn e0070_never_param_type() -> Result<(), Box<dyn std::error::Error>> {
+fn never_param_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Never
 
@@ -53,10 +53,10 @@ def f(x: Never) -> None:
     Ok(())
 }
 
-// --- E0072: No matching overload ---
+// --- No matching overload ---
 
 #[test]
-fn e0072_overload_with_incompatible_call() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_with_incompatible_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -77,7 +77,7 @@ result = process(3.14)
 }
 
 #[test]
-fn e0072_overload_matching_call() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_matching_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -98,7 +98,7 @@ result = double(42)
 }
 
 #[test]
-fn e0072_overload_no_args() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_no_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -118,10 +118,10 @@ result = make()
     Ok(())
 }
 
-// --- E0074: Constructor __new__ mismatch ---
+// --- Constructor __new__ mismatch ---
 
 #[test]
-fn e0074_generic_new_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_new_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar, Self
 
@@ -139,7 +139,7 @@ b = Box[int](1.0)
 }
 
 #[test]
-fn e0074_generic_new_correct() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_new_correct() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar, Self
 
@@ -157,7 +157,7 @@ b = Box[int](42)
 }
 
 #[test]
-fn e0074_explicit_cls_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn explicit_cls_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -174,10 +174,10 @@ x = MyClass[str]()
     Ok(())
 }
 
-// --- E0075: Self type attribute incompatibility ---
+// --- Self type attribute incompatibility ---
 
 #[test]
-fn e0075_self_attr_parent_instance() -> Result<(), Box<dyn std::error::Error>> {
+fn self_attr_parent_instance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Self, TypeVar, Generic
 from dataclasses import dataclass
@@ -202,7 +202,7 @@ xs = OrdinalLinkedList(value=1, next=LinkedList[int](value=2))
 }
 
 #[test]
-fn e0075_self_attr_correct() -> Result<(), Box<dyn std::error::Error>> {
+fn self_attr_correct() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Self
 from dataclasses import dataclass
@@ -218,10 +218,10 @@ n = Node(child=Node())
     Ok(())
 }
 
-// --- E0076: Overload union expansion ---
+// --- Overload union expansion ---
 
 #[test]
-fn e0076_overload_union_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_union_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload, Union
 
@@ -242,7 +242,7 @@ def caller(val: Union[int, str]) -> None:
 }
 
 #[test]
-fn e0076_overload_union_with_incompatible() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_union_with_incompatible() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload, Union
 
@@ -262,10 +262,10 @@ def caller2(val: Union[int, float]) -> None:
     Ok(())
 }
 
-// --- E0079: Module protocol incompatibility ---
+// --- Module protocol incompatibility ---
 
 #[test]
-fn e0079_module_protocol_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn module_protocol_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -281,10 +281,10 @@ x: HasTimeout = os
     Ok(())
 }
 
-// --- E0081: TypeVarTuple unpack minimum ---
+// --- TypeVarTuple unpack minimum ---
 
 #[test]
-fn e0081_typevartuple_unpack_min() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_unpack_min() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic, Any, Unpack
 
@@ -302,10 +302,10 @@ def func(z: "Array[int]") -> None:
     Ok(())
 }
 
-// --- E0082: TypeVarTuple callable mismatch ---
+// --- TypeVarTuple callable mismatch ---
 
 #[test]
-fn e0082_typevartuple_callable_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_callable_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Callable, Generic
 
@@ -319,10 +319,10 @@ def apply(f: Callable[[*Ts], None], *args: *Ts) -> None:
     Ok(())
 }
 
-// --- E0095: InitVar dataclass field ---
+// --- InitVar dataclass field ---
 
 #[test]
-fn e0095_initvar_field_access() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_field_access() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, InitVar, field
 
@@ -342,7 +342,7 @@ c = Config("test", True)
 }
 
 #[test]
-fn e0095_initvar_in_non_dataclass() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_in_non_dataclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import InitVar
 
@@ -355,7 +355,7 @@ class NotDataclass:
 }
 
 #[test]
-fn e0095_multiple_initvar_fields() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_initvar_fields() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, InitVar
 
@@ -374,10 +374,10 @@ class Server:
     Ok(())
 }
 
-// --- E0102: TypeVar default violation ---
+// --- TypeVar default violation ---
 
 #[test]
-fn e0102_typevar_default_ordering() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_ordering() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -392,7 +392,7 @@ class MyClass(Generic[T2, T1]): ...
 }
 
 #[test]
-fn e0102_typevar_default_bound_compat() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_bound_compat() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -405,7 +405,7 @@ Invalid1 = TypeVar("Invalid1", default=X1, bound=str)
 }
 
 #[test]
-fn e0102_typevar_default_constraint_superset() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_constraint_superset() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -418,7 +418,7 @@ Invalid2 = TypeVar("Invalid2", bool, complex, default=Y1)
 }
 
 #[test]
-fn e0102_typevar_default_valid() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_valid() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -432,10 +432,10 @@ class ValidClass(Generic[T1, T2]): ...
     Ok(())
 }
 
-// --- E0107: Variance incompatibility ---
+// --- Variance incompatibility ---
 
 #[test]
-fn e0107_covariant_in_param_position() -> Result<(), Box<dyn std::error::Error>> {
+fn covariant_in_param_position() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -451,7 +451,7 @@ class Container(Generic[T_co]):
 }
 
 #[test]
-fn e0107_contravariant_in_return_position() -> Result<(), Box<dyn std::error::Error>> {
+fn contravariant_in_return_position() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -467,7 +467,7 @@ class Sink(Generic[T_contra]):
 }
 
 #[test]
-fn e0107_correct_variance() -> Result<(), Box<dyn std::error::Error>> {
+fn correct_variance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -485,10 +485,10 @@ class Consumer(Generic[T_contra]):
     Ok(())
 }
 
-// --- E0110: Protocol variance violation ---
+// --- Protocol variance violation ---
 
 #[test]
-fn e0110_protocol_covariant_in_param() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_covariant_in_param() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -503,7 +503,7 @@ class Writable(Protocol[T_co]):
 }
 
 #[test]
-fn e0110_protocol_contravariant_in_return() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_contravariant_in_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -518,7 +518,7 @@ class Readable(Protocol[T_contra]):
 }
 
 #[test]
-fn e0110_protocol_correct_variance() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_correct_variance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -533,7 +533,7 @@ class Readable(Protocol[T_co]):
 }
 
 #[test]
-fn e0110_protocol_invariant_in_both() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_invariant_in_both() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -548,10 +548,10 @@ class Container(Protocol[T]):
     Ok(())
 }
 
-// --- E0111: Constructor call errors ---
+// --- Constructor call errors ---
 
 #[test]
-fn e0111_no_custom_init_with_args() -> Result<(), Box<dyn std::error::Error>> {
+fn no_custom_init_with_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Empty:
     pass
@@ -564,7 +564,7 @@ x = Empty(1, 2, 3)
 }
 
 #[test]
-fn e0111_generic_init_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_init_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -582,7 +582,7 @@ c = Container[int](1.5)
 }
 
 #[test]
-fn e0111_generic_init_correct() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_init_correct() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -600,7 +600,7 @@ c = Container[int](42)
 }
 
 #[test]
-fn e0111_class_scoped_typevar_in_self() -> Result<(), Box<dyn std::error::Error>> {
+fn class_scoped_typevar_in_self() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -616,7 +616,7 @@ class MyClass(Generic[T]):
 }
 
 #[test]
-fn e0111_no_init_no_args() -> Result<(), Box<dyn std::error::Error>> {
+fn no_init_no_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Simple:
     x: int = 0
@@ -625,16 +625,16 @@ s = Simple()
 "#;
     let diags = run(source)?;
     assert!(
-        !has_code(&diags, "BSK-E0111"),
+        !has_code(&diags, "constructors_call_init"),
         "no-arg constructor should not fire E0111"
     );
     Ok(())
 }
 
-// --- E0112: TypeGuard callable return ---
+// --- TypeGuard callable return ---
 
 #[test]
-fn e0112_typeguard_in_callable_str() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_in_callable_str() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeGuard, Callable
 
@@ -652,7 +652,7 @@ takes_str_callable(is_int)
 }
 
 #[test]
-fn e0112_typeguard_in_callable_bool() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_in_callable_bool() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeGuard, Callable
 
@@ -670,7 +670,7 @@ takes_bool_callable(is_int)
 }
 
 #[test]
-fn e0112_typeis_in_callable() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_in_callable() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeIs, Callable
 
@@ -687,10 +687,10 @@ takes_int_callable(is_str)
     Ok(())
 }
 
-// --- E0113: TypeIs inconsistent narrowing ---
+// --- TypeIs inconsistent narrowing ---
 
 #[test]
-fn e0113_typeis_inconsistent() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_inconsistent() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeIs
 
@@ -702,10 +702,10 @@ def is_int(val: str) -> TypeIs[int]:
     Ok(())
 }
 
-// --- E0114: Protocol isinstance ---
+// --- Protocol isinstance ---
 
 #[test]
-fn e0114_protocol_isinstance() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_isinstance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, runtime_checkable
 
@@ -720,7 +720,7 @@ isinstance(42, Drawable)
 }
 
 #[test]
-fn e0114_runtime_checkable_protocol() -> Result<(), Box<dyn std::error::Error>> {
+fn runtime_checkable_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, runtime_checkable
 
@@ -735,10 +735,10 @@ isinstance(42, Drawable)
     Ok(())
 }
 
-// --- E0119: Protocol isinstance overlap ---
+// --- Protocol isinstance overlap ---
 
 #[test]
-fn e0119_protocol_isinstance_overlap() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_isinstance_overlap() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, runtime_checkable
 
@@ -757,10 +757,10 @@ x: Sizeable = MyList()
     Ok(())
 }
 
-// --- E0120: Generator return type ---
+// --- Generator return type ---
 
 #[test]
-fn e0120_generator_with_non_generator_return() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_with_non_generator_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 def bad_gen() -> int:
     yield 1
@@ -771,7 +771,7 @@ def bad_gen() -> int:
 }
 
 #[test]
-fn e0120_generator_with_iterator_return() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_with_iterator_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Iterator
 
@@ -784,7 +784,7 @@ def good_gen() -> Iterator[int]:
 }
 
 #[test]
-fn e0120_generator_with_generator_return() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_with_generator_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -798,7 +798,7 @@ def gen() -> Generator[int, None, None]:
 }
 
 #[test]
-fn e0120_async_generator_invalid_return() -> Result<(), Box<dyn std::error::Error>> {
+fn async_generator_invalid_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 async def bad_async_gen() -> int:
     yield 1
@@ -809,7 +809,7 @@ async def bad_async_gen() -> int:
 }
 
 #[test]
-fn e0120_generator_yield_from() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_yield_from() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -824,10 +824,10 @@ def outer() -> Generator[int, None, None]:
     Ok(())
 }
 
-// --- E0121: Protocol conformance ---
+// --- Protocol conformance ---
 
 #[test]
-fn e0121_protocol_conformance_missing_method() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_conformance_missing_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -848,7 +848,7 @@ render(Circle())
 }
 
 #[test]
-fn e0121_protocol_conformance_satisfied() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_conformance_satisfied() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -869,10 +869,10 @@ render(Circle())
     Ok(())
 }
 
-// --- E0122: Callable arity ---
+// --- Callable arity ---
 
 #[test]
-fn e0122_callable_arity_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_arity_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -890,7 +890,7 @@ takes_binary(unary)
 }
 
 #[test]
-fn e0122_callable_arity_correct() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_arity_correct() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 
@@ -908,7 +908,7 @@ takes_binary(add)
 }
 
 #[test]
-fn e0122_callable_with_varargs() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_with_varargs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Callable
 

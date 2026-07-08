@@ -2,13 +2,16 @@
 //! Narrowing guard types collected from function bodies.
 //!
 //! These represent control-flow-sensitive type narrowing facts extracted
-//! during AST resolution. The checker's `NarrowingContext` consumes them
-//! to track narrowed variable types through branches.
+//! during AST resolution. They are collected for the planned checker
+//! narrowing engine (see NARROWPLAN Phase 1 in
+//! docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) and currently have
+//! no consumer; live narrowing for `assert_type` uses the flow environment
+//! in `visitor/assert_narrow.rs` instead ([TYPEINF-NARROWING-ASSIGN]).
 
 use super::span::Span;
 
 /// A type narrowing guard detected in a function body.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NarrowingGuard {
     /// What kind of narrowing this guard performs.
     pub kind: NarrowingGuardKind,
@@ -22,7 +25,7 @@ pub struct NarrowingGuard {
 }
 
 /// The kind of narrowing guard.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NarrowingGuardKind {
     /// `isinstance(var, Type)` — narrows `var` to `Type` in the positive branch,
     /// complement in the negative branch (§7.1).
@@ -105,7 +108,7 @@ pub enum NarrowingGuardKind {
 }
 
 /// A single `case` branch in a match statement narrowing.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MatchCaseNarrowing {
     /// The type that the match subject is narrowed to in this case.
     pub pattern_type: String,

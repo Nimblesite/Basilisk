@@ -1,5 +1,7 @@
 --- Health check tests for :checkhealth basilisk.
 ---
+--- Tests [NVIM-HEALTH-CHECK].
+---
 --- Regression coverage for issue #67: `:checkhealth basilisk` called
 --- `binary.resolve()` without the user-configured `binary_path`, so a binary
 --- reachable only via `setup({ binary_path = ... })` was falsely reported as

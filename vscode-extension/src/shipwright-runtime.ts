@@ -41,6 +41,11 @@ export interface BasiliskRuntime {
   readonly version: string | undefined;
 }
 
+// Implements [VSIX-BINARY-RESOLUTION] / [VSIX-BINARY-DISTRIBUTION] — binary
+// resolution is delegated to Shipwright (the resolution cascade is the single
+// source of truth in LSP-ARCHITECTURE-SPEC.md#LSPARCH-BINRES), which selects the
+// per-platform bundled `basilisk` binary from the VSIX (or an override) and
+// returns its executable path.
 export async function resolveBasiliskRuntime(context: vscode.ExtensionContext): Promise<BasiliskRuntime> {
   const api = await loadShipwrightApi();
   const activate = api.activateShipwright ?? api.activateDeploymentToolkit;

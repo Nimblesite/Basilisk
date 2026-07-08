@@ -4,7 +4,7 @@
 use super::{rhs::RhsKind, span::Span};
 
 /// A reference to an unhashable expression used as a dict key.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct UnhashableKeyRef {
     /// The span of the unhashable key expression.
     pub span: Span,
@@ -16,7 +16,7 @@ pub struct UnhashableKeyRef {
 ///
 /// A `@dataclass` with `eq=True` (the default) sets `__hash__` to `None`
 /// unless `frozen=True`, `unsafe_hash=True`, or the class defines `__hash__`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct UnhashableHashCallViolation {
     /// The class name that is not hashable.
     pub class_name: String,
@@ -25,7 +25,7 @@ pub struct UnhashableHashCallViolation {
 }
 
 /// A call site detected in module-level code.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CallSite {
     /// The name of the called function (simple name only; complex callees ignored).
     pub callee: String,
@@ -49,7 +49,7 @@ pub struct CallSite {
 ///
 /// Covers calls of the form `N = NamedTuple("N", [(field1, type1), ...])`.
 /// Field names are resolved by substituting `Final` string-literal constants.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NamedTupleDefInfo {
     /// The name the result is bound to (LHS of the assignment).
     pub lhs_name: String,
@@ -76,7 +76,7 @@ pub struct NamedTupleDefInfo {
 }
 
 /// Information about a module-level `TypeVar(...)` call.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "TypeVar has many boolean constraint flags"
@@ -125,7 +125,7 @@ pub struct TypeVarCallInfo {
 }
 
 /// A `match` statement with exhaustiveness information.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MatchStmtInfo {
     /// The span of the `match` keyword.
     pub span: Span,
@@ -138,7 +138,7 @@ pub struct MatchStmtInfo {
 }
 
 /// A `reveal_type(...)` call found anywhere in the module.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RevealTypeCallInfo {
     /// Number of positional arguments passed to `reveal_type`.
     pub arg_count: usize,
@@ -147,7 +147,7 @@ pub struct RevealTypeCallInfo {
 }
 
 /// An `assert_type(value, ExpectedType)` call found anywhere in the module.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AssertTypeCallInfo {
     /// Number of positional arguments passed to `assert_type`.
     pub arg_count: usize,
@@ -179,7 +179,7 @@ pub enum TypedDictSecondArgKind {
 /// Information about a module-level `TypedDict(...)` functional-syntax call.
 ///
 /// Covers calls of the form `Name = TypedDict("Name", {...})`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypedDictCallInfo {
     /// The name the result is bound to (LHS of the assignment).
     pub lhs_name: String,
@@ -200,7 +200,7 @@ pub struct TypedDictCallInfo {
 /// Information about a module-level `NewType(...)` call.
 ///
 /// Covers assignments of the form `Name = NewType("Name", BaseType)`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NewTypeCallInfo {
     /// The name the result is bound to (LHS of the assignment).
     pub lhs_name: String,
@@ -215,7 +215,7 @@ pub struct NewTypeCallInfo {
 }
 
 /// A module-level bare assignment (`name = expr`) that may re-assign a `Final`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ModuleBareAssignment {
     /// The simple name being assigned.
     pub name: String,
@@ -224,7 +224,7 @@ pub struct ModuleBareAssignment {
 }
 
 /// A module-level attribute assignment (`Class.attr = expr`).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ModuleAttrAssignment {
     /// The class/object name on the left of the dot.
     pub object_name: String,
@@ -240,7 +240,7 @@ pub struct ModuleAttrAssignment {
 ///
 /// Used to detect reads of attributes that may not be generated (e.g. `DC.__match_args__`
 /// on a dataclass with `match_args=False`).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ModuleAttrAccessInfo {
     /// The object/class name on the left of the dot.
     pub object_name: String,
@@ -266,7 +266,7 @@ pub enum CompareOp {
 /// A module-level comparison between two simple names using an ordering operator.
 ///
 /// Used to detect cross-type ordering comparisons of `order=True` dataclass instances.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ModuleOrderComparisonInfo {
     /// Name of the left operand.
     pub left_name: String,
@@ -279,7 +279,7 @@ pub struct ModuleOrderComparisonInfo {
 }
 
 /// Information about a `TypeAliasType(name, rhs, ...)` call.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeAliasTypeCallInfo {
     /// The LHS variable name.
     pub lhs_name: String,
@@ -290,7 +290,7 @@ pub struct TypeAliasTypeCallInfo {
 }
 
 /// Information about a PEP 695 `type X = rhs` statement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeStatementInfo {
     /// The alias name (`X` in `type X = rhs`).
     pub name: String,
@@ -301,7 +301,7 @@ pub struct TypeStatementInfo {
 }
 
 /// Information about an `Annotated[...]` subscription with too few arguments.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AnnotatedTooFewArgs {
     /// Span of the subscript expression.
     pub span: Span,
@@ -318,8 +318,8 @@ pub struct AnnotatedTooFewArgs {
 ///     x1: Literal["Color.RED"] = a  # E — string ≠ enum member
 /// ```
 ///
-/// Used by `BSK-E0066`.
-#[derive(Debug, Clone)]
+/// Used by `enums_member_values`.
+#[derive(Debug, Clone, PartialEq)]
 pub struct LiteralStringEnumMismatch {
     /// The variable name being assigned (e.g. `"x1"`).
     pub var_name: String,
@@ -337,8 +337,8 @@ pub struct LiteralStringEnumMismatch {
 /// that `isinstance`-guarded branches (where `f` has been narrowed to `int`) are
 /// excluded.
 ///
-/// Used by `BSK-E0065`.
-#[derive(Debug, Clone)]
+/// Used by `specialtypes_promotions`.
+#[derive(Debug, Clone, PartialEq)]
 pub struct FloatParamIntAttrAccess {
     /// The name of the parameter (e.g. `"f"`).
     pub param_name: String,
@@ -352,8 +352,8 @@ pub struct FloatParamIntAttrAccess {
 ///
 /// Represents `MyAlias: TypeAlias = SomeGeneric[int, T]` at module level.
 /// The `rhs_names` field contains all simple names referenced in the RHS expression.
-/// Used by `BSK-E0092` to check that subscript sites respect the alias arity.
-#[derive(Debug, Clone)]
+/// Used by `generics_defaults_specialization` to check that subscript sites respect the alias arity.
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeAliasDefInfo {
     /// The alias name (e.g. `"MyAlias"`).
     pub name: String,
@@ -370,7 +370,7 @@ pub struct TypeAliasDefInfo {
 }
 
 /// A module-level subscript expression (e.g. `MyGeneric[int]`) used as a statement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GenericSubscriptSite {
     /// The name of the subscripted type (e.g. `"MyGeneric"`).
     pub base_name: String,
@@ -381,7 +381,7 @@ pub struct GenericSubscriptSite {
 }
 
 /// A `TypedDict` key/value violation detected during resolution.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypedDictKeyViolation {
     /// The span of the offending expression.
     pub span: Span,
@@ -392,7 +392,7 @@ pub struct TypedDictKeyViolation {
 }
 
 /// Kind of `TypedDict` key/value violation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TypedDictKeyViolationKind {
     /// Subscript assignment with an invalid key: `td["invalid_key"] = val`.
     InvalidSubscriptKey {

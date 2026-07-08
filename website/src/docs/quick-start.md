@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "Quick Start — Type-Check Your First File in 5 Minutes"
-description: "Get started with Basilisk in 5 minutes. Install the VS Code extension, run your first type check, and see strict-by-default Python diagnostics in action."
+description: "Get started with Basilisk in 5 minutes. Install the VS Code extension, run your first type check, and see PEP-conformant Python diagnostics in action."
 keywords: basilisk, quick start, python language server, type checking, tutorial, vs code
 date: 2026-02-28
 dateModified: 2026-03-31
@@ -148,13 +148,17 @@ error[BSK-E0001]: Missing parameter type annotation for `data`
 - **`= note:`** — why the rule exists
 - **`= see:`** — link to full documentation
 
+The same information is available in your editor — hover any symbol for its inferred type:
+
+![Basilisk hover in VS Code — hovering a function shows its full inferred signature](/assets/images/vscode-hover.png)
+
 ## Step 6 — Intentional suppressions
 
 When you genuinely need to use `Any` or suppress a diagnostic, you can — but you must provide a reason:
 
 ```python
 # This suppression requires a reason comment
-result: Any = legacy_sdk_call()  # basilisk: ignore[BSK-E0011] -- tracked in #847
+result: Any = legacy_sdk_call()  # basilisk: ignore[returns_compatibility] -- tracked in #847
 ```
 
 Suppressions without reasons are themselves flagged. This is intentional: if you need to suppress a diagnostic, you should be able to explain why.
@@ -173,15 +177,13 @@ Output includes: total functions, typed functions, type coverage percentage, fil
 
 Basilisk includes an integrated CPU and memory profiler. To try it in VS Code:
 
-1. Run any Python script (the process must be alive)
-2. Open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) — or use the shortcut `Cmd+Shift+P Cmd+Shift+S` / `Ctrl+Shift+P Ctrl+Shift+S`
-3. Run **Basilisk: Start Profiling** and pick the target process
-4. Watch inline CPU heat annotations appear on hot lines as samples accumulate
-5. Run **Basilisk: Stop Profiling** to open the flamegraph viewer
+1. Open a Python file and click **Run & Profile CPU (Current File)** in the **Python Processes** panel (Basilisk icon in the activity bar) — it launches the script and profiles it from the first line. To profile an already-running process instead, click **Profile CPU** on its row in the same panel.
+2. Watch inline CPU heat annotations appear on hot lines as samples accumulate
+3. Run **Basilisk: Stop Profiling** (`Cmd+Shift+P Cmd+Shift+X` / `Ctrl+Shift+P Ctrl+Shift+X`, or click the status-bar counter) — the Basilisk Profiler panel opens with a flame graph and click-to-source hot-function tables
 
-For memory leak hunting, use **Basilisk: Start Memory Tracking**, take two snapshots with **Basilisk: Take Memory Snapshot**, then **Basilisk: Diff Memory Snapshots** to surface leaks as diagnostics in the Problems panel.
+For memory leak hunting, click **Run & Track Memory (Current File)** in the same panel (memory tracking rides the debugger, so this launches a debug session for you). Snapshots auto-capture at every pause — or take them manually with **Basilisk: Take Memory Snapshot** — and **Basilisk: Compare Memory Snapshots** surfaces leaks as diagnostics in the Problems panel.
 
-See the [Profiler guide](/docs/profiler/) for the full workflow — flamegraphs, reference graphs, profile diffing, VS Code commands, Zed slash commands, Neovim user commands, and platform requirements.
+See the [Profiler guide](/docs/profiler/) for the full workflow — flame graphs, reference graphs, memory snapshot comparison, VS Code commands, Zed slash commands, Neovim user commands, and platform requirements.
 
 ## Next steps
 

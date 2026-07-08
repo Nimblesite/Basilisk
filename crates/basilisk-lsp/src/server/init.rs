@@ -60,6 +60,35 @@ pub(super) async fn initialize(
         &roots,
     );
 
+    // Honor the Type Checking toggle (`basilisk.enabled`) supplied at startup so
+    // a client that opens with type checking off never sees a flash of
+    // diagnostics from the initial scan. Implements [ANALYSIS-ENABLED] (#65/#119).
+    if let Some(enabled) = params
+        .initialization_options
+        .as_ref()
+        .and_then(parse_enabled)
+    {
+        *server.type_checking_enabled.write().await = enabled;
+    }
+
+    // Resolve the formatter engine ([LSPFMT-CONFIG]): the editor setting
+    // (initializationOptions `formatter`, e.g. VS Code's `basilisk.formatter`)
+    // wins over config files; the default is the embedded Ruff engine.
+    let formatter = params
+        .initialization_options
+        .as_ref()
+        .and_then(parse_formatter)
+        .unwrap_or_else(|| {
+            roots
+                .first()
+                .map(|r| crate::config::load_config(r).formatter)
+                .unwrap_or_default()
+        });
+    let formatting_enabled = formatter != crate::config::FormatterEngine::Disabled;
+    server
+        .formatting_enabled
+        .store(formatting_enabled, std::sync::atomic::Ordering::Relaxed);
+
     // Store workspace roots for later use by import resolution.
     (*server.workspace_roots.write().await).clone_from(&roots);
 
@@ -78,14 +107,32 @@ pub(super) async fn initialize(
     Ok(InitializeResult {
         server_info: Some(ServerInfo {
             name: "basilisk".to_owned(),
-            version: Some(env!("CARGO_PKG_VERSION").to_owned()),
+            // [LSPFMT-PROVENANCE]: every client surfaces which Ruff formatter
+            // is embedded, alongside the binary version.
+            version: Some(format!(
+                "{} (Ruff formatter {})",
+                env!("CARGO_PKG_VERSION"),
+                crate::formatting::EMBEDDED_RUFF_FORMATTER_VERSION
+            )),
         }),
-        capabilities: build_capabilities(),
+        capabilities: build_capabilities(formatting_enabled),
     })
 }
 
+/// Read the `formatter` engine from `initializationOptions` ([LSPFMT-CONFIG]).
+fn parse_formatter(value: &serde_json::Value) -> Option<crate::config::FormatterEngine> {
+    value
+        .get("formatter")
+        .or_else(|| value.get("basilisk").and_then(|b| b.get("formatter")))
+        .and_then(serde_json::Value::as_str)
+        .map(crate::config::FormatterEngine::parse)
+}
+
 /// Build the full `ServerCapabilities` for the `initialize` response.
-fn build_capabilities() -> ServerCapabilities {
+///
+/// Formatting capabilities are advertised only while the formatter engine is
+/// enabled ([LSPFMT-CAPABILITIES], [LSPFMT-CONFIG]).
+fn build_capabilities(formatting_enabled: bool) -> ServerCapabilities {
     ServerCapabilities {
         text_document_sync: Some(TextDocumentSyncCapability::Kind(
             TextDocumentSyncKind::INCREMENTAL,
@@ -114,7 +161,8 @@ fn build_capabilities() -> ServerCapabilities {
         declaration_provider: Some(DeclarationCapability::Simple(true)),
         definition_provider: Some(OneOf::Left(true)),
         type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
-        document_formatting_provider: Some(OneOf::Left(true)),
+        document_formatting_provider: formatting_enabled.then_some(OneOf::Left(true)),
+        document_range_formatting_provider: formatting_enabled.then_some(OneOf::Left(true)),
         document_highlight_provider: Some(OneOf::Left(true)),
         document_symbol_provider: Some(OneOf::Left(true)),
         folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
@@ -130,6 +178,7 @@ fn build_capabilities() -> ServerCapabilities {
             prepare_provider: Some(true),
             work_done_progress_options: WorkDoneProgressOptions::default(),
         })),
+        // Implements [LSPARCH-CMDREG]
         execute_command_provider: Some(ExecuteCommandOptions {
             commands: basilisk_common::commands::ALL
                 .iter()
@@ -192,13 +241,19 @@ pub(super) async fn initialized(server: &LspServer) {
     // message loop is not blocked while the workspace scan runs.
     let mode = {
         let guard = server.index.read().await;
-        guard.as_ref().map(|idx| idx.mode)
+        guard.as_ref().map(WorkspaceIndex::mode)
     };
 
     let Some(mode) = mode else { return };
 
     match mode {
+        // Implements [ANALYSIS-STARTUP-OPEN]
         AnalysisMode::OpenFilesOnly => {
+            // No workspace scan runs in this mode, so zero-file rollups are
+            // already final ([EXTACT-MODULES-HEADER-LOADING], GitHub #144).
+            server
+                .initial_scan_complete
+                .store(true, std::sync::atomic::Ordering::Relaxed);
             server
                 .client
                 .log_message(
@@ -217,31 +272,7 @@ pub(super) async fn initialized(server: &LspServer) {
             // respond to requests (documentSymbol, etc.) while scanning.
             // tower-lsp v0.20 processes messages sequentially — blocking here
             // prevents ALL request handling until the scan completes.
-            let scan_client = server.client.clone();
-            let scan_index = Arc::clone(&server.index);
-            let scan_roots = {
-                let roots = server.workspace_roots.read().await;
-                roots.clone()
-            };
-            drop(tokio::spawn(async move {
-                let guard = scan_index.read().await;
-                if let Some(index) = guard.as_ref() {
-                    let scan_result = scan_resolve_and_check_with_roots(index, &scan_roots);
-                    drop(guard);
-                    for (uri, diags) in scan_result.diagnostics {
-                        scan_client.publish_diagnostics(uri, diags, None).await;
-                    }
-                    scan_client
-                        .log_message(
-                            MessageType::INFO,
-                            format!(
-                                "Basilisk: workspace scan complete — {} files, {} error(s)",
-                                scan_result.file_count, scan_result.error_count
-                            ),
-                        )
-                        .await;
-                }
-            }));
+            run_workspace_scan(server, mode).await;
         }
     }
 
@@ -262,6 +293,15 @@ pub(super) async fn did_change_configuration(
     // Update test explorer config if present.
     update_test_explorer_config(server, &settings).await;
 
+    // Apply the Type Checking toggle (`basilisk.enabled`) first: the LSP owns
+    // diagnostics, so flipping it must clear-or-restore them, and while disabled
+    // every scan/publish below is suppressed. Implements [ANALYSIS-ENABLED]
+    // (#65/#119). Returning here on a settled-disabled state stops an unrelated
+    // setting change (e.g. analysisMode) from re-publishing through the gate.
+    if !apply_type_checking_toggle(server, &settings).await {
+        return;
+    }
+
     let mut mode = None;
     if let Some(mode_str) = settings
         .get("analysisMode")
@@ -275,30 +315,28 @@ pub(super) async fn did_change_configuration(
         return;
     };
 
-    // Check whether the mode actually changed — skip the expensive write
-    // lock + workspace scan if it hasn't.  The background scan spawned by
-    // `initialized()` holds a READ lock on the index; acquiring a WRITE
-    // lock here would block the entire message loop until that scan
-    // finishes, preventing `textDocument/didOpen` and other requests from
-    // being processed.
-    let current_mode = {
+    // Check-and-set through a READ guard only ([ANALYSIS-PUBLISH], GitHub
+    // #264): `WorkspaceIndex::set_mode` is interior-mutable, so a mode flip
+    // never queues a WRITE behind a long-running scan's read guard — a queued
+    // writer makes tokio's fair `RwLock` block every subsequent reader, which
+    // saturates tower-lsp's bounded handler slots and stalls the whole
+    // message loop (delaying `didClose` clears past any test/UX budget).
+    let changed = {
         let guard = server.index.read().await;
-        guard.as_ref().map(|idx| idx.mode)
+        guard.as_ref().is_some_and(|index| {
+            let changed = index.mode() != new_mode;
+            if changed {
+                index.set_mode(new_mode);
+            }
+            changed
+        })
     };
-    if current_mode == Some(new_mode) {
+    if !changed {
         info!(
             ?new_mode,
             "did_change_configuration: mode unchanged, skipping scan"
         );
         return;
-    }
-
-    // Update the mode on the index.
-    {
-        let mut guard = server.index.write().await;
-        if let Some(index) = guard.as_mut() {
-            index.mode = new_mode;
-        }
     }
 
     server
@@ -315,6 +353,95 @@ pub(super) async fn did_change_configuration(
         }
         AnalysisMode::OpenFilesOnly => {
             clear_non_open_diagnostics(server).await;
+        }
+    }
+}
+
+// Implements [ANALYSIS-ENABLED] — the Type Checking toggle (`basilisk.enabled`).
+/// Parse the `basilisk.enabled` toggle from a settings / init-options value.
+///
+/// Accepts both shapes the editor sends: the flat
+/// `initializationOptions = readBasiliskSettings()` (top-level `enabled`) and the
+/// `didChangeConfiguration` payload `{ basilisk: { enabled } }` (nested).
+fn parse_enabled(value: &serde_json::Value) -> Option<bool> {
+    value
+        .get("enabled")
+        .or_else(|| value.get("basilisk").and_then(|b| b.get("enabled")))
+        .and_then(serde_json::Value::as_bool)
+}
+
+/// Apply the Type Checking toggle from a `didChangeConfiguration` payload.
+///
+/// Returns `true` when the caller should continue to analysis-mode handling, and
+/// `false` when the toggle fully handled this notification — because it just
+/// cleared diagnostics (disabled), re-scanned (re-enabled), or the server is
+/// settled-disabled and every subsequent scan/publish must stay suppressed.
+/// Implements [ANALYSIS-ENABLED] (GitHub #65 / #119).
+async fn apply_type_checking_toggle(server: &LspServer, settings: &serde_json::Value) -> bool {
+    let current = server.is_type_checking_enabled().await;
+
+    if let Some(new_enabled) = parse_enabled(settings) {
+        if new_enabled != current {
+            *server.type_checking_enabled.write().await = new_enabled;
+            if new_enabled {
+                info!("type checking re-enabled — re-scanning workspace");
+                rescan_after_enable(server).await;
+            } else {
+                info!("type checking disabled — clearing published diagnostics");
+                clear_all_diagnostics(server).await;
+            }
+            return false;
+        }
+    }
+
+    // No toggle change: proceed to mode handling only while enabled, so an
+    // unrelated setting change cannot resurrect diagnostics while disabled.
+    current
+}
+
+/// Publish empty diagnostics for every indexed URI, clearing stale errors when
+/// type checking is switched off. Bypasses the enable gate deliberately — the
+/// flag is already `false`, but clearing must still reach the editor.
+/// Implements [ANALYSIS-ENABLED] / [ANALYSIS-PUBLISH].
+async fn clear_all_diagnostics(server: &LspServer) {
+    let guard = server.index.read().await;
+    let Some(index) = guard.as_ref() else { return };
+    let uris: Vec<Url> = index
+        .files
+        .iter()
+        .filter_map(|entry| Url::from_file_path(entry.key()).ok())
+        .collect();
+    drop(guard);
+    let count = uris.len();
+    for uri in uris {
+        server.client.publish_diagnostics(uri, vec![], None).await;
+    }
+    info!(count, "cleared diagnostics for all indexed files");
+}
+
+/// Re-publish diagnostics after type checking is re-enabled, matching the active
+/// analysis mode. Implements [ANALYSIS-ENABLED].
+async fn rescan_after_enable(server: &LspServer) {
+    let mode = {
+        let guard = server.index.read().await;
+        guard.as_ref().map(WorkspaceIndex::mode)
+    };
+    let Some(mode) = mode else { return };
+
+    match mode {
+        AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
+            run_workspace_scan(server, mode).await;
+        }
+        AnalysisMode::OpenFilesOnly => {
+            // Only open files are indexed in this mode; re-check and re-publish
+            // each one (the gate is already back on, so publishing is correct).
+            let guard = server.index.read().await;
+            let Some(index) = guard.as_ref() else { return };
+            let results = index.recheck_all_files();
+            drop(guard);
+            for (uri, diags) in results {
+                server.publish_diagnostics_if_enabled(uri, diags).await;
+            }
         }
     }
 }
@@ -363,7 +490,7 @@ pub(super) async fn did_change_workspace_folders(
         let guard = server.index.read().await;
         guard
             .as_ref()
-            .map_or(AnalysisMode::OpenFilesOnly, |idx| idx.mode)
+            .map_or(AnalysisMode::OpenFilesOnly, WorkspaceIndex::mode)
     };
 
     let checker_config = updated_roots
@@ -379,6 +506,8 @@ pub(super) async fn did_change_workspace_folders(
     }
 }
 
+// Implements [LSPUV-WATCHERS] (uv.lock, .python-version, pyproject.toml,
+// basilisk.json; the spec's `.venv/pyvenv.cfg` row is not watched).
 /// Register file watchers for uv-related configuration files.
 ///
 /// Watches `**/uv.lock`, `**/.python-version`, and `**/pyproject.toml` so
@@ -427,26 +556,93 @@ async fn register_file_watchers(client: &Client) {
     }
 }
 
-/// Scan the whole workspace and publish diagnostics for all files.
+/// Scan the whole workspace in a background task and publish diagnostics.
+///
+/// The scan is ALWAYS spawned: tower-lsp drives every handler on one
+/// cooperative task, so a scan computed inside a notification handler starves
+/// all other messages — including the `textDocument/didClose` whose clear the
+/// editor is waiting on — for the scan's full duration (GitHub #264).
 async fn run_workspace_scan(server: &LspServer, _mode: AnalysisMode) {
-    let guard = server.index.read().await;
-    let Some(index) = guard.as_ref() else { return };
-    let scan_result = scan_resolve_and_check(server, index).await;
-    drop(guard);
+    let scan_roots = server.workspace_roots.read().await.clone();
+    let scan_index = Arc::clone(&server.index);
+    let scan_client = server.client.clone();
+    // Clone the toggle so the spawned scan suppresses publication when type
+    // checking is off. Implements [ANALYSIS-ENABLED].
+    let scan_enabled = Arc::clone(&server.type_checking_enabled);
+    let scan_complete = Arc::clone(&server.initial_scan_complete);
+    drop(tokio::spawn(async move {
+        let ScanResult {
+            diagnostics,
+            file_count,
+            error_count,
+        } = {
+            let guard = scan_index.read().await;
+            let Some(index) = guard.as_ref() else { return };
+            scan_resolve_and_check_with_roots(index, &scan_roots)
+        };
+        publish_scan_results(&scan_index, &scan_client, &scan_enabled, diagnostics).await;
+        // Zero-file rollups are trustworthy from here on. Flip the flag BEFORE
+        // notifying, so a refetch triggered by the notification reads
+        // `scanComplete: true`. The notification is what settles the client's
+        // loading state even when the scan published nothing — a genuinely
+        // empty workspace produces no diagnostics events at all
+        // ([EXTACT-MODULES-HEADER-LOADING], GitHub #144).
+        scan_complete.store(true, std::sync::atomic::Ordering::Relaxed);
+        scan_client
+            .send_notification::<super::activity_panel::ScanCompleteNotification>(
+                serde_json::json!({ "totalFiles": file_count }),
+            )
+            .await;
+        scan_client
+            .log_message(
+                MessageType::INFO,
+                format!(
+                    "Basilisk: workspace scan complete — {file_count} files, {error_count} error(s)"
+                ),
+            )
+            .await;
+    }));
+}
 
-    for (uri, diags) in scan_result.diagnostics {
-        server.client.publish_diagnostics(uri, diags, None).await;
+// Implements [ANALYSIS-PUBLISH] — scan results must reflect the index state at
+// publish time, not at compute time.
+/// Publish scan results, skipping entries that went stale while the scan ran.
+///
+/// A file closed mid-scan was removed from the index by `did_close`, which
+/// also cleared its diagnostics — republishing the scan's snapshot would
+/// resurrect them with nothing left to ever clear them (GitHub #264). And
+/// after a mid-scan flip to `openFilesOnly`, only open files may publish.
+async fn publish_scan_results(
+    index: &RwLock<Option<WorkspaceIndex>>,
+    client: &Client,
+    enabled: &RwLock<bool>,
+    diagnostics: Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)>,
+) {
+    for (uri, diags) in diagnostics {
+        let still_current = {
+            let guard = index.read().await;
+            guard
+                .as_ref()
+                .is_some_and(|idx| scan_entry_still_current(idx, &uri))
+        };
+        if still_current {
+            super::publish_diagnostics_gated(client, enabled, uri, diags).await;
+        } else {
+            super::diaglog!("[DIAG] scan publish SKIPPED (stale) uri={uri}");
+        }
     }
-    server
-        .client
-        .log_message(
-            MessageType::INFO,
-            format!(
-                "Basilisk: workspace scan complete — {} files, {} error(s)",
-                scan_result.file_count, scan_result.error_count
-            ),
-        )
-        .await;
+}
+
+/// Whether a scan result computed for `uri` still reflects the index state:
+/// the file is still tracked, and — under `openFilesOnly` — still open.
+fn scan_entry_still_current(index: &WorkspaceIndex, uri: &Url) -> bool {
+    let Ok(path) = uri.to_file_path() else {
+        return false;
+    };
+    match index.files.get(&path) {
+        None => false,
+        Some(entry) => !matches!(index.mode(), AnalysisMode::OpenFilesOnly) || entry.is_open,
+    }
 }
 
 /// Result of a full workspace scan with import resolution and optional cross-module
@@ -460,34 +656,22 @@ struct ScanResult {
 /// Scan workspace files, resolve imports, and optionally run cross-module symbol
 /// population. Returns diagnostics ready to publish.
 ///
-/// This is the single source of truth for the scan+resolve+crossmod pipeline,
-/// used by both `initialized()` and `run_workspace_scan()`.
-async fn scan_resolve_and_check(server: &LspServer, index: &WorkspaceIndex) -> ScanResult {
-    let roots = server.workspace_roots.read().await;
-    let result = scan_resolve_and_check_with_roots(index, &roots);
-    drop(roots);
-    result
-}
-
-/// Core scan logic that takes roots directly instead of `&LspServer`.
-///
-/// This allows the scan to run in a spawned task with cloned data.
+/// This is the single source of truth for the scan+resolve+crossmod pipeline —
+/// every scan goes through `run_workspace_scan`'s spawned task, which calls
+/// this with cloned data so it can run off the message loop.
 fn scan_resolve_and_check_with_roots(
     index: &WorkspaceIndex,
     roots: &[std::path::PathBuf],
 ) -> ScanResult {
-    let (_results, file_count, _initial_error_count) = index.scan();
-
-    // Resolve imports for all scanned files.
     let config = roots
         .first()
         .map(|r| crate::config::load_config(r))
         .unwrap_or_default();
 
-    // Detect uv project, build package registry and discover workspace members.
+    // Detect uv project, build package registry and discover workspace members
+    // BEFORE scanning, so the scan itself analyses with import resolution.
     let registry = build_uv_registry(roots);
-    let search_paths =
-        crate::import_resolver::ImportSearchPaths::from_config(roots, &config, registry);
+    let search_paths = crate::import_resolver::search_paths_from_config(roots, &config, registry);
     info!(
         site_packages = ?search_paths.site_packages,
         workspace_members = search_paths.workspace_members.len(),
@@ -495,23 +679,28 @@ fn scan_resolve_and_check_with_roots(
         has_registry = search_paths.registry.is_some(),
         "built LSP import search paths"
     );
-    crate::import_resolver::resolve_workspace_imports(index, &search_paths);
     // Cache the search paths so incremental single-file re-checks (didOpen /
     // didChange) resolve third-party imports identically to this scan, instead
-    // of resurrecting false BSK-E0010. Implements [ANALYSIS-INCR-IMPORTS].
+    // of resurrecting false imports_unresolved. Implements [ANALYSIS-INCR-IMPORTS].
     index.set_search_paths(search_paths);
 
-    // Re-check all files now that imports are resolved. The initial scan()
-    // generates diagnostics before workspace members are known, so BSK-E0010
-    // fires for imports that are actually resolvable via workspace members.
-    let diagnostics = if matches!(index.mode, AnalysisMode::CrossModule) {
-        crate::cross_module::populate_cross_module_symbols(index);
+    // One pass: the scan primes the salsa engine with the whole workspace and
+    // analyses each file exactly once through the memoized queries — imports
+    // resolved and, in crossModule mode, `imported_symbols` populated. Every
+    // later edit hits the memos this pass created. Implements
+    // [CHKARCH-INCREMENTAL-SALSA] adoption / [ANALYSIS-STARTUP-WHOLE].
+    let (mut diagnostics, file_count, _initial_error_count) = index.scan();
+
+    // Open files are skipped by the scan (editor text is authoritative), but
+    // their pre-scan diagnostics were computed without the search paths —
+    // re-analyse them through the engine so open editors converge too.
+    diagnostics.extend(index.refresh_open_files());
+
+    if matches!(index.mode(), AnalysisMode::CrossModule) {
+        // Reverse-edge lookups for cross-file references/rename.
         index.build_import_graph();
-        info!("cross-module symbol population complete");
-        recheck_with_cross_module_symbols(index)
-    } else {
-        recheck_with_cross_module_symbols(index)
-    };
+        info!("cross-module analysis complete");
+    }
 
     // Recount errors after re-check (resolved imports reduce false E0010s).
     let final_error_count: usize = diagnostics
@@ -534,6 +723,8 @@ fn scan_resolve_and_check_with_roots(
     }
 }
 
+// Implements [ANALYSIS-PUBLISH] (runtime mode-switch → clear non-open files;
+// per-mode publish and delete→empty live in run_workspace_scan and document.rs).
 /// Clear diagnostics for all non-open files (used when switching to `openFilesOnly`).
 async fn clear_non_open_diagnostics(server: &LspServer) {
     let guard = server.index.read().await;
@@ -546,40 +737,9 @@ async fn clear_non_open_diagnostics(server: &LspServer) {
         .collect();
     drop(guard);
     for uri in to_clear {
+        super::diaglog!("[DIAG] clear_non_open publish n=0 uri={uri}");
         server.client.publish_diagnostics(uri, vec![], None).await;
     }
-}
-
-/// Re-check all workspace files using their current `ResolvedModule` (which now
-/// contains cross-module `imported_symbols`). Returns fresh LSP diagnostics.
-///
-/// This is called after `populate_cross_module_symbols()` so that checker rules
-/// can see imported symbols from other modules.
-fn recheck_with_cross_module_symbols(
-    index: &WorkspaceIndex,
-) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
-    let mut results = Vec::new();
-
-    for mut entry in index.files.iter_mut() {
-        let Some(resolved) = &entry.resolved else {
-            continue;
-        };
-
-        let file_config = index.config_for_file(entry.key());
-        let checker_diags = basilisk_checker::check_with_config(resolved, file_config);
-        let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
-            .iter()
-            .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
-            .collect();
-
-        entry.diagnostics = checker_diags;
-
-        if let Some(uri) = crate::workspace_scan::path_to_uri(entry.key()) {
-            results.push((uri, lsp_diags));
-        }
-    }
-
-    results
 }
 
 /// Detect a uv project and build a [`PackageRegistry`] from its lock file.
@@ -622,6 +782,8 @@ fn build_uv_registry(roots: &[std::path::PathBuf]) -> Option<Arc<basilisk_uv::Pa
     Some(Arc::new(registry))
 }
 
+// Implements [LSPARCH-UV-HOTRELOAD] and [LSPUV-LOCK-HOT-RELOAD] (full rebuild on
+// uv.lock change — no package-level diff; logs a simpler message than the spec)
 /// Rebuild the uv package registry and re-resolve all workspace imports.
 ///
 /// Called after uv commands complete or when `uv.lock` changes on disk.
@@ -639,37 +801,22 @@ pub(super) async fn rebuild_registry_and_resolve(server: &LspServer) {
         .unwrap_or_default();
 
     let registry = build_uv_registry(&roots);
-    let search_paths =
-        crate::import_resolver::ImportSearchPaths::from_config(&roots, &config, registry);
-    crate::import_resolver::resolve_workspace_imports(index, &search_paths);
+    let search_paths = crate::import_resolver::search_paths_from_config(&roots, &config, registry);
     // Refresh the cached search paths so subsequent incremental re-checks pick
     // up the rebuilt registry / venv. Implements [ANALYSIS-INCR-IMPORTS].
     index.set_search_paths(search_paths);
     drop(roots);
 
-    // Re-check all files and publish updated diagnostics.
-    let results: Vec<_> = index
-        .files
-        .iter_mut()
-        .filter_map(|mut entry| {
-            let resolved = entry.resolved.as_ref()?;
-            let file_config = index.config_for_file(entry.key());
-            let checker_diags = basilisk_checker::check_with_config(resolved, file_config);
-            let lsp_diags: Vec<tower_lsp::lsp_types::Diagnostic> = checker_diags
-                .iter()
-                .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &entry.text))
-                .collect();
-            entry.diagnostics = checker_diags;
-            let uri = crate::workspace_scan::path_to_uri(entry.key())?;
-            Some((uri, lsp_diags))
-        })
-        .collect();
+    // Re-analyse all files through the salsa engine (the changed
+    // `SearchPathsInput` invalidates exactly the import-resolving queries) and
+    // publish updated diagnostics.
+    let results = index.reresolve_imports_and_recheck();
 
     drop(guard);
 
     let file_count = results.len();
     for (uri, diags) in results {
-        server.client.publish_diagnostics(uri, diags, None).await;
+        server.publish_diagnostics_if_enabled(uri, diags).await;
     }
 
     info!(
@@ -719,6 +866,7 @@ async fn update_test_explorer_config(server: &LspServer, settings: &serde_json::
 fn spawn_initial_test_discovery(server: &LspServer) {
     let client = server.client.clone();
     let index = Arc::clone(&server.index);
+    let enabled = Arc::clone(&server.type_checking_enabled);
     let roots_lock = &server.workspace_roots;
 
     // Read the workspace root synchronously (fast, just a lock read).
@@ -749,7 +897,7 @@ fn spawn_initial_test_discovery(server: &LspServer) {
             .await;
 
         // Check pytest availability using the cloned index.
-        check_pytest_from_index(&client, &index, &root).await;
+        check_pytest_from_index(&client, &index, &enabled, &root).await;
     }));
 }
 
@@ -760,6 +908,7 @@ fn spawn_initial_test_discovery(server: &LspServer) {
 async fn check_pytest_from_index(
     client: &Client,
     index: &Arc<RwLock<Option<WorkspaceIndex>>>,
+    enabled: &RwLock<bool>,
     root: &std::path::Path,
 ) {
     // We need workspace roots to detect uv — use root directly.
@@ -782,7 +931,7 @@ async fn check_pytest_from_index(
         client
             .log_message(
                 MessageType::WARNING,
-                "Basilisk: pytest not found in uv.lock — use the quick fix to install it"
+                "Basilisk: test runner \"pytest\" is not installed — use the quick fix (uv add --dev pytest)"
                     .to_owned(),
             )
             .await;
@@ -793,7 +942,8 @@ async fn check_pytest_from_index(
                 continue;
             };
             let diag = super::test_handlers::make_pytest_not_found_diagnostic();
-            client.publish_diagnostics(uri, vec![diag], None).await;
+            // Suppressed while type checking is off ([ANALYSIS-ENABLED]).
+            super::publish_diagnostics_gated(client, enabled, uri, vec![diag]).await;
         }
     }
 

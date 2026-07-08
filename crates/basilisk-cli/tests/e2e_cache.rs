@@ -1,4 +1,4 @@
-//! Tests for [CHKCACHE]. See docs/specs/CHECKER-CACHE-SPEC.md
+//! Tests for [CHKCACHE] / [CHKCACHE-TEST]. See docs/specs/CHECKER-CACHE-SPEC.md
 #![allow(
     clippy::allow_attributes,
     clippy::expect_used,
@@ -25,6 +25,16 @@ fn unique_dir(prefix: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("bsk_cache_{prefix}_{}_{n}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("create temp dir");
     dir
+}
+
+/// Write a `basilisk.json` into `dir` opting into the annotation house rules
+/// (`BSK-E0001`/`BSK-W0050` …), which are off by default — the default config is
+/// pure PEP conformance. Tests that assert those diagnostics call this so they
+/// see exactly what a user who enabled them would. No modes; this is
+/// configuration. See [CHKARCH-CONFIGURATION-ONLY].
+fn opt_in_house_rules(dir: &std::path::Path) {
+    std::fs::write(dir.join("basilisk.json"), "{\"strictAnnotations\": true}\n")
+        .expect("write basilisk.json");
 }
 
 /// Run `basilisk check <target> --cache --cache-dir <cache> --cache-stats`.
@@ -64,6 +74,7 @@ fn assert_stats(output: &Output, hits: usize, misses: usize) {
 #[test]
 fn second_run_hits_with_identical_output() {
     let dir = unique_dir("hit");
+    opt_in_house_rules(&dir);
     let target = dir.join("t.py");
     let cache = dir.join("cache");
     std::fs::write(&target, "def f(x):\n    return x\n").unwrap();
@@ -95,6 +106,7 @@ fn second_run_hits_with_identical_output() {
 #[test]
 fn editing_target_invalidates() {
     let dir = unique_dir("target");
+    opt_in_house_rules(&dir);
     let target = dir.join("t.py");
     let cache = dir.join("cache");
 
@@ -153,7 +165,7 @@ fn changing_config_invalidates() {
     std::fs::write(&target, "x: int = 42\n").unwrap();
     std::fs::write(
         &pyproject,
-        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk.rules]\n\"BSK-W0050\" = \"warning\"\n",
+        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\nstrict-annotations = true\n\n[tool.basilisk.rules]\n\"BSK-W0050\" = \"warning\"\n",
     )
     .unwrap();
 
@@ -163,7 +175,7 @@ fn changing_config_invalidates() {
     // Same source, different config: the fingerprint must differ → miss.
     std::fs::write(
         &pyproject,
-        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk.rules]\n\"BSK-W0050\" = \"error\"\n",
+        "[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n[tool.basilisk]\nstrict-annotations = true\n\n[tool.basilisk.rules]\n\"BSK-W0050\" = \"error\"\n",
     )
     .unwrap();
     assert_stats(&check_cached(&target, &cache), 0, 1);
@@ -172,9 +184,11 @@ fn changing_config_invalidates() {
 // ── CHKCACHE-TEST-DISABLED ──────────────────────────────────────────────────
 
 /// Without `--cache`, no cache directory is created and output is unchanged.
+// Exercises [CHKCACHE-CLI]
 #[test]
 fn disabled_creates_no_cache_dir() {
     let dir = unique_dir("disabled");
+    opt_in_house_rules(&dir);
     let target = dir.join("t.py");
     std::fs::write(&target, "def f(x):\n    return x\n").unwrap();
 

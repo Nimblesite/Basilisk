@@ -12,7 +12,6 @@ This crate implements **static ownership semantics** as type annotations over st
 - **`InOut`** — a mutable reference. Must be explicitly declared.
 - **`Owned`** — ownership is transferred. Use after transfer is a type error.
 - **Standard Python syntax** — uses `typing.Annotated`, no compiler or runtime required.
-- **Mojo compatibility** — code that passes these checks is structurally compatible with Mojo's type expectations.
 
 ## Example
 
@@ -21,7 +20,7 @@ from typing import Annotated
 from basilisk import Borrowed
 
 def summarise(items: Annotated[list[int], Borrowed]) -> int:
-    items.append(99)  # BSK-E0030: mutation of Borrowed parameter
+    items.append(99)  # generics_defaults: mutation of Borrowed parameter
     return sum(items)
 ```
 

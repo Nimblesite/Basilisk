@@ -1,7 +1,7 @@
 {
   "name": "basilisk",
   "displayName": "Basilisk",
-  "description": "Complete Python language server — the open-source replacement for Pylance. Type checking, completions, go-to-definition, and more. Built in Rust.",
+  "description": "The only Python type checker with a perfect 100% score on the official python/typing conformance results. Open-source Pylance replacement — complete language server with type checking, completions, go-to-definition, refactoring, debugging & profiling. Built in Rust.",
   "version": "0.0.0-PLACEHOLDER",
   "publisher": "Nimblesite",
   "license": "MIT",
@@ -38,7 +38,9 @@
     "go to definition",
     "rust",
     "basilisk",
-    "lsp"
+    "lsp",
+    "pep conformance",
+    "conformance"
   ],
   "activationEvents": [
     "onLanguage:python",
@@ -67,7 +69,7 @@
         {
           "id": "basilisk.pythonProcesses",
           "name": "Python Processes",
-          "when": "basilisk.hasWorkspace && basilisk.profilingEnabled"
+          "when": "basilisk.hasWorkspace"
         },
         {
           "id": "basilisk.info",
@@ -127,11 +129,22 @@
       },
       {
         "command": "basilisk.fixFile",
+        "title": "Basilisk: Fix All (Safe) in File",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.fixFileAll",
         "title": "Basilisk: Fix All in File",
         "category": "Basilisk"
       },
       {
         "command": "basilisk.fixWorkspace",
+        "title": "Basilisk: Fix All (Safe) in Workspace",
+        "category": "Basilisk",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "basilisk.fixWorkspaceAll",
         "title": "Basilisk: Fix All in Workspace",
         "category": "Basilisk",
         "icon": "$(wand)"
@@ -240,10 +253,10 @@
         "icon": "$(debug-alt)"
       },
       {
-        "command": "basilisk.profileDiff",
-        "title": "Basilisk: Compare Profile Results",
+        "command": "basilisk.profileShowResults",
+        "title": "Basilisk: Show Profile Results",
         "category": "Basilisk",
-        "icon": "$(diff)"
+        "icon": "$(flame)"
       },
       {
         "command": "basilisk.memoryMenu",
@@ -364,50 +377,6 @@
           "when": "false"
         },
         {
-          "command": "basilisk.profileStart",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.profileStop",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.profileSnapshot",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.profileAttachToDebug",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.profileDiff",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.profileCurrentFileCpu",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.trackMemoryCurrentFile",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.refreshProcesses",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.sortProcesses",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.groupProcesses",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
-          "command": "basilisk.filterProcesses",
-          "when": "basilisk.profilingEnabled"
-        },
-        {
           "command": "basilisk.profileProcess",
           "when": "false"
         },
@@ -425,31 +394,48 @@
         },
         {
           "command": "basilisk.memoryMenu",
-          "when": "basilisk.debugging && basilisk.profilingEnabled"
+          "when": "basilisk.debugging"
         },
         {
           "command": "basilisk.memoryStart",
-          "when": "basilisk.debugging && basilisk.profilingEnabled"
+          "when": "basilisk.debugging"
         },
         {
           "command": "basilisk.memorySnapshot",
-          "when": "basilisk.debugging && basilisk.profilingEnabled"
+          "when": "basilisk.debugging"
         },
         {
           "command": "basilisk.memoryDiff",
-          "when": "basilisk.debugging && basilisk.profilingEnabled"
+          "when": "basilisk.debugging"
         },
         {
           "command": "basilisk.memoryGcCollect",
-          "when": "basilisk.debugging && basilisk.profilingEnabled"
+          "when": "basilisk.debugging"
         },
         {
           "command": "basilisk.memoryReferences",
-          "when": "basilisk.debugging && basilisk.profilingEnabled"
+          "when": "basilisk.debugging"
         },
         {
           "command": "basilisk.memoryStop",
-          "when": "basilisk.debugging && basilisk.profilingEnabled"
+          "when": "basilisk.debugging"
+        }
+      ],
+      "debug/toolBar": [
+        {
+          "command": "basilisk.memorySnapshot",
+          "when": "debugType == basilisk-debug && basilisk.memoryTracking",
+          "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.memoryDiff",
+          "when": "debugType == basilisk-debug && basilisk.memoryTracking",
+          "group": "navigation@2"
+        },
+        {
+          "command": "basilisk.memoryStop",
+          "when": "debugType == basilisk-debug && basilisk.memoryTracking",
+          "group": "navigation@3"
         }
       ],
       "view/title": [
@@ -504,9 +490,19 @@
           "group": "navigation@1"
         },
         {
-          "command": "basilisk.memoryStop",
+          "command": "basilisk.memorySnapshot",
+          "when": "view == basilisk.pythonProcesses && basilisk.memoryTracking",
+          "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.memoryDiff",
           "when": "view == basilisk.pythonProcesses && basilisk.memoryTracking",
           "group": "navigation@2"
+        },
+        {
+          "command": "basilisk.memoryStop",
+          "when": "view == basilisk.pythonProcesses && basilisk.memoryTracking",
+          "group": "navigation@3"
         },
         {
           "command": "basilisk.refreshProcesses",
@@ -562,12 +558,12 @@
         },
         {
           "command": "basilisk.copyProcessPid",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^(pythonProcess|blockedPythonProcess)/",
           "group": "9_copy@1"
         },
         {
           "command": "basilisk.revealProcessScript",
-          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^(pythonProcess|blockedPythonProcess)/",
           "group": "9_copy@2"
         }
       ]
@@ -583,13 +579,13 @@
         "command": "basilisk.profileStart",
         "key": "ctrl+shift+p ctrl+shift+s",
         "mac": "cmd+shift+p cmd+shift+s",
-        "when": "editorLangId == python && basilisk.profilingEnabled"
+        "when": "editorLangId == python"
       },
       {
         "command": "basilisk.profileStop",
         "key": "ctrl+shift+p ctrl+shift+x",
         "mac": "cmd+shift+p cmd+shift+x",
-        "when": "basilisk.profiling && basilisk.profilingEnabled"
+        "when": "basilisk.profiling"
       }
     ],
     "breakpoints": [
@@ -763,15 +759,11 @@
           "default": true,
           "description": "Reserved: variable-type inlay hints are always shown. The language server does not yet read this setting (see EXTENSION-ACTIVITY-PANEL-PLAN.md)."
         },
-        "basilisk.ruff.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Reserved: Ruff integration is always on. The language server does not yet read this setting (see EXTENSION-ACTIVITY-PANEL-PLAN.md)."
-        },
-        "basilisk.ruff.executablePath": {
+        "basilisk.formatter": {
           "type": "string",
+          "enum": ["ruff", "none"],
           "default": "ruff",
-          "description": "Reserved: the language server resolves ruff from PATH and does not yet read this setting (see EXTENSION-ACTIVITY-PANEL-PLAN.md)."
+          "description": "Formatter engine. 'ruff' uses the Ruff formatter embedded in the Basilisk binary (in-process — no external ruff binary is ever required or spawned); 'none' disables formatting. See LSP-FORMATTING-SPEC.md#LSPFMT-CONFIG."
         },
         "basilisk.uv.enabled": {
           "type": "boolean",
@@ -980,7 +972,8 @@
     "test": "vscode-test",
     "test:shipwright": "node scripts/verify-shipwright.mjs manifest",
     "vscode:prepublish": "npm run sync:shipwright && npm run compile",
-    "package": "npm run sync:shipwright && vsce package"
+    "package": "npm run sync:shipwright && vsce package",
+    "screenshots:editor": "node scripts/capture-screenshots.mjs"
   },
   "dependencies": {
     "@nimblesite/shipwright-vscode": "^0.10.0",

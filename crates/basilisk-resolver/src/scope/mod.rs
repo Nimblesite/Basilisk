@@ -17,7 +17,7 @@ mod variable_types;
 mod violations;
 
 pub use class_types::{BaseSubscriptEntry, ClassInfo, GenericParamInfo, TypeArg};
-pub use external_symbol::{ExternalSymbol, ExternalSymbolKind};
+pub use external_symbol::{ExternalMethod, ExternalSymbol, ExternalSymbolKind};
 pub use function_types::{
     FunctionInfo, ParameterInfo, ReturnAnnotationKind, ReturnStmtInfo, YieldExprInfo,
 };
@@ -42,7 +42,7 @@ pub use pep695_scoping::{
     AttrAccess, DecoratorRef, GenericDefKind, Pep695AliasDef, Pep695Def, Pep695Param,
     Pep695ParamKind, Pep695Scoping,
 };
-pub use resolved_module::ResolvedModule;
+pub use resolved_module::{LazyAst, ResolvedModule};
 pub use rhs::RhsKind;
 pub use span::Span;
 pub use typeddict_meta::{

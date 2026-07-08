@@ -44,6 +44,10 @@ enum Transport {
     Ws,
 }
 
+// Implements [CHKARCH-CLI-COMMANDS]: the `check` core command (with `--watch`
+// deferred — see report). `fix`/`adopt`/`unadopt`/`lsp`/`stubs` extend the spec
+// list; the spec's `stats`/`migrate`/`init` commands are not implemented.
+// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-COMMANDS
 #[derive(Subcommand)]
 enum Command {
     /// Type check one or more files or directories.
@@ -165,7 +169,22 @@ fn handle_version(args: &[String]) -> bool {
         },
     };
     match dispatch(args, &mut std::io::stdout(), &spec) {
-        Ok(handled) => handled,
+        Ok(handled) => {
+            // [LSPFMT-PROVENANCE]: the human-readable `--version` also lists
+            // the embedded formatter engine. The `--json` payload stays a
+            // pure Shipwright contract, so machine consumers are unaffected.
+            if handled && !args.iter().any(|a| a == "--json") {
+                let _ = std::io::Write::write_all(
+                    &mut std::io::stdout(),
+                    format!(
+                        "Ruff formatter: {}\n",
+                        basilisk_lsp::formatting::EMBEDDED_RUFF_FORMATTER_VERSION
+                    )
+                    .as_bytes(),
+                );
+            }
+            handled
+        }
         Err(err) => {
             let _ = std::io::Write::write_all(
                 &mut std::io::stderr(),
@@ -202,7 +221,27 @@ fn main() -> ExitCode {
 
     let cli = Cli::parse();
 
-    let exit_code: u8 = match cli.command {
+    // Command dispatch runs on an analysis-sized stack: `check`/`fix`/`adopt`
+    // walk the AST recursively and overflow the default main-thread stack
+    // (~8 MiB on macOS/Linux, ~1 MiB on Windows) on deeply chained
+    // expressions in generated code. Implements [LSPARCH-ARCH-STACK]
+    // (GitHub #278).
+    let exit_code =
+        match basilisk_lsp::runtime::run_with_analysis_stack("basilisk-cli", move || {
+            run_command(cli.command)
+        }) {
+            Ok(code) => code,
+            Err(err) => {
+                error!(%err, "analysis thread failed");
+                1
+            }
+        };
+    ExitCode::from(exit_code)
+}
+
+/// Dispatch the parsed subcommand. Returns the process exit code.
+fn run_command(command: Command) -> u8 {
+    match command {
         Command::Check {
             paths,
             output,
@@ -249,9 +288,7 @@ fn main() -> ExitCode {
             },
         },
         Command::Stubs { action } => run_stubs(action),
-    };
-
-    ExitCode::from(exit_code)
+    }
 }
 
 /// Run the stubs subcommand.
@@ -420,10 +457,14 @@ fn run_stubs_status() -> u8 {
 
 /// Run the check subcommand.
 ///
-/// Exit codes:
+/// Implements [CHKARCH-CLI-EXITCODES]. Exit codes:
 /// - `0` — clean, no errors
 /// - `1` — type errors found
 /// - `3` — internal error
+///
+/// Note: the spec's exit code `2` (configuration error) is not produced — a
+/// malformed config silently falls back to defaults rather than erroring (see
+/// report). See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI-EXITCODES
 fn run_check(paths: &[String], format: OutputFormat, cache: &cache_check::CacheOptions) -> u8 {
     let mut stats = cache_check::CacheStats::default();
     let result = collect_and_check(paths, cache, &mut stats);
@@ -431,6 +472,9 @@ fn run_check(paths: &[String], format: OutputFormat, cache: &cache_check::CacheO
         stats.report();
     }
     match result {
+        // Implements [CHKARCH-CLI-OUTPUT]: the human-readable text default and
+        // machine-readable JSON. The spec's `sarif`/`junit` formats are not
+        // implemented (see report).
         Ok((diagnostics, sources)) => match format {
             OutputFormat::Json => {
                 render_diagnostics_json(&diagnostics, &sources);
@@ -547,11 +591,8 @@ fn collect_and_check(
     // Add include paths from WorkspaceConfig as search roots.
     let lsp_config = basilisk_lsp::config::load_config(&project_root);
     let registry = build_uv_registry(&roots);
-    let mut search_paths = basilisk_lsp::import_resolver::ImportSearchPaths::from_config(
-        &roots,
-        &lsp_config,
-        registry,
-    );
+    let mut search_paths =
+        basilisk_lsp::import_resolver::search_paths_from_config(&roots, &lsp_config, registry);
     // Ensure all roots are also in extra_paths for module resolution.
     search_paths.roots = roots;
     info!(
@@ -635,7 +676,7 @@ fn process_file(
 
     // Resolve imports against venv/site-packages and uv registry using the same
     // routine the LSP uses, so the CLI and editor agree on what resolves and on
-    // package-dependency metadata (W0011 transitive-import warnings, etc.).
+    // package-dependency metadata (BSK-W0011 transitive-import warnings, etc.).
     basilisk_lsp::import_resolver::resolve_module_imports(&mut resolved, search_paths);
 
     // Apply the project's `[tool.basilisk.rules]` / per-path overrides so the
@@ -708,6 +749,14 @@ pub(crate) fn excluded_dirs_and_log<'a>(
     excluded
 }
 
+/// `true` for the Python source extensions Basilisk type-checks: `.py`
+/// implementation files and `.pyi` stub files (whose overload-definition and
+/// `@final`/`@override` rules differ — see `overloads_*`). Stubs were silently
+/// dropped before, so a `basilisk check foo.pyi` produced no diagnostics.
+fn is_python_source_ext(ext: &std::ffi::OsStr) -> bool {
+    ext.eq_ignore_ascii_case("py") || ext.eq_ignore_ascii_case("pyi")
+}
+
 pub(crate) fn collect_python_files(
     paths: &[String],
     excluded: &HashSet<&str>,
@@ -729,7 +778,7 @@ pub(crate) fn collect_python_files(
         if meta.is_file() {
             if std::path::Path::new(root)
                 .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
+                .is_some_and(is_python_source_ext)
             {
                 files.push(root.clone());
             }
@@ -756,11 +805,7 @@ pub(crate) fn collect_python_files(
                 })
                 .filter_map(Result::ok)
                 .filter(|e| e.file_type().is_file())
-                .filter(|e| {
-                    e.path()
-                        .extension()
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
-                })
+                .filter(|e| e.path().extension().is_some_and(is_python_source_ext))
                 // File-level globs (e.g. `*.pb.py`, `**/conftest.py`) are honoured
                 // here; directory globs are already pruned above before recursing.
                 .filter(|e| !is_excluded_path(e.path(), root_path, excluded))
@@ -882,12 +927,21 @@ mod tests {
     #[test]
     fn collect_and_check_returns_diagnostics_for_bad_code() -> Result<(), Box<dyn std::error::Error>>
     {
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_bad_code.py");
+        // `def foo(x)` violates the annotation house rules (BSK-E0001/E0002),
+        // which are OFF by default — the default config is pure PEP conformance.
+        // Run inside an isolated project that opts in, exactly as a user would.
+        // See [CHKARCH-CONFIGURATION-ONLY].
+        let dir = unique_project_dir("basilisk_test_bad_code");
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(
+            dir.join("basilisk.json"),
+            b"{\"strictAnnotations\": true}\n",
+        )?;
+        let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x):\n    pass\n")?;
         let path = py.to_string_lossy().into_owned();
         let (diags, _) = collect_and_check_uncached(&[path])?;
-        let _ = std::fs::remove_file(&py);
+        let _ = std::fs::remove_dir_all(&dir);
         assert!(
             !diags.is_empty(),
             "unannotated function must produce diagnostics"
@@ -916,9 +970,14 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let dir = unique_project_dir("basilisk_cli_cfg_promote");
         std::fs::create_dir_all(&dir)?;
+        // A severity override only re-grades a rule that is ALREADY enabled;
+        // BSK-W0050 is an off-by-default house rule, so the project must opt in
+        // (`strict-annotations = true`) AND escalate it. See
+        // [CHKARCH-CONFIGURATION-ONLY].
         std::fs::write(
             dir.join("pyproject.toml"),
             b"[project]\nname = \"x\"\nversion = \"0.1.0\"\n\n\
+              [tool.basilisk]\nstrict-annotations = true\n\n\
               [tool.basilisk.rules]\n\"BSK-W0050\" = \"error\"\n",
         )?;
         let py = dir.join("m.py");
@@ -937,7 +996,7 @@ mod tests {
             w0050
                 .iter()
                 .all(|d| d.severity == basilisk_checker::Severity::Error),
-            "project config `BSK-W0050 = \"error\"` must promote W0050 to error \
+            "project config `BSK-W0050 = \"error\"` must promote BSK-W0050 to error \
              through the CLI; got {:?}",
             w0050.iter().map(|d| d.severity).collect::<Vec<_>>()
         );
@@ -979,12 +1038,18 @@ mod tests {
     /// and `== / < / >=` at line 65 (which would change the return value).
     #[test]
     fn run_check_json_bad_code_returns_one() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_rc_json_bad.py");
+        // BSK-E0001 (unannotated `x`) is off by default; opt in via project config.
+        let dir = unique_project_dir("basilisk_test_rc_json_bad");
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(
+            dir.join("basilisk.json"),
+            b"{\"strictAnnotations\": true}\n",
+        )?;
+        let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
         let path = py.to_string_lossy().into_owned();
         let code = run_check(&[path], OutputFormat::Json, &no_cache());
-        let _ = std::fs::remove_file(&py);
+        let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(code, 1, "bad code must make run_check return 1 (Json)");
         Ok(())
     }
@@ -1007,12 +1072,18 @@ mod tests {
     /// Kills `>=` mutant at line 81 (which always returns 1 since usize >= 0).
     #[test]
     fn run_check_text_bad_code_returns_one() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = std::env::temp_dir();
-        let py = dir.join("basilisk_test_rc_text_bad.py");
+        // BSK-E0001 (unannotated `x`) is off by default; opt in via project config.
+        let dir = unique_project_dir("basilisk_test_rc_text_bad");
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(
+            dir.join("basilisk.json"),
+            b"{\"strictAnnotations\": true}\n",
+        )?;
+        let py = dir.join("bad.py");
         std::fs::write(&py, b"def foo(x) -> None:\n    pass\n")?;
         let path = py.to_string_lossy().into_owned();
         let code = run_check(&[path], OutputFormat::Text, &no_cache());
-        let _ = std::fs::remove_file(&py);
+        let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(code, 1, "bad code must make run_check return 1 (Text)");
         Ok(())
     }
@@ -1248,5 +1319,307 @@ mod tests {
             "user-supplied root starting with '.' must still be walked, got: {files:?}"
         );
         Ok(())
+    }
+
+    // ── stubs subcommand ─────────────────────────────────────────────────────
+    //
+    // The `basilisk stubs` subsystem (run_stubs → run_stubs_generate /
+    // run_stubs_status, cache_stub, find_package_source) is exercised in-process
+    // here. Driving it directly — rather than through a spawned binary — keeps
+    // its coverage independent of subprocess profile merging, which is unreliable
+    // across platforms. Implements [STUBRES-AUTOGEN] on the CLI surface.
+
+    /// `run_stubs_generate` with no packages and `--all` off must error (exit 1)
+    /// after running the mode/cache prologue. Exercises the empty-packages guard
+    /// and the hybrid mode arm.
+    #[test]
+    fn run_stubs_generate_no_packages_returns_one() {
+        assert_eq!(
+            run_stubs_generate(&[], false, StubGenModeArg::Hybrid, "python3"),
+            1,
+            "no packages must return 1"
+        );
+    }
+
+    /// `run_stubs_generate` with `--all` is not yet implemented and must return 1
+    /// before touching any package. Exercises the `all` guard and the runtime
+    /// mode arm.
+    #[test]
+    fn run_stubs_generate_all_flag_returns_one() {
+        assert_eq!(
+            run_stubs_generate(
+                &["requests".to_owned()],
+                true,
+                StubGenModeArg::Runtime,
+                "python3"
+            ),
+            1,
+            "--all is unimplemented and must return 1"
+        );
+    }
+
+    /// `run_stubs_generate` in AST mode for a package with no discoverable source
+    /// must report the missing-source error and return 1. Exercises the
+    /// `None if Ast` branch, the AST mode arm, and the per-package error tally.
+    #[test]
+    fn run_stubs_generate_ast_missing_source_returns_one() {
+        assert_eq!(
+            run_stubs_generate(
+                &["basilisk_no_such_pkg_ast".to_owned()],
+                false,
+                StubGenModeArg::Ast,
+                "python3"
+            ),
+            1,
+            "AST mode with no source must return 1"
+        );
+    }
+
+    /// `run_stubs_generate` in hybrid mode for an uninstalled package falls back
+    /// to runtime generation, which fails, returning 1. Exercises the non-AST
+    /// `None` fallback branch and the runtime-generation error path.
+    #[test]
+    fn run_stubs_generate_hybrid_uninstalled_returns_one() {
+        assert_eq!(
+            run_stubs_generate(
+                &["basilisk_no_such_pkg_hybrid".to_owned()],
+                false,
+                StubGenModeArg::Hybrid,
+                "python3"
+            ),
+            1,
+            "hybrid mode for an uninstalled package must return 1"
+        );
+    }
+
+    /// `find_package_source` returns `None` for a package that cannot be imported
+    /// (the querying subprocess exits non-zero).
+    #[test]
+    fn find_package_source_returns_none_for_unknown_package() {
+        let result = find_package_source(
+            "basilisk_definitely_not_installed_pkg",
+            std::path::Path::new("python3"),
+        );
+        assert!(result.is_none(), "unknown package must resolve to None");
+    }
+
+    /// `find_package_source` resolves an installed stdlib **package** to its
+    /// `__init__.py` — exercising the success path (subprocess ok, dir parse,
+    /// `__init__.py` exists). `json` is a package in every supported `CPython`.
+    #[test]
+    fn find_package_source_resolves_stdlib_package() {
+        let result = find_package_source("json", std::path::Path::new("python3"));
+        // Skip silently only if no usable interpreter is on PATH; otherwise the
+        // success branch must resolve `json/__init__.py`.
+        if std::process::Command::new("python3")
+            .arg("--version")
+            .output()
+            .is_ok()
+        {
+            assert!(
+                result.is_some_and(|p| p.ends_with("__init__.py")),
+                "the `json` stdlib package must resolve to its __init__.py"
+            );
+        }
+    }
+
+    /// `cache_stub` writes the stub and returns `true` on success.
+    #[test]
+    fn cache_stub_writes_and_returns_true() -> Result<(), Box<dyn std::error::Error>> {
+        use basilisk_stubs::generate::{GeneratedStub, StubGenMode};
+        let dir = unique_project_dir("basilisk_cli_cache_stub_ok");
+        std::fs::create_dir_all(&dir)?;
+        let stub = GeneratedStub {
+            module_name: "widget".to_owned(),
+            pyi_content: "def f() -> int: ...\n".to_owned(),
+            mode: StubGenMode::Hybrid,
+        };
+        let ok = cache_stub(&dir, "widget", &stub);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(ok, "cache_stub must succeed writing to a writable dir");
+        Ok(())
+    }
+
+    /// `cache_stub` returns `false` when the cache directory cannot be created
+    /// because a regular file sits where a parent directory is required.
+    #[test]
+    fn cache_stub_returns_false_when_dir_uncreatable() -> Result<(), Box<dyn std::error::Error>> {
+        use basilisk_stubs::generate::{GeneratedStub, StubGenMode};
+        let base = unique_project_dir("basilisk_cli_cache_stub_fail");
+        std::fs::create_dir_all(&base)?;
+        // A regular file where a directory component is required downstream.
+        let blocker = base.join("blocker");
+        std::fs::write(&blocker, b"not a dir")?;
+        let stub = GeneratedStub {
+            module_name: "widget".to_owned(),
+            pyi_content: "x: int\n".to_owned(),
+            mode: StubGenMode::Ast,
+        };
+        // cache_dir nested under the regular file → `create_dir_all` must fail.
+        let ok = cache_stub(&blocker.join("nested"), "widget", &stub);
+        let _ = std::fs::remove_dir_all(&base);
+        assert!(
+            !ok,
+            "cache_stub must return false when the cache dir is uncreatable"
+        );
+        Ok(())
+    }
+
+    /// `run_stubs(Status)` always reports without error (exit 0), whether or not
+    /// any stubs are cached. Exercises the `Status` dispatch arm.
+    #[test]
+    fn run_stubs_status_returns_zero() {
+        assert_eq!(
+            run_stubs(StubAction::Status),
+            0,
+            "stubs status must return 0"
+        );
+    }
+
+    /// `run_stubs(Generate { .. })` dispatches to generation; with no packages it
+    /// returns 1. Exercises the `Generate` dispatch arm end to end.
+    #[test]
+    fn run_stubs_generate_dispatch_no_packages_returns_one() {
+        let action = StubAction::Generate {
+            packages: Vec::new(),
+            all: false,
+            mode: StubGenModeArg::Ast,
+            python: "python3".to_owned(),
+        };
+        assert_eq!(
+            run_stubs(action),
+            1,
+            "generate with no packages must return 1"
+        );
+    }
+
+    // ── run_command dispatch ─────────────────────────────────────────────────
+    //
+    // `run_command` is the parsed-subcommand dispatcher `main` delegates to on
+    // the analysis stack. Driving each arm in-process — rather than only through
+    // the spawned binary — keeps the dispatch covered independently of
+    // subprocess profile merging. The `Lsp` arm is excluded on purpose: it
+    // blocks on a running server.
+
+    /// A temp project holding one clean, fully-annotated module. Returns the
+    /// directory (to clean up) and the module's path.
+    fn clean_project(
+        prefix: &str,
+    ) -> Result<(std::path::PathBuf, String), Box<dyn std::error::Error>> {
+        let dir = unique_project_dir(prefix);
+        std::fs::create_dir_all(&dir)?;
+        let py = dir.join("m.py");
+        std::fs::write(&py, b"def greet(name: str) -> str:\n    return name\n")?;
+        let path = py.to_string_lossy().into_owned();
+        Ok((dir, path))
+    }
+
+    /// `run_command(Check)` (text) on clean code returns 0 and applies colour mode.
+    #[test]
+    fn run_command_check_text_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let (dir, py) = clean_project("rc_check_text")?;
+        let code = run_command(Command::Check {
+            paths: vec![py],
+            output: OutputFormat::Text,
+            color: ColorMode::Never,
+            cache: false,
+            cache_dir: None,
+            cache_stats: false,
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(code, 0, "clean check (text) must return 0");
+        Ok(())
+    }
+
+    /// `run_command(Check)` (json) on clean code returns 0.
+    #[test]
+    fn run_command_check_json_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let (dir, py) = clean_project("rc_check_json")?;
+        let code = run_command(Command::Check {
+            paths: vec![py],
+            output: OutputFormat::Json,
+            color: ColorMode::Always,
+            cache: false,
+            cache_dir: None,
+            cache_stats: false,
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(code, 0, "clean check (json) must return 0");
+        Ok(())
+    }
+
+    /// `run_command(Check)` with the opt-in cache + stats exercises the cache
+    /// context build, the cached check path, and the stats report.
+    #[test]
+    fn run_command_check_with_cache_and_stats_returns_zero(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (dir, py) = clean_project("rc_check_cache")?;
+        let cache_dir = dir.join("cache");
+        let code = run_command(Command::Check {
+            paths: vec![py],
+            output: OutputFormat::Text,
+            color: ColorMode::Auto,
+            cache: true,
+            cache_dir: Some(cache_dir),
+            cache_stats: true,
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(code, 0, "cached clean check must return 0");
+        Ok(())
+    }
+
+    /// `run_command(Fix)` on clean code returns 0 (nothing to fix).
+    #[test]
+    fn run_command_fix_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let (dir, py) = clean_project("rc_fix")?;
+        let code = run_command(Command::Fix {
+            paths: vec![py],
+            r#unsafe: false,
+            rules: Vec::new(),
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(code, 0, "fixing clean code must return 0");
+        Ok(())
+    }
+
+    /// `run_command(Adopt)` and `run_command(Adopt { status })` both succeed on a
+    /// clean project — exercising both the adopt and the status dispatch branch.
+    #[test]
+    fn run_command_adopt_and_status_return_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let (dir, py) = clean_project("rc_adopt")?;
+        let adopt = run_command(Command::Adopt {
+            paths: vec![py.clone()],
+            status: false,
+        });
+        let status = run_command(Command::Adopt {
+            paths: vec![py],
+            status: true,
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(adopt, 0, "adopting clean code must return 0");
+        assert_eq!(status, 0, "adopt --status must return 0");
+        Ok(())
+    }
+
+    /// `run_command(Unadopt)` on a clean project returns 0.
+    #[test]
+    fn run_command_unadopt_returns_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let (dir, py) = clean_project("rc_unadopt")?;
+        let code = run_command(Command::Unadopt { paths: vec![py] });
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(code, 0, "unadopt on a clean project must return 0");
+        Ok(())
+    }
+
+    /// `run_command(Stubs { Status })` reports without error.
+    #[test]
+    fn run_command_stubs_status_returns_zero() {
+        assert_eq!(
+            run_command(Command::Stubs {
+                action: StubAction::Status,
+            }),
+            0,
+            "stubs status via run_command must return 0"
+        );
     }
 }

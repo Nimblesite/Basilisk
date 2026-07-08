@@ -46,13 +46,11 @@ The result is a codebase that *appears* to be using type checking but is actuall
 
 ## Basilisk's position
 
-Basilisk is strict by default. There is no permissive mode. There is no `--strict` flag to forget to pass. There is one mode: every parameter must be typed, every return type must be declared, `Any` must always be explicit.
+Basilisk's default *is* the Python typing spec — full PEP conformance, with no `--strict` flag to forget. And when you want more than the spec, it's one config change away: opt-in Basilisk rules require a type on every parameter, declare every return, and make `Any` explicit.
 
-This is not about making Python developers' lives harder. It's about making the safe path the default path. When strictness is the default, type coverage naturally increases as teams add new code. There's nothing to remember to turn on.
+This is not about making Python developers' lives harder. It's about making the safe path easy to reach. The spec-conformant baseline is the default; stricter checking is there the moment a team decides they want it — switched on in config, scoped per-project or per-path, never forced.
 
-Adopting Basilisk on an existing codebase does require work — but it's work that surfaces real bugs. Every BSK-E0001 is a function where the type contract was never defined. Every BSK-E0023 is a `match` statement where an unhandled case was silently ignored. The errors Basilisk reports are not false positives — they are places where the type system was not being used.
-
-Looking further ahead, [Mojo](https://www.modular.com/mojo)'s ownership semantics and immutability model are an inspiration for a planned future direction in Basilisk — but that is on the roadmap, not in the current release.
+Turning that stricter checking on for an existing codebase does require work — but it's work that surfaces real bugs. With Basilisk's annotation rules switched on, every BSK-E0001 is a function where the type contract was never defined. A non-exhaustive `match` is a case silently ignored. These are not false positives — they are places where the type system was not being used.
 
 ## Why Rust
 
@@ -86,7 +84,7 @@ Basilisk (alpha) implements Phase 1 of a seven-phase roadmap.
 
 **On the roadmap:**
 - Phase 3: 80% PEP coverage, `basilisk migrate`, gradual adoption
-- Phase 4: Mojo safety annotations (ownership, immutability, coercion)
+- Phase 4: opt-in, off-by-default ownership & immutability rules (inspired by Mojo)
 - Phase 5: WASM plugin system, Django/Pydantic/SQLAlchemy plugins, auto-stub generation
 - Phase 6: 95%+ PEP coverage, SARIF/JUnit output, enterprise hardening
 - Phase 7: Plugin marketplace, community stubs, ecosystem

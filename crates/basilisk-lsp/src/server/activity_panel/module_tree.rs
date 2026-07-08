@@ -16,26 +16,61 @@ pub(crate) struct WorkspaceModulesResult {
     pub workspace: serde_json::Value,
 }
 
+/// Workspace-wide grading accumulator for the single-pass rollup.
+#[derive(Default)]
+struct HealthTotals {
+    symbols: usize,
+    annotated: usize,
+    errors: usize,
+    warnings: usize,
+    adopted: usize,
+}
+
+impl HealthTotals {
+    fn accumulate(&mut self, health: &super::type_health::FileHealth) {
+        self.symbols += health.total_symbols;
+        self.annotated += health.annotated_symbols;
+        self.errors += health.errors;
+        self.warnings += health.warnings;
+        if health.adopted {
+            self.adopted += 1;
+        }
+    }
+}
+
+// Implements [LSPARCH-DATAMODEL]
 /// Build the module tree from the workspace index.
+///
+/// Implements the server side of [EXTACT-MODULES-MODULE-ROW] (each node carries
+/// the folded coverage %, error/warning counts, and adoption state rendered on
+/// the module row) and [EXTACT-MODULES-HEADER] (the `workspace` `HealthStats`
+/// summary that drives the view's message + badge).
 ///
 /// Each file becomes a module node containing its top-level symbols and a folded
 /// health rollup (coverage %, error/warning counts, adoption state). The
 /// workspace-wide rollup is accumulated in the same single pass, so the merged
 /// Modules panel needs no separate `basilisk.typeHealth` round-trip.
+///
+/// With type checking disabled ([ANALYSIS-ENABLED], GitHub #119) the payload
+/// carries NO grading data at all — no coverage %, no error/warning tallies, no
+/// adoption state — only the navigation tree plus `typeCheckingEnabled: false`.
+/// The grading fields are OMITTED (not zeroed) so no client can render a
+/// "NN% typed" header or coverage-tinted rows while the toggle is off.
 pub(crate) fn build_module_tree(
     idx: &WorkspaceIndex,
     scope: &str,
     project_root: Option<&Path>,
+    type_checking_enabled: bool,
+    scan_complete: bool,
 ) -> WorkspaceModulesResult {
-    let adoption_store =
-        project_root.and_then(|root| basilisk_config::AdoptionStore::load(root).ok());
+    let adoption_store = if type_checking_enabled {
+        project_root.and_then(|root| basilisk_config::AdoptionStore::load(root).ok())
+    } else {
+        None
+    };
 
     let mut modules = Vec::new();
-    let mut total_symbols: usize = 0;
-    let mut total_annotated: usize = 0;
-    let mut total_errors: usize = 0;
-    let mut total_warnings: usize = 0;
-    let mut total_adopted: usize = 0;
+    let mut totals = HealthTotals::default();
 
     for entry in &idx.files {
         let path = entry.key();
@@ -56,42 +91,26 @@ pub(crate) fn build_module_tree(
             continue;
         };
 
-        let symbols = build_symbol_list(resolved, &file_entry.text);
-        let health = compute_file_health(
-            resolved,
-            &file_entry.diagnostics,
-            path,
-            project_root,
-            adoption_store.as_ref(),
-        );
-
-        total_symbols += health.total_symbols;
-        total_annotated += health.annotated_symbols;
-        total_errors += health.errors;
-        total_warnings += health.warnings;
-        if health.adopted {
-            total_adopted += 1;
-        }
-
-        let kind = if path
-            .file_name()
-            .is_some_and(|n| n == "__init__.py" || n == "__init__.pyi")
-        {
-            "package"
-        } else {
-            "module"
-        };
-
-        modules.push(serde_json::json!({
+        let mut node = serde_json::json!({
             "name": module_name,
             "path": path.display().to_string(),
-            "kind": kind,
-            "symbols": symbols,
-            "coveragePercent": health.coverage_percent,
-            "errors": health.errors,
-            "warnings": health.warnings,
-            "adopted": health.adopted,
-        }));
+            "kind": module_kind(path),
+            "symbols": build_symbol_list(resolved, &file_entry.text),
+        });
+
+        if type_checking_enabled {
+            let health = compute_file_health(
+                resolved,
+                &file_entry.diagnostics,
+                path,
+                project_root,
+                adoption_store.as_ref(),
+            );
+            totals.accumulate(&health);
+            attach_grading(&mut node, &health);
+        }
+
+        modules.push(node);
     }
 
     modules.sort_by(|a, b| {
@@ -100,20 +119,75 @@ pub(crate) fn build_module_tree(
         a_name.cmp(b_name)
     });
 
-    let workspace = serde_json::json!({
-        "totalSymbols": total_symbols,
-        "annotatedSymbols": total_annotated,
-        "coveragePercent": coverage_percent(total_annotated, total_symbols),
-        "errors": total_errors,
-        "warnings": total_warnings,
-        "adoptedFiles": total_adopted,
-        "totalFiles": idx.files.len(),
-    });
+    let workspace = workspace_rollup(
+        &totals,
+        idx.files.len(),
+        type_checking_enabled,
+        scan_complete,
+    );
 
     WorkspaceModulesResult { modules, workspace }
 }
 
+/// Node kind: `__init__.py(i)` files are packages, everything else a module.
+fn module_kind(path: &Path) -> &'static str {
+    if path
+        .file_name()
+        .is_some_and(|n| n == "__init__.py" || n == "__init__.pyi")
+    {
+        "package"
+    } else {
+        "module"
+    }
+}
+
+/// Fold the per-file grading rollup into a module node — enabled path only
+/// ([ANALYSIS-ENABLED]): while disabled these fields are absent by construction.
+fn attach_grading(node: &mut serde_json::Value, health: &super::type_health::FileHealth) {
+    if let Some(obj) = node.as_object_mut() {
+        let _ = obj.insert("coveragePercent".into(), health.coverage_percent.into());
+        let _ = obj.insert("errors".into(), health.errors.into());
+        let _ = obj.insert("warnings".into(), health.warnings.into());
+        let _ = obj.insert("adopted".into(), health.adopted.into());
+    }
+}
+
+/// The `workspace` `HealthStats` summary. Every payload declares the toggle
+/// state; the grading rollup is only present while type checking is enabled
+/// ([ANALYSIS-ENABLED], #119). Every payload also declares `scanComplete`, so
+/// a client can tell a genuinely empty workspace apart from one whose initial
+/// scan hasn't finished ([EXTACT-MODULES-HEADER-LOADING], GitHub #144).
+fn workspace_rollup(
+    totals: &HealthTotals,
+    total_files: usize,
+    type_checking_enabled: bool,
+    scan_complete: bool,
+) -> serde_json::Value {
+    if !type_checking_enabled {
+        return serde_json::json!({
+            "typeCheckingEnabled": false,
+            "totalFiles": total_files,
+            "scanComplete": scan_complete,
+        });
+    }
+    serde_json::json!({
+        "typeCheckingEnabled": true,
+        "totalSymbols": totals.symbols,
+        "annotatedSymbols": totals.annotated,
+        "coveragePercent": coverage_percent(totals.annotated, totals.symbols),
+        "errors": totals.errors,
+        "warnings": totals.warnings,
+        "adoptedFiles": totals.adopted,
+        "totalFiles": total_files,
+        "scanComplete": scan_complete,
+    })
+}
+
 /// Build the list of top-level symbols from a resolved module.
+///
+/// Implements the server side of [EXTACT-MODULES-ITEM-PROPERTIES]: each symbol
+/// carries its name, kind, source line, and `annotated` flag so the client can
+/// render the per-symbol drill-down rows and the "untyped" decoration.
 pub(crate) fn build_symbol_list(
     resolved: &basilisk_resolver::ResolvedModule,
     text: &str,
@@ -267,7 +341,7 @@ mod tests {
         let _ = idx.set_open(&uri_a, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_b, "y: str = 'hi'\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root));
+        let tree = build_module_tree(&idx, "", Some(&root), true, true);
         assert_eq!(tree.modules.len(), 2, "expected 2 modules in the tree");
 
         let names: Vec<&str> = tree
@@ -295,7 +369,7 @@ mod tests {
         let uri = make_uri("/workspace/pkg/__init__.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root));
+        let tree = build_module_tree(&idx, "", Some(&root), true, true);
         assert_eq!(tree.modules.len(), 1);
         let kind = tree.modules[0]
             .get("kind")
@@ -311,7 +385,7 @@ mod tests {
         let uri = make_uri("/workspace/mod.py");
         let _ = idx.set_open(&uri, "x: int = 1\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root));
+        let tree = build_module_tree(&idx, "", Some(&root), true, true);
         assert_eq!(tree.modules.len(), 1);
         let kind = tree.modules[0]
             .get("kind")
@@ -329,13 +403,79 @@ mod tests {
         let _ = idx.set_open(&uri_a, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_b, "y: int = 2\n", 1);
 
-        let tree = build_module_tree(&idx, "pkg", Some(&root));
+        let tree = build_module_tree(&idx, "pkg", Some(&root), true, true);
         assert_eq!(tree.modules.len(), 1, "scope filter should keep only pkg.a");
         let name = tree.modules[0]
             .get("name")
             .and_then(|v| v.as_str())
             .unwrap();
         assert_eq!(name, "pkg.a");
+    }
+
+    // [ANALYSIS-ENABLED] (GitHub #119, showstopper reopen): with type checking
+    // disabled the server must serve NO grading data at all — no coverage %, no
+    // error/warning tallies, no adoption state — so no client can render
+    // "NN% typed" or red rows while the user has switched checking off.
+    #[test]
+    fn test_disabled_toggle_serves_no_grading_data() {
+        let root = PathBuf::from("/workspace");
+        let idx = make_index_with_roots(vec![root.clone()]);
+        // Unannotated symbols → low coverage that would tint rows red if served.
+        let uri = make_uri("/workspace/untyped.py");
+        let _ = idx.set_open(&uri, "def bare(a):\n    return a\n\nb = 2\n", 1);
+
+        let tree = build_module_tree(&idx, "", Some(&root), false, true);
+
+        assert_eq!(tree.modules.len(), 1, "module list stays for navigation");
+        let module = &tree.modules[0];
+        for field in ["coveragePercent", "errors", "warnings", "adopted"] {
+            assert!(
+                module.get(field).is_none(),
+                "disabled toggle must omit grading field '{field}' from module nodes, got {module}"
+            );
+        }
+        // Navigation payload survives — the panel is still a module browser.
+        assert!(
+            module.get("symbols").is_some(),
+            "symbols stay for navigation"
+        );
+
+        let ws = &tree.workspace;
+        assert_eq!(
+            ws.get("typeCheckingEnabled")
+                .and_then(serde_json::Value::as_bool),
+            Some(false),
+            "workspace rollup must carry typeCheckingEnabled=false, got {ws}"
+        );
+        for field in ["coveragePercent", "errors", "warnings", "totalSymbols"] {
+            assert!(
+                ws.get(field).is_none(),
+                "disabled toggle must omit workspace grading field '{field}', got {ws}"
+            );
+        }
+    }
+
+    // [ANALYSIS-ENABLED]: while enabled the payload declares it, so clients can
+    // branch on the flag instead of guessing from missing fields.
+    #[test]
+    fn test_enabled_toggle_stamps_flag_and_serves_grading() {
+        let root = PathBuf::from("/workspace");
+        let idx = make_index_with_roots(vec![root.clone()]);
+        let uri = make_uri("/workspace/mod.py");
+        let _ = idx.set_open(&uri, "x: int = 1\n", 1);
+
+        let tree = build_module_tree(&idx, "", Some(&root), true, true);
+        assert_eq!(
+            tree.workspace
+                .get("typeCheckingEnabled")
+                .and_then(serde_json::Value::as_bool),
+            Some(true),
+            "enabled payload must stamp typeCheckingEnabled=true"
+        );
+        assert!(
+            tree.modules[0].get("coveragePercent").is_some(),
+            "enabled payload keeps the grading rollup"
+        );
     }
 
     #[test]
@@ -348,7 +488,7 @@ mod tests {
         let _ = idx.set_open(&uri_full, "x: int = 1\n", 1);
         let _ = idx.set_open(&uri_partial, "a: int = 1\nb = 2\n", 1);
 
-        let tree = build_module_tree(&idx, "", Some(&root));
+        let tree = build_module_tree(&idx, "", Some(&root), true, true);
 
         // Every module node carries its folded health fields.
         for module in &tree.modules {

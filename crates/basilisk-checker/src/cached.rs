@@ -19,9 +19,17 @@ use basilisk_stubs::TypeProvenance;
 use crate::diagnostic::{Diagnostic, ErrorCode, Severity};
 
 /// Owned, serialisable form of a [`Diagnostic`].
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+///
+/// Also the value type memoized by the Salsa `checked_file` query
+/// ([CHKARCH-INCREMENTAL-SALSA]): it is fully owned, so it satisfies salsa's
+/// `Update` bound. The derive resolves each field through salsa's dispatch
+/// helper — `String`/`Option<String>` use their `Update` impls, while `Span`,
+/// `Severity`, and `Option<TypeProvenance>` fall back to their `PartialEq`
+/// impls (all are `'static`), so deriving here needs no salsa dependency in
+/// `basilisk-resolver` or `basilisk-stubs`.
+#[derive(Debug, Clone, PartialEq, Eq, salsa::Update, serde::Serialize, serde::Deserialize)]
 pub struct CachedDiagnostic {
-    /// Full code string, e.g. `"BSK-E0001"`.
+    /// Full code string, e.g. `"returns_compatibility"`.
     pub code: String,
     /// Documentation URL for the code.
     pub docs_url: String,

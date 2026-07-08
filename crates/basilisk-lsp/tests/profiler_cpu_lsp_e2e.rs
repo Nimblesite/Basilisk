@@ -92,6 +92,7 @@ async fn wait_for_progress(
 
 // ── The headline full-pipeline test ──────────────────────────────────────────
 
+// Exercises [PROFILE-REQUESTS-SNAPSHOT]
 /// Script → inject into real Python → attach → snapshot → list → stop, all over
 /// the JSON-RPC wire, asserting the genuine hotspot and every on-disk artifact.
 #[tokio::test]
@@ -422,6 +423,7 @@ async fn profiler_stop_unknown_session_is_error() -> TestResult<()> {
     Ok(())
 }
 
+// Exercises [PROFILE-REQUESTS-LIST]
 /// With no sessions started, `list` returns an empty set over the wire.
 #[tokio::test]
 async fn profiler_list_is_empty_before_any_session() -> TestResult<()> {

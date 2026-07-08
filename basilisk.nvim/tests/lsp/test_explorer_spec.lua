@@ -1,5 +1,7 @@
 --- Test explorer e2e tests — real pytest, real UI panels.
 ---
+--- Tests [NVIM-TEST-EXPLORER].
+---
 --- Tests discover, run, panel open/close, status updates with real pytest.
 
 local helpers = require("tests.lsp.helpers")

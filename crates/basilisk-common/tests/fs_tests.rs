@@ -44,6 +44,7 @@ fn read_without_recorder_returns_content_and_records_nothing() {
     let _ = std::fs::remove_file(&file);
 }
 
+// Exercises [CHKCACHE-READSET]
 #[test]
 fn recorder_captures_reads_with_canonical_key_and_hash() {
     let file = temp_file("tracked.py", "y = 2\n");

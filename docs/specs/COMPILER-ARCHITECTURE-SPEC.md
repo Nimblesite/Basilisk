@@ -4,52 +4,25 @@
 **Status**: Specification Draft
 **License**: MIT
 
----
-
-## Vision {#COMPILER-VISION}
-
-Basilisk is a compiled subset of Python. Every Basilisk program is a valid Python 3.12 program. Not every Python program is a valid Basilisk program.
-
-The compiler takes `.py` files that pass Basilisk's type checker, lowers them to LLVM IR, and produces native machine code. You run a Basilisk script the same way you run any Python script -- but it compiles and executes as native code.
-
-```bash
-basilisk run script.py          # compile + execute (JIT)
-basilisk build script.py        # compile to native binary (AOT)
-python3 script.py               # still works -- it's valid Python
-```
-
-### What This Is {#COMPILER-WHAT}
-
-- A **strict subset** of Python 3.12 that compiles to native code
-- Aims to be PEP compliant for the features it supports
-- LLVM-based: JIT for development, AOT for deployment
-- Interoperable with the Python ecosystem via CPython embedding
-- A single binary (`basilisk`) that checks, compiles, and runs
-
-### What This Is Not {#COMPILER-WHATNOT}
-
-- **Not Mojo.** No new syntax. No `fn` vs `def`. No `let` vs `var`. No MLIR. No hardware abstractions. Basilisk is Python -- the typed part.
-- **Not Cython.** No `.pyx` files. No C type declarations. No mixed Python/C syntax.
-- **Not Nuitka.** Does not attempt to compile all of CPython. Only compiles the statically typed subset.
-- **Not PyPy.** No tracing JIT over the full interpreter. Compilation is driven by static type information.
-- **Not a transpiler.** Does not emit Python, C, or Rust source. Emits LLVM IR directly.
-- **Not a drop-in CPython replacement.** Untyped code and dynamic features go through the Python interpreter via interop.
-
-### Design Thesis {#COMPILER-THESIS}
-
-Python has two halves: the typed half and the dynamic half. The typed half -- annotated functions, typed classes, generics, protocols, pattern matching -- is a perfectly good statically typed language hiding inside a dynamically typed one. Basilisk compiles that half.
-
-The dynamic half -- `eval`, `exec`, monkey-patching, runtime metaclasses -- stays in CPython where it belongs. Basilisk provides a clean interop boundary so you can call Python when you need to, but you never pay for dynamism you aren't using.
+> ⚠️ **Implementation status: EXPERIMENTAL / mostly ROADMAP.** The `basilisk-compiler`
+> crate (~1.8k LOC) currently implements a **parse → resolve → check (gate) →
+> tree-walking interpreter** pipeline over a small Python subset. There is **no
+> HIR, no LLVM/Cranelift, no native code generation, no AOT/JIT, no memory-layout
+> model, no interop, no runtime crate, no stdlib, and no `run`/`build` CLI** (the
+> compiler crate is not even a dependency of `basilisk-cli`). The four "new"
+> crates named in [`COMPILER-CRATES`](#COMPILER-CRATES) do not exist. Sections
+> below describe the *target* design, not what ships today; see
+> [`CONFAUDIT-ROADMAP`](../plans/SPEC-CONFORMANCE-AUDIT-PLAN.md#CONFAUDIT-ROADMAP).
 
 ---
 
 ## The Basilisk Subset {#COMPILER-SUBSET}
 
-Basilisk supports every Python 3.12 feature that can be statically typed and compiled. The boundary is simple: **if the type checker can verify it, the compiler can compile it.**
+Boundary: **if the type checker can verify it, the compiler can compile it.**
 
 ### Supported Features {#COMPILER-SUPPORTED}
 
-All features listed here follow standard Python 3.12 semantics. For the definitive specification of each feature, see the [Python Language Reference](https://docs.python.org/3.12/reference/) and the [Python Typing Specification](https://typing.python.org/en/latest/spec/index.html).
+Standard Python 3.12 semantics ([Language Reference](https://docs.python.org/3.12/reference/), [Typing Spec](https://typing.python.org/en/latest/spec/index.html)).
 
 **Functions and Control Flow**
 - `def` with typed parameters and return types
@@ -103,7 +76,7 @@ All features listed here follow standard Python 3.12 semantics. For the definiti
 
 ### Excluded Features {#COMPILER-EXCLUDED}
 
-These features require the CPython interpreter. Basilisk does not compile them natively. To use them, go through the Python interop layer ([Python Interop](#COMPILER-INTEROP)).
+These require the CPython interpreter; not compiled natively. Use them via the interop layer ([Python Interop](#COMPILER-INTEROP)).
 
 | Feature | Why Excluded |
 |---|---|
@@ -137,7 +110,7 @@ These features require the CPython interpreter. Basilisk does not compile them n
 
 ## Compilation Pipeline {#COMPILER-PIPELINE}
 
-The compiler extends Basilisk's existing analysis pipeline. The type checker is a hard gate -- code that fails any rule does not enter codegen.
+Extends the existing analysis pipeline. The type checker is a hard gate -- code that fails any rule does not enter codegen.
 
 ```mermaid
 graph TD
@@ -150,15 +123,12 @@ graph TD
     G --> H["Execution or native binary"]
 ```
 
-For the existing parser, resolver, and checker stages, see:
-- [CHECKER-ARCHITECTURE-SPEC.md §CHKARCH-ARCH](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH) for architecture details
-- [CHECKER-TYPE-INFERENCE-SPEC.md](CHECKER-TYPE-INFERENCE-SPEC.md) for inference rules
+Existing parser/resolver/checker stages: [CHKARCH-ARCH](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH) (architecture), [CHECKER-TYPE-INFERENCE-SPEC.md](CHECKER-TYPE-INFERENCE-SPEC.md) (inference rules).
 
 ### HIR Stage {#COMPILER-HIR}
 
-The HIR (High-level Intermediate Representation) bridges analysis and codegen. It takes the `ResolvedModule` from the checker and produces a fully typed, monomorphized representation suitable for LLVM lowering.
+The High-level Intermediate Representation bridges analysis and codegen: takes the checker's `ResolvedModule` and produces a fully typed, monomorphized representation for LLVM lowering.
 
-**What the HIR does:**
 - Resolves all `InferredType` variants to concrete `CompiledType` values with memory layout
 - Monomorphizes generics: `list[int]` and `list[str]` become distinct concrete types
 - Lowers `Union[T1, T2]` to tagged union structs
@@ -170,9 +140,8 @@ The HIR (High-level Intermediate Representation) bridges analysis and codegen. I
 
 ### Codegen Stage {#COMPILER-CODEGEN}
 
-The codegen stage translates HIR to LLVM IR using `inkwell` (safe Rust LLVM bindings).
+Translates HIR to LLVM IR via `inkwell` (safe Rust LLVM bindings):
 
-**LLVM IR generation covers:**
 - Function bodies → LLVM functions
 - Class instances → LLVM structs
 - Method dispatch → direct call (concrete) or vtable indirect call (protocol)
@@ -186,7 +155,7 @@ The codegen stage translates HIR to LLVM IR using `inkwell` (safe Rust LLVM bind
 
 ## Type Representation {#COMPILER-TYPES}
 
-Every `InferredType` from the checker maps to a concrete compiled representation. Types that cannot be fully resolved (`Any`, `Unknown`) are rejected by the checker and never reach codegen.
+Every `InferredType` maps to a concrete compiled representation. Unresolvable types (`Any`, `Unknown`) are rejected by the checker and never reach codegen.
 
 | Python Type | Compiled Representation | Stack/Heap | Notes |
 |---|---|---|---|
@@ -211,32 +180,32 @@ Every `InferredType` from the checker maps to a concrete compiled representation
 
 ### Integer Semantics {#COMPILER-TYPES-INT}
 
-By default, Basilisk integers are 64-bit signed (`i64`). This diverges from Python's arbitrary-precision integers but matches what most code actually needs.
+Default: 64-bit signed (`i64`), diverging from Python's arbitrary-precision integers.
 
-- Arithmetic overflow traps in debug mode (like Rust), wraps in release mode
-- The `--big-int` flag enables arbitrary-precision integers backed by GMP, matching Python's semantics exactly
-- Integer literals that exceed `i64` range are a compile error unless `--big-int` is enabled
+- Overflow traps in debug, wraps in release
+- `--big-int` enables arbitrary-precision integers (GMP-backed), matching Python exactly
+- Integer literals exceeding `i64` range are a compile error unless `--big-int` is set
 
 ### String Semantics {#COMPILER-TYPES-STR}
 
-Strings are UTF-8 encoded, matching Python 3's `str` type. Operations follow Python's string semantics:
+UTF-8, matching Python 3's `str`:
 
-- Indexing (`s[i]`) returns a single character (one-element `str`, not a code point integer)
-- Slicing (`s[i:j]`) returns a new string (copy-on-write optimization possible)
-- `len(s)` returns the number of Unicode code points (not bytes)
-- Concatenation allocates a new string (or mutates in-place when refcount == 1)
+- `s[i]` returns a single character (one-element `str`, not a code point integer)
+- `s[i:j]` returns a new string (copy-on-write possible)
+- `len(s)` returns Unicode code points, not bytes
+- Concatenation allocates a new string (in-place when refcount == 1)
 
 ---
 
 ## Memory Model {#COMPILER-MEMORY}
 
-Basilisk's memory management is **pluggable**. The compiler emits calls to a runtime memory interface -- the implementation behind that interface is swappable. This means the same compiled code can run under different memory management strategies without recompilation of user code (only relinking against a different runtime).
+Memory management is **pluggable**: the compiler emits calls to a runtime memory interface whose implementation is swappable. The same compiled user code runs under different strategies by relinking against a different runtime -- no recompilation.
 
-The default is **CPython-style**: reference counting with a cyclic garbage collector. This is what Python developers already know. No surprises.
+Default: **CPython-style** -- reference counting with a cyclic garbage collector.
 
 ### Memory Interface {#COMPILER-MEMORY-IFACE}
 
-The runtime exposes a standard interface that all memory backends implement:
+All memory backends implement this interface:
 
 ```
 alloc(size, type_tag) -> *void       # allocate a new object
@@ -246,7 +215,7 @@ decref(ptr)                          # decrement reference count (no-op for trac
 collect()                            # run cycle collection / GC pass
 ```
 
-The codegen emits calls to these functions. The backend is selected at link time. User code does not change.
+Codegen emits calls to these; the backend is selected at link time.
 
 ```bash
 basilisk build --gc=refcount      # default: CPython-style (refcount + cyclic GC)
@@ -257,59 +226,54 @@ basilisk build --gc=arena         # arena: bump allocator, free-all-at-once, ide
 
 ### Default Backend {#COMPILER-MEMORY-DEFAULT}
 
-**This is the only backend implemented initially.** All other backends are future work. The interface exists from day one so that adding new backends is a matter of implementing the trait, not restructuring the compiler.
+The only backend implemented initially; others are future work. The interface exists from day one so adding a backend means implementing the trait, not restructuring the compiler.
 
-The default backend matches CPython's memory semantics:
+Matches CPython's memory semantics:
 
 - Every heap object has a reference count header
-- Assignment increments the reference count
-- Scope exit or reassignment decrements the reference count
-- When the reference count reaches zero, the object is destroyed immediately
-- `__del__` methods (if present) are called deterministically at destruction time (same as CPython)
+- Assignment increments the count; scope exit or reassignment decrements it
+- At count zero, the object is destroyed immediately; `__del__` (if present) runs deterministically, as in CPython
 
 **Cyclic garbage collector:**
 
-- Objects that **can** form cycles (contain references to other heap objects) are tracked in a generation list
-- Objects that **cannot** form cycles (e.g., `list[int]`, `dict[str, float]`, primitives) are exempt -- their refcount alone is sufficient
-- The cycle collector runs when the tracked object count exceeds a generation threshold
-- Uses the trial-deletion algorithm (same approach as CPython's `gc` module)
-- Three generations, same as CPython: generation 0 (young), generation 1, generation 2 (old)
+- Objects that **can** form cycles (hold references to other heap objects) are tracked in a generation list
+- Objects that **cannot** (e.g. `list[int]`, `dict[str, float]`, primitives) are exempt -- refcount alone suffices
+- The collector runs when tracked object count exceeds a generation threshold
+- Trial-deletion algorithm, three generations (0 young, 1, 2 old) -- same as CPython's `gc`
 
-This means Basilisk programs behave identically to CPython with respect to object lifetime and `__del__` ordering for acyclic objects. Cyclic objects are collected by the same algorithm. No behavioral surprises when porting from Python.
+Acyclic object lifetime and `__del__` ordering match CPython exactly; cyclic objects use the same collection algorithm.
 
 ### Future Backends {#COMPILER-MEMORY-FUTURE}
+
+Documented for interface design; implementation deferred.
 
 | Backend | Flag | Trade-off | Best For |
 |---|---|---|---|
 | **ARC-only** | `--gc=arc` | Fastest, deterministic, but leaks reference cycles | Scripts, pipelines, acyclic data (trees, arrays, configs) |
-| **Tracing GC** | `--gc=tracing` | Higher throughput, no refcount overhead per assignment, but `__del__` timing is non-deterministic | Long-running servers, many short-lived allocations |
-| **Arena** | `--gc=arena` | Bump allocation, free everything at once, fastest possible allocation | CLI tools, request handlers, short-lived programs |
-
-These are documented here for the interface design. Implementation is deferred.
+| **Tracing GC** | `--gc=tracing` | Higher throughput, no per-assignment refcount, but non-deterministic `__del__` timing | Long-running servers, many short-lived allocations |
+| **Arena** | `--gc=arena` | Bump allocation, free everything at once, fastest allocation | CLI tools, request handlers, short-lived programs |
 
 ### Stack Allocation {#COMPILER-MEMORY-STACK}
 
-Regardless of backend, values that don't escape their scope are stack-allocated:
+Regardless of backend, values that don't escape their scope are stack-allocated and bypass the memory interface:
 
 - Primitives: `int`, `float`, `bool`, `None`
 - Small tuples: `tuple[int, int]`, `tuple[str, float]`
 - Small frozen dataclasses
 - Tagged unions where all variants are stack-sized
 
-The compiler performs escape analysis: if a value is never stored into a heap object, passed to a function that stores it, or returned, it stays on the stack. Stack-allocated values bypass the memory interface entirely.
+Escape analysis: a value stays on the stack if it is never stored into a heap object, passed to a function that stores it, or returned.
 
 ### Ownership Annotations {#COMPILER-MEMORY-OWNERSHIP}
 
-The ownership annotations from [CHECKER-ARCHITECTURE-SPEC.md §CHKARCH-MOJO-OWNERSHIP](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-MOJO-OWNERSHIP) (`Borrowed`, `Owned`, `InOut`) are optimization hints that work across **all** memory backends:
+Optional optimization hints from [CHKARCH-MOJO-OWNERSHIP](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-MOJO-OWNERSHIP) (`Borrowed`, `Owned`, `InOut`), working across **all** backends. Without them the compiler conservatively inc/decrements refcounts at call boundaries; with them it elides unnecessary operations.
 
 | Annotation | Compiler Effect |
 |---|---|
 | `Borrowed` (default) | No refcount increment at call boundary. Caller guarantees the value outlives the call. |
-| `Owned` | Caller transfers ownership. No increment. Callee responsible for eventual decrement. Enables move semantics. |
-| `InOut` | Exclusive mutable borrow. No refcount change. Compiler can optimize in-place mutation. |
+| `Owned` | Caller transfers ownership. No increment. Callee handles eventual decrement. Enables move semantics. |
+| `InOut` | Exclusive mutable borrow. No refcount change. Enables in-place mutation. |
 | (no annotation) | Same as `Borrowed` -- immutable parameter, refcount elided when provably safe. |
-
-These annotations are optional. Without them, the compiler conservatively increments/decrements reference counts at call boundaries. With them, the compiler can elide unnecessary operations -- regardless of which backend is active.
 
 ---
 
@@ -346,13 +310,13 @@ struct Point {
 
 ### Inheritance {#COMPILER-LAYOUT-INHERIT}
 
-**Single inheritance**: child struct embeds parent struct as first field, enabling pointer casting.
+**Single inheritance**: child struct embeds the parent struct as its first field, enabling pointer casting.
 
-**Multiple inheritance**: fields are flattened according to C3 MRO, computed at compile time. Each base class gets a vtable for its methods. Method calls on a base type use the corresponding vtable offset.
+**Multiple inheritance**: fields flattened per C3 MRO (computed at compile time). Each base class gets a vtable; method calls on a base type use the corresponding vtable offset.
 
 ### Protocols {#COMPILER-LAYOUT-PROTOCOLS}
 
-`Protocol` types compile to vtable interfaces, similar to Rust's `dyn Trait`:
+`Protocol` types compile to vtable interfaces, like Rust's `dyn Trait`:
 
 ```python
 class Printable(Protocol):
@@ -369,21 +333,21 @@ struct PrintableVtable {
 }
 ```
 
-Any class implementing `display(self) -> str` satisfies `Printable` at compile time. The vtable is constructed per concrete type and passed alongside the data pointer (fat pointer).
+Any class implementing `display(self) -> str` satisfies `Printable` at compile time. The vtable is built per concrete type and passed alongside the data pointer (fat pointer).
 
 ### isinstance {#COMPILER-LAYOUT-ISINSTANCE}
 
-`isinstance(x, T)` compiles to a comparison of the object's type tag against `T`'s known tag constant. This is O(1). For inheritance hierarchies, each class stores its full ancestor chain as a compile-time constant, and `isinstance` checks against the chain.
+`isinstance(x, T)` compiles to an O(1) comparison of the object's type tag against `T`'s known tag constant. For hierarchies, each class stores its full ancestor chain as a compile-time constant and the check tests against the chain.
 
 ---
 
 ## Python Interop {#COMPILER-INTEROP}
 
-Basilisk interoperates with CPython in both directions. Interop is explicit and typed at the boundary.
+Bidirectional CPython interop, explicit and typed at the boundary.
 
 ### Project Layout {#COMPILER-INTEROP-LAYOUT}
 
-All Basilisk source files use the `.py` extension. They are valid Python. The distinction between compiled Basilisk code and interpreted Python code is determined by **folder convention**, not file extension.
+All Basilisk source uses the `.py` extension and is valid Python. Compiled vs. interpreted is decided by **folder convention**, not file extension.
 
 ```
 myproject/
@@ -406,19 +370,16 @@ compile = ["src/"]          # compiled to native code
 interop = ["interop/"]      # stays in CPython, accessed via interop layer
 ```
 
-**Why not a `.bsk` extension?**
-- Basilisk files ARE valid Python -- renaming them breaks `python3 script.py` compatibility
-- Standard Python tooling (Ruff, IDEs, pytest, syntax highlighting) works on `.py` files out of the box
-- No ecosystem fragmentation
+No `.bsk` extension: keeping `.py` preserves `python3 script.py` compatibility and out-of-the-box Python tooling (Ruff, IDEs, pytest, highlighting), avoiding ecosystem fragmentation.
 
 **How it works:**
 - Imports within `compile` directories are native calls (zero overhead)
-- Imports from `interop` directories cross the interop boundary automatically (value conversion at the call site)
-- Imports from installed third-party packages follow the stub strategy: if the package passes the Basilisk checker, it can be compiled; otherwise it goes through interop (see [stub-strategy.md](stub-strategy.md))
+- Imports from `interop` directories cross the boundary automatically (value conversion at the call site)
+- Third-party packages follow the stub strategy: compile if they pass the checker, otherwise interop (see [CHECKER-STUB-RESOLUTION-SPEC.md](CHECKER-STUB-RESOLUTION-SPEC.md))
 
-**Gradual migration:** move files from `interop/` to `src/` (or whichever `compile` directory) as you add type annotations and fix checker errors. The boundary moves with you.
+**Gradual migration:** move files from `interop/` to a `compile` directory as you add annotations and fix checker errors.
 
-**Per-file override** for edge cases:
+**Per-file override:**
 
 ```python
 # basilisk: compile
@@ -432,7 +393,7 @@ interop = ["interop/"]      # stays in CPython, accessed via interop layer
 
 ### Calling Python from Basilisk {#COMPILER-INTEROP-PY2BSK}
 
-Basilisk embeds `libpython3.12` via [pyo3](https://pyo3.rs) (Rust bindings to CPython). Imports from `interop` directories or untyped third-party packages go through this layer automatically.
+Embeds `libpython3.12` via [pyo3](https://pyo3.rs). Imports from `interop` directories or untyped third-party packages go through this layer automatically.
 
 ```python
 # src/main.py (compiled)
@@ -443,11 +404,10 @@ def run(data: list[str]) -> int:
     return int(result)           # convert back to Basilisk int
 ```
 
-**At the interop boundary:**
-- Basilisk values are converted to `PyObject*` before crossing
-- Python return values are converted back to Basilisk types
+**At the boundary:**
+- Basilisk values convert to `PyObject*` before crossing; return values convert back
 - The return type must be annotated -- no implicit `Any`
-- If the Python call returns a value that doesn't match the annotation, a runtime error is raised
+- A return value that doesn't match the annotation raises a runtime error
 
 **Conversion table:**
 
@@ -484,30 +444,28 @@ import fib
 print(fib.fibonacci(40))       # calls compiled native code
 ```
 
-The compiler generates CPython C API wrappers (PEP 384 stable ABI) for all public typed functions and classes. This enables gradual adoption: compile hot paths to Basilisk, import them from Python.
+The compiler generates CPython C API wrappers (PEP 384 stable ABI) for all public typed functions and classes, enabling gradual adoption.
 
 ### Compiling Typed Python Libraries {#COMPILER-INTEROP-LIBS}
 
-A PEP-compliant Python library that passes Basilisk's type checker can be compiled to a native Basilisk library:
+A PEP-compliant library that passes the checker compiles to a native shared library (`.bsk.so` / `.bsk.dylib`), linkable directly into a Basilisk program with no CPython call-boundary overhead:
 
 ```bash
 basilisk build --lib /path/to/typed-library/
 ```
 
-This produces a native shared library (`.bsk.so` / `.bsk.dylib`) that can be linked directly into a Basilisk program -- no CPython overhead at the call boundary.
+**Requirements:**
+- Passes all checker rules (no `Any` escapes, no untyped functions)
+- All dependencies natively compiled or available via interop
+- Uses no [excluded features](#COMPILER-EXCLUDED)
 
-**Requirements for native compilation:**
-- The library must pass all Basilisk checker rules (no `Any` escapes, no untyped functions)
-- All dependencies must either be natively compiled or available via interop
-- The library must not use any excluded features ([Excluded Features](#COMPILER-EXCLUDED))
-
-**For libraries with stubs but dynamic implementations**, see [stub-strategy.md](stub-strategy.md). Libraries that have type stubs but use dynamic features internally cannot be natively compiled -- they go through the interop layer.
+Libraries with type stubs but dynamic internals cannot be natively compiled and go through interop (see [CHECKER-STUB-RESOLUTION-SPEC.md](CHECKER-STUB-RESOLUTION-SPEC.md)).
 
 ---
 
 ## Runtime Library {#COMPILER-RUNTIME}
 
-The Basilisk runtime (`basilisk-runtime`) provides the minimal foundation needed by compiled code. It is a Rust crate linked into every Basilisk binary.
+`basilisk-runtime` is the minimal Rust crate linked into every Basilisk binary.
 
 ### Core Runtime Components {#COMPILER-RUNTIME-CORE}
 
@@ -524,11 +482,11 @@ The Basilisk runtime (`basilisk-runtime`) provides the minimal foundation needed
 
 ### No GIL {#COMPILER-RUNTIME-NOGIL}
 
-Basilisk does not have a Global Interpreter Lock. Statically typed code does not need runtime type dispatch or reference safety guards. True parallelism is available through typed concurrency primitives.
+No Global Interpreter Lock: statically typed code needs no runtime type dispatch or reference-safety guards. True parallelism via typed concurrency primitives.
 
 ### Exception Implementation {#COMPILER-RUNTIME-EXCEPTIONS}
 
-Exceptions are compiled to LLVM landing pads (zero-cost when no exception is thrown):
+Exceptions compile to LLVM landing pads (zero-cost when none is thrown):
 
 - `raise` generates an LLVM `invoke` to a runtime raise function
 - `try` / `except` generates a landing pad that catches and dispatches by exception type
@@ -540,31 +498,31 @@ Exceptions are compiled to LLVM landing pads (zero-cost when no exception is thr
 
 ## Standard Library Strategy {#COMPILER-STDLIB}
 
-The standard library is available in three tiers:
+Three tiers.
 
 ### Tier 1: Native Builtins {#COMPILER-STDLIB-T1}
 
-Implemented in the Basilisk runtime (Rust) or compiled from Basilisk source. Full native speed, no CPython dependency.
+In the Rust runtime or compiled from Basilisk source. Full native speed, no CPython.
 
 `builtins`, `math`, `os.path`, `sys` (subset: `argv`, `exit`, `platform`, `version`), `collections` (`deque`, `defaultdict`, `Counter`, `OrderedDict`), `itertools`, `functools` (subset: `reduce`, `partial`, `lru_cache`), `typing`, `dataclasses`, `enum`, `json`, `re` (via Rust `regex` crate), `pathlib`, `datetime`, `hashlib`, `struct`, `io` (subset: file read/write), `string`, `textwrap`, `copy` (`copy`, `deepcopy`)
 
 ### Tier 2: Wrapper Builtins {#COMPILER-STDLIB-T2}
 
-Thin Basilisk wrappers around OS or C libraries. Native speed for the computation, syscall overhead for OS operations.
+Thin Basilisk wrappers over OS/C libraries. Native compute speed, syscall overhead for OS operations.
 
 `os`, `socket`, `threading`, `subprocess`, `csv`, `tempfile`, `shutil`, `signal`, `select`, `mmap`
 
 ### Tier 3: Python Interop {#COMPILER-STDLIB-T3}
 
-Everything not in Tier 1 or Tier 2 goes through CPython embedding. This includes all third-party packages.
+Everything else goes through CPython embedding, including all third-party packages.
 
-`importlib`, `inspect`, `ast`, `asyncio` (initially -- native implementation planned), `logging`, `unittest`, `argparse`, `http`, `urllib`, `email`, `xml`, `sqlite3`, `ctypes`, and all third-party packages
+`importlib`, `inspect`, `ast`, `asyncio` (native planned), `logging`, `unittest`, `argparse`, `http`, `urllib`, `email`, `xml`, `sqlite3`, `ctypes`, and all third-party packages
 
 ---
 
 ## CLI Interface {#COMPILER-CLI}
 
-The existing `basilisk check` and `basilisk lsp` commands remain unchanged. New commands for compilation:
+Existing `basilisk check` and `basilisk lsp` are unchanged. New compilation commands:
 
 ```bash
 # Run (JIT compile and execute)
@@ -612,31 +570,27 @@ basilisk lsp                         # language server
 
 ### JIT Mode {#COMPILER-MODES-JIT}
 
-For development. Parse, check, lower to HIR, generate LLVM IR, JIT-compile, and execute immediately.
+For development. Parse, check, lower to HIR, generate LLVM IR, JIT-compile, execute immediately.
 
-- Uses LLVM's ORC JIT engine
-- Module-level code executes as soon as it's compiled
-- Compiled modules are cached in `.basilisk/cache/` keyed by content hash
-- Subsequent runs skip compilation for unchanged modules
-- **Startup target**: < 100ms for a small script (after cache warm-up)
+- LLVM ORC JIT engine; module-level code runs as soon as it compiles
+- Modules cached in `.basilisk/cache/` keyed by content hash; unchanged modules skip recompilation
+- **Startup target**: < 100ms for a small script (cache warm)
 
 ### AOT Mode {#COMPILER-MODES-AOT}
 
 For deployment. Full ahead-of-time compilation to a native binary or shared library.
 
-- Whole-program analysis: monomorphization, dead code elimination, cross-module inlining
-- Links against `basilisk-runtime` (static by default)
-- If interop is used, links against `libpython3.12` (dynamic)
+- Whole-program analysis: monomorphization, dead-code elimination, cross-module inlining
+- Links `basilisk-runtime` (static by default); links `libpython3.12` (dynamic) when interop is used
 - Output: standalone binary, shared library, or CPython extension module
-- Cross-compilation supported via LLVM target triples
+- Cross-compilation via LLVM target triples
 
 ### Caching {#COMPILER-MODES-CACHE}
 
 Both modes use content-addressed caching:
-- Each module is hashed (source content + compiler version + flags)
-- Compiled LLVM IR and object files are cached in `.basilisk/cache/`
-- Cache invalidation is automatic when source changes
-- `basilisk cache clear` to manually flush
+- Each module hashed (source + compiler version + flags)
+- Compiled LLVM IR and object files cached in `.basilisk/cache/`; auto-invalidated on source change
+- `basilisk cache clear` to flush manually
 
 ---
 
@@ -664,7 +618,7 @@ basilisk-cli
   +-- basilisk-lsp       (depends on basilisk-checker)
 ```
 
-No circular dependencies. The existing `parser → resolver → checker` chain is extended with `→ hir → codegen`. The runtime and interop crates are standalone.
+No cycles. The existing `parser → resolver → checker` chain extends with `→ hir → codegen`; runtime and interop are standalone.
 
 ---
 
@@ -687,25 +641,25 @@ No circular dependencies. The existing `parser → resolver → checker` chain i
 
 ## Performance Targets {#COMPILER-PERF}
 
-| Benchmark | Target vs C/Rust | CPython Comparison | Notes |
-|---|---|---|---|
-| Fibonacci(40) recursive | Within 2x of C | ~100x faster than CPython | Tests function call overhead |
-| String processing (100MB) | Within 3x of Rust | ~50x faster than CPython | Tests string allocation and iteration |
-| JSON parsing | Within 2x of serde_json | ~20x faster than CPython json | Tests dict/list construction |
-| List comprehension (1M elements) | Within 2x of Rust Vec | ~30x faster than CPython | Tests collection allocation |
-| Startup time (hello world) | < 50ms | CPython ~30ms | JIT compilation + execution |
-| Binary size (hello world) | < 5MB | N/A | Statically linked with runtime |
-| Compilation speed | < 1s for 10K LOC | N/A | Incremental: < 100ms for single file change |
+| Benchmark | Target vs C/Rust | Notes |
+|---|---|---|
+| Fibonacci(40) recursive | Within 2x of C | Tests function call overhead |
+| String processing (100MB) | Within 3x of Rust | Tests string allocation and iteration |
+| JSON parsing | Within 2x of serde_json | Tests dict/list construction |
+| List comprehension (1M elements) | Within 2x of Rust Vec | Tests collection allocation |
+| Startup time (hello world) | < 50ms | JIT compilation + execution |
+| Binary size (hello world) | < 5MB | Statically linked with runtime |
+| Compilation speed | < 1s for 10K LOC | Incremental: < 100ms for single file change |
 
 ---
 
 ## Testing Strategy {#COMPILER-TESTING}
 
-The compiler is tested end-to-end. We write a `.py` file, compile and run it, and match the output against an expected output file. This is the primary testing layer -- it proves the whole pipeline works from source to execution.
+Tested end-to-end: write a `.py` file, compile and run it, match stdout against an expected-output file. This is the primary layer, proving the whole source-to-execution pipeline.
 
 ### E2E Test Convention {#COMPILER-TESTING-E2E}
 
-Test fixtures live in `crates/basilisk-compiler/tests/e2e/`. Each test is a pair of files:
+Fixtures live in `crates/basilisk-compiler/tests/e2e/` as file pairs:
 
 ```
 crates/basilisk-compiler/tests/e2e/
@@ -718,7 +672,7 @@ crates/basilisk-compiler/tests/e2e/
   ...
 ```
 
-**The input file** is a valid Basilisk (typed Python) program:
+The input is a valid Basilisk (typed Python) program; the `-expectedoutput.txt` file is its exact stdout:
 
 ```python
 # crates/basilisk-compiler/tests/e2e/hello.py
@@ -728,103 +682,20 @@ def main() -> None:
 main()
 ```
 
-**The expected output file** is the exact stdout the program should produce:
-
 ```
 # crates/basilisk-compiler/tests/e2e/hello-expectedoutput.txt
 hello, world
 ```
 
-The test runner compiles each `.py` file, executes the resulting binary, captures stdout, and asserts it matches the corresponding `-expectedoutput.txt` file byte-for-byte.
+The runner compiles each `.py`, runs the binary, and asserts captured stdout matches the corresponding `-expectedoutput.txt` byte-for-byte.
 
 ### Examples {#COMPILER-TESTING-EXAMPLES}
 
-**Arithmetic:**
-
-```python
-# arithmetic.py
-def add(a: int, b: int) -> int:
-    return a + b
-
-def multiply(x: int, y: int) -> int:
-    return x * y
-
-print(add(2, 3))
-print(multiply(4, 5))
-print(add(multiply(2, 3), 4))
-```
-
-```
-# arithmetic-expectedoutput.txt
-5
-20
-10
-```
-
-**Control flow:**
-
-```python
-# controlflow.py
-def fizzbuzz(n: int) -> str:
-    if n % 15 == 0:
-        return "FizzBuzz"
-    elif n % 3 == 0:
-        return "Fizz"
-    elif n % 5 == 0:
-        return "Buzz"
-    else:
-        return str(n)
-
-for i in range(1, 16):
-    print(fizzbuzz(i))
-```
-
-```
-# controlflow-expectedoutput.txt
-1
-2
-Fizz
-4
-Buzz
-Fizz
-7
-8
-Fizz
-Buzz
-11
-Fizz
-13
-14
-FizzBuzz
-```
-
-**Classes:**
-
-```python
-# classes.py
-class Point:
-    x: float
-    y: float
-
-    def __init__(self, x: float, y: float) -> None:
-        self.x = x
-        self.y = y
-
-    def distance(self) -> float:
-        return (self.x ** 2 + self.y ** 2) ** 0.5
-
-p = Point(3.0, 4.0)
-print(p.distance())
-```
-
-```
-# classes-expectedoutput.txt
-5.0
-```
+A `fizzbuzz(n: int) -> str` over `range(1, 16)`, an arithmetic `add`/`multiply`, and a `Point` class with a `distance` method, each paired with its expected stdout, exercise control flow, functions, and classes end-to-end.
 
 ### Test Layers {#COMPILER-TESTING-LAYERS}
 
-The compiler follows the same testing philosophy as the analyzer (see [CHECKER-ARCHITECTURE-SPEC.md §CHKARCH-TESTING](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING)):
+Same testing philosophy as the analyzer ([CHKARCH-TESTING](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING)):
 
 | Layer | Location | What It Tests |
 |---|---|---|
@@ -832,11 +703,11 @@ The compiler follows the same testing philosophy as the analyzer (see [CHECKER-A
 | **Integration** | `crates/basilisk-hir/tests/`, `crates/basilisk-codegen/tests/` | HIR lowering and LLVM IR generation for specific constructs |
 | **Unit** | `#[cfg(test)]` modules inside crate source files | Narrow logic only -- type layout computation, ARC elision decisions |
 
-E2E tests are the foundation. If a feature doesn't have an E2E test with expected output, it doesn't work.
+A feature without an E2E test and expected output does not work.
 
 ### Failure Tests {#COMPILER-TESTING-FAILURES}
 
-Tests that should **fail to compile** use a `-expectederror.txt` file instead:
+Tests that should **fail to compile** use a `-expectederror.txt` file:
 
 ```python
 # untyped-param.py
@@ -849,7 +720,7 @@ def greet(name):  # missing type annotation
 BSK-E0001
 ```
 
-The test runner asserts that compilation fails and the error output contains the expected error code.
+The runner asserts compilation fails and the error output contains the expected code.
 
 ---
 

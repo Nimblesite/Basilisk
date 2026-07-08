@@ -14,12 +14,12 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0115: Deprecated usage — comprehensive coverage
+// Deprecated usage — comprehensive coverage
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Tests that @deprecated functions are detected when called.
 #[test]
-fn e0115_deprecated_function_call() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_function_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -36,7 +36,7 @@ ref = old_func
     let diagnostics = run(source)?;
     let e0115: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0115")
+        .filter(|d| d.code.code == "directives_deprecated")
         .collect();
     assert!(
         !e0115.is_empty(),
@@ -51,7 +51,7 @@ ref = old_func
 
 /// Tests deprecated class usage.
 #[test]
-fn e0115_deprecated_class_call() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_class_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -68,7 +68,7 @@ cls_ref = OldClass
     let diagnostics = run(source)?;
     let e0115: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0115")
+        .filter(|d| d.code.code == "directives_deprecated")
         .collect();
     assert!(
         !e0115.is_empty(),
@@ -83,7 +83,7 @@ cls_ref = OldClass
 
 /// Tests deprecated method calls via instance variable type inference.
 #[test]
-fn e0115_deprecated_method_via_instance() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_method_via_instance() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -105,7 +105,7 @@ obj.old_method()
 
 /// Tests deprecated property access.
 #[test]
-fn e0115_deprecated_property() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_property() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -131,7 +131,7 @@ cfg.old_prop = 10
 
 /// Tests deprecated __call__ dunder.
 #[test]
-fn e0115_deprecated_call_dunder() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_call_dunder() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -150,7 +150,7 @@ obj()
 
 /// Tests deprecated dunder via binary operator.
 #[test]
-fn e0115_deprecated_add_dunder() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_add_dunder() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -169,7 +169,7 @@ x += 1
 
 /// Tests deprecated setter via augmented assignment on attribute.
 #[test]
-fn e0115_deprecated_setter_aug_assign() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_setter_aug_assign() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -193,7 +193,7 @@ s.size += 10
 
 /// Tests deprecated overloaded function.
 #[test]
-fn e0115_deprecated_overload() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_overload() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 from typing_extensions import deprecated
@@ -216,7 +216,7 @@ process(42)
 
 /// Tests deprecated usage inside function body with param annotation types.
 #[test]
-fn e0115_deprecated_in_function_body() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_in_function_body() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -235,7 +235,7 @@ def process(w: Widget) -> str:
 
 /// Tests deprecated usage in control flow.
 #[test]
-fn e0115_deprecated_in_control_flow() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_in_control_flow() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -261,7 +261,7 @@ x: int = old_check()
 
 /// Tests deprecated via module attribute access pattern.
 #[test]
-fn e0115_deprecated_attribute_access() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_attribute_access() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -279,12 +279,12 @@ Library.old_func()
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0130: TypeVar scoping — comprehensive coverage
+// TypeVar scoping — comprehensive coverage
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Tests nested class using outer class `TypeVar` in base.
 #[test]
-fn e0130_nested_class_outer_typevar_base() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_class_outer_typevar_base() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -301,7 +301,7 @@ class Outer(Generic[T]):
 
 /// Tests nested class body referencing outer `TypeVar` in annotation.
 #[test]
-fn e0130_nested_class_body_typevar_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_class_body_typevar_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -325,7 +325,7 @@ class Outer(Generic[T]):
 
 /// Tests unbound `TypeVar` in function body annotation.
 #[test]
-fn e0130_unbound_typevar_in_function() -> Result<(), Box<dyn std::error::Error>> {
+fn unbound_typevar_in_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -343,7 +343,7 @@ def func(x: int) -> None:
 
 /// Tests `TypeAlias` inside class body referencing class `TypeVar`.
 #[test]
-fn e0130_typealias_in_class_body() -> Result<(), Box<dyn std::error::Error>> {
+fn typealias_in_class_body() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic, TypeAlias
 
@@ -360,7 +360,7 @@ class Container(Generic[T]):
 
 /// Tests module-level `TypeVar` usage in non-alias expressions.
 #[test]
-fn e0130_module_level_unbound_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn module_level_unbound_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -378,7 +378,7 @@ y: list[T] = []
 /// Tests generic instance method call type mismatch.
 /// ALL code at module level (no indentation) — e0130 line-by-line scanner requires this.
 #[test]
-fn e0130_generic_instance_method_call() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_instance_method_call() -> Result<(), Box<dyn std::error::Error>> {
     // NOTE: e0130 check.rs scans SOURCE TEXT line-by-line. All generic classes,
     // instances, and method calls MUST be at module level (zero indentation).
     let source = "from typing import TypeVar, Generic
@@ -410,7 +410,7 @@ b.get()
 
 /// Tests generic instance with multiple type params at module level.
 #[test]
-fn e0130_generic_instance_multi_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_instance_multi_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import TypeVar, Generic
 
 T = TypeVar(\"T\")
@@ -436,7 +436,7 @@ p.set_second(\"ok\")
 
 /// Tests variance assignment checks.
 #[test]
-fn e0130_variance_assignments() -> Result<(), Box<dyn std::error::Error>> {
+fn variance_assignments() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -474,7 +474,7 @@ f: Contravariant[int] = Contravariant()
 /// Targets `check_generic_constructor_calls` which needs `TypeVar` defaults
 /// and partial specialization: Container[int]("wrong") where T defaults.
 #[test]
-fn e0130_typevar_default_constructor() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_constructor() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import TypeVar, Generic
 
 T = TypeVar(\"T\", default=int)
@@ -505,7 +505,7 @@ Container[str](\"ok\", \"label\")
 /// Tests `TypeVar` default with partial specialization at module level.
 /// This specifically targets check.rs lines 228-380.
 #[test]
-fn e0130_typevar_default_partial_specialization() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_partial_specialization() -> Result<(), Box<dyn std::error::Error>> {
     let source = "from typing import TypeVar, Generic
 
 T = TypeVar(\"T\")
@@ -526,12 +526,12 @@ Pair[int, str](1, \"ok\")
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0148: Generic type argument violations — comprehensive
+// Generic type argument violations — comprehensive
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Tests constrained `TypeVar` mismatch at call site.
 #[test]
-fn e0148_constrained_typevar_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn constrained_typevar_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -554,7 +554,7 @@ concat("hello", b"world")
 
 /// Tests Mapping key type mismatch.
 #[test]
-fn e0148_mapping_key_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn mapping_key_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Mapping
 
@@ -573,7 +573,7 @@ bad_val = scores[42]
 
 /// Tests generic metaclass detection.
 #[test]
-fn e0148_generic_metaclass() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_metaclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -589,7 +589,7 @@ class BadMeta(metaclass=Generic[T]):
 
 /// Tests constrained `TypeVar` with multiple parameters.
 #[test]
-fn e0148_constrained_multi_param() -> Result<(), Box<dyn std::error::Error>> {
+fn constrained_multi_param() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -610,12 +610,12 @@ multi(1.0, (1, 2))
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0048: TypeAlias — additional coverage
+// TypeAlias — additional coverage
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Tests `TypeAlias` with `from typing import TypeAlias as TA`.
 #[test]
-fn e0048_typealias_as_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn typealias_as_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias as TA
 
@@ -625,7 +625,7 @@ GoodAlias: TA = int | str
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert!(!e0048.is_empty(), "should flag invalid TA RHS: {e0048:?}");
     Ok(())
@@ -633,7 +633,7 @@ GoodAlias: TA = int | str
 
 /// Tests `eval()` as `TypeAlias` RHS.
 #[test]
-fn e0048_eval_rhs() -> Result<(), Box<dyn std::error::Error>> {
+fn eval_rhs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias
 
@@ -642,7 +642,7 @@ BadAlias: TypeAlias = eval("int")
     let diagnostics = run(source)?;
     let e0048: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0048")
+        .filter(|d| d.code.code == "aliases_implicit")
         .collect();
     assert!(!e0048.is_empty(), "eval() should be flagged");
     Ok(())
@@ -650,7 +650,7 @@ BadAlias: TypeAlias = eval("int")
 
 /// Tests union alias instantiation.
 #[test]
-fn e0048_union_alias_instantiation() -> Result<(), Box<dyn std::error::Error>> {
+fn union_alias_instantiation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 
@@ -664,7 +664,7 @@ x = UnionAlias()
 
 /// Tests generic alias with too many type args.
 #[test]
-fn e0048_generic_alias_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_alias_too_many_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias, TypeVar
 
@@ -680,7 +680,7 @@ x: GenericAlias[int, str] = []
 
 /// Tests non-generic alias parameterized.
 #[test]
-fn e0048_non_generic_alias_parameterized() -> Result<(), Box<dyn std::error::Error>> {
+fn non_generic_alias_parameterized() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeAlias
 
@@ -694,7 +694,7 @@ x: SimpleAlias[int] = 42
 
 /// Tests `ParamSpec` alias with simple args.
 #[test]
-fn e0048_paramspec_alias_simple_args() -> Result<(), Box<dyn std::error::Error>> {
+fn paramspec_alias_simple_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias, TypeVar, ParamSpec, Callable
 
@@ -711,7 +711,7 @@ x: CallbackAlias[int, str] = lambda: None
 
 /// Tests `TypeVar` bound violation in type alias args.
 #[test]
-fn e0048_typevar_bound_violation() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_bound_violation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAlias, TypeVar
 
@@ -729,7 +729,7 @@ z: BoundedAlias[bool] = []
 
 /// Tests runtime variable used as annotation.
 #[test]
-fn e0048_runtime_var_as_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn runtime_var_as_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 runtime_val = 42
 other_val = [1, 2, 3]
@@ -744,7 +744,7 @@ def func(p1: runtime_val, p2: other_val) -> None:
 
 /// Tests implicit alias detection.
 #[test]
-fn e0048_implicit_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn implicit_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -763,12 +763,12 @@ z = IntOrStr()
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0150: Dead branch variables — inside function bodies
+// Dead branch variables — inside function bodies
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Tests version guard inside function.
 #[test]
-fn e0150_version_guard_in_function() -> Result<(), Box<dyn std::error::Error>> {
+fn version_guard_in_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 import sys
 
@@ -788,7 +788,7 @@ def my_func():
 
 /// Tests platform guard inside function.
 #[test]
-fn e0150_platform_guard_in_function() -> Result<(), Box<dyn std::error::Error>> {
+fn platform_guard_in_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import sys
 
@@ -808,7 +808,7 @@ def check_platform():
 
 /// Tests multiple version operators.
 #[test]
-fn e0150_version_multiple_operators() -> Result<(), Box<dyn std::error::Error>> {
+fn version_multiple_operators() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import sys
 
@@ -844,7 +844,7 @@ def check_versions():
 
 /// Tests dead var usage in call expressions and attribute access.
 #[test]
-fn e0150_dead_var_in_call_and_attr() -> Result<(), Box<dyn std::error::Error>> {
+fn dead_var_in_call_and_attr() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import sys
 
@@ -865,7 +865,7 @@ def check_dead_usage():
 
 /// Tests dead branch else dead.
 #[test]
-fn e0150_dead_branch_else_dead() -> Result<(), Box<dyn std::error::Error>> {
+fn dead_branch_else_dead() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import sys
 
@@ -884,7 +884,7 @@ def check():
 
 /// Tests platform != guard.
 #[test]
-fn e0150_platform_not_equal() -> Result<(), Box<dyn std::error::Error>> {
+fn platform_not_equal() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import sys
 
@@ -903,7 +903,7 @@ def check():
 
 /// Tests nested function dead branch.
 #[test]
-fn e0150_nested_function() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 import sys
 
@@ -924,7 +924,7 @@ def outer():
 
 /// Tests `ann_assign` with dead var.
 #[test]
-fn e0150_ann_assign_dead_var() -> Result<(), Box<dyn std::error::Error>> {
+fn ann_assign_dead_var() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 import sys
 
@@ -942,12 +942,12 @@ def check():
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0014: TypeForm — comprehensive
+// TypeForm — comprehensive
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Tests `TypeForm` literal assignments.
 #[test]
-fn e0014_typeform_literal_assignments() -> Result<(), Box<dyn std::error::Error>> {
+fn typeform_literal_assignments() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import TypeForm
 
@@ -964,7 +964,7 @@ t: TypeForm[tuple] = (int, str)
 
 /// Tests `TypeForm` call expressions.
 #[test]
-fn e0014_typeform_call() -> Result<(), Box<dyn std::error::Error>> {
+fn typeform_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing_extensions import TypeForm
 
@@ -980,7 +980,7 @@ d: TypeForm[None] = None
 
 /// Tests `TypeForm` string validation.
 #[test]
-fn e0014_typeform_string() -> Result<(), Box<dyn std::error::Error>> {
+fn typeform_string() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import TypeForm
 
@@ -996,7 +996,7 @@ b: TypeForm[int | str] = "int | str"
 
 /// Tests `TypeForm` RHS type expression — invalid forms.
 #[test]
-fn e0014_typeform_invalid_rhs() -> Result<(), Box<dyn std::error::Error>> {
+fn typeform_invalid_rhs() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import TypeForm
 from typing import Annotated, Optional
@@ -1017,7 +1017,7 @@ c: TypeForm[int] = Annotated[int, "metadata"]
 
 /// Tests `TypeForm` constructor calls.
 #[test]
-fn e0014_typeform_constructor() -> Result<(), Box<dyn std::error::Error>> {
+fn typeform_constructor() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import TypeForm
 
@@ -1037,7 +1037,7 @@ TypeForm("str | None")
 
 /// Tests `TypeForm` function parameter args.
 #[test]
-fn e0014_typeform_function_param() -> Result<(), Box<dyn std::error::Error>> {
+fn typeform_function_param() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import TypeForm
 
@@ -1055,11 +1055,11 @@ expects_typeform(int)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0149: PEP 695 — scoping violations
+// PEP 695 — scoping violations
 // ═══════════════════════════════════════════════════════════════════════
 
 #[test]
-fn e0149_bound_cross_reference() -> Result<(), Box<dyn std::error::Error>> {
+fn bound_cross_reference() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Sequence
 
@@ -1075,7 +1075,7 @@ class BadClass2[S, T: Sequence[S]]:
 }
 
 #[test]
-fn e0149_type_stmt_in_function() -> Result<(), Box<dyn std::error::Error>> {
+fn type_stmt_in_function() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def my_func():
     type InnerAlias = int | str
@@ -1087,7 +1087,7 @@ def my_func():
 }
 
 #[test]
-fn e0149_type_stmt_circular() -> Result<(), Box<dyn std::error::Error>> {
+fn type_stmt_circular() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type CircularAlias = CircularAlias
 type CircularArgs[T] = CircularArgs[str]
@@ -1098,7 +1098,7 @@ type CircularArgs[T] = CircularArgs[str]
 }
 
 #[test]
-fn e0149_type_stmt_operations() -> Result<(), Box<dyn std::error::Error>> {
+fn type_stmt_operations() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 type MyType = int | str
 
@@ -1116,7 +1116,7 @@ class Child(MyType):
 }
 
 #[test]
-fn e0149_method_shadows_class_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn method_shadows_class_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Container[T]:
     def method[T](self) -> T:
@@ -1131,9 +1131,9 @@ class Container[T]:
 // Additional coverage targets for various rules
 // ═══════════════════════════════════════════════════════════════════════
 
-/// E0097: Protocol __init__ with nested body walking.
+/// Protocol __init__ with nested body walking.
 #[test]
-fn e0097_protocol_init_nested_body() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_init_nested_body() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -1154,9 +1154,9 @@ class Proto(Protocol):
     Ok(())
 }
 
-/// E0107: Variance with nested generics.
+/// Variance with nested generics.
 #[test]
-fn e0107_variance_nested_generics() -> Result<(), Box<dyn std::error::Error>> {
+fn variance_nested_generics() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -1190,9 +1190,9 @@ class Multi(Base[T_co], Covariant[T_co], Generic[T_co]):
     Ok(())
 }
 
-/// E0137: Generic protocol violations.
+/// Generic protocol violations.
 #[test]
-fn e0137_generic_protocol() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar, Generic
 
@@ -1222,9 +1222,9 @@ z: Container[str] = BadContainer()
     Ok(())
 }
 
-/// E0137: Protocol with Generic[T] both bases.
+/// Protocol with Generic[T] both bases.
 #[test]
-fn e0137_protocol_generic_both() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_generic_both() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar, Generic
 
@@ -1238,9 +1238,9 @@ class Readable(Protocol[T_co], Generic[T_co]):
     Ok(())
 }
 
-/// E0137: Self-typed protocol method.
+/// Self-typed protocol method.
 #[test]
-fn e0137_self_typed_protocol() -> Result<(), Box<dyn std::error::Error>> {
+fn self_typed_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -1265,9 +1265,9 @@ y: Clonable = Bad()
     Ok(())
 }
 
-/// E0111: Constructor errors — various patterns.
+/// Constructor errors — various patterns.
 #[test]
-fn e0111_constructor_various() -> Result<(), Box<dyn std::error::Error>> {
+fn constructor_various() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar, NamedTuple
 from dataclasses import dataclass
@@ -1303,9 +1303,9 @@ Data(x=1, z=2)
     Ok(())
 }
 
-/// E0111: Generic constructor with self annotation.
+/// Generic constructor with self annotation.
 #[test]
-fn e0111_self_annotation_typevar() -> Result<(), Box<dyn std::error::Error>> {
+fn self_annotation_typevar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 

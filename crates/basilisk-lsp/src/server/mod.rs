@@ -30,7 +30,15 @@ macro_rules! diaglog {
             .append(true)
             .open("/tmp/basilisk-diag.log")
         {
-            let _ = writeln!(f, $($arg)*);
+            // Millisecond timestamp + pid, and a single write per line so
+            // concurrent handlers (and concurrent server processes in tests)
+            // cannot shred each other's lines mid-string.
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0);
+            let line = format!($($arg)*);
+            let _ = writeln!(f, "[{timestamp} p{}] {line}", std::process::id());
         }
     }};
 }
@@ -43,23 +51,25 @@ use tower_lsp::lsp_types::{
     CallHierarchyOutgoingCall, CallHierarchyOutgoingCallsParams, CallHierarchyPrepareParams,
     CodeActionParams, CodeActionResponse, CodeLens, CodeLensParams, ColorInformation,
     ColorPresentation, ColorPresentationParams, CompletionItem, CompletionParams,
-    CompletionResponse, DidChangeConfigurationParams, DidChangeTextDocumentParams,
+    CompletionResponse, Diagnostic, DidChangeConfigurationParams, DidChangeTextDocumentParams,
     DidChangeWatchedFilesParams, DidChangeWorkspaceFoldersParams, DidCloseTextDocumentParams,
     DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentColorParams,
-    DocumentFormattingParams, DocumentHighlight, DocumentHighlightParams, DocumentSymbolParams,
-    DocumentSymbolResponse, ExecuteCommandParams, FoldingRange, FoldingRangeParams,
-    GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams, InitializeParams,
-    InitializeResult, InitializedParams, InlayHint, InlayHintParams, Location, Position,
-    PrepareRenameResponse, ReferenceParams, RenameFilesParams, RenameParams, SelectionRange,
-    SelectionRangeParams, SemanticTokensParams, SemanticTokensResult, SignatureHelpParams,
-    SymbolInformation, TextDocumentPositionParams, TextEdit, TypeHierarchyItem,
-    TypeHierarchyPrepareParams, TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, Url,
-    WorkspaceEdit, WorkspaceSymbolParams,
+    DocumentFormattingParams, DocumentHighlight, DocumentHighlightParams,
+    DocumentRangeFormattingParams, DocumentSymbolParams, DocumentSymbolResponse,
+    ExecuteCommandParams, FoldingRange, FoldingRangeParams, GotoDefinitionParams,
+    GotoDefinitionResponse, Hover, HoverParams, InitializeParams, InitializeResult,
+    InitializedParams, InlayHint, InlayHintParams, Location, Position, PrepareRenameResponse,
+    ReferenceParams, RenameFilesParams, RenameParams, SelectionRange, SelectionRangeParams,
+    SemanticTokensParams, SemanticTokensResult, SignatureHelpParams, SymbolInformation,
+    TextDocumentPositionParams, TextEdit, TypeHierarchyItem, TypeHierarchyPrepareParams,
+    TypeHierarchySubtypesParams, TypeHierarchySupertypesParams, Url, WorkspaceEdit,
+    WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LspService, Server};
 
 use crate::workspace::WorkspaceIndex;
 
+// Implements [ANALYSIS-INCR-DEBOUNCE]
 /// Debounce interval for file-watcher notifications (milliseconds).
 pub(super) const FILE_WATCHER_DEBOUNCE_MS: u64 = 200;
 
@@ -76,6 +86,7 @@ pub(super) fn no_workspace_root_error() -> tower_lsp::jsonrpc::Error {
 /// Debounce interval for `basilisk/moduleChanged` notifications (milliseconds).
 pub(super) const MODULE_CHANGED_DEBOUNCE_MS: u64 = 300;
 
+// Implements [LSPTEST-CONFIGURATION-SETTINGS]
 /// Runtime test explorer configuration received from the client.
 #[derive(Debug, Clone)]
 pub(super) struct TestExplorerConfig {
@@ -114,6 +125,7 @@ pub struct LspServer {
     pub(super) index: Arc<RwLock<Option<WorkspaceIndex>>>,
     /// Workspace root folders discovered during initialization.
     pub(super) workspace_roots: RwLock<Vec<std::path::PathBuf>>,
+    // Implements [LSPDEBUG-WIRE] (DebugSessionManager added to LspServer)
     /// Debug session manager — spawns debugpy and tracks active sessions.
     pub(super) debug_manager: crate::debug::DebugSessionManager,
     /// Profiler session manager — py-spy sampling, aggregation, export.
@@ -127,6 +139,26 @@ pub struct LspServer {
     pub(super) module_changed_debounce: Mutex<Option<AbortHandle>>,
     /// Test explorer configuration from the client.
     pub(super) test_config: RwLock<TestExplorerConfig>,
+    // Implements [ANALYSIS-ENABLED] (the `basilisk.enabled` / "Type Checking"
+    // toggle). The LSP is authoritative for diagnostics in the default mode, so
+    // when the toggle is off the server clears published diagnostics and stops
+    // publishing new ones — instead of leaving stale errors on screen.
+    // GitHub #65 / #119. Shared as an `Arc` so debounced/spawned publish tasks
+    // (file-watcher, startup scan) can read it after the handler returns.
+    /// Whether type checking (diagnostic publication) is enabled.
+    pub(super) type_checking_enabled: Arc<RwLock<bool>>,
+    // Implements [LSPFMT-CONFIG] (`basilisk.formatter`): when the client or
+    // config selects `"none"`, formatting capabilities are not advertised and
+    // the handlers answer `None` even if a client calls them anyway.
+    /// Whether formatting (whole-document and range) is enabled.
+    pub(super) formatting_enabled: std::sync::atomic::AtomicBool,
+    // Implements [EXTACT-MODULES-HEADER-LOADING] (GitHub #144): clients must be
+    // able to tell "not scanned yet" apart from "genuinely zero Python files",
+    // so the server tracks whether a workspace scan has finished and stamps it
+    // into every `basilisk.workspaceModules` rollup. Shared as an `Arc` so the
+    // spawned scan task can flip it after the handler returns.
+    /// Whether the initial workspace scan has completed.
+    pub(super) initial_scan_complete: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl std::fmt::Debug for LspServer {
@@ -149,7 +181,50 @@ impl LspServer {
             watcher_debounce: Mutex::new(None),
             module_changed_debounce: Mutex::new(None),
             test_config: RwLock::new(TestExplorerConfig::default()),
+            // Type checking is on by default; the client opts out via
+            // `basilisk.enabled = false`. Implements [ANALYSIS-ENABLED].
+            type_checking_enabled: Arc::new(RwLock::new(true)),
+            // Formatting is on by default (`basilisk.formatter = "ruff"`);
+            // `initialize` flips this off for `"none"`. [LSPFMT-CONFIG]
+            formatting_enabled: std::sync::atomic::AtomicBool::new(true),
+            // No scan has run yet: zero-file rollups are NOT trustworthy until
+            // the first scan completes. [EXTACT-MODULES-HEADER-LOADING], #144.
+            initial_scan_complete: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
+    }
+
+    /// Whether formatting is enabled ([LSPFMT-CONFIG]).
+    pub(super) fn is_formatting_enabled(&self) -> bool {
+        self.formatting_enabled
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// The workspace's formatter style options ([LSPFMT-ENGINE]), read from
+    /// the first workspace root's `pyproject.toml`.
+    pub(super) async fn format_style(&self) -> crate::config::FormatStyle {
+        self.workspace_roots
+            .read()
+            .await
+            .first()
+            .map(|root| crate::config::load_format_style(root))
+            .unwrap_or_default()
+    }
+
+    /// Whether type checking (diagnostic publication) is currently enabled.
+    /// Implements [ANALYSIS-ENABLED].
+    pub(super) async fn is_type_checking_enabled(&self) -> bool {
+        *self.type_checking_enabled.read().await
+    }
+
+    /// Publish diagnostics only while type checking is enabled.
+    ///
+    /// Every live diagnostic-producing path routes through here so that the
+    /// `basilisk.enabled` toggle is honoured uniformly. Clearing (publishing an
+    /// empty set on disable) deliberately bypasses this gate via
+    /// [`publish_diagnostics_gated`] with `force_clear`. Implements
+    /// [ANALYSIS-ENABLED] / [ANALYSIS-PUBLISH].
+    pub(super) async fn publish_diagnostics_if_enabled(&self, uri: Url, diags: Vec<Diagnostic>) {
+        publish_diagnostics_gated(&self.client, &self.type_checking_enabled, uri, diags).await;
     }
 
     /// Borrow the index and call `f` with it. Returns `None` if not yet
@@ -193,6 +268,31 @@ impl LspServer {
         };
         let byte_offset = crate::util::position_to_byte_offset(&text, pos);
         Ok(handler(&resolved, &text, byte_offset, &uri, &diags))
+    }
+}
+
+// Implements [ANALYSIS-ENABLED] — the single choke point for the
+// `basilisk.enabled` gate, callable from spawned tasks that hold a cloned
+// `Client` + flag `Arc` (file-watcher debounce, startup scan) without a
+// `&LspServer`.
+/// Publish `diags` for `uri` only while the `enabled` flag is set.
+///
+/// The disable path clears already-published diagnostics by publishing an empty
+/// set; that clearing must happen regardless of the flag, so callers wanting to
+/// clear use [`Client::publish_diagnostics`] directly rather than this gate.
+pub(super) async fn publish_diagnostics_gated(
+    client: &Client,
+    enabled: &RwLock<bool>,
+    uri: Url,
+    diags: Vec<Diagnostic>,
+) {
+    let is_enabled = *enabled.read().await;
+    diaglog!(
+        "[DIAG] publish n={} enabled={is_enabled} uri={uri}",
+        diags.len()
+    );
+    if is_enabled {
+        client.publish_diagnostics(uri, diags, None).await;
     }
 }
 
@@ -354,6 +454,13 @@ impl tower_lsp::LanguageServer for LspServer {
         handlers::formatting(self, params).await
     }
 
+    async fn range_formatting(
+        &self,
+        params: DocumentRangeFormattingParams,
+    ) -> LspResult<Option<Vec<TextEdit>>> {
+        handlers::range_formatting(self, params).await
+    }
+
     async fn folding_range(
         &self,
         params: FoldingRangeParams,
@@ -440,16 +547,19 @@ impl tower_lsp::LanguageServer for LspServer {
 
 /// Start the LSP server.
 ///
+/// Runs on analysis-sized stacks ([LSPARCH-ARCH-STACK]): recursive AST
+/// visitors overflow default thread stacks on deeply chained expressions in
+/// generated code, aborting the whole server (GitHub #278).
+///
 /// # Errors
 ///
 /// Returns an `io::Error` if the Tokio runtime fails to initialize.
 pub fn run_server() -> std::io::Result<()> {
-    let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(async {
+    crate::runtime::block_on_with_analysis_stack("basilisk-lsp-stdio", || async {
         let stdin = tokio::io::stdin();
         let stdout = tokio::io::stdout();
         let (service, socket) = LspService::new(LspServer::new);
         Server::new(stdin, stdout, socket).serve(service).await;
-    });
-    Ok(())
+        Ok(())
+    })
 }

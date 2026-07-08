@@ -306,6 +306,7 @@ fn collect_function_names(func: &basilisk_resolver::FunctionInfo) -> Vec<String>
 
 // ── Scope-aware reference finding ────────────────────────────────────────────
 
+// Implements [REFACTOR-RENAME-SCOPE]
 /// Find all references to the binding at `byte_offset` in `source`, respecting
 /// Python's lexical scoping rules.
 ///
@@ -502,6 +503,7 @@ const PYTHON_KEYWORDS: &[&str] = &[
     "with", "yield",
 ];
 
+// Implements [REFACTOR-RENAME-VALIDATE]
 /// Validate a proposed rename.  Returns `None` if the rename is acceptable,
 /// or `Some(rejection)` explaining why it is not.
 #[must_use]

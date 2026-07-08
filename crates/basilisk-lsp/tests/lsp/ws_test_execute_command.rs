@@ -1,4 +1,5 @@
-//! Tests for [LSPARCH-TESTING]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-TESTING
+//! Tests for [LSPARCH-TESTING], [LSPARCH-FEATURES-EXECCMD].
+//! See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-EXECCMD
 // Tests for LSP: `ws_test_execute_command`.
 
 use super::ws_test_common::*;

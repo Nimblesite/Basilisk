@@ -1,15 +1,16 @@
-<p align="center"><a href="README.md">English</a> · <strong>简体中文</strong></p>
-
-> 📝 本文档由机器翻译生成，欢迎母语者校对改进。
-
 <p align="center">
   <img src="images/basilisk-logo.png" alt="Basilisk" width="160">
 </p>
 
 <h1 align="center">Basilisk</h1>
 
+<p align="center"><a href="README.md">English</a> · <strong>简体中文</strong></p>
+
+> 📝 本文档由机器翻译生成，欢迎母语者校对改进。
+
 <p align="center">
   <strong>开源的 Python 语言服务器。</strong><br>
+  唯一在官方 <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> 符合性结果</a>中取得满分 100% 的 Python 类型检查器。<br>
   完整的语言服务器、类型检查器、调试器与性能分析器 —— 默认严格。<br>
   VS Code、Cursor 与 Windsurf（Open VSX）&bull; Zed &bull; Neovim。使用 <strong>Rust</strong> 构建 —— 单一二进制文件，无需运行时。
 </p>
@@ -23,11 +24,35 @@
   <a href="https://www.basilisk-python.dev/zh/docs/comparison/">对比</a>
 </p>
 
----
+<p align="center">
+  <a href="https://www.basilisk-python.dev/zh/docs/conformance/"><strong>PEP 符合性 <!--g:score-->100.0%<!--/g:score--></strong></a> &mdash; 官方
+  <a href="https://github.com/python/typing/tree/f4f2952f3ac94d7af819c5c71b60a50a100370e0/conformance"><code>python/typing</code></a>
+  符合性套件 <!--g:total-->141<!--/g:total--> 个测试中通过 <!--g:pass-->141<!--/g:pass--> 个（提交 <code><!--g:short-->f4f2952<!--/g:short--></code>），由真实的上游评分工具在默认配置下对通过 wheel 安装的 CLI 评分。
+  我们对标 <code>python/typing@main</code>，得分只升不降。
+</p>
+
+## 唯一满分 —— 且最快
+
+Basilisk 是**唯一**在官方
+[`python/typing` 符合性套件](https://github.com/python/typing/blob/main/conformance/results/results.html)
+上取得满分的 Python 类型检查器：**<!--g:score-->100.0%<!--/g:score-->**（<!--g:pass-->141<!--/g:pass-->/<!--g:total-->141<!--/g:total--> 个文件，捕获 <!--g:caught-->970<!--/g:caught--> 个必需错误，<!--g:fp-->0<!--/g:fp--> 个误报），由真实的上游评分工具在默认配置下对通过 wheel 安装的 CLI 评分。
 
 <p align="center">
   <img src="images/screenshot.png" alt="Basilisk 实战 —— 在编辑器中进行类型检查、诊断与重构" width="900">
 </p>
+
+它也是**我们测试过最快的检查器** —— 从零冷启动的全文件检查中位数：
+
+| 类型检查器 | 冷启动检查中位数 |
+| --- | --- |
+| ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
+| zuban | <!--g:benchZuban-->27<!--/g:benchZuban--> ms |
+| ty | <!--g:benchTy-->37<!--/g:benchTy--> ms |
+| Pyrefly | <!--g:benchPyrefly-->145<!--/g:benchPyrefly--> ms |
+| Pyright | <!--g:benchPyright-->568<!--/g:benchPyright--> ms |
+| mypy | <!--g:benchMypy-->588<!--/g:benchMypy--> ms |
+
+在 <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> 上，跨 <!--g:benchCount-->26<!--/g:benchCount--> 个单一类型构造压力测试样本的冷启动全文件检查中位数 —— 数值越低越好。Basilisk 的热重检查可降至约 <!--g:benchWarm-->5<!--/g:benchWarm--> ms。每个数字均由 [`hyperfine`](https://github.com/sharkdp/hyperfine) 生成并按机器提交，没有一个是手写的。**克隆仓库，在你自己的硬件上运行 `make bench`，并把 CSV 发给我们 —— 欢迎社区独立复核。** [完整基准测试与方法论（英文）&rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 
 ## 试用
 
@@ -40,175 +65,14 @@ basilisk check examples/mixed.py  # some errors, some clean
 basilisk check examples/          # all three at once
 ```
 
----
+## 编辑器
 
-## 快速示例
+一个扩展，覆盖完整工作流：默认严格的诊断、自动补全、悬停信息、跳转到定义、重构代码操作、调试与性能分析。无需 Node.js 或 Python 运行时 —— 由单一 Rust 二进制文件驱动一切。
 
-<table>
-<tr>
-<th>Basilisk 会拒绝这段代码</th>
-<th>修复后</th>
-</tr>
-<tr>
-<td>
+- **VS Code、Cursor 与 Windsurf** —— 从 [Open VSX](https://open-vsx.org/) 安装
+- **Zed** &bull; **Neovim 0.10+**
 
-```python
-def greet(name):
-    return "Hello " + name
-```
-
-</td>
-<td>
-
-```python
-def greet(name: str) -> str:
-    return "Hello " + name
-```
-
-</td>
-</tr>
-</table>
-
----
-
-## 规则
-
-所有规则默认开启，且无法在全局范围内放宽。
-
-### 注解规则（E0001-E0005）
-
-| Code | 触发条件 |
-|------|---------------|
-| `BSK-E0001` | 函数参数缺少类型注解 |
-| `BSK-E0002` | 函数缺少返回类型注解 |
-| `BSK-E0003` | 变量赋值缺少类型注解 |
-| `BSK-E0004` | `*args` 或 `**kwargs` 缺少类型注解 |
-| `BSK-E0005` | 类属性缺少类型注解 |
-
-### 类型正确性（E0010-E0029）
-
-| Code | 触发条件 |
-|------|---------------|
-| `BSK-E0010` | 无法解析导入 |
-| `BSK-E0011` | 显式的 `Any` 注解（以警告形式发出），或返回类型不匹配 |
-| `BSK-E0012` | 实参类型与形参类型不匹配 |
-| `BSK-E0013` | 返回类型与声明的返回类型不匹配 |
-| `BSK-E0014` | 赋值类型与声明的变量类型不匹配 |
-| `BSK-E0015` | 类型参数数量错误（例如 `list[int, str]`） |
-| `BSK-E0016` | 方法重写的签名不兼容 |
-| `BSK-E0017` | 类变量重写的类型不兼容 |
-| `BSK-E0018` | 引用了未定义的名称 |
-| `BSK-E0019` | 变量在赋值前被使用 |
-| `BSK-E0020` | `@overload` 分组缺少未加装饰器的实现 |
-| `BSK-E0021` | 两个 `@overload` 签名相互重叠 |
-| `BSK-E0022` | 字典键类型不可哈希 |
-| `BSK-E0023` | `match` 语句不完备 |
-| `BSK-E0024` | 类型表达式无效（例如把数字字面量当作类型使用） |
-| `BSK-E0025` | 重写方法缺少 `@override` 装饰器 |
-| `BSK-E0026` | `TypeVar` 仅声明了单个约束 |
-| `BSK-E0027` | `Generic[...]` 基类中存在重复的 `TypeVar` |
-| `BSK-E0029` | 在 `TypedDict` 类内部定义了方法 |
-
-以上是最常见的规则。Basilisk 总共提供 **155 个诊断代码**（150 个错误、5 个警告）—— 参见[完整诊断参考](https://www.basilisk-python.dev/zh/docs/rules/)（由 `scripts/gen_rules_reference.py` 从检查器源码生成）。
-
----
-
-## 重构
-
-Basilisk 提供了一整套重构代码操作 —— 在 VS Code、Cursor 与 Windsurf（通过 Open VSX）以及 Zed 和 Neovim 中，均可通过灯泡（代码操作）菜单使用。无需任何额外扩展。
-
-| 操作 | 类别 | 功能说明 |
-|--------|------|-------------|
-| **提取变量** | `refactor.extract` | 将表达式提取为命名变量 |
-| **提取变量（替换全部）** | `refactor.extract` | 替换所有相同的出现处 |
-| **提取常量** | `refactor.extract` | 提取为模块级的 `SCREAMING_SNAKE` 常量 |
-| **提取函数** | `refactor.extract` | 将选中的语句提取为新函数 |
-| **内联变量** | `refactor.inline` | 用变量的值替换变量，并删除赋值 |
-| **内联函数** | `refactor.inline` | 用函数体替换调用（单表达式） |
-| **移动到新文件** | `refactor.move` | 将类/函数移动到新文件，并在原处留下导入语句 |
-| **移动到现有文件** | `refactor.move` | 通过命令将类/函数移动到指定文件 |
-| **重命名符号** | — | 作用域感知的重命名，同时更新关键字参数、`self.attr`、文档字符串与 `__all__` |
-| **删除参数** | `refactor.rewrite` | 从函数及所有调用处删除参数 |
-| **添加参数** | `refactor.rewrite` | 向函数签名添加 `new_param=None` |
-| **排序参数** | `refactor.rewrite` | 按字母顺序排序参数（保持 `self`/`cls` 在前） |
-| **实现抽象方法** | `refactor.rewrite` | 为抽象基类生成方法存根 |
-| **转换 Union/Optional** | `refactor.rewrite` | `Union[X, Y]` ↔ `X \| Y`、`Optional[X]` ↔ `X \| None` |
-| **转换语法结构** | `refactor.rewrite` | f-string ↔ `.format()`、`dict()` ↔ `{}`、`list()` ↔ `[]`、三元表达式 ↔ if/else、NamedTuple 类 ↔ 函数式写法 |
-
-提取函数能够识别异步函数、方法（`self`/`cls`），并会拒绝包含 `yield`、`break` 或 `continue` 的选区。
-
----
-
-## 输出格式
-
-诊断采用 rustc 风格的输出：
-
-```
-error[BSK-E0001]: Missing parameter type annotation for `data`
-  --> src/utils.py:14:13
-   |
-14 | def process(data):
-   |             ^^^^
-   |
-   = help: Add a type annotation: `data: <type>`
-   = note: In Basilisk, all function parameters require explicit types
-   = see: https://www.basilisk-python.dev/errors/BSK-E0001
-```
-
-| Exit code | 含义 |
-|-----------|---------|
-| `0` | 通过 —— 无错误 |
-| `1` | 发现类型错误 |
-| `3` | 内部错误 |
-
----
-
-## 架构
-
-Basilisk 是一个 Cargo workspace，每个 crate 负责分析流水线中的一层。
-
-> **流水线：** 源文本 &rarr; 解析器 &rarr; AST &rarr; 解析器（名称解析） &rarr; 作用域 &rarr; 检查器 &rarr; 诊断
->
-> **增量：** `basilisk-db` 按内容哈希缓存 AST 与已解析的模块，因此只有发生变更的文件才会重新运行流水线。
-
-### 分析流水线
-
-| Crate | 功能 | 状态 |
-|-------|-------------|--------|
-| [basilisk-parser](crates/basilisk-parser/) | 封装 `ruff_python_parser`，将 `.py` 源码解析为带类型的 AST | 已完成 |
-| [basilisk-resolver](crates/basilisk-resolver/) | 名称解析与作用域分析 —— 捕获未定义名称与赋值前使用的情况 | 已完成 |
-| [basilisk-checker](crates/basilisk-checker/) | 核心类型检查器 —— 实现所有 E0001-E0025 规则 | 已完成 |
-| [basilisk-cli](crates/basilisk-cli/) | `basilisk` 二进制文件 —— 将整条流水线串联起来 | 已完成 |
-
-### LSP 与基础设施
-
-| Crate | 功能 | 状态 |
-|-------|-------------|--------|
-| [basilisk-lsp](crates/basilisk-lsp/) | LSP 服务器 —— 诊断、悬停信息、跳转到定义、代码操作、重构、调试 | 运行中 |
-| [basilisk-db](crates/basilisk-db/) | 基于 Salsa 的增量计算，实现低于 10ms 的延迟 | 运行中 |
-| [basilisk-config](crates/basilisk-config/) | 配置解析（`pyproject.toml`、`basilisk.json`） | 已完成 |
-| [basilisk-stubs](crates/basilisk-stubs/) | 内置类型存根（typeshed）—— 无需联网 | 运行中 |
-| [basilisk-uv](crates/basilisk-uv/) | 为 LSP 提供的 uv 包管理器集成 | 运行中 |
-| [basilisk-common](crates/basilisk-common/) | 共享的常量与类型 —— 零依赖，兼容 WASM | 已完成 |
-| [basilisk-test-utils](crates/basilisk-test-utils/) | 共享的 E2E 测试辅助工具 | 已完成 |
-
-### 未来能力
-
-| Crate | 功能 | 状态 |
-|-------|-------------|--------|
-| [basilisk-mojo](crates/basilisk-mojo/) | 受 Mojo 启发的所有权/不可变性分析（`Borrowed`、`InOut`、`Owned`） | Phase 4 |
-| [basilisk-compiler](crates/basilisk-compiler/) | 将带类型的 Python 编译为原生代码 | 未来 |
-| [basilisk-plugin](crates/basilisk-plugin/) | 用于 Django、Pydantic、SQLAlchemy 类型扩展的 WASM 插件宿主 | Phase 5 |
-
-### 编辑器扩展
-
-| 扩展 | 编辑器 | 状态 |
-|-----------|--------|--------|
-| [vscode-extension](vscode-extension/) | VS Code | 运行中 |
-| [basilisk.nvim](basilisk.nvim/) | Neovim 0.10+ | 运行中 |
-| [basilisk-zed](basilisk-zed/) | Zed | Phase 2 |
-
----
+每条诊断都有教育意义：rustc 风格的输出，附带 `help`、`note` 以及指向每条规则详解页的链接。参见[完整诊断参考](https://www.basilisk-python.dev/zh/docs/rules/)与[安装指南](https://www.basilisk-python.dev/zh/docs/installation/)。
 
 ## 开发
 
@@ -221,14 +85,26 @@ cargo fmt            # format
 
 需要 Rust 1.87+。
 
----
-
 ## 贡献
 
 Basilisk 由人类与 AI 的协作打造，并有意地划分了各自的工作。请参阅
 [CONTRIBUTING.md](CONTRIBUTING.md) —— **For Humans**（测试、代码质量审查、
 一致性/安全审计、IDE 功能对等、打磨 AI 指令）以及
 **For AI**（在 [CLAUDE.md](CLAUDE.md) 既定规则下的技术执行）。
+
+## 致谢
+
+Basilisk 建立在开源社区之上 —— 特别感谢：
+
+- **[Astral](https://astral.sh/)** —— [Ruff](https://github.com/astral-sh/ruff)，Basilisk 嵌入了其解析器、AST 与格式化器 crate（MIT）。我们最倚重的基础。
+- **[typeshed](https://github.com/python/typeshed)** —— 标准库类型存根（Apache-2.0）。
+- **[Salsa](https://github.com/salsa-rs/salsa)** —— 增量查询引擎。
+- **[Rayon](https://github.com/rayon-rs/rayon)** —— 数据并行。
+- **[tower-lsp](https://github.com/ebkalderon/tower-lsp)** —— LSP 脚手架。
+- **[debugpy](https://github.com/microsoft/debugpy)** —— 调试适配器（捆绑于 VS Code 扩展）。
+- [`python/typing`](https://github.com/python/typing) 一致性测试套件。
+
+完整的组件与许可证列表见 [NOTICES](NOTICES)。所有依赖均采用宽松许可证。
 
 ---
 

@@ -1,0 +1,135 @@
+//! Tests for [`qualifiers_final_annotation_2`] from [CHKARCH-DIAG-STRUCTURAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-STRUCTURAL
+// Integration tests for qualifiers_final_annotation_2: Final type qualifier violations.
+
+use super::common::*;
+
+#[test]
+fn module_final_reassignment_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Final
+RATE: Final = 3000
+RATE = 300
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "qualifiers_final_annotation_2");
+    assert!(
+        !msgs.is_empty(),
+        "reassignment to module-level Final should fire E0054, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn module_final_no_reassignment_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Final
+RATE: Final = 3000
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "qualifiers_final_annotation_2");
+    assert!(
+        msgs.is_empty(),
+        "module Final with no reassignment should not fire E0054"
+    );
+    Ok(())
+}
+
+#[test]
+fn class_final_attr_reassigned_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Final
+
+class Config:
+    DEFAULT_ID: Final[int] = 0
+
+Config.DEFAULT_ID = 42
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "qualifiers_final_annotation_2");
+    assert!(
+        !msgs.is_empty(),
+        "class Final attr reassignment should fire E0054, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn subclass_final_override_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Final
+
+class Base:
+    BORDER: Final[float] = 2.5
+
+class Child(Base):
+    BORDER = 3.0
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "qualifiers_final_annotation_2");
+    assert!(
+        !msgs.is_empty(),
+        "subclass overriding Final attr should fire E0054, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn local_final_modification_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Final
+
+def func() -> None:
+    x: Final = 3
+    x = 4
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "qualifiers_final_annotation_2");
+    assert!(
+        !msgs.is_empty(),
+        "local Final modification should fire E0054, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn instance_final_outside_init_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Final
+
+class MyClass:
+    def other_method(self) -> None:
+        self.x: Final = 1
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "qualifiers_final_annotation_2");
+    assert!(
+        !msgs.is_empty(),
+        "instance Final outside __init__ should fire E0054, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn instance_final_in_init_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r"
+from typing import Final
+
+class MyClass:
+    def __init__(self) -> None:
+        self.x: Final = 1
+";
+    let diags = run(source)?;
+
+    let msgs = messages_for(&diags, "qualifiers_final_annotation_2");
+    assert!(
+        msgs.is_empty(),
+        "instance Final in __init__ should not fire E0054, got: {msgs:?}"
+    );
+    Ok(())
+}

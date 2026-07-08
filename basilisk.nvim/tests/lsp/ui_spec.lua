@@ -24,6 +24,12 @@ describe("basilisk UI interactions with real LSP", function()
     fh:write('[project]\nname = "test"\nversion = "0.1.0"\n')
     fh:close()
 
+    -- Opt into the annotation house rules (off by default) so untyped-parameter
+    -- diagnostics fire — mirrors the Rust LSP harness fixture (ws_test_common.rs).
+    local cfg = io.open(tmpdir .. "/basilisk.json", "w")
+    cfg:write('{"strictAnnotations": true}\n')
+    cfg:close()
+
     vim.lsp.config("basilisk", {
       cmd = { binary, "lsp" },
       filetypes = { "python" },
@@ -210,8 +216,9 @@ describe("basilisk UI interactions with real LSP", function()
     helpers.wait_for_server_ready(buf)
 
     local ok = pcall(vim.lsp.buf.format, { bufnr = buf, timeout_ms = 5000 })
-    -- May fail if ruff is not installed — that's acceptable.
-    -- The important thing is the LSP handles the request.
+    -- The Ruff formatter is embedded in the binary ([LSPFMT-ENGINE]);
+    -- formatting must succeed with no external ruff installed (#254).
+    assert.is_true(ok, "vim.lsp.buf.format must succeed")
   end)
 
   -- vim.lsp.buf.document_symbol() with real LSP

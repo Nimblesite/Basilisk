@@ -31,6 +31,14 @@ pub fn read_python_version(root: &Path) -> Option<String> {
 ///
 /// Returns `None` when nothing pins a version — callers fall back to the
 /// checker's centralized default ([CHKARCH-VERSION-TARGET], issue #93).
+//
+// Implements [LSPUV-PYTHON-VERSION-RESOLUTION-ORDER] steps 2–4 of the spec's
+// 5-step cascade. Step 1 (explicit `python-version` in project config) and
+// step 5 (default 3.12) are owned by the consumers
+// (`basilisk_lsp::workspace`, CLI `main.rs`, and the checker's centralized
+// default). Venv probing (`python3 --version`) is deliberately out of scope
+// per the spec: resolution reads declared project metadata only, so the
+// target stays deterministic across machines and adds no subprocess spawn.
 #[must_use]
 pub fn resolve_target_python_version(root: &Path) -> Option<String> {
     read_python_version(root)
@@ -72,6 +80,11 @@ fn constraint_lower_bound(constraint: &str) -> Option<String> {
     })
 }
 
+// Tests for [LSPUV-PYTHON-VERSION-RESOLUTION-ORDER]: these cover
+// `read_python_version` (the `.python-version` file, cascade step 2). NOTE:
+// `resolve_target_python_version` itself — the pyproject/lock fallback chain
+// and `constraint_lower_bound` — has no direct test here. See the conformance
+// audit for the partial NO-TEST gap.
 #[cfg(test)]
 #[expect(clippy::unwrap_used, reason = "test-only")]
 mod tests {

@@ -18,6 +18,7 @@ import {
 } from "vscode-languageclient/node";
 import { effect } from "@preact/signals-core";
 import { Logger } from "./logger";
+import { createLspTraceChannel } from "./lsp-trace";
 import { type Store, type LspState } from "./store";
 
 /** Maximum LSP errors before shutting down the server. */
@@ -28,13 +29,6 @@ function readInlayHints(cfg: vscode.WorkspaceConfiguration): Record<string, unkn
   return {
     parameterNames: cfg.get<boolean>("inlayHints.parameterNames") ?? true,
     variableTypes: cfg.get<boolean>("inlayHints.variableTypes") ?? true,
-  };
-}
-
-function readRuffSettings(cfg: vscode.WorkspaceConfiguration): Record<string, unknown> {
-  return {
-    enabled: cfg.get<boolean>("ruff.enabled") ?? true,
-    executablePath: cfg.get<string>("ruff.executablePath") ?? "ruff",
   };
 }
 
@@ -59,18 +53,34 @@ function readTestExplorerSettings(cfg: vscode.WorkspaceConfiguration): Record<st
   };
 }
 
+// Implements [VSIX-CONFIGURATION-SETTINGS] — reads the basilisk.* settings whose
+// package.json schema is declared in vscode-extension/package.json (contributes.
+// configuration); these are forwarded to the LSP server as initializationOptions
+// and on didChangeConfiguration. [VSIX-CONFIGURATION-SETTINGS-VS-CODE-ONLY]:
+// basilisk.useLsp / basilisk.trace.server are consumed here and in extension.ts,
+// not sent to the server.
+// Implements the editor-setting source of [ANALYSIS-CONFIG-SRC] — `analysisMode`
+// (default "wholeModule") is read from the workspace setting, the highest-priority
+// config source ([ANALYSIS-CONFIG-PRI]), and forwarded to the server.
 export function readBasiliskSettings(): Record<string, unknown> {
   const cfg = vscode.workspace.getConfiguration("basilisk");
-  const ruff = readRuffSettings(cfg);
+  // The "Type Checking" toggle (`basilisk.enabled`) MUST reach the server — the
+  // LSP is authoritative for diagnostics, so it clears/suppresses them when the
+  // toggle is off. Omitting it here left the toggle a cosmetic no-op (GitHub
+  // #65 / #119). Implements [ANALYSIS-ENABLED] (server side) and the
+  // [EXTACT-INFO-FEATURE-STATUS] "Type Checking" effect.
+  const enabled = cfg.get<boolean>("enabled") ?? true;
   return {
+    enabled,
     analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
     basilisk: {
+      enabled,
       python: cfg.get<string>("python") ?? "",
       analysisMode: cfg.get<string>("analysisMode") ?? "wholeModule",
       inlayHints: readInlayHints(cfg),
-      ruff,
+      formatter: cfg.get<string>("formatter") ?? "ruff",
     },
-    ruff,
+    formatter: cfg.get<string>("formatter") ?? "ruff",
     uv: readUvSettings(cfg),
     testExplorer: readTestExplorerSettings(cfg),
   };
@@ -88,6 +98,10 @@ interface LspClientOptions {
   outputChannel: vscode.LogOutputChannel | undefined;
 }
 
+// Implements [VSIX-LSP-CLIENT-CONFIGURATION] — builds ServerOptions/clientOptions
+// and starts the LanguageClient ("basilisk lsp" over stdio). The executablePath
+// arrives from binary resolution ([VSIX-BINARY-RESOLUTION], delegated to
+// Shipwright in shipwright-runtime.ts).
 export function startLspClient(
   options: LspClientOptions,
   store: Store,
@@ -106,11 +120,9 @@ export function startLspClient(
     },
   };
 
-  // vscode-languageclient 10 requires `traceOutputChannel` to be a
-  // `LogOutputChannel` (created with `{ log: true }`).
-  const traceChannel = vscode.window.createOutputChannel("Basilisk LSP Trace", {
-    log: true,
-  });
+  // [VSIX-OUTPUT-CHANNELS] "Basilisk LSP Trace" channel — surfaces LSP
+  // communication when basilisk.trace.server is enabled.
+  const traceChannel = createLspTraceChannel();
   context.subscriptions.push(traceChannel);
 
   const clientOptions = buildClientOptions(outputChannel, traceChannel, updateStatusBar);
@@ -188,6 +200,9 @@ function buildClientOptions(
   traceCh: vscode.LogOutputChannel,
   updateStatusBar: StatusBarUpdater
 ): LanguageClientOptions {
+  // Implements [VSIX-LSP-CLIENT-CONFIGURATION] — documentSelector (python files),
+  // synchronize.configurationSection "basilisk", initializationOptions, and the
+  // trace channel wiring per the spec's client-options shape.
   return {
     documentSelector: [{ scheme: "file", language: "python" }],
     synchronize: {
@@ -198,6 +213,8 @@ function buildClientOptions(
     traceOutputChannel: traceCh,
     outputChannel: outputCh,
     revealOutputChannelOn: RevealOutputChannelOn.Never,
+    // Implements [VSIX-ERROR-RECOVERY] — errorHandler shuts the server down after
+    // MAX_LSP_ERRORS_BEFORE_SHUTDOWN (3) errors and auto-restarts on close.
     errorHandler: {
       error: (error, _message, count) => {
         Logger.error(`LSP error: ${error.message ?? error}`);
@@ -236,13 +253,22 @@ function buildClientOptions(
   };
 }
 
+// Implements the client wiring of [EXTACT-HEALTH-CONTEXT-MENU] (Fix All in File /
+// Adopt File / Un-adopt File), the file-scoped half of [AUTOFIX-MASS-VSCODE]
+// (`basilisk.fixFile` Safe tier / `basilisk.fixFileAll` all tier), and
+// [AUTOFIX-ADOPTION-VSCODE] (`basilisk.adoptFile` / `basilisk.unadoptFile`) —
+// these server-advertised, file-scoped commands get the active editor's URI
+// injected so they act on the right file.
 /** Commands that need the active editor URI injected as the first arg. */
 const EDITOR_URI_COMMANDS = new Set([
   "basilisk.fixFile",
+  "basilisk.fixFileAll",
   "basilisk.adoptFile",
   "basilisk.unadoptFile",
 ]);
 
+// Implements the client UI of [LSPUV-COMMANDS] (the `{package}`-taking uv
+// commands) — prompts the user for the package name before the server runs uv.
 /** Commands that prompt the user for a package name before execution. */
 const PACKAGE_COMMANDS: Record<string, { prompt: string; placeholder: string }> = {
   "basilisk.uv.add": { prompt: "Package name to add", placeholder: "e.g. requests" },
@@ -399,13 +425,25 @@ function registerTabTracking(context: vscode.ExtensionContext, store: Store): vo
       const currentUris = collectOpenPythonUris();
 
       const mode = vscode.workspace.getConfiguration("basilisk").get<string>("analysisMode") ?? "wholeModule";
-      if (mode === "openFilesOnly") {
-        for (const uriStr of knownOpenUris) {
-          if (!currentUris.has(uriStr)) {
-            void lspClient.sendNotification("textDocument/didClose", {
-              textDocument: { uri: vscode.Uri.parse(uriStr).toString() },
-            });
-          }
+      for (const uriStr of knownOpenUris) {
+        if (currentUris.has(uriStr)) {
+          continue;
+        }
+        const uri = vscode.Uri.parse(uriStr);
+        // Implements the tab-close clause of [ANALYSIS-PUBLISH]
+        // (docs/specs/LSP-ANALYSIS-MODES-SPEC.md). VS Code disposes closed
+        // documents lazily, so the language client's own didClose can lag a
+        // tab close by an unbounded amount. Send a synthetic didClose
+        // whenever the server would clear diagnostics on close: every file in
+        // openFilesOnly, and out-of-workspace files in the whole-workspace
+        // modes — otherwise their stale diagnostics linger in the Problems
+        // panel (GitHub #264). In-workspace files in wholeModule/crossModule
+        // keep their diagnostics by design.
+        const inWorkspace = vscode.workspace.getWorkspaceFolder(uri) !== undefined;
+        if (mode === "openFilesOnly" || !inWorkspace) {
+          void lspClient.sendNotification("textDocument/didClose", {
+            textDocument: { uri: uri.toString() },
+          });
         }
       }
 

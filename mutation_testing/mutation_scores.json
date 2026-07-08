@@ -1,13 +1,13 @@
 {
   "scores": {
     "working": {
-      "caught": 114,
-      "date": "2026-06-24",
+      "caught": 118,
+      "date": "2026-07-03",
       "kill_rate": 100.0,
       "missed": 0,
       "timeout": 0,
-      "total": 119,
-      "unviable": 5
+      "total": 125,
+      "unviable": 7
     }
   },
   "version": 1

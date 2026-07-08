@@ -5,11 +5,14 @@
 //! Covers `workspace/executeCommand` dispatch and the individual command
 //! implementations: `basilisk.organizeImports`, `basilisk.startDebugSession`,
 //! `basilisk.stopDebugSession`, `basilisk.disableRule`, `basilisk.fixFile`,
-//! `basilisk.fixWorkspace`, and `basilisk.uv.*` package management commands.
+//! `basilisk.fixFileAll`, `basilisk.fixWorkspace`, `basilisk.fixWorkspaceAll`,
+//! and `basilisk.uv.*` package management commands.
 
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{ExecuteCommandParams, MessageType};
 use tracing::{debug, error, info, warn};
+
+use crate::code_actions::mass_fix::{ALL_FIXABLE_RULES, SAFE_FIXABLE_RULES};
 
 use super::LspServer;
 
@@ -36,6 +39,44 @@ fn is_stub_command(cmd: &str) -> bool {
     )
 }
 
+/// Whether `cmd` is one of the fix-all commands.
+fn is_fix_command(cmd: &str) -> bool {
+    matches!(
+        cmd,
+        basilisk_common::commands::FIX_FILE
+            | basilisk_common::commands::FIX_FILE_ALL
+            | basilisk_common::commands::FIX_WORKSPACE
+            | basilisk_common::commands::FIX_WORKSPACE_ALL
+    )
+}
+
+/// Dispatch the fix-all family.
+///
+/// Implements [AUTOFIX-CLASSIFY] — the plain commands are the Safe default
+/// tier; the `*All` variants ([AUTOFIX-MASS-VSCODE]) widen to every fixable
+/// rule, including Unsafe fixes.
+async fn dispatch_fix_command(
+    server: &LspServer,
+    cmd: &str,
+    args: &[serde_json::Value],
+) -> LspResult<Option<serde_json::Value>> {
+    match cmd {
+        basilisk_common::commands::FIX_FILE => {
+            execute_fix_file(server, args, SAFE_FIXABLE_RULES).await
+        }
+        basilisk_common::commands::FIX_FILE_ALL => {
+            execute_fix_file(server, args, ALL_FIXABLE_RULES).await
+        }
+        basilisk_common::commands::FIX_WORKSPACE => {
+            execute_fix_workspace(server, args, SAFE_FIXABLE_RULES).await
+        }
+        basilisk_common::commands::FIX_WORKSPACE_ALL => {
+            execute_fix_workspace(server, args, ALL_FIXABLE_RULES).await
+        }
+        _ => Ok(None),
+    }
+}
+
 /// Dispatch the `basilisk.stubs.*` family (create local stub, add member).
 async fn dispatch_stub_command(
     server: &LspServer,
@@ -53,6 +94,7 @@ async fn dispatch_stub_command(
     }
 }
 
+// Implements [LSPARCH-CMDS]
 /// Dispatch `workspace/executeCommand` to the appropriate handler.
 pub(super) async fn dispatch_execute_command(
     server: &LspServer,
@@ -64,6 +106,7 @@ pub(super) async fn dispatch_execute_command(
         basilisk_common::commands::ORGANIZE_IMPORTS => {
             execute_organize_imports(server, &params.arguments).await
         }
+        // Implements [LSPDEBUG-WIRE] (handle debug commands in execute_command dispatch)
         basilisk_common::commands::START_DEBUG_SESSION => {
             execute_start_debug_session(server, &params.arguments).await
         }
@@ -73,10 +116,7 @@ pub(super) async fn dispatch_execute_command(
         basilisk_common::commands::DISABLE_RULE => {
             execute_disable_rule(server, &params.arguments).await
         }
-        basilisk_common::commands::FIX_FILE => execute_fix_file(server, &params.arguments).await,
-        basilisk_common::commands::FIX_WORKSPACE => {
-            execute_fix_workspace(server, &params.arguments).await
-        }
+        cmd if is_fix_command(cmd) => dispatch_fix_command(server, cmd, &params.arguments).await,
         basilisk_common::commands::ADOPT_FILE => {
             super::adoption::execute_adopt_file(server, &params.arguments).await
         }
@@ -211,6 +251,7 @@ async fn dispatch_profiler_or_memory(
     }
 }
 
+// Implements [LSPARCH-FEATURES-EXECCMD]
 /// Handle `basilisk.organizeImports`.
 async fn execute_organize_imports(
     server: &LspServer,
@@ -280,7 +321,7 @@ pub(super) async fn execute_start_debug_session(
             .log_message(MessageType::ERROR, err.to_string())
             .await;
         return Err(tower_lsp::jsonrpc::Error {
-            code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32001),
+            code: tower_lsp::jsonrpc::ErrorCode::ServerError(err.jsonrpc_code()),
             message: err.to_string().into(),
             data: None,
         });
@@ -330,7 +371,7 @@ pub(super) async fn execute_start_debug_session(
                 .log_message(MessageType::ERROR, err.to_string())
                 .await;
             Err(tower_lsp::jsonrpc::Error {
-                code: tower_lsp::jsonrpc::ErrorCode::ServerError(-32002),
+                code: tower_lsp::jsonrpc::ErrorCode::ServerError(err.jsonrpc_code()),
                 message: err.to_string().into(),
                 data: None,
             })
@@ -439,13 +480,16 @@ async fn execute_disable_rule(
     })))
 }
 
-/// Handle `basilisk.fixFile`.
+/// Handle `basilisk.fixFile` / `basilisk.fixFileAll`.
 ///
-/// Collects all fixable diagnostics for the given file URI, resolves conflicts,
-/// and applies a single `WorkspaceEdit` so the user can undo in one step.
+/// Collects fixable diagnostics matching `allowed_rules` for the given file
+/// URI, resolves conflicts, and applies a single `WorkspaceEdit` so the user
+/// can undo in one step. The tier ([AUTOFIX-CLASSIFY]) is the dispatcher's
+/// choice: Safe rules for the default command, all rules for the `All` variant.
 async fn execute_fix_file(
     server: &LspServer,
     args: &[serde_json::Value],
+    allowed_rules: &'static [&'static str],
 ) -> LspResult<Option<serde_json::Value>> {
     let Some(uri_str) = args.first().and_then(|v| v.as_str()) else {
         return Ok(None);
@@ -461,7 +505,7 @@ async fn execute_fix_file(
                 .iter()
                 .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &text))
                 .collect();
-            crate::code_actions::fix_all_in_file(&uri, &lsp_diags, &text)
+            crate::code_actions::fix_filtered_in_file(&uri, &lsp_diags, &text, allowed_rules)
         })
         .await;
 
@@ -515,13 +559,15 @@ async fn execute_fix_file(
     Ok(Some(serde_json::json!({ "fixed": edit_count })))
 }
 
-/// Handle `basilisk.fixWorkspace`.
+/// Handle `basilisk.fixWorkspace` / `basilisk.fixWorkspaceAll`.
 ///
-/// Iterates all files in the workspace index, collects fixable diagnostics,
-/// and applies a single `WorkspaceEdit` so the user can undo in one step.
+/// Iterates all files in the workspace index, collects fixable diagnostics
+/// matching `allowed_rules` (the [AUTOFIX-CLASSIFY] tier picked by the
+/// dispatcher), and applies a single `WorkspaceEdit` for one-step undo.
 async fn execute_fix_workspace(
     server: &LspServer,
     _args: &[serde_json::Value],
+    allowed_rules: &'static [&'static str],
 ) -> LspResult<Option<serde_json::Value>> {
     info!("fixWorkspace: starting");
 
@@ -551,9 +597,12 @@ async fn execute_fix_workspace(
                     .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &file_entry.text))
                     .collect();
 
-                let Some(action) =
-                    crate::code_actions::fix_all_in_file(&uri, &lsp_diags, &file_entry.text)
-                else {
+                let Some(action) = crate::code_actions::fix_filtered_in_file(
+                    &uri,
+                    &lsp_diags,
+                    &file_entry.text,
+                    allowed_rules,
+                ) else {
                     continue;
                 };
 

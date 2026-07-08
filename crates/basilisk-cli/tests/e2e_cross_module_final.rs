@@ -10,7 +10,7 @@
     dead_code
 )]
 //! E2E: overriding a `@final` method whose definition lives in an imported
-//! sibling `.pyi` stub must be flagged (BSK-E0034 cross-module final override).
+//! sibling `.pyi` stub must be flagged (`qualifiers_final_decorator` cross-module final override).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -64,7 +64,7 @@ fn cross_module_final_first_overload_override_fires() {
 
     let codes = codes_for(&main);
     assert!(
-        codes.contains(&"BSK-E0034".to_owned()),
+        codes.contains(&"qualifiers_final_decorator".to_owned()),
         "overriding an imported @final method must fire E0034, got: {codes:?}"
     );
     let _ = fs::remove_dir_all(&dir);
@@ -98,7 +98,7 @@ fn cross_module_final_swapped_decorator_order_fires() {
 
     let codes = codes_for(&main);
     assert!(
-        codes.contains(&"BSK-E0034".to_owned()),
+        codes.contains(&"qualifiers_final_decorator".to_owned()),
         "swapped @overload/@final order must still fire E0034, got: {codes:?}"
     );
     let _ = fs::remove_dir_all(&dir);
@@ -125,7 +125,7 @@ fn cross_module_non_final_override_ok() {
 
     let codes = codes_for(&main);
     assert!(
-        !codes.contains(&"BSK-E0034".to_owned()),
+        !codes.contains(&"qualifiers_final_decorator".to_owned()),
         "overriding a non-final imported method must not fire E0034, got: {codes:?}"
     );
     let _ = fs::remove_dir_all(&dir);

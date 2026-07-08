@@ -26,6 +26,7 @@ import {
     setupLspTestSuite,
     teardownLspTestSuite,
 } from "./test-helpers";
+import { getPackageJsonCommands } from './profiler-test-constants';
 
 /** Extra time for the restart cycle test. */
 
@@ -37,39 +38,20 @@ const MULTI_CYCLE_COUNT = 3;
 /** Brief settle time after restart. */
 const RESTART_SETTLE_MS = 500;
 
+/** Budget for a replaced LSP client to stop after store.reset() (#264). */
+const ZOMBIE_STOP_TIMEOUT_MS = 5_000;
+
 /** Poll interval for waiting on command availability. */
 
 /**
- * All commands declared in package.json contributes.commands.
- * These are the ONLY commands that should appear in the palette.
+ * All commands declared in package.json contributes.commands — read from the
+ * REAL manifest, never a hand-copied list. A hand-maintained copy silently
+ * drifts: it never included `basilisk.profileDiff`, which shipped contributed
+ * but unregistered ("command not found" in the palette) and no test noticed.
  */
-const MANIFEST_COMMANDS = [
-    'basilisk.restartServer',
-    'basilisk.showOutput',
-    'basilisk.organizeImports',
-    'basilisk.fixFile',
-    'basilisk.fixWorkspace',
-    'basilisk.adoptFile',
-    'basilisk.adoptWorkspace',
-    'basilisk.unadoptFile',
-    'basilisk.uv.sync',
-    'basilisk.uv.add',
-    'basilisk.uv.addDev',
-    'basilisk.uv.remove',
-    'basilisk.uv.lock',
-    'basilisk.uv.createEnv',
-    'basilisk.refreshModuleExplorer',
-    'basilisk.sortModuleExplorer',
-    'basilisk.copyImportPath',
-    'basilisk.copyQualifiedName',
-    'basilisk.toggleModuleExplorerView',
-    'basilisk.filterModuleExplorer',
-    'basilisk.profileStart',
-    'basilisk.profileStop',
-    'basilisk.profileSnapshot',
-    'basilisk.profileAttachToDebug',
-    'basilisk.openWalkthrough',
-] as const;
+function manifestCommands(): readonly string[] {
+    return getPackageJsonCommands().map((entry) => entry.command);
+}
 
 /** Commands registered client-side (not by the LSP server). */
 const CLIENT_COMMANDS = [
@@ -90,7 +72,9 @@ const SERVER_COMMANDS = [
     'basilisk.stopDebugSession',
     'basilisk.disableRule',
     'basilisk.fixFile',
+    'basilisk.fixFileAll',
     'basilisk.fixWorkspace',
+    'basilisk.fixWorkspaceAll',
     'basilisk.adoptFile',
     'basilisk.adoptWorkspace',
     'basilisk.unadoptFile',
@@ -214,7 +198,9 @@ suite('Command Registration (VS Code API Compliance)', () => {
     // 1. Every manifest command is known to VS Code's command registry
     // ----------------------------------------------------------------
     test('all manifest commands exist in the VS Code command registry', function () {
-        for (const cmd of MANIFEST_COMMANDS) {
+        const commands = manifestCommands();
+        assert.ok(commands.length > 0, 'the manifest must contribute commands');
+        for (const cmd of commands) {
             assertCannotRegister(cmd, 'Manifest command registration');
         }
     });
@@ -404,6 +390,48 @@ suite('Command Registration (VS Code API Compliance)', () => {
             await ext.activate();
         }
         await pollUntilReady(WAIT_MS);
+    });
+
+    // ----------------------------------------------------------------
+    // 10b. store.reset() must stop the replaced LSP client (GitHub #264)
+    //
+    //     reset() drops the client reference and onReset starts a NEW
+    //     LanguageClient. If the old client is never stopped it stays a
+    //     live zombie: it keeps forwarding didOpen/didClose to its own
+    //     server and publishing into its own diagnostics collection,
+    //     which VS Code merges into getDiagnostics() — late zombie
+    //     republishes then resurrect diagnostics the real server
+    //     cleared (the flaky openFilesOnly diagnostics-clear failure).
+    // ----------------------------------------------------------------
+    test('store.reset() stops the replaced LSP client — no zombie publisher (#264)', async function () {
+        const store = getStore();
+        assert.ok(store, 'Store should be available');
+        await pollUntilReady(WAIT_MS);
+
+        const oldClient = store.client.value;
+        assert.ok(oldClient, 'a running LSP client should exist before reset');
+        assert.strictEqual(oldClient.isRunning(), true, 'old client should be running before reset');
+
+        store.reset();
+
+        // The onReset hook must bring up a replacement client.
+        await pollUntilReady(WAIT_MS);
+        const newClient = store.client.value;
+        assert.ok(newClient, 'reset() must start a replacement client');
+        assert.notStrictEqual(newClient, oldClient, 'reset() must create a new client instance');
+
+        // The replaced client must stop; a still-running one is a zombie
+        // publisher (GitHub #264).
+        const deadline = Date.now() + ZOMBIE_STOP_TIMEOUT_MS;
+        while (oldClient.isRunning() && Date.now() < deadline) {
+            await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        }
+        assert.strictEqual(
+            oldClient.isRunning(),
+            false,
+            'store.reset() must stop the replaced LSP client — a running one keeps ' +
+            'publishing stale diagnostics from its own collection (GitHub #264)'
+        );
     });
 
     // ----------------------------------------------------------------

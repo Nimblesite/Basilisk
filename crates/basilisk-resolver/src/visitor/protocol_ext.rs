@@ -23,11 +23,47 @@ pub(super) fn collect_transitive_required_members(
     required_methods: &mut std::collections::HashSet<String>,
     required_attrs: &mut std::collections::HashSet<String>,
 ) {
+    let mut visited = std::collections::HashSet::new();
+    let _ = visited.insert(proto.name.as_str());
+    required_members_walk(
+        proto,
+        protocol_names,
+        class_map,
+        protocol_required_methods,
+        protocol_required_attrs,
+        required_methods,
+        required_attrs,
+        &mut visited,
+    );
+}
+
+/// Recursive body of [`collect_transitive_required_members`]; `visited`
+/// breaks base-name cycles (GitHub #278).
+#[expect(
+    clippy::too_many_arguments,
+    reason = "internal walk threads the caller's accumulators plus a cycle guard"
+)]
+fn required_members_walk<'a>(
+    proto: &'a ClassInfo,
+    protocol_names: &std::collections::HashSet<&str>,
+    class_map: &std::collections::HashMap<&str, &'a ClassInfo>,
+    protocol_required_methods: &std::collections::HashMap<
+        String,
+        std::collections::HashSet<String>,
+    >,
+    protocol_required_attrs: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+    required_methods: &mut std::collections::HashSet<String>,
+    required_attrs: &mut std::collections::HashSet<String>,
+    visited: &mut std::collections::HashSet<&'a str>,
+) {
     for base_name in &proto.bases {
         if base_name == "Protocol" {
             continue;
         }
         if !protocol_names.contains(base_name.as_str()) {
+            continue;
+        }
+        if !visited.insert(base_name.as_str()) {
             continue;
         }
         if let Some(methods) = protocol_required_methods.get(base_name) {
@@ -37,7 +73,7 @@ pub(super) fn collect_transitive_required_members(
             required_attrs.extend(attrs.iter().cloned());
         }
         if let Some(parent_proto) = class_map.get(base_name.as_str()) {
-            collect_transitive_required_members(
+            required_members_walk(
                 parent_proto,
                 protocol_names,
                 class_map,
@@ -45,6 +81,7 @@ pub(super) fn collect_transitive_required_members(
                 protocol_required_attrs,
                 required_methods,
                 required_attrs,
+                visited,
             );
         }
     }

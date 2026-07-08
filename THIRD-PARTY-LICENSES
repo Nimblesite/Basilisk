@@ -1,0 +1,56 @@
+Third-party licenses
+====================
+
+Implements [LSPFMT-PROVENANCE] (docs/specs/LSP-FORMATTING-SPEC.md).
+
+Ruff
+----
+
+The `basilisk` binary embeds crates from the Ruff project by Astral
+(https://github.com/astral-sh/ruff), pinned in `Cargo.toml` to a single
+immutable rev — 7c645a9a1be8258b9f9e005208a55a0b7e8e18f0, which is release
+0.15.17 (see the workspace `[workspace.dependencies]` section). The crates
+declared directly are:
+
+  - ruff_python_parser     (Python parser)
+  - ruff_python_ast        (Python AST)
+  - ruff_text_size         (text ranges)
+  - ruff_python_formatter  (the embedded formatter engine — [LSPFMT-ENGINE])
+  - ruff_formatter         (formatter infrastructure)
+  - ruff_python_stdlib     (stdlib module / builtins tables)
+
+These pull in further crates from the same Ruff workspace transitively
+(ruff_python_trivia, ruff_source_file, ruff_annotate_snippets, ruff_cache,
+ruff_db, ruff_diagnostics, ruff_macros, ruff_memory_usage, ruff_notebook) —
+15 `ruff_*` crates in total, all from the one rev above and all under the same
+MIT license. No Ruff source is copied into this repository; the crates are
+consumed only as Cargo dependencies. The complete third-party notice list,
+including non-Ruff components, lives in the top-level `NOTICES` file.
+
+Ruff is distributed under the MIT license:
+
+  MIT License
+
+  Copyright (c) 2022 Charles Marsh
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+Ruff's own LICENSE file additionally lists the externally maintained
+libraries Ruff derives from; see
+https://github.com/astral-sh/ruff/blob/main/LICENSE for the complete text.

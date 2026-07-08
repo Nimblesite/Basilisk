@@ -14,6 +14,17 @@ basilisk-common.workspace   = true
 basilisk-uv.workspace       = true
 basilisk-stubs.workspace    = true
 basilisk-profiler-protocol.workspace = true
+salsa.workspace   = true
+
+# Embedded Ruff formatter + stdlib table — formatting and import hygiene are
+# self-contained in the binary ([LSPFMT-DECISION]); no `ruff` subprocess.
+ruff_python_formatter.workspace = true
+ruff_python_stdlib.workspace    = true
+ruff_python_parser.workspace    = true
+ruff_python_ast.workspace       = true
+ruff_text_size.workspace        = true
+ruff_formatter.workspace        = true
+toml.workspace                  = true
 
 tower-lsp         = "0.20"
 tokio             = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util", "net", "sync", "time", "process", "fs"] }
@@ -26,6 +37,11 @@ tracing.workspace = true
 py-spy            = "0.4"
 inferno           = { version = "0.12", default-features = false }
 sysinfo           = { version = "0.39.3", default-features = false, features = ["system", "user"] }
+
+[build-dependencies]
+# Cargo.lock parsing for the embedded-formatter provenance constant
+# ([LSPFMT-PROVENANCE]).
+toml.workspace = true
 
 [dev-dependencies]
 tokio-tungstenite   = "0.29"

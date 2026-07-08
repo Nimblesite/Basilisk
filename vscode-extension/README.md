@@ -4,206 +4,75 @@
 
 <h1 align="center">Basilisk for VS Code</h1>
 
+<p align="center"><strong>English</strong> · <a href="https://github.com/Nimblesite/Basilisk/blob/main/vscode-extension/README.zh.md">简体中文</a></p>
+
 <p align="center">
-  <strong>The open-source Pylance replacement for VS Code.</strong><br>
-  Complete language server: diagnostics, autocomplete, hover, go-to-definition,<br>
-  refactoring, debugging, profiling. Strict by default. Built in Rust.
+  <strong>The open-source Pylance replacement.</strong><br>
+  The only Python type checker with a perfect 100% score on the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> conformance results</a>.<br>
+  Complete language server, type checker, debugger, and profiler — strict by default. Built in <strong>Rust</strong> — single bundled binary, no runtime.
 </p>
 
 <p align="center">
   <a href="https://www.basilisk-python.dev">Website</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/quick-start/">Quick Start</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/rules/">Rules</a> &nbsp;&bull;&nbsp;
+  <a href="https://www.basilisk-python.dev/docs/conformance/">Conformance</a> &nbsp;&bull;&nbsp;
   <a href="https://github.com/Nimblesite/Basilisk">GitHub</a>
 </p>
 
-<p align="center"><strong>English</strong> · <a href="README.zh.md">简体中文</a></p>
-
----
-
 <p align="center">
-  <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in VS Code" width="900">
+  <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><strong><!--g:score-->100.0%<!--/g:score--> PEP conformance</strong></a> — <!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> tests in the official
+  <a href="https://github.com/python/typing/tree/main/conformance"><code>python/typing</code></a>
+  conformance suite, scored on the wheel-installed CLI in its default config by the real upstream harness. The only checker on the board at 100%.
 </p>
 
-## What Basilisk does
+## The only 100% checker — and the fastest
 
-Basilisk is a **complete Python language server and VS Code extension** that replaces Pylance and Pyright. It is not just a type checker — it provides autocomplete, go-to-definition, hover, code actions, refactoring, integrated debugging, and profiling. All fully open source.
+Basilisk is the **only** Python type checker with a perfect score on the official
+[`python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html):
+**<!--g:score-->100.0%<!--/g:score-->** (<!--g:pass-->141<!--/g:pass-->/<!--g:total-->141<!--/g:total--> files, <!--g:caught-->970<!--/g:caught--> required errors caught, <!--g:fp-->0<!--/g:fp--> false positives),
+measured by the real upstream harness on the wheel-installed CLI in its default config.
 
-Other type checkers default to permissive and hope you opt into strictness. Basilisk **starts strict** and stays strict. If your code isn't typed, it's an error — exactly as the screenshot above shows.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/vscode-extension/images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in VS Code" width="900">
+</p>
 
-Fix it once. Ship it typed forever:
+And it is the **fastest checker we&rsquo;ve measured** &mdash; median cold full-file check, from scratch:
 
-```python
-def greet(name: str) -> str:
-    return "Hello " + name
-```
+| Type checker | Median cold check |
+| --- | --- |
+| ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
+| zuban | <!--g:benchZuban-->27<!--/g:benchZuban--> ms |
+| ty | <!--g:benchTy-->37<!--/g:benchTy--> ms |
+| Pyrefly | <!--g:benchPyrefly-->145<!--/g:benchPyrefly--> ms |
+| Pyright | <!--g:benchPyright-->568<!--/g:benchPyright--> ms |
+| mypy | <!--g:benchMypy-->588<!--/g:benchMypy--> ms |
 
----
+Median cold full-file check across <!--g:benchCount-->26<!--/g:benchCount--> single-construct typing-spec stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better; inside the editor a warm re-check is faster again. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 
-## Features
+## Everything in one extension
 
-### Real-time diagnostics
+One extension replaces Pylance and gives you the whole workflow — no Node.js, no Python runtime, no pip, no npm. A single bundled Rust binary drives it all:
 
-Errors appear inline as you type — powered by the Basilisk LSP server with sub-10ms incremental analysis via the Salsa framework (same tech as rust-analyzer).
+- **Strict-by-default diagnostics** — inline as you type, incremental analysis powered by Salsa (the rust-analyzer engine)
+- **Autocomplete, hover, go-to-definition, find references, rename**
+- **Refactoring code actions** — extract, inline, move symbol, organize imports
+- **Integrated debugging** — F5 to debug via bundled debugpy; no separate extension
+- **Integrated profiling** — CPU heat map, flame graph, and a memory dashboard with leak detection
+- **Activity panel** — module tree with per-module type-health coverage, plus feature toggles
+- **Inlay hints** and **Ruff** formatting/import-organization, built in
 
-### Autocomplete, hover, go-to-definition
+Every diagnostic teaches: rustc-style output with a `help`, a `note`, and a link to a per-rule explainer, so a red squiggle always tells you *why*. Other checkers default to permissive; Basilisk **starts strict** and stays strict.
 
-Full language intelligence — completions, hover documentation, go-to-definition, find references, rename symbol.
+## Zero install
 
-### Code actions and refactoring
+The Basilisk binary is bundled with this extension for macOS (Apple Silicon), Linux (x86_64, aarch64), and Windows (x86_64, aarch64). Install the extension and go.
 
-Extract function/variable, rename, move symbol, inline, organize imports — all built into the LSP.
+Want the `basilisk` CLI on your PATH too (for CI or the terminal)? `brew install Nimblesite/tap/basilisk`, `scoop install basilisk` (after `scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket`), or grab a binary from [GitHub Releases](https://github.com/Nimblesite/Basilisk/releases). Point `basilisk.executablePath` at it to use your own build.
 
-### Integrated debugging
+## Acknowledgments
 
-Press F5 to debug Python. Basilisk spawns debugpy and brokers the DAP connection — breakpoints, stepping, variable inspection, watch expressions. No separate debug extension needed.
-
-### Integrated profiling
-
-Profile Python code with py-spy directly from the editor. View heatmaps and identify bottlenecks without leaving VS Code.
-
-### Activity panel
-
-The Basilisk sidebar provides two panels accessible from the activity bar:
-
-**Modules** — Browse your workspace's Python module tree with type health folded in. Each module shows a coverage bar, coverage percentage, error/warning tallies, and an `[adopted]` badge, with its icon tinted green/yellow/red by coverage; expand a module to see its top-level symbols (functions, classes, variables) with annotation status. The workspace-wide coverage summary appears in the panel's title (message + numeric badge). Right-click to copy import paths. Toggle between tree and flat views; in flat view, sort by worst-first, best-first, or alphabetical. Filter by glob patterns. While the server is running, the toolbar also offers **Fix All**, **Organize Imports**, and **Restart Server**.
-
-**Basilisk Info** — Feature toggles (type checking, uv integration) plus compact read-only server info (version, analysis mode, Python, uv — with auto-sync and stub-suggestion details in the tooltip — and binary path). The live server state lives in the status bar, whose click opens the Basilisk output log; uv actions (sync/add/lock/create-env) are in the command palette.
-
-Both panels update automatically when files change (debounced 300ms). The Modules panel appears when a workspace is open; the Info panel is always visible.
-
-### Inlay hints
-
-See inferred types and parameter names directly in your editor:
-
-- **Parameter names** at call sites
-- **Variable types** for unannotated locals
-
-### Ruff integration
-
-Built-in support for Ruff formatting and import organization. One extension, two tools.
-
-### Single binary, zero dependencies
-
-Basilisk ships as one Rust binary. No Python runtime, no Node.js, no pip, no npm. Install it and go.
-
----
-
-## Diagnostic rules
-
-All rules are **on by default**. There is no way to relax them globally.
-
-### Annotation rules
-
-| Code | What it catches |
-|------|----------------|
-| `BSK-E0001` | Parameter has no type annotation |
-| `BSK-E0002` | Function missing return type |
-| `BSK-E0003` | Variable missing type annotation |
-| `BSK-E0004` | `*args` / `**kwargs` not annotated |
-| `BSK-E0005` | Class attribute not annotated |
-
-### Type correctness
-
-| Code | What it catches |
-|------|----------------|
-| `BSK-E0010` | Import from untyped module |
-| `BSK-E0011` | Explicit `Any` annotation (warning) |
-| `BSK-E0012` | Argument type mismatch |
-| `BSK-E0013` | Return type mismatch |
-| `BSK-E0014` | Assignment type mismatch |
-| `BSK-E0015` | Wrong number of type arguments |
-| `BSK-E0016` | Incompatible method override |
-| `BSK-E0017` | Incompatible class variable override |
-| `BSK-E0018` | Undefined name |
-| `BSK-E0019` | Used before assignment |
-| `BSK-E0020` | `@overload` missing implementation |
-| `BSK-E0021` | Overlapping `@overload` signatures |
-| `BSK-E0022` | Unhashable dict key |
-| `BSK-E0023` | Non-exhaustive `match` |
-| `BSK-E0024` | Invalid type expression |
-| `BSK-E0025` | Missing `@override` decorator |
-
----
-
-## How it compares
-
-| | Basilisk | Pyright | mypy |
-|---|:---:|:---:|:---:|
-| **Strict by default** | Yes | No | No |
-| **Written in** | Rust | TypeScript | Python |
-| **Runtime needed** | None | Node.js | Python |
-| **Incremental speed** | <10ms | ~50ms | ~200ms |
-| **Ownership analysis** | Yes | No | No |
-| **Single binary** | Yes | No | No |
-
----
-
-## Extension settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `basilisk.enabled` | `true` | Enable/disable the type checker |
-| `basilisk.executablePath` | `""` | Explicit path to the basilisk binary. Empty uses the bundled VSIX binary |
-| `basilisk.binaries.path` | `""` | Directory containing Basilisk runtime binaries |
-| `basilisk.binaries.basilisk` | `""` | Explicit path to the Basilisk language server binary |
-| `basilisk.useLsp` | `true` | Use LSP server (disable for subprocess fallback) |
-| `basilisk.trace.server` | `"off"` | LSP trace level: `off`, `messages`, `verbose` |
-| `basilisk.inlayHints.parameterNames` | `true` | Reserved — hints are always shown; the server does not yet read this |
-| `basilisk.inlayHints.variableTypes` | `true` | Reserved — hints are always shown; the server does not yet read this |
-| `basilisk.ruff.enabled` | `true` | Reserved — Ruff is always on; the server does not yet read this |
-| `basilisk.ruff.executablePath` | `"ruff"` | Reserved — server resolves ruff from PATH; not yet read |
-
----
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `Basilisk: Restart Language Server` | Restart the LSP server |
-| `Basilisk: Show Output` | Open the Basilisk output channel |
-| `Basilisk: Organize Imports` | Sort and clean imports via Ruff |
-| `Basilisk: Fix File` | Apply all available autofixes to the current file |
-| `Basilisk: Adopt File` | Add type annotations to an untyped file |
-| `Basilisk: uv sync` | Run uv sync in the workspace |
-| `Basilisk: uv add` | Add a package via uv |
-| `Basilisk: Refresh Module Explorer` | Refresh the module tree |
-| `Basilisk: Toggle Module Explorer View` | Switch between tree and flat view |
-| `Basilisk: Toggle Sort Order` | Cycle flat-view sort (worst/best/alpha) |
-| `Basilisk: Copy Import Path` | Copy `from x import y` for the selected symbol |
-| `Basilisk: Open Walkthrough` | Open the Basilisk getting started walkthrough |
-
----
-
-## Requirements
-
-None — the Basilisk binary is bundled with this extension for macOS (Apple Silicon), Linux (x86_64 and aarch64), and Windows (x86_64 and aarch64). Install the extension and go.
-
-### Installing the CLI separately
-
-If you also want the `basilisk` CLI on your PATH (for CI, scripting, or terminal use), install it with your platform's package manager:
-
-```bash
-# macOS, Linux
-brew tap Nimblesite/tap
-brew install basilisk
-```
-
-```powershell
-# Windows
-scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
-scoop install basilisk
-```
-
-Or download a pre-built binary from [GitHub Releases](https://github.com/Nimblesite/Basilisk/releases).
-
-To make this extension use a CLI you installed separately, set `basilisk.executablePath` or `basilisk.binaries.basilisk` to the absolute path of the binary. Building from source also works — see the [GitHub repository](https://github.com/Nimblesite/Basilisk).
-
----
-
-## Part of Basilisk
-
-This is the VS Code extension for the [Basilisk](https://github.com/Nimblesite/Basilisk) project. Basilisk also supports [Neovim](https://github.com/Nimblesite/Basilisk/tree/main/basilisk.nvim) and [Zed](https://github.com/Nimblesite/Basilisk/tree/main/basilisk-zed).
+Built on [Ruff](https://github.com/astral-sh/ruff) by [Astral](https://astral.sh/) (MIT) and [typeshed](https://github.com/python/typeshed) (Apache-2.0); bundles [debugpy](https://github.com/microsoft/debugpy) (Microsoft, MIT). Full notices: [NOTICES](https://github.com/Nimblesite/Basilisk/blob/main/NOTICES).
 
 ## License
 

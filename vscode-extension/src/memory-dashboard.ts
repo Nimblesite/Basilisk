@@ -16,6 +16,7 @@
 import * as vscode from "vscode";
 import { Logger } from "./logger";
 import type { MemoryAllocation } from "./memory-decorations";
+import { openNativeTraceViewer, openSpeedscopeImport } from "./profiler-flamegraph-html";
 import {
   PROFILER_CSS_VARS,
   PROFILER_CSS_RESET,
@@ -25,6 +26,13 @@ import {
   PROFILER_JS_UTILS,
   formatBytes as formatBytesShared,
 } from "./profiler-styles";
+import {
+  buildWebviewDocument,
+  embedJson,
+  handleSourceNavigation,
+  SingletonWebviewPanel,
+  type WebviewMessage,
+} from "./profiler-webview";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -46,6 +54,8 @@ export interface MemoryDashboardSnapshot {
   gcCounts: number[];
   topAllocations: MemoryAllocation[];
   timeline: MemoryTimelinePoint[];
+  /** On-disk V8 `.heapprofile` for the built-in viewer; empty when not written. */
+  heapProfilePath: string;
 }
 
 /** A suspected leak from a snapshot diff. */
@@ -71,7 +81,47 @@ export interface MemoryDiffData {
 
 // ── State ─────────────────────────────────────────────────────────────────
 
-let memoryDashboardPanel: vscode.WebviewPanel | undefined;
+// One panel, one message handler — the shared host guarantees a re-opened
+// dashboard (the autopilot re-renders it on every pause) never stacks a second
+// navigation handler ([PROFILE-WEBVIEW-HOST]).
+const memoryDashboardPanel = new SingletonWebviewPanel("basilisk.memoryDashboard", (msg) => {
+  if (!handleMemoryDashboardMessage(msg)) {
+    handleSourceNavigation(msg);
+  }
+});
+
+/** The dashboard action buttons' message → command routing ([PROFILE-MEMORY-DISCOVERY]). */
+const DASHBOARD_ACTION_COMMANDS: Readonly<Record<string, string>> = {
+  takeSnapshot: "basilisk.memorySnapshot",
+  compareSnapshots: "basilisk.memoryDiff",
+};
+
+/**
+ * Route a dashboard action-button message to its real memory command, so the
+ * dashboard's "take more snapshots" advice is a button, not homework
+ * ([PROFILE-MEMORY-DISCOVERY], #263). Returns whether the message was one of
+ * the dashboard's actions (source-navigation clicks fall through).
+ */
+export function handleMemoryDashboardMessage(msg: WebviewMessage): boolean {
+  if (msg.type === "openHeapProfile" && msg.file !== undefined && msg.file !== "") {
+    // The dashboard is the landing view; the raw V8 `.heapprofile` opens in
+    // VS Code's built-in viewer on demand ([PROFILE-NATIVE]).
+    void openNativeTraceViewer(msg.file, msg.file);
+    return true;
+  }
+  if (msg.type === "openSpeedscope" && msg.file !== undefined && msg.file !== "") {
+    // speedscope imports V8 `.heapprofile` too — same loopback-served deep
+    // link as the CPU panel ([PROFILE-VIEWER-DELIVERY]).
+    void openSpeedscopeImport(msg.file);
+    return true;
+  }
+  const command = DASHBOARD_ACTION_COMMANDS[msg.type];
+  if (command === undefined) {
+    return false;
+  }
+  void vscode.commands.executeCommand(command);
+  return true;
+}
 
 // ── Public API ────────────────────────────────────────────────────────────
 
@@ -83,33 +133,10 @@ export function openMemoryDashboard(
   snapshotData: MemoryDashboardSnapshot,
   diffData?: MemoryDiffData,
 ): void {
-  if (memoryDashboardPanel !== undefined) {
-    memoryDashboardPanel.reveal(vscode.ViewColumn.Beside);
-  } else {
-    memoryDashboardPanel = vscode.window.createWebviewPanel(
-      "basilisk.memoryDashboard",
-      "Basilisk Memory Dashboard",
-      vscode.ViewColumn.Beside,
-      { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] },
-    );
-    memoryDashboardPanel.onDidDispose(() => { memoryDashboardPanel = undefined; });
-  }
-
-  memoryDashboardPanel.webview.html = buildMemoryDashboardHtml(snapshotData, diffData);
-
-  memoryDashboardPanel.webview.onDidReceiveMessage(
-    (msg: { type: string; file?: string; line?: number }) => {
-      if (msg.type === "navigateToSource" && msg.file !== undefined && msg.line !== undefined) {
-        const uri = vscode.Uri.file(msg.file);
-        const position = new vscode.Position(msg.line - 1, 0);
-        void vscode.window.showTextDocument(uri, {
-          selection: new vscode.Range(position, position),
-          viewColumn: vscode.ViewColumn.One,
-        });
-      }
-    },
+  memoryDashboardPanel.show(
+    "Basilisk Memory Dashboard",
+    buildMemoryDashboardHtml(snapshotData, diffData),
   );
-
   const leakCount = diffData?.suspectedLeaks.length ?? 0;
   Logger.info(
     `Memory dashboard opened: ${formatBytesShared(snapshotData.currentMemory)} current, ` +
@@ -119,34 +146,22 @@ export function openMemoryDashboard(
 
 /** Dispose the memory dashboard panel if open. */
 export function disposeMemoryDashboard(): void {
-  if (memoryDashboardPanel !== undefined) {
-    memoryDashboardPanel.dispose();
-    memoryDashboardPanel = undefined;
-  }
+  memoryDashboardPanel.dispose();
 }
 
 // ── HTML builder ──────────────────────────────────────────────────────────
 
-function buildMemoryDashboardHtml(
+/** Build the complete dashboard HTML (exported as an e2e seam). */
+export function buildMemoryDashboardHtml(
   snapshot: MemoryDashboardSnapshot,
   diff?: MemoryDiffData,
 ): string {
-  const css = buildDashboardHeadCss();
-  const body = buildDashboardBodyHtml();
-  const script = buildDashboardScriptTag(snapshot, diff);
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Basilisk Memory Dashboard</title>
-  <style>${css}</style>
-</head>
-<body>
-  ${body}
-  <script>${script}</script>
-</body>
-</html>`;
+  return buildWebviewDocument({
+    title: "Basilisk Memory Dashboard",
+    css: buildDashboardHeadCss(),
+    body: buildDashboardBodyHtml(snapshot.heapProfilePath !== ""),
+    script: buildDashboardScriptTag(snapshot, diff),
+  });
 }
 
 function buildDashboardHeadCss(): string {
@@ -157,9 +172,21 @@ function buildDashboardHeadCss(): string {
     ${PROFILER_CSS_HEADING}${PROFILER_CSS_CARDS}${PROFILER_CSS_TABLE}${buildDashboardCss()}`;
 }
 
-function buildDashboardBodyHtml(): string {
+function buildDashboardBodyHtml(hasHeapProfile: boolean): string {
+  // The dashboard is the landing view; the raw V8 `.heapprofile` opens on
+  // demand rather than by default ([PROFILE-NATIVE]) — in the built-in viewer
+  // or in speedscope.app ([PROFILE-VIEWER-DELIVERY]).
+  const heapProfileButtons = hasHeapProfile
+    ? `
+    <button class="toggle-btn" id="btn-open-heapprofile" title="Open the raw .heapprofile in the built-in trace viewer">Open Heap Profile in VS Code Viewer</button>
+    <button class="toggle-btn" id="btn-open-speedscope" title="Open speedscope.app with the heap profile loaded automatically">Open in Speedscope (external)</button>`
+    : "";
   return `
   <h1><span class="accent">BASILISK</span> MEMORY</h1>
+  <div class="toggle-row">
+    <button class="toggle-btn" id="btn-take-snapshot">Take Snapshot</button>
+    <button class="toggle-btn" id="btn-compare">Compare Snapshots</button>${heapProfileButtons}
+  </div>
   ${buildSummaryCardsHtml()}
   <h2>Memory Timeline</h2>
   <div class="timeline-container">
@@ -186,16 +213,20 @@ function buildDashboardScriptTag(
   snapshot: MemoryDashboardSnapshot,
   diff?: MemoryDiffData,
 ): string {
-  const allocJson = JSON.stringify(snapshot.topAllocations);
-  const timelineJson = JSON.stringify(snapshot.timeline);
-  const leaksJson = JSON.stringify(diff?.suspectedLeaks ?? []);
-  const gcCountsJson = JSON.stringify(snapshot.gcCounts);
+  // Allocation paths and leak reasons come from the profiled program — embed
+  // them so they can never close the inline <script> ([PROFILE-WEBVIEW-HOST]).
+  const allocJson = embedJson(snapshot.topAllocations);
+  const timelineJson = embedJson(snapshot.timeline);
+  const leaksJson = embedJson(diff?.suspectedLeaks ?? []);
+  const gcCountsJson = embedJson(snapshot.gcCounts);
+  const heapProfileJson = embedJson(snapshot.heapProfilePath);
   return `
     const vscode = acquireVsCodeApi();
     const allocations = ${allocJson};
     const timeline = ${timelineJson};
     const leaks = ${leaksJson};
     const gcCounts = ${gcCountsJson};
+    const heapProfileFile = ${heapProfileJson};
     const currentMemory = ${snapshot.currentMemory};
     const peakMemory = ${snapshot.peakMemory};
     const gcObjects = ${snapshot.gcObjects};
@@ -203,6 +234,7 @@ function buildDashboardScriptTag(
     ${buildSummaryScript()}
     ${buildTimelineScript()}
     ${buildToggleScript()}
+    ${buildActionsScript()}
     ${buildAllocScript()}
     ${buildLeakScript()}
     renderTimeline(); renderAllocs(); renderLeaks();
@@ -308,7 +340,7 @@ function buildTimelineDrawScript(): string {
       tlCanvas.style.width=w+'px'; tlCanvas.style.height=h+'px';
       tlCtx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
       if(timeline.length<2){
-        tlCtx.fillStyle='#8892a4';tlCtx.font='13px "Space Grotesk",-apple-system,sans-serif';
+        tlCtx.fillStyle=cssVar('--prof-text-secondary');tlCtx.font='13px "Space Grotesk",-apple-system,sans-serif';
         tlCtx.textAlign='center';tlCtx.textBaseline='middle';
         tlCtx.fillText('Take multiple snapshots to see the timeline',w/2,h/2); return;
       }
@@ -322,10 +354,10 @@ function buildTimelineDrawScript(): string {
       tlCanvas._geo={pL,pR,pT,pB,pW,pH,t0,t1,tR,mMax,xOf,yOf};
     }
     function drawTimelineGrid(pL,pT,pW,pH,mMax,xOf,t0){
-      tlCtx.strokeStyle='#1a1f2e';tlCtx.lineWidth=1;
+      tlCtx.strokeStyle=cssVar('--prof-border');tlCtx.lineWidth=1;
       for(let i=0;i<=4;i++){
         const y=pT+(pH/4)*i;tlCtx.beginPath();tlCtx.moveTo(pL,y);tlCtx.lineTo(pL+pW,y);tlCtx.stroke();
-        tlCtx.fillStyle='#8892a4';tlCtx.font='10px "JetBrains Mono",monospace';
+        tlCtx.fillStyle=cssVar('--prof-text-secondary');tlCtx.font='10px "JetBrains Mono",monospace';
         tlCtx.textAlign='right';tlCtx.textBaseline='middle';tlCtx.fillText(formatBytes(mMax*(1-i/4)),pL-6,y);
       }
       tlCtx.textAlign='center';tlCtx.textBaseline='top';
@@ -390,6 +422,29 @@ function buildToggleScript(): string {
       document.getElementById('btn-mem').className='toggle-btn';
       renderAllocs();
     });`;
+}
+
+/**
+ * The action buttons post their command back to the extension — the empty
+ * states say "take more snapshots", so the dashboard must let the user do it
+ * right there ([PROFILE-MEMORY-DISCOVERY], #263).
+ */
+function buildActionsScript(): string {
+  return `
+    document.getElementById('btn-take-snapshot').addEventListener('click',()=>{
+      vscode.postMessage({type:'takeSnapshot'});
+    });
+    document.getElementById('btn-compare').addEventListener('click',()=>{
+      vscode.postMessage({type:'compareSnapshots'});
+    });
+    const heapBtn=document.getElementById('btn-open-heapprofile');
+    if(heapBtn){heapBtn.addEventListener('click',()=>{
+      vscode.postMessage({type:'openHeapProfile',file:heapProfileFile});
+    });}
+    const speedscopeBtn=document.getElementById('btn-open-speedscope');
+    if(speedscopeBtn){speedscopeBtn.addEventListener('click',()=>{
+      vscode.postMessage({type:'openSpeedscope',file:heapProfileFile});
+    });}`;
 }
 
 function buildAllocScript(): string {

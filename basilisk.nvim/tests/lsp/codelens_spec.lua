@@ -1,5 +1,7 @@
 --- Code lens activation tests for ftplugin/python.lua.
 ---
+--- Tests [NVIM-LSP-CLIENT-CONFIGURATION-API-MAPPINGS] (Code Lens row).
+---
 --- Regression coverage for the deprecated `vim.lsp.codelens.refresh()` call,
 --- which spams a warning on Neovim 0.12 and stops working on 0.13. The
 --- ftplugin must prefer `vim.lsp.codelens.enable()` when the running Neovim

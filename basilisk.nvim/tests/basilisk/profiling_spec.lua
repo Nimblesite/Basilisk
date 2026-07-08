@@ -1098,7 +1098,7 @@ describe("Profiler — Configuration Interaction", function()
     local resolved = config_mod.resolve({ analysis_mode = "crossModule" })
     assert.are.equal("crossModule", resolved.analysis_mode)
     -- Nested defaults should be preserved.
-    assert.is_true(resolved.ruff.enabled, "ruff.enabled default should be preserved")
+    assert.are.equal("ruff", resolved.formatter, "formatter default should be preserved")
     assert.is_true(resolved.test_explorer.enabled, "test_explorer.enabled should be preserved")
     assert.is_true(resolved.uv.enabled, "uv.enabled should be preserved")
   end)
@@ -1431,10 +1431,10 @@ describe("profiler — configuration", function()
     assert.are.equal(40, resolved.test_explorer.width)
   end)
 
-  it("ruff defaults are correct", function()
+  it("formatter defaults are correct", function()
+    -- [LSPFMT-CONFIG]: the embedded Ruff formatter is the default engine.
     local resolved = config.resolve({})
-    assert.are.equal(true, resolved.ruff.enabled)
-    assert.are.equal("ruff", resolved.ruff.executable_path)
+    assert.are.equal("ruff", resolved.formatter)
   end)
 
   it("inlay_hints defaults are correct", function()

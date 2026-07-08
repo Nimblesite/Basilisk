@@ -12,11 +12,11 @@ use super::common::*;
 // e0076 overload union, e0148 generic args, e0111 constructor deep.
 
 // =============================================================================
-// E0144: Keyword + positional arg type checking
+// Keyword + positional arg type checking
 // =============================================================================
 
 #[test]
-fn e0144_kwarg_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn kwarg_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Config:
     def __init__(self, name: str, count: int) -> None:
@@ -28,7 +28,7 @@ def make(cls: type[Config]) -> Config:
     let diagnostics = run(source)?;
     let e0144 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0144")
+        .filter(|d| d.code.code == "constructors_call_type")
         .collect::<Vec<_>>();
     assert!(
         !e0144.is_empty(),
@@ -38,7 +38,7 @@ def make(cls: type[Config]) -> Config:
 }
 
 #[test]
-fn e0144_positional_arg_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn positional_arg_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 class Widget:
     def __init__(self, width: int, label: str) -> None:
@@ -50,7 +50,7 @@ def make(cls: type[Widget]) -> Widget:
     let diagnostics = run(source)?;
     let e0144 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0144")
+        .filter(|d| d.code.code == "constructors_call_type")
         .collect::<Vec<_>>();
     assert!(
         !e0144.is_empty(),
@@ -60,7 +60,7 @@ def make(cls: type[Widget]) -> Widget:
 }
 
 #[test]
-fn e0144_constructor_arg_in_nested_call() -> Result<(), Box<dyn std::error::Error>> {
+fn constructor_arg_in_nested_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Inner:
     def __init__(self, x: int) -> None:
@@ -78,11 +78,11 @@ def make(cls: type[Outer]) -> Outer:
 }
 
 // =============================================================================
-// E0145: Special form + union type[A|B] args
+// Special form + union type[A|B] args
 // =============================================================================
 
 #[test]
-fn e0145_special_form_as_type_arg() -> Result<(), Box<dyn std::error::Error>> {
+fn special_form_as_type_arg() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable
 
@@ -97,7 +97,7 @@ check(Callable)
     let diagnostics = run(source)?;
     let e0145 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0145")
+        .filter(|d| d.code.code == "specialtypes_type")
         .collect::<Vec<_>>();
     assert!(
         !e0145.is_empty(),
@@ -107,7 +107,7 @@ check(Callable)
 }
 
 #[test]
-fn e0145_union_type_bracket_arg() -> Result<(), Box<dyn std::error::Error>> {
+fn union_type_bracket_arg() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Cat:
     pass
@@ -126,7 +126,7 @@ check(Bird)
     let diagnostics = run(source)?;
     let e0145 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0145")
+        .filter(|d| d.code.code == "specialtypes_type")
         .collect::<Vec<_>>();
     assert!(
         !e0145.is_empty(),
@@ -136,7 +136,7 @@ check(Bird)
 }
 
 #[test]
-fn e0145_type_bracket_method_call() -> Result<(), Box<dyn std::error::Error>> {
+fn type_bracket_method_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 class Animal:
     pass
@@ -156,11 +156,11 @@ check(Animal)
 }
 
 // =============================================================================
-// E0147: Tuple starred unpack - mixed/literal/var compat
+// Tuple starred unpack - mixed/literal/var compat
 // =============================================================================
 
 #[test]
-fn e0147_tuple_starred_mixed_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_starred_mixed_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Tuple
 
@@ -172,7 +172,7 @@ def process(x: tuple[int, *tuple[str, ...], float]) -> None:
 }
 
 #[test]
-fn e0147_tuple_fixed_length_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_fixed_length_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Tuple
 
@@ -185,7 +185,7 @@ def process() -> None:
 }
 
 #[test]
-fn e0147_tuple_homogeneous_element_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_homogeneous_element_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Tuple
 
@@ -197,7 +197,7 @@ def process() -> None:
 }
 
 #[test]
-fn e0147_tuple_var_assignment_compat() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_var_assignment_compat() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def process(src: tuple[int, ...]) -> None:
     dest: tuple[int] = src
@@ -207,7 +207,7 @@ def process(src: tuple[int, ...]) -> None:
 }
 
 #[test]
-fn e0147_tuple_mixed_to_fixed() -> Result<(), Box<dyn std::error::Error>> {
+fn tuple_mixed_to_fixed() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 def process(src: tuple[int, *tuple[str, ...], float]) -> None:
     dest: tuple[int] = src
@@ -217,11 +217,11 @@ def process(src: tuple[int, *tuple[str, ...], float]) -> None:
 }
 
 // =============================================================================
-// E0146: Protocol class object satisfaction
+// Protocol class object satisfaction
 // =============================================================================
 
 #[test]
-fn e0146_protocol_class_object_property() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_class_object_property() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -241,7 +241,7 @@ x: type[HasProp] = Impl
 }
 
 #[test]
-fn e0146_protocol_class_object_classvar() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_class_object_classvar() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, ClassVar
 
@@ -258,7 +258,7 @@ x: type[HasClassVar] = Impl
 }
 
 #[test]
-fn e0146_protocol_instance_attr() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_instance_attr() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -275,11 +275,11 @@ x: type[HasAttr] = Impl
 }
 
 // =============================================================================
-// E0119: Protocol isinstance overlap deep
+// Protocol isinstance overlap deep
 // =============================================================================
 
 #[test]
-fn e0119_protocol_method_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_method_param_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, runtime_checkable
 
@@ -298,7 +298,7 @@ x: HasProcess = Impl()
 }
 
 #[test]
-fn e0119_protocol_method_return_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_method_return_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, runtime_checkable
 
@@ -317,7 +317,7 @@ x: HasProcess = Impl()
 }
 
 #[test]
-fn e0119_protocol_attr_vs_method() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_attr_vs_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, runtime_checkable
 
@@ -335,11 +335,11 @@ x: HasName = Impl()
 }
 
 // =============================================================================
-// E0130: Constraint deep paths
+// Constraint deep paths
 // =============================================================================
 
 #[test]
-fn e0130_typevar_constraint_with_bound() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_constraint_with_bound() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -357,7 +357,7 @@ class Container(Generic[T]):
 }
 
 #[test]
-fn e0130_typevar_in_function_return() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_in_function_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -374,11 +374,11 @@ def convert(x: T) -> str:
 }
 
 // =============================================================================
-// E0131: Generator yield deep
+// Generator yield deep
 // =============================================================================
 
 #[test]
-fn e0131_generator_yield_in_loop() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_yield_in_loop() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -390,7 +390,7 @@ def gen() -> Generator[int, None, None]:
     let diagnostics = run(source)?;
     let e0131 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0131")
+        .filter(|d| d.code.code == "annotations_generators_2")
         .collect::<Vec<_>>();
     assert!(
         !e0131.is_empty(),
@@ -400,7 +400,7 @@ def gen() -> Generator[int, None, None]:
 }
 
 #[test]
-fn e0131_generator_return_wrong_type() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_return_wrong_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Generator
 
@@ -411,7 +411,7 @@ def gen() -> Generator[int, None, str]:
     let diagnostics = run(source)?;
     let e0131 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0131")
+        .filter(|d| d.code.code == "annotations_generators_2")
         .collect::<Vec<_>>();
     // Return type mismatch may be checked
     let _ = e0131;
@@ -419,11 +419,11 @@ def gen() -> Generator[int, None, str]:
 }
 
 // =============================================================================
-// E0120: Generator return deep
+// Generator return deep
 // =============================================================================
 
 #[test]
-fn e0120_generator_with_multiple_violation_types() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_with_multiple_violation_types() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator
 
@@ -437,7 +437,9 @@ def gen2() -> Generator[str, None, None]:
     let diagnostics = run(source)?;
     let gen_errors = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0120" || d.code.code == "BSK-E0131")
+        .filter(|d| {
+            d.code.code == "annotations_generators" || d.code.code == "annotations_generators_2"
+        })
         .count();
     assert!(
         gen_errors >= 1,
@@ -447,11 +449,11 @@ def gen2() -> Generator[str, None, None]:
 }
 
 // =============================================================================
-// E0138: Transform frozen/kw-only/order deep
+// Transform frozen/kw-only/order deep
 // =============================================================================
 
 #[test]
-fn e0138_transform_inherited_class() -> Result<(), Box<dyn std::error::Error>> {
+fn transform_inherited_class() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import dataclass_transform
 
@@ -477,7 +479,7 @@ g = GrandChild(1, "hi", 3.0)
 }
 
 #[test]
-fn e0138_transform_order_true() -> Result<(), Box<dyn std::error::Error>> {
+fn transform_order_true() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import dataclass_transform
 
@@ -511,7 +513,7 @@ r2 = c < d
     let diagnostics = run(source)?;
     let e0138 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0138")
+        .filter(|d| d.code.code == "dataclasses_transform_meta")
         .collect::<Vec<_>>();
     assert!(
         !e0138.is_empty(),
@@ -521,11 +523,11 @@ r2 = c < d
 }
 
 // =============================================================================
-// E0112: TypeGuard message building
+// TypeGuard message building
 // =============================================================================
 
 #[test]
-fn e0112_typeguard_inner_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_inner_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeGuard, Callable
 
@@ -540,7 +542,7 @@ takes_str_check(is_int)
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0112")
+        .filter(|d| d.code.code == "narrowing_typeis")
         .collect::<Vec<_>>();
     assert!(
         !e0112.is_empty(),
@@ -550,7 +552,7 @@ takes_str_check(is_int)
 }
 
 #[test]
-fn e0112_typeis_vs_typeguard_different_kinds() -> Result<(), Box<dyn std::error::Error>> {
+fn typeis_vs_typeguard_different_kinds() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeIs, TypeGuard, Callable
 
@@ -565,7 +567,7 @@ takes_typeguard(is_str_typeis)
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0112")
+        .filter(|d| d.code.code == "narrowing_typeis")
         .collect::<Vec<_>>();
     assert!(
         !e0112.is_empty(),
@@ -575,7 +577,7 @@ takes_typeguard(is_str_typeis)
 }
 
 #[test]
-fn e0112_typeguard_bool_expected_ok() -> Result<(), Box<dyn std::error::Error>> {
+fn typeguard_bool_expected_ok() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import TypeGuard, Callable
 
@@ -590,7 +592,7 @@ takes_bool(is_str)
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0112")
+        .filter(|d| d.code.code == "narrowing_typeis")
         .collect::<Vec<_>>();
     assert!(
         e0112.is_empty(),
@@ -600,11 +602,11 @@ takes_bool(is_str)
 }
 
 // =============================================================================
-// E0121: Nominal subclass + protocol hierarchy
+// Nominal subclass + protocol hierarchy
 // =============================================================================
 
 #[test]
-fn e0121_nominal_subclass_accepted() -> Result<(), Box<dyn std::error::Error>> {
+fn nominal_subclass_accepted() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -626,7 +628,7 @@ x: Drawable = Circle()
 }
 
 #[test]
-fn e0121_protocol_with_inherited_methods() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_with_inherited_methods() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol
 
@@ -646,7 +648,7 @@ x: Extended = Impl()
     let diagnostics = run(source)?;
     let e0121 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0121")
+        .filter(|d| d.code.code == "protocols_definition_2")
         .collect::<Vec<_>>();
     assert!(
         !e0121.is_empty(),
@@ -656,11 +658,11 @@ x: Extended = Impl()
 }
 
 // =============================================================================
-// E0102: TypeVar default deep
+// TypeVar default deep
 // =============================================================================
 
 #[test]
-fn e0102_typevar_default_referential_ordering() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_referential_ordering() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -673,11 +675,11 @@ T3 = TypeVar("T3", default=T2)
 }
 
 // =============================================================================
-// E0076: Overload union expansion
+// Overload union expansion
 // =============================================================================
 
 #[test]
-fn e0076_overload_with_union_return() -> Result<(), Box<dyn std::error::Error>> {
+fn overload_with_union_return() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import overload, Union
 
@@ -696,11 +698,11 @@ def process(x: Union[int, str]) -> Union[str, int]:
 }
 
 // =============================================================================
-// E0148: Generic type arg deep
+// Generic type arg deep
 // =============================================================================
 
 #[test]
-fn e0148_set_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
+fn set_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Set, FrozenSet
 
@@ -712,7 +714,7 @@ y: FrozenSet[int, str] = frozenset()
 }
 
 #[test]
-fn e0148_deque_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
+fn deque_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Deque
 
@@ -723,11 +725,11 @@ x: Deque[int, str] = []
 }
 
 // =============================================================================
-// E0111: Constructor deep paths
+// Constructor deep paths
 // =============================================================================
 
 #[test]
-fn e0111_generic_constructor_substitution() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_constructor_substitution() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar, Generic
 
@@ -744,7 +746,7 @@ x: Stack[int] = Stack[int]([1, 2, 3])
 }
 
 #[test]
-fn e0111_class_with_overloaded_init() -> Result<(), Box<dyn std::error::Error>> {
+fn class_with_overloaded_init() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import overload
 
@@ -765,11 +767,11 @@ g = Flexible("hi", 10)
 }
 
 // =============================================================================
-// E0095: InitVar stmt walking - deep
+// InitVar stmt walking - deep
 // =============================================================================
 
 #[test]
-fn e0095_initvar_access_in_for() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_access_in_for() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, InitVar
 
@@ -870,7 +872,7 @@ def test_bound(cls: type[TB]) -> TB:
     let diagnostics = run(source)?;
     let e0144 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0144")
+        .filter(|d| d.code.code == "constructors_call_type")
         .count();
     assert!(
         e0144 >= 3,
@@ -912,7 +914,7 @@ check_union(Callable)
     let diagnostics = run(source)?;
     let e0145 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0145")
+        .filter(|d| d.code.code == "specialtypes_type")
         .count();
     assert!(
         e0145 >= 1,
@@ -951,7 +953,7 @@ isinstance(y, NotRuntime)
     let diagnostics = run(source)?;
     let e0119 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0119")
+        .filter(|d| d.code.code == "protocols_runtime_checkable_2")
         .count();
     assert!(
         e0119 >= 1,
@@ -1004,7 +1006,7 @@ r2 = c < d
     let diagnostics = run(source)?;
     let e0138 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0138")
+        .filter(|d| d.code.code == "dataclasses_transform_meta")
         .count();
     assert!(
         e0138 >= 1,
@@ -1055,7 +1057,7 @@ takes_bool(is_str_is)
     let diagnostics = run(source)?;
     let e0112 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0112")
+        .filter(|d| d.code.code == "narrowing_typeis")
         .count();
     assert!(
         e0112 >= 2,
@@ -1089,7 +1091,9 @@ def gen_multiple_yields() -> Generator[int, None, None]:
     let diagnostics = run(source)?;
     let gen_errors = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0120" || d.code.code == "BSK-E0131")
+        .filter(|d| {
+            d.code.code == "annotations_generators" || d.code.code == "annotations_generators_2"
+        })
         .count();
     assert!(
         gen_errors >= 1,
@@ -1132,7 +1136,7 @@ d.Z = False
     let diagnostics = run(source)?;
     let e0054 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0054")
+        .filter(|d| d.code.code == "qualifiers_final_annotation_2")
         .count();
     assert!(
         e0054 >= 3,
@@ -1175,7 +1179,7 @@ print(s.debug)
     let diagnostics = run(source)?;
     let e0095 = diagnostics
         .iter()
-        .filter(|d| d.code.code == "BSK-E0095")
+        .filter(|d| d.code.code == "dataclasses_postinit")
         .count();
     assert!(
         e0095 >= 1,

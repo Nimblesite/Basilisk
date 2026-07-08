@@ -36,6 +36,7 @@ export function toDashboardSnapshot(result: MemoryIngestResult): MemoryDashboard
       ? result.topAllocations
       : []) as MemoryDashboardSnapshot["topAllocations"],
     timeline: [],
+    heapProfilePath: asString(result.heapProfilePath),
   };
 }
 

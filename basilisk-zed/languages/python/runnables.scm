@@ -1,3 +1,5 @@
+; Run buttons for entry points and pytest functions. Implements [ZED-TREESITTER].
+
 ; if __name__ == "__main__": — script entry point
 (if_statement
   condition: (comparison_operator

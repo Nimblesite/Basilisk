@@ -24,14 +24,23 @@ use super::FileSource;
 ///
 /// Returns the count of error-severity diagnostics.
 pub fn render_diagnostics(diagnostics: &[Diagnostic], sources: &[FileSource]) -> usize {
-    diagnostics
+    use std::io::Write;
+
+    // Precompute one line index per source; every diagnostic then converts its
+    // span to line/col in O(log n) instead of rescanning the source prefix.
+    let indexes = super::SourceIndexes::new(sources);
+    // Buffer the whole render: stdout is line-buffered, so unbuffered printing
+    // costs one write syscall per output line — thousands on error-dense files.
+    let mut out = std::io::BufWriter::new(std::io::stdout().lock());
+    let count = diagnostics
         .iter()
         .inspect(|d| {
-            let source = sources.iter().find(|s| s.path == d.path);
-            print!("{}", format_one(d, source.map(|s| s.text.as_str())));
+            let _ = write!(out, "{}", format_one(d, indexes.for_path(&d.path)));
         })
         .filter(|d| d.severity == Severity::Error)
-        .count()
+        .count();
+    let _ = out.flush();
+    count
 }
 
 /// Apply the appropriate colour to a severity label.
@@ -44,7 +53,15 @@ fn color_severity(severity: Severity, text: &str) -> String {
 }
 
 /// Format a single diagnostic as a rustc-style string with ANSI colours.
-pub(super) fn format_one(diag: &Diagnostic, source: Option<&str>) -> String {
+///
+/// Implements [CHKARCH-DIAGEXP-QUALITY]: emits the rustc-standard layout —
+/// `severity[CODE]: message`, `--> path:line:col`, source snippet with caret
+/// underline, then `= help:` / `= note:` / `= see:` annotation lines.
+/// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAGEXP-QUALITY
+pub(super) fn format_one(
+    diag: &Diagnostic,
+    source: Option<(&str, &basilisk_common::text::LineIndex)>,
+) -> String {
     let mut out = String::new();
 
     // Header: error[BSK-E0001]: Message
@@ -56,8 +73,8 @@ pub(super) fn format_one(diag: &Diagnostic, source: Option<&str>) -> String {
     // Location: --> path:line:col
     let location = source.map_or_else(
         || diag.path.clone(),
-        |src| {
-            let (line, col) = byte_offset_to_line_col(src, diag.span.start_usize());
+        |(_, index)| {
+            let (line, col) = index.line_col(diag.span.start_usize());
             format!("{}:{}:{}", diag.path, line, col)
         },
     );
@@ -65,9 +82,10 @@ pub(super) fn format_one(diag: &Diagnostic, source: Option<&str>) -> String {
     let _ = writeln!(out, "  {} {location}", "-->".blue().bold());
 
     // Source snippet with underline
-    if let Some(src) = source {
+    if let Some((src, index)) = source {
         out.push_str(&format_snippet(
             src,
+            index,
             diag.span.start_usize(),
             diag.span.end_usize(),
             diag.severity,
@@ -103,14 +121,25 @@ pub(super) fn format_one(diag: &Diagnostic, source: Option<&str>) -> String {
 }
 
 /// Convert a byte offset into (1-based line number, 1-based column number).
+///
+/// Production rendering builds a [`LineIndex`](basilisk_common::text::LineIndex)
+/// once per file and calls its `line_col`; this single-shot wrapper remains only
+/// for the focused line/col unit tests below.
+#[cfg(test)]
 pub(super) fn byte_offset_to_line_col(source: &str, offset: usize) -> (usize, usize) {
     basilisk_common::text::line_col(source, offset)
 }
 
 /// Format a source line with a `^^^^` underline for the highlighted span.
-pub(super) fn format_snippet(source: &str, start: usize, end: usize, severity: Severity) -> String {
-    let (line_num, _) = byte_offset_to_line_col(source, start);
-    let line_start = source[..start].rfind('\n').map_or(0, |p| p + 1);
+pub(super) fn format_snippet(
+    source: &str,
+    index: &basilisk_common::text::LineIndex,
+    start: usize,
+    end: usize,
+    severity: Severity,
+) -> String {
+    let line_num = index.line(start);
+    let line_start = index.line_start(start);
     let line_text = source[line_start..].lines().next().unwrap_or("");
 
     let col_start = start - line_start;
@@ -124,13 +153,13 @@ pub(super) fn format_snippet(source: &str, start: usize, end: usize, severity: S
     let underline = color_severity(severity, &"^".repeat(underline_len));
 
     let mut out = String::new();
-    let _ = writeln!(out, "{pad}   {pipe}");
+    let _ = writeln!(out, "{pad} {pipe}");
     let _ = writeln!(out, "{line_num_str} {pipe} {line_text}");
     let _ = writeln!(
         out,
-        "{pad}   {pipe} {spaces}{underline}",
+        "{pad} {pipe} {spaces}{underline}",
         spaces = " ".repeat(col_start),
     );
-    let _ = writeln!(out, "{pad}   {pipe}");
+    let _ = writeln!(out, "{pad} {pipe}");
     out
 }

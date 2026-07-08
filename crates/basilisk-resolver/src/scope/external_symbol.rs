@@ -24,11 +24,24 @@ pub enum ExternalSymbolKind {
     ReExport,
 }
 
+/// A method on an externally imported class.
+///
+/// Kept so hover can resolve member access on subclasses of external classes
+/// (e.g. `Model.model_validate(...)` where `Model` extends pydantic's
+/// `BaseModel`) — GitHub #287.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalMethod {
+    /// The method's name.
+    pub name: String,
+    /// The rendered `def` signature for hover display.
+    pub signature: String,
+}
+
 /// A symbol imported from another module during cross-module analysis.
 ///
 /// Contains enough information for the checker and LSP to provide
 /// cross-file type checking, hover, go-to-definition, etc.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExternalSymbol {
     /// The symbol's name as it appears in the source module.
     pub name: String,
@@ -47,4 +60,9 @@ pub struct ExternalSymbol {
     /// Set during cross-module resolution based on how the import was resolved.
     /// Used by the checker for cascade suppression and by hover for annotations.
     pub provenance: Option<TypeProvenance>,
+    /// Methods of the class, when `kind` is [`ExternalSymbolKind::Class`].
+    ///
+    /// Empty for non-class symbols. Lets hover resolve inherited member access
+    /// on subclasses of external classes (GitHub #287).
+    pub methods: Vec<ExternalMethod>,
 }

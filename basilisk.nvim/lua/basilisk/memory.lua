@@ -103,6 +103,9 @@ function M.refs(type_name)
 end
 
 --- Display a leak report in a floating window.
+--- Implements [NVIM-USER-COMMANDS-MEMORY-UI] — leak report and retention paths
+--- (display_retention_paths) render in floats; COMMON_TYPES drives :BasiliskMemRefs
+--- completion (complete_refs).
 ---@param result? table Leak report from the LSP server.
 function M.display_leak_report(result)
   if not result then

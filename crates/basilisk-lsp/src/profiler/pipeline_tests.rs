@@ -74,6 +74,9 @@ fn build_pipeline_test_data() -> ProfileData {
     let _ = data.thread_stacks.insert(1, t1_stacks);
     let _ = data.thread_weights.insert(1, t1_weights);
     let _ = data.thread_names.insert(1, "MainThread".to_owned());
+    // 300 samples on thread 1 — the denominator hot-list percentages divide by
+    // ([PROFILE-AGGREGATION-LOGIC], #251).
+    let _ = data.thread_samples.insert(1, 300);
 
     // Thread 2: 200 samples (all serialize).
     let mut t2_stacks = Vec::with_capacity(200);
@@ -85,6 +88,8 @@ fn build_pipeline_test_data() -> ProfileData {
     let _ = data.thread_stacks.insert(2, t2_stacks);
     let _ = data.thread_weights.insert(2, t2_weights);
     let _ = data.thread_names.insert(2, "Worker-1".to_owned());
+    // 200 samples on thread 2 (#251, as above).
+    let _ = data.thread_samples.insert(2, 200);
 
     // Populate line_hits.
     for &(file, line, hits) in &[
@@ -136,6 +141,10 @@ fn build_pipeline_test_data() -> ProfileData {
 }
 
 /// Full pipeline test: ingestion → aggregation → export → diagnostics.
+///
+/// Exercises [PROFILE-AGGREGATION-LOGIC]/[PROFILE-AGGREGATION-THRESHOLD] (hot
+/// line/function detection) and [PROFILE-SPEEDSCOPE-MAPPING] (one profile per
+/// thread, deduplicated `shared.frames`).
 #[test]
 fn pipeline_ingest_export_diagnostics_e2e() -> Result<(), String> {
     let data = build_pipeline_test_data();
@@ -235,6 +244,8 @@ fn pipeline_ingest_export_diagnostics_e2e() -> Result<(), String> {
 }
 
 /// Verify that multi-thread data produces per-thread profiles in speedscope.
+///
+/// [PROFILE-SPEEDSCOPE-MAPPING] — `StackTrace.thread_name` → `profiles[i].name`.
 #[test]
 fn pipeline_multi_thread_export() -> Result<(), String> {
     let data = build_pipeline_test_data();

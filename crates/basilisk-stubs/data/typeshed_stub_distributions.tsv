@@ -1,7 +1,7 @@
 # typeshed third-party stub distribution map — GENERATED, do not edit by hand.
 # Source: python/typeshed `stubs/<DIST>/` directories (main branch).
 # Each line maps a Python *import root* to the PyPI *distribution* that
-# publishes its stubs (always `types-<DIST>`). Used by BSK-W0010 quick fix
+# publishes its stubs (always `types-<DIST>`). Used by the BSK-E0152 quick fix
 # to offer a real `uv add --dev <dist>` and to suppress the fix when no
 # stub distribution exists. Regenerate from typeshed's git tree.
 # Format: <import_root>\t<distribution>

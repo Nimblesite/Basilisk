@@ -1,7 +1,7 @@
 // Tests for [EXTACT-MODULES-TREE-STRUCTURE]. See docs/specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-MODULES-TREE-STRUCTURE
 //
 // Coarse component tests for the Module Explorer's nested folder/package tree
-// (#149) and the flat-view sort toggle (#151). Per CLAUDE.md we drive the real
+// (#149) and the flat-view sort picker (#151/#189). Per CLAUDE.md we drive the real
 // provider: a stubbed WorkspaceModulesResponse is fed through a fake LSP client
 // and getChildren() output is asserted. Crucially the LSP returns a FLAT list of
 // dotted module names — the provider must rebuild the hierarchy client-side, so
@@ -222,6 +222,7 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
     }
   });
 
+  // Tests [EXTACT-MODULES-TOOLBAR] Sort — the explicit, labelled name/path/coverage picker.
   test("flat-view exposes explicit name/path/coverage sort modes with a visible active mode (#151, #189)", async () => {
     const provider = new ModuleExplorerProvider(storeWith(MODULES));
     try {
@@ -267,6 +268,7 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
     }
   });
 
+  // Tests [EXTACT-MODULES-TOOLBAR] Sort (Path mode).
   test("flat-view offers an explicit sort-by-path mode (#189)", async () => {
     // Paths are chosen so file-path order (a/ < b/ < c/) differs from BOTH name
     // order (alpha < beta < gamma) and score order (10 < 50 < 90) — so only a
@@ -309,8 +311,8 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
       const app = roots.find((row) => labelOf(row) === "app");
       assert.ok(app instanceof PackageTreeItem, "'app' is a package container");
       const appDesc = String(app.description);
-      assert.ok(appDesc.includes("10E"), `'app' must roll up all descendant errors (9+1), got: ${appDesc}`);
-      assert.ok(appDesc.includes("2W"), `'app' must roll up descendant warnings, got: ${appDesc}`);
+      assert.ok(appDesc.includes("🔴 10"), `'app' must roll up all descendant errors (9+1), got: ${appDesc}`);
+      assert.ok(appDesc.includes("🟠 2"), `'app' must roll up descendant warnings, got: ${appDesc}`);
       assert.strictEqual(app.node.errors, 10, "rolled-up error count on the node");
       assert.strictEqual(app.node.warnings, 2, "rolled-up warning count on the node");
 
@@ -319,7 +321,7 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
       const api = appChildren.find((row) => labelOf(row) === "api");
       assert.ok(api instanceof PackageTreeItem, "'api' is a synthesised folder");
       assert.ok(
-        String(api.description).includes("9E"),
+        String(api.description).includes("🔴 9"),
         `'api' folder must surface auth's 9 errors without drilling in, got: ${String(api.description)}`,
       );
 
@@ -327,7 +329,7 @@ suite("Module Explorer tree structure [EXTACT-MODULES-TREE-STRUCTURE]", () => {
       const util = roots.find((row) => labelOf(row) === "util");
       assert.ok(util instanceof ModuleTreeItem, "'util' is a clean leaf module");
       assert.ok(
-        !String(util.description).includes("E") && !String(util.description).includes("W"),
+        !String(util.description).includes("🔴") && !String(util.description).includes("🟠"),
         `clean module must show no error/warning tally, got: ${String(util.description)}`,
       );
     } finally {

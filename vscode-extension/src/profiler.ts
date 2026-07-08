@@ -17,15 +17,19 @@ import { Logger } from "./logger";
 import type { Store } from "./store";
 import { evaluateInDebugSession, waitForStoppedFrame } from "./dap-evaluate";
 import { withUserProgress } from "./progress-ops";
-import { POLL_INTERVAL_MS, STARTUP_TIMEOUT_MS } from "./timeouts";
 import {
   applyProfileDecorations,
   disposeProfileDecorations,
   type ProfileResult,
 } from "./profiler-decorations";
-import { disposeFlamegraphPanel, presentProfileResult } from "./profiler-flamegraph-html";
+import {
+  disposeFlamegraphPanel,
+  openFlamegraphWebview,
+  presentProfileResult,
+} from "./profiler-flamegraph-html";
+import { disposeProfileServer } from "./profile-server";
 import { shouldProfileOnLaunch, waitForDebuggeePid } from "./profiler-launch";
-import { bindProfilerStatusBar } from "./profiler-status";
+import { bindProfilerStatusBar, registerProgressListener } from "./profiler-status";
 
 // Re-exported so tests keep one import site for the profiler's public seams.
 export { profilerStatusText } from "./profiler-status";
@@ -45,9 +49,6 @@ const LSP_CMD = {
 
 /** Ack printed by the injected cooperative sampler ([PROFILE-COOPERATIVE]). */
 const COOPERATIVE_ACK = "__BASILISK_CPU_ACK__";
-
-/** LSP notification for profiling progress. */
-const PROFILER_PROGRESS_NOTIFICATION = "basilisk/profiler/progress";
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -69,10 +70,7 @@ let lastResult: ProfileResult | undefined;
  * Register profiler UI components. Called once during extension activation.
  * Returns disposables for cleanup.
  */
-export function registerProfiler(
-  context: vscode.ExtensionContext,
-  store: Store,
-): vscode.Disposable[] {
+export function registerProfiler(store: Store): vscode.Disposable[] {
   const disposables: vscode.Disposable[] = [];
 
   // Status bar item — renders reactively from the store's profiler signal
@@ -85,10 +83,11 @@ export function registerProfiler(
     vscode.commands.registerCommand("basilisk.profileStop", async () => handleProfileStop(store)),
     vscode.commands.registerCommand("basilisk.profileSnapshot", async () => handleProfileSnapshot(store)),
     vscode.commands.registerCommand("basilisk.profileAttachToDebug", async () => handleProfileAttachToDebug(store)),
+    vscode.commands.registerCommand("basilisk.profileShowResults", () => { handleProfileShowResults(); }),
   );
 
   // Listen for profiler progress notifications from LSP.
-  registerProgressListener(store);
+  disposables.push(registerProgressListener(store));
 
   // Clear decorations when active editor changes (optional, re-applies on focus).
   disposables.push(
@@ -370,12 +369,11 @@ async function handleProfileStop(store: Store): Promise<void> {
     if (result !== undefined && result !== null) {
       lastResult = result;
       applyProfileDecorations(result);
-      // Land the user on a viewable result: the built-in `.cpuprofile` viewer
-      // when it renders (opened beside so the heat-mapped source stays visible),
-      // always with a completion toast whose action opens the self-contained
-      // flamegraph webview — a failed or unavailable viewer never dead-ends the
-      // user ([PROFILE-NATIVE-FALLBACK], #145).
-      await presentProfileResult(result);
+      // Land the user on the self-contained results panel (opened beside so the
+      // heat-mapped source stays visible); the raw `.cpuprofile` stays one click
+      // away via the completion toast, the panel's button, or "Show Profile
+      // Results" ([PROFILE-NATIVE-FALLBACK], #145).
+      presentProfileResult(result);
     }
   } catch (err: unknown) {
     store.profilerStopped();
@@ -394,24 +392,57 @@ async function handleProfileSnapshot(store: Store): Promise<void> {
   }
 
   try {
-    const result = await client.sendRequest<ProfileResult | undefined>("workspace/executeCommand", {
-      command: LSP_CMD.snapshot,
-      arguments: [{ sessionId }],
-    });
+    // Snapshots also write the export artifacts \u2014 show the wait like every
+    // other profiling flow ([PROFILE-UX-PROGRESS]).
+    const result = await withUserProgress(
+      "Basilisk: Taking profile snapshot",
+      async (report) => {
+        report("Collecting samples so far\u2026");
+        return client.sendRequest<ProfileResult | undefined>("workspace/executeCommand", {
+          command: LSP_CMD.snapshot,
+          arguments: [{ sessionId }],
+        });
+      },
+    );
 
     if (result !== undefined && result !== null) {
       lastResult = result;
       applyProfileDecorations(result);
       Logger.info(`Profile snapshot: ${result.totalSamples} samples so far`);
-      vscode.window.showInformationMessage(
-        `Basilisk: Snapshot \u2014 ${result.totalSamples} samples (profiling continues)`,
-      );
+      // Fire-and-forget: a toast with a button is sticky and must not block the
+      // snapshot handler ([PROFILE-NATIVE-FALLBACK]).
+      void vscode.window
+        .showInformationMessage(
+          `Basilisk: Snapshot \u2014 ${result.totalSamples} samples (profiling continues)`,
+          "View Results",
+        )
+        .then((choice) => {
+          if (choice === "View Results") {
+            openFlamegraphWebview(result);
+          }
+        });
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     Logger.error(`Profile snapshot failed: ${msg}`);
     vscode.window.showErrorMessage(`Basilisk: ${msg}`);
   }
+}
+
+/**
+ * Re-open the results panel for the most recent profile. The panel is a
+ * singleton the user can close; this palette command is the always-available
+ * way back in — results are never trapped behind a dismissed completion toast
+ * ([PROFILE-NATIVE-FALLBACK]).
+ */
+function handleProfileShowResults(): void {
+  if (lastResult === undefined) {
+    vscode.window.showInformationMessage(
+      "Basilisk: No profile results yet — run a profiling session first.",
+    );
+    return;
+  }
+  openFlamegraphWebview(lastResult);
 }
 
 async function handleProfileAttachToDebug(store: Store): Promise<void> {
@@ -465,31 +496,6 @@ async function handleProfileAttachToDebug(store: Store): Promise<void> {
   }
 }
 
-// ── Progress listener ─────────────────────────────────────────────────────
-
-function registerProgressListener(store: Store): void {
-  // Check periodically if the client is available and register the handler.
-  const interval = setInterval(() => {
-    const client = store.client.value;
-    if (client?.isRunning() === true) {
-      clearInterval(interval);
-      client.onNotification(PROFILER_PROGRESS_NOTIFICATION, (params: {
-        sessionId: string;
-        sampleCount: number;
-        duration: number;
-        topFunction: string;
-      }) => {
-        if (params.sessionId === store.profiler.value.cpuSessionId) {
-          store.profilerProgress(params.sampleCount, params.duration, params.topFunction);
-        }
-      });
-    }
-  }, POLL_INTERVAL_MS);
-
-  // Clean up interval if client never starts.
-  setTimeout(() => { clearInterval(interval); }, STARTUP_TIMEOUT_MS);
-}
-
 // ── Disposal ──────────────────────────────────────────────────────────────
 
 /**
@@ -500,5 +506,6 @@ function registerProgressListener(store: Store): void {
 export function disposeProfiler(): void {
   disposeProfileDecorations();
   disposeFlamegraphPanel();
+  disposeProfileServer();
   lastResult = undefined;
 }

@@ -152,11 +152,40 @@ pub(super) fn collect_unconditional_assigns(stmts: &[Stmt]) -> Vec<String> {
                     assignments.extend(if_else_assignments);
                 }
             }
+            Stmt::Try(node) => {
+                assignments.extend(collect_try_assignments(node));
+            }
             _ => {}
         }
     }
 
     assignments
+}
+
+/// Names guaranteed to be bound after a `try` statement completes.
+///
+/// The success path binds the `try` body's assigns plus the `else` clause's.
+/// A handler path guarantees only that handler's own assigns (the exception
+/// may pre-empt any assignment in the `try` body), so with handlers present a
+/// name must be bound on the success path AND in every handler. Without
+/// handlers an exception propagates out of the function, so only the success
+/// path reaches the following statements. `finally` always runs.
+fn collect_try_assignments(node: &ruff_python_ast::StmtTry) -> Vec<String> {
+    let mut success_path = collect_unconditional_assigns(&node.body);
+    success_path.extend(collect_unconditional_assigns(&node.orelse));
+
+    let mut guaranteed = node
+        .handlers
+        .iter()
+        .map(|ExceptHandler::ExceptHandler(h)| collect_unconditional_assigns(&h.body))
+        .fold(success_path, |acc, handler_assigns| {
+            acc.into_iter()
+                .filter(|name| handler_assigns.contains(name))
+                .collect()
+        });
+
+    guaranteed.extend(collect_unconditional_assigns(&node.finalbody));
+    guaranteed
 }
 
 /// Check if an if statement has both if and else branches that assign the same variables.

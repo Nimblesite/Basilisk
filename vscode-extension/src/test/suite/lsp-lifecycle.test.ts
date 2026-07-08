@@ -23,6 +23,7 @@ import {
     SUITE_SETUP_TIMEOUT_MS,
     waitForDiagnostics,
     waitForDiagnosticsCleared,
+    waitForLspReady,
     openPythonFile,
     closeAllEditors,
     replaceDocumentContent,
@@ -32,9 +33,6 @@ import {
 
 /** Extra buffer (ms) added to restart-test timeout to cover server restart. */
 const RESTART_EXTRA_TIMEOUT_MS = 20_000;
-
-/** Brief pause (ms) after issuing a restart command before probing the server. */
-const RESTART_SETTLE_MS = 500;
 
 /** Multiplier applied to DIAGNOSTIC_TIMEOUT_MS for multi-phase tests. */
 const DIAGNOSTIC_TIMEOUT_MULTIPLIER = 3;
@@ -63,7 +61,8 @@ suite('LSP Lifecycle Tests', () => {
     });
 
     // ----------------------------------------------------------------
-    // 1. restartServer command works
+    // 1. restartServer command works [VSIX-ERROR-RECOVERY] (manual recovery),
+    //    [VSIX-COMMANDS]
     // ----------------------------------------------------------------
     test('restartServer command works and server remains functional', async function () {
         this.timeout(DIAGNOSTIC_TIMEOUT_MS + RESTART_EXTRA_TIMEOUT_MS);
@@ -77,9 +76,12 @@ suite('LSP Lifecycle Tests', () => {
         }
         assert.strictEqual(didThrow, false, 'basilisk.restartServer should not throw');
 
-        // Brief pause for the server to restart — diagnostics polling below
-        // will wait for the server to actually respond.
-        await new Promise<void>((resolve) => setTimeout(resolve, RESTART_SETTLE_MS));
+        // Deterministically wait for the restarted server to re-advertise its
+        // commands before probing it. lspClient.stop() clears store.serverCommands
+        // and start() re-populates it asynchronously after re-initialize; waitForLspReady
+        // polls that signal, so we never race a half-restarted server (replaces the
+        // previous fixed 500ms sleep, which was the timing flake).
+        await waitForLspReady();
 
         // Verify the extension is still active after restart.
         const ext = vscode.extensions.getExtension(EXTENSION_ID);
@@ -101,7 +103,7 @@ suite('LSP Lifecycle Tests', () => {
     });
 
     // ----------------------------------------------------------------
-    // 2. showOutput command works
+    // 2. showOutput command works [VSIX-OUTPUT-CHANNELS], [VSIX-COMMANDS]
     // ----------------------------------------------------------------
     test('showOutput command works without error', async function () {
         this.timeout(SERVER_START_WAIT_MS);
@@ -122,7 +124,7 @@ suite('LSP Lifecycle Tests', () => {
     });
 
     // ----------------------------------------------------------------
-    // 3. Status bar exists after activation
+    // 3. Status bar exists after activation [VSIX-STATUS-BAR]
     // ----------------------------------------------------------------
     test('status bar exists after activation', async function () {
         this.timeout(SERVER_START_WAIT_MS);

@@ -1,28 +1,30 @@
 //! Implements [CHKARCH-INCREMENTAL-SALSA]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA
 //! Incremental computation database for Basilisk.
 //!
-//! This crate houses the opt-in CLI result cache ([`cache`], see
-//! [CHKCACHE](../../../docs/specs/CHECKER-CACHE-SPEC.md)) and will grow into the
-//! Salsa-based incremental database in Phase 2.
+//! Two complementary layers live here:
+//!
+//! - [`db`] — the **in-session** Salsa engine ([CHKARCH-INCREMENTAL-SALSA]). The
+//!   [`db::SourceFile`] input feeds a demand-driven query graph whose derived
+//!   queries (parse → resolve → check, defined in the upstream crates) re-run
+//!   only when an input they actually read changed. This is what makes an edit
+//!   recompute one file instead of the whole workspace.
+//! - [`cache`] — the **cross-session** content-addressed result cache
+//!   ([CHKCACHE](../../../docs/specs/CHECKER-CACHE-SPEC.md),
+//!   [CHKARCH-INCREMENTAL-CACHE]). It persists diagnostics keyed by their exact
+//!   read-set so a fresh process skips re-checking files that did not change on
+//!   disk, eliminating cold-start cost.
 
 pub mod cache;
+pub mod db;
+
+pub use db::{BasiliskDatabase, Db, SourceFile};
 
 /// Compute a content-based cache key for a source string.
 ///
 /// Delegates to the shared [`basilisk_common::fs::content_hash`] so every layer
-/// (stub cache, result cache, read-recorder) computes identical hashes.
+/// (Salsa input identity, result cache, read-recorder) computes identical
+/// hashes.
 #[must_use]
 pub fn hash_source(source: &str) -> u64 {
     basilisk_common::fs::content_hash(source)
-}
-
-/// Check whether a source file with the given hash needs to be rechecked.
-///
-/// Returns `false` when the cached result for this hash is still valid
-/// (i.e. the source has not changed).  Phase 2 will replace this with a
-/// Salsa-backed persistent cache; for now the content-addressed hash itself
-/// guarantees identity — equal hashes mean equal content, so no recheck.
-#[must_use]
-pub fn needs_recheck(_source_hash: u64) -> bool {
-    false
 }

@@ -142,7 +142,7 @@ pub(super) fn collect_attr_accesses_from_expr(
 /// Collect spans of module-level calls where `Annotated` itself is called as a
 /// function — either bare `Annotated(...)` or parameterized `Annotated[T, ...]()`.
 ///
-/// Used by `BSK-E0045` to detect invalid direct invocation of `Annotated`.
+/// Used by `qualifiers_annotated` to detect invalid direct invocation of `Annotated`.
 pub(super) fn collect_annotated_direct_calls(stmts: &[Stmt]) -> Vec<Span> {
     let mut out = Vec::new();
     for stmt in stmts {
@@ -177,7 +177,7 @@ pub(super) fn collect_annotated_calls_from_expr(expr: &Expr, out: &mut Vec<Span>
 /// non-hashable dataclass (has `eq=True`, is not frozen, not `unsafe_hash`, and
 /// does not define `__hash__` explicitly).
 ///
-/// Used by `BSK-E0063`.
+/// Used by `dataclasses_hash`.
 pub(super) fn collect_module_order_comparisons(
     stmts: &[Stmt],
 ) -> Vec<crate::scope::ModuleOrderComparisonInfo> {

@@ -14,12 +14,20 @@ use tower_lsp::lsp_types::Url;
 
 use crate::config::AnalysisMode;
 use crate::import_graph::ImportGraph;
-use crate::workspace_analysis::{analyse_with_config, bsk_to_lsp, fnv1a};
+use crate::workspace_analysis::{
+    analyse_with_config, bsk_to_lsp, fnv1a, make_entry, parse_error_diagnostic,
+};
 use crate::workspace_scan::{collect_python_files, deduplicate_by_stem, path_to_uri};
 
 // ── FileEntry ────────────────────────────────────────────────────────────────
 
 /// Per-file analysis state cached in the workspace index.
+// Implements [ANALYSIS-INDEX-STRUCT] — the spec's FileEntry shape (source_hash,
+// resolved, diagnostics, version, is_open); `text` is carried so reload/recheck
+// need not re-read the buffer.
+// Implements [LSPARCH-ARCH-CACHE] — caches the resolved module (the spec's
+// `DocumentState.resolved`), refreshed on did_open/did_change and reused by every
+// feature handler.
 #[derive(Debug)]
 pub struct FileEntry {
     /// FNV-1a hash of the source text at last analysis; used for invalidation.
@@ -37,19 +45,40 @@ pub struct FileEntry {
     pub is_open: bool,
 }
 
+/// Whether a workspace re-analysis publishes every file or only real changes.
+///
+/// `ChangedOnly` assumes the client's diagnostic state matches the server's
+/// store (steady-state sweeps); `Always` is for paths where the client may
+/// have diverged — post-scan open-file convergence, re-enable rescans.
+#[derive(Clone, Copy)]
+enum PublishPolicy {
+    /// Publish every re-analysed file.
+    Always,
+    /// Publish only files whose checker diagnostics differ from the stored ones.
+    ChangedOnly,
+}
+
 // ── WorkspaceIndex ───────────────────────────────────────────────────────────
 
 /// Process-scoped index of all analysed files.
 ///
 /// Owned by `LspServer`. All handlers access file state through this type
 /// rather than the old `DashMap<Url, DocumentState>`.
+// Implements [ANALYSIS-INDEX-STRUCT] — the spec's WorkspaceIndex shape (roots,
+// files, config, optional import_graph populated in crossModule).
 pub struct WorkspaceIndex {
     /// Workspace root directories.
     pub roots: Vec<PathBuf>,
     /// File path → analysis state.
     pub files: DashMap<PathBuf, FileEntry>,
     /// Analysis mode controlling which files are analysed.
-    pub mode: AnalysisMode,
+    ///
+    /// Interior-mutable so a runtime mode switch needs only a READ guard on
+    /// the index: a mode-flip WRITE queued behind a long-running scan's read
+    /// guard turns tokio's fair `RwLock` into a barrier for every subsequent
+    /// reader — and with tower-lsp's bounded handler concurrency that stalls
+    /// the whole message loop, starving `didClose` clears (GitHub #264).
+    mode: std::sync::RwLock<AnalysisMode>,
     /// Import dependency graph for cross-module invalidation.
     ///
     /// Built during workspace scan in `crossModule` mode.
@@ -74,17 +103,22 @@ pub struct WorkspaceIndex {
     ///
     /// Reused by the incremental single-file analysis path (`didOpen` /
     /// `didChange` / disk reload) so third-party import resolution matches the
-    /// full scan and the editor does not resurrect false `BSK-E0010`.
+    /// full scan and the editor does not resurrect false `imports_unresolved`.
     /// Implements [ANALYSIS-INCR-IMPORTS]. See
     /// docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-INCR-IMPORTS
     pub search_paths: std::sync::RwLock<Option<Arc<crate::import_resolver::ImportSearchPaths>>>,
+    /// In-session Salsa engine backing the incremental single-file analysis path
+    /// once the search paths are known. Memoizes `parse → resolve →
+    /// resolve_module_imports → check` per file. Implements
+    /// [CHKARCH-INCREMENTAL-SALSA].
+    pub(crate) salsa_engine: crate::salsa_engine::SalsaAnalysisEngine,
 }
 
 impl std::fmt::Debug for WorkspaceIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WorkspaceIndex")
             .field("roots", &self.roots)
-            .field("mode", &self.mode)
+            .field("mode", &self.mode())
             .field("file_count", &self.files.len())
             .finish_non_exhaustive()
     }
@@ -102,13 +136,36 @@ impl WorkspaceIndex {
         Self {
             roots,
             files: DashMap::new(),
-            mode,
+            mode: std::sync::RwLock::new(mode),
             import_graph: std::sync::Mutex::new(ImportGraph::new()),
             registry: None,
             root_configs,
             checker_config,
             search_paths: std::sync::RwLock::new(None),
+            salsa_engine: crate::salsa_engine::SalsaAnalysisEngine::default(),
         }
+    }
+
+    /// The current analysis mode.
+    ///
+    /// Poisoning is unrecoverable only for non-atomic state; `AnalysisMode` is
+    /// `Copy`, so a poisoned guard still holds a valid value — recover it.
+    #[must_use]
+    pub fn mode(&self) -> AnalysisMode {
+        *self
+            .mode
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Switch the analysis mode at runtime (`didChangeConfiguration`).
+    ///
+    /// Takes `&self` deliberately — see the `mode` field docs (GitHub #264).
+    pub fn set_mode(&self, mode: AnalysisMode) {
+        *self
+            .mode
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = mode;
     }
 
     /// Load each root's `BasiliskConfig` from its `pyproject.toml` /
@@ -179,7 +236,7 @@ impl WorkspaceIndex {
     /// populated the search paths, incremental edits resolve third-party and
     /// workspace imports exactly like the full scan — without this, every
     /// `didOpen` / `didChange` re-marks imports `Unresolved`, resurrecting
-    /// false `BSK-E0010` in the editor for packages the CLI resolves fine.
+    /// false `imports_unresolved` in the editor for packages the CLI resolves fine.
     /// Implements [ANALYSIS-INCR-IMPORTS].
     fn analyse_and_resolve(
         &self,
@@ -187,7 +244,42 @@ impl WorkspaceIndex {
         path: &std::path::Path,
     ) -> (FileEntry, Vec<tower_lsp::lsp_types::Diagnostic>) {
         let config = self.config_for_file(path);
-        let (mut entry, lsp_diags) = analyse_with_config(text, path, config);
+
+        // Before the first scan populates the search paths, keep the import-free
+        // path (no salsa engine): it matches the pre-scan behaviour exactly and
+        // avoids marking every third-party import unresolved.
+        let Some(search_paths) = self.search_paths_snapshot() else {
+            let (mut entry, lsp_diags) = analyse_with_config(text, path, config);
+            if self.is_path_excluded(path) || self.is_outside_include_roots(path) {
+                entry.diagnostics.clear();
+                return (entry, Vec::new());
+            }
+            return (entry, lsp_diags);
+        };
+
+        // Search paths are known: run the memoized salsa engine, which resolves
+        // imports so third-party/workspace imports match the bulk scan and
+        // `basilisk check`. In cross-module mode the engine's cross queries also
+        // populate `imported_symbols` from the other tracked files' current
+        // content, so cross-file diagnostics and navigation stay live.
+        // Implements [ANALYSIS-INCR-IMPORTS] via [CHKARCH-INCREMENTAL-SALSA].
+        let root_key = self.config_root_key(path);
+        let cross_module = matches!(self.mode(), AnalysisMode::CrossModule);
+        let analysis =
+            self.salsa_engine
+                .analyse(path, text, config, &root_key, &search_paths, cross_module);
+        let hash = fnv1a(text);
+
+        // Parse failure: surface BSK-PARSE, no navigable module (matches the
+        // non-salsa path).
+        if let Some(message) = analysis.parse_error {
+            return (
+                make_entry(hash, text, None, Vec::new()),
+                vec![parse_error_diagnostic(&message)],
+            );
+        }
+
+        let mut entry = make_entry(hash, text, analysis.resolved, analysis.diagnostics);
 
         // Excluded files, and files outside the configured `include` roots, are
         // parsed so navigation still works but never contribute diagnostics — the
@@ -200,23 +292,25 @@ impl WorkspaceIndex {
             return (entry, Vec::new());
         }
 
-        let Some(search_paths) = self.search_paths_snapshot() else {
-            return (entry, lsp_diags);
-        };
-        let Some(resolved_arc) = entry.resolved.as_mut() else {
-            return (entry, lsp_diags);
-        };
-
-        let resolved = Arc::make_mut(resolved_arc);
-        crate::import_resolver::resolve_module_imports(resolved, &search_paths);
-
-        let checker_diags = basilisk_checker::check_with_config(resolved, config);
-        let lsp_diags = checker_diags
+        let lsp_diags = entry
+            .diagnostics
             .iter()
-            .map(|d| crate::workspace_analysis::bsk_to_lsp(d, text))
+            .map(|d| bsk_to_lsp(d, text))
             .collect();
-        entry.diagnostics = checker_diags;
         (entry, lsp_diags)
+    }
+
+    /// The config-input key for `file_path`: its owning workspace root, or an
+    /// empty path for the fallback `checker_config`. Files that share a config
+    /// (same owning root) share one salsa `ConfigInput`.
+    #[must_use]
+    fn config_root_key(&self, file_path: &std::path::Path) -> PathBuf {
+        self.roots
+            .iter()
+            .filter(|root| file_path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Get the checker config for a file, looking up the owning root.
@@ -329,6 +423,8 @@ impl WorkspaceIndex {
     ///
     /// Marks the file as open and updates the index. Returns the LSP
     /// diagnostics ready for publishing.
+    // Implements [ANALYSIS-OPEN] (per-open-file analysis) and [ANALYSIS-INCR-CHANGE]
+    // (in-memory text is authoritative; parse → resolve → check runs on the edit).
     #[must_use]
     pub fn set_open(
         &self,
@@ -338,46 +434,15 @@ impl WorkspaceIndex {
     ) -> Vec<tower_lsp::lsp_types::Diagnostic> {
         let path = uri.to_file_path().unwrap_or_default();
 
-        // Capture cross-module data from the previous entry before overwriting.
-        let prev_cross_module = self.files.get(&path).and_then(|prev| {
-            prev.resolved.as_ref().map(|r| {
-                (
-                    r.imported_symbols.clone(),
-                    r.imports
-                        .iter()
-                        .filter_map(|imp| {
-                            imp.resolved_path
-                                .as_ref()
-                                .map(|p| (imp.module.clone(), p.clone()))
-                        })
-                        .collect::<Vec<_>>(),
-                )
-            })
-        });
-
+        // The analysis is authoritative: once search paths are known, the salsa
+        // engine resolves imports and (in cross-module mode) populates
+        // `imported_symbols` from the tracked files' current content — there is
+        // no stale prior state to restore, and carrying one forward would keep
+        // suppressing diagnostics for imports the edit just removed.
         let (entry, lsp_diags) = self.analyse_and_resolve(text, &path);
         let mut entry = entry;
         entry.is_open = true;
         entry.version = version;
-
-        // Restore cross-module symbols and resolved import paths from the
-        // previous entry so that goto-definition and other cross-module
-        // features keep working after didOpen re-parses the file.
-        if let Some((prev_symbols, prev_resolved_paths)) = prev_cross_module {
-            if let Some(ref mut resolved_arc) = entry.resolved {
-                let resolved = Arc::make_mut(resolved_arc);
-                if resolved.imported_symbols.is_empty() {
-                    resolved.imported_symbols = prev_symbols;
-                }
-                for (module, resolved_path) in prev_resolved_paths {
-                    for imp in &mut resolved.imports {
-                        if imp.module == module && imp.resolved_path.is_none() {
-                            imp.resolved_path = Some(resolved_path.clone());
-                        }
-                    }
-                }
-            }
-        }
 
         let _ = self.files.insert(path, entry);
         lsp_diags
@@ -398,13 +463,20 @@ impl WorkspaceIndex {
         version: i32,
     ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
         let path = uri.to_file_path().unwrap_or_default();
-        let track_exports = matches!(self.mode, AnalysisMode::CrossModule);
+        let track_exports = matches!(self.mode(), AnalysisMode::CrossModule);
         let before = track_exports.then(|| self.exported_symbol_names(&path));
         let own_diags = self.set_open(uri, text, version);
         if before.is_some_and(|prev| self.exported_symbol_names(&path) != prev) {
             // Exports changed: re-resolve + re-check so importers' stale symbol
             // diagnostics refresh without closing the file or reloading the server.
-            return self.reresolve_imports_and_recheck();
+            let mut results = self.reresolve_imports_and_recheck();
+            // The edited file must always republish after a didChange — the
+            // sweep's changed-only filter would skip it (set_open already
+            // stored its fresh diagnostics before the sweep compared).
+            if !results.iter().any(|(target, _)| target == uri) {
+                results.push((uri.clone(), own_diags));
+            }
+            return results;
         }
         vec![(uri.clone(), own_diags)]
     }
@@ -414,6 +486,10 @@ impl WorkspaceIndex {
     /// If the file is currently open, this is a no-op (editor text is
     /// authoritative). Returns `None` if the file could not be read or the
     /// hash is unchanged.
+    // Implements [ANALYSIS-INDEX-OPEN] (open files are authoritative — watcher
+    // events for an open path are ignored) and [ANALYSIS-INCR-WATCH] /
+    // [ANALYSIS-INDEX-INVAL] (skip when `source_hash` unchanged; otherwise
+    // re-run the pipeline). The 150 ms debounce is upstream in server/document.rs.
     #[must_use]
     pub fn reload_from_disk(
         &self,
@@ -459,6 +535,7 @@ impl WorkspaceIndex {
         // clear its diagnostics (e.g. an in-memory-only test file).
         let Ok(text) = std::fs::read_to_string(&path) else {
             let _ = self.files.remove(&path);
+            self.salsa_engine.remove(&path);
             return (uri.clone(), vec![]);
         };
         let (entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
@@ -474,6 +551,7 @@ impl WorkspaceIndex {
     pub fn forget_file(&self, uri: &Url) {
         if let Ok(path) = uri.to_file_path() {
             let _ = self.files.remove(&path);
+            self.salsa_engine.remove(&path);
         }
     }
 
@@ -512,27 +590,86 @@ impl WorkspaceIndex {
             .collect()
     }
 
-    /// Re-resolve every indexed file's imports against the cached search paths,
-    /// then re-check all files.
+    /// Re-analyse every indexed file through the salsa engine and return fresh
+    /// LSP diagnostics keyed by URI.
     ///
-    /// Called when the package layout changes (e.g. a new module is created) so
-    /// that files importing the new module stop reporting `BSK-E0010` without an
-    /// LSP reload. When no search paths are cached yet this degrades to a plain
-    /// recheck. Implements [ANALYSIS-INCR-IMPORTS].
+    /// Called when the resolution environment changes — a new module is
+    /// created, an open dependency's exports change, `uv.lock`/config edits —
+    /// so stale cross-file state clears without an LSP reload. The engine is
+    /// primed with every indexed file's **current** text first (open files
+    /// contribute their in-memory buffers), so the cross-file salsa edges see
+    /// the whole workspace; each file is then re-analysed through the memoized
+    /// queries, and only files whose inputs actually changed recompute — the
+    /// rest are revalidated memos ([CHKARCH-INCREMENTAL-SALSA]). When no search
+    /// paths are cached yet (before the first scan), degrades to a plain
+    /// recheck. Implements [ANALYSIS-INCR-IMPORTS] / [ANALYSIS-SYMBOLS-INVAL].
     #[must_use]
     pub fn reresolve_imports_and_recheck(
         &self,
     ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
-        if let Some(search_paths) = self.search_paths_snapshot() {
-            crate::import_resolver::resolve_workspace_imports(self, &search_paths);
+        if self.search_paths_snapshot().is_none() {
+            return self.recheck_all_files();
         }
-        // Implements [ANALYSIS-SYMBOLS-INVAL] (GitHub #56): refresh dependents'
-        // imported symbols so symbol-level diagnostics don't go stale.
-        if matches!(self.mode, AnalysisMode::CrossModule) {
-            crate::cross_module::populate_cross_module_symbols(self);
+        self.salsa_engine.prime(
+            self.files
+                .iter()
+                .map(|entry| (entry.key().clone(), entry.value().text.clone())),
+        );
+
+        let paths: Vec<PathBuf> = self.files.iter().map(|entry| entry.key().clone()).collect();
+        let results = self.reanalyse_paths(paths, PublishPolicy::ChangedOnly);
+
+        // The import graph serves navigation's reverse lookups (cross-file
+        // references / rename); invalidation itself is salsa's job now.
+        if matches!(self.mode(), AnalysisMode::CrossModule) {
             self.build_import_graph();
         }
-        self.recheck_all_files()
+        results
+    }
+
+    /// Re-analyse each indexed path through the salsa engine, preserving its
+    /// open-state, and return fresh LSP diagnostics per the publish policy.
+    ///
+    /// [`PublishPolicy::ChangedOnly`] is valid ONLY when the client's
+    /// diagnostic state is known to match the server's store (a steady-state
+    /// sweep): re-publishing an identical set is then a client no-op, so
+    /// skipping it saves O(workspace) publish traffic. When the client may
+    /// have diverged (cleared on disable, pre-scan state), use
+    /// [`PublishPolicy::Always`].
+    fn reanalyse_paths(
+        &self,
+        paths: Vec<PathBuf>,
+        policy: PublishPolicy,
+    ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
+        let mut results = Vec::new();
+        for path in paths {
+            let Some((text, version, is_open, prev_diagnostics)) =
+                self.files.get(&path).map(|entry| {
+                    (
+                        entry.text.clone(),
+                        entry.version,
+                        entry.is_open,
+                        entry.diagnostics.clone(),
+                    )
+                })
+            else {
+                continue;
+            };
+            let (mut entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
+            entry.version = version;
+            entry.is_open = is_open;
+            let publish = match policy {
+                PublishPolicy::Always => true,
+                PublishPolicy::ChangedOnly => entry.diagnostics != prev_diagnostics,
+            };
+            let _ = self.files.insert(path.clone(), entry);
+            if publish {
+                if let Some(uri) = path_to_uri(&path) {
+                    results.push((uri, lsp_diags));
+                }
+            }
+        }
+        results
     }
 
     /// Reload one file from disk, reporting whether its exported top-level
@@ -564,7 +701,21 @@ impl WorkspaceIndex {
     /// Scan all workspace roots and populate the index.
     ///
     /// Returns a list of `(Uri, diagnostics)` pairs ready for publishing.
-    /// Files already open in the editor are skipped.
+    /// Files already open in the editor are skipped (their in-memory text is
+    /// authoritative and already analysed).
+    ///
+    /// When the import search paths are cached (the caller sets them before
+    /// scanning — see `scan_resolve_and_check_with_roots`), every file's text
+    /// is read up front and the salsa engine is **primed with the whole
+    /// workspace before the first analysis**, so cross-file edges see every
+    /// file from the first query and each file is parsed exactly once —
+    /// through the same memoized queries every later edit uses. Without search
+    /// paths (unit tests, pre-config scans) each file falls back to the
+    /// import-free direct pipeline, exactly as before.
+    // Implements [ANALYSIS-STARTUP-WHOLE] — collects all `.py`/`.pyi` under the
+    // roots (respecting include/exclude), analyses them, and returns diagnostics
+    // for every file — via [CHKARCH-INCREMENTAL-SALSA] once search paths exist.
+    // The crossModule import graph is wired in server/init.rs.
     #[must_use]
     pub fn scan(
         &self,
@@ -586,17 +737,33 @@ impl WorkspaceIndex {
         let deduped = deduplicate_by_stem(all_files);
         let file_count = deduped.len();
 
-        let results: Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> = deduped
+        // Read every closed file's text before analysing anything, so the
+        // engine can be primed with the complete workspace. Open files keep
+        // their in-memory text — already tracked by the engine.
+        let to_analyse: Vec<(PathBuf, String)> = deduped
             .into_iter()
             .filter_map(|path| {
-                // Skip files already open in the editor.
                 if self.files.get(&path).is_some_and(|e| e.is_open) {
                     return None;
                 }
                 let text = std::fs::read_to_string(&path).ok()?;
+                Some((path, text))
+            })
+            .collect();
+
+        if self.search_paths_snapshot().is_some() {
+            self.salsa_engine.prime(
+                to_analyse
+                    .iter()
+                    .map(|(path, text)| (path.clone(), text.clone())),
+            );
+        }
+
+        let results: Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> = to_analyse
+            .into_iter()
+            .filter_map(|(path, text)| {
                 let uri = path_to_uri(&path)?;
-                let (entry, lsp_diags) =
-                    analyse_with_config(&text, &path, self.config_for_file(&path));
+                let (entry, lsp_diags) = self.analyse_and_resolve(&text, &path);
                 let _ = self.files.insert(path, entry);
                 Some((uri, lsp_diags))
             })
@@ -613,6 +780,27 @@ impl WorkspaceIndex {
             .sum();
 
         (results, file_count, error_count)
+    }
+
+    /// Re-analyse every OPEN file through the engine and return its fresh
+    /// diagnostics — **always**, even when they are unchanged.
+    ///
+    /// The scan skips open files (editor text is authoritative), but their
+    /// previous diagnostics were computed under different conditions (before
+    /// the search paths existed, or before type checking was re-enabled and
+    /// the client's diagnostics were cleared) — so the client's state may have
+    /// diverged from the server's store and a changed-only filter would leave
+    /// the editor stale. Called after the startup scan and mode/enable
+    /// rescans so open editors converge with the workspace.
+    #[must_use]
+    pub fn refresh_open_files(&self) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
+        let open_paths: Vec<PathBuf> = self
+            .files
+            .iter()
+            .filter(|entry| entry.value().is_open)
+            .map(|entry| entry.key().clone())
+            .collect();
+        self.reanalyse_paths(open_paths, PublishPolicy::Always)
     }
 
     /// Collect all `(uri, resolved, text)` triples currently in the index,
@@ -634,55 +822,14 @@ impl WorkspaceIndex {
     /// Build (or rebuild) the import graph from the current index state.
     ///
     /// Called after workspace scan or when the analysis mode is `CrossModule`.
+    // Implements [ANALYSIS-GRAPH-BUILD] (rebuilds the graph from the index) and
+    // the import-graph step of [ANALYSIS-STARTUP-CROSS].
     pub fn build_import_graph(&self) {
         let Ok(mut graph) = self.import_graph.lock() else {
             return;
         };
         *graph = ImportGraph::new();
         graph.build_from_index(self);
-    }
-
-    /// Re-analyse files that transitively depend on a changed file.
-    ///
-    /// Returns `(uri, diagnostics)` pairs for all files that were re-analysed
-    /// due to the change. The changed file itself is NOT included (it should
-    /// already have been re-analysed by the caller).
-    #[must_use]
-    pub fn invalidate_dependents(
-        &self,
-        changed_path: &std::path::Path,
-    ) -> Vec<(Url, Vec<tower_lsp::lsp_types::Diagnostic>)> {
-        let importers = {
-            let Ok(graph) = self.import_graph.lock() else {
-                return vec![];
-            };
-            graph.transitive_importers(changed_path)
-        };
-
-        let mut results = Vec::new();
-        for importer_path in importers {
-            // Re-analyse using the stored text (could be in-memory or from disk).
-            let text = {
-                let Some(entry) = self.files.get(&importer_path) else {
-                    continue;
-                };
-                entry.text.clone()
-            };
-
-            let (new_entry, lsp_diags) = self.analyse_and_resolve(&text, &importer_path);
-            let version = self.files.get(&importer_path).map_or(0, |e| e.version);
-            let is_open = self.files.get(&importer_path).is_some_and(|e| e.is_open);
-            let mut entry = new_entry;
-            entry.version = version;
-            entry.is_open = is_open;
-            let _ = self.files.insert(importer_path.clone(), entry);
-
-            if let Some(uri) = path_to_uri(&importer_path) {
-                results.push((uri, lsp_diags));
-            }
-        }
-
-        results
     }
 
     /// Map uv workspace members to LSP workspace folder URIs.
@@ -891,11 +1038,14 @@ mod tests {
         assert_eq!(entry.version, 1);
     }
 
+    // Exercises [ANALYSIS-OPEN] / [ANALYSIS-INCR-CHANGE]: per-open-file analysis
+    // runs the pipeline on in-memory text and publishes its diagnostics.
     #[test]
     fn test_set_open_produces_diagnostics_for_type_error() {
-        let idx = make_index();
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/err.py");
-        // Missing return type annotation — should trigger BSK-E0001.
+        // Missing return type annotation (BSK-E0002) — a house rule, off by
+        // default, so the index opts in. See [CHKARCH-CONFIGURATION-ONLY].
         let src = "def foo(x: int):\n    return x\n";
         let diags = idx.set_open(&uri, src, 1);
         assert!(
@@ -912,11 +1062,14 @@ mod tests {
     #[test]
     fn test_set_open_excluded_file_publishes_no_diagnostics() {
         let root = unique_tmp("bsk_excluded_open");
-        // Default config => DEFAULT_EXCLUDES (includes `bundled` / `_vendored`).
+        // House rules enabled (so the vendored file WOULD fire if not excluded),
+        // keeping DEFAULT_EXCLUDES (`bundled` / `_vendored`). This proves the
+        // exclusion — not an off-by-default rule — is what suppresses diagnostics.
+        // See [CHKARCH-CONFIGURATION-ONLY].
         let idx = WorkspaceIndex::new(
             vec![root.clone()],
             AnalysisMode::WholeModule,
-            BasiliskConfig::default(),
+            annotations_on(),
         );
         // A vendored file with blatant type errors that WOULD normally fire.
         let vendored = root.join("bundled").join("debugpy").join("vendored.py");
@@ -933,10 +1086,12 @@ mod tests {
     #[test]
     fn test_set_open_non_excluded_file_under_root_still_publishes() {
         let root = unique_tmp("bsk_included_open");
+        // House rules enabled so a non-excluded file has something to publish.
+        // See [CHKARCH-CONFIGURATION-ONLY].
         let idx = WorkspaceIndex::new(
             vec![root.clone()],
             AnalysisMode::WholeModule,
-            BasiliskConfig::default(),
+            annotations_on(),
         );
         let src_file = root.join("src").join("app.py");
         let uri = Url::from_file_path(&src_file).unwrap();
@@ -1026,6 +1181,8 @@ mod tests {
 
     // ── reload_from_disk ─────────────────────────────────────────────────────
 
+    // Exercises [ANALYSIS-INDEX-OPEN]: open files are authoritative; watcher
+    // reloads are ignored while open.
     #[test]
     fn test_reload_from_disk_skips_open_files() {
         let idx = make_index();
@@ -1036,6 +1193,8 @@ mod tests {
         assert!(result.is_none(), "should skip open files");
     }
 
+    // Exercises [ANALYSIS-INCR-WATCH] / [ANALYSIS-INDEX-INVAL]: unchanged
+    // source_hash leaves the entry as-is (no re-analysis).
     #[test]
     fn test_reload_from_disk_skips_unchanged_hash() {
         let dir = unique_tmp("bsk_reload");
@@ -1182,6 +1341,156 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// With search paths cached, the scan analyses THROUGH the salsa engine:
+    /// every scanned file becomes a tracked `SourceFile`, so cross-file edges
+    /// see the whole workspace and later edits hit the memos this pass primed.
+    /// Implements [CHKARCH-INCREMENTAL-SALSA] / [ANALYSIS-STARTUP-WHOLE].
+    #[test]
+    fn test_scan_with_search_paths_primes_the_engine() {
+        let dir = unique_tmp("bsk_scan_primes");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.py"), "x: int = 1\n").unwrap();
+        std::fs::write(dir.join("b.py"), "y: str = 'hi'\n").unwrap();
+
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        idx.set_search_paths(crate::import_resolver::ImportSearchPaths {
+            roots: vec![dir.clone()],
+            extra_paths: vec![],
+            stub_paths: vec![],
+            workspace_members: vec![],
+            site_packages: None,
+            registry: None,
+            typeshed_path: None,
+        });
+
+        let (results, file_count, _) = idx.scan();
+        assert_eq!(file_count, 2);
+        assert_eq!(results.len(), 2, "the scan publishes every scanned file");
+        assert_eq!(
+            idx.salsa_engine.tracked_source_count(),
+            2,
+            "the scan must analyse through the engine — every file tracked"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `refresh_open_files` must republish open files even when their
+    /// diagnostics are UNCHANGED: its consumers publish to a client whose
+    /// state may have diverged from the server's store — re-enabling type
+    /// checking cleared the client's diagnostics but not the stored entry, so
+    /// a changed-only filter here would leave the editor empty forever
+    /// (regression caught by the VSIX `basilisk.enabled` toggle e2e).
+    #[test]
+    fn test_refresh_open_files_republishes_unchanged_open_files() {
+        let dir = unique_tmp("bsk_refresh_open");
+        std::fs::create_dir_all(&dir).unwrap();
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            annotations_on(),
+        );
+        idx.set_search_paths(crate::import_resolver::ImportSearchPaths {
+            roots: vec![dir.clone()],
+            extra_paths: vec![],
+            stub_paths: vec![],
+            workspace_members: vec![],
+            site_packages: None,
+            registry: None,
+            typeshed_path: None,
+        });
+
+        // Open a file with a diagnostic; its fresh state is now stored.
+        let uri = Url::from_file_path(dir.join("open.py")).unwrap();
+        let opened = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
+        assert!(!opened.is_empty(), "precondition: the open file diagnoses");
+
+        // Nothing changed since — refresh must STILL return the open file,
+        // with its diagnostics, so the caller can repopulate the client.
+        let refreshed = idx.refresh_open_files();
+        assert!(
+            refreshed
+                .iter()
+                .any(|(target, diags)| target == &uri && !diags.is_empty()),
+            "refresh_open_files must republish an unchanged open file — the \
+             client's state may have been cleared (e.g. type-checking toggle); \
+             got: {:?}",
+            refreshed
+                .iter()
+                .map(|(u, d)| (u.to_string(), d.len()))
+                .collect::<Vec<_>>()
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The workspace sweep republishes ONLY files whose diagnostics changed:
+    /// a sweep over an unchanged workspace publishes nothing (a client no-op
+    /// either way, without O(workspace) publish traffic), while a real change
+    /// still republishes the affected file.
+    #[test]
+    fn test_sweep_republishes_only_changed_diagnostics() {
+        let dir = unique_tmp("bsk_sweep_diff");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("clean.py"), "x: int = 1\n").unwrap();
+        let broken = dir.join("broken.py");
+        std::fs::write(&broken, "def f() -> int:\n    return 1\n").unwrap();
+
+        let idx = WorkspaceIndex::new(
+            vec![dir.clone()],
+            AnalysisMode::WholeModule,
+            BasiliskConfig::default(),
+        );
+        idx.set_search_paths(crate::import_resolver::ImportSearchPaths {
+            roots: vec![dir.clone()],
+            extra_paths: vec![],
+            stub_paths: vec![],
+            workspace_members: vec![],
+            site_packages: None,
+            registry: None,
+            typeshed_path: None,
+        });
+        let _ = idx.scan();
+
+        // Nothing changed since the scan: the sweep must publish nothing.
+        let unchanged = idx.reresolve_imports_and_recheck();
+        assert!(
+            unchanged.is_empty(),
+            "a sweep over an unchanged workspace must republish nothing, got: {:?}",
+            unchanged
+                .iter()
+                .map(|(u, _)| u.to_string())
+                .collect::<Vec<_>>()
+        );
+
+        // Change one file's stored text to something that changes diagnostics.
+        if let Some(mut entry) = idx.files.get_mut(&broken) {
+            entry.text = "def f() -> int:\n    return undefined_name\n".to_owned();
+        }
+        let changed = idx.reresolve_imports_and_recheck();
+        assert_eq!(
+            changed.len(),
+            1,
+            "only the changed file republishes, got: {:?}",
+            changed
+                .iter()
+                .map(|(u, _)| u.to_string())
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            changed
+                .first()
+                .is_some_and(|(uri, _)| uri.to_string().ends_with("broken.py")),
+            "the republished file is the changed one"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn test_scan_skips_open_files() {
         let dir = unique_tmp("bsk_scan_skip_open");
@@ -1312,15 +1621,13 @@ mod tests {
         let uri = make_uri(&format!("{}/app.py", dir.display()));
         let _ = idx.set_open(&uri, "import flask\n", 1);
 
-        // Resolve with registry that does NOT have flask.
+        // Resolve with registry that does NOT have flask: the flask import
+        // should be unresolved (E0010).
         rebuild_and_resolve_imports(&idx, &roots, &config);
-
-        // Re-check: flask import should be unresolved (E0010).
-        recheck_all(&idx);
         let diags_before = get_diagnostics(&idx, &uri);
         assert!(
-            has_diag(&diags_before, "BSK-E0010", "flask"),
-            "expected BSK-E0010 for unresolved flask import, got: {diags_before:?}"
+            has_diag(&diags_before, "imports_unresolved", "flask"),
+            "expected imports_unresolved for unresolved flask import, got: {diags_before:?}"
         );
 
         // Now add flask to the lock file and rebuild.
@@ -1330,14 +1637,13 @@ mod tests {
         std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
 
         rebuild_and_resolve_imports(&idx, &roots, &config);
-        recheck_all(&idx);
 
         // After adding flask to the registry, classify_unresolved should now
         // return NeedsSync (in registry but not on filesystem) instead of
         // NotInstalled. The diagnostic message changes accordingly.
         let diags_after = get_diagnostics(&idx, &uri);
         assert!(
-            !has_diag(&diags_after, "BSK-E0010", "not a dependency"),
+            !has_diag(&diags_after, "imports_unresolved", "not a dependency"),
             "flask should no longer show 'not a dependency' after being added to lock: {diags_after:?}"
         );
 
@@ -1363,7 +1669,6 @@ mod tests {
 
         // Resolve with registry that HAS flask.
         rebuild_and_resolve_imports(&idx, &roots, &config);
-        recheck_all(&idx);
 
         // Now remove flask from the lock file.
         write_uv_lock(&dir, &[("requests", "2.31.0")]);
@@ -1371,12 +1676,46 @@ mod tests {
         std::fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
 
         rebuild_and_resolve_imports(&idx, &roots, &config);
-        recheck_all(&idx);
 
         let diags = get_diagnostics(&idx, &uri);
         assert!(
-            has_diag(&diags, "BSK-E0010", "flask"),
-            "expected BSK-E0010 for flask after removal from lock, got: {diags:?}"
+            has_diag(&diags, "imports_unresolved", "flask"),
+            "expected imports_unresolved for flask after removal from lock, got: {diags:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // Regression for issue #252, exercises the [LSPUV-DIAGNOSTICS-MODULE-NOT-FOUND]
+    // resolution contract (`import_resolver::resolve_site_packages_with_env`):
+    // the two lockfile E0010 tests above were not hermetic — a uv-locked
+    // project with no venv fell back to the ambient `python3` interpreter's
+    // site-packages, so `import flask` resolved on any machine whose first
+    // ambient site-packages dir carried flask and the "expected
+    // imports_unresolved" assertions failed. The contract: a uv-locked project
+    // resolves third-party imports against its lock and its own (or explicitly
+    // activated) venv ONLY — never the ambient interpreter.
+    #[test]
+    fn test_locked_project_ignores_ambient_interpreter_site_packages() {
+        let dir = unique_tmp("bsk_uv_no_ambient");
+        std::fs::create_dir_all(&dir).unwrap();
+        create_uv_project(&dir, &[("requests", "2.31.0")]);
+
+        let roots = vec![dir.clone()];
+        let config = crate::config::load_config(&dir);
+        let registry = build_registry_from_roots(&roots);
+        assert!(registry.is_some(), "temp uv project must yield a registry");
+
+        // The temp project is uv-locked and has NO venv of its own, and no
+        // VIRTUAL_ENV is injected: site-packages must stay unset instead of
+        // being probed from whatever `python3` happens to be on PATH.
+        let search_paths =
+            crate::import_resolver::search_paths_from_config(&roots, &config, registry);
+        assert!(
+            search_paths.site_packages.is_none(),
+            "uv-locked project without a venv must not inherit the ambient \
+             interpreter's site-packages (issue #252), got: {:?}",
+            search_paths.site_packages
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -1387,7 +1726,7 @@ mod tests {
     // `import configure_agent_backend` from `scripts/configure_agent_backend_test.py`
     // must resolve to the sibling `scripts/configure_agent_backend.py` even when
     // the workspace root is the project root (not `scripts/`). This mirrors
-    // Python's `sys.path[0]` behaviour and prevents BSK-E0010 false positives
+    // Python's `sys.path[0]` behaviour and prevents imports_unresolved false positives
     // for the common scripts-with-tests pattern.
     #[test]
     fn test_sibling_import_in_scripts_dir_does_not_emit_e0010() {
@@ -1417,17 +1756,17 @@ mod tests {
         let uri = Url::from_file_path(&test_path).unwrap();
         let _ = idx.set_open(&uri, "import configure_agent_backend\n", 1);
 
-        let search_paths = crate::import_resolver::ImportSearchPaths::from_config(
+        let search_paths = crate::import_resolver::search_paths_from_config(
             &roots, &config, /*registry=*/ None,
         );
-        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
-        recheck_all(&idx);
+        idx.set_search_paths(search_paths);
+        let _ = idx.reresolve_imports_and_recheck();
 
         let diags = get_diagnostics(&idx, &uri);
         assert!(
-            !has_diag(&diags, "BSK-E0010", "configure_agent_backend"),
+            !has_diag(&diags, "imports_unresolved", "configure_agent_backend"),
             "sibling-module import in a script directory must resolve via sys.path[0] \
-             fallback; got BSK-E0010: {diags:?}"
+             fallback; got imports_unresolved: {diags:?}"
         );
 
         let _ = std::fs::remove_dir_all(&project_root);
@@ -1507,37 +1846,37 @@ mod tests {
 
         // Mirror the LSP init flow: from_config discovers workspace_members
         // (src/ for src-layout projects), then imports are resolved.
-        let search_paths = crate::import_resolver::ImportSearchPaths::from_config(
+        let search_paths = crate::import_resolver::search_paths_from_config(
             &roots, &config, /*registry=*/ None,
         );
-        crate::import_resolver::resolve_workspace_imports(&idx, &search_paths);
-        recheck_all(&idx);
+        idx.set_search_paths(search_paths);
+        let _ = idx.reresolve_imports_and_recheck();
 
         // tests/helpers.py — imports agent_backend.db.models (via src/).
         let helpers_diags = get_diagnostics(&idx, &helpers_uri);
         assert!(
-            !has_diag(&helpers_diags, "BSK-E0010", "agent_backend"),
-            "BSK-E0010 false positive: src-layout production import from a test \
+            !has_diag(&helpers_diags, "imports_unresolved", "agent_backend"),
+            "imports_unresolved false positive: src-layout production import from a test \
              helper must resolve via src/ on the search path; got: {helpers_diags:?}"
         );
 
         // tests/test_foo.py — imports tests.helpers (via workspace root).
         let test_diags = get_diagnostics(&idx, &test_uri);
         assert!(
-            !has_diag(&test_diags, "BSK-E0010", "tests.helpers"),
-            "BSK-E0010 false positive: `tests.helpers` import must resolve when the \
+            !has_diag(&test_diags, "imports_unresolved", "tests.helpers"),
+            "imports_unresolved false positive: `tests.helpers` import must resolve when the \
              workspace root is on the search path; got: {test_diags:?}"
         );
 
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    // ── Editor edits must resolve third-party imports (no false BSK-E0010) ───
+    // ── Editor edits must resolve third-party imports (no false imports_unresolved) ───
     //
     // Regression: the full workspace scan resolves `import requests` against the
-    // venv site-packages (no BSK-E0010), but opening/editing a file ran parse →
+    // venv site-packages (no imports_unresolved), but opening/editing a file ran parse →
     // syntactic-resolve → check WITHOUT the import search paths, so every
-    // third-party import was re-marked `Unresolved` and BSK-E0010 fired in the
+    // third-party import was re-marked `Unresolved` and imports_unresolved fired in the
     // editor for packages the CLI resolves fine. The diagnostics that
     // `set_open` *publishes* must already reflect import resolution.
     // Implements [ANALYSIS-INCR-IMPORTS].
@@ -1570,24 +1909,27 @@ mod tests {
             stub_paths: vec![],
             workspace_members: vec![],
             site_packages: Some(site_packages.clone()),
+            typeshed_path: None,
             registry: None,
         });
 
         // Simulate the editor opening the file. The diagnostics it PUBLISHES
-        // (the return value) must not contain BSK-E0010 for `requests`.
+        // (the return value) must not contain imports_unresolved for `requests`.
         let uri = Url::from_file_path(&main_path).unwrap();
         let published = idx.set_open(&uri, "import requests\n", 1);
         assert!(
-            !lsp_codes(&published).iter().any(|c| c == "BSK-E0010"),
+            !lsp_codes(&published)
+                .iter()
+                .any(|c| c == "imports_unresolved"),
             "editor-opened file must resolve `requests` via the cached search \
-             paths; got BSK-E0010 in published diagnostics: {published:?}"
+             paths; got imports_unresolved in published diagnostics: {published:?}"
         );
 
         // The cached checker diagnostics must agree (used by other features).
         let stored = get_diagnostics(&idx, &uri);
         assert!(
-            !has_diag(&stored, "BSK-E0010", "requests"),
-            "stored diagnostics must not carry BSK-E0010 for resolved `requests`: {stored:?}"
+            !has_diag(&stored, "imports_unresolved", "requests"),
+            "stored diagnostics must not carry imports_unresolved for resolved `requests`: {stored:?}"
         );
 
         let _ = std::fs::remove_dir_all(&root);
@@ -1740,9 +2082,9 @@ mod tests {
         Some(Arc::new(registry))
     }
 
-    /// Build the registry from `roots`, derive `ImportSearchPaths`, and run
-    /// `resolve_workspace_imports` against `idx`. Collapses the three-line
-    /// import-resolution dance that every workspace test repeats.
+    /// Build the registry from `roots`, derive `ImportSearchPaths`, cache them
+    /// on the index, and re-analyse the workspace through the salsa engine —
+    /// the same flow the LSP scan and config-watcher paths run.
     fn rebuild_and_resolve_imports(
         idx: &WorkspaceIndex,
         roots: &[std::path::PathBuf],
@@ -1750,19 +2092,9 @@ mod tests {
     ) {
         let registry = build_registry_from_roots(roots);
         let search_paths =
-            crate::import_resolver::ImportSearchPaths::from_config(roots, config, registry);
-        crate::import_resolver::resolve_workspace_imports(idx, &search_paths);
-    }
-
-    /// Re-check all files in the workspace index and update their diagnostics.
-    fn recheck_all(index: &WorkspaceIndex) {
-        for mut entry in index.files.iter_mut() {
-            let Some(resolved) = &entry.resolved else {
-                continue;
-            };
-            let checker_diags = basilisk_checker::check(resolved);
-            entry.diagnostics = checker_diags;
-        }
+            crate::import_resolver::search_paths_from_config(roots, config, registry);
+        idx.set_search_paths(search_paths);
+        let _ = idx.reresolve_imports_and_recheck();
     }
 
     /// Extract checker diagnostics for a given URI from the workspace index.
@@ -1792,14 +2124,29 @@ mod tests {
         WorkspaceIndex::new(vec![], AnalysisMode::WholeModule, config)
     }
 
-    /// Helper: build a `WorkspaceIndex` whose config overrides exactly one rule's severity.
+    /// Config that opts into the annotation house rules (`strict_annotations =
+    /// true`). `BSK-E0001`/`BSK-W0050` are off by default — the default config is
+    /// pure PEP conformance — so tests that exercise those rules (or override
+    /// their severity) enable them here, exactly as a project would. No modes;
+    /// this is configuration. See [CHKARCH-CONFIGURATION-ONLY].
+    fn annotations_on() -> BasiliskConfig {
+        BasiliskConfig {
+            strict_annotations: true,
+            ..Default::default()
+        }
+    }
+
+    /// Helper: build a `WorkspaceIndex` whose config opts into the annotation
+    /// house rules and overrides exactly one rule's severity. A severity override
+    /// only re-grades a rule that is already enabled, so the house rules are
+    /// turned on first. See [CHKARCH-CONFIGURATION-ONLY].
     fn make_index_with_rule_override(
         code: &str,
         severity: basilisk_config::RuleSeverity,
     ) -> WorkspaceIndex {
         let config = BasiliskConfig {
             rules: std::collections::HashMap::from([(code.to_owned(), severity)]),
-            ..Default::default()
+            ..annotations_on()
         };
         make_index_with_config(config)
     }
@@ -1896,19 +2243,22 @@ mod tests {
         }
     }
 
-    // ── Default config: W-codes are warnings, E-codes are errors ────────────
+    // ── House rules enabled: W-codes are warnings, E-codes are errors ───────
+    // These rules are off by default (the default config is pure PEP
+    // conformance); the index opts in so their default severities are
+    // observable. See [CHKARCH-CONFIGURATION-ONLY].
 
     #[test]
-    fn default_config_w0050_is_warning_in_checker_diagnostics() {
-        let idx = make_index();
+    fn house_rules_w0050_is_warning_in_checker_diagnostics() {
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/cfg_w0050_default.py");
         let _ = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
         assert_checker_severity(&idx, &uri, "BSK-W0050", basilisk_checker::Severity::Warning);
     }
 
     #[test]
-    fn default_config_w0050_lsp_severity_is_warning() {
-        let idx = make_index();
+    fn house_rules_w0050_lsp_severity_is_warning() {
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/cfg_w0050_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_REDUNDANT_ANNOTATION, 1);
         assert_lsp_severity(
@@ -1919,16 +2269,16 @@ mod tests {
     }
 
     #[test]
-    fn default_config_e0001_is_error_in_checker_diagnostics() {
-        let idx = make_index();
+    fn house_rules_e0001_is_error_in_checker_diagnostics() {
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/cfg_e0001_default.py");
         let _ = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
         assert_checker_severity(&idx, &uri, "BSK-E0001", basilisk_checker::Severity::Error);
     }
 
     #[test]
-    fn default_config_e0001_lsp_severity_is_error() {
-        let idx = make_index();
+    fn house_rules_e0001_lsp_severity_is_error() {
+        let idx = make_index_with_config(annotations_on());
         let uri = make_uri("/tmp/cfg_e0001_lsp.py");
         let lsp_diags = idx.set_open(&uri, SRC_MISSING_ANNOTATION, 1);
         assert_lsp_severity(
@@ -2015,7 +2365,7 @@ mod tests {
         );
     }
 
-    // ── W0050 severity override: promote warning to error ───────────────────
+    // ── BSK-W0050 severity override: promote warning to error ───────────────────
 
     #[test]
     fn config_override_promotes_w0050_to_error_in_lsp() {
@@ -2033,7 +2383,7 @@ mod tests {
         );
     }
 
-    // ── W0050 disabled via config ───────────────────────────────────────────
+    // ── BSK-W0050 disabled via config ───────────────────────────────────────────
 
     #[test]
     fn config_override_disables_w0050() {
@@ -2117,7 +2467,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             !codes.contains(&"BSK-E0001".to_owned()),
-            "set_open must apply checker_config — disabled E0001 should be absent"
+            "set_open must apply checker_config — disabled BSK-E0001 should be absent"
         );
     }
 
@@ -2153,7 +2503,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             !codes.contains(&"BSK-E0001".to_owned()),
-            "reload_from_disk must apply checker_config — disabled E0001 should be absent"
+            "reload_from_disk must apply checker_config — disabled BSK-E0001 should be absent"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -2162,7 +2512,7 @@ mod tests {
     #[test]
     fn reload_root_configs_applies_changed_python_version() {
         // [CHKARCH-VERSION-TARGET] Editing `[tool.basilisk] python-version` must
-        // make version-aware rules (the BSK-E0155 PEP 695 gate) update without an
+        // make version-aware rules (the version_target_syntax PEP 695 gate) update without an
         // LSP restart: reload_root_configs re-reads the target, and the next
         // recheck reflects it.
         let dir = unique_tmp("bsk_cfg_pyver");
@@ -2189,14 +2539,14 @@ mod tests {
             idx.recheck_all_files()
                 .into_iter()
                 .find(|(u, _)| *u == uri)
-                .is_some_and(|(_, d)| lsp_codes(&d).contains(&"BSK-E0155".to_owned()))
+                .is_some_and(|(_, d)| lsp_codes(&d).contains(&"version_target_syntax".to_owned()))
         };
 
         // 3.11 target: PEP 695 `type` syntax is gated.
         let initial = idx.set_open(&uri, src, 1);
         assert!(
-            lsp_codes(&initial).contains(&"BSK-E0155".to_owned()),
-            "PEP 695 on a 3.11 target must fire BSK-E0155"
+            lsp_codes(&initial).contains(&"version_target_syntax".to_owned()),
+            "PEP 695 on a 3.11 target must fire version_target_syntax"
         );
 
         // Switch the configured target to 3.12 on disk.
@@ -2236,7 +2586,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             !codes.contains(&"BSK-E0001".to_owned()),
-            "set_closed must apply checker_config — disabled E0001 should be absent"
+            "set_closed must apply checker_config — disabled BSK-E0001 should be absent"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -2346,7 +2696,7 @@ mod tests {
             let codes = lsp_codes(lsp_diags);
             assert!(
                 !codes.contains(&"BSK-E0001".to_owned()),
-                "scan must apply checker_config — disabled E0001 should be absent, got {codes:?}"
+                "scan must apply checker_config — disabled BSK-E0001 should be absent, got {codes:?}"
             );
         }
 
@@ -2362,7 +2712,7 @@ mod tests {
         std::fs::create_dir_all(&root_a).unwrap();
         std::fs::create_dir_all(&root_b).unwrap();
 
-        // Root A: disable E0001 via pyproject.toml
+        // Root A: disable BSK-E0001 via pyproject.toml
         std::fs::write(
             root_a.join("pyproject.toml"),
             "[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
@@ -2379,20 +2729,20 @@ mod tests {
             BasiliskConfig::default(),
         );
 
-        // Check that root A's config disables E0001
+        // Check that root A's config disables BSK-E0001
         let cfg_a = idx.config_for_file(&root_a.join("a.py"));
         assert_eq!(
             cfg_a.rule_severity("BSK-E0001"),
             Some(basilisk_config::RuleSeverity::Disabled),
-            "root A should have E0001 disabled"
+            "root A should have BSK-E0001 disabled"
         );
 
-        // Check that root B uses default config (E0001 not overridden)
+        // Check that root B uses default config (BSK-E0001 not overridden)
         let cfg_b = idx.config_for_file(&root_b.join("b.py"));
         assert_eq!(
             cfg_b.rule_severity("BSK-E0001"),
             None,
-            "root B should have default config (no E0001 override)"
+            "root B should have default config (no BSK-E0001 override)"
         );
 
         let _ = std::fs::remove_dir_all(&root_a);
@@ -2435,23 +2785,23 @@ mod tests {
                     basilisk_config::RuleSeverity::Disabled,
                 ),
             ]),
-            ..Default::default()
+            ..annotations_on()
         };
         let idx = make_index_with_config(config);
 
-        // File with both E0001 and W0050 triggers.
+        // File with both BSK-E0001 and BSK-W0050 triggers.
         let uri = make_uri("/tmp/cfg_multi.py");
         let src = "x: int = 42\n\ndef greet(name):\n    return name\n";
         let lsp_diags = idx.set_open(&uri, src, 1);
         let codes = lsp_codes(&lsp_diags);
 
-        // W0050 should be gone (disabled).
+        // BSK-W0050 should be gone (disabled).
         assert!(
             !codes.contains(&"BSK-W0050".to_owned()),
             "disabled BSK-W0050 must not appear, got {codes:?}"
         );
 
-        // E0001 should be present but demoted to Warning.
+        // BSK-E0001 should be present but demoted to Warning.
         assert!(
             codes.contains(&"BSK-E0001".to_owned()),
             "demoted BSK-E0001 should still appear, got {codes:?}"
@@ -2463,7 +2813,7 @@ mod tests {
                     assert_eq!(
                         d.severity,
                         Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-                        "demoted E0001 must be WARNING in combined config"
+                        "demoted BSK-E0001 must be WARNING in combined config"
                     );
                 }
             }
@@ -2472,7 +2822,7 @@ mod tests {
         // Also verify the raw checker diagnostics match.
         let diags = get_diagnostics(&idx, &uri);
         let w0050_count = count_code(&diags, "BSK-W0050");
-        assert_eq!(w0050_count, 0, "W0050 disabled in checker too");
+        assert_eq!(w0050_count, 0, "BSK-W0050 disabled in checker too");
         for d in diags.iter().filter(|d| d.code.code == "BSK-E0001") {
             assert_eq!(d.severity, basilisk_checker::Severity::Warning);
         }
@@ -2545,14 +2895,14 @@ mod tests {
         let dir = unique_tmp("bsk_cfg_pyproject");
         std::fs::create_dir_all(&dir).unwrap();
 
-        // Write a pyproject.toml that disables E0001.
+        // Write a pyproject.toml that disables BSK-E0001.
         std::fs::write(
             dir.join("pyproject.toml"),
             "[tool.basilisk.rules]\n\"BSK-E0001\" = \"disabled\"\n",
         )
         .unwrap();
 
-        // Write a Python file that triggers E0001.
+        // Write a Python file that triggers BSK-E0001.
         std::fs::write(dir.join("check_me.py"), SRC_MISSING_ANNOTATION).unwrap();
 
         // Load config the same way the LSP init does.
@@ -2573,7 +2923,7 @@ mod tests {
             let codes = lsp_codes(lsp_diags);
             assert!(
                 !codes.contains(&"BSK-E0001".to_owned()),
-                "pyproject.toml disabled E0001 must not appear in scan results"
+                "pyproject.toml disabled BSK-E0001 must not appear in scan results"
             );
         }
 
@@ -2583,7 +2933,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             !codes.contains(&"BSK-E0001".to_owned()),
-            "pyproject.toml disabled E0001 must not appear via set_open either"
+            "pyproject.toml disabled BSK-E0001 must not appear via set_open either"
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -2594,9 +2944,12 @@ mod tests {
         let dir = unique_tmp("bsk_cfg_pyproject_demote");
         std::fs::create_dir_all(&dir).unwrap();
 
+        // A severity override only re-grades an already-enabled rule; BSK-E0001
+        // is off by default, so the project opts in AND demotes it.
+        // See [CHKARCH-CONFIGURATION-ONLY].
         std::fs::write(
             dir.join("pyproject.toml"),
-            "[tool.basilisk.rules]\n\"BSK-E0001\" = \"warning\"\n",
+            "[tool.basilisk]\nstrict-annotations = true\n\n[tool.basilisk.rules]\n\"BSK-E0001\" = \"warning\"\n",
         )
         .unwrap();
         std::fs::write(dir.join("demote_me.py"), SRC_MISSING_ANNOTATION).unwrap();
@@ -2610,7 +2963,7 @@ mod tests {
         let codes = lsp_codes(&lsp_diags);
         assert!(
             codes.contains(&"BSK-E0001".to_owned()),
-            "demoted E0001 should still appear"
+            "demoted BSK-E0001 should still appear"
         );
 
         for d in &lsp_diags {
@@ -2619,7 +2972,7 @@ mod tests {
                     assert_eq!(
                         d.severity,
                         Some(tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-                        "pyproject.toml demoted E0001 must be WARNING in LSP"
+                        "pyproject.toml demoted BSK-E0001 must be WARNING in LSP"
                     );
                 }
             }
@@ -2631,22 +2984,23 @@ mod tests {
             assert_eq!(
                 d.severity,
                 basilisk_checker::Severity::Warning,
-                "pyproject.toml demoted E0001 must be Warning in checker"
+                "pyproject.toml demoted BSK-E0001 must be Warning in checker"
             );
         }
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    // ── Default config vs custom config produce different results ────────────
+    // ── Default severity vs override produce different results ───────────────
 
     #[test]
-    fn default_and_custom_configs_produce_different_severity() {
-        // Prove the fix: same source, different configs, different severities.
+    fn default_severity_and_override_produce_different_severity() {
+        // Prove the fix: same source, two configs that both enable the house
+        // rule, different severities. See [CHKARCH-CONFIGURATION-ONLY].
         let uri_path = "/tmp/cfg_diff.py";
 
-        // Default config: E0001 is Error.
-        let default_idx = make_index();
+        // House rules enabled, BSK-E0001 at its default severity: Error.
+        let default_idx = make_index_with_config(annotations_on());
         let default_uri = make_uri(uri_path);
         let default_diags = default_idx.set_open(&default_uri, SRC_MISSING_ANNOTATION, 1);
         let default_severities: Vec<_> = default_diags
@@ -2657,7 +3011,7 @@ mod tests {
             .filter_map(|d| d.severity)
             .collect();
 
-        // Custom config: E0001 demoted to Warning.
+        // Custom config: BSK-E0001 demoted to Warning.
         let custom_idx =
             make_index_with_rule_override("BSK-E0001", basilisk_config::RuleSeverity::Warning);
         let custom_uri = make_uri(uri_path);
@@ -2670,28 +3024,31 @@ mod tests {
             .filter_map(|d| d.severity)
             .collect();
 
-        // Both should have E0001 diagnostics.
-        assert!(!default_severities.is_empty(), "default must have E0001");
-        assert!(!custom_severities.is_empty(), "custom must have E0001");
+        // Both should have BSK-E0001 diagnostics.
+        assert!(
+            !default_severities.is_empty(),
+            "default must have BSK-E0001"
+        );
+        assert!(!custom_severities.is_empty(), "custom must have BSK-E0001");
 
         // Default = ERROR, Custom = WARNING.
         assert!(
             default_severities
                 .iter()
                 .all(|s| *s == tower_lsp::lsp_types::DiagnosticSeverity::ERROR),
-            "default config E0001 must be ERROR"
+            "default config BSK-E0001 must be ERROR"
         );
         assert!(
             custom_severities
                 .iter()
                 .all(|s| *s == tower_lsp::lsp_types::DiagnosticSeverity::WARNING),
-            "custom config E0001 must be WARNING"
+            "custom config BSK-E0001 must be WARNING"
         );
 
         // They must differ — this is the core assertion proving the fix.
         assert_ne!(
             default_severities, custom_severities,
-            "default and custom configs MUST produce different LSP severities for E0001"
+            "default and custom configs MUST produce different LSP severities for BSK-E0001"
         );
     }
 }

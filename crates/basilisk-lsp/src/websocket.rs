@@ -226,12 +226,12 @@ pub async fn run_server_ws(port: u16) -> io::Result<()> {
 
 /// Start the WebSocket LSP server on the given port, blocking.
 ///
-/// Synchronous entry point matching `run_server()` for stdio.
+/// Synchronous entry point matching `run_server()` for stdio, on the same
+/// analysis-sized stacks ([LSPARCH-ARCH-STACK], GitHub #278).
 ///
 /// # Errors
 ///
 /// Returns an `io::Error` if the Tokio runtime or TCP listener fails.
 pub fn run_server_ws_blocking(port: u16) -> io::Result<()> {
-    let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(run_server_ws(port))
+    crate::runtime::block_on_with_analysis_stack("basilisk-lsp-ws", move || run_server_ws(port))
 }

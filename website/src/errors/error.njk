@@ -1,0 +1,65 @@
+---
+# Implements [WEBSITE-ERROR-PAGES-PAGES]: one landing page per diagnostic code,
+# built from the checker source (_data/rules.json) by paginating `rules` (size 1)
+# to emit /errors/{{ code }}/ for every record. Every page resolves the URL the
+# CLI prints — `see: https://www.basilisk-python.dev/errors/BSK-XXXX`. The worked
+# `basilisk check` screenshot is wired in via [WEBSITE-ERROR-PAGES-EXAMPLES].
+# See docs/specs/WEBSITE-ERROR-PAGES-SPEC.md.
+layout: layouts/docs.njk
+pagination:
+  data: rules
+  size: 1
+  alias: rule
+  # Add every code's page (not just the first) to collections.all so they all
+  # land in the generated sitemap.xml for discoverability.
+  addAllPagesToCollections: true
+permalink: "/errors/{{ rule.code }}/"
+eleventyComputed:
+  title: "{{ rule.code }}: {{ rule.summary }} — Basilisk"
+  description: "What Basilisk's {{ rule.code }} ({{ rule.summary }}) diagnostic means and how to fix it — the PEP-conformant Python type checker."
+---
+{% set stem = examples[rule.code] %}
+{% set groupUrl = "/docs/rules/" %}
+{% if rule.group == "Missing Annotations" %}{% set groupUrl = "/docs/rules/missing-annotations/" %}
+{% elif rule.group == "Type Safety" %}{% set groupUrl = "/docs/rules/type-safety/" %}{% endif %}
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/docs/rules/">Rules</a> <span aria-hidden="true">/</span>
+  <a href="{{ groupUrl }}">{{ rule.group }}</a> <span aria-hidden="true">/</span>
+  <span>{{ rule.code }}</span>
+</nav>
+
+<h1 class="error-title">
+  <code>{{ rule.code }}</code>
+  <span class="badge badge--{{ rule.severity }}">{{ rule.severity }}</span>
+</h1>
+
+<p class="error-summary">{{ rule.summaryHtml | safe }}</p>
+
+{% for block in rule.body %}
+  {% if block.type == "code" %}
+<pre class="error-codeblock"><code>{{ block.code }}</code></pre>
+  {% else %}
+<p>{{ block.html | safe }}</p>
+  {% endif %}
+{% endfor %}
+
+{% if stem %}
+<h2>Real <code>basilisk check</code> output</h2>
+<p>What you see when {{ rule.code }} fires on a minimal example:</p>
+<img class="error-screenshot" src="/assets/images/{{ stem }}.png"
+     alt="basilisk check output reporting {{ rule.code }} — {{ rule.summary }}" loading="lazy">
+{% endif %}
+
+<h2>How to handle it</h2>
+<p>
+  Every rule is on by default — strict is the default, not a cage. You can dial
+  {{ rule.code }} down per-file or per-path from your editor or
+  <a href="/docs/configuration/"><code>pyproject.toml</code></a>, or fix the code
+  so it type-checks. See the <a href="{{ groupUrl }}">{{ rule.group }}</a> rules and
+  the <a href="/docs/rules/">complete diagnostic reference</a>.
+</p>
+
+<p class="error-perma">
+  Canonical URL: <a href="{{ rule.docsUrl }}"><code>{{ rule.docsUrl }}</code></a>
+</p>

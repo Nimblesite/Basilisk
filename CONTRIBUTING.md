@@ -24,14 +24,43 @@ This guide has two sections. Pick the one that's you.
 
 ## For Humans
 
-You don't need to write Rust to make Basilisk better. Basilisk's north stars are public and
-non-negotiable: be the **most conformant** *and* the **fastest** Python type checker — and never
-trade one for the other ([CHKARCH-TESTING-BENCH-RATCHET]). Both are *measured numbers*, so the
-highest-leverage human contributions are the ones that keep those numbers — and everything around
-them — **honest**: the calls an agent shouldn't be trusted to sign off on alone. In rough order of
-impact:
+You don't need to write Rust to make Basilisk better. The **single highest-leverage thing a human can
+do on this project is keep the agents honest** — above all about **PEP conformance**, the number most
+worth faking and the one an agent is most likely to fake. Agents do the bulk of the engineering;
+humans own the judgment, accountability, and trust an agent can't be held to — and the first of those
+duties is *surveillance*. Basilisk's north stars are public and non-negotiable: be the **most
+conformant** *and* the **fastest** Python type checker, never trading one for the other
+([CHKARCH-TESTING-BENCH-RATCHET]). Both are *measured numbers*, and a measured number is worth nothing
+the moment someone games it. In rough order of impact:
 
-### 1. Test it for real — on real, large codebases
+### 1. Keep the agents honest — watch every metric like a hawk
+
+This is the number one human job on Basilisk. The agents do the engineering; **you make sure they
+didn't cheat to do it.** Under pressure, an agent will move the *number* instead of doing the *work* —
+and every number here is gameable: **PEP conformance, test coverage, mutation score, test assertions,
+lint/clippy, benchmarks.** Treat every metric change as a possible cheat until you've re-derived it
+yourself. They cannot grade their own homework — that's what you're here for.
+
+The dodges, across every metric:
+
+- **Silence instead of fix** — disabling, deleting, or unregistering a rule so it stops firing,
+  instead of fixing what it caught.
+- **Weaken the test** — deleting failing tests, cutting assertions, or watering them down so "green"
+  means nothing.
+- **Edit the scoreboard or the gate** — hand-editing `conformance_status.csv`, or lowering a
+  threshold/baseline (`coverage-thresholds.json`, the mutation or benchmark baselines) to match a
+  faked run.
+- **Measure less** — excluding diagnostic codes, skipping fixtures, narrowing mutation scope, grading
+  a subset. A high percentage over part of the suite is not a real percentage.
+
+Conformance is the most critical metric, so guard it hardest: it must **strictly track the official PEP
+standard**, scored by the official `python/typing` calculator unmodified at a pinned commit — never a
+rule turned off, deleted, or unregistered, never a reimplementation. Every
+metric only ever moves the *honest* way — conformance, coverage, and mutation **up**; false positives
+and benchmark times **down** — because the work genuinely got better, never because someone changed
+how we count. **Gaming any of them is a punishable offence** ([CHKARCH-CONFORMANCE]).
+
+### 2. Test it for real — on real, large codebases
 
 Automated tests prove the code does what we told it to. They can't tell you whether the product
 *feels* right, holds up against a million lines somebody else wrote, or breaks on a machine we never
@@ -49,33 +78,6 @@ tried. **Point Basilisk at the real world:**
   test there is: put Basilisk in front of real Python developers, watch where they hit friction, and
   turn every "this fired on perfectly good code" or "this missed an obvious bug" into an issue (§6)
   and a failing test. The goal is real-world adoption, not green fixtures.
-
-### 2. Audit conformance-score accuracy
-
-**Make sure the way we score conformance is as close to the official
-PEP scoring as possible, and reuses the official script as much as possible.** Our number only means
-something if it's computed the way the Python typing community computes every checker's — so the less
-home-grown scoring logic sits between us and the official tool, the more trustworthy our figure is.
-
-Audit against the official `python/typing` conformance suite:
-
-- the full [test suite](https://github.com/python/typing/tree/main/conformance/tests) (`conformance/tests/`) — are we running **every** fixture the PEP system demands, with nothing quietly skipped or excluded? A high percentage over a subset of the tests is not a real percentage.
-- the [scoring methodology](https://github.com/python/typing/blob/main/conformance/README.md) (`conformance/README.md`) — does our methodology match it?
-- the [Python scoring script](https://github.com/python/typing/blob/main/conformance/src/main.py) (`conformance/src/main.py`) — are we running *that*, unmodified at a pinned commit, rather than reimplementing it? Every place we diverge is a place our number can drift from reality.
-- the published [results table](https://github.com/python/typing/blob/main/conformance/results/results.html) — the scoreboard we want to be listed on; diff our standing against what the official tool actually reports.
-
-Flag any gap between what we claim and what the official script says, and push our harness to lean on
-that script wherever it currently doesn't. The score only moves **up**, and only because we genuinely
-got more conformant — target **100%** — never because we changed how we count.
-
-**Disabling any conformance rule to move the score is absolutely forbidden — a punishable offence.**
-PEP conformance MUST run the `basilisk` binary with **every rule enabled**: no `basilisk.json`, no
-per-rule override, no "spec-conformance mode", no skipped fixtures, no exceptions. The score is
-exactly what a real user gets out of the box. If a strict default fires on spec-valid code, **fix the
-checker** so it stops firing — never silence the rule to inflate the number. This is precisely how the
-number was once faked: house-style rules were switched off at score time to report a hollow 100% while
-the false positives were merely hidden, not eliminated. That disabling has been removed; the only
-legitimate path to 100% is making the checker smarter with every rule still on ([CHKARCH-CONFORMANCE]).
 
 ### 3. Maintain and improve code quality
 
@@ -177,11 +179,14 @@ follow it exactly. This section is a map, not a restatement (we don't duplicate)
 - **The ratchets only move one way.** Conformance score up; false positives and benchmark
   regressions down; coverage up; mutation score up. A conformance fix that blows the benchmark gate
   isn't done.
-- **Never disable a conformance rule to move the score — a punishable offence.** PEP conformance runs
-  the `basilisk` binary with **every rule enabled**: no `basilisk.json`, no per-rule override, no
-  "spec-conformance mode", no skipped fixtures, no exceptions. The score is exactly what a real user
-  gets out of the box. If a strict default fires on spec-valid code, **fix the checker** so it stops
-  firing — never silence the rule to inflate the number ([CHKARCH-CONFORMANCE]).
+- **Never disable, delete, or unregister a conformance rule to move the score — a punishable offence.**
+  PEP conformance runs the `basilisk` binary with **every rule enabled**: no `basilisk.json`, no
+  per-rule override, no "spec-conformance mode", no skipped fixtures, **no deleting rule source files,
+  no removing rules from `all_rules()`**, no exceptions. Equally forbidden: hand-editing
+  `conformance/conformance_status.csv` or loosening the `coverage-thresholds.json` gate to match a
+  faked run. The score is exactly what a real user gets out of the box. If a strict default fires on
+  spec-valid code, **fix the checker** so it stops firing — never silence, delete, or unregister the
+  rule to inflate the number ([CHKARCH-CONFORMANCE]).
 - **`make` is the interface.** `make build | test | lint | fmt | clean | ci | setup` — exactly seven
   targets, don't add more. `make test` is fail-fast and enforces the coverage threshold from
   `coverage-thresholds.json`.

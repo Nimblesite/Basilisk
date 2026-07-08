@@ -1,19 +1,18 @@
-// Eleventy global data: PEP conformance results, computed FRESH at every build
-// from the committed outputs of the REAL python/typing calculator — never
-// hand-typed. Implements [CHKARCH-CONFORMANCE]; mirrors _data/benchmarks.js.
+// Eleventy global data: PEP conformance results, read from committed outputs of
+// the real python/typing harness — never hand-typed. Implements
+// [CHKARCH-CONFORMANCE]; mirrors _data/benchmarks.js.
 //
-//   conformance/conformance_status.csv  -> live per-file pass/fail (score.py)
-//   conformance/score.py                -> pinned upstream ref + sha256
-//   conformance/upstream_main.py        -> re-hashed here to re-verify the pin
-//   git log of conformance_status.csv   -> the over-time chart (real commits)
+//   conformance/conformance_status.csv         -> live per-file pass/fail
+//   website/src/_data/conformance_report.json  -> resolved python/typing@main commit + score metadata
+//   git log of conformance_status.csv          -> the over-time chart (real commits)
 //
-// A file passes iff the official calculator's `errors_diff` is empty. Every
-// number the website shows is whatever that scorer last produced and committed —
-// and the over-time chart is read straight from this file's GIT history, not a
-// hand-maintained ledger, so it cannot drift from what actually happened.
-import { readFileSync, existsSync, statSync } from "fs";
+// A file passes iff the official harness reports no diff between expected and
+// observed diagnostics. Every number the website shows is whatever that harness
+// last produced and committed. The over-time chart is read straight from this
+// file's GIT history, not a hand-maintained ledger, so it cannot drift from what
+// actually happened.
+import { readFileSync, existsSync } from "fs";
 import { execFileSync } from "child_process";
-import { createHash } from "crypto";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -22,13 +21,15 @@ const REPO_ROOT = join(__dirname, "../../..");
 const CONF_DIR = join(REPO_ROOT, "conformance");
 const STATUS_REL = "conformance/conformance_status.csv";
 const STATUS_CSV = join(CONF_DIR, "conformance_status.csv");
-const SCORE_PY = join(CONF_DIR, "score.py");
-const UPSTREAM_MAIN = join(CONF_DIR, "upstream_main.py");
+// The resolved python/typing@main commit and score metadata. It lives in this
+// same _data dir.
+const REPORT = join(__dirname, "conformance_report.json");
 
-// The day the official python/typing calculator replaced our earlier in-repo
+// The day the official python/typing scoring rules replaced our earlier in-repo
 // script. That script excluded some diagnostic codes and did not count false
 // positives, so it miscalculated the score (up to 100%). Commits dated on/after
-// this used the official calculator; before, the earlier in-repo measurement.
+// this used the official scoring semantics; before, the earlier in-repo
+// measurement.
 const OFFICIAL_SINCE = "2026-06-23";
 
 // The CSV stores lowercase category slugs; these render the few that are not a
@@ -51,15 +52,15 @@ function shortDate(iso) {
   return Number.isFinite(m) && Number.isFinite(d) ? `${MONTHS[m - 1]} ${d}` : iso;
 }
 
-// Pull a `NAME = "value"` string constant straight out of score.py so the pin
-// shown on the website is the exact one the scorer enforces, not a copy. Handles
-// both single-line (`NAME = "v"`) and the formatter's parenthesised wrap
-// (`NAME = (\n    "v"\n)`) the 64-char sha256 gets — `\(?\s*` spans the newline.
-function constFromScorePy(name) {
-  if (!existsSync(SCORE_PY)) return null;
-  const src = readFileSync(SCORE_PY, "utf-8");
-  const m = src.match(new RegExp(`^${name}\\s*=\\s*\\(?\\s*"([^"]+)"`, "m"));
-  return m ? m[1] : null;
+// Read the machine-readable report, which is the single source for the upstream
+// commit. Written by the conformance gate; never hand-edited.
+function readReport() {
+  if (!existsSync(REPORT)) return null;
+  try {
+    return JSON.parse(readFileSync(REPORT, "utf-8"));
+  } catch {
+    return null;
+  }
 }
 
 // Tally one CSV body (pass/total/fp/missed) from its raw text.
@@ -130,7 +131,7 @@ function git(args) {
 // The over-time series, read from the GIT history of conformance_status.csv.
 // One real data point per commit that changed the file: its commit date and the
 // score that commit recorded. Points dated before OFFICIAL_SINCE were produced
-// by the earlier in-repo script; on/after, by the official calculator.
+// by the earlier in-repo script; on/after, by the official scoring semantics.
 function gitHistory() {
   let log;
   try {
@@ -211,27 +212,31 @@ export default function () {
     return { hasData: false, scorePct: null, categories: [], failing: [], history: [], chart: null };
   }
 
-  const pinnedRef = constFromScorePy("PINNED_TYPING_REF");
-  const sha256 = constFromScorePy("UPSTREAM_MAIN_SHA256");
-  // Re-verify the committed calculator at build time — the page states this.
-  let liveSha = null, upstreamBytes = null, verified = false;
-  if (existsSync(UPSTREAM_MAIN)) {
-    const raw = readFileSync(UPSTREAM_MAIN);
-    liveSha = createHash("sha256").update(raw).digest("hex");
-    upstreamBytes = statSync(UPSTREAM_MAIN).size;
-    verified = sha256 != null && liveSha === sha256;
+  // The resolved upstream commit comes from the conformance report.
+  const report = readReport();
+  const upstream = report?.upstream ?? {};
+  const pinnedRef = upstream.sha ?? null;
+
+  // [CHKARCH-CONFORMANCE] Build-time guarantee, not convention: every page that
+  // quotes the score must also carry the exact python/typing commit it was
+  // graded against. A build with score data but no commit would render blank
+  // SHAs and make the public number unreproducible, so fail it instead.
+  if (!pinnedRef) {
+    throw new Error(
+      "conformance: conformance_status.csv has score data but conformance_report.json " +
+      "records no python/typing commit — run the real python/typing harness gate",
+    );
   }
 
   const history = gitHistory();
   return {
     hasData: true,
     ...status,
+    upstreamRef: upstream.ref ?? "main",
     pinnedRef,
-    sha256,
-    sha256Short: sha256 ? sha256.slice(0, 12) : null,
-    liveSha256Short: liveSha ? liveSha.slice(0, 12) : null,
-    verified,
-    upstreamBytes,
+    pinnedRefShort: upstream.shortSha ?? (pinnedRef ? pinnedRef.slice(0, 7) : null),
+    commitDate: upstream.commitDate || null,
+    stale: upstream.stale ?? false,
     officialSince: OFFICIAL_SINCE,
     history,
     chart: buildChart(history),

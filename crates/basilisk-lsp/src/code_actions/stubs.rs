@@ -33,7 +33,7 @@ pub(super) fn make_create_local_stub_action(
     }
 }
 
-/// Build the "Add member to stub" quick fix for a `BSK-E0154` diagnostic
+/// Build the "Add member to stub" quick fix for a `imports_module_attribute` diagnostic
 /// (a `module.attr` access the local stub does not declare).
 ///
 /// Parses the module/attribute and stub path out of the diagnostic message,
@@ -278,7 +278,7 @@ mod tests {
         assert!(!action.is_preferred.unwrap());
     }
 
-    // ── Add-member quick fix (BSK-E0154) ────────────────────────────────────
+    // ── Add-member quick fix (imports_module_attribute) ────────────────────────────────────
     use super::{infer_params, keyword_name, make_add_member_action};
 
     /// Build an E0154 diagnostic whose range ends right after `expr` in `source`.
@@ -290,7 +290,7 @@ mod tests {
                 start: crate::util::byte_offset_to_position(source, source.find(expr).unwrap()),
                 end,
             },
-            code: Some(NumberOrString::String("BSK-E0154".to_owned())),
+            code: Some(NumberOrString::String("imports_module_attribute".to_owned())),
             message: format!(
                 "Module `cowsay` has no attribute `{member}`\n\nhelp: declare `{member}` in the local stub `{stub_path}`, or fix the typo.",
             ),

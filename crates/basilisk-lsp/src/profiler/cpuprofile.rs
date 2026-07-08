@@ -29,6 +29,11 @@ struct CpuNode {
 
 /// Build a V8 `Profiler.Profile` (`.cpuprofile`) value from aggregated data.
 ///
+/// Implements [PROFILE-NATIVE] (CPU leg): merges the per-thread py-spy stacks
+/// into one `nodes` call tree plus the `samples` + integer-µs `timeDeltas`
+/// arrays VS Code's built-in viewer needs; `url` is the source file and line
+/// numbers are 0-based (V8 convention).
+///
 /// `sample_rate` (Hz) yields the per-sample interval as **integer**
 /// microseconds (`1_000_000 / rate`), avoiding any float→int cast.
 #[must_use]
@@ -167,6 +172,8 @@ mod tests {
         }
     }
 
+    // [PROFILE-NATIVE] The `.cpuprofile` matches V8's `Profiler.Profile` schema
+    // (nodes/samples/timeDeltas, 0-based lines) so VS Code renders it natively.
     #[test]
     fn cpuprofile_matches_v8_schema() -> Result<(), String> {
         // Two samples, both the single-frame stack [frame 0], at 100 Hz.

@@ -31,6 +31,43 @@ except Exception as e:
     print(json.dumps({"error": str(e)}))
     sys.exit(1)
 
+def encode_signature(entry, obj):
+    try:
+        sig = inspect.signature(obj)
+    except (ValueError, TypeError):
+        entry["params"] = []
+        return
+    params = []
+    for pname, param in sig.parameters.items():
+        p = {"name": pname}
+        if param.annotation is not inspect.Parameter.empty:
+            p["annotation"] = str(param.annotation)
+        if param.default is not inspect.Parameter.empty:
+            p["has_default"] = True
+        if param.kind == inspect.Parameter.VAR_POSITIONAL:
+            p["kind"] = "vararg"
+        elif param.kind == inspect.Parameter.VAR_KEYWORD:
+            p["kind"] = "kwarg"
+        elif param.kind == inspect.Parameter.KEYWORD_ONLY:
+            p["kind"] = "keyword_only"
+        elif param.kind == inspect.Parameter.POSITIONAL_ONLY:
+            p["kind"] = "positional_only"
+        params.append(p)
+    entry["params"] = params
+    ret = sig.return_annotation
+    if ret is not inspect.Parameter.empty:
+        entry["return"] = str(ret)
+
+def encode_class_methods(entry, cls):
+    methods = []
+    for mname, mobj in inspect.getmembers(cls):
+        if mname.startswith('_') or not callable(mobj):
+            continue
+        mentry = {"name": mname}
+        encode_signature(mentry, mobj)
+        methods.append(mentry)
+    entry["methods"] = methods
+
 results = []
 for name in sorted(dir(module)):
     if name.startswith('_'):
@@ -38,32 +75,10 @@ for name in sorted(dir(module)):
     obj = getattr(module, name)
     entry = {"name": name}
     if callable(obj):
-        try:
-            sig = inspect.signature(obj)
-            params = []
-            for pname, param in sig.parameters.items():
-                p = {"name": pname}
-                if param.annotation is not inspect.Parameter.empty:
-                    p["annotation"] = str(param.annotation)
-                if param.default is not inspect.Parameter.empty:
-                    p["has_default"] = True
-                if param.kind == inspect.Parameter.VAR_POSITIONAL:
-                    p["kind"] = "vararg"
-                elif param.kind == inspect.Parameter.VAR_KEYWORD:
-                    p["kind"] = "kwarg"
-                elif param.kind == inspect.Parameter.KEYWORD_ONLY:
-                    p["kind"] = "keyword_only"
-                elif param.kind == inspect.Parameter.POSITIONAL_ONLY:
-                    p["kind"] = "positional_only"
-                params.append(p)
-            entry["params"] = params
-            ret = sig.return_annotation
-            if ret is not inspect.Parameter.empty:
-                entry["return"] = str(ret)
-        except (ValueError, TypeError):
-            entry["params"] = []
+        encode_signature(entry, obj)
         if isinstance(obj, type):
             entry["kind"] = "class"
+            encode_class_methods(entry, obj)
         else:
             entry["kind"] = "function"
     elif isinstance(obj, types.ModuleType):
@@ -83,6 +98,8 @@ print(json.dumps(results))
 ///
 /// Returns `StubGenError::Subprocess` if the Python process fails or times out.
 /// Returns `StubGenError::Import` if the module cannot be imported.
+// Implements [STUBRES-AUTOGEN-MODES] "Runtime introspection" — highest
+// accuracy: `inspect.signature()` via a Python subprocess sees actual signatures.
 pub fn generate_runtime_stubs(
     module_name: &str,
     python_path: &Path,
@@ -147,7 +164,21 @@ fn entries_to_pyi(module_name: &str, entries: &[serde_json::Value]) -> String {
                 lines.push(sig);
             }
             "class" => {
-                lines.push(format!("class {name}: ..."));
+                // Emit method bodies so class members survive stub parsing —
+                // hover on inherited members needs them (GitHub #287).
+                let methods = entry.get("methods").and_then(|v| v.as_array());
+                match methods {
+                    Some(methods) if !methods.is_empty() => {
+                        lines.push(format!("class {name}:"));
+                        for method in methods {
+                            let Some(mname) = method.get("name").and_then(|v| v.as_str()) else {
+                                continue;
+                            };
+                            lines.push(format!("    {}", format_function_stub(mname, method)));
+                        }
+                    }
+                    _ => lines.push(format!("class {name}: ...")),
+                }
             }
             "variable" => {
                 let ann = entry
@@ -226,6 +257,27 @@ mod tests {
         assert!(pyi.contains("class Session: ..."));
         assert!(pyi.contains("VERSION: str"));
         assert!(pyi.contains("Auto-generated stub"));
+    }
+
+    /// GitHub #287: class methods must survive into the generated stub body so
+    /// hover can resolve inherited members — `class X: ...` loses them all.
+    #[test]
+    fn entries_to_pyi_emits_class_methods() {
+        let entries: Vec<serde_json::Value> = serde_json::from_str(
+            r#"[
+                {"name": "BaseModel", "kind": "class", "methods": [
+                    {"name": "model_validate", "params": [{"name": "obj", "annotation": "Any"}], "return": "BaseModel"}
+                ]}
+            ]"#,
+        )
+        .unwrap();
+
+        let pyi = entries_to_pyi("pydantic", &entries);
+        assert!(pyi.contains("class BaseModel:"), "class header: {pyi}");
+        assert!(
+            pyi.contains("    def model_validate(obj: Any) -> BaseModel: ..."),
+            "indented method body: {pyi}"
+        );
     }
 
     #[test]

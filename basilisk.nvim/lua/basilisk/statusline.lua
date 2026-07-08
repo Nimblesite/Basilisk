@@ -2,6 +2,10 @@
 ---
 --- Compatible with lualine.nvim, heirline.nvim, or any status line
 --- that accepts a function returning a string.
+---
+--- Implements [NVIM-STATUS-LINE] — exposes lualine_component and the
+--- starting/ready/error/stopped states with the spec's icons, error/warn counts,
+--- and colors.
 
 local M = {}
 

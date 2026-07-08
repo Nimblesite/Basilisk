@@ -7,7 +7,7 @@
 
 ## Analysis Modes {#ANALYSIS-MODES}
 
-Three modes govern which files are analysed and how symbol information flows between them.
+Three modes govern which files are analysed and how symbol information flows.
 
 ### openFilesOnly {#ANALYSIS-OPEN}
 
@@ -19,7 +19,7 @@ Three modes govern which files are analysed and how symbol information flows bet
 | **Startup scan** | None |
 | **Performance cost** | Minimal — only active documents are analysed |
 
-Diagnostics are published only for open documents. Suitable for large monorepos where full workspace analysis is too expensive.
+Diagnostics published only for open documents. For large monorepos where full workspace analysis is too expensive.
 
 ### wholeModule {#ANALYSIS-WHOLE}
 
@@ -31,7 +31,7 @@ Diagnostics are published only for open documents. Suitable for large monorepos 
 | **Startup scan** | Full workspace scan; diagnostics published for every file |
 | **Performance cost** | Higher startup cost; incremental updates are fast |
 
-This is the default mode. It corresponds to how Pyright's `basic` / `standard` mode works: the entire project is indexed and diagnostics are visible for **all** files, not just open ones.
+Default mode. Equivalent to Pyright's [`diagnosticMode: workspace`](https://microsoft.github.io/pyright/#/configuration): the entire project is indexed and diagnostics are visible for all files, not just open ones.
 
 ### crossModule {#ANALYSIS-CROSS}
 
@@ -43,7 +43,7 @@ This is the default mode. It corresponds to how Pyright's `basic` / `standard` m
 | **Startup scan** | Full workspace scan + import graph construction |
 | **Performance cost** | Highest |
 
-`crossModule` enables features that depend on knowing what a symbol *is* across file boundaries: cross-file Go to Definition, cross-file Find References, cross-file Rename, and auto-import suggestions.
+`crossModule` enables features that need cross-boundary symbol identity: cross-file Go to Definition, Find References, Rename, and auto-import suggestions.
 
 | Concern | `wholeModule` | `crossModule` |
 |---------|---------------|---------------|
@@ -70,22 +70,23 @@ This is the default mode. It corresponds to how Pyright's `basic` / `standard` m
 | `"wholeModule"` | Analyse all workspace files (default) |
 | `"crossModule"` | Cross-file import graph analysis |
 
-Default: `"wholeModule"`. Basilisk is strict by default — the user must explicitly opt down to `openFilesOnly`.
+Default: `"wholeModule"`. The user must explicitly opt down to `openFilesOnly`.
 
 ### Config Priority {#ANALYSIS-CONFIG-PRI}
 
-Config resolution order (highest wins):
+Resolution order (highest wins):
 
-1. Editor workspace setting (`basilisk.analysisMode`)
-2. `analysisMode` in `basilisk.json`
-3. `analysisMode` in `[tool.basilisk]` section of `pyproject.toml`
-4. Hard default: `wholeModule`
+1. Editor workspace setting (`basilisk.analysisMode`) — delivered as `initializationOptions.analysisMode` at startup and re-applied at runtime via `workspace/didChangeConfiguration` (top-level `analysisMode` or nested `basilisk.analysisMode`). Editors that always forward a value (the VS Code extension and basilisk.nvim both send their `wholeModule` default) pin the mode from the editor side; clients that send no value (e.g. the Zed extension) fall through to the file tier.
+2. The first parseable config file in the first workspace root, checked in this order: `basilisk.json`, then `pyrightconfig.json` (pyright compatibility), then `pyproject.toml` — `[tool.basilisk]` or, failing that, `[tool.pyright]`. The winning file supplies the entire workspace config: precedence is first-file-wins, NOT per-field merging, so a `basilisk.json` that omits `analysisMode` resolves to the default even if `pyproject.toml` sets one (mirroring [pyright's own whole-file precedence](https://microsoft.github.io/pyright/#/configuration) of `pyrightconfig.json` over `pyproject.toml`).
+3. Hard default: `wholeModule`.
+
+Tier 1 and the fallback are resolved by `resolve_analysis_mode` (`crates/basilisk-lsp/src/workspace_analysis.rs`); the file tier is `load_config` (`crates/basilisk-lsp/src/config.rs`), which the CLI shares.
 
 ---
 
 ## Workspace Index {#ANALYSIS-INDEX}
 
-`wholeModule` and `crossModule` modes both require a **workspace index** — a persistent, process-scoped data structure that holds the resolved state of every file in the workspace.
+`wholeModule` and `crossModule` both require a **workspace index** — a process-scoped structure holding the resolved state of every workspace file.
 
 ### Structure {#ANALYSIS-INDEX-STRUCT}
 
@@ -112,19 +113,31 @@ A `FileEntry` is invalidated when:
 
 - Its on-disk content changes (file-watcher event) AND `source_hash` changes
 - The editor sends a `didChange` notification for it
-- Any of its direct importers are invalidated (`crossModule` only)
+- A file it depends on changes in a way that affects its output (`crossModule` only)
 
-When invalidated: re-parse, re-resolve, re-check, update `source_hash` and `diagnostics`, re-publish.
+When invalidated, the file is re-analysed **through the salsa engine**
+([CHKARCH-INCREMENTAL-SALSA]), which re-runs only the queries whose inputs
+actually changed; `source_hash` and `diagnostics` update and the result is
+re-published. Cross-file dependency tracking is content-precise: the salsa
+queries record edges on the imported files' tracked text and export sets, so a
+body-only edit in a dependency backdates (importers' memos stay valid) while an
+export change recomputes exactly the affected importers — no file-granularity
+cascade walk.
 
 ### Open-File Priority {#ANALYSIS-INDEX-OPEN}
 
-When a file is open in the editor, the in-memory text (from `didOpen`/`didChange`) is authoritative. File-watcher events for the same path are silently ignored as long as `is_open == true`. When closed (`didClose`), on-disk text is re-read to rebuild the `FileEntry`.
+For an open file, the in-memory text (`didOpen`/`didChange`) is authoritative; file-watcher events for that path are ignored while `is_open == true`. On `didClose`, on-disk text is re-read to rebuild the `FileEntry`.
 
 ---
 
 ## Import Graph {#ANALYSIS-GRAPH}
 
-The import graph is the core data structure that distinguishes `crossModule` from `wholeModule`.
+The import graph serves the navigation handlers' **reverse lookups** ("who
+imports this file?") for cross-file references and rename
+([ANALYSIS-CROSSLSP-REFS] / [ANALYSIS-CROSSLSP-RENAME]). It plays no role in
+invalidation — that is the salsa engine's job ([ANALYSIS-INDEX-INVAL],
+[CHKARCH-INCREMENTAL-SALSA]), which tracks cross-file dependencies
+content-precisely rather than at file granularity.
 
 ### Structure {#ANALYSIS-GRAPH-STRUCT}
 
@@ -138,19 +151,7 @@ pub struct ImportGraph {
 
 ### Construction {#ANALYSIS-GRAPH-BUILD}
 
-`build_from_index()` walks `ImportInfo.resolved_path` for every file in the `WorkspaceIndex`, populating forward and reverse edges.
-
-### Topological Ordering {#ANALYSIS-GRAPH-TOPO}
-
-`topological_order()` uses Kahn's algorithm to produce an imported-first ordering. Files are analysed in this order so that imported symbols are available before importers are checked.
-
-### Cycle Detection {#ANALYSIS-GRAPH-CYCLES}
-
-`detect_cycles()` uses DFS with white/gray/black coloring. Detected cycles produce an `ImportCycle` diagnostic. Cycles are broken for analysis ordering — one edge is arbitrarily dropped to allow analysis to proceed.
-
-### Transitive Importers {#ANALYSIS-GRAPH-TRANS}
-
-`transitive_importers()` performs BFS over reverse edges. Used for invalidation cascading: when a file changes, all transitive importers may need re-analysis.
+`build_from_index()` walks `ImportInfo.resolved_path` for every file in the `WorkspaceIndex`, populating forward and reverse edges. It is rebuilt after every workspace-wide re-analysis in `crossModule` mode.
 
 ---
 
@@ -172,49 +173,72 @@ pub struct ExternalSymbol {
 
 Each `ResolvedModule` carries `imported_symbols: HashMap<String, ExternalSymbol>` — symbols imported from other modules, resolved during the cross-module pass.
 
-### Two-Pass Population {#ANALYSIS-SYMBOLS-POP}
+### Population {#ANALYSIS-SYMBOLS-POP}
 
-`populate_cross_module_symbols()` in `cross_module.rs`:
+Population lives in the checker's memoized cross-module salsa queries
+(`crates/basilisk-checker/src/incremental.rs`, helpers in
+`crates/basilisk-checker/src/exports.rs`), which the LSP's engine runs in
+`crossModule` mode ([CHKARCH-INCREMENTAL-SALSA]):
 
-1. **Export extraction pass**: For each file, `extract_exports()` collects all public symbols (functions, classes, module-level variables) and builds their signatures via `build_function_signature()`.
-2. **Import resolution pass**: For each file's `ImportInfo`, look up the target file's exports and populate `imported_symbols` in the importer's `ResolvedModule`.
+1. **Export extraction**: the `module_exports(file)` query parses a
+   workspace-tracked file's **current** (possibly in-memory) text and
+   `extract_exports()` collects its public symbols (functions, classes,
+   module-level variables), building signatures via
+   `build_function_signature()`. The result is memoized per file and — because
+   salsa backdates unchanged values — a body-only edit re-derives an equal
+   export set and leaves every importer's memo valid.
+2. **Import resolution**: the `cross_resolved_module(file)` query walks the
+   file's resolved imports and populates `imported_symbols`
+   (`populate_imported_symbols()`): workspace-tracked targets resolve through
+   `module_exports`; external `.pyi` stubs and PEP 561 `py.typed` packages are
+   parsed from disk on demand; non-`py.typed` packages are skipped (opt-in
+   only). A `from`-import binds only its named symbols; plain and star imports
+   publish the whole export set.
 
 ### Invalidation Cascading {#ANALYSIS-SYMBOLS-INVAL}
 
-When a file changes — whether on disk (file watcher) or in the editor
-(`didChange` / `didSave` on an **open** file) — its exports are diffed:
+When a file changes — on disk (file watcher) or in the editor (`didChange`/`didSave` on an **open** file) — its exports are diffed:
 
 1. Re-analyse the changed file.
 2. `exported_symbol_names()` compares old and new exports.
-3. If exports changed, re-resolve the workspace and re-check importers
-   (`reresolve_imports_and_recheck`) so their cross-module diagnostics refresh
-   without a reload. The watcher path uses `reload_and_diff_exports`; the
-   open-file path uses `set_open_refresh_dependents` — the watcher's
-   `reload_from_disk` skips open files, so editing an open module would
-   otherwise leave dependents stale (GitHub #56).
-4. If exports unchanged, skip the cascade (most edits don't change public API).
+3. If exports changed, re-analyse the workspace through the salsa engine
+   (`reresolve_imports_and_recheck`) so cross-module diagnostics refresh
+   without a reload: the engine is primed with every indexed file's current
+   text (open files contribute their in-memory buffers), and salsa recomputes
+   exactly the files whose dependencies changed — the rest are revalidated
+   memos. Only files whose diagnostics actually **changed** are republished
+   (an identical set is a client no-op; the edited/reloaded file itself always
+   republishes). Watcher path uses `reload_and_diff_exports`; open-file path
+   uses `set_open_refresh_dependents` — the watcher's `reload_from_disk` skips
+   open files, so editing an open module would otherwise leave dependents
+   stale (GitHub #56).
+4. If exports unchanged, skip the cascade. (For a **stub** dependency the
+   export diff still changes — `.pyi` files parse as Python — so an in-memory
+   edit to an open user stub refreshes its importers' `imports_module_attribute`
+   diagnostics through the same path, with the salsa query re-capturing the
+   stub API from the tracked text rather than stale disk.)
 
 ---
 
 ## Cross-File LSP Features {#ANALYSIS-CROSSLSP}
 
-Features enabled by `crossModule` that are unavailable or degraded in `wholeModule`:
+Features enabled by `crossModule`, unavailable or degraded in `wholeModule`:
 
 ### Cross-File Go to Definition {#ANALYSIS-CROSSLSP-GOTODEF}
 
-Follow `ImportInfo.resolved_path`, find the symbol's `name_span` in the target `ResolvedModule`. Re-exports are followed across the import chain.
+Follow `ImportInfo.resolved_path` to the symbol's `name_span` in the target `ResolvedModule`; re-exports are followed across the import chain.
 
 ### Cross-File Find All References {#ANALYSIS-CROSSLSP-REFS}
 
-Use import graph reverse edges. For a symbol defined in file A, search all importers of A for usage of that symbol name.
+Use import-graph reverse edges: for a symbol defined in file A, search all importers of A for usage of that name.
 
 ### Cross-File Rename {#ANALYSIS-CROSSLSP-RENAME}
 
-Produces a multi-file `WorkspaceEdit`: definition site + import sites (`from module import old_name` → `from module import new_name`) + all usage sites in importing files.
+Produces a multi-file `WorkspaceEdit`: definition site + import sites (`from module import old_name` → `new_name`) + all usage sites in importing files.
 
 ### Auto-Import Completion {#ANALYSIS-CROSSLSP-IMPORT}
 
-`SymbolIndex` (built in `auto_import.rs`) indexes all workspace exports. When the user types an unknown symbol, completion suggests imports with `additionalTextEdits` that insert the import statement.
+`SymbolIndex` (`auto_import.rs`) indexes all workspace exports. Typing an unknown symbol suggests imports with `additionalTextEdits` that insert the import statement.
 
 ---
 
@@ -222,15 +246,15 @@ Produces a multi-file `WorkspaceEdit`: definition site + import sites (`from mod
 
 ### openFilesOnly Startup {#ANALYSIS-STARTUP-OPEN}
 
-No workspace scan. The server waits passively for `didOpen` notifications.
+No workspace scan; the server waits for `didOpen` notifications.
 
 ### wholeModule Startup {#ANALYSIS-STARTUP-WHOLE}
 
-On `initialized`: all `.py` / `.pyi` files under workspace roots are collected (respecting `include`/`exclude`), analysed in parallel, diagnostics published. Progress reported via `window/workDoneProgress`.
+On `initialized`: the import search paths are built first (uv registry, workspace members, stub dirs), then all `.py`/`.pyi` files under workspace roots are collected (respecting `include`/`exclude`), the salsa engine is primed with every file's text, and each file is analysed **exactly once through the memoized queries** ([CHKARCH-INCREMENTAL-SALSA]) — the same memos every subsequent edit hits. Diagnostics are published for every file; open files (skipped by the scan — editor text is authoritative) are re-analysed through the engine afterwards so they converge with the scanned workspace. Progress via `window/workDoneProgress`.
 
 ### crossModule Startup {#ANALYSIS-STARTUP-CROSS}
 
-Same as `wholeModule`, with an additional pass: the import graph is built from `ImportInfo`, files are topologically sorted, and `populate_cross_module_symbols()` resolves inter-module references. Files whose diagnostics change are re-checked and re-published.
+Same as `wholeModule` — the scan's engine pass runs the cross-module queries ([ANALYSIS-SYMBOLS-POP]), so every file's `imported_symbols` reflect the other modules' exports — plus the import graph is built from `ImportInfo` for navigation reverse-lookups ([ANALYSIS-GRAPH]).
 
 ---
 
@@ -238,21 +262,21 @@ Same as `wholeModule`, with an additional pass: the import graph is built from `
 
 ### didChange {#ANALYSIS-INCR-CHANGE}
 
-Incremental text edits are applied to the in-memory buffer, then parse → resolve → check runs for the changed file. In `crossModule`, direct importers are queued for re-analysis if the exported symbol table changed.
+Incremental edits are applied to the in-memory buffer, then parse → resolve → check runs for the changed file. In `crossModule`, direct importers are queued for re-analysis if the exported symbol table changed.
 
 ### Import resolution on incremental re-check {#ANALYSIS-INCR-IMPORTS}
 
-The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk reload, dependent invalidation) MUST resolve third-party and workspace imports against the **same** `ImportSearchPaths` (venv site-packages, workspace members, stub paths, uv registry) that the full workspace scan used. The full scan builds these once and caches them on the workspace index; incremental re-checks reuse the cached value rather than recomputing it (site-packages discovery may touch the filesystem or spawn a subprocess and MUST NOT run per keystroke).
+The `resolve` step of any incremental re-check (`didOpen`, `didChange`, disk reload, dependent invalidation) MUST resolve third-party and workspace imports against the **same** `ImportSearchPaths` (venv site-packages, workspace members, stub paths, uv registry) the full scan used. The full scan builds and caches these on the workspace index; incremental re-checks reuse the cached value (site-packages discovery may touch the filesystem or spawn a subprocess and MUST NOT run per keystroke).
 
-Without this, the syntactic resolver marks every import `Unresolved`, so opening or editing a file resurrects false `BSK-E0010` ("Cannot resolve import … no type information available") in the editor for packages that resolve cleanly on the CLI and during the startup scan. The diagnostics an incremental re-check **publishes** MUST already reflect import resolution — not just the cached symbol table used by navigation features.
+Otherwise the syntactic resolver marks every import `Unresolved`, resurrecting false `imports_unresolved` for packages that resolve cleanly on the CLI and at startup. The diagnostics an incremental re-check **publishes** MUST reflect import resolution — not just the cached symbol table used by navigation.
 
 ### File-Watcher Event {#ANALYSIS-INCR-WATCH}
 
-If the file is open, the event is ignored. Otherwise the file is read from disk; if `source_hash` is unchanged the entry is left as-is. If changed, the pipeline re-runs.
+If the file is open, the event is ignored. Otherwise read from disk; if `source_hash` is unchanged, leave the entry as-is; if changed, re-run the pipeline.
 
 ### Debouncing {#ANALYSIS-INCR-DEBOUNCE}
 
-File-watcher events MUST be debounced with a 150 ms delay to avoid thrashing during bulk saves. `didChange` events are NOT debounced — latency matters.
+File-watcher events are trailing-debounced 200 ms (`FILE_WATCHER_DEBOUNCE_MS`, `crates/basilisk-lsp/src/server/mod.rs`) to avoid thrashing during bulk saves: each `workspace/didChangeWatchedFiles` batch cancels any pending re-analysis task and schedules a fresh one, so a burst of events triggers work only once it settles. `didChange` events are NOT debounced — latency matters.
 
 ---
 
@@ -264,7 +288,100 @@ File-watcher events MUST be debounced with a 150 ms delay to avoid thrashing dur
 | `wholeModule` | All workspace files (open and closed) |
 | `crossModule` | All workspace files + any file whose diagnostics changed due to cross-module re-analysis |
 
-When a file is **deleted**, publish empty diagnostics to clear the error panel. When the user switches mode at runtime, clear all diagnostics, re-analyse, re-publish.
+On **delete**, publish empty diagnostics to clear the error panel. On runtime mode switch, clear all diagnostics, re-analyse, re-publish.
+
+Publication must reflect the index state at **publish time**, not at compute
+time (GitHub #264):
+
+- **Scans never block the message loop.** Every workspace scan (startup, mode
+  switch, re-enable, workspace-folder change) runs in a spawned task
+  (`run_workspace_scan`) — a scan computed inside a notification handler
+  starves every other message, including the `didClose` whose clear the editor
+  is waiting on, for the scan's full duration.
+- **Stale scan results are dropped.** Before publishing each scan entry, the
+  server re-checks the index: a file removed mid-scan (closed in
+  `openFilesOnly`, or an out-of-workspace file closed in any mode) is skipped —
+  republishing its snapshot would resurrect diagnostics `didClose` already
+  cleared, with nothing left to ever clear them. After a mid-scan switch to
+  `openFilesOnly`, only open files publish (`publish_scan_results` /
+  `scan_entry_still_current`).
+- **Mode switches never queue an index write.** `WorkspaceIndex::set_mode` is
+  interior-mutable and applied through a READ guard. A mode-flip writer queued
+  behind a running scan's read guard would make tokio's fair `RwLock` block
+  every subsequent reader, saturating tower-lsp's bounded handler slots and
+  stalling the entire message loop — the `didClose` clear then arrives seconds
+  late (the original flaky-clear failure).
+- **Tab close sends a synthetic `didClose`** for every file the server would
+  clear on close: all files in `openFilesOnly`, and out-of-workspace files in
+  the whole-workspace modes. VS Code disposes closed documents lazily, so the
+  language client's own `didClose` can lag a tab close unboundedly
+  (`registerTabTracking` in `vscode-extension/src/lsp-client.ts`). In-workspace
+  files in `wholeModule`/`crossModule` keep their diagnostics per the table
+  above.
+- **Exactly one publisher.** `store.reset()` MUST stop (dispose) the
+  LanguageClient it replaces before starting a new one. A forgotten-but-alive
+  client is a zombie publisher: it keeps forwarding `didOpen`/`didClose` to
+  its own server process and publishing into its own diagnostics collection —
+  VS Code merges collections, so the zombie's late republishes resurrect
+  diagnostics the real server already cleared (the observed root cause of the
+  flaky openFilesOnly clear, GitHub #264).
+
+Covered end-to-end by the `#264` regression test in
+`vscode-extension/src/test/suite/lsp-analysis-mode.test.ts` (file closed
+mid-scan must stay cleared).
+
+---
+
+## Type Checking Toggle {#ANALYSIS-ENABLED}
+
+The `basilisk.enabled` setting (surfaced as the **Type Checking** toggle in the
+activity panel, [EXTACT-INFO-FEATURE-STATUS]) gates **all diagnostic
+publication**. The LSP is authoritative for diagnostics in every mode, so the
+toggle is honoured **server-side** — the editor's own
+[`subprocess-mode`](VSIX-SPEC.md) path mirrors it only as a fallback.
+
+Contract (GitHub #65 / #119):
+
+- **Forwarded:** the editor MUST include `enabled` in `initializationOptions` and
+  in every `workspace/didChangeConfiguration` payload (both the flat top-level
+  key and the nested `basilisk.enabled` shape are accepted).
+- **On disable** (`true → false`): publish **empty** diagnostics for every
+  indexed URI (clearing stale errors everywhere they surface — editor squiggles,
+  Problems panel, module tree) and **suppress** all further publication. The
+  index keeps tracking edits; only publication is gated.
+- **While disabled:** `didOpen` / `didChange` / `didSave` / `didClose`, the
+  file-watcher re-analysis, the startup scan, and registry rebuilds all run but
+  publish **nothing**.
+- **On enable** (`false → true`): re-scan per the active mode and re-publish, so
+  diagnostics cleared on disable come back.
+- **At startup:** a client that initializes with `enabled = false` gets **no**
+  diagnostics from the initial workspace scan.
+- **Grading surfaces are gated too** (the v0.25.0 showstopper reopen of #119):
+  `basilisk.workspaceModules` and `basilisk.typeHealth` MUST NOT serve grading
+  while disabled. Every payload stamps `typeCheckingEnabled`; when `false`, the
+  grading fields (`coveragePercent`, `errors`, `warnings`, `adopted`, symbol
+  totals) are **omitted** — never zeroed — so no client can render a
+  `"NN% typed"` header, coverage-tinted (red) rows, or tally badges from a
+  stale shape. The module list itself stays as a navigation surface, and
+  `typeHealth` serves an empty `modules` list. Clients render an explicit
+  `"Type checking disabled"` header state ([EXTACT-MODULES-HEADER]).
+- **Panel refresh on transition:** flipping the toggle repaints the panel
+  immediately in both directions — the clear/re-publish above fires the
+  client's diagnostics listener, which bumps `analysisRevision`
+  ([EXTACT-REACTIVE-STATE]) even in a diagnostics-free workspace, because
+  clearing publishes an (empty) set for every indexed URI.
+
+Implemented in `crates/basilisk-lsp/src/server/init.rs`
+(`apply_type_checking_toggle`, `clear_all_diagnostics`, `rescan_after_enable`),
+the gated publish paths in `crates/basilisk-lsp/src/server/document.rs`, and the
+gated panel builders in `crates/basilisk-lsp/src/server/activity_panel/`
+(`build_module_tree`, `build_type_health`); forwarded by
+`readBasiliskSettings()` in `vscode-extension/src/lsp-client.ts`; rendered by
+`workspaceHealthMessage` / `workspaceHealthBadge` / `ModuleTreeItem` in
+`vscode-extension/src/module-explorer.ts`.
+Exercised by `ws_test_type_checking_toggle.rs` (real LSP) and
+`type-checking-toggle.test.ts` (real VS Code window — diagnostics clearing,
+panel-payload gating, header/row neutrality, and zero-diagnostics refresh).
 
 ---
 
@@ -296,13 +413,13 @@ When `analysisMode` is `openFilesOnly`, these capabilities are omitted.
 | Diagnostic publish latency (open file) | < 100 ms after last keystroke |
 | Memory per file in index | < 500 KB average |
 
-Large workspaces (> 500 K LOC) MAY show a progress notification and allow the user to cancel.
+Large workspaces (> 500 K LOC) MAY show a cancellable progress notification.
 
 ---
 
 ## Error Handling {#ANALYSIS-ERRORS}
 
-- If a file cannot be read (permissions, encoding), log a `window/logMessage` warning and skip it. Do not crash.
-- If the workspace root does not exist, skip silently.
-- If the workspace scan exceeds 30 s, log a warning and continue in degraded mode.
+- File unreadable (permissions, encoding): log a `window/logMessage` warning and skip. Do not crash.
+- Workspace root missing: skip silently.
+- Workspace scan exceeds 30 s: log a warning, continue in degraded mode.
 - Circular imports: detect, emit diagnostic, break cycle for ordering.

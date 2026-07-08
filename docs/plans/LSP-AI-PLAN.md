@@ -1,6 +1,6 @@
-# AI-Powered LSP Features — Implementation Plan
+# AI-Powered LSP Features — Implementation Plan {#LSPAIPLAN}
 
-## Status
+## Status {#LSPAIPLAN-STATUS}
 
 **Prerequisites:**
 - Diagnostic pipeline: EXISTS (BSK-E#### codes, spans, messages)
@@ -8,17 +8,17 @@
 - Mass Autofix spec: EXISTS ([LSP-MASS-AUTOFIX-SPEC.md §AUTOFIX-AI](../specs/LSP-MASS-AUTOFIX-SPEC.md#AUTOFIX-AI) — Phase 5 AI Typing Hooks not yet implemented)
 - AI provider code: NOTHING exists
 
-**This plan expands:** `LSP-MASS-AUTOFIX-PLAN.md` Phase 5 (AI Typing Hooks — stubs only). That phase was designed as a stub. This plan upgrades the stubs to a full provider abstraction. Mass Autofix Phases 1-4 are **completely independent of this plan** — they are deterministic features that work without AI. AI is an optional enhancement layer that plugs in after deterministic fixes for diagnostics that can't be fixed otherwise.
+**This plan expands:** `LSP-MASS-AUTOFIX-PLAN.md` Phase 5 (AI Typing Hooks — stubs only), upgrading the stubs to a full provider abstraction. Mass Autofix Phases 1-4 are **independent of this plan** — deterministic features that work without AI. AI is an optional layer that plugs in after deterministic fixes for diagnostics that can't be fixed otherwise.
 
 **Dependency:** Mass Autofix Phase 1 (Fix Metadata Infrastructure) must land first. AI fixes use the same `Fix` struct.
 
 ---
 
-## Phase 1: Provider Abstraction & NoOp Default
+## Phase 1: Provider Abstraction & NoOp Default {#LSPAIPLAN-PROVIDER-ABSTRACTION}
 
 **Goal:** The `AiProvider` trait exists, is wired into the LSP, and does nothing by default. Zero overhead when disabled.
 
-### Tasks
+### Tasks {#LSPAIPLAN-PROVIDER-ABSTRACTION-TASKS}
 
 1. **Create `basilisk-ai` crate** in the workspace:
    - `Cargo.toml` — minimal dependencies (serde, serde_json for request/response serialization). No AI SDK dependencies.
@@ -59,18 +59,18 @@
    - `src/truncation.rs` — `fn truncate_request(request: &mut AiFixRequest, max_tokens: usize)`.
    - Priority-based truncation per [LSP-AI-SPEC.md §LSPAI-TRUNCATION](../specs/LSP-AI-SPEC.md#LSPAI-TRUNCATION).
 
-### Deliverables
+### Deliverables {#LSPAIPLAN-PROVIDER-ABSTRACTION-DELIVERABLES}
 - Compiles. All existing tests pass. Zero behavioral changes.
 - `AiProvider` trait is usable by provider implementations.
 - Context builder produces correct payloads from `ResolvedModule`.
 
 ---
 
-## Phase 2: OpenAI-Compatible Provider
+## Phase 2: OpenAI-Compatible Provider {#LSPAIPLAN-OPENAI-PROVIDER}
 
-**Goal:** Any model behind an OpenAI-compatible API works. This covers Ollama, LM Studio, vLLM, llama.cpp, OpenAI, Azure, Groq, Together, Fireworks, and anything else that speaks this protocol.
+**Goal:** Any model behind an OpenAI-compatible API works — Ollama, LM Studio, vLLM, llama.cpp, OpenAI, Azure, Groq, Together, Fireworks, and anything else speaking the protocol.
 
-### Tasks
+### Tasks {#LSPAIPLAN-OPENAI-PROVIDER-TASKS}
 
 1. **Implement `OpenAiCompatibleProvider`** in `basilisk-ai/src/providers/openai_compatible.rs`:
    - HTTP client: `ureq` (blocking, no tokio dependency, already used elsewhere in the project — check first; if not, `minreq` for minimal footprint).
@@ -110,17 +110,17 @@
    - Test timeout handling.
    - Test missing API key handling.
 
-### Deliverables
+### Deliverables {#LSPAIPLAN-OPENAI-PROVIDER-DELIVERABLES}
 - `basilisk.ai.provider = "openai-compatible"` with local Ollama works end-to-end.
 - Same provider config works against OpenAI, Azure, etc.
 
 ---
 
-## Phase 3: Anthropic & Copilot Providers
+## Phase 3: Anthropic & Copilot Providers {#LSPAIPLAN-ANTHROPIC-COPILOT-PROVIDERS}
 
 **Goal:** First-party support for Claude and GitHub Copilot.
 
-### Tasks
+### Tasks {#LSPAIPLAN-ANTHROPIC-COPILOT-PROVIDERS-TASKS}
 
 1. **Implement `AnthropicProvider`** in `basilisk-ai/src/providers/anthropic.rs`:
    - HTTP client: same as OpenAI provider (`ureq`/`minreq`).
@@ -143,17 +143,17 @@
    - Process lifecycle: spawn per-request or keep alive (configurable).
    - Document the JSON wire protocol so users can build custom bridges in any language.
 
-### Deliverables
+### Deliverables {#LSPAIPLAN-ANTHROPIC-COPILOT-PROVIDERS-DELIVERABLES}
 - Claude, Copilot, and custom process providers work.
 - Users with existing Copilot subscriptions get AI features for free.
 
 ---
 
-## Phase 4: LSP Feature Integration
+## Phase 4: LSP Feature Integration {#LSPAIPLAN-LSP-INTEGRATION}
 
 **Goal:** AI features appear in the editor as code actions, commands, and hover info.
 
-### Tasks
+### Tasks {#LSPAIPLAN-LSP-INTEGRATION-TASKS}
 
 1. **AI code actions in `code_actions/`**:
    - New module: `code_actions/ai.rs`.
@@ -192,7 +192,7 @@
    - On init: log provider name and availability.
    - VS Code status bar item: "Basilisk AI: [provider name]" or "Basilisk AI: Off".
 
-### Deliverables
+### Deliverables {#LSPAIPLAN-LSP-INTEGRATION-DELIVERABLES}
 - AI code actions appear in all editors.
 - Mass autofix uses AI for unfixable diagnostics.
 - Explain and docstring features work.
@@ -200,11 +200,11 @@
 
 ---
 
-## Phase 5: CLI Integration
+## Phase 5: CLI Integration {#LSPAIPLAN-CLI-INTEGRATION}
 
 **Goal:** AI features available from the command line for CI/batch workflows.
 
-### Tasks
+### Tasks {#LSPAIPLAN-CLI-INTEGRATION-TASKS}
 
 1. **`basilisk fix --ai`**:
    - Runs deterministic fixes first (existing behavior).
@@ -237,18 +237,18 @@
    - Analyze potential dead code with AI framework awareness.
    - Output: list of symbols, dead/alive verdict, confidence, reasoning.
 
-### Deliverables
+### Deliverables {#LSPAIPLAN-CLI-INTEGRATION-DELIVERABLES}
 - CLI users get all AI features without an editor.
 - `debug-context` enables privacy auditing.
 - `stubs generate --ai` enables batch stub generation for CI.
 
 ---
 
-## Phase 6: AI Import Resolution & Rename Suggestions
+## Phase 6: AI Import Resolution & Rename Suggestions {#LSPAIPLAN-IMPORT-RENAME}
 
 **Goal:** AI enhances two existing LSP features — import resolution and rename.
 
-### Tasks
+### Tasks {#LSPAIPLAN-IMPORT-RENAME-TASKS}
 
 1. **Context builders for import and rename**:
    - `src/context.rs` — `fn build_import_request(name: &str, usage: &SyntaxNode, resolved: &ResolvedModule) -> AiImportRequest`.
@@ -269,18 +269,18 @@
    - Analyze the file's function names, variable names, class names to determine dominant casing style.
    - Feed this to the AI so it suggests names that match the project's style.
 
-### Deliverables
+### Deliverables {#LSPAIPLAN-IMPORT-RENAME-DELIVERABLES}
 - AI import suggestions appear when deterministic resolution fails.
 - AI name suggestions appear in the rename dialog.
 - Both features gracefully degrade (no AI → no suggestions, no error).
 
 ---
 
-## Phase 7: AI Refactoring & Code Modernization
+## Phase 7: AI Refactoring & Code Modernization {#LSPAIPLAN-REFACTORING-MODERNIZATION}
 
 **Goal:** AI suggests structural refactoring and modern Python patterns.
 
-### Tasks
+### Tasks {#LSPAIPLAN-REFACTORING-MODERNIZATION-TASKS}
 
 1. **Refactoring context builder**:
    - `src/context.rs` — `fn build_refactor_request(range: TextRange, resolved: &ResolvedModule) -> AiRefactorRequest`.
@@ -311,20 +311,20 @@
    - All AI-suggested refactorings are validated: parse the result as Python AST. If it doesn't parse, discard and report to user.
    - This is a safety net — the AI might produce syntactically invalid code.
 
-### Deliverables
+### Deliverables {#LSPAIPLAN-REFACTORING-MODERNIZATION-DELIVERABLES}
 - AI refactoring suggestions appear for selected code regions.
 - AI modernization suggestions appear for legacy patterns.
 - All suggestions are validated against the Python parser before presentation.
 
 ---
 
-## Phase 8: AI Completions, Stubs, Search, Dead Code & Next-Edit
+## Phase 8: AI Completions, Stubs, Search, Dead Code & Next-Edit {#LSPAIPLAN-COMPLETIONS-STUBS-SEARCH}
 
 **Goal:** The remaining AI features — each independent, can be implemented in any order.
 
-### Tasks
+### Tasks {#LSPAIPLAN-COMPLETIONS-STUBS-SEARCH-TASKS}
 
-#### 8a: AI-Enhanced Completions
+#### 8a: AI-Enhanced Completions {#LSPAIPLAN-COMPLETIONS-STUBS-SEARCH-ENHANCED-COMPLETIONS}
 
 1. **Completion enhancement pipeline**:
    - After deterministic completion produces items, if AI provider has `completion_enhancement` capability:
@@ -337,7 +337,7 @@
    - AI can provide richer documentation strings for completion items.
    - Merged into `documentation` field of `CompletionItem`.
 
-#### 8b: AI Stub Generation
+#### 8b: AI Stub Generation {#LSPAIPLAN-COMPLETIONS-STUBS-SEARCH-STUB-GENERATION}
 
 1. **Stub context builder**:
    - `fn build_stub_request(module_path: &str, module_source: Option<&str>, usages: &[StubUsagePattern]) -> AiStubRequest`.
@@ -354,7 +354,7 @@
    - Parse generated `.pyi` as valid Python stub syntax.
    - Check that all referenced types are importable.
 
-#### 8c: AI Semantic Search
+#### 8c: AI Semantic Search {#LSPAIPLAN-COMPLETIONS-STUBS-SEARCH-SEMANTIC-SEARCH}
 
 1. **Symbol index export**:
    - Export workspace symbol index as `Vec<SymbolIndexEntry>` — name, kind, type, docstring, preview.
@@ -364,7 +364,7 @@
    - `basilisk/ai/findByIntent` custom command.
    - Workspace symbol provider optionally routes through AI for natural language queries (detected by: no camelCase/snake_case pattern, contains spaces, etc.).
 
-#### 8d: AI Dead Code Detection
+#### 8d: AI Dead Code Detection {#LSPAIPLAN-COMPLETIONS-STUBS-SEARCH-DEAD-CODE}
 
 1. **Dead code context builder**:
    - When reference analysis finds zero-reference symbols, build `AiDeadCodeRequest`.
@@ -378,7 +378,7 @@
    - If AI says "not dead": suppress diagnostic or downgrade to hint.
    - If AI says "dead" with high confidence: show as warning.
 
-#### 8e: AI Next-Edit Prediction
+#### 8e: AI Next-Edit Prediction {#LSPAIPLAN-COMPLETIONS-STUBS-SEARCH-NEXT-EDIT}
 
 1. **Edit event handler**:
    - Listen to `textDocument/didChange` events.
@@ -398,7 +398,7 @@
    - Hard cutoff at `next-edit-timeout-ms`. If the model doesn't respond in time, discard.
    - Only enabled if provider has `next_edit_prediction` capability AND `max_latency_ms` ≤ timeout.
 
-### Deliverables
+### Deliverables {#LSPAIPLAN-COMPLETIONS-STUBS-SEARCH-DELIVERABLES}
 - AI-enhanced completions with async merge.
 - AI stub generation from CLI and code actions.
 - Semantic search for natural language symbol queries.
@@ -407,7 +407,7 @@
 
 ---
 
-## Phase Summary
+## Phase Summary {#LSPAIPLAN-PHASE-SUMMARY}
 
 | Phase | What | Depends On | Parallel? |
 |-------|------|-----------|-----------|
@@ -445,17 +445,17 @@ Mass Autofix Phase 1 (Fix Metadata)
     Phase 5 (CLI)
 ```
 
-Phases 6, 7, and 8a-e all depend on Phase 1 only. They can run in parallel with each other and with Phases 2-5. This means a contributor working on semantic search doesn't block someone working on refactoring.
+Phases 6, 7, and 8a-e depend on Phase 1 only and can run in parallel with each other and with Phases 2-5.
 
 ---
 
-## Non-Goals (Explicit)
+## Non-Goals (Explicit) {#LSPAIPLAN-NON-GOALS}
 
 Things this plan does NOT do:
 
-- **General code generation.** Basilisk enhances specific LSP features with AI. It doesn't generate arbitrary code from natural language prompts. That's Copilot/Cursor territory.
-- **Training or fine-tuning.** Basilisk sends prompts. It doesn't train models.
-- **Bundling a model.** No shipping a 4GB GGUF with the binary. Users bring their own model.
-- **Agent loops.** No "let the AI iterate until the file has zero errors." One request, one response, user decides.
-- **Chat interface.** No chatbot in the sidebar. Structured requests, structured responses, code actions.
-- **Full IDE replacement.** Basilisk is a type checker with an LSP. AI enhances the type checking and code intelligence features. It doesn't try to be a general-purpose AI coding assistant.
+- **General code generation.** Enhances specific LSP features; no arbitrary code from natural-language prompts (Copilot/Cursor territory).
+- **Training or fine-tuning.** Sends prompts only; doesn't train models.
+- **Bundling a model.** No shipping a 4GB GGUF with the binary; users bring their own model.
+- **Agent loops.** No "iterate until zero errors." One request, one response, user decides.
+- **Chat interface.** No sidebar chatbot. Structured requests, structured responses, code actions.
+- **Full IDE replacement.** A type checker with an LSP whose AI enhances type-checking and code-intelligence features — not a general-purpose AI coding assistant.

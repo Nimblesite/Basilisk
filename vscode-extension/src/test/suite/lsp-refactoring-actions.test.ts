@@ -19,6 +19,9 @@ import {
     pollUntilResult,
 } from "./test-helpers";
 
+// Exercises [REFACTOR-KINDS] (client side) — verifies the refactoring code-action
+// kinds (extract var/const/func, inline var/func, convert, move, change signature)
+// are offered to the editor through the real LSP.
 // eslint-disable-next-line max-lines-per-function
 suite('LSP Refactoring Code Action Tests', () => {
     let tmpDir: string;

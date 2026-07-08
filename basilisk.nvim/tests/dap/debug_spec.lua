@@ -1,5 +1,8 @@
 --- DAP integration E2E tests for basilisk.nvim.
 ---
+--- Tests [NVIM-DAP-INTEGRATION], [NVIM-DAP-INTEGRATION-ADAPTER-REGISTRATION],
+--- [NVIM-DAP-INTEGRATION-DAP-TCP-PROXY], [NVIM-DAP-INTEGRATION-DEFAULT-CONFIGURATIONS].
+---
 --- These tests exercise REAL debug sessions by:
 ---   1. Starting the basilisk LSP server
 ---   2. Using nvim-dap to launch debugpy via the LSP

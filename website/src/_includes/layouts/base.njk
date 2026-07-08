@@ -158,7 +158,7 @@
         "name": "Basilisk",
         "url": "{{ site.url }}",
         "applicationCategory": "DeveloperApplication",
-        "applicationSubCategory": "Python type checker and language server",
+        "applicationSubCategory": "100% PEP-conformant Python type checker and language server",
         "operatingSystem": "macOS, Linux, Windows",
         "programmingLanguage": "Python",
         "softwareRequirements": "Python 3.12",
@@ -266,6 +266,12 @@
 
       <div class="footer-bottom">
         <p>&copy; {% year %} <a href="https://www.nimblesite.co">NIMBLESITE PTY LTD</a></p>
+        {% set footerLang = lang | default('en') %}
+        {% if footerLang == 'zh' %}
+        <p class="footer-credit">基于 <a href="https://astral.sh" target="_blank" rel="noopener">Astral</a> 的 <a href="https://github.com/astral-sh/ruff" target="_blank" rel="noopener">Ruff</a> 构建，由 <a href="https://github.com/charliermarsh" target="_blank" rel="noopener">Charlie&nbsp;Marsh</a> 创建（MIT）。</p>
+        {% else %}
+        <p class="footer-credit">Built on <a href="https://github.com/astral-sh/ruff" target="_blank" rel="noopener">Ruff</a> by <a href="https://astral.sh" target="_blank" rel="noopener">Astral</a>, created by <a href="https://github.com/charliermarsh" target="_blank" rel="noopener">Charlie&nbsp;Marsh</a> (MIT).</p>
+        {% endif %}
       </div>
     </div>
   </footer>

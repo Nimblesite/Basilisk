@@ -2,7 +2,7 @@
 //! Configuration parsing for Basilisk.
 //!
 //! Parses `pyproject.toml` `[tool.basilisk]` and `basilisk.json` with support for:
-//! - Global rule severity overrides (`rules."BSK-E0010" = "warning"`)
+//! - Global rule severity overrides (`rules."imports_unresolved" = "warning"`)
 //! - Per-module overrides (`per-module-overrides."fastmcp".ignore-missing-stubs = true`)
 //! - Per-path overrides (`per-path-overrides."vendor/**".rules.disabled = [...]`)
 //! - Stub path directories (`stub-paths = ["stubs/"]`)
@@ -47,11 +47,13 @@ pub const DEFAULT_EXCLUDES: &[&str] = &[
 
 /// Load a `BasiliskConfig` from the first config file found in `root`.
 ///
-/// Search order (highest priority wins):
+/// Implements [CHKARCH-CONFIG-FILE]. Search order (highest priority wins):
 /// 1. `basilisk.json`
 /// 2. `pyproject.toml` `[tool.basilisk]`
 ///
-/// Returns `BasiliskConfig::default()` if no config file is found.
+/// Returns `BasiliskConfig::default()` if no config file is found (and likewise
+/// on a malformed file — no configuration-error exit is raised; see report).
+/// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFIG-FILE
 #[must_use]
 pub fn load_basilisk_config(root: &Path) -> BasiliskConfig {
     // 1. basilisk.json
@@ -105,6 +107,7 @@ mod tests {
                 "default excludes must contain __pycache__"
             );
             assert!(cfg.stub_paths.is_empty());
+            assert!(cfg.typeshed_path.is_none());
             assert!(cfg.rules.is_empty());
             assert!(cfg.per_module_overrides.is_empty());
             assert!(cfg.per_path_overrides.is_empty());
@@ -120,9 +123,10 @@ mod tests {
                 r#"
 [tool.basilisk]
 stub-paths = ["stubs/", "typings/"]
+typeshed-path = "typeshed-mp"
 
 [tool.basilisk.rules]
-"BSK-E0010" = "warning"
+"imports_unresolved" = "warning"
 "BSK-E0001" = "disabled"
 
 [tool.basilisk.per-module-overrides.fastmcp]
@@ -132,14 +136,18 @@ ignore-missing-stubs = true
 ignore-missing-stubs = true
 
 [tool.basilisk.per-path-overrides."vendor/**"]
-disabled = ["BSK-E0010", "BSK-E0001"]
+disabled = ["imports_unresolved", "BSK-E0001"]
 "#,
             )],
             |cfg| {
                 assert_eq!(cfg.stub_paths.len(), 2);
+                assert_eq!(
+                    cfg.typeshed_path,
+                    Some(std::path::PathBuf::from("typeshed-mp"))
+                );
                 assert_eq!(cfg.rules.len(), 2);
                 assert_eq!(
-                    cfg.rules.get("BSK-E0010").copied(),
+                    cfg.rules.get("imports_unresolved").copied(),
                     Some(RuleSeverity::Warning)
                 );
                 assert_eq!(
@@ -161,8 +169,9 @@ disabled = ["BSK-E0010", "BSK-E0001"]
                 "basilisk.json",
                 r#"{
                 "stubPaths": ["stubs/"],
+                "typeshedPath": "ts-json",
                 "rules": {
-                    "BSK-E0010": "info"
+                    "imports_unresolved": "info"
                 },
                 "perModuleOverrides": {
                     "requests": { "ignoreMissingStubs": true }
@@ -171,8 +180,9 @@ disabled = ["BSK-E0010", "BSK-E0001"]
             )],
             |cfg| {
                 assert_eq!(cfg.stub_paths.len(), 1);
+                assert_eq!(cfg.typeshed_path, Some(std::path::PathBuf::from("ts-json")));
                 assert_eq!(
-                    cfg.rules.get("BSK-E0010").copied(),
+                    cfg.rules.get("imports_unresolved").copied(),
                     Some(RuleSeverity::Info)
                 );
                 assert!(cfg.per_module_overrides.contains_key("requests"));
@@ -351,7 +361,7 @@ dependency-diagnostics = true
 disabled = ["BSK-E0001"]
 
 [tool.basilisk.per-path-overrides."tests/**".rules]
-"BSK-E0010" = "warning"
+"imports_unresolved" = "warning"
 "BSK-E0005" = "info"
 "#,
             )],
@@ -367,9 +377,12 @@ disabled = ["BSK-E0001"]
                     "disabled rules should be parsed"
                 );
                 assert_eq!(
-                    tests_override.rule_overrides.get("BSK-E0010").copied(),
+                    tests_override
+                        .rule_overrides
+                        .get("imports_unresolved")
+                        .copied(),
                     Some(RuleSeverity::Warning),
-                    "rule overrides should contain BSK-E0010 as warning"
+                    "rule overrides should contain imports_unresolved as warning"
                 );
                 assert_eq!(
                     tests_override.rule_overrides.get("BSK-E0005").copied(),
@@ -384,7 +397,7 @@ disabled = ["BSK-E0001"]
     fn rule_severity_returns_configured_override() {
         let cfg = BasiliskConfig {
             rules: [
-                ("BSK-E0010".to_owned(), RuleSeverity::Warning),
+                ("imports_unresolved".to_owned(), RuleSeverity::Warning),
                 ("BSK-E0001".to_owned(), RuleSeverity::Disabled),
             ]
             .into_iter()
@@ -392,7 +405,10 @@ disabled = ["BSK-E0001"]
             ..Default::default()
         };
 
-        assert_eq!(cfg.rule_severity("BSK-E0010"), Some(RuleSeverity::Warning));
+        assert_eq!(
+            cfg.rule_severity("imports_unresolved"),
+            Some(RuleSeverity::Warning)
+        );
         assert_eq!(cfg.rule_severity("BSK-E0001"), Some(RuleSeverity::Disabled));
         assert_eq!(
             cfg.rule_severity("BSK-E9999"),
@@ -407,7 +423,7 @@ disabled = ["BSK-E0001"]
             per_path_overrides: [(
                 "vendor/**".to_owned(),
                 PathOverride {
-                    disabled_rules: vec!["BSK-E0010".to_owned(), "BSK-E0001".to_owned()],
+                    disabled_rules: vec!["imports_unresolved".to_owned(), "BSK-E0001".to_owned()],
                     rule_overrides: std::collections::HashMap::new(),
                 },
             )]
@@ -417,16 +433,22 @@ disabled = ["BSK-E0001"]
         };
 
         assert!(
-            cfg.is_rule_disabled_for_path("BSK-E0010", std::path::Path::new("vendor/lib/foo.py")),
-            "BSK-E0010 should be disabled for vendor paths"
+            cfg.is_rule_disabled_for_path(
+                "imports_unresolved",
+                std::path::Path::new("vendor/lib/foo.py")
+            ),
+            "imports_unresolved should be disabled for vendor paths"
         );
         assert!(
             cfg.is_rule_disabled_for_path("BSK-E0001", std::path::Path::new("vendor/bar.py")),
             "BSK-E0001 should be disabled for vendor paths"
         );
         assert!(
-            !cfg.is_rule_disabled_for_path("BSK-E0010", std::path::Path::new("src/app.py")),
-            "BSK-E0010 should NOT be disabled for non-vendor paths"
+            !cfg.is_rule_disabled_for_path(
+                "imports_unresolved",
+                std::path::Path::new("src/app.py")
+            ),
+            "imports_unresolved should NOT be disabled for non-vendor paths"
         );
         assert!(
             !cfg.is_rule_disabled_for_path("BSK-E9999", std::path::Path::new("vendor/foo.py")),
@@ -526,8 +548,8 @@ stub-paths = ["fallback-stubs/"]
             &[("basilisk.json", r#"{ "stubPaths": [] }"#)],
             |cfg| {
                 assert!(
-                    cfg.uv_stub_suggestions,
-                    "uv_stub_suggestions should default to true"
+                    !cfg.uv_stub_suggestions,
+                    "uv_stub_suggestions defaults to false so BSK-E0152 stays off by default (default config = the PEP set only)"
                 );
                 assert!(
                     !cfg.uv_dependency_diagnostics,

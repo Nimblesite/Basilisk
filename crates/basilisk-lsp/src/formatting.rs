@@ -1,60 +1,108 @@
-//! Implements [LSPARCH-FEATURES-FORMAT]. See docs/specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-FORMAT
+//! Implements [LSPARCH-FEATURES-FORMAT] and [LSPFMT-ENGINE].
+//! See docs/specs/LSP-FORMATTING-SPEC.md#LSPFMT-ENGINE
 //!
-//! Document formatting handler via Ruff delegation.
+//! Document and range formatting via the **embedded** Ruff formatter.
 //!
-//! Delegates to `ruff format` for Python document formatting, returning
-//! a single `TextEdit` that replaces the entire document content.
+//! The `ruff_python_formatter` crate is linked into the binary at the same
+//! pinned rev as the parser, so formatting works with no `ruff` executable
+//! installed anywhere — no subprocess, no PATH lookup, no silent no-op
+//! ([LSPFMT-DECISION], #254). Output is a pure passthrough of Ruff's
+//! formatter ([LSPFMT-HONESTY]); style options come from the project's
+//! `[tool.ruff]` / `[tool.ruff.format]` config ([LSPFMT-CONFIG]).
 
-use std::io::Write;
-use std::process::{Command, Stdio};
+use ruff_formatter::{IndentStyle, LineWidth};
+use ruff_python_ast::PySourceType;
+use ruff_python_formatter::{MagicTrailingComma, PyFormatOptions, QuoteStyle};
+use ruff_text_size::{TextRange, TextSize};
+use tower_lsp::lsp_types::{Range, TextEdit};
 
-use tower_lsp::lsp_types::{Position, Range, TextEdit};
+use crate::config::FormatStyle;
 
-/// Format a Python document by delegating to `ruff format`.
+/// Version of the embedded Ruff formatter, derived at compile time from the
+/// pinned dependency rev by `build.rs` ([LSPFMT-PROVENANCE]). Surfaced in
+/// `basilisk --version`, LSP `serverInfo.version`, and the log line emitted
+/// on each format.
+pub const EMBEDDED_RUFF_FORMATTER_VERSION: &str = env!("BASILISK_RUFF_FORMATTER_VERSION");
+
+/// Translate the project's `[tool.ruff.format]` style into Ruff's options.
 ///
-/// Spawns `ruff format --stdin-filename <file_path> -` and pipes the source
-/// through stdin. Returns a single `TextEdit` replacing the entire document,
-/// or `None` if the output is unchanged or Ruff is unavailable.
-#[must_use]
-pub fn format_document(source: &str, file_path: &str) -> Option<Vec<TextEdit>> {
-    let mut child = Command::new("ruff")
-        .args(["format", "--stdin-filename", file_path, "-"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-
-    // Write source to stdin, then drop to close the pipe.
-    child.stdin.as_mut()?.write_all(source.as_bytes()).ok()?;
-
-    let output = child.wait_with_output().ok()?;
-    if !output.status.success() {
-        return None;
+/// Unset fields keep Ruff's own defaults so output stays byte-identical to
+/// what the user's `ruff format` would produce ([LSPFMT-ENGINE]).
+fn py_format_options(style: &FormatStyle) -> PyFormatOptions {
+    let mut options = PyFormatOptions::from_source_type(PySourceType::Python);
+    if let Some(width) = style.line_length.and_then(|w| LineWidth::try_from(w).ok()) {
+        options = options.with_line_width(width);
     }
+    match style.quote_style.as_deref() {
+        Some("single") => options = options.with_quote_style(QuoteStyle::Single),
+        Some("preserve") => options = options.with_quote_style(QuoteStyle::Preserve),
+        _ => {}
+    }
+    if style.indent_style.as_deref() == Some("tab") {
+        options = options.with_indent_style(IndentStyle::Tab);
+    }
+    if style.skip_magic_trailing_comma {
+        options = options.with_magic_trailing_comma(MagicTrailingComma::Ignore);
+    }
+    options
+}
 
-    let formatted = String::from_utf8(output.stdout).ok()?;
-
-    // No change needed.
+/// Format a whole Python document in-process with the embedded Ruff formatter.
+///
+/// Returns a single `TextEdit` replacing the entire document, or `None` when
+/// the document is already formatted or does not parse.
+#[must_use]
+pub fn format_document(source: &str, style: &FormatStyle) -> Option<Vec<TextEdit>> {
+    let formatted = ruff_python_formatter::format_module_source(source, py_format_options(style))
+        .ok()?
+        .into_code();
     if formatted == source {
         return None;
     }
-
-    // Compute the range spanning the entire original document.
-    let line_count = source.lines().count();
-    let last_line = if line_count == 0 { 0 } else { line_count - 1 };
-    let last_col = source.lines().last().map_or(0, str::len);
-
-    let last_line_u32 = u32::try_from(last_line).unwrap_or(u32::MAX);
-    let last_col_u32 = u32::try_from(last_col).unwrap_or(u32::MAX);
-
-    let range = Range {
-        start: Position::new(0, 0),
-        end: Position::new(last_line_u32, last_col_u32),
-    };
-
+    // [LSPFMT-PROVENANCE]: no silent magic — say which engine produced the bytes.
+    tracing::info!(
+        engine = "ruff",
+        version = EMBEDDED_RUFF_FORMATTER_VERSION,
+        "formatted with embedded Ruff formatter"
+    );
     Some(vec![TextEdit {
-        range,
+        range: crate::code_actions::full_document_range(source),
         new_text: formatted,
+    }])
+}
+
+/// Format a selection ("Format Selection") with the embedded Ruff formatter.
+///
+/// Ruff widens the requested range to whole logical lines; the returned edit
+/// covers exactly the widened source range. Returns `None` when the selection
+/// is already formatted or the source does not parse. [LSPFMT-CAPABILITIES]
+#[must_use]
+pub fn format_selection(source: &str, range: Range, style: &FormatStyle) -> Option<Vec<TextEdit>> {
+    let start = crate::util::position_to_byte_offset(source, range.start);
+    let end = crate::util::position_to_byte_offset(source, range.end);
+    let text_range = TextRange::new(
+        TextSize::try_from(start).ok()?,
+        TextSize::try_from(end).ok()?,
+    );
+
+    let printed =
+        ruff_python_formatter::format_range(source, text_range, py_format_options(style)).ok()?;
+    let replaced = printed.source_range();
+    let replaced_start = usize::from(replaced.start());
+    let replaced_end = usize::from(replaced.end());
+    if source.get(replaced_start..replaced_end) == Some(printed.as_code()) {
+        return None;
+    }
+    tracing::info!(
+        engine = "ruff",
+        version = EMBEDDED_RUFF_FORMATTER_VERSION,
+        "formatted selection with embedded Ruff formatter"
+    );
+    Some(vec![TextEdit {
+        range: Range {
+            start: crate::util::byte_offset_to_position(source, replaced_start),
+            end: crate::util::byte_offset_to_position(source, replaced_end),
+        },
+        new_text: printed.into_code(),
     }])
 }

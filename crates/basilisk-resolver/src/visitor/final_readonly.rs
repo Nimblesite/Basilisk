@@ -44,27 +44,8 @@ pub(super) fn collect_final_string_constants<'a>(
 // Shared utilities
 // ---------------------------------------------------------------------------
 
-/// Names of well-known typing forms that are NOT parameterized by `TypeVar`s even
-/// when subscripted.  `Literal["x"]`, `Optional[int]`, etc. are valid `TypeVar`
-/// bounds and constraints, so we must not flag them as "parameterized by `TypeVar`".
-pub(super) const TYPING_FORMS: &[&str] = &[
-    "Literal",
-    "Optional",
-    "Union",
-    "Final",
-    "ClassVar",
-    "Annotated",
-    "Required",
-    "NotRequired",
-    "ReadOnly",
-    "TypeAlias",
-];
-
-/// Returns `true` when an expression is a subscript parameterized by a potential
-/// `TypeVar` — i.e. it is `list[T]` or similar, NOT a typing form like `Literal[...]`.
-///
-/// Used to detect cases like `TypeVar("T", bound=list[T])` where the bound is
-/// parameterized by a free `TypeVar` rather than being a valid concrete generic.
+/// Collects the field names wrapped in `ReadOnly[...]` from a functional
+/// `TypedDict(...)` fields dict expression.
 pub(super) fn functional_typeddict_readonly_fields(
     dict_expr: &Expr,
 ) -> std::collections::HashSet<String> {
@@ -385,7 +366,7 @@ fn collect_file_final_methods(
 /// Map each imported class to its `@final` method names, read from a sibling
 /// module (`.pyi` preferred, then `.py`). Mirrors [`collect_imported_final_names`]
 /// but records per-class method sets so cross-module `@final`-override checks
-/// (BSK-E0034) can see base methods declared `@final` in an imported stub.
+/// (`qualifiers_final_decorator`) can see base methods declared `@final` in an imported stub.
 pub(super) fn collect_imported_final_methods(
     stmts: &[Stmt],
     module_path: &str,

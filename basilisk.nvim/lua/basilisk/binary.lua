@@ -243,7 +243,12 @@ function M.version(binary_path)
   if not ok or vim.v.shell_error ~= 0 then
     return nil
   end
-  return vim.trim(result)
+  -- `--version` is multi-line: line 1 is the Shipwright `<name> <semver>`
+  -- contract, later lines list embedded engines (e.g. the Ruff formatter,
+  -- [LSPFMT-PROVENANCE]). Only line 1 is the binary version — and interior
+  -- newlines would break single-line consumers like the info float.
+  local first_line = vim.split(vim.trim(result), "\n", { plain = true })[1]
+  return first_line and vim.trim(first_line) or nil
 end
 
 --- Check if a newer version is available and notify the user.

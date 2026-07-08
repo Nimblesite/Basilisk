@@ -108,13 +108,15 @@ pub(crate) fn span_for_line(source: &str, line_number: usize) -> Span {
 // Parsing
 // ---------------------------------------------------------------------------
 
-/// Parse the resolved module's source into an AST, returning `None` on parse failure.
+/// Return the resolved module's AST, parsing it once and sharing the result.
 ///
 /// Every `Rule::check` implementation needs the AST and silently bails on parse
-/// errors (those are reported separately as `BSK-E0000`). This collapses that
-/// boilerplate into a single line at the call site.
-pub(crate) fn parse_module(module: &ResolvedModule) -> Option<ParsedModule> {
-    basilisk_parser::parse_source(module.source.clone(), module.path.clone()).ok()
+/// errors (those are reported separately as `BSK-E0000`). Backed by the module's
+/// [`LazyAst`](basilisk_resolver::LazyAst) cache, so the first rule to ask parses
+/// the source and every later rule reuses it — a file is parsed once, not once
+/// per parsing rule.
+pub(crate) fn parse_module(module: &ResolvedModule) -> Option<&ParsedModule> {
+    module.lazy_ast.get_or_parse(&module.source, &module.path)
 }
 
 // ---------------------------------------------------------------------------
@@ -126,6 +128,77 @@ pub(crate) fn parse_module(module: &ResolvedModule) -> Option<ParsedModule> {
 /// The returned map borrows from the slice; both must outlive the map.
 pub(crate) fn class_name_map(classes: &[ClassInfo]) -> HashMap<&str, &ClassInfo> {
     classes.iter().map(|c| (c.name.as_str(), c)).collect()
+}
+
+// ---------------------------------------------------------------------------
+// Cycle-safe transitive base-class walks (GitHub #278)
+// ---------------------------------------------------------------------------
+// Base names resolve to same-module classes by SIMPLE name, so `class
+// Client(httpx.Client)` records the base as `Client` and the by-name lookup
+// makes the class its own ancestor. A naive recursive walk then never
+// terminates and overflows the stack, aborting the whole process. Every
+// transitive base walk must use these helpers or carry its own visited set /
+// depth cap.
+//
+// `resolve` and `matches` receive each base name EXACTLY as recorded
+// (subscripts included), so call sites keep their own normalisation and the
+// helpers change nothing but termination.
+
+/// Returns `true` when `predicate` holds for `cls` or for any class in its
+/// transitive same-module base chain (bases resolve through `resolve`).
+pub(crate) fn class_or_base_matches<'a>(
+    cls: &'a ClassInfo,
+    resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
+    predicate: &dyn Fn(&'a ClassInfo) -> bool,
+) -> bool {
+    let mut visited: HashSet<&str> = HashSet::new();
+    let _ = visited.insert(cls.name.as_str());
+    walk_class_or_base(cls, resolve, predicate, &mut visited)
+}
+
+/// Recursive body of [`class_or_base_matches`]; `visited` breaks base-name
+/// cycles.
+fn walk_class_or_base<'a>(
+    cls: &'a ClassInfo,
+    resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
+    predicate: &dyn Fn(&'a ClassInfo) -> bool,
+    visited: &mut HashSet<&'a str>,
+) -> bool {
+    if predicate(cls) {
+        return true;
+    }
+    cls.bases.iter().any(|base| {
+        visited.insert(base.as_str())
+            && resolve(base).is_some_and(|b| walk_class_or_base(b, resolve, predicate, visited))
+    })
+}
+
+/// Returns `true` when any base name in the transitive chain of `cls`
+/// satisfies `matches`. Each base name is first tested with `matches` and
+/// then resolved through `resolve` for the recursive step.
+pub(crate) fn any_base_name_matches<'a>(
+    cls: &'a ClassInfo,
+    resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
+    matches: &dyn Fn(&str) -> bool,
+) -> bool {
+    let mut visited: HashSet<&str> = HashSet::new();
+    let _ = visited.insert(cls.name.as_str());
+    walk_base_names(cls, resolve, matches, &mut visited)
+}
+
+/// Recursive body of [`any_base_name_matches`]; `visited` breaks base-name
+/// cycles.
+fn walk_base_names<'a>(
+    cls: &'a ClassInfo,
+    resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
+    matches: &dyn Fn(&str) -> bool,
+    visited: &mut HashSet<&'a str>,
+) -> bool {
+    cls.bases.iter().any(|base| {
+        matches(base)
+            || (visited.insert(base.as_str())
+                && resolve(base).is_some_and(|b| walk_base_names(b, resolve, matches, visited)))
+    })
 }
 
 /// Build a `(class_name, method_name) -> Vec<&FunctionInfo>` lookup for every
@@ -501,4 +574,46 @@ pub(crate) fn is_unverifiable_return_type(ty: &InferredType) -> bool {
         }
         _ => false,
     }
+}
+
+// ---------------------------------------------------------------------------
+// Line tokenisation
+// ---------------------------------------------------------------------------
+
+/// Yield `(identifier, index_after_delimiter)` for every identifier token in
+/// `line` that is immediately followed by `delim` (e.g. `[` for subscripts,
+/// `(` for calls).
+///
+/// Rules that scan source lines for `ClassName[...]` / `ClassName(...)`
+/// patterns use this to dispatch each line's tokens through a hash lookup —
+/// O(tokens) per line — instead of running a formatted substring search per
+/// known class per line, which is O(classes × line length) and dominated
+/// whole-file checks on class-heavy modules.
+pub(crate) fn identifiers_followed_by(
+    line: &str,
+    delim: char,
+) -> impl Iterator<Item = (&str, usize)> + '_ {
+    let mut chars = line.char_indices().peekable();
+    std::iter::from_fn(move || {
+        while let Some((start, ch)) = chars.next() {
+            if !(ch.is_alphanumeric() || ch == '_') {
+                continue;
+            }
+            let mut end = start + ch.len_utf8();
+            while let Some(&(idx, next)) = chars.peek() {
+                if next.is_alphanumeric() || next == '_' {
+                    let _ = chars.next();
+                    end = idx + next.len_utf8();
+                } else {
+                    break;
+                }
+            }
+            if let Some(&(idx, next)) = chars.peek() {
+                if next == delim {
+                    return Some((&line[start..end], idx + next.len_utf8()));
+                }
+            }
+        }
+        None
+    })
 }

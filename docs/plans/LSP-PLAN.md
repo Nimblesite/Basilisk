@@ -1,36 +1,68 @@
-# LSP Implementation Plan
+# LSP Implementation Plan {#LSPPLAN}
 
 > **Spec**: [LSP-ARCHITECTURE-SPEC.md §LSPARCH-ARCH](../specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH) — read before touching any code.
 
 ---
 
-## Status
+## Status {#LSPPLAN-STATUS}
 
-Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols all operational. Phase 3.5 (PEP conformance push) is ACTIVE — the official `python/typing` scorer (run unmodified, pinned commit 268d0c4e) currently reports **68/146 files passing (46.6%, errors+warnings strictest)**, with the basilisk binary run with EVERY rule enabled (NO config, NO `basilisk.json`, NO "spec-conformance mode" — see CHKARCH-CONFORMANCE-MODE, which documents that no such mode exists). The checker catches EVERY required error: 0 missed required errors, and the 265 remaining false positives all come from strict-by-default house-style rules (require-annotation E0001/E0002/E0004, missing-@override E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code where the spec treats unannotated as inferred rather than an error. HISTORY (stated plainly): the last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#185/#191 then inflated the reported number to a FAKE 100% by writing a `basilisk.json` that DISABLED those 6 house rules at score time (the so-called "spec-conformance mode") — the checker was not made smarter, the false positives were merely hidden. That disabling has been REMOVED and is now FORBIDDEN; genuine progress over that span was real but modest (40.4% → 46.6%). The ONLY legitimate path to 100% is fixing the checker so its strict defaults stop firing on spec-valid code, with every rule still enabled — never by disabling a rule.
+Phases 0–6 COMPLETE. Phase 7 (cross-module foundation) MOSTLY COMPLETE — stub infrastructure, import graph, cross-file symbols operational. Phase 7.5 (PEP conformance push) ACTIVE.
+
+Score: the official `python/typing` scorer (unmodified, pinned commit 268d0c4e) reports **68/146 files passing (46.6%, errors+warnings strictest)**, binary run with EVERY rule enabled — no config, no `basilisk.json`, no "spec-conformance mode" (no such mode exists — see CHKARCH-CONFORMANCE-MODE). 0 missed required errors; the 265 false positives all come from strict-by-default house-style rules (require-annotation E0001/E0002/E0004, missing-@override E0025, explicit-Any W0014, redundant-annotation W0050) firing on spec-valid code where the spec treats unannotated as inferred. The only legitimate path to 100% is fixing the checker so its strict defaults stop firing — never disabling a rule.
+
+History: last honest score was 59/146 = 40.4% (285 FPs) at PR #183; PRs #184/#185/#191 inflated it to a fake 100% via a `basilisk.json` that disabled those 6 house rules at score time. That disabling is REMOVED and FORBIDDEN; genuine progress over that span was 40.4% → 46.6%.
 
 ---
 
-## Phase 7 — Cross-Module Foundation (MOSTLY COMPLETE)
+## Phase 7 — Cross-Module Foundation (MOSTLY COMPLETE) {#LSPPLAN-CROSS-MODULE-FOUNDATION}
 
-> **The big unlock.** Workspace module resolver, import graph, cross-file symbol sharing
-> are all operational. Remaining: re-exports, rename, auto-import, multi-root.
+> Module resolver, import graph, cross-file symbol sharing operational. Remaining: re-exports, rename, auto-import, multi-root.
 
 | Task | Description | Difficulty | Status |
 |------|-------------|------------|--------|
 | 7.1 | Workspace module resolver — scan workspace, resolve `import X` to file paths | Hard | DONE — `import_resolver.rs` resolves imports, `workspace.rs` scans files |
-| 7.2 | Multi-file `ResolvedModule` graph — cross-file symbol sharing | Hard | DONE — `imported_symbols: HashMap<String, ExternalSymbol>` on `ResolvedModule`, populated by `cross_module.rs` |
-| 7.3 | Import graph — topological ordering, cycle detection, incremental invalidation | Medium | DONE — `import_graph.rs` with forward+reverse edges, Kahn's algorithm, DFS cycle detection |
-| 7.4 | Salsa integration — memoized incremental computation (like rust-analyzer) | Hard | TODO — no `salsa` dependency, current `DashMap` + `Arc` approach works |
+| 7.2 | Multi-file `ResolvedModule` graph — cross-file symbol sharing | Hard | DONE — `imported_symbols: HashMap<String, ExternalSymbol>` on `ResolvedModule`, populated by the memoized `cross_resolved_module` salsa query (`basilisk-checker`'s `incremental.rs` + `exports.rs`) |
+| 7.3 | Import graph — reverse-edge lookups for cross-file navigation | Medium | DONE — `import_graph.rs` with forward+reverse edges serving references/rename importer search; invalidation is salsa's job, so the former topological-ordering / cycle-detection / transitive-importer machinery was retired as dead code |
+| 7.4 | Salsa integration — memoized incremental computation (like rust-analyzer) | Hard | DONE for the LSP ([CHKARCH-INCREMENTAL-SALSA](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA)): the engine memoizes `parse → resolve → resolve_module_imports → check_with_config` per file, with source text, config, search paths, and the workspace file registry as tracked inputs, and the LSP drives both interactive edits and workspace-wide re-analysis through it (cross-module symbol population included, via `module_exports` / `cross_resolved_module`). Remaining (below): CLI batch path, cross-session persistence, per-function granularity |
 | 7.5 | Stub file (`.pyi`) support — resolve type info from `.pyi` alongside `.py` | Medium | DONE — full `.pyi` parser in `pyi_parser.rs`, PEP 561 resolution order implemented |
 | 7.6 | Third-party type stubs — typeshed bundling, `py.typed` marker detection (PEP 561) | Medium | DONE — `phf` stdlib module set, `py.typed` detection, stub package discovery |
 | 7.7 | Config file reading — `pyproject.toml`, `basilisk.json` | Medium | DONE — `basilisk-config` crate with per-module/per-path overrides |
 
-## Phase 7.5 — PEP Conformance Push (ACTIVE — 46.6% → 100%)
+> Stub resolution (tasks 7.5 / 7.6) and its remaining work — the custom-typeshed override, auto-stub generation — now have a dedicated plan: [CHECKER-STUB-RESOLUTION-PLAN.md](CHECKER-STUB-RESOLUTION-PLAN.md).
 
-> **BLOCKING for Phase 9.** The type system needs these capabilities to stop producing
-> false positives and to catch real typing errors conformance expects.
+### Task 7.4 — Salsa incremental engine: status at a glance {#LSPPLAN-SALSA-STATUS}
 
-### Tier 1 — Medium complexity, highest ROI
+> Spec: [CHKARCH-INCREMENTAL-SALSA](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA). The engine is built, proven correct, and **drives the LSP's analysis** — interactive edits (didOpen/didChange) and every workspace-wide re-analysis (post-scan re-check, config/`uv.lock` refresh, dependent refresh), cross-module symbol population included. The CLI conformance path (`basilisk check` → `process_file`) is deliberately unchanged, so this cannot affect the conformance score.
+
+**Done:**
+- [x] `salsa` 0.27 dependency; `basilisk-db` is a real database, not the old stub.
+- [x] `SourceFile` input query (`path` + `text`) and `BasiliskDatabase` (`crates/basilisk-db/src/db.rs`); `Debug` redacted so source text never reaches logs.
+- [x] `checked_file` `#[salsa::tracked]` query memoizing `parse → resolve → check_with_config`, keyed on the `(file, config)` pair and returning owned `CachedDiagnostic`s (`crates/basilisk-checker/src/incremental.rs`); plus `file_diagnostics` convenience.
+- [x] **`BasiliskConfig` is a salsa input** — `ConfigInput`/`ConfigValue` wrap it in `basilisk-checker` (salsa-free `basilisk-config` gains only `PartialEq`/`Eq`); the `salsa::Update` resolves through `PartialEq`, mirroring `CachedDiagnostic`. Editing the config invalidates exactly the affected files.
+- [x] Tests: memoization, source- AND config-edit invalidation, nested-override-map invalidation, cross-file isolation, cancellation, no-source-leak, config-awareness (`strict_annotations` → BSK-E0001 differential), and byte-for-byte equivalence to the direct pipeline (`basilisk-db/tests/db_tests.rs`, `basilisk-checker/tests/incremental_tests.rs`).
+- [x] **Import engine hoisted into `basilisk-checker`** (`crates/basilisk-checker/src/imports/`) — the filesystem-pure resolver (`resolve_module`, `resolve_module_imports`, `ImportSearchPaths`, …) moved down from `basilisk-lsp` (which now re-exports it, and builds an `ImportSearchPaths` via `search_paths_from_config`). Pure refactor: zero behaviour change, all tests relocated and green.
+- [x] **Import search paths are a salsa input** — `ImportSearchPaths` derives `salsa::Update` (its `Arc<PackageRegistry>` compares by value; `basilisk-uv` gains only `PartialEq`/`Eq`), wrapped by `SearchPathsInput`. The `checked_file_resolved` query runs `parse → resolve → resolve_module_imports → check_with_config`, keyed on `(file, config, search_paths)` — the **full CLI pipeline**, memoized. Proven byte-for-byte equal to the CLI's `process_file` core, and it actually resolves imports (`imports_unresolved` reflects the search paths). Editing the file, config, OR search-paths invalidates exactly the affected files (`basilisk-checker/tests/incremental_resolved_tests.rs`). Filesystem-impurity boundary documented like [CHKCACHE-LIMITS].
+- [x] **`ResolvedModule` is salsa-carryable + `resolved_module` query** — `ResolvedModule` and its ~64 transitively-contained types derive `PartialEq` (derive-only), so `Arc<ResolvedModule>` satisfies salsa's `Update` bound via the fallback (no salsa dep in `basilisk-resolver`). The `resolved_module(file, search_paths)` query returns the navigable import-resolved module; `checked_file_resolved` reuses it, so a config-only edit re-runs only the cheap `check` step.
+- [x] **The LSP's interactive single-file analysis is wired onto the engine** — `basilisk-lsp`'s `SalsaAnalysisEngine` (`salsa_engine.rs`) holds a persistent `BasiliskDatabase` + input handles (`SourceFile` per file, `ConfigInput` per root, one `SearchPathsInput` + `WorkspaceFiles`). `WorkspaceIndex::analyse_and_resolve` routes the didOpen/didChange path through the resolved-module query (navigation) + its diagnostics projection once the scan populated the search paths — the cross-module variants in `crossModule` mode, the plain CLI-parity pair elsewhere; the pre-scan path is unchanged. Verified genuinely exercised (instrumented: 61 engine hits in `ws_core_tests`). The full LSP e2e suite stays green; the CLI conformance path is untouched. Config-only edits memo-hit `resolved_module` (skip re-parse/resolve, `config_edit_does_not_reresolve_module`).
+- [x] **Single parse per edit** — `resolved_module` returns a `ResolvedFile` outcome (`Resolved` / `ParseError` / `ResolveError`), so the one memoized parse serves diagnostics, navigation, AND `BSK-PARSE` reporting; the LSP engine no longer parses outside salsa.
+- [x] **Engine bookkeeping bounded on file deletion** — `SalsaAnalysisEngine::remove` (wired into `forget_file` + `set_closed`) drops a deleted file's `SourceFile` and rebuilds the registry, so the engine's maps stay consistent with the index and no cross-file edge points at a gone path (`remove_drops_a_tracked_source`). Note: salsa 0.27 cannot reclaim an input's internal memo, so a deleted file's memo lingers until the DB is dropped — bounded, not unbounded. Since the workspace sweep primes every indexed file, the database's footprint scales with the workspace for the session (the standard incremental-engine trade).
+- [x] **Content-precise cross-file invalidation — mechanism** — a `WorkspaceFiles` salsa input (path → `SourceFile` map) lets `resolved_module` record a content edge on exactly the imports whose output depends on content: user-stub `.pyi` imports, whose API is re-derived from the tracked text (`recapture_user_stub_from_source`), so the edge changes *output* (`editing_a_user_stub_updates_the_importer_diagnostics`, verified by neutering). Non-stub imports record NO text edge — their content-dependence is exports-level, via `module_exports` — so editing a dependency never re-parses its importers (`editing_a_non_stub_imported_file_does_not_reparse_the_importer`); unrelated edits stay isolated. Engine input writes compare-before-set: salsa re-executes dependents on a same-value `set` (pinned by `salsa_set_semantics.rs`), so unconditional input syncing would discard the memos. Adding `PartialEq` to `ResolvedModule` is what let the module flow through salsa.
+- [x] **Cross-module symbol sharing lives in the query** — `module_exports(file)` memoizes a workspace file's export set from its tracked text (equal-value re-runs **backdate**, so a body-only edit in `b.py` re-checks nothing downstream), and `cross_resolved_module` / `checked_file_cross` populate `imported_symbols` from it (`basilisk-checker`'s `exports.rs`; PEP 561 `py.typed` gating and external-stub provenance preserved; `crates/basilisk-checker/tests/incremental_cross_tests.rs`). The former LSP-side pass (`cross_module.rs`, `populate_cross_module_symbols`, `resolve_workspace_imports`) is deleted; `import_graph.rs` keeps only the navigation reverse-lookup (`importers_of`).
+- [x] **Cross-file is live in the LSP.** `reresolve_imports_and_recheck` — the post-scan re-check, the config/`uv.lock` refresh, and the dependent refresh on export changes — is a salsa sweep: it primes the engine with every indexed file's current text (open buffers included) and re-analyses through the memoized queries. An in-memory edit to an open user-stub `.pyi` now updates its importer end-to-end with the disk left stale (`editing_open_stub_refreshes_importer_via_salsa` — the former characterization test, flipped).
+
+- [x] **The startup scan runs through the engine** — search paths are built before the scan, the engine is primed with every collected file's text, and each file is analysed exactly once through the memoized queries (no pre-salsa first pass, no post-scan sweep); open files are re-analysed afterwards so open editors converge (`test_scan_with_search_paths_primes_the_engine`).
+- [x] **Sweeps republish only changed diagnostics** — `reresolve_imports_and_recheck` diffs each file's fresh checker diagnostics against the stored ones and skips identical sets (a client no-op), so a dependency change publishes O(affected), not O(workspace); the edited/reloaded file itself always republishes (`test_sweep_republishes_only_changed_diagnostics`).
+
+**Remaining:**
+- [ ] Route the **CLI batch path** through the engine — the CLI is the conformance path, so it must prove byte-for-byte parity before flipping (and gains little: one-shot batch reuses no memos).
+- [ ] Cross-session salsa persistence (today cross-session is the separate content-addressed result cache, [CHKCACHE](../specs/CHECKER-CACHE-SPEC.md)).
+- [ ] Finer-than-module granularity (per-function) — optional, not yet implemented.
+
+## Phase 7.5 — PEP Conformance Push (ACTIVE — 46.6% → 100%) {#LSPPLAN-PEP-CONFORMANCE-PUSH}
+
+> BLOCKING for Phase 9. Adds the type-system capabilities needed to stop false positives and catch the errors conformance expects.
+
+### Tier 1 — Medium complexity, highest ROI {#LSPPLAN-PEP-CONFORMANCE-PUSH-TIER-MEDIUM-ROI}
 
 | Task | Conformance files it flips | Complexity | Status |
 |------|---------------------------|------------|--------|
@@ -39,7 +71,7 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 | Class inheritance in TypeVar constraints | generics_basic.py | Medium | TODO |
 | Protocol structural subtyping (attrs satisfy properties) | protocols_definition.py | High | TODO |
 
-### Tier 2 — High complexity, massive impact
+### Tier 2 — High complexity, massive impact {#LSPPLAN-PEP-CONFORMANCE-PUSH-TIER-HIGH-IMPACT}
 
 | Task | Conformance files it flips | Complexity | Status |
 |------|---------------------------|------------|--------|
@@ -48,14 +80,14 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 | Variance (covariant/contravariant) | protocols_generic.py + others | High | TODO |
 | Dead branch elimination (`sys.version_info`) | directives_version_platform.py | High | TODO |
 
-### Completed this sprint
+### Completed this sprint {#LSPPLAN-PEP-CONFORMANCE-PUSH-COMPLETED-SPRINT}
 - [x] E0130: Module-level type alias TypeVar, Protocol[T] binding, multi-line sigs
 - [x] E0111: Skip dataclass/TypedDict synthesized constructors
 - [x] E0092: TypeVarTuple via Expr::Starred in name collection
 - [x] E0111: NamedTuple constructor arg count validation
 - [x] FP reduction: 435 → 294 unexpected diagnostics
 
-## Phase 8 — Cross-Module Features (requires Phase 7)
+## Phase 8 — Cross-Module Features (requires Phase 7) {#LSPPLAN-CROSS-MODULE-FEATURES}
 
 | Task | Description | Difficulty | Status |
 |------|-------------|------------|--------|
@@ -67,9 +99,9 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 | 8.6 | Module-level auto-import index with depth control | Hard | TODO |
 | 8.7 | Multi-root workspace support | Medium | TODO |
 
-## Phase 9 — Advanced Type Inference (requires Phase 7.5)
+## Phase 9 — Advanced Type Inference (requires Phase 7.5) {#LSPPLAN-ADVANCED-TYPE-INFERENCE}
 
-> Full type inference engine. This is the core of Pyright/Pylance parity.
+> Full type inference engine — the core of Pyright/Pylance parity.
 
 | Task | Description | Difficulty | Status |
 |------|-------------|------------|--------|
@@ -86,7 +118,7 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 
 ---
 
-## Rules
+## Rules {#LSPPLAN-RULES}
 
 - Build must stay GREEN at all times
 - No `.unwrap()` in server code
@@ -97,9 +129,8 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 
 ---
 
-## Detailed TODO — Pylance Parity
+## Detailed TODO — Pylance Parity {#LSPPLAN-PYLANCE-PARITY}
 
-> Every feature Pylance advertises. Every gap must be closed.
 > Reference: [Pylance marketplace](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance), [Pyright docs](https://microsoft.github.io/pyright/#/)
 > Pylance PEP support: 484, 487, 526, 544, 561, 563, 570, 585, 586, 589, 591, 593, 604, 612, 613, 635, 646, 647, 655, 673, 675, 681, 692, 695, 696, 698, 702, 705, 728, 742.
 > See [CHECKER-PEP-CONFORMANCE-PLAN.md](CHECKER-PEP-CONFORMANCE-PLAN.md) for the detailed conformance push plan.
@@ -179,14 +210,12 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 - [ ] Virtual environment auto-detection
 - [ ] Configuration `extends` — base configuration inheritance
 - [ ] Extra module search paths — `extraPaths`
-- [ ] Custom typeshed path — `typeshedPath`
-- [ ] Custom stub path — `stubPath`
+- **Stub resolution & custom typeshed** (`stub-paths`, `typeshed-path`, auto-stub generation) — moved to its own focused plan: [CHECKER-STUB-RESOLUTION-PLAN.md](CHECKER-STUB-RESOLUTION-PLAN.md). Headline open item: the step-3 custom-typeshed override for [#271](https://github.com/Nimblesite/Basilisk/issues/271).
 - [ ] Namespace package support
 - [ ] Persistent index caching — cache workspace index to disk
 - [ ] Multi-root workspace support (requires Phase 8)
 - [ ] Module-level auto-import index with depth control (requires Phase 8)
 - [ ] Workspace-wide diagnostics — diagnose all files, not just open ones (partially done via whole-module analysis)
-- [ ] Automatic type stub generation — CLI `--createstub`
 - [ ] Type completeness verification — CLI `--verifytypes`
 - [ ] Library code analysis fallback — `useLibraryCodeForTypes`
 - [ ] Watch mode — `--watch` with incremental updates
@@ -203,26 +232,26 @@ Phases 0–6 are COMPLETE. Phase 7 (cross-module foundation) is MOSTLY COMPLETE 
 
 ---
 
-## Remaining Items (from completed plans)
+## Remaining Items (from completed plans) {#LSPPLAN-REMAINING-ITEMS}
 
 > Migrated from deleted plans: LSP-PROFILING-PLAN, EXTENSION-ACTIVITY-PANEL-PLAN, NEOVIM-PLAN, ZED-PLAN, LSP-UV-INTEGRATION-PLAN.
 
-### Zed Extension
+### Zed Extension {#LSPPLAN-REMAINING-ITEMS-ZED-EXTENSION}
 
 - [ ] Verify: highlighting, outline panel, bracket matching, auto-indent (manual — requires Zed with extension installed)
 - [ ] Test: breakpoints, stepping, variables, debug console, attach mode (manual — no Zed test framework)
 - [ ] Publish to Zed extension registry (PR to `zed-industries/extensions`)
 - [ ] When Zed adds panel API: implement native activity panels using same LSP commands
 
-### Neovim Extension
+### Neovim Extension {#LSPPLAN-REMAINING-ITEMS-NEOVIM-EXTENSION}
 
 - [ ] Verify all 21 core LSP features work (requires running basilisk binary against a real Python project)
 - [ ] DapTcpProxy integration tests with live TCP
 - [ ] Submit `lsp/basilisk.lua` PR to nvim-lspconfig
 
-### uv Integration
+### uv Integration {#LSPPLAN-REMAINING-ITEMS-UV-INTEGRATION}
 
-- [ ] BSK-E0010: attach `code_action_data` to diagnostic for quick-fix wiring
+- [ ] imports_unresolved: attach `code_action_data` to diagnostic for quick-fix wiring
 - [ ] BSK-W0012: unused dependency (in deps but never imported — whole-module only)
 - [ ] BSK-W0013: stale lock (`pyproject.toml` mtime > `uv.lock` mtime)
 - [ ] Graceful degradation: hide uv commands/actions when `uv` binary not found

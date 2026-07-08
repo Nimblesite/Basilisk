@@ -1,23 +1,19 @@
 # Basilisk LSP — Feature Specification {#LSPARCH}
 
-> **Goal**: Compete with Pylance. Every feature that makes a Python IDE useful.
-
-This is the **single source of truth** for all LSP features, DAP integration, custom commands, configuration settings, and binary resolution. Editor-specific specs (VS Code, Zed, Neovim) MUST reference this document rather than duplicating LSP details.
+**Single source of truth** for all LSP features, DAP integration, custom commands, configuration settings, and binary resolution. Editor-specific specs MUST reference this document, not duplicate LSP details.
 
 - **VS Code**: `VSIX-SPEC.md`
 - **Zed**: `ZED-SPEC.md`
 - **Neovim**: `NEOVIM-SPEC.md`
 - **uv Integration**: `LSP-UV-INTEGRATION-SPEC.md` — environment detection, lock file intelligence, package commands
 
-⚠️ KEY DESIGN PRINCIPLE: LSP DRIVES THE FUNCTIONALITY - NOT THE IDE EXTENSION
-⚠️ IDE EXTENSIONS LISTEN FOR THINGS LIKE COMMANDS FROM THE LSP AND ADJUST ACCORDINGLY
-⚠️ THE IDE EXTENSIONS NEVER REGISTERS COMMANDS ETC THAT THE LSP DOESN'T ADVERTISE
+Design principle: the LSP drives functionality. IDE extensions react to LSP signals (e.g. commands) and never register a command the LSP does not advertise.
 
 ---
 
 ## System Architecture {#LSPARCH-SYSTEM}
 
-Three editor frontends share one binary. The binary embeds the LSP server and the type-checking pipeline (parser → resolver → checker), and shells out to external tools (`ruff`, `debugpy`, `uv`) on demand.
+Three editor frontends share one binary. The binary embeds the LSP server, the type-checking pipeline (parser → resolver → checker), the Ruff formatter crate, and native import-hygiene fixers ([LSPFMT-DECISION](LSP-FORMATTING-SPEC.md#LSPFMT-DECISION)); it shells out to external tools (`debugpy`, `uv`) on demand. The `ruff` CLI is **not** spawned — formatting and import cleanup are in-process.
 
 ```mermaid
 flowchart TB
@@ -43,7 +39,6 @@ flowchart TB
 
     subgraph Subprocs["External subprocesses"]
         direction LR
-        Ruff["ruff"]
         Debugpy["debugpy"]
         UvBin["uv"]
         Py["python3"]
@@ -59,7 +54,6 @@ flowchart TB
     Zed <-->|"TCP DAP"| Debugpy
     Nvim <-->|"TCP DAP"| Debugpy
 
-    LSP -.->|spawn| Ruff
     LSP -.->|spawn| Debugpy
     LSP -.->|spawn| UvBin
     LSP -.->|spawn| Py
@@ -68,11 +62,10 @@ flowchart TB
     VSC -.->|bundles per-platform| Helper
 ```
 
-**Notes on this picture:**
-- Solid arrows are runtime data flow. Dotted arrows are process spawns or build-time bundling.
-- The VSIX ships the `basilisk` binary and `basilisk-profiler-helper` for 5 platforms (darwin x64/arm64, linux x64/arm64, win32 x64). Zed and Neovim users install `basilisk` themselves.
-- The DAP connection from each editor goes directly to `debugpy` over TCP — `basilisk` only spawns `debugpy` and tells the editor which port to dial.
-- See [Three-Phase Pipeline](#three-phase-pipeline) below for what happens inside the pipeline.
+- Solid arrows: runtime data flow. Dotted: process spawns or build-time bundling.
+- The VSIX ships `basilisk` and `basilisk-profiler-helper` for 5 platforms (darwin x64/arm64, linux x64/arm64, win32 x64). Zed and Neovim users install `basilisk` themselves.
+- DAP from each editor connects directly to `debugpy` over TCP; `basilisk` only spawns `debugpy` and reports the port.
+- Pipeline detail: [Three-Phase Pipeline](#LSPARCH-ARCH-PIPELINE).
 
 ---
 
@@ -88,19 +81,12 @@ basilisk lsp [--transport stdio|ws] [--port 8765]
 
 ## Binary Resolution (all editors) {#LSPARCH-BINRES}
 
-Runtime binaries are declared in `shipwright.json` and resolved by the
-Shipwright framework. Each component's `sources` array controls the
-resolution cascade. The only permitted sources are:
+Runtime binaries are declared in `shipwright.json` and resolved by the Shipwright framework. Each component's `sources` array controls the resolution cascade. The only permitted sources, in order:
 
-1. **`user-setting`** — explicit user override via the editor setting
-   (e.g. `basilisk.executablePath`). Allows advanced users to point at a
-   different build.
-2. **`bundled`** — the binary shipped inside the extension package at
-   `bin/${platform}/${binaryName}${exe}`.
+1. **`user-setting`** — explicit user override via editor setting (e.g. `basilisk.executablePath`).
+2. **`bundled`** — binary shipped inside the extension package at `bin/${platform}/${binaryName}${exe}`.
 
-No other source is permitted. `cargo-bin`, `pkgmgr`, `path`, `env`, and
-`lsp-initialize` are **illegal** — the extension must never fall back to
-system-installed binaries.
+No other source is permitted. `cargo-bin`, `pkgmgr`, `path`, `env`, and `lsp-initialize` are **illegal** — the extension must never fall back to system-installed binaries.
 
 Current components (see `shipwright.json` for the full manifest):
 
@@ -119,10 +105,11 @@ These settings are sent to the LSP server via `workspace/configuration` under th
 | `basilisk.executablePath` | `string` | `""` (auto-detect) | Path to basilisk binary |
 | `basilisk.enabled` | `boolean` | `true` | Enable/disable type checker |
 | `basilisk.analysisMode` | `enum` | `"wholeModule"` | `openFilesOnly` / `wholeModule` / `crossModule` |
+| `basilisk.stubPaths` | `string[]` | `[]` | Extra `.pyi` stub directories at the head of the import search path (resolution step 1). See [STUBRES-CONFIG](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CONFIG). |
+| `basilisk.typeshedPath` | `string` | `""` (bundled) | LSP JSON spelling of `typeshed-path`; custom/modified typeshed directory and canonical source for standard-library types (resolution step 3). See [STUBRES-CUSTOM-TYPESHED](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-CUSTOM-TYPESHED). |
 | `basilisk.inlayHints.parameterNames` | `boolean` | `true` | Show parameter name hints at call sites |
 | `basilisk.inlayHints.variableTypes` | `boolean` | `true` | Show inferred type hints for unannotated variables |
-| `basilisk.ruff.enabled` | `boolean` | `true` | Enable Ruff integration (formatting + import org) |
-| `basilisk.ruff.executablePath` | `string` | `"ruff"` | Path to the ruff binary |
+| `basilisk.formatter` | `enum` | `"ruff"` | Formatter engine: `"ruff"` (embedded, default) or `"none"`. Future `"basilisk"`. See [LSPFMT-CONFIG](LSP-FORMATTING-SPEC.md#LSPFMT-CONFIG). Replaces the removed `basilisk.ruff.*` settings — there is no `ruff` binary to point at. |
 | `basilisk.debugger.enabled` | `boolean` | `true` | Enable debugger |
 | `basilisk.debugger.typeChecking` | `boolean` | `false` | Enable type assertion breakpoints |
 | `basilisk.debugger.debugpyPath` | `string` | `"debugpy"` | Path to debugpy module |
@@ -135,22 +122,19 @@ These settings are sent to the LSP server via `workspace/configuration` under th
 
 ## Command Registration Rule {#LSPARCH-CMDREG}
 
-⚠️ FOLLOW THIS DOCUMENTATION TO THE LETTER
-https://code.visualstudio.com/api/references/vscode-api#commands
+Reference: https://code.visualstudio.com/api/references/vscode-api#commands
 
-**The LSP server is the single source of truth for commands.** The server advertises every command it handles via `executeCommandProvider` in its `initialize` response. This is an ironclad rule:
+The LSP server is the single source of truth for commands; it advertises every command it handles via `executeCommandProvider` in its `initialize` response. Applies to VS Code, Neovim, and Zed equally:
 
-1. **The server MUST advertise ALL commands** it can handle in `executeCommandProvider.commands`. No exceptions. See `basilisk_common::commands::ALL` in `crates/basilisk-common/src/lib.rs`.
-2. **No editor extension may pre-register server commands.** The LSP client library (e.g. `vscode-languageclient`) discovers commands from the server's capabilities and registers them automatically. If an extension also calls `registerCommand()` for the same command, the client crashes with "command already exists".
-3. **Client-side UI logic belongs in middleware**, not in `registerCommand()`. For example, VS Code's `executeCommand` middleware injects editor URIs, shows input prompts, and displays toast messages — all without pre-registering the command.
-4. **Tests must wait for LSP readiness** before asserting command availability. Server-advertised commands only exist after the LSP handshake completes.
-5. **Client-only commands** (e.g. `restartServer`, `showOutput`) that have no server-side handler ARE registered client-side. These are NOT in `executeCommandProvider`.
-
-This rule applies equally to VS Code, Neovim, and Zed extensions.
+1. The server MUST advertise ALL commands it handles in `executeCommandProvider.commands`. See `basilisk_common::commands::ALL` in `crates/basilisk-common/src/lib.rs`.
+2. No editor extension may pre-register server commands. The client library (e.g. `vscode-languageclient`) discovers and registers them from server capabilities; a duplicate `registerCommand()` crashes the client with "command already exists".
+3. Client-side UI logic belongs in middleware, not `registerCommand()` — e.g. VS Code's `executeCommand` middleware injects editor URIs, shows prompts, displays toasts.
+4. Tests must wait for LSP readiness before asserting command availability — server-advertised commands exist only after the handshake.
+5. Client-only commands with no server handler (e.g. `restartServer`, `showOutput`) ARE registered client-side and are NOT in `executeCommandProvider`.
 
 ### Modules Toolbar Contract (VS Code) {#VSIX-MODULE-EXPLORER-TOOLBAR}
 
-The `basilisk.moduleExplorer` (MODULES) view title-bar follows a fixed contract (issue #113):
+The `basilisk.moduleExplorer` (MODULES) view title-bar contract (issue #113):
 
 1. **Deterministic order.** Every `view/title` entry carries an explicit `@N` index — bare `"group": "navigation"` is forbidden.
 2. **Collapse All is native, never contributed.** VS Code renders the Collapse All button from the tree view's `showCollapseAll: true`. The panel must **not** also contribute a custom collapse command — the dead `basilisk.collapseModuleExplorer` no-op next to the native button was the duplicate Collapse All in #113. Exactly one Collapse All may exist, and it is the native one; no contributed command may carry the `$(collapse-all)` glyph.
@@ -167,56 +151,75 @@ Enforced by the toolbar contract tests in `vscode-extension/src/test/suite/activ
 
 | Command | Arguments | Response | Description |
 |---------|-----------|----------|-------------|
-| `basilisk.organizeImports` | `{uri}` | `TextEdit[]` | Run Ruff import organization |
-| `basilisk/startDebugSession` | `{uri, pythonPath?}` | `{host, port, sessionId}` | Spawn debugpy, return connection info |
-| `basilisk/stopDebugSession` | `{sessionId}` | `{}` | Terminate debug session |
-| `basilisk/profiler/start` | `{pid?}` | `{sessionId}` | Start profiling (active process or PID) |
-| `basilisk/profiler/stop` | `{sessionId}` | `{results}` | Stop profiling, return results |
-| `basilisk/profiler/snapshot` | `{sessionId}` | `{results}` | Snapshot without stopping |
-| `basilisk/memory/start` | `{}` | `{sessionId}` | Start memory leak tracking |
-| `basilisk/memory/stop` | `{sessionId}` | `{leakReport}` | Stop tracking, return leak report |
-| `basilisk/memory/refs` | `{typeName}` | `{retentionPaths}` | Query retention paths for a type |
+| `basilisk.organizeImports` | `{uri}` | `TextEdit[]` | Native import organization ([LSPFMT-IMPORTS](LSP-FORMATTING-SPEC.md#LSPFMT-IMPORTS)) |
+| `basilisk.startDebugSession` | `{uri, pythonPath?}` | `{host, port, sessionId}` | Spawn debugpy, return connection info |
+| `basilisk.stopDebugSession` | `{sessionId}` | `{}` | Terminate debug session |
+| `basilisk.profiler.start` | `{pid?}` | `{sessionId}` | Start profiling (active process or PID) |
+| `basilisk.profiler.stop` | `{sessionId}` | `{results}` | Stop profiling, return results |
+| `basilisk.profiler.snapshot` | `{sessionId}` | `{results}` | Snapshot without stopping |
+| `basilisk.memory.start` | `{}` | `{sessionId}` | Start memory tracking |
+| `basilisk.memory.snapshot` | `{sessionId}` | `{snapshot}` | Take a heap snapshot |
+| `basilisk.memory.diff` | `{sessionId}` | `{leakReport}` | Diff snapshots → leak report |
+| `basilisk.memory.references` | `{typeName}` | `{retentionPaths}` | Query retention paths for a type |
 | `basilisk.uv.sync` | `{}` | `{}` | Run `uv sync` in project root (see `LSP-UV-INTEGRATION-SPEC.md`) |
 | `basilisk.uv.add` | `{package}` | `{}` | Run `uv add <package>` |
 | `basilisk.uv.addDev` | `{package}` | `{}` | Run `uv add --dev <package>` |
 | `basilisk.uv.remove` | `{package}` | `{}` | Run `uv remove <package>` |
 | `basilisk.uv.lock` | `{}` | `{}` | Run `uv lock` (resolve without installing) |
 | `basilisk.uv.createEnv` | `{pythonVersion?}` | `{}` | Run `uv venv` (optionally `--python X.Y`) |
-| `basilisk/workspaceModules` | `{scope?: string}` | `WorkspaceModulesResponse` | Return the workspace module tree (optionally scoped to a package/subpackage) |
-| `basilisk/typeHealth` | `{module?: string}` | `TypeHealthResponse` | Return type health statistics for the workspace or a specific module. The same per-file rollup is folded into `basilisk/workspaceModules`; unified-panel editors read the folded data and this command serves editors without one (Zed `/health`, Neovim `:BasiliskHealth`). |
+| `basilisk.workspaceModules` | `{scope?: string}` | `WorkspaceModulesResponse` | Return the workspace module tree (optionally scoped to a package/subpackage) |
+| `basilisk.typeHealth` | `{module?: string}` | `TypeHealthResponse` | Type health stats for the workspace or one module. The same rollup is folded into `basilisk.workspaceModules`; this command serves editors without a unified panel (Zed `/health`, Neovim `:BasiliskHealth`). |
 
 ### Custom LSP Notifications {#LSPARCH-NOTIFS}
 
 | Notification | Direction | Params | Description |
 |-------------|-----------|--------|-------------|
-| `basilisk/moduleChanged` | Server → Client | `{module: ModuleNode}` | Sent when a module's symbol table changes after re-analysis. Debounced at 300ms. |
+| `basilisk/moduleChanged` | Server → Client | `{module: {name, path, kind, symbols}}` | Sent when a module's symbol table changes after re-analysis. Debounced at 300ms. Carries a partial `ModuleNode` — no folded health fields; clients refetch via `basilisk.workspaceModules` for rollups. |
+| `basilisk/scanComplete` | Server → Client | `{totalFiles: number}` | Sent when a workspace scan (startup or after an analysis-mode/config change) finishes. Settles panel loading states even when the scan published nothing — a genuinely empty workspace produces no diagnostics events ([EXTACT-MODULES-HEADER-LOADING](EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-MODULES-HEADER), GitHub #144). |
 
 ### Data Model Types {#LSPARCH-DATAMODEL}
 
+The wire shapes below are the shipped contract, consumed field-for-field by the
+VS Code extension (`module-explorer.ts`), basilisk.nvim (`type_health.lua`), and
+the Zed slash commands. Source of truth: `crates/basilisk-lsp/src/server/activity_panel/`
+(`module_tree.rs`, `type_health.rs`, `helpers.rs`). Panel-rendering semantics live in
+[EXTACT-DATA-MODEL](EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-DATA-MODEL).
+
 ```typescript
-/** A node in the workspace module tree. */
+/**
+ * A module entry. `basilisk.workspaceModules` returns a FLAT list sorted by
+ * name; clients rebuild the package hierarchy from dotted names
+ * ([EXTACT-MODULES-TREE-STRUCTURE]).
+ */
 interface ModuleNode {
     name: string;              // Fully qualified module name (e.g. "mypackage.utils")
     path: string;              // Absolute filesystem path to the module file or __init__.py
-    kind: "package" | "module";
-    children: ModuleNode[];    // Sub-modules (non-empty only for packages)
-    symbols: SymbolNode[];     // Top-level symbols exported by this module
+    kind: "package" | "module";  // "package" iff the file is __init__.py/__init__.pyi
+    symbols: SymbolNode[];     // Top-level symbols in this module
+    // Folded per-module health rollup (single source: compute_file_health):
+    coveragePercent: number;   // annotated/total * 100, rounded; 100 when the module has no symbols
+    errors: number;            // 0 when type checking is disabled ([ANALYSIS-ENABLED], #119)
+    warnings: number;          // ditto
+    adopted: boolean;          // file is in adopted (errors-as-warnings) mode
 }
 
-/** A symbol within a module (function, class, or variable). */
+/** A symbol within a module. */
 interface SymbolNode {
     name: string;
-    kind: "function" | "class" | "variable";
-    type: string | null;       // Inferred or annotated type signature, null if unresolved
+    kind: "function" | "class" | "variable" | "constant";
+                               // "constant" = module var whose name chars are all
+                               //   uppercase/underscore (digit-bearing names emit "variable")
     line: number;              // 0-based line number of the definition
-    children: SymbolNode[];    // Nested symbols (e.g. methods inside a class)
+    annotated: boolean;        // functions: all params + return annotated (methods exclude
+                               //   self/cls); vars/attrs: annotation present; classes: always true
+    exported: boolean;         // reserved for __all__ tracking; currently always false
+    children?: SymbolNode[];   // present on class nodes only (methods + attributes, sorted by line)
 }
 
 /**
- * Response from `basilisk/workspaceModules`. Each ModuleNode carries its folded
- * type-health rollup (coveragePercent, errors, warnings, adopted) and the
- * response carries a workspace-wide summary, so a merged Modules panel needs no
- * separate `basilisk/typeHealth` round-trip (issue #103).
+ * Response from `basilisk.workspaceModules`. Carries a workspace-wide health
+ * summary so a merged Modules panel needs no separate `basilisk.typeHealth`
+ * round-trip (issue #103).
  */
 interface WorkspaceModulesResponse {
     modules: ModuleNode[];
@@ -226,19 +229,38 @@ interface WorkspaceModulesResponse {
 /** Aggregate health statistics for a scope (workspace or single module). */
 interface HealthStats {
     totalSymbols: number;      // Total symbols in scope
-    typedSymbols: number;      // Symbols with a resolved type annotation
-    coveragePercent: number;   // (typedSymbols / totalSymbols) * 100, 0 when totalSymbols == 0
-    errorCount: number;        // Number of BSK-E* diagnostics
-    warningCount: number;      // Number of BSK-W* diagnostics
+    annotatedSymbols: number;  // Symbols counted as annotated (see SymbolNode.annotated)
+    coveragePercent: number;   // (annotatedSymbols / totalSymbols) * 100; 100 when
+                               //   totalSymbols == 0 (clients branch on totalFiles == 0
+                               //   for the empty state, #57)
+    errors: number;            // Number of BSK-E* diagnostics
+    warnings: number;          // Number of BSK-W* diagnostics
+    adoptedFiles: number;      // Files with >= 1 demoted diagnostic
+    totalFiles: number;        // In workspaceModules this counts ALL indexed files,
+                               //   regardless of the scope filter
+    scanComplete?: boolean;    // workspaceModules only: whether the initial
+                               //   workspace scan finished. totalFiles == 0 is a
+                               //   real empty workspace ONLY when true; otherwise
+                               //   clients render a loading state
+                               //   ([EXTACT-MODULES-HEADER-LOADING], GitHub #144)
 }
 
-/** Per-module health breakdown. */
+/**
+ * Per-module health breakdown (`TypeHealthResponse.modules` entry), sorted
+ * ascending by coveragePercent — worst first. Unlike `basilisk.workspaceModules`,
+ * typeHealth errors/warnings are NOT gated on type checking being enabled.
+ */
 interface ModuleHealth {
-    module: string;            // Fully qualified module name
-    stats: HealthStats;
+    name: string;              // Fully qualified module name
+    path: string;              // Absolute filesystem path
+    coveragePercent: number;
+    errors: number;
+    warnings: number;
+    adopted: boolean;
+    unannotated: string[];     // Names of unannotated symbols (quick-fix suggestions)
 }
 
-/** Response from `basilisk/typeHealth`. */
+/** Response from `basilisk.typeHealth`. */
 interface TypeHealthResponse {
     workspace: HealthStats;    // Rolled-up stats for the entire workspace
     modules: ModuleHealth[];   // Per-module breakdown (all modules, or single module when filtered)
@@ -249,13 +271,13 @@ interface TypeHealthResponse {
 
 All editors MUST implement a TCP proxy between the DAP client and debugpy to fix known stepping quirks:
 
-1. Listen on a random local port
-2. Connect to debugpy on the `{host, port}` returned by `basilisk/startDebugSession`
-3. Frame DAP messages with `Content-Length` headers
-4. **Intercept `stepOut`** — inject auto-`next` for structural lines (`try:`, `with:`, `if:`)
-5. **Attach mode timeout** — 3s timeout with synthetic success response
-6. **Inject `exited` event** before `terminated` if missing
-7. **Fast disconnect** — respond immediately post-termination
+1. Listen on a random local port.
+2. Connect to debugpy on the `{host, port}` returned by `basilisk.startDebugSession`.
+3. Frame DAP messages with `Content-Length` headers.
+4. **Intercept `stepOut`** — inject auto-`next` for structural lines (`try:`, `with:`, `if:`).
+5. **Attach-mode timeout** — 3s timeout with synthetic success response.
+6. **Inject `exited` event** before `terminated` if missing.
+7. **Fast disconnect** — respond immediately post-termination.
 
 ---
 
@@ -273,9 +295,9 @@ flowchart TD
     Src --> Parser --> Resolver --> Checker
 ```
 
-### ResolvedModule — The Data That Powers Everything {#LSPARCH-ARCH-RESOLVED}
+### ResolvedModule {#LSPARCH-ARCH-RESOLVED}
 
-`ResolvedModule` (defined in `crates/basilisk-resolver/src/scope.rs`) contains:
+`ResolvedModule` (`crates/basilisk-resolver/src/scope.rs`) contains:
 
 | Field | Type | Powers |
 |-------|------|--------|
@@ -310,7 +332,7 @@ crates/basilisk-lsp/src/
   inlay_hints.rs     — inferred types, parameter names, return types
   semantic_tokens.rs — token classification
   code_actions.rs    — quick fixes (E0001-E0003, suppress, organize imports)
-  formatting.rs      — Ruff delegation
+  formatting.rs      — embedded Ruff formatter, in-process ([LSPFMT-ENGINE])
   highlight.rs       — document highlight (symbol occurrences)
   call_hierarchy.rs  — incoming/outgoing call navigation
   type_hierarchy.rs  — supertype/subtype navigation
@@ -331,7 +353,39 @@ struct DocumentState {
 }
 ```
 
-Update `resolved` on `did_change`/`did_open`. Reuse cached result for all feature handlers.
+Update `resolved` on `did_change`/`did_open`; reuse the cached result for all feature handlers.
+
+### Runtime Stack Sizing {#LSPARCH-ARCH-STACK}
+
+Every thread that can run analysis has a **64 MiB stack** — the `block_on`
+thread and all tokio workers alike (`crates/basilisk-lsp/src/runtime.rs`).
+
+The resolver and checker walk the AST recursively. The parser caps
+parenthesis and indentation nesting, but a long binary-operator chain
+(`total = 1 + 1 + …`, typical of generated code) parses fine and yields an
+arbitrarily deep left-nested `BinOp` tree; on a default ~2 MiB tokio worker
+stack the workspace scan overflowed and aborted the whole server, which the
+editor then restarted into the same file — a crash loop (GitHub #278,
+`0xC00000FD` / `thread 'tokio-rt-worker' has overflowed its stack`).
+
+- Production entry points (stdio `run_server`, WebSocket
+  `run_server_ws_blocking`) MUST build their runtime via
+  `runtime::block_on_with_analysis_stack` — never a bare `Runtime::new()`.
+  tower-lsp polls handler futures on both the `block_on` thread and runtime
+  workers, so both need analysis-sized stacks.
+- The CLI has the same exposure on the process main thread (~8 MiB on
+  macOS/Linux, only ~1 MiB on Windows): its command dispatch runs via
+  `runtime::run_with_analysis_stack`, the synchronous counterpart.
+- Depth beyond what any stack can absorb is rejected linearly *before*
+  parsing by the operator-chain limit in [CHKARCH-ARCH-PARSEDEPTH]
+  (`docs/specs/CHECKER-ARCHITECTURE-SPEC.md`) — the two mechanisms together
+  make analysis un-crashable: big stacks for every legitimate file, a clean
+  `BSK-PARSE` rejection for pathological ones.
+- E2E-tested against the real binary in
+  `crates/basilisk-cli/tests/e2e_deep_expressions.rs`: a workspace whose one
+  file is a 10,000-term chain must survive the startup scan **and** the file
+  being opened; `basilisk check` must analyse 30,000 terms cleanly and skip
+  300,000 with a warning instead of crashing.
 
 ---
 
@@ -339,7 +393,7 @@ Update `resolved` on `did_change`/`did_open`. Reuse cached result for all featur
 
 ### Shared Infrastructure: `find_symbol_at_offset` {#LSPARCH-FEATURES-FINDSYM}
 
-Central symbol lookup function reused by hover, go-to-def, references, rename:
+Central symbol lookup reused by hover, go-to-def, references, rename:
 
 ```rust
 // crates/basilisk-lsp/src/util.rs
@@ -361,7 +415,7 @@ Also: `pub fn format_type_signature(hit: &SymbolHit, source: &str) -> String` �
 
 ### Hover (`textDocument/hover`) {#LSPARCH-FEATURES-HOVER}
 
-Show type signatures for any symbol, with diagnostics as secondary:
+Type signature for any symbol, with diagnostics secondary:
 
 ```
 (function) def greet(name: str) -> str
@@ -378,6 +432,12 @@ Show type signatures for any symbol, with diagnostics as secondary:
 | Variable | `(variable) name: Type` or `(variable) name = <inferred type>` |
 | Parameter | `(parameter) name: Type` |
 | Attribute | `(property) ClassName.name: Type` |
+
+Unannotated functions still surface types (#253): the return type is inferred
+from the body's `return` statements (shared with inlay hints via
+`infer_return_type_display`; no reachable `return` infers `None`, mixed or
+uninferrable returns render nothing), and unannotated parameters render
+`: Unknown` — never blank — except the implicit `self`/`cls` receiver.
 
 ### Go to Definition (`textDocument/definition`) {#LSPARCH-FEATURES-DEFINITION}
 
@@ -418,7 +478,7 @@ Whole-word text scan with word boundary checks, filtering strings/comments. Resp
 
 ### Rename Symbol (`textDocument/prepareRename` + `textDocument/rename`) {#LSPARCH-FEATURES-RENAME}
 
-Validates symbol is renameable, returns `WorkspaceEdit` with `TextEdit` for each occurrence. Single-file scope.
+`prepareRename` returns the identifier range + placeholder when the cursor is on a renameable symbol, `null` otherwise; the new name itself is validated in `rename` (`scope_tree::validate_rename`). `rename` returns a workspace-wide `WorkspaceEdit` built in two halves: (1) a scope-aware single-file core (`references::rename_symbol`) that renames every occurrence in the current file respecting lexical scoping (shadowed bindings untouched) and also updates keyword-argument call sites and docstring references when renaming a parameter, `self.attr` references when renaming a class attribute, and `__all__` entries when renaming a module-level symbol; (2) a cross-file half ([ANALYSIS-CROSSLSP-RENAME](LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP-RENAME), [REFACTOR-RENAME](LSP-REFACTORING-SPEC.md#REFACTOR-RENAME)) that walks the import graph to also rename the symbol in every importer of the current file and — when the cursor symbol is itself imported — at its source-definition file. The cross-file half is gated on `crossModule` analysis; without it rename degrades gracefully to single-file.
 
 ### Completion (`textDocument/completion`) {#LSPARCH-FEATURES-COMPLETION}
 
@@ -436,9 +496,9 @@ Validates symbol is renameable, returns `WorkspaceEdit` with `TextEdit` for each
 | BSK-E0002 | Add return annotation | Insert `-> None` |
 | BSK-E0003 | Add variable annotation | Insert `: <inferred_type>` |
 | (any) | Suppress with `# type: ignore` | Append comment to line |
-| (source) | Organize imports | Delegate to `ruff check --select I --fix` |
+| (source) | Organize imports | Native import organizer ([LSPFMT-IMPORTS](LSP-FORMATTING-SPEC.md#LSPFMT-IMPORTS)) |
 
-| BSK-E0010 (uv) | Add dependency | `uv add <package>` via `basilisk.uv.add` command |
+| imports_unresolved (uv) | Add dependency | `uv add <package>` via `basilisk.uv.add` command |
 | BSK-E0152 (uv) | Install type stubs | `uv add --dev types-<package>` via `basilisk.uv.addDev` command |
 | BSK-W0011 (uv) | Add dependency | `uv add <package>` — transitive dep used directly |
 | BSK-W0013 (uv) | Sync environment | `uv sync` via `basilisk.uv.sync` command |
@@ -447,7 +507,7 @@ Register `codeActionKinds`: `[QUICKFIX, SOURCE_ORGANIZE_IMPORTS, REFACTOR]`
 
 ### Execute Command (`workspace/executeCommand`) {#LSPARCH-FEATURES-EXECCMD}
 
-- `basilisk.organizeImports` — run Ruff import organization on a document
+- `basilisk.organizeImports` — native import organization on a document ([LSPFMT-IMPORTS](LSP-FORMATTING-SPEC.md#LSPFMT-IMPORTS))
 
 ### Inlay Hints (`textDocument/inlayHint`) {#LSPARCH-FEATURES-INLAYHINTS}
 
@@ -481,9 +541,9 @@ Highlight all occurrences of symbol under cursor. Definition = WRITE, usages = R
 
 Ctrl+T symbol search across all open documents. Aggregates from DashMap, filters by query.
 
-### Format Document (`textDocument/formatting`) {#LSPARCH-FEATURES-FORMAT}
+### Format Document (`textDocument/formatting` + `rangeFormatting`) {#LSPARCH-FEATURES-FORMAT}
 
-Spawn `ruff format --stdin-filename <path> -` with document text on stdin. Return single `TextEdit` replacing entire document.
+Format in-process via the **embedded Ruff formatter crate** — no `ruff` subprocess. Whole-document formatting returns a single `TextEdit`; range formatting (`textDocument/rangeFormatting`) formats the selection. Engine, config, provenance, capabilities, and the `basilisk.formatter` flag are specified in **[LSPFMT](LSP-FORMATTING-SPEC.md#LSPFMT)** ([LSPFMT-ENGINE](LSP-FORMATTING-SPEC.md#LSPFMT-ENGINE), [LSPFMT-CAPABILITIES](LSP-FORMATTING-SPEC.md#LSPFMT-CAPABILITIES)).
 
 ### Folding Ranges (`textDocument/foldingRange`) {#LSPARCH-FEATURES-FOLDING}
 
@@ -513,26 +573,22 @@ Show "N references" above each function and class definition.
 
 ## uv Integration Architecture {#LSPARCH-UV}
 
-See [LSP-UV-INTEGRATION-SPEC.md](LSP-UV-INTEGRATION-SPEC.md) for the full specification. Key architectural details:
+Full spec: [LSP-UV-INTEGRATION-SPEC.md](LSP-UV-INTEGRATION-SPEC.md). Key architecture:
 
 ### Detection & Registry {#LSPARCH-UV-DETECT}
 
-On startup, the LSP detects uv projects via filesystem signals (`uv.lock`, `[tool.uv]` in `pyproject.toml`, `.venv/pyvenv.cfg` with `uv = true`). If detected:
+On startup the LSP detects uv projects via filesystem signals (`uv.lock`, `[tool.uv]` in `pyproject.toml`, `.venv/pyvenv.cfg` with `uv = true`). If detected:
 
-1. Parse `uv.lock` → `LockFile` (TOML, zero subprocess calls)
-2. Extract `[project].dependencies` from `pyproject.toml` (PEP 508 specifier parsing)
-3. Build `PackageRegistry` — HashMap keyed by normalised import name, classifying each package as `Direct`, `Dev`, or `Transitive`
-4. Discover `[tool.uv.workspace]` members → add source roots to import search paths
+1. Parse `uv.lock` → `LockFile` (TOML, zero subprocess calls).
+2. Extract `[project].dependencies` from `pyproject.toml` (PEP 508 specifier parsing).
+3. Build `PackageRegistry` — HashMap keyed by normalised import name, classifying each package `Direct`, `Dev`, or `Transitive`.
+4. Discover `[tool.uv.workspace]` members → add source roots to import search paths.
 
-The registry feeds into:
-- **Import resolution**: `PackageDepKind` (Direct/Dev/Transitive) annotated on each `ImportInfo`
-- **Diagnostics**: BSK-W0011 fires for transitive dependency imports
-- **Hover**: shows dependency classification and workspace member status
-- **Code actions**: `uv add`, `uv add --dev`, `uv sync` quick fixes
+The registry feeds: import resolution (`PackageDepKind` on each `ImportInfo`), diagnostics (BSK-W0011 for transitive imports), hover (dependency classification, workspace member status), and code actions (`uv add`, `uv add --dev`, `uv sync`).
 
 ### Hot Reload {#LSPARCH-UV-HOTRELOAD}
 
-All uv commands trigger `rebuild_registry_and_resolve()` on success — re-parses `uv.lock`, rebuilds the registry, re-resolves all imports, and republishes diagnostics for every indexed file. The same path fires when the file watcher detects a `uv.lock`, `pyproject.toml`, `basilisk.json`, or `.python-version` change — first reloading each root's checker config (`reload_root_configs`) so version-aware rules ([CHKARCH-VERSION-TARGET]) and rule-severity overrides update live, then re-checking. No LSP restart needed.
+uv commands trigger `rebuild_registry_and_resolve()` on success — re-parse `uv.lock`, rebuild registry, re-resolve imports, republish diagnostics for every indexed file. Same path fires when the file watcher detects a `uv.lock`, `pyproject.toml`, `basilisk.json`, or `.python-version` change — first reloading each root's checker config (`reload_root_configs`) so version-aware rules ([CHKARCH-VERSION-TARGET]) and rule-severity overrides update live, then re-checking. No LSP restart.
 
 ### uv Binary Resolution {#LSPARCH-UV-BINRES}
 
@@ -544,7 +600,7 @@ All uv commands trigger `rebuild_registry_and_resolve()` on success — re-parse
 | 4 | `~/.local/bin/uv` |
 | 5 | OS PATH search |
 
-The uv binary is only needed for **commands** (sync, add, remove). Lock file parsing and environment detection are pure filesystem operations.
+The uv binary is needed only for **commands** (sync, add, remove); lock-file parsing and environment detection are pure filesystem operations.
 
 ### uv Diagnostic Codes {#LSPARCH-UV-DIAGCODES}
 
@@ -571,7 +627,7 @@ See [LSP-ANALYSIS-MODES-SPEC.md](LSP-ANALYSIS-MODES-SPEC.md) for `openFilesOnly`
 
 ## Editor-Specific Specs {#LSPARCH-EDITORS}
 
-For editor-specific implementation details (commands, UI, configuration schema, DAP proxy implementation), see:
+Editor-specific implementation (commands, UI, config schema, DAP proxy):
 
 - **VS Code**: [`VSIX-SPEC.md`](VSIX-SPEC.md)
 - **Zed**: [`ZED-SPEC.md`](ZED-SPEC.md)

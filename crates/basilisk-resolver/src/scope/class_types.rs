@@ -4,7 +4,7 @@
 use super::{span::Span, variable_types::AttributeInfo};
 
 /// Type parameters declared in a `Generic[T1, T2, ...]` base expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GenericParamInfo {
     /// The name of the type parameter (e.g. `"T"`, `"T_co"`).
     pub name: String,
@@ -18,7 +18,7 @@ pub struct GenericParamInfo {
 /// A type argument in a subscript expression, possibly nested.
 ///
 /// Represents both simple names (`T`) and parameterised types (`list[T]`).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TypeArg {
     /// A simple name reference (e.g. `T`, `int`).
     Simple(String),
@@ -35,7 +35,7 @@ pub enum TypeArg {
 ///
 /// For `class Foo(Base[T, int])`, this captures `base_name = "Base"`,
 /// `type_arg_names = ["T", "int"]`, and the structured `type_args`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BaseSubscriptEntry {
     /// The base class name being subscripted.
     pub base_name: String,
@@ -48,7 +48,7 @@ pub struct BaseSubscriptEntry {
 }
 
 /// A class definition with its attributes and method names.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "Python classes have many boolean flags"
@@ -137,13 +137,13 @@ pub struct ClassInfo {
     /// `true` when at least one base class expression is a subscript.
     ///
     /// For example, `class Foo(SubclassMe[float])` has a subscript base.
-    /// Used by `BSK-E0092` to detect classes that have fully specialised their
+    /// Used by `generics_defaults_specialization` to detect classes that have fully specialised their
     /// generic bases and therefore cannot be further subscripted.
     pub has_subscript_base: bool,
     /// Structured information about subscripted base classes.
     ///
     /// For `class Foo(Base[T, int])`, this contains an entry with `base_name = "Base"`.
-    /// Used by `BSK-E0107` for variance checking.
+    /// Used by `generics_variance` for variance checking.
     pub base_subscripts: Vec<BaseSubscriptEntry>,
     /// `true` when the dataclass is decorated with `slots=True`.
     pub is_dataclass_slots: bool,

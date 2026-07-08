@@ -1,0 +1,171 @@
+// Tests for [PROFILE-PROCESSES-REACTIVE]. See docs/specs/LSP-PROFILING-SPEC.md#PROFILE-PROCESSES-REACTIVE
+//
+// Issue #148: the Python Processes panel must be a pure projection of
+// centralised store Signals — no panel-local timer, no panel-owned data. These
+// tests drive the store's `processes` Signal and assert the tree re-renders
+// reactively through the production wiring (`subscribeRevision` over
+// `store.processesRevision`, the exact subscription registerPythonProcesses
+// installs), that view state (sort/group/filter/debuggee) is shared by every
+// subscriber, and that the poll feeding the store lives store-side
+// (process-poll.ts), gated on view visibility.
+
+import * as assert from "assert";
+import * as vscode from "vscode";
+import { type LanguageClient } from "vscode-languageclient/node";
+import { PythonProcessesProvider, type ProcessInfo } from "../../process-explorer";
+import { bindProcessPolling, fetchProcessesIntoStore } from "../../process-poll";
+import { subscribeRevision } from "../../reactive-refresh";
+import { createStore, type Store } from "../../store";
+
+const MB = 1024 * 1024;
+
+/** A minimal, debuggable process row. */
+function proc(pid: number, overrides: Partial<ProcessInfo> = {}): ProcessInfo {
+  return {
+    pid, ppid: 1, name: `python-${pid}`, interpreterPath: "/usr/bin/python3.12",
+    script: `/app/p${pid}.py`, pythonVersion: "3.12.1", cpuPercent: pid, memoryBytes: pid * MB,
+    runtimeSecs: 10, user: "alice", requiresElevation: false,
+    inWorkspace: false, launcher: null, debuggable: true, undebuggableReason: null,
+    ...overrides,
+  };
+}
+
+/** A store whose fake LSP client serves the given process table. */
+function storeServing(processes: readonly ProcessInfo[]): Store {
+  const store = createStore();
+  const client = {
+    isRunning: (): boolean => true,
+    onDidChangeState: (): vscode.Disposable => ({ dispose: (): undefined => undefined }),
+    sendRequest: async (): Promise<unknown> => ({ processes }),
+  } as unknown as LanguageClient;
+  store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, client);
+  return store;
+}
+
+/** A provider wired to the store exactly as registerPythonProcesses wires it. */
+function subscribedProvider(store: Store): PythonProcessesProvider {
+  const provider = new PythonProcessesProvider(store);
+  subscribeRevision(store.processesRevision, provider);
+  return provider;
+}
+
+/** The PIDs of the plain process rows in a root listing. */
+function pidsOf(rows: vscode.TreeItem[]): number[] {
+  return rows
+    .map((row) => (row as unknown as { process?: ProcessInfo }).process?.pid)
+    .filter((pid): pid is number => typeof pid === "number");
+}
+
+suite("Python Processes — pure projection of store Signals (#148)", () => {
+  test("a store bump repaints the tree through the production subscription — no fetch, no timer", async () => {
+    // Deliberately NO LSP client: if the panel needed to fetch anything itself,
+    // this test could not render a single row.
+    const store = createStore();
+    const provider = subscribedProvider(store);
+    try {
+      let repaints = 0;
+      provider.disposables.push(provider.onDidChangeTreeData(() => { repaints += 1; }));
+
+      assert.deepStrictEqual(await provider.getChildren(), [], "nothing to render before the store holds data");
+
+      store.processesLoaded([proc(7)]);
+      assert.strictEqual(repaints, 1, "the revision bump must repaint the subscribed tree");
+      assert.deepStrictEqual(pidsOf(await provider.getChildren()), [7], "the tree renders exactly the store's list");
+
+      store.processesLoaded([]);
+      assert.strictEqual(repaints, 2, "clearing the store repaints again");
+      assert.deepStrictEqual(await provider.getChildren(), [], "an emptied store empties the tree");
+    } finally {
+      provider.dispose();
+    }
+  });
+
+  test("the provider owns no data: a second panel over the same store renders the fetched list without fetching", async () => {
+    const store = storeServing([proc(1), proc(2)]);
+    const fetcher = subscribedProvider(store);
+    const observer = subscribedProvider(store); // never fetches
+    try {
+      await fetcher.refreshNow();
+      assert.deepStrictEqual(
+        pidsOf(await observer.getChildren()).sort((a, b) => a - b),
+        [1, 2],
+        "a panel that never fetched renders the centralised list — the data lives in the store",
+      );
+    } finally {
+      fetcher.dispose();
+      observer.dispose();
+    }
+  });
+
+  test("view state (sort, filter, debuggee) is centralised — one panel's change drives every subscriber", async () => {
+    const store = storeServing([proc(10, { cpuPercent: 1, memoryBytes: 99 * MB }), proc(20, { cpuPercent: 50, memoryBytes: 1 * MB })]);
+    const panelA = subscribedProvider(store);
+    const panelB = subscribedProvider(store);
+    try {
+      await panelA.refreshNow();
+      assert.deepStrictEqual(pidsOf(await panelB.getChildren()), [20, 10], "default sort: CPU descending");
+
+      panelA.cycleSortMode(); // cpu → memory
+      assert.deepStrictEqual(
+        pidsOf(await panelB.getChildren()),
+        [10, 20],
+        "panel A's sort change re-orders panel B — the mode lives in the store, not the panel",
+      );
+
+      panelA.setFilter("p20");
+      assert.deepStrictEqual(pidsOf(await panelB.getChildren()), [20], "the filter is centralised too");
+      panelA.setFilter("");
+
+      store.setActiveDebuggeePid(20);
+      const debuggeeRow = (await panelB.getChildren()).find(
+        (row) => (row as unknown as { process?: ProcessInfo }).process?.pid === 20,
+      );
+      assert.strictEqual(
+        debuggeeRow?.contextValue,
+        "pythonProcessDebuggee",
+        "the debuggee marker is a store signal every panel projects",
+      );
+    } finally {
+      panelA.dispose();
+      panelB.dispose();
+    }
+  });
+
+  test("the poll lives store-side: binding a visible view fetches into the store immediately", async () => {
+    const store = storeServing([proc(42)]);
+    const visibility = new vscode.EventEmitter<vscode.TreeViewVisibilityChangeEvent>();
+    const polling = bindProcessPolling(store, { visible: true, onDidChangeVisibility: visibility.event });
+    try {
+      // The immediate fetch is fire-and-forget; wait for the signal to settle.
+      const deadline = Date.now() + 2000;
+      while (store.processes.value.fetch !== "loaded" && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.strictEqual(store.processes.value.fetch, "loaded", "the store-side poll must fetch on bind");
+      assert.deepStrictEqual(store.processes.value.list.map((p) => p.pid), [42], "the fetch landed in the store signal");
+    } finally {
+      polling.dispose();
+      visibility.dispose();
+    }
+  });
+
+  test("every fetch outcome lands honestly in the store (#147 via the store path)", async () => {
+    // No client → still loading (never "no processes").
+    const bare = createStore();
+    await fetchProcessesIntoStore(bare);
+    assert.strictEqual(bare.processes.value.fetch, "loading");
+
+    // Failing client → error, and any stale rows are dropped.
+    const failing = createStore();
+    const client = {
+      isRunning: (): boolean => true,
+      onDidChangeState: (): vscode.Disposable => ({ dispose: (): undefined => undefined }),
+      sendRequest: async (): Promise<unknown> => { throw new Error("disconnected"); },
+    } as unknown as LanguageClient;
+    failing.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, client);
+    failing.processesLoaded([proc(1)]);
+    await fetchProcessesIntoStore(failing);
+    assert.strictEqual(failing.processes.value.fetch, "error");
+    assert.deepStrictEqual(failing.processes.value.list, [], "a failed fetch never leaves stale rows on screen");
+  });
+});

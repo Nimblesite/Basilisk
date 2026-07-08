@@ -54,7 +54,7 @@ suite('Basilisk Extension E2E Tests', () => {
     });
 
     // ----------------------------------------------------------------
-    // 2. Extension registers expected commands
+    // 2. Extension registers expected commands [VSIX-COMMANDS]
     // ----------------------------------------------------------------
     test('Extension registers basilisk.restartServer command', () => {
         const store = getStore();
@@ -85,6 +85,9 @@ suite('Basilisk Extension E2E Tests', () => {
 
     // ----------------------------------------------------------------
     // 3. Extension contributes configuration settings
+    // [VSIX-CONFIGURATION-SETTINGS], [VSIX-CONFIGURATION-SETTINGS-VS-CODE-ONLY]
+    // (useLsp/trace.server). executablePath/bundled resolution → [VSIX-BINARY-
+    // RESOLUTION] / [VSIX-BINARY-DISTRIBUTION].
     // ----------------------------------------------------------------
     test('Extension contributes basilisk.executablePath setting', () => {
         const cfg = vscode.workspace.getConfiguration('basilisk');
@@ -97,6 +100,8 @@ suite('Basilisk Extension E2E Tests', () => {
         );
     });
 
+    // Tests [VSIX-BINARY-RESOLUTION]: the default resolution cascade picks the
+    // bundled per-platform VSIX binary (Shipwright source = "bundled").
     test('Shipwright resolves basilisk from the bundled VSIX binary by default', () => {
         const store = getStore();
         assert.ok(store, 'Store should be available after activation');
@@ -181,30 +186,39 @@ suite('Basilisk Extension E2E Tests', () => {
         );
     });
 
-    test('Extension contributes basilisk.ruff.enabled setting', () => {
+    // The formatter is the Ruff engine embedded in the Basilisk binary — there is
+    // no external `ruff` binary, so there is no `ruff.executablePath`. The only
+    // formatter setting is the engine selector. [LSPFMT-CONFIG]
+    test('Extension contributes basilisk.formatter setting defaulting to "ruff"', () => {
         const cfg = vscode.workspace.getConfiguration('basilisk');
-        const inspected = cfg.inspect<boolean>('ruff.enabled');
-        assert.ok(inspected, 'basilisk.ruff.enabled should be a contributed setting');
-        assert.strictEqual(
-            inspected.defaultValue,
-            true,
-            'Default ruff.enabled should be true'
-        );
-    });
-
-    test('Extension contributes basilisk.ruff.executablePath setting', () => {
-        const cfg = vscode.workspace.getConfiguration('basilisk');
-        const inspected = cfg.inspect<string>('ruff.executablePath');
-        assert.ok(inspected, 'basilisk.ruff.executablePath should be a contributed setting');
+        const inspected = cfg.inspect<string>('formatter');
+        assert.ok(inspected, 'basilisk.formatter should be a contributed setting');
         assert.strictEqual(
             inspected.defaultValue,
             'ruff',
-            'Default ruff.executablePath should be "ruff"'
+            'Default formatter should be the embedded Ruff engine ("ruff")'
+        );
+    });
+
+    test('Extension does NOT contribute any basilisk.ruff.* setting', () => {
+        // The external ruff binary is jettisoned; a ruff path/toggle would be a
+        // dead, misleading setting. [LSPFMT-DECISION]
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        assert.strictEqual(
+            cfg.inspect('ruff.enabled')?.defaultValue,
+            undefined,
+            'basilisk.ruff.enabled must not exist'
+        );
+        assert.strictEqual(
+            cfg.inspect('ruff.executablePath')?.defaultValue,
+            undefined,
+            'basilisk.ruff.executablePath must not exist'
         );
     });
 
     // ----------------------------------------------------------------
-    // 4. Status bar item is created after activation
+    // 4. Status bar item is created after activation [VSIX-STATUS-BAR]
+    //    (also exercises basilisk.showOutput → [VSIX-OUTPUT-CHANNELS])
     // ----------------------------------------------------------------
     test('Status bar item is created after activation', async () => {
         const ext = vscode.extensions.getExtension(EXTENSION_ID);

@@ -57,6 +57,9 @@ function fill(template: string, vars: Record<string, string>): string {
     );
 }
 
+// Tests [VSIX-BINARY-DISTRIBUTION] / [VSIX-PACKAGING-PARITY]: the VSIX under test
+// bundles the per-platform `basilisk` binary (and every other shipwright-declared
+// component, e.g. debugpy) the manifest requires for this platform.
 suite('Bundle integrity (#71)', () => {
     test('extension-under-test bundles every shipwright-declared component for this platform', () => {
         const ext = vscode.extensions.getExtension(EXTENSION_ID);

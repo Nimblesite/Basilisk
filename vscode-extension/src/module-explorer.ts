@@ -14,6 +14,12 @@ import { subscribeRevision } from "./reactive-refresh";
 import { Logger } from "./logger";
 
 // ── LSP response types ───────────────────────────────────────────────────
+//
+// Implements the client mirror of [EXTACT-DATA-MODEL] — the shared
+// WorkspaceModulesResponse / ModuleNode / SymbolNode / HealthStats wire shapes
+// returned by basilisk.workspaceModules. (The spec's DiagnosticNode /
+// ModuleNode.diagnostics drill-down [EXTACT-MODULES-DIAGNOSTICS] is not yet
+// modelled here — see the activity-panel audit notes.)
 
 interface SymbolNode {
   readonly name: string;
@@ -31,22 +37,31 @@ interface ModuleNode {
   readonly symbols: readonly SymbolNode[];
   // Health rollup folded into each module by basilisk.workspaceModules
   // [EXTACT-MODULES] — coverage %, diagnostic counts, and adoption state, so the
-  // merged panel needs no separate basilisk.typeHealth round-trip.
-  readonly coveragePercent: number;
-  readonly errors: number;
-  readonly warnings: number;
-  readonly adopted: boolean;
+  // merged panel needs no separate basilisk.typeHealth round-trip. ABSENT while
+  // Type Checking is disabled ([ANALYSIS-ENABLED], #119): the server omits all
+  // grading, so there is nothing to render as "% typed" or a red tint.
+  readonly coveragePercent?: number;
+  readonly errors?: number;
+  readonly warnings?: number;
+  readonly adopted?: boolean;
 }
 
 /** Workspace-wide health rollup carried alongside the module list. */
 interface HealthStats {
-  readonly totalSymbols: number;
-  readonly annotatedSymbols: number;
-  readonly coveragePercent: number;
-  readonly errors: number;
-  readonly warnings: number;
-  readonly adoptedFiles: number;
+  // The Type Checking toggle state stamped by the server ([ANALYSIS-ENABLED],
+  // #119). `false` means the grading fields below are absent by construction.
+  readonly typeCheckingEnabled?: boolean;
+  readonly totalSymbols?: number;
+  readonly annotatedSymbols?: number;
+  readonly coveragePercent?: number;
+  readonly errors?: number;
+  readonly warnings?: number;
+  readonly adoptedFiles?: number;
   readonly totalFiles: number;
+  // Whether the server's initial workspace scan has finished. A zero-file
+  // rollup only means "empty workspace" when this is true; before that it
+  // means "not scanned yet" ([EXTACT-MODULES-HEADER-LOADING], #144).
+  readonly scanComplete?: boolean;
 }
 
 interface WorkspaceModulesResponse {
@@ -82,6 +97,8 @@ interface PackageTreeNode {
 
 type TreeItem = ModuleTreeItem | SymbolTreeItem | PackageTreeItem;
 
+// Implements [EXTACT-MODULES-MODULE-ROW] — the module row: label, coverage-tinted
+// icon, folded-health description, tooltip, and open-on-click action.
 export class ModuleTreeItem extends vscode.TreeItem {
   constructor(
     public readonly module: ModuleNode,
@@ -98,9 +115,12 @@ export class ModuleTreeItem extends vscode.TreeItem {
     );
     // Tint the namespace/file icon by coverage so a module's type health is
     // visible at a glance [EXTACT-MODULES]; the per-symbol "untyped" decoration
-    // is the drill-down.
+    // is the drill-down. No coverage (Type Checking disabled, #119) → no tint.
     const codicon = module.kind === "package" ? "symbol-namespace" : "symbol-file";
-    this.iconPath = new vscode.ThemeIcon(codicon, coverageColor(module.coveragePercent));
+    const tint = module.coveragePercent !== undefined
+      ? coverageColor(module.coveragePercent)
+      : undefined;
+    this.iconPath = new vscode.ThemeIcon(codicon, tint);
     this.contextValue = "module";
     this.description = moduleDescription(module);
     this.tooltip = moduleTooltip(module);
@@ -147,6 +167,8 @@ export class PackageTreeItem extends vscode.TreeItem {
   }
 }
 
+// Implements [EXTACT-MODULES-ITEM-PROPERTIES] and [EXTACT-MODULES-DECORATIONS]
+// for symbol labels, suffixes, icons, and open-at-line commands.
 class SymbolTreeItem extends vscode.TreeItem {
   constructor(
     public readonly symbol: SymbolNode,
@@ -204,6 +226,8 @@ const COVERAGE_BAR_WIDTH = 10;
 const COVERAGE_GOOD_THRESHOLD = 90;
 /** Coverage threshold for "warning" (yellow); below it is red. */
 const COVERAGE_WARN_THRESHOLD = 50;
+/** Neutral coverage for ungraded rows (Type Checking disabled, #119). */
+const FULL_COVERAGE_PERCENT = 100;
 
 /** Render a coverage progress bar using Unicode block characters. */
 function coverageBar(percent: number): string {
@@ -218,13 +242,15 @@ function coverageColor(percent: number): vscode.ThemeColor {
   return new vscode.ThemeColor("list.errorForeground");
 }
 
+// [EXTACT-MODULES-COUNT-STYLE] is the diagnostic-tally surface for module rows.
 /** Module row description: coverage bar + % + error/warning counts + adopted badge. */
 function moduleDescription(module: ModuleNode): string {
-  const issues: string[] = [];
-  if (module.errors > 0) { issues.push(`${module.errors}E`); }
-  if (module.warnings > 0) { issues.push(`${module.warnings}W`); }
-  const issueStr = issues.length > 0 ? ` — ${issues.join(" ")}` : "";
-  const badge = module.adopted ? " [adopted]" : "";
+  // Type Checking disabled (#119): the server serves no grading, so the row is
+  // a plain navigation entry — no bar, no percentage, no tallies.
+  if (module.coveragePercent === undefined) { return ""; }
+  const issueTally = diagnosticTally(module.errors ?? 0, module.warnings ?? 0);
+  const issueStr = issueTally === "" ? "" : ` — ${issueTally}`;
+  const badge = module.adopted === true ? " [adopted]" : "";
   return `${coverageBar(module.coveragePercent)} ${module.coveragePercent}%${issueStr}${badge}`;
 }
 
@@ -233,18 +259,19 @@ function moduleTooltip(module: ModuleNode): string {
   return [
     module.name,
     module.path,
-    `Coverage: ${module.coveragePercent}%`,
-    `Errors: ${module.errors}`,
-    `Warnings: ${module.warnings}`,
-    module.adopted ? "Status: Adopted (errors demoted to warnings)" : "",
+    module.coveragePercent !== undefined ? `Coverage: ${module.coveragePercent}%` : "",
+    module.errors !== undefined ? `Errors: ${module.errors}` : "",
+    module.warnings !== undefined ? `Warnings: ${module.warnings}` : "",
+    module.adopted === true ? "Status: Adopted (errors demoted to warnings)" : "",
   ].filter(Boolean).join("\n");
 }
 
-/** `nE nW` diagnostic tally, or "" when clean. Shared by folder/package rows. */
+/** Implements [EXTACT-MODULES-COUNT-STYLE]: coloured glyphs `🔴 n` (errors) /
+ *  `🟠 n` (warnings) — never `nE nW`; a zero severity is omitted, or "" when clean. */
 function diagnosticTally(errors: number, warnings: number): string {
   const issues: string[] = [];
-  if (errors > 0) { issues.push(`${errors}E`); }
-  if (warnings > 0) { issues.push(`${warnings}W`); }
+  if (errors > 0) { issues.push(`🔴 ${errors}`); }
+  if (warnings > 0) { issues.push(`🟠 ${warnings}`); }
   return issues.join(" ");
 }
 
@@ -256,18 +283,20 @@ function diagnosticTally(errors: number, warnings: number): string {
 function packageIconColor(node: PackageTreeNode): vscode.ThemeColor | undefined {
   if (node.errors > 0) { return new vscode.ThemeColor("list.errorForeground"); }
   if (node.warnings > 0) { return new vscode.ThemeColor("list.warningForeground"); }
-  return node.module !== undefined ? coverageColor(node.module.coveragePercent) : undefined;
+  // No coverage served (Type Checking disabled, #119) → untinted, like a folder.
+  return node.module?.coveragePercent !== undefined
+    ? coverageColor(node.module.coveragePercent)
+    : undefined;
 }
 
 /**
- * Folder/package row description: the subtree's rolled-up `nE nW` so problems
- * are visible without drilling in (#149). A package (`__init__.py`) also keeps
- * its own coverage bar.
+ * Folder/package row description: the subtree's rolled-up count-style tally
+ * ([EXTACT-MODULES-COUNT-STYLE]) so problems are visible without drilling in
+ * (#149). A package (`__init__.py`) also keeps its own coverage bar.
  */
 function packageDescription(node: PackageTreeNode): string {
-  const own = node.module !== undefined
-    ? `${coverageBar(node.module.coveragePercent)} ${node.module.coveragePercent}%`
-    : "";
+  const coverage = node.module?.coveragePercent;
+  const own = coverage !== undefined ? `${coverageBar(coverage)} ${coverage}%` : "";
   return [own, diagnosticTally(node.errors, node.warnings)].filter(Boolean).join(" — ");
 }
 
@@ -275,39 +304,62 @@ function packageDescription(node: PackageTreeNode): string {
 function packageTooltip(node: PackageTreeNode): string {
   const errs = `${node.errors} error${node.errors === 1 ? "" : "s"}`;
   const warns = `${node.warnings} warning${node.warnings === 1 ? "" : "s"}`;
+  const coverage = node.module?.coveragePercent;
   return [
     node.fullName,
     node.module?.path,
-    node.module !== undefined ? `Coverage: ${node.module.coveragePercent}%` : "",
+    coverage !== undefined ? `Coverage: ${coverage}%` : "",
     `Subtree: ${errs}, ${warns}`,
   ].filter(Boolean).join("\n");
 }
 
 // ── Workspace health chrome [EXTACT-MODULES-HEADER] ──────────────────────
 
+/** Loading affordance while the analyzer starts up or its initial workspace
+ *  scan is still running ([EXTACT-MODULES-HEADER-LOADING], #144). */
+const ANALYZING_MESSAGE = "Analyzing workspace…";
+
 /**
  * Workspace summary rendered into the tree view's native `message` chrome.
  *
- * [EXTACT-HEALTH] An empty workspace (no Python files) renders an explicit
+ * Implements [EXTACT-MODULES-HEADER] (`treeView.message`: "73% typed · …").
+ * [EXTACT-HEALTH-HEADER] An empty workspace (no Python files) renders an explicit
  * "No Python files found" — never a misleading 100% for 0/0 symbols (#57).
+ * [EXTACT-MODULES-HEADER-LOADING] That empty-state is gated on the server's
+ * initial scan having finished: before then (or before any stats are fetched
+ * at all) the panel shows a loading message, never a false "zero files" (#144).
  */
 export function workspaceHealthMessage(stats: HealthStats | undefined): string {
-  if (stats === undefined) { return ""; }
-  if (stats.totalFiles === 0) { return "No Python files found"; }
-  const issues: string[] = [];
-  if (stats.errors > 0) { issues.push(`${stats.errors}E`); }
-  if (stats.warnings > 0) { issues.push(`${stats.warnings}W`); }
-  const issueStr = issues.length > 0 ? ` · ${issues.join(" ")}` : "";
-  return `${stats.coveragePercent}% typed${issueStr}`;
+  // No stats yet: the server is idle/starting, or the first fetch hasn't
+  // answered. Never render a terminal state from nothing (#144).
+  if (stats === undefined) { return ANALYZING_MESSAGE; }
+  // Type Checking off ([ANALYSIS-ENABLED], #119): the panel must state that
+  // plainly instead of grading the workspace — no "% typed", no tallies.
+  if (stats.typeCheckingEnabled === false) { return "Type checking disabled"; }
+  if (stats.totalFiles === 0) {
+    // Zero files is only the honest empty-state once the scan finished;
+    // mid-scan it just means "not scanned yet" (#144).
+    return stats.scanComplete === true ? "No Python files found" : ANALYZING_MESSAGE;
+  }
+  const issueTally = diagnosticTally(stats.errors ?? 0, stats.warnings ?? 0);
+  const issueStr = issueTally === "" ? "" : ` · ${issueTally}`;
+  return `${stats.coveragePercent ?? FULL_COVERAGE_PERCENT}% typed${issueStr}`;
 }
 
-/** Numeric view badge: outstanding diagnostics (errors + warnings), or none. */
+// Implements [EXTACT-MODULES-HEADER] `treeView.badge`: numeric count of
+// outstanding diagnostics, hidden when zero or on an empty workspace.
+/** Numeric view badge: outstanding diagnostics (errors + warnings), or none.
+ *  No badge while Type Checking is disabled ([ANALYSIS-ENABLED], #119). */
 export function workspaceHealthBadge(stats: HealthStats | undefined): vscode.ViewBadge | undefined {
-  if (stats === undefined || stats.totalFiles === 0) { return undefined; }
-  const count = stats.errors + stats.warnings;
+  if (stats === undefined || stats.typeCheckingEnabled === false || stats.totalFiles === 0) {
+    return undefined;
+  }
+  const errors = stats.errors ?? 0;
+  const warnings = stats.warnings ?? 0;
+  const count = errors + warnings;
   if (count === 0) { return undefined; }
-  const errs = `${stats.errors} error${stats.errors === 1 ? "" : "s"}`;
-  const warns = `${stats.warnings} warning${stats.warnings === 1 ? "" : "s"}`;
+  const errs = `${errors} error${errors === 1 ? "" : "s"}`;
+  const warns = `${warnings} warning${warnings === 1 ? "" : "s"}`;
   return { value: count, tooltip: `${errs}, ${warns}` };
 }
 
@@ -350,6 +402,8 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     this.treeView = treeView;
   }
 
+  // Implements [EXTACT-MODULES-REFRESH] — the manual refresh button (and the
+  // create/delete/rename full re-fetch) clear the cache and re-query the LSP.
   public refresh(): void {
     this.modules = [];
     this.workspace = undefined;
@@ -367,11 +421,15 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     this.emitter.fire(undefined);
   }
 
+  // Implements [EXTACT-MODULES-TOOLBAR] Sort — the explicit Module Name / Path /
+  // Type Coverage picker (#189) with the active mode marked, never a blind cycle.
   /** Labelled sort options with the active one marked, to drive the picker (#189). */
   public sortOptions(): readonly { readonly mode: SortMode; readonly label: string; readonly current: boolean }[] {
     return SORT_OPTIONS.map((option) => ({ ...option, current: option.mode === this.sortMode }));
   }
 
+  // Implements [EXTACT-MODULES-TOOLBAR] Toggle View — switch tree<->flat and
+  // publish the `basilisk.moduleExplorerView` context key that gates Sort (#151).
   /** Toggle between tree and flat view modes, persisted in workspaceState. */
   public toggleViewMode(context: vscode.ExtensionContext): void {
     this.viewMode = this.viewMode === "tree" ? "flat" : "tree";
@@ -386,6 +444,7 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     void vscode.commands.executeCommand("setContext", "basilisk.moduleExplorerView", this.viewMode);
   }
 
+  // Implements [EXTACT-MODULES-TOOLBAR] Filter — the glob search over module names.
   /** Set the glob filter pattern and re-render. */
   public setFilter(pattern: string): void {
     this.filterPattern = pattern;
@@ -426,7 +485,7 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
 
     if (this.viewMode === "flat") {
       // Flat view: one sortable row per module (full dotted name); the sort
-      // toggle reorders this list (#151). Symbols stay grouped under their
+      // picker reorders this list (#151/#189). Symbols stay grouped under their
       // owning module — never dumped bare at the tree root (#149).
       return this.sortModules([...filtered]).map((mod) => new ModuleTreeItem(mod));
     }
@@ -515,13 +574,16 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     });
   }
 
-  /** Order modules for flat view per the current sort selection (#189). */
+  /** Order modules for flat view per the current picker selection. */
   private sortModules(modules: ModuleNode[]): ModuleNode[] {
     switch (this.sortMode) {
       case "name": return modules.sort((a, b) => a.name.localeCompare(b.name));
       case "path": return modules.sort((a, b) => a.path.localeCompare(b.path));
-      // Ascending coverage surfaces the least-typed modules first.
-      case "coverage": return modules.sort((a, b) => a.coveragePercent - b.coveragePercent);
+      // Ascending coverage surfaces the least-typed modules first; ungraded
+      // rows (Type Checking disabled, #119) sort as neutral 100.
+      case "coverage": return modules.sort(
+        (a, b) => (a.coveragePercent ?? FULL_COVERAGE_PERCENT) - (b.coveragePercent ?? FULL_COVERAGE_PERCENT),
+      );
     }
   }
 
@@ -548,6 +610,8 @@ export class ModuleExplorerProvider implements vscode.TreeDataProvider<TreeItem>
     });
   }
 
+  // Implements [EXTACT-LSP-COMMANDS-WORKSPACE-MODULES] by requesting the flat
+  // module list and folded health rollup from the LSP.
   private async fetchModules(): Promise<void> {
     const client = this.store.client.value;
     if (!client?.isRunning()) {
@@ -601,8 +665,8 @@ function registerExplorerCommands(
       provider.toggleViewMode(context);
     }),
     vscode.commands.registerCommand("basilisk.sortModuleExplorer", async () => {
-      // Explicit picker with the active mode checked, so the current sort is
-      // always visible — never a blind cycle (#189).
+      // Implements [EXTACT-MODULES-TOOLBAR] Sort: explicit picker with the active
+      // mode checked, so the current sort is always visible — never a blind cycle (#189).
       const items = provider.sortOptions().map((option) => ({
         label: option.current ? `$(check) ${option.label}` : option.label,
         mode: option.mode,
@@ -620,6 +684,7 @@ function registerExplorerCommands(
       });
       provider.setFilter(input ?? "");
     }),
+    // Implements [EXTACT-MODULES-CONTEXT-MENU] Copy Import Path.
     vscode.commands.registerCommand("basilisk.copyImportPath", (item: TreeItem) => {
       if (item instanceof SymbolTreeItem) {
         copyToClipboard(`from ${item.moduleName} import ${item.symbol.name}`);
@@ -628,6 +693,7 @@ function registerExplorerCommands(
       const module = itemModule(item);
       if (module !== undefined) { copyToClipboard(`import ${module.name}`); }
     }),
+    // Implements [EXTACT-MODULES-CONTEXT-MENU] Copy Qualified Name.
     vscode.commands.registerCommand("basilisk.copyQualifiedName", (item: TreeItem) => {
       if (item instanceof SymbolTreeItem) {
         copyToClipboard(`${item.moduleName}.${item.symbol.name}`);

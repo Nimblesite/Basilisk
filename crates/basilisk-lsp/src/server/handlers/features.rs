@@ -8,10 +8,10 @@ use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::{
     CodeActionOrCommand, CodeActionParams, CodeActionResponse, CodeLens, CodeLensParams,
     ColorInformation, ColorPresentation, ColorPresentationParams, CompletionItem, CompletionParams,
-    CompletionResponse, Diagnostic, DocumentColorParams, DocumentFormattingParams, FoldingRange,
-    FoldingRangeParams, Hover, HoverParams, InlayHint, InlayHintParams, NumberOrString,
-    SelectionRange, SelectionRangeParams, SemanticTokens, SemanticTokensParams,
-    SemanticTokensResult, SignatureHelpParams, TextEdit,
+    CompletionResponse, Diagnostic, DocumentColorParams, DocumentFormattingParams,
+    DocumentRangeFormattingParams, FoldingRange, FoldingRangeParams, Hover, HoverParams, InlayHint,
+    InlayHintParams, NumberOrString, SelectionRange, SelectionRangeParams, SemanticTokens,
+    SemanticTokensParams, SemanticTokensResult, SignatureHelpParams, TextEdit,
 };
 
 use crate::{
@@ -22,6 +22,7 @@ use crate::{
 use crate::server::{none_if_empty, LspServer};
 
 /// Handle `textDocument/hover`.
+// Implements [LSPARCH-FEATURES-HOVER] — type signatures for any symbol, diagnostics secondary.
 pub(in crate::server) async fn hover(
     server: &LspServer,
     params: HoverParams,
@@ -36,6 +37,7 @@ pub(in crate::server) async fn hover(
 }
 
 /// Handle `textDocument/signatureHelp`.
+// Implements [LSPARCH-FEATURES-SIGHELP] — parameter hints with active-parameter tracking.
 pub(in crate::server) async fn signature_help(
     server: &LspServer,
     params: SignatureHelpParams,
@@ -50,6 +52,7 @@ pub(in crate::server) async fn signature_help(
 }
 
 /// Handle `textDocument/inlayHint`.
+// Implements [LSPARCH-FEATURES-INLAYHINTS] — variable type, parameter name, and return type hints.
 pub(in crate::server) async fn inlay_hint(
     server: &LspServer,
     params: InlayHintParams,
@@ -62,6 +65,7 @@ pub(in crate::server) async fn inlay_hint(
 }
 
 /// Handle `textDocument/semanticTokens/full`.
+// Implements [LSPARCH-FEATURES-SEMTOKENS] — token classification across the legend.
 pub(in crate::server) async fn semantic_tokens_full(
     server: &LspServer,
     params: SemanticTokensParams,
@@ -78,6 +82,7 @@ pub(in crate::server) async fn semantic_tokens_full(
 }
 
 /// Handle `textDocument/codeAction`.
+// Implements [LSPARCH-FEATURES-CODEACTIONS] — quick fixes, suppress, organize imports, fix-all.
 pub(in crate::server) async fn code_action(
     server: &LspServer,
     params: CodeActionParams,
@@ -101,7 +106,14 @@ pub(in crate::server) async fn code_action(
                     .iter()
                     .map(|d| crate::workspace_analysis::bsk_to_lsp(d, &text))
                     .collect();
-                let action = code_actions::fix_all_in_file(&uri, &lsp_diags, &text)?;
+                // Implements [AUTOFIX-CLASSIFY] — the default tier is Safe
+                // fixes only; Unsafe fixes need the explicit all-tier commands.
+                let action = code_actions::fix_filtered_in_file(
+                    &uri,
+                    &lsp_diags,
+                    &text,
+                    code_actions::mass_fix::SAFE_FIXABLE_RULES,
+                )?;
                 Some(vec![tower_lsp::lsp_types::CodeActionOrCommand::CodeAction(
                     action,
                 )])
@@ -164,6 +176,7 @@ pub(in crate::server) async fn code_action(
 }
 
 /// Handle `textDocument/completion`.
+// Implements [LSPARCH-FEATURES-COMPLETION] — symbol, dot, import, builtin, kwarg completions (+ auto-import).
 pub(in crate::server) async fn completion(
     server: &LspServer,
     params: CompletionParams,
@@ -312,20 +325,42 @@ pub(in crate::server) async fn completion_resolve(
 }
 
 /// Handle `textDocument/formatting`.
+// Implements [LSPARCH-FEATURES-FORMAT] / [LSPFMT-ENGINE] — embedded Ruff
+// formatter in-process, whole-document TextEdit. No `ruff` subprocess (#254).
 pub(in crate::server) async fn formatting(
     server: &LspServer,
     params: DocumentFormattingParams,
 ) -> LspResult<Option<Vec<TextEdit>>> {
+    if !server.is_formatting_enabled() {
+        return Ok(None);
+    }
     let uri = params.text_document.uri;
     let Some(text) = server.with_index(|idx| idx.get_text(&uri)).await else {
         return Ok(None);
     };
-    let file_path = uri.to_file_path().unwrap_or_default();
-    let path_str = file_path.to_string_lossy().into_owned();
-    Ok(formatting::format_document(&text, &path_str))
+    let style = server.format_style().await;
+    Ok(formatting::format_document(&text, &style))
+}
+
+/// Handle `textDocument/rangeFormatting` (Format Selection).
+// Implements [LSPFMT-CAPABILITIES] — same embedded engine as whole-document.
+pub(in crate::server) async fn range_formatting(
+    server: &LspServer,
+    params: DocumentRangeFormattingParams,
+) -> LspResult<Option<Vec<TextEdit>>> {
+    if !server.is_formatting_enabled() {
+        return Ok(None);
+    }
+    let uri = params.text_document.uri;
+    let Some(text) = server.with_index(|idx| idx.get_text(&uri)).await else {
+        return Ok(None);
+    };
+    let style = server.format_style().await;
+    Ok(formatting::format_selection(&text, params.range, &style))
 }
 
 /// Handle `textDocument/foldingRange`.
+// Implements [LSPARCH-FEATURES-FOLDING] — function/class def_span and import-block folds.
 pub(in crate::server) async fn folding_range(
     server: &LspServer,
     params: FoldingRangeParams,
@@ -338,6 +373,7 @@ pub(in crate::server) async fn folding_range(
 }
 
 /// Handle `textDocument/selectionRange`.
+// Implements [LSPARCH-FEATURES-SELECTION] — Smart Select nested range tree from ResolvedModule spans.
 pub(in crate::server) async fn selection_range(
     server: &LspServer,
     params: SelectionRangeParams,
@@ -354,6 +390,7 @@ pub(in crate::server) async fn selection_range(
 }
 
 /// Handle `textDocument/codeLens`.
+// Implements [LSPARCH-FEATURES-CODELENS] — "N references" lens above each function/class.
 pub(in crate::server) async fn code_lens(
     server: &LspServer,
     params: CodeLensParams,

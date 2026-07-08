@@ -157,6 +157,158 @@ async fn snapshot_measures_and_attributes_real_allocations() -> Result<(), Strin
     Ok(())
 }
 
+// ── Evaluation budget: scripts must not stall the paused DAP evaluate ─────────
+
+/// pydevd warns (and scares the user with a wall of timeout text) when a DAP
+/// `evaluate` runs longer than `PYDEVD_WARN_EVALUATION_TIMEOUT`, which defaults
+/// to 3 seconds — see the debugpy sources
+/// (`_pydevd_bundle/pydevd_constants.py`). The injected memory scripts run
+/// inside exactly such an evaluate, so the part of each script that executes
+/// synchronously is bounded by this budget on REAL heaps, not just toy ones.
+const PYDEVD_EVAL_WARN_BUDGET_SECS: f64 = 3.0;
+
+/// A large-but-realistic traced workload: ~3 M live tracemalloc traces (str +
+/// list + tuple + list-growth blocks per iteration). Big enough that any
+/// per-trace pure-Python pass inside the evaluate takes several seconds.
+const BIG_HEAP: &str = "_BASILISK_KEEP = [(str(_i), [_i]) for _i in range(600000)]";
+
+/// Wrap `script` so the program prints how long the script itself took — the
+/// exact wall time a DAP `evaluate` of that script would block the debugger.
+fn timed(script: &str) -> String {
+    format!(
+        "import time as _bsk_timer\n_bsk_eval_t0 = _bsk_timer.monotonic()\n{script}\nprint('__BASILISK_EVAL_SECONDS__%.3f' % (_bsk_timer.monotonic() - _bsk_eval_t0))"
+    )
+}
+
+/// Recover the `timed(...)` measurement from a program's stdout.
+fn eval_seconds(stdout: &str) -> Option<f64> {
+    stdout.lines().find_map(|line| {
+        let idx = line.find("__BASILISK_EVAL_SECONDS__")?;
+        line[idx + "__BASILISK_EVAL_SECONDS__".len()..]
+            .trim()
+            .parse()
+            .ok()
+    })
+}
+
+/// The user-reported bug (run & track memory → take snapshot): on a real heap,
+/// the snapshot script's synchronous portion ran a per-trace pure-Python
+/// aggregation over millions of traces inside the paused `evaluate`, tripping
+/// pydevd's 3-second evaluation warning (`_basilisk_emit(...)` "did not finish
+/// after 3.00 seconds"). The evaluate-blocking portion of the snapshot script
+/// must stay within that budget on a ~3M-trace heap — while the payload it
+/// eventually couriers stays complete, correct, and attributable.
+#[tokio::test]
+async fn snapshot_evaluate_portion_fits_the_pydevd_budget_on_a_large_heap() -> Result<(), String> {
+    let finalfile = unique_temp_file("basilisk_final", "memfinal");
+    let src = program(&[
+        &scripts::start_tracemalloc(DEPTH, &finalfile.to_string_lossy(), MAX_STATS),
+        BIG_HEAP,
+        &timed(&scripts::take_snapshot(MAX_STATS)),
+    ]);
+    let Some((run, payloads)) = run_and_harvest(&src) else {
+        eprintln!("SKIP: python3 not available");
+        return Ok(());
+    };
+    let _ = std::fs::remove_file(&finalfile);
+
+    let secs = eval_seconds(&run.stdout)
+        .ok_or_else(|| format!("timing marker missing from stdout:\n{}", run.stdout))?;
+    assert!(
+        secs < PYDEVD_EVAL_WARN_BUDGET_SECS,
+        "the snapshot script blocked the (simulated) DAP evaluate for {secs:.3}s on a \
+         ~3M-trace heap — past pydevd's {PYDEVD_EVAL_WARN_BUDGET_SECS}s evaluation-warning \
+         budget, which is exactly the user-visible timeout wall of text"
+    );
+
+    // Speed must not cost correctness: the couriered payload still ingests and
+    // still attributes the big allocation to our program's line.
+    assert_eq!(payloads.len(), 1, "one snapshot payload, got {payloads:?}");
+    let manager = MemorySessionManager::new();
+    let session = manager.start_session(DEPTH).await;
+    let result = manager.ingest(&session, &payloads[0]).await?;
+    let IngestOutcome::Snapshot(snapshot) = &result.outcome else {
+        return Err(format!(
+            "expected snapshot outcome, got {:?}",
+            result.outcome
+        ));
+    };
+    assert!(
+        snapshot.current_memory >= 50_000_000,
+        "the ~600k-item heap must be measured, got {} bytes",
+        snapshot.current_memory
+    );
+    let fname = run.script_file_name();
+    let ours = snapshot
+        .top_allocations
+        .iter()
+        .find(|site| site.file.ends_with(&fname))
+        .ok_or_else(|| "our big allocation site must appear in top allocations".to_owned())?;
+    assert!(
+        ours.size >= 10_000_000,
+        "our retained site should hold >=10 MB, got {}",
+        ours.size
+    );
+    Ok(())
+}
+
+/// Same budget, diff flavour: `Snapshot.compare_to` runs the stdlib's pure-
+/// Python statistics pass over BOTH snapshots (measured ~18 s at 4 M traces),
+/// so "Compare Snapshots" — and every autopilot pass, which diffs right after
+/// its snapshot — stalls the evaluate even harder than the snapshot did. The
+/// diff script's evaluate-blocking portion must fit the same 3-second budget,
+/// and the growth it reports must still be real.
+#[tokio::test]
+async fn diff_evaluate_portion_fits_the_pydevd_budget_on_a_large_heap() -> Result<(), String> {
+    let finalfile = unique_temp_file("basilisk_final", "memfinal");
+    let src = program(&[
+        &scripts::start_tracemalloc(DEPTH, &finalfile.to_string_lossy(), MAX_STATS),
+        BIG_HEAP,
+        GROWER,
+        scripts::store_baseline(),
+        "_basilisk_grow(20000)",
+        &timed(&scripts::diff_snapshot(MAX_STATS)),
+    ]);
+    let Some((run, payloads)) = run_and_harvest(&src) else {
+        eprintln!("SKIP: python3 not available");
+        return Ok(());
+    };
+    let _ = std::fs::remove_file(&finalfile);
+
+    let secs = eval_seconds(&run.stdout)
+        .ok_or_else(|| format!("timing marker missing from stdout:\n{}", run.stdout))?;
+    assert!(
+        secs < PYDEVD_EVAL_WARN_BUDGET_SECS,
+        "the diff script blocked the (simulated) DAP evaluate for {secs:.3}s on a \
+         ~3M-trace heap — past pydevd's {PYDEVD_EVAL_WARN_BUDGET_SECS}s evaluation-warning budget"
+    );
+
+    assert_eq!(
+        payloads.len(),
+        1,
+        "one diff payload, got {}",
+        payloads.len()
+    );
+    let manager = MemorySessionManager::new();
+    let session = manager.start_session(DEPTH).await;
+    let result = manager.ingest(&session, &payloads[0]).await?;
+    let IngestOutcome::Diff { diff, .. } = &result.outcome else {
+        return Err(format!("expected diff outcome, got {:?}", result.outcome));
+    };
+    let fname = run.script_file_name();
+    assert!(
+        diff.grown_allocations
+            .iter()
+            .any(|site| site.file.ends_with(&fname) && site.size_diff > 1_000_000),
+        "the diff must still report our real >1MB growth at our own line: {:?}",
+        diff.grown_allocations
+            .iter()
+            .map(|s| (&s.file, s.size_diff))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
 // ── At-exit final snapshot: the breakpoint-free "Run & Track Memory" flow ─────
 
 /// [PROFILE-MEMORY-FINAL] The `atexit` hook the start script installs must write
@@ -286,6 +438,7 @@ async fn repeated_real_growth_escalates_leak_confidence() -> Result<(), String> 
 
 // ── GC: real reference cycle is detected ─────────────────────────────────────
 
+// Exercises [PROFILE-MEMORY-CODES]
 /// Build and drop real `__del__` reference cycles, then run the gc-collect
 /// script. With `DEBUG_SAVEALL` the collector retains them, so the ingested
 /// result must report a real collection and surface uncollectable objects.

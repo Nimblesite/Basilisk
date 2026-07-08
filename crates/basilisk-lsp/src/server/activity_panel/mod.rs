@@ -21,6 +21,10 @@ use super::LspServer;
 
 /// Handle `basilisk.workspaceModules`.
 ///
+/// Implements [EXTACT-LSP-COMMANDS-WORKSPACE-MODULES] — the client->server
+/// request returning the module tree with the folded type-health rollup.
+/// The optional `scope` param is the spec's module-name prefix filter.
+///
 /// Walks the workspace index and builds a hierarchical module tree from the
 /// resolved symbol tables. Supports an optional `scope` parameter for prefix
 /// filtering (used for lazy child loading).
@@ -38,8 +42,27 @@ pub(super) async fn execute_workspace_modules(
     let project_root = roots.first().cloned();
     drop(roots);
 
+    // The module tree's error/warning rollup mirrors the publish gate: with type
+    // checking disabled the counts must read empty, just like the cleared editor
+    // diagnostics ([ANALYSIS-ENABLED], GitHub #119).
+    let type_checking_enabled = server.is_type_checking_enabled().await;
+
+    // Whether a zero-file rollup is final ("no Python files") or merely "not
+    // scanned yet" ([EXTACT-MODULES-HEADER-LOADING], GitHub #144).
+    let scan_complete = server
+        .initial_scan_complete
+        .load(std::sync::atomic::Ordering::Relaxed);
+
     let tree = server
-        .with_index(|idx| Some(build_module_tree(idx, scope, project_root.as_deref())))
+        .with_index(|idx| {
+            Some(build_module_tree(
+                idx,
+                scope,
+                project_root.as_deref(),
+                type_checking_enabled,
+                scan_complete,
+            ))
+        })
         .await;
 
     let response = match tree {
@@ -55,8 +78,15 @@ pub(super) async fn execute_workspace_modules(
 
 /// Handle `basilisk.typeHealth`.
 ///
+/// Implements [EXTACT-LSP-COMMANDS-TYPE-HEALTH] — the standalone workspace
+/// health command for editors without a unified panel (Zed `/health`, Neovim
+/// `:BasiliskHealth`); computed from the same per-file figures as the rollup
+/// folded into `basilisk.workspaceModules`.
+///
 /// Computes type coverage statistics (annotated vs unannotated symbols),
 /// error/warning counts, and adoption state for each file in the workspace.
+/// Gated on the Type Checking toggle like `basilisk.workspaceModules`
+/// ([ANALYSIS-ENABLED], #119): while disabled it serves no grading.
 pub(super) async fn execute_type_health(
     server: &LspServer,
     _args: &[serde_json::Value],
@@ -65,8 +95,16 @@ pub(super) async fn execute_type_health(
     let project_root = roots.first().cloned();
     drop(roots);
 
+    let type_checking_enabled = server.is_type_checking_enabled().await;
+
     let result: Option<serde_json::Value> = server
-        .with_index(|idx| Some(build_type_health(idx, project_root.as_deref())))
+        .with_index(|idx| {
+            Some(build_type_health(
+                idx,
+                project_root.as_deref(),
+                type_checking_enabled,
+            ))
+        })
         .await;
 
     let result = result.unwrap_or_else(|| {
@@ -82,7 +120,11 @@ pub(super) async fn execute_type_health(
 
 // ── Module change notification ────────────────────────────────────────────
 
+// Implements [LSPARCH-NOTIFS]
 /// Notification type for `basilisk/moduleChanged`.
+///
+/// Implements [EXTACT-LSP-COMMANDS-MODULE-CHANGED] — the server->client
+/// notification carrying `{ module: ModuleNode }` after file-save re-analysis.
 pub(crate) struct ModuleChangedNotification;
 
 impl tower_lsp::lsp_types::notification::Notification for ModuleChangedNotification {
@@ -90,9 +132,28 @@ impl tower_lsp::lsp_types::notification::Notification for ModuleChangedNotificat
     const METHOD: &'static str = basilisk_common::notifications::MODULE_CHANGED;
 }
 
+// Implements [LSPARCH-NOTIFS]
+/// Notification type for `basilisk/scanComplete`.
+///
+/// Implements [EXTACT-LSP-COMMANDS-SCAN-COMPLETE] — the server->client
+/// notification that a workspace scan finished. Panels showing the loading
+/// state refetch on receipt; required because a genuinely empty workspace
+/// publishes no diagnostics, so nothing else would ever settle the loading
+/// message into the honest empty-state
+/// ([EXTACT-MODULES-HEADER-LOADING], GitHub #144).
+pub(crate) struct ScanCompleteNotification;
+
+impl tower_lsp::lsp_types::notification::Notification for ScanCompleteNotification {
+    type Params = serde_json::Value;
+    const METHOD: &'static str = basilisk_common::notifications::SCAN_COMPLETE;
+}
+
 /// Send a debounced `basilisk/moduleChanged` notification for a file that was
 /// just re-analysed. Waits 300 ms after the last save before sending, so rapid
 /// saves don't flood the client.
+///
+/// Implements [EXTACT-PERFORMANCE] (and [EXTACT-LSP-COMMANDS-MODULE-CHANGED]):
+/// the 300 ms debounce the spec mandates lives in `MODULE_CHANGED_DEBOUNCE_MS`.
 pub(crate) async fn send_module_changed(server: &LspServer, uri: &tower_lsp::lsp_types::Url) {
     let uri = uri.clone();
     let index_lock = std::sync::Arc::clone(&server.index);

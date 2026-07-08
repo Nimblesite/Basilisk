@@ -24,8 +24,9 @@ pub(super) fn is_dot_completion(text: &str, byte_offset: usize) -> bool {
 }
 
 /// Extract the receiver name before the `.` at `byte_offset`, e.g. `"self"`
-/// from `"self.<cursor>"`.
-pub(super) fn dot_receiver(text: &str, byte_offset: usize) -> Option<String> {
+/// from `"self.<cursor>"`. Shared with hover for dot-access member lookup
+/// (GitHub #287).
+pub(crate) fn dot_receiver(text: &str, byte_offset: usize) -> Option<String> {
     let before = text.get(..byte_offset.min(text.len())).unwrap_or(text);
     let stripped = before.trim_end_matches(|c: char| c.is_alphanumeric() || c == '_');
     let before_dot = stripped.strip_suffix('.')?;

@@ -6,9 +6,13 @@ use basilisk_stubs::TypeProvenance;
 
 /// The severity level of a diagnostic.
 ///
-/// Every rule has a default severity determined by its code prefix (`E` = Error,
-/// `W` = Warning). All rules can be overridden to any severity at the line,
-/// block, file, path, or project level.
+/// Implements [CHKARCH-STRICTNESS-SEVERITY] / [CHKARCH-DIAG-CODES]: every rule
+/// has a default severity determined by its code prefix (`E` = Error,
+/// `W` = Warning, `I` = Info). All rules can be overridden to any severity at
+/// the line, block, file, path, or project level (the override application lives
+/// in `basilisk-checker/src/lib.rs`, the precedence ladder in
+/// [CHKARCH-STRICTNESS-PRECEDENCE]).
+/// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STRICTNESS-SEVERITY
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
@@ -19,7 +23,8 @@ pub enum Severity {
     Warning,
     /// A type error that must be resolved.
     Error,
-    /// Critical Mojo safety violation (ownership/move semantics).
+    /// Critical safety violation reported by the opt-in, off-by-default
+    /// ownership/move-semantics rules inspired by Mojo.
     SafetyViolation,
 }
 
@@ -52,6 +57,12 @@ pub enum RuleMode {
 }
 
 /// A parsed inline suppression or mode override from a source comment.
+///
+/// The data shape behind [CHKARCH-STRICTNESS-SUPPRESSION] / the compat table in
+/// [CHKARCH-STRICTNESS-COMPAT] — a `# type: <mode>[codes]` or block/file
+/// directive. The comment scanner that produces these and the precedence ladder
+/// that applies them live in `basilisk-checker` (out of this audit's scope).
+/// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STRICTNESS-SUPPRESSION
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InlineOverride {
     /// The mode to apply.
@@ -64,10 +75,14 @@ pub struct InlineOverride {
     pub is_block_end: bool,
 }
 
-/// A BSK diagnostic code such as `BSK-E0001`.
+/// A BSK diagnostic code such as `returns_compatibility`.
+///
+/// Implements [CHKARCH-DIAG-PHILOSOPHY] (stable codes, every diagnostic links to
+/// docs) and underpins the [CHKARCH-DIAG-REFERENCE] table generated from rule
+/// source. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-PHILOSOPHY
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErrorCode {
-    /// The full code string, e.g. `"BSK-E0001"`.
+    /// The full code string, e.g. `"returns_compatibility"`.
     pub code: &'static str,
     /// URL to the documentation for this diagnostic.
     pub docs_url: &'static str,
@@ -169,7 +184,11 @@ fn diagnostic_owned(
 }
 
 /// A single diagnostic emitted by the checker.
-#[derive(Debug, Clone)]
+///
+/// `PartialEq` lets consumers detect "diagnostics unchanged" — the LSP's
+/// workspace sweep compares a file's fresh diagnostics against the stored ones
+/// and republishes only on a real change.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
     /// The error/warning code.
     pub code: ErrorCode,
@@ -220,6 +239,8 @@ impl Diagnostic {
     }
 }
 
+// Tests for [CHKARCH-DIAGEXP-QUALITY]: the help/note guidance every diagnostic
+// carries (folded onto the LSP message via `help_note_suffix`).
 #[cfg(test)]
 mod tests {
     use super::{Diagnostic, ErrorCode, Severity};

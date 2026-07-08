@@ -3,11 +3,10 @@
 //! Code Actions handler: quick fixes for diagnostics.
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicU64;
 
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, CodeActionOrCommand, Command, Diagnostic, NumberOrString, Range,
-    TextEdit, Url, WorkspaceEdit,
+    CodeAction, CodeActionKind, CodeActionOrCommand, Command, Diagnostic, NumberOrString, Position,
+    Range, TextEdit, Url, WorkspaceEdit,
 };
 
 mod fixes;
@@ -17,8 +16,22 @@ pub(crate) mod refactor;
 mod stubs;
 mod suppress;
 
-/// Monotonic counter for unique temp-file names.
-pub(super) static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+/// Compute the LSP range covering the entire document.
+pub(crate) fn full_document_range(source: &str) -> Range {
+    let line_count = u32::try_from(source.lines().count()).unwrap_or(u32::MAX);
+    let last_line_char_count = source.lines().last().map_or(0, |l| l.chars().count());
+    let last_line_len = u32::try_from(last_line_char_count).unwrap_or(u32::MAX);
+    Range {
+        start: Position {
+            line: 0,
+            character: 0,
+        },
+        end: Position {
+            line: line_count,
+            character: last_line_len,
+        },
+    }
+}
 
 /// Return the 0-based line number after the last import statement.
 pub(super) fn last_import_line(source: &str) -> u32 {
@@ -82,7 +95,7 @@ pub(super) fn quickfix_action(
 
 // Re-export pub(crate) items that the server module calls directly.
 pub(crate) use imports::organize_imports;
-pub(crate) use mass_fix::{fix_all_by_rule, fix_all_in_file, fix_all_quickfix};
+pub(crate) use mass_fix::{fix_all_by_rule, fix_all_quickfix, fix_filtered_in_file};
 
 /// Generate code actions for the given diagnostics and cursor range.
 ///
@@ -114,7 +127,7 @@ pub fn code_actions(
         };
 
         // uv-based quick fixes for unresolved imports and missing stubs.
-        if code == "BSK-E0010" {
+        if code == "imports_unresolved" {
             if let Some(module) = extract_module_from_diagnostic(&diag.message) {
                 // Only offer `uv add` when the name is a plausible PyPI
                 // distribution. Internal/vendored modules like `_pydevd_bundle`
@@ -142,7 +155,7 @@ pub fn code_actions(
                 ));
             }
         }
-        if code == "BSK-E0154" {
+        if code == "imports_module_attribute" {
             // "Create method/attribute" quick fix — add the undeclared member
             // to the local stub. [STUBRES-ADD-MEMBER]
             if let Some(action) = stubs::make_add_member_action(diag, source) {
@@ -366,6 +379,9 @@ fn make_uv_add_dev_pytest_action(diag: &Diagnostic) -> CodeAction {
 /// Returns `None` when no stub distribution is known (the package ships inline
 /// `py.typed` types or no stubs exist), so we never offer a quick-fix that would
 /// fail to resolve on `PyPI` (e.g. the nonexistent `pydantic_ai-stubs`).
+///
+/// Implements [LSPUV-DIAGNOSTICS-MISSING-STUBS] — the `basilisk.uv.addDev`
+/// quick fix, gated on the bundled typeshed index.
 fn make_uv_add_stubs_action(diag: &Diagnostic, module: &str) -> Option<CodeAction> {
     let stubs_package = basilisk_stubs::typeshed_stub_distribution(module)?;
     Some(CodeAction {
@@ -561,7 +577,7 @@ mod tests {
     fn test_bsk_e0010_code_action_includes_uv_add() {
         let diag = make_diagnostic(
             DiagnosticSeverity::ERROR,
-            "BSK-E0010",
+            "imports_unresolved",
             "Cannot resolve import 'requests'",
             range_at((0, 0), (0, 8)),
         );
@@ -578,7 +594,7 @@ mod tests {
         );
     }
 
-    /// Regression for issue #84: the BSK-E0010 "add dependency" quick-fix must
+    /// Regression for issue #84: the `imports_unresolved` "add dependency" quick-fix must
     /// NOT offer `uv add` for a module name that is not a valid `PyPI`
     /// distribution. `_pydevd_bundle` is a debugpy-internal submodule whose
     /// name starts with `_`; `uv` rejects it ("Expected package name starting
@@ -588,7 +604,7 @@ mod tests {
     fn test_bsk_e0010_no_uv_add_for_non_pypi_module() {
         let diag = make_diagnostic(
             DiagnosticSeverity::ERROR,
-            "BSK-E0010",
+            "imports_unresolved",
             "Cannot resolve import `_pydevd_bundle`",
             range_at((0, 0), (0, 20)),
         );
@@ -674,13 +690,13 @@ mod tests {
         assert_create_local_stub_action(&actions, "requests", false);
     }
 
-    /// BSK-E0154 offers a one-click "add member to stub" fix that dispatches the
+    /// `imports_module_attribute` offers a one-click "add member to stub" fix that dispatches the
     /// `STUBS_ADD_MEMBER` command with the stub path and the inferred snippet.
     #[test]
     fn test_bsk_e0154_offers_add_member_action() {
         let diag = make_diagnostic(
             DiagnosticSeverity::ERROR,
-            "BSK-E0154",
+            "imports_module_attribute",
             "Module `cowsay` has no attribute `get_output_string`\n\nhelp: declare \
              `get_output_string` in the local stub `/w/.basilisk/stubs/cowsay.pyi`, or fix the typo.",
             range_at((1, 4), (1, 28)),
@@ -705,11 +721,11 @@ mod tests {
     }
 
     #[test]
-    fn test_bsk_w0014_code_action_includes_uv_add_dev_pytest() {
+    fn pytest_not_found_code_action_includes_uv_add_dev_pytest() {
         let diag = make_diagnostic(
             DiagnosticSeverity::WARNING,
             crate::server::test_handlers::PYTEST_NOT_FOUND_CODE,
-            "pytest not found in uv.lock — use quick fix to install",
+            "Test runner \"pytest\" is not installed. Run \"uv add --dev pytest\" to install.",
             range_at((0, 0), (0, 0)),
         );
         let uri = Url::parse("file:///test_example.py").unwrap();

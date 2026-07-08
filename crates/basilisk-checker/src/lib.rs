@@ -10,11 +10,11 @@
 //! severity. See CHECKER-ARCHITECTURE-SPEC.md Section 4.1.3 for the full specification.
 //!
 //! - `# type: ignore` — suppress all diagnostics (PEP 484 compatible)
-//! - `# type: ignore[BSK-E0010]` — suppress specific codes
-//! - `# type: warning[BSK-E0010]` — demote to warning
-//! - `# type: info[BSK-E0010]` — demote to info
-//! - `# type: disabled[BSK-E0010]` — disable rule on this line
-//! - `# type: disabled[BSK-E0010]` ... `# type: end-disabled[BSK-E0010]` — block
+//! - `# type: ignore[imports_unresolved]` — suppress specific codes
+//! - `# type: warning[imports_unresolved]` — demote to warning
+//! - `# type: info[imports_unresolved]` — demote to info
+//! - `# type: disabled[imports_unresolved]` — disable rule on this line
+//! - `# type: disabled[imports_unresolved]` ... `# type: end-disabled[imports_unresolved]` — block
 //! - `# basilisk: relaxed` — per-file: all errors become warnings
 //! - `# basilisk: file-disabled[CODE]` — per-file: disable specific rules
 //!
@@ -22,7 +22,7 @@
 //!
 //! [`check_with_config`] applies project-level overrides from `pyproject.toml`
 //! or `basilisk.json`:
-//! - Global rule severity overrides (`rules."BSK-E0010" = "warning"`)
+//! - Global rule severity overrides (`rules."imports_unresolved" = "warning"`)
 //! - Per-module overrides (`per-module-overrides."fastmcp".ignore-missing-stubs`)
 //! - Per-path overrides (`per-path-overrides."vendor/**".rules.disabled`)
 
@@ -30,7 +30,11 @@ pub mod cached;
 pub mod collection_inference;
 pub mod context;
 pub mod diagnostic;
+pub mod exports;
+pub mod imports;
+pub mod incremental;
 pub mod inference;
+pub mod rule_tags;
 pub mod rules;
 pub mod span_util;
 pub mod suppression;
@@ -39,6 +43,16 @@ pub mod types_parsing;
 
 pub use cached::CachedDiagnostic;
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};
+pub use incremental::{
+    checked_file, checked_file_cross, checked_file_resolved, cross_resolved_module,
+    file_diagnostics, file_diagnostics_cross, file_diagnostics_resolved, module_exports,
+    resolved_module, ConfigInput, ConfigValue, FileRegistry, ModuleExports, ResolvedFile,
+    SearchPathsInput, WorkspaceFiles,
+};
+
+// Re-export the incremental-database handles so consumers can drive the
+// memoized `checked_file` query without depending on `basilisk-db` directly.
+pub use basilisk_db::{BasiliskDatabase, Db, SourceFile};
 
 /// Run all rules and apply inline suppression / mode overrides.
 ///
@@ -54,7 +68,7 @@ pub fn check(module: &basilisk_resolver::ResolvedModule) -> Vec<Diagnostic> {
 /// 1. Inline source comments (`# type: ignore`, `# basilisk: relaxed`, etc.)
 /// 2. Per-path overrides (`per-path-overrides."vendor/**"`)
 /// 3. Per-module overrides (`per-module-overrides."fastmcp"`)
-/// 4. Global rule severity overrides (`rules."BSK-E0010" = "warning"`)
+/// 4. Global rule severity overrides (`rules."imports_unresolved" = "warning"`)
 /// 5. Cascade suppression (suppress downstream errors from untyped imports)
 /// 6. Default rule severity
 #[must_use]
@@ -65,35 +79,49 @@ pub fn check_with_config(
     let inline_overrides = suppression::parse_source_overrides(&module.source);
     let source = &module.source;
     let file_path = std::path::Path::new(&module.path);
-    // [CHKARCH-VERSION-TARGET] every rule sees the configured target.
-    let ctx = context::CheckContext::from_config(config);
+    // [CHKARCH-VERSION-TARGET] every rule sees the configured target, plus a
+    // shared line index so offset→line lookups (here and in rules) stay O(log n)
+    // instead of rescanning the source per diagnostic / per function.
+    let ctx = context::CheckContext::from_config_with_source(config, source);
     let raw = rules::run_all(module, &ctx);
 
     // Build the set of symbol names imported from unresolved modules.
     // Used for cascade suppression: downstream errors referencing these names
-    // are suppressed since the root cause is the missing import (BSK-E0010).
+    // are suppressed since the root cause is the missing import (imports_unresolved).
     let untyped_names: std::collections::HashSet<String> = module
         .imports
         .iter()
         .filter(|i| {
+            // A configured custom typeshed is canonical for step 3, so the
+            // bundled name-set no longer treats an absent stdlib module as typed
+            // ([STUBRES-CUSTOM-TYPESHED]); its imported names then participate in
+            // cascade suppression like any other unresolved import.
             i.resolution == basilisk_resolver::scope::ImportResolution::Unresolved
-                && !basilisk_stubs::is_stdlib_module(&i.module)
+                && !crate::imports::bundled_stdlib_recognized(
+                    &i.module,
+                    config.typeshed_path.is_some(),
+                )
         })
         .flat_map(|i| i.names.iter().cloned())
         .collect();
+
+    // Diagnostic-independent, so computed once: scanning every import per
+    // emitted `imports_unresolved` diagnostic made import-heavy files O(n²).
+    let suppress_e0010 = should_suppress_e0010_for_module(module, config);
 
     raw.into_iter()
         .filter_map(|mut diag| {
             let code = diag.code.code;
 
-            // 0. Config gating for uv diagnostics.
-            if code == "BSK-E0152" && !config.uv_stub_suggestions {
-                return None;
-            }
-            if matches!(code, "BSK-W0011" | "BSK-W0012" | "BSK-W0013")
-                && !config.uv_dependency_diagnostics
-            {
-                return None;
+            // 0. Opt-in gating. Basilisk-original rules (provenance `basilisk`)
+            //    are off by default; each turns on only when the configuration
+            //    opts into one of its tags. PEP rules always run. Provenance and
+            //    tags come from the rule itself via the tagging layer — there is
+            //    no hand-maintained code list here. [CHKTAG-PROVENANCE]
+            if let Some(spec) = rule_tags::opt_in_spec_for_code(code) {
+                if !spec.tags.iter().any(|tag| opt_in_tag_enabled(tag, config)) {
+                    return None;
+                }
             }
 
             // 1. Per-path: check if rule is completely disabled for this file path.
@@ -101,8 +129,8 @@ pub fn check_with_config(
                 return None;
             }
 
-            // 2. Per-module: suppress BSK-E0010 for modules with ignore-missing-stubs.
-            if code == "BSK-E0010" && should_suppress_e0010_for_module(module, config) {
+            // 2. Per-module: suppress imports_unresolved for modules with ignore-missing-stubs.
+            if code == "imports_unresolved" && suppress_e0010 {
                 return None;
             }
 
@@ -145,11 +173,32 @@ pub fn check_with_config(
                 }
             }
 
-            // 7. Inline source overrides (highest priority).
-            let diag_line = suppression::byte_offset_to_line_in_source(source, diag.span.start);
+            // 7. Inline source overrides (highest priority). The 0-based line is
+            //    the count of newlines before the span start — the shared line
+            //    index answers that in O(log n) instead of rescanning the prefix
+            //    for every diagnostic.
+            let diag_line = ctx
+                .line_index
+                .line(diag.span.start_usize())
+                .saturating_sub(1);
             suppression::apply_overrides_at_line(diag, diag_line, &inline_overrides)
         })
         .collect()
+}
+
+/// Whether a Basilisk rule's free-form `tag` is opted into by `config`.
+///
+/// This is the single bridge from the configuration's opt-in switches to rule
+/// tags. Selection is by tag, so adding a Basilisk rule needs only a tag on the
+/// rule itself — never an entry in a code list here or in the tagging layer.
+/// [CHKARCH-CONFIGURATION-ONLY]
+fn opt_in_tag_enabled(tag: &str, config: &basilisk_config::BasiliskConfig) -> bool {
+    match tag {
+        "strictness" | "style" | "redundancy" => config.strict_annotations,
+        "dependencies" | "imports" => config.uv_dependency_diagnostics,
+        "stubs" => config.uv_stub_suggestions,
+        _ => false,
+    }
 }
 
 /// Returns `true` if this diagnostic code can be cascade-suppressed.
@@ -161,13 +210,13 @@ pub fn check_with_config(
 fn is_cascade_suppressible(code: &str) -> bool {
     matches!(
         code,
-        "BSK-E0012"  // wrong call
-        | "BSK-E0013" // attribute not found
-        | "BSK-E0014" // type mismatch
-        | "BSK-E0015" // missing return type
-        | "BSK-E0018" // undefined variable
-        | "BSK-E0041" // too few arguments
-        | "BSK-E0053" // assert_type mismatch
+        "calls_argument_type"  // wrong call
+        | "returns_compatibility_2" // attribute not found
+        | "assignment_compatibility" // type mismatch
+        | "callables_annotation" // missing return type
+        | "names_undefined" // undefined variable
+        | "calls_argument_count" // too few arguments
+        | "directives_assert_type_2" // assert_type mismatch
     )
 }
 
@@ -177,7 +226,7 @@ fn is_cascade_suppressible(code: &str) -> bool {
 /// Extracts the source text covered by the diagnostic's span and checks if
 /// any of the `untyped_names` appear as whole identifiers within it. This
 /// avoids cascading errors from untyped imports — the root cause is already
-/// reported by BSK-E0010.
+/// reported by `imports_unresolved`.
 fn should_suppress_cascade(
     diag: &Diagnostic,
     untyped_names: &std::collections::HashSet<String>,
@@ -242,7 +291,7 @@ const fn is_identifier_char(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
-/// Check whether BSK-E0010 should be suppressed based on per-module overrides.
+/// Check whether `imports_unresolved` should be suppressed based on per-module overrides.
 ///
 /// Iterates the module's imports to find which module triggered E0010,
 /// then checks if that module has `ignore-missing-stubs = true`.
@@ -316,17 +365,17 @@ mod tests {
         let config = basilisk_config::BasiliskConfig::default();
         let diagnostics = check_with_config(&module, &config);
 
-        // Should have BSK-E0010 for the unresolved import.
-        let e0010_count = count_code(&diagnostics, "BSK-E0010");
+        // Should have imports_unresolved for the unresolved import.
+        let e0010_count = count_code(&diagnostics, "imports_unresolved");
         assert!(
             e0010_count >= 1,
-            "BSK-E0010 should fire for unresolved import"
+            "imports_unresolved should fire for unresolved import"
         );
 
         // Should NOT have any downstream errors referencing `get`.
         let downstream = diagnostics
             .iter()
-            .filter(|d| d.code.code != "BSK-E0010" && d.code.code != "BSK-E0152")
+            .filter(|d| d.code.code != "imports_unresolved" && d.code.code != "BSK-E0152")
             .filter(|d| d.message.contains("get"))
             .count();
         assert_eq!(
@@ -345,8 +394,11 @@ mod tests {
         let config = basilisk_config::BasiliskConfig::default();
         let diagnostics = check_with_config(&module, &config);
 
-        // os is stdlib — no BSK-E0010 should fire.
-        let e0010_count = count_code(&diagnostics, "BSK-E0010");
-        assert_eq!(e0010_count, 0, "stdlib imports should not fire BSK-E0010");
+        // os is stdlib — no imports_unresolved should fire.
+        let e0010_count = count_code(&diagnostics, "imports_unresolved");
+        assert_eq!(
+            e0010_count, 0,
+            "stdlib imports should not fire imports_unresolved"
+        );
     }
 }

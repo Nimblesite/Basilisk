@@ -11,10 +11,10 @@ fn run(source: &str) -> Result<Vec<basilisk_checker::Diagnostic>, Box<dyn std::e
     Ok(check(&resolved))
 }
 
-// ── E0107: Variance — class with base_subscripts ──
+// ── Variance — class with base_subscripts ──
 
 #[test]
-fn e0107_covariant_in_invariant_base() -> Result<(), Box<dyn std::error::Error>> {
+fn covariant_in_invariant_base() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -40,7 +40,7 @@ class DoubleNested(Generic[T_co]):
 }
 
 #[test]
-fn e0107_variance_through_alias() -> Result<(), Box<dyn std::error::Error>> {
+fn variance_through_alias() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar, TypeAlias
 
@@ -61,7 +61,7 @@ class Child(ContainerAlias, Generic[T_co]):
 }
 
 #[test]
-fn e0107_multiple_generic_bases() -> Result<(), Box<dyn std::error::Error>> {
+fn multiple_generic_bases() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -83,10 +83,10 @@ class Multi(First[T_co], Second[T_co], Generic[T_co]):
     Ok(())
 }
 
-// ── E0115: Deprecated — in-module usage ──
+// ── Deprecated — in-module usage ──
 
 #[test]
-fn e0115_deprecated_in_same_module() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_in_same_module() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 import warnings
 
@@ -120,7 +120,7 @@ val = obj.old_prop
 }
 
 #[test]
-fn e0115_deprecated_typing_extensions() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_typing_extensions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing_extensions import deprecated
 
@@ -150,7 +150,7 @@ LegacyClass.static_method()
 }
 
 #[test]
-fn e0115_deprecated_warnings_module() -> Result<(), Box<dyn std::error::Error>> {
+fn deprecated_warnings_module() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from warnings import deprecated
 
@@ -170,10 +170,10 @@ x = OldClass()
     Ok(())
 }
 
-// ── E0137: Generic protocol — subscripted assignment ──
+// ── Generic protocol — subscripted assignment ──
 
 #[test]
-fn e0137_subscripted_protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
+fn subscripted_protocol_assignment() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar, Generic
 
@@ -201,7 +201,7 @@ c: Getter[int] = StrGetter()
 }
 
 #[test]
-fn e0137_protocol_generic_both_bases() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_generic_both_bases() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar, Generic
 
@@ -216,7 +216,7 @@ class ProtoAndGeneric(Protocol[T_co], Generic[T_co]):
 }
 
 #[test]
-fn e0137_protocol_self_typed_method() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_self_typed_method() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, TypeVar
 
@@ -241,10 +241,10 @@ y: Clonable = Bad()
     Ok(())
 }
 
-// ── E0148: Generic type arg — constrained/subscript/metaclass ──
+// ── Generic type arg — constrained/subscript/metaclass ──
 
 #[test]
-fn e0148_constrained_typevar_mixed_call() -> Result<(), Box<dyn std::error::Error>> {
+fn constrained_typevar_mixed_call() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -266,7 +266,7 @@ ok2 = concat(b"a", b"b")
 }
 
 #[test]
-fn e0148_mapping_key_type() -> Result<(), Box<dyn std::error::Error>> {
+fn mapping_key_type() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Mapping
 
@@ -285,7 +285,7 @@ val3 = my_map[True]
 }
 
 #[test]
-fn e0148_generic_metaclass() -> Result<(), Box<dyn std::error::Error>> {
+fn generic_metaclass() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -305,10 +305,10 @@ class MyClass2(metaclass=GenericMeta):
     Ok(())
 }
 
-// ── E0130: TypeVar scope — line-by-line scope tracking ──
+// ── TypeVar scope — line-by-line scope tracking ──
 
 #[test]
-fn e0130_nested_class_typevar_scope() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_class_typevar_scope() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -328,7 +328,7 @@ class Outer(Generic[T]):
 }
 
 #[test]
-fn e0130_unbound_typevar_module_level() -> Result<(), Box<dyn std::error::Error>> {
+fn unbound_typevar_module_level() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar, TypeAlias
 
@@ -351,7 +351,7 @@ class MyClass(Generic[T]):
 }
 
 #[test]
-fn e0130_typevar_in_function_scope() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_in_function_scope() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -376,10 +376,10 @@ c.transform("wrong")
     Ok(())
 }
 
-// ── E0111: Constructor — more patterns ──
+// ── Constructor — more patterns ──
 
 #[test]
-fn e0111_specialized_generic_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+fn specialized_generic_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -401,7 +401,7 @@ w4 = Wrapper[float](3.14)
 }
 
 #[test]
-fn e0111_explicit_self_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn explicit_self_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generic, TypeVar
 
@@ -422,7 +422,7 @@ p2 = Pair[int, str](1, "hello")
 }
 
 #[test]
-fn e0111_namedtuple_type_check() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_type_check() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import NamedTuple
 
@@ -449,10 +449,10 @@ p7 = Person("Frank", 1, True, "extra")
     Ok(())
 }
 
-// ── E0097: Protocol __init__ — deeper body walking ──
+// ── Protocol __init__ — deeper body walking ──
 
 #[test]
-fn e0097_protocol_init_for_loop_body() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_init_for_loop_body() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol
 
@@ -476,10 +476,10 @@ class MyProto(Protocol):
     Ok(())
 }
 
-// ── E0102: TypeVar default — more patterns ──
+// ── TypeVar default — more patterns ──
 
 #[test]
-fn e0102_typevar_default_bound_compat() -> Result<(), Box<dyn std::error::Error>> {
+fn typevar_default_bound_compat() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVar
 
@@ -505,10 +505,10 @@ D3 = TypeVar("D3", default=D2)
     Ok(())
 }
 
-// ── E0085: TypeVarTuple — more patterns ──
+// ── TypeVarTuple — more patterns ──
 
 #[test]
-fn e0085_typevartuple_mixed_params() -> Result<(), Box<dyn std::error::Error>> {
+fn typevartuple_mixed_params() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeVarTuple, Generic, TypeVar, Unpack
 
@@ -528,10 +528,10 @@ t3 = Tensor[str, int, int, int]("", 1, 2, 3)
     Ok(())
 }
 
-// ── E0119: Protocol isinstance — more patterns ──
+// ── Protocol isinstance — more patterns ──
 
 #[test]
-fn e0119_protocol_isinstance_data_protocol() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_isinstance_data_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Protocol, runtime_checkable
 
@@ -569,10 +569,10 @@ issubclass(str, MethodProto)
     Ok(())
 }
 
-// ── E0146: Protocol class object — more patterns ──
+// ── Protocol class object — more patterns ──
 
 #[test]
-fn e0146_protocol_type_annotation() -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_type_annotation() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Protocol, Type
 
@@ -606,10 +606,10 @@ y: type[Serializable] = JsonSerializer
     Ok(())
 }
 
-// ── E0138: Frozen dataclass — with ordering ──
+// ── Frozen dataclass — with ordering ──
 
 #[test]
-fn e0138_frozen_with_order() -> Result<(), Box<dyn std::error::Error>> {
+fn frozen_with_order() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -637,7 +637,7 @@ a.y = "z"
 }
 
 #[test]
-fn e0138_frozen_without_order() -> Result<(), Box<dyn std::error::Error>> {
+fn frozen_without_order() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 
@@ -661,10 +661,10 @@ a.x = 10
     Ok(())
 }
 
-// ── E0140: Callable — more edge cases ──
+// ── Callable — more edge cases ──
 
 #[test]
-fn e0140_callable_protocol_form() -> Result<(), Box<dyn std::error::Error>> {
+fn callable_protocol_form() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import Callable, Protocol
 
@@ -689,10 +689,10 @@ d: Callable[[int, str, float], bool] = lambda x, y: True
     Ok(())
 }
 
-// ── E0120: Generator — yield from ──
+// ── Generator — yield from ──
 
 #[test]
-fn e0120_generator_yield_from() -> Result<(), Box<dyn std::error::Error>> {
+fn generator_yield_from() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import Generator, Iterator
 
@@ -716,10 +716,10 @@ def gen_async_iter():
     Ok(())
 }
 
-// ── E0143: NamedTuple — delete/unpack ──
+// ── NamedTuple — delete/unpack ──
 
 #[test]
-fn e0143_namedtuple_delete_and_unpack() -> Result<(), Box<dyn std::error::Error>> {
+fn namedtuple_delete_and_unpack() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
 from typing import NamedTuple
 
@@ -747,10 +747,10 @@ val2 = v[-4]
     Ok(())
 }
 
-// ── E0095: InitVar — attribute access ──
+// ── InitVar — attribute access ──
 
 #[test]
-fn e0095_initvar_attribute_access() -> Result<(), Box<dyn std::error::Error>> {
+fn initvar_attribute_access() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass, InitVar
 
@@ -774,10 +774,10 @@ w.verbose
     Ok(())
 }
 
-// ── E0108: Slots — __slots__ access ──
+// ── Slots — __slots__ access ──
 
 #[test]
-fn e0108_slots_access_on_non_slots() -> Result<(), Box<dyn std::error::Error>> {
+fn slots_access_on_non_slots() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from dataclasses import dataclass
 

@@ -6,17 +6,23 @@ edition.workspace    = true
 license.workspace    = true
 
 [dependencies]
+basilisk-common.workspace   = true
 basilisk-config.workspace   = true
+basilisk-db.workspace       = true
 basilisk-parser.workspace   = true
 basilisk-resolver.workspace = true
 basilisk-stubs.workspace    = true
 ruff_python_ast.workspace   = true
 ruff_text_size.workspace    = true
 basilisk-uv.workspace       = true
+salsa.workspace             = true
 serde.workspace             = true
 
 [dev-dependencies]
 basilisk-test-macros.workspace = true
+basilisk-test-utils = { workspace = true, features = ["salsa"] }
+basilisk-config.workspace = true
+salsa.workspace = true
 serde_json.workspace = true
 tempfile = "3"
 

@@ -66,6 +66,9 @@ pub fn parse_pyi_file(
 /// # Errors
 ///
 /// Returns [`StubParseError::Syntax`] if the source has parse errors.
+// Implements [STUBRES-PYI] — reuses `ruff_python_parser`; only signatures
+// matter (def/class/annotations), bodies (`...`/`pass`) are ignored, and the
+// `@overload` decorator is tracked (see `StubExtractor::visit_function`).
 pub fn parse_pyi_source(
     content: &str,
     path: &Path,
@@ -137,6 +140,8 @@ impl StubExtractor {
         }
     }
 
+    // Implements [STUBRES-PYI] — `@overload` is the one decorator that is
+    // significant for stub extraction: overload variants are grouped separately.
     fn visit_function(&mut self, func: &StmtFunctionDef, class_name: Option<&str>) {
         let decorators = extract_decorator_names(&func.decorator_list);
         let is_overload = decorators.iter().any(|d| d == "overload");

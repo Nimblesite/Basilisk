@@ -9,6 +9,13 @@ use std::path::{Path, PathBuf};
 use crate::error::UvError;
 
 /// Parsed uv workspace configuration.
+//
+// Implements [LSPUV-WORKSPACE-MODEL] in a slimmed form: holds the resolved
+// member directory paths (the spec's `WorkspaceInfo.members`). The spec's
+// richer per-member shape (`WorkspaceMember { name, path, pyproject,
+// src_roots }`) is not modelled as a struct here — member src-roots are
+// derived later in `discover_workspace_members` / `add_source_root`. See
+// conformance audit (DEVIATION: simplified model).
 #[derive(Debug, Clone)]
 pub struct UvWorkspace {
     /// Resolved member directory paths.
@@ -57,6 +64,13 @@ struct WorkspaceSection {
 /// # Errors
 ///
 /// Returns [`UvError::TomlParse`] if the file is malformed TOML.
+//
+// Implements [LSPUV-WORKSPACE-DETECTION] — reads `[tool.uv.workspace] members`
+// (and `exclude`) from `pyproject.toml` and resolves glob patterns to member
+// directories. NOTE: the spec table shows `exclude` being honoured in spirit,
+// but `resolve_member_patterns` does NOT subtract `exclude` from the resolved
+// members (the field is parsed and surfaced, not applied). See conformance
+// audit (DEVIATION).
 pub fn parse_uv_workspace(root: &Path) -> Result<Option<UvWorkspace>, UvError> {
     let path = root.join("pyproject.toml");
 
@@ -141,6 +155,9 @@ mod tests {
         parse_uv_workspace(dir.path()).unwrap().unwrap()
     }
 
+    // [LSPUV-WORKSPACE-DETECTION]: parsing `[tool.uv.workspace]` members/glob
+    // patterns/excludes, and the no-workspace / malformed / literal-member
+    // edge cases.
     #[test]
     fn parses_workspace_with_members_and_excludes() {
         let dir = tempfile::tempdir().unwrap();
@@ -360,6 +377,9 @@ mod discovery_tests {
     /// `src/` layout (no uv workspace, no subdirectory projects), the `src/`
     /// directory must be added to workspace members so first-party imports
     /// like `from agent_backend.config import settings` resolve.
+    ///
+    /// Exercises [LSPUV-WORKSPACE-IMPORT-RESOLUTION] — member source-root
+    /// discovery (the `src/` layout preference in `add_source_root`).
     #[test]
     fn root_src_layout_project_is_discovered() {
         let root = unique_tmp("bsk_uv_root_src");

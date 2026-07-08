@@ -5,6 +5,13 @@
 //! Each function maps a specific Basilisk diagnostic code to a targeted text
 //! edit that resolves the problem.
 
+// Implements [AUTOFIX-MASS] (Single-diagnostic scope) — these per-diagnostic
+// edits are the unit that mass_fix collects and combines for File/Workspace
+// scope. NOTE: the spec's `Fix` metadata struct ([AUTOFIX-METADATA]) with
+// `safety`/`combinable`/`source` fields is NOT modelled here; each fn returns a
+// bare `CodeAction`. Safety is tracked separately as static rule-code lists in
+// mass_fix (SAFE_FIXABLE_RULES / ALL_FIXABLE_RULES). See report DEVIATION.
+
 use std::collections::HashMap;
 
 use tower_lsp::lsp_types::{CodeAction, Diagnostic, Position, Range, TextEdit, Url};

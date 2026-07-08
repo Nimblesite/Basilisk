@@ -32,6 +32,69 @@ const TIMEOUT_BUFFER_MS = 5_000;
 /** Large buffer (ms) for tests with multiple diagnostic waits or startup delays. */
 const LARGE_TIMEOUT_BUFFER_MS = 15_000;
 
+/** Fodder files written into the workspace to slow the wholeModule scan enough
+ *  that closing an editor reliably lands mid-scan (GitHub #264). */
+const FODDER_FILE_COUNT = 400;
+
+/** Wait (ms) after flipping to wholeModule before closing the editor — long
+ *  enough for the didChangeConfiguration to reach the server and the scan to
+ *  begin computing, short enough that the scan is still running. */
+const SCAN_KICKOFF_WAIT_MS = 1_000;
+
+/** Budget (ms) for the fodder marker file to receive its scan diagnostics —
+ *  i.e. for the slowed-down workspace scan to complete and publish. */
+const SCAN_COMPLETE_TIMEOUT_MS = 45_000;
+
+/** Window (ms) after the scan completes during which stale diagnostics for the
+ *  closed file must NOT reappear. The buggy republish trails the marker
+ *  publish by milliseconds, so this is generous. */
+const STALE_REPUBLISH_GRACE_MS = 3_000;
+
+/** Fodder module: fully annotated, diagnostic-free, but real enough that the
+ *  scan pays parse+check cost for each file. */
+function fodderModule(moduleIndex: number): string {
+    const lines: string[] = ['"""Scan fodder for the #264 stale-republish test."""', ''];
+    for (let functionIndex = 0; functionIndex < 12; functionIndex += 1) {
+        lines.push(
+            `def fodder_${moduleIndex}_${functionIndex}(value: int) -> int:`,
+            `    total: int = value + ${functionIndex}`,
+            '    return total',
+            ''
+        );
+    }
+    return lines.join('\n');
+}
+
+/** Write FODDER_FILE_COUNT clean modules plus one erroring marker module into
+ *  `fodderDir`. The marker's scan diagnostics signal "publish loop reached the
+ *  scan portion" — open-file refresh entries publish after it. */
+function writeScanFodder(fodderDir: string): vscode.Uri {
+    fs.mkdirSync(fodderDir, { recursive: true });
+    for (let moduleIndex = 0; moduleIndex < FODDER_FILE_COUNT; moduleIndex += 1) {
+        const name = `fodder_${String(moduleIndex).padStart(3, '0')}.py`;
+        fs.writeFileSync(path.join(fodderDir, name), fodderModule(moduleIndex), 'utf8');
+    }
+    const markerPath = path.join(fodderDir, 'zz_marker_264.py');
+    fs.writeFileSync(markerPath, 'def marker(name):\n    return f"Hello, {name}!"\n', 'utf8');
+    return vscode.Uri.file(markerPath);
+}
+
+/** Poll for `windowMs` asserting the URI's diagnostics stay at zero — catches
+ *  a stale scan republish arriving after didClose cleared them (#264). */
+async function assertDiagnosticsStayCleared(uri: vscode.Uri, windowMs: number): Promise<void> {
+    const deadline = Date.now() + windowMs;
+    while (Date.now() < deadline) {
+        const diags = vscode.languages.getDiagnostics(uri);
+        assert.strictEqual(
+            diags.length,
+            0,
+            `stale diagnostics republished for closed file ${uri.fsPath} after ` +
+            `didClose cleared them (GitHub #264): ${diags.map((d) => d.message).join('; ')}`
+        );
+        await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    }
+}
+
 /**
  * Filter diagnostics to only those produced by the Basilisk LSP server.
  */
@@ -47,6 +110,9 @@ function filterBasiliskDiagnostics(diags: vscode.Diagnostic[]): vscode.Diagnosti
     );
 }
 
+// Tests the editor-setting source of [ANALYSIS-CONFIG-SRC] — the
+// `basilisk.analysisMode` workspace setting: default `wholeModule`, all three
+// enum values accepted, and the server respecting the selected scope.
 // eslint-disable-next-line max-lines-per-function
 suite('Analysis Mode Tests', () => {
     let tmpDir: string;
@@ -327,6 +393,67 @@ suite('Analysis Mode Tests', () => {
                 'openFilesOnly: diagnostics should be cleared when file is closed'
             );
         } finally {
+            await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Workspace);
+        }
+    });
+
+    // Regression test for GitHub #264 — the root cause of the flaky
+    // "openFilesOnly: opening a file produces diagnostics, closing clears them"
+    // failure under full-suite load. A wholeModule scan snapshots open files
+    // (refresh_open_files) and publishes them last; a didClose processed
+    // between the scan's publishes clears the file and removes it from the
+    // index, then the scan republishes the stale diagnostics — which nothing
+    // ever clears again. Exercises the publish staleness guard in
+    // crates/basilisk-lsp/src/server/init.rs ([ANALYSIS-PUBLISH]).
+    test('wholeModule: file closed mid-scan must not get stale diagnostics republished (#264)', async function () {
+        this.timeout(SUITE_SETUP_TIMEOUT_MS + SCAN_COMPLETE_TIMEOUT_MS);
+
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        assert.ok(workspaceRoot !== undefined, 'no workspace folder configured');
+
+        const cfg = vscode.workspace.getConfiguration('basilisk');
+        const originalMode = cfg.get<string>('analysisMode');
+        const fodderDir = path.join(workspaceRoot, 'scan_fodder_264');
+
+        try {
+            // Start in openFilesOnly so the later flip to wholeModule triggers
+            // a fresh workspace scan while our file is open.
+            await cfg.update('analysisMode', 'openFilesOnly', vscode.ConfigurationTarget.Workspace);
+            await new Promise<void>((resolve) => setTimeout(resolve, 1_000));
+
+            // Slow the upcoming scan down and plant the completion marker.
+            const markerUri = writeScanFodder(fodderDir);
+
+            // Open an erroring file OUTSIDE the workspace root and wait for
+            // its diagnostics (published by didOpen).
+            const { uri } = await openPythonFile(
+                tmpDir,
+                'stale_republish_264.py',
+                'def greet(name):\n    return f"Hello, {name}!"\n'
+            );
+            const openDiags = await waitForDiagnostics(uri, DIAGNOSTIC_TIMEOUT_MS);
+            assert.ok(openDiags.length > 0, 'file must have diagnostics while open');
+
+            // Flip to wholeModule: the scan snapshot now includes the open
+            // file. Give the config change time to reach the server and the
+            // scan time to start computing…
+            await cfg.update('analysisMode', 'wholeModule', vscode.ConfigurationTarget.Workspace);
+            await new Promise<void>((resolve) => setTimeout(resolve, SCAN_KICKOFF_WAIT_MS));
+
+            // …then close the editor while the scan is still running. The
+            // server clears the file's diagnostics on didClose.
+            await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+            const cleared = await waitForDiagnosticsCleared(uri, DIAGNOSTIC_TIMEOUT_MS);
+            assert.strictEqual(cleared.length, 0, 'didClose must clear diagnostics');
+
+            // Wait for the scan's publish loop to reach the scan portion (the
+            // marker fodder file gets its diagnostics)…
+            await waitForDiagnostics(markerUri, SCAN_COMPLETE_TIMEOUT_MS);
+
+            // …and assert the closed file's stale diagnostics never come back.
+            await assertDiagnosticsStayCleared(uri, STALE_REPUBLISH_GRACE_MS);
+        } finally {
+            fs.rmSync(fodderDir, { recursive: true, force: true });
             await cfg.update('analysisMode', originalMode, vscode.ConfigurationTarget.Workspace);
         }
     });

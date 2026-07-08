@@ -22,7 +22,6 @@ import { createStore, type Store } from "./store";
 import { registerProfiler, disposeProfiler } from "./profiler";
 import { registerMemoryProfiler, disposeMemoryProfiler } from "./memory-profiler";
 import { registerMemoryAutopilot, disposeMemoryAutopilot, notifyDebuggeePause } from "./memory-autopilot";
-import { isProfilingUiEnabled } from "./profiling-ui";
 import { reportRuntimeFailure, resolveBasiliskRuntime } from "./shipwright-runtime";
 
 /** Priority for the Basilisk status bar item (higher = further left). */
@@ -154,6 +153,8 @@ function initExtension(context: vscode.ExtensionContext): void {
   }
 }
 
+// Implements [EXTACT] — wires up the Basilisk activity sidebar (Modules + Basilisk
+// info panels) plus the profiling/memory UI and the Getting Started walkthrough.
 /**
  * Register activity panels, profiler UI, memory profiler, and walkthrough.
  * Called once on the first activation only.
@@ -162,14 +163,6 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
   // Set context key so panel visibility conditions work.
   const hasWorkspace = (vscode.workspace.workspaceFolders?.length ?? 0) > 0;
   void vscode.commands.executeCommand("setContext", "basilisk.hasWorkspace", hasWorkspace);
-
-  // [PROFILE-UI-GATE] Single switch for every profiling `when` clause: on under
-  // test, hidden for shipped users until the profiler experience is reliable.
-  void vscode.commands.executeCommand(
-    "setContext",
-    "basilisk.profilingEnabled",
-    isProfilingUiEnabled(context),
-  );
 
   // Activity bar panels — register once (tree view IDs must be unique).
   // The Modules panel (module-explorer) now carries the folded type-health
@@ -185,17 +178,20 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
   singletonDisposables.push(...processesResult.disposables);
 
   // Profiler UI — status bar, commands, decorations, flamegraph webview.
-  const profilerDisposables = registerProfiler(context, s);
+  const profilerDisposables = registerProfiler(s);
   singletonDisposables.push(...profilerDisposables);
 
   // Memory profiler UI — commands, reference graph webview, memory dashboard.
-  const memoryDisposables = registerMemoryProfiler(context, s);
+  const memoryDisposables = registerMemoryProfiler(s);
   singletonDisposables.push(...memoryDisposables);
 
   // Memory autopilot — auto snapshot+diff on every pause / interval, so the leak
   // hunt is "set a breakpoint and press Continue" ([PROFILE-MEMORY-AUTOPILOT]).
   singletonDisposables.push(...registerMemoryAutopilot(s));
 
+  // Implements [EXTACT-INFO-GETTING-STARTED] — the Getting Started items open the
+  // built-in `basilisk.gettingStarted` walkthrough (contributes.walkthroughs in
+  // package.json) directly via this command.
   // Walkthrough command.
   singletonDisposables.push(
     vscode.commands.registerCommand("basilisk.openWalkthrough", () => {
@@ -238,6 +234,12 @@ export function deactivate(): Promise<void> | undefined {
 
 // ── Initialization helpers ────────────────────────────────────────────────
 
+// Implements [VSIX-OUTPUT-CHANNELS] — creates the main "Basilisk" output channel
+// and the file log sink. DEVIATION: the spec names the file sink
+// "/tmp/basilisk-debug-trace.log", but for security (js/insecure-temporary-file)
+// the log lives at context.logUri/basilisk-debug-trace.log (per-extension private
+// dir), not world-writable /tmp. The "Basilisk LSP Trace" channel is created in
+// lsp-client.ts.
 function initLogging(context: vscode.ExtensionContext, s: Store): void {
   const logChannel = vscode.window.createOutputChannel("Basilisk", { log: true });
   s.setOutputChannel(logChannel);
@@ -258,6 +260,9 @@ function initLogging(context: vscode.ExtensionContext, s: Store): void {
   context.subscriptions.push(logChannel);
 }
 
+// Implements [VSIX-STATUS-BAR] — creates the persistent status bar item whose
+// text/state is driven by updateStatusBar (server state) and
+// updateStatusBarDiagnostics (per-file error/warning counts).
 function initStatusBar(context: vscode.ExtensionContext, s: Store): void {
   const item = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
@@ -268,6 +273,13 @@ function initStatusBar(context: vscode.ExtensionContext, s: Store): void {
   context.subscriptions.push(item);
 }
 
+// Implements [VSIX-PYTHON-DEBUGGER-DAP-ARCHITECTURE] / [VSIX-PYTHON-DEBUGGER-START]
+// — registers the `basilisk-debug` adapter-descriptor factory, the (Dynamic +
+// default) config provider, and the tracker factory. The matching activation
+// events (onDebug, onDebugResolve/onDebugDynamicConfigurations:basilisk-debug)
+// are declared in vscode-extension/package.json so these register before a Python
+// file is opened. [VSIX-PYTHON-DEBUGGER-DAP-TRACKER]: tracker callbacks feed PID +
+// pause signals to the store.
 function registerDebugSupport(context: vscode.ExtensionContext, s: Store): void {
   // Debug adapter factories can only be registered once per type.
   // Push to singletonDisposables so deactivate() can dispose them
@@ -348,6 +360,10 @@ function registerDebugLifecycleLogging(context: vscode.ExtensionContext): void {
 
 // ── Status bar ────────────────────────────────────────────────────────────
 
+// Implements [VSIX-STATUS-BAR] — server-state faces: starting → $(sync~spin)
+// ("analyzing"), ready → $(check), error → $(error) (server failed/not running),
+// stopped → $(circle-slash). Note: the spec lists only check/warning/error/
+// sync~spin; "stopped" uses $(circle-slash) (not in the spec's enumerated list).
 function updateStatusBar(state: "starting" | "ready" | "error" | "stopped"): void {
   // Set context key for panel visibility conditions.
   void vscode.commands.executeCommand("setContext", "basilisk.serverState", state === "ready" ? "running" : state);
@@ -379,6 +395,11 @@ function updateStatusBar(state: "starting" | "ready" | "error" | "stopped"): voi
   item.show();
 }
 
+// Implements [VSIX-STATUS-BAR] — per-file diagnostic count face. DEVIATION from
+// spec text: the spec shows "$(warning) Basilisk (3) — errors in current file",
+// but errors use the $(error) icon (red errorBackground) and warnings use
+// $(warning) (warningBackground); no issues → $(check). The spec's example
+// conflates the warning icon with an error count.
 function updateStatusBarDiagnostics(): void {
   const item = store?.statusBarItem.value;
   if (!item) {return;}
@@ -406,6 +427,11 @@ function updateStatusBarDiagnostics(): void {
 
 // ── Runtime resolution ────────────────────────────────────────────────────
 
+// Implements [VSIX-ERROR-RECOVERY] — resolves the binary then starts LSP mode or,
+// when basilisk.useLsp is false, the subprocess fallback ([VSIX-CONFIGURATION-
+// SETTINGS-VS-CODE-ONLY]). On failure it surfaces a user-visible error
+// (reportRuntimeFailure) and flips the status bar to the error face.
+// [VSIX-BINARY-RESOLUTION] is delegated to resolveBasiliskRuntime (Shipwright).
 async function startRuntime(context: vscode.ExtensionContext, s: Store): Promise<void> {
   try {
     const runtime = await resolveBasiliskRuntime(context);

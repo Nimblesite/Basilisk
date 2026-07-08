@@ -1,83 +1,23 @@
-# Extension Activity Panel — Implementation Plan
+# Extension Activity Panel — Implementation Plan {#EXTACT-PLAN}
 
 > Spec: [EXTENSION-ACTIVITY-PANEL-SPEC.md](../specs/EXTENSION-ACTIVITY-PANEL-SPEC.md)
 
-## Phase 1: LSP Backend (Rust)
+## Status {#EXTACT-PLAN-STATUS}
 
-Implement the three custom LSP commands in `basilisk-lsp`. This unblocks all editors simultaneously.
+Core panels are SHIPPED across all editors. The three LSP custom commands
+(`basilisk/workspaceModules`, `basilisk/typeHealth`, `basilisk/moduleChanged`) are
+implemented in `crates/basilisk-lsp/src/server/activity_panel/`. Live with e2e tests:
+VS Code panels (`vscode-extension/src/module-explorer.ts`, type-health, basilisk-info;
+views + walkthrough + icon in `package.json`), Zed slash commands
+(`/modules`, `/symbols`, `/health`, `/basilisk` in `basilisk-zed/src/logic.rs`),
+and Neovim modules (`:BasiliskModules`, `:BasiliskHealth`, `:BasiliskInfo`).
 
-**`basilisk/workspaceModules`**:
-- Walk the resolver's module graph (already built during analysis)
-- For each module, extract top-level symbols from `ResolvedModule`
-- Build `ModuleNode` / `SymbolNode` tree from resolver data
-- Support `scope` parameter for prefix filtering
-- Lazy: return only top-level modules initially, symbols on demand when `scope` narrows to a single module
-
-**`basilisk/moduleChanged`**:
-- Hook into the file-change -> re-analysis pipeline
-- After a module is re-resolved, diff against previous state
-- If changed, push notification with updated `ModuleNode`
-- Debounce: 300ms after last save before sending
-
-**`basilisk/typeHealth`**:
-- Count annotated vs unannotated symbols per module (resolver already tracks `annotated` on symbols)
-- Aggregate diagnostic counts per module (already computed)
-- Read adoption state per file
-- Return `TypeHealthResponse`
-
-## Phase 2: VS Code Panels (TypeScript)
-
-Reference implementation. All three panels.
-
-1. Register `viewsContainers` and `views` in `package.json`
-2. Implement `ModuleExplorerProvider` (`TreeDataProvider<ModuleNode | SymbolNode>`)
-   - `getTreeItem()`: map to `TreeItem` with codicons, descriptions, tooltips
-   - `getChildren()`: call `basilisk/workspaceModules` with scope
-   - Handle `basilisk/moduleChanged` notifications for incremental refresh
-3. Implement `TypeHealthProvider` (`TreeDataProvider<ModuleHealth>`)
-   - Summary header row with coverage bar
-   - Per-module rows with coverage %, errors, warnings, adoption badge
-   - Sort cycling
-4. Implement `BasiliskInfoProvider` (`TreeDataProvider`)
-   - Static tree: Getting Started, Feature Status, Quick Actions, Server Info
-   - Feature Status items read settings, click toggles them
-   - Quick Actions items fire existing commands
-   - Server Info fetched from LSP init response + `basilisk/typeHealth` stats
-5. Register all new commands (refresh, toggle view, copy import path, etc.)
-6. Wire `basilisk/moduleChanged` notification handler to refresh providers
-7. Add walkthrough contribution to `package.json`
-8. Create `basilisk-icon.svg` for activity bar
-
-## Phase 3: Zed Slash Commands (Rust/WASM)
-
-Surface the same data through Zed's available extension points.
-
-1. Register `/modules`, `/symbols`, `/health`, `/basilisk` slash commands in `run_slash_command()`
-2. Each command calls the corresponding LSP custom command
-3. Format responses as clean markdown tables/trees
-4. Add argument completion (module names for `/modules` and `/symbols`)
-
-## Phase 4: Neovim Panels (Lua)
-
-Lua-rendered buffers using the nvim LSP client.
-
-1. Implement `basilisk.modules` Lua module — renders module tree in a split buffer
-2. Implement `basilisk.health` Lua module — renders type health with colored highlights
-3. Implement `basilisk.info` Lua module — floating window with server info
-4. Register `:BasiliskModules`, `:BasiliskHealth`, `:BasiliskInfo` commands
-5. Default keymaps: `<leader>bm`, `<leader>bh`, `<leader>bi`
-6. Handle `basilisk/moduleChanged` via `vim.lsp.handlers`
-
-## Phase 5: Polish
-
-1. End-to-end tests: open workspace, verify module tree matches actual modules, verify health stats
-2. Performance testing: large workspace (1000+ files), measure LSP response time for `basilisk/workspaceModules`
-3. Accessibility audit: screen reader testing in VS Code
-4. Icon design: commission or create final `basilisk-icon.svg`
+Remaining: **(1) make the Feature Status toggles real**, **(2)
+performance/accessibility polish**, and cross-editor follow-ups.
 
 ---
 
-## TODOs
+## Shipped Panel Inventory {#EXTACT-PLAN-SHIPPED-INVENTORY}
 
 ### LSP Backend
 - [x] Implement `basilisk/workspaceModules` handler in `basilisk-lsp`
@@ -108,7 +48,7 @@ Lua-rendered buffers using the nvim LSP client.
 - [x] Implement module filter input box with glob support
 - [x] Implement `TypeHealthProvider` — `TreeDataProvider` with summary header
 - [x] Implement coverage bar rendering in description field
-- [x] Implement sort cycling (worst-first / best-first / alphabetical)
+- [x] Implement explicit module sort picker (module name / path / type coverage)
 - [x] Implement `BasiliskInfoProvider` — static tree with four sections
 - [x] Implement Feature Status toggle-on-click
 - [x] Implement Server Info section (version, binary, python, analysis mode, file count)
@@ -166,17 +106,17 @@ Lua-rendered buffers using the nvim LSP client.
 > [EXTACT-INFO-FEATURE-STATUS](../specs/EXTENSION-ACTIVITY-PANEL-SPEC.md#EXTACT-INFO-FEATURE-STATUS).
 
 **Background (audit, 2026-05-30).** The Feature Status section shipped eight
-toggles. Six of them were no-ops: the extension wrote the setting via
-`basilisk.toggleFeature`, but nothing on either side read it back. Root cause:
-the LSP server's `did_change_configuration`
+toggles; six were no-ops — the extension wrote the setting via
+`basilisk.toggleFeature`, but nothing read it back. Root cause: the LSP server's
+`did_change_configuration`
 ([`crates/basilisk-lsp/src/server/init.rs`](../../crates/basilisk-lsp/src/server/init.rs))
-only parses `analysisMode` and `testExplorer.*` — every other forwarded field
+parses only `analysisMode` and `testExplorer.*`; every other forwarded field
 (`inlayHints.*`, `ruff.*`, `uv.*`) is silently dropped. The no-op toggles were
-**removed** from the panel; only `Type Checking` (`basilisk.enabled`, gates
-diagnostic publication client-side) and `uv Integration` (`basilisk.uv.enabled`,
-gates the uv surface in the panel) remain.
+**removed**; only `Type Checking` (`basilisk.enabled`, gates diagnostic
+publication client-side) and `uv Integration` (`basilisk.uv.enabled`, gates the
+uv surface in the panel) remain.
 
-A toggle returns to the panel ONLY when both of these are true:
+A toggle returns to the panel ONLY when both are true:
 1. Flipping the setting produces a real, observable effect that matches the label.
 2. A VSIX test under `vscode-extension/src/test/suite/` proves that effect
    (toggle the setting, assert the behavior changed — not merely that the setting
@@ -194,18 +134,22 @@ A toggle returns to the panel ONLY when both of these are true:
 ### Inlay Hints (Params) / (Types) {#EXTACT-PLAN-INLAY-TOGGLES}
 - [ ] In `crates/basilisk-lsp/src/inlay_hints.rs` / `server/handlers/features.rs`,
       gate parameter-name hints on `inlayHints.parameterNames` and variable-type
-      hints on `inlayHints.variableTypes` (currently both are emitted unconditionally).
+      hints on `inlayHints.variableTypes` (currently both emitted unconditionally).
 - [ ] VSIX test: open a file with call-site params, toggle `parameterNames` off,
       assert `vscode.executeInlayHintProvider` returns no parameter hints; repeat
       for `variableTypes`.
 
-### Ruff Integration {#EXTACT-PLAN-RUFF-TOGGLE}
-- [ ] When `ruff.enabled` is false: skip ruff-backed code actions / formatting /
-      organize-imports in `code_actions/` and `formatting.rs`, and do not advertise
-      `basilisk.organizeImports` as an available action for the document.
-- [ ] Honor `ruff.executablePath` instead of resolving `ruff` from PATH.
-- [ ] VSIX test: toggle `ruff.enabled` off, assert organize-imports code action is
-      absent / formatting is a no-op.
+### Formatter Engine {#EXTACT-PLAN-FORMATTER-TOGGLE}
+The external `ruff` binary is jettisoned — there is no `ruff.enabled`/`ruff.executablePath`
+to honor. Formatting is the Ruff formatter embedded in the Basilisk binary, in-process
+([LSPFMT-DECISION](../specs/LSP-FORMATTING-SPEC.md#LSPFMT-DECISION)). The only setting is
+the `basilisk.formatter` engine selector ([LSPFMT-CONFIG](../specs/LSP-FORMATTING-SPEC.md#LSPFMT-CONFIG)).
+- [ ] When `basilisk.formatter` is `"none"`: do not advertise `documentFormattingProvider`
+      / `documentRangeFormattingProvider` in `formatting.rs` / `server/init.rs`, so no
+      Basilisk formatter appears in any editor. (Native import hygiene stays available —
+      it is not gated by this flag.)
+- [ ] VSIX test: set `basilisk.formatter` to `"none"`, assert formatting is not offered;
+      set it back to `"ruff"`, assert formatting works with no `ruff` binary installed.
 
 ### Test Explorer {#EXTACT-PLAN-TEST-EXPLORER-TOGGLE}
 - [ ] `testExplorer.enabled` currently only gates auto-discovery-on-save. Make it
@@ -224,8 +168,6 @@ A toggle returns to the panel ONLY when both of these are true:
 - [ ] The panel already hides uv actions when `uv.enabled` is false, but the server
       still executes uv commands if invoked elsewhere. Gate the uv command handlers
       (`server/uv_handlers.rs`) and uv file watchers on `uv.enabled` for consistency.
-- [ ] VSIX test already needed: assert uv Quick Actions disappear when toggled off
-      (added in this PR for the client-side effect).
 
 ### AI Suggestions / Profiler toggles {#EXTACT-PLAN-FUTURE-TOGGLES}
 - [ ] AI Suggestions: no provider exists. Do not surface a toggle until the
@@ -234,3 +176,16 @@ A toggle returns to the panel ONLY when both of these are true:
       `package.json`.
 - [ ] Profiler: there is no `basilisk.profiler.enabled` gate; the profiler is always
       available. Only add a toggle if disabling it becomes meaningful.
+
+---
+
+## Remaining: polish & cross-editor follow-ups {#EXTACT-PLAN-POLISH}
+
+- [ ] Performance test: `basilisk/workspaceModules` < 100ms for 1000-file workspace.
+- [ ] Performance test: `basilisk/typeHealth` < 50ms for 1000-file workspace.
+- [ ] Performance test: `basilisk/moduleChanged` notification < 20ms per file change.
+- [ ] Accessibility audit: VS Code screen reader testing.
+- [ ] Documentation: add panel usage to README / user guide.
+- [ ] Neovim test: `:BasiliskModules` renders correct tree for test workspace.
+- [ ] Neovim test: `:BasiliskHealth` renders correct coverage stats.
+- [ ] Zed: when Zed adds a panel API, implement native panels using the same LSP commands.

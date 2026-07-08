@@ -36,13 +36,18 @@ pub enum InferredType {
     Optional(Box<InferredType>),
     /// Callable type (`Callable[[params...], return]` or `Callable[..., return]`)
     Callable(CallableInfo),
-    /// Any type (`Any`) - explicit escape hatch
+    /// Any type (`Any`) - explicit escape hatch.
+    /// Implements [TYPEINF-SPECIAL-ANY] — the explicit escape hatch variant; never
+    /// inferred as a fallback (unannotated params produce E0001, not `Any`).
     Any,
-    /// Never type (`Never`) - bottom type, no values
+    /// Never type (`Never`) - bottom type, no values.
+    /// Implements [TYPEINF-SPECIAL-NEVER] — bottom type used for always-raises
+    /// return inference and pattern-match exhaustiveness.
     Never,
     /// Unknown type - used when type cannot be determined
     Unknown,
-    /// `LiteralString` — any string literal or value known to be a literal string
+    /// `LiteralString` — any string literal or value known to be a literal string.
+    /// Implements [TYPEINF-SPECIAL-LITERALSTRING] — supertype of all `Literal[str]`.
     LiteralString,
     /// Named type (`ClassName`) - fallback for named types not yet resolved
     Named(String),
@@ -151,6 +156,11 @@ impl fmt::Display for LiteralValue {
 
 impl InferredType {
     /// Creates a union of two types, flattening nested unions.
+    ///
+    /// Implements [TYPEINF-VARS-FLOW] — the join of types assigned across branches
+    /// is their union. Also the `A | B` construction underpinning
+    /// [TYPEINF-SUBTYPING-UNION]; `Never ∪ T = T` realises `Never` as the bottom
+    /// type (identity element of union).
     #[must_use]
     pub fn union(a: InferredType, b: InferredType) -> InferredType {
         // Helper to flatten a type into the vector
@@ -198,18 +208,31 @@ impl InferredType {
     }
 
     /// Returns true if this type is assignable to the other type.
+    ///
+    /// Implements [TYPEINF-SUBTYPING-IMPL] — the `InferredType`-level subtype check
+    /// the spec calls `is_subtype_of()`. Covers the builtin numeric tower
+    /// ([TYPEINF-SUBTYPING-NOMINAL]), union/optional/special-form relations
+    /// ([TYPEINF-SUBTYPING-UNION]), container element assignability
+    /// ([TYPEINF-SUBTYPING-GENERIC]) and callable variance
+    /// ([TYPEINF-SUBTYPING-CALLABLE]). Nominal MRO and structural Protocol/TypedDict
+    /// checks live in out-of-scope rule modules (see the consolidated map).
     #[must_use]
     pub fn is_assignable_to(&self, other: &InferredType) -> bool {
         match (self, other) {
             // Any is assignable to/from everything (PEP 484).
             // Unknown means we cannot determine the type — assume compatible to avoid false positives.
             // Never is the bottom type — assignable to everything.
+            // Implements [TYPEINF-SPECIAL-ANY] (Any bidirectional) and
+            // [TYPEINF-SPECIAL-NEVER] (Never <: everything, bottom type).
             (InferredType::Any | InferredType::Never | InferredType::Unknown, _)
             | (_, InferredType::Any | InferredType::Unknown) => true,
             // Same types are assignable
             (a, b) if a == b => true,
             // Int→float widening, Literal assignable to base type,
-            // string types assignable to LiteralString, LiteralString to str
+            // string types assignable to LiteralString, LiteralString to str.
+            // Implements [TYPEINF-SUBTYPING-NOMINAL] — the hardcoded builtin tower
+            // (bool <: int <: float) plus [TYPEINF-SPECIAL-LITERALSTRING]
+            // (Literal[str]/LiteralString <-> str relations).
             (
                 InferredType::Int | InferredType::Literal(LiteralValue::Float(_)),
                 InferredType::Float,
@@ -236,13 +259,18 @@ impl InferredType {
             // `None` satisfies `Hashable` (it defines `__hash__`). The annotation
             // parser lowercases names, so the ABC arrives as `Named("hashable")`.
             (InferredType::None_, InferredType::Named(name)) if name == "hashable" => true,
-            // Optional types are assignable to their non-optional counterparts
+            // Optional types are assignable to their non-optional counterparts.
+            // Implements [TYPEINF-SUBTYPING-UNION] — Optional[T] = T | None handling.
             (InferredType::Optional(inner), other) => inner.is_assignable_to(other),
             (inner, InferredType::Optional(other)) => inner.is_assignable_to(other),
-            // Union types require all variants to be assignable
+            // Union types require all variants to be assignable.
+            // Implements [TYPEINF-SUBTYPING-UNION] — `A | B <: C` iff `A <: C` and
+            // `B <: C`; `A <: A | B` (a type is a subtype of any union containing it).
             (InferredType::Union(types), other) => types.iter().all(|t| t.is_assignable_to(other)),
             (inner, InferredType::Union(types)) => types.iter().any(|t| inner.is_assignable_to(t)),
             // Container types require element type assignability.
+            // Implements [TYPEINF-SUBTYPING-GENERIC] — list/set/dict are invariant
+            // here (element types checked structurally, no cross-container matching).
             // List and Set cannot use or-patterns — that would incorrectly allow cross-matching.
             (InferredType::List(a), InferredType::List(b))
             | (InferredType::Set(a), InferredType::Set(b)) => a.is_assignable_to(b),
@@ -250,6 +278,9 @@ impl InferredType {
                 a_key.is_assignable_to(b_key) && a_val.is_assignable_to(b_val)
             }
             (InferredType::Tuple(a), InferredType::Tuple(b)) => {
+                // Implements [TYPEINF-COLLECTIONS-TUPLES] — fixed-length positional
+                // tuples plus the homogeneous `tuple[X, ...]` and PEP 646 unpacked
+                // (`*tuple[...]`/`*Ts`) forms.
                 // A target with an unpacked `*tuple[...]` / `*Ts` segment (PEP 646)
                 // needs prefix/middle/suffix matching, not positional equality.
                 if b.iter().any(is_unpacked_tuple_elem) {
@@ -282,7 +313,10 @@ impl InferredType {
                     }
                 }
             }
-            // Callable type assignability
+            // Callable type assignability.
+            // Implements [TYPEINF-SUBTYPING-CALLABLE] — return type covariant
+            // (source return <: target return), parameters contravariant
+            // (target param <: source param), `...`/empty params gradual.
             (InferredType::Callable(a), InferredType::Callable(b)) => {
                 // Check return type compatibility (covariant - source return must be assignable to target return)
                 // Special case: if source return type is Unknown, we can't verify compatibility

@@ -28,6 +28,8 @@ use crate::server::{none_if_empty, LspServer};
 /// Tries single-file definition first. If no local definition is found,
 /// falls back to cross-file lookup via `imported_symbols` populated by
 /// cross-module analysis.
+// Implements [ANALYSIS-CROSSLSP-GOTODEF] — follows the import's resolved_path to
+// the symbol's name_span in the target module, following re-export chains.
 pub(in crate::server) async fn goto_definition(
     server: &LspServer,
     params: GotoDefinitionParams,
@@ -44,14 +46,19 @@ pub(in crate::server) async fn goto_definition(
                 return Some(resp);
             }
 
-            // Cross-file: extract identifier and check imported symbols.
+            // Cross-file: extract identifier and resolve it in the target module.
             let name = crate::util::identifier_at_offset(&text, byte_offset)?;
-            let ext_sym = resolved.imported_symbols.get(&name)?;
 
-            // Follow re-export chain: if the symbol in the target file is itself
-            // imported from another file, follow through to the actual definition.
-            let (final_path, final_span) =
-                follow_reexport_chain(idx, &ext_sym.source_path, &name, ext_sym.source_span);
+            // Prefer pre-populated imported symbols (crossModule mode), following
+            // re-export chains. When that map is empty — the default wholeModule
+            // mode does not pre-compute it — resolve the import on demand via its
+            // resolved_path so cmd+click across files works in every mode.
+            let (final_path, final_span) = match resolved.imported_symbols.get(&name) {
+                Some(ext_sym) => {
+                    follow_reexport_chain(idx, &ext_sym.source_path, &name, ext_sym.source_span)
+                }
+                None => resolve_imported_name_on_demand(idx, &resolved, &name)?,
+            };
 
             let target_entry = idx.files.get(&final_path)?;
             let range = crate::util::span_to_range(&target_entry.text, final_span);
@@ -70,6 +77,8 @@ pub(in crate::server) async fn goto_definition(
 /// If the symbol at `source_path` is itself an import from another file,
 /// follows the chain until a non-imported definition is found. Prevents
 /// infinite loops with a depth limit.
+// Implements [ANALYSIS-CROSSLSP-GOTODEF] — "Re-exports are followed across the
+// import chain."
 fn follow_reexport_chain(
     idx: &crate::workspace::WorkspaceIndex,
     source_path: &std::path::Path,
@@ -101,6 +110,27 @@ fn follow_reexport_chain(
     (current_path, current_span)
 }
 
+/// Resolve an imported name to its cross-file definition on demand.
+///
+/// Used when `imported_symbols` is not pre-populated — the default `wholeModule`
+/// mode skips cross-module symbol population, so cross-file navigation must be
+/// resolved per request. Finds the import that binds `name`, follows its
+/// `resolved_path` (set by the import resolver in every mode) into the workspace
+/// index, and locates the symbol's definition in the target module. Returns the
+/// defining file path and the name span.
+fn resolve_imported_name_on_demand(
+    idx: &crate::workspace::WorkspaceIndex,
+    resolved: &basilisk_resolver::ResolvedModule,
+    name: &str,
+) -> Option<(std::path::PathBuf, basilisk_resolver::Span)> {
+    let import = crate::util::find_import_by_bound_name(resolved, name)?;
+    let target_path = import.resolved_path.as_ref()?;
+    let target_entry = idx.files.get(target_path)?;
+    let target_resolved = target_entry.resolved.as_ref()?;
+    let hit = crate::util::find_definition_by_name(target_resolved, name)?;
+    Some((target_path.clone(), crate::util::definition_span(&hit)))
+}
+
 /// Handle `textDocument/declaration`.
 pub(in crate::server) async fn goto_declaration(
     server: &LspServer,
@@ -116,17 +146,53 @@ pub(in crate::server) async fn goto_declaration(
 }
 
 /// Handle `textDocument/typeDefinition`.
+///
+/// Tries single-file type resolution first. If the annotated type is a class
+/// imported from another file, follows it cross-file via `imported_symbols`
+/// (the same mechanism `goto_definition` uses), so `x: ImportedClass` jumps to
+/// the class's real declaration.
 pub(in crate::server) async fn goto_type_definition(
     server: &LspServer,
     params: GotoDefinitionParams,
 ) -> LspResult<Option<GotoDefinitionResponse>> {
     let uri = params.text_document_position_params.text_document.uri;
     let pos = params.text_document_position_params.position;
-    server
-        .at_position(uri, pos, |resolved, text, offset, uri, _| {
-            type_definition::goto_type_definition(resolved, text, offset, uri)
+    Ok(server
+        .with_index(|idx| {
+            let (text, resolved, _) = idx.get_by_uri(&uri)?;
+            let byte_offset = crate::util::position_to_byte_offset(&text, pos);
+
+            // Same-file: annotated type is a class defined in this file.
+            if let Some(resp) =
+                type_definition::goto_type_definition(&resolved, &text, byte_offset, &uri)
+            {
+                return Some(resp);
+            }
+
+            // Cross-file: resolve the annotated type name through imported
+            // symbols (crossModule), falling back to on-demand resolution via
+            // resolved_path so type-def across files works in wholeModule too.
+            let type_name = type_definition::type_name_at(&resolved, &text, byte_offset)?;
+            let (final_path, final_span) = match resolved.imported_symbols.get(&type_name) {
+                Some(ext_sym) => follow_reexport_chain(
+                    idx,
+                    &ext_sym.source_path,
+                    &type_name,
+                    ext_sym.source_span,
+                ),
+                None => resolve_imported_name_on_demand(idx, &resolved, &type_name)?,
+            };
+
+            let target_entry = idx.files.get(&final_path)?;
+            let range = crate::util::span_to_range(&target_entry.text, final_span);
+            let target_uri = Url::from_file_path(&final_path).ok()?;
+
+            Some(GotoDefinitionResponse::Scalar(Location {
+                uri: target_uri,
+                range,
+            }))
         })
-        .await
+        .await)
 }
 
 /// Handle `textDocument/documentSymbol`.
@@ -166,6 +232,8 @@ pub(in crate::server) async fn symbol(
 /// Finds single-file references first, then searches cross-file via the
 /// import graph — checking all importers of the current file for usage of
 /// the symbol, and the source file if the symbol is imported.
+// Implements [ANALYSIS-CROSSLSP-REFS] — uses import-graph reverse edges
+// (`importers_of`) to search every importer of the defining file for the symbol.
 pub(in crate::server) async fn references(
     server: &LspServer,
     params: ReferenceParams,
@@ -307,6 +375,8 @@ pub(in crate::server) async fn prepare_rename(
 ///
 /// Renames the symbol at the cursor across all files: definition site,
 /// import sites, and usage sites in importers.
+// Implements [ANALYSIS-CROSSLSP-RENAME] — produces a multi-file WorkspaceEdit
+// (definition site + import/usage sites in importers via the import graph).
 pub(in crate::server) async fn rename(
     server: &LspServer,
     params: RenameParams,

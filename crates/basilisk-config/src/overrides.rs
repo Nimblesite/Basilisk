@@ -4,6 +4,11 @@
 use std::collections::HashMap;
 
 /// Severity level for a diagnostic rule override.
+///
+/// Implements [CHKARCH-STRICTNESS-SEVERITY] (config side): the four modes a rule
+/// can be set to — `error`, `warning`, `info`, `disabled`. The checker applies
+/// them in `basilisk-checker/src/lib.rs`.
+/// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STRICTNESS-SEVERITY
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 pub enum RuleSeverity {
     /// Full error (default for most rules).
@@ -18,6 +23,9 @@ pub enum RuleSeverity {
 
 impl RuleSeverity {
     /// Parse a severity string from config.
+    ///
+    /// Implements [CHKARCH-STRICTNESS-SEVERITY]: maps the spec's four mode names
+    /// (plus the documented aliases `warn`/`information`/`off`/`none`) to a mode.
     #[must_use]
     pub fn parse(value: &str) -> Option<Self> {
         match value {
@@ -34,9 +42,9 @@ impl RuleSeverity {
 ///
 /// Applied when the imported module name matches the override key.
 /// Keys support wildcard patterns (e.g. `django.*` matches `django.db.models`).
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct ModuleOverride {
-    /// When `true`, BSK-E0010 is suppressed for this module.
+    /// When `true`, `imports_unresolved` is suppressed for this module.
     pub ignore_missing_stubs: bool,
 }
 
@@ -44,7 +52,7 @@ pub struct ModuleOverride {
 ///
 /// Applied when the file path matches the override key pattern.
 /// Keys use glob patterns (e.g. `vendor/**` matches `vendor/lib/foo.py`).
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct PathOverride {
     /// Rules to completely disable for files matching this path pattern.
     pub disabled_rules: Vec<String>,
@@ -182,6 +190,7 @@ pub fn path_matches_pattern(file_path: &std::path::Path, pattern: &str) -> bool 
 /// Find applicable module override for a given module name.
 ///
 /// Returns the override configuration if any per-module pattern matches.
+/// Implements the per-module step of [CHKARCH-STRICTNESS-PRECEDENCE] (rung 5).
 #[must_use]
 pub fn find_module_override<'a, S: std::hash::BuildHasher>(
     module_name: &str,
@@ -200,6 +209,9 @@ pub fn find_module_override<'a, S: std::hash::BuildHasher>(
 /// Find applicable path override for a given file path.
 ///
 /// Returns the override configuration if any per-path pattern matches.
+/// Implements the per-path step of [CHKARCH-STRICTNESS-PRECEDENCE] (rung 4,
+/// above per-module and global, below inline/file directives).
+/// See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STRICTNESS-PRECEDENCE
 #[must_use]
 pub fn find_path_override<'a, S: std::hash::BuildHasher>(
     file_path: &std::path::Path,

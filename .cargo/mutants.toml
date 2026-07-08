@@ -25,24 +25,29 @@ test_package = [
 
 # Equivalent mutants: these produce no observable behaviour change because
 # surrounding code handles the edge case gracefully. Excluding them avoids
-# false "missed" reports that can never be killed by a test.
-# Equivalent mutants excluded by regex (matched against `cargo mutants --list` output).
-# These produce no observable behaviour change — documented in comments below.
+# false "missed" reports that can never be killed by a test. Patterns are
+# matched against `cargo mutants --list` output, so they reference the rule's
+# source path + the exact replacement. (Paths track the rule module names; keep
+# them in sync when a rule file/dir is renamed, or the exclusions silently lapse.)
 #
-#   e0014/mod.rs check_vars `&& rhs_span.is_some()` → `||`: vars without rhs pass
-#   the filter but infer_with_literal_value returns Unknown; no diagnostic fires.
+#   assignment_compatibility/mod.rs extract_annotation `pos + 1` → `pos * 1`:
+#   line_start then points at the preceding '\n', but name_offset
+#   (= start - line_start) shifts by the same amount, so every slice taken from
+#   `line` is byte-identical to the unmutated extraction. Provably equivalent.
 #
-#   e0014/mod.rs extract_annotation `pos + 1` → `pos * 1`: line_start = pos includes
-#   the '\n' char but source.get() gracefully handles the off-by-one.
+#   aliases_implicit.rs collect_type_alias_names `&& alias != "TypeAlias"` → `||`:
+#   the only inputs that differ (`TypeAlias as TypeAlias`, or an empty alias) push
+#   a duplicate "TypeAlias"/"" into `names`, which is consumed solely via
+#   `is_type_alias_annotation`'s `.any(|n| ann == n)` — so the extra entry can
+#   never change a diagnostic. Equivalent.
 #
-#   e0048.rs collect_type_alias_names `&& alias != "TypeAlias"` → `||`: empty aliases
-#   pushed to names never match a real (non-empty) annotation identifier.
-#
+# (The former check_vars `&& rhs_span.is_some()` → `||` exclusion was dropped:
+# that mutant is now killed by the `mutant_bare_declaration_not_flagged` test, so
+# it stays in the pool as real, caught coverage rather than a hidden exclusion.)
 exclude_re = [
     # Inference engine: slow, not covered by mutation-safe tests.
     "src/inference",
     # Equivalent mutants — produce no observable behaviour change:
-    "e0014/mod\\.rs:\\d+:\\d+: replace && with \\|\\| in check_vars",
-    "e0014/mod\\.rs:\\d+:\\d+: replace \\+ with \\* in extract_annotation",
-    "e0048\\.rs:\\d+:\\d+: replace && with \\|\\| in collect_type_alias_names",
+    "assignment_compatibility/mod\\.rs:\\d+:\\d+: replace \\+ with \\* in extract_annotation",
+    "aliases_implicit\\.rs:\\d+:\\d+: replace && with \\|\\| in collect_type_alias_names",
 ]

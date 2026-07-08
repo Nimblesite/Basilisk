@@ -22,7 +22,7 @@ pub enum DepKind {
 }
 
 /// Resolved information about a single package.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageInfo {
     /// Normalised `PyPI` package name.
     pub name: String,
@@ -37,7 +37,7 @@ pub struct PackageInfo {
 }
 
 /// An in-memory index of all resolved packages, keyed by import name.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct PackageRegistry {
     packages: HashMap<String, Arc<PackageInfo>>,
 }
@@ -51,6 +51,11 @@ impl PackageRegistry {
     /// appear there are classified as [`DepKind::Direct`]; those that appear
     /// in any package's `dev-dependencies` list are [`DepKind::Dev`]; all
     /// others are [`DepKind::Transitive`].
+    //
+    // Implements [LSPUV-LOCK-REGISTRY] — the fast lookup structure keyed by
+    // normalised import name ([LSPUV-LOCK-IMPORT-MAPPING] via
+    // `package_to_import_name`), carrying version, direct/dev/transitive
+    // classification, and editable-source flag for each package.
     #[must_use]
     pub fn from_lock_file(lock: &LockFile, pyproject_deps: &[String]) -> Self {
         let dev_names = collect_dev_dep_names(&lock.packages);
@@ -91,9 +96,15 @@ impl PackageRegistry {
         self.packages.contains_key(import_name)
     }
 
-    /// Search for a type-stub package (e.g. `types-requests` for `requests`).
+    /// Look up a `types_{name}` entry in the lock registry (e.g.
+    /// `types_requests` for `requests`).
     ///
-    /// Returns the import name of the stub package if found.
+    /// Returns the import name of the stub package if present. This is a
+    /// plain registry lookup; the BSK-E0152 stub *suggestion* path
+    /// ([LSPUV-DIAGNOSTICS-MISSING-STUBS]) instead uses the bundled typeshed
+    /// index (`basilisk_stubs::typeshed_stub_distribution`), and installed
+    /// `{name}-stubs` packages are honoured at import-resolution time
+    /// ([STUBRES-PEP561] step 3) — never by name guessing here.
     #[must_use]
     pub fn find_stub_package(&self, name: &str) -> Option<String> {
         let stub_import = format!("types_{name}");
@@ -240,6 +251,8 @@ mod tests {
         }
     }
 
+    // [LSPUV-LOCK-REGISTRY]: direct/dev/transitive classification, editable
+    // detection, lookup by import name, and import-name mapping on build.
     #[test]
     fn classifies_direct_dependency() {
         let lock = make_lock_file();
@@ -332,6 +345,10 @@ mod tests {
         assert!(registry.has_package("my_editable"));
     }
 
+    // A `types-<pkg>` entry in uv.lock is discoverable as the matching stub
+    // package (keyed `types_<pkg>`). Registry lookup only — the BSK-E0152
+    // suggestion path ([LSPUV-DIAGNOSTICS-MISSING-STUBS]) uses the bundled
+    // typeshed index instead.
     #[test]
     fn find_stub_package_found() {
         let lock = LockFile {

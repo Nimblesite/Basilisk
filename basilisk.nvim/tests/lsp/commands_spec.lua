@@ -1,5 +1,7 @@
 --- Real command integration tests with actual LSP and UI interactions.
 ---
+--- Tests [NVIM-USER-COMMANDS] (and [NVIM-LSP-CLIENT-CONFIGURATION-CUSTOM-COMMANDS]).
+---
 --- Tests all :Basilisk* commands with the REAL LSP server.
 --- Verifies floating windows open, buffers change, keymaps fire, etc.
 

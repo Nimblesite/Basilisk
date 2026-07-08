@@ -5,7 +5,12 @@
     clippy::expect_used,
     clippy::unwrap_used,
     clippy::panic,
-    clippy::as_conversions
+    clippy::as_conversions,
+    // Shared helpers (`run` / `run_with_config` / `annotation_rules_config` /
+    // `fixture`) are each used by SOME but not every CLI test binary; `mod
+    // common` compiles into each binary independently, so a helper unused by one
+    // is not dead across the suite.
+    dead_code
 )]
 //! Shared helpers for Basilisk CLI end-to-end tests.
 //!
@@ -18,7 +23,8 @@
 
 use std::path::Path;
 
-use basilisk_checker::{check, Diagnostic};
+use basilisk_checker::{check, check_with_config, Diagnostic};
+use basilisk_config::BasiliskConfig;
 use basilisk_parser::parse_file;
 use basilisk_resolver::resolve;
 
@@ -47,4 +53,37 @@ pub fn run(rel: &str) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
     let parsed = parse_file(&path)?;
     let resolved = resolve(&parsed)?;
     Ok(check(&resolved))
+}
+
+/// Run the checker over a fixture honoring an explicit project configuration.
+///
+/// Basilisk has **no modes** — the checker does exactly what configuration
+/// says. [`run`] uses the default config (every PEP rule, no `BSK-`prefixed
+/// house rules), so out of the box a fixture is graded as pure PEP conformance.
+/// House-style rules (require-annotation, require-`@override`, redundant
+/// annotation, …) are off by default; a fixture that exercises them passes a
+/// config that opts in. See [CHKARCH-CONFIGURATION-ONLY].
+pub fn run_with_config(
+    rel: &str,
+    config: &BasiliskConfig,
+) -> Result<Vec<Diagnostic>, Box<dyn std::error::Error>> {
+    let path = fixture(rel);
+    let parsed = parse_file(&path)?;
+    let resolved = resolve(&parsed)?;
+    Ok(check_with_config(&resolved, config))
+}
+
+/// The project configuration that opts into Basilisk's annotation house rules
+/// (`strict_annotations = true`): `BSK-E0001`..`BSK-E0005`, `BSK-E0025`,
+/// `BSK-W0014`, `BSK-W0040`, `BSK-W0050`.
+///
+/// This is configuration **data** — exactly what a project writes in
+/// `basilisk.toml` to enable these off-by-default rules — not a checker "mode".
+/// See [CHKARCH-CONFIGURATION-ONLY].
+#[must_use]
+pub fn annotation_rules_config() -> BasiliskConfig {
+    BasiliskConfig {
+        strict_annotations: true,
+        ..BasiliskConfig::default()
+    }
 }

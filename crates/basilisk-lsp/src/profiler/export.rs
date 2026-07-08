@@ -127,6 +127,13 @@ fn validate_thread(data: &ProfileData, tid: u64, stacks: &[Vec<usize>]) -> Resul
 ///
 /// Writes the file to `output_dir` and returns the path.
 ///
+/// Implements [PROFILE-SPEEDSCOPE-MAPPING]: `ProfileData.frames` →
+/// `shared.frames[i] { name, file, line }`; one `profiles[i]` per thread named
+/// after `thread_name`; each thread's `thread_stacks` (already reversed to
+/// root-first in `ingest_traces`) become `samples`, with `1/sample_rate` per
+/// entry in `weights`. Frames were deduplicated by `(name, filename, line)` at
+/// ingest time, so samples index into `shared.frames`.
+///
 /// # Errors
 ///
 /// Returns an error string if the data is not viewer-loadable
@@ -249,6 +256,17 @@ pub fn export_flamegraph(
     })
 }
 
+/// Make a frame label safe for the collapsed-stack format: `;` is the frame
+/// SEPARATOR and inferno has no escaping, so a path (or exotic function name)
+/// containing one would split into phantom frames and corrupt the whole graph.
+fn fold_safe(text: &str) -> std::borrow::Cow<'_, str> {
+    if text.contains(';') {
+        std::borrow::Cow::Owned(text.replace(';', ","))
+    } else {
+        std::borrow::Cow::Borrowed(text)
+    }
+}
+
 /// Build inferno-compatible collapsed stack lines from profile data.
 ///
 /// Format: `root_fn;caller_fn;leaf_fn count\n`
@@ -263,7 +281,12 @@ fn build_collapsed_stacks(data: &ProfileData) -> String {
                 .iter()
                 .filter_map(|&idx| {
                     let frame = data.frames.get(idx)?;
-                    Some(format!("{} ({}:{})", frame.name, frame.file, frame.line))
+                    Some(format!(
+                        "{} ({}:{})",
+                        fold_safe(&frame.name),
+                        fold_safe(&frame.file),
+                        frame.line
+                    ))
                 })
                 .collect::<Vec<_>>()
                 .join(";");
@@ -329,6 +352,7 @@ pub struct StopArtifacts {
 pub fn export_stop_artifacts(
     data: &ProfileData,
     session_id: &str,
+    pid: u32,
     duration_secs: f64,
     sample_rate: u64,
     format_str: &str,
@@ -354,7 +378,7 @@ pub fn export_stop_artifacts(
             data,
             export_format,
             session_id,
-            0,
+            pid,
             duration_secs,
             output_dir,
         )
@@ -607,6 +631,75 @@ mod tests {
         data.total_samples = 2;
 
         data
+    }
+
+    // A file path containing ';' must not split into phantom frames: ';' is
+    // the collapsed-stack SEPARATOR, and inferno has no escaping — an
+    // unsanitized path corrupts the whole flame graph.
+    #[test]
+    fn flamegraph_survives_semicolons_in_file_paths() -> Result<(), String> {
+        let mut data = ProfileData::default();
+        data.frames.push(SpeedscopeFrame {
+            name: "outer".to_owned(),
+            file: "/data;backup/main.py".to_owned(),
+            line: 1,
+        });
+        data.frames.push(SpeedscopeFrame {
+            name: "inner".to_owned(),
+            file: "/data;backup/main.py".to_owned(),
+            line: 9,
+        });
+        let _ = data.thread_stacks.insert(1, vec![vec![0, 1]]);
+        let _ = data.thread_weights.insert(1, vec![0.01]);
+        let _ = data.thread_samples.insert(1, 1);
+        data.total_samples = 1;
+
+        let dir = std::env::temp_dir().join("basilisk_semicolon_fg");
+        let _ = std::fs::create_dir_all(&dir);
+        let result = export_flamegraph(&data, "semi-test", &dir)?;
+        let svg = std::fs::read_to_string(&result.path).map_err(|err| err.to_string())?;
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // Exactly one root ("all") + the two real frames — a phantom frame
+        // means the separator was corrupted by the path.
+        let frame_titles = svg.matches("<title>").count();
+        assert_eq!(
+            frame_titles, 3,
+            "a 2-deep stack renders 3 titled frames (root + 2); more means the \
+             ';' in the path split the stack: {svg}"
+        );
+        assert!(svg.contains("outer"), "the outer frame must survive");
+        assert!(svg.contains("inner"), "the inner frame must survive");
+        Ok(())
+    }
+
+    // The speedscope profile is named after the PROFILED process — stop
+    // artifacts must carry the session's real PID, never a hardcoded 0.
+    #[test]
+    fn stop_artifacts_name_the_profiled_pid() -> Result<(), String> {
+        let data = make_test_data();
+        let dir = std::env::temp_dir().join("basilisk_pid_name");
+        let _ = std::fs::create_dir_all(&dir);
+
+        let artifacts =
+            export_stop_artifacts(&data, "pid-test", 4242, 2.0, 100, "speedscope", &dir);
+        let path = artifacts
+            .output_file
+            .ok_or("speedscope artifact must exist")?;
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).map_err(|err| err.to_string())?)
+                .map_err(|err| err.to_string())?;
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let name = json
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .ok_or("profile must be named")?;
+        assert!(
+            name.contains("4242"),
+            "the profile name must carry the profiled PID, got: {name}"
+        );
+        Ok(())
     }
 
     #[test]

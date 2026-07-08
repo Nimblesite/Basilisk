@@ -27,7 +27,9 @@ pub(super) async fn did_open(server: &LspServer, params: DidOpenTextDocumentPara
     let Some(index) = guard.as_ref() else { return };
     let diags = index.set_open(&uri, &text, version);
     drop(guard);
-    server.client.publish_diagnostics(uri, diags, None).await;
+    // Index stays current, but publication respects the Type Checking toggle
+    // ([ANALYSIS-ENABLED]) — disabled means no diagnostics reach the editor.
+    server.publish_diagnostics_if_enabled(uri, diags).await;
 }
 
 /// Handle `textDocument/didChange`: apply incremental edits and republish diagnostics.
@@ -59,7 +61,7 @@ pub(super) async fn did_change(server: &LspServer, params: DidChangeTextDocument
     let results = index.set_open_refresh_dependents(&uri, &text, version);
     drop(guard);
     for (target, diags) in results {
-        server.client.publish_diagnostics(target, diags, None).await;
+        server.publish_diagnostics_if_enabled(target, diags).await;
     }
 }
 
@@ -75,7 +77,7 @@ pub(super) async fn did_save(server: &LspServer, params: DidSaveTextDocumentPara
     let results = index.set_open_refresh_dependents(&uri, &text, 0);
     drop(guard);
     for (target, diags) in results {
-        server.client.publish_diagnostics(target, diags, None).await;
+        server.publish_diagnostics_if_enabled(target, diags).await;
     }
 
     // Notify activity panels that this module changed.
@@ -120,10 +122,10 @@ pub(super) async fn did_close(server: &LspServer, params: DidCloseTextDocumentPa
     let Some(index) = guard.as_ref() else {
         super::diaglog!("[DIAG] did_close: no index, clearing");
         info!(uri = %uri, "did_close: no index, clearing diagnostics");
-        server.client.publish_diagnostics(uri, vec![], None).await;
+        server.publish_diagnostics_if_enabled(uri, vec![]).await;
         return;
     };
-    let mode = index.mode;
+    let mode = index.mode();
     let roots_debug: Vec<_> = index
         .roots
         .iter()
@@ -141,7 +143,7 @@ pub(super) async fn did_close(server: &LspServer, params: DidCloseTextDocumentPa
             drop(guard);
             super::diaglog!("[DIAG] did_close: OpenFilesOnly -> clearing uri={uri}");
             info!(uri = %uri, "did_close: openFilesOnly — clearing diagnostics");
-            server.client.publish_diagnostics(uri, vec![], None).await;
+            server.publish_diagnostics_if_enabled(uri, vec![]).await;
         }
         AnalysisMode::WholeModule | AnalysisMode::CrossModule => {
             let in_workspace = uri
@@ -157,8 +159,7 @@ pub(super) async fn did_close(server: &LspServer, params: DidCloseTextDocumentPa
                 );
                 info!(uri = %uri, diag_count, "did_close: wholeModule in-workspace — republishing");
                 server
-                    .client
-                    .publish_diagnostics(publish_uri, diags, None)
+                    .publish_diagnostics_if_enabled(publish_uri, diags)
                     .await;
             } else {
                 // Remove from index so no subsequent event republishes.
@@ -170,7 +171,7 @@ pub(super) async fn did_close(server: &LspServer, params: DidCloseTextDocumentPa
                     "[DIAG] did_close: WholeModule out-of-workspace -> clearing uri={uri}"
                 );
                 info!(uri = %uri, "did_close: wholeModule out-of-workspace — clearing");
-                server.client.publish_diagnostics(uri, vec![], None).await;
+                server.publish_diagnostics_if_enabled(uri, vec![]).await;
             }
         }
     }
@@ -186,7 +187,7 @@ pub(super) async fn did_change_watched_files(
     {
         let guard = server.index.read().await;
         let Some(index) = guard.as_ref() else { return };
-        if index.mode == AnalysisMode::OpenFilesOnly {
+        if index.mode() == AnalysisMode::OpenFilesOnly {
             return; // File-watcher events are irrelevant in openFilesOnly mode.
         }
     }
@@ -250,6 +251,9 @@ pub(super) async fn did_change_watched_files(
     // that fires after FILE_WATCHER_DEBOUNCE_MS milliseconds.
     let index_lock = Arc::clone(&server.index);
     let client = server.client.clone();
+    // Clone the toggle so the debounced re-analysis respects [ANALYSIS-ENABLED]
+    // when it fires after the handler has returned.
+    let enabled = Arc::clone(&server.type_checking_enabled);
 
     let task = tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(FILE_WATCHER_DEBOUNCE_MS)).await;
@@ -261,7 +265,7 @@ pub(super) async fn did_change_watched_files(
         // cross-module mode an export change must refresh dependents' stale
         // symbol diagnostics. Implements [ANALYSIS-SYMBOLS-INVAL] (GitHub #56).
         let mut exports_changed = false;
-        let cross_module = matches!(index.mode, crate::config::AnalysisMode::CrossModule);
+        let cross_module = matches!(index.mode(), crate::config::AnalysisMode::CrossModule);
         let reload_results: Vec<_> = reload_targets
             .iter()
             .filter_map(|uri| {
@@ -273,14 +277,23 @@ pub(super) async fn did_change_watched_files(
 
         // When a new module appeared, its dependents may now resolve imports
         // that were previously unresolved. Re-resolve the whole workspace so
-        // their stale BSK-E0010 clears without an LSP reload (GitHub #53).
+        // their stale imports_unresolved clears without an LSP reload (GitHub #53).
         // Likewise when an edited module's exports changed (GitHub #56).
         let publish_set = if has_created_module || exports_changed {
             // Drop deleted entries first so the recheck cannot resurrect them.
             for uri in &delete_targets {
                 index.forget_file(uri);
             }
-            index.reresolve_imports_and_recheck()
+            let mut sweep = index.reresolve_imports_and_recheck();
+            // The sweep republishes only files whose diagnostics changed; the
+            // reloaded files already stored their fresh diagnostics before it
+            // ran, so append their own publishes rather than losing them.
+            for (uri, diags) in reload_results {
+                if !sweep.iter().any(|(target, _)| *target == uri) {
+                    sweep.push((uri, diags));
+                }
+            }
+            sweep
         } else {
             reload_results
         };
@@ -288,10 +301,10 @@ pub(super) async fn did_change_watched_files(
         drop(guard);
 
         for (uri, diags) in publish_set {
-            client.publish_diagnostics(uri, diags, None).await;
+            super::publish_diagnostics_gated(&client, &enabled, uri, diags).await;
         }
         for uri in delete_targets {
-            client.publish_diagnostics(uri, vec![], None).await;
+            super::publish_diagnostics_gated(&client, &enabled, uri, vec![]).await;
         }
     });
 

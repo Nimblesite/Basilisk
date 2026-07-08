@@ -10,6 +10,7 @@ use super::helpers::{leading_indent_of_line, WorkspaceEditBuilder};
 ///
 /// Returns up to two actions: one for ternary-to-if/else and one for
 /// if/else-to-ternary, depending on what patterns appear near the cursor.
+// Implements [REFACTOR-CONVERT] — the "Ternary ↔ if/else block" conversion row.
 #[must_use]
 pub(in crate::code_actions) fn convert_ternary(
     uri: &Url,

@@ -129,8 +129,8 @@ copy_extension_tree() {
     for item in "${COPY_ITEMS[@]}"; do
         if [[ -e "$src/$item" ]]; then
             # -L dereferences symlinks so the mirror is self-contained: e.g.
-            # images/screenshot.png links into website/, which does not exist in
-            # the standalone tree — copy the real file, not a dangling link.
+            # images/zed-screenshot.png links into website/, which does not exist
+            # in the standalone tree — copy the real file, not a dangling link.
             cp -RL "$src/$item" "$dest/$item"
         fi
     done
@@ -207,10 +207,15 @@ main() {
     render_extension_manifest "$dest" "$version"
     stamp_toml_version "$dest/extension.toml" "$version"
 
-    echo "Verifying no placeholders remain..."
-    if grep -rlF "$PLACEHOLDER" "$dest" >/dev/null 2>&1; then
-        echo "render-zed-mirror.sh: placeholders still present under ${dest}:" >&2
-        grep -rlF "$PLACEHOLDER" "$dest" >&2
+    # Guard against an UNSTAMPED version slipping through. A leftover placeholder
+    # only matters as a *version value*, which is always a quoted TOML string
+    # (`version = "0.0.0-PLACEHOLDER"`); a doc comment that merely names the token
+    # is not a defect. Match the quoted form so prose can reference the
+    # placeholder freely without tripping the release ([ZED-MIRROR]).
+    echo "Verifying no version placeholders remain..."
+    if grep -rlF "\"${PLACEHOLDER}\"" "$dest" >/dev/null 2>&1; then
+        echo "render-zed-mirror.sh: unstamped version placeholder under ${dest}:" >&2
+        grep -rlF "\"${PLACEHOLDER}\"" "$dest" >&2
         exit 2
     fi
     echo "Rendered standalone Zed extension at ${dest}"

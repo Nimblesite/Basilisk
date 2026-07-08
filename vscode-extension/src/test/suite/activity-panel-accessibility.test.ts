@@ -238,6 +238,9 @@ function assertDataPanelsRequireWorkspace(): void {
 
 // ── Test Suite ────────────────────────────────────────────────────────────
 
+// Tests [EXTACT-ACCESSIBILITY] — descriptive labels, icon+text indicators,
+// keyboard-navigable commands, and screen-reader-meaningful content across the
+// activity panel.
 suite("Basilisk Activity Panel Accessibility Audit", function () {
 
   let suiteContext: { tmpDir: string; basiliskBinary: string };

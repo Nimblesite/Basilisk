@@ -21,8 +21,8 @@ AST ➜ [basilisk-resolver] ➜ scopes + resolved names ➜ checker ➜ diagnost
 
 | Code | Description |
 |------|-------------|
-| `BSK-E0018` | Undefined name |
-| `BSK-E0019` | Used before assignment |
+| `names_undefined` | Undefined name |
+| `names_unbound` | Used before assignment |
 
 ## Dependencies
 

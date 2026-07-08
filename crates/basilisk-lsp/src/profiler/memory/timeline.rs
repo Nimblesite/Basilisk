@@ -14,6 +14,8 @@ use tracing::{debug, info};
 
 use super::{format_bytes, MemorySnapshot};
 
+// Implements [PROFILE-MEMORY-AUTOPILOT-INTERVAL] — the LSP-side 30s auto-snapshot
+// interval default the spec anchors here.
 /// Configuration for auto-snapshot mode.
 #[derive(Debug, Clone)]
 pub struct AutoSnapshotConfig {

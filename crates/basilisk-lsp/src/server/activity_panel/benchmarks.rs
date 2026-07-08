@@ -2,6 +2,10 @@
 //!
 //! Performance benchmarks for the activity panel LSP commands.
 //!
+//! Tests [EXTACT-PERFORMANCE]: the activity-panel handlers are computed
+//! server-side from existing resolver/diagnostic data (no extra file I/O), and
+//! these benches guard that they stay fast on large workspaces.
+//!
 //! Validates that key operations meet latency targets for 1000-file workspaces:
 //! - `basilisk/workspaceModules`: <100ms
 //! - `basilisk/typeHealth`: <50ms
@@ -85,7 +89,7 @@ mod tests {
         let (idx, root) = build_large_workspace(1000);
 
         let start = Instant::now();
-        let result = build_module_tree(&idx, "", Some(&root));
+        let result = build_module_tree(&idx, "", Some(&root), true, true);
         let elapsed = start.elapsed();
 
         let target_ms = 100 * TIMING_MULTIPLIER;
@@ -129,7 +133,7 @@ mod tests {
         let (idx, root) = build_large_workspace(1000);
 
         let start = Instant::now();
-        let health = build_type_health(&idx, Some(&root));
+        let health = build_type_health(&idx, Some(&root), true);
         let elapsed = start.elapsed();
 
         let target_ms = 50 * TIMING_MULTIPLIER;

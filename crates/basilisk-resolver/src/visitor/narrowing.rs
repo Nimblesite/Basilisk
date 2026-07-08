@@ -79,6 +79,8 @@ fn collect_from_stmt(stmt: &Stmt, guards: &mut Vec<NarrowingGuard>, in_loop: boo
                 });
             }
         }
+        // Implements [TYPEINF-NARROWING-MATCH] — per-case pattern narrowing and
+        // wildcard tracking for exhaustiveness.
         Stmt::Match(node) => {
             if let Some(variable) = expr_simple_name(&node.subject) {
                 let mut cases = Vec::new();
@@ -111,6 +113,8 @@ fn collect_from_stmt(stmt: &Stmt, guards: &mut Vec<NarrowingGuard>, in_loop: boo
             }
         }
         // Loops: narrowing inside does NOT persist after the loop (§7.10)
+        // Implements [TYPEINF-NARROWING-SCOPE] — the `in_loop` flag marks guards
+        // collected inside a loop body so they do not leak past the loop.
         Stmt::For(node) => {
             collect_from_stmts(&node.body, guards, true);
             collect_from_stmts(&node.orelse, guards, in_loop);
@@ -137,6 +141,9 @@ fn collect_from_stmt(stmt: &Stmt, guards: &mut Vec<NarrowingGuard>, in_loop: boo
 }
 
 /// Extract a narrowing guard from an `if` test expression.
+// Implements [TYPEINF-NARROWING-ISINSTANCE] (isinstance branch),
+// [TYPEINF-NARROWING-NONE] (`is None`/`is not None` branch), and
+// [TYPEINF-NARROWING-TRUTHY] (`if x:` / `if not x:` branch).
 fn extract_guard_from_test(
     test: &Expr,
     if_body_span: Span,
@@ -217,6 +224,8 @@ fn extract_guard_from_test(
 }
 
 /// Extract a narrowing guard from an `assert` statement's test expression.
+// Implements [TYPEINF-NARROWING-ASSERT] — `assert isinstance(x, T)` /
+// `assert x is not None` narrows for all subsequent code in the flow path.
 fn extract_assert_guard(test: &Expr) -> Option<NarrowingGuardKind> {
     match test {
         // assert isinstance(x, T)

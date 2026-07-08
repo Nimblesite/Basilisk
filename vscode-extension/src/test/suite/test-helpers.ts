@@ -298,3 +298,203 @@ export function teardownLspTestSuite(tmpDir: string): void {
         fs.rmSync(tmpDir, { recursive: true, force: true });
     }
 }
+
+// ── Hover & navigation helpers ───────────────────────────────────────
+// Shared so the hover (lsp-hover) and goto (lsp-goto) suites can HAMMER
+// every symbol kind without re-implementing the poll/extract plumbing.
+
+/** Flatten VS Code hover results into a single searchable string. */
+export function extractHoverText(hovers: readonly vscode.Hover[]): string {
+    return hovers
+        .flatMap((h) =>
+            h.contents.map((c) => {
+                if (typeof c === 'string') { return c; }
+                if (c instanceof vscode.MarkdownString) { return c.value; }
+                if ('value' in c) { return (c as { value: string }).value; }
+                return '';
+            })
+        )
+        .join('\n');
+}
+
+/**
+ * Locate a token within multi-line source and return a Position pointing at
+ * the MIDDLE of that token (so the cursor sits firmly inside the identifier,
+ * the way a user hovering/clicking would land). `occurrence` selects which
+ * match (0-based) when the token appears more than once — essential for
+ * distinguishing a definition site from its later reference sites.
+ *
+ * Throws if the token (at the requested occurrence) is absent: a missing
+ * token means the test fixture drifted, which must fail loudly, not silently
+ * hover at (0,0).
+ */
+export function locate(content: string, token: string, occurrence = 0): vscode.Position {
+    const lines = content.split('\n');
+    let seen = 0;
+    for (let line = 0; line < lines.length; line++) {
+        let from = 0;
+        for (; ;) {
+            const col = lines[line].indexOf(token, from);
+            if (col === -1) { break; }
+            if (seen === occurrence) {
+                return new vscode.Position(line, col + Math.floor(token.length / 2));
+            }
+            seen += 1;
+            from = col + token.length;
+        }
+    }
+    throw new Error(
+        `locate: token "${token}" (occurrence ${occurrence}) not found in source`
+    );
+}
+
+/**
+ * Poll the hover provider until it returns content, then return the flattened
+ * hover text. Returns '' (never throws) when no hover ever materialises, so a
+ * test can assert presence with a clear message instead of an opaque timeout.
+ */
+export async function getHoverText(
+    uri: vscode.Uri,
+    position: vscode.Position,
+    timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS,
+): Promise<string> {
+    // Poll until the hover has non-empty CONTENT, not merely a non-empty array.
+    // During the analysis window the provider can transiently return a Hover with
+    // empty contents (the intermittent "no content" regression, #200); resolving
+    // on array length alone yields '' and a spurious failure. Gating on extracted
+    // text makes the wait deterministic — it resolves only once real content
+    // materialises, bounded by timeoutMs.
+    const hovers = await pollUntilResult({
+        fn: async () => vscode.commands.executeCommand<vscode.Hover[]>(
+            'vscode.executeHoverProvider', uri, position
+        ).then((r) => r ?? [], () => [] as vscode.Hover[]),
+        predicate: (r) => Array.isArray(r) && extractHoverText(r).trim().length > 0,
+        timeoutMs,
+    }).catch(() => [] as vscode.Hover[]);
+    return extractHoverText(hovers);
+}
+
+// ── Inlay-hint helpers ───────────────────────────────────────────────
+// Shared so any suite can assert that Basilisk surfaces inferred types
+// INLINE (via `textDocument/inlayHint`) without the user hovering. See
+// [LSPARCH-FEATURES-INLAYHINTS].
+
+/** Flatten a VS Code inlay hint's label (string or label-parts) into one string. */
+export function inlayHintLabel(hint: vscode.InlayHint): string {
+    return typeof hint.label === 'string'
+        ? hint.label
+        : hint.label.map((part) => part.value).join('');
+}
+
+/**
+ * Whitespace-insensitive inlay-hint label so assertions are immune to padding
+ * differences: `": int"` → `":int"`, `" -> str"` → `"->str"`, `"name="` stays.
+ * Splits on spaces (no regex — see CLAUDE.md) which is all these labels contain.
+ */
+export function normalizedInlayLabel(hint: vscode.InlayHint): string {
+    return inlayHintLabel(hint).split(' ').join('');
+}
+
+/** The full-document range for a provider request. */
+function fullDocumentRange(doc: vscode.TextDocument): vscode.Range {
+    const lastLine = doc.lineCount - 1;
+    return new vscode.Range(
+        new vscode.Position(0, 0),
+        new vscode.Position(lastLine, doc.lineAt(lastLine).text.length),
+    );
+}
+
+/**
+ * Poll the whole-document inlay-hint provider until `predicate` holds. Returns
+ * `[]` on timeout — never throws — so callers assert with a descriptive message
+ * rather than an opaque poll failure. Analysis is async, so the first request
+ * can legitimately be empty.
+ */
+async function pollInlayHints(
+    doc: vscode.TextDocument,
+    predicate: (hints: vscode.InlayHint[]) => boolean,
+    timeoutMs: number,
+): Promise<vscode.InlayHint[]> {
+    const range = fullDocumentRange(doc);
+    return pollUntilResult({
+        fn: async () => vscode.commands.executeCommand<vscode.InlayHint[]>(
+            'vscode.executeInlayHintProvider', doc.uri, range,
+        ).then((r) => r ?? [], () => [] as vscode.InlayHint[]),
+        predicate,
+        timeoutMs,
+    }).catch(() => [] as vscode.InlayHint[]);
+}
+
+/** Poll until at least `minCount` inlay hints materialise over the document. */
+export async function getInlayHints(
+    doc: vscode.TextDocument,
+    minCount: number,
+    timeoutMs: number = DIAGNOSTIC_TIMEOUT_MS,
+): Promise<vscode.InlayHint[]> {
+    return pollInlayHints(doc, (r) => r.length >= minCount, timeoutMs);
+}
+
+/** Normalised inlay-hint labels present on `line` (0-based) of the document. */
+export function inlayLabelsOnLine(
+    hints: readonly vscode.InlayHint[],
+    line: number,
+): string[] {
+    return hints
+        .filter((hint) => hint.position.line === line)
+        .map(normalizedInlayLabel);
+}
+
+/** Arguments for {@link waitForInlayLabel}. */
+export interface InlayLabelWait {
+    doc: vscode.TextDocument;
+    line: number;
+    /** Normalised label to wait for, e.g. `":str"` (see {@link normalizedInlayLabel}). */
+    label: string;
+    timeoutMs?: number;
+}
+
+/**
+ * Poll the inlay-hint provider until a hint whose normalised label equals
+ * `label` appears on `line`. Returns the full hint list once satisfied, or `[]`
+ * on timeout. Used to assert that inline types stay CORRECT and LIVE after the
+ * document text changes.
+ */
+export async function waitForInlayLabel(opts: InlayLabelWait): Promise<vscode.InlayHint[]> {
+    const { doc, line, label, timeoutMs = DIAGNOSTIC_TIMEOUT_MS } = opts;
+    return pollInlayHints(doc, (r) => inlayLabelsOnLine(r, line).includes(label), timeoutMs);
+}
+
+/** Definition-family providers usable with {@link getNavLocations}. */
+export type NavProvider =
+    | 'vscode.executeDefinitionProvider'
+    | 'vscode.executeDeclarationProvider'
+    | 'vscode.executeTypeDefinitionProvider';
+
+/** Normalise the `(Location | LocationLink)[]` a provider may return to `Location[]`. */
+export function normalizeLocations(
+    raw: readonly (vscode.Location | vscode.LocationLink)[]
+): vscode.Location[] {
+    return raw.map((l) =>
+        'targetUri' in l ? new vscode.Location(l.targetUri, l.targetRange) : l
+    );
+}
+
+/**
+ * Poll a definition-family provider until it returns at least one location,
+ * normalising LocationLink results. Returns [] (never throws) on timeout so
+ * the caller can assert with a descriptive message.
+ */
+export async function getNavLocations(
+    command: NavProvider,
+    uri: vscode.Uri,
+    position: vscode.Position,
+): Promise<vscode.Location[]> {
+    const raw = await pollUntilResult({
+        fn: async () => vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(
+            command, uri, position
+        ).then((r) => r ?? [], () => [] as vscode.Location[]),
+        predicate: (r) => Array.isArray(r) && r.length > 0,
+        timeoutMs: DIAGNOSTIC_TIMEOUT_MS,
+    }).catch(() => [] as (vscode.Location | vscode.LocationLink)[]);
+    return normalizeLocations(raw);
+}

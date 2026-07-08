@@ -47,11 +47,12 @@ fn in_span(offset: usize, span: Span) -> bool {
 
 /// Find the symbol whose `name_span` contains the given byte offset.
 ///
-/// Searches functions (and their parameters), classes (and their attributes),
-/// module variables, and imports. Returns the first match.
+/// Searches functions (and their parameters and local variables), classes (and
+/// their attributes), module variables, and imports. Returns the first match.
+// Implements [LSPARCH-FEATURES-FINDSYM] — central symbol lookup reused by hover, goto-def, references, rename.
 #[must_use]
 pub fn find_symbol_at_offset(resolved: &ResolvedModule, offset: usize) -> Option<SymbolHit<'_>> {
-    // Check function names and their parameters.
+    // Check function names, their parameters, and their local variables.
     for func in &resolved.functions {
         if in_span(offset, func.name_span) {
             return Some(SymbolHit::Function(func));
@@ -69,6 +70,12 @@ pub fn find_symbol_at_offset(resolved: &ResolvedModule, offset: usize) -> Option
         if let Some(ref kw) = func.kwarg {
             if in_span(offset, kw.name_span) {
                 return Some(SymbolHit::Parameter { func, param: kw });
+            }
+        }
+        // Function-local bindings: annotated (`x: T = ...`) and plain (`x = ...`).
+        for var in func.local_vars.iter().chain(&func.local_unannotated_vars) {
+            if in_span(offset, var.name_span) {
+                return Some(SymbolHit::Variable(var));
             }
         }
     }
@@ -102,7 +109,8 @@ pub fn find_symbol_at_offset(resolved: &ResolvedModule, offset: usize) -> Option
     None
 }
 
-/// Find a symbol definition by name. Searches functions, classes, variables.
+/// Find a symbol definition by name. Searches functions, classes, module
+/// variables, function-local variables, and function parameters.
 ///
 /// Returns the definition `SymbolHit` for the first match.
 #[must_use]
@@ -128,7 +136,68 @@ pub fn find_definition_by_name<'a>(
             return Some(SymbolHit::Variable(var));
         }
     }
+    // Function-local variables (annotated and plain assignments) and parameters.
+    // Searched last so module-level symbols keep precedence for a bare name
+    // reference; lets a use of a local/param resolve to its in-function binding.
+    for func in &resolved.functions {
+        for var in func.local_vars.iter().chain(&func.local_unannotated_vars) {
+            if var.name == name {
+                return Some(SymbolHit::Variable(var));
+            }
+        }
+        if let Some(hit) = find_parameter_by_name(func, name) {
+            return Some(hit);
+        }
+    }
+    // Class attributes, so a `self.attr` (or `obj.attr`) read resolves to the
+    // attribute's declaration. Searched last — only matches a name that nothing
+    // higher-precedence claimed — so existing resolutions are unchanged.
+    for class in &resolved.classes {
+        for attr in &class.attributes {
+            if attr.name == name {
+                return Some(SymbolHit::Attribute { class, attr });
+            }
+        }
+    }
     None
+}
+
+/// Find a parameter (positional, `*args`, or `**kwargs`) of `func` by name.
+fn find_parameter_by_name<'a>(func: &'a FunctionInfo, name: &str) -> Option<SymbolHit<'a>> {
+    for param in &func.parameters {
+        if param.name == name {
+            return Some(SymbolHit::Parameter { func, param });
+        }
+    }
+    if let Some(ref va) = func.vararg {
+        if va.name == name {
+            return Some(SymbolHit::Parameter { func, param: va });
+        }
+    }
+    if let Some(ref kw) = func.kwarg {
+        if kw.name == name {
+            return Some(SymbolHit::Parameter { func, param: kw });
+        }
+    }
+    None
+}
+
+/// Find the import that introduces `name` as a locally-bound symbol.
+///
+/// Matches `from m import name` / `from m import x as name` (the bound name lives
+/// in `names`) and `import name` / `import m as name` (the module or its alias).
+/// Star imports bind no specific name, so they never match. Shared by hover
+/// (render the import declaration) and goto-definition (resolve the import's
+/// target file) when the cross-module symbol table has not populated yet.
+pub(crate) fn find_import_by_bound_name<'a>(
+    resolved: &'a ResolvedModule,
+    name: &str,
+) -> Option<&'a ImportInfo> {
+    resolved.imports.iter().find(|imp| match imp.kind {
+        ImportKind::Star => false,
+        ImportKind::From => imp.names.iter().any(|n| n == name),
+        ImportKind::Plain => imp.names.iter().any(|n| n == name) || imp.module == name,
+    })
 }
 
 /// Extract the identifier at a byte offset from source text.
@@ -163,6 +232,7 @@ fn is_ident_char(b: u8) -> bool {
 // ── Type signature formatting ────────────────────────────────────────────────
 
 /// Format a hover markdown string for a symbol hit.
+// Implements [LSPARCH-FEATURES-FINDSYM] — `format_type_signature` builds hover markdown for any symbol kind.
 #[must_use]
 pub fn format_type_signature(hit: &SymbolHit<'_>, source: &str) -> String {
     match hit {
@@ -195,6 +265,10 @@ fn format_function_signature(func: &FunctionInfo, source: &str) -> String {
         sig.push_str(&param.name);
         if let Some(ann) = annotation_text(param.annotation_span, source) {
             let _ = write!(sig, ": {ann}");
+        } else if !is_implicit_receiver(func, idx, param) {
+            // #253: an unannotated parameter renders its inferred type —
+            // `Unknown` until parameter inference exists — never blank.
+            sig.push_str(": Unknown");
         }
     }
     if let Some(ref va) = func.vararg {
@@ -218,7 +292,13 @@ fn format_function_signature(func: &FunctionInfo, source: &str) -> String {
     sig.push(')');
 
     match func.return_annotation {
-        ReturnAnnotationKind::Missing => {}
+        ReturnAnnotationKind::Missing => {
+            // #253: no annotation — infer from the body's `return` statements.
+            let inferred = infer_return_type_display(func);
+            if !inferred.is_empty() {
+                let _ = write!(sig, " -> {inferred}");
+            }
+        }
         ReturnAnnotationKind::NoneType => sig.push_str(" -> None"),
         ReturnAnnotationKind::Any => sig.push_str(" -> Any"),
         _ => {
@@ -229,6 +309,12 @@ fn format_function_signature(func: &FunctionInfo, source: &str) -> String {
     }
 
     sig
+}
+
+/// `true` for the implicit `self`/`cls` receiver of a method — it carries an
+/// implicit type, so it never renders an `Unknown` annotation.
+fn is_implicit_receiver(func: &FunctionInfo, idx: usize, param: &ParameterInfo) -> bool {
+    idx == 0 && func.class_name.is_some() && (param.name == "self" || param.name == "cls")
 }
 
 fn format_class_signature(class: &ClassInfo) -> String {
@@ -293,7 +379,7 @@ fn format_import_signature(imp: &ImportInfo) -> String {
 }
 
 /// Extract annotation text from the source using a span.
-fn annotation_text(span: Option<Span>, source: &str) -> Option<String> {
+pub(crate) fn annotation_text(span: Option<Span>, source: &str) -> Option<String> {
     let span = span?;
     let text = span.slice_source(source)?;
     Some(text.trim().to_owned())
@@ -313,8 +399,36 @@ pub(crate) fn rhs_type_display(rhs: &basilisk_resolver::RhsKind) -> &'static str
         RhsKind::EmptyDict | RhsKind::Dict(_) => "dict",
         RhsKind::Set(_) => "set",
         RhsKind::Tuple(_) => "tuple",
+        RhsKind::KnownCall(result) => rhs_type_display(result),
         _ => "",
     }
+}
+
+/// Infer a display type for a function's return from its `return` statements.
+///
+/// Shared by hover (#253) and inlay hints. Returns an empty string when the
+/// type cannot be determined.
+pub(crate) fn infer_return_type_display(func: &basilisk_resolver::FunctionInfo) -> &'static str {
+    if func.return_stmts.is_empty() {
+        return "None";
+    }
+
+    // Collect the display names for every return statement.
+    let mut common_type: Option<&'static str> = None;
+    for ret in &func.return_stmts {
+        let display = rhs_type_display(&ret.rhs_kind);
+        // If any return has an uninferrable type, bail out.
+        if display.is_empty() {
+            return "";
+        }
+        match common_type {
+            None => common_type = Some(display),
+            Some(prev) if prev == display => {}
+            Some(_) => return "", // mixed return types — cannot infer
+        }
+    }
+
+    common_type.unwrap_or("None")
 }
 
 // ── Position conversion ──────────────────────────────────────────────────────

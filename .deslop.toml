@@ -7,9 +7,9 @@
 # exceeds the value below.
 # Docs: https://deslop.live/docs/for-ai/
 [threshold]
-# Measured repo-wide duplication at stamp time: 22.71%. Ceiling set just above to
+# Measured repo-wide duplication at stamp time: 12.5%. Ceiling set just above to
 # absorb cross-runner float jitter. Ratchet DOWN as duplication is reduced.
-max_duplication_percent = 23.0
+max_duplication_percent = 12.6
 
 [defaults]
 # `exclude` drops files during discovery so they are never analysed and never
@@ -24,4 +24,18 @@ exclude = [
   # This code is deliberately illustrative and repetitive, not product source,
   # so its duplication is expected and must not gate the build.
   "**/examples/**",
+  # Vendored Python dependencies — the conformance scorer's virtualenv. Third-
+  # party site-packages, not our source; their internal duplication is irrelevant.
+  ".venv/**",
+  "**/.venv/**",
+  "**/site-packages/**",
+  # Throwaway working area (git-ignored). Logs, screenshots, and scratch clones
+  # of upstream repos live here; never product source.
+  "scratchpad/**",
+  "**/scratchpad/**",
+  # Upstream python/typing conformance test suite — sha-pinned third-party
+  # fixtures downloaded by score.py, not our code. Duplication among the spec's
+  # own test files is expected and must not gate our build (mirrors the
+  # crates/*/tests and benchmarks/fixtures exclusions above).
+  "conformance/tests/**",
 ]

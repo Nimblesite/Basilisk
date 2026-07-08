@@ -6,7 +6,7 @@ use super::{
 };
 
 /// Information about a single function parameter.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "Python parameters have many boolean flags"
@@ -54,7 +54,7 @@ impl ReturnAnnotationKind {
 }
 
 /// A `return` statement found inside a function body.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReturnStmtInfo {
     /// The span of the `return` keyword.
     pub span: Span,
@@ -68,12 +68,12 @@ pub struct ReturnStmtInfo {
     pub value_is_call: bool,
     /// What kind of expression is returned, if any.
     ///
-    /// Used for return type inference in E0002.
+    /// Used for return type inference in BSK-E0002.
     pub rhs_kind: RhsKind,
 }
 
 /// A `yield` or `yield from` expression found inside a generator function body.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct YieldExprInfo {
     /// The span of the `yield` keyword.
     pub span: Span,
@@ -87,7 +87,7 @@ pub struct YieldExprInfo {
 }
 
 /// Information about a single function definition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "Python functions have many boolean flags"
@@ -123,7 +123,7 @@ pub struct FunctionInfo {
     pub class_name: Option<String>,
     /// `true` when this function is lexically nested inside a class body — e.g.
     /// a closure defined inside a method — even though it is not itself a method
-    /// (`class_name` is `None`).  Used by [BSK-E0094] to know that `Self` still
+    /// (`class_name` is `None`).  Used by `generics_self_usage` to know that `Self` still
     /// has a valid enclosing-class binding and must not be flagged as
     /// module-level `Self` usage.
     pub nested_in_class: bool,
@@ -143,7 +143,7 @@ pub struct FunctionInfo {
     pub unhashable_keys: Vec<super::module_types::UnhashableKeyRef>,
     /// `true` when the entire function body is a stub (only `...` or `pass`).
     ///
-    /// Stub bodies are exempt from E0001/E0002/E0004: they appear in overload
+    /// Stub bodies are exempt from BSK-E0001/BSK-E0002/BSK-E0004: they appear in overload
     /// signatures, Protocol bodies used as stubs, and `.pyi`-style inline stubs.
     pub is_stub_body: bool,
     /// `true` when the last top-level statement in the function body unconditionally
@@ -190,7 +190,8 @@ pub struct FunctionInfo {
     pub docstring: Option<String>,
     /// Type narrowing guards detected in this function body.
     ///
-    /// Collected during AST resolution for use by the checker's `NarrowingContext`.
-    /// See `CHECKER-TYPE-INFERENCE-SPEC.md` §7.
+    /// Collected during AST resolution for the planned checker narrowing
+    /// engine (NARROWPLAN Phase 1); currently unconsumed. See
+    /// `CHECKER-TYPE-INFERENCE-SPEC.md` §7.
     pub narrowing_guards: Vec<NarrowingGuard>,
 }

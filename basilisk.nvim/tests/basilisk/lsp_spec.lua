@@ -1,5 +1,8 @@
 --- Tests for basilisk.lsp module.
 ---
+--- Tests [NVIM-LSP-CLIENT-CONFIGURATION] (start) and
+--- [NVIM-LSP-CLIENT-CONFIGURATION-ERROR-RECOVERY] (restart backoff / counter).
+---
 --- Covers: restart count, start (with/without binary), restart backoff,
 --- settings passthrough.
 

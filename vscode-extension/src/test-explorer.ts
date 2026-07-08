@@ -57,6 +57,9 @@ interface LspTestRunResult {
  *
  * Creates a `TestController`, wires up notification listeners, and registers
  * run/debug/coverage profiles. Call this from `activate()` when LSP mode is active.
+ *
+ * Implements [LSPTEST-EDITOR-SPECIFIC-INTEGRATION-VSCODE] — TestController via the `vscode.tests`
+ * API, with results streamed back to the Test Explorer and debug routed through the DAP proxy.
  */
 export function registerTestExplorer(
   context: vscode.ExtensionContext,
@@ -108,6 +111,8 @@ export function registerTestExplorer(
   return controller;
 }
 
+// Implements [LSPTEST-LSP-PROTOCOL-CUSTOM-NOTIFICATIONS] (client side) — subscribes to the
+// `basilisk/testDiscoveryResult` and `basilisk/coverageResult` server→client notifications.
 /** Wire up the `basilisk/testDiscoveryResult` notification listener. */
 function wireNotificationListener(
   controller: vscode.TestController,
@@ -182,6 +187,9 @@ async function requestDiscovery(store: Store): Promise<void> {
  * Populate the TestController with items from an LSP discovery notification.
  *
  * Replaces the entire tree — items not in the new list are removed.
+ *
+ * Implements [LSPTEST-TEST-ITEM-DATA-MODEL-HIERARCHY] (VS Code side) — renders the
+ * File > Class > Method tree received from the server into native TestItem nodes.
  */
 function populateTestItems(
   controller: vscode.TestController,
@@ -256,6 +264,9 @@ interface RunTestsArgs {
  *
  * For run mode, sends `basilisk.runTests` to the LSP server.
  * For debug mode, sends `basilisk.debugTest` and starts a VS Code debug session.
+ *
+ * Implements [LSPTEST-EDITOR-SPECIFIC-INTEGRATION-VSCODE] — invokes the server
+ * [LSPTEST-LSP-PROTOCOL-COMMANDS] handlers and streams results into the Test Explorer.
  */
 async function runTests(args: RunTestsArgs): Promise<void> {
   const { controller, store, request, token, debug, coverage = false } = args;
@@ -400,6 +411,8 @@ async function runDebugTest(args: RunDebugTestArgs): Promise<void> {
   }
 }
 
+// Implements [LSPTEST-EDITOR-SPECIFIC-INTEGRATION-VSCODE] — streams pass/fail/skip/error results
+// (the [LSPTEST-TEST-ITEM-DATA-MODEL-HIERARCHY] inline failure message) into the Test Explorer.
 /** Apply per-test results to the test run. */
 function applyPerTestResults(
   run: vscode.TestRun,

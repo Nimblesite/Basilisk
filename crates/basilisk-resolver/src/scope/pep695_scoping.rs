@@ -1,5 +1,5 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
-//! AST-derived PEP 695 scoping facts consumed by `BSK-E0149`.
+//! AST-derived PEP 695 scoping facts consumed by `generics_syntax_scoping`.
 //!
 //! These structures are populated purely from `ruff_python_ast` nodes (never
 //! from raw `source.lines()` scanning), so docstring/comment/string content can
@@ -19,7 +19,7 @@ pub enum Pep695ParamKind {
 }
 
 /// A single PEP 695 type parameter with its optional bound.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Pep695Param {
     /// The parameter name (e.g. `T`).
     pub name: String,
@@ -43,7 +43,7 @@ pub enum GenericDefKind {
 }
 
 /// A decorator applied to a generic definition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DecoratorRef {
     /// Simple names referenced anywhere in the decorator expression.
     pub refs: Vec<String>,
@@ -52,8 +52,8 @@ pub struct DecoratorRef {
 }
 
 /// A `class` or `def` that declares a PEP 695 `[...]` type parameter list,
-/// plus the scope facts `BSK-E0149` needs.
-#[derive(Debug, Clone)]
+/// plus the scope facts `generics_syntax_scoping` needs.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Pep695Def {
     /// Whether this is a class or a function.
     pub kind: GenericDefKind,
@@ -72,7 +72,7 @@ pub struct Pep695Def {
 }
 
 /// A PEP 695 `type Name[...] = rhs` alias statement, resolved from the AST.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Pep695AliasDef {
     /// The alias name.
     pub name: String,
@@ -86,7 +86,7 @@ pub struct Pep695AliasDef {
     /// member of a top-level `X | Y` union — but NOT names nested inside a
     /// subscript/container. A bare reference to another alias is non-terminating
     /// (`type A = B`), whereas one through a container (`type A = list[B]`) is
-    /// legitimate recursion; this powers mutual-cycle detection (BSK-E0149).
+    /// legitimate recursion; this powers mutual-cycle detection (`generics_syntax_scoping`).
     pub rhs_bare_refs: Vec<String>,
     /// When the RHS contains a self-referential subscript `Name[args]`, the
     /// simple argument names of the first such subscript.
@@ -96,7 +96,7 @@ pub struct Pep695AliasDef {
 }
 
 /// An attribute access `Name.attr` somewhere in the module (outside `type` RHS).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AttrAccess {
     /// The base name being accessed.
     pub base: String,
@@ -107,7 +107,7 @@ pub struct AttrAccess {
 }
 
 /// All PEP 695 scoping facts for a module, derived purely from the AST.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Pep695Scoping {
     /// Classes and functions that declare PEP 695 type parameters.
     pub defs: Vec<Pep695Def>,

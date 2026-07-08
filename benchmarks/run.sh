@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Benchmark: Basilisk vs Pyright vs mypy vs ty vs Pyrefly.
+# Benchmark: Basilisk vs Pyright vs mypy vs ty vs Pyrefly vs Zuban.
 #
 # Uses hyperfine for accurate wall-clock timing. Each fixture is a large
-# single-rule stress file (2k–3.5k lines) so the numbers reflect steady-state
-# checking throughput rather than process startup.
+# single-construct stress file (2k–4k lines) that exercises one typing-spec
+# construct. Timings are whole-process cold checks — startup + stubs + analysis
+# — i.e. the real latency of checking one file from scratch. For heavier tools
+# that latency is dominated by their fixed startup/stub cost, NOT by the
+# fixture's construct; the published tables therefore compare per-tool
+# distributions (median/range), never construct-vs-construct across tools.
 #
 # Run from the repo root:  make bench   (or:  bash benchmarks/run.sh)
 #
@@ -17,7 +21,14 @@
 #
 # Competitor tools are OPTIONAL — any that are not installed are skipped (their
 # column is left blank). Only `basilisk` and `hyperfine` are required. Fixtures
-# intentionally contain errors, so every command runs with --ignore-failure.
+# intentionally contain errors, so tools exit 1 and every hyperfine command runs
+# with --ignore-failure. That flag would also happily time a CRASH, so a
+# preflight pass first runs every tool on every fixture un-timed: exit >= 2
+# (parse abort / internal error / bad usage) excludes that tool from that
+# fixture's timing and leaves its CSV cell blank — a tool that never analyzed
+# a file must not be published as a (fast) time for it. The same pass records
+# how many diagnostics each tool reports per fixture (the <tool>_diags CSV
+# columns), so a do-nothing run is visible in the published data, not hidden.
 #
 # REGRESSION GATE:
 #   `make bench` FAILS (non-zero exit) if basilisk got slower than the recorded
@@ -58,12 +69,28 @@ mkdir -p "$OUT" "$STATUS_DIR"
 #   * mypy-warm      — incremental .mypy_cache hit; cold mypy is --no-incremental
 # pyright/ty/pyrefly keep NO cross-run result cache (verified: zero cache
 # artifacts), so a repeat run lands ~= cold — they are measured COLD-only.
+# zuban is ALSO measured cold-only, but it is the one cold tool that DOES emit a
+# cross-run cache: `zuban mypy` mirrors mypy and reads/writes a `.mypy_cache` in
+# the working dir whenever one is present, and it exposes no --cache-dir /
+# --no-incremental flag to opt out (verified: both rejected as unknown args; it
+# also ignores $MYPY_CACHE_DIR). Left alone, hyperfine's warmup runs would prime
+# that cache and turn every measured run into a warm incremental hit — the exact
+# apples-to-oranges trap we avoid for mypy with --no-incremental. So we bust the
+# cache before EVERY timed run (see the `--prepare` on the per-fixture hyperfine
+# call below), forcing the COLD label to hold by construction — zuban gets no
+# published warm number because none is measured, never because we assume its
+# cache is worthless.
 # mypy is run with --strict: without it, mypy reports "no issues" on the
 # strictness fixtures (e.g. missing-parameter annotations) and "checks" nothing,
 # making its timing an apples-to-oranges lie. --strict makes mypy perform the
 # strict-mode analysis these fixtures exist to stress, matching basilisk's
 # strict-by-default workload.
-ALL_TOOLS="basilisk basilisk-warm pyright mypy mypy-warm ty pyrefly"
+# zuban is run as `zuban mypy --strict` for exactly the same reason: its default
+# `zuban check` mode skips these strictness rules (it flags 0 errors on the
+# missing-annotation fixtures), so only the Mypy-compatible strict mode performs
+# the analysis being measured. `zuban mypy` is the strict-mode workload, just as
+# `mypy --strict` is — they are the apples-to-apples pair.
+ALL_TOOLS="basilisk basilisk-warm pyright mypy mypy-warm ty pyrefly zuban"
 
 # ─── Preconditions ────────────────────────────────────────────────────────────
 if ! command -v hyperfine >/dev/null 2>&1; then
@@ -96,8 +123,12 @@ if command -v mypy >/dev/null 2>&1; then
   # cold = --no-incremental (full check); warm = incremental .mypy_cache hit.
   # Without --no-incremental the hyperfine warmup turned every cold measurement
   # into a do-nothing cache hit, which is why mypy used to look flat/fast.
-  add_tool "mypy"      "mypy --strict --no-incremental --ignore-missing-imports --no-error-summary {}"
-  add_tool "mypy-warm" "mypy --strict --cache-dir $MYPYCACHE --ignore-missing-imports --no-error-summary {}"
+  # No --ignore-missing-imports: the unresolved_imports fixture exists to
+  # stress failed-import handling, and that flag would silence exactly that
+  # analysis for mypy while every other tool performs it — a hidden workload
+  # difference the _diags columns would then misreport as tool behavior.
+  add_tool "mypy"      "mypy --strict --no-incremental --no-error-summary {}"
+  add_tool "mypy-warm" "mypy --strict --cache-dir $MYPYCACHE --no-error-summary {}"
 fi
 if command -v ty >/dev/null 2>&1; then
   # No cross-run result cache → cold-only.
@@ -107,6 +138,32 @@ if command -v pyrefly >/dev/null 2>&1; then
   # No cross-run result cache → cold-only.
   add_tool "pyrefly" "pyrefly check {}"
 fi
+if command -v zuban >/dev/null 2>&1; then
+  # `zuban mypy --strict` (alias of `zmypy --strict`) so it performs the
+  # strict-mode analysis the fixtures stress — zuban's default `zuban check`
+  # mode skips these strictness rules and reports "no issues" on the
+  # missing-annotation fixtures, which would time a do-nothing run, exactly as
+  # plain (non-strict) mypy would.
+  # Unlike pyright/ty/pyrefly, zuban's mypy mode REUSES a `.mypy_cache` in the cwd
+  # whenever one is present (it has no flag to disable it) — and the cold-mypy
+  # column scribbles exactly such a cache earlier in the same hyperfine run, so
+  # without intervention zuban would read it back and be measured WARM. We force
+  # it COLD by wiping that cache before every timed run (ZUBAN_PRESENT gates the
+  # `--prepare` on the hyperfine call), keeping the COLD column honest by
+  # construction.
+  # No --ignore-missing-imports here either — same reason as mypy above.
+  ZUBAN_PRESENT=1
+  add_tool "zuban" "zuban mypy --strict --no-error-summary {}"
+fi
+
+# Clean up the ./.mypy_cache that the cold-mypy column writes (mypy scribbles one
+# even under --no-incremental) and that zuban's mypy mode would reuse — so a
+# benchmark run never leaves cache litter in the repo. Gated on those two tools
+# being measured so we don't delete an unrelated cache when neither ran. The trap
+# fires on every exit path, including the regression-gate failure (exit 3).
+case " ${TOOL_NAMES[*]} " in
+  *" mypy "*|*" zuban "*) trap 'rm -rf .mypy_cache' EXIT ;;
+esac
 
 version_of() {
   local base="${1%-warm}" v=""
@@ -188,6 +245,67 @@ if [[ ${#FIXTURES[@]} -eq 0 ]]; then
   exit 1
 fi
 
+# ─── Preflight: diagnostic coverage + crash screening ─────────────────────────
+# One un-timed run of every base tool on every fixture BEFORE anything is timed.
+# Two jobs:
+#   1. Validity — exit >= 2 means the tool did NOT analyze the file (parse
+#      abort, internal error, bad usage; exit 0/1 = analyzed, clean/findings).
+#      An invalid tool is excluded from that fixture's hyperfine run, together
+#      with its -warm sibling (same binary): --ignore-failure would otherwise
+#      record the crash as a (fast) timing. Discovered the hard way: a `# type:`
+#      comment made mypy abort at line 1 and its "152 ms" went to the website.
+#   2. Coverage — the diagnostic count per tool per fixture goes into the CSV
+#      (<tool>_diags), so a tool that runs but finds nothing on a fixture is
+#      visible in the published data next to its time.
+# (The pyright pip wrapper exits 0 even with findings, so 0 vs 1 carries no
+# meaning across tools — only >= 2 does.)
+COVERAGE="$OUT/coverage.tsv"
+: > "$COVERAGE"
+INVALID_COMBOS=" "
+echo "─── Preflight: diagnostics per tool + crash screening ──────────────────"
+echo ""
+printf "  %-38s" "fixture"
+for name in "${TOOL_NAMES[@]}"; do
+  case "$name" in *-warm) continue ;; esac
+  printf " %9s" "$name"
+done
+echo ""
+for FILE in "${FIXTURES[@]}"; do
+  FPATH="$FX/$FILE"
+  STEM="${FILE%.py}"
+  printf "  %-38s" "$STEM"
+  for i in "${!TOOL_NAMES[@]}"; do
+    name="${TOOL_NAMES[$i]}"
+    case "$name" in *-warm) continue ;; esac
+    CMD="${TOOL_CMDS[$i]//\{\}/$FPATH}"
+    output="$($CMD 2>/dev/null)"; code=$?
+    case "$name" in
+      # Conformance rules use their rule name as the code (error[typeddicts_inheritance]);
+      # house rules use BSK-XXXX (error[BSK-E0001]) — match any error[...] diagnostic.
+      basilisk) n=$(printf '%s\n' "$output" | grep -cE "^error\[" || true) ;;
+      pyright)  n=$(printf '%s\n' "$output" | grep -cE " - error:" || true) ;;
+      mypy)     n=$(printf '%s\n' "$output" | grep -cE ": error:" || true) ;;
+      ty)       n=$(printf '%s\n' "$output" | grep -cE "error\[|error:" || true) ;;
+      pyrefly)  n=$(printf '%s\n' "$output" | grep -cE "error\[|ERROR " || true) ;;
+      zuban)    n=$(printf '%s\n' "$output" | grep -cE ": error:" || true) ;;
+      *)        n=0 ;;
+    esac
+    if [[ "$code" -ge 2 ]]; then
+      INVALID_COMBOS+="${STEM}/${name} "
+      printf " %9s" "CRASH"
+      printf '%s\t%s\t%s\t\n' "$STEM" "$name" "$code" >> "$COVERAGE"
+    else
+      printf " %9s" "$n"
+      printf '%s\t%s\t%s\t%s\n' "$STEM" "$name" "$code" "$n" >> "$COVERAGE"
+    fi
+  done
+  echo ""
+done
+for combo in $INVALID_COMBOS; do
+  echo "  !! ${combo#*/} exited >= 2 on ${combo%/*} — did not analyze the file; timing cell left blank"
+done
+echo ""
+
 echo "─── Per-file timing ($RUNS runs each) ──────────────────────────────────"
 echo ""
 
@@ -198,9 +316,21 @@ for FILE in "${FIXTURES[@]}"; do
 
   HF=(hyperfine --ignore-failure --warmup "$WARMUP" --runs "$RUNS"
       --export-json "$OUT/${STEM}.json")
+  # When zuban is measured, wipe ./.mypy_cache before EVERY timed run: zuban's
+  # mypy mode reuses an existing .mypy_cache and has no flag to disable it, so
+  # without this its warmed-up runs would be warm incremental hits, not cold.
+  # Harmless to the other tools — their caches live in dedicated --cache-dir
+  # paths (basilisk-warm/mypy-warm), and cold mypy uses --no-incremental, so
+  # none of them read or write ./.mypy_cache. hyperfine excludes --prepare time
+  # from the measurement.
+  [[ -n "${ZUBAN_PRESENT:-}" ]] && HF+=(--prepare 'rm -rf .mypy_cache')
   for i in "${!TOOL_NAMES[@]}"; do
+    name="${TOOL_NAMES[$i]}"
+    # Preflight-invalid tool (exit >= 2 — never analyzed this file): not timed.
+    # The -warm sibling shares the binary, so it is excluded along with it.
+    case "$INVALID_COMBOS" in *" ${STEM}/${name%-warm} "*) continue ;; esac
     CMD="${TOOL_CMDS[$i]//\{\}/$FPATH}"
-    HF+=(--command-name "${TOOL_NAMES[$i]}" "$CMD")
+    HF+=(--command-name "$name" "$CMD")
   done
 
   "${HF[@]}" 2>&1 | grep -E "Time|Summary|ran|faster|slower" | sed 's/^/│  /' || true
@@ -216,6 +346,7 @@ BENCH_ARCH="$BENCH_ARCH" BENCH_OS="$BENCH_OS" BENCH_CORES="$BENCH_CORES" \
 BENCH_GENERATED="$BENCH_GENERATED" BENCH_TOOLS="$BENCH_TOOLS" BENCH_RUNS="$RUNS" \
 BENCH_STATUS_DIR="$STATUS_DIR" BENCH_ALL_TOOLS="$ALL_TOOLS" \
 BENCH_GATE="$BENCH_GATE" BENCH_REGRESS_PCT="$BENCH_REGRESS_PCT" \
+BENCH_COVERAGE="$COVERAGE" \
 python3 - "$OUT" "${TOOL_NAMES[@]}" <<'PY'
 import json, os, sys, glob
 
@@ -230,6 +361,19 @@ for jf in sorted(glob.glob(os.path.join(out_dir, "*.json"))):
         data = json.load(fh)
     means = {r["command"]: r["mean"] * 1000.0 for r in data["results"]}
     rows.append((stem, means))
+
+# Preflight coverage: (stem, tool) -> diagnostic count ("" = crashed, no cell).
+# Published as <tool>_diags CSV columns so a time is always read next to how
+# many diagnostics the tool actually reported on that fixture.
+coverage = {}
+cov_path = os.environ.get("BENCH_COVERAGE", "")
+if cov_path and os.path.exists(cov_path):
+    with open(cov_path) as fh:
+        for raw in fh:
+            parts = raw.rstrip("\n").split("\t")
+            if len(parts) == 4:
+                coverage[(parts[0], parts[1])] = parts[3]
+base_tools = [t for t in all_tools if not t.endswith("-warm")]
 
 if not rows:
     print("  (no JSON results)")
@@ -310,11 +454,15 @@ csv_lines = [
     f"# tools: {os.environ['BENCH_TOOLS']}",
     f"# runs: {os.environ['BENCH_RUNS']} (hyperfine mean wall-clock, milliseconds)",
     f"# generated: {os.environ['BENCH_GENERATED']}",
-    f"# note: <tool>_ms = COLD full-file CLI check from scratch. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures).",
-    "fixture," + ",".join(f"{t}_ms" for t in all_tools),
+    f"# note: <tool>_ms = COLD full-file CLI check from scratch (whole process: startup + stubs + analysis). <tool>_diags = error diagnostics the tool reported on that fixture in the measured configuration (error severity only; warnings/notes are not counted) — read every time next to its diags; a tool that reports 0 analyzed the file but flagged no errors there. A blank _ms cell means the tool either was not installed on this machine or failed to analyze that fixture (exit >= 2, e.g. parse abort) and was excluded rather than timed as a crash. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. zuban is also cold-only but its mypy mode DOES reuse a ./.mypy_cache when present (no flag disables it), so we wipe ./.mypy_cache before every timed run to keep the measurement cold. mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures); zuban runs as `zuban mypy --strict` for the same reason (its default `zuban check` mode skips these strictness rules).",
+    "fixture,"
+    + ",".join(f"{t}_ms" for t in all_tools)
+    + ","
+    + ",".join(f"{t}_diags" for t in base_tools),
 ]
 for stem, means in rows:
     cells = [stem] + [f"{means[t]:.1f}" if t in means else "" for t in all_tools]
+    cells += [coverage.get((stem, t), "") for t in base_tools]
     csv_lines.append(",".join(cells))
 
 blocked = bool(regressions) and gate_on
@@ -337,32 +485,6 @@ if blocked:
     raise SystemExit(3)
 PY
 GATE_STATUS=$?
-
-# ─── Diagnostic coverage (best-effort error counts) ───────────────────────────
-echo ""
-echo "─── Diagnostic coverage (errors reported per tool) ─────────────────────"
-echo ""
-printf "  %-38s" "fixture"
-for name in "${TOOL_NAMES[@]}"; do printf " %9s" "$name"; done
-echo ""
-for FILE in "${FIXTURES[@]}"; do
-  FPATH="$FX/$FILE"
-  printf "  %-38s" "${FILE%.py}"
-  for i in "${!TOOL_NAMES[@]}"; do
-    name="${TOOL_NAMES[$i]}"
-    CMD="${TOOL_CMDS[$i]//\{\}/$FPATH}"
-    case "${name%-warm}" in
-      basilisk) n=$($CMD 2>/dev/null | grep -cE "error\[BSK" || true) ;;
-      pyright)  n=$($CMD 2>/dev/null | grep -cE " - error:" || true) ;;
-      mypy)     n=$($CMD 2>/dev/null | grep -cE ": error:" || true) ;;
-      ty)       n=$($CMD 2>/dev/null | grep -cE "error\[|error:" || true) ;;
-      pyrefly)  n=$($CMD 2>/dev/null | grep -cE "error\[|ERROR " || true) ;;
-      *)        n=0 ;;
-    esac
-    printf " %9s" "$n"
-  done
-  echo ""
-done
 
 echo ""
 if [[ "${GATE_STATUS:-0}" -ne 0 ]]; then

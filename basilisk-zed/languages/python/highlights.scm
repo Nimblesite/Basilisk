@@ -1,3 +1,6 @@
+; Syntax highlighting for Zed's built-in tree-sitter-python grammar.
+; Implements [ZED-TREESITTER].
+
 ; Keywords
 [
   "and" "as" "assert" "async" "await" "break" "class" "continue"

@@ -4,7 +4,7 @@
 use super::{rhs::RhsKind, span::Span};
 
 /// A module-level or class-body variable assignment.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VariableInfo {
     /// The variable name.
     pub name: String,
@@ -21,7 +21,7 @@ pub struct VariableInfo {
 }
 
 /// A class attribute (declared in the class body).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "Python attributes have many boolean flags"
@@ -56,7 +56,7 @@ pub struct AttributeInfo {
     pub rhs_is_descriptor_call: bool,
     /// `true` when the annotation contains `ReadOnly[...]` (directly or nested).
     ///
-    /// Used by `BSK-E0056` to detect mutation of read-only `TypedDict` fields.
+    /// Used by `typeddicts_readonly` to detect mutation of read-only `TypedDict` fields.
     pub is_readonly: bool,
     /// `true` when the field is keyword-only in a dataclass `__init__`.
     ///
@@ -77,4 +77,9 @@ pub struct AttributeInfo {
     /// `InitVar` fields are not real attributes — they are passed as parameters
     /// to `__post_init__` and cannot be accessed as instance attributes.
     pub is_init_var: bool,
+    /// Static `if`-guard the field was defined under, if any (`None` for an
+    /// unconditional member). A field whose guard is statically false at the
+    /// target version is pruned by `resolve_with_target`, so consumers see only
+    /// the members that exist for the target.
+    pub guard: Option<crate::static_condition::StaticCondition>,
 }

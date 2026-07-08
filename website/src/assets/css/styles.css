@@ -204,15 +204,30 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 @media (max-width: 768px) {
   .mobile-menu-toggle { display: flex; }
-  .nav { padding: 0 var(--space-4); }
+  /* [WEBSITE-MOBILE-DOCS-NAV] Let the header grow to hold the open menu in
+     normal flow rather than floating it as an absolute overlay. On docs pages
+     the same hamburger also opens the in-flow `.sidebar` submenu; an overlaid
+     nav-links dropdown would sit on top of it and clip its first items. */
+  .site-header { height: auto; min-height: var(--header-height); }
+  .nav {
+    padding: 0 var(--space-4);
+    height: auto;
+    min-height: var(--header-height);
+    flex-wrap: wrap;
+  }
+  .nav-actions { order: 2; }
   .nav-links {
-    position: absolute;
-    top: var(--header-height);
-    left: 0; right: 0;
+    /* Override the techdoc layout.css overlay (`position: absolute; top: 100%`)
+       — without an explicit reset it keeps floating over the docs sidebar. */
+    position: static;
+    inset: auto;
+    order: 3;
+    flex-basis: 100%;
     flex-direction: column;
     align-items: stretch;
     background: var(--color-bg-secondary);
-    border-bottom: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border);
+    margin: 0 calc(-1 * var(--space-4));
     padding: var(--space-4) var(--space-6);
     gap: var(--space-1);
     display: none;
@@ -422,6 +437,9 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .footer-section a { font-size: 0.875rem; color: var(--color-text-secondary); transition: color var(--ease-fast); }
 .footer-section a:hover { color: var(--color-primary); }
 .footer-bottom { border-top: 1px solid var(--color-border); padding-top: var(--space-6); text-align: center; font-size: 0.875rem; color: var(--color-text-muted); }
+.footer-credit { font-size: 0.8125rem; margin-top: var(--space-2); }
+.footer-credit a { color: var(--color-text-secondary); }
+.footer-credit a:hover { color: var(--color-primary); }
 
 .skip-link { position: absolute; top: -999px; left: var(--space-4); background: var(--color-primary); color: #fff; padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); font-weight: 600; font-size: 0.875rem; z-index: 200; }
 .skip-link:focus { top: var(--space-4); }
@@ -512,16 +530,40 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 /* ══════════════════════════════════════════════════════════
    HERO — Split layout: big text left, code right
 ══════════════════════════════════════════════════════════ */
+/* The sticky 60px header already sits in-flow above the hero, so the hero only
+   needs a little breathing room to clear it — NOT another header-height of
+   padding (that double-counted the header and pushed the fold past the viewport,
+   clipping the product panel). The fold is OWNED by .hero__split below, which is
+   sized to fill exactly one screen; the proof band flows just beneath it. */
 .hero {
-  padding: calc(var(--header-height) + var(--space-16)) 0 var(--space-16);
+  padding: var(--space-8) 0 var(--space-16);
   border-bottom: 1px solid var(--color-border);
 }
+/* Hero uses the SAME centred 1280px container as every section below it, so its
+   left edge lines up with the comparison/benchmark tables and the whole page
+   reads as one centred column instead of a wide hero over narrow sections. It
+   stacks the split (text + video) above the proof band as one vertical column. */
+.hero > .container {
+  width: 100%;
+  max-width: var(--max-width);
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
 
+/* The split OWNS the fold: min-height fills one viewport (minus the sticky
+   header and the hero's own top/bottom breathing room), so the promise + the
+   product video always sit fully above the fold and the proof band peeks in
+   just below it. Columns are centre-aligned so the landscape video keeps its
+   EXACT aspect ratio (see .hero__code) instead of being stretched to match the
+   taller text column. */
 .hero__split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-16);
+  grid-template-columns: 1fr 1.2fr;
+  gap: var(--space-10);
   align-items: center;
+  min-height: calc(100vh - var(--header-height) - var(--space-16));
 }
 
 .hero__kicker {
@@ -535,9 +577,9 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 
 .hero__headline {
-  font-size: clamp(3rem, 5.5vw, 5rem);
+  font-size: clamp(2.5rem, 4vw, 3.75rem);
   font-weight: 700;
-  line-height: 1.0;
+  line-height: 1.05;
   letter-spacing: -0.04em;
   color: var(--color-text-primary);
   margin-bottom: var(--space-6);
@@ -561,34 +603,92 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 .hero__meta {
   display: flex;
-  gap: var(--space-6);
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
   font-size: 0.8125rem;
   color: var(--color-text-muted);
 }
-.hero__meta span { display: flex; align-items: center; gap: var(--space-1); }
+.hero__meta span { display: flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 .hero__meta strong { color: var(--color-text-secondary); font-weight: 500; }
 
-/* Code side of hero */
-.hero__code { position: relative; }
+/* Code side of hero — the panel hugs the product video at its EXACT native
+   aspect ratio: the video is a plain responsive block (width 100%, height auto),
+   so the frame is exactly as tall as the video is wide ÷ its ratio. Nothing is
+   cropped and there is no letterbox — the border wraps the footage edge-to-edge
+   like a framed screen. The aspect-ratio hint reserves the box before the
+   video's metadata loads, so there is no layout shift. */
+.hero__code {
+  align-self: center;
+  overflow: hidden;
+  border: 1px solid var(--color-border-bright);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+  box-shadow: 0 30px 70px -25px rgba(0, 0, 0, 0.65);
+}
+.hero__shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3152 / 2042; /* rename.mp4 native size — locks ratio, prevents CLS */
+}
 
-/* Demo tabs inside hero */
-.hero__demo .demo-tabs { display: flex; gap: 0; background: var(--color-bg-elevated); border: 1px solid var(--color-border-bright); border-bottom: none; border-radius: var(--radius-md) var(--radius-md) 0 0; }
-.hero__demo .demo-tab { padding: var(--space-2) var(--space-5); font-size: 0.8125rem; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; transition: all var(--ease-fast); border-right: 1px solid var(--color-border); background: none; }
-.hero__demo .demo-tab:last-child { border-right: none; }
-.hero__demo .demo-tab:hover { color: var(--color-text-primary); }
-.hero__demo .demo-tab.active { color: var(--color-text-primary); background: var(--color-bg-tertiary); }
-.hero__demo .demo-panel { display: none; }
-.hero__demo .demo-panel.active { display: block; }
-.hero__demo .demo-wrapper { border: 1px solid var(--color-border-bright); border-radius: 0 0 var(--radius-lg) var(--radius-lg); overflow: hidden; }
+/* Real product screenshot inside a feature-row visual (e.g. step-through debugging) */
+.feature-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border-bright);
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.7);
+}
+
+/* ══ Hero proof band — PEP conformance + cold-check speed, the two headline
+   proofs, side by side INSIDE the full-height hero (see index.njk). Reuses
+   .stat-card so there is ONE card style, not two. Numbers render from real data. ══ */
+.hero__proof {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+}
+.hero__proof-cta { text-align: center; font-size: 0.875rem; color: var(--color-text-muted); }
+.hero__proof-cta a { color: var(--color-primary); margin-left: var(--space-4); white-space: nowrap; }
+.hero__proof-cta code { font-family: var(--font-mono); font-size: 0.9em; color: var(--color-code-type); }
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+}
+.stat-card__num {
+  font-size: clamp(2.75rem, 4.5vw, 4rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--color-text-primary);
+}
+.stat-card__unit { color: var(--color-primary); }
+.stat-card__label { font-size: 1.0625rem; font-weight: 600; color: var(--color-text-primary); }
+.stat-card__sub { font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.4; }
+
+@media (max-width: 760px) {
+  .hero__proof { grid-template-columns: 1fr; }
+  .hero__proof-cta a { display: inline-block; margin: var(--space-1) var(--space-3) 0 0; }
+}
 
 @media (max-width: 900px) {
-  .hero__split { grid-template-columns: 1fr; }
+  /* Stacked: the split no longer fills a fold — text over video, natural flow. */
+  .hero__split { grid-template-columns: 1fr; min-height: 0; }
   .hero__split > * { min-width: 0; }
   .hero__subheadline { max-width: none; }
-  .hero__meta { flex-wrap: wrap; gap: var(--space-4); }
+  .hero__meta { gap: var(--space-3) var(--space-4); }
 }
 @media (max-width: 640px) {
-  .hero { padding: calc(var(--header-height) + var(--space-12)) 0 var(--space-12); }
+  .hero { padding: var(--space-6) 0 var(--space-12); }
   .hero__cta-group { flex-direction: column; align-items: flex-start; }
 }
 
@@ -746,6 +846,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 .stat-block__unit { color: var(--color-primary); }
 .stat-block__label { font-size: 0.875rem; color: var(--color-text-muted); margin-top: var(--space-2); display: block; letter-spacing: 0.02em; }
+.stat-block__sub { font-size: 0.75rem; color: var(--color-text-muted); opacity: 0.72; margin-top: var(--space-2); display: block; max-width: 22rem; margin-inline: auto; line-height: 1.5; }
 
 /* ══════════════════════════════════════════════════════════
    COMPARISON TABLE
@@ -782,7 +883,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 }
 
 .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--color-border-bright); border-radius: var(--radius-lg); }
-.comparison-table { width: 100%; min-width: 680px; border-collapse: separate; border-spacing: 0; font-size: 0.875rem; }
+.comparison-table { width: 100%; min-width: 900px; border-collapse: separate; border-spacing: 0; font-size: 0.875rem; }
 .comparison-table thead { background: var(--color-bg-tertiary); }
 .comparison-table thead th { padding: var(--space-4) var(--space-5); text-align: center; font-weight: 600; color: var(--color-text-secondary); border-bottom: 1px solid var(--color-border-bright); white-space: nowrap; }
 .comparison-table thead th:first-child { text-align: left; color: var(--color-text-muted); font-weight: 400; }
@@ -887,6 +988,9 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 
 .bench-meta { margin-top: var(--space-4); font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.6; }
 .bench-meta code { font-family: var(--font-mono); font-size: 0.9em; color: var(--color-text-secondary); }
+/* Warm re-check table: distinguish a real cross-run cache "(warm)" from a
+   tool with no cache "(no cache)" whose best case equals its cold time. */
+.bench-cache-tag { display: inline-block; font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.02em; color: var(--color-text-muted); white-space: nowrap; }
 .benchmark-table { width: 100%; min-width: 680px; border-collapse: separate; border-spacing: 0; font-size: 0.875rem; }
 .benchmark-table thead { background: var(--color-bg-tertiary); }
 .benchmark-table thead th { padding: var(--space-4) var(--space-5); text-align: center; font-weight: 600; color: var(--color-text-secondary); border-bottom: 1px solid var(--color-border-bright); white-space: nowrap; }
@@ -1086,6 +1190,17 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   vertical-align: middle;
   min-width: 2px;
 }
+/* The Basilisk row on the official-leaderboard table — the whole point of the
+   page, so it gets a primary-tinted highlight in both themes. */
+.conf-row-basilisk {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.conf-row-basilisk td { font-weight: 600; }
+.conf-note {
+  margin-top: var(--space-3);
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
 .conf-verified {
   display: inline-flex;
   align-items: center;
@@ -1142,3 +1257,31 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   .demo-section { padding: var(--space-12) 0; }
   .cta-section { padding: var(--space-12) 0; }
 }
+
+/* ── Error reference pages ([WEBSITE-ERROR-PAGES]) ─────────────────── */
+.breadcrumb { font-size: 0.8125rem; color: var(--color-text-muted); margin-bottom: var(--space-5); }
+.breadcrumb a { color: var(--color-text-secondary); }
+.breadcrumb a:hover { color: var(--color-primary-light); }
+.breadcrumb span[aria-hidden] { margin: 0 0.4em; color: var(--color-border-bright); }
+
+.error-title { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.error-title code { font-size: 1.5rem; color: var(--color-text-primary); background: var(--color-bg-tertiary); border: 1px solid var(--color-border-bright); padding: 0.1em 0.4em; }
+
+.badge { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.2em 0.6em; border-radius: var(--radius-sm); }
+.badge--error { color: var(--color-error); background: var(--color-error-dim); border: 1px solid rgba(248, 113, 113, 0.35); }
+.badge--warning { color: var(--color-warning); background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.35); }
+
+.error-summary { font-size: 1.125rem; color: var(--color-text-secondary); margin: var(--space-4) 0 var(--space-6); }
+.error-screenshot { max-width: 100%; height: auto; border-radius: var(--radius-lg); border: 1px solid var(--color-border-bright); display: block; }
+.error-perma { font-size: 0.8125rem; color: var(--color-text-muted); border-top: 1px solid var(--color-border); padding-top: var(--space-4); margin-top: var(--space-8); word-break: break-all; }
+
+.error-list { list-style: none; padding: 0; margin: 0 0 var(--space-8); display: grid; gap: var(--space-2); }
+.error-list li { display: flex; gap: var(--space-3); align-items: baseline; padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border); }
+.error-list a { flex: 0 0 auto; }
+.error-list__summary { color: var(--color-text-secondary); font-size: 0.9375rem; }
+.error-count { color: var(--color-text-muted); font-weight: 400; font-size: 0.875rem; }
+
+.rules-table { width: 100%; border-collapse: collapse; margin-bottom: var(--space-6); font-size: 0.9375rem; }
+.rules-table th, .rules-table td { text-align: left; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border); vertical-align: top; }
+.rules-table th { color: var(--color-text-muted); font-weight: 600; font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.rules-table td:first-child { white-space: nowrap; }

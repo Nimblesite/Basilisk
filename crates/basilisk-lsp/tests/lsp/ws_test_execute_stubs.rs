@@ -53,7 +53,7 @@ async fn test_create_local_stub_dispatches_and_writes_pyi() -> TestResult<()> {
     );
     let body = std::fs::read_to_string(&stub_path)?;
     assert!(
-        body.contains("BSK-E0154")
+        body.contains("imports_module_attribute")
             && body
                 .lines()
                 .all(|line| line.trim().is_empty() || line.trim_start().starts_with('#')),

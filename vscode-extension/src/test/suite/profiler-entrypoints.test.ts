@@ -13,7 +13,7 @@ import * as vscode from "vscode";
 import { buildProfileLaunchConfig } from "../../process-launch";
 import { shouldProfileOnLaunch } from "../../profiler";
 import { PythonProcessesProvider } from "../../process-explorer";
-import { type Store } from "../../store";
+import { createStore } from "../../store";
 import {
   getPackageJsonCommands,
   getPackageJsonMenu,
@@ -21,6 +21,7 @@ import {
   type PackageJsonCommandEntry,
   type PackageJsonViewsWelcomeEntry,
 } from "./profiler-test-constants";
+import { EXTENSION_ID } from "./test-helpers";
 
 /** The metric-explicit run-and-profile entry points (#82). */
 const CPU_LAUNCH_COMMAND = "basilisk.profileCurrentFileCpu";
@@ -106,17 +107,33 @@ suite("Python Processes — title-bar entry points state their metric (#82)", ()
     );
   });
 
-  test("both launches stay palette-gated behind the profiling UI switch", () => {
+  // The profiling UI ships enabled — the [PROFILE-UI-GATE] availability switch
+  // was removed. The regression this pins: a `when` clause referencing a context
+  // key nobody sets evaluates falsy and silently hides the entry point from
+  // every shipped user, which is indistinguishable from the feature not existing.
+  test("both launches are palette-reachable in production — never hidden behind a gate", () => {
     const palette = getPackageJsonMenu("commandPalette");
     for (const command of [CPU_LAUNCH_COMMAND, MEMORY_LAUNCH_COMMAND]) {
       const entry = palette.find((item) => item.command === command);
-      assert.ok(entry, `${command} must have a commandPalette entry`);
-      assert.strictEqual(
-        entry.when,
-        "basilisk.profilingEnabled",
-        `${command} must stay behind the [PROFILE-UI-GATE] context key`,
+      assert.ok(
+        entry === undefined,
+        `${command} must have no commandPalette suppression entry (ships ungated); ` +
+          `found when: ${entry?.when}`,
       );
     }
+  });
+
+  // Whole-manifest sweep for the same regression class: any surface (palette,
+  // toolbar, view, keybinding) still referencing the removed gate key would be
+  // invisible in every session, since nothing sets the key any more.
+  test("no manifest surface references the removed profiling UI gate key", () => {
+    const extension = vscode.extensions.getExtension(EXTENSION_ID);
+    assert.ok(extension, "extension must be found");
+    const manifest = JSON.stringify(extension.packageJSON);
+    assert.ok(
+      !manifest.includes("basilisk.profilingEnabled"),
+      "package.json must not reference the removed basilisk.profilingEnabled context key",
+    );
   });
 });
 
@@ -173,9 +190,21 @@ suite("Python Processes — empty state honesty (#147)", () => {
   });
 });
 
-/** Build a provider over a fake store whose client behaves as given (#147 seam). */
+/**
+ * Build a provider over a REAL store whose LSP client behaves as given (#147
+ * seam). The provider is a pure projection of the store's `processes` Signal
+ * (#148), so the harness must go through the genuine store, not a stub bag.
+ */
 function providerWithClient(client: unknown): PythonProcessesProvider {
-  return new PythonProcessesProvider({ client: { value: client } } as unknown as Store);
+  const store = createStore();
+  if (client !== undefined) {
+    const fake = {
+      onDidChangeState: (): vscode.Disposable => ({ dispose: (): undefined => undefined }),
+      ...(client as object),
+    };
+    store.setClient({ subscriptions: [] } as unknown as vscode.ExtensionContext, fake as never);
+  }
+  return new PythonProcessesProvider(store);
 }
 
 suite("Python Processes — fetch-state drives the welcome (#147)", () => {

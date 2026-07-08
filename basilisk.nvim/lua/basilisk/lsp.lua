@@ -30,10 +30,7 @@ local function build_settings(config)
         parameterNames = config.inlay_hints.parameter_names,
         variableTypes = config.inlay_hints.variable_types,
       },
-      ruff = {
-        enabled = config.ruff.enabled,
-        executablePath = config.ruff.executable_path,
-      },
+      formatter = config.formatter,
       debugger = {
         enabled = config.debugger.enabled,
         typeChecking = config.debugger.type_checking,
@@ -117,6 +114,8 @@ function M.install_handlers()
 end
 
 --- Configure and enable the basilisk LSP client.
+--- Implements [NVIM-LSP-CLIENT-CONFIGURATION] — vim.lsp.config + vim.lsp.enable
+--- with cmd/filetypes/root_markers/settings exactly as the spec documents.
 ---@param config BasiliskConfig
 ---@return boolean success
 function M.start(config)
@@ -152,6 +151,8 @@ function M.start(config)
 end
 
 --- Restart the LSP server, respecting the backoff policy.
+--- Implements [NVIM-LSP-CLIENT-CONFIGURATION-ERROR-RECOVERY] — auto-restart up to
+--- MAX_RESTARTS with 1s/2s/4s exponential backoff; :BasiliskRestart forces a reset.
 ---@param config BasiliskConfig
 ---@param force? boolean Bypass the restart limit.
 function M.restart(config, force)

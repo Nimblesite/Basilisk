@@ -10,6 +10,10 @@ use serde::Serialize;
 use super::diff::AllocationGrowth;
 
 /// Confidence level for a suspected memory leak.
+///
+/// Implements [PROFILE-MEMORY-CONFIDENCE] — the four-level scale (Low, Medium,
+/// High, Definite) and its criteria. `Ord` is derived ascending so callers can
+/// compare `>= Medium` etc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum LeakConfidence {
     /// Single-diff growth, small size — could be normal warmup.
@@ -57,12 +61,14 @@ pub struct SuspectedLeak {
 }
 
 /// History of a single allocation site across multiple diffs.
+///
+/// Only the consecutive-growth streak feeds the confidence ladder
+/// ([PROFILE-MEMORY-CONFIDENCE]); per-diff byte sizes come from the diff
+/// itself, so no byte total is accumulated here.
 #[derive(Debug, Clone, Default)]
 struct AllocationHistory {
     /// Number of consecutive diffs where this site grew.
     consecutive_growths: u32,
-    /// Total bytes grown across all observed diffs.
-    total_growth: i64,
 }
 
 /// Tracks allocation patterns across multiple diffs for leak scoring.
@@ -92,7 +98,6 @@ impl LeakTracker {
 
             let history = self.histories.entry(key).or_default();
             history.consecutive_growths += 1;
-            history.total_growth += growth.size_diff;
         }
 
         // Reset consecutive count for sites that didn't grow this time.
@@ -133,6 +138,10 @@ impl LeakTracker {
 const LARGE_GROWTH_THRESHOLD: i64 = 10 * 1024 * 1024;
 
 /// Score a single allocation site based on its history and current growth.
+///
+/// Implements [PROFILE-MEMORY-CONFIDENCE]: High for 3+ consecutive growths,
+/// Medium for 2 consecutive *or* a single-diff growth >10 MB, else Low.
+/// (Definite — `__del__` in a cycle — is decided from gc output, not here.)
 fn score_leak(history: &AllocationHistory, growth: &AllocationGrowth) -> (LeakConfidence, String) {
     if history.consecutive_growths >= 3 {
         (
@@ -201,6 +210,7 @@ mod tests {
         Ok(())
     }
 
+    // [PROFILE-MEMORY-CONFIDENCE] 3+ consecutive growth diffs escalate to High.
     #[test]
     fn three_consecutive_growths_is_high() -> Result<(), String> {
         let mut tracker = LeakTracker::new();
