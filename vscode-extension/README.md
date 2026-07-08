@@ -37,7 +37,7 @@ measured by the real upstream harness on the wheel-installed CLI in its default 
   <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/vscode-extension/images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in VS Code" width="900">
 </p>
 
-And it is the **fastest checker we&rsquo;ve measured** &mdash; on every rule, checked cold from scratch:
+And it is the **fastest checker we&rsquo;ve measured** &mdash; median cold full-file check, from scratch:
 
 | Type checker | Median cold check |
 | --- | --- |
@@ -45,16 +45,16 @@ And it is the **fastest checker we&rsquo;ve measured** &mdash; on every rule, ch
 | zuban | <!--g:benchZuban-->27<!--/g:benchZuban--> ms |
 | ty | <!--g:benchTy-->37<!--/g:benchTy--> ms |
 | Pyrefly | <!--g:benchPyrefly-->145<!--/g:benchPyrefly--> ms |
-| Pyright | <!--g:benchPyright-->558<!--/g:benchPyright--> ms |
-| mypy | <!--g:benchMypy-->582<!--/g:benchMypy--> ms |
+| Pyright | <!--g:benchPyright-->568<!--/g:benchPyright--> ms |
+| mypy | <!--g:benchMypy-->588<!--/g:benchMypy--> ms |
 
-Median cold full-file check across <!--g:benchCount-->29<!--/g:benchCount--> single-rule stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better; inside the editor a warm re-check is faster again. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
+Median cold full-file check across <!--g:benchCount-->26<!--/g:benchCount--> single-construct typing-spec stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better; inside the editor a warm re-check is faster again. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 
 ## Everything in one extension
 
 One extension replaces Pylance and gives you the whole workflow — no Node.js, no Python runtime, no pip, no npm. A single bundled Rust binary drives it all:
 
-- **Strict-by-default diagnostics** — inline as you type, sub-10ms incremental analysis (Salsa, the rust-analyzer engine)
+- **Strict-by-default diagnostics** — inline as you type, incremental analysis powered by Salsa (the rust-analyzer engine)
 - **Autocomplete, hover, go-to-definition, find references, rename**
 - **Refactoring code actions** — extract, inline, move symbol, organize imports
 - **Integrated debugging** — F5 to debug via bundled debugpy; no separate extension

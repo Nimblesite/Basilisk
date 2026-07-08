@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "Basilisk vs Pyright vs mypy vs ty vs Pyrefly"
-description: "Detailed comparison of Python type checkers: Basilisk, Pyright, mypy, ty, and Pyrefly. Strictness, PEP conformance, performance benchmarks, and feature differences."
+description: "Detailed comparison of Python type checkers: Basilisk, Pyright, mypy, ty, and Pyrefly. Strictness, PEP conformance, and feature differences, with links to the measured benchmarks."
 keywords: basilisk vs pyright, python type checker comparison, mypy vs basilisk, ty, pyrefly
 date: 2026-02-28
 dateModified: 2026-03-31
@@ -13,7 +13,7 @@ eleventyNavigation:
 
 # Comparing Type Checkers
 
-The Python type checker landscape has changed significantly. Three new Rust-based tools launched in 2025. They differ less in raw speed than in how faithfully they implement the typing spec — and in whether they're a complete language server or only a checker.
+The Python type checker landscape has changed significantly. Three new Rust-based tools launched in 2025. They differ in how faithfully they implement the typing spec, in whether they're a complete language server or only a checker — and in speed, which we [measure and publish](/docs/benchmarks/) rather than assert.
 
 On the [official python/typing conformance suite]({{ conformanceOfficial.snapshot.source }}), **Basilisk is the only type checker with a perfect {{ conformanceOfficial.byId.basilisk.pct }}% score** ({{ conformanceOfficial.byId.basilisk.passLabel }}/{{ conformanceOfficial.byId.basilisk.total }}) — ahead of zuban ({{ conformanceOfficial.byId.zuban.pct }}%), Pyrefly ({{ conformanceOfficial.byId.pyrefly.pct }}%), Pyright ({{ conformanceOfficial.byId.pyright.pct }}%), ty ({{ conformanceOfficial.byId.ty.pct }}%), and mypy ({{ conformanceOfficial.byId.mypy.pct }}%), all graded on the same run.
 
@@ -101,7 +101,7 @@ mypy defined what Python type checking looks like. Its `--strict` flag was the r
 - Long history means most edge cases are handled
 
 **What mypy doesn't do:**
-- Significantly slower than Rust-based tools on large codebases
+- Slowest cold single-file check of the tools in [our measured benchmarks](/docs/benchmarks/) (its incremental cache narrows the gap on re-checks)
 - Daemon mode (`dmypy`) is fragile under certain conditions
 - Not a language server — no completions, hover, or go-to-definition
 - Requires a Python runtime
