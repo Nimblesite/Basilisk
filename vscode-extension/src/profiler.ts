@@ -22,7 +22,11 @@ import {
   disposeProfileDecorations,
   type ProfileResult,
 } from "./profiler-decorations";
-import { disposeFlamegraphPanel, presentProfileResult } from "./profiler-flamegraph-html";
+import {
+  disposeFlamegraphPanel,
+  openFlamegraphWebview,
+  presentProfileResult,
+} from "./profiler-flamegraph-html";
 import { shouldProfileOnLaunch, waitForDebuggeePid } from "./profiler-launch";
 import { bindProfilerStatusBar, registerProgressListener } from "./profiler-status";
 
@@ -78,6 +82,7 @@ export function registerProfiler(store: Store): vscode.Disposable[] {
     vscode.commands.registerCommand("basilisk.profileStop", async () => handleProfileStop(store)),
     vscode.commands.registerCommand("basilisk.profileSnapshot", async () => handleProfileSnapshot(store)),
     vscode.commands.registerCommand("basilisk.profileAttachToDebug", async () => handleProfileAttachToDebug(store)),
+    vscode.commands.registerCommand("basilisk.profileShowResults", () => { handleProfileShowResults(); }),
   );
 
   // Listen for profiler progress notifications from LSP.
@@ -363,12 +368,11 @@ async function handleProfileStop(store: Store): Promise<void> {
     if (result !== undefined && result !== null) {
       lastResult = result;
       applyProfileDecorations(result);
-      // Land the user on a viewable result: the built-in `.cpuprofile` viewer
-      // when it renders (opened beside so the heat-mapped source stays visible),
-      // always with a completion toast whose action opens the self-contained
-      // flamegraph webview — a failed or unavailable viewer never dead-ends the
-      // user ([PROFILE-NATIVE-FALLBACK], #145).
-      await presentProfileResult(result);
+      // Land the user on the self-contained results panel (opened beside so the
+      // heat-mapped source stays visible); the raw `.cpuprofile` stays one click
+      // away via the completion toast, the panel's button, or "Show Profile
+      // Results" ([PROFILE-NATIVE-FALLBACK], #145).
+      presentProfileResult(result);
     }
   } catch (err: unknown) {
     store.profilerStopped();
@@ -404,15 +408,40 @@ async function handleProfileSnapshot(store: Store): Promise<void> {
       lastResult = result;
       applyProfileDecorations(result);
       Logger.info(`Profile snapshot: ${result.totalSamples} samples so far`);
-      vscode.window.showInformationMessage(
-        `Basilisk: Snapshot \u2014 ${result.totalSamples} samples (profiling continues)`,
-      );
+      // Fire-and-forget: a toast with a button is sticky and must not block the
+      // snapshot handler ([PROFILE-NATIVE-FALLBACK]).
+      void vscode.window
+        .showInformationMessage(
+          `Basilisk: Snapshot \u2014 ${result.totalSamples} samples (profiling continues)`,
+          "View Results",
+        )
+        .then((choice) => {
+          if (choice === "View Results") {
+            openFlamegraphWebview(result);
+          }
+        });
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     Logger.error(`Profile snapshot failed: ${msg}`);
     vscode.window.showErrorMessage(`Basilisk: ${msg}`);
   }
+}
+
+/**
+ * Re-open the results panel for the most recent profile. The panel is a
+ * singleton the user can close; this palette command is the always-available
+ * way back in — results are never trapped behind a dismissed completion toast
+ * ([PROFILE-NATIVE-FALLBACK]).
+ */
+function handleProfileShowResults(): void {
+  if (lastResult === undefined) {
+    vscode.window.showInformationMessage(
+      "Basilisk: No profile results yet — run a profiling session first.",
+    );
+    return;
+  }
+  openFlamegraphWebview(lastResult);
 }
 
 async function handleProfileAttachToDebug(store: Store): Promise<void> {

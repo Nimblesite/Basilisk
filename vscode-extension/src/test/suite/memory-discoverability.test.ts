@@ -122,9 +122,12 @@ function assertDebugToolbarCarriesMemoryActions(): void {
       entry.when.includes("debugType == basilisk-debug"),
       `"${command}" must not appear on other debuggers' toolbars, when: ${entry.when}`,
     );
+    // The profiling UI ships enabled — a leftover reference to the removed
+    // availability-gate key would evaluate falsy and hide the toolbar buttons
+    // from every shipped user.
     assert.ok(
-      entry.when.includes("basilisk.profilingEnabled"),
-      `"${command}" must respect the profiling UI gate ([PROFILE-UI-GATE]), when: ${entry.when}`,
+      !entry.when.includes("basilisk.profilingEnabled"),
+      `"${command}" must not reference the removed profiling UI gate key, when: ${entry.when}`,
     );
   }
 }

@@ -25,7 +25,7 @@ Legend: ⬜ todo · 🟦 in progress · ✅ done
 | 12 | ux-5 | Med | ⏭️ | Memory has no live/streaming view (single end-of-run snapshot only) — **deferred (feature)** |
 | — | test-seams | Med | ⬜ | dap-2/tests-1, tests-2, tests-4, tests-5, heaptree-2, memui-9, tests-6 (assertiveness) |
 | — | dup/size | Med/Low | ⬜ | flame-2, heaptree-1, pyscript-4, dry-2/3/4/5, dap-6, conform-1/2/3 (>500 LOC) |
-| — | conform-5 | Process | ⬜ | Merging re-flips `[PROFILE-UI-GATE]` (re-ships UI that #150 reverted) — needs sign-off |
+| — | conform-5 | Process | ✅ | Merging re-flips `[PROFILE-UI-GATE]` (re-ships UI that #150 reverted) — **signed off: profiling ships enabled; the gate is deleted** |
 
 ### Progress — session 1
 
@@ -104,7 +104,7 @@ Legend: ⬜ todo · 🟦 in progress · ✅ done
 
 ## 🟡 Low / Nit (grouped)
 
-**Spec/size/process:** conform-1 (`scripts.rs` 463→648 LOC) · conform-3 (`dap-proxy.ts` 560→610) · conform-5 (re-flips `[PROFILE-UI-GATE]`; #150 re-ship — needs sign-off) · heaptree-7 / tests-10-style (unit tests added despite "coarse e2e only").
+**Spec/size/process:** conform-1 (`scripts.rs` 463→648 LOC) · conform-3 (`dap-proxy.ts` 560→610) · conform-5 (re-flips `[PROFILE-UI-GATE]`; signed off — profiling ships enabled, gate deleted, spec updated) · heaptree-7 / tests-10-style (unit tests added despite "coarse e2e only").
 
 **CPU export:** cpu-1 (validate_exportable couples .cpuprofile to speedscope-only invariants) · cpu-2 (all-empty-stack profile passes the zero-sample guard) · cpu-3 (zero-sample test leaks temp file, asserts only `is_err()`).
 

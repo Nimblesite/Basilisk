@@ -14,7 +14,6 @@
 import * as vscode from "vscode";
 import { effect } from "@preact/signals-core";
 import type { Store } from "./store";
-import { isProfilingUiEnabled } from "./profiling-ui";
 
 /** Status bar priority — lower than main Basilisk item. */
 const MEMORY_STATUS_BAR_PRIORITY = 98;
@@ -22,29 +21,19 @@ const MEMORY_STATUS_BAR_PRIORITY = 98;
 let memoryStatusBarItem: vscode.StatusBarItem | undefined;
 /** Last-rendered visibility, so the e2e seam knows when the item is hidden. */
 let memoryStatusVisible = false;
-/** [PROFILE-UI-GATE] Whether the (imperative) memory indicator may be shown. */
-let memoryUiEnabled = false;
 
 /**
  * Create the memory status-bar item (click = action menu) and bind it to the
  * store's `profiler` signal and the debug-session lifecycle. Returns
  * disposables that tear down the effect, the listeners, and the item.
  */
-export function bindMemoryStatusBar(
-  context: vscode.ExtensionContext,
-  store: Store,
-): vscode.Disposable[] {
+export function bindMemoryStatusBar(store: Store): vscode.Disposable[] {
   memoryStatusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
     MEMORY_STATUS_BAR_PRIORITY,
   );
   // Click the status-bar item to open the memory action menu (no palette needed).
   memoryStatusBarItem.command = "basilisk.memoryMenu";
-
-  // [PROFILE-UI-GATE] The memory indicator is the one profiling surface no `when`
-  // clause can reach, so it shares the single switch in code: shown under test,
-  // hidden for shipped users.
-  memoryUiEnabled = isProfilingUiEnabled(context);
 
   // Reactive leg: tracking state ([PROFILE-PROCESSES-REACTIVE]).
   const disposeEffect = effect(() => {
@@ -77,8 +66,6 @@ export function bindMemoryStatusBar(
  */
 function refreshMemoryStatusBar(store: Store): void {
   if (memoryStatusBarItem === undefined) { return; }
-  // [PROFILE-UI-GATE] Same switch as the declarative surfaces, applied in code.
-  if (!memoryUiEnabled) { hideMemoryStatusBar(); return; }
 
   const debugging = vscode.debug.activeDebugSession?.type === "basilisk-debug";
   const memoryState = store.profiler.value.memory;

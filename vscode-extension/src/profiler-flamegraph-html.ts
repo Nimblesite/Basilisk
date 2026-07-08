@@ -5,7 +5,8 @@
  * Owns the results panel end to end: the interactive flame graph hero (the
  * inferno SVG the LSP exports on every stop, [PROFILE-FLAMEGRAPH]), summary
  * cards, hot function/line tables with click-to-source navigation, and the
- * completion-toast fallback flow that never dead-ends the user (#145).
+ * result-landing flow that never dead-ends the user (#145): the panel is the
+ * primary view on stop, with the raw V8 trace one click away.
  *
  * Panel lifecycle, CSP, and safe data embedding come from the shared webview
  * host ([PROFILE-WEBVIEW-HOST], profiler-webview.ts).
@@ -35,7 +36,7 @@ import {
 // ── Result presentation (#145) ─────────────────────────────────────────────
 
 /** Completion-toast actions that always reach a working view (#145). */
-const OPEN_FLAME_CHART = "Open Flame Chart";
+const OPEN_NATIVE_TRACE = "Open Trace in VS Code Viewer";
 const REVEAL_TRACE = "Reveal Trace File";
 
 /**
@@ -66,19 +67,21 @@ export function profileHasNoUsableData(
 /**
  * Land a completed CPU profile on a viewable result ([PROFILE-NATIVE-FALLBACK], #145).
  *
- * Opens VS Code's built-in `.cpuprofile` viewer when one was produced, but never
- * *relies* on it: that viewer can refuse to render (unavailable in the host, or
- * a profile it rejects) and `vscode.open` does not reject when it does. So the
- * completion notification always offers an "Open Flame Chart" action onto the
- * self-contained results webview (plus "Reveal Trace File") — the user is
- * never stranded on "the editor could not be opened".
+ * The self-contained results panel (summary cards, flame graph hero, navigable
+ * hot-function/line tables) opens immediately as the primary view: it always
+ * renders, while VS Code's built-in `.cpuprofile` viewer lands on a raw
+ * self/total-time table that reads as a wall of numbers until the user finds
+ * its flame icon. The native trace stays one deliberate click away — the
+ * completion toast's "Open Trace in VS Code Viewer" action, the panel's own
+ * button, or the "Basilisk: Show Profile Results" re-entry command — so the
+ * user is never stranded and never dumped somewhere confusing.
  */
-export async function presentProfileResult(result: ProfileResult): Promise<void> {
+export function presentProfileResult(result: ProfileResult): void {
   if (profileHasNoUsableData(result)) {
     presentNoUsableData(result);
     return;
   }
-  await openNativeViewerOrFallback(result);
+  openFlamegraphWebview(result);
   Logger.info(
     `Profiling stopped: ${result.totalSamples} samples, ${result.duration.toFixed(1)}s, ` +
     `output: ${result.outputFile}`,
@@ -160,24 +163,31 @@ export async function openNativeProfileViewerBeside(
 }
 
 /**
- * Open the native `.cpuprofile` viewer beside the source, falling back to the
- * self-contained results webview.
+ * Open the V8 trace in VS Code's built-in viewer on demand — the user asked for
+ * it explicitly (toast action or panel button), so a viewer that cannot open
+ * (unavailable in the host, or no `.cpuprofile` produced) is said out loud and
+ * the trace file is revealed instead; an explicit request never fails silently.
  */
-async function openNativeViewerOrFallback(result: ProfileResult): Promise<void> {
-  await openNativeProfileViewerBeside(result.cpuProfilePath ?? "", () => {
-    openFlamegraphWebview(result);
+async function openNativeTraceViewer(cpuProfilePath: string, traceFile: string): Promise<void> {
+  await openNativeProfileViewerBeside(cpuProfilePath, () => {
+    void vscode.window.showWarningMessage(
+      "Basilisk: VS Code's built-in trace viewer could not open the profile — revealing the trace file instead.",
+    );
+    if (traceFile !== "") {
+      void vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(traceFile));
+    }
   });
 }
 
-/** Completion toast that always offers a path to a working view (#145). */
+/** Completion toast that always offers a path to the raw trace (#145). */
 async function offerProfileResultActions(result: ProfileResult): Promise<void> {
   const choice = await vscode.window.showInformationMessage(
     `Basilisk: Profile complete — ${result.totalSamples} samples in ${result.duration.toFixed(1)}s`,
-    OPEN_FLAME_CHART,
+    OPEN_NATIVE_TRACE,
     REVEAL_TRACE,
   );
-  if (choice === OPEN_FLAME_CHART) {
-    openFlamegraphWebview(result);
+  if (choice === OPEN_NATIVE_TRACE) {
+    await openNativeTraceViewer(result.cpuProfilePath ?? "", traceFileFor(result));
   } else if (choice === REVEAL_TRACE) {
     const trace = traceFileFor(result);
     if (trace !== "") {
@@ -195,6 +205,10 @@ function handleFlamegraphMessage(msg: WebviewMessage): void {
   }
   if (msg.type === "openSpeedscope" && msg.file !== undefined && msg.file !== "") {
     void openSpeedscopeImport(msg.file);
+  } else if (msg.type === "openCpuProfile" && msg.file !== undefined && msg.file !== "") {
+    // The panel's "Open Trace in VS Code Viewer" button — the on-demand path to
+    // the built-in `.cpuprofile` table view ([PROFILE-NATIVE]).
+    void openNativeTraceViewer(msg.file, msg.file);
   } else if (msg.type === "openFlamegraphSvg" && msg.file !== undefined && msg.file !== "") {
     // The inferno SVG carries its own zoom/search interactivity, which the
     // CSP-locked webview intentionally does not run — open it externally where
@@ -305,7 +319,8 @@ function flamegraphCss(): string {
       border-radius: 6px; color: var(--prof-text);
       font-size: 13px; cursor: pointer; font-family: inherit;
     }
-    .action-link:hover { border-color: var(--prof-critical); color: var(--prof-critical); }`;
+    .action-link:hover { border-color: var(--prof-critical); color: var(--prof-critical); }
+    .action-link + .action-link { margin-left: 8px; }`;
 }
 
 /** Build the body HTML with the flame graph hero, summary cards and tables. */
@@ -328,7 +343,7 @@ function flamegraphBody(svgDataUri: string | undefined): string {
     <thead><tr><th>Location</th><th>%</th><th>Samples</th><th></th></tr></thead>
     <tbody id="line-body"></tbody>
   </table>
-  <div id="speedscope-section"></div>`;
+  <div id="trace-actions"></div>`;
 }
 
 /** Build the script initialization and helpers for the results webview. */
@@ -341,6 +356,7 @@ function flamegraphScriptInit(result: ProfileResult): string {
     const duration = ${result.duration};
     const outputFile = ${embedJson(result.outputFile)};
     const flamegraphFile = ${embedJson(result.flamegraphPath ?? "")};
+    const cpuProfileFile = ${embedJson(result.cpuProfilePath ?? "")};
     function animateValue(el, target, suffix) {
       const start = 0;
       const stepTime = Math.max(10, Math.floor(400 / target));
@@ -398,8 +414,18 @@ function flamegraphScriptRender(): string {
       ].join('');
       lineBody.appendChild(tr);
     }
+    const section = document.getElementById('trace-actions');
+    if (cpuProfileFile) {
+      const nativeButton = document.createElement('button');
+      nativeButton.className = 'action-link';
+      nativeButton.textContent = 'Open Trace in VS Code Viewer';
+      nativeButton.title = 'Open the raw .cpuprofile in the built-in trace viewer (self/total time table)';
+      nativeButton.onclick = () => {
+        vscode.postMessage({ type: 'openCpuProfile', file: cpuProfileFile });
+      };
+      section.appendChild(nativeButton);
+    }
     if (outputFile) {
-      const section = document.getElementById('speedscope-section');
       const link = document.createElement('button');
       link.className = 'action-link';
       link.textContent = 'Open in Speedscope (external)';

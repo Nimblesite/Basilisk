@@ -185,6 +185,30 @@ suite('Profiler webviews — flame graph hero', () => {
         assert.ok(html.includes('openFlamegraphSvg'), 'the open action must post a message the extension handles');
     });
 
+    // [PROFILE-NATIVE] The built-in `.cpuprofile` viewer is on-demand, not the
+    // landing view — so the panel itself must carry the way into it. Without
+    // this button the raw trace is only reachable through the (dismissable)
+    // completion toast.
+    test('the results panel offers the raw trace via an "Open Trace in VS Code Viewer" button', () => {
+        const withTrace = buildFlamegraphHtml(
+            profileResult({ cpuProfilePath: '/tmp/basilisk-s-1.cpuprofile' }),
+        );
+        assert.ok(
+            withTrace.includes('Open Trace in VS Code Viewer'),
+            'the panel must offer opening the native .cpuprofile viewer',
+        );
+        assert.ok(
+            withTrace.includes('openCpuProfile'),
+            'the trace button must post a message the extension handles',
+        );
+
+        const withoutTrace = buildFlamegraphHtml(profileResult());
+        assert.ok(
+            !withoutTrace.includes('/tmp/basilisk-s-1.cpuprofile'),
+            'no stale trace path may be embedded when no .cpuprofile was produced',
+        );
+    });
+
     test('a missing or unreadable SVG degrades to the tables, never a broken image', () => {
         const withoutPath = buildFlamegraphHtml(profileResult());
         const withDeadPath = buildFlamegraphHtml(

@@ -617,15 +617,16 @@ suite("CPU profiling — real end-to-end", () => {
     }
   });
 
-  // The viewability flow (#145): a completed CPU profile must hand the user a
-  // working flame chart. The built-in `.cpuprofile` viewer can refuse to render
-  // (viewer unavailable, or a profile it rejects), and `vscode.open` doesn't
-  // reject when that happens — so the completion notification itself MUST offer
-  // an action that lands on the self-contained flamegraph webview, never a
-  // dead-end on "the editor could not be opened". Covers [PROFILE-NATIVE-FALLBACK]
+  // The viewability flow (#145): a completed CPU profile must land the user on
+  // a working flame chart WITHOUT any extra click — the self-contained results
+  // panel opens as the primary view on stop (the built-in `.cpuprofile` viewer
+  // is a raw self/total-time table and can refuse to render, so it is on-demand
+  // only). The completion notification must still offer trace actions, and a
+  // closed panel must stay reachable via "Basilisk: Show Profile Results" — a
+  // dismissed toast never strands the results. Covers [PROFILE-NATIVE-FALLBACK]
   // (docs/specs/LSP-PROFILING-SPEC.md#PROFILE-NATIVE-FALLBACK) + acceptance
   // criteria 2/3/4 of the issue.
-  test("run → profile → view: completion notification opens a working flame chart, never a dead-end (#145)", async function () {
+  test("run → profile → view: the results panel opens on stop with no click, and stays reachable after closing (#145)", async function () {
     if (process.platform === "win32") { this.skip(); }
     this.timeout(60_000);
     const store = getStore();
@@ -651,15 +652,15 @@ suite("CPU profiling — real end-to-end", () => {
       assert.strictEqual(store.profiler.value.cpu, "active", "the panel attach must activate the session");
     }
 
-    // Capture the completion notification's actions and simulate the user
-    // taking the flame-chart action when it is offered.
+    // Capture the completion notification's actions but take NONE of them —
+    // the panel must open without any user click.
     const toasts: { message: string; actions: string[] }[] = [];
     const win = vscode.window as { showInformationMessage: typeof vscode.window.showInformationMessage };
     const originalShow = win.showInformationMessage;
     win.showInformationMessage = async (message: string, ...items: unknown[]) => {
       const actions = items.filter((item): item is string => typeof item === "string");
       toasts.push({ message, actions });
-      return actions.find((action) => /flame|view|open/i.test(action));
+      return undefined;
     };
 
     disposeFlamegraphPanel(); // known-closed baseline so the post-stop check is meaningful
@@ -670,6 +671,20 @@ suite("CPU profiling — real end-to-end", () => {
       win.showInformationMessage = originalShow;
     }
 
+    // Primary landing: the results panel is open right after stop, with no
+    // toast interaction — the user is never dumped on the raw `.cpuprofile`
+    // table as the only view.
+    await pollUntilResult({
+      fn: async () => flamegraphPanelOpen(),
+      predicate: (open) => open,
+      timeoutMs: 5_000,
+    }).catch(() => {
+      assert.fail(
+        "stopping a profile must open the self-contained results panel without requiring " +
+          "any toast click — the raw .cpuprofile table must never be the primary landing (#145)",
+      );
+    });
+
     const completion = toasts.find((toast) => /Profile complete/i.test(toast.message));
     assert.ok(
       completion !== undefined,
@@ -677,19 +692,22 @@ suite("CPU profiling — real end-to-end", () => {
     );
     assert.ok(
       completion.actions.length > 0,
-      `the "Profile complete" notification must offer an action to reach the result (#145) — ` +
+      `the "Profile complete" notification must offer an action to reach the raw trace (#145) — ` +
         `the toast currently dead-ends with no way to open or reveal the trace`,
     );
-    // The toast is fired-and-forget (sticky notifications must not block the
-    // stop handler), so the action's view opens on a microtask — poll for it.
+
+    // Re-entry: a closed panel is one palette command away — results are never
+    // trapped behind the dismissed completion toast.
+    disposeFlamegraphPanel();
+    assert.strictEqual(flamegraphPanelOpen(), false, "baseline: panel closed before re-entry");
+    await vscode.commands.executeCommand("basilisk.profileShowResults");
     await pollUntilResult({
       fn: async () => flamegraphPanelOpen(),
       predicate: (open) => open,
       timeoutMs: 5_000,
     }).catch(() => {
       assert.fail(
-        "taking the completion action must open a working flame chart, never leave the user " +
-          "on the built-in viewer's \"could not be opened\" error (#145)",
+        '"Basilisk: Show Profile Results" must re-open the results panel for the last profile',
       );
     });
 

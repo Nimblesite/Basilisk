@@ -60,15 +60,12 @@ const pendingSnapshotCleanup = new Map<string, string>();
 // ── Registration ──────────────────────────────────────────────────────────
 
 /** Register memory profiler commands and UI components. */
-export function registerMemoryProfiler(
-  context: vscode.ExtensionContext,
-  store: Store,
-): vscode.Disposable[] {
+export function registerMemoryProfiler(store: Store): vscode.Disposable[] {
   boundStore = store;
   return [
     // The memory status-bar item — its whole lifecycle (idle affordance,
     // starting spinner, tracking readout) lives in memory-status.ts.
-    ...bindMemoryStatusBar(context, store),
+    ...bindMemoryStatusBar(store),
     ...memoryCommandDisposables(store),
   ];
 }
