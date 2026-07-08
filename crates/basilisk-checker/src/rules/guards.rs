@@ -112,9 +112,9 @@ pub(crate) fn inherits_dataclass_transform(
     };
     let metaclass_is_transform = |c: &ClassInfo| {
         c.metaclass_name.as_deref().is_some_and(|meta| {
-            class_map
-                .get(meta)
-                .is_some_and(|m| super::shared::class_or_base_matches(m, &resolve, &directly_decorated))
+            class_map.get(meta).is_some_and(|m| {
+                super::shared::class_or_base_matches(m, &resolve, &directly_decorated)
+            })
         })
     };
 

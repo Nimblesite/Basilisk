@@ -888,8 +888,7 @@ mod tests {
         force_colors();
         let out = strip_ansi(&render_snippet("def foo(x): pass", 8, 9, Severity::Error));
         assert_eq!(
-            out,
-            "  |\n1 | def foo(x): pass\n  |         ^\n  |\n",
+            out, "  |\n1 | def foo(x): pass\n  |         ^\n  |\n",
             "gutter rows must align with the source row (issue #279)"
         );
     }

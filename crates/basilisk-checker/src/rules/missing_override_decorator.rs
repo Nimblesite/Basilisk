@@ -100,11 +100,9 @@ fn is_protocol_transitively<'a>(
     cls: &'a ClassInfo,
     class_map: &HashMap<&str, &'a ClassInfo>,
 ) -> bool {
-    super::shared::class_or_base_matches(
-        cls,
-        &|name| class_map.get(name).copied(),
-        &|candidate| is_protocol_class(candidate),
-    )
+    super::shared::class_or_base_matches(cls, &|name| class_map.get(name).copied(), &|candidate| {
+        is_protocol_class(candidate)
+    })
 }
 
 fn check_class(

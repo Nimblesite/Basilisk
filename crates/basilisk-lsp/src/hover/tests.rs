@@ -129,7 +129,9 @@ fn test_hover_on_method_inherited_from_external_stub_base_shows_signature() {
     // The stub pipeline skips the `self`/`cls` receiver of methods
     // (`extract_params`), matching how local method hovers render.
     assert!(
-        markup.value.contains("BaseModel.model_validate(obj: object) -> BaseModel"),
+        markup
+            .value
+            .contains("BaseModel.model_validate(obj: object) -> BaseModel"),
         "hover should show the inherited method's stub signature: {}",
         markup.value
     );
@@ -157,7 +159,9 @@ fn test_hover_on_class_shows_init_signature() {
         markup.value
     );
     assert!(
-        markup.value.contains("__init__(self, x: int, y: int) -> None"),
+        markup
+            .value
+            .contains("__init__(self, x: int, y: int) -> None"),
         "hover should show the constructor signature: {}",
         markup.value
     );

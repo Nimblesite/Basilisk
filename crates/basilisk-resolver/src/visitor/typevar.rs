@@ -54,8 +54,8 @@ pub(super) fn typevar_call_info_from(
     };
     let has_default = find_kw("default").is_some();
     let has_bound = find_kw("bound").is_some();
-    let has_parameterized_bound = find_kw("bound")
-        .is_some_and(|kw| expr_parameterized_by_typevar(&kw.value, known_typevars));
+    let has_parameterized_bound =
+        find_kw("bound").is_some_and(|kw| expr_parameterized_by_typevar(&kw.value, known_typevars));
     let has_parameterized_constraint = call
         .arguments
         .args

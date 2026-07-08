@@ -27,10 +27,10 @@ pub(super) fn external_member_hover(
 
     // Stub signatures render as `def name(...)`; qualify with the class name
     // to match the local-method hover style `(method) def Class.name(...)`.
-    let qualified = method
-        .signature
-        .strip_prefix("def ")
-        .map_or_else(|| method.signature.clone(), |rest| format!("def {}.{rest}", class.name));
+    let qualified = method.signature.strip_prefix("def ").map_or_else(
+        || method.signature.clone(),
+        |rest| format!("def {}.{rest}", class.name),
+    );
     let mut md = format!("```python\n(method) {qualified}\n```");
     if let Some(label) = class
         .provenance
