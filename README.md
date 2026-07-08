@@ -40,18 +40,18 @@ measured by the real upstream harness on the wheel-installed CLI in its default 
   <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
 </p>
 
-And it is the **fastest checker we&rsquo;ve measured** &mdash; on every rule, checked cold from scratch:
+And it is the **fastest checker we&rsquo;ve measured** &mdash; median cold full-file check, from scratch:
 
 | Type checker | Median cold check |
 | --- | --- |
 | ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
-| zuban | <!--g:benchZuban-->27<!--/g:benchZuban--> ms |
+| zuban | <!--g:benchZuban-->26<!--/g:benchZuban--> ms |
 | ty | <!--g:benchTy-->37<!--/g:benchTy--> ms |
-| Pyrefly | <!--g:benchPyrefly-->145<!--/g:benchPyrefly--> ms |
-| Pyright | <!--g:benchPyright-->558<!--/g:benchPyright--> ms |
-| mypy | <!--g:benchMypy-->582<!--/g:benchMypy--> ms |
+| Pyrefly | <!--g:benchPyrefly-->142<!--/g:benchPyrefly--> ms |
+| Pyright | <!--g:benchPyright-->570<!--/g:benchPyright--> ms |
+| mypy | <!--g:benchMypy-->573<!--/g:benchMypy--> ms |
 
-Median cold full-file check across <!--g:benchCount-->29<!--/g:benchCount--> single-rule stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better. Basilisk&rsquo;s warm re-check drops to ~<!--g:benchWarm-->5<!--/g:benchWarm--> ms. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
+Median cold full-file check across <!--g:benchCount-->26<!--/g:benchCount--> single-construct typing-spec stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better. Basilisk&rsquo;s warm re-check drops to ~<!--g:benchWarm-->5<!--/g:benchWarm--> ms. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 
 
 

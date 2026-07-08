@@ -3,37 +3,34 @@
 # arch: arm64
 # os: Darwin 25.5.0
 # cores: 14
-# tools: basilisk=basilisk 0.0.0-dev+g0319a7de-dirty, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0, zuban=zuban 0.9.0
+# tools: basilisk=basilisk 0.0.0-dev+gf46fe899-dirty, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0, zuban=zuban 0.9.0
 # runs: 10 (hyperfine mean wall-clock, milliseconds)
-# generated: 2026-07-07T22:39:03+1000
-# note: <tool>_ms = COLD full-file CLI check from scratch. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. zuban is also cold-only but its mypy mode DOES reuse a ./.mypy_cache when present (no flag disables it), so we wipe ./.mypy_cache before every timed run to keep the measurement cold (cold==warm anyway on these single-file fixtures, ~31ms). mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures); zuban runs as `zuban mypy --strict` for the same reason (its default `zuban check` mode skips these strictness rules).
-fixture,basilisk_ms,basilisk-warm_ms,pyright_ms,mypy_ms,mypy-warm_ms,ty_ms,pyrefly_ms,zuban_ms
-aliases_type_statement,9.2,4.6,550.5,604.8,161.7,58.8,148.4,26.5
-callables_subtyping,14.1,5.0,526.2,568.1,160.6,37.0,146.9,27.1
-constructors_call_init,10.1,4.5,601.4,582.2,163.5,36.6,139.1,25.8
-dataclasses_usage,10.4,4.4,1572.2,635.8,160.2,58.7,207.9,55.1
-e0001_missing_param,11.9,3.8,514.2,606.2,159.0,28.8,142.7,31.1
-e0002_missing_return,14.5,3.3,557.5,608.8,159.8,35.4,149.8,35.5
-e0010_unresolved_import,19.8,7.9,477.6,663.9,163.2,236.7,560.0,237.9
-e0011_explicit_any,14.3,3.6,520.2,597.0,157.2,29.0,142.0,29.1
-e0012_argument_type_mismatch,15.7,5.9,635.1,597.4,158.5,53.6,150.4,47.2
-e0014_assignment_incompatibility,11.4,7.1,587.8,566.8,159.5,49.8,148.5,30.1
-e0016_incompatible_override,17.3,3.3,634.9,598.7,159.5,52.6,155.3,29.6
-e0018_undefined_name,18.3,7.5,485.6,610.3,165.6,48.7,576.8,35.1
-e0022_unhashable_dict_key,15.1,7.3,518.8,596.0,161.1,37.8,139.1,29.5
-e0023_nonexhaustive_match,11.8,4.4,518.0,586.0,156.8,33.0,144.8,26.8
-e0026_typevar_single_constraint,20.2,7.5,728.3,572.2,160.9,38.3,149.2,32.0
-e0036_classvar_misuse,17.6,7.3,603.1,598.3,161.5,55.1,166.9,31.4
-e0038_typeddict_readonly_inheritance,16.2,5.3,668.8,560.8,158.0,36.1,151.3,26.1
-e0050_newtype_name_mismatch,13.7,7.3,704.6,608.2,161.0,22.2,153.6,35.0
-e0054_final_reassignment,7.7,4.3,456.4,552.8,157.8,26.4,134.4,23.4
-e0056_readonly_typeddict_mutation,10.6,4.4,616.7,565.7,156.9,40.1,144.4,25.5
-e0093_typeddict_invalid_key,10.4,4.3,607.2,560.6,159.1,34.7,142.3,25.1
-enums_member_values,8.2,4.4,567.0,558.6,158.6,39.2,139.5,25.7
-generics_defaults_specialization,11.0,4.4,545.7,566.6,157.6,33.3,138.6,25.1
-literals_semantics_2,13.2,5.2,519.1,563.1,158.6,30.2,141.4,26.1
-narrowing_typeis_2,10.4,4.7,531.4,561.3,157.9,33.9,140.5,25.5
-overloads_evaluation,13.9,4.6,609.6,600.2,157.3,56.8,152.8,33.3
-protocols_definition_2,9.4,4.4,563.7,563.0,158.6,33.7,138.3,26.6
-returns_compatibility,8.1,5.3,485.8,152.0,156.5,30.2,136.9,23.5
-tuples_index_2,9.9,5.4,544.7,560.6,161.0,32.3,139.8,25.3
+# generated: 2026-07-08T18:33:52+1000
+# note: <tool>_ms = COLD full-file CLI check from scratch (whole process: startup + stubs + analysis). <tool>_diags = diagnostics the tool reported on that fixture in the measured configuration — read every time next to its diags; a tool that reports 0 did the analysis but flags nothing there. A blank _ms cell means the tool FAILED to analyze that fixture (exit >= 2, e.g. parse abort) and was excluded rather than timed as a crash. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. zuban is also cold-only but its mypy mode DOES reuse a ./.mypy_cache when present (no flag disables it), so we wipe ./.mypy_cache before every timed run to keep the measurement cold. mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures); zuban runs as `zuban mypy --strict` for the same reason (its default `zuban check` mode skips these strictness rules).
+fixture,basilisk_ms,basilisk-warm_ms,pyright_ms,mypy_ms,mypy-warm_ms,ty_ms,pyrefly_ms,zuban_ms,basilisk_diags,pyright_diags,mypy_diags,ty_diags,pyrefly_diags,zuban_diags
+aliases_type_statement,8.9,4.8,558.9,600.7,156.4,59.2,145.5,26.2,600,850,650,1850,700,600
+assignment_compatibility,11.3,7.3,590.0,570.0,160.4,49.2,146.3,30.0,2000,2000,2000,2000,2000,2000
+call_argument_types,15.4,5.3,633.1,599.6,160.2,52.7,147.6,47.7,998,998,1002,998,998,1000
+callables_subtyping,13.4,4.6,514.0,570.7,158.8,36.5,139.8,27.1,600,600,600,600,600,600
+classvar_scoping,17.5,7.2,607.1,602.7,158.6,54.5,165.7,31.4,2000,2000,2000,2000,4000,2000
+constructors_call_init,9.9,4.6,597.7,585.0,157.7,36.9,137.4,26.0,444,370,296,370,444,518
+dataclasses_usage,10.3,4.6,1523.8,638.6,156.2,57.5,203.7,54.7,500,500,500,500,500,500
+dict_key_hashability,15.2,7.9,530.3,615.9,156.9,35.9,136.3,30.1,2000,2000,0,0,0,0
+enums_member_values,8.4,4.4,572.6,558.5,159.3,39.2,137.0,25.8,480,480,80,480,480,480
+final_reassignment,7.9,4.4,471.9,560.4,160.1,26.3,133.4,23.2,500,500,500,500,500,500
+generics_defaults_specialization,11.0,4.4,563.0,570.6,159.1,32.8,137.8,25.7,560,560,560,421,560,560
+literals_semantics,12.4,4.6,528.7,565.2,159.6,31.0,138.5,25.9,576,576,576,576,576,576
+match_exhaustiveness,12.1,4.5,522.4,590.3,158.1,34.7,142.8,26.5,500,0,0,500,0,0
+narrowing_typeis,10.2,4.5,539.3,572.6,159.4,33.6,139.1,26.0,520,520,520,520,520,520
+newtype_definition,13.5,7.2,702.2,613.3,158.6,22.4,152.1,34.8,2000,2000,2000,0,2000,2000
+overloads_evaluation,13.7,4.6,586.7,608.9,158.2,56.6,151.0,33.3,600,1401,801,600,600,801
+override_compatibility,14.6,3.9,645.4,592.4,157.8,38.5,144.1,27.8,200,200,300,1,200,300
+protocols_definition,9.6,4.6,566.9,566.9,160.3,33.5,136.6,25.8,536,402,402,335,402,402
+returns_compatibility,8.4,5.5,485.6,560.7,159.4,29.8,134.8,23.4,1080,540,540,540,540,540
+tuples_index,9.9,4.6,541.7,563.4,160.9,31.6,136.5,24.9,600,600,600,1800,600,600
+typeddict_key_access,10.0,4.3,610.2,566.3,159.6,35.8,141.4,25.3,500,500,500,500,500,500
+typeddict_readonly_inheritance,15.4,4.3,694.8,566.7,159.7,36.3,148.2,25.3,500,500,500,2,500,500
+typeddict_readonly_mutation,10.7,4.6,618.2,572.7,161.8,39.8,141.1,25.6,500,500,500,500,500,500
+typevar_constraints,20.4,7.2,713.1,571.1,160.9,38.5,143.9,32.1,2000,2000,2000,2000,2000,2000
+undefined_names,18.3,7.3,485.1,626.1,162.1,48.3,576.1,33.6,2000,2000,4000,2000,2000,4000
+unresolved_imports,19.2,6.9,464.7,667.2,159.2,235.1,551.0,230.9,2000,2000,0,2000,2000,0

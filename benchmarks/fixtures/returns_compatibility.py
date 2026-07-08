@@ -1,8 +1,11 @@
-# type: disabled[returns_compatibility_2]
-# Benchmark stress fixture for `returns_compatibility` (return type mismatch).
-# The sibling rule returns_compatibility_2 fires in lock-step on the same
-# constructs by design; the block directive above isolates the target rule so
-# the fixture stays single-rule. It is an inert comment for other checkers.
+"""Benchmark stress fixture: return type compatibility.
+
+Functions whose returned values do not match their declared return type.
+Every mismatched return is an error the checker must flag; the surrounding
+well-typed returns exercise the same compatibility check without emitting
+diagnostics. Plain Python — no checker-specific directives, so every tool
+analyzes the identical workload in its default strict configuration.
+"""
 
 
 def fn0_a() -> str:
