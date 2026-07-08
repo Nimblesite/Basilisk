@@ -38,7 +38,7 @@ Basilisk 是**唯一**在官方
   <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/vscode-extension/images/screenshot.png" alt="Basilisk 实战 —— 在 VS Code 中进行类型检查、诊断与重构" width="900">
 </p>
 
-它也是**我们测试过最快的检查器** —— 每条规则，均为从零冷启动检查：
+它也是**我们测试过最快的检查器** —— 从零冷启动的全文件检查中位数：
 
 | 类型检查器 | 冷启动检查中位数 |
 | --- | --- |
@@ -49,7 +49,7 @@ Basilisk 是**唯一**在官方
 | Pyright | <!--g:benchPyright-->570<!--/g:benchPyright--> ms |
 | mypy | <!--g:benchMypy-->573<!--/g:benchMypy--> ms |
 
-在 <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> 上，跨 <!--g:benchCount-->26<!--/g:benchCount--> 个单规则压力测试样本的冷启动全文件检查中位数 —— 数值越低越好；在编辑器内热重检查更快。每个数字均由 [`hyperfine`](https://github.com/sharkdp/hyperfine) 生成并按机器提交，没有一个是手写的。**克隆仓库，在你自己的硬件上运行 `make bench`，并把 CSV 发给我们 —— 欢迎社区独立复核。** [完整基准测试与方法论 &rarr;](https://www.basilisk-python.dev/zh/docs/benchmarks/)
+在 <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> 上，跨 <!--g:benchCount-->26<!--/g:benchCount--> 个单一类型构造压力测试样本的冷启动全文件检查中位数 —— 数值越低越好；在编辑器内热重检查更快。每个数字均由 [`hyperfine`](https://github.com/sharkdp/hyperfine) 生成并按机器提交，没有一个是手写的。**克隆仓库，在你自己的硬件上运行 `make bench`，并把 CSV 发给我们 —— 欢迎社区独立复核。** [完整基准测试与方法论（英文）&rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 
 ## 一个扩展，全部搞定
 

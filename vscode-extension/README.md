@@ -37,7 +37,7 @@ measured by the real upstream harness on the wheel-installed CLI in its default 
   <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/vscode-extension/images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in VS Code" width="900">
 </p>
 
-And it is the **fastest checker we&rsquo;ve measured** &mdash; on every rule, checked cold from scratch:
+And it is the **fastest checker we&rsquo;ve measured** &mdash; median cold full-file check, from scratch:
 
 | Type checker | Median cold check |
 | --- | --- |
@@ -48,7 +48,7 @@ And it is the **fastest checker we&rsquo;ve measured** &mdash; on every rule, ch
 | Pyright | <!--g:benchPyright-->570<!--/g:benchPyright--> ms |
 | mypy | <!--g:benchMypy-->573<!--/g:benchMypy--> ms |
 
-Median cold full-file check across <!--g:benchCount-->26<!--/g:benchCount--> single-rule stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better; inside the editor a warm re-check is faster again. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
+Median cold full-file check across <!--g:benchCount-->26<!--/g:benchCount--> single-construct typing-spec stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better; inside the editor a warm re-check is faster again. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 
 ## Everything in one extension
 

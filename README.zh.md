@@ -106,20 +106,6 @@ Basilisk 建立在开源社区之上 —— 特别感谢：
 
 完整的组件与许可证列表见 [NOTICES](NOTICES)。所有依赖均采用宽松许可证。
 
-## 致谢
-
-Basilisk 建立在开源社区之上 —— 特别感谢：
-
-- **[Astral](https://astral.sh/)** —— [Ruff](https://github.com/astral-sh/ruff)，Basilisk 嵌入了其解析器、AST 与格式化器 crate（MIT）。我们最倚重的基础。
-- **[typeshed](https://github.com/python/typeshed)** —— 标准库类型存根（Apache-2.0）。
-- **[Salsa](https://github.com/salsa-rs/salsa)** —— 增量查询引擎。
-- **[Rayon](https://github.com/rayon-rs/rayon)** —— 数据并行。
-- **[tower-lsp](https://github.com/ebkalderon/tower-lsp)** —— LSP 脚手架。
-- **[debugpy](https://github.com/microsoft/debugpy)** —— 调试适配器（捆绑于 VS Code 扩展）。
-- [`python/typing`](https://github.com/python/typing) 一致性测试套件。
-
-完整的组件与许可证列表见 [NOTICES](NOTICES)。所有依赖均采用宽松许可证。
-
 ---
 
 ## 许可证
