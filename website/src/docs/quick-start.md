@@ -177,15 +177,13 @@ Output includes: total functions, typed functions, type coverage percentage, fil
 
 Basilisk includes an integrated CPU and memory profiler. To try it in VS Code:
 
-1. Run any Python script (the process must be alive)
-2. Open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) — or use the shortcut `Cmd+Shift+P Cmd+Shift+S` / `Ctrl+Shift+P Ctrl+Shift+S`
-3. Run **Basilisk: Start Profiling** and pick the target process
-4. Watch inline CPU heat annotations appear on hot lines as samples accumulate
-5. Run **Basilisk: Stop Profiling** to open the flamegraph viewer
+1. Open a Python file and click **Run & Profile CPU (Current File)** in the **Python Processes** panel (Basilisk icon in the activity bar) — it launches the script and profiles it from the first line. To profile an already-running process instead, click **Profile CPU** on its row in the same panel.
+2. Watch inline CPU heat annotations appear on hot lines as samples accumulate
+3. Run **Basilisk: Stop Profiling** (`Cmd+Shift+P Cmd+Shift+X` / `Ctrl+Shift+P Ctrl+Shift+X`, or click the status-bar counter) — the Basilisk Profiler panel opens with a flame graph and click-to-source hot-function tables
 
-For memory leak hunting, use **Basilisk: Start Memory Tracking**, take two snapshots with **Basilisk: Take Memory Snapshot**, then **Basilisk: Diff Memory Snapshots** to surface leaks as diagnostics in the Problems panel.
+For memory leak hunting, click **Run & Track Memory (Current File)** in the same panel (memory tracking rides the debugger, so this launches a debug session for you). Snapshots auto-capture at every pause — or take them manually with **Basilisk: Take Memory Snapshot** — and **Basilisk: Compare Memory Snapshots** surfaces leaks as diagnostics in the Problems panel.
 
-See the [Profiler guide](/docs/profiler/) for the full workflow — flamegraphs, reference graphs, profile diffing, VS Code commands, Zed slash commands, Neovim user commands, and platform requirements.
+See the [Profiler guide](/docs/profiler/) for the full workflow — flame graphs, reference graphs, memory snapshot comparison, VS Code commands, Zed slash commands, Neovim user commands, and platform requirements.
 
 ## Next steps
 

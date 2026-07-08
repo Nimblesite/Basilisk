@@ -168,15 +168,13 @@ basilisk stats src/
 
 Basilisk 包含一个集成的 CPU 和内存性能分析器。要在 VS Code 中试用：
 
-1. 运行任何 Python 脚本（进程必须处于活动状态）
-2. 打开命令面板（`Cmd+Shift+P` / `Ctrl+Shift+P`）——或使用快捷键 `Cmd+Shift+P Cmd+Shift+S` / `Ctrl+Shift+P Ctrl+Shift+S`
-3. 运行 **Basilisk: Start Profiling** 并选择目标进程
-4. 随着采样的积累，观察内联 CPU 热注解出现在热行上
-5. 运行 **Basilisk: Stop Profiling** 以打开火焰图查看器
+1. 打开一个 Python 文件，在 **Python 进程面板**（活动栏中的 Basilisk 图标）中点击 **Run & Profile CPU (Current File)**——它会启动脚本并从第一行开始分析。若要分析已在运行的进程，改为点击面板中该进程行上的 **Profile CPU**。
+2. 随着采样的积累，观察内联 CPU 热注解出现在热行上
+3. 运行 **Basilisk: Stop Profiling**（`Cmd+Shift+P Cmd+Shift+X` / `Ctrl+Shift+P Ctrl+Shift+X`，或点击状态栏计数）——Basilisk Profiler 面板打开，显示火焰图和可跳转到源代码的热点函数表格
 
-对于内存泄漏检测，使用 **Basilisk: Start Memory Tracking**，通过 **Basilisk: Take Memory Snapshot** 拍摄两个快照，然后 **Basilisk: Diff Memory Snapshots** 在问题面板中将泄漏显示为诊断。
+对于内存泄漏检测，在同一面板中点击 **Run & Track Memory (Current File)**（内存跟踪依托调试器，此操作会为您启动调试会话）。每次暂停都会自动捕获快照——也可通过 **Basilisk: Take Memory Snapshot** 手动拍摄——然后 **Basilisk: Compare Memory Snapshots** 在问题面板中将泄漏显示为诊断。
 
-请参阅[性能分析器指南](/zh/docs/profiler/)了解完整的工作流程——火焰图、引用图、配置文件差异、Zed 和 Neovim 命令以及平台要求。
+请参阅[性能分析器指南](/zh/docs/profiler/)了解完整的工作流程——火焰图、引用图、内存快照对比、VS Code 命令、Zed 和 Neovim 命令以及平台要求。
 
 ## 下一步
 

@@ -31,7 +31,7 @@ Basilisk takes a different position. Its default *is* the typing spec — full P
 - **Editor extensions for every major IDE** — VS Code, Neovim (0.10+), and Zed today; Cursor and Windsurf (via Open VSX) coming very soon, and JetBrains (IntelliJ / PyCharm) on the way
 - **Enrichment fixes** — one-click code actions that add the missing type annotations *for* you
 - An **integrated debugger** — press F5 to debug Python with breakpoints, stepping, variable inspection, and watch expressions, all brokered through the Basilisk LSP
-- An **integrated profiler** — CPU profiling via py-spy with inline heatmap annotations, flamegraphs, memory leak detection, and reference graph visualization, all inside your editor
+- An **integrated profiler** — sampling CPU profiler with inline heatmap annotations, flame graphs, memory leak detection, and reference graph visualization, all inside your editor
 - A **PEP-conformant type checker by default** — the core spec rule set out of the box, with opt-in Basilisk rules for checking stricter than the spec
 - A **CLI tool** for CI integration — exits with code 1 when errors are found
 - A **migration assistant** that reads your existing `pyrightconfig.json` or `mypy.ini`
