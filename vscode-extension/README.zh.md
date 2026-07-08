@@ -35,7 +35,7 @@ Basilisk 是**唯一**在官方
 上取得满分的 Python 类型检查器：**<!--g:score-->100.0%<!--/g:score-->**（<!--g:pass-->141<!--/g:pass-->/<!--g:total-->141<!--/g:total--> 个文件，捕获 <!--g:caught-->970<!--/g:caught--> 个必需错误，<!--g:fp-->0<!--/g:fp--> 个误报），由真实的上游评分工具在默认配置下对通过 wheel 安装的 CLI 评分。
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/vscode-extension/images/screenshot.png" alt="Basilisk 实战 —— 在 VS Code 中进行类型检查、诊断与重构" width="900">
+  <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/website/src/assets/images/screenshot.png" alt="Basilisk 实战 —— 在 VS Code 中进行类型检查、诊断与重构" width="900">
 </p>
 
 它也是**我们测试过最快的检查器** —— 从零冷启动的全文件检查中位数：
