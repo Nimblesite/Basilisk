@@ -17,7 +17,7 @@ mod variable_types;
 mod violations;
 
 pub use class_types::{BaseSubscriptEntry, ClassInfo, GenericParamInfo, TypeArg};
-pub use external_symbol::{ExternalSymbol, ExternalSymbolKind};
+pub use external_symbol::{ExternalMethod, ExternalSymbol, ExternalSymbolKind};
 pub use function_types::{
     FunctionInfo, ParameterInfo, ReturnAnnotationKind, ReturnStmtInfo, YieldExprInfo,
 };

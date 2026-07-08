@@ -4,11 +4,11 @@
 
 A Python profiler embedded in the Basilisk LSP (no separate tool or `pip install`). Attaches to running Python processes, samples call stacks, and surfaces hotspots inline (VS Code and Zed).
 
-## UI Availability Gate {#PROFILE-UI-GATE}
+## UI Availability {#PROFILE-UI-GATE}
 
-The profiler is complete in the LSP; its VS Code surfaces stay hidden from shipped users until the end-to-end experience is reliable.
+The profiling UI **ships enabled in every session** — commands, the Python Processes panel, keybindings, and the status-bar items are available out of the box. Visibility is governed only by session state (`basilisk.profiling`, `basilisk.memoryTracking`, `basilisk.debugging`, `debugType == basilisk-debug`), never by an availability switch.
 
-`isProfilingUiEnabled(context)` (`vscode-extension/src/profiling-ui.ts`) returns `true` only under test (`ExtensionMode.Test`), `false` in shipped and dev-host sessions, so the suite still exercises the full UI. `extension.ts` mirrors it into the `basilisk.profilingEnabled` context key every profiling `when` clause keys off; `memory-status.ts` reads it for the memory status-bar item (no `when` clause can reach it). Nothing is removed — all commands stay advertised ([PROFILE-REQUESTS]) and registered. To ship, return `true` unconditionally and drop the gate.
+The former gate (`isProfilingUiEnabled` + the `basilisk.profilingEnabled` context key, introduced in #92 while the experience stabilised and re-asserted in #150) is deleted. The regression this section now guards against is the *residue* of such a gate: a `when` clause referencing a context key nobody sets evaluates falsy and silently hides that surface from every shipped user — indistinguishable from the feature not existing. `profiler-entrypoints.test.ts` sweeps the whole manifest and fails on any reference to the removed key.
 
 ## Why py-spy {#PROFILE-PYSPY}
 
@@ -165,7 +165,7 @@ No profiling action is silent while it works. Every multi-second flow shows a pr
 
 Starting a memory-tracking run focuses the Debug view (`stopOnEntry` breaks there), so the memory actions must be visible where the user actually lands — never palette-only (#263). Four surfaces, one rule: every place the flow narrates an action offers that action.
 
-- **Debug toolbar**: `basilisk.memorySnapshot` / `basilisk.memoryDiff` / `basilisk.memoryStop` are contributed to `debug/toolBar`, gated on `debugType == basilisk-debug && basilisk.memoryTracking && basilisk.profilingEnabled` ([#PROFILE-UI-GATE]) — Snapshot / Compare / Stop sit beside Continue/Step exactly while they are usable, and never on another debugger's toolbar.
+- **Debug toolbar**: `basilisk.memorySnapshot` / `basilisk.memoryDiff` / `basilisk.memoryStop` are contributed to `debug/toolBar`, gated on `debugType == basilisk-debug && basilisk.memoryTracking` — Snapshot / Compare / Stop sit beside Continue/Step exactly while they are usable, and never on another debugger's toolbar.
 - **Launch-panel parity**: while tracking, the Python Processes view title offers Snapshot and Compare beside Stop, so the panel that launched the run can drive the whole session ([#PROFILE-PROCESSES-PANEL]).
 - **The dashboard's advice is actionable**: the memory dashboard's "take more snapshots" empty states are accompanied by real **Take Snapshot** / **Compare Snapshots** buttons. The webview posts `takeSnapshot` / `compareSnapshots` messages; `handleMemoryDashboardMessage` (`memory-dashboard.ts`) routes them to the real commands and lets source-navigation clicks fall through to the shared handler ([#PROFILE-WEBVIEW-HOST]).
 - **Toasts offer the actions they name**: "Memory tracking started" carries a **Take Snapshot** button (the exact moment the user is dropped into the Debug view); "stopped — no snapshot was taken" carries **Memory Actions…** (the quick-pick menu). Both route through one `showActionableToast` helper in `memory-profiler.ts` — fire-and-forget, so a sticky notification never blocks the flow.
@@ -294,7 +294,7 @@ The view-title entry point states **what it tracks** (#82). Two metric-explicit 
 - **🔥 Run & Profile CPU (Current File)** (`basilisk.profileCurrentFileCpu`) — launches the active `.py` under `basilisk-debug` with `profileOnLaunch: true`; profiler.ts honours that flag (or the global `basilisk.profiler.profileOnLaunch` setting) and attaches the CPU profiler to the captured debuggee PID ([#PROFILE-SAME-PROCESS]).
 - **🗄️ Run & Track Memory (Current File)** (`basilisk.trackMemoryCurrentFile`) — launches with `stopOnEntry: true` + `memoryTrackOnLaunch: true`; tracemalloc needs a paused debuggee ([#PROFILE-MEMORY-HOWTO]), so memory-profiler.ts starts tracking at the entry pause then resumes. With no breakpoint, the start script also arms an at-exit snapshot so the run finalises into a visible result rather than dead-ending ([#PROFILE-MEMORY-FINAL]).
 
-Both appear in the title bar, the empty state, and (gated on [#PROFILE-UI-GATE]) the command palette.
+Both appear in the title bar, the empty state, and the command palette.
 
 ##### Profiling runs complete; they do not stop interactively {#PROFILE-LAUNCH-NOSTOP}
 
@@ -409,7 +409,11 @@ Tests assert the full invariant set on every exported file (`profiler_tests.rs::
 
 ### Viewer Delivery {#PROFILE-VIEWER-DELIVERY}
 
-`https://www.speedscope.app/#profileURL=<url>` works only for http(s) URLs the browser may fetch from that origin; an https page can **never** read `file://`, so editors must never build a speedscope.app link to a local file (always "Something went wrong"). Until profiles are served over localhost HTTP with CORS, editors open the local flamegraph SVG (`flamegraphPath`) directly and point the user at the speedscope JSON for manual drag-and-drop import.
+`https://www.speedscope.app/#profileURL=<url>` works only for http(s) URLs the browser may fetch from that origin; an https page can **never** read `file://`, so editors must never build a speedscope.app link to a local file (always "Something went wrong"). Browsers do treat loopback as a potentially-trustworthy origin an https page may fetch from, so the VS Code extension serves the exported file from an in-extension loopback HTTP server (`profile-server.ts`) and opens `#profileURL=http://127.0.0.1:<port>/<token>/<basename>` — the profile loads automatically, no drag-and-drop. The URL carries the real basename so speedscope's extension-based format detection works; both the CPU panel (speedscope JSON) and the memory dashboard (V8 `.heapprofile`, a format speedscope also imports) share the flow through `openSpeedscopeImport`.
+
+Containment: 127.0.0.1-only bind, one unguessable 32-hex token per registered file (the token IS the access control), GET only, `Access-Control-Allow-Origin: *` (speedscope's importer fetches cross-origin), `Cache-Control: no-store`, registrations expire after 10 minutes, and the server tears down with the extension (`disposeProfiler`). The deep-link fragment is deliberately NOT percent-encoded — the value contains only `:` and `/` (legal raw in a fragment) and encoding it invites `vscode.Uri` re-encoding mangling.
+
+Never a dead-end: the deep link always ships with a fire-and-forget toast offering **"Reveal Trace File"** (a browser without the loopback mixed-content exemption still shows speedscope's error page), and a failure to serve falls back to the manual path — reveal the JSON, open speedscope.app, drag-and-drop toast. Pinned by `profile-server.test.ts`.
 
 ## Flamegraph SVG Export {#PROFILE-FLAMEGRAPH}
 
@@ -429,7 +433,7 @@ All profiler results panels (CPU results, memory dashboard, retention graph) are
 
 ## Native VS Code profile files {#PROFILE-NATIVE}
 
-Both profilers also emit **V8 profile files** that VS Code's built-in viewer opens natively (flame chart + bottom-up/left-heavy tables) — the same UI as [Node.js profiling](https://code.visualstudio.com/docs/nodejs/profiling). The editor opens them with `vscode.open`; the custom flamegraph/dashboard webviews remain fallbacks.
+Both profilers also emit **V8 profile files** that VS Code's built-in viewer opens natively (flame chart + bottom-up/left-heavy tables) — the same UI as [Node.js profiling](https://code.visualstudio.com/docs/nodejs/profiling). For CPU results the built-in viewer is **on-demand, never the landing view**: it opens on a raw self/total-time table that reads as a wall of numbers until the user discovers its flame icon, so stopping a profile lands on the self-contained results webview ([PROFILE-FLAMEGRAPH]) with the trace one deliberate click away (the completion toast's "Open Trace in VS Code Viewer" action or the panel's button of the same name). Memory results land the same way: manual snapshots open the Basilisk memory dashboard, whose "Open Heap Profile in VS Code Viewer" button opens the `.heapprofile` on demand (both routes share `openNativeTraceViewer`).
 
 ### Never dead-end the user {#PROFILE-NATIVE-FALLBACK}
 
@@ -437,8 +441,9 @@ The built-in `.cpuprofile`/`.heapprofile` viewer is best-effort: it can be **una
 
 On profile stop the editor:
 
-- opens the native `.cpuprofile` beside the source when one was produced, catching any `vscode.open` rejection and falling back to the self-contained flamegraph webview ([PROFILE-FLAMEGRAPH]); and
-- **always** raises a completion notification offering **"Open Flame Chart"** (the network-free webview) and **"Reveal Trace File"** (the `.cpuprofile`, else the speedscope JSON). The "Profile complete — N samples" toast must carry these, never announce an unreachable result.
+- opens the **self-contained results webview** beside the source ([PROFILE-FLAMEGRAPH]) — the primary landing, which always renders and keeps the heat-mapped source visible;
+- **always** raises a completion notification offering **"Open Trace in VS Code Viewer"** (the built-in `.cpuprofile` viewer; when that viewer cannot open, the failure is said out loud and the trace file is revealed instead — an explicit request never fails silently) and **"Reveal Trace File"** (the `.cpuprofile`, else the speedscope JSON). The "Profile complete — N samples" toast must carry these, never announce an unreachable result; and
+- keeps results reachable after the panel or toast is dismissed: **"Basilisk: Show Profile Results"** (`basilisk.profileShowResults`) re-opens the panel for the most recent profile, and snapshot toasts carry a **"View Results"** action.
 
 `presentProfileResult` in `profiler-flamegraph-html.ts` owns this routing.
 
@@ -511,7 +516,7 @@ Memory profiling uses the purple palette on a separate decoration track for allo
 
 See [VSIX-SPEC.md](VSIX-SPEC.md) for VS Code-specific UX.
 
-- **Commands:** `basilisk.profileStart`, `basilisk.profileStop`, `basilisk.profileSnapshot`, `basilisk.profileAttachToDebug`.
+- **Commands:** `basilisk.profileStart`, `basilisk.profileStop`, `basilisk.profileSnapshot`, `basilisk.profileAttachToDebug`, `basilisk.profileShowResults`.
 - **Flamegraph Webview:** full dashboard, all chart types, source navigation, PNG/SVG export.
 - **Status Bar:** profiling state with pulsing orange dot; click to stop.
 
@@ -615,7 +620,7 @@ The "Run & Track Memory (Current File)" flow ([#PROFILE-PROCESSES-LAUNCH-FILE]) 
 
 The fix mirrors the cooperative CPU sampler ([#PROFILE-COOPERATIVE]): capture to a **file during the run, read it at the end**. On start, `basilisk.memory.start` mints a per-session `finalSnapshotFile` and returns it with the script; the start script ([`start_tracemalloc`](../../crates/basilisk-lsp/src/profiler/memory/scripts.rs)) registers a Python `atexit` hook that takes one `tracemalloc` snapshot **as the program exits** and writes it directly to that file. The payload is byte-identical to an evaluate-path snapshot (both embed the shared `snapshot_payload_fn`), so it ingests through [`basilisk.memory.ingest`](#PROFILE-MEMORY-INGEST) with no new parser. A direct in-process write (not the `_basilisk_emit` print path) is used because at exit there is no DAP `evaluate` round-trip listening, and it sidesteps debugpy's print truncation ([#PROFILE-MEMORY-COURIER]).
 
-When the debug session terminates, `memory-profiler.ts`'s `onDidTerminateDebugSession` listener finalises **only the tracked session** — the store records `memoryDebugSessionId` at start and the listener matches against it, so an unrelated session ending never tears down live tracking. For the tracked session it calls `finalizeMemorySessionOnEnd`: settles the stale tracking state ([#PROFILE-PROCESSES-REACTIVE]), reads the file (briefly polling for the terminate/flush race, then deleting), posts it to `ingest`, and presents it like a manual snapshot — the purple allocation track plus the V8 `.heapprofile` ([#PROFILE-NATIVE]). The launch toast says so up front ("a final snapshot opens automatically when the program finishes"). **Stopping never silently produces nothing:** if the hook didn't run (crash, `os._exit`, no live allocations), the editor says so rather than clearing state silently, and `basilisk.memory.stop` reports whether a snapshot was captured. Stopping *mid-run* leaves the hook armed, scheduling its exit-written file for deletion on termination — a manual stop never orphans a temp file.
+When the debug session terminates, `memory-profiler.ts`'s `onDidTerminateDebugSession` listener finalises **only the tracked session** — the store records `memoryDebugSessionId` at start and the listener matches against it, so an unrelated session ending never tears down live tracking. For the tracked session it calls `finalizeMemorySessionOnEnd`: settles the stale tracking state ([#PROFILE-PROCESSES-REACTIVE]), reads the file (briefly polling for the terminate/flush race, then deleting), posts it to `ingest`, and presents it like a manual snapshot — the purple allocation track plus the memory dashboard, with the V8 `.heapprofile` one click away on the dashboard's button ([#PROFILE-NATIVE]). The launch toast says so up front ("a final snapshot opens automatically when the program finishes"). **Stopping never silently produces nothing:** if the hook didn't run (crash, `os._exit`, no live allocations), the editor says so rather than clearing state silently, and `basilisk.memory.stop` reports whether a snapshot was captured. Stopping *mid-run* leaves the hook armed, scheduling its exit-written file for deletion on termination — a manual stop never orphans a temp file.
 
 The injected path is a JSON-encoded Python string literal (the cross-platform-safe pattern of [#PROFILE-COOPERATIVE]), so a Windows backslash or a quote in `TMPDIR` cannot break the script.
 

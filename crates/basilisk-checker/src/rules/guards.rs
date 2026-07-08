@@ -100,34 +100,33 @@ pub(crate) fn inherits_dataclass_transform(
     class: &ClassInfo,
     class_map: &HashMap<&str, &ClassInfo>,
 ) -> bool {
-    fn is_transform_decorated(class: &ClassInfo, class_map: &HashMap<&str, &ClassInfo>) -> bool {
-        class
-            .decorator_spans
-            .iter()
-            .any(|(name, _)| name == "dataclass_transform")
-            || class.bases.iter().any(|base| {
-                class_map
-                    .get(base.split('[').next().unwrap_or(base))
-                    .is_some_and(|b| is_transform_decorated(b, class_map))
-            })
-    }
-
-    let metaclass_is_transform = class.metaclass_name.as_deref().is_some_and(|meta| {
-        class_map
-            .get(meta)
-            .is_some_and(|m| is_transform_decorated(m, class_map))
-    });
-    if metaclass_is_transform {
-        return true;
-    }
-
-    class.bases.iter().any(|base| {
+    let resolve = |base: &str| {
         class_map
             .get(base.split('[').next().unwrap_or(base))
-            .is_some_and(|b| {
-                is_transform_decorated(b, class_map) || inherits_dataclass_transform(b, class_map)
+            .copied()
+    };
+    let directly_decorated = |c: &ClassInfo| {
+        c.decorator_spans
+            .iter()
+            .any(|(name, _)| name == "dataclass_transform")
+    };
+    let metaclass_is_transform = |c: &ClassInfo| {
+        c.metaclass_name.as_deref().is_some_and(|meta| {
+            class_map.get(meta).is_some_and(|m| {
+                super::shared::class_or_base_matches(m, &resolve, &directly_decorated)
             })
-    })
+        })
+    };
+
+    // A transform metaclass on this class or any transitive base…
+    super::shared::class_or_base_matches(class, &resolve, &metaclass_is_transform)
+        // …or a directly-decorated transitive base. The class's OWN decorator
+        // is the decorator-function form and intentionally does not count.
+        || class.bases.iter().any(|base| {
+            resolve(base).is_some_and(|b| {
+                super::shared::class_or_base_matches(b, &resolve, &directly_decorated)
+            })
+        })
 }
 
 // ---------------------------------------------------------------------------

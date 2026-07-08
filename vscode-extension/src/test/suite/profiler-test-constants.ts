@@ -16,6 +16,7 @@ export const PROFILER_CLIENT_COMMANDS = [
     'basilisk.profileStop',
     'basilisk.profileSnapshot',
     'basilisk.profileAttachToDebug',
+    'basilisk.profileShowResults',
 ] as const;
 
 /** Memory profiler client-side commands (registered in memory-profiler.ts). */

@@ -130,6 +130,77 @@ pub(crate) fn class_name_map(classes: &[ClassInfo]) -> HashMap<&str, &ClassInfo>
     classes.iter().map(|c| (c.name.as_str(), c)).collect()
 }
 
+// ---------------------------------------------------------------------------
+// Cycle-safe transitive base-class walks (GitHub #278)
+// ---------------------------------------------------------------------------
+// Base names resolve to same-module classes by SIMPLE name, so `class
+// Client(httpx.Client)` records the base as `Client` and the by-name lookup
+// makes the class its own ancestor. A naive recursive walk then never
+// terminates and overflows the stack, aborting the whole process. Every
+// transitive base walk must use these helpers or carry its own visited set /
+// depth cap.
+//
+// `resolve` and `matches` receive each base name EXACTLY as recorded
+// (subscripts included), so call sites keep their own normalisation and the
+// helpers change nothing but termination.
+
+/// Returns `true` when `predicate` holds for `cls` or for any class in its
+/// transitive same-module base chain (bases resolve through `resolve`).
+pub(crate) fn class_or_base_matches<'a>(
+    cls: &'a ClassInfo,
+    resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
+    predicate: &dyn Fn(&'a ClassInfo) -> bool,
+) -> bool {
+    let mut visited: HashSet<&str> = HashSet::new();
+    let _ = visited.insert(cls.name.as_str());
+    walk_class_or_base(cls, resolve, predicate, &mut visited)
+}
+
+/// Recursive body of [`class_or_base_matches`]; `visited` breaks base-name
+/// cycles.
+fn walk_class_or_base<'a>(
+    cls: &'a ClassInfo,
+    resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
+    predicate: &dyn Fn(&'a ClassInfo) -> bool,
+    visited: &mut HashSet<&'a str>,
+) -> bool {
+    if predicate(cls) {
+        return true;
+    }
+    cls.bases.iter().any(|base| {
+        visited.insert(base.as_str())
+            && resolve(base).is_some_and(|b| walk_class_or_base(b, resolve, predicate, visited))
+    })
+}
+
+/// Returns `true` when any base name in the transitive chain of `cls`
+/// satisfies `matches`. Each base name is first tested with `matches` and
+/// then resolved through `resolve` for the recursive step.
+pub(crate) fn any_base_name_matches<'a>(
+    cls: &'a ClassInfo,
+    resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
+    matches: &dyn Fn(&str) -> bool,
+) -> bool {
+    let mut visited: HashSet<&str> = HashSet::new();
+    let _ = visited.insert(cls.name.as_str());
+    walk_base_names(cls, resolve, matches, &mut visited)
+}
+
+/// Recursive body of [`any_base_name_matches`]; `visited` breaks base-name
+/// cycles.
+fn walk_base_names<'a>(
+    cls: &'a ClassInfo,
+    resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
+    matches: &dyn Fn(&str) -> bool,
+    visited: &mut HashSet<&'a str>,
+) -> bool {
+    cls.bases.iter().any(|base| {
+        matches(base)
+            || (visited.insert(base.as_str())
+                && resolve(base).is_some_and(|b| walk_base_names(b, resolve, matches, visited)))
+    })
+}
+
 /// Build a `(class_name, method_name) -> Vec<&FunctionInfo>` lookup for every
 /// method in the module (functions carrying a `class_name`).
 ///

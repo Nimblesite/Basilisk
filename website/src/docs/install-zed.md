@@ -64,16 +64,16 @@ Press **F5** on a Python file to debug it. Basilisk brokers a `debugpy` session 
 
 ## Slash commands
 
-Basilisk registers slash commands in Zed's AI assistant panel for profiling, memory analysis, tests, and workspace insight:
+Basilisk registers slash commands in Zed's AI assistant panel for profiling, memory analysis, tests, and workspace insight. The profiling and memory commands are **guides**: each explains the matching `basilisk.profiler.*` / `basilisk.memory.*` language-server command and how to drive it — profiling itself runs through the LSP:
 
 | Command | What it does |
 |---------|--------------|
-| `/profile` | Start CPU profiling (optional PID) |
-| `/profstop` | Stop profiling and export results |
-| `/profsnapshot` | Snapshot hotspots without stopping |
-| `/memleak` | Start memory leak tracking via `tracemalloc` |
-| `/memstop` | Stop memory tracking and generate a leak report |
-| `/memrefs <Type>` | Walk the reference graph for a Python type |
+| `/profile` | How to start CPU profiling (optional PID) |
+| `/profstop` | How to stop profiling and where results land |
+| `/profsnapshot` | How to snapshot hotspots without stopping |
+| `/memleak` | The memory-tracking workflow via `tracemalloc` |
+| `/memstop` | How to stop memory tracking |
+| `/memrefs <Type>` | How to walk the reference graph for a Python type |
 | `/tests` | Discover pytest/unittest tests |
 | `/runtests` | Run tests by node ID or file |
 | `/testfile` | Run all tests in the current file |

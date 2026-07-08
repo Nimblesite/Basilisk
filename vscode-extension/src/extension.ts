@@ -22,7 +22,6 @@ import { createStore, type Store } from "./store";
 import { registerProfiler, disposeProfiler } from "./profiler";
 import { registerMemoryProfiler, disposeMemoryProfiler } from "./memory-profiler";
 import { registerMemoryAutopilot, disposeMemoryAutopilot, notifyDebuggeePause } from "./memory-autopilot";
-import { isProfilingUiEnabled } from "./profiling-ui";
 import { reportRuntimeFailure, resolveBasiliskRuntime } from "./shipwright-runtime";
 
 /** Priority for the Basilisk status bar item (higher = further left). */
@@ -165,14 +164,6 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
   const hasWorkspace = (vscode.workspace.workspaceFolders?.length ?? 0) > 0;
   void vscode.commands.executeCommand("setContext", "basilisk.hasWorkspace", hasWorkspace);
 
-  // [PROFILE-UI-GATE] Single switch for every profiling `when` clause: on under
-  // test, hidden for shipped users until the profiler experience is reliable.
-  void vscode.commands.executeCommand(
-    "setContext",
-    "basilisk.profilingEnabled",
-    isProfilingUiEnabled(context),
-  );
-
   // Activity bar panels — register once (tree view IDs must be unique).
   // The Modules panel (module-explorer) now carries the folded type-health
   // rollup, so there is no separate Type Health panel [EXTACT-MODULES].
@@ -191,7 +182,7 @@ function registerPanelsAndCommands(context: vscode.ExtensionContext, s: Store): 
   singletonDisposables.push(...profilerDisposables);
 
   // Memory profiler UI — commands, reference graph webview, memory dashboard.
-  const memoryDisposables = registerMemoryProfiler(context, s);
+  const memoryDisposables = registerMemoryProfiler(s);
   singletonDisposables.push(...memoryDisposables);
 
   // Memory autopilot — auto snapshot+diff on every pause / interval, so the leak

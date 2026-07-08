@@ -379,7 +379,7 @@ fn format_import_signature(imp: &ImportInfo) -> String {
 }
 
 /// Extract annotation text from the source using a span.
-fn annotation_text(span: Option<Span>, source: &str) -> Option<String> {
+pub(crate) fn annotation_text(span: Option<Span>, source: &str) -> Option<String> {
     let span = span?;
     let text = span.slice_source(source)?;
     Some(text.trim().to_owned())

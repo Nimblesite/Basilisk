@@ -92,18 +92,16 @@ impl Rule for MissingOverrideDecorator {
 }
 
 /// Returns `true` when `cls` is a Protocol class directly or transitively
-/// (i.e., any base class in `class_map` is itself a Protocol).
+/// (i.e., any base class in `class_map` is itself a Protocol). The shared
+/// walk breaks base-name cycles (GitHub #278): `class Client(httpx.Client)`
+/// records its base under the attribute name `Client`, which the by-name
+/// class map resolves back to the class itself.
 fn is_protocol_transitively<'a>(
     cls: &'a ClassInfo,
     class_map: &HashMap<&str, &'a ClassInfo>,
 ) -> bool {
-    if is_protocol_class(cls) {
-        return true;
-    }
-    cls.bases.iter().any(|base| {
-        class_map
-            .get(base.as_str())
-            .is_some_and(|base_cls| is_protocol_transitively(base_cls, class_map))
+    super::shared::class_or_base_matches(cls, &|name| class_map.get(name).copied(), &|candidate| {
+        is_protocol_class(candidate)
     })
 }
 
@@ -120,10 +118,14 @@ fn check_class(
     }
 
     // Collect base method names, skipping Protocol bases (Protocol methods
-    // need implementation, not @override).
+    // need implementation, not @override). A base name that resolves to the
+    // class itself is a name collision with an external base (`class
+    // Client(httpx.Client)`), not inheritance — a class never overrides its
+    // own methods (GitHub #278).
     let base_methods: Vec<&str> = child
         .bases
         .iter()
+        .filter(|base_name| base_name.as_str() != child.name)
         .filter_map(|base_name| class_map.get(base_name.as_str()))
         .filter(|(_, is_proto)| !is_proto)
         .flat_map(|(cls, _)| cls.method_names.iter().map(String::as_str))

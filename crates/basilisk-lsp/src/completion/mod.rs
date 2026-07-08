@@ -11,7 +11,7 @@ use tower_lsp::lsp_types::{CompletionItem, Documentation, MarkupContent, MarkupK
 
 mod dot;
 mod kwarg;
-mod prefix;
+pub(crate) mod prefix;
 mod symbol;
 
 // ── Public API ───────────────────────────────────────────────────────────────

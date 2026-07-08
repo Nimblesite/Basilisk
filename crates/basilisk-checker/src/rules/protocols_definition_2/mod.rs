@@ -255,22 +255,13 @@ fn is_nominal_subclass(
     target_class: &str,
     class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
 ) -> bool {
-    let Some(rhs_info) = class_map.get(rhs_class) else {
-        return false;
-    };
-
-    // Direct base check.
-    for base in &rhs_info.bases {
-        if base == target_class {
-            return true;
-        }
-        // Recurse through base classes.
-        if is_nominal_subclass(base, target_class, class_map) {
-            return true;
-        }
-    }
-
-    false
+    class_map.get(rhs_class).copied().is_some_and(|rhs_info| {
+        crate::rules::shared::any_base_name_matches(
+            rhs_info,
+            &|base| class_map.get(base).copied(),
+            &|base| base == target_class,
+        )
+    })
 }
 
 /// Check if a class (transitively) inherits from a Protocol class.

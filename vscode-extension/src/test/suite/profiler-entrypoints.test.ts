@@ -21,6 +21,7 @@ import {
   type PackageJsonCommandEntry,
   type PackageJsonViewsWelcomeEntry,
 } from "./profiler-test-constants";
+import { EXTENSION_ID } from "./test-helpers";
 
 /** The metric-explicit run-and-profile entry points (#82). */
 const CPU_LAUNCH_COMMAND = "basilisk.profileCurrentFileCpu";
@@ -106,17 +107,33 @@ suite("Python Processes — title-bar entry points state their metric (#82)", ()
     );
   });
 
-  test("both launches stay palette-gated behind the profiling UI switch", () => {
+  // The profiling UI ships enabled — the [PROFILE-UI-GATE] availability switch
+  // was removed. The regression this pins: a `when` clause referencing a context
+  // key nobody sets evaluates falsy and silently hides the entry point from
+  // every shipped user, which is indistinguishable from the feature not existing.
+  test("both launches are palette-reachable in production — never hidden behind a gate", () => {
     const palette = getPackageJsonMenu("commandPalette");
     for (const command of [CPU_LAUNCH_COMMAND, MEMORY_LAUNCH_COMMAND]) {
       const entry = palette.find((item) => item.command === command);
-      assert.ok(entry, `${command} must have a commandPalette entry`);
-      assert.strictEqual(
-        entry.when,
-        "basilisk.profilingEnabled",
-        `${command} must stay behind the [PROFILE-UI-GATE] context key`,
+      assert.ok(
+        entry === undefined,
+        `${command} must have no commandPalette suppression entry (ships ungated); ` +
+          `found when: ${entry?.when}`,
       );
     }
+  });
+
+  // Whole-manifest sweep for the same regression class: any surface (palette,
+  // toolbar, view, keybinding) still referencing the removed gate key would be
+  // invisible in every session, since nothing sets the key any more.
+  test("no manifest surface references the removed profiling UI gate key", () => {
+    const extension = vscode.extensions.getExtension(EXTENSION_ID);
+    assert.ok(extension, "extension must be found");
+    const manifest = JSON.stringify(extension.packageJSON);
+    assert.ok(
+      !manifest.includes("basilisk.profilingEnabled"),
+      "package.json must not reference the removed basilisk.profilingEnabled context key",
+    );
   });
 });
 

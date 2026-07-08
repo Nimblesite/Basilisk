@@ -6,10 +6,12 @@
 //! - Built-in type lookup for Python primitives
 //! - Stub resolution data model ([`StubResolution`], [`StubSource`], [`StubTier`])
 
+pub mod builtin_members;
 pub mod generate;
 pub mod pyi_parser;
 pub mod types;
 
+pub use builtin_members::builtin_method_signature;
 pub use pyi_parser::{parse_pyi_file, parse_pyi_source, StubParseError};
 pub use types::{
     StubClass, StubFunction, StubModule, StubParam, StubParamKind, StubResolution, StubSource,

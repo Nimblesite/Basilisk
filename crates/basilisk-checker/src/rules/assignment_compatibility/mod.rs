@@ -62,7 +62,7 @@ impl Rule for AssignmentTypeMismatch {
             typeddict_extra_items: collect_extra_items_typeddict_names(module),
             type_alias: collect_type_alias_names(module),
             type_alias_type: collect_type_alias_type_names(module),
-            value_aliases: alias_match::collect_union_aliases(module),
+            value_aliases: alias_match::collect_value_aliases(module),
             generic_aliases: alias_match::collect_generic_aliases(module),
             typeddict_schemas: typeddict_struct::build_typeddict_schemas(module),
         };
@@ -173,8 +173,9 @@ struct SkipNames {
     type_alias: std::collections::HashSet<String>,
     /// `TypeAliasType(...)` call LHS names (lowercase).
     type_alias_type: std::collections::HashSet<String>,
-    /// Legacy `Name = Union[...]` value aliases (lowercase → definition), used
-    /// for recursive-alias value matching.
+    /// Legacy value aliases — `Name = Union[...]` or a concrete container such
+    /// as `Name = dict[K, V]` (lowercase → definition), used for alias-expanded
+    /// value matching.
     value_aliases: std::collections::HashMap<String, InferredType>,
     /// Generic (`TypeVar`-parameterised) value aliases such as
     /// `G = list["G[T]" | T]`, keyed by lowercase name. Used to validate

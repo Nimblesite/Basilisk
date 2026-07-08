@@ -17,6 +17,47 @@ fn int_annotated_str_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn empty_dict_to_implicit_dict_alias_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression test for issue #282: `RefsDictT` is a legacy implicit alias
+    // for a dict type, so the empty dict literal is assignable to it.
+    let source = r#"
+RefsDictT = dict[tuple[str, str], str]
+
+def build_refs_dict() -> RefsDictT:
+    refs_dict: RefsDictT = {}
+    return refs_dict
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "assignment_compatibility");
+    assert!(
+        msgs.is_empty(),
+        "empty dict is assignable to a dict alias; should not fire, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn mismatched_dict_literal_to_implicit_dict_alias_fires() -> Result<(), Box<dyn std::error::Error>>
+{
+    // A dict literal whose key type contradicts the alias definition must
+    // still fire after alias expansion.
+    let source = r#"
+RefsDictT = dict[tuple[str, str], str]
+
+def build_refs_dict() -> RefsDictT:
+    refs_dict: RefsDictT = {1: "x"}
+    return refs_dict
+"#;
+    let diags = run(source)?;
+    let msgs = messages_for(&diags, "assignment_compatibility");
+    assert!(
+        !msgs.is_empty(),
+        "int key is not assignable to tuple[str, str]; should fire, got: {msgs:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn str_annotated_int_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
     let source = "label: str = 42\n";
     let diags = run(source)?;

@@ -16,6 +16,7 @@
 import * as vscode from "vscode";
 import { Logger } from "./logger";
 import type { MemoryAllocation } from "./memory-decorations";
+import { openNativeTraceViewer, openSpeedscopeImport } from "./profiler-flamegraph-html";
 import {
   PROFILER_CSS_VARS,
   PROFILER_CSS_RESET,
@@ -53,6 +54,8 @@ export interface MemoryDashboardSnapshot {
   gcCounts: number[];
   topAllocations: MemoryAllocation[];
   timeline: MemoryTimelinePoint[];
+  /** On-disk V8 `.heapprofile` for the built-in viewer; empty when not written. */
+  heapProfilePath: string;
 }
 
 /** A suspected leak from a snapshot diff. */
@@ -100,6 +103,18 @@ const DASHBOARD_ACTION_COMMANDS: Readonly<Record<string, string>> = {
  * the dashboard's actions (source-navigation clicks fall through).
  */
 export function handleMemoryDashboardMessage(msg: WebviewMessage): boolean {
+  if (msg.type === "openHeapProfile" && msg.file !== undefined && msg.file !== "") {
+    // The dashboard is the landing view; the raw V8 `.heapprofile` opens in
+    // VS Code's built-in viewer on demand ([PROFILE-NATIVE]).
+    void openNativeTraceViewer(msg.file, msg.file);
+    return true;
+  }
+  if (msg.type === "openSpeedscope" && msg.file !== undefined && msg.file !== "") {
+    // speedscope imports V8 `.heapprofile` too — same loopback-served deep
+    // link as the CPU panel ([PROFILE-VIEWER-DELIVERY]).
+    void openSpeedscopeImport(msg.file);
+    return true;
+  }
   const command = DASHBOARD_ACTION_COMMANDS[msg.type];
   if (command === undefined) {
     return false;
@@ -144,7 +159,7 @@ export function buildMemoryDashboardHtml(
   return buildWebviewDocument({
     title: "Basilisk Memory Dashboard",
     css: buildDashboardHeadCss(),
-    body: buildDashboardBodyHtml(),
+    body: buildDashboardBodyHtml(snapshot.heapProfilePath !== ""),
     script: buildDashboardScriptTag(snapshot, diff),
   });
 }
@@ -157,12 +172,20 @@ function buildDashboardHeadCss(): string {
     ${PROFILER_CSS_HEADING}${PROFILER_CSS_CARDS}${PROFILER_CSS_TABLE}${buildDashboardCss()}`;
 }
 
-function buildDashboardBodyHtml(): string {
+function buildDashboardBodyHtml(hasHeapProfile: boolean): string {
+  // The dashboard is the landing view; the raw V8 `.heapprofile` opens on
+  // demand rather than by default ([PROFILE-NATIVE]) — in the built-in viewer
+  // or in speedscope.app ([PROFILE-VIEWER-DELIVERY]).
+  const heapProfileButtons = hasHeapProfile
+    ? `
+    <button class="toggle-btn" id="btn-open-heapprofile" title="Open the raw .heapprofile in the built-in trace viewer">Open Heap Profile in VS Code Viewer</button>
+    <button class="toggle-btn" id="btn-open-speedscope" title="Open speedscope.app with the heap profile loaded automatically">Open in Speedscope (external)</button>`
+    : "";
   return `
   <h1><span class="accent">BASILISK</span> MEMORY</h1>
   <div class="toggle-row">
     <button class="toggle-btn" id="btn-take-snapshot">Take Snapshot</button>
-    <button class="toggle-btn" id="btn-compare">Compare Snapshots</button>
+    <button class="toggle-btn" id="btn-compare">Compare Snapshots</button>${heapProfileButtons}
   </div>
   ${buildSummaryCardsHtml()}
   <h2>Memory Timeline</h2>
@@ -196,12 +219,14 @@ function buildDashboardScriptTag(
   const timelineJson = embedJson(snapshot.timeline);
   const leaksJson = embedJson(diff?.suspectedLeaks ?? []);
   const gcCountsJson = embedJson(snapshot.gcCounts);
+  const heapProfileJson = embedJson(snapshot.heapProfilePath);
   return `
     const vscode = acquireVsCodeApi();
     const allocations = ${allocJson};
     const timeline = ${timelineJson};
     const leaks = ${leaksJson};
     const gcCounts = ${gcCountsJson};
+    const heapProfileFile = ${heapProfileJson};
     const currentMemory = ${snapshot.currentMemory};
     const peakMemory = ${snapshot.peakMemory};
     const gcObjects = ${snapshot.gcObjects};
@@ -411,7 +436,15 @@ function buildActionsScript(): string {
     });
     document.getElementById('btn-compare').addEventListener('click',()=>{
       vscode.postMessage({type:'compareSnapshots'});
-    });`;
+    });
+    const heapBtn=document.getElementById('btn-open-heapprofile');
+    if(heapBtn){heapBtn.addEventListener('click',()=>{
+      vscode.postMessage({type:'openHeapProfile',file:heapProfileFile});
+    });}
+    const speedscopeBtn=document.getElementById('btn-open-speedscope');
+    if(speedscopeBtn){speedscopeBtn.addEventListener('click',()=>{
+      vscode.postMessage({type:'openSpeedscope',file:heapProfileFile});
+    });}`;
 }
 
 function buildAllocScript(): string {
