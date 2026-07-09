@@ -465,3 +465,27 @@ fn test_hover_on_source_py_import_shows_no_stubs_annotation() {
         markup.value
     );
 }
+
+// Regression for GitHub #290: hovering a variable bound to a dict literal
+// showed the bare container name (`dict`) instead of the parameterized
+// generic inferred from its elements (`dict[str, str]`).
+#[test]
+fn test_hover_infers_generic_type_args_for_dict_literal() {
+    let source = "language_timezone_mapping = {\"en\": \"UTC\", \"fr\": \"Europe/Paris\"}\n";
+    let resolved = parse_and_resolve(source);
+
+    // Cursor on `language_timezone_mapping` at its definition (offset 0).
+    let hover = hover_at(&resolved, source, 0, &[]);
+    let hover = hover.expect("hover should be Some for a dict-literal variable");
+    let HoverContents::Markup(markup) = hover.contents else {
+        panic!("expected Markup hover contents");
+    };
+
+    assert!(
+        markup
+            .value
+            .contains("language_timezone_mapping: dict[str, str]"),
+        "hover should show the parameterized generic dict[str, str]: {}",
+        markup.value
+    );
+}

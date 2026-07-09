@@ -20,18 +20,6 @@ pub(super) fn call_func_name(expr: &Expr) -> Option<&str> {
     }
 }
 
-pub(super) fn extract_call_name(expr: &Expr) -> Option<String> {
-    if let Expr::Call(call) = expr {
-        match call.func.as_ref() {
-            Expr::Name(n) => Some(n.id.to_string()),
-            Expr::Attribute(a) => Some(a.attr.to_string()),
-            _ => None,
-        }
-    } else {
-        None
-    }
-}
-
 /// Returns `true` when a function body is a pure ellipsis stub (`...`).
 ///
 /// Only `...` — optionally preceded by a docstring — is treated as a stub.

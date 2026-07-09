@@ -179,6 +179,6 @@ fn variable_builtin_type(
     if inferred.is_empty() {
         None
     } else {
-        Some(inferred.to_owned())
+        Some(inferred)
     }
 }

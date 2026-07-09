@@ -98,6 +98,7 @@ mod tests {
             module: module.to_owned(),
             names: vec![],
             span: Span::new(0, span_end),
+            name_spans: Vec::new(),
             kind: ImportKind::Plain,
             resolution,
             resolved_path: resolved_path.map(PathBuf::from),
