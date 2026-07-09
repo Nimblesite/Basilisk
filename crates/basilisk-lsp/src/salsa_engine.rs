@@ -6,7 +6,7 @@
 //! **input** handles (one [`SourceFile`] per file, one [`ConfigInput`] per root,
 //! one [`SearchPathsInput`] for the workspace). On each analysis it syncs those
 //! inputs to the current values and reads the memoized queries
-//! ([`resolved_module`] for navigation, [`file_diagnostics_resolved`] for
+//! ([`cross_resolved_module`] for navigation, [`file_diagnostics_resolved`] for
 //! diagnostics), so re-analysing an unchanged file is served from the memo and a
 //! config-only edit re-runs only the cheap `check` step. Input handles are
 //! reused across calls (salsa memoization is identity-based), and every write
@@ -21,9 +21,9 @@ use std::sync::{Arc, Mutex};
 
 use basilisk_checker::imports::ImportSearchPaths;
 use basilisk_checker::{
-    cross_resolved_module, file_diagnostics_cross, file_diagnostics_resolved, resolved_module,
-    BasiliskDatabase, ConfigInput, ConfigValue, Diagnostic, FileRegistry, ResolvedFile,
-    SearchPathsInput, SourceFile, WorkspaceFiles,
+    cross_resolved_module, file_diagnostics_cross, file_diagnostics_resolved, BasiliskDatabase,
+    ConfigInput, ConfigValue, Diagnostic, FileRegistry, ResolvedFile, SearchPathsInput, SourceFile,
+    WorkspaceFiles,
 };
 use basilisk_config::BasiliskConfig;
 use dashmap::DashMap;
@@ -86,12 +86,14 @@ impl SalsaAnalysisEngine {
     /// against `search_paths`.
     ///
     /// `root_key` is the file's owning workspace root (the config-input key).
-    /// With `cross_module` set, analysis runs through the cross-module queries
-    /// ([`cross_resolved_module`] / [`file_diagnostics_cross`]): the resolved
-    /// module carries `imported_symbols` populated from the other tracked
-    /// files' **current** content, and editing an imported file's exports
-    /// invalidates exactly its importers. Without it, the plain queries keep
-    /// byte-for-byte CLI parity. [CHKARCH-INCREMENTAL-SALSA]
+    /// The resolved module always comes from [`cross_resolved_module`] and so
+    /// always carries `imported_symbols` — external stub/py.typed enrichment
+    /// drives hover, completion, and navigation in every mode (GitHub #287).
+    /// `cross_module` gates only the **diagnostics** query: with it set,
+    /// [`file_diagnostics_cross`] sees other tracked files' current content
+    /// and editing an imported file's exports invalidates exactly its
+    /// importers; without it, the plain diagnostics query keeps byte-for-byte
+    /// CLI parity. [CHKARCH-INCREMENTAL-SALSA]
     pub(crate) fn analyse(
         &self,
         path: &Path,
@@ -115,11 +117,12 @@ impl SalsaAnalysisEngine {
 
         // One memoized parse+resolve, whose outcome distinguishes a parse error
         // (→ BSK-PARSE) from a resolve error (→ nothing) from a resolved module.
-        let outcome = if cross_module {
-            cross_resolved_module(&*db, source, search_paths_input, workspace)
-        } else {
-            resolved_module(&*db, source, search_paths_input, workspace)
-        };
+        // The resolved view is always the cross-module one: its
+        // `imported_symbols` enrichment from stubs / py.typed packages drives
+        // hover, completion, and navigation for external symbols in every mode
+        // (GitHub #287). Diagnostics stay mode-gated below, so non-cross modes
+        // keep byte-for-byte CLI parity on what they report.
+        let outcome = cross_resolved_module(&*db, source, search_paths_input, workspace);
         match outcome {
             ResolvedFile::ParseError(message) => EngineAnalysis {
                 resolved: None,
@@ -313,6 +316,10 @@ impl SalsaAnalysisEngine {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "test-only code: expect acceptable in unit tests"
+)]
 mod tests {
     use super::*;
 
@@ -326,6 +333,54 @@ mod tests {
             registry: None,
             typeshed_path: None,
         }
+    }
+
+    /// Regression for #287, wiring layer: the default (non-cross-module)
+    /// analysis must still populate `imported_symbols` from external
+    /// stub/py.typed packages. Hover, completion, and navigation read the
+    /// engine's resolved view; gating the enrichment on the reserved
+    /// `crossModule` mode left dot-access hover on inherited external methods
+    /// dead in every real editor session.
+    #[test]
+    fn default_mode_analysis_populates_external_imported_symbols() {
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let site = dir.path().join("site-packages");
+        let pkg = site.join("pydantic");
+        std::fs::create_dir_all(&pkg).expect("create package dir");
+        std::fs::write(pkg.join("py.typed"), "").expect("write py.typed marker");
+        std::fs::write(
+            pkg.join("__init__.py"),
+            "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from .main import *\n",
+        )
+        .expect("write __init__.py");
+        std::fs::write(
+            pkg.join("main.py"),
+            "class BaseModel:\n    @classmethod\n    def model_validate(cls, obj: object) -> 'BaseModel': ...\n",
+        )
+        .expect("write main.py");
+
+        let workspace = dir.path().join("ws");
+        std::fs::create_dir_all(&workspace).expect("create workspace dir");
+        let file = workspace.join("app.py");
+        let text = "from pydantic import BaseModel\n\nclass C(BaseModel):\n    name: str\n";
+        std::fs::write(&file, text).expect("write app.py");
+
+        let engine = SalsaAnalysisEngine::default();
+        let config = BasiliskConfig::default();
+        let mut search_paths = empty_search_paths();
+        search_paths.site_packages = Some(site);
+        search_paths.roots = vec![workspace.clone()];
+
+        let analysis = engine.analyse(&file, text, &config, &workspace, &search_paths, false);
+        let resolved = analysis.resolved.expect("module should resolve");
+        let base = resolved
+            .imported_symbols
+            .get("BaseModel")
+            .expect("default-mode analysis must populate external imported symbols (GitHub #287)");
+        assert!(
+            base.methods.iter().any(|m| m.name == "model_validate"),
+            "the re-exported class must carry its methods for dot-access hover"
+        );
     }
 
     /// A deleted file's `SourceFile` is dropped from the engine's map so its
