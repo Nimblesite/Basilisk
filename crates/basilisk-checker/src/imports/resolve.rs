@@ -1,5 +1,11 @@
 //! Implements [ANALYSIS-CROSSLSP-IMPORT]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP-IMPORT
 //! Filesystem path resolution: `module_name` + [`ImportSearchPaths`] → a file.
+//!
+//! This is the whole of import resolution: a static filesystem search, never an
+//! execution of the target program ([STUBRES-STATIC-MODEL]). A module the search
+//! cannot find — including one only a runtime `sys.meta_path` hook or a computed
+//! `importlib.import_module(name)` could produce — resolves to nothing here and
+//! is surfaced downstream as `imports_unresolved`.
 
 use std::path::Path;
 

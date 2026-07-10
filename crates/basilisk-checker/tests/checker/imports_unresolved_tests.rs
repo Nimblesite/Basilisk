@@ -1,4 +1,5 @@
 //! Tests for [`imports_unresolved`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
+//! Also exercises the static resolution model [STUBRES-STATIC-MODEL]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-STATIC-MODEL
 // Integration tests for imports_unresolved: Import from untyped module.
 
 use super::common::*;
@@ -92,5 +93,26 @@ fn diagnostic_has_help() -> Result<(), Box<dyn std::error::Error>> {
         return Err("E0010 diagnostic missing after assertion".into());
     };
     assert!(diag.help.is_some(), "E0010 should have help text");
+    Ok(())
+}
+
+/// [STUBRES-STATIC-MODEL]: resolution is a static filesystem search, so a module
+/// that only a runtime `sys.meta_path` hook could ever provide is invisible to
+/// Basilisk — it matches no resolution step and surfaces as `imports_unresolved`
+/// exactly like any other unresolved import. The checker never executes the
+/// program to honour the hook.
+#[test]
+fn meta_path_provided_module_fires() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "import sys\n",
+        "class _Finder: ...\n",
+        "sys.meta_path.insert(0, _Finder())\n",
+        "import magic_runtime_module\n",
+    );
+    let diags = run(src)?;
+    assert!(
+        codes(&diags).contains(&"imports_unresolved"),
+        "a module only a runtime meta_path hook could supply must surface as unresolved"
+    );
     Ok(())
 }

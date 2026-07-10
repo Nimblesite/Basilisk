@@ -126,6 +126,14 @@ def process(data: Any) -> Any:  # BSK-W0011: Explicit Any requires reason commen
     pass
 ```
 
+The "untyped import" case above is an **implicit `Any`** produced by the static
+resolution model: an import Basilisk cannot resolve by inspecting files on disk —
+including computed/dynamic imports and modules only a runtime `sys.meta_path`
+hook could supply — lands in a terminal unresolved state and is surfaced by
+`imports_unresolved` rather than silently accepted. The interpreter is never
+executed to follow an import. See the normative
+[§STUBRES-STATIC-MODEL](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-STATIC-MODEL).
+
 #### Diagnostic Severity Modes {#CHKARCH-STRICTNESS-SEVERITY}
 
 Every rule has four severity modes:

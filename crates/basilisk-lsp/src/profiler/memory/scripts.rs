@@ -684,13 +684,18 @@ collected = gc.collect()
 after = tracemalloc.get_traced_memory()[0] if tracemalloc.is_tracing() else 0
 
 uncollectable = []
-for obj in gc.garbage[:20]:
+garbage = sorted(
+    gc.garbage,
+    key=lambda obj: '__del__' not in type(obj).__dict__,
+)
+for obj in garbage[:20]:
+    has_finalizer = '__del__' in type(obj).__dict__
     uncollectable.append({{
         'id': id(obj),
         'type': type(obj).__name__,
         'size': sys.getsizeof(obj),
-        'repr': repr(obj)[:100],
-        'reason': 'Instance has __del__ method and is in a reference cycle' if hasattr(obj, '__del__') else 'Uncollectable cycle',
+        'repr': object.__repr__(obj)[:100],
+        'reason': 'Instance has __del__ method and is in a reference cycle' if has_finalizer else 'Uncollectable cycle',
     }})
 
 result = {{
@@ -1030,5 +1035,17 @@ mod tests {
         let script = gc_collect();
         assert!(script.contains("__BASILISK_MEM_GC__"));
         assert!(script.contains("gc.collect()"));
+        assert!(
+            script.contains("'__del__' not in type(obj).__dict__"),
+            "finalizer cycles must be selected ahead of incidental garbage"
+        );
+        assert!(
+            script.contains("object.__repr__(obj)"),
+            "reporting garbage must not execute an object's custom __repr__"
+        );
+        assert!(
+            !script.contains("'repr': repr(obj)"),
+            "a hostile __repr__ must remain inert during collection"
+        );
     }
 }
