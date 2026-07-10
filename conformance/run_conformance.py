@@ -5,9 +5,12 @@
 This is the ONE and ONLY conformance path. It reimplements NOTHING, vendors
 NOTHING, and adapts NOTHING. Every run:
 
-  1. clones ``python/typing@<ref>`` FRESH (no cache, no committed fixtures),
+  1. clones ``python/typing@<ref>`` FRESH — the tests AND the harness — from the
+     LATEST commit (no cache, no committed fixtures, no vendored calculator),
   2. runs the suite's OWN unmodified ``conformance/src/main.py --only-run
-     basilisk`` against the real compiled binary (via ``BASILISK_BIN``).
+     basilisk`` against the ``--bin`` binary (via ``BASILISK_BIN``). The CI gate
+     passes a freshly-built CLEAN release binary — exactly what ships, never the
+     PyPI wheel (a prior version) and never an instrumented build.
 
 The suite already ships the official Basilisk adapter — ``BasiliskTypeChecker``
 in ``conformance/src/type_checker.py``

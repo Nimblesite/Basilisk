@@ -1413,7 +1413,7 @@ a design target, not a claim of existing measurement.
 | Golden file tests | Expected diagnostic output | Diagnostic regression |
 | Fuzzing | `cargo-fuzz` | Crash resistance, soundness |
 | Property tests | `proptest` crate | Type system invariants |
-| Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Performance tracking + regression gate (fails if basilisk regresses >25% vs the committed per-machine `benchmarks/status/<machine>.csv`) |
+| Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Performance tracking + zero-tolerance regression gate (fails if basilisk gets slower than the committed per-machine `benchmarks/status/<machine>.csv`) |
 
 ### PEP Conformance Scoring {#CHKARCH-CONFORMANCE}
 
@@ -1423,6 +1423,24 @@ built-in `BasiliskTypeChecker` — against the compiled binary on **every run**,
 never a Basilisk reimplementation. It is the exact tooling the reference checkers
 (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with. **A build in which
 that official check did not run against a freshly cloned suite is a BUILD FAILURE.**
+
+**The mechanism — every CI run, in order, no step skippable or the build dies:**
+
+1. **Freshly download** the tests **and** the harness/calculator from
+   `python/typing@main`'s **latest** commit — `git clone --depth 1
+   https://github.com/python/typing`. No cache, no committed fixtures, no vendored
+   calculator. (So the moment upstream merges a new rule/fixture, the very next run
+   grades against it — and if we regress, CI tanks.)
+2. **Freshly build a CLEAN release** `basilisk` binary from THIS checkout's source
+   — `cargo build --release`, un-instrumented, byte-for-byte what ships. Never the
+   PyPI wheel (a prior version), never an instrumented build.
+3. **Run the suite's OWN `conformance/src/main.py --only-run basilisk`** against
+   that binary (pointed at it via `BASILISK_BIN`), and **fail HARD on ANY false
+   positive or ANY missed required error** — the gate demands 100 % pass / 0 FP
+   (`coverage-thresholds.json`). One stray diagnostic tanks the build.
+4. **Regenerate `conformance/conformance_status.csv`** (and the website report)
+   from the harness's OWN `results/basilisk/*.toml` — the committed scoreboard is
+   always a product of the live run, never hand-authored.
 
 > ⛔️ **DISABLING, DELETING, OR UNREGISTERING ANY CONFORMANCE RULE IS FORBIDDEN.**
 > The binary is scored in its **full, default configuration with EVERY rule
@@ -1550,14 +1568,14 @@ Mutation testing proves the test suite actually asserts behaviour. Scope only ev
 
 Performance and conformance ratchet **together** — neither traded for the other:
 
-- `make bench` (`benchmarks/run.sh`) fails when basilisk regresses more than
-  `BENCH_REGRESS_PCT` (default 25%) on any fixture vs the committed per-machine
-  baseline `benchmarks/status/<machine>.csv`.
+- `make bench` (`benchmarks/run.sh`) fails when basilisk gets slower on any
+  fixture vs the committed per-machine baseline
+  `benchmarks/status/<machine>.csv`.
 - Run it whenever checker hot paths change (resolver visitors, rule `check` loops,
   conformance-driven additions). Conformance logic that blows the gate must be
   optimised or restructured.
-- `BENCH_NO_GATE=1` (baseline reset) is reserved for fixture-set changes and must
-  be justified in the PR description.
+- The performance gate cannot be disabled or widened; a machine without a
+  baseline establishes one only after a successful run.
 
 ### CI Artifact Storage Policy {#GITHUB-NO-ARTIFACTS}
 

@@ -41,6 +41,16 @@ rustup component add llvm-tools-preview 2>/dev/null || true
 
 header "Running tests with coverage instrumentation"
 cargo llvm-cov clean --workspace
+
+# Build the CLEAN release binary the conformance GATE scores — freshly built from
+# THIS checkout's source, un-instrumented, byte-for-byte what ships. Built BEFORE
+# the llvm-cov env is sourced so NO coverage flags touch it. Coverage for the
+# checker/resolver paths the suite exercises comes from a SEPARATE instrumented
+# pass further down. The gate must score what ships — never an instrumented build,
+# never a prior (PyPI) release. See [CHKARCH-CONFORMANCE].
+header "Freshly building the CLEAN release basilisk binary for the conformance gate"
+cargo build --release --bin basilisk
+
 eval "$(cargo llvm-cov show-env --export-prefix)"
 
 # macOS coverage-collection fix. cargo-llvm-cov's default `LLVM_PROFILE_FILE`
@@ -94,25 +104,32 @@ ok "All workspace tests passed"
 # binary whose objects the report reads — not a stale one from another target dir.
 export BASILISK_BIN="$REPO_ROOT/target/ci/basilisk"
 BASILISK_BIN=$(find_basilisk_bin) || {
-    echo -e "${RED}${BOLD}FATAL: basilisk binary not found after coverage build.${RESET}"
+    echo -e "${RED}${BOLD}FATAL: instrumented basilisk binary not found after coverage build.${RESET}"
     echo -e "${RED}Checked: target/ci/ and fallback paths${RESET}"
     exit 1
 }
-ok "basilisk binary ready: $BASILISK_BIN"
+ok "instrumented basilisk binary ready: $BASILISK_BIN"
 
-# ── PEP conformance gate — the REAL python/typing harness (also gives coverage)
-# Run python/typing's OWN `conformance/src/main.py --only-run basilisk` against
-# the freshly built, instrumented binary (BASILISK_BIN) via
-# conformance/run_conformance.py, reusing the fresh clone from --sync-tests above,
-# and enforce the gate from coverage-thresholds.json — 100% pass, 0 false
-# positives, or the build fails. The binary runs under the sourced llvm-cov env,
-# so every `basilisk check` subprocess the harness spawns joins the coverage pool
-# and the checker/resolver paths these fixtures exercise count toward coverage.
-# There is NO Rust conformance test and NO vendored calculator: the score is the
-# real suite's own verdict on the compiled binary. If the real harness cannot be
-# cloned and run, this FAILS the build. See [CHKARCH-CONFORMANCE].
-header "Enforcing PEP conformance gate (REAL python/typing harness)"
-python3 "$REPO_ROOT/conformance/run_conformance.py" --bin "$BASILISK_BIN" --gate --reuse-clone
+# ── PEP conformance — the REAL python/typing harness, run FRESH ───────────────
+# Two passes over the ONE freshly-cloned suite (reused, no re-clone):
+#   1. COVERAGE pass — the freshly-built INSTRUMENTED binary checks every fixture
+#      under the sourced llvm-cov env, so every `basilisk check` subprocess joins
+#      the coverage pool and the checker/resolver paths these fixtures exercise
+#      count toward coverage.
+#   2. GATE pass — the freshly-built CLEAN RELEASE binary (target/release/basilisk,
+#      un-instrumented, exactly what ships) is scored by the REAL harness and MUST
+#      hit 100% pass / 0 false positives (coverage-thresholds.json) or the build
+#      DIES. run_conformance.py regenerates conformance/conformance_status.csv from
+#      the harness's OWN results/basilisk/*.toml on each pass.
+# There is NO Rust conformance test, NO vendored calculator, and NO cached
+# fixtures: the score is the real suite's own verdict on the CLEAN RELEASE build —
+# never an instrumented one, never a prior (PyPI) release. If the real harness
+# cannot be cloned and run, this FAILS the build. See [CHKARCH-CONFORMANCE].
+header "Conformance coverage pass (instrumented binary over the real suite)"
+python3 "$REPO_ROOT/conformance/run_conformance.py" --bin "$BASILISK_BIN" --reuse-clone
+
+header "Enforcing PEP conformance gate (freshly-built CLEAN RELEASE build vs the REAL harness)"
+python3 "$REPO_ROOT/conformance/run_conformance.py" --bin "$REPO_ROOT/target/release/basilisk" --gate --reuse-clone
 
 # ── macOS: drop truncated profiles before the merge ──────────────────────────
 # Completes the `%p` fix above. All instrumented runs are done, so any profile
