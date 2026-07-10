@@ -187,8 +187,8 @@ where
     let Some(frame) = read_bounded_frame(reader).await? else {
         return Ok(None);
     };
-    let value = serde_json::from_slice(&frame)
-        .map_err(|err| Error::new(ErrorKind::InvalidData, err))?;
+    let value =
+        serde_json::from_slice(&frame).map_err(|err| Error::new(ErrorKind::InvalidData, err))?;
     Ok(Some(value))
 }
 

@@ -283,10 +283,9 @@ mod tests {
         let on_disk = std::fs::read_to_string(&path).unwrap();
         assert!(on_disk.contains("imports_module_attribute"));
         // It lives under the resolver's auto-included Tier-3 cache dir.
-        assert!(
-            path.to_string_lossy()
-                .contains(basilisk_stubs::generate::cache::DEFAULT_CACHE_DIR)
-        );
+        assert!(path
+            .to_string_lossy()
+            .contains(basilisk_stubs::generate::cache::DEFAULT_CACHE_DIR));
     }
 
     #[test]

@@ -33,6 +33,7 @@ enum PipeKind {
     Stderr,
 }
 
+#[derive(Debug)]
 struct CapturedPipe {
     bytes: Vec<u8>,
     truncated: bool,
@@ -585,5 +586,125 @@ exit 7",
 
         let stub = format_function_stub("foo", &entry);
         assert_eq!(stub, "def foo(a, *args, **kwargs) -> None: ...");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn generate_runtime_stubs_parses_valid_introspection_output() {
+        let (_dir, python) = fake_python(
+            r#"printf '%s' '[{"name": "connect", "kind": "function", "params": [{"name": "dsn", "annotation": "str"}], "return": "Conn"}, {"name": "VERSION", "kind": "variable", "annotation": "str"}]'"#,
+        );
+
+        let stub = generate_runtime_stubs("db", &python).unwrap();
+        assert_eq!(stub.module_name.as_str(), "db");
+        assert!(
+            matches!(stub.mode, StubGenMode::Runtime),
+            "runtime introspection must be tagged as the runtime tier"
+        );
+        assert!(
+            stub.pyi_content
+                .contains("def connect(dsn: str) -> Conn: ..."),
+            "valid introspection JSON must render function stubs: {}",
+            stub.pyi_content
+        );
+        assert!(
+            stub.pyi_content.contains("VERSION: str"),
+            "{}",
+            stub.pyi_content
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn generate_runtime_stubs_surfaces_import_error_in_output() {
+        let (_dir, python) = fake_python(r#"printf '%s' '[{"error": "No module named ghost"}]'"#);
+
+        let error = generate_runtime_stubs("ghost", &python).unwrap_err();
+        assert!(
+            matches!(error, StubGenError::Import(ref msg) if msg == "No module named ghost"),
+            "an error entry in the output JSON must surface as an import error: {error:?}"
+        );
+    }
+
+    #[test]
+    fn entries_to_pyi_skips_unnamed_entries_and_unknown_kinds() {
+        let entries: Vec<serde_json::Value> = serde_json::from_str(
+            r#"[
+                {"kind": "function"},
+                {"name": "Widget", "kind": "class", "methods": [
+                    {"params": []},
+                    {"name": "render", "return": "None"}
+                ]},
+                {"name": "mystery", "kind": "enigma"}
+            ]"#,
+        )
+        .unwrap();
+
+        let pyi = entries_to_pyi("mod", &entries);
+        assert!(
+            !pyi.contains("mystery"),
+            "an unknown kind emits nothing: {pyi}"
+        );
+        assert!(pyi.contains("class Widget:"), "class renders: {pyi}");
+        assert!(
+            pyi.contains("    def render() -> None: ..."),
+            "the named method survives while the nameless one is skipped: {pyi}"
+        );
+    }
+
+    #[test]
+    fn entries_to_pyi_defaults_missing_annotations_and_returns_to_any() {
+        let entries: Vec<serde_json::Value> = serde_json::from_str(
+            r#"[
+                {"name": "noop", "kind": "function"},
+                {"name": "config", "kind": "variable"}
+            ]"#,
+        )
+        .unwrap();
+
+        let pyi = entries_to_pyi("mod", &entries);
+        assert!(
+            pyi.contains("def noop() -> Any: ..."),
+            "a function with no params/return defaults to Any: {pyi}"
+        );
+        assert!(
+            pyi.contains("config: Any"),
+            "a variable with no annotation defaults to Any: {pyi}"
+        );
+    }
+
+    #[test]
+    fn default_timeout_matches_configured_timeout() {
+        assert_eq!(default_timeout(), TIMEOUT);
+        assert_eq!(default_timeout().as_secs(), 10);
+    }
+
+    #[test]
+    fn receive_captured_pipes_reports_reader_disconnect() {
+        let (sender, receiver) = mpsc::channel::<(PipeKind, io::Result<CapturedPipe>)>();
+        drop(sender); // every reader gone before a pipe arrives
+        let timeout = Duration::from_secs(5);
+        let deadline = Instant::now() + timeout;
+
+        let error = receive_captured_pipes(&receiver, deadline, timeout).unwrap_err();
+        assert!(
+            matches!(error, StubGenError::Subprocess(ref msg) if msg.contains("stopped unexpectedly")),
+            "a disconnected reader must surface a subprocess error: {error:?}"
+        );
+    }
+
+    #[test]
+    fn receive_captured_pipes_times_out_once_the_deadline_passes() {
+        // Keep the sender alive so the channel is not disconnected; the elapsed
+        // deadline alone must produce the timeout.
+        let (_sender, receiver) = mpsc::channel::<(PipeKind, io::Result<CapturedPipe>)>();
+        let timeout = Duration::from_millis(5);
+        let deadline = Instant::now();
+
+        let error = receive_captured_pipes(&receiver, deadline, timeout).unwrap_err();
+        assert!(
+            matches!(error, StubGenError::Subprocess(ref msg) if msg.contains("timed out")),
+            "an elapsed deadline must surface a timeout: {error:?}"
+        );
     }
 }

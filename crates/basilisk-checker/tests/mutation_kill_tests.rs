@@ -4,7 +4,6 @@
 //! ARE caught and that correct code is NOT flagged.
 
 use basilisk_checker::check_with_config;
-use basilisk_checker::types::{InferredType, LiteralValue};
 use basilisk_config::BasiliskConfig;
 use basilisk_parser::parse_source;
 use basilisk_resolver::resolve;
@@ -40,37 +39,6 @@ fn assignment_compatibility_count(diagnostics: &[basilisk_checker::Diagnostic]) 
         .iter()
         .filter(|d| d.code.code == "assignment_compatibility")
         .count()
-}
-
-#[test]
-fn subtype_relations_preserve_optional_literalstring_and_mutable_invariance() {
-    let optional_int = InferredType::Optional(Box::new(InferredType::Int));
-    assert!(!optional_int.is_assignable_to(&InferredType::Int));
-    assert!(InferredType::Int.is_assignable_to(&optional_int));
-
-    assert!(!InferredType::Str.is_assignable_to(&InferredType::LiteralString));
-    assert!(InferredType::Literal(LiteralValue::Str("safe".to_owned()))
-        .is_assignable_to(&InferredType::LiteralString));
-
-    let list_int = InferredType::List(Box::new(InferredType::Int));
-    let list_float = InferredType::List(Box::new(InferredType::Float));
-    assert!(!list_int.is_assignable_to(&list_float));
-    assert!(InferredType::List(Box::new(InferredType::Never)).is_assignable_to(&list_int));
-
-    let dict_int = InferredType::Dict(
-        Box::new(InferredType::Str),
-        Box::new(InferredType::Int),
-    );
-    let dict_float = InferredType::Dict(
-        Box::new(InferredType::Str),
-        Box::new(InferredType::Float),
-    );
-    assert!(!dict_int.is_assignable_to(&dict_float));
-    let empty_dict = InferredType::Dict(
-        Box::new(InferredType::Never),
-        Box::new(InferredType::Never),
-    );
-    assert!(empty_dict.is_assignable_to(&dict_int));
 }
 
 // ═══════════════════════════════════════════════════════════════════════

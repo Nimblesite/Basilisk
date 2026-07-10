@@ -19,14 +19,69 @@ use tokio::io::{
 };
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
+use tokio_tungstenite::tungstenite::handshake::server::{ErrorResponse, Request, Response};
+use tokio_tungstenite::tungstenite::http::{header::ORIGIN, StatusCode};
+use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::Message;
 use tower_lsp::{LspService, Server};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::server::LspServer;
 
 /// Buffer size for the in-memory `DuplexStream` pipe (64 KiB).
 const DUPLEX_BUFFER_SIZE: usize = 64 * 1024;
+
+/// Upper bound on the total bytes of a client's handshake request headers.
+/// A native editor handshake is well under 1 KiB; bounding it stops a client
+/// from forcing unbounded buffering during the handshake. [LSPARCH-INVOKE]
+const MAX_HANDSHAKE_HEADER_BYTES: usize = 8 * 1024;
+
+/// Upper bound on a single inbound WebSocket message (one JSON-RPC payload).
+/// Generous for real LSP traffic yet caps a localhost peer from exhausting
+/// memory with a giant frame; an oversized message closes the connection.
+const MAX_MESSAGE_BYTES: usize = 4 * 1024 * 1024;
+
+/// The reason a client handshake must be refused, or `None` when it may open.
+///
+/// A web page must never drive the localhost LSP with the user's filesystem
+/// authority: a cross-origin browser WebSocket always carries an `Origin`
+/// header and native editor clients never do, so any request presenting
+/// `Origin` is refused. The total header size is bounded to cap handshake
+/// buffering. Implements [LSPARCH-INVOKE].
+fn handshake_rejection_reason(request: &Request) -> Option<&'static str> {
+    if request.headers().contains_key(ORIGIN) {
+        return Some("Origin header is not permitted");
+    }
+    let header_bytes: usize = request
+        .headers()
+        .iter()
+        .map(|(name, value)| name.as_str().len() + value.len())
+        .sum();
+    (header_bytes > MAX_HANDSHAKE_HEADER_BYTES)
+        .then_some("handshake headers exceed the permitted size")
+}
+
+/// Build a `400 Bad Request` handshake rejection carrying a short reason.
+fn reject_handshake(reason: &'static str) -> ErrorResponse {
+    let mut response = ErrorResponse::new(Some(reason.to_owned()));
+    *response.status_mut() = StatusCode::BAD_REQUEST;
+    response
+}
+
+/// Handshake callback for `accept_hdr_async_with_config`: open the socket
+/// unless [`handshake_rejection_reason`] refuses it.
+#[expect(
+    clippy::result_large_err,
+    reason = "tungstenite's Callback trait fixes the return type as \
+              Result<Response, ErrorResponse>; ErrorResponse is the crate's own \
+              http::Response and cannot be boxed without breaking the signature"
+)]
+fn ws_handshake_guard(request: &Request, response: Response) -> Result<Response, ErrorResponse> {
+    match handshake_rejection_reason(request) {
+        Some(reason) => Err(reject_handshake(reason)),
+        None => Ok(response),
+    }
+}
 
 /// Inject capabilities that `lsp-types 0.94` does not expose in
 /// `ServerCapabilities` but that the server does handle.
@@ -212,14 +267,30 @@ pub async fn run_server_ws(port: u16) -> io::Result<()> {
     let listener = TcpListener::bind(format!("127.0.0.1:{port}")).await?;
     info!(port, "Basilisk LSP WebSocket server listening");
 
+    // Bound per-message size so a localhost peer cannot exhaust memory with a
+    // single giant frame; tungstenite closes the connection past the limit.
+    let ws_config = WebSocketConfig::default()
+        .max_message_size(Some(MAX_MESSAGE_BYTES))
+        .max_frame_size(Some(MAX_MESSAGE_BYTES));
+
     loop {
         let (tcp_stream, _addr) = listener.accept().await?;
-        let ws_stream = tokio_tungstenite::accept_async(tcp_stream)
-            .await
-            .map_err(|err| ws_err(format!("ws handshake failed: {err}")))?;
-
+        // Run the handshake AND the connection in a spawned task so the accept
+        // loop is never blocked by one client's handshake — a slow, oversized, or
+        // rejected handshake must not stall (or DoS) acceptance of the others. A
+        // rejected or malformed handshake is logged and dropped; only a
+        // listener-level accept error propagates and stops the server.
         drop(tokio::spawn(async move {
-            handle_connection(ws_stream).await;
+            match tokio_tungstenite::accept_hdr_async_with_config(
+                tcp_stream,
+                ws_handshake_guard,
+                Some(ws_config),
+            )
+            .await
+            {
+                Ok(ws_stream) => handle_connection(ws_stream).await,
+                Err(err) => warn!(%err, "rejected WebSocket handshake"),
+            }
         }));
     }
 }
@@ -236,103 +307,75 @@ pub fn run_server_ws_blocking(port: u16) -> io::Result<()> {
     crate::runtime::block_on_with_analysis_stack("basilisk-lsp-ws", move || run_server_ws(port))
 }
 
+// Pure-function unit tests (no networking, so they belong here rather than in the
+// integration binary that hosts the real-server tests — see tests/websocket_transport.rs).
 #[cfg(test)]
-mod tests {
-    use std::{error::Error, io, time::Duration};
+#[expect(
+    clippy::unwrap_used,
+    reason = "test-only: unwrap is acceptable in unit tests"
+)]
+mod unit_tests {
+    use super::*;
 
-    use futures_util::{SinkExt as _, StreamExt as _};
-    use tokio_tungstenite::tungstenite::client::IntoClientRequest as _;
-    use tokio_tungstenite::tungstenite::http::{header::ORIGIN, HeaderValue};
-    use tokio_tungstenite::tungstenite::Message;
-
-    use super::run_server_ws;
-
-    async fn spawn_test_server(
-    ) -> Result<(String, tokio::task::JoinHandle<io::Result<()>>), Box<dyn Error>> {
-        let reservation = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
-        let port = reservation.local_addr()?.port();
-        drop(reservation);
-
-        let server = tokio::spawn(run_server_ws(port));
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        Ok((format!("ws://127.0.0.1:{port}"), server))
+    #[test]
+    fn inject_capabilities_adds_type_hierarchy_to_initialize_result() {
+        let body = r#"{"result":{"capabilities":{"hoverProvider":true}}}"#;
+        let patched = inject_missing_capabilities(body);
+        assert!(
+            patched.contains(r#""typeHierarchyProvider":true"#),
+            "an initialize result must gain typeHierarchyProvider: {patched}"
+        );
+        assert!(patched.contains(r#""hoverProvider":true"#), "{patched}");
     }
 
-    // [LSPARCH-INVOKE] A web page must not be able to drive the localhost LSP
-    // with the user's filesystem authority. Native editor clients omit Origin.
-    #[tokio::test]
-    async fn rejects_browser_origin_and_keeps_native_clients() -> Result<(), Box<dyn Error>> {
-        let (url, server) = spawn_test_server().await?;
-        let mut browser_request = url.clone().into_client_request()?;
-        let _ = browser_request.headers_mut().insert(
-            ORIGIN,
-            HeaderValue::from_static("https://attacker.example"),
-        );
-
-        let browser_was_rejected = tokio_tungstenite::connect_async(browser_request)
-            .await
-            .is_err();
-        let native_was_accepted = tokio_tungstenite::connect_async(&url).await.is_ok();
-        server.abort();
-
-        assert!(
-            browser_was_rejected,
-            "a browser-style Origin handshake must be rejected"
-        );
-        assert!(
-            native_was_accepted,
-            "rejecting browsers must not disable native no-Origin clients"
-        );
-        Ok(())
+    #[test]
+    fn inject_capabilities_leaves_invalid_and_non_initialize_bodies_untouched() {
+        assert_eq!(inject_missing_capabilities("not json"), "not json");
+        let no_caps = r#"{"result":{"other":1}}"#;
+        assert_eq!(inject_missing_capabilities(no_caps), no_caps);
     }
 
-    #[tokio::test]
-    async fn rejects_oversized_handshake_and_keeps_listening() -> Result<(), Box<dyn Error>> {
-        let (url, server) = spawn_test_server().await?;
-        let mut oversized_request = url.clone().into_client_request()?;
-        let padding = vec![b'a'; 20 * 1024];
-        let _ = oversized_request
-            .headers_mut()
-            .insert("x-padding", HeaderValue::from_bytes(&padding)?);
-
-        let oversized_was_rejected = tokio_tungstenite::connect_async(oversized_request)
-            .await
-            .is_err();
-        let native_was_accepted = tokio_tungstenite::connect_async(&url).await.is_ok();
-        server.abort();
-
+    #[test]
+    fn inject_capabilities_preserves_an_existing_type_hierarchy_flag() {
+        // `entry().or_insert` must not overwrite a value the server already set.
+        let body = r#"{"result":{"capabilities":{"typeHierarchyProvider":false}}}"#;
+        let patched = inject_missing_capabilities(body);
         assert!(
-            oversized_was_rejected,
-            "handshake bytes must have a finite upper bound"
+            patched.contains(r#""typeHierarchyProvider":false"#),
+            "existing flag must survive: {patched}"
         );
-        assert!(
-            native_was_accepted,
-            "an oversized handshake must not terminate the listener"
-        );
-        Ok(())
     }
 
-    #[tokio::test]
-    async fn closes_connections_that_exceed_the_message_limit() -> Result<(), Box<dyn Error>> {
-        let (url, server) = spawn_test_server().await?;
-        let (mut client, _) = tokio_tungstenite::connect_async(&url).await?;
-        let text = format!(
-            r#"{{"jsonrpc":"2.0","method":"$/oversized","params":"{}"}}"#,
-            "a".repeat(8 * 1024 * 1024)
+    #[test]
+    fn handshake_guard_admits_native_and_refuses_origin_and_oversized_headers() {
+        let native = Request::builder().uri("/").body(()).unwrap();
+        assert_eq!(handshake_rejection_reason(&native), None);
+
+        let browser = Request::builder()
+            .uri("/")
+            .header("origin", "https://attacker.example")
+            .body(())
+            .unwrap();
+        assert_eq!(
+            handshake_rejection_reason(&browser),
+            Some("Origin header is not permitted")
         );
 
-        let send_result = client.send(Message::Text(text.into())).await;
-        let was_closed = if send_result.is_err() {
-            true
-        } else {
-            matches!(
-                tokio::time::timeout(Duration::from_secs(2), client.next()).await,
-                Ok(None | Some(Err(_) | Ok(Message::Close(_))))
-            )
-        };
-        server.abort();
+        let oversized = Request::builder()
+            .uri("/")
+            .header("x-padding", "a".repeat(MAX_HANDSHAKE_HEADER_BYTES + 1))
+            .body(())
+            .unwrap();
+        assert_eq!(
+            handshake_rejection_reason(&oversized),
+            Some("handshake headers exceed the permitted size")
+        );
+    }
 
-        assert!(was_closed, "oversized messages must close the connection");
-        Ok(())
+    #[test]
+    fn reject_handshake_is_a_400_carrying_the_reason() {
+        let response = reject_handshake("nope");
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(response.body().as_deref(), Some("nope"));
     }
 }

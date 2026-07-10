@@ -440,11 +440,14 @@ impl ProfileSessionManager {
 /// Resolve and validate a requested sampling rate before starting any backend.
 fn validated_sample_rate(requested: Option<u64>) -> Result<u64, ProfileError> {
     let rate = requested.unwrap_or(DEFAULT_SAMPLE_RATE);
-    (1..=MAX_SAMPLE_RATE).contains(&rate).then_some(rate).ok_or_else(|| {
-        ProfileError::Sampler(SamplerError::AttachFailed(format!(
-            "sample rate must be between 1 and {MAX_SAMPLE_RATE} Hz"
-        )))
-    })
+    (1..=MAX_SAMPLE_RATE)
+        .contains(&rate)
+        .then_some(rate)
+        .ok_or_else(|| {
+            ProfileError::Sampler(SamplerError::AttachFailed(format!(
+                "sample rate must be between 1 and {MAX_SAMPLE_RATE} Hz"
+            )))
+        })
 }
 
 /// Register a freshly attached sampler as a session, whatever its backend

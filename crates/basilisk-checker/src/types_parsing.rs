@@ -13,10 +13,9 @@ impl InferredType {
     /// For complex types, it returns Named(String) as a fallback.
     #[must_use]
     pub fn from_annotation(annotation: &str) -> InferredType {
-        let annotation = annotation.trim();
-        let normalized_name = annotation.to_ascii_lowercase();
+        let annotation = annotation.trim().to_ascii_lowercase();
 
-        match normalized_name.as_str() {
+        match annotation.as_str() {
             "int" => InferredType::Int,
             "str" => InferredType::Str,
             "float" | "complex" => InferredType::Float, // complex ⊃ float ⊃ int
@@ -42,7 +41,7 @@ impl InferredType {
             "list" => InferredType::List(Box::new(InferredType::Any)),
             "dict" => InferredType::Dict(Box::new(InferredType::Any), Box::new(InferredType::Any)),
             "set" | "frozenset" => InferredType::Set(Box::new(InferredType::Any)),
-            _ => parse_complex_annotation(annotation),
+            _ => parse_complex_annotation(&annotation),
         }
     }
 }
@@ -70,19 +69,23 @@ fn parse_complex_annotation(annotation: &str) -> InferredType {
     {
         return parse_literal_annotation(inner.trim());
     }
-    if let Some(inner) = strip_subscript(annotation, "callable[") {
-        return parse_callable_annotation(inner.trim());
+    if annotation.starts_with("callable[") && annotation.ends_with(']') {
+        let inner = annotation["callable[".len()..annotation.len() - 1].trim();
+        return parse_callable_annotation(inner);
     }
-    if annotation.eq_ignore_ascii_case("typeform") {
+    if annotation == "typeform" {
         return InferredType::TypeForm(Box::new(InferredType::Any));
     }
-    if let Some(inner) = strip_subscript(annotation, "typeform[") {
+    if annotation.starts_with("typeform[") && annotation.ends_with(']') {
+        let inner = &annotation["typeform[".len()..annotation.len() - 1];
         return InferredType::TypeForm(Box::new(InferredType::from_annotation(inner)));
     }
-    if let Some(inner) = strip_subscript(annotation, "final[") {
+    if annotation.starts_with("final[") && annotation.ends_with(']') {
+        let inner = &annotation["final[".len()..annotation.len() - 1];
         return InferredType::from_annotation(inner);
     }
-    if let Some(inner) = strip_subscript(annotation, "union[") {
+    if annotation.starts_with("union[") && annotation.ends_with(']') {
+        let inner = &annotation["union[".len()..annotation.len() - 1];
         let types: Vec<InferredType> = split_type_params(inner)
             .iter()
             .map(|part| InferredType::from_annotation(part.trim()))
@@ -99,10 +102,12 @@ fn parse_complex_annotation(annotation: &str) -> InferredType {
 /// level — `list[T]`/`dict[K, V]`/`set[T]`/`tuple[...]` (including `tuple[()]` and
 /// `tuple[X, ...]`) parse into the corresponding [`InferredType`] container.
 fn parse_container_annotation(annotation: &str) -> InferredType {
-    if let Some(inner) = strip_subscript(annotation, "list[") {
+    if annotation.starts_with("list[") && annotation.ends_with(']') {
+        let inner = &annotation[5..annotation.len() - 1];
         return InferredType::List(Box::new(InferredType::from_annotation(inner)));
     }
-    if let Some(inner) = strip_subscript(annotation, "dict[") {
+    if annotation.starts_with("dict[") && annotation.ends_with(']') {
+        let inner = &annotation[5..annotation.len() - 1];
         // Bracket-aware split so a nested key type (e.g. `tuple[str, str]`) is
         // not severed at its inner comma — same splitter `tuple[`/`union[` use.
         return match parse_key_value_args(inner) {
@@ -112,10 +117,12 @@ fn parse_container_annotation(annotation: &str) -> InferredType {
             None => InferredType::Named(annotation.to_owned()),
         };
     }
-    if let Some(inner) = strip_subscript(annotation, "set[") {
+    if annotation.starts_with("set[") && annotation.ends_with(']') {
+        let inner = &annotation[4..annotation.len() - 1];
         return InferredType::Set(Box::new(InferredType::from_annotation(inner)));
     }
-    if let Some(inner) = strip_subscript(annotation, "tuple[") {
+    if annotation.starts_with("tuple[") && annotation.ends_with(']') {
+        let inner = &annotation[6..annotation.len() - 1];
         // `tuple[()]` is the PEP 484 spelling of the empty-tuple type.
         if inner.trim() == "()" {
             return InferredType::Tuple(Vec::new());
@@ -127,7 +134,8 @@ fn parse_container_annotation(annotation: &str) -> InferredType {
             .collect();
         return InferredType::Tuple(elem_types);
     }
-    if let Some(inner) = strip_subscript(annotation, "optional[") {
+    if annotation.starts_with("optional[") && annotation.ends_with(']') {
+        let inner = &annotation[9..annotation.len() - 1];
         return InferredType::Optional(Box::new(InferredType::from_annotation(inner)));
     }
     InferredType::Named(annotation.to_owned())
@@ -136,10 +144,11 @@ fn parse_container_annotation(annotation: &str) -> InferredType {
 /// Strip a `prefix...]` subscript wrapper, returning the inner text when the
 /// annotation both starts with `prefix` and ends with `]`.
 fn strip_subscript<'a>(annotation: &'a str, prefix: &str) -> Option<&'a str> {
-    let actual_prefix = annotation.get(..prefix.len())?;
-    (actual_prefix.eq_ignore_ascii_case(prefix) && annotation.ends_with(']'))
-        .then(|| annotation.get(prefix.len()..annotation.len() - 1))
-        .flatten()
+    if annotation.starts_with(prefix) && annotation.ends_with(']') {
+        annotation.get(prefix.len()..annotation.len() - 1)
+    } else {
+        None
+    }
 }
 
 /// Split an annotation on top-level `|` (PEP 604 union), ignoring any `|` nested
@@ -193,13 +202,13 @@ fn parse_literal_annotation(inner: &str) -> InferredType {
 fn parse_single_literal(val: &str) -> InferredType {
     let val = val.trim();
 
-    if val.eq_ignore_ascii_case("true") {
+    if val == "true" {
         return InferredType::Literal(LiteralValue::Bool(true));
     }
-    if val.eq_ignore_ascii_case("false") {
+    if val == "false" {
         return InferredType::Literal(LiteralValue::Bool(false));
     }
-    if val.eq_ignore_ascii_case("none") {
+    if val == "none" {
         return InferredType::None_;
     }
 
@@ -232,10 +241,7 @@ fn parse_single_literal(val: &str) -> InferredType {
         return InferredType::Literal(LiteralValue::Str(content.to_owned()));
     }
 
-    if (val.starts_with("b\"")
-        || val.starts_with("B\"")
-        || val.starts_with("b'")
-        || val.starts_with("B'"))
+    if (val.starts_with("b\"") || val.starts_with("b'"))
         && (val.ends_with('"') || val.ends_with('\''))
     {
         let content = &val[2..val.len() - 1];
