@@ -66,6 +66,15 @@ pub(crate) fn parse_source_overrides_with_comments(
     source: &str,
     comment_ranges: &[basilisk_resolver::Span],
 ) -> SourceOverrides {
+    // Suppression directives are rare. Avoid allocating a per-line comment map
+    // and rescanning the whole file unless a real Python comment contains a
+    // directive marker. The parser-provided ranges preserve the string-literal
+    // safety property while keeping the no-directive path proportional only to
+    // the number of comments.
+    if !contains_override_directive(source, comment_ranges) {
+        return SourceOverrides::empty();
+    }
+
     let mut file_mode = None;
     let mut line_overrides = Vec::new();
     let mut block_starts: Vec<(usize, LineOverride)> = Vec::new();
@@ -172,6 +181,30 @@ pub(crate) fn parse_source_overrides_with_comments(
         line_overrides,
         block_overrides,
     }
+}
+
+impl SourceOverrides {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.file_mode.is_none()
+            && self.line_overrides.is_empty()
+            && self.block_overrides.is_empty()
+    }
+
+    fn empty() -> Self {
+        Self {
+            file_mode: None,
+            line_overrides: Vec::new(),
+            block_overrides: Vec::new(),
+        }
+    }
+}
+
+fn contains_override_directive(source: &str, comment_ranges: &[basilisk_resolver::Span]) -> bool {
+    comment_ranges.iter().any(|range| {
+        range
+            .slice_source(source)
+            .is_some_and(|comment| comment.contains("# type:") || comment.contains("# basilisk:"))
+    })
 }
 
 /// Return the actual Python comment token on each physical line.

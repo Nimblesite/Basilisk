@@ -145,6 +145,13 @@ rest_pat_in_fully_bound_structs = "deny"
 # Require Arc::clone(&x) syntax — make ref-counted pointer cloning visually distinct
 clone_on_ref_ptr     = "deny"
 
+# Release artifacts are latency-sensitive CLI/LSP binaries. Fat LTO plus one
+# codegen unit lets LLVM optimize across crate boundaries and keeps benchmark
+# baselines moving down; development and CI test profiles remain fast below.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+
 # ── CI profile: fast compilation for test/coverage runs ──────────────────────
 # Use via `cargo test --profile ci` or `cargo llvm-cov --profile ci`.
 # Trades peak runtime speed for much faster compilation and linking.

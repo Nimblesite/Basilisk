@@ -230,6 +230,37 @@ fn per_module_override_suppresses_e0010() {
 }
 
 #[test]
+fn per_module_override_only_suppresses_the_matching_import() {
+    let source = "import fastmcp\nimport definitely_missing_basilisk_module\n";
+    let config = BasiliskConfig {
+        per_module_overrides: HashMap::from([(
+            "fastmcp".to_owned(),
+            ModuleOverride {
+                ignore_missing_stubs: true,
+            },
+        )]),
+        ..Default::default()
+    };
+
+    let unresolved = check_with(source, "test.py", &config)
+        .into_iter()
+        .filter(|diagnostic| diagnostic.code.code == "imports_unresolved")
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        unresolved.len(),
+        1,
+        "ignoring one missing module must not hide unrelated unresolved imports"
+    );
+    assert!(
+        unresolved[0]
+            .message
+            .contains("definitely_missing_basilisk_module"),
+        "the unrelated unresolved import must remain visible"
+    );
+}
+
+#[test]
 fn per_module_wildcard_override() {
     let source = "import django.db.models\n";
     let config = BasiliskConfig {

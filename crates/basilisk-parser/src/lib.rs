@@ -44,15 +44,24 @@ pub fn parse_source(source: String, path: String) -> Result<ParsedModule, ParseE
     }
     ruff_python_parser::parse_module(&source)
         .map(|parsed| {
-            let comment_ranges = parsed
-                .tokens()
-                .iter()
-                .filter(|token| token.kind() == TokenKind::Comment)
-                .map(|token| {
-                    let range = token.as_tuple().1;
-                    (range.start().to_u32(), range.end().to_u32())
-                })
-                .collect();
+            // Most comments are not suppression directives. Avoid walking the
+            // full token stream unless a possible directive marker exists;
+            // when it does, Ruff still classifies the token so marker text in
+            // a string cannot masquerade as a comment.
+            let possible_directive = source.contains("# type:") || source.contains("# basilisk:");
+            let comment_ranges = if possible_directive {
+                parsed
+                    .tokens()
+                    .iter()
+                    .filter(|token| token.kind() == TokenKind::Comment)
+                    .map(|token| {
+                        let range = token.as_tuple().1;
+                        (range.start().to_u32(), range.end().to_u32())
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
             ParsedModule {
                 ast: parsed.into_syntax(),
                 source,

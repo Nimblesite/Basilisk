@@ -78,81 +78,103 @@ pub fn check_with_config(
 ) -> Vec<Diagnostic> {
     let inline_overrides =
         suppression::parse_source_overrides_with_comments(&module.source, &module.comment_ranges);
+    let has_inline_overrides = !inline_overrides.is_empty();
     let source = &module.source;
     let file_path = std::path::Path::new(&module.path);
     // [CHKARCH-VERSION-TARGET] every rule sees the configured target, plus a
     // shared line index so offset→line lookups (here and in rules) stay O(log n)
     // instead of rescanning the source per diagnostic / per function.
-    let ctx = context::CheckContext::from_config_with_source(config, source);
+    // Only starred-tuple analysis and inline suppression need byte→line
+    // lookups. Avoid allocating and populating an O(lines) index for the common
+    // case where neither feature appears.
+    let ctx = if has_inline_overrides || source.contains("*tuple[") {
+        context::CheckContext::from_config_with_source(config, source)
+    } else {
+        context::CheckContext::from_config(config)
+    };
     let raw = rules::run_all(module, &ctx);
 
     // Build the set of symbol names imported from unresolved modules.
     // Used for cascade suppression: downstream errors referencing these names
     // are suppressed since the root cause is the missing import (imports_unresolved).
-    let untyped_names: std::collections::HashSet<String> = module
-        .imports
+    let untyped_names: std::collections::HashSet<String> = if raw
         .iter()
-        .filter(|i| {
-            // A configured custom typeshed is canonical for step 3, so the
-            // bundled name-set no longer treats an absent stdlib module as typed
-            // ([STUBRES-CUSTOM-TYPESHED]); its imported names then participate in
-            // cascade suppression like any other unresolved import.
-            i.resolution == basilisk_resolver::scope::ImportResolution::Unresolved
-                && !crate::imports::bundled_stdlib_recognized(
-                    &i.module,
-                    config.typeshed_path.is_some(),
-                )
-        })
-        .flat_map(|i| i.names.iter().cloned())
-        .collect();
+        .any(|diagnostic| is_cascade_suppressible(diagnostic.code.code))
+    {
+        module
+            .imports
+            .iter()
+            .filter(|i| {
+                // A configured custom typeshed is canonical for step 3, so the
+                // bundled name-set no longer treats an absent stdlib module as typed
+                // ([STUBRES-CUSTOM-TYPESHED]); its imported names then participate in
+                // cascade suppression like any other unresolved import.
+                i.resolution == basilisk_resolver::scope::ImportResolution::Unresolved
+                    && !crate::imports::bundled_stdlib_recognized(
+                        &i.module,
+                        config.typeshed_path.is_some(),
+                    )
+            })
+            .flat_map(|i| i.names.iter().cloned())
+            .collect()
+    } else {
+        std::collections::HashSet::new()
+    };
 
     // Diagnostic-independent, so computed once: scanning every import per
     // emitted `imports_unresolved` diagnostic made import-heavy files O(n²).
-    let suppress_e0010 = should_suppress_e0010_for_module(module, config);
+    // Keying by the originating import span prevents one ignored dependency
+    // from hiding every other unresolved import in the file.
+    let suppressed_unresolved_spans = suppressed_unresolved_import_spans(module, config);
+    let has_suppressed_unresolved_spans = !suppressed_unresolved_spans.is_empty();
+    let has_path_overrides = !config.per_path_overrides.is_empty();
+    let has_rule_overrides = !config.rules.is_empty();
 
-    raw.into_iter()
-        .filter_map(|mut diag| {
-            let code = diag.code.code;
+    let mut filtered = Vec::with_capacity(raw.len());
+    filtered.extend(raw.into_iter().filter_map(|mut diag| {
+        let code = diag.code.code;
 
-            // 0. Opt-in gating. Basilisk-original rules (provenance `basilisk`)
-            //    are off by default; each turns on only when the configuration
-            //    opts into one of its tags. PEP rules always run. Provenance and
-            //    tags come from the rule itself via the tagging layer — there is
-            //    no hand-maintained code list here. [CHKTAG-PROVENANCE]
-            if let Some(spec) = rule_tags::opt_in_spec_for_code(code) {
-                if !spec.tags.iter().any(|tag| opt_in_tag_enabled(tag, config)) {
-                    return None;
-                }
-            }
-
-            // 1. Per-path: check if rule is completely disabled for this file path.
-            if config.is_rule_disabled_for_path(code, file_path) {
+        // 0. Opt-in gating. Basilisk-original rules (provenance `basilisk`)
+        //    are off by default; each turns on only when the configuration
+        //    opts into one of its tags. PEP rules always run. Provenance and
+        //    tags come from the rule itself via the tagging layer — there is
+        //    no hand-maintained code list here. [CHKTAG-PROVENANCE]
+        if let Some(spec) = rule_tags::opt_in_spec_for_code(code) {
+            if !spec.tags.iter().any(|tag| opt_in_tag_enabled(tag, config)) {
                 return None;
             }
+        }
 
-            // 2. Per-module: suppress imports_unresolved for modules with ignore-missing-stubs.
-            if code == "imports_unresolved" && suppress_e0010 {
-                return None;
-            }
+        // 1. Per-path: check if rule is completely disabled for this file path.
+        if has_path_overrides && config.is_rule_disabled_for_path(code, file_path) {
+            return None;
+        }
 
-            // 3. Cascade suppression: suppress downstream errors that reference
-            //    symbols from unresolved imports. Only applies to type-checking
-            //    rules whose results depend on resolved import types. Structural
-            //    rules (Final, deprecated, Protocol, Generic params, etc.) fire
-            //    independently of type resolution and must never be suppressed.
-            if is_cascade_suppressible(code)
-                && should_suppress_cascade(&diag, &untyped_names, source)
-            {
-                return None;
-            }
+        // 2. Per-module: suppress imports_unresolved for modules with ignore-missing-stubs.
+        if code == "imports_unresolved"
+            && has_suppressed_unresolved_spans
+            && suppressed_unresolved_spans.contains(&(diag.span.start, diag.span.end))
+        {
+            return None;
+        }
 
-            // 4. Tier-based severity adjustment: Tier3 (best-effort) stubs
-            //    produce info-level diagnostics, not errors.
-            if diag.provenance == Some(basilisk_stubs::TypeProvenance::StubTier3) {
-                diag.severity = Severity::Info;
-            }
+        // 3. Cascade suppression: suppress downstream errors that reference
+        //    symbols from unresolved imports. Only applies to type-checking
+        //    rules whose results depend on resolved import types. Structural
+        //    rules (Final, deprecated, Protocol, Generic params, etc.) fire
+        //    independently of type resolution and must never be suppressed.
+        if is_cascade_suppressible(code) && should_suppress_cascade(&diag, &untyped_names, source) {
+            return None;
+        }
 
-            // 5. Global rule severity override from config.
+        // 4. Tier-based severity adjustment: Tier3 (best-effort) stubs
+        //    produce info-level diagnostics, not errors.
+        if diag.provenance == Some(basilisk_stubs::TypeProvenance::StubTier3) {
+            diag.severity = Severity::Info;
+        }
+
+        // 5. Global rule severity override from config.
+        if has_rule_overrides {
             if let Some(severity) = config.rule_severity(code) {
                 match severity {
                     basilisk_config::RuleSeverity::Disabled => return None,
@@ -161,30 +183,44 @@ pub fn check_with_config(
                     basilisk_config::RuleSeverity::Error => diag.severity = Severity::Error,
                 }
             }
+        }
 
-            // 6. Per-path rule severity override.
-            if let Some(path_severity) =
-                find_path_rule_severity(code, file_path, &config.per_path_overrides)
-            {
-                match path_severity {
-                    basilisk_config::RuleSeverity::Disabled => return None,
-                    basilisk_config::RuleSeverity::Warning => diag.severity = Severity::Warning,
-                    basilisk_config::RuleSeverity::Info => diag.severity = Severity::Info,
-                    basilisk_config::RuleSeverity::Error => diag.severity = Severity::Error,
-                }
+        // 6. Per-path rule severity override.
+        if let Some(path_severity) = has_path_overrides
+            .then(|| find_path_rule_severity(code, file_path, &config.per_path_overrides))
+            .flatten()
+        {
+            match path_severity {
+                basilisk_config::RuleSeverity::Disabled => return None,
+                basilisk_config::RuleSeverity::Warning => diag.severity = Severity::Warning,
+                basilisk_config::RuleSeverity::Info => diag.severity = Severity::Info,
+                basilisk_config::RuleSeverity::Error => diag.severity = Severity::Error,
             }
+        }
 
-            // 7. Inline source overrides (highest priority). The 0-based line is
-            //    the count of newlines before the span start — the shared line
-            //    index answers that in O(log n) instead of rescanning the prefix
-            //    for every diagnostic.
-            let diag_line = ctx
-                .line_index
-                .line(diag.span.start_usize())
-                .saturating_sub(1);
-            suppression::apply_overrides_at_line(diag, diag_line, &inline_overrides)
-        })
-        .collect()
+        // 7. Inline source overrides (highest priority). The 0-based line is
+        //    the count of newlines before the span start — the shared line
+        //    index answers that in O(log n) instead of rescanning the prefix
+        //    for every diagnostic.
+        finish_inline_override(diag, has_inline_overrides, &inline_overrides, &ctx)
+    }));
+    filtered
+}
+
+fn finish_inline_override(
+    diag: Diagnostic,
+    has_inline_overrides: bool,
+    inline_overrides: &suppression::SourceOverrides,
+    ctx: &context::CheckContext,
+) -> Option<Diagnostic> {
+    if !has_inline_overrides {
+        return Some(diag);
+    }
+    let diag_line = ctx
+        .line_index
+        .line(diag.span.start_usize())
+        .saturating_sub(1);
+    suppression::apply_overrides_at_line(diag, diag_line, inline_overrides)
 }
 
 /// Whether a Basilisk rule's free-form `tag` is opted into by `config`.
@@ -292,18 +328,23 @@ const fn is_identifier_char(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
-/// Check whether `imports_unresolved` should be suppressed based on per-module overrides.
-///
-/// Iterates the module's imports to find which module triggered E0010,
-/// then checks if that module has `ignore-missing-stubs = true`.
-fn should_suppress_e0010_for_module(
+/// Collect unresolved-import spans suppressed by per-module overrides.
+fn suppressed_unresolved_import_spans(
     module: &basilisk_resolver::ResolvedModule,
     config: &basilisk_config::BasiliskConfig,
-) -> bool {
-    module.imports.iter().any(|import| {
-        import.resolution == basilisk_resolver::scope::ImportResolution::Unresolved
-            && config.should_ignore_missing_stubs(&import.module)
-    })
+) -> std::collections::HashSet<(u32, u32)> {
+    if config.per_module_overrides.is_empty() {
+        return std::collections::HashSet::new();
+    }
+    module
+        .imports
+        .iter()
+        .filter(|import| {
+            import.resolution == basilisk_resolver::scope::ImportResolution::Unresolved
+                && config.should_ignore_missing_stubs(&import.module)
+        })
+        .map(|import| (import.span.start, import.span.end))
+        .collect()
 }
 
 /// Look up per-path rule severity override for a specific rule code.
