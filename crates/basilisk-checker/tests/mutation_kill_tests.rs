@@ -55,6 +55,7 @@ fn subtype_relations_preserve_optional_literalstring_and_mutable_invariance() {
     let list_int = InferredType::List(Box::new(InferredType::Int));
     let list_float = InferredType::List(Box::new(InferredType::Float));
     assert!(!list_int.is_assignable_to(&list_float));
+    assert!(InferredType::List(Box::new(InferredType::Never)).is_assignable_to(&list_int));
 
     let dict_int = InferredType::Dict(
         Box::new(InferredType::Str),
@@ -65,6 +66,11 @@ fn subtype_relations_preserve_optional_literalstring_and_mutable_invariance() {
         Box::new(InferredType::Float),
     );
     assert!(!dict_int.is_assignable_to(&dict_float));
+    let empty_dict = InferredType::Dict(
+        Box::new(InferredType::Never),
+        Box::new(InferredType::Never),
+    );
+    assert!(empty_dict.is_assignable_to(&dict_int));
 }
 
 // ═══════════════════════════════════════════════════════════════════════

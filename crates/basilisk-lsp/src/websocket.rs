@@ -235,3 +235,104 @@ pub async fn run_server_ws(port: u16) -> io::Result<()> {
 pub fn run_server_ws_blocking(port: u16) -> io::Result<()> {
     crate::runtime::block_on_with_analysis_stack("basilisk-lsp-ws", move || run_server_ws(port))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{error::Error, io, time::Duration};
+
+    use futures_util::{SinkExt as _, StreamExt as _};
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest as _;
+    use tokio_tungstenite::tungstenite::http::{header::ORIGIN, HeaderValue};
+    use tokio_tungstenite::tungstenite::Message;
+
+    use super::run_server_ws;
+
+    async fn spawn_test_server(
+    ) -> Result<(String, tokio::task::JoinHandle<io::Result<()>>), Box<dyn Error>> {
+        let reservation = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let port = reservation.local_addr()?.port();
+        drop(reservation);
+
+        let server = tokio::spawn(run_server_ws(port));
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        Ok((format!("ws://127.0.0.1:{port}"), server))
+    }
+
+    // [LSPARCH-INVOKE] A web page must not be able to drive the localhost LSP
+    // with the user's filesystem authority. Native editor clients omit Origin.
+    #[tokio::test]
+    async fn rejects_browser_origin_and_keeps_native_clients() -> Result<(), Box<dyn Error>> {
+        let (url, server) = spawn_test_server().await?;
+        let mut browser_request = url.clone().into_client_request()?;
+        let _ = browser_request.headers_mut().insert(
+            ORIGIN,
+            HeaderValue::from_static("https://attacker.example"),
+        );
+
+        let browser_was_rejected = tokio_tungstenite::connect_async(browser_request)
+            .await
+            .is_err();
+        let native_was_accepted = tokio_tungstenite::connect_async(&url).await.is_ok();
+        server.abort();
+
+        assert!(
+            browser_was_rejected,
+            "a browser-style Origin handshake must be rejected"
+        );
+        assert!(
+            native_was_accepted,
+            "rejecting browsers must not disable native no-Origin clients"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn rejects_oversized_handshake_and_keeps_listening() -> Result<(), Box<dyn Error>> {
+        let (url, server) = spawn_test_server().await?;
+        let mut oversized_request = url.clone().into_client_request()?;
+        let padding = vec![b'a'; 20 * 1024];
+        let _ = oversized_request
+            .headers_mut()
+            .insert("x-padding", HeaderValue::from_bytes(&padding)?);
+
+        let oversized_was_rejected = tokio_tungstenite::connect_async(oversized_request)
+            .await
+            .is_err();
+        let native_was_accepted = tokio_tungstenite::connect_async(&url).await.is_ok();
+        server.abort();
+
+        assert!(
+            oversized_was_rejected,
+            "handshake bytes must have a finite upper bound"
+        );
+        assert!(
+            native_was_accepted,
+            "an oversized handshake must not terminate the listener"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn closes_connections_that_exceed_the_message_limit() -> Result<(), Box<dyn Error>> {
+        let (url, server) = spawn_test_server().await?;
+        let (mut client, _) = tokio_tungstenite::connect_async(&url).await?;
+        let text = format!(
+            r#"{{"jsonrpc":"2.0","method":"$/oversized","params":"{}"}}"#,
+            "a".repeat(8 * 1024 * 1024)
+        );
+
+        let send_result = client.send(Message::Text(text.into())).await;
+        let was_closed = if send_result.is_err() {
+            true
+        } else {
+            matches!(
+                tokio::time::timeout(Duration::from_secs(2), client.next()).await,
+                Ok(None | Some(Err(_) | Ok(Message::Close(_))))
+            )
+        };
+        server.abort();
+
+        assert!(was_closed, "oversized messages must close the connection");
+        Ok(())
+    }
+}

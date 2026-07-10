@@ -317,6 +317,7 @@ _lint_rust:
 	@echo -e '\033[1m\033[0;36m▶ Linting Rust\033[0m' && \
 	cargo check --workspace --all-targets && \
 	cargo clippy --workspace --all-targets -- -D warnings && \
+	cargo audit && \
 	echo -e '\033[0;32m✓ Rust lint passed\033[0m'
 
 _lint_vsix:

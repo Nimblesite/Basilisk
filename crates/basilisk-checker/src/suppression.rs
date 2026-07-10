@@ -187,13 +187,8 @@ fn comments_by_line<'a>(
     let line_index = basilisk_common::text::LineIndex::new(source);
     let mut comments = vec![None; source.lines().count()];
     for range in comment_ranges {
-        let line = line_index
-            .line(range.start_usize())
-            .saturating_sub(1);
-        if let (Some(slot), Some(text)) = (
-            comments.get_mut(line),
-            range.slice_source(source),
-        ) {
+        let line = line_index.line(range.start_usize()).saturating_sub(1);
+        if let (Some(slot), Some(text)) = (comments.get_mut(line), range.slice_source(source)) {
             *slot = Some(text);
         }
     }

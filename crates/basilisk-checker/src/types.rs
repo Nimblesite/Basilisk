@@ -251,17 +251,21 @@ impl InferredType {
             )
             | (InferredType::Literal(LiteralValue::Bytes(_)), InferredType::Bytes)
             | (
-                InferredType::Str | InferredType::Literal(LiteralValue::Str(_)),
+                InferredType::Literal(LiteralValue::Str(_)),
                 InferredType::LiteralString,
             )
             // None is always assignable to Optional[T]
             | (InferredType::None_, InferredType::Optional(_)) => true,
             // `None` satisfies `Hashable` (it defines `__hash__`). The annotation
             // parser lowercases names, so the ABC arrives as `Named("hashable")`.
-            (InferredType::None_, InferredType::Named(name)) if name == "hashable" => true,
-            // Optional types are assignable to their non-optional counterparts.
-            // Implements [TYPEINF-SUBTYPING-UNION] — Optional[T] = T | None handling.
-            (InferredType::Optional(inner), other) => inner.is_assignable_to(other),
+            (InferredType::None_, InferredType::Named(name))
+                if name.eq_ignore_ascii_case("hashable") => true,
+            // Implements [TYPEINF-SUBTYPING-UNION] — Optional[T] = T | None.
+            // The source's None arm prevents Optional[T] → T narrowing, while
+            // Optional[S] → Optional[T] follows the inner subtype relation.
+            (InferredType::Optional(inner), InferredType::Optional(other)) => {
+                inner.is_assignable_to(other)
+            }
             (inner, InferredType::Optional(other)) => inner.is_assignable_to(other),
             // Union types require all variants to be assignable.
             // Implements [TYPEINF-SUBTYPING-UNION] — `A | B <: C` iff `A <: C` and
@@ -273,9 +277,9 @@ impl InferredType {
             // here (element types checked structurally, no cross-container matching).
             // List and Set cannot use or-patterns — that would incorrectly allow cross-matching.
             (InferredType::List(a), InferredType::List(b))
-            | (InferredType::Set(a), InferredType::Set(b)) => a.is_assignable_to(b),
+            | (InferredType::Set(a), InferredType::Set(b)) => invariantly_compatible(a, b),
             (InferredType::Dict(a_key, a_val), InferredType::Dict(b_key, b_val)) => {
-                a_key.is_assignable_to(b_key) && a_val.is_assignable_to(b_val)
+                invariantly_compatible(a_key, b_key) && invariantly_compatible(a_val, b_val)
             }
             (InferredType::Tuple(a), InferredType::Tuple(b)) => {
                 // Implements [TYPEINF-COLLECTIONS-TUPLES] — fixed-length positional
@@ -382,6 +386,12 @@ impl InferredType {
             _ => false,
         }
     }
+}
+
+/// Mutable generic arguments are compatible only in both directions.
+fn invariantly_compatible(source: &InferredType, target: &InferredType) -> bool {
+    matches!(source, InferredType::Never)
+        || (source.is_assignable_to(target) && target.is_assignable_to(source))
 }
 
 /// Returns the element type `X` when `elems` is the homogeneous variable-length

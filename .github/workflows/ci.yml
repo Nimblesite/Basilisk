@@ -245,6 +245,11 @@ jobs:
       - name: Install deslop
         run: scripts/install-deslop.sh
 
+      - name: Install Rust security audit
+        uses: taiki-e/install-action@81ee9698f20724138a785d788c7567d40f14cd2d # cargo-audit
+        with:
+          tool: cargo-audit@0.22.2
+
       # `make lint` runs clippy, eslint, AND the deslop duplication gate. The
       # threshold lives in committed .deslop.toml — ratcheted DOWN only, never
       # up — and deslop exits non-zero when repo-wide duplication exceeds it.

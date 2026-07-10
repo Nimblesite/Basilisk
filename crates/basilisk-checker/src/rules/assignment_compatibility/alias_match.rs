@@ -188,8 +188,8 @@ pub(super) fn alias_value_assignable(
     declared_name: &str,
     ctx: &AliasCtx<'_>,
 ) -> Option<bool> {
-    let base = alias_base(declared_name);
-    if ctx.union.contains_key(base) || ctx.generic.contains_key(base) {
+    let base = alias_base(declared_name).to_ascii_lowercase();
+    if ctx.union.contains_key(&base) || ctx.generic.contains_key(&base) {
         return Some(match_named_target(value, declared_name, ctx, 0));
     }
     None
@@ -262,10 +262,11 @@ fn match_named_target(value: &InferredType, name: &str, ctx: &AliasCtx<'_>, dept
     }
 
     let base = alias_base(name);
-    if let Some(def) = ctx.union.get(base) {
+    let lookup_key = base.to_ascii_lowercase();
+    if let Some(def) = ctx.union.get(&lookup_key) {
         return alias_assignable(value, def, ctx, depth + 1);
     }
-    if let Some(generic) = ctx.generic.get(base) {
+    if let Some(generic) = ctx.generic.get(&lookup_key) {
         return match resolve_generic(name, generic) {
             Some(resolved) => alias_assignable(value, &resolved, ctx, depth + 1),
             // Arity mismatch (e.g. a bare generic alias used without args):
@@ -372,7 +373,11 @@ fn alias_base(name: &str) -> &str {
 /// Parse a `mapping[K, V]` Named into a `Dict(K, V)` so it can be matched
 /// structurally against a dict literal value.
 fn parse_mapping_named(name: &str) -> Option<InferredType> {
-    let inner = name.strip_prefix("mapping[")?.strip_suffix(']')?;
+    let prefix = name.get(.."mapping[".len())?;
+    if !prefix.eq_ignore_ascii_case("mapping[") {
+        return None;
+    }
+    let inner = name.get("mapping[".len()..)?.strip_suffix(']')?;
     let (key, val) = crate::types_parsing::parse_key_value_args(inner)?;
     Some(InferredType::Dict(Box::new(key), Box::new(val)))
 }

@@ -4,6 +4,27 @@
 // These tests exercise type inference paths through real Python code.
 
 use super::common::*;
+use basilisk_checker::types::{InferredType, LiteralValue};
+
+#[test]
+fn annotation_parser_preserves_case_inside_nested_typing_forms() {
+    let parsed = InferredType::from_annotation(
+        r#"DiCt[STR, LiSt[Widget | LiTeRaL["UP"] | LiTeRaL[b"BY"]]]"#,
+    );
+
+    assert_eq!(
+        parsed,
+        InferredType::Dict(
+            Box::new(InferredType::Str),
+            Box::new(InferredType::List(Box::new(InferredType::Union(vec![
+                InferredType::Named("Widget".to_owned()),
+                InferredType::Literal(LiteralValue::Str("UP".to_owned())),
+                InferredType::Literal(LiteralValue::Bytes(b"BY".to_vec())),
+            ])))),
+        ),
+        "typing-form names are case-insensitive, but user types and literal values are not",
+    );
+}
 
 #[test]
 fn infers_dict_annotation() -> Result<(), Box<dyn std::error::Error>> {

@@ -5,14 +5,44 @@
 //! function signatures via `inspect.signature()`.  Returns the result as
 //! generated `.pyi` content.
 
+use std::fmt::Write as _;
+use std::io::{self, Read};
 use std::path::Path;
-use std::process::Command;
-use std::time::Duration;
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use super::{GeneratedStub, StubGenError, StubGenMode};
 
 /// Default subprocess timeout.
 const TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Maximum bytes retained from each subprocess output stream (1 MiB).
+///
+/// Readers continue draining after reaching the limit so a noisy child cannot
+/// block on a full pipe, but excess bytes are discarded instead of retained.
+const CAPTURE_LIMIT_BYTES: usize = 1024 * 1024;
+
+/// Avoid busy-waiting while enforcing the subprocess deadline.
+const WAIT_POLL_INTERVAL: Duration = Duration::from_millis(10);
+
+#[derive(Clone, Copy)]
+enum PipeKind {
+    Stdout,
+    Stderr,
+}
+
+struct CapturedPipe {
+    bytes: Vec<u8>,
+    truncated: bool,
+}
+
+struct BoundedOutput {
+    status: ExitStatus,
+    stdout: CapturedPipe,
+    stderr: CapturedPipe,
+}
 
 /// Python script that imports a module and dumps its public API as JSON.
 ///
@@ -104,21 +134,29 @@ pub fn generate_runtime_stubs(
     module_name: &str,
     python_path: &Path,
 ) -> Result<GeneratedStub, StubGenError> {
-    let output = Command::new(python_path)
-        .args(["-c", INTROSPECT_SCRIPT, module_name])
-        .env("PYTHONDONTWRITEBYTECODE", "1")
-        .output()
-        .map_err(|err| StubGenError::Subprocess(format!("failed to spawn Python: {err}")))?;
+    let output = run_introspection(python_path, module_name, TIMEOUT)?;
 
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+        let mut stderr = String::from_utf8_lossy(&output.stderr.bytes).into_owned();
+        if output.stderr.truncated {
+            let _ = write!(
+                stderr,
+                "\n[stderr truncated after {CAPTURE_LIMIT_BYTES} bytes]"
+            );
+        }
         return Err(StubGenError::Import(format!(
             "Python exited with {}: {stderr}",
             output.status
         )));
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    if output.stdout.truncated {
+        return Err(StubGenError::Subprocess(format!(
+            "stdout exceeded {CAPTURE_LIMIT_BYTES}-byte capture limit"
+        )));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout.bytes);
     let entries: Vec<serde_json::Value> = serde_json::from_str(stdout.trim())
         .map_err(|err| StubGenError::Subprocess(format!("invalid JSON output: {err}")))?;
 
@@ -136,6 +174,182 @@ pub fn generate_runtime_stubs(
         pyi_content,
         mode: StubGenMode::Runtime,
     })
+}
+
+fn run_introspection(
+    python_path: &Path,
+    module_name: &str,
+    timeout: Duration,
+) -> Result<BoundedOutput, StubGenError> {
+    let mut child = Command::new(python_path)
+        .args(["-c", INTROSPECT_SCRIPT, module_name])
+        .env("PYTHONDONTWRITEBYTECODE", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|err| StubGenError::Subprocess(format!("failed to spawn Python: {err}")))?;
+
+    let Some(stdout) = child.stdout.take() else {
+        terminate_and_reap(&mut child);
+        return Err(StubGenError::Subprocess(
+            "failed to capture Python stdout".to_owned(),
+        ));
+    };
+    let Some(stderr) = child.stderr.take() else {
+        terminate_and_reap(&mut child);
+        return Err(StubGenError::Subprocess(
+            "failed to capture Python stderr".to_owned(),
+        ));
+    };
+
+    let (sender, receiver) = mpsc::channel();
+    if let Err(err) = spawn_bounded_reader(stdout, PipeKind::Stdout, sender.clone()) {
+        terminate_and_reap(&mut child);
+        return Err(StubGenError::Subprocess(format!(
+            "failed to start stdout reader: {err}"
+        )));
+    }
+    if let Err(err) = spawn_bounded_reader(stderr, PipeKind::Stderr, sender) {
+        terminate_and_reap(&mut child);
+        return Err(StubGenError::Subprocess(format!(
+            "failed to start stderr reader: {err}"
+        )));
+    }
+
+    let deadline = Instant::now() + timeout;
+    let status = wait_until(&mut child, deadline, timeout)?;
+    let (stdout, stderr) = receive_captured_pipes(&receiver, deadline, timeout)?;
+
+    Ok(BoundedOutput {
+        status,
+        stdout,
+        stderr,
+    })
+}
+
+fn spawn_bounded_reader<R>(
+    reader: R,
+    kind: PipeKind,
+    sender: Sender<(PipeKind, io::Result<CapturedPipe>)>,
+) -> io::Result<()>
+where
+    R: Read + Send + 'static,
+{
+    thread::Builder::new()
+        .name(
+            match kind {
+                PipeKind::Stdout => "basilisk-stub-stdout",
+                PipeKind::Stderr => "basilisk-stub-stderr",
+            }
+            .to_owned(),
+        )
+        .spawn(move || {
+            let captured = read_bounded(reader);
+            let _ = sender.send((kind, captured));
+        })
+        .map(|_| ())
+}
+
+fn read_bounded(mut reader: impl Read) -> io::Result<CapturedPipe> {
+    let mut bytes = Vec::new();
+    let mut truncated = false;
+    let mut buffer = [0_u8; 8192];
+
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+
+        let remaining = CAPTURE_LIMIT_BYTES.saturating_sub(bytes.len());
+        let retain = read.min(remaining);
+        let retained = buffer
+            .get(..retain)
+            .ok_or_else(|| io::Error::other("invalid output capture length"))?;
+        bytes.extend_from_slice(retained);
+        if retain < read {
+            truncated = true;
+        }
+    }
+
+    Ok(CapturedPipe { bytes, truncated })
+}
+
+fn wait_until(
+    child: &mut Child,
+    deadline: Instant,
+    timeout: Duration,
+) -> Result<ExitStatus, StubGenError> {
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(status),
+            Ok(None) if Instant::now() >= deadline => {
+                terminate_and_reap(child);
+                return Err(timeout_error(timeout));
+            }
+            Ok(None) => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                thread::sleep(WAIT_POLL_INTERVAL.min(remaining));
+            }
+            Err(err) => {
+                terminate_and_reap(child);
+                return Err(StubGenError::Subprocess(format!(
+                    "failed while waiting for Python: {err}"
+                )));
+            }
+        }
+    }
+}
+
+fn receive_captured_pipes(
+    receiver: &Receiver<(PipeKind, io::Result<CapturedPipe>)>,
+    deadline: Instant,
+    timeout: Duration,
+) -> Result<(CapturedPipe, CapturedPipe), StubGenError> {
+    let mut stdout = None;
+    let mut stderr = None;
+
+    while stdout.is_none() || stderr.is_none() {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(timeout_error(timeout));
+        }
+
+        match receiver.recv_timeout(remaining) {
+            Ok((PipeKind::Stdout, captured)) => {
+                stdout = Some(captured.map_err(|err| pipe_error(&err))?);
+            }
+            Ok((PipeKind::Stderr, captured)) => {
+                stderr = Some(captured.map_err(|err| pipe_error(&err))?);
+            }
+            Err(RecvTimeoutError::Timeout) => return Err(timeout_error(timeout)),
+            Err(RecvTimeoutError::Disconnected) => {
+                return Err(StubGenError::Subprocess(
+                    "Python output reader stopped unexpectedly".to_owned(),
+                ));
+            }
+        }
+    }
+
+    match (stdout, stderr) {
+        (Some(stdout), Some(stderr)) => Ok((stdout, stderr)),
+        _ => Err(StubGenError::Subprocess(
+            "Python output capture incomplete".to_owned(),
+        )),
+    }
+}
+
+fn pipe_error(err: &io::Error) -> StubGenError {
+    StubGenError::Subprocess(format!("failed reading Python output: {err}"))
+}
+
+fn timeout_error(timeout: Duration) -> StubGenError {
+    StubGenError::Subprocess(format!("timed out after {} seconds", timeout.as_secs()))
+}
+
+fn terminate_and_reap(child: &mut Child) {
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 /// Convert introspection JSON entries to `.pyi` stub content.
@@ -240,6 +454,88 @@ pub const fn default_timeout() -> Duration {
 )]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    fn fake_python(script_body: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("python");
+        std::fs::write(&path, format!("#!/bin/sh\n{script_body}\n")).unwrap();
+        let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+        permissions.set_mode(0o700);
+        std::fs::set_permissions(&path, permissions).unwrap();
+        (dir, path)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn runtime_introspection_times_out_and_reaps_python() {
+        let (_dir, python) = fake_python(
+            r#"printf '%s' "$$" > "$0.pid"
+exec sleep 11"#,
+        );
+        let started = std::time::Instant::now();
+
+        let error = generate_runtime_stubs("ignored", &python).unwrap_err();
+        let message = error.to_string();
+
+        assert!(
+            message.contains("timed out after 10 seconds"),
+            "runtime introspection must report the configured timeout, got: {message}"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(11),
+            "the subprocess must be terminated at the timeout"
+        );
+
+        let pid = std::fs::read_to_string(python.with_extension("pid")).unwrap();
+        let status = Command::new("ps")
+            .args(["-p", pid.trim()])
+            .status()
+            .unwrap();
+        assert!(
+            !status.success(),
+            "the timed-out Python subprocess must be killed and reaped"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn runtime_introspection_rejects_stdout_over_capture_limit() {
+        let (_dir, python) =
+            fake_python(r"dd if=/dev/zero bs=1048576 count=2 2>/dev/null | tr '\000' x");
+
+        let error = generate_runtime_stubs("ignored", &python).unwrap_err();
+        let message = error.to_string();
+
+        assert!(
+            message.contains("stdout exceeded 1048576-byte capture limit"),
+            "oversized stdout must be rejected with the documented limit"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn runtime_introspection_truncates_stderr_at_capture_limit() {
+        let (_dir, python) = fake_python(
+            r"dd if=/dev/zero bs=1048576 count=2 2>/dev/null | tr '\000' x >&2
+exit 7",
+        );
+
+        let error = generate_runtime_stubs("ignored", &python).unwrap_err();
+        let message = error.to_string();
+
+        assert!(
+            message.contains("stderr truncated after 1048576 bytes"),
+            "oversized stderr must carry an explicit truncation marker"
+        );
+        assert!(
+            message.len() <= 1_048_576 + 256,
+            "the surfaced error must remain bounded, got {} bytes",
+            message.len()
+        );
+    }
 
     #[test]
     fn entries_to_pyi_produces_valid_stub() {

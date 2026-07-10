@@ -40,6 +40,9 @@ ok "llvm-tools"
 cargo llvm-cov --version &>/dev/null || cargo install cargo-llvm-cov --locked
 ok "cargo-llvm-cov"
 
+cargo audit --version &>/dev/null || cargo install cargo-audit --version 0.22.2 --locked
+ok "cargo-audit"
+
 header "Installing Python packages"
 
 python3 -c 'import debugpy' &>/dev/null || python3 -m pip install --quiet --break-system-packages debugpy

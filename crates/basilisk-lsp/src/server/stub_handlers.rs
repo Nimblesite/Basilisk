@@ -330,12 +330,11 @@ mod tests {
             "package-child",
         ] {
             let dir = tempfile::tempdir().unwrap();
-            let err = write_local_stub(dir.path(), module)
-                .expect_err("an invalid dotted module identifier must be rejected");
+            let result = write_local_stub(dir.path(), module);
             assert_eq!(
-                err.kind(),
-                std::io::ErrorKind::InvalidInput,
-                "unexpected error for {module:?}: {err}"
+                result.as_ref().err().map(std::io::Error::kind),
+                Some(std::io::ErrorKind::InvalidInput),
+                "an invalid dotted module identifier must be rejected: {module:?}"
             );
         }
     }

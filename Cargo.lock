@@ -402,10 +402,10 @@ name = "basilisk-stubs"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "basilisk-common",
+ "basilisk-parser",
  "phf 0.14.0",
  "phf_codegen 0.14.0",
  "ruff_python_ast",
- "ruff_python_parser",
  "ruff_text_size",
  "serde",
  "serde_json",

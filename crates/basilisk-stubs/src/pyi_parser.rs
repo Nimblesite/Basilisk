@@ -1,7 +1,7 @@
 //! Implements [STUBRES-ENGINE]. See docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-ENGINE
 //! `.pyi` stub file parser.
 //!
-//! Parses `.pyi` files using `ruff_python_parser` and extracts structured
+//! Parses `.pyi` files using `basilisk-parser` and extracts structured
 //! type information into a [`StubModule`]. Handles `@overload` grouping,
 //! class definitions with methods and attributes, and module-level
 //! variable annotations.
@@ -66,7 +66,7 @@ pub fn parse_pyi_file(
 /// # Errors
 ///
 /// Returns [`StubParseError::Syntax`] if the source has parse errors.
-// Implements [STUBRES-PYI] — reuses `ruff_python_parser`; only signatures
+// Implements [STUBRES-PYI] — reuses `basilisk-parser`; only signatures
 // matter (def/class/annotations), bodies (`...`/`pass`) are ignored, and the
 // `@overload` decorator is tracked (see `StubExtractor::visit_function`).
 pub fn parse_pyi_source(
@@ -76,13 +76,13 @@ pub fn parse_pyi_source(
     source: StubSource,
     tier: StubTier,
 ) -> Result<StubModule, StubParseError> {
-    let parsed =
-        ruff_python_parser::parse_module(content).map_err(|err| StubParseError::Syntax {
-            path: path.to_path_buf(),
-            message: err.to_string(),
-        })?;
-
-    let module_ast = parsed.into_syntax();
+    let module_ast =
+        basilisk_parser::parse_source(content.to_owned(), path.to_string_lossy().into_owned())
+            .map_err(|err| StubParseError::Syntax {
+                path: path.to_path_buf(),
+                message: err.to_string(),
+            })?
+            .ast;
     let mut extractor = StubExtractor::new(module_name, path, source, tier);
     extractor.visit_body(&module_ast.body);
     Ok(extractor.into_module())

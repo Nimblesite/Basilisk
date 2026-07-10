@@ -279,7 +279,7 @@ fn check_vars(
                 let ann_lower = annotation_text.trim().to_ascii_lowercase();
                 if ann_lower == "typealias"
                     || ann_lower.ends_with(".typealias")
-                    || matches!(declared_type, InferredType::Named(ref n) if n == "ta")
+                    || matches!(declared_type, InferredType::Named(ref n) if n.eq_ignore_ascii_case("ta"))
                 {
                     return None;
                 }
@@ -290,7 +290,7 @@ fn check_vars(
             // type, so any assignment check would be unreliable (false positives).
             if let InferredType::Named(ref name) = declared_type {
                 let base = name.split('[').next().unwrap_or(name);
-                if skip.type_alias.contains(base)
+                if skip.type_alias.contains(&base.to_ascii_lowercase())
                     || skip.type_alias_type.contains(&base.to_ascii_lowercase())
                 {
                     return None;
