@@ -3525,6 +3525,15 @@
         "type": "code",
         "lang": "python",
         "code": "v: tuple[int, str, list[bool]] = (3, \"hi\", [True])\nv[4]   # E0103 \u2014 index 4 out of range for 3-element tuple\nv[-4]  # E0103 \u2014 index -4 out of range for 3-element tuple"
+      },
+      {
+        "type": "text",
+        "html": "The parameter of a <code>key=</code> lambda passed to <code>sorted</code>/<code>min</code>/<code>max</code>/<code>list.sort</code> receives one element of the iterable, so when the iterable is provably a collection of fixed-length tuples \u2014 from its annotation or from a literal of uniform tuples \u2014 the same range check applies inside the lambda:"
+      },
+      {
+        "type": "code",
+        "lang": "python",
+        "code": "items = [(\"a\", 1, 2), (\"b\", 3, 4)]\nsorted(items, key=lambda pair: pair[4])  # E \u2014 4 out of range for 3-tuple"
       }
     ],
     "group": "Type System",

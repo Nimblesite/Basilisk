@@ -18,6 +18,7 @@ mod final_readonly_ext;
 mod function_info;
 mod generics;
 mod historical;
+mod key_lambda;
 mod module_level;
 mod narrowing;
 mod pep695_scoping;
@@ -190,6 +191,12 @@ fn build_resolved_module(
             typevar_calls.iter().map(|tv| tv.name.clone()).collect();
         type_alias::collect_type_alias_type_violations(stmts, &tv_names)
     };
+    let tuple_index_violations = key_lambda::collect_key_lambda_tuple_violations(
+        stmts,
+        &functions,
+        &module_vars,
+        &module.source,
+    );
     ResolvedModule {
         functions,
         classes,
@@ -236,7 +243,7 @@ fn build_resolved_module(
         type_alias_defs: results.type_alias_defs,
         generic_subscript_sites: results.generic_subscript_sites,
         literal_augmented_assign_violations: Vec::new(),
-        tuple_index_violations: Vec::new(),
+        tuple_index_violations,
         bounded_typevar_attr_violations: crate::bounded_typevar::collect(stmts),
         protocol_class_object_violations: Vec::new(),
         unhashable_hash_call_violations: results.unhashable_hash_calls,
