@@ -1,7 +1,7 @@
 {
   "name": "basilisk",
   "displayName": "Basilisk",
-  "description": "The only Python type checker with a perfect 100% score on the official python/typing conformance results. Open-source Pylance replacement — complete language server with type checking, completions, go-to-definition, refactoring, debugging & profiling. Built in Rust.",
+  "description": "The only Python type checker scoring 100% on the official python/typing conformance suite — and the fastest we've measured. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default.",
   "version": "0.0.0-PLACEHOLDER",
   "publisher": "Nimblesite",
   "license": "MIT",

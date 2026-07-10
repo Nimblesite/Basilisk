@@ -9,6 +9,7 @@ mod depth;
 pub mod error;
 
 pub use error::ParseError;
+use ruff_python_ast::token::TokenKind;
 pub use ruff_python_ast::ModModule;
 
 /// The result of parsing a single Python source file.
@@ -20,6 +21,8 @@ pub struct ParsedModule {
     pub source: String,
     /// The file path from which the source was loaded (for diagnostics).
     pub path: String,
+    /// Exact ranges of Python comment tokens, excluding `#` text in strings.
+    pub comment_ranges: Vec<(u32, u32)>,
 }
 
 /// Parse a Python source string into a [`ParsedModule`].
@@ -40,10 +43,22 @@ pub fn parse_source(source: String, path: String) -> Result<ParsedModule, ParseE
         });
     }
     ruff_python_parser::parse_module(&source)
-        .map(|parsed| ParsedModule {
-            ast: parsed.into_syntax(),
-            source,
-            path: path.clone(),
+        .map(|parsed| {
+            let comment_ranges = parsed
+                .tokens()
+                .iter()
+                .filter(|token| token.kind() == TokenKind::Comment)
+                .map(|token| {
+                    let range = token.as_tuple().1;
+                    (range.start().to_u32(), range.end().to_u32())
+                })
+                .collect();
+            ParsedModule {
+                ast: parsed.into_syntax(),
+                source,
+                path: path.clone(),
+                comment_ranges,
+            }
         })
         .map_err(|err| ParseError::Syntax {
             path,

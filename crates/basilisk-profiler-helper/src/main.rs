@@ -29,6 +29,11 @@ use tokio::io::BufReader;
 use tokio::net::UnixStream;
 use tracing::{error, info};
 
+/// Default profiler sampling frequency in hertz.
+const DEFAULT_SAMPLE_RATE: u64 = 100;
+/// Highest accepted frequency; keeps the timer interval nonzero and CPU bounded.
+const MAX_SAMPLE_RATE: u64 = 10_000;
+
 /// Handle `--version` / `--version --json` via the Shipwright contract emitter.
 ///
 /// Returns `true` when a version flag was handled and `main` should exit 0.
@@ -115,7 +120,13 @@ async fn read_attach_command(
 
     match cmd {
         Some(Command::Attach { pid, rate, native }) => {
-            Ok((pid, rate.unwrap_or(100), native.unwrap_or(false)))
+            let sample_rate = rate.unwrap_or(DEFAULT_SAMPLE_RATE);
+            if !(1..=MAX_SAMPLE_RATE).contains(&sample_rate) {
+                return Err(format!(
+                    "sample rate must be between 1 and {MAX_SAMPLE_RATE} Hz"
+                ));
+            }
+            Ok((pid, sample_rate, native.unwrap_or(false)))
         }
         Some(Command::Stop) => Err("expected 'attach' command first".to_owned()),
         None => Err("EOF before attach command".to_owned()),
@@ -317,6 +328,31 @@ mod tests {
     /// py-spy's ambiguous "cannot open" attach failure.
     const CANNOT_OPEN: &str =
         "py-spy attach failed: Failed to open process - check if it is running.";
+
+    #[tokio::test]
+    async fn attach_rejects_sample_rates_that_can_spin_or_divide_by_zero() -> Result<(), String> {
+        for rate in [0, u64::MAX] {
+            let (client, server) = UnixStream::pair().map_err(|err| err.to_string())?;
+            let (_client_reader, mut client_writer) = client.into_split();
+            let (server_reader, _server_writer) = server.into_split();
+            write_message(
+                &mut client_writer,
+                &Command::Attach {
+                    pid: 1,
+                    rate: Some(rate),
+                    native: Some(false),
+                },
+            )
+            .await
+            .map_err(|err| err.to_string())?;
+            let result = read_attach_command(&mut BufReader::new(server_reader)).await;
+            assert!(
+                result.is_err(),
+                "unsafe sample rate {rate} must be rejected before attach"
+            );
+        }
+        Ok(())
+    }
 
     /// Poll `ps` until `pid` reports the zombie state (`Z…`), or time out.
     fn wait_until_zombie(pid: u32) -> Result<(), String> {

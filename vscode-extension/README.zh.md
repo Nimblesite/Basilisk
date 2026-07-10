@@ -9,9 +9,8 @@
 > 📝 本文档由机器翻译生成，欢迎母语者校对改进。
 
 <p align="center">
-  <strong>开源的 Pylance 替代品。</strong><br>
-  唯一在官方 <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> 符合性结果</a>中取得满分 100% 的 Python 类型检查器。<br>
-  完整的语言服务器、类型检查器、调试器与性能分析器 —— 默认严格。使用 <strong>Rust</strong> 构建 —— 单一内置二进制文件，无需运行时。
+  <strong>唯一在官方 <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> 符合性套件</a>中取得 100% 满分的 Python 类型检查器 —— 也是我们测过的最快的。</strong><br>
+  使用 <strong>Rust</strong> 构建的完整开源 Python 开发环境：类型检查器、语言服务器、调试器与性能分析器，并提供 VS Code、Cursor、Zed 与 Neovim 扩展。默认严格。
 </p>
 
 <p align="center">

@@ -76,7 +76,10 @@ pub fn check_with_config(
     module: &basilisk_resolver::ResolvedModule,
     config: &basilisk_config::BasiliskConfig,
 ) -> Vec<Diagnostic> {
-    let inline_overrides = suppression::parse_source_overrides(&module.source);
+    let inline_overrides = suppression::parse_source_overrides_with_comments(
+        &module.source,
+        &module.comment_ranges,
+    );
     let source = &module.source;
     let file_path = std::path::Path::new(&module.path);
     // [CHKARCH-VERSION-TARGET] every rule sees the configured target, plus a

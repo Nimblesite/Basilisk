@@ -1,7 +1,7 @@
 {
   "name": "Basilisk",
   "title": "Basilisk — The Only 100% PEP-Conformant Python Language Server",
-  "description": "The only Python type checker with a perfect 100% score on the official python/typing conformance results. Open-source language server in Rust — strict-by-default checking, autocomplete, refactoring, debugging & profiling in VS Code, Cursor, Zed & Neovim.",
+  "description": "The only Python type checker scoring 100% on the official python/typing conformance suite — and the fastest we've measured. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default.",
   "url": "https://www.basilisk-python.dev",
   "keywords": "basilisk, python type checker, 100% pep conformance, python/typing conformance results, python language server, lsp, strict typing, rust, vs code, cursor, zed, neovim, open source, autocomplete, refactoring",
   "themeColor": "#e8500a",

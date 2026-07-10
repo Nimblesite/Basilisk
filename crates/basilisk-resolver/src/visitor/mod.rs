@@ -248,6 +248,11 @@ fn build_resolved_module(
         pep695_scoping: pep695_scoping::collect_pep695_scoping(stmts, &module.source),
         path: module.path.clone(),
         source: module.source.clone(),
+        comment_ranges: module
+            .comment_ranges
+            .iter()
+            .map(|&(start, end)| crate::scope::Span::new(start, end))
+            .collect(),
         lazy_ast: super::scope::LazyAst::default(),
     }
 }

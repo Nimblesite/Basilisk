@@ -48,6 +48,21 @@ async fn session_manager_new_creates_empty_manager() {
 }
 
 #[tokio::test]
+async fn session_manager_rejects_unsafe_sample_rates_before_attach() {
+    let manager = ProfileSessionManager::new();
+    for rate in [0, 10_001, u64::MAX] {
+        let error = manager
+            .start(u32::MAX, Some(rate), Some(false), None)
+            .await
+            .expect_err("unsafe sample rate must fail");
+        assert!(
+            error.to_string().contains("sample rate"),
+            "rate {rate} must be rejected before any process attach: {error}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn session_manager_default_creates_empty_manager() {
     let manager = ProfileSessionManager::default();
     let sessions = manager.list().await;

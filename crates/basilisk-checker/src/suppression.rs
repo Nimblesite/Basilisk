@@ -5,6 +5,8 @@
 //! block directives, and file-level directives from Python source comments.
 
 use crate::diagnostic::{Diagnostic, RuleMode, Severity};
+use ruff_python_ast::{token::TokenKind, PySourceType};
+use ruff_text_size::Ranged;
 
 /// All parsed overrides for a source file.
 #[derive(Debug)]
@@ -43,6 +45,27 @@ pub struct LineOverride {
 /// Parse all inline overrides from the source text.
 #[must_use]
 pub fn parse_source_overrides(source: &str) -> SourceOverrides {
+    let parsed = ruff_python_parser::parse_unchecked_source(source, PySourceType::Python);
+    let comment_ranges: Vec<basilisk_resolver::Span> = parsed
+        .tokens()
+        .iter()
+        .filter(|token| token.kind() == TokenKind::Comment)
+        .map(|token| token.range().into())
+        .collect();
+    parse_source_overrides_with_comments(source, &comment_ranges)
+}
+
+/// Parse inline overrides from ranges already classified as Python comments.
+///
+/// The normal checker path passes the ranges retained by `basilisk-parser`, so
+/// suppression does not parse the file a second time. The public source-only
+/// helper above tokenizes on demand for callers that do not have a resolved
+/// module.
+#[must_use]
+pub(crate) fn parse_source_overrides_with_comments(
+    source: &str,
+    comment_ranges: &[basilisk_resolver::Span],
+) -> SourceOverrides {
     let mut file_mode = None;
     let mut line_overrides = Vec::new();
     let mut block_starts: Vec<(usize, LineOverride)> = Vec::new();
@@ -50,31 +73,42 @@ pub fn parse_source_overrides(source: &str) -> SourceOverrides {
     // Whether a docstring, import, or executable statement has been seen yet.
     // A file-level `# type: ignore` is only valid before any such line.
     let mut seen_substantial = false;
+    let comments = comments_by_line(source, comment_ranges);
 
     for (line_idx, line) in source.lines().enumerate() {
         let trimmed = line.trim();
+        let comment = comments.get(line_idx).and_then(|comment| *comment);
+        let trimmed_comment = comment.map(str::trim);
+        let is_standalone_comment = trimmed_comment == Some(trimmed);
 
         // File-level `# type: ignore` (PEP 484): a standalone `# type: ignore`
         // on its own line, before any docstring/import/executable code, silences
         // all errors in the file. Only blank lines and comments (shebang lines,
         // coding cookies) may precede it.
-        if file_mode.is_none() && trimmed == "# type: ignore" && !seen_substantial {
+        if file_mode.is_none()
+            && trimmed_comment == Some("# type: ignore")
+            && is_standalone_comment
+            && !seen_substantial
+        {
             file_mode = Some(FileOverride::Specific {
                 mode: RuleMode::Ignore,
                 codes: Vec::new(),
             });
             continue;
         }
-        if !trimmed.is_empty() && !trimmed.starts_with('#') {
+        if !trimmed.is_empty() && !is_standalone_comment {
             seen_substantial = true;
         }
 
         // File-level directives (must be standalone comment lines).
-        if trimmed == "# basilisk: relaxed" {
+        if trimmed_comment == Some("# basilisk: relaxed") && is_standalone_comment {
             file_mode = Some(FileOverride::Relaxed);
             continue;
         }
-        if let Some(rest) = trimmed.strip_prefix("# basilisk: file-") {
+        if let Some(rest) = trimmed_comment
+            .filter(|_| is_standalone_comment)
+            .and_then(|comment| comment.strip_prefix("# basilisk: file-"))
+        {
             if let Some(parsed) = parse_mode_directive(rest) {
                 file_mode = Some(FileOverride::Specific {
                     mode: parsed.mode,
@@ -85,7 +119,7 @@ pub fn parse_source_overrides(source: &str) -> SourceOverrides {
         }
 
         // Block end directives: `# type: end-<mode>[CODE]`
-        if let Some(rest) = find_comment_directive(line, "# type: end-") {
+        if let Some(rest) = comment.and_then(|text| find_comment_directive(text, "# type: end-")) {
             if let Some(parsed) = parse_mode_directive(rest) {
                 // Find matching block start and close it.
                 if let Some(start_idx) = find_matching_block_start(&block_starts, &parsed) {
@@ -99,8 +133,9 @@ pub fn parse_source_overrides(source: &str) -> SourceOverrides {
         // Block start directives: standalone `# type: <mode>[CODE]` on their own
         // line. The `# type: ` prefix on the *trimmed* line already guarantees a
         // standalone comment (a code-bearing line would start with the code).
-        if trimmed.starts_with("# type: ") {
-            if let Some(rest) = trimmed.strip_prefix("# type: ") {
+        if is_standalone_comment && trimmed_comment.is_some_and(|text| text.starts_with("# type: "))
+        {
+            if let Some(rest) = trimmed_comment.and_then(|text| text.strip_prefix("# type: ")) {
                 if rest.starts_with("disabled")
                     || rest.starts_with("warning")
                     || rest.starts_with("info")
@@ -108,10 +143,8 @@ pub fn parse_source_overrides(source: &str) -> SourceOverrides {
                     if let Some(parsed) = parse_mode_directive(rest) {
                         // Only treat as block start if this is a standalone comment line
                         // (no code before the comment).
-                        if line.trim_start().starts_with('#') {
-                            block_starts.push((line_idx, parsed));
-                            continue;
-                        }
+                        block_starts.push((line_idx, parsed));
+                        continue;
                     }
                 }
             }
@@ -121,7 +154,7 @@ pub fn parse_source_overrides(source: &str) -> SourceOverrides {
         // A single line may carry several directives (e.g. `ignore` one code
         // while `warning`-demoting another), so scan for EVERY `# type:` on the
         // line and apply each independently (issue #78).
-        for directive in find_all_type_directives(line) {
+        for directive in comment.into_iter().flat_map(find_all_type_directives) {
             if let Some(line_override) = parse_line_directive(directive) {
                 line_overrides.push((line_idx, line_override));
             }
@@ -139,6 +172,32 @@ pub fn parse_source_overrides(source: &str) -> SourceOverrides {
         line_overrides,
         block_overrides,
     }
+}
+
+/// Return the actual Python comment token on each physical line.
+///
+/// Ruff's tokenizer distinguishes comments from `# type:` text embedded in
+/// ordinary, raw, byte, triple-quoted, and interpolated string literals. Using
+/// its token ranges here keeps suppression directives tied to Python comments
+/// without maintaining a second, incomplete string lexer.
+fn comments_by_line<'a>(
+    source: &'a str,
+    comment_ranges: &[basilisk_resolver::Span],
+) -> Vec<Option<&'a str>> {
+    let line_index = basilisk_common::text::LineIndex::new(source);
+    let mut comments = vec![None; source.lines().count()];
+    for range in comment_ranges {
+        let line = line_index
+            .line(range.start_usize())
+            .saturating_sub(1);
+        if let (Some(slot), Some(text)) = (
+            comments.get_mut(line),
+            range.slice_source(source),
+        ) {
+            *slot = Some(text);
+        }
+    }
+    comments
 }
 
 /// Apply all overrides to a diagnostic given its pre-computed line number.
@@ -640,6 +699,21 @@ import os
         let source = "x = 1\ny = 2\n";
         let overrides = parse_source_overrides(source);
         assert!(overrides.line_overrides.is_empty());
+        assert!(overrides.block_overrides.is_empty());
+        assert!(overrides.file_mode.is_none());
+    }
+
+    /// A directive-looking substring inside a Python string is data, not a
+    /// comment, and must never suppress diagnostics on that line.
+    #[test]
+    fn type_ignore_inside_string_literal_is_not_a_directive() {
+        let source = "x: int = '# type: ignore'\n";
+        let overrides = parse_source_overrides(source);
+
+        assert!(
+            overrides.line_overrides.is_empty(),
+            "string contents must not create line overrides: {overrides:?}"
+        );
         assert!(overrides.block_overrides.is_empty());
         assert!(overrides.file_mode.is_none());
     }

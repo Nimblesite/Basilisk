@@ -7,9 +7,8 @@
 <p align="center"><strong>English</strong> · <a href="https://github.com/Nimblesite/Basilisk/blob/main/vscode-extension/README.zh.md">简体中文</a></p>
 
 <p align="center">
-  <strong>The open-source Pylance replacement.</strong><br>
-  The only Python type checker with a perfect 100% score on the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> conformance results</a>.<br>
-  Complete language server, type checker, debugger, and profiler — strict by default. Built in <strong>Rust</strong> — single bundled binary, no runtime.
+  <strong>The only Python type checker scoring 100% on the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> conformance suite</a> — and the fastest we&rsquo;ve measured.</strong><br>
+  Complete open-source Python dev environment in <strong>Rust</strong>: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed &amp; Neovim extensions. Strict by default.
 </p>
 
 <p align="center">

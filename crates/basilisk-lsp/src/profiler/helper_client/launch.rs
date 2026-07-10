@@ -16,7 +16,20 @@ use std::time::SystemTime;
 /// survive the shell.
 #[must_use]
 pub fn build_elevation_script(helper: &str, socket: &str) -> String {
+    let helper = escape_elevated_argument(helper);
+    let socket = escape_elevated_argument(socket);
     format!("do shell script \"cd / && '{helper}' '{socket}'\" with administrator privileges")
+}
+
+/// Quote one shell argument embedded inside an `AppleScript` string literal.
+fn escape_elevated_argument(argument: &str) -> String {
+    argument
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
+        .replace('\'', "'\\''")
 }
 
 /// Generate a unique, short Unix socket path for one helper session.
@@ -67,6 +80,26 @@ mod tests {
         assert!(
             script.contains("'/tmp/s p.sock'"),
             "socket path must be quoted: {script}"
+        );
+    }
+
+    #[test]
+    fn elevation_script_escapes_shell_and_applescript_metacharacters() {
+        let script = build_elevation_script(
+            "/Apps/O'Brien/\"Basilisk\"\\helper",
+            "/tmp/a'b\"c\\d.sock",
+        );
+        assert!(
+            script.contains(r"O'\''Brien"),
+            "shell single quotes must be escaped: {script}"
+        );
+        assert!(
+            script.contains(r#"\"Basilisk\""#),
+            "AppleScript double quotes must be escaped: {script}"
+        );
+        assert!(
+            script.contains(r"\\helper"),
+            "AppleScript backslashes must be escaped: {script}"
         );
     }
 
