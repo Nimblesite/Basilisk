@@ -5,8 +5,9 @@
 > excluded 9 diagnostic codes and ignored false positives. Treat the figures below
 > as historical task notes, not the live score.
 >
-> The live score is computed by the **unmodified `python/typing` calculator**
-> (pinned `268d0c4e`, `conformance/score.py`, see [CHKARCH-CONFORMANCE]) with the
+> The live score is produced by **RUNNING the unmodified `python/typing` harness**
+> (a FRESH `python/typing@main` clone driven by `conformance/run_conformance.py`,
+> see [CHKARCH-CONFORMANCE]) with the
 > `basilisk` binary run with **EVERY rule enabled** — no config, no `basilisk.json`,
 > no "spec-conformance mode" (no such mode exists — see CHKARCH-CONFORMANCE-MODE).
 > Honest current number: **68/146 = 46.6%** (errors+warnings, strictest),

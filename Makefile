@@ -163,12 +163,12 @@ mutation-test:
 		fi; \
 	'
 
-## conformance: Run the PEP typing conformance suite and write
-## conformance/conformance_status.csv. Fetches the upstream suite if missing;
-## use FETCH=1 to force a re-download.
+## conformance: Score basilisk by RUNNING the REAL python/typing harness and
+## write conformance/conformance_status.csv + the website report. Clones the
+## suite FRESH every run (no cache); needs network + git. See [CHKARCH-CONFORMANCE].
 conformance:
 	@cargo build -p basilisk-cli --bin basilisk
-	@python3 conformance/score.py --bin target/debug/basilisk $(if $(filter 1,$(FETCH)),--fetch,)
+	@python3 conformance/run_conformance.py --bin target/debug/basilisk
 
 ## bench: Benchmark Basilisk vs pyright/mypy/ty/pyrefly/zuban on the fixture suite.
 ## Requires hyperfine; competitor tools are skipped if not installed.

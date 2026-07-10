@@ -106,9 +106,10 @@ deslop-*.log
 benchmarks/results/
 
 # =============================================================================
-# Conformance test FIXTURES: downloaded on demand into conformance/tests/ (via
-# make conformance / score.py --fetch) — never committed. NOTE: the official
-# calculator conformance/upstream_main.py IS committed and is NOT ignored.
+# Conformance test FIXTURES: mirrored on demand into conformance/tests/ (via
+# make conformance / run_conformance.py --sync-tests) from a FRESH python/typing
+# clone — never committed. The fresh clone (target/typing-upstream) and the
+# harness venv (target/.conformance-venv) live under target/, already ignored above.
 # =============================================================================
 conformance/tests/
 

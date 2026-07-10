@@ -5,9 +5,10 @@
 Static docs (README.md, README.zh.md, the checker-architecture spec) quote the
 conformance score and the exact `python/typing` commit it was measured against.
 Those drift as the checker improves and `main` advances. This generator reads
-`website/src/_data/conformance_report.json` — written by `conformance/score.py`
-on every run — and refreshes the quoted values in place, so the docs can never
-silently contradict the self-measured number.
+`website/src/_data/conformance_report.json` — written by
+`conformance/run_conformance.py` on every run from the REAL python/typing harness
+output — and refreshes the quoted values in place, so the docs can never silently
+contradict the self-measured number.
 
 It updates two kinds of spot, both render-safe (the markers are invisible HTML
 comments, so they work mid-sentence, inside a list item, or inside a table cell):
@@ -167,7 +168,7 @@ def main(argv: list[str]) -> int:
     check = "--check" in argv
     if not REPORT.exists():
         print(
-            f"  ✗ {REPORT.relative_to(ROOT)} not found — run conformance/score.py first",
+            f"  ✗ {REPORT.relative_to(ROOT)} not found — run conformance/run_conformance.py first",
             file=sys.stderr,
         )
         return 1

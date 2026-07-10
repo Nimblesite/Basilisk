@@ -24,16 +24,6 @@ HTML_DIR="$REPO_ROOT/target/llvm-cov/html"
 # Ensure llvm-tools-preview is installed so cargo-llvm-cov never prompts.
 rustup component add llvm-tools-preview 2>/dev/null || true
 
-# ── Fetch the (git-ignored) conformance fixtures BEFORE the tests ─────────────
-# score.py --fetch-only pulls the latest python/typing@main (resolves the tip and
-# re-downloads the fixtures + calculator; degrades to cache when offline). This
-# MUST run before the workspace test suite: some tests (e.g. rule_tags_tests'
-# `pep_categories_match_conformance_test_prefixes`) read `conformance/tests/*.py`,
-# which is git-ignored and absent on a fresh checkout. The gate below re-resolves
-# main and re-scores against the same tip.
-header "Ensuring PEP conformance fixtures are current"
-python3 "$REPO_ROOT/conformance/score.py" --fetch-only
-
 # ── Rust tests + conformance, one instrumented coverage pool ─────────────────
 # Coverage is gathered in TWO phases that share ONE profile pool, reported once:
 #   1. the workspace test suite, then
@@ -76,6 +66,16 @@ if [[ "$OSTYPE" == darwin* ]]; then
     export LLVM_PROFILE_FILE="${CARGO_LLVM_COV_TARGET_DIR:-$REPO_ROOT/target}/Basilisk-%p.profraw"
 fi
 
+# Sync the (git-ignored) conformance fixtures the Rust tests read, from the REAL
+# python/typing suite. `--sync-tests` clones python/typing@main FRESH — done AFTER
+# the coverage clean so the clone survives — and mirrors its graded fixtures into
+# conformance/tests/ (absent on a fresh checkout, read by e.g. rule_tags_tests'
+# `pep_categories_match_conformance_test_prefixes`). The conformance gate below
+# reuses this same fresh clone (--reuse-clone) to RUN the harness under this
+# instrumented env, so the binary's conformance run also feeds the coverage pool.
+header "Syncing PEP conformance fixtures from the real python/typing suite"
+python3 "$REPO_ROOT/conformance/run_conformance.py" --sync-tests
+
 set +e
 cargo test --profile ci --workspace --exclude basilisk-compiler --all-targets
 TESTS_EXIT=$?
@@ -100,17 +100,19 @@ BASILISK_BIN=$(find_basilisk_bin) || {
 }
 ok "basilisk binary ready: $BASILISK_BIN"
 
-# ── PEP conformance gate (also contributes coverage) ──────────────────────────
-# Score the REAL compiled binary with the official python/typing calculator
-# (score.py runs upstream_main.py's get_expected_errors + diff_expected_errors,
-# fetched fresh from python/typing@main) and enforce the gate from
-# coverage-thresholds.json — 100% pass, 0 false positives, or the build fails. The
-# binary runs under the sourced llvm-cov env, so its profile data joins the test
-# pool and the checker/resolver paths these fixtures exercise count toward
-# coverage. The whole conformance system is these two Python files + the
-# gitignored fixtures, scored on the compiled binary — no Rust test.
-header "Enforcing PEP conformance gate (official python/typing calculator)"
-python3 "$REPO_ROOT/conformance/score.py" --bin "$BASILISK_BIN" --gate
+# ── PEP conformance gate — the REAL python/typing harness (also gives coverage)
+# Run python/typing's OWN `conformance/src/main.py --only-run basilisk` against
+# the freshly built, instrumented binary (BASILISK_BIN) via
+# conformance/run_conformance.py, reusing the fresh clone from --sync-tests above,
+# and enforce the gate from coverage-thresholds.json — 100% pass, 0 false
+# positives, or the build fails. The binary runs under the sourced llvm-cov env,
+# so every `basilisk check` subprocess the harness spawns joins the coverage pool
+# and the checker/resolver paths these fixtures exercise count toward coverage.
+# There is NO Rust conformance test and NO vendored calculator: the score is the
+# real suite's own verdict on the compiled binary. If the real harness cannot be
+# cloned and run, this FAILS the build. See [CHKARCH-CONFORMANCE].
+header "Enforcing PEP conformance gate (REAL python/typing harness)"
+python3 "$REPO_ROOT/conformance/run_conformance.py" --bin "$BASILISK_BIN" --gate --reuse-clone
 
 # ── macOS: drop truncated profiles before the merge ──────────────────────────
 # Completes the `%p` fix above. All instrumented runs are done, so any profile

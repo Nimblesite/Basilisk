@@ -6,9 +6,9 @@
 > The still-valid part of this plan is the *strategy* — driving specific rules'
 > false positives down; the *counts* below are stale.
 >
-> The score is now computed by the **real `python/typing` calculator**
-> (`conformance/score.py` runs upstream's `get_expected_errors` +
-> `diff_expected_errors`; see [CHKARCH-CONFORMANCE]). A file passes only with an
+> The score is now produced by **RUNNING the real `python/typing` harness**
+> (`conformance/run_conformance.py` clones the suite FRESH and runs its own
+> `src/main.py --only-run basilisk`; see [CHKARCH-CONFORMANCE]). A file passes only with an
 > **empty upstream `errors_diff`** (false positives fail the file); nothing is
 > excluded — the binary runs with **EVERY rule enabled**, no config, no
 > `basilisk.json`, no "spec-conformance mode" (no such mode exists — see

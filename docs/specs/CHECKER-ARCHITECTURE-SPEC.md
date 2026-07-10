@@ -1417,52 +1417,65 @@ a design target, not a claim of existing measurement.
 
 ### PEP Conformance Scoring {#CHKARCH-CONFORMANCE}
 
-The conformance score is computed by the **real `python/typing` conformance
-calculator**, not a Basilisk reimplementation — reproducible with the same tooling
-the reference checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with.
+The conformance score is produced by **RUNNING the real `python/typing`
+conformance harness** — the suite's own `conformance/src/main.py` driving its
+built-in `BasiliskTypeChecker` — against the compiled binary on **every run**,
+never a Basilisk reimplementation. It is the exact tooling the reference checkers
+(pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with. **A build in which
+that official check did not run against a freshly cloned suite is a BUILD FAILURE.**
 
 > ⛔️ **DISABLING, DELETING, OR UNREGISTERING ANY CONFORMANCE RULE IS FORBIDDEN.**
 > The binary is scored in its **full, default configuration with EVERY rule
 > enabled** — no `basilisk.json`, no per-rule override, no "spec-conformance mode",
 > no skipped fixtures, no deleting rule source (`src/rules/*.rs`), no removing rules
-> from `all_rules()`. `score.py` deletes any `basilisk.json` before scoring, but
+> from `all_rules()`. The binary is scored over a **fresh `python/typing` clone**
+> whose tree holds no `basilisk.json`, so nothing of ours can silence a rule;
 > deleting the rules themselves is the **same crime by another route** and equally
 > forbidden — as is hand-editing `conformance/conformance_status.csv` or loosening
 > the `coverage-thresholds.json` gate (`threshold` / `max_false_positives`). A
 > strict default firing on valid code is a **real conformance gap to FIX in the
 > checker**, never to hide. Gaming the number is a punishable offence.
 
-- **Scorer**: [`conformance/score.py`](../../conformance/score.py) tracks the
-  **latest [`python/typing@main`](https://github.com/python/typing/tree/main/conformance)** —
-  we always shoot for the current spec suite, not a frozen commit. On every run it
-  resolves the live `main` tip, refreshes the vendored
-  [`conformance/upstream_main.py`](../../conformance/upstream_main.py) calculator
-  (a byte-identical copy of `python/typing`'s `conformance/src/main.py`) and the
-  `# E`-annotated fixtures when `main` has moved, and **records the exact graded
-  commit hash + the calculator's sha256** in
-  [`website/src/_data/conformance_report.json`](../../website/src/_data/conformance_report.json)
-  — so the version every published number corresponds to is always pinned *by hash*
-  on the website and re-verified there at build time. It then calls upstream's own
-  `get_expected_errors` + `diff_expected_errors` functions **unmodified**. When
-  `main` is unreachable the cached fixtures are scored and the result is flagged
-  `stale`. The only Basilisk-specific code is a checker *adapter* that runs the real
-  `basilisk` binary and turns its JSON output into the `{line: [errors]}` mapping the
-  upstream algorithm consumes — exactly the role of upstream's per-checker adapters
-  in `type_checker.py`.
+- **Runner — the real harness, nothing else**:
+  [`conformance/run_conformance.py`](../../conformance/run_conformance.py) is the
+  ONE conformance path. Every run it clones the
+  **latest [`python/typing@main`](https://github.com/python/typing/tree/main/conformance)**
+  FRESH (we shoot for the current spec suite, not a frozen commit) and runs the
+  suite's **OWN unmodified `conformance/src/main.py --only-run basilisk`** against
+  the real compiled binary (via `BASILISK_BIN`). The suite already ships the
+  official Basilisk adapter — `BasiliskTypeChecker` in
+  [`conformance/src/type_checker.py`](https://github.com/python/typing/blob/main/conformance/src/type_checker.py) —
+  so **nothing of ours is injected, vendored, adapted, or reimplemented**. The
+  harness writes `results/basilisk/*.toml`; every `Pass`/`Fail` verdict and every
+  `errors_diff` is the harness's OWN, produced by the same code that grades pyright,
+  mypy, pyrefly, ty, zuban and pycroscope. From those real results the runner only
+  *reports*: it writes `conformance/conformance_status.csv` and **records the exact
+  graded commit hash** in
+  [`website/src/_data/conformance_report.json`](../../website/src/_data/conformance_report.json),
+  so every published number is pinned *by hash* on the website. There is **NO
+  vendored calculator and NO cached-fixtures fallback** — a build in which the real
+  harness could not be cloned and run is a **BUILD FAILURE**, by design. (The only
+  auxiliary number not in the toml, `caught` = required errors matched, is taken
+  from upstream's own `get_expected_errors` imported live from the fresh clone — the
+  official function on the official tests, never a copy.)
 - **Pass rule** (upstream's, verbatim): a file passes iff the upstream
   `errors_diff` is empty — every `# E` line gets an error, every `# E[tag]`
   group is satisfied, and **no error lands on a line the suite does not mark**.
   `conformance_automated = "Fail" if errors_diff.strip() else "Pass"`.
-- **Nothing excluded.** The scorer counts **every** diagnostic — errors **and**
+- **Nothing excluded.** The harness counts **every** diagnostic — errors **and**
   warnings (strictest grading, as pyright is graded); no looser mode, no opt-out.
-  The binary runs with **every rule enabled** in its default mode; `score.py`
-  deletes any stale `basilisk.json` before scoring ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
+  The binary runs with **every rule enabled** in its default mode over a fresh
+  `python/typing` clone whose tree holds no `basilisk.json`, so nothing of ours can
+  silence a rule ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 - **Gate**: `make test` (via [`scripts/test-rust.sh`](../../scripts/test-rust.sh))
-  builds the `basilisk` binary, then runs `python3 conformance/score.py --gate`
-  on it — there is **no Rust conformance test**; the whole conformance system is
-  the two committed Python files plus the git-ignored downloaded fixtures under
-  `conformance/tests/`. The pass-percentage floor and false-positive ceiling live
-  in `coverage-thresholds.json` (`conformance.threshold`,
+  builds the `basilisk` binary, then runs
+  `python3 conformance/run_conformance.py --gate` on it — which runs the REAL
+  harness and delegates the 100 %-pass / 0-false-positive check to
+  [`conformance/assert_wheel_conformance.py`](../../conformance/assert_wheel_conformance.py)
+  over the harness's OWN `results/basilisk/*.toml`. There is **no Rust conformance
+  test** and **no in-repo scorer**: the score is the real suite's own verdict on the
+  compiled binary. The pass-percentage floor and false-positive ceiling live in
+  `coverage-thresholds.json` (`conformance.threshold`,
   `conformance.max_false_positives`); the former ratchets **up**, the latter
   **down**. Per-file results are written to `conformance/conformance_status.csv`.
 - **Current score** — measured against `python/typing@main` at the exact graded
@@ -1470,8 +1483,8 @@ the reference checkers (pyright, mypy, pyrefly, ty, zuban, pycroscope) are grade
   [`<!--g:short-->f4f2952<!--/g:short-->`](https://github.com/python/typing/tree/f4f2952f3ac94d7af819c5c71b60a50a100370e0/conformance):
   **<!--g:pass-->141<!--/g:pass--> / <!--g:total-->141<!--/g:total--> = <!--g:score-->100.0%<!--/g:score-->**, **<!--g:fp-->0<!--/g:fp--> false positives**, **<!--g:missed-->0<!--/g:missed--> missed required errors**, with
   **<!--g:caught-->970<!--/g:caught-->** required errors caught. The binary runs in its default configuration — the
-  PEP conformance set — and `score.py` deletes any `basilisk.json` first so nothing
-  can silence a rule; Basilisk's opt-in house-style rules never run during scoring,
+  PEP conformance set — over a fresh `python/typing` clone whose tree holds no
+  `basilisk.json`, so nothing can silence a rule; Basilisk's opt-in house-style rules never run during scoring,
   so they can neither pad nor sink the number. The gate
   ratchets the pass-percentage **up** and the false-positive ceiling **down**
   (`coverage-thresholds.json` → `conformance.threshold` /
@@ -1500,9 +1513,10 @@ is forbidden** — as is hand-editing `conformance_status.csv` or loosening the
 `coverage-thresholds.json` gate (`threshold` / `max_false_positives`) to match a faked
 run. This has been attempted twice, back when the house rules still ran by default and
 counted toward the score. First, a revision wrote a `basilisk.json` that turned six
-rules off before scoring and reported a **fake 100%**; that was removed, and `score.py`
-now *deletes* any `basilisk.json` from the fixtures directory before scoring
-(`purge_rule_config`). Second — when config-disabling was blocked — a revision tried to
+rules off before scoring and reported a **fake 100%**; that was removed, and the
+scorer now runs the binary over a **fresh `python/typing` clone** whose tree contains
+no `basilisk.json`, so no config can silence a rule. Second — when config-disabling
+was blocked — a revision tried to
 *delete the offending rule source files outright* and unregister them from
 `all_rules()`, then re-report a **fake 100%**: the same lie by another route. **Deleting
 a rule to dodge the `basilisk.json` guard is the identical offence.**

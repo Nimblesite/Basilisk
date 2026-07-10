@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-# Implements [CHKARCH-CONFORMANCE]. Asserts the pip-installed `basilisk-python`
-# wheel passes the REAL python/typing harness. This is the release/CI gate for
-# the shipped artifact — it does NOT replace conformance/score.py (the sha-pinned
-# fast local scorer + anti-gaming gate), it proves the WHEEL a user installs
-# scores identically via the suite's own unmodified `src/main.py`.
+# Implements [CHKARCH-CONFORMANCE]. The conformance GATE: fail unless every file
+# the REAL python/typing harness graded is a Pass with zero false positives. It
+# reads the harness's OWN `results/basilisk/*.toml` — it does NO scoring of its
+# own. conformance/run_conformance.py invokes it after running the suite against
+# the compiled binary; the release workflow invokes it against the pip-installed
+# wheel. Either way the verdict is the upstream harness's, never ours.
 """Fail unless every scored file the upstream harness graded is a Pass.
 
 Reads the `results/basilisk/*.toml` files written by `src/main.py` (upstream's
