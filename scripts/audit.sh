@@ -25,6 +25,7 @@ require_py() {
 
 require_cmd cargo          "Install Rust: https://rustup.rs"
 require_cmd cargo-llvm-cov "Install: cargo install cargo-llvm-cov"
+require_cmd cargo-audit    "Install: cargo install cargo-audit --locked"
 require_cmd node           "Install Node.js 20+: https://nodejs.org"
 require_cmd npm            "Bundled with Node.js"
 require_cmd python3        "Install Python 3.12: https://python.org"

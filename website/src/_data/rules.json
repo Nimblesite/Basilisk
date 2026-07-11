@@ -2343,6 +2343,10 @@
       {
         "type": "text",
         "html": "Fires when an import cannot be resolved and the module is not part of the Python standard library.  When uv package-registry context is available the diagnostic message explains <em>why</em> the import failed (not installed, transitive-only, needs sync, wrong Python version).  Without that context a generic fallback message is used."
+      },
+      {
+        "type": "text",
+        "html": "This is where the static resolution model surfaces its terminal state (STUBRES-STATIC-MODEL): an import the static filesystem search could not follow \u2014 a missing dependency, but equally a computed/dynamic import or a module only a runtime <code>sys.meta_path</code> hook could supply \u2014 carries an implicit <code>Any</code>, and default-strict reports it here rather than silently accepting it."
       }
     ],
     "group": "Type System",

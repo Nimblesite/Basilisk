@@ -36,6 +36,9 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
+/// Maximum accepted newline-delimited wire frame, including its delimiter.
+const MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
+
 /// A command sent from the LSP to the helper.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "cmd", rename_all = "lowercase")]
@@ -181,14 +184,39 @@ where
     R: AsyncBufReadExt + Unpin,
     T: DeserializeOwned,
 {
-    let mut line = String::new();
-    let bytes_read = reader.read_line(&mut line).await?;
-    if bytes_read == 0 {
+    let Some(frame) = read_bounded_frame(reader).await? else {
         return Ok(None);
-    }
+    };
     let value =
-        serde_json::from_str(line.trim()).map_err(|err| Error::new(ErrorKind::InvalidData, err))?;
+        serde_json::from_slice(&frame).map_err(|err| Error::new(ErrorKind::InvalidData, err))?;
     Ok(Some(value))
+}
+
+/// Read one newline-delimited frame without allocating past the wire limit.
+async fn read_bounded_frame<R>(reader: &mut R) -> Result<Option<Vec<u8>>>
+where
+    R: AsyncBufReadExt + Unpin,
+{
+    let mut frame = Vec::new();
+    loop {
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            return Ok((!frame.is_empty()).then_some(frame));
+        }
+        let newline = available.iter().position(|byte| *byte == b'\n');
+        let take = newline.map_or(available.len(), |index| index.saturating_add(1));
+        if frame.len().saturating_add(take) > MAX_MESSAGE_BYTES {
+            return Err(Error::new(ErrorKind::InvalidData, "wire frame too large"));
+        }
+        let chunk = available
+            .get(..take)
+            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "invalid wire frame boundary"))?;
+        frame.extend_from_slice(chunk);
+        reader.consume(take);
+        if newline.is_some() {
+            return Ok(Some(frame));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -309,5 +337,19 @@ mod tests {
         let mut reader = BufReader::new(garbage);
         let decoded: Result<Option<Message>> = read_message(&mut reader).await;
         assert!(decoded.is_err(), "malformed JSON must surface an error");
+    }
+
+    #[tokio::test]
+    async fn read_message_rejects_oversized_frames() {
+        let message = "x".repeat(MAX_MESSAGE_BYTES);
+        let mut wire =
+            format!(r#"{{"type":"error","kind":"attach-failed","message":"{message}"}}"#);
+        wire.push('\n');
+        let mut reader = BufReader::new(wire.as_bytes());
+        let result: Result<Option<Message>> = read_message(&mut reader).await;
+        assert!(
+            matches!(&result, Err(error) if error.kind() == ErrorKind::InvalidData),
+            "oversized frame must return InvalidData"
+        );
     }
 }

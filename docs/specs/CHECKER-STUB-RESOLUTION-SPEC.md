@@ -5,6 +5,51 @@
 
 ---
 
+## Static Resolution Model {#STUBRES-STATIC-MODEL}
+
+Import resolution is **purely static**. Basilisk resolves every import by
+inspecting files on disk in the fixed order of [§STUBRES-PEP561](#STUBRES-PEP561),
+and MUST NOT execute the target program or its import system to do so. There is
+no embedded CPython, no interpreter subprocess, and no model of the runtime
+`import` machinery — resolution is a filesystem search, never an execution. This
+is what lets Basilisk ship as a single native binary with no Python runtime.
+
+Two consequences follow directly, and both are **by design**, not gaps:
+
+- **Computed / dynamic imports are unresolvable.** An import whose module name
+  is not a static string literal — `importlib.import_module(name)`,
+  `__import__(var)` — cannot be followed statically, because the name exists only
+  at runtime. The call's result is `Any` (the declared return type of
+  `importlib.import_module` / `__import__` in typeshed) and no member access on
+  it is checked. Basilisk MUST NOT guess the target module.
+- **`sys.meta_path` finders and custom loaders are not modelled.** A program MAY
+  install import hooks (`sys.meta_path`, `sys.path_hooks`, custom
+  `importlib.abc.MetaPathFinder`s) that make `import foo` resolve to something no
+  filesystem search could find — generated modules, database-backed modules,
+  zipimports. Honouring those hooks would mean running the target program, which
+  a static checker MUST NOT do. Such a module matches no step of
+  [§STUBRES-PEP561](#STUBRES-PEP561) and is treated exactly like any other
+  unresolved import.
+
+The typed-world answer for a module Basilisk cannot introspect statically is a
+**stub** (`.pyi`), not a runtime model: authoring or installing a stub
+([§STUBRES-PEP561](#STUBRES-PEP561) steps 1/4/5, or the "Create local stub" quick
+fix [§STUBRES-CREATE-LOCAL](#STUBRES-CREATE-LOCAL)) gives an otherwise-dynamic
+module precise types with zero execution.
+
+**Terminal state.** When the static search of [§STUBRES-PEP561](#STUBRES-PEP561)
+exhausts every step without a hit, the import lands in the terminal
+`ImportResolution::Unresolved` state and its bound names carry an **implicit
+`Any`**. Basilisk MUST NOT silently accept that `Any` the way a gradual checker
+does: default-strict surfaces it as `imports_unresolved`
+([§STUBRES-PROVENANCE-DIAG](#STUBRES-PROVENANCE-DIAG),
+[CHKARCH-STRICTNESS-ANY](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-STRICTNESS-ANY)). A
+module MAY *stay* `Any` only through an explicit opt-out — a module-level
+`def __getattr__(name: str) -> Any: ...` in its stub
+([§STUBRES-CREATE-LOCAL](#STUBRES-CREATE-LOCAL)) — never implicitly.
+
+---
+
 ## Import Resolution Order {#STUBRES-PEP561}
 
 Basilisk MUST resolve modules that carry type information in the exact order

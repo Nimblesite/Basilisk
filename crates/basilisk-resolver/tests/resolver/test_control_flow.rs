@@ -3,6 +3,223 @@
 
 use super::common::resolve_src;
 
+fn assert_control_flow_keeps_lexical_scope(
+    src: &str,
+    module_vars: &[&str],
+    module_imports: &[&str],
+    local_vars: &[&str],
+    local_imports: &[&str],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let resolved = resolve_src(src)?;
+
+    for name in module_vars {
+        assert!(
+            resolved.module_vars.iter().any(|var| var.name == *name),
+            "module binding `{name}` was lost inside control flow"
+        );
+    }
+    for name in local_vars {
+        assert!(
+            resolved.module_vars.iter().all(|var| var.name != *name),
+            "function-local binding `{name}` leaked into module scope"
+        );
+    }
+    for module in module_imports {
+        assert!(
+            resolved
+                .imports
+                .iter()
+                .any(|import| import.module == *module),
+            "module import `{module}` was lost inside control flow"
+        );
+    }
+    for module in local_imports {
+        assert!(
+            resolved
+                .imports
+                .iter()
+                .all(|import| import.module != *module),
+            "function-local import `{module}` leaked into module scope"
+        );
+    }
+
+    let function = resolved
+        .functions
+        .iter()
+        .find(|function| function.name == "local_scope")
+        .expect("local_scope function must resolve");
+    for name in local_vars {
+        assert!(
+            function.local_vars.iter().any(|var| var.name == *name),
+            "function-local binding `{name}` was not retained as a local"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn for_blocks_keep_module_bindings_and_function_locals_separate(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let src = r"
+for _ in ():
+    module_for_body: int = 1
+    import module_for_body_import
+else:
+    module_for_else: int = 2
+    import module_for_else_import
+
+def local_scope() -> None:
+    for _ in ():
+        local_for_body: int = 1
+        import local_for_body_import
+    else:
+        local_for_else: int = 2
+        import local_for_else_import
+";
+    assert_control_flow_keeps_lexical_scope(
+        src,
+        &["module_for_body", "module_for_else"],
+        &["module_for_body_import", "module_for_else_import"],
+        &["local_for_body", "local_for_else"],
+        &["local_for_body_import", "local_for_else_import"],
+    )
+}
+
+#[test]
+fn while_blocks_keep_module_bindings_and_function_locals_separate(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let src = r"
+while False:
+    module_while_body: int = 1
+    import module_while_body_import
+else:
+    module_while_else: int = 2
+    import module_while_else_import
+
+def local_scope() -> None:
+    while False:
+        local_while_body: int = 1
+        import local_while_body_import
+    else:
+        local_while_else: int = 2
+        import local_while_else_import
+";
+    assert_control_flow_keeps_lexical_scope(
+        src,
+        &["module_while_body", "module_while_else"],
+        &["module_while_body_import", "module_while_else_import"],
+        &["local_while_body", "local_while_else"],
+        &["local_while_body_import", "local_while_else_import"],
+    )
+}
+
+#[test]
+fn with_blocks_keep_module_bindings_and_function_locals_separate(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let src = r"
+with context_manager():
+    module_with_body: int = 1
+    import module_with_body_import
+
+def local_scope() -> None:
+    with context_manager():
+        local_with_body: int = 1
+        import local_with_body_import
+";
+    assert_control_flow_keeps_lexical_scope(
+        src,
+        &["module_with_body"],
+        &["module_with_body_import"],
+        &["local_with_body"],
+        &["local_with_body_import"],
+    )
+}
+
+#[test]
+fn try_blocks_keep_module_bindings_and_function_locals_separate(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let src = r"
+try:
+    module_try_body: int = 1
+    import module_try_body_import
+except Exception:
+    module_try_except: int = 2
+    import module_try_except_import
+else:
+    module_try_else: int = 3
+    import module_try_else_import
+finally:
+    module_try_finally: int = 4
+    import module_try_finally_import
+
+def local_scope() -> None:
+    try:
+        local_try_body: int = 1
+        import local_try_body_import
+    except Exception:
+        local_try_except: int = 2
+        import local_try_except_import
+    else:
+        local_try_else: int = 3
+        import local_try_else_import
+    finally:
+        local_try_finally: int = 4
+        import local_try_finally_import
+";
+    assert_control_flow_keeps_lexical_scope(
+        src,
+        &[
+            "module_try_body",
+            "module_try_except",
+            "module_try_else",
+            "module_try_finally",
+        ],
+        &[
+            "module_try_body_import",
+            "module_try_except_import",
+            "module_try_else_import",
+            "module_try_finally_import",
+        ],
+        &[
+            "local_try_body",
+            "local_try_except",
+            "local_try_else",
+            "local_try_finally",
+        ],
+        &[
+            "local_try_body_import",
+            "local_try_except_import",
+            "local_try_else_import",
+            "local_try_finally_import",
+        ],
+    )
+}
+
+#[test]
+fn match_blocks_keep_module_bindings_and_function_locals_separate(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let src = r"
+match subject:
+    case _:
+        module_match_case: int = 1
+        import module_match_case_import
+
+def local_scope() -> None:
+    match subject:
+        case _:
+            local_match_case: int = 1
+            import local_match_case_import
+";
+    assert_control_flow_keeps_lexical_scope(
+        src,
+        &["module_match_case"],
+        &["module_match_case_import"],
+        &["local_match_case"],
+        &["local_match_case_import"],
+    )
+}
+
 #[test]
 fn resolves_for_loop_with_else_clause() -> Result<(), Box<dyn std::error::Error>> {
     let src =

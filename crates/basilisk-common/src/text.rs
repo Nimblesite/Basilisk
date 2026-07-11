@@ -26,8 +26,11 @@
 /// instead of calling this in a loop — see the module docs.
 #[must_use]
 pub fn line_col(source: &str, offset: usize) -> (usize, usize) {
-    let clamped = offset.min(source.len());
-    let before = source.get(..clamped).unwrap_or(source);
+    let mut clamped = offset.min(source.len());
+    while !source.is_char_boundary(clamped) {
+        clamped = clamped.saturating_sub(1);
+    }
+    let before = source.get(..clamped).unwrap_or_default();
     let line = before.chars().filter(|&c| c == '\n').count() + 1;
     let col = before.rfind('\n').map_or(clamped, |pos| clamped - pos - 1) + 1;
     (line, col)
@@ -206,6 +209,13 @@ mod tests {
                 "offset {offset} gave ({line}, {col})"
             );
         }
+    }
+
+    #[test]
+    fn line_col_clamps_mid_character_offsets_to_previous_boundary() {
+        let source = "aé\nπ";
+        assert_eq!(line_col(source, 2), (1, 2));
+        assert_eq!(line_col(source, 5), (2, 1));
     }
 
     #[test]

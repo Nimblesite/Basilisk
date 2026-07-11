@@ -4,7 +4,7 @@
 
 First-class Neovim plugin for Basilisk — zero-config Python type checking, debugging, profiling, and test exploration.
 
-Basilisk is the **only Python type checker with a perfect 100% score** on the [official `python/typing` conformance results](https://github.com/python/typing/blob/main/conformance/results/results.html) — published on the Python typing repository's own leaderboard, ahead of Pyright, mypy, Pyrefly and ty.
+Basilisk is the only Python type checker scoring 100% on the [official `python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) — and the fastest we've measured. A complete, open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default.
 
 <p align="center">
   <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">

@@ -16,7 +16,28 @@ use std::time::SystemTime;
 /// survive the shell.
 #[must_use]
 pub fn build_elevation_script(helper: &str, socket: &str) -> String {
+    let helper = escape_elevated_argument(helper);
+    let socket = escape_elevated_argument(socket);
     format!("do shell script \"cd / && '{helper}' '{socket}'\" with administrator privileges")
+}
+
+/// Quote one shell argument embedded inside an `AppleScript` string literal.
+///
+/// The argument sits in two nested layers: it is wrapped in shell single quotes
+/// inside a command that is itself an `AppleScript` double-quoted string. Escape
+/// the INNER shell layer first — a literal `'` closes the quote, emits an escaped
+/// `\'`, and reopens (`'\''`) — THEN the OUTER `AppleScript` layer, so the
+/// backslash the shell escape introduces is itself doubled for `AppleScript`.
+/// Doing the `AppleScript` backslash pass first (as before) left a lone `\'`,
+/// which `osascript` rejects as an unknown escape token.
+fn escape_elevated_argument(argument: &str) -> String {
+    argument
+        .replace('\'', "'\\''")
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
 }
 
 /// Generate a unique, short Unix socket path for one helper session.
@@ -67,6 +88,28 @@ mod tests {
         assert!(
             script.contains("'/tmp/s p.sock'"),
             "socket path must be quoted: {script}"
+        );
+    }
+
+    #[test]
+    fn elevation_script_escapes_shell_and_applescript_metacharacters() {
+        let script =
+            build_elevation_script("/Apps/O'Brien/\"Basilisk\"\\helper", "/tmp/a'b\"c\\d.sock");
+        // The shell single-quote escape `'\''` has its backslash doubled for the
+        // outer AppleScript string layer, so the embedded form is `'\\''`. A lone
+        // `\'` (the previous, un-doubled output) is an invalid AppleScript escape
+        // that osascript rejects with "unknown token".
+        assert!(
+            script.contains(r"O'\\''Brien"),
+            "shell single quotes must be escaped and the backslash doubled for AppleScript: {script}"
+        );
+        assert!(
+            script.contains(r#"\"Basilisk\""#),
+            "AppleScript double quotes must be escaped: {script}"
+        );
+        assert!(
+            script.contains(r"\\helper"),
+            "AppleScript backslashes must be escaped: {script}"
         );
     }
 

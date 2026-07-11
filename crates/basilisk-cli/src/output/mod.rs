@@ -187,8 +187,8 @@ mod tests {
             message: "missing annotation for `x`".to_owned(),
             span: Span { start: 8, end: 9 },
             path: "test.py".to_owned(),
-            help: help.map(str::to_owned),
-            note: note.map(str::to_owned),
+            help: help.map(|value| value.to_owned().into()),
+            note: note.map(|value| value.to_owned().into()),
             provenance: None,
         }
     }

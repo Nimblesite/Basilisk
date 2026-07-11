@@ -101,6 +101,58 @@ async fn test_add_stub_member_appends_to_stub() -> TestResult<()> {
     Ok(())
 }
 
+/// [STUBRES-ADD-MEMBER] The command accepts a client-provided path, so lexical
+/// workspace prefixes are insufficient: parent components and symlinks can
+/// otherwise redirect the write outside the workspace.
+#[cfg(unix)]
+#[tokio::test]
+async fn test_add_stub_member_rejects_paths_that_escape_workspace() -> TestResult<()> {
+    let sandbox = tempfile::tempdir()?;
+    let root = sandbox.path().join("workspace");
+    let nested = root.join("nested");
+    std::fs::create_dir_all(&nested)?;
+    let traversal_target = sandbox.path().join("traversal.pyi");
+    let symlink_target = sandbox.path().join("symlink.pyi");
+    std::fs::write(&traversal_target, "# traversal target\n")?;
+    std::fs::write(&symlink_target, "# symlink target\n")?;
+    let traversal_path = nested.join("..").join("..").join("traversal.pyi");
+    let symlink_path = root.join("linked.pyi");
+    std::os::unix::fs::symlink(&symlink_target, &symlink_path)?;
+    let root_uri = format!("file://{}", root.display());
+
+    let mut fixture = WsTestFixture::new().await?;
+    let _ = initialize_with_root(&mut fixture, &root_uri, "wholeModule").await?;
+
+    for (id, path) in [(311, traversal_path), (312, symlink_path)] {
+        let resp = fixture
+            .request(
+                id,
+                "workspace/executeCommand",
+                serde_json::json!({
+                    "command": "basilisk.stubs.addMember",
+                    "arguments": [path.to_string_lossy(), "escaped: Any"]
+                }),
+            )
+            .await?
+            .ok_or("no response to workspace/executeCommand")?;
+        let parsed: serde_json::Value = serde_json::from_str(&resp)?;
+        assert!(
+            parsed["result"].is_null(),
+            "an escaping stub path must be rejected: {resp}"
+        );
+    }
+
+    assert_eq!(
+        std::fs::read_to_string(traversal_target)?,
+        "# traversal target\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(symlink_target)?,
+        "# symlink target\n"
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_create_local_stub_no_op_when_module_arg_missing() -> TestResult<()> {
     let dir = unique_temp_dir("bsk_create_local_stub_noarg");

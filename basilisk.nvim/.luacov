@@ -1,4 +1,10 @@
 return {
+  -- Periodic persistence protects coverage when Plenary exits a child via
+  -- :cq, but LuaCov's default of writing the complete shared stats file every
+  -- 100 covered lines turns the larger LSP specs into multi-minute jobs. The
+  -- suite is sequential and VimLeavePre performs a final flush, so this is a
+  -- crash-safety checkpoint rather than the primary persistence path.
+  savestepsize = 100000,
   include = {
     "basilisk.nvim/lua/basilisk/.+",
     "lua/basilisk/.+",

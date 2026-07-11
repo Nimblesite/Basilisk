@@ -101,7 +101,7 @@ pub(super) fn collect_from_stmt(
                 module_vars,
                 imports,
                 match_stmts,
-                false,
+                is_module_level,
             );
             collect_from_body(
                 &node.orelse,
@@ -110,7 +110,7 @@ pub(super) fn collect_from_stmt(
                 module_vars,
                 imports,
                 match_stmts,
-                false,
+                is_module_level,
             );
         }
         Stmt::While(node) => {
@@ -121,7 +121,7 @@ pub(super) fn collect_from_stmt(
                 module_vars,
                 imports,
                 match_stmts,
-                false,
+                is_module_level,
             );
             collect_from_body(
                 &node.orelse,
@@ -130,7 +130,7 @@ pub(super) fn collect_from_stmt(
                 module_vars,
                 imports,
                 match_stmts,
-                false,
+                is_module_level,
             );
         }
         Stmt::With(node) => {
@@ -141,7 +141,7 @@ pub(super) fn collect_from_stmt(
                 module_vars,
                 imports,
                 match_stmts,
-                false,
+                is_module_level,
             );
         }
         Stmt::Try(node) => {
@@ -152,7 +152,7 @@ pub(super) fn collect_from_stmt(
                 module_vars,
                 imports,
                 match_stmts,
-                false,
+                is_module_level,
             );
             collect_from_handlers(
                 &node.handlers,
@@ -161,6 +161,7 @@ pub(super) fn collect_from_stmt(
                 module_vars,
                 imports,
                 match_stmts,
+                is_module_level,
             );
             collect_from_body(
                 &node.orelse,
@@ -169,7 +170,7 @@ pub(super) fn collect_from_stmt(
                 module_vars,
                 imports,
                 match_stmts,
-                false,
+                is_module_level,
             );
             collect_from_body(
                 &node.finalbody,
@@ -178,7 +179,7 @@ pub(super) fn collect_from_stmt(
                 module_vars,
                 imports,
                 match_stmts,
-                false,
+                is_module_level,
             );
         }
         Stmt::Import(node) if is_module_level => {
@@ -205,7 +206,7 @@ pub(super) fn collect_from_stmt(
                     module_vars,
                     imports,
                     match_stmts,
-                    false,
+                    is_module_level,
                 );
             }
         }
@@ -242,6 +243,7 @@ pub(super) fn collect_from_handlers(
     module_vars: &mut Vec<VariableInfo>,
     imports: &mut Vec<ImportInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
+    is_module_level: bool,
 ) {
     for handler in handlers {
         let ExceptHandler::ExceptHandler(h) = handler;
@@ -252,7 +254,7 @@ pub(super) fn collect_from_handlers(
             module_vars,
             imports,
             match_stmts,
-            false,
+            is_module_level,
         );
     }
 }

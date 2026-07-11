@@ -7,7 +7,7 @@
 //!
 //! Three generation modes:
 //! - **Runtime** — `inspect.signature()` via Python subprocess (highest accuracy)
-//! - **AST** — parse `.py` source with `ruff_python_parser` (no subprocess)
+//! - **AST** — parse `.py` source with `basilisk-parser` (no subprocess)
 //! - **Hybrid** — try runtime first, fall back to AST per-function
 
 pub mod ast;
@@ -24,7 +24,7 @@ use std::path::Path;
 pub enum StubGenMode {
     /// Use `inspect.signature()` via Python subprocess.
     Runtime,
-    /// Parse `.py` source files with `ruff_python_parser`.
+    /// Parse `.py` source files with `basilisk-parser`.
     Ast,
     /// Try runtime first, fall back to AST per-function.
     Hybrid,

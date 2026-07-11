@@ -45,7 +45,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 RUN rustup component add rustfmt clippy
 
 # Rust cargo tools (pinned)
-RUN cargo install cargo-llvm-cov --version 0.8.4 --locked
+RUN cargo install cargo-llvm-cov --version 0.8.4 --locked \
+    && cargo install cargo-audit --version 0.22.2 --locked
 
 # Python packages (pinned — ruff MUST match CI and the ruff_* crate tag in
 # Cargo.toml: pip install debugpy ruff==0.15.17)

@@ -54,16 +54,24 @@ Basilisk's **opt-in house-style rules** (require-annotation, redundant-annotatio
 
 ### Reproduce it yourself
 
+Basilisk is a **registered checker in the official suite** — `BasiliskTypeChecker`
+lives in `python/typing`'s [`conformance/src/type_checker.py`](https://github.com/python/typing/blob/main/conformance/src/type_checker.py) —
+so you run the real harness directly, with nothing to patch:
+
 ```bash
-# Patch a python/typing checkout, install basilisk from the wheel, run the
-# real upstream harness, and write a proof log.
-python3 scripts/prepare_typing_conformance_pr.py \
-  --typing-repo ../typing \
-  --verbose \
-  --write-proof
+# Clone python/typing FRESH, run its OWN harness against the basilisk binary,
+# and regenerate conformance/conformance_status.csv from the real results.
+python3 conformance/run_conformance.py --bin target/release/basilisk
 ```
 
-The submission workflow lives in [`scripts/prepare_typing_conformance_pr.py`](https://github.com/Nimblesite/Basilisk/blob/main/scripts/prepare_typing_conformance_pr.py); the expected upstream PR files are documented in [`docs/typing-conformance-pr.md`](https://github.com/Nimblesite/Basilisk/blob/main/docs/typing-conformance-pr.md).
+Or drive the upstream harness by hand against any `basilisk` on your PATH:
+
+```bash
+git clone --depth 1 https://github.com/python/typing
+BASILISK_BIN=$(which basilisk) python typing/conformance/src/main.py --only-run basilisk
+```
+
+The runner lives in [`conformance/run_conformance.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/run_conformance.py); it clones the suite fresh, runs the unmodified upstream harness, and never scores anything itself.
 
 ## How the score got honest
 

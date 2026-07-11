@@ -9,9 +9,8 @@
 > 📝 本文档由机器翻译生成，欢迎母语者校对改进。
 
 <p align="center">
-  <strong>开源的 Pylance 替代品。</strong><br>
-  唯一在官方 <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> 符合性结果</a>中取得满分 100% 的 Python 类型检查器。<br>
-  完整的语言服务器、类型检查器、调试器与性能分析器 —— 默认严格。使用 <strong>Rust</strong> 构建 —— 单一内置二进制文件，无需运行时。
+  <strong>唯一在官方 <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> 符合性套件</a>中取得 100% 满分的 Python 类型检查器 —— 也是我们测过的最快的。</strong><br>
+  使用 <strong>Rust</strong> 构建的完整开源 Python 开发环境：类型检查器、语言服务器、调试器与性能分析器，并提供 VS Code、Cursor、Zed 与 Neovim 扩展。默认严格。
 </p>
 
 <p align="center">
@@ -42,12 +41,12 @@ Basilisk 是**唯一**在官方
 
 | 类型检查器 | 冷启动检查中位数 |
 | --- | --- |
-| ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
+| ⚡ **Basilisk** | **<!--g:benchBasilisk-->11<!--/g:benchBasilisk--> ms** |
 | zuban | <!--g:benchZuban-->27<!--/g:benchZuban--> ms |
-| ty | <!--g:benchTy-->37<!--/g:benchTy--> ms |
-| Pyrefly | <!--g:benchPyrefly-->145<!--/g:benchPyrefly--> ms |
-| Pyright | <!--g:benchPyright-->568<!--/g:benchPyright--> ms |
-| mypy | <!--g:benchMypy-->588<!--/g:benchMypy--> ms |
+| ty | <!--g:benchTy-->39<!--/g:benchTy--> ms |
+| Pyrefly | <!--g:benchPyrefly-->148<!--/g:benchPyrefly--> ms |
+| Pyright | <!--g:benchPyright-->582<!--/g:benchPyright--> ms |
+| mypy | <!--g:benchMypy-->610<!--/g:benchMypy--> ms |
 
 在 <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> 上，跨 <!--g:benchCount-->26<!--/g:benchCount--> 个单一类型构造压力测试样本的冷启动全文件检查中位数 —— 数值越低越好；在编辑器内热重检查更快。每个数字均由 [`hyperfine`](https://github.com/sharkdp/hyperfine) 生成并按机器提交，没有一个是手写的。**克隆仓库，在你自己的硬件上运行 `make bench`，并把 CSV 发给我们 —— 欢迎社区独立复核。** [完整基准测试与方法论（英文）&rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
 

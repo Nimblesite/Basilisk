@@ -6,6 +6,12 @@
 //! diagnostic message explains *why* the import failed (not installed,
 //! transitive-only, needs sync, wrong Python version).  Without that context a
 //! generic fallback message is used.
+//!
+//! This is where the static resolution model surfaces its terminal state
+//! ([STUBRES-STATIC-MODEL]): an import the static filesystem search could not
+//! follow — a missing dependency, but equally a computed/dynamic import or a
+//! module only a runtime `sys.meta_path` hook could supply — carries an implicit
+//! `Any`, and default-strict reports it here rather than silently accepting it.
 
 use basilisk_resolver::{ImportInfo, ImportResolution, ResolvedModule, UnresolvedReason};
 use basilisk_stubs::TypeProvenance;
@@ -57,6 +63,9 @@ impl Rule for ImportFromUntypedModule {
                     ctx.custom_typeshed_configured,
                 )
             })
+            // Terminal state of the static search ([STUBRES-STATIC-MODEL]):
+            // whatever the search could not follow to a `.py`/`.pyi` is an
+            // implicit `Any` we surface here instead of silently accepting.
             .filter(|import| import.resolution == ImportResolution::Unresolved)
             .for_each(|import| diagnostics.push(make_diagnostic(import, &module.path)));
     }
@@ -78,10 +87,8 @@ fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
         message,
         span: import.span,
         path: path.to_owned(),
-        help: Some(help),
-        note: Some(
-            "Basilisk requires complete type information for all imported modules".to_owned(),
-        ),
+        help: Some(help.into()),
+        note: Some("Basilisk requires complete type information for all imported modules".into()),
         provenance: Some(TypeProvenance::Untyped),
     }
 }
@@ -303,6 +310,18 @@ mod tests {
     fn diagnostic_has_correct_code() {
         let diag = check_single("numpy", None);
         assert_eq!(diag.code.code, "imports_unresolved");
+    }
+
+    /// [STUBRES-STATIC-MODEL]: a module the static filesystem search cannot follow
+    /// — the terminal state a computed/dynamic import or a `sys.meta_path`-only
+    /// module lands in — surfaces its implicit `Any` as `imports_unresolved`
+    /// rather than being silently accepted. Whatever the resolver could not reach
+    /// on disk arrives here as `ImportResolution::Unresolved`.
+    #[test]
+    fn static_model_surfaces_unresolvable_module() {
+        let diag = check_single("_runtime_only_module", None);
+        assert_eq!(diag.code.code, "imports_unresolved");
+        assert!(diag.message.contains("no type information available"));
     }
 
     #[test]

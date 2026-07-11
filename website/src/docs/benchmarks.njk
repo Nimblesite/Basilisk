@@ -23,7 +23,6 @@ benchmarkStrings:
   cacheHeader: "How"
   warmTag: "warm result-cache hit"
   noCacheTag: "measured cold-only — its cold median is shown"
-  outlierVsMedian: "its own median"
   versionsLabel: "Versions benchmarked"
   metaPre: "Mean wall-clock over "
   metaMid: " hyperfine runs per fixture; lower is better, ✓ = fastest median. Measured on "
@@ -35,16 +34,15 @@ benchmarkStrings:
 ---
 <h1>Performance Benchmarks</h1>
 
-{%- if benchmarks.vsPyright %}
+{%- if benchmarks.hasData %}
 <p class="releases-intro">
-  Across the <strong>{{ benchmarks.vsPyright.total }}</strong> typing-spec construct fixtures we benchmark,
-  Basilisk&rsquo;s cold full-file check is a median <strong>{{ benchmarks.vsPyright.medianFactor }}&times;</strong>
-  faster than Pyright (up to <strong>{{ benchmarks.vsPyright.maxFactor }}&times;</strong>) &mdash;
-  a typical <strong>{{ benchmarks.vsPyright.basiliskMedianMs }}&nbsp;ms</strong> against Pyright&rsquo;s
-  {{ benchmarks.vsPyright.pyrightMedianMs }}&nbsp;ms. These are self-measured, reproducible numbers:
-  <code>make bench</code> regenerates them and the raw CSV is committed per machine, so this page
-  renders exactly what was last measured and committed &mdash; never a hand-typed figure. The exact
-  build, tool versions, and measurement date are shown beneath the table.
+  Every number on this page is measured by <code>make bench</code> and read straight from the
+  committed per-machine CSV (<code>benchmarks/status/{{ benchmarks.primary }}.csv</code>) &mdash; the
+  page renders exactly what was last measured and committed, never a hand-typed or build-time-derived
+  figure. Each tool&rsquo;s cold full-file check is summarised below by its <strong>median</strong>
+  across the <strong>{{ benchmarks.rows.length }}</strong> typing-spec construct fixtures and the
+  fixtures at each end of its own range. The exact build, tool versions, and measurement date are shown
+  beneath the table.
 </p>
 {%- endif %}
 
@@ -72,22 +70,10 @@ benchmarkStrings:
   repeat each tool&rsquo;s baseline {{ benchmarks.rows.length }} times while implying
   &ldquo;tool&nbsp;X takes Y&nbsp;ms on construct&nbsp;Z&rdquo; precision that the measurement cannot
   support. Checkers also don&rsquo;t share a rule taxonomy, so no per-rule cross-tool comparison is
-  possible even in principle. We publish what the data actually supports: per-tool distributions above,
-  and the genuine departures below. The full per-fixture numbers &mdash; every timing and every
-  diagnostic count &mdash; are in the committed CSV if you want them.
+  possible even in principle. We publish what the data actually supports: the per-tool distributions
+  above. The full per-fixture numbers &mdash; every timing and every diagnostic count &mdash; are in
+  the committed CSV (<code>benchmarks/status/{{ benchmarks.primary }}.csv</code>) if you want them.
 </p>
-
-{%- if benchmarks.outliers.length %}
-<h3>Where a fixture genuinely separates a tool from its own baseline</h3>
-
-<p>
-  These are the fixtures where a tool&rsquo;s cold check lands at <strong>2&times; or more of its own
-  median</strong> &mdash; real, construct-specific cost (unresolved-import handling, dataclass synthesis)
-  rather than startup noise. Computed from the same CSV as everything else:
-</p>
-
-{{ benchmark.outliers(benchmarks, benchmarkStrings) }}
-{%- endif %}
 
 {%- if benchmarks.warm.hasData %}
 <h2 id="warm-recheck">Warm re-check &mdash; fastest repeat-check</h2>

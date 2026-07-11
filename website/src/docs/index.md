@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "Basilisk: The Only 100% PEP-Conformant Python Language Server"
-description: "Get started with Basilisk — the only Python type checker with a perfect 100% score on the official python/typing conformance results. Open-source language server in Rust: type checking, refactoring, debugging, and profiling."
+description: "The only Python type checker scoring 100% on the official python/typing conformance suite — and the fastest we've measured. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default."
 keywords: basilisk, python, language server, lsp, type checker, vs code, cursor, zed, neovim, strict, rust
 date: 2026-02-28
 dateModified: 2026-03-31
