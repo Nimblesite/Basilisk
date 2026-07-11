@@ -172,9 +172,10 @@ conformance:
 
 ## bench: Benchmark Basilisk vs pyright/mypy/ty/pyrefly/zuban on the fixture suite.
 ## Requires hyperfine; competitor tools are skipped if not installed.
-## Writes per-fixture JSON + a summary to benchmarks/results/.
+## run.sh does the CLEAN release rebuild itself (fresh binary under test) before
+## timing, so the guarantee holds even when run.sh is invoked directly — this
+## target just delegates. Writes per-fixture JSON + a summary to benchmarks/results/.
 bench:
-	@cargo build --release --bin basilisk
 	@bash benchmarks/run.sh
 
 ## smoke-micropython: Real-world smoke test for typeshed-path

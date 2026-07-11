@@ -1402,7 +1402,13 @@ Every error has at least one associated code action:
 
 The suite that exists today is `benchmarks/` — single-construct typing-spec
 stress fixtures timed cold across Basilisk, Pyright, mypy, ty, Pyrefly, and
-zuban by `benchmarks/run.sh` ([CHKARCH-TESTING-BENCH-RATCHET]).
+zuban by `benchmarks/run.sh`. Each run does a full `cargo clean` + fresh
+`--release` build of basilisk, pulls the LATEST official release of every
+competitor, times all fixtures, and writes the measured numbers to the
+per-machine status CSV **immediately and unconditionally** — the write is never
+gated. A **separate** read-only regression gate then compares those numbers
+against the committed baseline and fails CI on a slip beyond a small noise
+tolerance. Full mechanism: [CHKARCH-TESTING-BENCH-RATCHET].
 
 **Planned, not yet built:** a real-world-codebase suite — **PyTorch** (~600K
 LOC), **Django** (~250K LOC), **FastAPI** (~30K LOC), **Python standard
@@ -1421,7 +1427,7 @@ a design target, not a claim of existing measurement.
 | Golden file tests | Expected diagnostic output | Diagnostic regression |
 | Fuzzing | `cargo-fuzz` | Crash resistance, soundness |
 | Property tests | `proptest` crate | Type system invariants |
-| Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Performance tracking + zero-tolerance regression gate (fails if basilisk gets slower than the committed per-machine `benchmarks/status/<machine>.csv`) |
+| Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Performance tracking (results written to `benchmarks/status/<machine>.csv` immediately, every run) + regression gate that fails if basilisk gets slower than the **committed** baseline beyond a small noise tolerance ([CHKARCH-TESTING-BENCH-RATCHET]) |
 
 ### PEP Conformance Scoring {#CHKARCH-CONFORMANCE}
 
@@ -1574,16 +1580,60 @@ Mutation testing proves the test suite actually asserts behaviour. Scope only ev
 
 ### Benchmark Non-Regression {#CHKARCH-TESTING-BENCH-RATCHET}
 
-Performance and conformance ratchet **together** — neither traded for the other:
+Performance and conformance ratchet **together** — neither traded for the other.
+`make bench` (`benchmarks/run.sh`) runs the fixture suite and enforces the
+performance gate. Two responsibilities are deliberately **DECOUPLED**, so one can
+never suppress the other (`benchmarks/summarize.py`):
 
-- `make bench` (`benchmarks/run.sh`) fails when basilisk gets slower on any
-  fixture vs the committed per-machine baseline
-  `benchmarks/status/<machine>.csv`.
+1. **WRITE — unconditional and immediate.** Every measured number is written
+   straight to the per-machine status CSV `benchmarks/status/<machine>.csv` the
+   instant it exists: `summarize.py` runs in `incremental` mode after **each**
+   fixture (rewriting the CSV from all results so far) and again in `final` mode
+   at the end. There is **no gate on the write, no branch, no "left unchanged"
+   path** — the file ALWAYS reflects exactly what this build just measured. A run
+   that measured a number but did not record it is a lie about the build's
+   performance, and the whole point of the suite is to KNOW the moment a number
+   slips. So the write happens regardless of what the gate later decides
+   (atomic tmp + `os.replace`, so a kill mid-write never tears the file).
+
+2. **GATE — read-only, CI pass/fail, separate judgment.** In `final` mode, AFTER
+   the numbers are on disk, the run's basilisk times are compared against the
+   **COMMITTED** baseline — the status CSV read from git at `BENCH_BASELINE_REF`
+   (default `HEAD`) via `git show`, **never the working copy the run just
+   overwrote**, so a slower run can never launder its regression into the
+   baseline. A backwards step **beyond the tolerance** on any fixture exits 3 →
+   CI FAILURE. The gate only READS; it never edits the file. The committed
+   baseline advances only when a run is committed, so it still ratchets toward
+   faster — while the live file never hides a slip.
+
+- **Fresh binary, every run.** `run.sh` ALWAYS does a full `cargo clean` + a
+  from-scratch `cargo build --release --bin basilisk` before timing a single
+  fixture. A number is only honest if it came from a from-scratch optimized build
+  of the exact tree under test — never a stale or incrementally-linked binary. The
+  `# generated` timestamp and the basilisk version recorded in the CSV header are
+  captured after this build, so the header proves the numbers came from it.
+- **Latest competitors, every run.** Before discovery/timing, `run.sh` upgrades
+  each officially-recognized checker (pyright, mypy, ty, pyrefly, zuban — only
+  those tracked by the `python/typing` conformance suite; never unofficial tools)
+  to its newest official release via `pip install --upgrade` (best-effort per
+  tool, loud warning on failure). Competitor columns therefore always reflect
+  current upstream, never a pinned build. The pull runs outside all timing.
+- **Noise tolerance, not a disable knob.** A small COMMITTED tolerance
+  (`BENCH_TOLERANCE_PCT`, default 5%) absorbs run-to-run wall-clock jitter so a
+  non-regression is not red-flagged. It lives in the tracked script, not an env
+  var; the gate itself cannot be disabled or widened at runtime (`BENCH_NO_GATE` /
+  `BENCH_REGRESS_PCT` / `BENCH_TOLERANCE_PCT` overrides are rejected).
 - Run it whenever checker hot paths change (resolver visitors, rule `check` loops,
   conformance-driven additions). Conformance logic that blows the gate must be
-  optimised or restructured.
-- The performance gate cannot be disabled or widened; a machine without a
-  baseline establishes one only after a successful run.
+  optimised or restructured. A machine without a baseline establishes one only
+  after a successful run is committed.
+
+> **Planned — bench in the pipeline (CI).** Today `make bench` is run locally and
+> its results are committed. The intention is to eventually run the benchmark gate
+> in CI on a fixed runner class, on the same write-always / gate-separately
+> discipline described here, so a performance regression fails the pipeline the way
+> the conformance and coverage gates already do. Until that lands, the discipline
+> is enforced by running `make bench` locally and committing the updated status CSV.
 
 ### CI Artifact Storage Policy {#GITHUB-NO-ARTIFACTS}
 

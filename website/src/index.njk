@@ -109,10 +109,10 @@ permalink: /
     <h2 class="section-heading">Everything you expect.<br>Fully open source.</h2>
     <p class="section-subhead">
       A feature-complete, open-source language server with no proprietary lock-in.{% if benchmarks.hasData and benchmarks.toolMedians.fastest == 'basilisk' %}
-      And in our own cold-start benchmark it is the fastest of every checker we tested: a
-      <strong>{{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms</strong> median cold check &mdash; up to
-      <strong>{{ benchmarks.vsPyright.maxFactor }}&times;</strong> faster than Pyright, and quicker than the
-      Rust-based ty, Pyrefly, and zuban too. If the numbers hold, nothing we&rsquo;ve benchmarked is faster.{% endif %}
+      And in our own cold-start benchmark it posts the lowest median of every checker we tested: a
+      <strong>{{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms</strong> median cold check, against
+      Pyright&rsquo;s {{ benchmarks.toolMedians.ms.pyright }}&nbsp;ms and the Rust-based ty, Pyrefly, and
+      zuban.{% endif %}
       Every competitor claim below links to that tool&rsquo;s own docs &mdash; and the
       <a href="/docs/benchmarks/">benchmark methodology</a> shows exactly how these were measured.
     </p>
@@ -259,19 +259,19 @@ permalink: /
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">{{ benchmarks.vsPyright.beats }}<span class="stat-block__unit">/{{ benchmarks.vsPyright.total }}</span></span>
-        <span class="stat-block__label">benchmarked constructs beat Pyright</span>
+        <span class="stat-block__number">{{ benchmarks.toolMedians.ms.basilisk }}<span class="stat-block__unit">&nbsp;ms</span></span>
+        <span class="stat-block__label">median cold full-file check</span>
       </div>
     </div>
     <div class="feature-row__text">
       <p class="feature-row__num">02 &mdash; Measured, not promised</p>
-      {% if benchmarks.toolMedians.fastest == 'basilisk' %}<h2 class="feature-row__title">The fastest checker<br>we&rsquo;ve benchmarked.</h2>{% else %}<h2 class="feature-row__title">Faster than Pyright.<br>Every construct we benchmark.</h2>{% endif %}
+      {% if benchmarks.toolMedians.fastest == 'basilisk' %}<h2 class="feature-row__title">The lowest median<br>we&rsquo;ve benchmarked.</h2>{% else %}<h2 class="feature-row__title">Measured against<br>every checker.</h2>{% endif %}
       <p class="feature-row__body">
         The numbers come from <code>make bench</code> &mdash; hyperfine wall-clock against Pyright,
         mypy, ty, Pyrefly, and zuban on identical fixtures &mdash; and the raw CSV is committed to
         the repo, so the site renders exactly what was last measured.
-        {% if benchmarks.toolMedians.fastest == 'basilisk' %}Basilisk posts the fastest cold full-file check of every tool we measured &mdash; a
-        {{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms median, up to {{ benchmarks.vsPyright.maxFactor }}&times; faster than Pyright.{% else %}On the constructs we benchmark, Basilisk&rsquo;s cold full-file checks beat Pyright outright.{% endif %}
+        {% if benchmarks.toolMedians.fastest == 'basilisk' %}Basilisk posts the lowest median cold full-file check of every tool we measured &mdash;
+        {{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms, against Pyright&rsquo;s {{ benchmarks.toolMedians.ms.pyright }}&nbsp;ms.{% else %}Each tool&rsquo;s median cold full-file check is published side by side.{% endif %}
         And because re-checks are incremental &mdash; only the edited file and its importers are
         re-analyzed &mdash; warm edits do even less work. <a href="/docs/benchmarks/">See the benchmark methodology &rarr;</a>
       </p>

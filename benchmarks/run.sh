@@ -124,11 +124,32 @@ if ! command -v hyperfine >/dev/null 2>&1; then
   echo "ERROR: hyperfine is not installed (brew install hyperfine / cargo install hyperfine)." >&2
   exit 1
 fi
-if [[ ! -x "$BSK" ]]; then
-  echo "ERROR: basilisk release binary not found at $BSK" >&2
-  echo "       Build it first:  cargo build --release --bin basilisk" >&2
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "ERROR: cargo is not installed — the benchmark builds a FRESH release binary from this checkout." >&2
   exit 1
 fi
+
+# ─── FRESH BINARY: full clean release build from THIS checkout ────────────────
+# The benchmark must never time a stale or incrementally-linked binary — a number
+# is only honest if it came from a from-scratch optimized build of the exact tree
+# under test. So we ALWAYS `cargo clean` the whole target dir and rebuild
+# `basilisk --release` before a single fixture is timed. No skip path, no "reuse
+# if present" shortcut: the clean build is the first thing that happens, so the
+# preflight can never fail on a missing binary — it builds the binary it needs.
+echo "─── Fresh release build (full clean, then cargo build --release) ─────────"
+if ! cargo clean --manifest-path "$ROOT/Cargo.toml"; then
+  echo "ERROR: cargo clean failed — refusing to benchmark a dirty target dir." >&2
+  exit 1
+fi
+if ! cargo build --release --bin basilisk --manifest-path "$ROOT/Cargo.toml"; then
+  echo "ERROR: cargo build --release --bin basilisk failed — cannot benchmark." >&2
+  exit 1
+fi
+if [[ ! -x "$BSK" ]]; then
+  echo "ERROR: release build reported success but $BSK is missing/not executable." >&2
+  exit 1
+fi
+echo "  fresh binary: $BSK"
 
 # ─── Pull LATEST competitor versions (officially recognized checkers only) ────
 # Every run upgrades each recognized type checker to its newest official release
