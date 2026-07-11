@@ -5,13 +5,15 @@ Code here must comfortably pass review at a top-tier engineering org. Keep quali
 
 ⚠️ The conformance test suite is the **single source of all authority**: https://github.com/python/typing/tree/main/conformance/tests. Conformance is measured ONLY by how accurately Basilisk passes these tests — nothing else. ⚠️
 
-⚠️ Disabling, deleting, or unregistering ANY conformance rule is FORBIDDEN. Move the number by FIXING the checker, NEVER by touching the scoreboard: no `basilisk.json`, no deleting rule source (`crates/basilisk-checker/src/rules/*.rs`), no removing rules from `all_rules()`, no hand-editing `conformance/conformance_status.csv`, no loosening `coverage-thresholds.json` (`threshold` / `max_false_positives`). `score.py` purges stale config before scoring — deleting a rule to dodge that purge is the SAME crime by another route. See [CHKARCH-CONFORMANCE], [CHKARCH-CONFORMANCE-MODE]. ⚠️
+⚠️ Disabling, deleting, or unregistering ANY conformance rule is FORBIDDEN. Move the number by FIXING the checker, NEVER by touching the scoreboard: no `basilisk.json`, no deleting rule source (`crates/basilisk-checker/src/rules/*.rs`), no removing rules from `all_rules()`, no hand-editing `conformance/conformance_status.csv`, no loosening `coverage-thresholds.json` (`threshold` / `max_false_positives`). The score comes from RUNNING the real `python/typing` harness over a FRESH clone whose tree holds no `basilisk.json` — deleting a rule to dodge that is the SAME crime by another route. See [CHKARCH-CONFORMANCE], [CHKARCH-CONFORMANCE-MODE]. ⚠️
+
+⚠️ There is ONE conformance path — the REAL upstream harness, run FRESH every CI run (`conformance/run_conformance.py`). The mechanism, in order, no step skippable: **(1)** freshly `git clone` the tests **and** the harness from `python/typing@main`'s LATEST commit — no cache, no committed fixtures, no vendored calculator; **(2)** freshly build a CLEAN `cargo build --release` basilisk binary from THIS checkout — never the PyPI wheel (a prior version), never an instrumented build; **(3)** run the suite's OWN unmodified `conformance/src/main.py --only-run basilisk` (its `type_checker.py` already ships the official `BasiliskTypeChecker`) against that binary via `BASILISK_BIN` and **fail HARD on ANY false positive or ANY missed required error** (100% / 0 FP); **(4)** regenerate `conformance_status.csv` from the harness's OWN `results/basilisk/*.toml`. **NO** vendored calculator, **NO** reimplemented/injected adapter, **NO** cached fixtures, **NO** committed results substituting for a live run. A build where that official check did not actually run against a freshly-cloned suite is a **BUILD FAILURE** — never re-introduce a home-grown scorer. ⚠️
 
 ## Conformance Is the Prime Directive
 
 Target: **100% PEP conformance**, canonical Python **3.12**. Read the [PEP conformance README](https://github.com/python/typing/blob/main/conformance/README.md) carefully. This discipline outranks every other concern in this file.
 
-- **One reproducible scorer.** `python3 conformance/score.py` runs the real, sha-pinned `python/typing` calculator over the unmodified binary in its default config — every PEP rule on, nothing configured ([CHKARCH-CONFORMANCE], [CHKARCH-CONFIGURATION-ONLY]). The score is exactly what a user gets out of the box; never quote a number produced any other way.
+- **One reproducible path — the real harness.** `python3 conformance/run_conformance.py` clones `python/typing@main` FRESH and runs the suite's OWN unmodified harness (`src/main.py --only-run basilisk`) over the binary in its default config — every PEP rule on, nothing configured ([CHKARCH-CONFORMANCE], [CHKARCH-CONFIGURATION-ONLY]). The score is exactly what a user gets out of the box; never quote a number produced any other way, and never re-introduce a home-grown/vendored scorer.
 - **Precision is the whole game.** A file passes iff the upstream `errors_diff` is empty: emit an error on EVERY `# E` line, satisfy EVERY `# E[tag]` group, and emit NOTHING on a line the suite does not mark. Follow each PEP exactly — no missed required error, no stray diagnostic.
 - **Every failure is a false positive, not a miss.** The checker already catches every required error; files fail because a strict house-rule fires on spec-valid code. Close the gap by making the checker PRECISE — teach it to recognise the valid construct — never by missing a required error or silencing a rule ([CHKARCH-CONFORMANCE-MODE]).
 - **Ratchets, always.** Pass-% only goes UP and the false-positive ceiling only goes DOWN (`coverage-thresholds.json`: `conformance.threshold`, `conformance.max_false_positives`); benchmark times only go DOWN ([CHKARCH-TESTING-BENCH-RATCHET]). A change that moves any ratchet the wrong way is not done.
@@ -41,7 +43,7 @@ The spec-ID web is the fabric of this repository and is non-negotiable:
 
 - [Python type system spec](https://typing.python.org/en/latest/spec/index.html)
 - [Pyrefly](https://pyrefly.org/en/docs/) | [Pyright](https://microsoft.github.io/pyright/#/) — reference implementations to compare against; NEVER copy from their code.
-- [Conformance results](https://github.com/python/typing/blob/main/conformance/results/results.html) — being listed here is the goal 
+- [Conformance results](https://github.com/python/typing/blob/main/conformance/results/results.html) — Basilisk is listed here with a score of 100%. Dropping below 100% is ⛔️ ILLEGAL
 
 Refer to the Makefile for build scripts
 
@@ -92,9 +94,10 @@ VSIX tests must not call `whenCommandReady` or `vscode.commands.getCommands(true
 
 Performance is a feature: conformance must never be traded for it, nor it for conformance. Both ratchets hold simultaneously ([CHKARCH-TESTING-BENCH-RATCHET]).
 
-- Run `make bench` whenever you touch checker hot paths (resolver visitors, rule `check` loops, new conformance logic). It fails if basilisk gets >25% slower on any fixture vs the committed baseline `benchmarks/status/<machine>.csv`.
+- Run `make bench` whenever you touch checker hot paths (resolver visitors, rule `check` loops, new conformance logic). Every run does a full `cargo clean` + fresh `--release` build of basilisk and pulls the LATEST official release of every competitor (pyright, mypy, ty, pyrefly, zuban — officially-recognized checkers only) before timing.
+- **WRITE-ALWAYS, GATE-SEPARATELY.** The measured numbers are written to `benchmarks/status/<machine>.csv` **immediately and unconditionally** — after every fixture and again at the end (`benchmarks/summarize.py`). The write is NEVER gated: the file must ALWAYS reflect exactly what the build just measured, so a slip is visible the instant it happens. A run that measured a number but didn't record it is a lie. **Separately**, a zero-tolerance read-only gate compares those numbers against the **committed** baseline (read from git, not the working copy) and fails CI if basilisk is slower on any fixture. A regression is recorded in the file AND fails CI — never hidden.
 - A conformance fix that blows the benchmark gate is NOT done — optimize or restructure it.
-- `BENCH_NO_GATE=1` baseline resets are for fixture-set changes only and must be justified in the PR description.
+- The benchmark gate cannot be disabled or widened. New machines establish a baseline only after a successful run is committed. (Intention: eventually run this gate in CI — see [CHKARCH-TESTING-BENCH-RATCHET].)
 
 ## Logging Standards
 

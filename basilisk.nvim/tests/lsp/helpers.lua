@@ -83,19 +83,25 @@ function M.replace_content(buf, content)
 end
 
 --- Poll until a condition is met, or timeout.
----@param condition fun(): boolean
+---@param condition fun(remaining_ms: integer): boolean
 ---@param timeout_ms integer
 ---@param desc? string Description for error message.
 ---@return boolean success
 function M.poll_until(condition, timeout_ms, desc)
   local interval = 100
-  local elapsed = 0
-  while elapsed < timeout_ms do
-    if condition() then
+  local deadline = vim.uv.hrtime() + timeout_ms * 1000000
+
+  while vim.uv.hrtime() < deadline do
+    local remaining_ms = math.max(1, math.ceil((deadline - vim.uv.hrtime()) / 1000000))
+    if condition(remaining_ms) then
       return true
     end
-    vim.wait(interval)
-    elapsed = elapsed + interval
+
+    local remaining_ns = deadline - vim.uv.hrtime()
+    if remaining_ns <= 0 then
+      break
+    end
+    vim.wait(math.min(interval, math.ceil(remaining_ns / 1000000)))
   end
   return false
 end
@@ -155,7 +161,7 @@ function M.wait_for_server_ready(buf, timeout_ms)
   end
 
   local ready = false
-  M.poll_until(function()
+  M.poll_until(function(remaining_ms)
     local result = nil
     local done = false
     client:request("textDocument/documentSymbol", {
@@ -165,7 +171,7 @@ function M.wait_for_server_ready(buf, timeout_ms)
       done = true
     end, buf)
     -- Wait for the response.
-    vim.wait(3000, function()
+    vim.wait(math.min(3000, remaining_ms), function()
       return done
     end)
     if done then

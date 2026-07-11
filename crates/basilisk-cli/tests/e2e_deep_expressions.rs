@@ -124,9 +124,8 @@ const UNCHECKABLE_CHAIN_TERMS: usize = 300_000;
 fn cli_check_rejects_pathological_expression_depth_instead_of_crashing() {
     let (root, _source) = chain_workspace("bsk_deep_expr_cap", UNCHECKABLE_CHAIN_TERMS);
 
-    // Parity with the existing bracket/indent caps: the file is skipped with
-    // a warning that explains why — matching CPython's own nesting rejections
-    // — and the process must never abort.
+    // The guard reports a normal per-file analysis failure — matching CPython's
+    // own nesting rejection — and the process must never abort or claim success.
     let output = Command::new(env!("CARGO_BIN_EXE_basilisk"))
         .arg("check")
         .arg(&root)
@@ -134,14 +133,18 @@ fn cli_check_rejects_pathological_expression_depth_instead_of_crashing() {
         .expect("run basilisk check");
     assert_eq!(
         output.status.code(),
-        Some(0),
-        "the depth guard must skip the file like the bracket cap does, never crash: status {:?}",
+        Some(3),
+        "the depth guard must fail cleanly without crashing: status {:?}",
         output.status
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("expression too deeply nested"),
         "the skip must be explained in the warning: {stderr}"
+    );
+    assert!(
+        !String::from_utf8_lossy(&output.stdout).contains("No issues found"),
+        "a rejected file must never produce a clean-success message"
     );
 
     let _ = std::fs::remove_dir_all(&root);

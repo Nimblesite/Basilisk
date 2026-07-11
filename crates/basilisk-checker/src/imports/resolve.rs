@@ -1,5 +1,11 @@
 //! Implements [ANALYSIS-CROSSLSP-IMPORT]. See docs/specs/LSP-ANALYSIS-MODES-SPEC.md#ANALYSIS-CROSSLSP-IMPORT
 //! Filesystem path resolution: `module_name` + [`ImportSearchPaths`] → a file.
+//!
+//! This is the whole of import resolution: a static filesystem search, never an
+//! execution of the target program ([STUBRES-STATIC-MODEL]). A module the search
+//! cannot find — including one only a runtime `sys.meta_path` hook or a computed
+//! `importlib.import_module(name)` could produce — resolves to nothing here and
+//! is surfaced downstream as `imports_unresolved`.
 
 use std::path::Path;
 
@@ -173,32 +179,36 @@ fn try_resolve_stub_only(
     stub_dir: &Path,
     fs: &FsCache,
 ) -> Option<ResolvedImport> {
-    let parts: Vec<&str> = module_name.split('.').collect();
+    if !module_name.contains('.') {
+        return try_resolve_stub_name(stub_dir, module_name, fs);
+    }
+    let (leading, last) = module_name.rsplit_once('.')?;
     let mut current = stub_dir.to_path_buf();
-
-    let (leading, trailing) = parts.split_at(parts.len().saturating_sub(1));
-    for &part in leading {
+    for part in leading.split('.') {
         current = current.join(part);
         if !fs.is_dir(&current) {
             return None;
         }
     }
 
-    let last = trailing.first()?;
+    try_resolve_stub_name(&current, last, fs)
+}
+
+fn try_resolve_stub_name(dir: &Path, name: &str, fs: &FsCache) -> Option<ResolvedImport> {
+    let pyi_name = format!("{name}.pyi");
 
     // Only look for .pyi files in stub directories
-    let pyi = current.join(format!("{last}.pyi"));
-    if fs.is_file(&pyi) {
+    if fs.contains_file(dir, pyi_name.as_ref()) {
         return Some(ResolvedImport {
-            path: pyi,
+            path: dir.join(pyi_name),
             resolution: ImportResolution::StubPyi,
         });
     }
 
     // Package stub `name/__init__.pyi`, gated on `name/` existing so missing
     // packages are answered from the parent's cached listing.
-    let pkg_dir = current.join(last);
-    if fs.is_dir(&pkg_dir) {
+    if fs.contains_dir(dir, name.as_ref()) {
+        let pkg_dir = dir.join(name);
         let pkg_pyi = pkg_dir.join("__init__.pyi");
         if fs.is_file(&pkg_pyi) {
             return Some(ResolvedImport {
@@ -266,47 +276,51 @@ pub fn resolve_relative_import(
 
 /// Try resolving a dotted module name within a single directory.
 fn try_resolve_in_dir(module_name: &str, dir: &Path, fs: &FsCache) -> Option<ResolvedImport> {
-    let parts: Vec<&str> = module_name.split('.').collect();
+    if !module_name.contains('.') {
+        return try_resolve_name(dir, module_name, fs);
+    }
+    let (leading, last) = module_name.rsplit_once('.')?;
     let mut current = dir.to_path_buf();
 
     // Navigate through package directories for all but the last part.
-    let (leading, trailing) = parts.split_at(parts.len().saturating_sub(1));
-    for &part in leading {
+    for part in leading.split('.') {
         current = current.join(part);
         if !fs.is_dir(&current) {
             return None;
         }
     }
 
-    let last = trailing.first()?;
     try_resolve_name(&current, last, fs)
 }
 
 /// Try resolving a single name (the last segment) within a directory.
 fn try_resolve_name(dir: &Path, name: &str, fs: &FsCache) -> Option<ResolvedImport> {
+    let mut file_name = String::with_capacity(name.len() + 4);
+    file_name.push_str(name);
+    file_name.push_str(".pyi");
     // 1. name.pyi (stub preferred)
-    let pyi = dir.join(format!("{name}.pyi"));
-    if fs.is_file(&pyi) {
+    if fs.contains_file(dir, file_name.as_ref()) {
         return Some(ResolvedImport {
-            path: pyi,
+            path: dir.join(file_name),
             resolution: ImportResolution::StubPyi,
         });
     }
     // 2. name.py
-    let py = dir.join(format!("{name}.py"));
-    if fs.is_file(&py) {
+    file_name.truncate(name.len());
+    file_name.push_str(".py");
+    if fs.contains_file(dir, file_name.as_ref()) {
         return Some(ResolvedImport {
-            path: py,
+            path: dir.join(file_name),
             resolution: ImportResolution::SourcePy,
         });
     }
     // 3+4. name/__init__.pyi (package stub), then name/__init__.py (package).
     // Gate both on `name/` being a directory first: that answer comes from the
     // parent's cached listing, so missing packages cost no filesystem probe.
-    let pkg_dir = dir.join(name);
-    if !fs.is_dir(&pkg_dir) {
+    if !fs.contains_dir(dir, name.as_ref()) {
         return None;
     }
+    let pkg_dir = dir.join(name);
     let pkg_pyi = pkg_dir.join("__init__.pyi");
     if fs.is_file(&pkg_pyi) {
         return Some(ResolvedImport {

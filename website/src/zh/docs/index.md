@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 简介
-description: Basilisk 是完整的开源 Python 语言服务器——默认符合 PEP 规范的类型检查、自动补全、重构、调试和性能分析，支持 VS Code、Cursor、Windsurf、Zed 和 Neovim。
+description: 唯一在官方 python/typing 符合性套件中取得 100% 满分的 Python 类型检查器 —— 也是我们测过的最快的。使用 Rust 构建的完整开源 Python 开发环境：类型检查器、语言服务器、调试器、性能分析器，并提供 VS Code、Cursor、Zed 与 Neovim 扩展。默认严格。
 keywords: basilisk, python, 语言服务器, lsp, 类型检查器, vs code, cursor, zed, neovim, 严格, rust
 lang: zh
 ---

@@ -135,16 +135,25 @@ jobs:
         with:
           key: conformance
 
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      # The REAL python/typing harness's own runtime deps (run_conformance.py runs
+      # the suite's unmodified src/main.py). See [CHKARCH-CONFORMANCE].
+      - name: Install conformance harness deps
+        run: pip install jinja2 markdown tomlkit
+
       - name: Build basilisk
         run: cargo build --release --bin basilisk
 
-      # Pull the LATEST python/typing@main and require a perfect score — anything
-      # less than 100%, or a single false positive, tanks the release
-      # (coverage-thresholds.json → conformance.threshold 100, max_false_positives 0).
-      - name: Enforce 100% PEP conformance
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 conformance/score.py --bin target/release/basilisk --gate
+      # Clone the LATEST python/typing@main FRESH and run its OWN harness against
+      # the compiled binary; require a perfect score — anything less than 100%, or a
+      # single false positive, tanks the release (coverage-thresholds.json →
+      # conformance.threshold 100, max_false_positives 0). No cached fixtures, no
+      # vendored calculator: if the real harness cannot run, the release fails.
+      - name: Enforce 100% PEP conformance (REAL python/typing harness)
+        run: python3 conformance/run_conformance.py --bin target/release/basilisk --gate
 
   release:
     name: Publish binaries to release
@@ -862,10 +871,11 @@ jobs:
           retention-days: 1
 
   # Prove the ACTUAL shipped wheel — pip-installed — scores 100% via the REAL,
-  # unmodified python/typing harness (its own `src/main.py`, not our fast local
-  # scorer). This complements conformance/score.py (which grades the compiled
-  # binary): score.py stays the sha-pinned dev/CI fast path; this gate guarantees
-  # the released install path is conformant. See [CHKARCH-CONFORMANCE].
+  # unmodified python/typing harness (its own `src/main.py` + built-in
+  # BasiliskTypeChecker). This is the SAME harness CI runs against the compiled
+  # binary (conformance/run_conformance.py); here it runs against the pip-installed
+  # wheel so the released install path is proven conformant too. There is no other
+  # scorer. See [CHKARCH-CONFORMANCE].
   conformance-wheel:
     name: Conformance gate — pip-installed wheel vs python/typing@main (real harness)
     needs: pypi-wheels
@@ -893,13 +903,11 @@ jobs:
           # Fails the job immediately if the wheel did not put `basilisk` on PATH.
           basilisk --version
 
-      - name: Clone python/typing@main (real fixtures + harness + calculator)
+      - name: Clone python/typing@main (real fixtures + harness + adapter)
         shell: bash
+        # The suite already ships the official Basilisk adapter (BasiliskTypeChecker
+        # in conformance/src/type_checker.py) — nothing of ours is injected.
         run: git clone --depth 1 https://github.com/python/typing typing-upstream
-
-      - name: Inject the Basilisk adapter (suite ships every other checker; add ours)
-        shell: bash
-        run: cat conformance/basilisk_conformance_adapter.py >> typing-upstream/conformance/src/type_checker.py
 
       - name: Run the REAL upstream harness against the installed wheel
         working-directory: typing-upstream/conformance

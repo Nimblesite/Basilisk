@@ -61,6 +61,18 @@ impl FsCache {
         self.probe(path, |listing, name| listing.dirs.contains(name))
     }
 
+    /// Test a file name in an already identified directory without building a
+    /// candidate [`PathBuf`]. Import resolution uses this on its overwhelmingly
+    /// common miss path.
+    pub(crate) fn contains_file(&self, dir: &Path, name: &OsStr) -> bool {
+        self.contains(dir, name, |listing, entry| listing.files.contains(entry))
+    }
+
+    /// Test a subdirectory name without allocating a joined path.
+    pub(crate) fn contains_dir(&self, dir: &Path, name: &OsStr) -> bool {
+        self.contains(dir, name, |listing, entry| listing.dirs.contains(entry))
+    }
+
     fn probe(&self, path: &Path, hit: impl Fn(&DirListing, &OsStr) -> bool) -> bool {
         let (Some(parent), Some(name)) = (path.parent(), path.file_name()) else {
             return false;
@@ -72,14 +84,23 @@ impl FsCache {
         } else {
             parent
         };
+        self.contains(parent, name, hit)
+    }
+
+    fn contains(
+        &self,
+        dir: &Path,
+        name: &OsStr,
+        hit: impl Fn(&DirListing, &OsStr) -> bool,
+    ) -> bool {
         let mut listings = self.listings.borrow_mut();
         // Fast path: no allocation when the listing is already cached.
-        if let Some(listing) = listings.get(parent) {
+        if let Some(listing) = listings.get(dir) {
             return listing.as_ref().is_some_and(|l| hit(l, name));
         }
-        let listing = read_listing(parent);
+        let listing = read_listing(dir);
         let found = listing.as_ref().is_some_and(|l| hit(l, name));
-        let _ = listings.insert(parent.to_path_buf(), listing);
+        let _ = listings.insert(dir.to_path_buf(), listing);
         found
     }
 }

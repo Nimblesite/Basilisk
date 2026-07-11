@@ -245,6 +245,11 @@ jobs:
       - name: Install deslop
         run: scripts/install-deslop.sh
 
+      - name: Install Rust security audit
+        uses: taiki-e/install-action@81ee9698f20724138a785d788c7567d40f14cd2d # cargo-audit
+        with:
+          tool: cargo-audit@0.22.2
+
       # `make lint` runs clippy, eslint, AND the deslop duplication gate. The
       # threshold lives in committed .deslop.toml — ratcheted DOWN only, never
       # up — and deslop exits non-zero when repo-wide duplication exceeds it.
@@ -324,8 +329,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      # debugpy/ruff for the workspace tests; jinja2/markdown/tomlkit are the
+      # REAL python/typing harness's own runtime deps (conformance/run_conformance.py
+      # runs the suite's unmodified src/main.py — see [CHKARCH-CONFORMANCE]).
       - name: Install Python test dependencies
-        run: pip install debugpy==1.8.14 ruff==0.15.17
+        run: pip install debugpy==1.8.14 ruff==0.15.17 jinja2 markdown tomlkit
 
       - name: Install lld
         run: sudo apt-get update && sudo apt-get install -y lld
@@ -333,21 +341,10 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@81ee9698f20724138a785d788c7567d40f14cd2d # cargo-llvm-cov
 
-      # Only the conformance FIXTURES are fetched (the calculator
-      # conformance/upstream_main.py is committed). score.py tracks
-      # python/typing@main (UPSTREAM_REF = "main"): it resolves main's tip each
-      # run and re-fetches the fixtures whenever main has moved, recording the
-      # resolved commit in conformance/tests/.ref-sha. Cache the downloaded
-      # fixtures keyed on score.py's hash so editing the fetch logic busts the
-      # cache; a stale prefix restore self-heals because score.py re-fetches as
-      # soon as main's tip differs from the recorded ref.
-      - name: Cache conformance fixtures
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: conformance/tests
-          key: conformance-suite-${{ hashFiles('conformance/score.py') }}
-          restore-keys: conformance-suite-
-
+      # NO fixture cache and NO vendored calculator, by design ([CHKARCH-CONFORMANCE]).
+      # test-rust.sh clones python/typing@main FRESH every run via
+      # conformance/run_conformance.py and scores the binary with the suite's OWN
+      # harness — the conformance number can never ride on a stale/cached artifact.
       - name: Run Rust tests with coverage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

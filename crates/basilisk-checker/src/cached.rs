@@ -10,6 +10,7 @@
 //! (one leaked entry per distinct string — at most one per BSK code, so memory
 //! is constant regardless of how many diagnostics are replayed).
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock, PoisonError};
 
@@ -58,8 +59,8 @@ impl From<&Diagnostic> for CachedDiagnostic {
             message: diagnostic.message.clone(),
             span: diagnostic.span,
             path: diagnostic.path.clone(),
-            help: diagnostic.help.clone(),
-            note: diagnostic.note.clone(),
+            help: diagnostic.help.as_deref().map(str::to_owned),
+            note: diagnostic.note.as_deref().map(str::to_owned),
             provenance: diagnostic.provenance,
         }
     }
@@ -79,8 +80,8 @@ impl CachedDiagnostic {
             message: self.message,
             span: self.span,
             path: self.path,
-            help: self.help,
-            note: self.note,
+            help: self.help.map(Cow::Owned),
+            note: self.note.map(Cow::Owned),
             provenance: self.provenance,
         }
     }

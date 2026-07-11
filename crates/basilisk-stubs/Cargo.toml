@@ -7,9 +7,9 @@ license.workspace    = true
 
 [dependencies]
 basilisk-common = { path = "../basilisk-common" }
+basilisk-parser.workspace = true
 phf.workspace = true
 ruff_python_ast.workspace = true
-ruff_python_parser.workspace = true
 ruff_text_size.workspace = true
 serde.workspace = true
 serde_json.workspace = true

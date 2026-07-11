@@ -175,7 +175,7 @@ x = 1
 x += 2   # still int — the target keeps its existing type
 ```
 
-Augmented assignment (`x op= rhs`) does not re-type the target: `x` keeps its previously declared or inferred type. Basilisk does not resolve `__iadd__`/`__add__` return types to compute a new type; retaining the existing type is conservative and emits no diagnostics on spec-valid code (the conformance gate holds at 100% pass / 0 false positives, self-measured by `conformance/score.py`). Operator return-type inference is roadmap work — see [NARROWPLAN-EXPR-INFERENCE-OPERATORS](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-EXPR-INFERENCE-OPERATORS). Augmented assignment IS analyzed for `Final`/`ReadOnly` reassignment violations and literal-semantics checks.
+Augmented assignment (`x op= rhs`) does not re-type the target: `x` keeps its previously declared or inferred type. Basilisk does not resolve `__iadd__`/`__add__` return types to compute a new type; retaining the existing type is conservative and emits no diagnostics on spec-valid code (the conformance gate holds at 100% pass / 0 false positives, self-measured by the real `python/typing` harness via `conformance/run_conformance.py`). Operator return-type inference is roadmap work — see [NARROWPLAN-EXPR-INFERENCE-OPERATORS](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-EXPR-INFERENCE-OPERATORS). Augmented assignment IS analyzed for `Final`/`ReadOnly` reassignment violations and literal-semantics checks.
 
 ### Walrus Operator {#TYPEINF-VARS-WALRUS}
 
@@ -914,7 +914,7 @@ query("SELECT * FROM " + table)    # callables_annotation — not LiteralString
 
 ## Conformance Test Coverage {#TYPEINF-CONFORMANCE}
 
-The [Python typing conformance suite](https://github.com/python/typing/tree/main/conformance) is the canonical benchmark. Basilisk targets 100% conformance with every rule enabled (no config, no `basilisk.json`); the reproducible score is measured by the unmodified `python/typing` scorer in CI (`python3 conformance/score.py`). The remaining gap is false positives from strict house-style rules firing on spec-valid code, not missed required errors; the only legitimate fix is teaching the checker to stop firing — never disabling a rule. See [CHKARCH-CONFORMANCE].
+The [Python typing conformance suite](https://github.com/python/typing/tree/main/conformance) is the canonical benchmark. Basilisk targets 100% conformance with every rule enabled (no config, no `basilisk.json`); the reproducible score is measured by RUNNING the real, unmodified `python/typing` harness in CI (`python3 conformance/run_conformance.py`). The remaining gap is false positives from strict house-style rules firing on spec-valid code, not missed required errors; the only legitimate fix is teaching the checker to stop firing — never disabling a rule. See [CHKARCH-CONFORMANCE].
 
 Inference-relevant conformance tests:
 

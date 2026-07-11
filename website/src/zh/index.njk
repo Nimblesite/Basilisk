@@ -1,7 +1,7 @@
 ---
 layout: layouts/base.njk
 title: "Basilisk —— 唯一在官方 python/typing 一致性结果中取得满分 100% 的 Python 语言服务器"
-description: "唯一在官方 python/typing 一致性测试结果中取得满分 100% 的 Python 类型检查器。用 Rust 构建的开源语言服务器：类型检查、自动补全、重构、调试与性能分析，兼容 VS Code、Cursor、Windsurf、Zed 和 Neovim。"
+description: "唯一在官方 python/typing 符合性套件中取得 100% 满分的 Python 类型检查器 —— 也是我们测过的最快的。使用 Rust 构建的完整开源 Python 开发环境：类型检查器、语言服务器、调试器、性能分析器，并提供 VS Code、Cursor、Zed 与 Neovim 扩展。默认严格。"
 lang: zh
 permalink: /zh/
 ---
@@ -24,13 +24,12 @@ permalink: /zh/
         </h1>
 
         <p class="hero__subheadline">
-          Basilisk 是一个完整的开源 Python 语言服务器。
-          类型检查、自动补全、跳转到定义、悬停信息、重构、
-          诊断、调试与性能分析——您依赖的一切，
-          无专有锁定。支持 VS Code、Cursor、Windsurf、Zed 和 Neovim
-          ——无论您在哪里编写 Python。唯一在官方
-          <code>python/typing</code> 一致性测试套件中取得满分
-          {{ conformanceOfficial.basilisk.pct }}% 的类型检查器——严格程度随心调整，用 Rust 构建。
+          唯一在官方 <code>python/typing</code> 符合性套件中取得
+          {{ conformanceOfficial.basilisk.pct }}% 满分的 Python 类型检查器
+          —— 也是我们测过的最快的。使用 Rust 构建的完整开源 Python 开发环境：
+          类型检查器、语言服务器、调试器、性能分析器 —— 自动补全、跳转到定义、
+          悬停信息、重构、诊断与集成调试，支持 VS Code、Cursor、Zed 和 Neovim，
+          无专有锁定。默认严格。
         </p>
 
         <div class="hero__cta-group">
@@ -107,10 +106,9 @@ permalink: /zh/
     <h2 class="section-heading">您期待的一切功能。<br>完全开源。</h2>
     <p class="section-subhead">
       功能完整的开源语言服务器，无专有锁定。{% if benchmarks.hasData and benchmarks.toolMedians.fastest == 'basilisk' %}
-      而且在我们自己的冷启动基准测试中，它是我们测试过的所有检查器里最快的：冷启动全文件检查中位数仅
-      <strong>{{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms</strong>——比 Pyright 最高快
-      <strong>{{ benchmarks.vsPyright.maxFactor }}&times;</strong>，也快过用 Rust 编写的 ty、Pyrefly 和 zuban。
-      如果这些数字成立，我们基准测试过的工具中没有更快的。{% endif %}
+      而且在我们自己的冷启动基准测试中，它的中位数在所有检查器里最低：冷启动全文件检查中位数仅
+      <strong>{{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms</strong>，对比 Pyright 的
+      {{ benchmarks.toolMedians.ms.pyright }}&nbsp;ms，以及用 Rust 编写的 ty、Pyrefly 和 zuban。{% endif %}
       下方每一项竞品声明都链接到该工具自己的文档——<a href="/docs/benchmarks/">基准测试方法</a>详述了这些数字的测量方式。
     </p>
 
@@ -254,17 +252,17 @@ permalink: /zh/
   <div class="feature-row">
     <div class="feature-row__visual">
       <div class="stat-block">
-        <span class="stat-block__number">{{ benchmarks.vsPyright.beats }}<span class="stat-block__unit">/{{ benchmarks.vsPyright.total }}</span></span>
-        <span class="stat-block__label">基准测试用例胜过 Pyright</span>
+        <span class="stat-block__number">{{ benchmarks.toolMedians.ms.basilisk }}<span class="stat-block__unit">&nbsp;ms</span></span>
+        <span class="stat-block__label">冷启动全文件检查中位数</span>
       </div>
     </div>
     <div class="feature-row__text">
       <p class="feature-row__num">02 &mdash; 实测，而非承诺</p>
-      {% if benchmarks.toolMedians.fastest == 'basilisk' %}<h2 class="feature-row__title">我们基准测试过的<br>最快检查器。</h2>{% else %}<h2 class="feature-row__title">快过 Pyright。<br>我们基准测试的每个用例。</h2>{% endif %}
+      {% if benchmarks.toolMedians.fastest == 'basilisk' %}<h2 class="feature-row__title">我们基准测试过的<br>最低中位数。</h2>{% else %}<h2 class="feature-row__title">对比每一款<br>检查器实测。</h2>{% endif %}
       <p class="feature-row__body">
         数据来自 <code>make bench</code>——用 hyperfine 在相同的固定用例上对 Pyright、
         mypy、ty、Pyrefly 和 zuban 测量挂钟时间，原始 CSV 提交到代码库，网站渲染的正是最后一次实测提交的数据。
-        {% if benchmarks.toolMedians.fastest == 'basilisk' %}在冷启动全文件检查上，Basilisk 快过我们测量的每一款工具——中位数 {{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms，比 Pyright 最高快 {{ benchmarks.vsPyright.maxFactor }}&times;。{% else %}在我们基准测试的用例上，Basilisk 的冷启动全文件检查全面胜过 Pyright。{% endif %}
+        {% if benchmarks.toolMedians.fastest == 'basilisk' %}在冷启动全文件检查上，Basilisk 的中位数在我们测量的每一款工具中最低——{{ benchmarks.toolMedians.ms.basilisk }}&nbsp;ms，对比 Pyright 的 {{ benchmarks.toolMedians.ms.pyright }}&nbsp;ms。{% else %}每款工具的冷启动全文件检查中位数并排展示。{% endif %}
         而且由于重检是增量的——只重新分析被编辑的文件及其导入方——热编辑做的工作更少。<a href="/docs/benchmarks/">查看基准测试方法 &rarr;</a>
       </p>
     </div>

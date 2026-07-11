@@ -49,16 +49,22 @@ Basilisk 的**可选内建规则**（要求注解、冗余注解、缺失 `@over
 
 ### 自己复现
 
+Basilisk 是官方套件中的**已注册检查器**——`BasiliskTypeChecker` 就在 `python/typing` 的 [`conformance/src/type_checker.py`](https://github.com/python/typing/blob/main/conformance/src/type_checker.py) 中——所以你直接运行真实 harness，无需任何修补：
+
 ```bash
-# 修补 python/typing checkout，从 wheel 安装 basilisk，运行真实上游
-# harness，并写出证明日志。
-python3 scripts/prepare_typing_conformance_pr.py \
-  --typing-repo ../typing \
-  --verbose \
-  --write-proof
+# 全新克隆 python/typing，用它自己的 harness 针对 basilisk 二进制运行，
+# 并从真实结果重新生成 conformance/conformance_status.csv。
+python3 conformance/run_conformance.py --bin target/release/basilisk
 ```
 
-提交流程位于 [`scripts/prepare_typing_conformance_pr.py`](https://github.com/Nimblesite/Basilisk/blob/main/scripts/prepare_typing_conformance_pr.py)；上游 PR 应包含的文件记录在 [`docs/typing-conformance-pr.md`](https://github.com/Nimblesite/Basilisk/blob/main/docs/typing-conformance-pr.md)。
+或针对 PATH 上任意 `basilisk` 手动驱动上游 harness：
+
+```bash
+git clone --depth 1 https://github.com/python/typing
+BASILISK_BIN=$(which basilisk) python typing/conformance/src/main.py --only-run basilisk
+```
+
+运行器位于 [`conformance/run_conformance.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/run_conformance.py)；它全新克隆套件、运行未经修改的上游 harness，自身从不进行任何评分。
 
 ## 得分如何变诚实
 

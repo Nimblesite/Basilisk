@@ -1,8 +1,15 @@
 // Eleventy global data: benchmark results, read from the git-tracked per-machine
 // CSV that `make bench` generates (benchmarks/status/<machine>.csv).
 //
-// The homepage benchmark table renders from this data, so the published numbers
-// are always whatever was last measured + committed — never hand-typed.
+// The website renders MEASURED FACTS. This loader parses the CSV's header
+// metadata and its per-fixture measured times/diagnostic-counts, and derives
+// only ONE kind of summary from them: each tool's median cold check across the
+// corpus (a direct, order-statistic summary of the measured values). It does
+// NOT invent comparison numbers — there are no speedup ratios ("N× faster"), no
+// "beats M of N" tallies, and no arbitrary outlier thresholds computed at build
+// time. Every number the page shows is either a value straight out of the CSV or
+// the median of such values; nothing is editorialised beyond what `make bench`
+// recorded, so the page can never drift from — or overstate — the measured data.
 //
 // Primary machine selection (what the website shows):
 //   1. $BASILISK_BENCH_PRIMARY (slug)   2. benchmarks/status/.primary file
@@ -14,8 +21,6 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATUS_DIR = join(__dirname, "../../../benchmarks/status");
-
-const titleCase = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // A benchmark fixture's filename IS the typing-spec construct it stresses, so
 // the human-readable row label is derived straight from the stem — never a
@@ -46,7 +51,10 @@ function fixtureName(stem) {
 //   "basilisk=basilisk 0.0.0, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ..."
 // i.e. comma-separated `name=<--version output>` entries. The version output
 // usually repeats the tool name and may carry a trailing parenthetical, both of
-// which we strip so the site shows a clean "pyright 1.1.408".
+// which we strip so the site shows a clean "pyright 1.1.408". This is metadata
+// pass-through — the harness records exactly which build of each tool it
+// measured (competitors are upgraded to their LATEST release every run), and the
+// page shows it unchanged.
 function parseToolVersions(toolsStr) {
   if (!toolsStr) return [];
   return toolsStr
@@ -127,10 +135,12 @@ function median(nums) {
 }
 
 // Per-checker median cold full-file time, for the "how it compares" speed row.
-// Every checker's own median over the fixtures it reported, so the comparison is
-// each tool against the same bench harness. Warm/cache variants are excluded —
+// Every checker's own median over the fixtures it reported — a direct order
+// statistic of the measured CSV values, NOT a comparison number: the page shows
+// each tool's median next to the others and lets the reader compare, rather than
+// asserting a build-time "N× faster" ratio. Warm/cache variants are excluded;
 // this is the cold, from-scratch number. Self-measured, reproducible with
-// `make bench`; never hand-typed, so the table can't drift from the CSV.
+// `make bench`, so the table can't drift from the CSV.
 function computeToolMedians(rows, tools) {
   const ms = {};
   const text = {};
@@ -147,36 +157,17 @@ function computeToolMedians(rows, tools) {
   return { ms, text, fastest };
 }
 
-// Headline "how much faster than Pyright" stats for the benchmarks docs page.
-// Computed from the SAME parsed CSV the table renders, so the punchy numbers can
-// never drift from the measured data. Cold-vs-cold (both tools measured cold);
-// self-measured, reproducible with `make bench` — never a hand-typed figure.
-function computeVsPyright(rows) {
-  const pairs = rows
-    .map((r) => ({ b: r.values.basilisk, p: r.values.pyright }))
-    .filter((x) => x.b != null && x.p != null && x.b > 0 && x.p > 0);
-  if (!pairs.length) return null;
-  const factors = pairs.map((x) => x.p / x.b);
-  return {
-    maxFactor: Math.round(Math.max(...factors)),
-    medianFactor: Math.round(median(factors)),
-    basiliskMedianMs: Math.round(median(pairs.map((x) => x.b))),
-    pyrightMedianMs: Math.round(median(pairs.map((x) => x.p))),
-    beats: pairs.filter((x) => x.b < x.p).length,
-    total: pairs.length,
-  };
-}
-
 // Per-tool distribution of the cold check across the fixture corpus. The
 // published cold table is ONE ROW PER TOOL (median + fastest/slowest fixture),
 // never a fixture × tool grid: for the heavier tools a cold single-file check
 // is dominated by fixed startup + stub-loading cost, so a full grid would
 // repeat each tool's baseline once per fixture and imply per-construct
-// precision that doesn't exist (computeOutliers surfaces the departures that
-// ARE real). `zeroDiag` counts fixtures where the tool ran but reported no
-// diagnostics — published so a do-nothing run is visible next to its time.
-// `missing` counts fixtures with no timing at all (tool not installed on that
-// machine, or excluded by the harness preflight after failing to analyze).
+// precision that doesn't exist. Every value here is a measured CSV time or the
+// median of measured times — no ratios, no thresholds. `zeroDiag` counts
+// fixtures where the tool ran but reported no diagnostics (so a do-nothing run
+// is visible next to its time); `missing` counts fixtures with no timing at all
+// (tool not installed on that machine, or excluded by the harness preflight
+// after failing to analyze).
 function computeToolStats(rows, tools) {
   const stats = tools
     .map((tool) => {
@@ -208,34 +199,6 @@ function computeToolStats(rows, tools) {
     .filter(Boolean)
     .sort((a, b) => a.medianMs - b.medianMs);
   return stats.map((s, i) => ({ ...s, fastest: i === 0 }));
-}
-
-// The per-construct signal that IS real: fixtures where a tool departs from
-// its own median by at least 2× (failed-import resolution, dataclass
-// synthesis, …). Below that threshold a per-fixture difference is within the
-// noise of the tool's fixed startup cost, so it is never published per-fixture.
-function computeOutliers(rows, tools) {
-  const out = [];
-  for (const tool of tools) {
-    const vals = rows.map((r) => r.values[tool]).filter((v) => v != null && v > 0);
-    if (vals.length < 3) continue;
-    const med = median(vals);
-    if (med <= 0) continue;
-    for (const r of rows) {
-      const ms = r.values[tool];
-      if (ms != null && ms >= med * 2) {
-        out.push({
-          tool,
-          fixture: r.fixture,
-          name: r.name,
-          ms: Math.round(ms),
-          medianMs: Math.round(med),
-          factor: Math.round((ms / med) * 10) / 10,
-        });
-      }
-    }
-  }
-  return out.sort((a, b) => b.factor - a.factor);
 }
 
 // Warm re-check comparison, collapsed to a per-tool median (same
@@ -319,14 +282,16 @@ export default function () {
   const parsed = parseCsv(readFileSync(join(STATUS_DIR, primary), "utf-8"));
   if (!parsed) return empty;
 
+  // Everything exposed is either a raw CSV value or a median of raw CSV values.
+  // No speedup ratios, no "beats N of M", no outlier thresholds are computed —
+  // those build-time comparison numbers were removed so the page shows only
+  // measured facts and their direct medians.
   return {
     available: files.map((f) => f.replace(/\.csv$/, "")),
     primary: primary.replace(/\.csv$/, ""),
     ...parsed,
     toolMedians: computeToolMedians(parsed.rows, parsed.tools),
     toolStats: computeToolStats(parsed.rows, parsed.tools),
-    outliers: computeOutliers(parsed.rows, parsed.tools),
-    vsPyright: computeVsPyright(parsed.rows),
     warm: computeWarm(parsed.rows, parsed.allTools),
     hasData: parsed.rows.length > 0,
   };

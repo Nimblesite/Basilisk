@@ -19,8 +19,8 @@ fn sample(code: &'static str, with_extras: bool) -> Diagnostic {
         message: "boom".to_owned(),
         span: Span::new(3, 9),
         path: "m.py".to_owned(),
-        help: with_extras.then(|| "try this".to_owned()),
-        note: with_extras.then(|| "PEP 484".to_owned()),
+        help: with_extras.then(|| "try this".into()),
+        note: with_extras.then(|| "PEP 484".into()),
         provenance: with_extras.then_some(TypeProvenance::StubTier1),
     }
 }

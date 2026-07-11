@@ -39,5 +39,7 @@
         "titleBar.inactiveForeground": "#f0f2f7cc"
     },
     "basilisk.enabled": true,
-    "basilisk.uv.enabled": true
+    "basilisk.uv.enabled": true,
+    "deslop.topOffenders.splitByLanguage": true,
+    "deslop.topOffenders.groupBy": "file"
 }

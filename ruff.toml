@@ -1,11 +1,9 @@
-# Ruff configuration for this repo's Python tooling (conformance scorer, scripts).
-# Formatting/linting uses Ruff's defaults (line-length 88); the only customization
-# is the exclude below.
+# Ruff configuration for this repo's Python tooling (the conformance runner,
+# scripts). Formatting/linting uses Ruff's defaults (line-length 88).
 #
-# conformance/upstream_main.py is a BYTE-IDENTICAL vendored copy of python/typing's
-# official conformance calculator, sha256-pinned in conformance/score.py. Ruff must
-# never reformat it — any change breaks the integrity pin and the "we run the real
-# upstream scorer, unmodified" guarantee — so it is excluded from discovery here.
-# (The downloaded test fixtures under conformance/tests/ are git-ignored and already
-# skipped by Ruff's respect-gitignore default.)
-extend-exclude = ["conformance/upstream_main.py"]
+# There is no vendored calculator to protect: the ONE conformance path clones
+# python/typing FRESH and runs the suite's OWN harness (see
+# conformance/run_conformance.py). The downloaded fixtures under conformance/tests/
+# and the fresh clone under target/ are git-ignored and already skipped by Ruff's
+# respect-gitignore default, so no extra excludes are needed.
+extend-exclude = []
