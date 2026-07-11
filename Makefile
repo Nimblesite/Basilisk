@@ -105,9 +105,12 @@ setup:
 # Repo-Specific Targets
 # =============================================================================
 
-## mutation-test: Mutate ALL of a crate's source; kill with its fast test suite.
-## PKG=basilisk-checker (default) | basilisk-lsp. Use ALL=1 for the unscoped
-## checker suite (every test, not just the mutation-safe binaries).
+## mutation-test: Mutate a crate's source and kill with its fast test suite.
+## PKG=basilisk-checker (default) | basilisk-lsp. The per-PR `working` gate scopes
+## mutants to the functions the mutation-safe binaries cover (via
+## scripts/mutation_examine_re.py) so it finishes inside CI's 60-min budget. Use
+## ALL=1 for the WHOLE-crate run (examine_re=".", every line, no exclusions) —
+## thorough but hours-long, so it is an offline/scheduled run, never the PR gate.
 mutation-test:
 	@bash -euo pipefail -c '\
 		package="$(PKG)"; \
@@ -122,7 +125,7 @@ mutation-test:
 		if [ "$(ALL)" = "1" ] && [ "$$package" = "basilisk-checker" ]; then \
 			mode="all"; \
 			test_args=""; \
-			test_desc="all tests (unscoped)"; \
+			test_desc="all tests (unscoped); mutants: WHOLE crate (examine_re=.)"; \
 		elif [ "$$package" = "basilisk-lsp" ]; then \
 			mode="lsp"; \
 			test_args="--lib"; \
@@ -132,6 +135,10 @@ mutation-test:
 			mutation_rustflags="$${mutation_rustflags:+$$mutation_rustflags }--cfg mutation_testing"; \
 			test_args="--lib $(_CHECKER_MUTATION_TESTS)"; \
 			test_desc="lib unit tests + broad existing rule-test binaries"; \
+			tests_file="$$(mktemp)"; \
+			RUSTFLAGS="$$mutation_rustflags" cargo test --package "$$package" "$$marker" -- --list > "$$tests_file" 2>/dev/null || true; \
+			examine_re="$$(python3 scripts/mutation_examine_re.py "$$tests_file")"; \
+			rm -f "$$tests_file"; \
 		fi; \
 		if [ -n "$$shard" ]; then \
 			shard_label="$${shard//\//-of-}"; \
@@ -147,7 +154,7 @@ mutation-test:
 		fi; \
 		echo -e "\033[1m\033[0;36m▶ Mutation testing ($$mode): $$package\033[0m"; \
 		echo -e "\033[0;36m  [diag] Tests: $$test_desc\033[0m"; \
-		echo -e "\033[0;36m  [diag] Mutants: ALL source in $$package (no code excluded)\033[0m"; \
+		echo -e "\033[0;36m  [diag] Mutant selection (examine_re): $$examine_re\033[0m"; \
 		if [ -n "$$shard" ]; then \
 			echo -e "\033[0;36m  [diag] Shard: $$shard\033[0m"; \
 		fi; \

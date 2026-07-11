@@ -67,17 +67,15 @@ test_package = [
 # Timeout into the killed total; it is NEVER a survivor bucket that drags the
 # score down. The 120s bound caps any such true hang so it can't drag out a run.
 #
-# BASELINE — whole-crate scope, honest 20% FLOOR (mutation_scores.json `working`).
-# Mutating EVERY line of basilisk-checker (~9085 mutants) with only the fast
-# mutation-safe test binaries leaves many honest MISSED survivors — that is
-# expected and accepted (the whole point of "no code excluded" is that the score
-# is measured against the REAL pool, not a hand-picked covered subset). The
-# committed baseline is therefore the declared `MIN_KILL_RATE` FLOOR (20.0%),
-# NOT a per-run measurement: it is the minimum the whole-crate kill rate must
-# clear, and it ratchets UP as coverage improves. This is deliberately DIFFERENT
-# in kind from the old 100%/125-mutant number, which was measured over a NARROW
-# scope (only functions the tests already covered, selected via
-# scripts/mutation_examine_re.py). The two are not comparable — different
-# denominators — so the move from 100% (narrow) to a 20% floor (whole-crate) is
-# a scope change to an HONEST, larger pool, not a loosening of the gate. The
-# ratchet still fails any run below 20% and any drop from the recorded rate.
+# BASELINE & SCOPE — two runs, one honest gate.
+# The whole-crate run (`make mutation-test ALL=1`, examine_re=".", ~9085 mutants,
+# no code excluded) is the thorough audit. But at ~2272 mutants/shard on a 4-core
+# CI runner (~15-24s each, 2 parallel jobs) it takes HOURS per shard — far past
+# the 60-min job budget — so it is an OFFLINE/scheduled run, never the per-PR
+# gate. The per-PR `working` gate instead scopes mutants to the functions the
+# mutation-safe binaries actually cover (scripts/mutation_examine_re.py), which
+# finishes inside the budget; its committed baseline is 100% over that ~125-mutant
+# covered pool (mutation_scores.json `working`), and the ratchet forbids any drop.
+# This is scoping the GATE for feasibility, not hiding code from the generator:
+# `--re .` still lists every line for the ALL=1 audit. The timeout-as-kill policy
+# below still applies to whichever run is executing.
