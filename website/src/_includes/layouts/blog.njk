@@ -38,6 +38,25 @@ layout: layouts/base.njk
   "articleSection": "{{ category }}"{% endif %}
 }
 </script>
+{% if faq %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {% for item in faq %}{
+      "@type": "Question",
+      "name": {{ item.q | dump | safe }},
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": {{ item.a | dump | safe }}
+      }
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+}
+</script>
+{% endif %}
 {% endblock %}
 
 {% set langPrefix = "/" + lang if lang and lang != defaultLanguage else "" %}
