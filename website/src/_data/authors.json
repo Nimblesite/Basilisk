@@ -1,9 +1,10 @@
 {
-  "_doc": "Author registry — the single source of truth for blog author pages. Each entry generates a page at /authors/<slug>/ via src/authors/author.njk, and blog post bylines (author: field, matched by `name`) link to it. Add an author here, set `author: <name>` in a post's front matter, and the byline links automatically.",
+  "_doc": "Author registry — the single source of truth for blog author pages. Each entry generates a page at /authors/<slug>/ via src/authors/author.njk, and blog post bylines (author: field, matched by `name` or `nameZh`) link to it. Add an author here, set `author: <name>` (or the localized `nameZh` in a zh post) in a post's front matter, and the byline links automatically.",
   "authors": [
     {
       "slug": "basilisk-team",
       "name": "The Basilisk Project",
+      "nameZh": "Basilisk 项目",
       "shortName": "Basilisk Team",
       "role": "The team behind Basilisk",
       "avatar": "/assets/images/authors/basilisk-team.png",
@@ -21,6 +22,7 @@
     {
       "slug": "christian-findlay",
       "name": "Christian Findlay",
+      "nameZh": "Christian Findlay",
       "shortName": "Christian Findlay",
       "role": "Director, Nimblesite",
       "avatar": "/assets/images/authors/christian-findlay.png",

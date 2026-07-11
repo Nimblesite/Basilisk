@@ -10,9 +10,9 @@ imageWidth: 1200
 imageHeight: 675
 tags:
   - posts
-  - 开源
+  - open source
   - Ruff
-  - Python 工具链
+  - Python tooling
   - Basilisk
 category: announcements
 lang: zh

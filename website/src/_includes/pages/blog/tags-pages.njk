@@ -13,7 +13,7 @@ eleventyComputed:
 {% set taggedPosts = collections.postsByTag[tag] %}
 
 <div class="blog-container">
-  {{ masthead(tag, "blog.tagResultsDescription" | t(lang) | default("Writing collected under this topic."), lang) }}
+  {{ masthead(tag | capitalize, "blog.tagResultsDescription" | t(lang) | default("Writing collected under this topic."), lang) }}
   {{ navigation(lang, defaultLanguage, "tags") }}
 
   <div class="post-list">

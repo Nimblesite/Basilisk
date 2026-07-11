@@ -10,8 +10,8 @@ imageWidth: 1200
 imageHeight: 675
 tags:
   - posts
-  - Python 类型
-  - 类型检查
+  - Python typing
+  - type checking
   - Basilisk
   - Rust
 category: announcements

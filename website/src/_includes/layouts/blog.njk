@@ -71,9 +71,9 @@ layout: layouts/base.njk
         <time datetime="{{ date | isoDate }}">{{ date | dateFormat(lang) }}</time>
         {% if author %}
           {%- set authorRecord = null -%}
-          {%- for a in authors.authors -%}{%- if a.name == author -%}{%- set authorRecord = a -%}{%- endif -%}{%- endfor -%}
+          {%- for a in authors.authors -%}{%- if a.name == author or a.nameZh == author -%}{%- set authorRecord = a -%}{%- endif -%}{%- endfor -%}
           &middot;
-          {% if authorRecord %}<a href="{{ langPrefix }}/authors/{{ authorRecord.slug }}/" rel="author">{{ author }}</a>{% else %}{{ author }}{% endif %}
+          {% if authorRecord %}<a href="/authors/{{ authorRecord.slug }}/" rel="author">{{ author }}</a>{% else %}{{ author }}{% endif %}
         {% endif %}
         {% if category %} &middot; <a href="{{ langPrefix }}/blog/categories/{{ category | slugify }}/">{{ category | capitalize }}</a>{% endif %}
       </p>

@@ -11,6 +11,8 @@ eleventyComputed:
   description: "{{ author.bio | truncate(155) }}"
 ---
 
+{% from "components/blog.njk" import postCard %}
+
 {% block head %}
 <script type="application/ld+json">
 {
@@ -69,14 +71,7 @@ eleventyComputed:
       <h2>Posts by {{ author.shortName | default(author.name) }}</h2>
       <div class="post-list">
         {% for post in authorPosts %}
-        <article class="blog-post">
-          <a href="{{ post.url }}" class="post-title">{{ post.data.title }}</a>
-          <div class="post-meta">
-            <time datetime="{{ post.date | isoDate }}">{{ post.date | dateFormat }}</time>
-            {% if post.data.category %} · {{ post.data.category | capitalize }}{% endif %}
-          </div>
-          {% if post.data.excerpt or post.data.description %}<p class="post-excerpt">{{ post.data.excerpt | default(post.data.description) }}</p>{% endif %}
-        </article>
+          {{ postCard(post, "en", defaultLanguage, loop.first) }}
         {% endfor %}
       </div>
     </section>
