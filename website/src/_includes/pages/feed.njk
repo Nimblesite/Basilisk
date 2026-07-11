@@ -18,7 +18,7 @@
     <title>{{ post.data.title }}</title>
     <link href="{{ site.url }}{{ post.url }}"/>
     <id>{{ site.url }}{{ post.url }}</id>
-    <updated>{{ post.date | dateToRfc3339 }}</updated>
+    <updated>{{ post.data.dateModified | default(post.date) | dateToRfc3339 }}</updated>
     <content type="html" xml:base="{{ site.url }}{{ post.url }}"><![CDATA[{{ post.templateContent | safe }}]]></content>
     {% if post.data.description %}<summary>{{ post.data.description }}</summary>{% endif %}
   </entry>

@@ -34,26 +34,62 @@ layout: layouts/base.njk
 </script>
 {% endblock %}
 
-{% set navPages = collections.all | eleventyNavigation %}
-
 <div class="docs-layout">
+  <button class="docs-menu-toggle" id="docs-menu-toggle" type="button" aria-controls="docs-sidebar" aria-expanded="false">
+    <span>{% if currentLang == 'zh' %}浏览文档{% else %}Browse documentation{% endif %}</span>
+    <span aria-hidden="true">+</span>
+  </button>
+
   <aside class="sidebar" id="docs-sidebar">
-    <nav class="docs-nav">
+    <nav class="docs-nav" aria-label="{% if currentLang == 'zh' %}文档导航{% else %}Documentation navigation{% endif %}">
       <ul>
-        {% for entry in navPages %}
-        {% set entryLang = entry.url | extractLangFromUrl(defaultLanguage) %}
-        {% if entryLang == currentLang %}
-        <li>
-          <a href="{{ entry.url }}" {% if page.url == entry.url %}class="active"{% endif %}>{{ entry.title }}</a>
-          {% if entry.children.length %}
+        {% for section in navigation.docs %}
+        <li class="docs-nav-section">
+          <p class="docs-nav-label">{% if currentLang == 'zh' %}{{ section.titleZh }}{% else %}{{ section.title }}{% endif %}</p>
           <ul>
-            {% for child in entry.children %}
-            <li><a href="{{ child.url }}" {% if page.url == child.url %}class="active"{% endif %}>{{ child.title }}</a></li>
-            {% endfor %}
+          {% for item in section.items %}
+            {% set itemUrl = item.url %}
+            {% if currentLang == 'zh' %}
+              {% set localizedItemUrl = '/zh' + item.url %}
+              {% if collections.all | hasPageUrl(localizedItemUrl) %}{% set itemUrl = localizedItemUrl %}{% endif %}
+            {% endif %}
+            <li>
+              <a class="docs-nav-link{% if page.url == itemUrl %} active{% endif %}" href="{{ itemUrl }}"{% if page.url == itemUrl %} aria-current="page"{% endif %}>{% if currentLang == 'zh' %}{{ item.titleZh }}{% else %}{{ item.title }}{% endif %}</a>
+            </li>
+
+            {% if section.kind == 'rules' and loop.first %}
+            <li class="docs-nav-disclosure">
+              <details{% if page.url.startsWith('/docs/rules/basilisk/') or page.url.startsWith('/zh/docs/rules/basilisk/') or (page.url.startsWith('/errors/') and rule.provenance == 'basilisk') %} open{% endif %}>
+                <summary>
+                  <span>{% if currentLang == 'zh' %}Basilisk 可选规则{% else %}Basilisk rules <small>opt-in</small>{% endif %}</span>
+                  <strong>{{ ruleTagGroups.counts.basilisk }}</strong>
+                </summary>
+                <ul>
+                {% for group in ruleTagGroups.basilisk %}
+                  {% set groupUrl = group.zhUrl if currentLang == 'zh' else group.url %}
+                  <li><a class="docs-nav-link{% if page.url == groupUrl %} active{% endif %}" href="{{ groupUrl }}"{% if page.url == groupUrl %} aria-current="page"{% endif %}><span>{% if currentLang == 'zh' %}{{ group.labelZh }}{% else %}{{ group.label }}{% endif %}</span><small>{{ group.count }}</small></a></li>
+                {% endfor %}
+                </ul>
+              </details>
+            </li>
+            <li class="docs-nav-disclosure">
+              <details{% if page.url.startsWith('/docs/rules/pep/') or page.url.startsWith('/zh/docs/rules/pep/') or (page.url.startsWith('/errors/') and rule.provenance == 'pep') %} open{% endif %}>
+                <summary>
+                  <span>{% if currentLang == 'zh' %}Python 类型规范{% else %}Python typing spec{% endif %}</span>
+                  <strong>{{ ruleTagGroups.counts.pep }}</strong>
+                </summary>
+                <ul>
+                {% for group in ruleTagGroups.pep %}
+                  {% set groupUrl = group.zhUrl if currentLang == 'zh' else group.url %}
+                  <li><a class="docs-nav-link{% if page.url == groupUrl %} active{% endif %}" href="{{ groupUrl }}"{% if page.url == groupUrl %} aria-current="page"{% endif %}><span>{% if currentLang == 'zh' %}{{ group.labelZh }}{% else %}{{ group.label }}{% endif %}</span><small>{{ group.count }}</small></a></li>
+                {% endfor %}
+                </ul>
+              </details>
+            </li>
+            {% endif %}
+          {% endfor %}
           </ul>
-          {% endif %}
         </li>
-        {% endif %}
         {% endfor %}
       </ul>
     </nav>

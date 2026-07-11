@@ -3,6 +3,7 @@ pagination:
   data: authors.authors
   size: 1
   alias: author
+  addAllPagesToCollections: true
 permalink: /authors/{{ author.slug }}/
 layout: layouts/base.njk
 noTranslation: true
@@ -21,10 +22,10 @@ eleventyComputed:
     {
       "@type": "{% if author.slug == 'basilisk-team' %}Organization{% else %}Person{% endif %}",
       "@id": "{{ site.url }}/authors/{{ author.slug }}/#author",
-      "name": "{{ author.name }}",
+      "name": {{ author.name | dump | safe }},
       "url": "{{ site.url }}/authors/{{ author.slug }}/",
       "description": {{ author.bio | dump | safe }},
-      {% if author.role %}"{% if author.slug == 'basilisk-team' %}slogan{% else %}jobTitle{% endif %}": "{{ author.role }}",{% endif %}
+      {% if author.role %}"{% if author.slug == 'basilisk-team' %}slogan{% else %}jobTitle{% endif %}": {{ author.role | dump | safe }},{% endif %}
       "image": "{{ site.url }}{{ author.avatar }}",
       "sameAs": [
         {% for u in author.sameAs %}"{{ u }}"{% if not loop.last %},{% endif %}{% endfor %}
@@ -34,7 +35,7 @@ eleventyComputed:
       "@type": "ProfilePage",
       "@id": "{{ site.url }}/authors/{{ author.slug }}/#webpage",
       "url": "{{ site.url }}/authors/{{ author.slug }}/",
-      "name": "{{ author.name }}",
+      "name": {{ author.name | dump | safe }},
       "mainEntity": { "@id": "{{ site.url }}/authors/{{ author.slug }}/#author" }
     }
   ]

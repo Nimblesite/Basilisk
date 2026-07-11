@@ -28,6 +28,9 @@ _NVIM_DIR                  := basilisk.nvim
 _MUTATION_DIR              := mutation_testing
 _MUTATION_TEST_PACKAGE     := basilisk-checker
 _MUTATION_TEST_MARKER      := mutation_safe
+# Which crate to mutate. Every crate here mutates ALL its source (no code
+# exclusions); only the TEST suite is scoped per crate (see mutation-test).
+PKG                        ?= basilisk-checker
 _COVERAGE_THRESHOLDS_FILE  := coverage-thresholds.json
 OPEN                       ?= 0
 ALL                        ?= 0
@@ -67,25 +70,33 @@ setup:
 # Repo-Specific Targets
 # =============================================================================
 
-## mutation-test: Run mutation-safe tests. Use ALL=1 for full checker suite.
+## mutation-test: Mutate ALL of a crate's source; kill with its fast test suite.
+## PKG=basilisk-checker (default) | basilisk-lsp. Use ALL=1 for the unscoped
+## checker suite (every test, not just the mutation-safe binaries).
 mutation-test:
 	@bash -euo pipefail -c '\
-		package="$(_MUTATION_TEST_PACKAGE)"; \
+		package="$(PKG)"; \
 		marker="$(_MUTATION_TEST_MARKER)"; \
 		mutation_rustflags="$${RUSTFLAGS:-}"; \
-		mode="working"; \
-		test_filter="$$marker"; \
-		examine_re=""; \
+		examine_re="."; \
 		shard="$(SHARD)"; \
 		shard_arg=""; \
 		mutation_check="$(MUTATION_CHECK)"; \
-		if [ "$(ALL)" = "1" ]; then \
+		test_args=""; \
+		test_desc=""; \
+		if [ "$(ALL)" = "1" ] && [ "$$package" = "basilisk-checker" ]; then \
 			mode="all"; \
-			test_filter=""; \
-			examine_re="."; \
+			test_args=""; \
+			test_desc="all tests (unscoped)"; \
+		elif [ "$$package" = "basilisk-lsp" ]; then \
+			mode="lsp"; \
+			test_args="--lib"; \
+			test_desc="lib unit tests (--lib; no E2E)"; \
 		else \
+			mode="working"; \
 			mutation_rustflags="$${mutation_rustflags:+$$mutation_rustflags }--cfg mutation_testing"; \
-			examine_re="."; \
+			test_args="--test coverage_boost_33_tests --test mutation_kill_tests $$marker"; \
+			test_desc="mutation-safe binaries + marker"; \
 		fi; \
 		if [ -n "$$shard" ]; then \
 			shard_label="$${shard//\//-of-}"; \
@@ -100,8 +111,8 @@ mutation-test:
 			fi; \
 		fi; \
 		echo -e "\033[1m\033[0;36m▶ Mutation testing ($$mode): $$package\033[0m"; \
-		echo -e "\033[0;36m  [diag] Tests: $${test_filter:-all}\033[0m"; \
-		echo -e "\033[0;36m  [diag] Mutants: $$examine_re\033[0m"; \
+		echo -e "\033[0;36m  [diag] Tests: $$test_desc\033[0m"; \
+		echo -e "\033[0;36m  [diag] Mutants: ALL source in $$package (no code excluded)\033[0m"; \
 		if [ -n "$$shard" ]; then \
 			echo -e "\033[0;36m  [diag] Shard: $$shard\033[0m"; \
 		fi; \
@@ -115,13 +126,13 @@ mutation-test:
 			exit 1; \
 		fi; \
 		echo -e "\033[0;36m  [diag] Total mutants: $$mutants_count\033[0m"; \
-		if [ -n "$$test_filter" ]; then \
+		if [ -n "$$test_args" ]; then \
 			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
 				--jobs "$$mutation_jobs" --timeout 60 --baseline skip --copy-target true \
 				--package "$$package" --re "$$examine_re" \
 				$$shard_arg \
 				--output "$$out_dir" \
-				-- --test coverage_boost_33_tests --test mutation_kill_tests "$$test_filter" || true; \
+				-- $$test_args || true; \
 		else \
 			RUSTFLAGS="$$mutation_rustflags" cargo mutants \
 				--jobs "$$mutation_jobs" --timeout 60 --baseline skip --copy-target true \

@@ -1,30 +1,21 @@
 ---
-# Implements [WEBSITE-ERROR-PAGES-PAGES]: the grouped, browsable directory of
-# every diagnostic code (the companion to the per-code error.njk pages).
+# Implements [WEBSITE-ERROR-PAGES-PAGES]: browsable taxonomy for every
+# diagnostic code. The tag data is generated from the checker's own metadata.
 layout: layouts/docs.njk
-title: "Basilisk Error Reference — Every BSK Diagnostic Code Explained"
-description: "Browse every Basilisk diagnostic code (BSK-E errors and BSK-W warnings) with an explanation and fix for each — the page the CLI links to for any reported error."
+title: "Basilisk Error Reference — Diagnostics Grouped by Rule Tag"
+description: "Browse every Basilisk diagnostic by authoritative rule tag, from default Python typing-spec checks to opt-in strictness, style, dependency, import, and stub rules."
 permalink: "/errors/index.html"
 ---
+{% from "components/rules.njk" import groupGrid with context %}
+
 <h1>Error reference</h1>
 
-<p>
-  Every Basilisk diagnostic has a unique code. When the checker reports one it
-  links here — <code>see: https://www.basilisk-python.dev/errors/BSK-XXXX</code> —
-  so you can read what it means and how to fix it. {{ rules.length }} codes in total.
-</p>
+<p>Every Basilisk diagnostic has a permanent explanation at <code>/errors/CODE/</code>—the same URL printed by the CLI. The {{ rules.length }} current codes are grouped below by the tags the checker itself uses.</p>
 
-<p>For worked examples with real CLI output, start with the
-  <a href="/docs/rules/">rules overview</a>.</p>
+<h2>Basilisk rules <span class="error-count">({{ ruleTagGroups.counts.basilisk }} opt-in)</span></h2>
+<p>Rules for stricter project policy, code style, dependencies, imports, and type stubs. They are off by default and activate only through explicit configuration.</p>
+{{ groupGrid(ruleTagGroups.basilisk, "en") }}
 
-{% for group in ruleGroups %}
-<h2 id="{{ group.id }}">{{ group.group }} <span class="error-count">({{ group.items.length }})</span></h2>
-<ul class="error-list">
-  {% for rule in group.items %}
-  <li>
-    <a href="/errors/{{ rule.code }}/"><code>{{ rule.code }}</code></a>
-    <span class="error-list__summary">{{ rule.summaryHtml | safe }}</span>
-  </li>
-  {% endfor %}
-</ul>
-{% endfor %}
+<h2>Python typing-spec rules <span class="error-count">({{ ruleTagGroups.counts.pep }} default)</span></h2>
+<p>Core checks enabled by default, grouped by the canonical <code>python/typing</code> category tags. Cross-cutting checks without one category have their own group.</p>
+{{ groupGrid(ruleTagGroups.pep, "en") }}

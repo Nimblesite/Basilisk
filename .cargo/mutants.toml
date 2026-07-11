@@ -14,13 +14,24 @@ cap_lints = true
 # Without this, cargo-mutants copies 200MB+ of node_modules per mutant → disk full.
 gitignore = true
 
-# Only mutate basilisk-checker. All other crates are excluded:
+# Crates under mutation. Both have real, fast test suites; every line of their
+# source is mutated (NO code exclusions). The Makefile drives one crate per run
+# (`PKG=`), scopes the *tests* per crate (checker: the mutation-safe binaries;
+# lsp: `--lib` fast inline unit tests only, never the subprocess/E2E `tests/`),
+# and records a separate baseline per scope in mutation_scores.json.
+#   basilisk-checker — mutation-safe unit tests (`--test coverage_boost_33_tests
+#                      --test mutation_kill_tests`).
+#   basilisk-lsp     — fast inline `#[cfg(test)]` unit tests via `--lib`; the
+#                      heavy E2E binaries in tests/ (spawn LSP subprocess /
+#                      sockets / python) are excluded as TESTS, not code.
+# Still fully excluded (as TESTS — their code is simply not mutated yet, not hidden
+# from a run that mutates it):
 #   basilisk-parser   — 2 mutants, 0 tests, all unviable
 #   basilisk-resolver — cold builds take 300s+; tests don't cover mutations well
-#   basilisk-lsp      — no unit tests; spawns language server subprocess
 #   basilisk-cli      — e2e tests spawn compiled binary; hangs per-mutant
 test_package = [
     "basilisk-checker",
+    "basilisk-lsp",
 ]
 
 # NO `exclude_re`. Excluding *code* from the mutant generator is forbidden: it

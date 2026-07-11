@@ -2,18 +2,22 @@ import { readFileSync, writeFileSync, existsSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import techdoc from "eleventy-plugin-techdoc";
+import markdownIt from "markdown-it";
+import markdownItAnchor from "markdown-it-anchor";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Patch the techdoc plugin's virtual templates with project-owned versions.
-// The plugin reads these files after this config loads, so the copies survive a
-// fresh npm install without maintaining a fork of the package.
+// Patch techdoc templates and behavior with project-owned versions. The plugin
+// reads these files after this config loads, so the copies survive a fresh npm
+// install without maintaining a fork of the package.
 const templateOverrides = [
+  ["src/assets/js/mobile-menu.js", "assets/js/mobile-menu.js"],
   ["src/_includes/layouts/base.njk", "templates/layouts/base.njk"],
   ["src/_includes/layouts/blog.njk", "templates/layouts/blog.njk"],
   ["src/_includes/layouts/docs.njk", "templates/layouts/docs.njk"],
   ["src/_includes/pages/feed.njk", "templates/pages/feed.njk"],
   ["src/_includes/pages/robots.txt.njk", "templates/pages/robots.txt.njk"],
+  ["src/_includes/pages/sitemap.njk", "templates/pages/sitemap.njk"],
   ["src/_includes/pages/blog/index.njk", "templates/pages/blog/index.njk"],
   ["src/_includes/pages/blog/tags.njk", "templates/pages/blog/tags.njk"],
   ["src/_includes/pages/blog/tags-pages.njk", "templates/pages/blog/tags-pages.njk"],
@@ -126,7 +130,7 @@ export default function (eleventyConfig) {
       organization: {
         name: "Basilisk",
         url: "https://www.basilisk-python.dev",
-        logo: "/assets/images/logo.svg",
+        logo: "/assets/images/favicon.png",
         sameAs: [
           "https://github.com/Nimblesite/Basilisk",
         ],
@@ -148,9 +152,27 @@ export default function (eleventyConfig) {
     },
   });
 
+  // Preserve CJK headings in fragment identifiers. Techdoc's default slugger
+  // strips all non-ASCII letters, which produces empty and numeric-only IDs on
+  // Chinese prose pages and breaks their heading permalinks.
+  const markdown = markdownIt({ html: true, breaks: false, linkify: true }).use(
+    markdownItAnchor,
+    {
+      level: [1, 2, 3, 4],
+      permalink: markdownItAnchor.permalink.headerLink(),
+      slugify: (value) =>
+        value
+          .normalize("NFKC")
+          .toLowerCase()
+          .trim()
+          .replace(/[^\p{Letter}\p{Number}_-]+/gu, "-")
+          .replace(/^-+|-+$/g, ""),
+    }
+  );
+  eleventyConfig.setLibrary("md", markdown);
+
   eleventyConfig.addPassthroughCopy("src/assets");
   eleventyConfig.addPassthroughCopy("src/CNAME");
-  eleventyConfig.addPassthroughCopy("src/robots.txt");
 
   // [Author pages] Posts written by a given author, matched on the post's
   // `author` front-matter string == the author's `name` in _data/authors.json.
@@ -167,6 +189,15 @@ export default function (eleventyConfig) {
     if (s.length <= len) return s;
     return s.slice(0, s.lastIndexOf(" ", len)).trimEnd() + "…";
   });
+
+  const categoryLabels = {
+    en: { announcements: "Announcements", "deep-dives": "Deep dives" },
+    zh: { announcements: "公告", "deep-dives": "深度解析" },
+  };
+  eleventyConfig.addFilter("blogCategoryLabel", (category, lang = "en") =>
+    categoryLabels[lang]?.[category] ||
+    String(category || "").replaceAll("-", " ")
+  );
 
   // Base layout guard: only advertise a language alternate when Eleventy
   // actually generated that URL. This prevents hreflang and switcher 404s on

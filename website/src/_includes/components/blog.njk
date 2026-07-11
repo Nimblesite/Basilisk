@@ -30,7 +30,7 @@
   {% endif %}
   <div class="post-card-body">
     <div class="post-meta">
-      {% if post.data.category %}<a href="{{ langPrefix }}/blog/categories/{{ post.data.category | slugify }}/">{{ post.data.category | replace("-", " ") | capitalize }}</a><span aria-hidden="true">/</span>{% endif %}
+      {% if post.data.category %}<a href="{{ langPrefix }}/blog/categories/{{ post.data.category | slugify }}/">{{ post.data.category | blogCategoryLabel(lang) }}</a><span aria-hidden="true">/</span>{% endif %}
       <time datetime="{{ post.date | isoDate }}">{{ post.date | dateFormat(lang) }}</time>
     </div>
     <h2><a href="{{ post.url }}" class="post-title">{{ post.data.title }}</a></h2>

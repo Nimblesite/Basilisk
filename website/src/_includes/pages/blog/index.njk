@@ -2,6 +2,7 @@
 layout: layouts/base.njk
 title: Blog
 permalink: /blog/
+isBlogPost: false
 ---
 {% from "components/blog.njk" import masthead, navigation, postCard with context %}
 {% set postCollection = collections.posts %}

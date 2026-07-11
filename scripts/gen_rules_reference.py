@@ -36,11 +36,13 @@ import html
 import json
 import re
 import sys
+from csv import DictReader
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RULES_DIR = ROOT / "crates" / "basilisk-checker" / "src" / "rules"
 DEFAULT_DATA_OUT = ROOT / "website" / "src" / "_data" / "rules.json"
+CONFORMANCE_STATUS = ROOT / "conformance" / "conformance_status.csv"
 ERRORS_BASE_URL = "https://www.basilisk-python.dev/errors"
 
 HEADER = re.compile(r"//!\s*(BSK-[EW]\d{4}|`[a-z0-9_]+`):\s*(.*)")
@@ -71,6 +73,24 @@ GROUPS = (
     ("E", 30, 9999, "Type System"),
     ("W", 0, 9999, "Warnings"),
 )
+
+
+def pep_categories() -> frozenset[str]:
+    """Read the canonical python/typing category vocabulary used by Basilisk.
+
+    The checker validates the same CSV-backed vocabulary in [CHKTAG-TESTS].
+    Reading it here keeps the website consumer on that source instead of
+    maintaining a parallel category list.
+    """
+    with CONFORMANCE_STATUS.open(encoding="utf-8", newline="") as handle:
+        return frozenset(
+            row["category"]
+            for row in DictReader(handle)
+            if row.get("category")
+        )
+
+
+PEP_CATEGORIES = pep_categories()
 
 
 def clean(text: str) -> str:
@@ -171,17 +191,18 @@ def parse_body(doc_lines: list[str]) -> list[dict]:
 # directly from the checker rule sources, so the generated /errors/<code>/ pages
 # can never drift from the diagnostics the binary actually emits.
 def extract() -> list[dict]:
-    """One record per code: summary, body blocks, severity, group, docsUrl."""
+    """One record per code, including its canonical checker tag set."""
     records: dict[str, dict] = {}
     for path in sorted(RULES_DIR.rglob("*.rs")):
         text = path.read_text(encoding="utf-8")
         lines = text.splitlines()
         file_docs_url = DOCS_URL.search(text)
-        # Provenance and opt-in tags from the rule's own opt_in_spec, not its
-        # code prefix. Core PEP rules carry no opt-in tags (empty list).
+        # Provenance and opt-in tags come from the rule's own opt_in_spec, not
+        # its cosmetic code prefix. PEP category tags use the same canonical
+        # conformance CSV vocabulary validated by rule_tags.rs.
         provenance = "basilisk" if OPT_IN.search(text) else "pep"
         tags_match = OPT_IN_TAGS.search(text)
-        tags = TAG.findall(tags_match.group(1)) if tags_match else []
+        free_form_tags = TAG.findall(tags_match.group(1)) if tags_match else []
         for i, line in enumerate(lines):
             m = HEADER.match(line.strip())
             if not m:
@@ -204,6 +225,12 @@ def extract() -> list[dict]:
                 and is_text_line(body_lines[0])
             ):
                 summary = f"{summary} {body_lines.pop(0)}"
+            category = code.partition("_")[0]
+            tags = (
+                ["basilisk", *free_form_tags]
+                if provenance == "basilisk"
+                else ["pep", *([category] if category in PEP_CATEGORIES else [])]
+            )
             records[code] = {
                 "code": code,
                 "severity": severity_for(code),

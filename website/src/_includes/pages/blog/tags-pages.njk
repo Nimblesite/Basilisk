@@ -3,11 +3,13 @@ pagination:
   data: collections.tagList
   size: 1
   alias: tag
+  addAllPagesToCollections: true
 permalink: /blog/tags/{{ tag | slugify }}/
 layout: layouts/base.njk
+isBlogPost: false
 eleventyComputed:
-  title: "Posts tagged '{{ tag }}'"
-  description: "All blog posts tagged with {{ tag }}."
+  title: "{% if lang == 'zh' %}标签：{{ tag }}{% else %}Articles tagged {{ tag }}{% endif %}"
+  description: "{% if lang == 'zh' %}浏览所有带有“{{ tag }}”标签的 Basilisk 博客文章。{% else %}Browse every Basilisk blog post tagged {{ tag }}.{% endif %}"
 ---
 {% from "components/blog.njk" import masthead, navigation, postCard with context %}
 {% set taggedPosts = collections.postsByTag[tag] %}
