@@ -444,6 +444,59 @@ describe("basilisk.binary", function()
       local dir = vim.fn.stdpath("data") .. "/basilisk/" .. version1
       vim.fn.delete(dir, "rf")
     end)
+
+    it("extracts Windows zips with tar, not unzip (stock Windows has no unzip)", function()
+      local original_system = vim.fn.system
+      local original_asset = binary.platform_asset_name
+      local original_fetch = binary.fetch_latest_release
+
+      -- Capture every shell command download() issues; run a no-op through
+      -- the real system() so vim.v.shell_error stays 0 (it is read-only).
+      local commands = {}
+      vim.fn.system = function(cmd)
+        table.insert(commands, cmd)
+        return original_system({ "true" })
+      end
+      binary.platform_asset_name = function()
+        return "basilisk-x86_64-pc-windows-msvc.zip", true
+      end
+      binary.fetch_latest_release = function()
+        return {
+          tag_name = "v0.0.0-windows-test",
+          assets = {
+            {
+              name = "basilisk-x86_64-pc-windows-msvc.zip",
+              browser_download_url = "https://example.invalid/basilisk.zip",
+            },
+          },
+        }
+      end
+
+      local ok, err = pcall(function()
+        binary.download()
+
+        local extract_cmd
+        for _, cmd in ipairs(commands) do
+          if type(cmd) == "table" and (cmd[1] == "unzip" or cmd[1] == "tar") then
+            extract_cmd = cmd
+          end
+        end
+        assert.is_truthy(extract_cmd, "download() should have attempted an extraction")
+        assert.are.equal(
+          "tar",
+          extract_cmd[1],
+          "Windows zips must extract via in-box tar.exe (bsdtar, Windows 10 1803+) — "
+            .. "stock Windows has no unzip, got: " .. tostring(extract_cmd[1])
+        )
+      end)
+
+      vim.fn.system = original_system
+      binary.platform_asset_name = original_asset
+      binary.fetch_latest_release = original_fetch
+      vim.fn.delete(vim.fn.stdpath("data") .. "/basilisk/v0.0.0-windows-test", "rf")
+
+      assert(ok, err)
+    end)
   end)
 
   -- ── install_source ───────────────────────────────────────────────────────

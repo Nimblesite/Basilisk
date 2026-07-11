@@ -162,12 +162,16 @@ function M.download()
     return nil, nil
   end
 
-  -- Extract. `-j` flattens zip entries: the macOS archive nests the binaries
-  -- under a `basilisk-darwin/` staging dir ([NVIM-BINARY-UPGRADE-ASSETS]).
-  if asset_name:match("%.zip$") then
-    pcall(vim.fn.system, { "unzip", "-j", "-o", archive_path, "-d", dir })
-  else
+  -- Extract ([NVIM-BINARY-UPGRADE-ASSETS]). Windows has no unzip, but its
+  -- in-box tar.exe (bsdtar, Windows 10 1803+) extracts zips, and the Windows
+  -- archives are flat. macOS keeps `unzip -j` to flatten the binaries out of
+  -- the archive's `basilisk-darwin/` staging dir.
+  if not asset_name:match("%.zip$") then
     pcall(vim.fn.system, { "tar", "xzf", archive_path, "-C", dir })
+  elseif is_windows then
+    pcall(vim.fn.system, { "tar", "-xf", archive_path, "-C", dir })
+  else
+    pcall(vim.fn.system, { "unzip", "-j", "-o", archive_path, "-d", dir })
   end
 
   if vim.v.shell_error ~= 0 then

@@ -321,7 +321,7 @@ The plugin owns the full lifecycle of the binary it downloads: detect → notify
 |---|---|---|
 | Linux x86_64 / aarch64 | `basilisk-<arch>-unknown-linux-gnu.tar.gz` | `basilisk` at archive root |
 | macOS aarch64 (only) | `basilisk-aarch64-apple-darwin.zip` | `basilisk-darwin/{basilisk, basilisk-profiler-helper}` — extraction must flatten (`unzip -j`) and chmod both |
-| Windows x86_64 / aarch64 | `basilisk-<arch>-pc-windows-msvc.zip` | `basilisk.exe` at archive root |
+| Windows x86_64 / aarch64 | `basilisk-<arch>-pc-windows-msvc.zip` | `basilisk.exe` at archive root — extraction must use in-box `tar.exe` (bsdtar reads zip; stock Windows has no `unzip`) |
 
 No `x86_64-apple-darwin` build is published; on Intel macs `platform_asset_name()` returns `nil` and the flows fall back to advising `cargo install basilisk-cli`. Any drift between this table and `release.yml` makes `download()` silently find no asset — the binary_spec contract test pins the exact names.
 
