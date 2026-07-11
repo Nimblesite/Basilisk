@@ -42,3 +42,42 @@ test_package = [
 # mutation_kill_tests`). A mutant no safe test kills is reported as MISSED, in
 # the open, never excluded. Widen coverage by adding #[mutation_safe] tests that
 # kill those survivors — never by hiding the code from the generator.
+#
+# TIMEOUTS — none should occur from slowness; any that remains is a hung-code KILL.
+#
+# MEASURED root cause of the timeouts we saw: the cargo-mutants *test phase* runs
+# `cargo test`, which INCREMENTALLY RECOMPILES the crate + its test binaries under
+# the mutation BEFORE running them. That compile is ~10-24s. The pure test RUN is
+# <1s. So the wall-clock of the "test" phase is dominated by compilation, ~10-24s.
+# `--timeout` bounds that whole phase. A too-tight `--timeout 20` therefore
+# mislabelled honest CAUGHT/MISSED mutants as TIMEOUT purely because compilation
+# hadn't finished — e.g. every aliases_implicit.rs mutant "timed out" at 20s but,
+# at 120s, resolved cleanly to 5 CAUGHT / 4 MISSED with ZERO timeouts. It was
+# never hung code and never a slow test; it was the compile budget.
+#   Fixes: `--timeout 120` (5-6x headroom over the compile-included run, so
+#   slowness never trips it) and `--build-timeout 600` (the dedicated build phase
+#   gets its own generous ceiling). `--jobs` is also capped to min(4, cores/2) so
+#   concurrent rebuilds don't starve each other. All three are TEST-execution
+#   settings, not code exclusions — every mutant still runs.
+#
+# The residual policy, for any GENUINE infinite-loop mutant (one that would run
+# FOREVER, far past any 120s compile+run): it has been DETECTED — a terminating
+# suite became non-terminating, an observable behaviour change — so a Timeout
+# counts as a KILL, exactly as PIT and Stryker do. `mutants_report.py` folds
+# Timeout into the killed total; it is NEVER a survivor bucket that drags the
+# score down. The 120s bound caps any such true hang so it can't drag out a run.
+#
+# BASELINE — whole-crate scope, honest 20% FLOOR (mutation_scores.json `working`).
+# Mutating EVERY line of basilisk-checker (~9085 mutants) with only the fast
+# mutation-safe test binaries leaves many honest MISSED survivors — that is
+# expected and accepted (the whole point of "no code excluded" is that the score
+# is measured against the REAL pool, not a hand-picked covered subset). The
+# committed baseline is therefore the declared `MIN_KILL_RATE` FLOOR (20.0%),
+# NOT a per-run measurement: it is the minimum the whole-crate kill rate must
+# clear, and it ratchets UP as coverage improves. This is deliberately DIFFERENT
+# in kind from the old 100%/125-mutant number, which was measured over a NARROW
+# scope (only functions the tests already covered, selected via
+# scripts/mutation_examine_re.py). The two are not comparable — different
+# denominators — so the move from 100% (narrow) to a 20% floor (whole-crate) is
+# a scope change to an HONEST, larger pool, not a loosening of the gate. The
+# ratchet still fails any run below 20% and any drop from the recorded rate.

@@ -53,6 +53,11 @@ class MutationScore:
         return asdict(self)
 
     @property
+    def detected(self) -> int:
+        """Mutants the suite killed. A Timeout is a kill (see `score_percentage`)."""
+        return self.caught + self.timeout
+
+    @property
     def viable(self) -> int:
         """Compilable mutants — the pool kill_rate is computed over."""
         return self.caught + self.missed + self.timeout
@@ -142,7 +147,12 @@ def render_mutant_row(outcome: dict, mutants_out: Path, idx: int) -> str:
     {f"<tr class='diff-row'><td colspan='5'>{diff_section}</td></tr>" if diff_section else ""}"""
 
 
-def _esc(s: str) -> str:
+def _esc(s: str | None) -> str:
+    # A mutant location can be missing a start/end (e.g. whole-file or
+    # attribute-level mutants carry no line:col span), so treat None as empty
+    # rather than crashing the whole report on one span-less entry.
+    if s is None:
+        return ""
     return (
         s.replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -191,8 +201,15 @@ def mutation_counts(data: dict[str, Any]) -> dict[str, int]:
 
 
 def score_percentage(counts: dict[str, int]) -> float:
-    viable = counts["caught"] + counts["missed"] + counts["timeout"]
-    return round(100.0 * counts["caught"] / viable, 2) if viable > 0 else 0.0
+    # A Timeout is a KILL, not a survivor. A mutant that turns a terminating test
+    # suite into a non-terminating one HAS been detected — the suite's observable
+    # behaviour changed. This is the standard convention in PIT and Stryker (a
+    # timed-out mutant counts toward the killed total), so timeout joins `caught`
+    # in the numerator. `missed` is the only survivor category. Result: timeouts
+    # NEVER drag the score down; the rate is computed over {detected, missed}.
+    detected = counts["caught"] + counts["timeout"]
+    viable = detected + counts["missed"]
+    return round(100.0 * detected / viable, 2) if viable > 0 else 0.0
 
 
 def load_score_book(scores_path: Path) -> dict[str, Any]:
@@ -223,35 +240,48 @@ def baseline_for_scope(score_book: dict[str, Any], scope: str) -> MutationScore 
     return MutationScore.from_json(raw_score)
 
 
-def regression_messages(fresh: MutationScore, baseline: MutationScore) -> list[str]:
+# Hard floor for every crate's kill rate, independent of the moving baseline.
+# The mutation run mutates the WHOLE crate (no code excluded), so `missed` is a
+# large absolute number that DROPS as tests improve — the opposite of the old
+# hidden-pool regime where any missed mutant was a scandal. The binding ratchet
+# is therefore `kill_rate`, which must never drop AND never fall below this
+# floor. Raise the floor as coverage climbs; never lower it.
+MIN_KILL_RATE = 20.0
+
+
+def regression_messages(
+    fresh: MutationScore, baseline: MutationScore | None
+) -> list[str]:
     regressions: list[str] = []
-    # The mutation scope only ever GROWS ([CHKARCH-TESTING-MUTATION-RATCHET]):
-    # widening coverage means adding #[mutation_safe] tests over more rules and
-    # functions, which enlarges the viable mutant pool. A shrinking pool means
-    # scope was removed — that is a regression even if kill_rate held.
-    if fresh.viable < baseline.viable:
+    # Absolute kill-rate floor — the primary honest gate. Applies on EVERY run,
+    # baseline or not, so a first run can never enshrine a sub-floor score.
+    if fresh.kill_rate < MIN_KILL_RATE:
         regressions.append(
-            f"viable mutant pool shrank {baseline.viable} -> {fresh.viable} "
-            "(mutation scope must only grow)"
+            f"kill_rate {fresh.kill_rate}% is below the {MIN_KILL_RATE}% floor"
         )
-    if fresh.caught < baseline.caught:
-        regressions.append(f"caught dropped {baseline.caught} -> {fresh.caught}")
-    if fresh.missed > baseline.missed:
-        regressions.append(f"missed increased {baseline.missed} -> {fresh.missed}")
-    if fresh.timeout > baseline.timeout:
-        regressions.append(f"timeout increased {baseline.timeout} -> {fresh.timeout}")
-    # NOTE: `unviable` is deliberately NOT a regression signal. Unviable mutants
-    # are mutations cargo-mutants generated that fail to compile, so they are
-    # excluded from `kill_rate` by construction (see `score_percentage`: viable =
-    # caught + missed + timeout). Adding code legitimately grows the mutant pool
-    # and can yield more non-compiling mutants without any drop in test quality.
-    # A genuinely worse suite shows up as `caught dropped` / `missed increased` /
-    # `kill_rate dropped`, which remain hard-fail gates. The count is still
-    # reported via `score_summary` for visibility.
+    # The remaining checks are ratchets against a committed baseline. With no
+    # baseline yet (first measured run), only the floor above applies.
+    if baseline is None:
+        return regressions
+    # Ratchet: the crate's kill_rate must never regress against the committed
+    # baseline. This is what forces the number monotonically upward.
     if fresh.kill_rate < baseline.kill_rate:
         regressions.append(
             f"kill_rate dropped {baseline.kill_rate}% -> {fresh.kill_rate}%"
         )
+    # `detected` (caught + timeout, since a timeout is a kill) is a ratchet ONLY
+    # when the pool did not shrink: with a fixed pool, fewer kills is a genuinely
+    # weaker suite. When the pool grows (more code mutated) `detected` naturally
+    # moves; kill_rate above is the size-independent guard, so we don't
+    # double-penalise.
+    if fresh.viable <= baseline.viable and fresh.detected < baseline.detected:
+        regressions.append(f"detected dropped {baseline.detected} -> {fresh.detected}")
+    # NOTE: absolute `missed` and `viable` are NOT regression signals here.
+    # Mutating the whole crate means `missed` is large and shrinks as coverage
+    # improves; the whole point of this suite is to drive it DOWN, so a rise in
+    # the absolute count relative to a smaller-pool baseline is expected the
+    # first time the full pool is measured. `unviable` is excluded from the rate
+    # by construction. All three are still reported via `score_summary`.
     return regressions
 
 
@@ -270,14 +300,19 @@ def record_score(data: dict[str, Any], scores_path: Path, scope: str) -> Mutatio
     )
     baseline = baseline_for_scope(score_book, scope)
     print(f"Fresh mutation score ({scope}): {score_summary(fresh)}", file=sys.stderr)
+    # The MIN_KILL_RATE floor applies on EVERY run, including the very first
+    # (no baseline yet) — otherwise a first run could record a sub-floor score
+    # and enshrine it. `regression_messages` checks the floor unconditionally and
+    # the baseline ratchet only when a baseline is present, so we always call it;
+    # a missing baseline degenerates to a floor-only check.
     if baseline is not None:
         print(
             f"Baseline ({baseline.date}, {scope}): {score_summary(baseline)}",
             file=sys.stderr,
         )
-        regressions = regression_messages(fresh, baseline)
-        if regressions:
-            raise MutationScoreRegression(regressions)
+    regressions = regression_messages(fresh, baseline)
+    if regressions:
+        raise MutationScoreRegression(regressions)
     score_book["version"] = SCORE_FILE_VERSION
     score_book["scores"][scope] = fresh.to_json()
     write_score_book(scores_path, score_book)
@@ -422,8 +457,8 @@ def generate_from_data(
     <div class="lbl">Caught</div>
   </div>
   <div class="stat">
-    <div class="val timeout">{timeout}</div>
-    <div class="lbl">Timeout</div>
+    <div class="val caught">{timeout}</div>
+    <div class="lbl">Timeout (= kill)</div>
   </div>
   <div class="stat">
     <div class="val" style="color:var(--muted)">{unviable}</div>

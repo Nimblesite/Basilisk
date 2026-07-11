@@ -4,6 +4,7 @@
       "docs": "Docs",
       "rules": "Rules",
       "blog": "Blog",
+      "discord": "Discord",
       "github": "GitHub",
       "getStarted": "Get Started"
     },
@@ -41,7 +42,19 @@
     "footer": {
       "madeWith": "Built with",
       "license": "MIT License",
-      "copyright": "The Basilisk Project"
+      "copyright": "The Basilisk Project",
+      "product": "Product",
+      "community": "Community",
+      "legal": "Legal",
+      "documentation": "Documentation",
+      "rulesReference": "Rules Reference",
+      "blog": "Blog",
+      "authors": "Authors",
+      "github": "GitHub",
+      "issues": "Issues",
+      "discord": "Discord",
+      "discussions": "Discussions",
+      "mit": "MIT"
     }
   },
   "zh": {
@@ -49,6 +62,7 @@
       "docs": "文档",
       "rules": "规则",
       "blog": "博客",
+      "discord": "Discord",
       "github": "GitHub",
       "getStarted": "立即开始"
     },
@@ -86,7 +100,19 @@
     "footer": {
       "madeWith": "构建于",
       "license": "MIT 许可证",
-      "copyright": "Basilisk 项目"
+      "copyright": "Basilisk 项目",
+      "product": "产品",
+      "community": "社区",
+      "legal": "法律",
+      "documentation": "文档",
+      "rulesReference": "规则参考",
+      "blog": "博客",
+      "authors": "作者",
+      "github": "GitHub",
+      "issues": "问题",
+      "discord": "Discord",
+      "discussions": "讨论",
+      "mit": "MIT 许可证"
     }
   }
 }

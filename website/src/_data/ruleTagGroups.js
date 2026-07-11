@@ -72,11 +72,20 @@ function makeGroups(provenance, order) {
 
 const basilisk = makeGroups("basilisk", BASILISK_ORDER);
 const pep = makeGroups("pep", PEP_ORDER);
+const basiliskPrimary = basilisk
+  .map((group) => {
+    const items = rules.filter(
+      (rule) => rule.provenance === "basilisk" && rule.tags[1] === group.tag
+    );
+    return { ...group, count: items.length, items };
+  })
+  .filter((group) => group.count > 0);
 
 export default {
   basilisk,
   pep,
   pages: [...basilisk, ...pep],
+  indexGroups: [...basiliskPrimary, ...pep],
   counts: {
     basilisk: rules.filter((rule) => rule.provenance === "basilisk").length,
     pep: rules.filter((rule) => rule.provenance === "pep").length,

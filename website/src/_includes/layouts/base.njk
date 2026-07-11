@@ -202,7 +202,7 @@
 
       <ul class="nav-links" id="site-navigation">
         {% set navData = navigation %}
-        {% set currentLang = lang | default('en') %}
+        {% set currentLang = effLang %}
         {% for item in navData.main %}
         <li>
           {% set navUrl = item.url %}
@@ -212,9 +212,20 @@
               {% set navUrl = localizedNavUrl %}
             {% endif %}
           {% endif %}
+          {% set navActive = false %}
+          {% if item.url == '/docs/' %}
+            {% set rulesPrefix = '/zh/docs/rules/' if currentLang != defaultLanguage else '/docs/rules/' %}
+            {% set navActive = page.url.startsWith(navUrl) and not page.url.startsWith(rulesPrefix) %}
+          {% elif item.url == '/docs/rules/' %}
+            {% set navActive = page.url.startsWith(navUrl) or page.url.startsWith('/errors/') %}
+          {% elif item.url == '/' %}
+            {% set navActive = page.url == '/' or page.url == '/index.html' or page.url == ('/' + currentLang + '/') or page.url == ('/' + currentLang + '/index.html') %}
+          {% elif not item.external %}
+            {% set navActive = page.url.startsWith(navUrl) %}
+          {% endif %}
           <a href="{{ navUrl }}" {% if item.external %}target="_blank" rel="noopener noreferrer"{% endif %}
-             class="nav-link {% if (item.url == '/' and (page.url == '/' or page.url == '/index.html' or page.url == ('/' + currentLang + '/') or page.url == ('/' + currentLang + '/index.html'))) or (item.url != '/' and item.url | length > 1 and (page.url.startsWith(item.url) or page.url.startsWith(navUrl))) %}active{% endif %}">
-            {{ item.text }}
+             class="nav-link{% if navActive %} active{% endif %}">
+            {{ ('nav.' + item.key) | t(effLang) | default(item.text) }}
           </a>
         </li>
         {% endfor %}
@@ -255,10 +266,10 @@
     <div class="footer-content">
       {% if navigation.footer %}
       <div class="footer-grid">
-        {% set currentLang = lang | default('en') %}
+        {% set currentLang = effLang %}
         {% for section in navigation.footer %}
         <div class="footer-section">
-          <h3>{{ section.title }}</h3>
+          <h3>{{ ('footer.' + section.key) | t(effLang) | default(section.title) }}</h3>
           <ul>
             {% for item in section.items %}
             {% set footerUrl = item.url %}
@@ -268,7 +279,7 @@
                 {% set footerUrl = localizedFooterUrl %}
               {% endif %}
             {% endif %}
-            <li><a href="{{ footerUrl }}">{{ item.text }}</a></li>
+            <li><a href="{{ footerUrl }}">{{ ('footer.' + item.key) | t(effLang) | default(item.text) }}</a></li>
             {% endfor %}
           </ul>
         </div>

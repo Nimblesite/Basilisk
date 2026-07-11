@@ -169,7 +169,9 @@ export default function (eleventyConfig) {
           .replace(/^-+|-+$/g, ""),
     }
   );
-  eleventyConfig.setLibrary("md", markdown);
+  // Eleventy executes plugins after the project config returns, so register
+  // this override as the next plugin to ensure it runs after techdoc's default.
+  eleventyConfig.addPlugin((config) => config.setLibrary("md", markdown));
 
   eleventyConfig.addPassthroughCopy("src/assets");
   eleventyConfig.addPassthroughCopy("src/CNAME");

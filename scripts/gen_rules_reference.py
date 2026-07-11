@@ -84,9 +84,7 @@ def pep_categories() -> frozenset[str]:
     """
     with CONFORMANCE_STATUS.open(encoding="utf-8", newline="") as handle:
         return frozenset(
-            row["category"]
-            for row in DictReader(handle)
-            if row.get("category")
+            row["category"] for row in DictReader(handle) if row.get("category")
         )
 
 

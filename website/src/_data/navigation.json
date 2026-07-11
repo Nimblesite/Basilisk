@@ -1,10 +1,10 @@
 {
   "main": [
-    { "text": "Docs", "url": "/docs/" },
-    { "text": "Rules", "url": "/docs/rules/" },
-    { "text": "Blog", "url": "/blog/" },
-    { "text": "Discord", "url": "https://discord.gg/4wBDSGEZQd", "external": true },
-    { "text": "GitHub", "url": "https://github.com/Nimblesite/Basilisk", "external": true }
+    { "key": "docs", "text": "Docs", "url": "/docs/" },
+    { "key": "rules", "text": "Rules", "url": "/docs/rules/" },
+    { "key": "blog", "text": "Blog", "url": "/blog/" },
+    { "key": "discord", "text": "Discord", "url": "https://discord.gg/4wBDSGEZQd", "external": true },
+    { "key": "github", "text": "GitHub", "url": "https://github.com/Nimblesite/Basilisk", "external": true }
   ],
   "docs": [
     {
@@ -66,27 +66,30 @@
   ],
   "footer": [
     {
+      "key": "product",
       "title": "Product",
       "items": [
-        { "text": "Documentation", "url": "/docs/" },
-        { "text": "Rules Reference", "url": "/docs/rules/" },
-        { "text": "Blog", "url": "/blog/" },
-        { "text": "Authors", "url": "/authors/" }
+        { "key": "documentation", "text": "Documentation", "url": "/docs/" },
+        { "key": "rulesReference", "text": "Rules Reference", "url": "/docs/rules/" },
+        { "key": "blog", "text": "Blog", "url": "/blog/" },
+        { "key": "authors", "text": "Authors", "url": "/authors/" }
       ]
     },
     {
+      "key": "community",
       "title": "Community",
       "items": [
-        { "text": "GitHub", "url": "https://github.com/Nimblesite/Basilisk" },
-        { "text": "Issues", "url": "https://github.com/Nimblesite/Basilisk/issues" },
-        { "text": "Discord", "url": "https://discord.gg/4wBDSGEZQd" },
-        { "text": "Discussions", "url": "https://github.com/Nimblesite/Basilisk/discussions" }
+        { "key": "github", "text": "GitHub", "url": "https://github.com/Nimblesite/Basilisk" },
+        { "key": "issues", "text": "Issues", "url": "https://github.com/Nimblesite/Basilisk/issues" },
+        { "key": "discord", "text": "Discord", "url": "https://discord.gg/4wBDSGEZQd" },
+        { "key": "discussions", "text": "Discussions", "url": "https://github.com/Nimblesite/Basilisk/discussions" }
       ]
     },
     {
+      "key": "legal",
       "title": "Legal",
       "items": [
-        { "text": "MIT", "url": "https://github.com/Nimblesite/Basilisk/blob/main/LICENSE" }
+        { "key": "mit", "text": "MIT", "url": "https://github.com/Nimblesite/Basilisk/blob/main/LICENSE" }
       ]
     }
   ]

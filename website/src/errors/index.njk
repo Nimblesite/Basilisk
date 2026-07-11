@@ -19,3 +19,19 @@ permalink: "/errors/index.html"
 <h2>Python typing-spec rules <span class="error-count">({{ ruleTagGroups.counts.pep }} default)</span></h2>
 <p>Core checks enabled by default, grouped by the canonical <code>python/typing</code> category tags. Cross-cutting checks without one category have their own group.</p>
 {{ groupGrid(ruleTagGroups.pep, "en") }}
+
+<details class="rule-directory">
+  <summary>All {{ rules.length }} diagnostic pages</summary>
+  <p>Each rule appears once below under its primary tag. Rules with additional tags remain discoverable from every matching tag page above.</p>
+  {% for group in ruleTagGroups.indexGroups %}
+  <h3 id="directory-{{ group.provenance }}-{{ group.id }}"><a href="{{ group.url }}">{{ group.label }}</a> <span class="error-count">({{ group.count }})</span></h3>
+  <ul class="error-list">
+    {% for rule in group.items %}
+    <li>
+      <a href="/errors/{{ rule.code }}/"><code>{{ rule.code }}</code></a>
+      <span class="error-list__summary">{{ rule.summaryHtml | safe }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endfor %}
+</details>
