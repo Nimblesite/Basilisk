@@ -1,0 +1,24 @@
+---
+pagination:
+  data: collections.categoryList
+  size: 1
+  alias: category
+permalink: /blog/categories/{{ category | slugify }}/
+layout: layouts/base.njk
+eleventyComputed:
+  title: "{{ category | capitalize }}"
+  description: "All blog posts in the {{ category }} category."
+---
+{% from "components/blog.njk" import masthead, navigation, postCard %}
+{% set categoryPosts = collections.postsByCategory[category] %}
+
+<div class="blog-container">
+  {{ masthead(category | replace("-", " ") | capitalize, "blog.categoryResultsDescription" | t(lang) | default("Writing collected under this category."), lang) }}
+  {{ navigation(lang, defaultLanguage, "categories") }}
+
+  <div class="post-list">
+    {% for post in categoryPosts %}
+      {{ postCard(post, lang, defaultLanguage, loop.first) }}
+    {% endfor %}
+  </div>
+</div>

@@ -1,0 +1,24 @@
+---
+pagination:
+  data: collections.tagList
+  size: 1
+  alias: tag
+permalink: /blog/tags/{{ tag | slugify }}/
+layout: layouts/base.njk
+eleventyComputed:
+  title: "Posts tagged '{{ tag }}'"
+  description: "All blog posts tagged with {{ tag }}."
+---
+{% from "components/blog.njk" import masthead, navigation, postCard %}
+{% set taggedPosts = collections.postsByTag[tag] %}
+
+<div class="blog-container">
+  {{ masthead(tag, "blog.tagResultsDescription" | t(lang) | default("Writing collected under this topic."), lang) }}
+  {{ navigation(lang, defaultLanguage, "tags") }}
+
+  <div class="post-list">
+    {% for post in taggedPosts %}
+      {{ postCard(post, lang, defaultLanguage, loop.first) }}
+    {% endfor %}
+  </div>
+</div>

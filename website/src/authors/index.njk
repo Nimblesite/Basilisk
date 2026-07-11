@@ -1,0 +1,48 @@
+---
+layout: layouts/base.njk
+permalink: /authors/
+noTranslation: true
+title: "Authors: The People Behind Basilisk"
+description: "Meet the authors behind the Basilisk blog: The Basilisk Project team and Christian Findlay, director of Nimblesite and creator of Basilisk."
+keywords: basilisk authors, basilisk team, christian findlay, nimblesite
+---
+
+{% block head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  "@id": "{{ site.url }}/authors/#webpage",
+  "url": "{{ site.url }}/authors/",
+  "name": "Authors: The People Behind Basilisk",
+  "hasPart": [
+    {% for a in authors.authors %}{
+      "@type": "ProfilePage",
+      "url": "{{ site.url }}/authors/{{ a.slug }}/",
+      "name": "{{ a.name }}"
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+}
+</script>
+{% endblock %}
+
+<div class="blog-container">
+  <header class="blog-header">
+    <h1>Authors</h1>
+    <p>The people behind Basilisk and this blog.</p>
+  </header>
+
+  <div class="author-list">
+    {% for a in authors.authors %}
+    <a class="author-card" href="/authors/{{ a.slug }}/">
+      {% if a.avatar %}<img class="author-avatar" src="{{ a.avatar }}" alt="{{ a.name }}" width="72" height="72" loading="lazy" decoding="async">{% endif %}
+      <div class="author-card__body">
+        <span class="author-card__name">{{ a.name }}</span>
+        {% if a.role %}<span class="author-card__role">{{ a.role }}</span>{% endif %}
+        <span class="author-card__bio">{{ a.bio | truncate(150) }}</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</div>

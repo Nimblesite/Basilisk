@@ -1,0 +1,41 @@
+{% macro masthead(title, subtitle, lang) %}
+<header class="blog-header">
+  <p class="blog-kicker">{{ "blog.eyebrow" | t(lang) | default("The Basilisk Journal") }}</p>
+  <h1>{{ title }}</h1>
+  {% if subtitle %}<p class="blog-subtitle">{{ subtitle }}</p>{% endif %}
+</header>
+{% endmacro %}
+
+{% macro navigation(lang, defaultLanguage, active) %}
+{% set langPrefix = "/" + lang if lang and lang != defaultLanguage else "" %}
+<nav class="blog-nav" aria-label="{{ "blog.browse" | t(lang) | default("Browse the blog") }}">
+  <a href="{{ langPrefix }}/blog/" class="blog-nav-link{% if active == 'all' %} active{% endif %}">{{ "blog.allStories" | t(lang) | default("All stories") }}</a>
+  <a href="{{ langPrefix }}/blog/categories/" class="blog-nav-link{% if active == 'categories' %} active{% endif %}">{{ "blog.categories" | t(lang) | default("Categories") }}</a>
+  <a href="{{ langPrefix }}/blog/tags/" class="blog-nav-link{% if active == 'tags' %} active{% endif %}">{{ "blog.tags" | t(lang) | default("Tags") }}</a>
+</nav>
+{% endmacro %}
+
+{% macro postCard(post, lang, defaultLanguage, featured=false) %}
+{% set langPrefix = "/" + lang if lang and lang != defaultLanguage else "" %}
+<article class="post-card{% if featured %} post-card--featured{% endif %}">
+  {% if post.data.image %}
+  <a href="{{ post.url }}" class="post-card-media" aria-label="{{ "blog.readMore" | t(lang) | default("Read article") }}: {{ post.data.title }}">
+    <img src="{{ post.data.image }}"
+         alt="{{ post.data.imageAlt | default(post.data.title) }}"
+         width="{{ post.data.imageWidth | default(1200) }}"
+         height="{{ post.data.imageHeight | default(675) }}"
+         loading="{% if featured %}eager{% else %}lazy{% endif %}"
+         decoding="async"{% if featured %} fetchpriority="high"{% endif %}>
+  </a>
+  {% endif %}
+  <div class="post-card-body">
+    <div class="post-meta">
+      {% if post.data.category %}<a href="{{ langPrefix }}/blog/categories/{{ post.data.category | slugify }}/">{{ post.data.category | replace("-", " ") | capitalize }}</a><span aria-hidden="true">/</span>{% endif %}
+      <time datetime="{{ post.date | isoDate }}">{{ post.date | dateFormat(lang) }}</time>
+    </div>
+    <h2><a href="{{ post.url }}" class="post-title">{{ post.data.title }}</a></h2>
+    {% if post.data.excerpt or post.data.description %}<p class="post-excerpt">{{ post.data.excerpt | default(post.data.description) }}</p>{% endif %}
+    <a href="{{ post.url }}" class="post-card-cta">{{ "blog.readMore" | t(lang) | default("Read article") }} <span aria-hidden="true">→</span></a>
+  </div>
+</article>
+{% endmacro %}

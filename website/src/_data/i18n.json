@@ -9,6 +9,8 @@
     },
     "blog": {
       "title": "Blog",
+      "eyebrow": "The Basilisk Journal",
+      "headline": "Ideas for safer Python.",
       "subtitle": "Updates, announcements, and deep-dives from the Basilisk project.",
       "description": "Updates, announcements, and deep-dives from the Basilisk project.",
       "tags": "Tags",
@@ -18,7 +20,16 @@
       "categoriesTitle": "Categories",
       "categoriesDescription": "Browse blog posts by category.",
       "readMore": "Read more",
-      "publishedOn": "Published on"
+      "publishedOn": "Published on",
+      "browse": "Browse the blog",
+      "allStories": "All stories",
+      "latestEyebrow": "From the project",
+      "latest": "Latest writing",
+      "articles": "articles",
+      "categoryResultsDescription": "Writing collected under this category.",
+      "tagResultsDescription": "Writing collected under this topic.",
+      "noTags": "No tags yet. Check back soon!",
+      "noCategories": "No categories yet. Check back soon!"
     },
     "docs": {
       "onThisPage": "On this page",
@@ -42,6 +53,8 @@
     },
     "blog": {
       "title": "博客",
+      "eyebrow": "Basilisk 技术期刊",
+      "headline": "探索更安全的 Python。",
       "subtitle": "来自 Basilisk 项目的更新、公告和深度解析。",
       "description": "来自 Basilisk 项目的更新、公告和深度解析。",
       "tags": "标签",
@@ -51,7 +64,16 @@
       "categoriesTitle": "分类",
       "categoriesDescription": "按分类浏览博客文章。",
       "readMore": "阅读更多",
-      "publishedOn": "发布于"
+      "publishedOn": "发布于",
+      "browse": "浏览博客",
+      "allStories": "全部文章",
+      "latestEyebrow": "项目动态",
+      "latest": "最新文章",
+      "articles": "篇文章",
+      "categoryResultsDescription": "此分类下的全部文章。",
+      "tagResultsDescription": "此主题下的全部文章。",
+      "noTags": "暂无标签。",
+      "noCategories": "暂无分类。"
     },
     "docs": {
       "onThisPage": "本页内容",

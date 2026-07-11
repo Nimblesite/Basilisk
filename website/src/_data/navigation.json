@@ -53,7 +53,8 @@
       "items": [
         { "text": "Documentation", "url": "/docs/" },
         { "text": "Rules Reference", "url": "/docs/rules/" },
-        { "text": "Blog", "url": "/blog/" }
+        { "text": "Blog", "url": "/blog/" },
+        { "text": "Authors", "url": "/authors/" }
       ]
     },
     {

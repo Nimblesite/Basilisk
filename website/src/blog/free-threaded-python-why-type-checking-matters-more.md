@@ -8,7 +8,12 @@ image: /assets/images/blog/free-threaded-python-type-checking.png
 imageAlt: "Parallel Python execution threads running side by side over a strict type-checking safety layer"
 imageWidth: 1200
 imageHeight: 675
-tags: posts
+tags:
+  - posts
+  - free-threading
+  - Python 3.14
+  - concurrency
+  - type checking
 category: deep-dives
 excerpt: "Python 3.14 made free-threaded Python officially supported. When threads really run in parallel, a type error stops being a quiet annoyance and becomes a concurrency bug. Here's why strict, default-on type checking is the cheapest protection you can buy."
 keywords: free-threaded python, no-gil python, python 3.14, cpython, python type checker, python type hints, strict typing, concurrency, pep 703, pep 779, basilisk

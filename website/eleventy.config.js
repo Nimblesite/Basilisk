@@ -5,17 +5,24 @@ import techdoc from "eleventy-plugin-techdoc";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Patch the techdoc plugin's layouts with our custom versions. The plugin's
-// own templates dir wins layout resolution over src/_includes/layouts, so an
-// override has to be copied into the plugin (base.njk adds favicon + logo;
-// blog.njk adds the per-post hero banner + image-aware BlogPosting JSON-LD).
-const layoutOverrides = ["base.njk", "blog.njk"];
-for (const layout of layoutOverrides) {
-  const localOverride = join(__dirname, "src/_includes/layouts", layout);
+// Patch the techdoc plugin's virtual templates with project-owned versions.
+// The plugin reads these files after this config loads, so the copies survive a
+// fresh npm install without maintaining a fork of the package.
+const templateOverrides = [
+  ["src/_includes/layouts/base.njk", "templates/layouts/base.njk"],
+  ["src/_includes/layouts/blog.njk", "templates/layouts/blog.njk"],
+  ["src/_includes/pages/blog/index.njk", "templates/pages/blog/index.njk"],
+  ["src/_includes/pages/blog/tags.njk", "templates/pages/blog/tags.njk"],
+  ["src/_includes/pages/blog/tags-pages.njk", "templates/pages/blog/tags-pages.njk"],
+  ["src/_includes/pages/blog/categories.njk", "templates/pages/blog/categories.njk"],
+  ["src/_includes/pages/blog/categories-pages.njk", "templates/pages/blog/categories-pages.njk"],
+];
+for (const [source, target] of templateOverrides) {
+  const localOverride = join(__dirname, source);
   const pluginTarget = join(
     __dirname,
-    "node_modules/eleventy-plugin-techdoc/templates/layouts",
-    layout
+    "node_modules/eleventy-plugin-techdoc",
+    target
   );
   if (existsSync(localOverride)) {
     writeFileSync(pluginTarget, readFileSync(localOverride, "utf-8"));
@@ -76,12 +83,21 @@ function patchIndexFrontMatter(path, content) {
     .replace(/^(title: .*)$/m, `$1\ndescription: "${meta.description}"`);
 }
 
+function addSharedProseClass(path, content) {
+  return path === "_includes/layouts/docs.njk" || path === "_includes/layouts/api.njk"
+    ? content.replace('class="docs-content"', 'class="docs-content prose"')
+    : content;
+}
+
 export default function (eleventyConfig) {
   const originalAddTemplate = eleventyConfig.addTemplate.bind(eleventyConfig);
   eleventyConfig.addTemplate = (virtualInputPath, content, data) =>
     originalAddTemplate(
       virtualInputPath,
-      patchIndexFrontMatter(virtualInputPath, content),
+      patchIndexFrontMatter(
+        virtualInputPath,
+        addSharedProseClass(virtualInputPath, content)
+      ),
       data
     );
 
@@ -123,6 +139,22 @@ export default function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy("src/assets");
   eleventyConfig.addPassthroughCopy("src/CNAME");
   eleventyConfig.addPassthroughCopy("src/robots.txt");
+
+  // [Author pages] Posts written by a given author, matched on the post's
+  // `author` front-matter string == the author's `name` in _data/authors.json.
+  // Newest first, English posts only (Chinese posts carry their own byline).
+  eleventyConfig.addFilter("authorPosts", (posts, authorName) =>
+    (posts || [])
+      .filter((p) => p.data.author === authorName && !p.url.startsWith("/zh/"))
+      .sort((a, b) => b.date - a.date)
+  );
+
+  // [Author pages] Plain-text truncation for meta descriptions built from a bio.
+  eleventyConfig.addFilter("truncate", (str, len) => {
+    const s = String(str || "");
+    if (s.length <= len) return s;
+    return s.slice(0, s.lastIndexOf(" ", len)).trimEnd() + "…";
+  });
 
   return {
     dir: {
