@@ -37,7 +37,11 @@ class HarnessEnvironmentTests(unittest.TestCase):
 class GeneratedReferenceTests(unittest.TestCase):
     def test_checked_in_conformance_references_match_the_live_report(self) -> None:
         result = subprocess.run(
-            [sys.executable, str(ROOT / "scripts" / "gen_conformance_reference.py"), "--check"],
+            [
+                sys.executable,
+                str(ROOT / "scripts" / "gen_conformance_reference.py"),
+                "--check",
+            ],
             cwd=ROOT,
             capture_output=True,
             text=True,
