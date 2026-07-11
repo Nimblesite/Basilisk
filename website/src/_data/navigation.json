@@ -8,21 +8,25 @@
   ],
   "docs": [
     {
-      "title": "Start here",
-      "titleZh": "开始使用",
-      "items": [
-        { "title": "Introduction", "titleZh": "简介", "url": "/docs/" },
-        { "title": "Quick start", "titleZh": "快速开始", "url": "/docs/quick-start/" }
-      ]
+      "title": "Introduction",
+      "titleZh": "简介",
+      "url": "/docs/"
     },
     {
-      "title": "Install",
-      "titleZh": "安装",
+      "title": "Getting started",
+      "titleZh": "开始使用",
       "items": [
-        { "title": "Installation overview", "titleZh": "安装概览", "url": "/docs/installation/" },
-        { "title": "VS Code & Cursor", "titleZh": "VS Code 与 Cursor", "url": "/docs/install-vscode/" },
-        { "title": "Zed", "titleZh": "Zed", "url": "/docs/install-zed/" },
-        { "title": "CLI & package managers", "titleZh": "CLI 与包管理器", "url": "/docs/install-cli/" }
+        {
+          "title": "Installation",
+          "titleZh": "安装",
+          "children": [
+            { "title": "Overview", "titleZh": "概览", "url": "/docs/installation/" },
+            { "title": "VS Code & Cursor", "titleZh": "VS Code 与 Cursor", "url": "/docs/install-vscode/" },
+            { "title": "Zed", "titleZh": "Zed", "url": "/docs/install-zed/" },
+            { "title": "CLI & package managers", "titleZh": "CLI 与包管理器", "url": "/docs/install-cli/" }
+          ]
+        },
+        { "title": "Quick start", "titleZh": "快速开始", "url": "/docs/quick-start/" }
       ]
     },
     {
@@ -36,9 +40,8 @@
     {
       "title": "Type checking",
       "titleZh": "类型检查",
-      "kind": "rules",
       "items": [
-        { "title": "Rules overview", "titleZh": "规则概览", "url": "/docs/rules/" },
+        { "title": "Rules", "titleZh": "规则", "url": "/docs/rules/", "kind": "rules" },
         { "title": "Conformance", "titleZh": "规范符合性", "url": "/docs/conformance/" },
         { "title": "Type checker comparison", "titleZh": "类型检查器对比", "url": "/docs/comparison/" }
       ]

@@ -274,8 +274,7 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .docs-menu-toggle { display: none; }
 .docs-nav { padding: 0; }
 .docs-nav ul { list-style: none; margin: 0; padding: 0; }
-.docs-nav-section { margin-bottom: var(--space-6); }
-.docs-nav-label { margin: 0 0 var(--space-2); padding: 0 var(--space-3); color: var(--color-text-muted); font-family: var(--font-mono); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+.docs-nav-section { margin-bottom: var(--space-2); }
 
 .docs-nav a {
   display: flex;
@@ -293,6 +292,15 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .docs-nav a:hover { color: var(--color-text-primary); background: var(--color-bg-elevated); }
 .docs-nav a.active { color: var(--color-text-primary); background: var(--color-bg-tertiary); font-weight: 600; }
 .docs-nav a small { color: var(--color-text-muted); font-family: var(--font-mono); font-size: 0.6875rem; }
+.docs-nav-root, .docs-nav-group > summary { min-height: 44px !important; padding: var(--space-2) var(--space-3) !important; border: 1px solid transparent; border-radius: var(--radius-md) !important; font-size: 0.9375rem !important; font-weight: 600; }
+.docs-nav-root.active { border-color: var(--color-border-bright); background: var(--color-bg-tertiary); }
+.docs-nav-group > summary { display: flex; align-items: center; justify-content: space-between; color: var(--color-text-secondary); cursor: pointer; list-style: none; }
+.docs-nav-group > summary::-webkit-details-marker { display: none; }
+.docs-nav-group > summary::after { color: var(--color-text-muted); content: "+"; font-family: var(--font-mono); font-weight: 400; }
+.docs-nav-group[open] > summary { background: var(--color-bg-secondary); color: var(--color-text-primary); }
+.docs-nav-group[open] > summary::after { content: "−"; }
+.docs-nav-group > summary:hover { background: var(--color-bg-elevated); color: var(--color-text-primary); }
+.docs-nav-group > ul { margin: var(--space-1) 0 var(--space-3); padding-left: var(--space-3); }
 .docs-nav-disclosure details { margin-top: var(--space-1); }
 .docs-nav-disclosure summary { display: flex; min-height: 38px; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); color: var(--color-text-secondary); cursor: pointer; font-size: 0.875rem; list-style: none; }
 .docs-nav-disclosure summary::-webkit-details-marker { display: none; }

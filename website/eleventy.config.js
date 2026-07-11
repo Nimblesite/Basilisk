@@ -199,6 +199,21 @@ export default function (eleventyConfig) {
     String(category || "").replaceAll("-", " ")
   );
 
+  const docsNavActive = (node, currentUrl) => {
+    const current = String(currentUrl || "").replace(/^\/zh(?=\/)/, "");
+    if (
+      node?.kind === "rules" &&
+      (current.startsWith("/docs/rules/") || current.startsWith("/errors/"))
+    ) {
+      return true;
+    }
+    if (node?.url === current) return true;
+    return [...(node?.items || []), ...(node?.children || [])].some((child) =>
+      docsNavActive(child, current)
+    );
+  };
+  eleventyConfig.addFilter("docsNavActive", docsNavActive);
+
   // Base layout guard: only advertise a language alternate when Eleventy
   // actually generated that URL. This prevents hreflang and switcher 404s on
   // English-only docs, author profiles, benchmarks, and diagnostic pages.

@@ -44,51 +44,72 @@ layout: layouts/base.njk
     <nav class="docs-nav" aria-label="{% if currentLang == 'zh' %}文档导航{% else %}Documentation navigation{% endif %}">
       <ul>
         {% for section in navigation.docs %}
+        {% set sectionActive = section | docsNavActive(page.url) %}
         <li class="docs-nav-section">
-          <p class="docs-nav-label">{% if currentLang == 'zh' %}{{ section.titleZh }}{% else %}{{ section.title }}{% endif %}</p>
+          {% if section.url %}
+            {% set sectionUrl = section.url %}
+            {% if currentLang == 'zh' and (collections.all | hasPageUrl('/zh' + section.url)) %}{% set sectionUrl = '/zh' + section.url %}{% endif %}
+            <a class="docs-nav-root{% if page.url == sectionUrl %} active{% endif %}" href="{{ sectionUrl }}"{% if page.url == sectionUrl %} aria-current="page"{% endif %}>{% if currentLang == 'zh' %}{{ section.titleZh }}{% else %}{{ section.title }}{% endif %}</a>
+          {% else %}
+          <details class="docs-nav-group"{% if sectionActive %} open{% endif %}>
+            <summary><span>{% if currentLang == 'zh' %}{{ section.titleZh }}{% else %}{{ section.title }}{% endif %}</span></summary>
           <ul>
           {% for item in section.items %}
-            {% set itemUrl = item.url %}
-            {% if currentLang == 'zh' %}
-              {% set localizedItemUrl = '/zh' + item.url %}
-              {% if collections.all | hasPageUrl(localizedItemUrl) %}{% set itemUrl = localizedItemUrl %}{% endif %}
-            {% endif %}
-            <li>
-              <a class="docs-nav-link{% if page.url == itemUrl %} active{% endif %}" href="{{ itemUrl }}"{% if page.url == itemUrl %} aria-current="page"{% endif %}>{% if currentLang == 'zh' %}{{ item.titleZh }}{% else %}{{ item.title }}{% endif %}</a>
-            </li>
-
-            {% if section.kind == 'rules' and loop.first %}
+            {% set itemActive = item | docsNavActive(page.url) %}
+            {% if item.children %}
             <li class="docs-nav-disclosure">
-              <details{% if page.url.startsWith('/docs/rules/basilisk/') or page.url.startsWith('/zh/docs/rules/basilisk/') or (page.url.startsWith('/errors/') and rule.provenance == 'basilisk') %} open{% endif %}>
-                <summary>
-                  <span>{% if currentLang == 'zh' %}Basilisk 可选规则{% else %}Basilisk rules <small>opt-in</small>{% endif %}</span>
-                  <strong>{{ ruleTagGroups.counts.basilisk }}</strong>
-                </summary>
+              <details{% if itemActive %} open{% endif %}>
+                <summary><span>{% if currentLang == 'zh' %}{{ item.titleZh }}{% else %}{{ item.title }}{% endif %}</span></summary>
                 <ul>
-                {% for group in ruleTagGroups.basilisk %}
-                  {% set groupUrl = group.zhUrl if currentLang == 'zh' else group.url %}
-                  <li><a class="docs-nav-link{% if page.url == groupUrl %} active{% endif %}" href="{{ groupUrl }}"{% if page.url == groupUrl %} aria-current="page"{% endif %}><span>{% if currentLang == 'zh' %}{{ group.labelZh }}{% else %}{{ group.label }}{% endif %}</span><small>{{ group.count }}</small></a></li>
+                {% for child in item.children %}
+                  {% set childUrl = child.url %}
+                  {% if currentLang == 'zh' and (collections.all | hasPageUrl('/zh' + child.url)) %}{% set childUrl = '/zh' + child.url %}{% endif %}
+                  <li><a class="docs-nav-link{% if page.url == childUrl %} active{% endif %}" href="{{ childUrl }}"{% if page.url == childUrl %} aria-current="page"{% endif %}>{{ child.titleZh if currentLang == 'zh' else child.title }}</a></li>
                 {% endfor %}
                 </ul>
               </details>
             </li>
+            {% elif item.kind == 'rules' %}
             <li class="docs-nav-disclosure">
-              <details{% if page.url.startsWith('/docs/rules/pep/') or page.url.startsWith('/zh/docs/rules/pep/') or (page.url.startsWith('/errors/') and rule.provenance == 'pep') %} open{% endif %}>
-                <summary>
-                  <span>{% if currentLang == 'zh' %}Python 类型规范{% else %}Python typing spec{% endif %}</span>
-                  <strong>{{ ruleTagGroups.counts.pep }}</strong>
-                </summary>
+              <details{% if itemActive %} open{% endif %}>
+                <summary><span>{% if currentLang == 'zh' %}{{ item.titleZh }}{% else %}{{ item.title }}{% endif %}</span><strong>{{ ruleTagGroups.counts.pep + ruleTagGroups.counts.basilisk }}</strong></summary>
                 <ul>
-                {% for group in ruleTagGroups.pep %}
-                  {% set groupUrl = group.zhUrl if currentLang == 'zh' else group.url %}
-                  <li><a class="docs-nav-link{% if page.url == groupUrl %} active{% endif %}" href="{{ groupUrl }}"{% if page.url == groupUrl %} aria-current="page"{% endif %}><span>{% if currentLang == 'zh' %}{{ group.labelZh }}{% else %}{{ group.label }}{% endif %}</span><small>{{ group.count }}</small></a></li>
-                {% endfor %}
+                  {% set rulesOverviewUrl = '/zh/docs/rules/' if currentLang == 'zh' else '/docs/rules/' %}
+                  <li><a class="docs-nav-link{% if page.url == rulesOverviewUrl %} active{% endif %}" href="{{ rulesOverviewUrl }}"{% if page.url == rulesOverviewUrl %} aria-current="page"{% endif %}>{% if currentLang == 'zh' %}概览{% else %}Overview{% endif %}</a></li>
+                  <li class="docs-nav-disclosure">
+                    <details{% if page.url.startsWith('/docs/rules/basilisk/') or page.url.startsWith('/zh/docs/rules/basilisk/') or (page.url.startsWith('/errors/') and rule.provenance == 'basilisk') %} open{% endif %}>
+                      <summary><span>{% if currentLang == 'zh' %}Basilisk 可选规则{% else %}Basilisk rules <small>opt-in</small>{% endif %}</span><strong>{{ ruleTagGroups.counts.basilisk }}</strong></summary>
+                      <ul>
+                      {% for group in ruleTagGroups.basilisk %}
+                        {% set groupUrl = group.zhUrl if currentLang == 'zh' else group.url %}
+                        <li><a class="docs-nav-link{% if page.url == groupUrl %} active{% endif %}" href="{{ groupUrl }}"{% if page.url == groupUrl %} aria-current="page"{% endif %}><span>{{ group.labelZh if currentLang == 'zh' else group.label }}</span><small>{{ group.count }}</small></a></li>
+                      {% endfor %}
+                      </ul>
+                    </details>
+                  </li>
+                  <li class="docs-nav-disclosure">
+                    <details{% if page.url.startsWith('/docs/rules/pep/') or page.url.startsWith('/zh/docs/rules/pep/') or (page.url.startsWith('/errors/') and rule.provenance == 'pep') %} open{% endif %}>
+                      <summary><span>{% if currentLang == 'zh' %}Python 类型规范{% else %}Python typing spec{% endif %}</span><strong>{{ ruleTagGroups.counts.pep }}</strong></summary>
+                      <ul>
+                      {% for group in ruleTagGroups.pep %}
+                        {% set groupUrl = group.zhUrl if currentLang == 'zh' else group.url %}
+                        <li><a class="docs-nav-link{% if page.url == groupUrl %} active{% endif %}" href="{{ groupUrl }}"{% if page.url == groupUrl %} aria-current="page"{% endif %}><span>{{ group.labelZh if currentLang == 'zh' else group.label }}</span><small>{{ group.count }}</small></a></li>
+                      {% endfor %}
+                      </ul>
+                    </details>
+                  </li>
                 </ul>
               </details>
             </li>
+            {% else %}
+              {% set itemUrl = item.url %}
+              {% if currentLang == 'zh' and (collections.all | hasPageUrl('/zh' + item.url)) %}{% set itemUrl = '/zh' + item.url %}{% endif %}
+              <li><a class="docs-nav-link{% if page.url == itemUrl %} active{% endif %}" href="{{ itemUrl }}"{% if page.url == itemUrl %} aria-current="page"{% endif %}>{{ item.titleZh if currentLang == 'zh' else item.title }}</a></li>
             {% endif %}
           {% endfor %}
           </ul>
+          </details>
+          {% endif %}
         </li>
         {% endfor %}
       </ul>
