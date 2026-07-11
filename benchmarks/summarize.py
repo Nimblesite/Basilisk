@@ -92,7 +92,9 @@ def build_csv_lines(rows, all_tools, base_tools, coverage):
         f"# os: {os.environ['BENCH_OS']}",
         f"# cores: {os.environ['BENCH_CORES']}",
         f"# tools: {os.environ['BENCH_TOOLS']}",
-        f"# runs: {os.environ['BENCH_RUNS']} (hyperfine mean wall-clock, milliseconds)",
+        f"# runs: {os.environ['BENCH_RUNS']} minimum; noisy Basilisk CV "
+        f"> {float(os.environ['BENCH_MAX_CV']):.0%} is remeasured with at least "
+        f"{os.environ['BENCH_STABILITY_RUNS']} runs (hyperfine mean wall-clock, milliseconds)",
         f"# generated: {os.environ['BENCH_GENERATED']}",
         f"# note: {STATUS_NOTE}",
         "fixture,"

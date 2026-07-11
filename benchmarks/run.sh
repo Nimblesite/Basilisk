@@ -54,7 +54,10 @@
 # how many diagnostics each tool reports per fixture (the <tool>_diags CSV
 # columns), so a do-nothing run is visible in the published data, not hidden.
 #
-# Knobs: RUNS=<n> WARMUP=<n>. The gate cannot be DISABLED or WIDENED at runtime
+# Knobs: RUNS=<n> WARMUP=<n>. A Basilisk measurement whose coefficient of
+# variation exceeds 15% is automatically remeasured with at least 30 runs;
+# this increases evidence instead of letting a scheduler spike move the ratchet.
+# The gate cannot be DISABLED or WIDENED at runtime
 # (BENCH_NO_GATE / BENCH_REGRESS_PCT / BENCH_TOLERANCE_PCT env overrides are
 # rejected); the committed tolerance is zero.
 
@@ -67,6 +70,10 @@ OUT="$ROOT/benchmarks/results"
 STATUS_DIR="$ROOT/benchmarks/status"
 RUNS="${RUNS:-10}"
 WARMUP="${WARMUP:-2}"
+# Fixed measurement-quality policy. A noisy result gets more samples; if the
+# longer run is still noisy, the benchmark fails instead of publishing it.
+MAX_BASILISK_CV="0.15"
+MIN_STABILITY_RUNS=30
 # Persistent cache dirs for the warm columns of the tools that HAVE a result
 # cache (basilisk's --cache, mypy's incremental). Entries are keyed by the
 # target path, so one dir across fixtures never collides; the hyperfine warmup
@@ -307,7 +314,7 @@ echo "  machine : $BENCH_MACHINE"
 echo "  cpu     : $BENCH_CPU ($BENCH_CORES cores, $BENCH_ARCH)"
 echo "  os      : $BENCH_OS"
 echo "  slug    : $BENCH_SLUG  ->  benchmarks/status/${BENCH_SLUG}.csv"
-echo "  runs    : $RUNS (warmup $WARMUP)"
+echo "  runs    : $RUNS minimum (warmup $WARMUP; noisy measurements retry with >=$MIN_STABILITY_RUNS)"
 echo "  tools   :"
 for name in "${TOOL_NAMES[@]}"; do
   printf "    %-9s %s\n" "$name" "$(version_of "$name")"
@@ -338,6 +345,7 @@ export BENCH_SLUG BENCH_MACHINE BENCH_CPU BENCH_ARCH BENCH_OS BENCH_CORES \
   BENCH_GENERATED BENCH_TOOLS BENCH_RUNS="$RUNS" BENCH_STATUS_DIR="$STATUS_DIR" \
   BENCH_ALL_TOOLS="$ALL_TOOLS" BENCH_GATE="$BENCH_GATE" \
   BENCH_TOLERANCE_PCT="$BENCH_TOLERANCE_PCT" BENCH_COVERAGE="$COVERAGE" \
+  BENCH_MAX_CV="$MAX_BASILISK_CV" BENCH_STABILITY_RUNS="$MIN_STABILITY_RUNS" \
   BENCH_ROOT="$ROOT" BENCH_BASELINE_REF="${BENCH_BASELINE_REF:-HEAD}"
 
 # ─── Preflight: diagnostic coverage + crash screening ─────────────────────────
@@ -409,26 +417,53 @@ for FILE in "${FIXTURES[@]}"; do
   STEM="${FILE%.py}"
   echo "┌─ $STEM ($(wc -l < "$FPATH" | tr -d ' ') lines)"
 
-  HF=(hyperfine --ignore-failure --warmup "$WARMUP" --runs "$RUNS"
-      --export-json "$OUT/${STEM}.json")
-  # When zuban is measured, wipe ./.mypy_cache before EVERY timed run: zuban's
-  # mypy mode reuses an existing .mypy_cache and has no flag to disable it, so
-  # without this its warmed-up runs would be warm incremental hits, not cold.
-  # Harmless to the other tools — their caches live in dedicated --cache-dir
-  # paths (basilisk-warm/mypy-warm), and cold mypy uses --no-incremental, so
-  # none of them read or write ./.mypy_cache. hyperfine excludes --prepare time
-  # from the measurement.
-  [[ -n "${ZUBAN_PRESENT:-}" ]] && HF+=(--prepare 'rm -rf .mypy_cache')
-  for i in "${!TOOL_NAMES[@]}"; do
-    name="${TOOL_NAMES[$i]}"
-    # Preflight-invalid tool (exit >= 2 — never analyzed this file): not timed.
-    # The -warm sibling shares the binary, so it is excluded along with it.
-    case "$INVALID_COMBOS" in *" ${STEM}/${name%-warm} "*) continue ;; esac
-    CMD="${TOOL_CMDS[$i]//\{\}/$FPATH}"
-    HF+=(--command-name "$name" "$CMD")
-  done
+  run_fixture_benchmark() {
+    local measurement_runs="$1"
+    local i name cmd
+    local -a hf
+    hf=(hyperfine --ignore-failure --warmup "$WARMUP" --runs "$measurement_runs"
+        --export-json "$OUT/${STEM}.json")
+    # When zuban is measured, wipe ./.mypy_cache before EVERY timed run: zuban's
+    # mypy mode reuses an existing .mypy_cache and has no flag to disable it, so
+    # without this its warmed-up runs would be warm incremental hits, not cold.
+    # Harmless to the other tools — their caches live in dedicated --cache-dir
+    # paths (basilisk-warm/mypy-warm), and cold mypy uses --no-incremental, so
+    # none of them read or write ./.mypy_cache. hyperfine excludes --prepare
+    # time from the measurement.
+    [[ -n "${ZUBAN_PRESENT:-}" ]] && hf+=(--prepare 'rm -rf .mypy_cache')
+    for i in "${!TOOL_NAMES[@]}"; do
+      name="${TOOL_NAMES[$i]}"
+      # Preflight-invalid tool (exit >= 2 — never analyzed this file): not timed.
+      # The -warm sibling shares the binary, so it is excluded along with it.
+      case "$INVALID_COMBOS" in *" ${STEM}/${name%-warm} "*) continue ;; esac
+      cmd="${TOOL_CMDS[$i]//\{\}/$FPATH}"
+      hf+=(--command-name "$name" "$cmd")
+    done
 
-  "${HF[@]}" 2>&1 | grep -E "Time|Summary|ran|faster|slower" | sed 's/^/│  /' || true
+    "${hf[@]}" 2>&1 | grep -E "Time|Summary|ran|faster|slower" | sed 's/^/│  /' || true
+  }
+
+  run_fixture_benchmark "$RUNS"
+
+  # Zero tolerance stays zero, but a ten-sample process mean with extreme
+  # scheduler variance is not sound evidence. Remeasure based on variance
+  # alone (never based on the baseline comparison), then require the longer
+  # measurement to be stable so a genuine stable regression still fails.
+  stability_output="$(python3 "$ROOT/benchmarks/stability.py" "$OUT/${STEM}.json" "$MAX_BASILISK_CV" 2>&1)"
+  stability_rc=$?
+  if [[ "$stability_rc" -eq 10 ]]; then
+    stability_runs=$((RUNS * 3))
+    [[ "$stability_runs" -lt "$MIN_STABILITY_RUNS" ]] && stability_runs="$MIN_STABILITY_RUNS"
+    echo "│  noisy measurement: $stability_output"
+    echo "│  remeasuring with $stability_runs runs"
+    run_fixture_benchmark "$stability_runs"
+    stability_output="$(python3 "$ROOT/benchmarks/stability.py" "$OUT/${STEM}.json" "$MAX_BASILISK_CV" 2>&1)"
+    stability_rc=$?
+  fi
+  if [[ "$stability_rc" -ne 0 ]]; then
+    echo "ERROR: unstable or invalid Basilisk measurement for $STEM: $stability_output" >&2
+    exit 4
+  fi
   echo "└──"
   echo ""
 
