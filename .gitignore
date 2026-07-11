@@ -103,7 +103,9 @@ deslop-*.log
 # =============================================================================
 # Benchmarks
 # =============================================================================
-benchmarks/results/
+benchmarks/results/.mypycache/
+benchmarks/results/.warmcache/
+
 
 # =============================================================================
 # Conformance test FIXTURES: mirrored on demand into conformance/tests/ (via
