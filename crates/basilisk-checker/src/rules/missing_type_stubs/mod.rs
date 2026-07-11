@@ -109,11 +109,11 @@ fn make_diagnostic(import: &ImportInfo, path: &str) -> Diagnostic {
         message: format!("Package `{root_module}` is installed but has no type stubs available"),
         span: import.span,
         path: path.to_owned(),
-        help: Some(stub_help_text(root_module)),
+        help: Some(stub_help_text(root_module).into()),
         note: Some(
             "Packages without type stubs or a PEP 561 `py.typed` marker provide no type \
              information — https://peps.python.org/pep-0561/"
-                .to_owned(),
+                .into(),
         ),
         provenance: Some(TypeProvenance::Untyped),
     }

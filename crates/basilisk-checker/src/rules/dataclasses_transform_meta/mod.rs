@@ -175,12 +175,12 @@ impl MetaTransformCtx {
                         help: Some(
                             "A non-frozen class cannot inherit from a frozen one when \
                              the metaclass uses `@dataclass_transform`"
-                                .to_owned(),
+                                .into(),
                         ),
                         note: Some(
                             "PEP 681: mixing frozen and non-frozen \
                              dataclass_transform classes is not allowed"
-                                .to_owned(),
+                                .into(),
                         ),
                         provenance: None,
                     });
@@ -242,12 +242,12 @@ impl MetaTransformCtx {
                     help: Some(
                         "Frozen dataclass_transform instances are immutable after \
                          construction"
-                            .to_owned(),
+                            .into(),
                     ),
                     note: Some(
                         "PEP 681: `frozen=True` (or `frozen_default=True`) prohibits \
                          attribute assignment"
-                            .to_owned(),
+                            .into(),
                     ),
                     provenance: None,
                 });
@@ -365,13 +365,16 @@ impl MetaTransformCtx {
                 ),
                 span,
                 path: path.to_owned(),
-                help: Some(format!(
-                    "Pass `order=True` to `{left_class}(...)` to enable ordering comparisons"
-                )),
+                help: Some(
+                    format!(
+                        "Pass `order=True` to `{left_class}(...)` to enable ordering comparisons"
+                    )
+                    .into(),
+                ),
                 note: Some(
                     "PEP 681: ordering methods are only synthesized when `order=True` \
                      is passed to the dataclass_transform class"
-                        .to_owned(),
+                        .into(),
                 ),
                 provenance: None,
             });

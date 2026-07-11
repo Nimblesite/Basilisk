@@ -200,8 +200,8 @@ mod tests {
             message: "Package `acme` is installed but has no type stubs available".to_owned(),
             span: basilisk_resolver::Span::new(0, 5),
             path: "test.py".to_owned(),
-            help: help.map(str::to_owned),
-            note: note.map(str::to_owned),
+            help: help.map(|value| value.to_owned().into()),
+            note: note.map(|value| value.to_owned().into()),
             provenance: None,
         }
     }

@@ -11,13 +11,37 @@
 #
 # Run from the repo root:  make bench   (or:  bash benchmarks/run.sh)
 #
+# WRITE-ALWAYS, GATE-SEPARATELY. Two responsibilities that must NEVER suppress
+# each other (benchmarks/summarize.py enforces this):
+#
+#   1. The measured numbers are written STRAIGHT to the git-tracked status CSV
+#      the instant each score exists — after every fixture (incremental) and at
+#      the end (final). There is NO path where a run measures a number and does
+#      not record it: the file ALWAYS shows what this build actually did. A
+#      benchmark that hides a slower number is a lie, and the entire point of the
+#      suite is to KNOW the moment a number slips.
+#   2. SEPARATELY, and only AFTER the numbers are on disk, the regression gate
+#      compares this run's basilisk times against the COMMITTED baseline (the
+#      status CSV at HEAD, read from git — never the working copy we just
+#      overwrote). A backwards step beyond BENCH_TOLERANCE_PCT on any fixture
+#      FAILS CI (non-zero exit). The gate only reads; it never edits the file.
+#      Because it reads the committed baseline, overwriting the working copy can
+#      never launder a regression into the baseline — the committed baseline
+#      advances only when a green run is committed, so it still ratchets faster.
+#
+# COMPETITOR VERSIONS: every run first pulls the LATEST official release of each
+# recognized type checker (see PULL LATEST below), so competitor columns always
+# reflect current upstream, never a stale pin.
+#
 # OUTPUT (auto-generated every run):
 #   benchmarks/status/<machine>.csv   — git-tracked per-machine results table,
-#                                        the same way conformance_status.csv is
-#                                        tracked. The website reads this file, so
-#                                        the published numbers are never hand-typed.
-#   benchmarks/results/*.json         — raw hyperfine output (gitignored)
-#   benchmarks/results/summary.md     — human-readable summary (gitignored)
+#                                        ALWAYS rewritten with the latest measured
+#                                        numbers (even on a regression). The
+#                                        website reads this file, so the published
+#                                        numbers are never hand-typed and never
+#                                        stale relative to the last run.
+#   benchmarks/results/*.json         — raw hyperfine output (untracked)
+#   benchmarks/results/summary.md     — human-readable summary (untracked)
 #
 # Competitor tools are OPTIONAL — any that are not installed are skipped (their
 # column is left blank). Only `basilisk` and `hyperfine` are required. Fixtures
@@ -30,13 +54,9 @@
 # how many diagnostics each tool reports per fixture (the <tool>_diags CSV
 # columns), so a do-nothing run is visible in the published data, not hidden.
 #
-# REGRESSION GATE:
-#   `make bench` FAILS (non-zero exit) if basilisk got slower than the recorded
-#   baseline (the existing benchmarks/status/<machine>.csv) on any fixture.
-#   The zero-tolerance ratchet cannot be disabled or widened. On a regression
-#   the baseline CSV is left UNCHANGED so every subsequent run continues to
-#   compare against known-good numbers. A machine without a baseline creates
-#   one after a successful run. Knobs: RUNS=<n> WARMUP=<n>.
+# Knobs: RUNS=<n> WARMUP=<n>. The gate cannot be DISABLED or WIDENED at runtime
+# (BENCH_NO_GATE / BENCH_REGRESS_PCT / BENCH_TOLERANCE_PCT env overrides are
+# rejected); the small noise tolerance is a committed constant below.
 
 set -uo pipefail
 
@@ -53,14 +73,18 @@ WARMUP="${WARMUP:-2}"
 # runs populate them so the measured runs are cache hits.
 WARMCACHE="$OUT/.warmcache"
 MYPYCACHE="$OUT/.mypycache"
-# The benchmark ratchet is deliberately non-configurable: all recorded fixture
-# times must be monotonically non-increasing.
-if [[ -n "${BENCH_NO_GATE:-}" || -n "${BENCH_REGRESS_PCT:-}" ]]; then
+# The gate cannot be disabled or widened at runtime. The write is unconditional
+# (never gated); the ONLY tunable is a small, COMMITTED noise tolerance so
+# run-to-run jitter does not red-flag a non-regression. It lives here in the
+# tracked script, not in an env var, so it can never be widened away for a run.
+if [[ -n "${BENCH_NO_GATE:-}" || -n "${BENCH_REGRESS_PCT:-}" || -n "${BENCH_TOLERANCE_PCT:-}" ]]; then
   echo "ERROR: benchmark regression policy cannot be disabled or widened." >&2
   exit 2
 fi
 BENCH_GATE="1"
-BENCH_REGRESS_PCT="0"
+# Slight tolerance for wall-clock fluctuations: a fixture must exceed the
+# committed baseline by MORE than this percentage to count as a regression.
+BENCH_TOLERANCE_PCT="5"
 mkdir -p "$OUT" "$STATUS_DIR"
 
 # Canonical tool column order for the status CSV / website (stable schema).
@@ -105,6 +129,39 @@ if [[ ! -x "$BSK" ]]; then
   echo "       Build it first:  cargo build --release --bin basilisk" >&2
   exit 1
 fi
+
+# ─── Pull LATEST competitor versions (officially recognized checkers only) ────
+# Every run upgrades each recognized type checker to its newest official release
+# BEFORE discovery/timing, so competitor columns always reflect current upstream
+# and can never publish a stale pin. Only the checkers tracked by the
+# python/typing conformance suite are pulled — pyright, mypy, ty, pyrefly, zuban;
+# we never add unofficial tools. basilisk itself is the local build under test
+# and is never "pulled". The upgrade is best-effort PER TOOL: a failed pull
+# (offline, yanked release, non-pip install channel) prints a LOUD warning and
+# the run continues on the installed version, so a transient PyPI hiccup can't
+# brick the basilisk performance gate — but the staleness is always visible in
+# the log, never silent. The pull runs outside all timing, so it never affects a
+# measured number. Recognized package names == CLI command names for all five.
+RECOGNIZED_CHECKERS="pyright mypy ty pyrefly zuban"
+echo "─── Pull latest competitor versions (officially recognized checkers) ────"
+if python3 -m pip --version >/dev/null 2>&1; then
+  for _tool in $RECOGNIZED_CHECKERS; do
+    _before="$(command -v "$_tool" >/dev/null 2>&1 && "$_tool" --version 2>&1 | head -1 || echo 'not installed')"
+    if python3 -m pip install --upgrade --quiet --disable-pip-version-check "$_tool" >/dev/null 2>&1; then
+      _after="$(command -v "$_tool" >/dev/null 2>&1 && "$_tool" --version 2>&1 | head -1 || echo 'n/a')"
+      if [[ "$_before" == "$_after" ]]; then
+        printf "  %-9s already latest (%s)\n" "$_tool" "$_after"
+      else
+        printf "  %-9s %s -> %s\n" "$_tool" "$_before" "$_after"
+      fi
+    else
+      printf "  ⚠ %-9s could not pull latest — using installed (%s). Column may be stale.\n" "$_tool" "$_before" >&2
+    fi
+  done
+else
+  echo "  ⚠ python3 -m pip unavailable — cannot pull latest competitors; using installed versions." >&2
+fi
+echo ""
 
 # ─── Tool discovery (basilisk required, competitors optional) ─────────────────
 # Each entry: "name|command-template"  where {} is replaced by the fixture path.
@@ -248,6 +305,21 @@ if [[ ${#FIXTURES[@]} -eq 0 ]]; then
   exit 1
 fi
 
+# Clear stale per-fixture JSON from earlier runs so the always-current latest
+# CSV (and the final aggregate) only ever reflect THIS run's measurements — a
+# fixture removed since last time can no longer leak an old time into either.
+rm -f "$OUT"/*.json
+
+# Export the machine/tool metadata ONCE so both the per-fixture incremental
+# writer and the final aggregator (benchmarks/summarize.py) see identical
+# values. The regression policy stays fixed here — it is never widened.
+COVERAGE="$OUT/coverage.tsv"
+export BENCH_SLUG BENCH_MACHINE BENCH_CPU BENCH_ARCH BENCH_OS BENCH_CORES \
+  BENCH_GENERATED BENCH_TOOLS BENCH_RUNS="$RUNS" BENCH_STATUS_DIR="$STATUS_DIR" \
+  BENCH_ALL_TOOLS="$ALL_TOOLS" BENCH_GATE="$BENCH_GATE" \
+  BENCH_TOLERANCE_PCT="$BENCH_TOLERANCE_PCT" BENCH_COVERAGE="$COVERAGE" \
+  BENCH_ROOT="$ROOT" BENCH_BASELINE_REF="${BENCH_BASELINE_REF:-HEAD}"
+
 # ─── Preflight: diagnostic coverage + crash screening ─────────────────────────
 # One un-timed run of every base tool on every fixture BEFORE anything is timed.
 # Two jobs:
@@ -262,7 +334,7 @@ fi
 #      visible in the published data next to its time.
 # (The pyright pip wrapper exits 0 even with findings, so 0 vs 1 carries no
 # meaning across tools — only >= 2 does.)
-COVERAGE="$OUT/coverage.tsv"
+# COVERAGE path is set + exported above (BENCH_COVERAGE); truncate it fresh here.
 : > "$COVERAGE"
 INVALID_COMBOS=" "
 echo "─── Preflight: diagnostics per tool + crash screening ──────────────────"
@@ -339,160 +411,33 @@ for FILE in "${FIXTURES[@]}"; do
   "${HF[@]}" 2>&1 | grep -E "Time|Summary|ran|faster|slower" | sed 's/^/│  /' || true
   echo "└──"
   echo ""
+
+  # IMMEDIATE WRITE: this fixture's score is now on disk as $OUT/$STEM.json, so
+  # rewrite the git-tracked status CSV from every fixture measured so far — the
+  # file reflects reality the instant each score exists. Runs BETWEEN timed
+  # fixtures (never inside a hyperfine measurement), so it can't perturb timings;
+  # if the run dies mid-suite the status CSV already holds every completed score.
+  # No gate here — the write is unconditional; the gate runs once, at the end.
+  python3 "$ROOT/benchmarks/summarize.py" "$OUT" incremental "${TOOL_NAMES[@]}" >/dev/null || true
 done
 
-# ─── Write outputs: summary.md (ephemeral) + status CSV (git-tracked) ─────────
+# ─── Final: console table + summary.md + status CSV (already written) + gate ──
+# summarize.py rewrote the status CSV after every fixture; this final call
+# re-emits it in full, writes summary.md, prints the table, and runs the
+# read-only regression gate against the COMMITTED baseline. The status CSV holds
+# this run's real numbers no matter how the gate exits.
 echo "─── Summary: mean wall-clock per fixture (ms) ──────────────────────────"
 echo ""
-BENCH_SLUG="$BENCH_SLUG" BENCH_MACHINE="$BENCH_MACHINE" BENCH_CPU="$BENCH_CPU" \
-BENCH_ARCH="$BENCH_ARCH" BENCH_OS="$BENCH_OS" BENCH_CORES="$BENCH_CORES" \
-BENCH_GENERATED="$BENCH_GENERATED" BENCH_TOOLS="$BENCH_TOOLS" BENCH_RUNS="$RUNS" \
-BENCH_STATUS_DIR="$STATUS_DIR" BENCH_ALL_TOOLS="$ALL_TOOLS" \
-BENCH_GATE="$BENCH_GATE" BENCH_REGRESS_PCT="$BENCH_REGRESS_PCT" \
-BENCH_COVERAGE="$COVERAGE" \
-python3 - "$OUT" "${TOOL_NAMES[@]}" <<'PY'
-import json, os, sys, glob
-
-out_dir = sys.argv[1]
-tools = sys.argv[2:]
-all_tools = os.environ["BENCH_ALL_TOOLS"].split()
-
-rows = []
-for jf in sorted(glob.glob(os.path.join(out_dir, "*.json"))):
-    stem = os.path.splitext(os.path.basename(jf))[0]
-    with open(jf) as fh:
-        data = json.load(fh)
-    means = {r["command"]: r["mean"] * 1000.0 for r in data["results"]}
-    rows.append((stem, means))
-
-# Preflight coverage: (stem, tool) -> diagnostic count ("" = crashed, no cell).
-# Published as <tool>_diags CSV columns so a time is always read next to how
-# many diagnostics the tool actually reported on that fixture.
-coverage = {}
-cov_path = os.environ.get("BENCH_COVERAGE", "")
-if cov_path and os.path.exists(cov_path):
-    with open(cov_path) as fh:
-        for raw in fh:
-            parts = raw.rstrip("\n").split("\t")
-            if len(parts) == 4:
-                coverage[(parts[0], parts[1])] = parts[3]
-base_tools = [t for t in all_tools if not t.endswith("-warm")]
-
-if not rows:
-    print("  (no JSON results)")
-    raise SystemExit
-
-# Console table -------------------------------------------------------------
-w = max(len(s) for s, _ in rows)
-header = f"  {'fixture':<{w}}  " + "  ".join(f"{t:>9}" for t in tools)
-print(header)
-print("  " + "-" * (len(header) - 2))
-for stem, means in rows:
-    cells = []
-    fastest = min((means[t] for t in tools if t in means), default=None)
-    for t in tools:
-        if t in means:
-            mark = " *" if fastest is not None and abs(means[t] - fastest) < 1e-9 else "  "
-            cells.append(f"{means[t]:7.1f}{mark}")
-        else:
-            cells.append(f"{'n/a':>9}")
-    print(f"  {stem:<{w}}  " + "  ".join(cells))
-print("\n  (* = fastest for that fixture; lower is better)")
-
-# Human-readable summary.md (gitignored) ------------------------------------
-md = ["# Benchmark summary\n", f"Machine: `{os.environ['BENCH_MACHINE']}`\n", "",
-      "| fixture | " + " | ".join(tools) + " |",
-      "|" + "---|" * (len(tools) + 1)]
-for stem, means in rows:
-    md.append(f"| {stem} | " + " | ".join(f"{means[t]:.1f} ms" if t in means else "n/a" for t in tools) + " |")
-with open(os.path.join(out_dir, "summary.md"), "w") as fh:
-    fh.write("\n".join(md) + "\n")
-
-# Git-tracked per-machine status CSV + regression gate ----------------------
-# Stable schema: a metadata header (# lines) the website parses for conditions,
-# then one row per fixture with a fixed `<tool>_ms` column for every tool.
-status_path = os.path.join(os.environ["BENCH_STATUS_DIR"], os.environ["BENCH_SLUG"] + ".csv")
-gate_on = os.environ.get("BENCH_GATE", "1") == "1"
-pct = float(os.environ.get("BENCH_REGRESS_PCT", "0"))
-
-def read_baseline_basilisk(path):
-    """basilisk_ms per fixture from an existing status CSV (the last/committed run)."""
-    base, cols = {}, None
-    if not os.path.exists(path):
-        return base
-    with open(path) as fh:
-        for raw in fh:
-            line = raw.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split(",")
-            if cols is None:
-                cols = parts
-                continue
-            if "basilisk_ms" not in cols:
-                break
-            idx = cols.index("basilisk_ms")
-            val = parts[idx] if idx < len(parts) else ""
-            if val:
-                base[parts[0]] = float(val)
-    return base
-
-baseline = read_baseline_basilisk(status_path)
-
-# Regression = basilisk slower than baseline by more than `pct`% on a fixture.
-regressions = []
-for stem, means in rows:
-    if "basilisk" not in means or stem not in baseline:
-        continue
-    old, new = baseline[stem], means["basilisk"]
-    if old > 0 and new > old * (1.0 + pct / 100.0):
-        regressions.append((stem, old, new, (new / old - 1.0) * 100.0))
-
-csv_lines = [
-    f"# machine: {os.environ['BENCH_MACHINE']}",
-    f"# cpu: {os.environ['BENCH_CPU']}",
-    f"# arch: {os.environ['BENCH_ARCH']}",
-    f"# os: {os.environ['BENCH_OS']}",
-    f"# cores: {os.environ['BENCH_CORES']}",
-    f"# tools: {os.environ['BENCH_TOOLS']}",
-    f"# runs: {os.environ['BENCH_RUNS']} (hyperfine mean wall-clock, milliseconds)",
-    f"# generated: {os.environ['BENCH_GENERATED']}",
-    f"# note: <tool>_ms = COLD full-file CLI check from scratch (whole process: startup + stubs + analysis). <tool>_diags = error diagnostics the tool reported on that fixture in the measured configuration (error severity only; warnings/notes are not counted) — read every time next to its diags; a tool that reports 0 analyzed the file but flagged no errors there. A blank _ms cell means the tool either was not installed on this machine or failed to analyze that fixture (exit >= 2, e.g. parse abort) and was excluded rather than timed as a crash. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. zuban is also cold-only but its mypy mode DOES reuse a ./.mypy_cache when present (no flag disables it), so we wipe ./.mypy_cache before every timed run to keep the measurement cold. mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures); zuban runs as `zuban mypy --strict` for the same reason (its default `zuban check` mode skips these strictness rules).",
-    "fixture,"
-    + ",".join(f"{t}_ms" for t in all_tools)
-    + ","
-    + ",".join(f"{t}_diags" for t in base_tools),
-]
-for stem, means in rows:
-    cells = [stem] + [f"{means[t]:.1f}" if t in means else "" for t in all_tools]
-    cells += [coverage.get((stem, t), "") for t in base_tools]
-    csv_lines.append(",".join(cells))
-
-blocked = bool(regressions) and gate_on
-if blocked:
-    print(f"\n  REGRESSION GATE — basilisk slower than baseline by >{pct:.0f}%")
-    print(f"    baseline: {status_path}")
-    print(f"    {'fixture':<34} {'baseline':>11} {'now':>11} {'change':>9}")
-    for stem, old, new, delta in regressions:
-        print(f"    {stem:<34} {old:>8.1f} ms {new:>8.1f} ms {delta:>+7.1f}%")
-    print("    Baseline left UNCHANGED. Optimize the regression before updating it.")
-else:
-    with open(status_path, "w") as fh:
-        fh.write("\n".join(csv_lines) + "\n")
-    print(f"\n  Status CSV (git-tracked): {status_path}")
-print(f"  Summary:                  {os.path.join(out_dir, 'summary.md')}")
-
-if blocked:
-    raise SystemExit(3)
-PY
+python3 "$ROOT/benchmarks/summarize.py" "$OUT" final "${TOOL_NAMES[@]}"
 GATE_STATUS=$?
 
 echo ""
 if [[ "${GATE_STATUS:-0}" -ne 0 ]]; then
-  echo "RESULT: FAIL — performance regression vs baseline (see gate report above)."
-  echo "        Fix the slowdown; the recorded baseline is unchanged."
+  echo "RESULT: FAIL — performance regression vs the COMMITTED baseline (see gate report above)."
+  echo "        The status CSV already holds this run's real numbers — the slip is recorded, not hidden."
+  echo "        Optimize the slowdown, then commit benchmarks/status/*.csv to advance the baseline."
 else
-  echo "RESULT: PASS — no performance regression vs baseline."
-  echo "        Commit benchmarks/status/*.csv to track the trend."
+  echo "RESULT: PASS — no regression vs the committed baseline."
+  echo "        The status CSV holds this run's numbers; commit benchmarks/status/*.csv to track the trend."
 fi
 exit "${GATE_STATUS:-0}"

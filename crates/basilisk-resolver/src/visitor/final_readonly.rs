@@ -9,7 +9,6 @@ use crate::scope::{ClassInfo, ReadOnlyViolationInfo, ReadOnlyViolationKind};
 use super::annotations::{ann_text_is_final, annotation_contains_readonly_expr};
 use super::class_info_ext::expr_simple_name;
 use super::core::{source_slice_range, text_range_to_span};
-use super::typeddict::build_var_type_map;
 
 pub(super) fn collect_final_string_constants<'a>(
     stmts: &'a [Stmt],
@@ -48,7 +47,7 @@ pub(super) fn collect_final_string_constants<'a>(
 /// `TypedDict(...)` fields dict expression.
 pub(super) fn functional_typeddict_readonly_fields(
     dict_expr: &Expr,
-) -> std::collections::HashSet<String> {
+) -> std::collections::HashSet<&str> {
     let Expr::Dict(dict) = dict_expr else {
         return std::collections::HashSet::new();
     };
@@ -60,7 +59,7 @@ pub(super) fn functional_typeddict_readonly_fields(
                 return None;
             };
             if annotation_contains_readonly_expr(&item.value) {
-                Some(key.value.to_string())
+                Some(key.value.to_str())
             } else {
                 None
             }
@@ -71,7 +70,7 @@ pub(super) fn functional_typeddict_readonly_fields(
 /// Scan function body for `kwargs["key"] = val` where key is a `ReadOnly` field.
 pub(super) fn check_kwargs_readonly_violations(
     func: &StmtFunctionDef,
-    td_readonly_fields: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+    td_readonly_fields: &std::collections::HashMap<&str, std::collections::HashSet<&str>>,
     out: &mut Vec<ReadOnlyViolationInfo>,
 ) {
     let Some(kwarg) = &func.parameters.kwarg else {
@@ -90,10 +89,10 @@ pub(super) fn check_kwargs_readonly_violations(
     let Some(td_name) = expr_simple_name(&sub.slice) else {
         return;
     };
-    let Some(readonly_fields) = td_readonly_fields.get(&td_name) else {
+    let Some(readonly_fields) = td_readonly_fields.get(td_name.as_str()) else {
         return;
     };
-    let kwarg_name = kwarg.name.to_string();
+    let kwarg_name = kwarg.name.as_str();
     for stmt in &func.body {
         let Stmt::Assign(assign) = stmt else {
             continue;
@@ -111,11 +110,11 @@ pub(super) fn check_kwargs_readonly_violations(
             let Expr::StringLiteral(key_str) = tsub.slice.as_ref() else {
                 continue;
             };
-            let key = key_str.value.to_string();
-            if readonly_fields.contains(&key) {
+            let key = key_str.value.to_str();
+            if readonly_fields.contains(key) {
                 out.push(ReadOnlyViolationInfo {
                     var_name,
-                    field_name: Some(key),
+                    field_name: Some(key.to_owned()),
                     kind: ReadOnlyViolationKind::SubscriptAssign,
                     span: text_range_to_span(assign.range()),
                 });
@@ -125,11 +124,11 @@ pub(super) fn check_kwargs_readonly_violations(
 }
 
 /// Build a map from `TypedDict` class name to its `ReadOnly` field names.
-pub(super) fn build_typeddict_readonly_map(
-    stmts: &[Stmt],
-    classes: &[ClassInfo],
-    source: &str,
-) -> std::collections::HashMap<String, std::collections::HashSet<String>> {
+pub(super) fn build_typeddict_readonly_map<'a>(
+    stmts: &'a [Stmt],
+    classes: &'a [ClassInfo],
+    source: &'a str,
+) -> std::collections::HashMap<&'a str, std::collections::HashSet<&'a str>> {
     use std::collections::{HashMap, HashSet};
     let class_map = crate::scope::class_by_name(classes);
     // Use the effective (post-inheritance) field set so a subclass that does NOT
@@ -137,27 +136,27 @@ pub(super) fn build_typeddict_readonly_map(
     // (`class Album2(NamedDict): year: int` keeps `name: ReadOnly[str]`), while a
     // subclass that redeclares it as mutable drops the read-only status (the
     // most-derived declaration wins).
-    let mut map: HashMap<String, HashSet<String>> = classes
+    let mut map: HashMap<&str, HashSet<&str>> = classes
         .iter()
         .filter(|cls| crate::scope::is_transitive_typeddict(cls.name.as_str(), &class_map))
         .filter_map(|cls| {
-            let fields: HashSet<String> =
+            let fields: HashSet<&str> =
                 super::typeddict_schema::effective_fields(cls, &class_map, source)
                     .into_iter()
                     .filter(|f| f.readonly)
-                    .map(|f| f.name.to_owned())
+                    .map(|f| f.name)
                     .collect();
             if fields.is_empty() {
                 None
             } else {
-                Some((cls.name.clone(), fields))
+                Some((cls.name.as_str(), fields))
             }
         })
         .collect();
     // Functional form: `Name = TypedDict("Name", {"field": ReadOnly[...]})`
     for stmt in stmts {
         let Stmt::Assign(assign) = stmt else { continue };
-        let Some(lhs_name) = assign.targets.first().and_then(expr_simple_name) else {
+        let Some(Expr::Name(lhs_name)) = assign.targets.first() else {
             continue;
         };
         let Expr::Call(call) = assign.value.as_ref() else {
@@ -169,8 +168,33 @@ pub(super) fn build_typeddict_readonly_map(
         if let Some(second_arg) = call.arguments.args.get(1) {
             let fields = functional_typeddict_readonly_fields(second_arg);
             if !fields.is_empty() {
-                let _ = map.insert(lhs_name, fields);
+                let _ = map.insert(lhs_name.id.as_str(), fields);
             }
+        }
+    }
+    map
+}
+
+/// Build a borrowed map from variable names to their declared `TypedDict`.
+///
+/// The resolver only needs these names while walking the AST. Borrowing them
+/// avoids allocating two strings per annotated variable in large `TypedDict`
+/// modules; only names that become diagnostics are copied into the result.
+fn build_var_type_map<'a>(
+    stmts: &'a [Stmt],
+    td_readonly_fields: &std::collections::HashMap<&'a str, std::collections::HashSet<&'a str>>,
+) -> std::collections::HashMap<&'a str, &'a str> {
+    let mut map = std::collections::HashMap::new();
+    for stmt in stmts {
+        let Stmt::AnnAssign(ann) = stmt else { continue };
+        let Expr::Name(var_name) = ann.target.as_ref() else {
+            continue;
+        };
+        let Expr::Name(type_name) = ann.annotation.as_ref() else {
+            continue;
+        };
+        if let Some((&key, _)) = td_readonly_fields.get_key_value(type_name.id.as_str()) {
+            let _ = map.insert(var_name.id.as_str(), key);
         }
     }
     map
@@ -195,10 +219,10 @@ pub(super) fn collect_readonly_violations(
                     let Expr::Subscript(sub) = target else {
                         continue;
                     };
-                    let Some(var_name) = expr_simple_name(&sub.value) else {
+                    let Expr::Name(var_name) = sub.value.as_ref() else {
                         continue;
                     };
-                    let Some(&class_name) = var_type.get(&var_name) else {
+                    let Some(&class_name) = var_type.get(var_name.id.as_str()) else {
                         continue;
                     };
                     let Some(fields) = td_readonly_fields.get(class_name) else {
@@ -207,11 +231,11 @@ pub(super) fn collect_readonly_violations(
                     let Expr::StringLiteral(key_str) = sub.slice.as_ref() else {
                         continue;
                     };
-                    let key = key_str.value.to_string();
-                    if fields.contains(&key) {
+                    let key = key_str.value.to_str();
+                    if fields.contains(key) {
                         out.push(ReadOnlyViolationInfo {
-                            var_name,
-                            field_name: Some(key),
+                            var_name: var_name.id.to_string(),
+                            field_name: Some(key.to_owned()),
                             kind: ReadOnlyViolationKind::SubscriptAssign,
                             span: text_range_to_span(assign.range()),
                         });
@@ -228,12 +252,12 @@ pub(super) fn collect_readonly_violations(
                 if attr.attr.as_str() != "update" {
                     continue;
                 }
-                let Some(var_name) = expr_simple_name(&attr.value) else {
+                let Expr::Name(var_name) = attr.value.as_ref() else {
                     continue;
                 };
-                if var_type.contains_key(&var_name) {
+                if var_type.contains_key(var_name.id.as_str()) {
                     out.push(ReadOnlyViolationInfo {
-                        var_name,
+                        var_name: var_name.id.to_string(),
                         field_name: None,
                         kind: ReadOnlyViolationKind::UpdateCall,
                         span: text_range_to_span(expr_stmt.value.range()),
